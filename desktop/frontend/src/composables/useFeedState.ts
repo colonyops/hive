@@ -2,7 +2,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Browser, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, RenameFlow, SaveSidebar, SetFlowEnabled } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
-import { ActionRun, ActionViews, FeedCounts, InboxCounts, InboxItemEvents, InvokeAction, ListInboxItems, ListInboxItemsByFeed, MarkInboxItemUnread, SessionLaunchOptions, ToggleInboxItemArchived } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { ActionRun, ActionViews, FeedCounts, InboxCounts, InboxItemEvents, InvokeAction, ListInboxItems, ListInboxItemsByFeed, MarkInboxItemUnread, SessionLaunchOptions, ToggleInboxItemArchived, ToggleInboxItemIgnored } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 import { bodySnippet, feedSource, githubPayload, typeLabel } from '../lib/feedPresentation'
 import { useActivity } from './useActivity'
@@ -439,7 +439,7 @@ export function useFeedState() {
     // The storage query returns newest-first for efficient recent-event reads;
     // the observed timeline is deliberately chronological for human reading.
     return ((await InboxItemEvents(itemID, 100) ?? [])
-      .map((event) => ({ ...event, summary: event.summary ?? null }))
+      .map((event) => ({ ...event, summary: event.summary ?? null, detail: event.detail ?? null }))
       .reverse())
   }
 
@@ -523,6 +523,17 @@ export function useFeedState() {
       }
     } catch (error) {
       console.warn('Unable to toggle inbox item archive state', error)
+      await reloadCurrentSelection()
+    }
+    if (activeProfileId.value) await loadFeeds(activeProfileId.value)
+  }
+
+  async function toggleIgnored(item: InboxItem): Promise<void> {
+    try {
+      await ToggleInboxItemIgnored(item.id, item.revision)
+      await reloadCurrentSelection()
+    } catch (error) {
+      console.warn('Unable to toggle inbox item ignored state', error)
       await reloadCurrentSelection()
     }
     if (activeProfileId.value) await loadFeeds(activeProfileId.value)
@@ -788,6 +799,7 @@ export function useFeedState() {
     toggleUnread,
     markItemUnread,
     toggleArchive,
+    toggleIgnored,
     loadEvents,
     refresh,
     invokeAction,

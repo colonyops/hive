@@ -34,6 +34,30 @@ func TestGithubClassifierTerminalAndReopenTransitions(t *testing.T) {
 	closed := Observation{ExternalID: "o/r#1", Payload: []byte(`{"state":"closed","updatedAt":2}`)}
 	entered := classifier.Classify(&previous, closed)
 	assert.Equal(t, pipelinedb.TransitionEnteredTerminal, entered.Transition)
+	assert.Equal(t, "Closed", entered.Summary)
 	reopened := classifier.Classify(&closed, previous)
 	assert.Equal(t, pipelinedb.TransitionLeftTerminal, reopened.Transition)
+	assert.Equal(t, "Reopened", reopened.Summary)
+}
+
+func TestGithubClassifierDescribesObservedActivity(t *testing.T) {
+	classifier := newGithubClassifier(&fakeAbsenceConfirmer{})
+	tests := []struct {
+		name, previous, current, kind, summary string
+	}{
+		{"comment", `{"state":"open","updatedAt":1,"labels":["bug"]}`, `{"state":"open","updatedAt":2,"reason":"comment"}`, "comment", "New comment activity"},
+		{"review", `{"state":"open","updatedAt":1}`, `{"state":"open","updatedAt":2,"reason":"review_requested"}`, "review_requested", "Review requested"},
+		{"labels", `{"state":"open","updatedAt":1,"labels":["bug"]}`, `{"state":"open","updatedAt":2,"labels":["bug","urgent"]}`, "labels", "Labels added: urgent"},
+		{"generic", `{"state":"open","updatedAt":1}`, `{"state":"open","updatedAt":2}`, "updated", "Updated on GitHub"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			previous := Observation{ExternalID: "o/r#1", Payload: []byte(tt.previous)}
+			got := classifier.Classify(&previous, Observation{ExternalID: "o/r#1", Payload: []byte(tt.current)})
+			assert.Equal(t, tt.kind, got.Kind)
+			assert.Equal(t, tt.summary, got.Summary)
+			assert.Equal(t, pipelinedb.AttentionActivity, got.Attention)
+			assert.NotEmpty(t, got.Detail)
+		})
+	}
 }

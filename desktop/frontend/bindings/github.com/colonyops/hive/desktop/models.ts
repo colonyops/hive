@@ -50,7 +50,7 @@ export interface GithubSettings {
 }
 
 /**
- * ENUM(inbox, open, archive, all, unfiled)
+ * ENUM(inbox, open, archive, all, ignored)
  */
 export type InboxView = string;
 

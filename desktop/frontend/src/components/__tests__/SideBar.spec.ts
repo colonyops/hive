@@ -42,7 +42,7 @@ describe('SideBar', () => {
 
   it('renders and selects each inbox view', async () => {
     const wrapper = mountSideBar()
-    const views = ['inbox', 'open', 'archive', 'all', 'unfiled']
+    const views = ['inbox', 'open', 'archive', 'all', 'ignored']
     for (const view of views) {
       const button = wrapper.get(`[data-testid="inbox-view-${view}"]`)
       expect(button.attributes('data-testid')).toBe(`inbox-view-${view}`)

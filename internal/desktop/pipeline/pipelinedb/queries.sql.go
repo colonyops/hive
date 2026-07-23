@@ -150,9 +150,11 @@ func (q *Queries) ConfirmOutputCommand(ctx context.Context, arg ConfirmOutputCom
 
 const countInboxItems = `-- name: CountInboxItems :one
 SELECT
-    CAST(COALESCE(SUM(CASE WHEN archived_at IS NULL THEN 1 ELSE 0 END), 0) AS INTEGER) AS inbox_total,
-    CAST(COALESCE(SUM(CASE WHEN archived_at IS NULL AND unread = 1 THEN 1 ELSE 0 END), 0) AS INTEGER) AS inbox_unread
-FROM inbox_item WHERE profile_id = ?
+    CAST(COALESCE(SUM(CASE WHEN i.archived_at IS NULL AND i.ignored_at IS NULL THEN 1 ELSE 0 END), 0) AS INTEGER) AS inbox_total,
+    CAST(COALESCE(SUM(CASE WHEN i.archived_at IS NULL AND i.ignored_at IS NULL AND i.unread = 1 THEN 1 ELSE 0 END), 0) AS INTEGER) AS inbox_unread
+FROM inbox_item i
+WHERE i.profile_id = ?
+  AND EXISTS (SELECT 1 FROM feed_membership_claim c WHERE c.profile_id = i.profile_id AND c.item_id = i.id)
 `
 
 type CountInboxItemsRow struct {
@@ -174,7 +176,7 @@ SELECT
     CAST(COUNT(DISTINCT CASE WHEN i.unread = 1 THEN i.id END) AS INTEGER) AS unread
 FROM feed_membership_claim c
 JOIN inbox_item i ON i.id = c.item_id
-WHERE c.profile_id = ? AND i.archived_at IS NULL
+WHERE c.profile_id = ? AND i.archived_at IS NULL AND i.ignored_at IS NULL
 GROUP BY c.feed_id
 `
 
@@ -473,7 +475,7 @@ func (q *Queries) GetConsumerOffset(ctx context.Context, consumer string) (Consu
 }
 
 const getInboxItemByExternalID = `-- name: GetInboxItemByExternalID :one
-SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at, ignored_at FROM inbox_item
 WHERE profile_id = ? AND source_kind = ? AND source_scope = ? AND external_id = ?
 `
 
@@ -510,12 +512,13 @@ func (q *Queries) GetInboxItemByExternalID(ctx context.Context, arg GetInboxItem
 		&i.SourceState,
 		&i.FirstSeenAt,
 		&i.LastEventAt,
+		&i.IgnoredAt,
 	)
 	return i, err
 }
 
 const getInboxItemByID = `-- name: GetInboxItemByID :one
-SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE id = ?
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at, ignored_at FROM inbox_item WHERE id = ?
 `
 
 func (q *Queries) GetInboxItemByID(ctx context.Context, id int64) (InboxItem, error) {
@@ -539,6 +542,7 @@ func (q *Queries) GetInboxItemByID(ctx context.Context, id int64) (InboxItem, er
 		&i.SourceState,
 		&i.FirstSeenAt,
 		&i.LastEventAt,
+		&i.IgnoredAt,
 	)
 	return i, err
 }
@@ -584,7 +588,7 @@ func (q *Queries) GetSourceHeadPayload(ctx context.Context, arg GetSourceHeadPay
 }
 
 const getUnarchivedInboxItemByID = `-- name: GetUnarchivedInboxItemByID :one
-SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE id = ? AND profile_id = ? AND archived_at IS NULL
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at, ignored_at FROM inbox_item WHERE id = ? AND profile_id = ? AND archived_at IS NULL
 `
 
 type GetUnarchivedInboxItemByIDParams struct {
@@ -613,6 +617,7 @@ func (q *Queries) GetUnarchivedInboxItemByID(ctx context.Context, arg GetUnarchi
 		&i.SourceState,
 		&i.FirstSeenAt,
 		&i.LastEventAt,
+		&i.IgnoredAt,
 	)
 	return i, err
 }
@@ -671,7 +676,7 @@ INSERT INTO inbox_item (
     ?, ?, ?, 1, ?,
     ?, ?, ?
 )
-RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at, ignored_at
 `
 
 type InsertInboxItemParams struct {
@@ -723,6 +728,7 @@ func (q *Queries) InsertInboxItem(ctx context.Context, arg InsertInboxItemParams
 		&i.SourceState,
 		&i.FirstSeenAt,
 		&i.LastEventAt,
+		&i.IgnoredAt,
 	)
 	return i, err
 }
@@ -936,8 +942,10 @@ func (q *Queries) ListInboxEventsByItem(ctx context.Context, arg ListInboxEvents
 }
 
 const listInboxItemsAll = `-- name: ListInboxItemsAll :many
-SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ?
-ORDER BY last_event_at DESC, id DESC LIMIT ?
+SELECT i.id, i.profile_id, i.source_kind, i.source_scope, i.external_id, i.title, i.url, i.payload, i.revision, i.unread, i.archived_at, i.archived_actor, i.archived_reason, i.lifecycle, i.source_state, i.first_seen_at, i.last_event_at, i.ignored_at FROM inbox_item i
+WHERE i.profile_id = ? AND i.ignored_at IS NULL
+  AND EXISTS (SELECT 1 FROM feed_membership_claim c WHERE c.profile_id = i.profile_id AND c.item_id = i.id)
+ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?
 `
 
 type ListInboxItemsAllParams struct {
@@ -972,6 +980,7 @@ func (q *Queries) ListInboxItemsAll(ctx context.Context, arg ListInboxItemsAllPa
 			&i.SourceState,
 			&i.FirstSeenAt,
 			&i.LastEventAt,
+			&i.IgnoredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -987,8 +996,10 @@ func (q *Queries) ListInboxItemsAll(ctx context.Context, arg ListInboxItemsAllPa
 }
 
 const listInboxItemsArchive = `-- name: ListInboxItemsArchive :many
-SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ? AND archived_at IS NOT NULL
-ORDER BY archived_at DESC, id DESC LIMIT ?
+SELECT i.id, i.profile_id, i.source_kind, i.source_scope, i.external_id, i.title, i.url, i.payload, i.revision, i.unread, i.archived_at, i.archived_actor, i.archived_reason, i.lifecycle, i.source_state, i.first_seen_at, i.last_event_at, i.ignored_at FROM inbox_item i
+WHERE i.profile_id = ? AND i.archived_at IS NOT NULL AND i.ignored_at IS NULL
+  AND EXISTS (SELECT 1 FROM feed_membership_claim c WHERE c.profile_id = i.profile_id AND c.item_id = i.id)
+ORDER BY i.archived_at DESC, i.id DESC LIMIT ?
 `
 
 type ListInboxItemsArchiveParams struct {
@@ -1023,6 +1034,7 @@ func (q *Queries) ListInboxItemsArchive(ctx context.Context, arg ListInboxItemsA
 			&i.SourceState,
 			&i.FirstSeenAt,
 			&i.LastEventAt,
+			&i.IgnoredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1038,9 +1050,9 @@ func (q *Queries) ListInboxItemsArchive(ctx context.Context, arg ListInboxItemsA
 }
 
 const listInboxItemsByFeed = `-- name: ListInboxItemsByFeed :many
-SELECT DISTINCT i.id, i.profile_id, i.source_kind, i.source_scope, i.external_id, i.title, i.url, i.payload, i.revision, i.unread, i.archived_at, i.archived_actor, i.archived_reason, i.lifecycle, i.source_state, i.first_seen_at, i.last_event_at FROM inbox_item i
+SELECT DISTINCT i.id, i.profile_id, i.source_kind, i.source_scope, i.external_id, i.title, i.url, i.payload, i.revision, i.unread, i.archived_at, i.archived_actor, i.archived_reason, i.lifecycle, i.source_state, i.first_seen_at, i.last_event_at, i.ignored_at FROM inbox_item i
 JOIN feed_membership_claim c ON c.item_id = i.id
-WHERE c.profile_id = ? AND c.feed_id = ? AND i.archived_at IS NULL
+WHERE c.profile_id = ? AND c.feed_id = ? AND i.archived_at IS NULL AND i.ignored_at IS NULL
 ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?
 `
 
@@ -1077,6 +1089,61 @@ func (q *Queries) ListInboxItemsByFeed(ctx context.Context, arg ListInboxItemsBy
 			&i.SourceState,
 			&i.FirstSeenAt,
 			&i.LastEventAt,
+			&i.IgnoredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInboxItemsIgnored = `-- name: ListInboxItemsIgnored :many
+SELECT i.id, i.profile_id, i.source_kind, i.source_scope, i.external_id, i.title, i.url, i.payload, i.revision, i.unread, i.archived_at, i.archived_actor, i.archived_reason, i.lifecycle, i.source_state, i.first_seen_at, i.last_event_at, i.ignored_at FROM inbox_item i
+WHERE i.profile_id = ? AND i.ignored_at IS NOT NULL
+  AND EXISTS (SELECT 1 FROM feed_membership_claim c WHERE c.profile_id = i.profile_id AND c.item_id = i.id)
+ORDER BY i.ignored_at DESC, i.id DESC LIMIT ?
+`
+
+type ListInboxItemsIgnoredParams struct {
+	ProfileID string `json:"profile_id"`
+	Limit     int64  `json:"limit"`
+}
+
+func (q *Queries) ListInboxItemsIgnored(ctx context.Context, arg ListInboxItemsIgnoredParams) ([]InboxItem, error) {
+	rows, err := q.db.QueryContext(ctx, listInboxItemsIgnored, arg.ProfileID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InboxItem{}
+	for rows.Next() {
+		var i InboxItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProfileID,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.ExternalID,
+			&i.Title,
+			&i.Url,
+			&i.Payload,
+			&i.Revision,
+			&i.Unread,
+			&i.ArchivedAt,
+			&i.ArchivedActor,
+			&i.ArchivedReason,
+			&i.Lifecycle,
+			&i.SourceState,
+			&i.FirstSeenAt,
+			&i.LastEventAt,
+			&i.IgnoredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1092,8 +1159,10 @@ func (q *Queries) ListInboxItemsByFeed(ctx context.Context, arg ListInboxItemsBy
 }
 
 const listInboxItemsInbox = `-- name: ListInboxItemsInbox :many
-SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL
-ORDER BY last_event_at DESC, id DESC LIMIT ?
+SELECT i.id, i.profile_id, i.source_kind, i.source_scope, i.external_id, i.title, i.url, i.payload, i.revision, i.unread, i.archived_at, i.archived_actor, i.archived_reason, i.lifecycle, i.source_state, i.first_seen_at, i.last_event_at, i.ignored_at FROM inbox_item i
+WHERE i.profile_id = ? AND i.archived_at IS NULL AND i.ignored_at IS NULL
+  AND EXISTS (SELECT 1 FROM feed_membership_claim c WHERE c.profile_id = i.profile_id AND c.item_id = i.id)
+ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?
 `
 
 type ListInboxItemsInboxParams struct {
@@ -1101,6 +1170,9 @@ type ListInboxItemsInboxParams struct {
 	Limit     int64  `json:"limit"`
 }
 
+// Every user-facing inbox view is claim-scoped: source observations that did
+// not reach a feed terminal remain internal pipeline data and never leak into
+// workspace categories.
 func (q *Queries) ListInboxItemsInbox(ctx context.Context, arg ListInboxItemsInboxParams) ([]InboxItem, error) {
 	rows, err := q.db.QueryContext(ctx, listInboxItemsInbox, arg.ProfileID, arg.Limit)
 	if err != nil {
@@ -1128,6 +1200,7 @@ func (q *Queries) ListInboxItemsInbox(ctx context.Context, arg ListInboxItemsInb
 			&i.SourceState,
 			&i.FirstSeenAt,
 			&i.LastEventAt,
+			&i.IgnoredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1143,8 +1216,10 @@ func (q *Queries) ListInboxItemsInbox(ctx context.Context, arg ListInboxItemsInb
 }
 
 const listInboxItemsOpen = `-- name: ListInboxItemsOpen :many
-SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL AND lifecycle = 'active'
-ORDER BY last_event_at DESC, id DESC LIMIT ?
+SELECT i.id, i.profile_id, i.source_kind, i.source_scope, i.external_id, i.title, i.url, i.payload, i.revision, i.unread, i.archived_at, i.archived_actor, i.archived_reason, i.lifecycle, i.source_state, i.first_seen_at, i.last_event_at, i.ignored_at FROM inbox_item i
+WHERE i.profile_id = ? AND i.archived_at IS NULL AND i.ignored_at IS NULL AND i.lifecycle = 'active'
+  AND EXISTS (SELECT 1 FROM feed_membership_claim c WHERE c.profile_id = i.profile_id AND c.item_id = i.id)
+ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?
 `
 
 type ListInboxItemsOpenParams struct {
@@ -1179,59 +1254,7 @@ func (q *Queries) ListInboxItemsOpen(ctx context.Context, arg ListInboxItemsOpen
 			&i.SourceState,
 			&i.FirstSeenAt,
 			&i.LastEventAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listInboxItemsUnfiled = `-- name: ListInboxItemsUnfiled :many
-SELECT i.id, i.profile_id, i.source_kind, i.source_scope, i.external_id, i.title, i.url, i.payload, i.revision, i.unread, i.archived_at, i.archived_actor, i.archived_reason, i.lifecycle, i.source_state, i.first_seen_at, i.last_event_at FROM inbox_item i
-WHERE i.profile_id = ?
-  AND NOT EXISTS (SELECT 1 FROM feed_membership_claim c WHERE c.item_id = i.id)
-ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?
-`
-
-type ListInboxItemsUnfiledParams struct {
-	ProfileID string `json:"profile_id"`
-	Limit     int64  `json:"limit"`
-}
-
-func (q *Queries) ListInboxItemsUnfiled(ctx context.Context, arg ListInboxItemsUnfiledParams) ([]InboxItem, error) {
-	rows, err := q.db.QueryContext(ctx, listInboxItemsUnfiled, arg.ProfileID, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []InboxItem{}
-	for rows.Next() {
-		var i InboxItem
-		if err := rows.Scan(
-			&i.ID,
-			&i.ProfileID,
-			&i.SourceKind,
-			&i.SourceScope,
-			&i.ExternalID,
-			&i.Title,
-			&i.Url,
-			&i.Payload,
-			&i.Revision,
-			&i.Unread,
-			&i.ArchivedAt,
-			&i.ArchivedActor,
-			&i.ArchivedReason,
-			&i.Lifecycle,
-			&i.SourceState,
-			&i.FirstSeenAt,
-			&i.LastEventAt,
+			&i.IgnoredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1510,7 +1533,7 @@ func (q *Queries) ListSourceHeadKeys(ctx context.Context, topic string) ([]strin
 }
 
 const listUnarchivedInboxItemsByProfile = `-- name: ListUnarchivedInboxItemsByProfile :many
-SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at, ignored_at FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL
 `
 
 func (q *Queries) ListUnarchivedInboxItemsByProfile(ctx context.Context, profileID string) ([]InboxItem, error) {
@@ -1540,6 +1563,7 @@ func (q *Queries) ListUnarchivedInboxItemsByProfile(ctx context.Context, profile
 			&i.SourceState,
 			&i.FirstSeenAt,
 			&i.LastEventAt,
+			&i.IgnoredAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1744,7 +1768,7 @@ func (q *Queries) RetryOutputCommand(ctx context.Context, arg RetryOutputCommand
 const setInboxItemUnread = `-- name: SetInboxItemUnread :one
 UPDATE inbox_item SET unread = ?, revision = revision + 1
 WHERE id = ? AND revision = ?
-RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at, ignored_at
 `
 
 type SetInboxItemUnreadParams struct {
@@ -1774,6 +1798,7 @@ func (q *Queries) SetInboxItemUnread(ctx context.Context, arg SetInboxItemUnread
 		&i.SourceState,
 		&i.FirstSeenAt,
 		&i.LastEventAt,
+		&i.IgnoredAt,
 	)
 	return i, err
 }
@@ -1861,12 +1886,13 @@ func (q *Queries) SetJobStatus(ctx context.Context, arg SetJobStatusParams) (Job
 
 const toggleInboxItemArchived = `-- name: ToggleInboxItemArchived :one
 UPDATE inbox_item SET
+    ignored_at = CASE WHEN archived_at IS NULL THEN NULL ELSE ignored_at END,
     archived_at = CASE WHEN archived_at IS NULL THEN ? ELSE NULL END,
     archived_actor = CASE WHEN archived_at IS NULL THEN 'manual' ELSE NULL END,
     archived_reason = CASE WHEN archived_at IS NULL THEN 'manual' ELSE NULL END,
     revision = revision + 1
 WHERE id = ? AND revision = ?
-RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at, ignored_at
 `
 
 type ToggleInboxItemArchivedParams struct {
@@ -1896,6 +1922,51 @@ func (q *Queries) ToggleInboxItemArchived(ctx context.Context, arg ToggleInboxIt
 		&i.SourceState,
 		&i.FirstSeenAt,
 		&i.LastEventAt,
+		&i.IgnoredAt,
+	)
+	return i, err
+}
+
+const toggleInboxItemIgnored = `-- name: ToggleInboxItemIgnored :one
+UPDATE inbox_item SET
+    ignored_at = CASE WHEN ignored_at IS NULL THEN ? ELSE NULL END,
+    unread = CASE WHEN ignored_at IS NULL THEN 0 ELSE 1 END,
+    archived_at = CASE WHEN ignored_at IS NULL THEN NULL ELSE archived_at END,
+    archived_actor = CASE WHEN ignored_at IS NULL THEN NULL ELSE archived_actor END,
+    archived_reason = CASE WHEN ignored_at IS NULL THEN NULL ELSE archived_reason END,
+    revision = revision + 1
+WHERE id = ? AND revision = ?
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at, ignored_at
+`
+
+type ToggleInboxItemIgnoredParams struct {
+	IgnoredAt sql.NullInt64 `json:"ignored_at"`
+	ID        int64         `json:"id"`
+	Revision  int64         `json:"revision"`
+}
+
+func (q *Queries) ToggleInboxItemIgnored(ctx context.Context, arg ToggleInboxItemIgnoredParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, toggleInboxItemIgnored, arg.IgnoredAt, arg.ID, arg.Revision)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+		&i.IgnoredAt,
 	)
 	return i, err
 }
@@ -1950,7 +2021,7 @@ ON CONFLICT (profile_id, source_kind, source_scope, external_id) DO UPDATE SET
     archived_at = excluded.archived_at, archived_actor = excluded.archived_actor,
     archived_reason = excluded.archived_reason, lifecycle = excluded.lifecycle,
     source_state = excluded.source_state, last_event_at = excluded.last_event_at
-RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at, ignored_at
 `
 
 type UpsertInboxItemParams struct {
@@ -2008,6 +2079,7 @@ func (q *Queries) UpsertInboxItem(ctx context.Context, arg UpsertInboxItemParams
 		&i.SourceState,
 		&i.FirstSeenAt,
 		&i.LastEventAt,
+		&i.IgnoredAt,
 	)
 	return i, err
 }

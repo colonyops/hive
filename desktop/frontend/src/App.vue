@@ -56,7 +56,7 @@ const {
   selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, feedSort, setFeedSort, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, renamingProfile, renameProfileError, togglingProfileId, toggleProfileError, deletingProfile, loadProfiles, createProfile, renameProfile, setProfileEnabled, deleteProfile,
   reorderFeeds, selectProfile, selectSidebar, selectItem, openActionRun, selectNext, selectPrev,
-  toggleUnread, markItemUnread, toggleArchive, loadEvents, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
+  toggleUnread, markItemUnread, toggleArchive, toggleIgnored, loadEvents, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
 // The feed-item kinds currently in the system — what the actions editor
@@ -156,7 +156,7 @@ watch([profilesLoaded, () => route.fullPath], async ([loaded]) => {
     : null
   const wantsUnread = route.query.unread === '1'
   const rawView = route.query.view
-  const view: InboxView = typeof rawView === 'string' && ['open', 'archive', 'all', 'unfiled'].includes(rawView)
+  const view: InboxView = typeof rawView === 'string' && ['open', 'archive', 'all', 'ignored'].includes(rawView)
     ? rawView as InboxView
     : 'inbox'
   if (feedId) await selectSidebar({ type: 'feed', feedId })
@@ -763,7 +763,7 @@ onUnmounted(() => {
               @set-unread="navigateUnreadFilter"
               @refresh="refresh"
             />
-            <DetailPane :item="selectedItem" :events="selectedEvents" :actions="actions" :pending-action="pendingAction" :action-runs="actionRuns" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="requestOpenActionsSettings" />
+            <DetailPane :item="selectedItem" :events="selectedEvents" :actions="actions" :pending-action="pendingAction" :action-runs="actionRuns" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @set-unread="(value) => selectedItem && markItemUnread(selectedItem, value)" @toggle-archive="selectedItem && toggleArchive(selectedItem)" @toggle-ignored="selectedItem && toggleIgnored(selectedItem)" @edit="requestOpenActionsSettings" />
           </section>
           <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
             <template v-if="profilesError">

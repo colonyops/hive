@@ -65,6 +65,15 @@ describe('DetailPane', () => {
     expect(wrapper.get('[data-testid="action-footer-branch"]').text()).toContain('a-very-long-branch')
   })
 
+  it('offers read, archive, and ignore actions from the item menu', async () => {
+    const wrapper = mount(DetailPane, { props: { item, actions } })
+    await wrapper.get('[data-testid="item-actions-toggle"]').trigger('click')
+    const entries = wrapper.get('[data-testid="item-actions-menu"]').findAll('button')
+    expect(entries.map((entry) => entry.text())).toEqual(['Mark as read', 'Archive', 'Ignore'])
+    await entries[2]!.trigger('click')
+    expect(wrapper.emitted('toggle-ignored')).toHaveLength(1)
+  })
+
   it('renders the Observed activity timeline in supplied chronological order', () => {
     const wrapper = mount(DetailPane, { props: { item, actions, events: [
       { id: 1, itemId: 42, kind: 'created', transition: 'created', attention: 'activity', summary: 'first observation', createdAt: 1 },

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { onClickOutside } from '@vueuse/core'
 import ActionCard from './ActionCard.vue'
 import PanelResizeHandle from './PanelResizeHandle.vue'
 import SourceMark from './SourceMark.vue'
@@ -10,14 +11,37 @@ import { renderGithubMarkdown } from '../lib/githubMarkdown'
 import IconCircleDot from '~icons/lucide/circle-dot'
 import IconExternalLink from '~icons/lucide/external-link'
 import IconGitPullRequest from '~icons/lucide/git-pull-request'
+import IconArchive from '~icons/lucide/archive'
+import IconEllipsis from '~icons/lucide/ellipsis'
+import IconEyeOff from '~icons/lucide/eye-off'
 import IconInfo from '~icons/lucide/info'
+import IconMail from '~icons/lucide/mail'
 import IconSettings from '~icons/lucide/settings'
 import type { InboxEvent, InboxItem } from '../types/feed'
 import type { ActionView } from '../types/action'
 import type { ActionRunView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 
 const props = defineProps<{ item: InboxItem | null; actions: ActionView[]; events?: InboxEvent[]; pendingAction?: string | null; actionRuns?: Record<string, ActionRunView> }>()
-const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': []; 'open-url': [url: string]; edit: [] }>()
+const emit = defineEmits<{
+  'run-action': [actionId: string]
+  'open-browser': []
+  'open-url': [url: string]
+  'set-unread': [unread: boolean]
+  'toggle-archive': []
+  'toggle-ignored': []
+  edit: []
+}>()
+
+const itemMenu = ref<HTMLElement | null>(null)
+const itemMenuOpen = ref(false)
+onClickOutside(itemMenu, () => { itemMenuOpen.value = false })
+function chooseItemAction(action: () => void): void {
+  itemMenuOpen.value = false
+  action()
+}
+function toggleRead(): void {
+  if (props.item) emit('set-unread', !props.item.unread)
+}
 
 // The detail header leads with the item's source badge and type. The badge
 // already identifies the provider, so the adjacent context stays focused on
@@ -81,6 +105,14 @@ const { size: bodyHeight, startResize: startBodyResize, step: stepBody } = useRe
           <span class="min-w-0 truncate font-mono text-xs text-text-3">{{ github?.repo }} #{{ github?.num }}</span>
           <span class="flex-1" />
           <button class="open-button shrink-0" @click="emit('open-browser')">open <IconExternalLink class="size-3" /></button>
+          <div ref="itemMenu" class="relative shrink-0">
+            <button class="more-button" aria-label="Item actions" data-testid="item-actions-toggle" :aria-expanded="itemMenuOpen" @click="itemMenuOpen = !itemMenuOpen"><IconEllipsis class="size-4" /></button>
+            <div v-if="itemMenuOpen" class="item-menu" role="menu" data-testid="item-actions-menu">
+              <button class="item-menu-entry" role="menuitem" @click="chooseItemAction(toggleRead)"><IconMail class="size-3.5" />{{ item.unread ? 'Mark as read' : 'Mark as unread' }}</button>
+              <button class="item-menu-entry" role="menuitem" @click="chooseItemAction(() => emit('toggle-archive'))"><IconArchive class="size-3.5" />{{ item.archivedAt ? 'Move to inbox' : 'Archive' }}</button>
+              <button class="item-menu-entry" role="menuitem" @click="chooseItemAction(() => emit('toggle-ignored'))"><IconEyeOff class="size-3.5" />{{ item.ignoredAt ? 'Stop ignoring' : 'Ignore' }}</button>
+            </div>
+          </div>
         </div>
         <h1 class="text-[17px] font-semibold leading-[1.3] tracking-[-.01em]">{{ item.title }}</h1>
         <p class="mt-[9px] text-xs text-text-3"><span class="text-text-2">{{ github?.author }}</span> · {{ relativeAge(item.lastEventAt) === 'now' ? 'now' : `${relativeAge(item.lastEventAt)} ago` }}</p>
@@ -104,7 +136,7 @@ const { size: bodyHeight, startResize: startBodyResize, step: stepBody } = useRe
         <div class="mt-1.5 pl-[19px] font-mono text-[11px] text-text-4">Actions defined in desktop actions.yml</div>
         <section v-if="(events ?? []).length" class="mt-6 border-t border-border pt-4" data-testid="observed-activity">
           <h2 class="mb-3 font-mono text-[10.5px] tracking-[.12em] text-accent">OBSERVED ACTIVITY</h2>
-          <ol class="space-y-2"><li v-for="event in events ?? []" :key="event.id" class="text-xs text-text-3"><span class="text-text-2">{{ event.kind }}</span><span v-if="event.summary"> · {{ event.summary }}</span><span class="ml-2 font-mono text-[10px]">{{ relativeAge(event.createdAt) }}</span></li></ol>
+          <ol class="space-y-2"><li v-for="event in events ?? []" :key="event.id" class="text-xs text-text-3"><span class="text-text-2">{{ event.summary || event.kind }}</span><span v-if="event.summary && event.kind !== 'observed'" class="ml-1 font-mono text-[10px] text-text-4">{{ event.kind.replaceAll('_', ' ') }}</span><span class="ml-2 font-mono text-[10px]">{{ relativeAge(event.createdAt) }}</span></li></ol>
         </section>
       </div>
     </template>
@@ -117,9 +149,13 @@ const { size: bodyHeight, startResize: startBodyResize, step: stepBody } = useRe
 .kind-pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px 0 7px; border-radius: 6px; font-size: 11px; font-weight: 600; }
 .kind-pill-pr { background: var(--color-kind-pr-tint); color: var(--color-kind-pr); }
 .kind-pill-issue { background: var(--color-kind-issue-tint); color: var(--color-kind-issue); }
-.open-button, .edit-button { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border: 1px solid var(--color-card); border-radius: 4px; padding: 2px 7px; color: var(--color-text-2); font-family: var(--font-mono); font-size: 11px; }
+.open-button, .edit-button, .more-button { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border: 1px solid var(--color-card); border-radius: 4px; padding: 2px 7px; color: var(--color-text-2); font-family: var(--font-mono); font-size: 11px; }
 .edit-button { border-radius: 5px; padding: 3px 8px; font-family: var(--font-sans); }
-.open-button:hover, .edit-button:hover { border-color: var(--color-strong); color: var(--color-text); }
+.more-button { height: 24px; padding: 0 5px; }
+.open-button:hover, .edit-button:hover, .more-button:hover, .more-button[aria-expanded="true"] { border-color: var(--color-strong); color: var(--color-text); }
+.item-menu { position: absolute; right: 0; top: calc(100% + 5px); z-index: 30; width: 170px; border: 1px solid var(--color-strong); border-radius: 8px; background: var(--color-pane); padding: 5px; box-shadow: 0 18px 45px -12px rgb(0 0 0 / .55); }
+.item-menu-entry { display: flex; width: 100%; align-items: center; gap: 8px; cursor: pointer; border-radius: 6px; padding: 7px 9px; color: var(--color-text-2); font-size: 12px; text-align: left; }
+.item-menu-entry:hover { background: var(--color-hover); color: var(--color-text); }
 .action-footer-meta { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 8px; align-items: start; }
 
 /* Rendered issue/PR body (GitHub-flavored markdown). Its height is set inline

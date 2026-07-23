@@ -32,12 +32,17 @@ func TestFixtureFlow_LoadsAndMatchesSeedConstants(t *testing.T) {
 	assert.Equal(t, "Frontend Triage", f.Name)
 	assert.True(t, f.Enabled)
 
-	var feedNode *flow.Node
+	var feedNode, sourceNode *flow.Node
 	for i := range f.Nodes {
-		if f.Nodes[i].Type == "feed" {
+		switch f.Nodes[i].Type {
+		case "feed":
 			feedNode = &f.Nodes[i]
+		case "github-source":
+			sourceNode = &f.Nodes[i]
 		}
 	}
+	require.NotNil(t, sourceNode, "fixture flow must have a GitHub source node")
+	assert.Equal(t, MockSourceNodeID, sourceNode.ID, "fixture flow's source node id must match MockSourceNodeID")
 	require.NotNil(t, feedNode, "fixture flow must have a feed node")
 	assert.Equal(t, MockFeedNodeID, feedNode.ID, "fixture flow's feed node id must match MockFeedNodeID")
 }
@@ -80,4 +85,16 @@ func TestSeedMockInboxItems_WritesExpectedRows(t *testing.T) {
 	}
 	assert.False(t, rows.Next())
 	require.NoError(t, rows.Err())
+
+	visible, err := db.ListInboxItems(context.Background(), MockFlowID, "inbox", len(mockInboxItems))
+	require.NoError(t, err)
+	assert.Len(t, visible, len(mockInboxItems))
+
+	tail, err := db.EventLogTailOffset(context.Background())
+	require.NoError(t, err)
+	snapshots, err := db.ListReplaySourceSnapshots(context.Background(), MockFlowID, tail)
+	require.NoError(t, err)
+	require.Len(t, snapshots, 1)
+	assert.Equal(t, "source:"+MockFlowID+"/"+MockSourceNodeID, snapshots[0].Topic)
+	assert.Len(t, snapshots[0].Snapshot, len(mockInboxItems))
 }

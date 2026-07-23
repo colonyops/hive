@@ -5,13 +5,13 @@ import type { InboxItem } from '../../types/feed'
 
 const mocks = vi.hoisted(() => ({
   ListFlows: vi.fn(), GetFlow: vi.fn(), CreateFlow: vi.fn(), RenameFlow: vi.fn(), SetFlowEnabled: vi.fn(), DeleteFlow: vi.fn(), GetSidebar: vi.fn(), SaveSidebar: vi.fn(),
-  ListInboxItems: vi.fn(), ListInboxItemsByFeed: vi.fn(), FeedCounts: vi.fn(), InboxCounts: vi.fn(), MarkInboxItemUnread: vi.fn(), ToggleInboxItemArchived: vi.fn(), InboxItemEvents: vi.fn(),
+  ListInboxItems: vi.fn(), ListInboxItemsByFeed: vi.fn(), FeedCounts: vi.fn(), InboxCounts: vi.fn(), MarkInboxItemUnread: vi.fn(), ToggleInboxItemArchived: vi.fn(), ToggleInboxItemIgnored: vi.fn(), InboxItemEvents: vi.fn(),
   ActionViews: vi.fn(), ActionRun: vi.fn(), InvokeAction: vi.fn(), SessionLaunchOptions: vi.fn(), On: vi.fn(), Hide: vi.fn(), OpenURL: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => ({ ListFlows: mocks.ListFlows, GetFlow: mocks.GetFlow, CreateFlow: mocks.CreateFlow, RenameFlow: mocks.RenameFlow, SetFlowEnabled: mocks.SetFlowEnabled, DeleteFlow: mocks.DeleteFlow, GetSidebar: mocks.GetSidebar, SaveSidebar: mocks.SaveSidebar }))
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
   ListInboxItems: mocks.ListInboxItems, ListInboxItemsByFeed: mocks.ListInboxItemsByFeed, FeedCounts: mocks.FeedCounts, InboxCounts: mocks.InboxCounts,
-  MarkInboxItemUnread: mocks.MarkInboxItemUnread, ToggleInboxItemArchived: mocks.ToggleInboxItemArchived, InboxItemEvents: mocks.InboxItemEvents,
+  MarkInboxItemUnread: mocks.MarkInboxItemUnread, ToggleInboxItemArchived: mocks.ToggleInboxItemArchived, ToggleInboxItemIgnored: mocks.ToggleInboxItemIgnored, InboxItemEvents: mocks.InboxItemEvents,
   ActionViews: mocks.ActionViews, ActionRun: mocks.ActionRun, InvokeAction: mocks.InvokeAction, SessionLaunchOptions: mocks.SessionLaunchOptions,
 }))
 vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On }, Window: { Hide: mocks.Hide }, Browser: { OpenURL: mocks.OpenURL }, Call: { ByID: vi.fn() } }))
@@ -30,6 +30,7 @@ beforeEach(() => {
   mocks.ListInboxItems.mockResolvedValue([]); mocks.ListInboxItemsByFeed.mockResolvedValue([]); mocks.ActionViews.mockResolvedValue([]); mocks.ActionRun.mockResolvedValue({ commandId: 1, status: 'done' }); mocks.SessionLaunchOptions.mockResolvedValue({ repositories: [{ name: 'hive', repository: 'https://github.com/colonyops/hive.git' }], defaultRepository: 'https://github.com/colonyops/hive.git', agents: ['claude'], defaultAgent: 'claude' })
   mocks.MarkInboxItemUnread.mockImplementation(async (id: number, revision: number, unread: boolean) => item(id, { revision: revision + 1, unread }))
   mocks.ToggleInboxItemArchived.mockImplementation(async (id: number, revision: number) => item(id, { revision: revision + 1, archivedAt: Date.now() }))
+  mocks.ToggleInboxItemIgnored.mockImplementation(async (id: number, revision: number) => item(id, { revision: revision + 1, ignoredAt: Date.now() }))
   mocks.SetFlowEnabled.mockImplementation(async (id: string, enabled: boolean) => ({ id, name: 'Frontend Triage', enabled, valid: true }))
   mocks.On.mockReturnValue(() => {})
 })
@@ -46,12 +47,12 @@ describe('useFeedState', () => {
 
   it('uses dedicated inbox queries for all sidebar views and feed claims', async () => {
     const get = mountState(); await flushPromises()
-    for (const view of ['open', 'archive', 'all', 'unfiled'] as const) await get().selectSidebar({ type: 'view', view })
+    for (const view of ['open', 'archive', 'all', 'ignored'] as const) await get().selectSidebar({ type: 'view', view })
     await get().selectSidebar({ type: 'feed', feedId: 'triage/my-prs' })
     expect(mocks.ListInboxItems).toHaveBeenCalledWith('triage', 'open', 500)
     expect(mocks.ListInboxItems).toHaveBeenCalledWith('triage', 'archive', 500)
     expect(mocks.ListInboxItems).toHaveBeenCalledWith('triage', 'all', 500)
-    expect(mocks.ListInboxItems).toHaveBeenCalledWith('triage', 'unfiled', 500)
+    expect(mocks.ListInboxItems).toHaveBeenCalledWith('triage', 'ignored', 500)
     expect(mocks.ListInboxItemsByFeed).toHaveBeenCalledWith('triage', 'triage/my-prs', 500)
   })
 
@@ -96,7 +97,7 @@ describe('useFeedState', () => {
     expect(get().items.value[0]?.revision).toBe(2)
     expect(mocks.ListInboxItems).toHaveBeenLastCalledWith('triage', 'all', 500)
 
-    for (const view of ['inbox', 'open', 'unfiled', 'archive'] as const) {
+    for (const view of ['inbox', 'open', 'ignored', 'archive'] as const) {
       mocks.ListInboxItems.mockResolvedValue([item(1, { archivedAt: view === 'archive' ? 1 : null })])
       await get().selectSidebar({ type: 'view', view }); const before = mocks.ListInboxItems.mock.calls.length
       await get().toggleArchive(get().items.value[0]!)
