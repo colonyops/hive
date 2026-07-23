@@ -1,7 +1,10 @@
-// Package github is a minimal GitHub REST client for the desktop data layer.
-// It owns in-app authentication (OAuth device flow, PAT validation) and the
-// typed API calls the feed needs (search, notifications). It deliberately has
-// no feed concepts: profiles, unread state, and polling live in internal/feed.
+// Package github is a minimal GitHub REST client: in-app authentication
+// (OAuth device flow, PAT validation) and typed search/notification calls.
+//
+// Nothing in this repository imports it — it exists for the hive-desktop app
+// (hay-kot/hive-desktop), which vendors hive's internal packages at a pinned
+// commit. Keep it building and tested here; removing it would break the
+// desktop's vendor sync.
 package github
 
 import (

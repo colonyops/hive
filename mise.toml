@@ -1,7 +1,6 @@
 [tools]
 # Go Tools
 "go" = "1.26"
-"go:github.com/wailsapp/wails/v3/cmd/wails3" = "v3.0.0-alpha2.117"
 "go:golang.org/x/tools/cmd/deadcode" = "latest"
 "go:github.com/abice/go-enum" = "v0.9.4"
 "github:hay-kot/gobusgen" = "v0.3.0"
@@ -19,9 +18,9 @@ HIVE_LOG_FILE = "./dev.log"
 
 [tasks."generate:enums"]
 description = "Generate enum methods using go-enum"
-sources = ["internal/core/action/type.go", "internal/core/hc/item.go", "internal/core/notify/store.go", "internal/core/todo/todo.go", "internal/sources/backend.go", "internal/desktop/activity/activity.go", "internal/desktop/jobs/jobs.go", "internal/desktop/pipeline/pipelinedb/classify.go", "internal/desktop/pipeline/flow/flow.go", "desktop/pipelineservice.go"]
-outputs = ["internal/core/action/type_enum.go", "internal/core/hc/item_enum.go", "internal/core/notify/store_enum.go", "internal/core/todo/todo_enum.go", "internal/sources/backend_enum.go", "internal/desktop/activity/activity_enum.go", "internal/desktop/jobs/jobs_enum.go", "internal/desktop/pipeline/pipelinedb/classify_enum.go", "internal/desktop/pipeline/flow/flow_enum.go", "desktop/pipelineservice_enum.go"]
-run = "go-enum --nocase --names --marshal -f internal/core/action/type.go -f internal/core/hc/item.go -f internal/core/notify/store.go -f internal/core/todo/todo.go -f internal/sources/backend.go -f internal/desktop/activity/activity.go -f internal/desktop/jobs/jobs.go -f internal/desktop/pipeline/pipelinedb/classify.go -f internal/desktop/pipeline/flow/flow.go -f desktop/pipelineservice.go"
+sources = ["internal/core/action/type.go", "internal/core/hc/item.go", "internal/core/notify/store.go", "internal/core/todo/todo.go", "internal/sources/backend.go"]
+outputs = ["internal/core/action/type_enum.go", "internal/core/hc/item_enum.go", "internal/core/notify/store_enum.go", "internal/core/todo/todo_enum.go", "internal/sources/backend_enum.go"]
+run = "go-enum --nocase --names --marshal -f internal/core/action/type.go -f internal/core/hc/item.go -f internal/core/notify/store.go -f internal/core/todo/todo.go -f internal/sources/backend.go"
 
 [tasks.generate]
 description = "Run all code generators"
@@ -31,8 +30,6 @@ sources = [
   "internal/data/db/queries/queries.sql",
   "internal/data/db/queries/queries_hc.sql",
   "internal/data/db/migrations/*.up.sql",
-  "internal/desktop/pipeline/pipelinedb/queries/queries.sql",
-  "internal/desktop/pipeline/pipelinedb/migrations/*.up.sql",
   "sqlc.yaml",
 ]
 outputs = [
@@ -41,9 +38,6 @@ outputs = [
   "internal/data/db/models.go",
   "internal/data/db/queries.sql.go",
   "internal/data/db/queries_hc.sql.go",
-  "internal/desktop/pipeline/pipelinedb/db.go",
-  "internal/desktop/pipeline/pipelinedb/models.go",
-  "internal/desktop/pipeline/pipelinedb/queries.sql.go",
 ]
 run = ["go generate ./...", "sqlc generate"]
 
@@ -98,49 +92,6 @@ run = "go run . doctor"
 description = "Run doctor with intentionally invalid config"
 env = { HIVE_CONFIG = "./dev/config.invalid.yaml" }
 run = "go run . doctor || true"
-
-[tasks."desktop:dev"]
-description = "Run the desktop app in dev mode (wails3 dev). Picks a free Vite port so instances run concurrently; injects the git branch for the dev bar."
-dir = "desktop"
-run = """
-port="$(./build/scripts/dev-port.sh)"
-branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
-echo "hive desktop dev: vite port ${port}, branch ${branch}"
-WAILS_VITE_PORT="${port}" VITE_HIVE_DEV_BRANCH="${branch}" wails3 dev -config ./build/config.yml
-"""
-
-[tasks."desktop:build"]
-description = "Build the desktop app"
-dir = "desktop"
-run = "wails3 build"
-
-[tasks."desktop:icons"]
-description = "Regenerate desktop icon assets from SVG masters"
-dir = "desktop"
-run = "./build/icons/generate.sh"
-
-[tasks."desktop:generate"]
-description = "Regenerate desktop TS bindings"
-dir = "desktop"
-run = "wails3 generate bindings -clean=true -ts -i"
-
-[tasks."desktop:serve"]
-description = "Build and run the desktop app as a headless HTTP server (server build)"
-# The server binary embeds frontend/dist, so the frontend must be built first —
-# a fresh clone's dist contains only .gitkeep. Port override: WAILS_SERVER_PORT.
-run = [
-  "cd desktop/frontend && npm run build",
-  "go build -tags server -o ./desktop/bin/hive-desktop-server ./desktop",
-  "./desktop/bin/hive-desktop-server",
-]
-
-[tasks."desktop:test"]
-description = "Run desktop frontend + Go tests"
-run = ["cd desktop/frontend && npm test", "go test ./desktop/... ./internal/desktop/..."]
-
-[tasks."desktop:e2e"]
-description = "Run desktop e2e tests in the pinned Docker/Playwright environment"
-run = "./desktop/e2e/scripts/run-docker.sh"
 
 [tasks."docs:serve"]
 description = "Serve documentation site locally"
