@@ -438,10 +438,12 @@ watch(() => (authenticated.value ? authStatus.value?.login ?? '' : null), (key) 
 const needsWorkspace = computed(() => authenticated.value && profilesLoaded.value && profiles.value.length === 0)
 
 // ── Layout chrome ─────────────────────────────────────────────────────────────
-// The feed sidebar collapses to reclaim horizontal space (handy in split
-// screens); the choice is persisted. Its toggle only appears in the feed view —
-// the one place a sidebar renders — so it never dangles over settings or flows.
+// The feed sidebar and the detail preview both collapse to reclaim horizontal
+// space (handy in split screens); each choice is persisted. Their toggles only
+// appear in the feed view — the one place those panels render — so they never
+// dangle over settings or flows.
 const sidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)
+const previewCollapsed = useStorage('hive.panel.detailpane.collapsed', false)
 const feedViewActive = computed(() =>
   authenticated.value && !needsWorkspace.value &&
   !applicationSettingsActive.value && !profileSettingsActive.value &&
@@ -451,6 +453,10 @@ const feedViewActive = computed(() =>
 
 function toggleSidebar(): void {
   sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+function togglePreview(): void {
+  previewCollapsed.value = !previewCollapsed.value
 }
 
 // We draw our own hidden-inset title bar, so the native double-click-to-zoom
@@ -477,6 +483,7 @@ const runMap: Record<string, () => void | Promise<void>> = {
   'feed.prev': selectPrev,
   'feed.open-in-browser': openSelectedInBrowser,
   'feed.toggle-unread': navigateUnreadToggle,
+  'feed.toggle-preview': togglePreview,
   'feed.refresh': refresh,
   'feed.toggle-archive': async () => { if (selectedItem.value) await toggleArchive(selectedItem.value) },
   'feed.mark-unread': async () => { if (selectedItem.value) await markItemUnread(selectedItem.value, true) },
@@ -673,6 +680,8 @@ onUnmounted(() => {
         :can-go-forward="canGoForward"
         :sidebar-collapsed="sidebarCollapsed"
         :can-toggle-sidebar="feedViewActive"
+        :preview-collapsed="previewCollapsed"
+        :can-toggle-preview="feedViewActive"
         @back="router.back()"
         @forward="router.forward()"
         @open-error-node="openErrorNode"
@@ -680,6 +689,7 @@ onUnmounted(() => {
         @open-job-run="openJobRun"
         @open-update="openUpdate"
         @toggle-sidebar="toggleSidebar"
+        @toggle-preview="togglePreview"
         @open-palette="togglePalette"
         @toggle-maximise="toggleMaximise"
       />
@@ -763,7 +773,7 @@ onUnmounted(() => {
               @set-unread="navigateUnreadFilter"
               @refresh="refresh"
             />
-            <DetailPane :item="selectedItem" :events="selectedEvents" :actions="actions" :pending-action="pendingAction" :action-runs="actionRuns" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @set-unread="(value) => selectedItem && markItemUnread(selectedItem, value)" @toggle-archive="selectedItem && toggleArchive(selectedItem)" @toggle-ignored="selectedItem && toggleIgnored(selectedItem)" @edit="requestOpenActionsSettings" />
+            <DetailPane v-if="!previewCollapsed" :item="selectedItem" :events="selectedEvents" :actions="actions" :pending-action="pendingAction" :action-runs="actionRuns" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @set-unread="(value) => selectedItem && markItemUnread(selectedItem, value)" @toggle-archive="selectedItem && toggleArchive(selectedItem)" @toggle-ignored="selectedItem && toggleIgnored(selectedItem)" @edit="requestOpenActionsSettings" />
           </section>
           <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
             <template v-if="profilesError">

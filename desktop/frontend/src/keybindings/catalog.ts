@@ -5,6 +5,7 @@ import IconCommand from '~icons/lucide/command'
 import IconExternalLink from '~icons/lucide/external-link'
 import IconEye from '~icons/lucide/eye'
 import IconMinus from '~icons/lucide/minus'
+import IconPanelRight from '~icons/lucide/panel-right'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 
 // The single declarative source of truth for *bindable* commands — the stable
@@ -71,6 +72,15 @@ export const commandCatalog: BindableCommand[] = [
     keywords: ['unread', 'filter'],
     icon: IconEye,
     defaultCombos: ['u'],
+    context: 'feed',
+  },
+  {
+    id: 'feed.toggle-preview',
+    title: 'Toggle preview pane',
+    group: 'Feeds',
+    keywords: ['preview', 'detail', 'pane', 'panel', 'reading', 'close'],
+    icon: IconPanelRight,
+    defaultCombos: ['p'],
     context: 'feed',
   },
   { id: 'feed.toggle-archive', title: 'Archive / unarchive item', group: 'Feeds', defaultCombos: ['e'], context: 'feed' },

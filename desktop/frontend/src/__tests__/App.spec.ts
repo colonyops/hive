@@ -256,6 +256,22 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('collapses and restores the detail preview from the title-bar toggle and the p key', async () => {
+    const wrapper = await mountApp()
+    expect(wrapper.find('[data-testid="detail-pane"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="titlebar-toggle-preview"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="detail-pane"]').exists()).toBe(false)
+    expect(localStorage.getItem('hive.panel.detailpane.collapsed')).toBe('true')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="detail-pane"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it('opens profile settings from the sidebar gear and application settings from the rail', async () => {
     const wrapper = await mountApp()
 
