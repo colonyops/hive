@@ -1,12 +1,15 @@
+import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { useFeedState } from '../useFeedState'
+import { resetToastsForTests } from '../useToasts'
 import type { InboxItem } from '../../types/feed'
 
 const mocks = vi.hoisted(() => ({
   ListFlows: vi.fn(), GetFlow: vi.fn(), CreateFlow: vi.fn(), RenameFlow: vi.fn(), SetFlowEnabled: vi.fn(), DeleteFlow: vi.fn(), GetSidebar: vi.fn(), SaveSidebar: vi.fn(),
   ListInboxItems: vi.fn(), ListInboxItemsByFeed: vi.fn(), FeedCounts: vi.fn(), InboxCounts: vi.fn(), MarkInboxItemUnread: vi.fn(), ToggleInboxItemArchived: vi.fn(), ToggleInboxItemIgnored: vi.fn(), InboxItemEvents: vi.fn(),
   ActionViews: vi.fn(), ActionRun: vi.fn(), InvokeAction: vi.fn(), SessionLaunchOptions: vi.fn(), On: vi.fn(), Hide: vi.fn(), OpenURL: vi.fn(),
+  notify: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => ({ ListFlows: mocks.ListFlows, GetFlow: mocks.GetFlow, CreateFlow: mocks.CreateFlow, RenameFlow: mocks.RenameFlow, SetFlowEnabled: mocks.SetFlowEnabled, DeleteFlow: mocks.DeleteFlow, GetSidebar: mocks.GetSidebar, SaveSidebar: mocks.SaveSidebar }))
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
@@ -15,6 +18,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', (
   ActionViews: mocks.ActionViews, ActionRun: mocks.ActionRun, InvokeAction: mocks.InvokeAction, SessionLaunchOptions: mocks.SessionLaunchOptions,
 }))
 vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On }, Window: { Hide: mocks.Hide }, Browser: { OpenURL: mocks.OpenURL }, Call: { ByID: vi.fn() } }))
+vi.mock('../useNotify', () => ({ useNotify: () => ({ notify: mocks.notify }) }))
 
 const flow = { id: 'triage', name: 'Frontend Triage', enabled: true, nodes: [{ id: 'source', type: 'github-source' }, { id: 'my-prs', type: 'feed', name: 'My PRs' }], wires: [] }
 function item(id: number, overrides: Partial<InboxItem> = {}): InboxItem {
@@ -23,7 +27,8 @@ function item(id: number, overrides: Partial<InboxItem> = {}): InboxItem {
 function mountState() { let state!: ReturnType<typeof useFeedState>; mount({ setup() { state = useFeedState(); return () => null } }); return () => state }
 
 beforeEach(() => {
-  vi.clearAllMocks(); localStorage.clear()
+  vi.clearAllMocks(); localStorage.clear(); resetToastsForTests()
+  mocks.notify.mockResolvedValue(undefined)
   mocks.ListFlows.mockResolvedValue([{ id: 'triage', name: 'Frontend Triage', enabled: true, valid: true }])
   mocks.GetFlow.mockResolvedValue(flow); mocks.GetSidebar.mockResolvedValue({ items: [] }); mocks.SaveSidebar.mockResolvedValue(undefined)
   mocks.FeedCounts.mockResolvedValue([{ feedId: 'triage/my-prs', total: 3, unread: 2 }]); mocks.InboxCounts.mockResolvedValue({ inboxTotal: 3, inboxUnread: 2 })
@@ -37,6 +42,15 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('useFeedState', () => {
+  it('keeps durable outcomes on notify and reserves showToast for ephemeral feedback', () => {
+    const source = readFileSync('src/composables/useFeedState.ts', 'utf8')
+    expect(source).not.toContain('recordActivity')
+    expect(source.match(/showToast\(/g)).toHaveLength(4)
+    for (const title of ['Sidebar layout save failed', 'Profile renamed', 'Profile enabled', 'Profile disabled', "Couldn't delete profile", 'Profile deleted']) {
+      expect(source).toContain(title)
+    }
+  })
+
   it('loads flow profiles, resolved feed counts, and the default inbox view', async () => {
     const get = mountState(); await flushPromises()
     expect(get().activeProfileId.value).toBe('triage')
@@ -148,6 +162,7 @@ describe('useFeedState', () => {
     expect(mocks.SetFlowEnabled).toHaveBeenCalledWith('triage', false)
     expect(get().activeProfileId.value).toBe('triage')
     expect(get().activeProfile.value?.enabled).toBe(false)
+    expect(mocks.notify).toHaveBeenCalledWith({ title: 'Profile disabled', body: 'Frontend Triage', severity: 'success', category: 'config' })
 
     mocks.SetFlowEnabled.mockRejectedValueOnce(new Error('disk is read-only'))
     expect(await get().setProfileEnabled('triage', true)).toBe(false)
@@ -166,11 +181,13 @@ describe('useFeedState', () => {
     await get().selectProfile('triage')
     expect(await get().renameProfile('triage', ' Team Triage ')).toBe(true)
     expect(get().activeProfile.value).toMatchObject({ name: 'Team Triage', letter: 'T' })
+    expect(mocks.notify).toHaveBeenCalledWith({ title: 'Profile renamed', body: 'Team Triage', severity: 'success', category: 'config' })
     mocks.RenameFlow.mockRejectedValueOnce(new Error('disk is read-only'))
     expect(await get().renameProfile('triage', 'Nope')).toBe(false)
     expect(get().renameProfileError.value).toBe('disk is read-only')
     await get().deleteProfile('triage')
     expect(mocks.DeleteFlow).toHaveBeenCalledWith('triage')
+    expect(mocks.notify).toHaveBeenCalledWith({ title: 'Profile deleted', body: 'Team Triage', severity: 'success', category: 'config' })
   })
 
   it('opens arbitrary URLs and reports a selected inbox item without a URL', async () => {
@@ -191,11 +208,27 @@ describe('useFeedState', () => {
     await get().invokeAction('review')
     expect(mocks.InvokeAction).toHaveBeenCalledWith('review', 7, {})
     expect(get().actionRuns.value.review?.commandId).toBe(17)
-    expect(get().toasts.value.some((toast) => toast.message === 'Review completed')).toBe(true)
+    expect(mocks.notify).toHaveBeenCalledWith({ title: 'Review completed', severity: 'success', category: 'action' })
     mocks.InvokeAction.mockResolvedValueOnce({ commandId: 18, status: 'failed', error: 'command exited 1', stderr: 'bad input' })
     await get().invokeAction('review')
     expect(get().actionRuns.value.review).toMatchObject({ commandId: 18, status: 'failed', stderr: 'bad input' })
-    expect(get().toasts.value.some((toast) => toast.severity === 'error' && toast.message === 'command exited 1')).toBe(true)
+    expect(mocks.notify).toHaveBeenCalledWith({ title: 'command exited 1', severity: 'error', category: 'action' })
+  })
+
+  it('asks for confirmation before rerunning an action and preserves the first run', async () => {
+    mocks.ListInboxItems.mockResolvedValue([item(7)])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review PR', type: 'shell', showInDetail: true, requiresSessionInput: false }])
+    mocks.InvokeAction
+      .mockResolvedValueOnce({ commandId: 7, status: 'done', confirmationRequired: true })
+      .mockResolvedValueOnce({ commandId: 8, status: 'done' })
+    const get = mountState(); await flushPromises()
+    await get().invokeAction('review')
+    expect(get().actionRerunConfirmation.value).toMatchObject({ actionID: 'review', label: 'Review PR' })
+    expect(mocks.notify).not.toHaveBeenCalled()
+    await get().confirmActionRerun()
+    expect(mocks.InvokeAction).toHaveBeenLastCalledWith('review', 7, { rerun: true })
+    expect(get().actionRerunConfirmation.value).toBeNull()
+    expect(mocks.notify).toHaveBeenCalledWith({ title: 'Review PR completed', severity: 'success', category: 'action' })
   })
 
   it('names published messages and opens interactive session launch actions before invocation', async () => {
@@ -204,7 +237,7 @@ describe('useFeedState', () => {
     mocks.InvokeAction.mockResolvedValueOnce({ commandId: 18, status: 'done', result: { message: { topic: 'agent.session.inbox', sender: 'hive-desktop' } } })
     const get = mountState(); await flushPromises()
     await get().invokeAction('notify')
-    expect(get().toasts.value.some((toast) => toast.message === 'Published message to agent.session.inbox as hive-desktop')).toBe(true)
+    expect(mocks.notify).toHaveBeenCalledWith({ title: 'Published message to agent.session.inbox as hive-desktop', severity: 'success', category: 'action' })
     mocks.ActionViews.mockResolvedValue([{ id: 'launch', label: 'Launch', type: 'launch-session', showInDetail: true, requiresSessionInput: true }])
     await get().selectItem(7)
     await get().invokeAction('launch')
@@ -213,7 +246,7 @@ describe('useFeedState', () => {
     mocks.InvokeAction.mockResolvedValueOnce({ commandId: 19, status: 'done', result: { session: { id: 'session-1', name: 'review-pr-7' } } })
     await get().submitSessionLaunch({ name: 'review-pr-7', repository: 'https://github.com/colonyops/hive.git', agent: 'claude' })
     expect(mocks.InvokeAction).toHaveBeenLastCalledWith('launch', 7, { session: { name: 'review-pr-7', repository: 'https://github.com/colonyops/hive.git', agent: 'claude' } })
-    expect(get().toasts.value.some((toast) => toast.message === 'Created session review-pr-7 (session-1)')).toBe(true)
+    expect(mocks.notify).toHaveBeenCalledWith({ title: 'Created session review-pr-7 (session-1)', severity: 'success', category: 'session' })
   })
 
   it('scopes persisted action runs to the numeric inbox item that owns them', async () => {

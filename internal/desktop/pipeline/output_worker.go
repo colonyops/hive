@@ -26,9 +26,11 @@ const (
 const ActionTypeLaunchSession = "launch-session"
 
 type OutputData struct {
-	Key     string
-	Payload map[string]any
-	Raw     json.RawMessage
+	Key       string
+	Payload   map[string]any
+	Raw       json.RawMessage
+	CommandID int64
+	IsRerun   bool
 }
 type Executor interface {
 	Execute(context.Context, actions.Action, OutputData, ActionInvocationInput) (ExecutionResult, error)
@@ -53,6 +55,7 @@ type ActionLister interface {
 type OutputCommandStore interface {
 	ListRunnableOutputCommandsAfter(context.Context, int64, int) ([]pipelinedb.OutputCommand, error)
 	ConfirmOutputCommand(context.Context, string, string, []byte) (pipelinedb.OutputCommand, bool, error)
+	RerunOutputCommand(context.Context, string, string, []byte) (pipelinedb.OutputCommand, error)
 	OutputCommand(context.Context, int64) (pipelinedb.OutputCommand, error)
 	MarkOutputCommandDone(context.Context, int64, ...string) error
 	MarkOutputCommandFailed(context.Context, int64, string, ...string) error
@@ -152,12 +155,24 @@ func (w *Worker) Stop() { w.stopOnce.Do(func() { close(w.stop) }) }
 func (w *Worker) Confirm(ctx context.Context, actionID, key string, payload []byte, input ActionInvocationInput) (ActionRunView, error) {
 	w.runMu.Lock()
 	defer w.runMu.Unlock()
-	row, created, err := w.db.ConfirmOutputCommand(ctx, actionID, key, payload)
+	var row pipelinedb.OutputCommand
+	var err error
+	if input.Rerun {
+		row, err = w.db.RerunOutputCommand(ctx, actionID, key, payload)
+	} else {
+		var created bool
+		row, created, err = w.db.ConfirmOutputCommand(ctx, actionID, key, payload)
+		if err == nil && !created {
+			if row.Status == "pending" || row.Status == "running" {
+				return ActionRunView{}, fmt.Errorf("action %q is already running for %q", actionID, key)
+			}
+			view := w.view(ctx, row.ID)
+			view.ConfirmationRequired = true
+			return view, nil
+		}
+	}
 	if err != nil {
 		return ActionRunView{}, err
-	}
-	if !created {
-		return ActionRunView{}, fmt.Errorf("action %q has already run for %q", actionID, key)
 	}
 
 	action, ok := w.actions.Get(actionID)
@@ -301,7 +316,10 @@ func (w *Worker) execute(
 		logger.Warn().Err(err).Msg("output worker: decoding command payload failed")
 		return ExecutionResult{}, fmt.Errorf("decode payload: %w", err)
 	}
-	return w.dispatch.Execute(ctx, a, OutputData{Key: row.Key, Payload: payload, Raw: json.RawMessage(row.Payload)}, input)
+	return w.dispatch.Execute(ctx, a, OutputData{
+		Key: row.Key, Payload: payload, Raw: json.RawMessage(row.Payload),
+		CommandID: row.ID, IsRerun: row.IsRerun != 0,
+	}, input)
 }
 
 func (w *Worker) fail(

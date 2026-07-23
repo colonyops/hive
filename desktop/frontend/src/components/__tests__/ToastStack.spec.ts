@@ -44,31 +44,32 @@ describe('ToastStack', () => {
     const toasts = [
       toast({ severity: 'info', message: 'Feed refreshed' }),
       toast({ severity: 'auto-action', message: 'Automatic action taken', actions: [undo, view] }),
-      toast({ severity: 'error', message: "Couldn't reach GitHub", duration: null }),
+      toast({ severity: 'warning', message: 'Rate limit is close' }),
+      toast({ severity: 'error', message: "Couldn't reach GitHub" }),
       toast({ severity: 'success', message: 'Session created' }),
     ]
     const wrapper = mount(ToastStack, { props: { toasts } })
 
     const els = toastEls(wrapper)
-    expect(els.map((el) => el.attributes('data-toast-severity'))).toEqual(['info', 'auto-action', 'error', 'success'])
+    expect(els.map((el) => el.attributes('data-toast-severity'))).toEqual(['auto-action', 'warning', 'error', 'success'])
 
-    const autoToast = els[1]
+    const autoToast = els[0]
     expect(autoToast.find('[data-testid="toast-auto-badge"]').text()).toBe('AUTO')
     const actionLabels = autoToast.findAll('[data-testid="toast-action"]').map((el) => el.text())
     expect(actionLabels).toEqual(['Undo', 'View in activity'])
 
     // Other severities show no AUTO badge.
-    expect(els[0].find('[data-testid="toast-auto-badge"]').exists()).toBe(false)
+    expect(els[1].find('[data-testid="toast-auto-badge"]').exists()).toBe(false)
 
     wrapper.unmount()
   })
 
-  it('gives error toasts no auto-dismiss progress bar, and other severities one', () => {
-    const toasts = [toast({ severity: 'error', duration: null }), toast({ severity: 'success', duration: 4000 })]
+  it('shows auto-dismiss progress for error and success toasts', () => {
+    const toasts = [toast({ severity: 'error' }), toast({ severity: 'success' })]
     const wrapper = mount(ToastStack, { props: { toasts } })
 
     const els = toastEls(wrapper)
-    expect(els[0].find('[data-testid="toast-progress"]').exists()).toBe(false)
+    expect(els[0].find('[data-testid="toast-progress"]').exists()).toBe(true)
     expect(els[1].find('[data-testid="toast-progress"]').exists()).toBe(true)
 
     wrapper.unmount()

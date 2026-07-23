@@ -32,6 +32,40 @@ type GithubSettings struct {
 	MinPollIntervalSeconds int `json:"minPollIntervalSeconds"`
 }
 
+// NotificationSettings is the desktop notification configuration resolved
+// from settings.yaml. All fields are explicit booleans for the frontend.
+type NotificationSettings struct {
+	NotificationsEnabled       bool `json:"notificationsEnabled"`
+	SystemNotificationsEnabled bool `json:"systemNotificationsEnabled"`
+	NotificationSound          bool `json:"notificationSound"`
+}
+
+// NotificationSettings returns the current resolved notification settings.
+func (s *SettingsService) NotificationSettings() (NotificationSettings, error) {
+	settings, err := desktop.LoadSettings()
+	if err != nil {
+		return NotificationSettings{}, err
+	}
+	return NotificationSettings{
+		NotificationsEnabled:       settings.NotificationsEnabledOrDefault(),
+		SystemNotificationsEnabled: settings.SystemNotificationsEnabledOrDefault(),
+		NotificationSound:          settings.NotificationSoundOrDefault(),
+	}, nil
+}
+
+// SetNotificationSettings persists the notification configuration while
+// preserving all unrelated desktop settings.
+func (s *SettingsService) SetNotificationSettings(settings NotificationSettings) error {
+	current, err := desktop.LoadSettings()
+	if err != nil {
+		return err
+	}
+	current.NotificationsEnabled = &settings.NotificationsEnabled
+	current.SystemNotificationsEnabled = &settings.SystemNotificationsEnabled
+	current.NotificationSound = &settings.NotificationSound
+	return desktop.SaveSettings(current)
+}
+
 // GithubSettings returns the current resolved GitHub polling settings.
 func (s *SettingsService) GithubSettings() (GithubSettings, error) {
 	settings, err := desktop.LoadSettings()

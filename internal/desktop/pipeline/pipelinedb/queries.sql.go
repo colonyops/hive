@@ -110,9 +110,9 @@ func (q *Queries) CommitConsumerOffset(ctx context.Context, arg CommitConsumerOf
 const confirmOutputCommand = `-- name: ConfirmOutputCommand :one
 INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'running', ?)
-ON CONFLICT(action_id, key) DO UPDATE SET status = 'running'
+ON CONFLICT DO UPDATE SET status = 'running'
 WHERE output_command.status = 'pending'
-RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at
+RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun
 `
 
 type ConfirmOutputCommandParams struct {
@@ -144,6 +144,7 @@ func (q *Queries) ConfirmOutputCommand(ctx context.Context, arg ConfirmOutputCom
 		&i.Stdout,
 		&i.Stderr,
 		&i.CreatedAt,
+		&i.IsRerun,
 	)
 	return i, err
 }
@@ -413,7 +414,7 @@ func (q *Queries) DeleteUnarchivedFeedMembershipClaimsByProfile(ctx context.Cont
 const enqueueOutputCommand = `-- name: EnqueueOutputCommand :exec
 INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'pending', ?)
-ON CONFLICT(action_id, key) DO NOTHING
+ON CONFLICT DO NOTHING
 `
 
 type EnqueueOutputCommandParams struct {
@@ -547,8 +548,40 @@ func (q *Queries) GetInboxItemByID(ctx context.Context, id int64) (InboxItem, er
 	return i, err
 }
 
+const getLatestOutputCommandForAction = `-- name: GetLatestOutputCommandForAction :one
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun FROM output_command
+WHERE action_id = ? AND key = ?
+ORDER BY id DESC
+LIMIT 1
+`
+
+type GetLatestOutputCommandForActionParams struct {
+	ActionID string `json:"action_id"`
+	Key      string `json:"key"`
+}
+
+func (q *Queries) GetLatestOutputCommandForAction(ctx context.Context, arg GetLatestOutputCommandForActionParams) (OutputCommand, error) {
+	row := q.db.QueryRowContext(ctx, getLatestOutputCommandForAction, arg.ActionID, arg.Key)
+	var i OutputCommand
+	err := row.Scan(
+		&i.ID,
+		&i.ActionID,
+		&i.Key,
+		&i.Payload,
+		&i.Status,
+		&i.Attempts,
+		&i.LastError,
+		&i.ResultJson,
+		&i.Stdout,
+		&i.Stderr,
+		&i.CreatedAt,
+		&i.IsRerun,
+	)
+	return i, err
+}
+
 const getOutputCommand = `-- name: GetOutputCommand :one
-SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at FROM output_command WHERE id = ?
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun FROM output_command WHERE id = ?
 `
 
 func (q *Queries) GetOutputCommand(ctx context.Context, id int64) (OutputCommand, error) {
@@ -566,6 +599,7 @@ func (q *Queries) GetOutputCommand(ctx context.Context, id int64) (OutputCommand
 		&i.Stdout,
 		&i.Stderr,
 		&i.CreatedAt,
+		&i.IsRerun,
 	)
 	return i, err
 }
@@ -1413,7 +1447,7 @@ func (q *Queries) ListNodeRunsByFlow(ctx context.Context, arg ListNodeRunsByFlow
 }
 
 const listRunnableOutputCommands = `-- name: ListRunnableOutputCommands :many
-SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at FROM output_command
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun FROM output_command
 WHERE status = 'pending'
 ORDER BY id ASC
 LIMIT ?
@@ -1442,6 +1476,7 @@ func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) (
 			&i.Stdout,
 			&i.Stderr,
 			&i.CreatedAt,
+			&i.IsRerun,
 		); err != nil {
 			return nil, err
 		}
@@ -1457,7 +1492,7 @@ func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) (
 }
 
 const listRunnableOutputCommandsAfter = `-- name: ListRunnableOutputCommandsAfter :many
-SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at FROM output_command
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun FROM output_command
 WHERE status = 'pending' AND id > ?
 ORDER BY id ASC
 LIMIT ?
@@ -1491,6 +1526,7 @@ func (q *Queries) ListRunnableOutputCommandsAfter(ctx context.Context, arg ListR
 			&i.Stdout,
 			&i.Stderr,
 			&i.CreatedAt,
+			&i.IsRerun,
 		); err != nil {
 			return nil, err
 		}
@@ -1741,6 +1777,56 @@ func (q *Queries) ReadEventsFrom(ctx context.Context, arg ReadEventsFromParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const rerunOutputCommand = `-- name: RerunOutputCommand :one
+INSERT INTO output_command (action_id, key, payload, status, created_at, is_rerun)
+SELECT ?1, ?2, ?3, 'running', ?4, 1
+WHERE EXISTS (
+    SELECT 1 FROM output_command
+    WHERE action_id = ?1 AND key = ?2
+      AND status IN ('done', 'failed')
+)
+AND NOT EXISTS (
+    SELECT 1 FROM output_command
+    WHERE action_id = ?1 AND key = ?2
+      AND status IN ('pending', 'running')
+)
+RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun
+`
+
+type RerunOutputCommandParams struct {
+	ActionID  string `json:"action_id"`
+	Key       string `json:"key"`
+	Payload   []byte `json:"payload"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// An explicit user confirmation creates a separate command so prior execution
+// diagnostics and Activity links remain intact.
+func (q *Queries) RerunOutputCommand(ctx context.Context, arg RerunOutputCommandParams) (OutputCommand, error) {
+	row := q.db.QueryRowContext(ctx, rerunOutputCommand,
+		arg.ActionID,
+		arg.Key,
+		arg.Payload,
+		arg.CreatedAt,
+	)
+	var i OutputCommand
+	err := row.Scan(
+		&i.ID,
+		&i.ActionID,
+		&i.Key,
+		&i.Payload,
+		&i.Status,
+		&i.Attempts,
+		&i.LastError,
+		&i.ResultJson,
+		&i.Stdout,
+		&i.Stderr,
+		&i.CreatedAt,
+		&i.IsRerun,
+	)
+	return i, err
 }
 
 const retryOutputCommand = `-- name: RetryOutputCommand :exec

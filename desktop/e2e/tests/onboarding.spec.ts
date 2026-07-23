@@ -165,7 +165,7 @@ test.describe.serial('first-run onboarding, then workspace and flow management',
     await page.getByTestId('delete-profile-confirm').click()
 
     await expect(deleteProfileModal).toBeHidden()
-    await expect(page.getByTestId('toast').last()).toHaveText('Profile deleted')
+    await expect(page.getByTestId('toast').last()).toContainText('Profile deleted')
     await expect(page.getByTestId('profile-tile')).toHaveCount(1)
     await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage')
   })

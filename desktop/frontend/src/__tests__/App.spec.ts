@@ -53,6 +53,15 @@ const mocks = vi.hoisted(() => ({
   // updaterservice
   UpdaterStatus: vi.fn(),
   InstallUpdate: vi.fn(),
+  // notification settings
+  NotificationSettings: vi.fn(),
+  SetNotificationSettings: vi.fn(),
+  PermissionStatus: vi.fn(),
+  RequestNotificationPermission: vi.fn(),
+  Notify: vi.fn(),
+  Focused: vi.fn(),
+  ActivityList: vi.fn(),
+  RecordActivity: vi.fn(),
   // runtime
   On: vi.fn(),
   Hide: vi.fn(),
@@ -112,6 +121,23 @@ vi.mock('../../bindings/github.com/colonyops/hive/internal/desktop/auth/service'
 vi.mock('../../bindings/github.com/colonyops/hive/desktop/updaterservice', () => ({
   Status: mocks.UpdaterStatus,
   InstallUpdate: mocks.InstallUpdate,
+}))
+
+vi.mock('../../bindings/github.com/colonyops/hive/desktop/settingsservice', () => ({
+  NotificationSettings: mocks.NotificationSettings,
+  SetNotificationSettings: mocks.SetNotificationSettings,
+}))
+
+vi.mock('../../bindings/github.com/colonyops/hive/desktop/notificationservice', () => ({
+  PermissionStatus: mocks.PermissionStatus,
+  RequestNotificationPermission: mocks.RequestNotificationPermission,
+  Notify: mocks.Notify,
+}))
+
+vi.mock('../../bindings/github.com/colonyops/hive/desktop/windowservice', () => ({ Focused: mocks.Focused }))
+vi.mock('../../bindings/github.com/colonyops/hive/desktop/activityservice', () => ({
+  List: mocks.ActivityList,
+  Record: mocks.RecordActivity,
 }))
 
 vi.mock('@wailsio/runtime', () => ({
@@ -182,6 +208,14 @@ describe('App', () => {
     mocks.On.mockReturnValue(() => {})
     mocks.UpdaterStatus.mockResolvedValue({ enabled: true, available: false, currentVersion: 'dev', latestVersion: '', notes: '', releaseUrl: '' })
     mocks.InstallUpdate.mockResolvedValue(undefined)
+    mocks.NotificationSettings.mockResolvedValue({ notificationsEnabled: true, systemNotificationsEnabled: true, notificationSound: true })
+    mocks.SetNotificationSettings.mockResolvedValue(undefined)
+    mocks.PermissionStatus.mockResolvedValue('not-requested')
+    mocks.RequestNotificationPermission.mockResolvedValue(true)
+    mocks.Notify.mockResolvedValue(undefined)
+    mocks.Focused.mockResolvedValue(true)
+    mocks.ActivityList.mockResolvedValue([])
+    mocks.RecordActivity.mockResolvedValue(undefined)
   })
 
   it('registers profile / feed-selection / flow-edit palette commands (not the removed feed-editor ones)', async () => {
@@ -215,6 +249,7 @@ describe('App', () => {
     // Flows canvas is up; the spaces rail stays mounted as the way back.
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="profile-tile"]').exists()).toBe(true)
+    const getFlowCallsBeforeExit = mocks.GetFlow.mock.calls.length
 
     await wrapper.find('[data-testid="profile-tile"][data-id="personal"]').trigger('click')
     await flushPromises()
@@ -222,6 +257,7 @@ describe('App', () => {
     // Back to the feed view.
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+    expect(mocks.GetFlow.mock.calls.length).toBeGreaterThan(getFlowCallsBeforeExit)
 
     wrapper.unmount()
   })
@@ -376,6 +412,35 @@ describe('App', () => {
 
     expect(backspace.defaultPrevented).toBe(false)
     wrapper.unmount()
+  })
+
+  it('renders notifications settings from its deep link', async () => {
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/settings/notifications')
+    await router.isReady()
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(router.currentRoute.value.params.section).toBe('notifications')
+    expect(wrapper.find('[data-testid="notification-settings"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('renders developer tools from its deep link', async () => {
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/dev')
+    await router.isReady()
+    const wrapper = mount(App, { global: { plugins: [router] } })
+
+    try {
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('dev')
+      await vi.waitFor(() => {
+        expect(wrapper.find('[data-testid="dev-view"]').exists()).toBe(true)
+      })
+    } finally {
+      wrapper.unmount()
+    }
   })
 
   it('routes DetailPane Edit to actions settings', async () => {

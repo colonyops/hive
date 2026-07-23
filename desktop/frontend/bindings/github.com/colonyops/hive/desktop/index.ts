@@ -5,19 +5,23 @@ import * as ActionsService from "./actionsservice.js";
 import * as ActivityService from "./activityservice.js";
 import * as FlowsService from "./flowsservice.js";
 import * as JobService from "./jobservice.js";
+import * as NotificationService from "./notificationservice.js";
 import * as PipelineService from "./pipelineservice.js";
 import * as SettingsService from "./settingsservice.js";
 import * as SystemService from "./systemservice.js";
 import * as UpdaterService from "./updaterservice.js";
+import * as WindowService from "./windowservice.js";
 export {
     ActionsService,
     ActivityService,
     FlowsService,
     JobService,
+    NotificationService,
     PipelineService,
     SettingsService,
     SystemService,
-    UpdaterService
+    UpdaterService,
+    WindowService
 };
 
 export type {
@@ -25,6 +29,8 @@ export type {
     FlowSummary,
     GithubSettings,
     InboxView,
+    NotificationSettings,
+    NotifyInput,
     PathInfo,
     SystemInfo,
     UpdateInfo

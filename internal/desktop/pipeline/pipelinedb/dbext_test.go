@@ -35,11 +35,11 @@ func TestOpen_FreshDB_AppliesBaseline(t *testing.T) {
 	require.NoError(t, err)
 	migrations, err := migrate.Load(sub)
 	require.NoError(t, err)
-	require.Len(t, migrations, 2)
+	require.Len(t, migrations, 3)
 
 	applied, err := migrate.AppliedVersions(ctx, database.Conn())
 	require.NoError(t, err)
-	assert.Equal(t, map[int]bool{1: true, 2: true}, applied)
+	assert.Equal(t, map[int]bool{1: true, 2: true, 3: true}, applied)
 }
 
 func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {

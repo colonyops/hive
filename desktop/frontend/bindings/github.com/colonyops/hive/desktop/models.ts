@@ -55,6 +55,28 @@ export interface GithubSettings {
 export type InboxView = string;
 
 /**
+ * NotificationSettings is the desktop notification configuration resolved
+ * from settings.yaml. All fields are explicit booleans for the frontend.
+ */
+export interface NotificationSettings {
+    "notificationsEnabled": boolean;
+    "systemNotificationsEnabled": boolean;
+    "notificationSound": boolean;
+}
+
+/**
+ * NotifyInput is the frontend-facing request for a native notification.
+ */
+export interface NotifyInput {
+    "title": string;
+    "subtitle": string;
+    "body": string;
+    "severity": string;
+    "sound": boolean;
+    "data": { [_ in string]?: any } | null;
+}
+
+/**
  * PathInfo describes a single on-disk location surfaced in settings.
  */
 export interface PathInfo {

@@ -267,7 +267,7 @@ RETURNING *;
 -- action invocation at most once (see idx_output_command_action_key).
 INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'pending', ?)
-ON CONFLICT(action_id, key) DO NOTHING;
+ON CONFLICT DO NOTHING;
 
 -- name: ListRunnableOutputCommands :many
 -- Every enqueued flow action is runnable immediately; running is reserved for
@@ -290,9 +290,32 @@ LIMIT ?;
 -- Terminal/running commands remain deduplicated.
 INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'running', ?)
-ON CONFLICT(action_id, key) DO UPDATE SET status = 'running'
+ON CONFLICT DO UPDATE SET status = 'running'
 WHERE output_command.status = 'pending'
 RETURNING *;
+
+-- name: RerunOutputCommand :one
+-- An explicit user confirmation creates a separate command so prior execution
+-- diagnostics and Activity links remain intact.
+INSERT INTO output_command (action_id, key, payload, status, created_at, is_rerun)
+SELECT sqlc.arg(action_id), sqlc.arg(key), sqlc.arg(payload), 'running', sqlc.arg(created_at), 1
+WHERE EXISTS (
+    SELECT 1 FROM output_command
+    WHERE action_id = sqlc.arg(action_id) AND key = sqlc.arg(key)
+      AND status IN ('done', 'failed')
+)
+AND NOT EXISTS (
+    SELECT 1 FROM output_command
+    WHERE action_id = sqlc.arg(action_id) AND key = sqlc.arg(key)
+      AND status IN ('pending', 'running')
+)
+RETURNING *;
+
+-- name: GetLatestOutputCommandForAction :one
+SELECT * FROM output_command
+WHERE action_id = ? AND key = ?
+ORDER BY id DESC
+LIMIT 1;
 
 -- name: GetOutputCommand :one
 SELECT * FROM output_command WHERE id = ?;

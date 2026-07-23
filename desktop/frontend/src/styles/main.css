@@ -39,6 +39,9 @@
   --color-severity-success: var(--hv-severity-success);
   --color-severity-success-tint: var(--hv-severity-success-tint);
   --color-severity-success-border: var(--hv-severity-success-border);
+  --color-severity-warning: var(--hv-severity-warning);
+  --color-severity-warning-tint: var(--hv-severity-warning-tint);
+  --color-severity-warning-border: var(--hv-severity-warning-border);
   --color-severity-error: var(--hv-severity-error);
   --color-severity-error-tint: var(--hv-severity-error-tint);
   --color-severity-error-border: var(--hv-severity-error-border);
@@ -118,6 +121,9 @@
   --hv-severity-success: #4ade80;
   --hv-severity-success-tint: rgba(74, 222, 128, 0.15);
   --hv-severity-success-border: #2c4a38;
+  --hv-severity-warning: #fbbf24;
+  --hv-severity-warning-tint: rgba(251, 191, 36, 0.15);
+  --hv-severity-warning-border: #4a3d20;
   --hv-severity-error: #f7768e;
   --hv-severity-error-tint: rgba(247, 118, 142, 0.15);
   --hv-severity-error-border: #4a2b32;

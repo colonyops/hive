@@ -20,6 +20,8 @@ declare module "@wailsio/runtime" {
             "log:appended": number;
             "update:available": main$0.UpdateInfo;
             "update:none": main$0.UpdateInfo;
+            "window:blur": boolean;
+            "window:focus": boolean;
         }
     }
 }

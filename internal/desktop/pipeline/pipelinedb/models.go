@@ -113,6 +113,7 @@ type OutputCommand struct {
 	Stdout     sql.NullString `json:"stdout"`
 	Stderr     sql.NullString `json:"stderr"`
 	CreatedAt  int64          `json:"created_at"`
+	IsRerun    int64          `json:"is_rerun"`
 }
 
 type SourceHead struct {

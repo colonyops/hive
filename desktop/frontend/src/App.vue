@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Events, Window } from '@wailsio/runtime'
 import { useStorage } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
@@ -15,6 +15,7 @@ import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CreateSessionDialog from './components/CreateSessionDialog.vue'
+import ConfirmationDialog from './components/ConfirmationDialog.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ProfileSettingsView from './components/ProfileSettingsView.vue'
 import SettingsView from './components/SettingsView.vue'
@@ -25,7 +26,6 @@ import NewProfileModal from './components/NewProfileModal.vue'
 import UnsavedFlowChangesModal from './components/UnsavedFlowChangesModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
 import ToastStack from './components/ToastStack.vue'
-import DevBar from './components/DevBar.vue'
 import { useAuth } from './composables/useAuth'
 import { useActivity } from './composables/useActivity'
 import { useJobs } from './composables/useJobs'
@@ -42,9 +42,12 @@ import type { ApplicationSettingsSection, ProfileSettingsSection } from './route
 import type { InboxView, SidebarSelection } from './types/feed'
 import { githubPayload } from './lib/feedPresentation'
 
-// Only true when Vite is serving in dev mode (under `wails3 dev`); statically
-// false in production/server builds, so DevBar is compiled out of them.
+// Only true when Vite is serving in dev mode (under `wails3 dev`). Keeping
+// these imports inside this compile-time conditional prevents developer tools
+// and their notification implementation from shipping in production bundles.
 const devMode = import.meta.env.DEV
+const DevBar = devMode ? defineAsyncComponent(() => import('./components/DevBar.vue')) : null
+const DevView = devMode ? defineAsyncComponent(() => import('./components/DevView.vue')) : null
 
 const {
   status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
@@ -53,10 +56,10 @@ const {
 
 const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, visibleItems, unreadCount, search, loadError,
-  selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, feedSort, setFeedSort, title, toasts, dismissToast, clearToasts,
+  selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, actionRerunConfirmation, actionRerunBusy, actionRerunError, unreadOnly, feedSort, setFeedSort, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, renamingProfile, renameProfileError, togglingProfileId, toggleProfileError, deletingProfile, loadProfiles, createProfile, renameProfile, setProfileEnabled, deleteProfile,
   reorderFeeds, selectProfile, selectSidebar, selectItem, openActionRun, selectNext, selectPrev,
-  toggleUnread, markItemUnread, toggleArchive, toggleIgnored, loadEvents, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
+  toggleUnread, markItemUnread, toggleArchive, toggleIgnored, loadEvents, refresh, invokeAction, cancelActionRerun, confirmActionRerun, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
 // The feed-item kinds currently in the system — what the actions editor
@@ -105,6 +108,7 @@ const router = useRouter()
 const route = useRoute()
 const flowsActive = computed(() => route.name === 'flows')
 const activityActive = computed(() => route.name === 'activity')
+const devActive = computed(() => devMode && route.name === 'dev')
 const applicationSettingsActive = computed(() => route.name === 'application-settings')
 const profileSettingsActive = computed(() => route.name === 'profile-settings')
 const applicationSettingsSection = computed<ApplicationSettingsSection>(() =>
@@ -112,7 +116,8 @@ const applicationSettingsSection = computed<ApplicationSettingsSection>(() =>
     : route.params.section === 'actions' ? 'actions'
       : route.params.section === 'keybindings' ? 'keybindings'
         : route.params.section === 'system' ? 'system'
-          : 'appearance',
+          : route.params.section === 'notifications' ? 'notifications'
+            : 'appearance',
 )
 const profileSettingsSection = computed<ProfileSettingsSection>(() =>
   route.params.section === 'danger' ? 'danger' : 'general',
@@ -265,7 +270,12 @@ function requestExitFlows(): void {
   openFeed()
 }
 
-function requestSelectProfile(id: string): void {
+async function requestSelectProfile(id: string): Promise<void> {
+  // Returning from the canvas to the already-active profile does not change
+  // the route profile id, so the route watcher will not reload its feeds.
+  // Refresh explicitly after a clean deploy so the sidebar cannot retain the
+  // pre-deploy flow snapshot if flows:updated races the filesystem watcher.
+  if (id === activeProfileId.value && !session.dirty.value) await selectProfile(id)
   openFeed(id)
 }
 
@@ -447,7 +457,7 @@ const previewCollapsed = useStorage('hive.panel.detailpane.collapsed', false)
 const feedViewActive = computed(() =>
   authenticated.value && !needsWorkspace.value &&
   !applicationSettingsActive.value && !profileSettingsActive.value &&
-  !flowsActive.value && !activityActive.value &&
+  !flowsActive.value && !activityActive.value && !devActive.value &&
   !!activeProfile.value,
 )
 
@@ -720,8 +730,9 @@ onUnmounted(() => {
           @add="openNewProfile"
           @open-settings="requestOpenSettings('application')"
         />
+        <DevView v-if="devMode && devActive" @close="closeSettings" />
         <SettingsView
-          v-if="applicationSettingsActive"
+          v-else-if="applicationSettingsActive"
           :github-connected="authenticated"
           :github-login="authStatus?.login"
           :active-category="applicationSettingsSection"
@@ -794,6 +805,17 @@ onUnmounted(() => {
       :error="sessionLaunchError"
       @close="cancelSessionLaunch"
       @submit="submitSessionLaunch"
+    />
+    <ConfirmationDialog
+      v-if="actionRerunConfirmation"
+      title="Run action again?"
+      :description="`${actionRerunConfirmation.label} has already run for this item. Run it again?`"
+      confirm-label="Run again"
+      :busy="actionRerunBusy"
+      :error="actionRerunError"
+      testid="action-rerun-confirmation"
+      @confirm="confirmActionRerun"
+      @cancel="cancelActionRerun"
     />
     <ToastStack :toasts="toasts" @dismiss="dismissToast" @clear-all="clearToasts" />
     <CommandPalette />

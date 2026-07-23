@@ -23,6 +23,7 @@ import (
 	"github.com/colonyops/hive/internal/desktop/auth"
 	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/jobs"
+	desktopnotify "github.com/colonyops/hive/internal/desktop/notify"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
@@ -34,6 +35,7 @@ import (
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+	wailsnotify "github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 )
 
@@ -65,6 +67,10 @@ func registerEvents() struct{} {
 	application.RegisterEvent[string]("flows:updated")
 	application.RegisterEvent[string]("actions:updated")
 	application.RegisterEvent[string]("jobs:updated")
+	// window:focus and window:blur carry the current focus state. Consumers use
+	// them to update focus-sensitive UI without querying the native window.
+	application.RegisterEvent[bool]("window:focus")
+	application.RegisterEvent[bool]("window:blur")
 	// activity:appended carries the new event's id after any subsystem (or the
 	// frontend, via ActivityService.Record) appends to the activity log. The
 	// Activity view re-reads its latest page and advances its unseen marker.
@@ -137,6 +143,22 @@ func emitActivityAppended(id int64) {
 func emitJobsUpdated() {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("jobs:updated", "changed")
+	}
+}
+
+// emitWindowFocus pushes the current focused state to the frontend. Safe to
+// call from native window event callbacks once the app is running.
+func emitWindowFocus() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("window:focus", true)
+	}
+}
+
+// emitWindowBlur pushes the current unfocused state to the frontend. Safe to
+// call from native window event callbacks once the app is running.
+func emitWindowBlur() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("window:blur", false)
 	}
 }
 
@@ -438,22 +460,48 @@ func main() {
 	// toggle seeds the initial state.
 	updaterVersion, _, _ := resolvedBuildInfo()
 	updaterService := NewUpdaterService(updaterVersion, settings.AutoUpdateOrDefault(), defaultUpdateCheckInterval, logger)
+	focus := newFocusState()
+	// Mock/server builds deliberately do not start the native Wails
+	// notification service: E2E verifies preference persistence without an OS
+	// bus, banner, or permission prompt. The frontend still gets a descriptive
+	// unavailable binding through NotificationService.
+	notificationService := NewUnavailableNotificationService(fmt.Errorf("native notifications unavailable in desktop mock mode"))
+	var nativeNotifications *wailsnotify.NotificationService
+	if desktop.MockMode() == "" {
+		nativeNotifications = wailsnotify.New()
+		notifier, err := desktopnotify.New(nativeNotifications, appIcon)
+		if err != nil {
+			logger.Warn().Err(err).Msg("native notifications unavailable")
+			notificationService = NewUnavailableNotificationService(err)
+		} else {
+			notificationService = NewNotificationService(notifier)
+		}
+	}
+
+	services := []application.Service{
+		application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
+		application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker, actionRuntime.launcher)),
+		application.NewService(NewFlowsService(flowsStore, pipelineDB, onFlowsUpdated)),
+		application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
+		application.NewService(NewActivityService(activityStore)),
+		application.NewService(NewJobService(jobStore)),
+		application.NewService(NewSystemService()),
+		application.NewService(NewSettingsService(producer, fetcher, logger)),
+		application.NewService(updaterService),
+	}
+	if nativeNotifications != nil {
+		services = append(services, application.NewService(nativeNotifications))
+	}
+	services = append(services,
+		application.NewService(notificationService),
+		application.NewService(NewWindowService(focus)),
+	)
 
 	options := application.Options{
 		Name:        "Hive",
 		Description: "Hive desktop application",
 		Icon:        appIcon,
-		Services: []application.Service{
-			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
-			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker, actionRuntime.launcher)),
-			application.NewService(NewFlowsService(flowsStore, pipelineDB, onFlowsUpdated)),
-			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
-			application.NewService(NewActivityService(activityStore)),
-			application.NewService(NewJobService(jobStore)),
-			application.NewService(NewSystemService()),
-			application.NewService(NewSettingsService(producer, fetcher, logger)),
-			application.NewService(updaterService),
-		},
+		Services:    services,
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
 			Middleware: desktopSmokeMiddleware(pipelineDB, actionRuntime.db),
@@ -508,6 +556,26 @@ func main() {
 		},
 	})
 
+	// This is the sole owner of notification activation: a click only brings
+	// the existing window forward; routing stays out of the notification binding.
+	if nativeNotifications != nil {
+		nativeNotifications.OnNotificationResponse(func(wailsnotify.NotificationResult) {
+			window.Show()
+			window.Focus()
+		})
+	}
+
+	window.OnWindowEvent(events.Common.WindowFocus, func(*application.WindowEvent) {
+		if focus.set(true) {
+			emitWindowFocus()
+		}
+	})
+	window.OnWindowEvent(events.Common.WindowLostFocus, func(*application.WindowEvent) {
+		if focus.set(false) {
+			emitWindowBlur()
+		}
+	})
+
 	// Closing the window keeps the app running in the dock and tray; it can be
 	// reopened from either. Quitting is done via Cmd+Q or the tray menu.
 	// This must be a hook, not OnWindowEvent: hooks run synchronously before
@@ -515,6 +583,9 @@ func main() {
 	// which otherwise races this callback in a separate goroutine.
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		window.Hide()
+		if focus.set(false) {
+			emitWindowBlur()
+		}
 		e.Cancel()
 	})
 

@@ -162,7 +162,7 @@ func TestWorker_HeadlessActionExecutesAndConsumesQueue(t *testing.T) {
 	assert.Equal(t, "done", status)
 }
 
-func TestWorker_ConfirmCannotReplayAlreadyCompletedDeployedFlowCommand(t *testing.T) {
+func TestWorker_ConfirmRequiresApprovalBeforeRerunningCompletedCommand(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)
 	enqueueTestCommand(t, db, "review-action", "item-1", `{"title":"Fix bug"}`)
@@ -172,19 +172,25 @@ func TestWorker_ConfirmCannotReplayAlreadyCompletedDeployedFlowCommand(t *testin
 		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
 	worker.Tick(t.Context())
 
-	_, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"changed"}`), ActionInvocationInput{})
-	require.Error(t, err, "the worker already consumed the queued command")
-	assert.Equal(t, 1, exec.callCount())
+	view, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"changed"}`), ActionInvocationInput{})
+	require.NoError(t, err)
+	assert.True(t, view.ConfirmationRequired)
+	assert.Equal(t, 1, exec.callCount(), "the duplicate must not execute before confirmation")
 	assert.Equal(t, "Fix bug", exec.calls[0].Payload["title"], "the worker preserves the queued command payload")
 
-	var status string
+	rerun, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"changed"}`), ActionInvocationInput{Rerun: true})
+	require.NoError(t, err)
+	assert.False(t, rerun.ConfirmationRequired)
+	assert.Equal(t, "done", rerun.Status)
+	assert.Equal(t, 2, exec.callCount())
+	assert.Equal(t, "changed", exec.calls[1].Payload["title"])
+
+	var count int
 	require.NoError(t, db.Conn().QueryRowContext(t.Context(),
-		`SELECT status FROM output_command WHERE action_id = ? AND key = ?`,
+		`SELECT COUNT(*) FROM output_command WHERE action_id = ? AND key = ?`,
 		"review-action", "item-1",
-	).Scan(&status))
-	assert.Equal(t, "done", status)
-	_, err = worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{}`), ActionInvocationInput{})
-	assert.Error(t, err, "completed actions remain deduped")
+	).Scan(&count))
+	assert.Equal(t, 2, count, "a confirmed rerun preserves the original command history")
 }
 
 func TestWorker_ConfirmRecordsJobLifecycleWithoutReplay(t *testing.T) {
@@ -205,9 +211,10 @@ func TestWorker_ConfirmRecordsJobLifecycleWithoutReplay(t *testing.T) {
 	assert.Positive(t, recorder.commandID)
 
 	recorder.calls = nil
-	_, err = worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{}`), ActionInvocationInput{})
-	require.Error(t, err)
-	assert.Empty(t, recorder.calls, "idempotent replay must not create a phantom job")
+	view, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{}`), ActionInvocationInput{})
+	require.NoError(t, err)
+	assert.True(t, view.ConfirmationRequired)
+	assert.Empty(t, recorder.calls, "an unconfirmed rerun must not create a phantom job")
 }
 
 func TestWorker_ConfirmUnknownActionRecordsQueuedFailure(t *testing.T) {
