@@ -1,6 +1,5 @@
-// Inbox presentation types. Adapter payload remains deliberately opaque until
+// Feed presentation types. Adapter payload remains deliberately opaque until
 // decoded by the GitHub presentation seam.
-export type InboxView = 'inbox' | 'open' | 'archive' | 'all' | 'ignored'
 export type FeedSort = 'newest' | 'oldest' | 'unread'
 
 export interface InboxItem {
@@ -39,6 +38,7 @@ export interface FeedInboxCount {
   feedId: string
   total: number
   unread: number
+  archived: number
 }
 
 export interface FeedSummary {
@@ -46,6 +46,7 @@ export interface FeedSummary {
   name: string
   count: number
   newCount: number
+  archivedCount?: number
   icon?: string
   description?: string
 }
@@ -66,6 +67,8 @@ export interface Profile {
   tree?: FeedTree
 }
 
+// Feeds are the only primary destinations; Trash is a de-emphasized utility
+// surface for unrouted and ignored items. There is no aggregate inbox view.
 export type SidebarSelection =
-  | { type: 'view'; view: InboxView }
   | { type: 'feed'; feedId: string }
+  | { type: 'trash' }

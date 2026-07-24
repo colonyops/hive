@@ -2,14 +2,14 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Browser, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, RenameFlow, SaveSidebar, SetFlowEnabled } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
-import { ActionRun, ActionViews, FeedCounts, InboxCounts, InboxItemEvents, InvokeAction, ListInboxItems, ListInboxItemsByFeed, MarkInboxItemUnread, SessionLaunchOptions, ToggleInboxItemArchived, ToggleInboxItemIgnored } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { ActionRun, ActionViews, FeedCounts, InboxItemEvents, InvokeAction, ListArchivedInboxItemsByFeed, ListInboxItemsByFeed, ListInboxItemsTrash, MarkInboxItemUnread, SessionLaunchOptions, ToggleInboxItemArchived, ToggleInboxItemIgnored } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 import { bodySnippet, feedSource, githubPayload, typeLabel } from '../lib/feedPresentation'
 import { useActivity } from './useActivity'
 import { useWailsEvent } from './useWailsEvent'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
-import type { FeedInboxCount, FeedSort, InboxEvent, InboxItem, InboxView, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
+import type { FeedInboxCount, FeedSort, InboxEvent, InboxItem, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
 import type { ToastInstance, ToastOptions } from '../types/toast'
 
 // A profile IS a flow: the profiles list comes from FlowsService.ListFlows, a
@@ -30,14 +30,40 @@ export function useFeedState() {
   const profilesLoaded = ref(false)
   const profilesError = ref<string | null>(null)
   const activeProfileId = ref('')
-  const selection = ref<SidebarSelection>({ type: 'view', view: 'inbox' })
+  // Feeds are the only primary destinations. Trash is the fallback selection
+  // only when a profile has no feeds at all.
+  const selection = ref<SidebarSelection>({ type: 'trash' })
+
   const unreadOnly = ref(false)
   const feedSort = useStorage<FeedSort>(feedSortStorageKey, 'newest')
+
+  // Last-selected sidebar destination per profile: reopening a workspace
+  // returns to where the user left off, else the first feed. Plain
+  // localStorage (not useStorage) — it is read once per profile switch and
+  // needs no reactivity or cross-instance cache.
+  const lastSelectionStorageKey = 'hive.sidebar.last-selection'
+  function readLastSelections(): Record<string, SidebarSelection> {
+    try {
+      const stored: unknown = JSON.parse(localStorage.getItem(lastSelectionStorageKey) ?? '{}')
+      if (!stored || Array.isArray(stored) || typeof stored !== 'object') return {}
+      return stored as Record<string, SidebarSelection>
+    } catch {
+      return {}
+    }
+  }
+  function writeLastSelection(profileID: string, sel: SidebarSelection): void {
+    try { localStorage.setItem(lastSelectionStorageKey, JSON.stringify({ ...readLastSelections(), [profileID]: sel })) }
+    catch (error) { console.warn('Unable to persist sidebar selection', error) }
+  }
   // Search is a pure view filter over the loaded list (like unreadOnly). It
   // lives here — not in FeedList — so keyboard navigation moves over exactly
   // the rows the user sees. Cleared on feed/profile switch (see selectSidebar).
   const search = ref('')
   const items = ref<InboxItem[]>([])
+  // The selected feed's archived section: collapsed by default, lazy-loaded
+  // when expanded. Never populated for trash.
+  const archivedItems = ref<InboxItem[]>([])
+  const archivedExpanded = ref(false)
   const loadError = ref<string | null>(null)
   const selectedId = ref<number | null>(null)
   const actions = ref<ActionView[]>([])
@@ -118,12 +144,27 @@ export function useFeedState() {
   }
 
   const activeProfile = computed(() => profiles.value.find((p) => p.id === activeProfileId.value) ?? null)
-  const selectedItem = computed(() => items.value.find((item) => item.id === selectedId.value) ?? null)
+  const selectedItem = computed(() =>
+    items.value.find((item) => item.id === selectedId.value)
+      ?? archivedItems.value.find((item) => item.id === selectedId.value)
+      ?? null,
+  )
   const title = computed(() => {
     const sel = selection.value
     if (sel.type === 'feed') return activeProfile.value?.feeds.find((f) => f.id === sel.feedId)?.name ?? 'Feed'
-    return sel.view[0].toUpperCase() + sel.view.slice(1)
+    return 'Trash'
   })
+  const selectedFeed = computed(() => {
+    const sel = selection.value
+    if (sel.type !== 'feed') return null
+    return activeProfile.value?.feeds.find((f) => f.id === sel.feedId) ?? null
+  })
+  // The archived divider count comes from feed counts so it is correct even
+  // while the archived section is collapsed and unloaded.
+  const archivedCount = computed(() => selectedFeed.value?.archivedCount ?? 0)
+  // Trash filter: 'ignored' narrows to user-ignored items (to un-ignore);
+  // 'all' also includes unrouted observations.
+  const trashFilter = ref<'all' | 'ignored'>('all')
 
   // The Unread badge counts the whole loaded list, independent of search.
   const unreadCount = computed(() => items.value.filter((item) => item.unread).length)
@@ -147,8 +188,21 @@ export function useFeedState() {
   const visibleItems = computed(() =>
     [...items.value]
       .sort(compareItems)
-      .filter((item) => (!unreadOnly.value || item.unread) && matchesSearch(item)),
+      .filter((item) => (!unreadOnly.value || item.unread) && matchesSearch(item) && matchesTrashFilter(item)),
   )
+
+  const visibleArchivedItems = computed(() =>
+    [...archivedItems.value].filter((item) => matchesSearch(item)),
+  )
+
+  function matchesTrashFilter(item: InboxItem): boolean {
+    if (selection.value.type !== 'trash' || trashFilter.value === 'all') return true
+    return item.ignoredAt != null
+  }
+
+  function setTrashFilter(value: 'all' | 'ignored'): void {
+    trashFilter.value = value
+  }
 
   function setFeedSort(value: FeedSort): void {
     feedSort.value = value
@@ -245,22 +299,25 @@ export function useFeedState() {
   // a stale reload must not overwrite a fresher one. Guard with a sequence, the
   // same way loadItems does — otherwise the later-resolving read wins even when
   // it read the pre-deploy flow, leaving the sidebar on the old feed label.
-  async function loadFeeds(flowId: string) {
+  // Returns the feeds it read so callers that need an immediate answer (e.g.
+  // selectProfile's default-feed decision) do not depend on profile state that
+  // a concurrent superseded reload may not have written.
+  async function loadFeeds(flowId: string): Promise<FeedSummary[] | null> {
     const seq = ++feedsSeq
     try {
-      const [flow, counts, sidebar, inboxCounts] = await Promise.all([GetFlow(flowId), FeedCounts(flowId), GetSidebar(flowId), InboxCounts(flowId)])
-      if (seq !== feedsSeq) return
+      const [flow, counts, sidebar] = await Promise.all([GetFlow(flowId), FeedCounts(flowId), GetSidebar(flowId)])
       const countByFeed = new Map((counts ?? []).map((c) => [c.feedId, c]))
       // GetFlow returns the flattened wire shape (see pipeline/lib/wireFlow):
       // a feed node's config fields (icon/description) sit at the top level of
       // the node object alongside id/type/name, not under a `config` key.
+      if (seq !== feedsSeq) return null
       const nodes = (flow.nodes ?? []) as Array<{ id: string; type: string; name?: string; icon?: string; description?: string }>
       const feeds: FeedSummary[] = nodes
         .filter((n) => n.type === 'feed')
         .map((n) => {
           const feedId = `${flowId}/${n.id}`
           const c = countByFeed.get(feedId)
-          return { id: feedId, name: n.name || n.id, count: c?.total ?? 0, newCount: c?.unread ?? 0, icon: n.icon, description: n.description }
+          return { id: feedId, name: n.name || n.id, count: c?.total ?? 0, newCount: c?.unread ?? 0, archivedCount: c?.archived ?? 0, icon: n.icon, description: n.description }
         })
       const sourceCount = nodes.filter((n) => n.type === 'github-source').length
       const profile = profiles.value.find((p) => p.id === flowId)
@@ -270,11 +327,15 @@ export function useFeedState() {
         // load so counts stay fresh and added/removed feeds reconcile in.
         profile.tree = buildFeedTree(feeds, sidebar, flowId)
         profile.sourceSummary = `GitHub · ${sourceCount} source${sourceCount === 1 ? '' : 's'}`
-        profile.totalCount = inboxCounts.inboxTotal
-        profile.unreadCount = inboxCounts.inboxUnread
+        // Workspace rollups derive from feed counts: without an aggregate
+        // inbox there is no workspace-wide query to consult.
+        profile.totalCount = feeds.reduce((sum, f) => sum + f.count, 0)
+        profile.unreadCount = feeds.reduce((sum, f) => sum + f.newCount, 0)
       }
+      return feeds
     } catch (error) {
       console.warn('Unable to load flow feeds', error)
+      return null
     }
   }
 
@@ -398,15 +459,16 @@ export function useFeedState() {
     return { ...view, archivedAt: view.archivedAt ?? null, archivedActor: view.archivedActor ?? null, archivedReason: view.archivedReason ?? null, sourceState: view.sourceState ?? null }
   }
 
-  async function loadItems(view: InboxView = 'inbox') {
+  async function loadTrashItems() {
     if (!activeProfileId.value) return
     const seq = ++loadSeq
     try {
-      const loaded = (await ListInboxItems(activeProfileId.value, view, 500)) ?? []
+      const loaded = (await ListInboxItemsTrash(activeProfileId.value, 500)) ?? []
       if (seq !== loadSeq) return
       loadError.value = null
       items.value = loaded.map(asInboxItem)
-      const first = (unreadOnly.value ? items.value.find((item) => item.unread) : items.value[0]) ?? null
+      archivedItems.value = []
+      const first = items.value[0] ?? null
       if (selectedId.value && items.value.some((item) => item.id === selectedId.value)) return
       selectedId.value = first?.id ?? null
       await loadActions(first)
@@ -418,21 +480,37 @@ export function useFeedState() {
     const seq = ++loadSeq
     try {
       const loaded = (await ListInboxItemsByFeed(activeProfileId.value, feedID, 500)) ?? []
+      // The archived section reloads with the active list only while expanded;
+      // collapsed sections stay unloaded until the user opens them.
+      const archivedLoaded = archivedExpanded.value
+        ? (await ListArchivedInboxItemsByFeed(activeProfileId.value, feedID, 500)) ?? []
+        : []
       if (seq !== loadSeq) return
       loadError.value = null
       items.value = loaded.map(asInboxItem)
+      archivedItems.value = archivedLoaded.map(asInboxItem)
       const first = (unreadOnly.value ? items.value.find((item) => item.unread) : items.value[0]) ?? null
-      if (selectedId.value && items.value.some((item) => item.id === selectedId.value)) return
+      if (selectedId.value && (items.value.some((item) => item.id === selectedId.value) || archivedItems.value.some((item) => item.id === selectedId.value))) return
       selectedId.value = first?.id ?? null
       await loadActions(first)
     } catch (error) { handleLoadError(seq, error) }
+  }
+
+  async function toggleArchivedSection(): Promise<void> {
+    if (selection.value.type !== 'feed') return
+    archivedExpanded.value = !archivedExpanded.value
+    if (!archivedExpanded.value) {
+      archivedItems.value = []
+      return
+    }
+    await loadFeedItems(selection.value.feedId)
   }
 
   function handleLoadError(seq: number, error: unknown) {
     if (seq !== loadSeq) return
     console.warn('Unable to load inbox items', error)
     loadError.value = "Can't load inbox items right now."
-    items.value = []; selectedId.value = null; actions.value = []
+    items.value = []; archivedItems.value = []; selectedId.value = null; actions.value = []
   }
 
   async function loadEvents(itemID: number): Promise<InboxEvent[]> {
@@ -494,7 +572,7 @@ export function useFeedState() {
 
   async function reloadCurrentSelection(): Promise<void> {
     if (selection.value.type === 'feed') await loadFeedItems(selection.value.feedId)
-    else await loadItems(selection.value.view)
+    else await loadTrashItems()
   }
 
   async function markItemUnread(item: InboxItem, unread: boolean): Promise<void> {
@@ -511,16 +589,10 @@ export function useFeedState() {
 
   async function toggleArchive(item: InboxItem): Promise<void> {
     try {
-      const updated = await ToggleInboxItemArchived(item.id, item.revision)
-      // All retains both archived and unarchived rows, so it can apply the
-      // returned revision in place. Every other inbox view and a feed list
-      // changes membership when archive state changes and must reload now.
-      if (selection.value.type === 'view' && selection.value.view === 'all') {
-        const index = items.value.findIndex((candidate) => candidate.id === item.id)
-        if (index >= 0) items.value.splice(index, 1, asInboxItem(updated))
-      } else {
-        await reloadCurrentSelection()
-      }
+      await ToggleInboxItemArchived(item.id, item.revision)
+      // Archiving moves the item between a feed's active list and its
+      // archived section, so the current selection always reloads.
+      await reloadCurrentSelection()
     } catch (error) {
       console.warn('Unable to toggle inbox item archive state', error)
       await reloadCurrentSelection()
@@ -545,8 +617,9 @@ export function useFeedState() {
   // when selectItem marks the current item read and it drops out of the unread
   // view. Clamps at both ends (no wrap).
   async function moveSelection(delta: 1 | -1) {
-    const all = items.value
-    const passes = (item: InboxItem) => (!unreadOnly.value || item.unread) && matchesSearch(item)
+    // Keyboard navigation continues into the archived section when expanded.
+    const all = archivedExpanded.value ? [...items.value, ...archivedItems.value] : items.value
+    const passes = (item: InboxItem) => (!unreadOnly.value || item.unread) && matchesSearch(item) && matchesTrashFilter(item)
     const currentIndex = all.findIndex((item) => item.id === selectedId.value)
     if (currentIndex === -1) {
       const visible = all.filter(passes)
@@ -570,19 +643,38 @@ export function useFeedState() {
   async function selectProfile(profileID: string) {
     activeProfileId.value = profileID
     unreadOnly.value = false
-    await loadFeeds(profileID)
-    await selectSidebar({ type: 'view', view: 'inbox' })
+    const feeds = await loadFeeds(profileID)
+    // A default (fallback) selection is not a user decision — never persist
+    // it, or a transient feed-load race would overwrite the remembered one.
+    await selectSidebar(defaultSelection(profileID, feeds ?? undefined), { persist: false })
   }
 
-  async function selectSidebar(nextSelection: SidebarSelection) {
+  // Workspace entry point: the previously selected destination if it still
+  // exists, else the first feed in sidebar order, else Trash (feedless flow).
+  function defaultSelection(profileID: string, feeds?: FeedSummary[]): SidebarSelection {
+    const known = feeds ?? profiles.value.find((p) => p.id === profileID)?.feeds ?? []
+    const remembered = readLastSelections()[profileID]
+    if (remembered?.type === 'trash') return remembered
+    if (remembered?.type === 'feed' && known.some((f) => f.id === remembered.feedId)) return remembered
+    const firstFeed = known[0]
+    return firstFeed ? { type: 'feed', feedId: firstFeed.id } : { type: 'trash' }
+  }
+
+  async function selectSidebar(nextSelection: SidebarSelection, options: { persist?: boolean } = {}) {
     unreadOnly.value = false
     search.value = '' // a switched feed starts unfiltered
-    await applySelection(nextSelection)
+    trashFilter.value = 'all'
+    archivedExpanded.value = false
+    archivedItems.value = []
+    await applySelection(nextSelection, options)
   }
 
   async function selectUnreadView() {
     unreadOnly.value = true
-    await applySelection({ type: 'view', view: 'inbox' })
+    if (selection.value.type !== 'feed') {
+      const fallback = defaultSelection(activeProfileId.value)
+      if (fallback.type === 'feed') await applySelection(fallback)
+    }
     await reanchorToUnread()
   }
 
@@ -594,15 +686,15 @@ export function useFeedState() {
     }
   }
 
-  async function applySelection(nextSelection: SidebarSelection) {
+  async function applySelection(nextSelection: SidebarSelection, options: { persist?: boolean } = {}) {
     selection.value = nextSelection
+    if (options.persist !== false && activeProfileId.value) writeLastSelection(activeProfileId.value, nextSelection)
     if (nextSelection.type === 'feed') await loadFeedItems(nextSelection.feedId)
-    else await loadItems(nextSelection.view)
+    else await loadTrashItems()
   }
 
   async function refreshCurrent(): Promise<void> {
-    if (selection.value.type === 'feed') await loadFeedItems(selection.value.feedId)
-    else await loadItems(selection.value.view)
+    await reloadCurrentSelection()
   }
 
   async function toggleUnread() {
@@ -755,6 +847,12 @@ export function useFeedState() {
     selection,
     items,
     visibleItems,
+    visibleArchivedItems,
+    archivedExpanded,
+    archivedCount,
+    toggleArchivedSection,
+    trashFilter,
+    setTrashFilter,
     unreadCount,
     search,
     loadError,
@@ -790,6 +888,7 @@ export function useFeedState() {
     deleteProfile,
     reorderFeeds,
     selectProfile,
+    defaultSelection,
     selectSidebar,
     selectUnreadView,
     selectItem,

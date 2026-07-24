@@ -7,8 +7,8 @@ function item(id: number, title: string, unread = false): InboxItem {
   return { id, profileId: 'triage', sourceKind: 'github', sourceScope: 'acme/app', externalId: `pr-${id}`, title, url: '', payload: { kind: 'PR', repo: 'acme/app', num: id, author: 'hay', body: 'Body' }, revision: 1, unread, lifecycle: 'active', firstSeenAt: 1, lastEventAt: Date.now() }
 }
 
-function mountList(overrides: Partial<{ visibleItems: InboxItem[]; selectedId: number | null; unreadOnly: boolean; unreadCount: number; search: string; sort: 'newest' | 'oldest' | 'unread'; view: 'inbox' | 'open' | 'archive' | 'all' | 'ignored'; loadError: string | null }> = {}) {
-  return mount(FeedList, { props: { title: 'Inbox', visibleItems: [item(1, 'Unread', true), item(2, 'Read')], view: 'inbox', selectedId: null, unreadOnly: false, unreadCount: 1, search: '', sort: 'newest', loadError: null, ...overrides } })
+function mountList(overrides: Partial<{ visibleItems: InboxItem[]; archivedItems: InboxItem[]; archivedCount: number; archivedExpanded: boolean; trash: boolean; trashFilter: 'all' | 'ignored'; selectedId: number | null; unreadOnly: boolean; unreadCount: number; search: string; sort: 'newest' | 'oldest' | 'unread'; loadError: string | null }> = {}) {
+  return mount(FeedList, { props: { title: 'Feed', visibleItems: [item(1, 'Unread', true), item(2, 'Read')], archivedItems: [], archivedCount: 0, archivedExpanded: false, trash: false, trashFilter: 'all', selectedId: null, unreadOnly: false, unreadCount: 1, search: '', sort: 'newest', loadError: null, ...overrides } })
 }
 
 describe('FeedList', () => {
@@ -44,9 +44,32 @@ describe('FeedList', () => {
     expect(wrapper.emitted('update:search')).toEqual([['oauth']])
   })
 
-  it('shows archive metadata only in the archive view', () => {
-    const wrapper = mountList({ view: 'archive', visibleItems: [item(7, 'Archived')] })
-    expect(wrapper.find('[data-testid="archive-reason-label"]').exists()).toBe(true)
+  it('shows a collapsed archived divider and expands it on demand', async () => {
+    const wrapper = mountList({ archivedCount: 2 })
+    const divider = wrapper.get('[data-testid="archived-divider"]')
+    expect(divider.text()).toContain('Archived (2)')
+    expect(divider.attributes('aria-expanded')).toBe('false')
+    await divider.trigger('click')
+    expect(wrapper.emitted('toggle-archived')).toHaveLength(1)
+  })
+
+  it('renders archived rows below active rows when expanded', () => {
+    const archived = { ...item(9, 'Done'), archivedAt: 5, archivedReason: 'merged' }
+    const wrapper = mountList({ archivedCount: 1, archivedExpanded: true, archivedItems: [archived] })
+    const rows = wrapper.findAll('[data-testid="feed-item"]')
+    expect(rows).toHaveLength(3)
+    expect(rows[2]!.text()).toContain('Done')
+    expect(wrapper.find('[data-testid="archive-reason"]').text()).toBe('merged')
+  })
+
+  it('hides the archived divider and unread filter in trash, offering the ignored filter instead', async () => {
+    const ignored = { ...item(4, 'Muted'), ignoredAt: 7 }
+    const wrapper = mountList({ trash: true, archivedCount: 3, visibleItems: [ignored] })
+    expect(wrapper.find('[data-testid="archived-divider"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="filter-unread"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="ignored-pill"]').text()).toBe('ignored')
+    await wrapper.get('[data-testid="filter-trash-ignored"]').trigger('click')
+    expect(wrapper.emitted('set-trash-filter')).toEqual([['ignored']])
   })
 
   it('shows distinct empty, unread-drained, search, and load-error states', () => {

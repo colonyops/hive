@@ -43,6 +43,7 @@ export interface FeedInboxCount {
     "feedId": string;
     "total": number;
     "unread": number;
+    "archived": number;
 }
 
 export interface FeedMembershipClaim {
@@ -61,11 +62,6 @@ export interface FeedSnapshot {
     "feedId": string;
     "sourceTopic": string;
     "snapshotId": string;
-}
-
-export interface InboxCounts {
-    "inboxTotal": number;
-    "inboxUnread": number;
 }
 
 export interface InboxEventView {

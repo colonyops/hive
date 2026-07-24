@@ -24,7 +24,6 @@ export type {
     BuildInfo,
     FlowSummary,
     GithubSettings,
-    InboxView,
     PathInfo,
     SystemInfo,
     UpdateInfo

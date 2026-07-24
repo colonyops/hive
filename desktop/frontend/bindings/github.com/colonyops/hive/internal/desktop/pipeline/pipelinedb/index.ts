@@ -7,7 +7,6 @@ export type {
     FeedInboxCount,
     FeedMembershipClaim,
     FeedSnapshot,
-    InboxCounts,
     InboxEventView,
     InboxItemView,
     Msg,

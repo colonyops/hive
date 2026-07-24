@@ -22,7 +22,7 @@ const profile: Profile = {
 
 function mountSideBar(overrides: Partial<{ flowsDirty: boolean }> = {}) {
   return mount(SideBar, {
-    props: { profile, selection: { type: 'view', view: 'inbox' }, ...overrides },
+    props: { profile, selection: { type: 'feed', feedId: 'desktop' }, ...overrides },
   })
 }
 
@@ -40,16 +40,24 @@ describe('SideBar', () => {
     expect(wrapper.emitted('open-settings')).toHaveLength(1)
   })
 
-  it('renders and selects each inbox view', async () => {
+  it('has no aggregate inbox views; feeds are the only primary destinations', () => {
     const wrapper = mountSideBar()
-    const views = ['inbox', 'open', 'archive', 'all', 'ignored']
-    for (const view of views) {
-      const button = wrapper.get(`[data-testid="inbox-view-${view}"]`)
-      expect(button.attributes('data-testid')).toBe(`inbox-view-${view}`)
-      await button.trigger('click')
+    expect(wrapper.find('[data-testid="inbox-view-switcher"]').exists()).toBe(false)
+    for (const view of ['inbox', 'open', 'archive', 'all', 'ignored']) {
+      expect(wrapper.find(`[data-testid="inbox-view-${view}"]`).exists()).toBe(false)
     }
-    expect(wrapper.emitted('select')).toEqual(views.map((view) => [{ type: 'view', view }]))
-    expect(wrapper.get('[data-testid="inbox-view-inbox"]').classes()).toContain('sidebar-entry-selected')
+  })
+
+  it('renders a de-emphasized trash entry without a count and selects it', async () => {
+    const wrapper = mountSideBar()
+    const trash = wrapper.get('[data-testid="sidebar-trash"]')
+    expect(trash.text()).toBe('Trash')
+    await trash.trigger('click')
+    expect(wrapper.emitted('select')).toEqual([[{ type: 'trash' }]])
+    expect(trash.classes()).not.toContain('sidebar-entry-selected')
+
+    const selected = mount(SideBar, { props: { profile, selection: { type: 'trash' } } })
+    expect(selected.get('[data-testid="sidebar-trash"]').classes()).toContain('sidebar-entry-selected')
   })
 
   it('opens the flows canvas from the Edit flow footer', async () => {
@@ -113,7 +121,7 @@ const grouped: Profile = {
 }
 
 function mountGrouped() {
-  return mount(SideBar, { props: { profile: grouped, selection: { type: 'view', view: 'inbox' } } })
+  return mount(SideBar, { props: { profile: grouped, selection: { type: 'feed', feedId: 'desktop' } } })
 }
 
 // The tree carried by the most recent 'reorder' emit.

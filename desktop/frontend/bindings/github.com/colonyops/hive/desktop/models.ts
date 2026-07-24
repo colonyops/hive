@@ -50,11 +50,6 @@ export interface GithubSettings {
 }
 
 /**
- * ENUM(inbox, open, archive, all, ignored)
- */
-export type InboxView = string;
-
-/**
  * PathInfo describes a single on-disk location surfaced in settings.
  */
 export interface PathInfo {

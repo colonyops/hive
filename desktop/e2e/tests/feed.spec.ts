@@ -69,16 +69,21 @@ test('archives, restores, and marks the selected inbox item unread from keyboard
   await page.keyboard.press('Shift+U')
   await expect(item.getByTestId('unread-dot')).toBeVisible()
 
+  // Archiving demotes the item into the feed's collapsed archived section.
   await page.keyboard.press('e')
   await expect(item).toHaveCount(0)
-  await page.getByTestId('inbox-view-archive').click()
+  const divider = page.getByTestId('archived-divider')
+  await expect(divider).toContainText('Archived (1)')
+  await divider.click()
   await expect(item).toBeVisible()
   await expect(item.getByTestId('archive-reason')).toHaveText('manual')
 
+  // Un-archiving from the archived section returns it to the active list.
+  await item.click()
   await page.keyboard.press('e')
-  await expect(item).toHaveCount(0)
-  await page.getByTestId('inbox-view-inbox').click()
   await expect(item).toBeVisible()
+  await expect(item.getByTestId('archive-reason')).toHaveCount(0)
+  await expect(page.getByTestId('archived-divider')).toHaveCount(0)
 })
 
 test('shows the single profile in the rail and sidebar', async ({ page }) => {

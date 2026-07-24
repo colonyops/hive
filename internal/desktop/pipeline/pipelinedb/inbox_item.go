@@ -43,15 +43,11 @@ type InboxEventView struct {
 	CreatedAt  int64           `json:"createdAt"`
 }
 
-type InboxCounts struct {
-	InboxTotal  int64 `json:"inboxTotal"`
-	InboxUnread int64 `json:"inboxUnread"`
-}
-
 type FeedInboxCount struct {
-	FeedID string `json:"feedId"`
-	Total  int64  `json:"total"`
-	Unread int64  `json:"unread"`
+	FeedID   string `json:"feedId"`
+	Total    int64  `json:"total"`
+	Unread   int64  `json:"unread"`
+	Archived int64  `json:"archived"`
 }
 
 // ErrStaleInboxItem indicates the item changed after the caller read its
@@ -94,32 +90,6 @@ func inboxItemViews(rows []InboxItem) []InboxItemView {
 	return views
 }
 
-func (db *DB) ListInboxItems(ctx context.Context, profileID, view string, limit int) ([]InboxItemView, error) {
-	if limit <= 0 {
-		return []InboxItemView{}, nil
-	}
-	var rows []InboxItem
-	var err error
-	switch view {
-	case "inbox":
-		rows, err = db.queries.ListInboxItemsInbox(ctx, ListInboxItemsInboxParams{ProfileID: profileID, Limit: int64(limit)})
-	case "open":
-		rows, err = db.queries.ListInboxItemsOpen(ctx, ListInboxItemsOpenParams{ProfileID: profileID, Limit: int64(limit)})
-	case "archive":
-		rows, err = db.queries.ListInboxItemsArchive(ctx, ListInboxItemsArchiveParams{ProfileID: profileID, Limit: int64(limit)})
-	case "all":
-		rows, err = db.queries.ListInboxItemsAll(ctx, ListInboxItemsAllParams{ProfileID: profileID, Limit: int64(limit)})
-	case "ignored":
-		rows, err = db.queries.ListInboxItemsIgnored(ctx, ListInboxItemsIgnoredParams{ProfileID: profileID, Limit: int64(limit)})
-	default:
-		return nil, fmt.Errorf("unknown inbox view %q", view)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("listing %s inbox items for %q: %w", view, profileID, err)
-	}
-	return inboxItemViews(rows), nil
-}
-
 func (db *DB) ListInboxItemsByFeed(ctx context.Context, profileID, feedID string, limit int) ([]InboxItemView, error) {
 	if limit <= 0 {
 		return []InboxItemView{}, nil
@@ -127,6 +97,33 @@ func (db *DB) ListInboxItemsByFeed(ctx context.Context, profileID, feedID string
 	rows, err := db.queries.ListInboxItemsByFeed(ctx, ListInboxItemsByFeedParams{ProfileID: profileID, FeedID: feedID, Limit: int64(limit)})
 	if err != nil {
 		return nil, fmt.Errorf("listing inbox items for feed %q: %w", feedID, err)
+	}
+	return inboxItemViews(rows), nil
+}
+
+// ListArchivedInboxItemsByFeed returns the feed's archived section, newest
+// archive first. It is queried lazily when the archived divider expands.
+func (db *DB) ListArchivedInboxItemsByFeed(ctx context.Context, profileID, feedID string, limit int) ([]InboxItemView, error) {
+	if limit <= 0 {
+		return []InboxItemView{}, nil
+	}
+	rows, err := db.queries.ListArchivedInboxItemsByFeed(ctx, ListArchivedInboxItemsByFeedParams{ProfileID: profileID, FeedID: feedID, Limit: int64(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("listing archived inbox items for feed %q: %w", feedID, err)
+	}
+	return inboxItemViews(rows), nil
+}
+
+// ListInboxItemsTrash returns unrouted (zero feed claims) and user-ignored
+// items. Trash is a utility/debug surface, not a work queue: it carries no
+// unread semantics.
+func (db *DB) ListInboxItemsTrash(ctx context.Context, profileID string, limit int) ([]InboxItemView, error) {
+	if limit <= 0 {
+		return []InboxItemView{}, nil
+	}
+	rows, err := db.queries.ListInboxItemsTrash(ctx, ListInboxItemsTrashParams{ProfileID: profileID, Limit: int64(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("listing trash inbox items for %q: %w", profileID, err)
 	}
 	return inboxItemViews(rows), nil
 }
@@ -184,14 +181,6 @@ func (db *DB) ToggleInboxItemIgnored(ctx context.Context, itemID, revision, igno
 		return InboxItemView{}, fmt.Errorf("toggling ignored state for inbox item %d: %w", itemID, err)
 	}
 	return inboxItemView(row), nil
-}
-
-func (db *DB) InboxCounts(ctx context.Context, profileID string) (InboxCounts, error) {
-	row, err := db.queries.CountInboxItems(ctx, profileID)
-	if err != nil {
-		return InboxCounts{}, fmt.Errorf("counting inbox items for %q: %w", profileID, err)
-	}
-	return InboxCounts(row), nil
 }
 
 func (db *DB) FeedCounts(ctx context.Context, profileID string) ([]FeedInboxCount, error) {

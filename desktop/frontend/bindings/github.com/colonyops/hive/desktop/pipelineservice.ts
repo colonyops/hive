@@ -21,10 +21,6 @@ import * as actions$0 from "../internal/desktop/pipeline/actions/models.js";
 // @ts-ignore: Unused imports
 import * as pipelinedb$0 from "../internal/desktop/pipeline/pipelinedb/models.js";
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as $models from "./models.js";
-
 export function ActionRun(commandID: number): $CancellablePromise<pipeline$0.ActionRunView> {
     return $Call.ByID(2865983566, commandID);
 }
@@ -69,10 +65,6 @@ export function FeedCounts(profileID: string): $CancellablePromise<pipelinedb$0.
     return $Call.ByID(1308541807, profileID);
 }
 
-export function InboxCounts(profileID: string): $CancellablePromise<pipelinedb$0.InboxCounts> {
-    return $Call.ByID(2660745881, profileID);
-}
-
 export function InboxItemEvents(itemID: number, limit: number): $CancellablePromise<pipelinedb$0.InboxEventView[] | null> {
     return $Call.ByID(1702778487, itemID, limit);
 }
@@ -87,14 +79,23 @@ export function InvokeAction(actionID: string, itemID: number, input: pipeline$0
 }
 
 /**
- * ListInboxItems reads one deterministic inbox view for a profile.
+ * ListArchivedInboxItemsByFeed returns a feed's archived section, loaded
+ * lazily when the user expands the archived divider.
  */
-export function ListInboxItems(profileID: string, view: $models.InboxView, limit: number): $CancellablePromise<pipelinedb$0.InboxItemView[] | null> {
-    return $Call.ByID(1074017451, profileID, view, limit);
+export function ListArchivedInboxItemsByFeed(profileID: string, feedID: string, limit: number): $CancellablePromise<pipelinedb$0.InboxItemView[] | null> {
+    return $Call.ByID(2639908520, profileID, feedID, limit);
 }
 
 export function ListInboxItemsByFeed(profileID: string, feedID: string, limit: number): $CancellablePromise<pipelinedb$0.InboxItemView[] | null> {
     return $Call.ByID(4276258094, profileID, feedID, limit);
+}
+
+/**
+ * ListInboxItemsTrash returns unrouted and ignored items for the Trash
+ * utility view.
+ */
+export function ListInboxItemsTrash(profileID: string, limit: number): $CancellablePromise<pipelinedb$0.InboxItemView[] | null> {
+    return $Call.ByID(719859655, profileID, limit);
 }
 
 /**

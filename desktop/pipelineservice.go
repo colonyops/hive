@@ -77,16 +77,20 @@ func (s *PipelineService) ListReplaySourceSnapshots(profileID, throughOffset str
 	return s.db.ListReplaySourceSnapshots(context.Background(), profileID, offset)
 }
 
-// ENUM(inbox, open, archive, all, ignored)
-type InboxView string
-
-// ListInboxItems reads one deterministic inbox view for a profile.
-func (s *PipelineService) ListInboxItems(profileID string, view InboxView, limit int) ([]pipelinedb.InboxItemView, error) {
-	return s.db.ListInboxItems(context.Background(), profileID, view.String(), limit)
-}
-
 func (s *PipelineService) ListInboxItemsByFeed(profileID, feedID string, limit int) ([]pipelinedb.InboxItemView, error) {
 	return s.db.ListInboxItemsByFeed(context.Background(), profileID, feedID, limit)
+}
+
+// ListArchivedInboxItemsByFeed returns a feed's archived section, loaded
+// lazily when the user expands the archived divider.
+func (s *PipelineService) ListArchivedInboxItemsByFeed(profileID, feedID string, limit int) ([]pipelinedb.InboxItemView, error) {
+	return s.db.ListArchivedInboxItemsByFeed(context.Background(), profileID, feedID, limit)
+}
+
+// ListInboxItemsTrash returns unrouted and ignored items for the Trash
+// utility view.
+func (s *PipelineService) ListInboxItemsTrash(profileID string, limit int) ([]pipelinedb.InboxItemView, error) {
+	return s.db.ListInboxItemsTrash(context.Background(), profileID, limit)
 }
 
 func (s *PipelineService) InboxItemEvents(itemID int64, limit int) ([]pipelinedb.InboxEventView, error) {
@@ -103,10 +107,6 @@ func (s *PipelineService) ToggleInboxItemArchived(itemID, revision int64) (pipel
 
 func (s *PipelineService) ToggleInboxItemIgnored(itemID, revision int64) (pipelinedb.InboxItemView, error) {
 	return s.db.ToggleInboxItemIgnored(context.Background(), itemID, revision, time.Now().UnixMilli())
-}
-
-func (s *PipelineService) InboxCounts(profileID string) (pipelinedb.InboxCounts, error) {
-	return s.db.InboxCounts(context.Background(), profileID)
 }
 
 func (s *PipelineService) FeedCounts(profileID string) ([]pipelinedb.FeedInboxCount, error) {

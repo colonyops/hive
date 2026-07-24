@@ -24,8 +24,8 @@ describe('FeedListItem', () => {
     expect(issue.find('[data-testid="unread-dot"]').exists()).toBe(false)
   })
 
-  it('uses archive reason only in archive presentation and keeps selection styling', () => {
-    const wrapper = mount(FeedListItem, { props: { item: { ...baseItem, archivedReason: 'manual' }, view: 'archive', selected: true } })
+  it('uses archive reason only in archived presentation and keeps selection styling', () => {
+    const wrapper = mount(FeedListItem, { props: { item: { ...baseItem, archivedReason: 'manual' }, archived: true, selected: true } })
     expect(wrapper.get('[data-testid="archive-reason"]').text()).toBe('manual')
     expect(wrapper.get('button.feed-item').classes()).toContain('selected')
   })

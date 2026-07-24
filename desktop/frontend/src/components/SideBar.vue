@@ -6,7 +6,6 @@ import IconChevronRight from '~icons/lucide/chevron-right'
 import IconFolder from '~icons/lucide/folder'
 import IconFolderPlus from '~icons/lucide/folder-plus'
 import IconGitBranch from '~icons/lucide/git-branch'
-import IconList from '~icons/lucide/list'
 import IconPencil from '~icons/lucide/pencil'
 import IconRss from '~icons/lucide/rss'
 import IconSettings from '~icons/lucide/settings'
@@ -40,14 +39,6 @@ const tree = computed<FeedTree>(() =>
   props.profile.tree ?? props.profile.feeds.map((f) => ({ kind: 'feed', feed: f })),
 )
 
-const utilityViews = [
-  { view: 'open', label: 'Open' }, { view: 'archive', label: 'Archive' },
-  { view: 'all', label: 'All' }, { view: 'ignored', label: 'Ignored' },
-] as const
-const utilityCollapsed = useStorage('hive.sidebar.utility-collapsed', false)
-function viewSelected(view: string): boolean {
-  return props.selection.type === 'view' && props.selection.view === view
-}
 function feedSelected(feedId: string): boolean {
   return props.selection.type === 'feed' && props.selection.feedId === feedId
 }
@@ -251,23 +242,7 @@ function deleteFolder(folder: FeedFolder): void {
       </div>
     </div>
 
-    <div class="px-2.5 pb-0.5 pt-3" data-testid="inbox-view-switcher">
-      <button class="sidebar-entry" :class="{ 'sidebar-entry-selected': viewSelected('inbox') }" data-testid="inbox-view-inbox" @click="emit('select', { type: 'view', view: 'inbox' })">
-        <span class="nav-icon border-accent-tint text-accent"><IconList class="size-3" /></span><span class="flex-1 text-left">Inbox</span><span class="font-mono text-[11px]">{{ profile.unreadCount }}</span>
-      </button>
-      <button class="folder-header mt-1" data-testid="inbox-utility-folder" :aria-expanded="!utilityCollapsed" @click="utilityCollapsed = !utilityCollapsed">
-        <span class="nav-icon"><IconFolder class="size-3" /></span>
-        <span class="min-w-0 flex-1 text-left font-medium">More</span>
-        <component :is="utilityCollapsed ? IconChevronRight : IconChevronDown" class="size-3 text-text-4" />
-      </button>
-      <div v-if="!utilityCollapsed" class="folder-body" data-testid="inbox-utility-views">
-        <button v-for="entry in utilityViews" :key="entry.view" class="sidebar-entry pl-5" :class="{ 'sidebar-entry-selected': viewSelected(entry.view) }" :data-testid="`inbox-view-${entry.view}`" @click="emit('select', { type: 'view', view: entry.view })">
-          <span class="nav-icon"><IconList class="size-3" /></span><span class="flex-1 text-left">{{ entry.label }}</span>
-        </button>
-      </div>
-    </div>
-
-    <section class="px-2.5 pb-1.5 pt-2" data-testid="sidebar-feeds">
+    <section class="px-2.5 pb-1.5 pt-3" data-testid="sidebar-feeds">
       <div class="section-label">
         <IconRss class="size-3 text-feeds" /><span>FEEDS</span>
         <button
@@ -382,8 +357,25 @@ function deleteFolder(folder: FeedFolder): void {
       />
     </section>
 
+    <!-- Trash: unrouted + ignored items. Deliberately de-emphasized — no
+         count, no unread badge; a place to go, never a queue that calls.
+         Renders exactly like a feed row so the sidebar stays visually one
+         list; only the missing count marks it as a utility surface. -->
+    <section class="mt-auto px-2.5 pb-2 pt-1">
+      <button
+        type="button"
+        class="sidebar-entry"
+        :class="{ 'sidebar-entry-selected': selection.type === 'trash' }"
+        data-testid="sidebar-trash"
+        @click="emit('select', { type: 'trash' })"
+      >
+        <span class="nav-icon"><IconTrash class="size-3" /></span>
+        <span class="min-w-0 flex-1 truncate text-left">Trash</span>
+      </button>
+    </section>
+
     <button
-      class="mt-auto flex items-center gap-2.5 border-t border-border p-2.5 text-left hover:bg-chip"
+      class="flex items-center gap-2.5 border-t border-border p-2.5 text-left hover:bg-chip"
       data-testid="sidebar-edit-flow"
       @click="emit('open-flows')"
     >
@@ -408,6 +400,7 @@ function deleteFolder(folder: FeedFolder): void {
 .sidebar-entry { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border-radius: 7px; color: var(--color-text-2); font-size: 13px; cursor: pointer; }
 .sidebar-entry:hover { background: var(--color-chip); color: var(--color-text); }
 .sidebar-entry-selected { background: var(--color-hover); color: var(--color-accent); font-weight: 500; }
+.sidebar-entry-selected .nav-icon { border-color: var(--color-accent-tint); color: var(--color-accent); }
 .nav-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--color-strong); border-radius: 5px; background: var(--color-app); color: var(--color-text-2); }
 .section-label { display: flex; align-items: center; gap: 7px; padding: 0 6px 8px; color: var(--color-text-4); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; }
 .folder-add { opacity: 0; }

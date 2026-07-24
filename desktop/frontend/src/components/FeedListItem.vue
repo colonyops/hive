@@ -3,9 +3,9 @@ import { computed } from 'vue'
 import SourceMark from './SourceMark.vue'
 import { relativeAge } from '../lib/age'
 import { bodySnippet, feedSource, githubPayload, typeLabel } from '../lib/feedPresentation'
-import type { InboxItem, InboxView } from '../types/feed'
+import type { InboxItem } from '../types/feed'
 
-const props = defineProps<{ item: InboxItem; view?: InboxView; selected: boolean }>()
+const props = defineProps<{ item: InboxItem; archived?: boolean; trash?: boolean; selected: boolean }>()
 const emit = defineEmits<{ select: [] }>()
 const source = computed(() => feedSource(props.item))
 const github = computed(() => githubPayload(props.item))
@@ -20,7 +20,7 @@ const typePillClass = computed(() => github.value.kind === 'PR' ? 'type-pill-pr'
       <span class="source-badge" :data-source="source.key" data-testid="source-badge"><SourceMark :source="source" class="size-4" /></span>
       <div class="min-w-0 flex-1">
         <div class="flex items-baseline gap-2.5"><div class="min-w-0 flex-1 truncate text-left text-[13.5px] leading-[1.35]" :class="item.unread ? 'font-semibold text-text' : 'font-normal text-text-2'">{{ item.title }}</div><div class="flex shrink-0 items-center gap-2"><span v-if="item.unread" data-testid="unread-dot" class="unread-dot" /><span class="font-mono text-[11px] text-text-4">{{ relativeAge(item.lastEventAt) }}</span></div></div>
-        <div class="mt-[5px] flex min-w-0 items-center gap-2"><span v-if="view === 'archive' && item.archivedReason" class="type-pill type-pill-neutral" data-testid="archive-reason">{{ item.archivedReason }}</span><span class="type-pill" :class="typePillClass" data-testid="type-pill" :data-kind="github.kind">{{ type }}</span><span class="min-w-0 truncate font-mono text-[11px] text-text-3">{{ source.label }} · {{ github.repo }} #{{ github.num }}</span></div>
+        <div class="mt-[5px] flex min-w-0 items-center gap-2"><span v-if="archived && item.archivedReason" class="type-pill type-pill-neutral" data-testid="archive-reason">{{ item.archivedReason }}</span><span v-if="trash && item.ignoredAt != null" class="type-pill type-pill-neutral" data-testid="ignored-pill">ignored</span><span class="type-pill" :class="typePillClass" data-testid="type-pill" :data-kind="github.kind">{{ type }}</span><span class="min-w-0 truncate font-mono text-[11px] text-text-3">{{ source.label }} · {{ github.repo }} #{{ github.num }}</span></div>
         <div v-if="github.author || snippet" class="mt-[5px] truncate text-left text-[12px] leading-[1.4] text-text-3" data-testid="item-snippet"><span v-if="github.author" class="text-text-2">{{ github.author }}</span><template v-if="github.author && snippet"> — </template>{{ snippet }}</div>
       </div>
     </div>

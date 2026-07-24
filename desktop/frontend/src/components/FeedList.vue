@@ -9,7 +9,8 @@ import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconSearch from '~icons/lucide/search'
 import IconSlidersHorizontal from '~icons/lucide/sliders-horizontal'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
-import type { FeedSort, InboxItem, InboxView } from '../types/feed'
+import IconArchive from '~icons/lucide/archive'
+import type { FeedSort, InboxItem } from '../types/feed'
 
 // Presentation-only: the store (useFeedState) owns the search text and the
 // filtered `visibleItems`, so keyboard navigation and this list render the
@@ -17,7 +18,11 @@ import type { FeedSort, InboxItem, InboxView } from '../types/feed'
 const props = defineProps<{
   title: string
   visibleItems: InboxItem[]
-  view: InboxView
+  archivedItems: InboxItem[]
+  archivedCount: number
+  archivedExpanded: boolean
+  trash: boolean
+  trashFilter: 'all' | 'ignored'
   selectedId: number | null
   unreadOnly: boolean
   unreadCount: number
@@ -28,6 +33,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   select: [id: number]
   'set-unread': [value: boolean]
+  'toggle-archived': []
+  'set-trash-filter': [value: 'all' | 'ignored']
   refresh: []
   'update:search': [value: string]
   'set-sort': [value: FeedSort]
@@ -81,7 +88,13 @@ watch(() => props.selectedId, async (id) => {
           @input="emit('update:search', ($event.target as HTMLInputElement).value)"
         >
       </label>
-      <div class="segmented" role="group" aria-label="Filter">
+      <!-- Trash filters by disposition (ignored vs everything); feeds filter
+           by unread. Trash carries no unread semantics. -->
+      <div v-if="trash" class="segmented" role="group" aria-label="Filter">
+        <button class="seg" :class="{ active: trashFilter === 'all' }" data-testid="filter-trash-all" @click="emit('set-trash-filter', 'all')">All</button>
+        <button class="seg" :class="{ active: trashFilter === 'ignored' }" data-testid="filter-trash-ignored" @click="emit('set-trash-filter', 'ignored')">Ignored</button>
+      </div>
+      <div v-else class="segmented" role="group" aria-label="Filter">
         <button class="seg" :class="{ active: !unreadOnly }" data-testid="filter-all" @click="emit('set-unread', false)">All</button>
         <button class="seg" :class="{ active: unreadOnly }" data-testid="filter-unread" @click="emit('set-unread', true)">
           Unread<span class="seg-count">{{ unreadCount }}</span>
@@ -117,18 +130,37 @@ watch(() => props.selectedId, async (id) => {
         <button class="state-action" @click="emit('refresh')">Retry now</button>
       </div>
       <template v-else>
-        <span v-if="view === 'archive'" class="px-3 pt-2 font-mono text-[10px] uppercase text-text-3" data-testid="archive-reason-label">Archive reason</span>
         <FeedListItem
           v-for="item in visibleItems"
           :key="item.id"
           :item="item"
-          :view="view"
+          :trash="trash"
           :selected="item.id === selectedId"
           @select="emit('select', item.id)"
         />
+        <!-- Archived section: items whose rules still match but whose work is
+             done stay in the feed, demoted below the fold. Collapsed by
+             default; expanding lazy-loads the rows. -->
+        <template v-if="!trash && archivedCount > 0">
+          <button type="button" class="archived-divider" data-testid="archived-divider" :aria-expanded="archivedExpanded" @click="emit('toggle-archived')">
+            <IconArchive class="size-3" />
+            <span>Archived ({{ archivedCount }})</span>
+            <IconChevronDown class="size-3 transition-transform" :class="{ '-rotate-90': !archivedExpanded }" />
+          </button>
+          <template v-if="archivedExpanded">
+            <FeedListItem
+              v-for="item in archivedItems"
+              :key="item.id"
+              :item="item"
+              archived
+              :selected="item.id === selectedId"
+              @select="emit('select', item.id)"
+            />
+          </template>
+        </template>
         <!-- Empty feed: "You're all caught up" when the unread filter drained
              the list, "No matches" when a search did, a plain empty state otherwise. -->
-        <div v-if="visibleItems.length === 0" class="state-frame" data-testid="feed-empty">
+        <div v-if="visibleItems.length === 0 && (trash || archivedCount === 0)" class="state-frame" data-testid="feed-empty">
           <template v-if="search.trim()">
             <div class="state-icon text-text-3"><IconSearch class="size-5" /></div>
             <div class="text-[13.5px] font-semibold">No matches</div>
@@ -171,6 +203,8 @@ watch(() => props.selectedId, async (id) => {
 .view-menu-item { display: flex; width: 100%; align-items: center; gap: 8px; cursor: pointer; border-radius: 6px; padding: 7px 9px; color: var(--color-text-2); font-size: 12.5px; text-align: left; }
 .view-menu-item:hover { background: var(--color-hover); color: var(--color-text); }
 .view-menu-divider { height: 1px; background: var(--color-row); margin: 4px; }
+.archived-divider { display: flex; width: 100%; align-items: center; gap: 7px; padding: 8px 14px 6px; color: var(--color-text-3); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; border-top: 1px solid var(--color-row); margin-top: 6px; }
+.archived-divider:hover { color: var(--color-text); }
 .state-frame { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; height: 100%; padding: 24px; text-align: center; }
 .state-icon { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid var(--color-strong); border-radius: 12px; background: var(--color-chip); margin-bottom: 4px; }
 .state-action { margin-top: 8px; padding: 6px 14px; border: 1px solid var(--color-strong); border-radius: 7px; color: var(--color-text-2); font-size: 12px; cursor: pointer; }
