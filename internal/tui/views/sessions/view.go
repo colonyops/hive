@@ -17,6 +17,7 @@ import (
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
+	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
@@ -345,10 +346,22 @@ func (v *View) handleTerminalPollTick() tea.Cmd {
 		sessPtrs[i] = &v.allSessions[i]
 	}
 	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
+	cmds = append(cmds, FetchRootRepoStatusBatch(v.terminalManager, v.rootRepoTargets(), v.gitWorkers))
 	if v.terminalManager.HasEnabledIntegrations() {
 		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
 	}
 	return tea.Batch(cmds...)
+}
+
+// rootRepoTargets collects workspace checkouts currently shown as repo headers.
+func (v *View) rootRepoTargets() []RootRepoTarget {
+	var targets []RootRepoTarget
+	for _, ti := range TreeItemsAll(v.list.Items()) {
+		if ti.IsHeader && ti.RootPath != "" {
+			targets = append(targets, RootRepoTarget{Name: ti.RepoName, Path: ti.RootPath})
+		}
+	}
+	return targets
 }
 
 func (v *View) handlePluginWorkerStarted(msg pluginWorkerStartedMsg) tea.Cmd {
@@ -382,7 +395,9 @@ func (v *View) handleReposDiscovered(msg reposDiscoveredMsg) tea.Cmd {
 	if msg.err != nil {
 		return ErrorCmd(fmt.Errorf("repo scan error: %w", msg.err))
 	}
-	return nil
+	// Rebuild the tree so headers pick up root checkout paths; the scan
+	// usually completes after the initial session load has built items.
+	return v.applyFilter()
 }
 
 func (v *View) handleSessionRefreshTick() tea.Cmd {
@@ -564,12 +579,14 @@ func (v *View) handleRecycledPlaceholderKey(keyStr string, treeItem *TreeItem) (
 }
 
 func (v *View) handleRepoHeaderKey(header *TreeItem) (*View, tea.Cmd) {
-	// Find the original repo path from discovered repos
-	var repoPath string
-	for _, repo := range v.discoveredRepos {
-		if repo.Remote == header.RepoRemote {
-			repoPath = repo.Path
-			break
+	repoPath := header.RootPath
+	if repoPath == "" {
+		// Headers built before the workspace scan finished lack RootPath.
+		for _, repo := range v.discoveredRepos {
+			if git.EquivalentRemote(repo.Remote, header.RepoRemote) {
+				repoPath = repo.Path
+				break
+			}
 		}
 	}
 	if repoPath == "" {
@@ -580,6 +597,7 @@ func (v *View) handleRepoHeaderKey(header *TreeItem) (*View, tea.Cmd) {
 		return OpenRepoRequestMsg{
 			Name:   header.RepoName,
 			Remote: header.RepoRemote,
+			Path:   repoPath,
 		}
 	}
 }
@@ -704,7 +722,7 @@ func (v *View) applyFilter() tea.Cmd {
 	} else {
 		groups = GroupSessionsByRepo(filteredSess, localRemote)
 	}
-	items := BuildTreeItems(groups, localRemote)
+	items := BuildTreeItems(groups, localRemote, v.discoveredRepos)
 	items = v.expandWindowItems(items)
 	*v.columnWidths = CalculateColumnWidths(filteredSess, nil)
 
@@ -715,6 +733,14 @@ func (v *View) applyFilter() tea.Cmd {
 		paths = append(paths, s.Path)
 		if !v.refreshing {
 			v.gitStatuses.Set(s.Path, GitStatus{IsLoading: true})
+		}
+	}
+	for _, ti := range TreeItemsAll(items) {
+		if ti.IsHeader && ti.RootPath != "" {
+			paths = append(paths, ti.RootPath)
+			if !v.refreshing {
+				v.gitStatuses.Set(ti.RootPath, GitStatus{IsLoading: true})
+			}
 		}
 	}
 
@@ -1240,9 +1266,15 @@ func (v *View) RefreshGitStatuses() tea.Cmd {
 	items := v.list.Items()
 	paths := make([]string, 0, len(items))
 
-	for _, ti := range TreeItemsSessions(items) {
-		paths = append(paths, ti.Session.Path)
-		v.gitStatuses.Set(ti.Session.Path, GitStatus{IsLoading: true})
+	for _, ti := range TreeItemsAll(items) {
+		switch {
+		case ti.IsSession():
+			paths = append(paths, ti.Session.Path)
+			v.gitStatuses.Set(ti.Session.Path, GitStatus{IsLoading: true})
+		case ti.IsHeader && ti.RootPath != "":
+			paths = append(paths, ti.RootPath)
+			v.gitStatuses.Set(ti.RootPath, GitStatus{IsLoading: true})
+		}
 	}
 
 	if len(paths) == 0 {

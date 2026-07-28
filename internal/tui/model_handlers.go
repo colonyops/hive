@@ -241,7 +241,7 @@ func (m Model) viewTasksForSelectedSession() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSessionOpenRepo(msg sessions.OpenRepoRequestMsg) (tea.Model, tea.Cmd) {
-	return m.openRepoHeaderByRemote(msg.Name, msg.Remote)
+	return m.openRepoHeader(msg.Name, msg.Remote, msg.Path)
 }
 
 // --- Outbound messages from tasks view ---
@@ -1566,12 +1566,13 @@ func (m Model) handleTabClick(x int) (tea.Model, tea.Cmd) {
 
 // --- Helper for repo header opening ---
 
-func (m Model) openRepoHeaderByRemote(name, remote string) (tea.Model, tea.Cmd) {
-	var repoPath string
-	for _, repo := range m.sessionsView.DiscoveredRepos() {
-		if repo.Remote == remote {
-			repoPath = repo.Path
-			break
+func (m Model) openRepoHeader(name, remote, repoPath string) (tea.Model, tea.Cmd) {
+	if repoPath == "" {
+		for _, repo := range m.sessionsView.DiscoveredRepos() {
+			if git.EquivalentRemote(repo.Remote, remote) {
+				repoPath = repo.Path
+				break
+			}
 		}
 	}
 	if repoPath == "" {

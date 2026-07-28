@@ -48,6 +48,7 @@ type RecycledDeleteRequestMsg struct {
 type OpenRepoRequestMsg struct {
 	Name   string
 	Remote string
+	Path   string // workspace checkout path when already resolved by the sender
 }
 
 // RefreshSessionsMsg requests a session list refresh.

@@ -9,9 +9,11 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/pkg/kv"
@@ -112,6 +114,7 @@ type TreeItem struct {
 	// Header fields (only used when IsHeader is true)
 	RepoName      string
 	RepoRemote    string // Git remote URL for the repo group
+	RootPath      string // Path to the workspace checkout this repo was sourced from (empty if none discovered)
 	IsCurrentRepo bool
 
 	// Session fields (only used when IsHeader is false and IsRecycledPlaceholder is false)
@@ -167,9 +170,18 @@ func (i TreeItem) FilterValue() string {
 }
 
 // BuildTreeItems converts repo groups into tree items for the list.
-func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
+// Workspace repos are matched to groups by remote identity so headers can
+// surface the root checkout's path (git status, open-repo target).
+func BuildTreeItems(groups []RepoGroup, localRemote string, workspaceRepos []workspace.DiscoveredRepo) []list.Item {
 	if len(groups) == 0 {
 		return nil
+	}
+
+	rootPaths := make(map[string]string, len(workspaceRepos))
+	for _, repo := range workspaceRepos {
+		if identity := git.RemoteIdentity(repo.Remote); identity != "" {
+			rootPaths[identity] = repo.Path
+		}
 	}
 
 	items := make([]list.Item, 0)
@@ -184,6 +196,7 @@ func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
 			IsHeader:      true,
 			RepoName:      group.Name,
 			RepoRemote:    group.Remote,
+			RootPath:      rootPaths[git.RemoteIdentity(group.Remote)],
 			IsCurrentRepo: group.Remote == localRemote,
 		}
 		items = append(items, header)
@@ -356,7 +369,9 @@ func (d TreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	_, _ = fmt.Fprintf(w, "%s%s", prefix, line)
 }
 
-// renderHeader renders a repository header.
+// renderHeader renders a repository header. When the repo has a discovered
+// workspace checkout (RootPath), the header also surfaces that checkout's
+// agent status dot and git status, making the root repo visible in the tree.
 func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, _ list.Model, _ int) string {
 	// Repo name
 	nameStyle := d.Styles.HeaderNormal
@@ -368,6 +383,22 @@ func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, _ list.Model,
 	// Append indicator for current repo
 	if item.IsCurrentRepo {
 		result += " " + d.Styles.HeaderStar.Render(currentRepoIndicator)
+	}
+
+	if item.RootPath == "" {
+		return result
+	}
+
+	// Status dot only when an agent is actually running in the root checkout;
+	// StatusMissing is the common case and would just add noise to every header.
+	if d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(RootStatusKey(item.RootPath)); ok && ts.Status != terminal.StatusMissing {
+			result = renderStatusIndicator(session.StateActive, &ts, d.Styles, d.AnimationFrame) + " " + result
+		}
+	}
+
+	if !d.PreviewMode {
+		result += d.renderGitStatus(item.RootPath)
 	}
 
 	return result

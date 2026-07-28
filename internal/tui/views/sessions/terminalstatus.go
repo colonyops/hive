@@ -99,6 +99,90 @@ func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session
 	}
 }
 
+// RootRepoTarget identifies a workspace checkout to poll for agent status.
+// Name doubles as the tmux session slug because opening a repo header names
+// the root repo's tmux session after the repo name (see openRepoHeader).
+type RootRepoTarget struct {
+	Name string
+	Path string
+}
+
+// RootStatusKey returns the terminalStatuses store key for a root checkout.
+// Prefixed so it can never collide with session IDs, which key the same store.
+func RootStatusKey(path string) string {
+	return "root:" + path
+}
+
+// FetchRootRepoStatusBatch returns a command that fetches terminal status for
+// workspace root checkouts. Results share TerminalStatusBatchCompleteMsg with
+// session statuses, keyed by RootStatusKey.
+func FetchRootRepoStatusBatch(mgr *terminal.Manager, targets []RootRepoTarget, workers int) tea.Cmd {
+	if len(targets) == 0 || !mgr.HasEnabledIntegrations() {
+		return nil
+	}
+
+	return func() tea.Msg {
+		results := make(map[string]TerminalStatus)
+		var mu sync.Mutex
+
+		sem := make(chan struct{}, workers)
+		var wg sync.WaitGroup
+
+		for _, target := range targets {
+			wg.Add(1)
+			go func(rt RootRepoTarget) {
+				defer wg.Done()
+
+				sem <- struct{}{}
+				defer func() { <-sem }()
+
+				ctx, cancel := context.WithTimeout(context.Background(), terminalStatusTimeout)
+				defer cancel()
+
+				status := fetchRootRepoStatus(ctx, mgr, rt)
+
+				mu.Lock()
+				results[RootStatusKey(rt.Path)] = status
+				mu.Unlock()
+			}(target)
+		}
+
+		wg.Wait()
+		return TerminalStatusBatchCompleteMsg{Results: results}
+	}
+}
+
+// fetchRootRepoStatus fetches terminal status for a workspace root checkout.
+// Unlike sessions, root repos don't expand window sub-items, so multi-window
+// discovery is skipped.
+func fetchRootRepoStatus(ctx context.Context, mgr *terminal.Manager, target RootRepoTarget) TerminalStatus {
+	status := TerminalStatus{Status: terminal.StatusMissing}
+
+	metadata := map[string]string{terminaltmux.SessionPathKey: target.Path}
+	info, integration, err := mgr.DiscoverSession(ctx, target.Name, metadata)
+	if err != nil {
+		log.Debug().Err(err).Str("repo", target.Name).Msg("root repo terminal discovery failed")
+		status.Error = err
+		return status
+	}
+	if info == nil || integration == nil {
+		return status
+	}
+
+	termStatus, err := integration.GetStatus(ctx, info)
+	if err != nil {
+		log.Debug().Err(err).Str("repo", target.Name).Msg("root repo terminal status lookup failed")
+		status.Error = err
+		return status
+	}
+
+	status.Status = termStatus
+	status.Tool = info.DetectedTool
+	status.WindowName = info.WindowName
+	status.PaneContent = info.PaneContent
+	return status
+}
+
 // fetchTerminalStatusForSession fetches terminal status for a single session.
 func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, sess *session.Session) TerminalStatus {
 	status := TerminalStatus{
