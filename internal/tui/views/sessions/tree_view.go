@@ -410,9 +410,9 @@ func (d TreeDelegate) renderRecycledPlaceholder(item TreeItem, isSelected bool) 
 	// Tree prefix
 	var prefix string
 	if item.IsLastInRepo {
-		prefix = treeLast
+		prefix = " " + treeLast
 	} else {
-		prefix = treeBranch
+		prefix = " " + treeBranch
 	}
 	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
@@ -431,9 +431,9 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	// Tree prefix
 	var prefix string
 	if item.IsLastInRepo {
-		prefix = treeLast
+		prefix = " " + treeLast
 	} else {
-		prefix = treeBranch
+		prefix = " " + treeBranch
 	}
 	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
@@ -506,9 +506,9 @@ func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 
 	var parentLine string
 	if item.IsLastInRepo {
-		parentLine = "        "
+		parentLine = "         "
 	} else {
-		parentLine = "│       "
+		parentLine = " │       "
 	}
 	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 
@@ -548,9 +548,9 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	// The parent session's tree line continues vertically
 	var parentLine string
 	if item.IsLastInRepo {
-		parentLine = "    " // parent was └─, no continuing line
+		parentLine = "     " // parent was └─, no continuing line
 	} else {
-		parentLine = "│   " // parent was ├─, line continues
+		parentLine = " │   " // parent was ├─, line continues
 	}
 	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 
