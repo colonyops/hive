@@ -358,12 +358,13 @@ func (d TreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		line = d.renderSession(treeItem, isSelected, m, index)
 	}
 
-	// Selection indicator
+	// Selection indicator: a single-cell gutter keeps rows close to the left
+	// edge; the bar sits directly against the item content.
 	var prefix string
 	if isSelected {
-		prefix = d.Styles.SelectedBorder.Render("┃") + " "
+		prefix = d.Styles.SelectedBorder.Render("┃")
 	} else {
-		prefix = "  "
+		prefix = " "
 	}
 
 	_, _ = fmt.Fprintf(w, "%s%s", prefix, line)
