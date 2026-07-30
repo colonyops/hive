@@ -28,6 +28,8 @@ func TestGroupPaneStatuses(t *testing.T) {
 	assert.Equal(t, "@1", got[0].WindowID)
 	assert.Equal(t, "0", got[0].WindowIndex)
 	assert.Equal(t, terminal.StatusApproval, got[0].Status)
+	assert.Equal(t, "codex", got[0].Tool)
+	assert.Equal(t, "approval", got[0].PaneContent)
 	assert.Len(t, got[0].Panes, 2)
 	assert.Equal(t, "@2", got[1].WindowID)
 	assert.Equal(t, "1", got[1].WindowIndex)

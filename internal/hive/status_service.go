@@ -283,7 +283,12 @@ func groupPaneStatuses(ctx context.Context, integration terminal.Integration, sl
 				PaneContent: wi.PaneContent,
 			})
 		} else {
-			windows[idx].Status = aggregateStatus(windows[idx].Status, paneStatus)
+			aggregated := aggregateStatus(windows[idx].Status, paneStatus)
+			if aggregated != windows[idx].Status {
+				windows[idx].Tool = wi.DetectedTool
+				windows[idx].PaneContent = wi.PaneContent
+			}
+			windows[idx].Status = aggregated
 			if windows[idx].Tool == "" {
 				windows[idx].Tool = wi.DetectedTool
 			}
