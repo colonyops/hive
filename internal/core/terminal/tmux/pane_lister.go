@@ -1,8 +1,8 @@
 package tmux
 
 import (
+	"context"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
@@ -15,7 +15,9 @@ type PaneLister interface {
 }
 
 // TmuxPaneLister calls tmux list-panes -a and parses the output.
-type TmuxPaneLister struct{}
+type TmuxPaneLister struct {
+	commander Commander
+}
 
 // listPanesFormat is the delimited format used for `tmux list-panes -a`.
 // tmux replaces literal tab format separators with underscores, so use a
@@ -42,8 +44,12 @@ type paneLine struct {
 }
 
 // ListAllPanes returns all tmux panes visible to the current tmux client.
-func (TmuxPaneLister) ListAllPanes() ([]classifier.PaneInput, error) {
-	output, err := exec.Command("tmux", "list-panes", "-a", "-F", listPanesFormat).Output()
+func (l TmuxPaneLister) ListAllPanes() ([]classifier.PaneInput, error) {
+	commander := l.commander
+	if commander == nil {
+		commander = execCommander{}
+	}
+	output, err := commander.Output(context.Background(), "list-panes", "-a", "-F", listPanesFormat)
 	if err != nil {
 		return nil, fmt.Errorf("tmux list-panes failed: %w", err)
 	}

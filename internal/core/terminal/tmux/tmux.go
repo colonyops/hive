@@ -3,7 +3,6 @@ package tmux
 
 import (
 	"context"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -30,8 +29,7 @@ type Integration struct {
 	trackers        map[string]*terminal.StateTracker
 	limiters        map[string]*terminal.RateLimiter
 	contentLimiters map[string]*terminal.RateLimiter // per-pane Tier 3 rate limiter
-	available       bool
-	availableOnce   sync.Once
+	commander       Commander
 	classifier      *classifier.Classifier
 	classCache      *classifier.Cache
 	processReader   process.ProcessReader
@@ -128,19 +126,33 @@ func WithCaptureRecorder(recorder CaptureRecorder) Option {
 	}
 }
 
+// WithCommander uses commander for tmux discovery, pane listing, and capture.
+// Embedders can supply an absolute binary, environment, or socket selection
+// without changing the process-wide environment.
+func WithCommander(commander Commander) Option {
+	return func(integration *Integration) {
+		if commander != nil {
+			integration.commander = commander
+		}
+	}
+}
+
 // NewFromPreviewMatchers creates the production tmux integration from config
 // matchers. Tool names for process detection are derived automatically from
 // the pattern strings (e.g. "^pi$" → "pi"), so callers only need to pass
 // the single PreviewWindowMatcher slice from config.
 func NewFromPreviewMatchers(previewMatchers []string, options ...Option) *Integration {
-	capture := TmuxCapture{}
 	reader := process.OSReader{}
-	agentNames := classifier.ToolNamesFromPatterns(previewMatchers)
-	cls := classifier.New(classifier.TitlePatternsFromConfig(previewMatchers, agentNames), reader, capture, content.NewScorer())
-	integration := NewWithReader(cls, TmuxPaneLister{}, reader)
+	integration := newIntegration(reader)
 	for _, option := range options {
 		option(integration)
 	}
+
+	capture := TmuxCapture{commander: integration.commander}
+	agentNames := classifier.ToolNamesFromPatterns(previewMatchers)
+	integration.classifier = classifier.New(classifier.TitlePatternsFromConfig(previewMatchers, agentNames), reader, capture, content.NewScorer())
+	integration.lister = TmuxPaneLister{commander: integration.commander}
+	integration.capture = capture
 	return integration
 }
 
@@ -151,26 +163,32 @@ func New(cls *classifier.Classifier, lister PaneLister) *Integration {
 
 // NewWithReader creates a tmux integration with explicit dependencies for tests.
 func NewWithReader(cls *classifier.Classifier, lister PaneLister, reader process.ProcessReader) *Integration {
-	capture := TmuxCapture{}
 	if reader == nil {
 		reader = process.OSReader{}
 	}
+	integration := newIntegration(reader)
+	capture := TmuxCapture{commander: integration.commander}
 	if cls == nil {
 		cls = classifier.New(nil, reader, capture, nil)
 	}
 	if lister == nil {
-		lister = TmuxPaneLister{}
+		lister = TmuxPaneLister{commander: integration.commander}
 	}
+	integration.classifier = cls
+	integration.lister = lister
+	integration.capture = capture
+	return integration
+}
+
+func newIntegration(reader process.ProcessReader) *Integration {
 	return &Integration{
 		cache:           make(map[string]*sessionCache),
 		trackers:        make(map[string]*terminal.StateTracker),
 		limiters:        make(map[string]*terminal.RateLimiter),
 		contentLimiters: make(map[string]*terminal.RateLimiter),
-		classifier:      cls,
+		commander:       execCommander{},
 		classCache:      classifier.NewCache(),
 		processReader:   reader,
-		lister:          lister,
-		capture:         capture,
 	}
 }
 
@@ -182,11 +200,7 @@ func (t *Integration) Name() string { return "tmux" }
 
 // Available returns true if tmux is installed and accessible.
 func (t *Integration) Available() bool {
-	t.availableOnce.Do(func() {
-		_, err := exec.LookPath("tmux")
-		t.available = err == nil
-	})
-	return t.available
+	return t.commander != nil && t.commander.Available()
 }
 
 // RefreshCache updates cached pane classifications. Call once per poll cycle.
