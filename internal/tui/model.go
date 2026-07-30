@@ -27,7 +27,6 @@ import (
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
-	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/internal/tui/sourcepicker"
 
@@ -76,14 +75,14 @@ const (
 // Deps holds all external dependencies for the TUI Model.
 type Deps struct {
 	// Required; nil causes a panic at construction time.
-	Config          *config.Config
-	Service         *hive.SessionService
-	Renderer        *tmpl.Renderer
-	TerminalManager *terminal.Manager
-	PluginManager   *plugins.Manager
-	CommandSet      *plugins.CommandSet
-	TodoService     *hive.TodoService
-	DB              *db.DB
+	Config        *config.Config
+	Service       *hive.SessionService
+	Renderer      *tmpl.Renderer
+	Status        *hive.StatusService
+	PluginManager *plugins.Manager
+	CommandSet    *plugins.CommandSet
+	TodoService   *hive.TodoService
+	DB            *db.DB
 
 	// Optional; nil disables the corresponding feature.
 	MsgStore      *hive.MessageService
@@ -248,8 +247,8 @@ type todoCreatedMsg struct {
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
 func New(deps Deps, opts Opts) Model {
-	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil || deps.CommandSet == nil || deps.TodoService == nil || deps.DB == nil {
-		panic("tui.New: Config, Service, Renderer, TerminalManager, PluginManager, CommandSet, TodoService, and DB are required")
+	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.Status == nil || deps.PluginManager == nil || deps.CommandSet == nil || deps.TodoService == nil || deps.DB == nil {
+		panic("tui.New: Config, Service, Renderer, Status, PluginManager, CommandSet, TodoService, and DB are required")
 	}
 	cfg := deps.Config
 	service := deps.Service
@@ -264,15 +263,15 @@ func New(deps Deps, opts Opts) Model {
 	cmdService := command.NewService(service, service, service, service, service)
 
 	sessionsView := sessions.New(sessions.ViewOpts{
-		Cfg:             cfg,
-		Service:         service,
-		Handler:         handler,
-		TerminalManager: deps.TerminalManager,
-		PluginManager:   deps.PluginManager,
-		LocalRemote:     opts.LocalRemote,
-		Workspaces:      cfg.Workspaces,
-		Renderer:        deps.Renderer,
-		Bus:             deps.Bus,
+		Cfg:           cfg,
+		Service:       service,
+		Handler:       handler,
+		Status:        deps.Status,
+		PluginManager: deps.PluginManager,
+		LocalRemote:   opts.LocalRemote,
+		Workspaces:    cfg.Workspaces,
+		Renderer:      deps.Renderer,
+		Bus:           deps.Bus,
 	})
 
 	// Wire handler lookups through sessions view stores

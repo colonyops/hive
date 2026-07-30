@@ -32,6 +32,7 @@ type App struct {
 	Doctor    *DoctorService
 	Todos     *TodoService
 	Honeycomb *HoneycombService
+	Status    *StatusService
 
 	Bus        *eventbus.EventBus
 	Terminal   *terminal.Manager
@@ -69,6 +70,7 @@ func NewApp(
 		Doctor:     NewDoctorService(sessions.sessions, cfg, pluginInfos),
 		Todos:      NewTodoService(todoStore, bus, cfg, logger.With().Str("component", "todos").Logger()),
 		Honeycomb:  NewHoneycombService(hcStore, logger.With().Str("component", "honeycomb").Logger()),
+		Status:     NewStatusService(termMgr, cfg.Git.StatusWorkers),
 		Bus:        bus,
 		Terminal:   termMgr,
 		Plugins:    pluginMgr,

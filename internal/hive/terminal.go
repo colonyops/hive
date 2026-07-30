@@ -1,11 +1,20 @@
-package commands
+package hive
 
 import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/terminal"
 	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 )
+
+// NewTerminalManager builds the terminal integration manager from config.
+// tmux is always enabled; availability is checked lazily by the manager.
+func NewTerminalManager(cfg *config.Config) *terminal.Manager {
+	mgr := terminal.NewManager([]string{"tmux"})
+	mgr.Register(newTmuxIntegration(cfg))
+	return mgr
+}
 
 func newTmuxIntegration(cfg *config.Config) *terminaltmux.Integration {
 	if cfg == nil {

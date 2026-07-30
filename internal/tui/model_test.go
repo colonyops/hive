@@ -63,15 +63,15 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 	)
 
 	m := New(Deps{
-		Config:          cfg,
-		Service:         newMouseTestSessionService(t),
-		Renderer:        testRenderer,
-		TerminalManager: terminal.NewManager(nil),
-		PluginManager:   pluginManager,
-		CommandSet:      commandSet,
-		TodoService:     todoService,
-		DB:              database,
-		Bus:             tb.EventBus,
+		Config:        cfg,
+		Service:       newMouseTestSessionService(t),
+		Renderer:      testRenderer,
+		Status:        hive.NewStatusService(terminal.NewManager(nil), 1),
+		PluginManager: pluginManager,
+		CommandSet:    commandSet,
+		TodoService:   todoService,
+		DB:            database,
+		Bus:           tb.EventBus,
 	}, Opts{})
 
 	return m
@@ -128,15 +128,15 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 	)
 
 	m := New(Deps{
-		Config:          cfg,
-		Service:         newMouseTestSessionService(t),
-		Renderer:        testRenderer,
-		TerminalManager: terminal.NewManager(nil),
-		PluginManager:   pluginManager,
-		CommandSet:      commandSet,
-		TodoService:     todoService,
-		DB:              database,
-		Bus:             tb.EventBus,
+		Config:        cfg,
+		Service:       newMouseTestSessionService(t),
+		Renderer:      testRenderer,
+		Status:        hive.NewStatusService(terminal.NewManager(nil), 1),
+		PluginManager: pluginManager,
+		CommandSet:    commandSet,
+		TodoService:   todoService,
+		DB:            database,
+		Bus:           tb.EventBus,
 	}, Opts{})
 
 	model, _ := m.openNewSessionForm()

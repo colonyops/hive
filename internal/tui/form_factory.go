@@ -7,8 +7,8 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/workspace"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/components/form"
-	"github.com/colonyops/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/pkg/kv"
 )
 
@@ -19,7 +19,7 @@ func newFormDialog(
 	fields []config.FormField,
 	sessions []session.Session,
 	repos []workspace.DiscoveredRepo,
-	termStatuses *kv.Store[string, sessions.TerminalStatus],
+	termStatuses *kv.Store[string, hive.TerminalStatus],
 ) (*form.Dialog, error) {
 	components := make([]form.Field, 0, len(fields))
 	variables := make([]string, 0, len(fields))
@@ -60,7 +60,7 @@ func newFormDialog(
 // filterActiveSessions returns sessions that are active and have a non-missing
 // terminal status. When termStatuses is nil (no terminal integration), falls
 // back to filtering by session state only.
-func filterActiveSessions(sessions []session.Session, termStatuses *kv.Store[string, sessions.TerminalStatus]) []session.Session {
+func filterActiveSessions(sessions []session.Session, termStatuses *kv.Store[string, hive.TerminalStatus]) []session.Session {
 	filtered := make([]session.Session, 0, len(sessions))
 	for _, s := range sessions {
 		if s.State != session.StateActive {

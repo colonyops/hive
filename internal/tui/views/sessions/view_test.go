@@ -90,8 +90,8 @@ func TestExpandWindowItems_NilTerminalStatuses(t *testing.T) {
 }
 
 func TestExpandWindowItems_ZeroWindows(t *testing.T) {
-	ts := kv.New[string, TerminalStatus]()
-	ts.Set("s1", TerminalStatus{Status: terminal.StatusActive})
+	ts := kv.New[string, hive.TerminalStatus]()
+	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusActive})
 	v := &View{terminalStatuses: ts}
 
 	items := []list.Item{TreeItem{Session: session.Session{ID: "s1"}}}
@@ -100,9 +100,9 @@ func TestExpandWindowItems_ZeroWindows(t *testing.T) {
 }
 
 func TestExpandWindowItems_OneWindow(t *testing.T) {
-	ts := kv.New[string, TerminalStatus]()
-	ts.Set("s1", TerminalStatus{
-		Windows: []WindowStatus{{WindowIndex: "0", WindowName: "main"}},
+	ts := kv.New[string, hive.TerminalStatus]()
+	ts.Set("s1", hive.TerminalStatus{
+		Windows: []hive.WindowStatus{{WindowIndex: "0", WindowName: "main"}},
 	})
 	v := &View{terminalStatuses: ts}
 
@@ -112,12 +112,12 @@ func TestExpandWindowItems_OneWindow(t *testing.T) {
 }
 
 func TestExpandWindowItems_OneWindowMultiplePanes(t *testing.T) {
-	ts := kv.New[string, TerminalStatus]()
-	ts.Set("s1", TerminalStatus{
-		Windows: []WindowStatus{{
+	ts := kv.New[string, hive.TerminalStatus]()
+	ts.Set("s1", hive.TerminalStatus{
+		Windows: []hive.WindowStatus{{
 			WindowIndex: "0",
 			WindowName:  "main",
-			Panes: []PaneStatus{
+			Panes: []hive.PaneStatus{
 				{PaneID: "%1", Tool: "claude", Status: terminal.StatusReady},
 				{PaneID: "%2", Tool: "codex", Status: terminal.StatusActive},
 			},
@@ -143,11 +143,11 @@ func TestExpandWindowItems_OneWindowMultiplePanes(t *testing.T) {
 
 func TestRenderPreviewHeader_SelectedPaneUsesDisplayID(t *testing.T) {
 	sess := session.Session{ID: "abcd1234", Name: "my-session"}
-	ts := kv.New[string, TerminalStatus]()
-	ts.Set("s1", TerminalStatus{Windows: []WindowStatus{{
+	ts := kv.New[string, hive.TerminalStatus]()
+	ts.Set("s1", hive.TerminalStatus{Windows: []hive.WindowStatus{{
 		WindowIndex: "0",
 		WindowName:  "main",
-		Panes:       []PaneStatus{{PaneID: "%12", Tool: "claude", Status: terminal.StatusReady}},
+		Panes:       []hive.PaneStatus{{PaneID: "%12", Tool: "claude", Status: terminal.StatusReady}},
 	}}})
 	v := newTestView([]list.Item{TreeItem{
 		IsPaneItem:    true,
@@ -166,9 +166,9 @@ func TestRenderPreviewHeader_SelectedPaneUsesDisplayID(t *testing.T) {
 }
 
 func TestExpandWindowItems_MultipleWindows(t *testing.T) {
-	ts := kv.New[string, TerminalStatus]()
-	ts.Set("s1", TerminalStatus{
-		Windows: []WindowStatus{
+	ts := kv.New[string, hive.TerminalStatus]()
+	ts.Set("s1", hive.TerminalStatus{
+		Windows: []hive.WindowStatus{
 			{WindowIndex: "0", WindowName: "claude"},
 			{WindowIndex: "1", WindowName: "aider"},
 		},
@@ -191,7 +191,7 @@ func TestExpandWindowItems_MultipleWindows(t *testing.T) {
 }
 
 func TestExpandWindowItems_NonSessionPassthrough(t *testing.T) {
-	ts := kv.New[string, TerminalStatus]()
+	ts := kv.New[string, hive.TerminalStatus]()
 	v := &View{terminalStatuses: ts}
 
 	items := []list.Item{
@@ -204,13 +204,13 @@ func TestExpandWindowItems_NonSessionPassthrough(t *testing.T) {
 
 // --- applyFilter ---
 
-func newFilterTestView(sessions []session.Session, statusFilter terminal.Status, statuses *kv.Store[string, TerminalStatus]) *View {
+func newFilterTestView(sessions []session.Session, statusFilter terminal.Status, statuses *kv.Store[string, hive.TerminalStatus]) *View {
 	delegate := NewTreeDelegate()
 	l := list.New([]list.Item{}, delegate, 80, 24)
 	columnWidths := &ColumnWidths{}
 	ts := statuses
 	if ts == nil {
-		ts = kv.New[string, TerminalStatus]()
+		ts = kv.New[string, hive.TerminalStatus]()
 	}
 	gitStatuses := kv.New[string, GitStatus]()
 	// new(hive.SessionService) gives a zero-valued service whose Git() returns nil.
@@ -253,9 +253,9 @@ func TestApplyFilter_NoStatusFilter(t *testing.T) {
 }
 
 func TestApplyFilter_StatusFilterMatches(t *testing.T) {
-	ts := kv.New[string, TerminalStatus]()
-	ts.Set("s1", TerminalStatus{Status: terminal.StatusActive})
-	ts.Set("s2", TerminalStatus{Status: terminal.StatusReady})
+	ts := kv.New[string, hive.TerminalStatus]()
+	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusActive})
+	ts.Set("s2", hive.TerminalStatus{Status: terminal.StatusReady})
 
 	sessions := []session.Session{
 		newSess("s1", "active-session"),
@@ -274,8 +274,8 @@ func TestApplyFilter_StatusFilterMatches(t *testing.T) {
 }
 
 func TestApplyFilter_StatusFilterNoMatches(t *testing.T) {
-	ts := kv.New[string, TerminalStatus]()
-	ts.Set("s1", TerminalStatus{Status: terminal.StatusReady})
+	ts := kv.New[string, hive.TerminalStatus]()
+	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusReady})
 
 	sessions := []session.Session{newSess("s1", "ready-session")}
 	v := newFilterTestView(sessions, terminal.StatusActive, ts)
@@ -291,9 +291,9 @@ func TestApplyFilter_StatusFilterNoMatches(t *testing.T) {
 }
 
 func TestApplyFilter_FilterThenClear(t *testing.T) {
-	ts := kv.New[string, TerminalStatus]()
-	ts.Set("s1", TerminalStatus{Status: terminal.StatusActive})
-	ts.Set("s2", TerminalStatus{Status: terminal.StatusReady})
+	ts := kv.New[string, hive.TerminalStatus]()
+	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusActive})
+	ts.Set("s2", hive.TerminalStatus{Status: terminal.StatusReady})
 
 	sessions := []session.Session{
 		newSess("s1", "active"),
@@ -316,7 +316,7 @@ func TestApplyFilter_FilterThenClear(t *testing.T) {
 }
 
 func TestApplyFilter_NoTerminalStatusExcluded(t *testing.T) {
-	ts := kv.New[string, TerminalStatus]()
+	ts := kv.New[string, hive.TerminalStatus]()
 	// neither session has a terminal status entry
 
 	sessions := []session.Session{
@@ -362,11 +362,11 @@ func newViewWithTerminalMgr(sessions []session.Session) *View {
 		list:             l,
 		allSessions:      sessions,
 		groupBy:          config.GroupByRepo,
-		terminalStatuses: kv.New[string, TerminalStatus](),
+		terminalStatuses: kv.New[string, hive.TerminalStatus](),
 		gitStatuses:      kv.New[string, GitStatus](),
 		columnWidths:     &ColumnWidths{},
 		service:          new(hive.SessionService),
-		terminalManager:  mgr,
+		status:           hive.NewStatusService(mgr, 1),
 		gitWorkers:       1,
 		cfg:              &config.Config{},
 	}

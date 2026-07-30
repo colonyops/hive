@@ -1,4 +1,4 @@
-package commands
+package hive
 
 import (
 	"os"
