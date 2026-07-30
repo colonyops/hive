@@ -84,14 +84,14 @@ func newMouseTestSessionsView(t *testing.T) *sessions.View {
 	svc := newMouseTestSessionService(t)
 	cfg := &config.Config{}
 	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(nil, nil), testRenderer)
-	mgr := terminal.NewManager(nil)
+	status := hive.NewStatusService(terminal.NewManager(nil), 1)
 	pm := plugins.NewManager(plugins.NewWorkerPool(0), plugins.NewCommandSet(nil, nil))
 	return sessions.New(sessions.ViewOpts{
-		Cfg:             cfg,
-		Service:         svc,
-		Handler:         handler,
-		TerminalManager: mgr,
-		PluginManager:   pm,
+		Cfg:           cfg,
+		Service:       svc,
+		Handler:       handler,
+		Status:        status,
+		PluginManager: pm,
 	})
 }
 

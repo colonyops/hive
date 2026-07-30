@@ -39,11 +39,11 @@ var builderPool = sync.Pool{
 // ViewOpts configures a new sessions View.
 type ViewOpts struct {
 	// Required — nil causes a panic at construction time.
-	Cfg             *config.Config
-	Service         *hive.SessionService
-	Handler         KeyResolver
-	TerminalManager *terminal.Manager
-	PluginManager   *plugins.Manager
+	Cfg           *config.Config
+	Service       *hive.SessionService
+	Handler       KeyResolver
+	Status        *hive.StatusService
+	PluginManager *plugins.Manager
 
 	// Optional — nil disables the corresponding feature.
 	LocalRemote string
@@ -74,8 +74,8 @@ type View struct {
 	gitWorkers  int
 
 	// Terminal integration
-	terminalManager    *terminal.Manager
-	terminalStatuses   *kv.Store[string, TerminalStatus]
+	status             *hive.StatusService
+	terminalStatuses   *kv.Store[string, hive.TerminalStatus]
 	previewEnabled     bool
 	previewTemplates   *PreviewTemplates
 	currentTmuxSession string
@@ -116,13 +116,13 @@ type View struct {
 // initialized here so the parent Model can pass them through ViewOpts without
 // constructing them itself.
 func New(opts ViewOpts) *View {
-	if opts.Cfg == nil || opts.Service == nil || opts.Handler == nil || opts.TerminalManager == nil || opts.PluginManager == nil {
-		panic("sessions.New: Cfg, Service, Handler, TerminalManager, and PluginManager are required")
+	if opts.Cfg == nil || opts.Service == nil || opts.Handler == nil || opts.Status == nil || opts.PluginManager == nil {
+		panic("sessions.New: Cfg, Service, Handler, Status, and PluginManager are required")
 	}
 	cfg := opts.Cfg
 
 	gitStatuses := kv.New[string, GitStatus]()
-	terminalStatuses := kv.New[string, TerminalStatus]()
+	terminalStatuses := kv.New[string, hive.TerminalStatus]()
 	columnWidths := &ColumnWidths{}
 
 	pluginStatuses := make(map[string]*kv.Store[string, plugins.Status])
@@ -188,7 +188,7 @@ func New(opts ViewOpts) *View {
 		gitStatuses: gitStatuses,
 		gitWorkers:  cfg.Git.StatusWorkers,
 
-		terminalManager:    opts.TerminalManager,
+		status:             opts.Status,
 		terminalStatuses:   terminalStatuses,
 		previewEnabled:     cfg.Views.Sessions.PreviewEnabled,
 		previewTemplates:   previewTemplates,
@@ -215,7 +215,7 @@ func (v *View) Init() tea.Cmd {
 		cmds = append(cmds, v.scanRepoDirs())
 	}
 
-	if v.terminalManager.HasEnabledIntegrations() {
+	if v.status.Available() {
 		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
 		cmds = append(cmds, scheduleAnimationTick())
 	}
@@ -286,12 +286,12 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 	}
 	// Immediately fetch terminal status so newly created sessions are detected
 	// without waiting for the next scheduled poll tick (up to 1500ms delay).
-	if v.terminalManager != nil && v.terminalManager.HasEnabledIntegrations() && len(v.allSessions) > 0 {
+	if v.status.Available() && len(v.allSessions) > 0 {
 		sessPtrs := make([]*session.Session, len(v.allSessions))
 		for i := range v.allSessions {
 			sessPtrs[i] = &v.allSessions[i]
 		}
-		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
+		cmds = append(cmds, FetchTerminalStatusBatch(v.status, sessPtrs))
 	}
 	return tea.Batch(cmds...)
 }
@@ -344,8 +344,8 @@ func (v *View) handleTerminalPollTick() tea.Cmd {
 	for i := range allSess {
 		sessPtrs[i] = &v.allSessions[i]
 	}
-	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
-	if v.terminalManager.HasEnabledIntegrations() {
+	cmds = append(cmds, FetchTerminalStatusBatch(v.status, sessPtrs))
+	if v.status.Available() {
 		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
 	}
 	return tea.Batch(cmds...)
@@ -750,7 +750,7 @@ func (v *View) rebuildWindowItems() {
 		if !ti.IsSession() {
 			continue
 		}
-		if ts, ok := v.terminalStatuses.Get(ti.Session.ID); ok && shouldExposeWindows(ts.Windows) {
+		if ts, ok := v.terminalStatuses.Get(ti.Session.ID); ok && hive.ShouldExposeWindows(ts.Windows) {
 			for _, w := range ts.Windows {
 				expected["w\x1f"+ti.Session.ID+"\x1f"+w.WindowIndex+"\x1f"+w.WindowName] = struct{}{}
 				if len(w.Panes) > 1 {
@@ -807,7 +807,7 @@ func (v *View) expandWindowItems(items []list.Item) []list.Item {
 		}
 
 		ts, ok := v.terminalStatuses.Get(treeItem.Session.ID)
-		if !ok || !shouldExposeWindows(ts.Windows) {
+		if !ok || !hive.ShouldExposeWindows(ts.Windows) {
 			continue
 		}
 
@@ -1151,7 +1151,7 @@ func (v *View) handleFilterAction(actionType act.Type) bool {
 
 // selectedPaneStatus returns the PaneStatus for the currently selected pane item,
 // or nil if a session/window is selected.
-func (v *View) selectedPaneStatus() *PaneStatus {
+func (v *View) selectedPaneStatus() *hive.PaneStatus {
 	item := v.list.SelectedItem()
 	if item == nil {
 		return nil
@@ -1182,7 +1182,7 @@ func (v *View) selectedPaneStatus() *PaneStatus {
 
 // selectedWindowStatus returns the WindowStatus for the currently selected window item,
 // or nil if a session (not a window) is selected.
-func (v *View) selectedWindowStatus() *WindowStatus {
+func (v *View) selectedWindowStatus() *hive.WindowStatus {
 	item := v.list.SelectedItem()
 	if item == nil {
 		return nil
@@ -1394,7 +1394,7 @@ func (v *View) DiscoveredRepos() []workspace.DiscoveredRepo {
 }
 
 // TerminalStatuses returns the terminal status store.
-func (v *View) TerminalStatuses() *kv.Store[string, TerminalStatus] {
+func (v *View) TerminalStatuses() *kv.Store[string, hive.TerminalStatus] {
 	return v.terminalStatuses
 }
 
@@ -1492,7 +1492,7 @@ func (v *View) ApplyStatusFilter(actionType act.Type) {
 
 // HasTerminalIntegration returns true if a terminal manager is configured with enabled integrations.
 func (v *View) HasTerminalIntegration() bool {
-	return v.terminalManager.HasEnabledIntegrations()
+	return v.status.Available()
 }
 
 // TogglePreview toggles the preview sidebar on/off.

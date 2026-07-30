@@ -11,7 +11,6 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui"
 	"github.com/colonyops/hive/pkg/profiler"
@@ -79,25 +78,18 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 
 	source, _ := os.Getwd()
 
-	// Create terminal integration manager (tmux always enabled)
-	termMgr := terminal.NewManager([]string{"tmux"})
-	tmuxIntegration := newTmuxIntegration(cmd.app.Config)
-	if tmuxIntegration.Available() {
-		termMgr.Register(tmuxIntegration)
-	}
-
 	deps := tui.Deps{
-		Config:          cmd.app.Config,
-		Service:         cmd.app.Sessions,
-		MsgStore:        cmd.app.Messages,
-		TodoService:     cmd.app.Todos,
-		Bus:             cmd.app.Bus,
-		TerminalManager: termMgr,
-		PluginManager:   cmd.app.Plugins,
-		CommandSet:      cmd.app.CommandSet,
-		DB:              cmd.app.DB,
-		KVStore:         cmd.app.KV,
-		Renderer:        cmd.app.Renderer,
+		Config:        cmd.app.Config,
+		Service:       cmd.app.Sessions,
+		MsgStore:      cmd.app.Messages,
+		TodoService:   cmd.app.Todos,
+		Bus:           cmd.app.Bus,
+		Status:        cmd.app.Status,
+		PluginManager: cmd.app.Plugins,
+		CommandSet:    cmd.app.CommandSet,
+		DB:            cmd.app.DB,
+		KVStore:       cmd.app.KV,
+		Renderer:      cmd.app.Renderer,
 		BuildInfo: tui.BuildInfo{
 			Version: cmd.app.Build.Version,
 			Commit:  cmd.app.Build.Commit,

@@ -12,6 +12,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/pkg/kv"
@@ -58,7 +59,7 @@ const currentRepoIndicator = "◆"
 // For active sessions with terminal integration, it uses terminal status.
 // For recycled sessions or when no terminal status is available, it falls back to session state.
 // The animFrame parameter controls the fade animation for active status (0 to AnimationFrameCount-1).
-func renderStatusIndicator(state session.State, termStatus *TerminalStatus, treeStyles TreeDelegateStyles, animFrame int) string {
+func renderStatusIndicator(state session.State, termStatus *hive.TerminalStatus, treeStyles TreeDelegateStyles, animFrame int) string {
 	// Recycled sessions always show recycled indicator
 	if state == session.StateRecycled {
 		return treeStyles.StatusRecycled.Render(styles.StatusIndicatorRecycled)
@@ -290,7 +291,7 @@ func CalculateColumnWidths(sessions []session.Session, gitBranches map[string]st
 type TreeDelegate struct {
 	Styles           TreeDelegateStyles
 	GitStatuses      *kv.Store[string, GitStatus]
-	TerminalStatuses *kv.Store[string, TerminalStatus]
+	TerminalStatuses *kv.Store[string, hive.TerminalStatus]
 	PluginStatuses   map[string]*kv.Store[string, plugins.Status] // plugin name -> session ID -> status
 	ColumnWidths     *ColumnWidths
 	AnimationFrame   int  // Current frame for status animations
@@ -406,7 +407,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
 	// Get terminal status if available
-	var termStatus *TerminalStatus
+	var termStatus *hive.TerminalStatus
 	if d.TerminalStatuses != nil {
 		if ts, ok := d.TerminalStatuses.Get(item.Session.ID); ok {
 			termStatus = &ts
@@ -480,7 +481,7 @@ func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 	}
 	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 
-	termStatus := &TerminalStatus{Status: item.PaneStatus}
+	termStatus := &hive.TerminalStatus{Status: item.PaneStatus}
 	statusStr := renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
 
 	nameStyle := d.Styles.SessionName
@@ -523,7 +524,7 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 
 	// Get per-window terminal status from the delegate's store
-	var windowStatus *WindowStatus
+	var windowStatus *hive.WindowStatus
 	if d.TerminalStatuses != nil {
 		if ts, ok := d.TerminalStatuses.Get(item.ParentSession.ID); ok {
 			for i := range ts.Windows {
@@ -538,7 +539,7 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	// Status indicator
 	var statusStr string
 	if windowStatus != nil {
-		termStatus := &TerminalStatus{Status: windowStatus.Status}
+		termStatus := &hive.TerminalStatus{Status: windowStatus.Status}
 		statusStr = renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
 	} else {
 		statusStr = d.Styles.StatusUnknown.Render(styles.StatusIndicatorMissing)

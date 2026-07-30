@@ -286,6 +286,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			)
 
 			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, bus, exec, renderer, svcLogger, os.Stdout, os.Stderr)
+			termMgr := hive.NewTerminalManager(cfg)
 
 			// Create all plugin instances, collect availability info for doctor,
 			// then register with the manager.
@@ -338,7 +339,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				hcStore,
 				cfg,
 				bus,
-				nil, // terminal manager created in TUI command
+				termMgr,
 				pluginMgr,
 				commandSet,
 				database,
