@@ -54,9 +54,27 @@ type TerminalStatusBatchCompleteMsg struct {
 // TerminalPollTickMsg triggers a terminal status poll cycle.
 type TerminalPollTickMsg struct{}
 
-// FetchTerminalStatusBatch returns a command that fetches terminal status for multiple sessions.
-func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int) tea.Cmd {
-	if len(sessions) == 0 || !mgr.HasEnabledIntegrations() {
+// RootRepoTarget identifies a workspace checkout to poll for agent status.
+// Name doubles as the tmux session slug because opening a repo header names
+// the root repo's tmux session after the repo name (see openRepoHeader).
+type RootRepoTarget struct {
+	Name string
+	Path string
+}
+
+// RootStatusKey returns the terminalStatuses store key for a root checkout.
+// Prefixed so it can never collide with session IDs, which key the same store.
+func RootStatusKey(path string) string {
+	return "root:" + path
+}
+
+// FetchTerminalStatusBatch returns a command that fetches terminal status for
+// sessions and workspace root checkouts in a single batch. Roots must share
+// the batch (not a separate command): the tmux integration only serves
+// discovery from a cache younger than 2s, so a separate command would race
+// the RefreshAll here and see a stale cache, silently missing statuses.
+func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, roots []RootRepoTarget, workers int) tea.Cmd {
+	if (len(sessions) == 0 && len(roots) == 0) || !mgr.HasEnabledIntegrations() {
 		return nil
 	}
 
@@ -94,41 +112,7 @@ func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session
 			}(sess)
 		}
 
-		wg.Wait()
-		return TerminalStatusBatchCompleteMsg{Results: results}
-	}
-}
-
-// RootRepoTarget identifies a workspace checkout to poll for agent status.
-// Name doubles as the tmux session slug because opening a repo header names
-// the root repo's tmux session after the repo name (see openRepoHeader).
-type RootRepoTarget struct {
-	Name string
-	Path string
-}
-
-// RootStatusKey returns the terminalStatuses store key for a root checkout.
-// Prefixed so it can never collide with session IDs, which key the same store.
-func RootStatusKey(path string) string {
-	return "root:" + path
-}
-
-// FetchRootRepoStatusBatch returns a command that fetches terminal status for
-// workspace root checkouts. Results share TerminalStatusBatchCompleteMsg with
-// session statuses, keyed by RootStatusKey.
-func FetchRootRepoStatusBatch(mgr *terminal.Manager, targets []RootRepoTarget, workers int) tea.Cmd {
-	if len(targets) == 0 || !mgr.HasEnabledIntegrations() {
-		return nil
-	}
-
-	return func() tea.Msg {
-		results := make(map[string]TerminalStatus)
-		var mu sync.Mutex
-
-		sem := make(chan struct{}, workers)
-		var wg sync.WaitGroup
-
-		for _, target := range targets {
+		for _, target := range roots {
 			wg.Add(1)
 			go func(rt RootRepoTarget) {
 				defer wg.Done()
