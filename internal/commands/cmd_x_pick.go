@@ -565,12 +565,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				}
 			}
 
-			// Create terminal manager (same as TUI) since cmd.app.Terminal is nil at app level
-			termMgr := terminal.NewManager([]string{"tmux"})
-			tmuxIntegration := newTmuxIntegration(cmd.app.Config)
-			if tmuxIntegration.Available() {
-				termMgr.Register(tmuxIntegration)
-			}
+			termMgr := cmd.app.Terminal
 
 			// Pre-fetch statuses synchronously so the first render has data.
 			// Keep baseItems as the original per-session slice; refreshStatusCmd
