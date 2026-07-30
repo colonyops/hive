@@ -292,7 +292,7 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 		for i := range v.allSessions {
 			sessPtrs[i] = &v.allSessions[i]
 		}
-		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
+		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.rootRepoTargets(), v.gitWorkers))
 	}
 	return tea.Batch(cmds...)
 }
@@ -345,8 +345,7 @@ func (v *View) handleTerminalPollTick() tea.Cmd {
 	for i := range allSess {
 		sessPtrs[i] = &v.allSessions[i]
 	}
-	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
-	cmds = append(cmds, FetchRootRepoStatusBatch(v.terminalManager, v.rootRepoTargets(), v.gitWorkers))
+	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.rootRepoTargets(), v.gitWorkers))
 	if v.terminalManager.HasEnabledIntegrations() {
 		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
 	}
@@ -397,7 +396,12 @@ func (v *View) handleReposDiscovered(msg reposDiscoveredMsg) tea.Cmd {
 	}
 	// Rebuild the tree so headers pick up root checkout paths; the scan
 	// usually completes after the initial session load has built items.
-	return v.applyFilter()
+	// Fetch root statuses immediately rather than waiting for the next poll
+	// tick — this is the first moment root targets exist.
+	return tea.Batch(
+		v.applyFilter(),
+		FetchTerminalStatusBatch(v.terminalManager, nil, v.rootRepoTargets(), v.gitWorkers),
+	)
 }
 
 func (v *View) handleSessionRefreshTick() tea.Cmd {
@@ -975,7 +979,11 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 	selected := v.SelectedSession()
 	var previewContent string
 
-	if selected != nil {
+	if selected == nil {
+		previewContent = v.renderRootRepoPreview(contentHeight, previewWidth)
+	}
+
+	if selected != nil { //nolint:nestif
 		// Check if this is the current session (would cause recursive preview)
 		isSelf := v.isCurrentTmuxSession(selected)
 
@@ -1008,7 +1016,7 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 		default:
 			previewContent = v.renderPreviewHeader(selected, previewWidth-4) + "\n\nNo pane content available"
 		}
-	} else {
+	} else if previewContent == "" {
 		previewContent = "No session selected"
 	}
 
@@ -1051,10 +1059,6 @@ func (v *View) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	nameStyle := styles.PreviewHeaderNameStyle
 	separatorStyle := styles.TextMutedStyle
 	idStyle := styles.TextSecondaryStyle
-	branchStyle := styles.TextSecondaryStyle
-	addStyle := styles.TextSuccessStyle
-	delStyle := styles.TextErrorStyle
-	dirtyStyle := styles.TextWarningStyle
 	dividerStyle := styles.TextMutedStyle
 
 	divider := strings.Repeat("─", maxWidth)
@@ -1077,20 +1081,8 @@ func (v *View) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	var statusParts []string
 
 	// Git status
-	if v.gitStatuses != nil {
-		if status, ok := v.gitStatuses.Get(sess.Path); ok && !status.IsLoading && status.Error == nil {
-			gitPart := branchStyle.Render("(")
-			if iconsEnabled {
-				gitPart += branchStyle.Render(styles.IconGitBranch + " ")
-			}
-			gitPart += branchStyle.Render(status.Branch + ")")
-			gitPart += " " + addStyle.Render("+"+fmt.Sprintf("%d", status.Additions))
-			gitPart += " " + delStyle.Render("-"+fmt.Sprintf("%d", status.Deletions))
-			if status.HasChanges && iconsEnabled {
-				gitPart += " " + dirtyStyle.Render(styles.IconGit)
-			}
-			statusParts = append(statusParts, gitPart)
-		}
+	if gitPart := v.previewGitStatusPart(sess.Path, iconsEnabled); gitPart != "" {
+		statusParts = append(statusParts, gitPart)
 	}
 
 	// Plugin statuses (neutral color)
@@ -1125,6 +1117,86 @@ func (v *View) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	if status != "" {
 		parts = append(parts, status)
 	}
+	parts = append(parts, "")
+	parts = append(parts, styles.TextMutedStyle.Render("Output"))
+	parts = append(parts, dividerStyle.Render(divider))
+
+	return strings.Join(parts, "\n")
+}
+
+// previewGitStatusPart formats the git status fragment for a preview header,
+// or returns "" when no loaded status exists for the path.
+func (v *View) previewGitStatusPart(path string, iconsEnabled bool) string {
+	if v.gitStatuses == nil {
+		return ""
+	}
+	status, ok := v.gitStatuses.Get(path)
+	if !ok || status.IsLoading || status.Error != nil {
+		return ""
+	}
+
+	branchStyle := styles.TextSecondaryStyle
+	gitPart := branchStyle.Render("(")
+	if iconsEnabled {
+		gitPart += branchStyle.Render(styles.IconGitBranch + " ")
+	}
+	gitPart += branchStyle.Render(status.Branch + ")")
+	gitPart += " " + styles.TextSuccessStyle.Render("+"+fmt.Sprintf("%d", status.Additions))
+	gitPart += " " + styles.TextErrorStyle.Render("-"+fmt.Sprintf("%d", status.Deletions))
+	if status.HasChanges && iconsEnabled {
+		gitPart += " " + styles.TextWarningStyle.Render(styles.IconGit)
+	}
+	return gitPart
+}
+
+// renderRootRepoPreview renders the preview pane for a selected repo header's
+// root checkout, or returns "" when the selection isn't a header with a
+// discovered workspace checkout.
+func (v *View) renderRootRepoPreview(contentHeight, previewWidth int) string {
+	ti := v.SelectedTreeItem()
+	if ti == nil || !ti.IsHeader || ti.RootPath == "" {
+		return ""
+	}
+
+	usableWidth := previewWidth - 4
+	header := v.renderRootPreviewHeader(ti, usableWidth)
+
+	// The root repo's tmux session is named after the repo; previewing it
+	// while hive runs inside it would capture hive's own pane recursively.
+	if v.currentTmuxSession != "" && v.currentTmuxSession == ti.RepoName {
+		return header + "\n\n(current session, preventing recursive view)"
+	}
+
+	status, ok := v.terminalStatuses.Get(RootStatusKey(ti.RootPath))
+	if !ok || status.PaneContent == "" {
+		return header + "\n\nNo pane content available"
+	}
+
+	headerHeight := strings.Count(header, "\n") + 1
+	outputHeight := max(contentHeight-headerHeight, 1)
+	content := tailLines(status.PaneContent, outputHeight)
+	content = truncateLines(content, usableWidth)
+	return header + "\n" + content
+}
+
+// renderRootPreviewHeader renders the preview header for a root checkout:
+// repo name, git status, and the checkout path in place of a session ID.
+func (v *View) renderRootPreviewHeader(ti *TreeItem, maxWidth int) string {
+	separatorStyle := styles.TextMutedStyle
+	dividerStyle := styles.TextMutedStyle
+	divider := strings.Repeat("─", max(maxWidth, 1))
+
+	title := styles.PreviewHeaderNameStyle.Render(ti.RepoName) +
+		separatorStyle.Render(" • root")
+
+	var parts []string
+	parts = append(parts, title)
+	parts = append(parts, dividerStyle.Render(divider))
+	status := v.previewGitStatusPart(ti.RootPath, v.cfg.TUI.IconsEnabled())
+	if status != "" {
+		parts = append(parts, status)
+	}
+	parts = append(parts, styles.TextMutedStyle.Render(ti.RootPath))
 	parts = append(parts, "")
 	parts = append(parts, styles.TextMutedStyle.Render("Output"))
 	parts = append(parts, dividerStyle.Render(divider))
