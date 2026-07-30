@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -58,7 +59,7 @@ func TestBuildTreeItems(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			items := BuildTreeItems(tt.groups, tt.localRemote)
+			items := BuildTreeItems(tt.groups, tt.localRemote, nil)
 
 			if tt.wantItems == 0 {
 				assert.Empty(t, items)
@@ -93,13 +94,46 @@ func TestBuildTreeItems_HeaderFields(t *testing.T) {
 		},
 	}
 
-	items := BuildTreeItems(groups, "git@github.com:user/local.git")
+	items := BuildTreeItems(groups, "git@github.com:user/local.git", nil)
 	require.Len(t, items, 3) // 1 header + 2 active sessions
 
 	header := items[0].(TreeItem)
 	assert.True(t, header.IsHeader)
 	assert.Equal(t, "local", header.RepoName)
 	assert.True(t, header.IsCurrentRepo)
+	assert.Empty(t, header.RootPath)
+}
+
+func TestBuildTreeItems_RootPathFromWorkspaceRepos(t *testing.T) {
+	groups := []RepoGroup{
+		{
+			Remote:   "git@github.com:user/alpha.git",
+			Name:     "alpha",
+			Sessions: []session.Session{{ID: "abc1", Name: "s1", State: session.StateActive}},
+		},
+		{
+			Remote:   "git@github.com:user/beta.git",
+			Name:     "beta",
+			Sessions: []session.Session{{ID: "abc2", Name: "s2", State: session.StateActive}},
+		},
+	}
+
+	repos := []workspace.DiscoveredRepo{
+		// HTTPS spelling must match the group's SSH remote (same GitHub repo).
+		{Name: "alpha", Path: "/code/alpha", Remote: "https://github.com/user/alpha.git"},
+		{Name: "unrelated", Path: "/code/unrelated", Remote: "git@github.com:user/unrelated.git"},
+	}
+
+	items := BuildTreeItems(groups, "", repos)
+	require.Len(t, items, 4)
+
+	alphaHeader := items[0].(TreeItem)
+	require.True(t, alphaHeader.IsHeader)
+	assert.Equal(t, "/code/alpha", alphaHeader.RootPath)
+
+	betaHeader := items[2].(TreeItem)
+	require.True(t, betaHeader.IsHeader)
+	assert.Empty(t, betaHeader.RootPath)
 }
 
 func TestBuildTreeItems_SessionFields(t *testing.T) {
@@ -115,7 +149,7 @@ func TestBuildTreeItems_SessionFields(t *testing.T) {
 		},
 	}
 
-	items := BuildTreeItems(groups, "")
+	items := BuildTreeItems(groups, "", nil)
 	require.Len(t, items, 3) // 1 header + 2 sessions
 
 	// First session

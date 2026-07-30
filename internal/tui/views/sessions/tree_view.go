@@ -9,9 +9,11 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/tui/components"
@@ -113,6 +115,7 @@ type TreeItem struct {
 	// Header fields (only used when IsHeader is true)
 	RepoName      string
 	RepoRemote    string // Git remote URL for the repo group
+	RootPath      string // Path to the workspace checkout this repo was sourced from (empty if none discovered)
 	IsCurrentRepo bool
 
 	// Session fields (only used when IsHeader is false and IsRecycledPlaceholder is false)
@@ -168,9 +171,18 @@ func (i TreeItem) FilterValue() string {
 }
 
 // BuildTreeItems converts repo groups into tree items for the list.
-func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
+// Workspace repos are matched to groups by remote identity so headers can
+// surface the root checkout's path (git status, open-repo target).
+func BuildTreeItems(groups []RepoGroup, localRemote string, workspaceRepos []workspace.DiscoveredRepo) []list.Item {
 	if len(groups) == 0 {
 		return nil
+	}
+
+	rootPaths := make(map[string]string, len(workspaceRepos))
+	for _, repo := range workspaceRepos {
+		if identity := git.RemoteIdentity(repo.Remote); identity != "" {
+			rootPaths[identity] = repo.Path
+		}
 	}
 
 	items := make([]list.Item, 0)
@@ -185,6 +197,7 @@ func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
 			IsHeader:      true,
 			RepoName:      group.Name,
 			RepoRemote:    group.Remote,
+			RootPath:      rootPaths[git.RemoteIdentity(group.Remote)],
 			IsCurrentRepo: group.Remote == localRemote,
 		}
 		items = append(items, header)
@@ -346,18 +359,21 @@ func (d TreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		line = d.renderSession(treeItem, isSelected, m, index)
 	}
 
-	// Selection indicator
+	// Selection indicator: a single-cell gutter keeps rows close to the left
+	// edge; the bar sits directly against the item content.
 	var prefix string
 	if isSelected {
-		prefix = d.Styles.SelectedBorder.Render("┃") + " "
+		prefix = d.Styles.SelectedBorder.Render("┃")
 	} else {
-		prefix = "  "
+		prefix = " "
 	}
 
 	_, _ = fmt.Fprintf(w, "%s%s", prefix, line)
 }
 
-// renderHeader renders a repository header.
+// renderHeader renders a repository header. When the repo has a discovered
+// workspace checkout (RootPath), the header also surfaces that checkout's
+// agent status dot and git status, making the root repo visible in the tree.
 func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, _ list.Model, _ int) string {
 	// Repo name
 	nameStyle := d.Styles.HeaderNormal
@@ -371,6 +387,22 @@ func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, _ list.Model,
 		result += " " + d.Styles.HeaderStar.Render(currentRepoIndicator)
 	}
 
+	if item.RootPath == "" {
+		return result
+	}
+
+	// Status dot only when an agent is actually running in the root checkout;
+	// StatusMissing is the common case and would just add noise to every header.
+	if d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(hive.RootStatusKey(item.RootPath)); ok && ts.Status != terminal.StatusMissing {
+			result = renderStatusIndicator(session.StateActive, &ts, d.Styles, d.AnimationFrame) + " " + result
+		}
+	}
+
+	if !d.PreviewMode {
+		result += d.renderGitStatus(item.RootPath)
+	}
+
 	return result
 }
 
@@ -379,9 +411,9 @@ func (d TreeDelegate) renderRecycledPlaceholder(item TreeItem, isSelected bool) 
 	// Tree prefix
 	var prefix string
 	if item.IsLastInRepo {
-		prefix = treeLast
+		prefix = " " + treeLast
 	} else {
-		prefix = treeBranch
+		prefix = " " + treeBranch
 	}
 	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
@@ -400,9 +432,9 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	// Tree prefix
 	var prefix string
 	if item.IsLastInRepo {
-		prefix = treeLast
+		prefix = " " + treeLast
 	} else {
-		prefix = treeBranch
+		prefix = " " + treeBranch
 	}
 	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
@@ -475,9 +507,9 @@ func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 
 	var parentLine string
 	if item.IsLastInRepo {
-		parentLine = "        "
+		parentLine = "         "
 	} else {
-		parentLine = "│       "
+		parentLine = " │       "
 	}
 	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 
@@ -517,9 +549,9 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	// The parent session's tree line continues vertically
 	var parentLine string
 	if item.IsLastInRepo {
-		parentLine = "    " // parent was └─, no continuing line
+		parentLine = "     " // parent was └─, no continuing line
 	} else {
-		parentLine = "│   " // parent was ├─, line continues
+		parentLine = " │   " // parent was ├─, line continues
 	}
 	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 

@@ -68,12 +68,32 @@ func (s *StatusService) Available() bool {
 	return s != nil && s.term != nil && s.term.HasEnabledIntegrations()
 }
 
-// FetchBatch fetches terminal status for the given sessions concurrently and
-// returns results keyed by session ID. Non-active sessions are skipped. Each
-// per-session fetch is bounded by an internal timeout in addition to ctx.
-func (s *StatusService) FetchBatch(ctx context.Context, sessions []*session.Session) map[string]TerminalStatus {
+// RootRepoTarget identifies a workspace checkout to poll for agent status.
+// Name doubles as the tmux session slug because opening a repo header names
+// the root repo's tmux session after the repo name.
+type RootRepoTarget struct {
+	Name string
+	Path string
+}
+
+// RootStatusKey returns the FetchBatch result key for a root checkout.
+// Prefixed so it can never collide with session IDs, which share the map.
+func RootStatusKey(path string) string {
+	return "root:" + path
+}
+
+// FetchBatch fetches terminal status for the given sessions and workspace
+// root checkouts concurrently. Results are keyed by session ID for sessions
+// and by RootStatusKey for roots. Non-active sessions are skipped. Each
+// per-target fetch is bounded by an internal timeout in addition to ctx.
+//
+// Roots must share the batch rather than run as a separate call: the tmux
+// integration only serves discovery from a cache younger than 2s, so a
+// separate call would race the RefreshAll here and see a stale cache,
+// silently missing statuses.
+func (s *StatusService) FetchBatch(ctx context.Context, sessions []*session.Session, roots []RootRepoTarget) map[string]TerminalStatus {
 	results := make(map[string]TerminalStatus)
-	if len(sessions) == 0 || !s.Available() {
+	if (len(sessions) == 0 && len(roots) == 0) || !s.Available() {
 		return results
 	}
 
@@ -107,8 +127,58 @@ func (s *StatusService) FetchBatch(ctx context.Context, sessions []*session.Sess
 		}(sess)
 	}
 
+	for _, target := range roots {
+		wg.Add(1)
+		go func(rt RootRepoTarget) {
+			defer wg.Done()
+
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			fetchCtx, cancel := context.WithTimeout(ctx, terminalStatusTimeout)
+			defer cancel()
+
+			status := s.fetchRoot(fetchCtx, rt)
+
+			mu.Lock()
+			results[RootStatusKey(rt.Path)] = status
+			mu.Unlock()
+		}(target)
+	}
+
 	wg.Wait()
 	return results
+}
+
+// fetchRoot fetches terminal status for a workspace root checkout. Unlike
+// sessions, root repos don't expand window sub-items, so multi-window
+// discovery is skipped.
+func (s *StatusService) fetchRoot(ctx context.Context, target RootRepoTarget) TerminalStatus {
+	status := TerminalStatus{Status: terminal.StatusMissing}
+
+	metadata := map[string]string{terminaltmux.SessionPathKey: target.Path}
+	info, integration, err := s.term.DiscoverSession(ctx, target.Name, metadata)
+	if err != nil {
+		log.Debug().Err(err).Str("repo", target.Name).Msg("root repo terminal discovery failed")
+		status.Error = err
+		return status
+	}
+	if info == nil || integration == nil {
+		return status
+	}
+
+	termStatus, err := integration.GetStatus(ctx, info)
+	if err != nil {
+		log.Debug().Err(err).Str("repo", target.Name).Msg("root repo terminal status lookup failed")
+		status.Error = err
+		return status
+	}
+
+	status.Status = termStatus
+	status.Tool = info.DetectedTool
+	status.WindowName = info.WindowName
+	status.PaneContent = info.PaneContent
+	return status
 }
 
 // FetchSession fetches terminal status for a single session.

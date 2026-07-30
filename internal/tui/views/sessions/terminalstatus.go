@@ -12,20 +12,21 @@ import (
 
 // TerminalStatusBatchCompleteMsg is sent when all terminal status fetches complete.
 type TerminalStatusBatchCompleteMsg struct {
-	Results map[string]hive.TerminalStatus // sessionID -> status
+	Results map[string]hive.TerminalStatus // sessionID or hive.RootStatusKey -> status
 }
 
 // TerminalPollTickMsg triggers a terminal status poll cycle.
 type TerminalPollTickMsg struct{}
 
-// FetchTerminalStatusBatch returns a command that fetches terminal status for multiple sessions.
-func FetchTerminalStatusBatch(status *hive.StatusService, sessions []*session.Session) tea.Cmd {
-	if len(sessions) == 0 || !status.Available() {
+// FetchTerminalStatusBatch returns a command that fetches terminal status for
+// sessions and workspace root checkouts in a single batch.
+func FetchTerminalStatusBatch(status *hive.StatusService, sessions []*session.Session, roots []hive.RootRepoTarget) tea.Cmd {
+	if (len(sessions) == 0 && len(roots) == 0) || !status.Available() {
 		return nil
 	}
 
 	return func() tea.Msg {
-		return TerminalStatusBatchCompleteMsg{Results: status.FetchBatch(context.Background(), sessions)}
+		return TerminalStatusBatchCompleteMsg{Results: status.FetchBatch(context.Background(), sessions, roots)}
 	}
 }
 
