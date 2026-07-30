@@ -22,7 +22,7 @@ func (f *fakeCommander) Output(_ context.Context, args ...string) ([]byte, error
 	f.calls = append(f.calls, slices.Clone(args))
 	switch args[0] {
 	case "list-panes":
-		return []byte("session|||0|||shell|||/work|||100|||%1|||0|||shell|||session\n"), nil
+		return []byte("session|||@1|||0|||shell|||/work|||100|||%1|||0|||shell|||session\n"), nil
 	case "capture-pane":
 		return []byte("## Task\n● Finished\n❯ "), nil
 	default:
@@ -42,6 +42,7 @@ func TestWithCommanderControlsAvailabilityListingAndCapture(t *testing.T) {
 	info, err := integration.DiscoverSession(t.Context(), "session", nil)
 	require.NoError(t, err)
 	require.NotNil(t, info)
+	assert.Equal(t, "@1", info.WindowID)
 
 	status, err := integration.GetStatus(t.Context(), info)
 	require.NoError(t, err)

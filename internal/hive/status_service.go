@@ -26,6 +26,7 @@ type PaneStatus struct {
 
 // WindowStatus holds per-window terminal status for multi-window sessions.
 type WindowStatus struct {
+	WindowID    string
 	WindowIndex string
 	WindowName  string
 	Status      terminal.Status
@@ -37,7 +38,9 @@ type WindowStatus struct {
 // TerminalStatus holds the terminal integration status for a session.
 type TerminalStatus struct {
 	Status      terminal.Status
+	Running     bool
 	Tool        string
+	WindowID    string
 	WindowName  string
 	PaneContent string
 	IsLoading   bool
@@ -166,6 +169,7 @@ func (s *StatusService) fetchRoot(ctx context.Context, target RootRepoTarget) Te
 	if info == nil || integration == nil {
 		return status
 	}
+	status.Running = true
 
 	termStatus, err := integration.GetStatus(ctx, info)
 	if err != nil {
@@ -176,6 +180,7 @@ func (s *StatusService) fetchRoot(ctx context.Context, target RootRepoTarget) Te
 
 	status.Status = termStatus
 	status.Tool = info.DetectedTool
+	status.WindowID = info.WindowID
 	status.WindowName = info.WindowName
 	status.PaneContent = info.PaneContent
 	return status
@@ -206,6 +211,7 @@ func (s *StatusService) FetchSession(ctx context.Context, sess *session.Session)
 	if info == nil || integration == nil {
 		return status
 	}
+	status.Running = true
 
 	// Get status from integration
 	termStatus, err := integration.GetStatus(ctx, info)
@@ -217,6 +223,7 @@ func (s *StatusService) FetchSession(ctx context.Context, sess *session.Session)
 
 	status.Status = termStatus
 	status.Tool = info.DetectedTool
+	status.WindowID = info.WindowID
 	status.WindowName = info.WindowName
 	status.PaneContent = info.PaneContent
 
@@ -258,13 +265,17 @@ func groupPaneStatuses(ctx context.Context, integration terminal.Integration, sl
 			IsAgent:     true,
 		}
 
-		// \x1f is an ASCII Unit Separator, which avoids collisions with printable tmux window names.
-		key := wi.WindowIndex + "\x1f" + wi.WindowName
+		key := wi.WindowID
+		if key == "" {
+			// \x1f is an ASCII Unit Separator, which avoids collisions with printable tmux window names.
+			key = wi.WindowIndex + "\x1f" + wi.WindowName
+		}
 		idx, ok := byWindow[key]
 		if !ok {
 			idx = len(windows)
 			byWindow[key] = idx
 			windows = append(windows, WindowStatus{
+				WindowID:    wi.WindowID,
 				WindowIndex: wi.WindowIndex,
 				WindowName:  wi.WindowName,
 				Status:      paneStatus,

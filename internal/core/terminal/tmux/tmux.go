@@ -385,6 +385,9 @@ func (t *Integration) DiscoverSession(_ context.Context, slug string, metadata m
 	}
 
 	pane := disambiguatePane(sc, metadata[SessionPathKey], slug)
+	if pane == nil {
+		return &terminal.SessionInfo{Name: sessionName}, nil
+	}
 	return sessionInfoFromPane(sessionName, pane), nil
 }
 
@@ -418,6 +421,7 @@ func sessionInfoFromPane(sessionName string, pane *cachedPane) *terminal.Session
 	}
 	return &terminal.SessionInfo{
 		Name:         sessionName,
+		WindowID:     pane.input.WindowID,
 		WindowIndex:  pane.input.WindowIndex,
 		PaneID:       pane.input.PaneID,
 		WindowName:   pane.input.WindowName,
