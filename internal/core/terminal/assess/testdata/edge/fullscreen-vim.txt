@@ -1,0 +1,9 @@
+func main() {
+    fmt.Println("hello from internal/example")
+}
+~
+~
+~
+~
+~
+"internal/example/main.go" 3L, 58B

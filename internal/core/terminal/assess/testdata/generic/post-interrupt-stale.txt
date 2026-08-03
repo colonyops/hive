@@ -1,0 +1,8 @@
+π - hive-example
+
+Reading files...
+⠙ perusing (12s · 640 tokens)
+^C
+Interrupted by user
+
+>

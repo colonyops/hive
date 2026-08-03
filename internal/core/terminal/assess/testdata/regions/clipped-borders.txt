@@ -1,0 +1,3 @@
+Some earlier output that scrolled past the top of a very short pane
+│ >                                                          │
+╰──────────────────────────────────────────────────────────╯

@@ -1,0 +1,199 @@
+package assess_test
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/colonyops/hive/internal/core/terminal/assess"
+	"github.com/stretchr/testify/require"
+)
+
+// fixture mirrors the pattern in
+// internal/core/terminal/content/scorer_fixtures_test.go: a table of
+// {name, expected..., purpose}, except content lives in a committed
+// testdata/<tool>/<scenario>.txt file instead of an inline string literal.
+type fixture struct {
+	name          string
+	file          string // path relative to testdata/, e.g. "claude/working-spinner.txt"
+	tool          string
+	expectedState assess.State
+	expectedHold  bool
+	purpose       string
+}
+
+func fixtureContent(t *testing.T, file string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", file))
+	require.NoError(t, err, "loading fixture %s", file)
+	return string(data)
+}
+
+// fixtures is the shared corpus consumed by both TestEngine_Assess (does the
+// engine classify correctly?) and TestParity_OldVsNewEngine (does the new
+// classification agree with the old detector, except where documented?).
+//
+// Six regression fixtures reproduce the corpus-documented failure class
+// (2026-07-21 handoff): matching substrings anywhere in a fixed recent-lines
+// window cannot distinguish current UI from transcript history. Three edge
+// fixtures cover degenerate/malformed input. All content below is synthetic
+// and sanitized — no real paths, repo names, or captured session data.
+var fixtures = []fixture{
+	// --- claude ---
+	{
+		name:          "claude-working-spinner",
+		file:          "claude/working-spinner.txt",
+		tool:          "claude",
+		expectedState: assess.StateWorking,
+		purpose:       "spinner-shape rule replaces the old whimsical-word list: any spinner glyph + gerund + ellipsis is 'working'.",
+	},
+	{
+		name:          "claude-working-token-stats",
+		file:          "claude/working-token-stats.txt",
+		tool:          "claude",
+		expectedState: assess.StateWorking,
+		purpose:       "a token-stats status line ('(45s · 1876 tokens)') is 'working' even with no spinner glyph on the line.",
+	},
+	{
+		name:          "claude-idle-empty-box",
+		file:          "claude/idle-empty-box.txt",
+		tool:          "claude",
+		expectedState: assess.StateIdle,
+		purpose:       "an empty/placeholder prompt box is idle once a turn has completed.",
+	},
+	{
+		name:          "claude-approval-permission-dialog",
+		file:          "claude/approval-permission-dialog.txt",
+		tool:          "claude",
+		expectedState: assess.StateApproval,
+		purpose:       "a live permission dialog rendered inside the prompt box is approval.",
+	},
+	{
+		name:          "claude-question-alpha-beta",
+		file:          "claude/question-alpha-beta.txt",
+		tool:          "claude",
+		expectedState: assess.StateQuestion,
+		purpose:       "regression #3: an AskUserQuestion-style question with selectable options is 'question', distinct from 'approval'.",
+	},
+	{
+		name:          "claude-typed-unsubmitted",
+		file:          "claude/typed-unsubmitted.txt",
+		tool:          "claude",
+		expectedState: assess.StateIdle,
+		purpose:       "regression #6: typed-but-unsubmitted input in the prompt box is idle, not working/approval.",
+	},
+	{
+		name:          "claude-hold-search-prompt",
+		file:          "claude/hold-search-prompt.txt",
+		tool:          "claude",
+		expectedState: assess.StateUnknown,
+		expectedHold:  true,
+		purpose:       "the file-search overlay is a transient screen: hold the previously published status instead of guessing.",
+	},
+	{
+		name:          "claude-hold-transcript-viewer",
+		file:          "claude/hold-transcript-viewer.txt",
+		tool:          "claude",
+		expectedState: assess.StateUnknown,
+		expectedHold:  true,
+		purpose:       "the transcript viewer ('ctrl+r to toggle') is a transient screen: hold, don't classify.",
+	},
+
+	// --- codex ---
+	{
+		name:          "codex-working-spinner",
+		file:          "codex/working-spinner.txt",
+		tool:          "codex",
+		expectedState: assess.StateWorking,
+		purpose:       "spinner-shape rule applies identically to codex's status line.",
+	},
+	{
+		name:          "codex-idle-empty-box",
+		file:          "codex/idle-empty-box.txt",
+		tool:          "codex",
+		expectedState: assess.StateIdle,
+		purpose:       "an empty prompt box is idle for codex just as for claude.",
+	},
+	{
+		name:          "codex-approval-live",
+		file:          "codex/approval-live.txt",
+		tool:          "codex",
+		expectedState: assess.StateApproval,
+		purpose:       "a live codex command-approval dialog ('Press enter to confirm or esc to cancel') is approval.",
+	},
+	{
+		name:          "codex-approval-post-denial-stale",
+		file:          "codex/approval-post-denial-stale.txt",
+		tool:          "codex",
+		expectedState: assess.StateIdle,
+		purpose:       "regression #1: stale approval text left in scrollback after a denial must not re-trigger approval; the current empty box is idle.",
+	},
+	{
+		name:          "codex-question-deploy-target",
+		file:          "codex/question-deploy-target.txt",
+		tool:          "codex",
+		expectedState: assess.StateQuestion,
+		purpose:       "regression #4: codex's AskUserQuestion-style dialog is 'question'.",
+	},
+	{
+		name:          "codex-hold-transcript-viewer",
+		file:          "codex/hold-transcript-viewer.txt",
+		tool:          "codex",
+		expectedState: assess.StateUnknown,
+		expectedHold:  true,
+		purpose:       "codex's transcript viewer is a transient screen: hold.",
+	},
+
+	// --- generic (tools with no dedicated rule set, e.g. pi) ---
+	{
+		name:          "generic-post-interrupt-stale",
+		file:          "generic/post-interrupt-stale.txt",
+		tool:          "pi",
+		expectedState: assess.StateIdle,
+		purpose:       "regression #2: stale spinner/working markers left visible after an interrupt must not re-trigger working; the current bare prompt is idle.",
+	},
+	{
+		name:          "generic-question-alpha-beta",
+		file:          "generic/question-alpha-beta.txt",
+		tool:          "pi",
+		expectedState: assess.StateQuestion,
+		purpose:       "regression #5: pi has no dedicated rule set, but the generic question rule (a question line plus a numbered option list) still catches it.",
+	},
+	{
+		name:          "generic-yes-no-prompt",
+		file:          "generic/yes-no-prompt.txt",
+		tool:          "pi",
+		expectedState: assess.StateApproval,
+		purpose:       "generic rule set: a bare '(y/n)' confirmation is approval even with no tool-specific vocabulary.",
+	},
+	{
+		name:          "generic-idle-bare-prompt",
+		file:          "generic/idle-bare-prompt.txt",
+		tool:          "pi",
+		expectedState: assess.StateIdle,
+		purpose:       "generic rule set: a bare prompt glyph with nothing else on the line is idle.",
+	},
+
+	// --- edge cases ---
+	{
+		name:          "edge-whitespace-only",
+		file:          "edge/whitespace.txt",
+		tool:          "claude",
+		expectedState: assess.StateUnknown,
+		purpose:       "edge (a): whitespace-only content matches no rule and must never panic.",
+	},
+	{
+		name:          "edge-fullscreen-no-box",
+		file:          "edge/fullscreen-vim.txt",
+		tool:          "claude",
+		expectedState: assess.StateUnknown,
+		purpose:       "edge (b): a fullscreen TUI with no prompt box (vim) falls back to whole-viewport scanning and matches no claude rule.",
+	},
+	{
+		name:          "edge-clipped-box-borders",
+		file:          "edge/clipped-box.txt",
+		tool:          "claude",
+		expectedState: assess.StateUnknown,
+		purpose:       "edge (c): a clipped pane (top ╭ border scrolled out) must degrade to no-box behavior, not misparse a partial box.",
+	},
+}
