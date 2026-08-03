@@ -163,7 +163,8 @@ func (c *Config) Warnings() []ValidationWarning {
 // terminalConfirmWarnings flags a configured min_duration shorter than
 // tmux.poll_interval: effectivePolls' poll-count floor already dominates a
 // sub-interval duration, so it silently has no effect — the same
-// dead-hysteresis bug class the old StateTracker's fixed window had.
+// dead-hysteresis bug class a fixed-window hysteresis timer falls into when
+// its window is shorter than the sampling interval.
 func (c *Config) terminalConfirmWarnings() []ValidationWarning {
 	if c.Tmux.PollInterval <= 0 {
 		return nil

@@ -11,31 +11,42 @@ import (
 
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/assess"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
 	"github.com/colonyops/hive/internal/core/terminal/content"
 	"github.com/colonyops/hive/internal/core/terminal/process"
+	"github.com/colonyops/hive/internal/core/terminal/status"
 )
 
 // contentCheckInterval is the minimum time between Tier 3 content-capture
 // classification attempts for the same pane during RefreshCache.
 const contentCheckInterval = 5 * time.Second
 
+// defaultMissingTolerance is how many consecutive list-panes failures this
+// integration tolerates (serving the stale cache) before publishing
+// StatusMissing. Production wiring overrides it via WithMissingTolerance from
+// terminal.status.confirm.missing.polls.
+const defaultMissingTolerance = 2
+
 // Integration implements terminal.Integration for tmux.
 type Integration struct {
-	mu              sync.RWMutex
-	refreshMu       sync.Mutex // prevents concurrent RefreshCache runs
-	cache           map[string]*sessionCache
-	cacheTime       time.Time
-	trackers        map[string]*terminal.StateTracker
-	limiters        map[string]*terminal.RateLimiter
-	contentLimiters map[string]*terminal.RateLimiter // per-pane Tier 3 rate limiter
-	commander       Commander
-	classifier      *classifier.Classifier
-	classCache      *classifier.Cache
-	processReader   process.ProcessReader
-	lister          PaneLister
-	capture         classifier.ContentCapture
-	recorder        CaptureRecorder
+	mu                sync.RWMutex
+	refreshMu         sync.Mutex // prevents concurrent RefreshCache runs
+	cache             map[string]*sessionCache
+	cacheTime         time.Time
+	tracker           *status.Tracker
+	refreshGeneration uint64
+	refreshFailures   int
+	missingTolerance  int
+	limiters          map[string]*terminal.RateLimiter
+	contentLimiters   map[string]*terminal.RateLimiter // per-pane Tier 3 rate limiter
+	commander         Commander
+	classifier        *classifier.Classifier
+	classCache        *classifier.Cache
+	processReader     process.ProcessReader
+	lister            PaneLister
+	capture           classifier.ContentCapture
+	recorder          CaptureRecorder
 }
 
 // sessionCache holds all panes for a single tmux session.
@@ -137,6 +148,36 @@ func WithCommander(commander Commander) Option {
 	}
 }
 
+// WithStatusOptions configures the debounce policies for this integration's
+// status tracker (production config path).
+func WithStatusOptions(opts status.Options) Option {
+	return func(integration *Integration) {
+		integration.tracker = status.NewTracker(assess.NewEngine(), opts)
+	}
+}
+
+// WithStatusTracker injects a pre-built tracker (test seam, analogous to
+// WithCommander).
+func WithStatusTracker(tracker *status.Tracker) Option {
+	return func(integration *Integration) {
+		if tracker != nil {
+			integration.tracker = tracker
+		}
+	}
+}
+
+// WithMissingTolerance sets how many consecutive list-panes failures
+// RefreshCache tolerates (serving the stale cache) before publishing
+// StatusMissing. n polls tolerates n-1 consecutive failures, matching
+// terminal.status.confirm.missing.polls semantics.
+func WithMissingTolerance(n int) Option {
+	return func(integration *Integration) {
+		if n > 0 {
+			integration.missingTolerance = n
+		}
+	}
+}
+
 // NewFromPreviewMatchers creates the production tmux integration from config
 // matchers. Tool names for process detection are derived automatically from
 // the pattern strings (e.g. "^pi$" → "pi"), so callers only need to pass
@@ -182,13 +223,14 @@ func NewWithReader(cls *classifier.Classifier, lister PaneLister, reader process
 
 func newIntegration(reader process.ProcessReader) *Integration {
 	return &Integration{
-		cache:           make(map[string]*sessionCache),
-		trackers:        make(map[string]*terminal.StateTracker),
-		limiters:        make(map[string]*terminal.RateLimiter),
-		contentLimiters: make(map[string]*terminal.RateLimiter),
-		commander:       execCommander{},
-		classCache:      classifier.NewCache(),
-		processReader:   reader,
+		cache:            make(map[string]*sessionCache),
+		tracker:          status.NewTracker(assess.NewEngine(), status.DefaultOptions()),
+		limiters:         make(map[string]*terminal.RateLimiter),
+		contentLimiters:  make(map[string]*terminal.RateLimiter),
+		commander:        execCommander{},
+		classCache:       classifier.NewCache(),
+		processReader:    reader,
+		missingTolerance: defaultMissingTolerance,
 	}
 }
 
@@ -221,12 +263,7 @@ func (t *Integration) RefreshCache() {
 
 	panes, err := t.lister.ListAllPanes()
 	if err != nil {
-		log.Debug().Err(err).Msg("tmux list-panes failed, clearing cache")
-		t.mu.Lock()
-		t.cache = make(map[string]*sessionCache)
-		t.cacheTime = time.Time{}
-		t.prunePaneKeysLocked(map[string]bool{})
-		t.mu.Unlock()
+		t.handleRefreshFailure(err)
 		return
 	}
 
@@ -288,8 +325,38 @@ func (t *Integration) RefreshCache() {
 	t.mu.Lock()
 	t.cache = newCache
 	t.cacheTime = time.Now()
+	t.refreshFailures = 0
+	t.refreshGeneration++
 	t.prunePaneKeysLocked(activeKeys)
 	t.mu.Unlock()
+
+	t.tracker.Prune(activeKeys)
+}
+
+// handleRefreshFailure applies the transport's missing-tolerance policy to a
+// list-panes failure. Failures below missingTolerance serve the existing
+// cache as-is (bumping cacheTime so the DiscoverSession/DiscoverAllPanes
+// freshness gates tolerate exactly one served-stale window) rather than
+// flashing every pane to missing on a single transient hiccup. Reaching
+// missingTolerance clears the cache and prunes per-pane state, same as the
+// original unconditional-clear behavior.
+func (t *Integration) handleRefreshFailure(err error) {
+	t.mu.Lock()
+	t.refreshFailures++
+	failures := t.refreshFailures
+	if failures < t.missingTolerance {
+		t.cacheTime = time.Now()
+		t.mu.Unlock()
+		log.Debug().Err(err).Int("failures", failures).Msg("tmux list-panes failed, serving stale cache")
+		return
+	}
+	t.cache = make(map[string]*sessionCache)
+	t.cacheTime = time.Time{}
+	t.prunePaneKeysLocked(map[string]bool{})
+	t.mu.Unlock()
+
+	t.tracker.Prune(map[string]bool{})
+	log.Debug().Err(err).Int("failures", failures).Msg("tmux list-panes failed, clearing cache")
 }
 
 // contentLimiterAllow returns true if Tier 3 content capture is allowed for
@@ -321,11 +388,6 @@ func (t *Integration) processFingerprint(panePID int64) int64 {
 }
 
 func (t *Integration) prunePaneKeysLocked(activeKeys map[string]bool) {
-	for key := range t.trackers {
-		if !activeKeys[key] {
-			delete(t.trackers, key)
-		}
-	}
 	for key := range t.limiters {
 		if !activeKeys[key] {
 			delete(t.limiters, key)
@@ -462,8 +524,9 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	prevContent := pane.state.paneContent
 	activity := pane.input.Activity
 	lastCaptureActive := pane.state.lastCaptureActive
-	cachedStatus := pane.state.cachedStatus
 	tool := pane.result.Tool
+	inMode := pane.input.InMode
+	paneTitle := pane.input.PaneTitle
 	t.mu.RUnlock()
 
 	t.mu.Lock()
@@ -472,6 +535,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		limiter = terminal.NewRateLimiter(2)
 		t.limiters[key] = limiter
 	}
+	generation := t.refreshGeneration
 	t.mu.Unlock()
 
 	var content string
@@ -498,23 +562,23 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	info.PaneContent = content
 	info.DetectedTool = tool
 
-	if content == prevContent && cachedStatus != "" {
-		return cachedStatus, nil
-	}
-
-	t.mu.Lock()
-	tracker, ok := t.trackers[key]
-	if !ok {
-		tracker = terminal.NewStateTracker()
-		t.trackers[key] = tracker
-	}
-	t.mu.Unlock()
-
 	if tool == "" {
 		tool = "agent"
 	}
-	status := tracker.Update(content, terminal.NewDetector(tool))
-	t.updatePaneState(sessionName, paneID, func(state *paneState) { state.cachedStatus = status })
+
+	// Every poll reaches Observe, even when content is unchanged: stability
+	// itself is a debounce signal (an idle candidate must see N consecutive
+	// confirming observations), and the tracker's per-generation idempotence
+	// guards against the double GetStatus call per pane that
+	// hive.StatusService's FetchSession/groupPaneStatuses pairing makes.
+	snap := assess.Snapshot{
+		Content:    content,
+		Title:      paneTitle,
+		Tool:       tool,
+		InMode:     inMode,
+		Generation: generation,
+	}
+	paneStatus, assessment := t.tracker.Observe(key, snap)
 
 	if freshCapture && t.recorder != nil {
 		if err := t.recorder.Record(CaptureObservation{
@@ -522,13 +586,15 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 			PaneID:      paneID,
 			Tool:        tool,
 			Content:     content,
-			Status:      status,
+			Status:      paneStatus,
+			RuleID:      assessment.RuleID,
+			Signals:     assessment.Signals,
 		}); err != nil {
 			log.Warn().Err(err).Str("pane_id", paneID).Msg("failed to record tmux pane capture")
 		}
 	}
 
-	return status, nil
+	return paneStatus, nil
 }
 
 func (t *Integration) updatePaneState(sessionName, paneID string, update func(*paneState)) {

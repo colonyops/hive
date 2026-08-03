@@ -25,6 +25,9 @@ type detectPaneResult struct {
 	Tool        string `json:"tool"`
 	Confidence  string `json:"confidence"`
 	Tier        int    `json:"tier"`
+	InMode      bool   `json:"inMode"`
+	Assessment  string `json:"assessment"`
+	RuleID      string `json:"ruleID"`
 }
 
 func TestDetect_NoSession(t *testing.T) {

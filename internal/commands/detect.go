@@ -8,6 +8,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/terminal/assess"
 	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/hive"
 )
@@ -44,6 +45,9 @@ type detectPaneOutput struct {
 	Tool        string `json:"tool,omitempty"`
 	Confidence  string `json:"confidence,omitempty"`
 	Tier        int    `json:"tier"`
+	InMode      bool   `json:"inMode"`               // from #{pane_in_mode}
+	Assessment  string `json:"assessment,omitempty"` // assess.State from a one-shot Engine.Assess
+	RuleID      string `json:"ruleID,omitempty"`
 }
 
 type detectOutput struct {
@@ -70,13 +74,15 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 	tmuxSessions := detectTmuxSessionNames(sess)
 
 	cls := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher).Classifier()
+	capture := terminaltmux.TmuxCapture{}
+	engine := assess.NewEngine()
 	out := detectOutput{Session: sess.Slug}
 	for _, pane := range panes {
 		if !tmuxSessions[pane.SessionName] {
 			continue
 		}
 		result := cls.Classify(ctx, pane)
-		out.Panes = append(out.Panes, detectPaneOutput{
+		paneOut := detectPaneOutput{
 			PaneID:      pane.PaneID,
 			PanePID:     pane.PanePID,
 			WindowIndex: pane.WindowIndex,
@@ -85,7 +91,29 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 			Tool:        result.Tool,
 			Confidence:  string(result.Confidence),
 			Tier:        result.Tier,
-		})
+			InMode:      pane.InMode,
+		}
+		if result.IsAgent {
+			// One-shot assessment (no tracker): debounce state is process-local
+			// to the long-running poller, so a one-off CLI invocation reports
+			// the raw stateless Stage-1 classification instead of pretending to
+			// debounce across a single sample.
+			if content, err := capture.CapturePane(ctx, pane.PaneID); err == nil {
+				tool := result.Tool
+				if tool == "" {
+					tool = "agent"
+				}
+				assessment := engine.Assess(assess.Snapshot{
+					Content: content,
+					Title:   pane.PaneTitle,
+					Tool:    tool,
+					InMode:  pane.InMode,
+				})
+				paneOut.Assessment = string(assessment.State)
+				paneOut.RuleID = assessment.RuleID
+			}
+		}
+		out.Panes = append(out.Panes, paneOut)
 	}
 
 	enc := json.NewEncoder(c.Root().Writer)

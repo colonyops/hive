@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestParsePaneLine(t *testing.T) {
@@ -14,7 +15,25 @@ func TestParsePaneLine(t *testing.T) {
 		ok   bool
 	}{
 		{
-			name: "9 fields with pane title and hive tag",
+			name: "10 fields with pane title, hive tag, and in_mode 0",
+			line: "sess|||1|||wname|||/work|||12345|||%2|||6789|||ptitle|||my-slug|||0",
+			want: paneLine{
+				sessName: "sess", winIdx: "1", winName: "wname", workDir: "/work",
+				activity: 12345, paneID: "%2", panePID: 6789, paneTitle: "ptitle", hiveSession: "my-slug", inMode: false,
+			},
+			ok: true,
+		},
+		{
+			name: "10 fields with in_mode 1 (copy-mode)",
+			line: "sess|||1|||wname|||/work|||12345|||%2|||6789|||ptitle|||my-slug|||1",
+			want: paneLine{
+				sessName: "sess", winIdx: "1", winName: "wname", workDir: "/work",
+				activity: 12345, paneID: "%2", panePID: 6789, paneTitle: "ptitle", hiveSession: "my-slug", inMode: true,
+			},
+			ok: true,
+		},
+		{
+			name: "9 fields with pane title and hive tag (no in_mode)",
 			line: "sess|||1|||wname|||/work|||12345|||%2|||6789|||ptitle|||my-slug",
 			want: paneLine{
 				sessName: "sess", winIdx: "1", winName: "wname", workDir: "/work",
@@ -61,7 +80,7 @@ func TestParsePaneLine(t *testing.T) {
 		},
 		{
 			name: "tag with surrounding whitespace trimmed",
-			line: "sess|||1|||wname|||/work|||12345|||%2|||6789|||ptitle|||  my-slug  ",
+			line: "sess|||1|||wname|||/work|||12345|||%2|||6789|||ptitle|||  my-slug  |||0",
 			want: paneLine{
 				sessName: "sess", winIdx: "1", winName: "wname", workDir: "/work",
 				activity: 12345, paneID: "%2", panePID: 6789, paneTitle: "ptitle", hiveSession: "my-slug",
@@ -83,11 +102,16 @@ func TestParsePaneLine(t *testing.T) {
 }
 
 func TestParsePaneList(t *testing.T) {
-	got := parsePaneList("sess|||0|||claude|||/work|||100|||%1|||123|||ptitle|||my-slug\n")
+	got := parsePaneList("sess|||0|||claude|||/work|||100|||%1|||123|||ptitle|||my-slug|||0\n")
 	assert.Len(t, got, 1)
 	assert.Equal(t, "sess", got[0].SessionName)
 	assert.Equal(t, "%1", got[0].PaneID)
 	assert.Equal(t, int64(123), got[0].PanePID)
 	assert.Equal(t, "ptitle", got[0].PaneTitle)
 	assert.Equal(t, "my-slug", got[0].HiveSession)
+	assert.False(t, got[0].InMode)
+
+	inCopyMode := parsePaneList("sess|||0|||claude|||/work|||100|||%1|||123|||ptitle|||my-slug|||1\n")
+	require.Len(t, inCopyMode, 1)
+	assert.True(t, inCopyMode[0].InMode)
 }

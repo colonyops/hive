@@ -113,9 +113,10 @@ func (t *Tracker) Observe(key string, snap assess.Snapshot) (terminal.Status, as
 }
 
 // observeFirst applies first-observation semantics for a brand new key: an
-// unknown/hold assessment publishes StatusReady (preserving the old
-// NewStateTracker default); any definite state — including idle — publishes
-// immediately, since there is no prior working state to protect yet.
+// unknown/hold assessment publishes StatusReady (preserving the previous
+// pipeline's default for a session with no prior observation); any definite
+// state — including idle — publishes immediately, since there is no prior
+// working state to protect yet.
 func (t *Tracker) observeFirst(ts *trackedState, assessment assess.Assessment) {
 	ts.published = mapDefiniteState(assessment.State)
 	// Seed the churn hash without flagging churn: lastChurnAt stays zero, so

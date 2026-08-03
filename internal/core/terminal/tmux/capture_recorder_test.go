@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/assess"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -27,6 +28,8 @@ func TestJSONCaptureRecorder_Record(t *testing.T) {
 		Tool:        "claude",
 		Content:     "agent output\n❯",
 		Status:      terminal.StatusReady,
+		RuleID:      "claude/prompt-glyph",
+		Signals:     []assess.Signal{{RuleID: "claude/prompt-glyph", Region: "bottomLines", Matched: "❯"}},
 	}
 	require.NoError(t, recorder.Record(observation))
 
@@ -56,7 +59,11 @@ func TestJSONCaptureRecorder_Record(t *testing.T) {
 	assert.Equal(t, observation.Content, record.Content)
 	assert.Equal(t, sha256Hex(observation.Content), record.ContentSHA256)
 	assert.Equal(t, terminal.StatusReady, record.WeakLabel)
+	assert.Equal(t, "hive_assess_v1", weakLabelSource)
 	assert.Equal(t, weakLabelSource, record.WeakLabelSource)
+	assert.Equal(t, 3, captureRecordSchemaVersion)
+	assert.Equal(t, observation.RuleID, record.RuleID)
+	assert.Equal(t, observation.Signals, record.Signals)
 	assert.False(t, record.CapturedAt.IsZero())
 
 	sameMachineRecorder, err := NewJSONCaptureRecorder(dir)
