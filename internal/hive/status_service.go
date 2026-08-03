@@ -301,6 +301,9 @@ func aggregateStatus(current, next terminal.Status) terminal.Status {
 	return current
 }
 
+// statusRank ranks missing above ready because a broken or missing pane in a
+// window is more actionable than a ready sibling — aggregation must surface
+// it, not mask it behind a sibling that happens to be idle.
 func statusRank(status terminal.Status) int {
 	switch status {
 	case terminal.StatusApproval:

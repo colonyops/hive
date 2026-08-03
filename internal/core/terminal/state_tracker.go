@@ -1,42 +1,26 @@
 package terminal
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"regexp"
 	"strings"
 	"time"
 )
 
-// StateTracker tracks terminal activity state across poll cycles.
-// Implements spike detection to filter cursor blinks and terminal redraws.
+// StateTracker holds a status steady across poll cycles via hysteresis,
+// so transient status-bar redraws and cursor blinks don't flicker the
+// reported status between calls to Update.
 //
 // Three-state model:
 //   - GREEN (active)   = Explicit busy indicator found (spinner, "ctrl+c to interrupt")
 //   - YELLOW (approval) = Permission dialog detected, needs user decision
 //   - CYAN (ready)     = Input prompt detected, ready for next task
 type StateTracker struct {
-	// Content tracking
-	lastHash       string    // SHA256 of normalized content
-	lastChangeTime time.Time // When sustained activity was last confirmed
-
-	// Activity timestamp tracking (from tmux window_activity)
-	lastActivityTimestamp int64 // Previous activity timestamp
-
-	// Spike detection: track activity changes across poll cycles
-	// Requires 2+ timestamp changes within 1 second to confirm sustained activity
-	activityCheckStart  time.Time // When we started tracking for sustained activity
-	activityChangeCount int       // How many timestamp changes seen in current window
-
-	// Last stable status (returned during spike detection window)
+	// Last stable status (returned during the hysteresis window)
 	lastStableStatus Status
 
 	// Hysteresis: minimum time to hold a status before allowing change
 	lastStatusTime time.Time // When current status was set
 }
-
-// SpikeWindow is how long we wait to confirm sustained activity.
-const SpikeWindow = 1 * time.Second
 
 // HysteresisWindow is the minimum time to hold a status before changing.
 // This prevents rapid flickering between states from status bar updates.
@@ -49,11 +33,10 @@ func NewStateTracker() *StateTracker {
 	}
 }
 
-// Update processes new activity data and returns the detected status.
+// Update processes new content and returns the detected status.
 // content is the terminal content (for busy/prompt detection).
-// activityTS is the tmux window_activity timestamp.
 // detector is used to check busy/approval/ready patterns.
-func (st *StateTracker) Update(content string, activityTS int64, detector *Detector) Status {
+func (st *StateTracker) Update(content string, detector *Detector) Status {
 	now := time.Now()
 
 	// Check for explicit indicators (most reliable)
@@ -94,43 +77,11 @@ func (st *StateTracker) Update(content string, activityTS int64, detector *Detec
 		// Transition to new status
 		st.lastStableStatus = desiredStatus
 		st.lastStatusTime = now
-		st.resetSpikeDetection()
-
-		if desiredStatus == StatusActive {
-			st.lastChangeTime = now
-		}
 
 		return desiredStatus
 	}
 
-	// Same status - update timestamp tracking for activity monitoring
-	if st.lastActivityTimestamp == 0 {
-		st.lastActivityTimestamp = activityTS
-	} else if st.lastActivityTimestamp != activityTS {
-		st.lastActivityTimestamp = activityTS
-		// Activity changed but status didn't - this is normal (status bar updates)
-		// Reset spike detection to avoid accumulating false positives
-		st.resetSpikeDetection()
-	}
-
 	return st.lastStableStatus
-}
-
-// resetSpikeDetection clears the spike detection window.
-func (st *StateTracker) resetSpikeDetection() {
-	st.activityCheckStart = time.Time{}
-	st.activityChangeCount = 0
-}
-
-// UpdateHash updates the content hash and returns true if content changed.
-func (st *StateTracker) UpdateHash(content string) bool {
-	normalized := NormalizeContent(content)
-	hash := HashContent(normalized)
-	if hash == st.lastHash {
-		return false
-	}
-	st.lastHash = hash
-	return true
 }
 
 // spinnerRunes are characters stripped during content normalization.
@@ -224,10 +175,4 @@ func stripControlChars(content string) string {
 		}
 	}
 	return result.String()
-}
-
-// HashContent generates SHA256 hash of content.
-func HashContent(content string) string {
-	h := sha256.Sum256([]byte(content))
-	return hex.EncodeToString(h[:])
 }

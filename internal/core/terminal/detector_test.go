@@ -416,6 +416,14 @@ func TestDetectTool(t *testing.T) {
 	}
 }
 
+func TestDetectTool_DeterministicOnMultipleKeywords(t *testing.T) {
+	content := "Powered by Anthropic Claude, running on OpenAI Codex infra"
+	for i := 0; i < 100; i++ {
+		got := DetectTool(content)
+		assert.Equal(t, "claude", got, "DetectTool() must deterministically prefer claude over codex")
+	}
+}
+
 func TestStripANSI(t *testing.T) {
 	tests := []struct {
 		name    string

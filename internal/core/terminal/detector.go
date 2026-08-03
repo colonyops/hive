@@ -263,7 +263,7 @@ func hasLineEndingWith(lines []string, suffix string) bool {
 }
 
 // DetectStatus returns the detected status based on terminal content alone.
-// For more accurate detection with spike filtering, use StateTracker.Update().
+// For hysteresis across poll cycles, use StateTracker.Update().
 func (d *Detector) DetectStatus(content string) Status {
 	if d.IsBusy(content) {
 		return StatusActive
@@ -289,44 +289,31 @@ func DetectTool(content string) string {
 
 	lower := strings.ToLower(content)
 
-	patterns := map[string][]string{
-		"claude": {
-			"claude",
-			"anthropic",
-			"ctrl+c to interrupt",
-		},
-		"cursor": {
-			"cursor",
-		},
-		"crush": {
-			"crush",
-		},
-		"agent": {
-			"agent",
-		},
-		"gemini": {
-			"gemini",
-			"google ai",
-		},
-		"opencode": {
-			"opencode",
-			"open code",
-		},
-		"codex": {
-			"codex",
-			"openai",
-		},
-	}
-
-	for tool, keywords := range patterns {
-		for _, keyword := range keywords {
+	for _, p := range toolPatterns {
+		for _, keyword := range p.keywords {
 			if strings.Contains(lower, keyword) {
-				return tool
+				return p.tool
 			}
 		}
 	}
 
 	return "shell"
+}
+
+// toolPatterns is ordered: specific tools first, so content matching multiple
+// keywords resolves deterministically; the generic "agent" keyword is last
+// because it substring-matches almost anything.
+var toolPatterns = []struct {
+	tool     string
+	keywords []string
+}{
+	{"claude", []string{"claude", "anthropic", "ctrl+c to interrupt"}},
+	{"codex", []string{"codex", "openai"}},
+	{"gemini", []string{"gemini", "google ai"}},
+	{"opencode", []string{"opencode", "open code"}},
+	{"cursor", []string{"cursor"}},
+	{"crush", []string{"crush"}},
+	{"agent", []string{"agent"}},
 }
 
 func looksLikeAiderContent(content string) bool {

@@ -513,7 +513,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	if tool == "" {
 		tool = "agent"
 	}
-	status := tracker.Update(content, activity, terminal.NewDetector(tool))
+	status := tracker.Update(content, terminal.NewDetector(tool))
 	t.updatePaneState(sessionName, paneID, func(state *paneState) { state.cachedStatus = status })
 
 	if freshCapture && t.recorder != nil {
