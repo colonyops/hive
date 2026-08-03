@@ -14,6 +14,7 @@ func TestRenderStatusIndicator(t *testing.T) {
 	}{
 		{terminal.StatusActive, StatusIndicatorActive},
 		{terminal.StatusApproval, StatusIndicatorApproval},
+		{terminal.StatusQuestion, StatusIndicatorApproval},
 		{terminal.StatusReady, StatusIndicatorReady},
 		{terminal.StatusMissing, StatusIndicatorMissing},
 		{terminal.Status("unknown"), StatusIndicatorMissing},
@@ -32,6 +33,7 @@ func TestRenderStatusIndicator_AllStatusesCovered(t *testing.T) {
 	statuses := []terminal.Status{
 		terminal.StatusActive,
 		terminal.StatusApproval,
+		terminal.StatusQuestion,
 		terminal.StatusReady,
 		terminal.StatusMissing,
 	}

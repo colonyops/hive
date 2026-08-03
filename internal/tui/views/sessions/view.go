@@ -710,7 +710,7 @@ func (v *View) applyFilter() tea.Cmd {
 		filtered := make([]session.Session, 0, len(allSess))
 		for _, s := range allSess {
 			if status, ok := v.terminalStatuses.Get(s.ID); ok {
-				if status.Status == statusFilter {
+				if statusMatchesFilter(status.Status, statusFilter) {
 					filtered = append(filtered, s)
 				}
 			}
@@ -1225,6 +1225,15 @@ func (v *View) isCurrentTmuxSession(sess *session.Session) bool {
 }
 
 // --- Status/Filter ---
+
+// statusMatchesFilter reports whether a published status satisfies a filter
+// value. "approval" includes question: question renders at the approval tier.
+func statusMatchesFilter(status terminal.Status, filter terminal.Status) bool {
+	if status == filter {
+		return true
+	}
+	return filter == terminal.StatusApproval && status == terminal.StatusQuestion
+}
 
 // handleFilterAction checks if the action is a filter action and updates the status filter.
 // Returns true if the action was a filter action (caller should call applyFilter).

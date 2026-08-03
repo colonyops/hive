@@ -74,6 +74,10 @@ func renderStatusIndicator(state session.State, termStatus *hive.TerminalStatus,
 			return renderActiveIndicator(animFrame)
 		case terminal.StatusApproval:
 			return treeStyles.StatusApproval.Render(styles.StatusIndicatorApproval)
+		case terminal.StatusQuestion:
+			// Question renders at the approval tier: same icon and style,
+			// no dedicated indicator.
+			return treeStyles.StatusApproval.Render(styles.StatusIndicatorApproval)
 		case terminal.StatusReady:
 			return treeStyles.StatusReady.Render(styles.StatusIndicatorReady)
 		case terminal.StatusMissing:

@@ -18,6 +18,10 @@ func RenderStatusIndicator(status terminal.Status) string {
 		return TextSuccessStyle.Render(StatusIndicatorActive)
 	case terminal.StatusApproval:
 		return TextWarningStyle.Render(StatusIndicatorApproval)
+	case terminal.StatusQuestion:
+		// Question renders at the approval tier: same icon and style, no
+		// dedicated indicator.
+		return TextWarningStyle.Render(StatusIndicatorApproval)
 	case terminal.StatusReady:
 		return TextSecondaryStyle.Render(StatusIndicatorReady)
 	case terminal.StatusMissing:

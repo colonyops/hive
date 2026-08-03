@@ -1,12 +1,16 @@
 package commands
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/urfave/cli/v3"
 )
 
 func TestPickItem_DisplayName(t *testing.T) {
@@ -203,11 +207,13 @@ func TestApplyFilter_StatusFilter(t *testing.T) {
 			{Session: session.Session{ID: "1", Name: "active-session"}},
 			{Session: session.Session{ID: "2", Name: "approval-session"}},
 			{Session: session.Session{ID: "3", Name: "missing-session"}},
+			{Session: session.Session{ID: "4", Name: "question-session"}},
 		},
 		statuses: map[string]terminal.Status{
 			"1": terminal.StatusActive,
 			"2": terminal.StatusApproval,
 			"3": terminal.StatusMissing,
+			"4": terminal.StatusQuestion,
 		},
 	}
 
@@ -219,12 +225,12 @@ func TestApplyFilter_StatusFilter(t *testing.T) {
 		{
 			name:     "all shows everything",
 			filter:   "all",
-			expected: []string{"active-session", "approval-session", "missing-session"},
+			expected: []string{"active-session", "approval-session", "missing-session", "question-session"},
 		},
 		{
 			name:     "default hides missing",
 			filter:   "",
-			expected: []string{"active-session", "approval-session"},
+			expected: []string{"active-session", "approval-session", "question-session"},
 		},
 		{
 			name:     "filter active only",
@@ -232,9 +238,9 @@ func TestApplyFilter_StatusFilter(t *testing.T) {
 			expected: []string{"active-session"},
 		},
 		{
-			name:     "filter approval only",
+			name:     "filter approval also matches question",
 			filter:   "approval",
-			expected: []string{"approval-session"},
+			expected: []string{"approval-session", "question-session"},
 		},
 		{
 			name:     "filter missing only",
@@ -347,6 +353,25 @@ func TestSortItemsInitial_Stable(t *testing.T) {
 	assert.Equal(t, "2", items[1].Session.ID)
 }
 
+func TestStatusMatchesFilter(t *testing.T) {
+	tests := []struct {
+		name   string
+		status terminal.Status
+		filter string
+		want   bool
+	}{
+		{"exact match", terminal.StatusActive, "active", true},
+		{"exact mismatch", terminal.StatusActive, "ready", false},
+		{"approval filter matches question", terminal.StatusQuestion, "approval", true},
+		{"question does not match unrelated filter", terminal.StatusQuestion, "active", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, statusMatchesFilter(tt.status, tt.filter))
+		})
+	}
+}
+
 // TestStatusCycle verifies the tab cycling order matches the defined cycle.
 func TestStatusCycle(t *testing.T) {
 	cycle := []string{"", "all", "active", "approval", "ready", "missing"}
@@ -440,4 +465,20 @@ func TestApplyFilter_PartialMatch(t *testing.T) {
 	m.applyFilter()
 
 	assert.Len(t, m.filtered, 1)
+}
+
+// TestPickCmd_RejectsQuestionStatusFilter locks in that "question" has no
+// dedicated --status value: it's out of scope by design (question renders
+// at the approval tier, so "approval" already surfaces it — see
+// TestApplyFilter_StatusFilter's "filter approval also matches question").
+func TestPickCmd_RejectsQuestionStatusFilter(t *testing.T) {
+	flags := &Flags{}
+	cmd := NewExperimentalCmd(flags, &hive.App{})
+
+	app := &cli.Command{Name: "hive"}
+	cmd.Register(app)
+
+	err := app.Run(context.Background(), []string{"hive", "x", "pick", "--status", "question"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid --status")
 }

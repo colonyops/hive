@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/assess"
 )
 
@@ -30,16 +33,76 @@ type assessFileOutput struct {
 	Regions assessRegionsOutput `json:"regions"`
 }
 
-// assessCmd registers the "hive x assess" command group. Only "file" exists
-// in this phase; "watch"/"replay" land with the status.Tracker (Phase 3).
+// assessCmd registers the "hive x assess" command group: "file" is Phase 2's
+// one-shot rule-authoring aid; "watch" and "replay" are Phase 3's
+// status.Tracker debug tooling.
 func (cmd *ExperimentalCmd) assessCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "assess",
 		Usage: "Status assessment engine debug tooling (rule-authoring aid)",
 		Commands: []*cli.Command{
 			cmd.assessFileCmd(),
+			cmd.assessWatchCmd(),
+			cmd.assessReplayCmd(),
 		},
 	}
+}
+
+// assessFrame is one raw observation, recorded by `watch --record` and
+// consumed by `replay`: {ts, content, title, inMode}.
+type assessFrame struct {
+	Timestamp time.Time `json:"ts"`
+	Content   string    `json:"content"`
+	Title     string    `json:"title"`
+	InMode    bool      `json:"inMode"`
+}
+
+// assessObservationOutput is the shape `watch` and `replay` both emit, one
+// per poll/frame.
+type assessObservationOutput struct {
+	Timestamp      time.Time         `json:"ts"`
+	Generation     uint64            `json:"generation"`
+	Assessment     assessStateOutput `json:"assessment"`
+	Published      terminal.Status   `json:"published"`
+	Candidate      terminal.Status   `json:"candidate"`
+	CandidatePolls int               `json:"candidatePolls"`
+	Churned        bool              `json:"churned"`
+	InMode         bool              `json:"inMode"`
+}
+
+// assessStateOutput is the Assessment sub-object of assessObservationOutput.
+type assessStateOutput struct {
+	State  assess.State `json:"state"`
+	RuleID string       `json:"ruleID"`
+	Hold   bool         `json:"hold"`
+}
+
+// writeAssessObservation prints one observation either as a compact JSON
+// line (jsonl, for scripting/analysis) or as a human-readable summary line
+// (the default, for watching interactively).
+func writeAssessObservation(w io.Writer, jsonl bool, out assessObservationOutput) error {
+	if jsonl {
+		data, err := json.Marshal(out)
+		if err != nil {
+			return err
+		}
+		_, err = fmt.Fprintln(w, string(data))
+		return err
+	}
+
+	_, err := fmt.Fprintf(w, "%s gen=%-4d state=%-9s rule=%-26s hold=%-5v -> %-8s candidate=%s(%d) churned=%-5v inMode=%v\n",
+		out.Timestamp.Format(time.RFC3339), out.Generation,
+		out.Assessment.State, orDash(out.Assessment.RuleID), out.Assessment.Hold,
+		out.Published, orDash(string(out.Candidate)), out.CandidatePolls, out.Churned, out.InMode,
+	)
+	return err
+}
+
+func orDash(s string) string {
+	if s == "" {
+		return "-"
+	}
+	return s
 }
 
 // assessFileCmd runs the assessment engine once over a captured pane file —

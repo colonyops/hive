@@ -9,6 +9,7 @@ type Status string
 const (
 	StatusActive   Status = "active"   // agent is actively working (spinner/busy indicator)
 	StatusApproval Status = "approval" // agent needs permission (Yes/No dialog)
+	StatusQuestion Status = "question" // agent asked the user a question (AskUserQuestion etc.)
 	StatusReady    Status = "ready"    // agent finished, waiting for next input (❯ prompt)
 	StatusMissing  Status = "missing"  // terminal session not found
 )
