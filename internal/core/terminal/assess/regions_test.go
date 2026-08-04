@@ -100,6 +100,28 @@ func TestNormalizeContent_NBSPFoldedToSpace(t *testing.T) {
 	assert.Equal(t, ">", r.promptBoxBody())
 }
 
+func TestComputeRegions_RuleDelimitedBarePromptBox(t *testing.T) {
+	// Regression (found live 2026-08-04): modern Claude Code UIs render no
+	// ╭│╰ box at all — just a horizontal rule, a bare "❯" prompt line (with
+	// a trailing NBSP), and another rule, with the footer/status block
+	// (cwd/branch/context/model) below the bottom rule. Before this fix,
+	// detectPromptBox found no box, abovePromptBox fell back to the last
+	// contiguous block — the footer — and the spinner line one block up
+	// never entered rule scope, so working was never detected (100% idle
+	// misclassification over 131 live polls).
+	content := readRegionFixture(t, "bare-prompt-live.txt")
+	r := computeRegions(normalizeContent(content))
+
+	require.True(t, r.hasPromptBox(), "a rule-delimited bare ❯ prompt line must be detected as a prompt box")
+	assert.Empty(t, r.promptBoxBody(), "a bare ❯ prompt line carries no typed text")
+	assert.Contains(t, r.abovePromptBox(), "Swooping",
+		"abovePromptBox must reach the spinner line above the top rule, not stop at the box-less fallback")
+	assert.NotContains(t, r.abovePromptBox(), "example-repo",
+		"the footer block below the bottom rule must be excluded from abovePromptBox")
+	assert.NotContains(t, r.abovePromptBox(), "should stay out of scope",
+		"scrollback above the blank-line boundary must stay out of abovePromptBox even with the new box shape")
+}
+
 func TestDumpRegions_MatchesEngineNormalization(t *testing.T) {
 	content := readRegionFixture(t, "basic-box.txt")
 	dump := DumpRegions(content)

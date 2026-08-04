@@ -140,16 +140,30 @@ func lastContiguousBlock(lines []string) []string {
 	return lines[start:end]
 }
 
-// detectPromptBox finds the LAST box-drawn input box in lines: a ╰ border,
-// with a contiguous run of │ body lines above it terminated by a ╭ border.
-// Claude/codex-style TUIs render this box with rounded corners
+// detectPromptBox finds the last prompt-box shape in lines, trying the
+// box-drawn (╭│╰) shape first and falling back to the rule-delimited bare
+// prompt shape newer Claude Code UIs render instead (see
+// detectRulePromptBox). Both shapes are reported through the same
+// promptBoxRegion so every other region method and every rule that consumes
+// hasPromptBox/promptBoxBody/abovePromptBox works unchanged regardless of
+// which UI rendered the prompt.
+func detectPromptBox(lines []string) *promptBoxRegion {
+	if box := detectBorderedPromptBox(lines); box != nil {
+		return box
+	}
+	return detectRulePromptBox(lines)
+}
+
+// detectBorderedPromptBox finds the LAST box-drawn input box in lines: a ╰
+// border, with a contiguous run of │ body lines above it terminated by a ╭
+// border. Claude/codex-style TUIs render this box with rounded corners
 // (╭ ╰ │), not the bare ─ rule that a naive "horizontal rule" scan would
 // assume. Only the bottommost ╰ is considered — an older box further up the
 // screen (e.g. a dismissed dialog) is scrollback, not the current box. If the
 // body run is broken by a non-│ line, or the ╭ is never found (a clipped pane
 // where the top border has scrolled out), detection fails and the caller
 // falls back to whole-viewport behavior rather than misparsing a partial box.
-func detectPromptBox(lines []string) *promptBoxRegion {
+func detectBorderedPromptBox(lines []string) *promptBoxRegion {
 	bottom := -1
 	for i := len(lines) - 1; i >= 0; i-- {
 		if strings.HasPrefix(strings.TrimLeft(lines[i], " "), "╰") {
@@ -179,6 +193,79 @@ func detectPromptBox(lines []string) *promptBoxRegion {
 	}
 
 	return &promptBoxRegion{topIndex: top, bottomIndex: bottom, bodyLines: body}
+}
+
+// detectRulePromptBox finds the LAST occurrence, near the bottom of the
+// viewport, of the rule-delimited bare prompt shape some modern tool UIs
+// render instead of a ╭│╰ box: a horizontal rule, exactly one middle line,
+// then another horizontal rule — with the footer/status block (cwd,
+// branch, context %, model, permission mode) rendered below the bottom
+// rule. Two tool dialects of that middle line are both accepted
+// (isBoxlessPromptBodyLine): Claude Code renders a bare prompt glyph (❯ or
+// >, optionally followed by typed-but-unsubmitted text); pi renders no
+// glyph at all, just a blank/whitespace-only row.
+//
+// Treating this exactly like a box is what fixes the "modern UI defeats
+// prompt-box detection" failure class: topIndex is the TOP rule, so
+// abovePromptBox's last-contiguous-block scan starts above the whole
+// rule/middle-line/rule unit (landing on the spinner/transcript block above
+// the blank line that precedes it) instead of falling through to the
+// footer below the bottom rule, and bodyLines is the middle line's content
+// after the glyph (or "" for the glyph-less shape) — the same
+// typed-but-unsubmitted-text signal a ╭│╰ box's body carries.
+//
+// The "exactly one middle line between two rules" constraint is deliberate,
+// not incidental: pi also renders unrelated content (banners, Q&A
+// transcript) between rule pairs further up the screen, sometimes with
+// several lines between them. Requiring exactly one line is what keeps
+// those from being misparsed as the prompt box. Scanning bottom-up and
+// returning on the first match makes this the LAST (bottommost) occurrence
+// of the shape, mirroring detectBorderedPromptBox's "only the bottommost ╰"
+// rule: an older rule/middle-line/rule unit further up the screen is
+// scrollback or unrelated chrome, not the current prompt.
+func detectRulePromptBox(lines []string) *promptBoxRegion {
+	for i := len(lines) - 1; i >= 2; i-- {
+		if !isHorizontalRule(lines[i]) {
+			continue
+		}
+		if !isBoxlessPromptBodyLine(lines[i-1]) {
+			continue
+		}
+		if !isHorizontalRule(lines[i-2]) {
+			continue
+		}
+		return &promptBoxRegion{
+			topIndex:    i - 2,
+			bottomIndex: i,
+			bodyLines:   []string{stripPromptGlyphLine(strings.TrimLeft(lines[i-1], " "))},
+		}
+	}
+	return nil
+}
+
+// isBoxlessPromptBodyLine reports whether a line is a valid middle line for
+// detectRulePromptBox's rule/middle-line/rule shape: either a blank/
+// whitespace-only line (pi's glyph-less empty input row) or a line that,
+// after left-trimming, begins with a bare prompt glyph (❯ or >, Claude
+// Code's shape).
+func isBoxlessPromptBodyLine(line string) bool {
+	if strings.TrimSpace(line) == "" {
+		return true
+	}
+	trimmed := strings.TrimLeft(line, " ")
+	return strings.HasPrefix(trimmed, "❯") || strings.HasPrefix(trimmed, ">")
+}
+
+// stripPromptGlyphLine strips the leading prompt glyph (❯ or >) and one
+// following space from an already-left-trimmed prompt line, preserving any
+// typed-but-unsubmitted text after it. Trailing padding (tmux pads captured
+// lines out to pane width) is trimmed too, matching stripBoxBodyLine's
+// behavior for the ╭│╰ box body.
+func stripPromptGlyphLine(trimmed string) string {
+	body := strings.TrimPrefix(trimmed, "❯")
+	body = strings.TrimPrefix(body, ">")
+	body = strings.TrimPrefix(body, " ")
+	return strings.TrimRight(body, " ")
 }
 
 // stripBoxBodyLine strips one layer of "│ " / " │" border padding from an

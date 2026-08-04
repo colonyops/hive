@@ -12,6 +12,14 @@ import (
 // from re-triggering the rule (the corpus-documented failure class).
 const approvalWindowLines = 6
 
+// liveDialogWindowLines bounds how far back liveDialogQuestionRule looks in
+// bottomLines. Wider than approvalWindowLines: the modern (no ╭│╰ box)
+// AskUserQuestion dialog renders a header chip, question line, several
+// numbered options with description lines, a second rule, and an extra
+// option below it before the footer — comfortably under 20 lines, but well
+// past a dialog rendered inside a box.
+const liveDialogWindowLines = 20
+
 var (
 	spinnerShapePattern = regexp.MustCompile(buildSpinnerShapePattern())
 
@@ -34,16 +42,21 @@ var (
 )
 
 // buildSpinnerShapePattern turns SpinnerGlyphs into "any spinner glyph +
-// gerund + ellipsis" — e.g. "✳ Gusting… (35s · ↑ 673 tokens)". This one
-// pattern replaces the old ~100-entry whimsical-word list entirely: it
-// matches the shape of the status line, not specific vocabulary, so it
-// survives new word choices across tool releases.
+// gerund + ellipsis" — e.g. "✳ Gusting… (35s · ↑ 673 tokens)" or pi's
+// " ⠧ Working... " (ASCII three-dot ellipsis, indented). This one pattern
+// replaces the old ~100-entry whimsical-word list entirely: it matches the
+// shape of the status line, not specific vocabulary, so it survives new
+// word choices across tool releases. Leading whitespace before the glyph
+// and "…" vs "..." are both tolerated for the same reason: they're
+// rendering-dialect differences between tools (pi renders bare-terminal
+// ASCII dots and left-pads its status line; Claude/Codex use the Unicode
+// ellipsis flush left), not the shape the rule is actually keying on.
 func buildSpinnerShapePattern() string {
 	var glyphs strings.Builder
 	for _, r := range SpinnerGlyphs {
 		glyphs.WriteRune(r)
 	}
-	return `(?m)^[` + glyphs.String() + `] \S+ing.*…`
+	return `(?m)^\s*[` + glyphs.String() + `] \S+ing.*(?:…|\.{3})`
 }
 
 // holdRule builds a transient-screen rule: if marker appears anywhere in the
@@ -103,6 +116,43 @@ func questionRule(id string) rule {
 				return Signal{}, false
 			}
 			return Signal{RuleID: id, Region: "promptBoxBody+abovePromptBox", Matched: m}, true
+		},
+	}
+}
+
+// liveDialogQuestionRule matches the modern AskUserQuestion dialog: Claude
+// Code renders it as bare text between two horizontal rules rather than
+// inside a ╭│╰ box, so questionRule's promptBoxBody+abovePromptBox scoping
+// can't see it — with no box, abovePromptBox falls back to the last
+// contiguous block, which is only the trailing footer chrome, well below
+// the blank-line boundary that separates it from the question/options
+// block.
+//
+// This rule instead scans bottomLines (not contiguous-block-restricted) for
+// three signals together: the dialog's footer chrome ("Enter to select" or
+// "↑/↓ to navigate"), a "?", and a numbered option line. The footer chrome
+// is what keeps this anti-stale despite the wider window: Claude Code
+// replaces the entire dialog with a "User answered Claude's questions:"
+// summary line once answered, so the chrome cannot linger in scrollback the
+// way phrase/spinner text can — unlike approvalWindowLines-scoped rules,
+// this doesn't need the contiguous-block restriction to stay safe.
+func liveDialogQuestionRule(id string) rule {
+	return rule{
+		id:    id,
+		state: StateQuestion,
+		match: func(r regions, _ string) (Signal, bool) {
+			window := r.bottomLines(liveDialogWindowLines)
+			if !strings.Contains(window, "Enter to select") && !strings.Contains(window, "to navigate") {
+				return Signal{}, false
+			}
+			if !strings.Contains(window, "?") {
+				return Signal{}, false
+			}
+			m := questionOptionPattern.FindString(window)
+			if m == "" {
+				return Signal{}, false
+			}
+			return Signal{RuleID: id, Region: "bottomLines", Matched: m}, true
 		},
 	}
 }

@@ -1,0 +1,18 @@
+⏺ Agent(Example background task) some-model
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+──────────────────────────────────────────────────────────
+ ☐ Example checklist item
+
+Example question line asking which option you prefer?
+
+❯ 1. First example option (Recommended)
+     Some example description text for option one.
+  2. Second example option
+     Some example description text for option two.
+  3. Third example option
+     Some example description text for option three.
+  4. Type something.
+──────────────────────────────────────────────────────────
+  5. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

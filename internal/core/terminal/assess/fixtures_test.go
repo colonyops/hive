@@ -98,6 +98,41 @@ var fixtures = []fixture{
 		expectedHold:  true,
 		purpose:       "the transcript viewer ('ctrl+r to toggle') is a transient screen: hold, don't classify.",
 	},
+	{
+		name:          "claude-bare-prompt-working",
+		file:          "claude/bare-prompt-working.txt",
+		tool:          "claude",
+		expectedState: assess.StateWorking,
+		purpose:       "modern bare-prompt UI regression (found live 2026-08-04): a spinner above a rule-delimited ❯ prompt (no ╭│╰ box) is working, not idle via the box-less prompt-glyph fallback.",
+	},
+	{
+		name:          "claude-bare-prompt-idle",
+		file:          "claude/bare-prompt-idle.txt",
+		tool:          "claude",
+		expectedState: assess.StateIdle,
+		purpose:       "modern bare-prompt UI regression (found live 2026-08-04): a completed turn with no spinner above a bare rule-delimited ❯ prompt is idle.",
+	},
+	{
+		name:          "claude-bare-prompt-typed",
+		file:          "claude/bare-prompt-typed.txt",
+		tool:          "claude",
+		expectedState: assess.StateIdle,
+		purpose:       "modern bare-prompt UI regression (found live 2026-08-04): typed-but-unsubmitted text on the rule-delimited ❯ line is idle, not working/approval.",
+	},
+	{
+		name:          "claude-bare-prompt-question",
+		file:          "claude/bare-prompt-question.txt",
+		tool:          "claude",
+		expectedState: assess.StateQuestion,
+		purpose:       "modern AskUserQuestion live-dialog regression (found live 2026-08-04): the question/options block rendered as bare text between two rules (no ╭│╰ box) is question, detected via the dialog's own footer chrome since promptBoxBody+abovePromptBox can't see it.",
+	},
+	{
+		name:          "claude-bare-prompt-after-answer",
+		file:          "claude/bare-prompt-after-answer.txt",
+		tool:          "claude",
+		expectedState: assess.StateWorking,
+		purpose:       "counter-fixture for the AskUserQuestion live-dialog regression: once answered, the dialog is fully replaced by a summary line and the footer chrome is gone, so this must NOT be question even though the summary still mentions the numbered option.",
+	},
 
 	// --- codex ---
 	{
@@ -172,6 +207,27 @@ var fixtures = []fixture{
 		tool:          "pi",
 		expectedState: assess.StateIdle,
 		purpose:       "generic rule set: a bare prompt glyph with nothing else on the line is idle.",
+	},
+	{
+		name:          "generic-pi-bare-working",
+		file:          "generic/pi-bare-working.txt",
+		tool:          "pi",
+		expectedState: assess.StateWorking,
+		purpose:       "pi stuck-active regression (found live 2026-08-04): pi's spinner line uses an ASCII three-dot ellipsis and is indented ('⠧ Working...'), not the Unicode ellipsis flush-left shape the pattern originally required.",
+	},
+	{
+		name:          "generic-pi-bare-idle",
+		file:          "generic/pi-bare-idle.txt",
+		tool:          "pi",
+		expectedState: assess.StateIdle,
+		purpose:       "pi stuck-active regression (found live 2026-08-04): pi's idle input area is a rule-delimited box with a blank (glyph-less) middle line, not a ❯/> prompt; detectRulePromptBox and the generic rule set's promptEmptyRule must both recognize it as an empty box.",
+	},
+	{
+		name:          "generic-pi-bare-done",
+		file:          "generic/pi-bare-done.txt",
+		tool:          "pi",
+		expectedState: assess.StateIdle,
+		purpose:       "pi stuck-active regression (found live 2026-08-04): after a turn completes, pi's rule-delimited box is empty again; this is what lets status.Tracker de-escalate active back to ready instead of holding active forever.",
 	},
 
 	// --- edge cases ---

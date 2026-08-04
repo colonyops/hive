@@ -22,6 +22,7 @@ var claudeRules = ruleSet{
 
 	phraseRule("claude/permission-dialog", StateApproval, claudeApprovalPhrases),
 	questionRule("claude/question"),
+	liveDialogQuestionRule("claude/question-live-dialog"),
 
 	spinnerShapeRule("claude/spinner-shape"),
 	tokenStatsRule("claude/token-stats"),

@@ -31,12 +31,17 @@ type paneDriver interface {
 // real agent CLI's own output would look like — which is the point ("the
 // pane LOOKS like a live agent to the whole pipeline").
 //
-// The respawned process is `sh -c 'clear; cat <file>; exec sleep
-// infinity'`: clear resets the screen so stale content never bleeds into
+// The respawned process is `sh -c 'clear; cat <file>; exec tail -f
+// /dev/null'`: clear resets the screen so stale content never bleeds into
 // the next frame, cat renders the frame's exact captured text, and the
-// trailing sleep parks the pane on that content — as opposed to exiting
+// trailing tail parks the pane on that content — as opposed to exiting
 // back to a shell prompt, which would add a trailing line capture-pane
-// would see that was never part of the recording.
+// would see that was never part of the recording. `tail -f /dev/null`
+// (rather than `sleep infinity`) is deliberate: GNU coreutils' sleep
+// accepts "infinity" as a duration, but BSD/macOS sleep does not and exits
+// immediately, killing the parked process and closing the pane out from
+// under the next frame's respawn-pane. `tail -f` blocks forever on both
+// GNU and BSD without relying on either sleep dialect.
 //
 // Known limitation: frame.InMode (tmux copy-mode) is not replicated.
 // respawn-pane exits copy mode as a side effect of killing the previous
@@ -70,7 +75,7 @@ func (d tmuxPaneDriver) DriveFrame(ctx context.Context, target string, frame ass
 	// framePath is program-generated (os.MkdirTemp plus a fixed literal
 	// filename), never derived from frame content or other user input, so a
 	// single-quote wrap is sufficient quoting without a general escaper.
-	shellCmd := fmt.Sprintf("clear; cat '%s'; exec sleep infinity", d.framePath)
+	shellCmd := fmt.Sprintf("clear; cat '%s'; exec tail -f /dev/null", d.framePath)
 	if err := exec.CommandContext(ctx, "tmux", "respawn-pane", "-k", "-t", target, shellCmd).Run(); err != nil {
 		return fmt.Errorf("tmux respawn-pane: %w", err)
 	}

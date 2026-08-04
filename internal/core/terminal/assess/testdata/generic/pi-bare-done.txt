@@ -1,0 +1,22 @@
+pi
+example-repo  feat/example-branch ~  v0.0.0
+❯ pi
+
+ Warning: tmux extended-keys-format is xterm. Pi works best with csi-u. Add `set -g extended-keys-format csi-u` to ~/.tmux.conf and restart tmux.
+
+──────────────────────────────
+ Update Available
+ New version 0.0.0 is available. Run pi update
+ Changelog: https://pi.dev/changelog
+──────────────────────────────
+
+
+ Example prompt text goes here
+
+
+ example reply
+
+──────────────────────────────
+
+──────────────────────────────
+  feat/example-branch                                        25k/1m 3% · some-model · high
