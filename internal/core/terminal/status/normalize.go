@@ -10,10 +10,6 @@ import (
 	"github.com/colonyops/hive/internal/core/terminal/assess"
 )
 
-// The patterns below mirror internal/core/terminal/state_tracker.go's
-// NormalizeContent. They are copied rather than shared because Phase 4
-// deletes the old pipeline's copies outright; factoring out a common helper
-// for code on its way out isn't worth the coupling.
 var (
 	dynamicStatusPattern   = regexp.MustCompile(`\([^)]*\d+s\s*·[^)]*(?:tokens|↑|↓)[^)]*\)`)
 	progressBarPattern     = regexp.MustCompile(`\[=*>?\s*\]\s*\d+%`)

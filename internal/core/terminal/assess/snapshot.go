@@ -1,7 +1,6 @@
 // Package assess implements Stage 1 of the two-stage status assessment
 // engine: a pure, stateless mapping from one terminal snapshot to one
-// semantic assessment. See the plan doc "Two-Stage Status Assessment Engine"
-// for the full architecture; Stage 2 (the debouncing status.Tracker) owns
+// semantic assessment. Stage 2 (the debouncing status.Tracker) owns
 // turning Assessment values into published terminal.Status values.
 package assess
 

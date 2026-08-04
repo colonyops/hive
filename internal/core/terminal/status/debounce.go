@@ -16,7 +16,8 @@ import (
 //	approval → anything     confirmed via ConfirmApproval (dialog gone = user acted)
 //	unknown                 hold: keep published, reset candidate
 //
-// The missing row is transport-level (Phase 4) and out of scope here.
+// The missing row is transport-level (see the tmux integration's
+// handleRefreshFailure) and out of scope here.
 func (t *Tracker) applyTransition(ts *trackedState, state assess.State, now time.Time, contentHash string) {
 	if state == assess.StateUnknown {
 		// No evidence must not advance an idle candidate.

@@ -42,8 +42,8 @@ func paneExtra(ctx context.Context, target string) (title string, inMode bool, e
 
 // assessWatchCmd observes a live tmux pane through the Stage 1 engine and
 // Stage 2 tracker. It builds its own private, single-goroutine Tracker —
-// production status fetching (Phase 4) is unaffected by running this
-// alongside it. Capture is read-only (capture-pane, display-message); it
+// production status fetching is unaffected by running this alongside it.
+// Capture is read-only (capture-pane, display-message); it
 // never sends keys, so it's safe to run against a real session on the host.
 func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 	var (

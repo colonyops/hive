@@ -46,8 +46,7 @@ var (
 
 // buildSpinnerShapePattern turns SpinnerGlyphs into "any spinner glyph +
 // gerund + ellipsis" — e.g. "✳ Gusting… (35s · ↑ 673 tokens)" or pi's
-// " ⠧ Working... " (ASCII three-dot ellipsis, indented). This one pattern
-// replaces the old ~100-entry whimsical-word list entirely: it matches the
+// " ⠧ Working... " (ASCII three-dot ellipsis, indented). It matches the
 // shape of the status line, not specific vocabulary, so it survives new
 // word choices across tool releases. Leading whitespace before the glyph
 // and "…" vs "..." are both tolerated for the same reason: they're

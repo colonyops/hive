@@ -85,7 +85,7 @@ func (o Options) effectivePolls(p ConfirmPolicy) int {
 // data-only package that many other packages import; status already sits
 // under internal/core/terminal and is naturally the consumer here.
 //
-// Missing's policy is deliberately not part of Options: Phase 4's tmux
+// Missing's policy is deliberately not part of Options: the tmux
 // transport consumes config.TerminalConfirmConfig.Missing directly to decide
 // how many consecutive list-panes failures to tolerate before publishing
 // StatusMissing — that's a transport-level retry count, not a Tracker

@@ -6,9 +6,7 @@ import (
 	"github.com/colonyops/hive/internal/core/terminal"
 )
 
-// rule is one prioritized detection rule. Rules are plain Go values — v1 has
-// no YAML manifest loader; that remains a documented follow-up serialization
-// format.
+// rule is one prioritized detection rule.
 type rule struct {
 	id    string
 	state State

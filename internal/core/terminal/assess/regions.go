@@ -30,9 +30,8 @@ type regions struct {
 }
 
 // computeRegions builds regions from already-normalized content (ANSI
-// stripped, NBSP replaced). Interior blank lines are preserved — unlike the
-// old detector's getLastNonEmptyLines, which dropped them and distorted
-// screen structure.
+// stripped, NBSP replaced). Interior blank lines are preserved: dropping
+// them distorts screen structure.
 func computeRegions(content string) regions {
 	lines := trimTrailingBlank(strings.Split(content, "\n"))
 	return regions{

@@ -29,15 +29,13 @@ func fixtureContent(t *testing.T, file string) string {
 	return string(data)
 }
 
-// fixtures is the shared corpus consumed by both TestEngine_Assess (does the
-// engine classify correctly?) and TestParity_OldVsNewEngine (does the new
-// classification agree with the old detector, except where documented?).
+// fixtures is the corpus consumed by TestEngine_Assess.
 //
-// Six regression fixtures reproduce the corpus-documented failure class
-// (2026-07-21 handoff): matching substrings anywhere in a fixed recent-lines
-// window cannot distinguish current UI from transcript history. Three edge
-// fixtures cover degenerate/malformed input. All content below is synthetic
-// and sanitized — no real paths, repo names, or captured session data.
+// The regression fixtures reproduce one shared failure class: matching
+// substrings anywhere in a fixed recent-lines window cannot distinguish
+// current UI from transcript history. The edge fixtures cover
+// degenerate/malformed input. All content below is synthetic and
+// sanitized — no real paths, repo names, or captured session data.
 var fixtures = []fixture{
 	// --- claude ---
 	{
@@ -45,7 +43,7 @@ var fixtures = []fixture{
 		file:          "claude/working-spinner.txt",
 		tool:          "claude",
 		expectedState: assess.StateWorking,
-		purpose:       "spinner-shape rule replaces the old whimsical-word list: any spinner glyph + gerund + ellipsis is 'working'.",
+		purpose:       "spinner-shape rule: any spinner glyph + gerund + ellipsis is 'working'.",
 	},
 	{
 		name:          "claude-working-token-stats",
@@ -73,14 +71,14 @@ var fixtures = []fixture{
 		file:          "claude/question-alpha-beta.txt",
 		tool:          "claude",
 		expectedState: assess.StateQuestion,
-		purpose:       "regression #3: an AskUserQuestion-style question with selectable options is 'question', distinct from 'approval'.",
+		purpose:       "regression: an AskUserQuestion-style question with selectable options is 'question', distinct from 'approval'.",
 	},
 	{
 		name:          "claude-typed-unsubmitted",
 		file:          "claude/typed-unsubmitted.txt",
 		tool:          "claude",
 		expectedState: assess.StateIdle,
-		purpose:       "regression #6: typed-but-unsubmitted input in the prompt box is idle, not working/approval.",
+		purpose:       "regression: typed-but-unsubmitted input in the prompt box is idle, not working/approval.",
 	},
 	{
 		name:          "claude-hold-search-prompt",
@@ -161,14 +159,14 @@ var fixtures = []fixture{
 		file:          "codex/approval-post-denial-stale.txt",
 		tool:          "codex",
 		expectedState: assess.StateIdle,
-		purpose:       "regression #1: stale approval text left in scrollback after a denial must not re-trigger approval; the current empty box is idle.",
+		purpose:       "regression: stale approval text left in scrollback after a denial must not re-trigger approval; the current empty box is idle.",
 	},
 	{
 		name:          "codex-question-deploy-target",
 		file:          "codex/question-deploy-target.txt",
 		tool:          "codex",
 		expectedState: assess.StateQuestion,
-		purpose:       "regression #4: codex's AskUserQuestion-style dialog is 'question'.",
+		purpose:       "regression: codex's AskUserQuestion-style dialog is 'question'.",
 	},
 	{
 		name:          "codex-hold-transcript-viewer",
@@ -213,14 +211,14 @@ var fixtures = []fixture{
 		file:          "generic/post-interrupt-stale.txt",
 		tool:          "pi",
 		expectedState: assess.StateIdle,
-		purpose:       "regression #2: stale spinner/working markers left visible after an interrupt must not re-trigger working; the current bare prompt is idle.",
+		purpose:       "regression: stale spinner/working markers left visible after an interrupt must not re-trigger working; the current bare prompt is idle.",
 	},
 	{
 		name:          "generic-question-alpha-beta",
 		file:          "generic/question-alpha-beta.txt",
 		tool:          "pi",
 		expectedState: assess.StateQuestion,
-		purpose:       "regression #5: pi has no dedicated rule set, but the generic question rule (a question line plus a numbered option list) still catches it.",
+		purpose:       "regression: pi has no dedicated rule set, but the generic question rule (a question line plus a numbered option list) still catches it.",
 	},
 	{
 		name:          "generic-yes-no-prompt",

@@ -338,8 +338,7 @@ func (t *Integration) RefreshCache() {
 // cache as-is (bumping cacheTime so the DiscoverSession/DiscoverAllPanes
 // freshness gates tolerate exactly one served-stale window) rather than
 // flashing every pane to missing on a single transient hiccup. Reaching
-// missingTolerance clears the cache and prunes per-pane state, same as the
-// original unconditional-clear behavior.
+// missingTolerance clears the cache and prunes per-pane state.
 func (t *Integration) handleRefreshFailure(err error) {
 	t.mu.Lock()
 	t.refreshFailures++
