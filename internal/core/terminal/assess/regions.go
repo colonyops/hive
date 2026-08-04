@@ -154,16 +154,40 @@ func detectPromptBox(lines []string) *promptBoxRegion {
 	return detectRulePromptBox(lines)
 }
 
-// detectBorderedPromptBox finds the LAST box-drawn input box in lines: a ╰
+// detectBorderedPromptBox finds the LAST box-drawn input box in lines that
+// isn't Codex's persistent welcome banner (see isWelcomeBannerBox): a ╰
 // border, with a contiguous run of │ body lines above it terminated by a ╭
 // border. Claude/codex-style TUIs render this box with rounded corners
 // (╭ ╰ │), not the bare ─ rule that a naive "horizontal rule" scan would
-// assume. Only the bottommost ╰ is considered — an older box further up the
-// screen (e.g. a dismissed dialog) is scrollback, not the current box. If the
-// body run is broken by a non-│ line, or the ╭ is never found (a clipped pane
-// where the top border has scrolled out), detection fails and the caller
-// falls back to whole-viewport behavior rather than misparsing a partial box.
+// assume. Only the bottommost non-banner ╰ is considered — an older box
+// further up the screen (e.g. a dismissed dialog, or the banner sitting
+// above the real prompt) is scrollback or chrome, not the current box, so a
+// banner match doesn't just fail — the scan retries above it, exactly like
+// it would need to for a dismissed-dialog box. If the body run is broken by
+// a non-│ line, or the ╭ is never found (a clipped pane where the top
+// border has scrolled out), detection fails and the caller falls back to
+// whole-viewport behavior rather than misparsing a partial box.
 func detectBorderedPromptBox(lines []string) *promptBoxRegion {
+	searchEnd := len(lines)
+	for searchEnd > 0 {
+		box := findLastBorderedBox(lines[:searchEnd])
+		if box == nil {
+			return nil
+		}
+		if !isWelcomeBannerBox(box.bodyLines) {
+			return box
+		}
+		searchEnd = box.topIndex
+	}
+	return nil
+}
+
+// findLastBorderedBox finds the last box-drawn input box in lines,
+// regardless of what it contains — detectBorderedPromptBox is the one that
+// additionally excludes Codex's welcome banner. Split out so the
+// banner-skip loop can re-run this same bottommost-╰ scan on a truncated
+// prefix without duplicating the parsing logic.
+func findLastBorderedBox(lines []string) *promptBoxRegion {
 	bottom := -1
 	for i := len(lines) - 1; i >= 0; i-- {
 		if strings.HasPrefix(strings.TrimLeft(lines[i], " "), "╰") {
@@ -193,6 +217,25 @@ func detectBorderedPromptBox(lines []string) *promptBoxRegion {
 	}
 
 	return &promptBoxRegion{topIndex: top, bottomIndex: bottom, bodyLines: body}
+}
+
+// isWelcomeBannerBox reports whether a detected ╭│╰ box is Codex's
+// persistent welcome banner (title, model, directory) rather than a real
+// input box. Codex renders this banner every frame regardless of state —
+// idle, working, mid-approval — unlike Claude's box, it is never the
+// current prompt. Left undetected, detectBorderedPromptBox would report the
+// banner's static "model: …"/"directory: …" lines as promptBoxBody(),
+// which are never a placeholder, so typedInputRule would fire "idle" on
+// every single frame regardless of actual state (observed live: idle for
+// 458 consecutive polls spanning two full working turns). The banner's
+// first body line is always Codex's ">_ <title>" glyph; nothing else this
+// engine parses renders that combination, and no committed fixture's real
+// input box body starts with it either.
+func isWelcomeBannerBox(bodyLines []string) bool {
+	if len(bodyLines) == 0 {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimSpace(bodyLines[0]), ">_ ")
 }
 
 // detectRulePromptBox finds the LAST occurrence, near the bottom of the

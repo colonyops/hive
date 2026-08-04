@@ -59,12 +59,12 @@ mise container
 # inside the container:
 hive x assess drive test/calibration/sequences/claude-turn-lifecycle.jsonl --target <pane>
 hive x assess scenario test/calibration/scenarios/claude-permission-flow.yaml --target <pane>
-hive x assess watch <pane> --record new-sequence.jsonl
+hive x assess watch <pane> --tool claude --record new-sequence.jsonl
 ```
 
 - `drive` replays a recorded sequence into a real pane (via `tmux respawn-pane`, not send-keys — see `cmd_x_assess_drive.go`'s doc comment for why) with its original relative timing, exercising the true `capture-pane -> list-panes -> assess` path with no agent credentials.
 - `scenario` drives a pane through a scripted YAML of `send`/`key`/`expect` steps and scores the result: a JSON report with per-expectation pass/fail + detection latency in polls, and a scenario-level **flap count** — published transitions the scenario steps didn't imply. Flap count is the headline metric the entire debounce design exists to drive to zero; watch it even on scenarios whose expectations all pass.
-- `watch --record` captures a fresh sequence from a real agent CLI (documented option only, no tooling provided) for promotion into the corpus per step 5.
+- `watch --record` captures a fresh sequence from a real agent CLI (documented option only, no tooling provided) for promotion into the corpus per step 5. Pass `--tool` (mirrors `replay`'s `--tool`/`-t`; empty auto-detects per frame via `terminal.DetectTool`): auto-detection reads the tool's identifying text out of the captured content itself, so once that text scrolls out of the visible pane (a long-running session, or a banner near the top), it silently misdetects — e.g. a codex pane with its banner scrolled away detects as "shell" and the codex rule set never runs, so every frame assesses `unknown`. Pin `--tool` for any real calibration run.
 
 ## Hard Rules
 

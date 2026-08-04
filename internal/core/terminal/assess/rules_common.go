@@ -28,8 +28,11 @@ var (
 	tokenStatsPattern = regexp.MustCompile(`\([^)]*\d[^)]*tokens\s*\)`)
 
 	// questionOptionPattern matches a numbered/lettered option list line,
-	// the shape AskUserQuestion-style UIs render answer choices with.
-	questionOptionPattern = regexp.MustCompile(`(?m)^\s*❯?\s*\d+[.)]\s+\S`)
+	// the shape AskUserQuestion-style UIs render answer choices with. Both
+	// selector glyphs observed in the wild are optional and interchangeable
+	// here: Claude Code uses ❯, Codex uses › (e.g. its boot-time directory-
+	// trust dialog's "› 1. Yes, continue").
+	questionOptionPattern = regexp.MustCompile(`(?m)^\s*[❯›]?\s*\d+[.)]\s+\S`)
 
 	// genericYesNoPattern matches bare "(y/n)" style confirmation prompts
 	// that are not tool-specific dialog vocabulary.

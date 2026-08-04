@@ -1,0 +1,47 @@
+⚠ `[features].codex_hooks` is deprecated. Use `[features].hooks` instead.
+Enable it with `--enable hooks` or `[features].hooks` in config.toml. See
+https://developers.openai.com/codex/config-basic#feature-flags for details.
+
+╭──────────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.1.0)                          │
+│                                                    │
+│ model:     gpt-x xhigh   /model to change          │
+│ directory: ~/example/repo                          │
+╰──────────────────────────────────────────────────╯
+
+  Tip: New Use /fast to enable our fastest inference with increased plan usage.
+
+
+› Reply with an example one-word response. Do not read any files.
+
+
+• example reply
+
+
+› Run an example shell command: echo example-command
+
+
+• Ran an example shell command: echo example-command
+  └ example-output-line-1
+    example-output-line-2
+    example-output-line-3
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› Run this exact example command: touch /tmp/example-probe
+
+
+• Ran touch /tmp/example-probe
+  └ (no output)
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+• Done.
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+› Use /skills to list available skills
+
+  gpt-x xhigh fast · ~/example/repo

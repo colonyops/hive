@@ -178,6 +178,34 @@ var fixtures = []fixture{
 		expectedHold:  true,
 		purpose:       "codex's transcript viewer is a transient screen: hold.",
 	},
+	{
+		name:          "codex-bare-working",
+		file:          "codex/bare-working.txt",
+		tool:          "codex",
+		expectedState: assess.StateWorking,
+		purpose:       "codex stuck-idle regression (found live 2026-08-04): real Codex (v0.146.0) renders a persistent ╭│╰ welcome banner (not the prompt) plus a bare '• Working (Ns • esc to interrupt)' status line with no box and no rule around it; the banner must be excluded from box detection and the status line matched via codex/working-status-line.",
+	},
+	{
+		name:          "codex-bare-idle",
+		file:          "codex/bare-idle.txt",
+		tool:          "codex",
+		expectedState: assess.StateIdle,
+		purpose:       "codex stuck-idle regression (found live 2026-08-04): codex's real idle prompt is a bare '›'-prefixed placeholder line, no box, no rule — bottomPromptGlyphPattern can't match it (it isn't bare), so codex/bare-prompt must.",
+	},
+	{
+		name:          "codex-bare-done",
+		file:          "codex/bare-done.txt",
+		tool:          "codex",
+		expectedState: assess.StateIdle,
+		purpose:       "codex stuck-idle regression (found live 2026-08-04): a longer post-turn transcript (multiple prior '›' turns, rule-delimited command output, a welcome banner) must not confuse the small bottomLines window into matching stale content — only the current bare '›' placeholder line drives idle.",
+	},
+	{
+		name:          "codex-trust-dialog",
+		file:          "codex/trust-dialog.txt",
+		tool:          "codex",
+		expectedState: assess.StateQuestion,
+		purpose:       "codex boot-time trust-dialog regression (found live 2026-08-04): 'Do you trust the contents of this directory?' renders with no box and each visual section (context line, question, options, footer) separated by its own blank line, so questionRule's contiguous-block scoping can't see the whole shape; codex/trust-dialog anchors on the dialog's own vocabulary instead.",
+	},
 
 	// --- generic (tools with no dedicated rule set, e.g. pi) ---
 	{

@@ -47,6 +47,7 @@ func paneExtra(ctx context.Context, target string) (title string, inMode bool, e
 // never sends keys, so it's safe to run against a real session on the host.
 func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 	var (
+		flagTool     string
 		flagJSONL    bool
 		flagRecord   string
 		flagInterval time.Duration
@@ -55,8 +56,14 @@ func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "watch",
 		Usage:     "Observe a live tmux pane through the assessment engine and tracker (read-only)",
-		UsageText: "hive x assess watch <pane-target> [--jsonl] [--record frames.jsonl] [--interval 1.5s]",
+		UsageText: "hive x assess watch <pane-target> [--tool <tool>] [--jsonl] [--record frames.jsonl] [--interval 1.5s]",
 		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:        "tool",
+				Aliases:     []string{"t"},
+				Usage:       "Tool to assess as (claude, codex, ...); empty auto-detects per frame",
+				Destination: &flagTool,
+			},
 			&cli.BoolFlag{
 				Name:        "jsonl",
 				Usage:       "Emit machine-readable JSON lines instead of a human summary",
@@ -76,7 +83,7 @@ func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.Args().Len() != 1 {
-				return fmt.Errorf("usage: hive x assess watch <pane-target> [--jsonl] [--record frames.jsonl] [--interval 1.5s]")
+				return fmt.Errorf("usage: hive x assess watch <pane-target> [--tool <tool>] [--jsonl] [--record frames.jsonl] [--interval 1.5s]")
 			}
 			target := c.Args().First()
 
@@ -127,7 +134,10 @@ func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 				}
 
 				generation++
-				tool := terminal.DetectTool(content)
+				tool := flagTool
+				if tool == "" {
+					tool = terminal.DetectTool(content)
+				}
 				snap := assess.Snapshot{Content: content, Title: title, Tool: tool, InMode: inMode, Generation: generation}
 				published, assessment := tracker.Observe(target, snap)
 				debug, _ := tracker.DebugState(target)
