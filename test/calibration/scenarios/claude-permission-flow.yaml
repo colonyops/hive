@@ -1,0 +1,15 @@
+# Drives a claude pane through a permission-dialog round trip: run a
+# harmless-but-approval-triggering command, wait for the approval dialog,
+# select "Yes" from the menu, then wait for the run to go back to working.
+#
+# Container-only: run via
+#   hive x assess scenario test/calibration/scenarios/claude-permission-flow.yaml --target <pane>
+# inside `mise container`. See .claude/skills/autocalibrate/SKILL.md.
+scenario: claude-permission-flow
+tool: claude
+steps:
+  - send: "run `rm /tmp/nonexistent-test`"
+  - expect: {state: approval, within_polls: 3, holds_for_polls: 2}
+  - key: Down
+  - key: Enter
+  - expect: {state: working, within_polls: 2}

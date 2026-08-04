@@ -35,7 +35,9 @@ type assessFileOutput struct {
 
 // assessCmd registers the "hive x assess" command group: "file" is Phase 2's
 // one-shot rule-authoring aid; "watch" and "replay" are Phase 3's
-// status.Tracker debug tooling.
+// status.Tracker debug tooling; "drive" and "scenario" are Phase 5's
+// calibration harness (both send real input to tmux and refuse to run
+// outside a container — see ensureContainerSafe).
 func (cmd *ExperimentalCmd) assessCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "assess",
@@ -44,6 +46,8 @@ func (cmd *ExperimentalCmd) assessCmd() *cli.Command {
 			cmd.assessFileCmd(),
 			cmd.assessWatchCmd(),
 			cmd.assessReplayCmd(),
+			cmd.assessDriveCmd(),
+			cmd.assessScenarioCmd(),
 		},
 	}
 }

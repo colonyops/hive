@@ -96,16 +96,8 @@ func readAssessFrames(path string) ([]assessFrame, error) {
 func replayFrames(w io.Writer, tracker *status.Tracker, frames []assessFrame, tool string, jsonl bool, virtualNow *time.Time) error {
 	var generation uint64
 	for _, f := range frames {
-		*virtualNow = f.Timestamp
-
-		frameTool := tool
-		if frameTool == "" {
-			frameTool = terminal.DetectTool(f.Content)
-		}
-
 		generation++
-		snap := assess.Snapshot{Content: f.Content, Title: f.Title, Tool: frameTool, InMode: f.InMode, Generation: generation}
-		published, assessment := tracker.Observe("replay", snap)
+		published, assessment := observeFrame(tracker, "replay", f, tool, generation, virtualNow)
 		debug, _ := tracker.DebugState("replay")
 
 		out := assessObservationOutput{
@@ -123,4 +115,22 @@ func replayFrames(w io.Writer, tracker *status.Tracker, frames []assessFrame, to
 		}
 	}
 	return nil
+}
+
+// observeFrame advances virtualNow to f's recorded timestamp and feeds it
+// through tracker under key, auto-detecting tool per frame when tool is
+// empty. This is the single stepping primitive shared by `replay` and the
+// calibration corpus eval test (cmd_x_assess_calibration_test.go): both need
+// "same recording, same virtual-clock tracker, same decision sequence,"
+// and factoring it out is what guarantees they can never drift apart.
+func observeFrame(tracker *status.Tracker, key string, f assessFrame, tool string, generation uint64, virtualNow *time.Time) (terminal.Status, assess.Assessment) {
+	*virtualNow = f.Timestamp
+
+	frameTool := tool
+	if frameTool == "" {
+		frameTool = terminal.DetectTool(f.Content)
+	}
+
+	snap := assess.Snapshot{Content: f.Content, Title: f.Title, Tool: frameTool, InMode: f.InMode, Generation: generation}
+	return tracker.Observe(key, snap)
 }
