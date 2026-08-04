@@ -1,7 +1,7 @@
 Claude Code
 
 ╭──────────────────────────────────────────────────────────╮
-│ Bash command                                              │
-│                                                             │
-│ go test ./internal/example/...                             │
+│ Bash command                                             │
+│                                                          │
+│ go test ./internal/example/...                           │
 ╰──────────────────────────────────────────────────────────╯

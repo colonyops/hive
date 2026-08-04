@@ -9,10 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Region resolution is the highest-risk code in this package (the plan's own
-// success criteria call it out): this file validates each region primitive
-// against realistic tmux `capture-pane -J` output, independent of the
-// engine/rule layer above it.
+// Region resolution is the highest-risk code in this package: this file
+// validates each region primitive against realistic tmux `capture-pane -J`
+// output, independent of the engine/rule layer above it.
 
 func readRegionFixture(t *testing.T, name string) string {
 	t.Helper()
@@ -29,7 +28,7 @@ func TestComputeRegions_PromptBoxBorders(t *testing.T) {
 	assert.Equal(t, ">", r.promptBoxBody())
 	assert.Equal(t, "Previous turn output here.", r.abovePromptBox(),
 		"abovePromptBox must return only the last contiguous block, not everything above the box")
-	assert.Equal(t, "╭──╮\n│ > │\n╰──╯", r.bottomLines(3))
+	assert.Equal(t, "╭───╮\n│ > │\n╰───╯", r.bottomLines(3))
 }
 
 func TestComputeRegions_InteriorBlankLinesPreserved(t *testing.T) {
@@ -126,7 +125,7 @@ func TestDumpRegions_MatchesEngineNormalization(t *testing.T) {
 	content := readRegionFixture(t, "basic-box.txt")
 	dump := DumpRegions(content)
 
-	const wholeViewport = "Claude Code\n\nPrevious turn output here.\n\n╭──╮\n│ > │\n╰──╯"
+	const wholeViewport = "Claude Code\n\nPrevious turn output here.\n\n╭───╮\n│ > │\n╰───╯"
 	assert.Equal(t, "Previous turn output here.", dump.AboveBox)
 	assert.Equal(t, ">", dump.PromptBoxBody)
 	// diagnosticBottomLines (15) exceeds this fixture's 7 lines, so BottomLines

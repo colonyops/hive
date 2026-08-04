@@ -9,5 +9,5 @@ Press enter to confirm or esc to cancel
 Command denied. Continuing without the requested change.
 
 ╭──────────────────────────────────────────────────────────╮
-│ >                                                          │
+│ >                                                        │
 ╰──────────────────────────────────────────────────────────╯
