@@ -88,16 +88,6 @@ func TestSessionInfoFromPane(t *testing.T) {
 	assert.Nil(t, sessionInfoFromPane("mysess", nil))
 }
 
-func TestWithStatusTracker(t *testing.T) {
-	tracker := status.NewTracker(assess.NewEngine(), status.DefaultOptions())
-	integ := NewFromPreviewMatchers(nil, WithStatusTracker(tracker))
-	assert.Same(t, tracker, integ.tracker)
-
-	// A nil tracker must not clobber the default.
-	integ2 := NewFromPreviewMatchers(nil, WithStatusTracker(nil))
-	assert.NotNil(t, integ2.tracker)
-}
-
 func TestWithStatusOptions(t *testing.T) {
 	integ := NewFromPreviewMatchers(nil, WithStatusOptions(status.Options{ConfirmIdle: status.ConfirmPolicy{Polls: 5}}))
 	require.NotNil(t, integ.tracker)

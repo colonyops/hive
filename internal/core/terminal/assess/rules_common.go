@@ -70,7 +70,7 @@ func holdRule(id, marker string) rule {
 		id:    id,
 		state: StateUnknown,
 		hold:  true,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			if !strings.Contains(r.viewport(), marker) {
 				return Signal{}, false
 			}
@@ -87,7 +87,7 @@ func phraseRule(id string, state State, phrases []string) rule {
 	return rule{
 		id:    id,
 		state: state,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			text := r.promptBoxBody() + "\n" + r.abovePromptBox()
 			for _, phrase := range phrases {
 				if strings.Contains(text, phrase) {
@@ -108,7 +108,7 @@ func questionRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateQuestion,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			text := r.promptBoxBody() + "\n" + r.abovePromptBox()
 			if !strings.Contains(text, "?") {
 				return Signal{}, false
@@ -142,7 +142,7 @@ func liveDialogQuestionRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateQuestion,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			window := r.bottomLines(liveDialogWindowLines)
 			if !strings.Contains(window, "Enter to select") && !strings.Contains(window, "to navigate") {
 				return Signal{}, false
@@ -163,7 +163,7 @@ func spinnerShapeRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateWorking,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			m := spinnerShapePattern.FindString(r.abovePromptBox())
 			if m == "" {
 				return Signal{}, false
@@ -177,7 +177,7 @@ func tokenStatsRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateWorking,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			m := tokenStatsPattern.FindString(r.abovePromptBox())
 			if m == "" {
 				return Signal{}, false
@@ -195,7 +195,7 @@ func promptEmptyRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateIdle,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			if !r.hasPromptBox() {
 				return Signal{}, false
 			}
@@ -215,7 +215,7 @@ func typedInputRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateIdle,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			if !r.hasPromptBox() {
 				return Signal{}, false
 			}
@@ -243,7 +243,7 @@ func bottomPromptGlyphRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateIdle,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			m := bottomPromptGlyphPattern.FindString(r.bottomLines(approvalWindowLines))
 			if m == "" {
 				return Signal{}, false
@@ -257,7 +257,7 @@ func genericYesNoRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateApproval,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			m := genericYesNoPattern.FindString(r.bottomLines(approvalWindowLines))
 			if m == "" {
 				return Signal{}, false

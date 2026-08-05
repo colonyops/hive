@@ -156,16 +156,6 @@ func WithStatusOptions(opts status.Options) Option {
 	}
 }
 
-// WithStatusTracker injects a pre-built tracker (test seam, analogous to
-// WithCommander).
-func WithStatusTracker(tracker *status.Tracker) Option {
-	return func(integration *Integration) {
-		if tracker != nil {
-			integration.tracker = tracker
-		}
-	}
-}
-
 // WithMissingTolerance sets how many consecutive list-panes failures
 // RefreshCache tolerates (serving the stale cache) before publishing
 // StatusMissing. n polls tolerates n-1 consecutive failures, matching

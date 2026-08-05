@@ -56,7 +56,7 @@ func codexWorkingStatusLineRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateWorking,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			m := codexWorkingStatusPattern.FindString(r.bottomLines(codexStatusWindowLines))
 			if m == "" {
 				return Signal{}, false
@@ -70,7 +70,7 @@ func codexBarePromptRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateIdle,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			m := codexBarePromptPattern.FindString(r.bottomLines(codexStatusWindowLines))
 			if m == "" {
 				return Signal{}, false
@@ -100,7 +100,7 @@ func codexTrustDialogRule(id string) rule {
 	return rule{
 		id:    id,
 		state: StateQuestion,
-		match: func(r regions, _ string) (Signal, bool) {
+		match: func(r regions) (Signal, bool) {
 			if !strings.Contains(r.bottomLines(trustDialogWindowLines), anchor) {
 				return Signal{}, false
 			}

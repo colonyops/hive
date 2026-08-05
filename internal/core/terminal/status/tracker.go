@@ -23,7 +23,6 @@ type trackedState struct {
 	lastChurnAt    time.Time // when that hash last changed
 
 	lastGeneration uint64
-	hasGeneration  bool // distinguishes "never observed" from "observed generation 0"
 	lastAssessment assess.Assessment
 
 	// candidateContentHash is the content hash recorded when the current
@@ -73,7 +72,7 @@ func (t *Tracker) Observe(key string, snap assess.Snapshot) (terminal.Status, as
 	defer t.mu.Unlock()
 
 	ts, exists := t.tracked[key]
-	if exists && ts.hasGeneration && ts.lastGeneration == snap.Generation {
+	if exists && ts.lastGeneration == snap.Generation {
 		return ts.published, ts.lastAssessment
 	}
 
@@ -106,7 +105,6 @@ func (t *Tracker) Observe(key string, snap assess.Snapshot) (terminal.Status, as
 	}
 
 	ts.lastGeneration = snap.Generation
-	ts.hasGeneration = true
 	ts.lastAssessment = assessment
 
 	return ts.published, assessment

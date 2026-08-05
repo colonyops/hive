@@ -11,7 +11,7 @@ type rule struct {
 	id    string
 	state State
 	hold  bool // transient screen: caller should hold the currently published state
-	match func(r regions, title string) (Signal, bool)
+	match func(r regions) (Signal, bool)
 }
 
 type ruleSet []rule
@@ -50,7 +50,7 @@ func (e *Engine) Assess(snap Snapshot) Assessment {
 	}
 
 	for _, rl := range rules {
-		signal, matched := rl.match(r, snap.Title)
+		signal, matched := rl.match(r)
 		if !matched {
 			continue
 		}
