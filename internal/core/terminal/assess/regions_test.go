@@ -121,6 +121,16 @@ func TestComputeRegions_RuleDelimitedBarePromptBox(t *testing.T) {
 		"scrollback above the blank-line boundary must stay out of abovePromptBox even with the new box shape")
 }
 
+func TestComputeRegions_LowerRulePromptWinsOverStaleBorderedDialog(t *testing.T) {
+	content := readRegionFixture(t, "stale-bordered-above-rule-prompt.txt")
+	r := computeRegions(normalizeContent(content))
+
+	require.True(t, r.hasPromptBox())
+	assert.Empty(t, r.promptBoxBody())
+	assert.Contains(t, r.abovePromptBox(), "Working")
+	assert.NotContains(t, r.abovePromptBox(), "Do you want to run")
+}
+
 func TestDumpRegions_MatchesEngineNormalization(t *testing.T) {
 	content := readRegionFixture(t, "basic-box.txt")
 	dump := DumpRegions(content)

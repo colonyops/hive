@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"runtime"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -178,9 +180,19 @@ func TestRefreshCache_InvalidatesOnForegroundPIDChange(t *testing.T) {
 	integ.RefreshCache()
 	assert.Equal(t, testToolClaude, integ.cache["sess"].findPane("%1").result.Tool)
 
+	key := paneKey("sess", "%1")
+	integ.tracker.Observe(key, assess.Snapshot{Content: assessContentWorking, Tool: "agent", Generation: 1})
+	oldLimiter := terminal.NewRateLimiter(1)
+	oldContentLimiter := integ.contentLimiters[key]
+	integ.limiters[key] = oldLimiter
+
 	reader.tpgid = 201
 	integ.RefreshCache()
 	assert.Equal(t, testToolCodex, integ.cache["sess"].findPane("%1").result.Tool)
+	_, tracked := integ.tracker.DebugState(key)
+	assert.False(t, tracked, "foreground process replacement must reset tracker state")
+	assert.NotSame(t, oldLimiter, integ.limiters[key], "capture limiter must not survive process replacement")
+	assert.NotSame(t, oldContentLimiter, integ.contentLimiters[key], "classification limiter must restart for the new process")
 }
 
 func TestRefreshCache_ReclassifiesContentBasedPositive(t *testing.T) {
@@ -301,9 +313,16 @@ func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
 		{SessionName: "sess", PaneID: "%1", PanePID: 202, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 200},
 	}}
 	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
+	key := paneKey("sess", "%1")
+	oldLimiter := terminal.NewRateLimiter(1)
+	oldContentLimiter := terminal.NewRateLimiter(1)
+	integ.limiters[key] = oldLimiter
+	integ.contentLimiters[key] = oldContentLimiter
+	integ.tracker.Observe(key, assess.Snapshot{Content: assessContentWorking, Tool: "agent", Generation: 1})
 	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
-		input: classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 101},
-		state: paneState{paneContent: "old", lastCaptureActive: 100},
+		input:  classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 101},
+		state:  paneState{paneContent: "old", lastCaptureActive: 100},
+		pollMu: &sync.Mutex{},
 	}}}}
 
 	integ.RefreshCache()
@@ -312,6 +331,197 @@ func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
 	require.NotNil(t, pane)
 	assert.Empty(t, pane.state.paneContent)
 	assert.Zero(t, pane.state.lastCaptureActive)
+	_, tracked := integ.tracker.DebugState(key)
+	assert.False(t, tracked, "pane PID replacement must reset tracker state")
+	assert.NotSame(t, oldLimiter, integ.limiters[key], "capture limiter must not survive process replacement")
+	assert.NotSame(t, oldContentLimiter, integ.contentLimiters[key], "classification limiter must restart for the new process")
+}
+
+func TestRefreshCache_ReusesStateCompletedAfterInitialSnapshot(t *testing.T) {
+	reader := &blockingFingerprintReader{
+		ProcessReader: &fakeProcessReader{tpgid: 200, comm: map[int]string{200: testToolClaude}},
+		fingerprint:   200,
+		started:       make(chan struct{}),
+		release:       make(chan struct{}),
+	}
+	input := classifier.PaneInput{
+		SessionName: "sess", PaneID: "%1", PanePID: 100,
+		WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 2,
+	}
+	integ := NewWithReader(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, "agent")}, reader, nil, nil), &fakePaneLister{panes: []classifier.PaneInput{input}}, reader)
+	capture := &blockingStatusCapture{content: assessContentWorking, started: make(chan struct{}), release: make(chan struct{})}
+	integ.capture = capture
+	integ.tracker = newImmediateTracker()
+	integ.refreshGeneration = 1
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:              input,
+		result:             classifier.Result{IsAgent: true, Tool: "agent"},
+		state:              paneState{paneContent: assessContentIdle, lastCaptureActive: 1},
+		processFingerprint: 200,
+		pollMu:             &sync.Mutex{},
+	}}}}
+
+	statusDone := make(chan terminal.Status, 1)
+	go func() {
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		statusDone <- got
+	}()
+	<-capture.started
+
+	refreshDone := make(chan struct{})
+	go func() {
+		integ.RefreshCache()
+		close(refreshDone)
+	}()
+	<-reader.started
+
+	// The refresh already copied its early snapshot. Let GetStatus publish its
+	// fresh capture before allowing refresh to reach final publication.
+	close(capture.release)
+	assert.Equal(t, terminal.StatusActive, <-statusDone)
+	close(reader.release)
+	<-refreshDone
+
+	pane := integ.cache["sess"].findPane("%1")
+	require.NotNil(t, pane)
+	assert.Equal(t, assessContentWorking, pane.state.paneContent)
+	assert.Equal(t, int64(2), pane.state.lastCaptureActive)
+}
+
+func TestRefreshCache_ReplacementResetsObservationCompletedAfterInitialSnapshot(t *testing.T) {
+	reader := &blockingFingerprintReader{
+		ProcessReader: &fakeProcessReader{tpgid: 201, comm: map[int]string{201: testToolCodex}},
+		fingerprint:   201,
+		started:       make(chan struct{}),
+		release:       make(chan struct{}),
+	}
+	oldInput := classifier.PaneInput{
+		SessionName: "sess", PaneID: "%1", PanePID: 100,
+		WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 2,
+	}
+	newInput := oldInput
+	newInput.WindowName = testToolCodex
+	newInput.PaneTitle = testToolCodex
+	integ := NewWithReader(classifier.New(toolPatterns(testToolClaude, testToolCodex), reader, nil, nil), &fakePaneLister{panes: []classifier.PaneInput{newInput}}, reader)
+	capture := &blockingStatusCapture{content: assessContentWorking, started: make(chan struct{}), release: make(chan struct{})}
+	integ.capture = capture
+	integ.tracker = newImmediateTracker()
+	integ.refreshGeneration = 1
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:              oldInput,
+		result:             classifier.Result{IsAgent: true, Tool: "agent"},
+		state:              paneState{paneContent: assessContentIdle, lastCaptureActive: 1},
+		processFingerprint: 200,
+		pollMu:             &sync.Mutex{},
+	}}}}
+
+	statusDone := make(chan terminal.Status, 1)
+	go func() {
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		statusDone <- got
+	}()
+	<-capture.started
+
+	refreshDone := make(chan struct{})
+	go func() {
+		integ.RefreshCache()
+		close(refreshDone)
+	}()
+	<-reader.started
+	close(capture.release)
+	assert.Equal(t, terminal.StatusActive, <-statusDone)
+	close(reader.release)
+	<-refreshDone
+
+	pane := integ.cache["sess"].findPane("%1")
+	require.NotNil(t, pane)
+	assert.Empty(t, pane.state.paneContent)
+	_, tracked := integ.tracker.DebugState(paneKey("sess", "%1"))
+	assert.False(t, tracked)
+}
+
+func TestRefreshCache_RemovalWaitsForInFlightObservationBeforePrune(t *testing.T) {
+	integ := New(nil, &fakePaneLister{})
+	capture := &blockingStatusCapture{content: assessContentWorking, started: make(chan struct{}), release: make(chan struct{})}
+	integ.capture = capture
+	integ.tracker = newImmediateTracker()
+	integ.refreshGeneration = 1
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:  classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 100, Activity: 2},
+		result: classifier.Result{IsAgent: true, Tool: "agent"},
+		state:  paneState{paneContent: assessContentIdle, lastCaptureActive: 1},
+		pollMu: &sync.Mutex{},
+	}}}}
+	atPollGate := make(chan struct{})
+	integ.beforePollGateLock = func() { close(atPollGate) }
+
+	statusDone := make(chan terminal.Status, 1)
+	go func() {
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		statusDone <- got
+	}()
+	<-capture.started
+
+	refreshDone := make(chan struct{})
+	go func() {
+		integ.RefreshCache()
+		close(refreshDone)
+	}()
+	<-atPollGate
+	select {
+	case <-refreshDone:
+		t.Fatal("RefreshCache completed while an observation for the removed pane was still in flight")
+	default:
+	}
+
+	close(capture.release)
+	assert.Equal(t, terminal.StatusActive, <-statusDone)
+	<-refreshDone
+	_, tracked := integ.tracker.DebugState(paneKey("sess", "%1"))
+	assert.False(t, tracked, "removed pane observation must be pruned after it finishes")
+}
+
+func TestRefreshCache_ToleranceExceededWaitsForInFlightObservationBeforePrune(t *testing.T) {
+	integ := New(nil, &flakyPaneLister{fail: true})
+	capture := &blockingStatusCapture{content: assessContentWorking, started: make(chan struct{}), release: make(chan struct{})}
+	integ.capture = capture
+	integ.tracker = newImmediateTracker()
+	integ.missingTolerance = 1
+	integ.refreshGeneration = 1
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:  classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 100, Activity: 2},
+		result: classifier.Result{IsAgent: true, Tool: "agent"},
+		state:  paneState{paneContent: assessContentIdle, lastCaptureActive: 1},
+		pollMu: &sync.Mutex{},
+	}}}}
+	atPollGate := make(chan struct{})
+	integ.beforePollGateLock = func() { close(atPollGate) }
+
+	statusDone := make(chan terminal.Status, 1)
+	go func() {
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		statusDone <- got
+	}()
+	<-capture.started
+
+	refreshDone := make(chan struct{})
+	go func() {
+		integ.RefreshCache()
+		close(refreshDone)
+	}()
+	<-atPollGate
+	select {
+	case <-refreshDone:
+		t.Fatal("RefreshCache completed while a failed refresh still had an observation in flight")
+	default:
+	}
+
+	close(capture.release)
+	assert.Equal(t, terminal.StatusActive, <-statusDone)
+	<-refreshDone
+	assert.Empty(t, integ.cache)
+	_, tracked := integ.tracker.DebugState(paneKey("sess", "%1"))
+	assert.False(t, tracked, "tolerance-exceeded pane observation must be pruned after it finishes")
 }
 
 func TestDiscoverSession(t *testing.T) {
@@ -494,6 +704,57 @@ func TestGetStatus_UsesPaneKeysAndCapture(t *testing.T) {
 	assert.Equal(t, 1, capture.calls)
 }
 
+func TestGetStatus_SerializesCaptureAndObservePerPane(t *testing.T) {
+	capture := &blockingStatusCapture{
+		content: assessContentWorking,
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	integ := New(nil, nil)
+	integ.capture = capture
+	integ.tracker = newImmediateTracker()
+	key := paneKey("sess", "%1")
+	integ.tracker.Observe(key, assess.Snapshot{Content: assessContentIdle, Tool: "agent", Generation: 1})
+	integ.refreshGeneration = 2
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input: classifier.PaneInput{PaneID: "%1", Activity: 2},
+		result: classifier.Result{
+			IsAgent: true,
+			Tool:    "agent",
+		},
+		state: paneState{paneContent: assessContentIdle, lastCaptureActive: 1},
+	}}}}
+
+	firstResult := make(chan terminal.Status, 1)
+	go func() {
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		firstResult <- got
+	}()
+	<-capture.started
+
+	secondStarted := make(chan struct{})
+	secondResult := make(chan terminal.Status, 1)
+	go func() {
+		close(secondStarted)
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		secondResult <- got
+	}()
+	<-secondStarted
+	for range 100 {
+		select {
+		case got := <-secondResult:
+			t.Fatalf("second observation returned %q before the fresh capture completed", got)
+		default:
+			runtime.Gosched()
+		}
+	}
+
+	close(capture.release)
+	assert.Equal(t, terminal.StatusActive, <-firstResult)
+	assert.Equal(t, terminal.StatusActive, <-secondResult)
+	assert.Equal(t, int32(1), capture.calls.Load())
+}
+
 func TestGetStatus_RecordsFreshCapture(t *testing.T) {
 	capture := &fakeCapture{content: "❯"}
 	recorder := &fakeCaptureRecorder{}
@@ -548,42 +809,42 @@ func TestGetStatus_RecorderErrorIsNonFatal(t *testing.T) {
 // generations to Tracker.Observe.
 func TestGetStatus_UnchangedContentStillObserves(t *testing.T) {
 	capture := &fakeCapture{content: assessContentWorking}
-	integ := New(nil, nil)
+	lister := &fakePaneLister{panes: []classifier.PaneInput{{
+		SessionName: "sess",
+		PaneID:      "%1",
+		PanePID:     101,
+		WindowIndex: "0",
+		WindowName:  testToolClaude,
+		PaneTitle:   testToolClaude,
+		Activity:    1,
+	}}}
+	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, "agent")}, nil, nil, nil), lister)
 	integ.capture = capture
 	integ.tracker = status.NewTracker(assess.NewEngine(), status.Options{
 		ConfirmIdle: status.ConfirmPolicy{Polls: 2},
 	})
-	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
-		input:  classifier.PaneInput{PaneID: "%1", Activity: 1},
-		result: classifier.Result{IsAgent: true, Tool: "agent"},
-	}}}}
+	integ.RefreshCache()
 	info := &terminal.SessionInfo{Name: "sess", PaneID: "%1"}
 
-	// Poll 1 (generation 0): brand-new key, busy content -> first observation
-	// publishes immediately, no debounce needed yet.
+	// Poll 1: brand-new key, busy content -> first observation publishes
+	// immediately, no debounce needed yet.
 	got, err := integ.GetStatus(context.Background(), info)
 	require.NoError(t, err)
 	require.Equal(t, terminal.StatusActive, got)
 
-	// Poll 2 (generation 1): content switches to idle and pane activity
-	// advances, forcing a fresh capture. This starts the 2-poll idle
-	// candidate -- one confirming poll is not enough to publish yet.
+	// Poll 2: content switches to idle and pane activity advances, forcing a
+	// fresh capture. This starts the 2-poll idle candidate.
 	capture.content = assessContentIdle
-	integ.cache["sess"].panes[0].input.Activity = 2
+	lister.panes[0].Activity = 2
 	integ.limiters = make(map[string]*terminal.RateLimiter) // simulate the capture rate limiter's interval elapsing
-	integ.refreshGeneration = 1
+	integ.RefreshCache()
 	got, err = integ.GetStatus(context.Background(), info)
 	require.NoError(t, err)
 	require.Equal(t, terminal.StatusActive, got, "one idle poll must not yet flip the published status")
 
-	// Poll 3 (generation 2): activity is unchanged from poll 2, so GetStatus
-	// serves the cached content through the cheap path -- no new
-	// capture-pane call happens. Before this redesign, identical content
-	// short-circuited before ever reaching the tracker, so the idle
-	// candidate's second confirming poll would never happen. RefreshCache
-	// still ran again (a new generation) even though nothing changed on the
-	// wire, and Observe must still see it.
-	integ.refreshGeneration = 2
+	// Poll 3: activity is unchanged, so GetStatus serves cached content. The
+	// successful refresh still advances the generation and confirms idle.
+	integ.RefreshCache()
 	got, err = integ.GetStatus(context.Background(), info)
 	require.NoError(t, err)
 	assert.Equal(t, terminal.StatusReady, got, "unchanged content across a new refresh generation must still confirm the idle candidate")
@@ -706,6 +967,22 @@ type fakeProcessReader struct {
 	comm  map[int]string
 }
 
+type blockingFingerprintReader struct {
+	process.ProcessReader
+	fingerprint int
+	started     chan struct{}
+	release     chan struct{}
+	once        sync.Once
+}
+
+func (b *blockingFingerprintReader) TPGID(int) (int, error) {
+	b.once.Do(func() {
+		close(b.started)
+		<-b.release
+	})
+	return b.fingerprint, nil
+}
+
 func (f *fakeProcessReader) TPGID(int) (int, error) { return f.tpgid, nil }
 func (f *fakeProcessReader) Comm(pid int) string    { return f.comm[pid] }
 func (f *fakeProcessReader) Cmdline(pid int) ([]string, error) {
@@ -716,6 +993,20 @@ func (f *fakeProcessReader) Cmdline(pid int) ([]string, error) {
 }
 func (f *fakeProcessReader) Environ(int) map[string]string { return nil }
 func (f *fakeProcessReader) Children(int) ([]int, error)   { return nil, nil }
+
+type blockingStatusCapture struct {
+	content string
+	started chan struct{}
+	release chan struct{}
+	calls   atomic.Int32
+}
+
+func (b *blockingStatusCapture) CapturePane(context.Context, string) (string, error) {
+	b.calls.Add(1)
+	close(b.started)
+	<-b.release
+	return b.content, nil
+}
 
 type fakeCapture struct {
 	content string

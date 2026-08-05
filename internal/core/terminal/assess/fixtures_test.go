@@ -53,6 +53,20 @@ var fixtures = []fixture{
 		purpose:       "a token-stats status line ('(45s · 1876 tokens)') is 'working' even with no spinner glyph on the line.",
 	},
 	{
+		name:          "claude-working-token-stats-with-interrupt-suffix",
+		file:          "claude/working-token-stats-suffix.txt",
+		tool:          "claude",
+		expectedState: assess.StateWorking,
+		purpose:       "a token-stats status line remains working when control hints appear between 'tokens' and the closing parenthesis.",
+	},
+	{
+		name:          "claude-idle-parenthetical-token-prose",
+		file:          "claude/idle-parenthetical-token-prose.txt",
+		tool:          "claude",
+		expectedState: assess.StateIdle,
+		purpose:       "ordinary prose mentioning a token count inside parentheses is not a running status line.",
+	},
+	{
 		name:          "claude-idle-empty-box",
 		file:          "claude/idle-empty-box.txt",
 		tool:          "claude",
@@ -72,6 +86,13 @@ var fixtures = []fixture{
 		tool:          "claude",
 		expectedState: assess.StateQuestion,
 		purpose:       "regression: an AskUserQuestion-style question with selectable options is 'question', distinct from 'approval'.",
+	},
+	{
+		name:          "claude-question-do-you-want-to",
+		file:          "claude/question-do-you-want-to.txt",
+		tool:          "claude",
+		expectedState: assess.StateQuestion,
+		purpose:       "generic 'Do you want to' wording is a selectable question unless permission-specific dialog markers corroborate approval.",
 	},
 	{
 		name:          "claude-typed-unsubmitted",

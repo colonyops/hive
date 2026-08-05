@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/terminal/assess"
+	"github.com/colonyops/hive/internal/core/terminal/status"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -69,6 +71,23 @@ func TestAssessReplayCmd_Deterministic(t *testing.T) {
 
 	require.NotEmpty(t, first)
 	assert.Equal(t, first, second, "replaying the same frames twice must produce identical decision sequences")
+}
+
+func TestObserveFrameUsesRecordedToolUnlessOverridden(t *testing.T) {
+	frame := assessFrame{
+		Timestamp: assessTestBase,
+		Content:   "› Ask anything\n",
+		Tool:      "codex",
+	}
+
+	virtualNow := time.Time{}
+	tracker := status.NewTracker(assess.NewEngine(), status.DefaultOptions())
+	_, assessment := observeFrame(tracker, "recorded", frame, "", 1, &virtualNow)
+	assert.Equal(t, "codex/bare-prompt", assessment.RuleID)
+
+	tracker = status.NewTracker(assess.NewEngine(), status.DefaultOptions())
+	_, assessment = observeFrame(tracker, "overridden", frame, "generic", 1, &virtualNow)
+	assert.NotEqual(t, "codex/bare-prompt", assessment.RuleID)
 }
 
 var assessTestBase = time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)

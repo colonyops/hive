@@ -263,6 +263,25 @@ func TestTracker_UnknownHoldsPublished(t *testing.T) {
 // bookkeeping — the overlay's own content, and the reversion when it closes,
 // must never register as churn.
 
+func TestTracker_FirstAssessHoldDoesNotSeedChurn(t *testing.T) {
+	clock := &fakeClock{t: start}
+	opts := status.DefaultOptions()
+	opts.ChurnWindow = time.Second
+	tr := newTracker(opts, clock)
+
+	published, assessment := tr.Observe("k", snapClaude(contentHoldOverlay, 1))
+	require.True(t, assessment.Hold, "fixture must actually trigger a hold rule")
+	require.Equal(t, terminal.StatusReady, published)
+
+	clock.Advance(50 * time.Millisecond)
+	published, _ = tr.Observe("k", snapClaude(contentIdleClaude, 2))
+	assert.Equal(t, terminal.StatusReady, published, "closing a first-frame overlay must not register as churn")
+
+	debug, ok := tr.DebugState("k")
+	require.True(t, ok)
+	assert.False(t, debug.Churned)
+}
+
 func TestTracker_AssessHoldDoesNotFlashWorking(t *testing.T) {
 	clock := &fakeClock{t: start}
 	opts := status.DefaultOptions()
@@ -474,6 +493,29 @@ func TestTracker_EmptyAboveBoxNeverChurns(t *testing.T) {
 }
 
 // --- Copy-mode hold ---
+
+func TestTracker_FirstCopyModeFrameDoesNotSeedChurn(t *testing.T) {
+	clock := &fakeClock{t: start}
+	opts := status.DefaultOptions()
+	opts.ChurnWindow = time.Second
+	tr := newTracker(opts, clock)
+
+	published, _ := tr.Observe("k", assess.Snapshot{
+		Content:    "some entirely different scrollback content",
+		Tool:       "test-tool",
+		InMode:     true,
+		Generation: 1,
+	})
+	require.Equal(t, terminal.StatusReady, published)
+
+	clock.Advance(50 * time.Millisecond)
+	published, _ = tr.Observe("k", snap(contentIdleA, 2))
+	assert.Equal(t, terminal.StatusReady, published, "leaving copy mode after the first frame must not register as churn")
+
+	debug, ok := tr.DebugState("k")
+	require.True(t, ok)
+	assert.False(t, debug.Churned)
+}
 
 func TestTracker_CopyModeHoldsPublishedAndCandidate(t *testing.T) {
 	clock := &fakeClock{t: start}

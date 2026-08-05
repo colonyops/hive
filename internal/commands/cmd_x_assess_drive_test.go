@@ -38,7 +38,7 @@ func TestRunAssessDriveCmd_RefusesWithoutAllowHost(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err := runAssessDriveCmd(context.Background(), &buf, "/nonexistent/frames.jsonl", "mypane:0.0", false, resolve)
+	err := runAssessDriveCmd(context.Background(), &buf, "/nonexistent/frames.jsonl", "mypane:0.0", false, resolve, notIsolated)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "mise container")
 	assert.Contains(t, err.Error(), "--allow-host")
@@ -56,7 +56,7 @@ func TestRunAssessDriveCmd_AllowHostNeverCallsResolver(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err := runAssessDriveCmd(context.Background(), &buf, "/nonexistent/frames.jsonl", "mypane:0.0", true, resolve)
+	err := runAssessDriveCmd(context.Background(), &buf, "/nonexistent/frames.jsonl", "mypane:0.0", true, resolve, notIsolated)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "opening frames file")
 }
@@ -71,9 +71,29 @@ func TestRunAssessDriveCmd_EmptyFramesFileErrors(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	err := runAssessDriveCmd(context.Background(), &buf, path, "mypane:0.0", true, resolve)
+	err := runAssessDriveCmd(context.Background(), &buf, path, "mypane:0.0", true, resolve, notIsolated)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no frames in")
+}
+
+func TestTmuxPaneDriverClearsEmptyTitle(t *testing.T) {
+	type invocation struct {
+		name string
+		args []string
+	}
+	var invocations []invocation
+	driver := tmuxPaneDriver{
+		framePath: filepath.Join(t.TempDir(), "frame.txt"),
+		run: func(_ context.Context, name string, args ...string) error {
+			invocations = append(invocations, invocation{name: name, args: append([]string(nil), args...)})
+			return nil
+		},
+	}
+
+	require.NoError(t, driver.DriveFrame(context.Background(), "mypane:0.0", assessFrame{Content: "frame", Title: ""}))
+	require.Len(t, invocations, 2)
+	assert.Equal(t, "tmux", invocations[1].name)
+	assert.Equal(t, []string{"select-pane", "-t", "mypane:0.0", "-T", ""}, invocations[1].args)
 }
 
 // --- driveFrames (pure: fake driver, fake sleep, no tmux) ---

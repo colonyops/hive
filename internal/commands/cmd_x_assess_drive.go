@@ -17,6 +17,12 @@ type paneDriver interface {
 	DriveFrame(ctx context.Context, target string, frame assessFrame) error
 }
 
+type commandRunner func(ctx context.Context, name string, args ...string) error
+
+func runCommand(ctx context.Context, name string, args ...string) error {
+	return exec.CommandContext(ctx, name, args...).Run()
+}
+
 // tmuxPaneDriver is the production paneDriver.
 //
 // Mechanism, and why: it renders a frame by replacing the pane's foreground
@@ -54,6 +60,7 @@ type tmuxPaneDriver struct {
 	// overwriting it in place is safe and avoids per-frame temp-file
 	// cleanup.
 	framePath string
+	run       commandRunner
 }
 
 // newTmuxPaneDriver creates the scratch file tmuxPaneDriver writes frame
@@ -64,7 +71,7 @@ func newTmuxPaneDriver() (tmuxPaneDriver, func(), error) {
 		return tmuxPaneDriver{}, nil, fmt.Errorf("creating scratch dir: %w", err)
 	}
 	cleanup := func() { _ = os.RemoveAll(dir) }
-	return tmuxPaneDriver{framePath: filepath.Join(dir, "frame.txt")}, cleanup, nil
+	return tmuxPaneDriver{framePath: filepath.Join(dir, "frame.txt"), run: runCommand}, cleanup, nil
 }
 
 func (d tmuxPaneDriver) DriveFrame(ctx context.Context, target string, frame assessFrame) error {
@@ -75,15 +82,18 @@ func (d tmuxPaneDriver) DriveFrame(ctx context.Context, target string, frame ass
 	// framePath is program-generated (os.MkdirTemp plus a fixed literal
 	// filename), never derived from frame content or other user input, so a
 	// single-quote wrap is sufficient quoting without a general escaper.
+	runner := d.run
+	if runner == nil {
+		runner = runCommand
+	}
+
 	shellCmd := fmt.Sprintf("clear; cat '%s'; exec tail -f /dev/null", d.framePath)
-	if err := exec.CommandContext(ctx, "tmux", "respawn-pane", "-k", "-t", target, shellCmd).Run(); err != nil {
+	if err := runner(ctx, "tmux", "respawn-pane", "-k", "-t", target, shellCmd); err != nil {
 		return fmt.Errorf("tmux respawn-pane: %w", err)
 	}
 
-	if frame.Title != "" {
-		if err := exec.CommandContext(ctx, "tmux", "select-pane", "-t", target, "-T", frame.Title).Run(); err != nil {
-			return fmt.Errorf("tmux select-pane (title): %w", err)
-		}
+	if err := runner(ctx, "tmux", "select-pane", "-t", target, "-T", frame.Title); err != nil {
+		return fmt.Errorf("tmux select-pane (title): %w", err)
 	}
 
 	return nil
@@ -106,9 +116,9 @@ func ctxSleep(ctx context.Context, d time.Duration) {
 // capture-pane->list-panes->assess path end to end with zero agent
 // credentials.
 //
-// Sends real input via `tmux respawn-pane`/`select-pane` — see
-// ensureContainerSafe: this refuses to run against the host's default tmux
-// socket unless --allow-host is passed.
+// Mutates the target via `tmux respawn-pane -k`/`select-pane` — see
+// ensureContainerSafe: this fails closed outside `mise container` unless
+// --allow-host is passed.
 func (cmd *ExperimentalCmd) assessDriveCmd() *cli.Command {
 	var (
 		flagTarget    string
@@ -137,7 +147,7 @@ func (cmd *ExperimentalCmd) assessDriveCmd() *cli.Command {
 				return fmt.Errorf("usage: hive x assess drive <frames.jsonl> --target <pane> [--allow-host]")
 			}
 
-			return runAssessDriveCmd(ctx, c.Root().Writer, c.Args().First(), flagTarget, flagAllowHost, resolveTmuxSocketPath)
+			return runAssessDriveCmd(ctx, c.Root().Writer, c.Args().First(), flagTarget, flagAllowHost, resolveTmuxSocketPath, runningInContainer)
 		},
 	}
 }
@@ -147,8 +157,8 @@ func (cmd *ExperimentalCmd) assessDriveCmd() *cli.Command {
 // a real tmux server. The tmux interaction inside driveFrames is not
 // exercised by this repo's own tests — it is exercised only by hand, inside
 // `mise container`.
-func runAssessDriveCmd(ctx context.Context, w io.Writer, framesPath, target string, allowHost bool, resolve socketPathResolver) error {
-	if err := ensureContainerSafe(ctx, target, allowHost, resolve); err != nil {
+func runAssessDriveCmd(ctx context.Context, w io.Writer, framesPath, target string, allowHost bool, resolve socketPathResolver, isolated isolationDetector) error {
+	if err := ensureContainerSafe(ctx, target, allowHost, resolve, isolated); err != nil {
 		return err
 	}
 

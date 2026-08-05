@@ -2,9 +2,10 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 )
 
@@ -13,12 +14,19 @@ import (
 // the production implementation.
 type socketPathResolver func(ctx context.Context, target string) (string, error)
 
-// isHostDefaultSocket reports whether path is tmux's default per-user socket
-// — created implicitly by any bare `tmux` invocation with no -L/-S flag, of
-// the form /tmp/tmux-<uid>/default. It is a pure predicate on the basename so
-// it can be unit-tested without touching tmux at all.
-func isHostDefaultSocket(path string) bool {
-	return filepath.Base(path) == "default"
+type isolationDetector func() bool
+
+const assessIsolationMarkerEnv = "HIVE_ASSESS_ISOLATED"
+
+// runningInContainer recognizes the repository's supported `mise container`
+// invocation, not arbitrary Docker environments that may mount host sockets.
+func runningInContainer() bool {
+	_, err := os.Stat("/.dockerenv")
+	return supportedIsolationMarkers(err == nil, os.Getenv(assessIsolationMarkerEnv))
+}
+
+func supportedIsolationMarkers(dockerMarker bool, assessMarker string) bool {
+	return dockerMarker && assessMarker == "1"
 }
 
 // resolveTmuxSocketPath asks tmux itself which socket target's server is
@@ -32,32 +40,38 @@ func resolveTmuxSocketPath(ctx context.Context, target string) (string, error) {
 }
 
 // ensureContainerSafe is the interlock `drive` and `scenario` both call
-// before sending a single keystroke: these commands send real input to a
-// tmux pane, and running that against the operator's own host tmux server
-// has crashed dev environments before (see CLAUDE.md's host-tmux rule) — so
-// by default they refuse to run anywhere but an isolated socket (in
-// practice, inside `mise container`). allowHost is the deliberate,
-// eyes-open escape hatch (--allow-host). resolve is injected so the refusal
-// path is unit-testable without a real tmux server.
-func ensureContainerSafe(ctx context.Context, target string, allowHost bool, resolve socketPathResolver) error {
+// before mutating a tmux pane. Socket names do not prove isolation: a host
+// server may use any name, so the command fails closed unless it is running
+// in the Docker environment created by `mise container`. allowHost is the
+// deliberate, eyes-open escape hatch (--allow-host).
+func ensureContainerSafe(ctx context.Context, target string, allowHost bool, resolve socketPathResolver, isolated isolationDetector) error {
 	if allowHost {
+		return nil
+	}
+	if isolated() {
 		return nil
 	}
 
 	path, err := resolve(ctx, target)
 	if err != nil {
-		return fmt.Errorf("resolving tmux socket for %s (safety check): %w", target, err)
-	}
-
-	if isHostDefaultSocket(path) {
 		return fmt.Errorf(
-			"refusing to send input to %s: it resolves to the host's default tmux socket (%s). "+
-				"drive and scenario send real keystrokes to a tmux pane and must only run inside "+
-				"`mise container` — host tmux spawning has crashed dev environments before (see CLAUDE.md). "+
-				"Pass --allow-host if you are deliberately overriding this",
-			target, path,
+			"refusing to mutate %s because hive cannot prove it is running inside `mise container`; "+
+				"socket resolution also failed: %w. Pass --allow-host only for a deliberate host override",
+			target, err,
+		)
+	}
+	if path == "" {
+		err = errors.New("tmux returned an empty socket path")
+		return fmt.Errorf(
+			"refusing to mutate %s because hive cannot prove it is running inside `mise container`: %w. "+
+				"Pass --allow-host only for a deliberate host override",
+			target, err,
 		)
 	}
 
-	return nil
+	return fmt.Errorf(
+		"refusing to mutate %s through tmux socket %s because socket names do not prove isolation; "+
+			"run inside `mise container` or pass --allow-host for a deliberate host override",
+		target, path,
+	)
 }

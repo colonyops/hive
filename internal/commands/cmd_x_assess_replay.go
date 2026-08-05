@@ -106,8 +106,9 @@ func replayFrames(w io.Writer, tracker *status.Tracker, frames []assessFrame, to
 }
 
 // observeFrame advances virtualNow to f's recorded timestamp and feeds it
-// through tracker under key, auto-detecting tool per frame when tool is
-// empty. This is the single stepping primitive shared by `replay` and the
+// through tracker under key. A CLI tool override wins over the recorded tool;
+// legacy recordings without a tool still auto-detect per frame. This is the
+// single stepping primitive shared by `replay` and the
 // calibration corpus eval test (cmd_x_assess_calibration_test.go): both need
 // "same recording, same virtual-clock tracker, same decision sequence,"
 // and factoring it out is what guarantees they can never drift apart.
@@ -115,6 +116,9 @@ func observeFrame(tracker *status.Tracker, key string, f assessFrame, tool strin
 	*virtualNow = f.Timestamp
 
 	frameTool := tool
+	if frameTool == "" {
+		frameTool = f.Tool
+	}
 	if frameTool == "" {
 		frameTool = terminal.DetectTool(f.Content)
 	}

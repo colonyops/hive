@@ -139,18 +139,24 @@ func lastContiguousBlock(lines []string) []string {
 	return lines[start:end]
 }
 
-// detectPromptBox finds the last prompt-box shape in lines, trying the
-// box-drawn (╭│╰) shape first and falling back to the rule-delimited bare
-// prompt shape newer Claude Code UIs render instead (see
-// detectRulePromptBox). Both shapes are reported through the same
-// promptBoxRegion so every other region method and every rule that consumes
-// hasPromptBox/promptBoxBody/abovePromptBox works unchanged regardless of
-// which UI rendered the prompt.
+// detectPromptBox finds the last prompt box regardless of whether it uses
+// box-drawn borders or horizontal rules. Both shapes can coexist when a
+// dismissed dialog remains visible above the current prompt, so detection
+// must compare their positions rather than prefer either rendering style.
 func detectPromptBox(lines []string) *promptBoxRegion {
-	if box := detectBorderedPromptBox(lines); box != nil {
-		return box
+	bordered := detectBorderedPromptBox(lines)
+	ruleDelimited := detectRulePromptBox(lines)
+
+	switch {
+	case bordered == nil:
+		return ruleDelimited
+	case ruleDelimited == nil:
+		return bordered
+	case ruleDelimited.bottomIndex > bordered.bottomIndex:
+		return ruleDelimited
+	default:
+		return bordered
 	}
-	return detectRulePromptBox(lines)
 }
 
 // detectBorderedPromptBox finds the LAST box-drawn input box in lines that

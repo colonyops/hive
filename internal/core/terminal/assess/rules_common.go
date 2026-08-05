@@ -25,7 +25,7 @@ var (
 
 	// tokenStatsPattern matches Claude/Codex's running-total status line,
 	// e.g. "(35s · 1234 tokens)" or "(12s · ↑ 673 tokens · ctrl+c to interrupt)".
-	tokenStatsPattern = regexp.MustCompile(`\([^)]*\d[^)]*tokens\s*\)`)
+	tokenStatsPattern = regexp.MustCompile(`\(\s*\d+(?:\.\d+)?(?:ms|s|m|h)(?:\s+\d+(?:\.\d+)?(?:ms|s|m|h))*\s*·\s*(?:[↑↓]\s*)?\d[\d,]*(?:\.\d+)?[kKmM]?\s+tokens(?:\s*·\s*(?:ctrl\+c|esc)\s+to interrupt)?\s*\)`)
 
 	// questionOptionPattern matches a numbered/lettered option list line,
 	// the shape AskUserQuestion-style UIs render answer choices with. Both

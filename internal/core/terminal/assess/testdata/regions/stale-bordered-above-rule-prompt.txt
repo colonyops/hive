@@ -1,0 +1,14 @@
+Claude Code
+
+╭────────────────────────────────────╮
+│ Do you want to run this command?   │
+│ ❯ 1. Yes                           │
+│   2. No                            │
+╰────────────────────────────────────╯
+
+✳ Working… (12s · ↑ 673 tokens · ctrl+c to interrupt)
+
+──────────────────────────────────────
+❯
+──────────────────────────────────────
+example-repo  main  48%  claude-sonnet

@@ -15,12 +15,13 @@ import (
 
 // trackedState is the per-key published/candidate state machine.
 type trackedState struct {
-	published      terminal.Status
-	candidate      terminal.Status // pending de-escalation target, "" if none
-	candidateSince time.Time
-	candidatePolls int
-	contentHash    string    // churn-normalized hash of Assessment.AboveBox
-	lastChurnAt    time.Time // when that hash last changed
+	published         terminal.Status
+	candidate         terminal.Status // pending de-escalation target, "" if none
+	candidateSince    time.Time
+	candidatePolls    int
+	contentHash       string    // churn-normalized hash of Assessment.AboveBox
+	contentHashSeeded bool      // held/copy-mode first frames deliberately leave it unset
+	lastChurnAt       time.Time // when that hash last changed
 
 	lastGeneration uint64
 	lastAssessment assess.Assessment
@@ -79,11 +80,12 @@ func (t *Tracker) Observe(key string, snap assess.Snapshot) (terminal.Status, as
 	assessment := t.engine.Assess(snap)
 	now := t.now()
 
-	switch {
-	case !exists:
-		ts = &trackedState{}
+	if !exists {
+		ts = &trackedState{published: terminal.StatusReady}
 		t.tracked[key] = ts
-		t.observeFirst(ts, assessment)
+	}
+
+	switch {
 	case snap.InMode:
 		// Copy-mode hold: scrollback churn must not read as working, and a
 		// scrolled viewport must not poison the next real churn comparison.
@@ -100,6 +102,8 @@ func (t *Tracker) Observe(key string, snap assess.Snapshot) (terminal.Status, as
 		// misread as working, and freezing the hash is what makes the
 		// pre-overlay and post-overlay frames compare equal again.
 		clearCandidate(ts)
+	case !exists:
+		t.observeFirst(ts, assessment)
 	default:
 		t.observeNext(ts, assessment, now)
 	}
@@ -110,23 +114,27 @@ func (t *Tracker) Observe(key string, snap assess.Snapshot) (terminal.Status, as
 	return ts.published, assessment
 }
 
-// observeFirst applies first-observation semantics for a brand new key: an
-// unknown/hold assessment publishes StatusReady (preserving the previous
-// pipeline's default for a session with no prior observation); any definite
-// state — including idle — publishes immediately, since there is no prior
-// working state to protect yet.
+// observeFirst applies first-observation semantics for a brand new key after
+// copy-mode and assessment holds have been excluded. Unknown publishes
+// StatusReady; any definite state — including idle — publishes immediately,
+// since there is no prior working state to protect yet.
 func (t *Tracker) observeFirst(ts *trackedState, assessment assess.Assessment) {
 	ts.published = mapDefiniteState(assessment.State)
 	// Seed the churn hash without flagging churn: lastChurnAt stays zero, so
 	// the very first poll never reads as a change from "nothing observed yet".
 	ts.contentHash = hashContent(normalizeContent(assessment.AboveBox))
+	ts.contentHashSeeded = true
 }
 
 // observeNext updates churn bookkeeping and applies the debounce transition
 // table for an existing, non-copy-mode observation.
 func (t *Tracker) observeNext(ts *trackedState, assessment assess.Assessment, now time.Time) {
 	newHash := hashContent(normalizeContent(assessment.AboveBox))
-	if newHash != ts.contentHash {
+	switch {
+	case !ts.contentHashSeeded:
+		ts.contentHash = newHash
+		ts.contentHashSeeded = true
+	case newHash != ts.contentHash:
 		ts.contentHash = newHash
 		ts.lastChurnAt = now
 	}
@@ -140,6 +148,13 @@ func (t *Tracker) observeNext(ts *trackedState, assessment assess.Assessment, no
 	}
 
 	t.applyTransition(ts, state, now, newHash)
+}
+
+// Reset drops all state for key so its next observation uses first-observation semantics.
+func (t *Tracker) Reset(key string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.tracked, key)
 }
 
 // Prune drops state for keys not in activeKeys.

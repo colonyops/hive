@@ -64,12 +64,13 @@ func (cmd *ExperimentalCmd) assessCmd() *cli.Command {
 	}
 }
 
-// assessFrame is one raw observation, recorded by `watch --record` and
-// consumed by `replay`: {ts, content, title, inMode}.
+// assessFrame is one raw observation recorded by `watch --record` and
+// consumed by replay and drive.
 type assessFrame struct {
 	Timestamp time.Time `json:"ts"`
 	Content   string    `json:"content"`
 	Title     string    `json:"title"`
+	Tool      string    `json:"tool,omitempty"`
 	InMode    bool      `json:"inMode"`
 }
 

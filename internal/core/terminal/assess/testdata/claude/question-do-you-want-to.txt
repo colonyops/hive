@@ -1,0 +1,10 @@
+Claude Code
+
+● I need your preference before continuing.
+
+╭──────────────────────────────────────────────────────────╮
+│ Do you want to use alpha or beta for the config flag?    │
+│                                                          │
+│ ❯ 1. Use alpha                                           │
+│   2. Use beta                                            │
+╰──────────────────────────────────────────────────────────╯

@@ -56,8 +56,8 @@ func (realTmuxSender) SendKey(ctx context.Context, target, key string) error {
 // through the same capture->assess->tracker pipeline `watch` uses, then
 // scores the resulting observation log and prints a JSON report.
 //
-// Sends real input (send-keys) — see ensureContainerSafe: this refuses to
-// run against the host's default tmux socket unless --allow-host is passed.
+// Sends real input (send-keys) — see ensureContainerSafe: this fails closed
+// outside `mise container` unless --allow-host is passed.
 func (cmd *ExperimentalCmd) assessScenarioCmd() *cli.Command {
 	var (
 		flagTarget    string
@@ -92,19 +92,17 @@ func (cmd *ExperimentalCmd) assessScenarioCmd() *cli.Command {
 				return fmt.Errorf("usage: hive x assess scenario <scenario.yaml> --target <pane> [--allow-host] [--interval 1.5s]")
 			}
 
-			return runAssessScenarioCmd(ctx, c.Root().Writer, c.Args().First(), flagTarget, flagAllowHost, flagInterval, cmd.app, resolveTmuxSocketPath)
+			return runAssessScenarioCmd(ctx, c.Root().Writer, c.Args().First(), flagTarget, flagAllowHost, c.IsSet("interval"), flagInterval, cmd.app, resolveTmuxSocketPath, runningInContainer)
 		},
 	}
 }
 
 // runAssessScenarioCmd is assessScenarioCmd's Action, minus the cli.Command
-// plumbing: resolve is injected so the safety interlock is testable without
-// a real tmux server (see assess_safety_test.go's pattern). Nothing past
-// the interlock check is covered by this repo's own tests — the scorer is
-// the unit-tested surface (assess_scenario_test.go); this function's tmux
-// interaction is exercised only by hand, inside `mise container`.
-func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target string, allowHost bool, interval time.Duration, app *hive.App, resolve socketPathResolver) error {
-	if err := ensureContainerSafe(ctx, target, allowHost, resolve); err != nil {
+// plumbing. The safety dependencies are injected so refusal paths remain
+// testable without a real tmux server; real tmux interaction is exercised
+// only by hand inside `mise container`.
+func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target string, allowHost, intervalSet bool, interval time.Duration, app *hive.App, resolve socketPathResolver, isolated isolationDetector) error {
+	if err := ensureContainerSafe(ctx, target, allowHost, resolve, isolated); err != nil {
 		return err
 	}
 
@@ -118,13 +116,13 @@ func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target
 		return err
 	}
 
-	opts := trackerOptions(app)
-	if interval <= 0 {
-		interval = opts.PollInterval
+	opts, interval, err := scenarioTrackerOptions(app, intervalSet, interval)
+	if err != nil {
+		return err
 	}
 
 	tracker := status.NewTracker(assess.NewEngine(), opts)
-	log, runErr := runScenario(ctx, target, spec, realTmuxSender{}, terminaltmux.TmuxCapture{}, tracker, interval)
+	log, runErr := runScenario(ctx, target, spec, realTmuxSender{}, terminaltmux.TmuxCapture{}, paneExtra, tracker, scenarioWait(ctx, interval))
 	report := scoreScenario(spec, log)
 
 	enc := json.NewEncoder(w)
@@ -152,7 +150,36 @@ func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target
 // (HoldsForPolls-1) more times to build the hold-confirmation tail that
 // scoreScenario checks. If the state is never found, the window is exactly
 // WithinPolls polls long and the loop moves on — there is nothing to hold.
-func runScenario(ctx context.Context, target string, spec *scenarioSpec, sender tmuxSender, capture terminaltmux.TmuxCapture, tracker *status.Tracker, interval time.Duration) ([]scenarioPoll, error) {
+func scenarioTrackerOptions(app *hive.App, intervalSet bool, interval time.Duration) (status.Options, time.Duration, error) {
+	opts := trackerOptions(app)
+	if intervalSet {
+		if interval <= 0 {
+			return status.Options{}, 0, fmt.Errorf("--interval must be greater than zero")
+		}
+	} else {
+		interval = opts.PollInterval
+	}
+	if interval <= 0 {
+		return status.Options{}, 0, fmt.Errorf("configured poll interval must be greater than zero")
+	}
+	opts.PollInterval = interval
+	return opts, interval, nil
+}
+
+func scenarioWait(ctx context.Context, interval time.Duration) func() error {
+	return func() error {
+		t := time.NewTimer(interval)
+		defer t.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-t.C:
+			return nil
+		}
+	}
+}
+
+func runScenario(ctx context.Context, target string, spec *scenarioSpec, sender tmuxSender, capture assessPaneCapture, getPaneExtra paneExtraFunc, tracker *status.Tracker, wait func() error) ([]scenarioPoll, error) {
 	var (
 		log        []scenarioPoll
 		pollSeq    int
@@ -164,7 +191,7 @@ func runScenario(ctx context.Context, target string, spec *scenarioSpec, sender 
 		if err != nil {
 			return "", fmt.Errorf("capture-pane: %w", err)
 		}
-		title, inMode, err := paneExtra(ctx, target)
+		title, inMode, err := getPaneExtra(ctx, target)
 		if err != nil {
 			return "", fmt.Errorf("display-message: %w", err)
 		}
@@ -180,17 +207,6 @@ func runScenario(ctx context.Context, target string, spec *scenarioSpec, sender 
 		log = append(log, scenarioPoll{Poll: pollSeq, Published: published, StepIndex: stepIdx})
 		pollSeq++
 		return published, nil
-	}
-
-	wait := func() error {
-		t := time.NewTimer(interval)
-		defer t.Stop()
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-t.C:
-			return nil
-		}
 	}
 
 	for stepIdx, step := range spec.Steps {

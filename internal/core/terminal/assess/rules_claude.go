@@ -1,10 +1,10 @@
 package assess
 
-// claudeApprovalPhrases are Claude Code's permission-dialog vocabulary.
-// Scoped to phraseRule's anti-staleness regions, so these strings appearing
-// in scrollback history (e.g. a dismissed dialog) do not re-fire the rule.
+// claudeApprovalPhrases are permission-specific Claude Code dialog markers.
+// Generic question wording is deliberately excluded because selectable
+// questions can also begin with "Do you want to".
 var claudeApprovalPhrases = []string{
-	"Do you want to",
+	"Needs your permission",
 	"Would you like to run",
 	"Yes, allow once",
 	"Yes, allow always",

@@ -9,6 +9,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal/assess"
+	"github.com/colonyops/hive/internal/core/terminal/classifier"
 	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/hive"
 )
@@ -94,24 +95,7 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 			InMode:      pane.InMode,
 		}
 		if result.IsAgent {
-			// One-shot assessment (no tracker): debounce state is process-local
-			// to the long-running poller, so a one-off CLI invocation reports
-			// the raw stateless Stage-1 classification instead of pretending to
-			// debounce across a single sample.
-			if content, err := capture.CapturePane(ctx, pane.PaneID); err == nil {
-				tool := result.Tool
-				if tool == "" {
-					tool = "agent"
-				}
-				assessment := engine.Assess(assess.Snapshot{
-					Content: content,
-					Title:   pane.PaneTitle,
-					Tool:    tool,
-					InMode:  pane.InMode,
-				})
-				paneOut.Assessment = string(assessment.State)
-				paneOut.RuleID = assessment.RuleID
-			}
+			paneOut.Assessment, paneOut.RuleID = assessDetectedAgentPane(ctx, pane, result.Tool, capture, engine)
 		}
 		out.Panes = append(out.Panes, paneOut)
 	}
@@ -119,6 +103,23 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 	enc := json.NewEncoder(c.Root().Writer)
 	enc.SetIndent("", "  ")
 	return enc.Encode(out)
+}
+
+func assessDetectedAgentPane(ctx context.Context, pane classifier.PaneInput, tool string, capture assessPaneCapture, engine *assess.Engine) (string, string) {
+	content, err := capture.CapturePane(ctx, pane.PaneID)
+	if err != nil {
+		return "", ""
+	}
+	if tool == "" {
+		tool = "agent"
+	}
+	assessment := engine.Assess(assess.Snapshot{
+		Content: content,
+		Title:   pane.PaneTitle,
+		Tool:    tool,
+		InMode:  pane.InMode,
+	})
+	return string(assessment.State), assessment.RuleID
 }
 
 func detectTmuxSessionNames(sess session.Session) map[string]bool {

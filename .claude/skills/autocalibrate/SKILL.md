@@ -52,7 +52,7 @@ Hive detects agent status in two stages: `internal/core/terminal/assess` (Stage 
 
 ## Optional Live Tier (Container-Only)
 
-Everything above is offline (fixture files, recorded frames) and safe anywhere, including this host. The live tier drives a real tmux pane and is **only safe inside `mise container`**:
+Everything above is offline (fixture files, recorded frames) and safe anywhere, including this host. The live tier's mutating commands are **only safe inside `mise container`**; `watch`, including `watch --record`, remains pane-read-only and may run on the host when its local capture file is handled as sensitive data:
 
 ```bash
 mise container
@@ -62,13 +62,13 @@ hive x assess scenario test/calibration/scenarios/claude-permission-flow.yaml --
 hive x assess watch <pane> --tool claude --record new-sequence.jsonl
 ```
 
-- `drive` replays a recorded sequence into a real pane (via `tmux respawn-pane`, not send-keys — see `cmd_x_assess_drive.go`'s doc comment for why) with its original relative timing, exercising the true `capture-pane -> list-panes -> assess` path with no agent credentials.
+- `drive` replays a recorded sequence into a real pane by running `tmux respawn-pane -k`, which kills and replaces the pane's current process. It then updates the pane title for each frame. This exercises the true `capture-pane -> list-panes -> assess` path with no agent credentials, but it is destructive to the target pane.
 - `scenario` drives a pane through a scripted YAML of `send`/`key`/`expect` steps and scores the result: a JSON report with per-expectation pass/fail + detection latency in polls, and a scenario-level **flap count** — published transitions the scenario steps didn't imply. Flap count is the headline metric the entire debounce design exists to drive to zero; watch it even on scenarios whose expectations all pass.
 - `watch --record` captures a fresh sequence from a real agent CLI (documented option only, no tooling provided) for promotion into the corpus per step 5. Pass `--tool` (mirrors `replay`'s `--tool`/`-t`; empty auto-detects per frame via `terminal.DetectTool`): auto-detection reads the tool's identifying text out of the captured content itself, so once that text scrolls out of the visible pane (a long-running session, or a banner near the top), it silently misdetects — e.g. a codex pane with its banner scrolled away detects as "shell" and the codex rule set never runs, so every frame assesses `unknown`. Pin `--tool` for any real calibration run.
 
 ## Hard Rules
 
-- **Anything that sends pane input runs only inside `mise container`.** `drive` and `scenario` both send real keystrokes to a tmux pane; running that against the host's own tmux server has crashed dev environments before (see the repo's `CLAUDE.md` "Integration Tests" rule, which this inherits). Both commands refuse to run against the host's default tmux socket unless you pass `--allow-host`.
-- **`--allow-host` is a deliberate, eyes-open exception only** — for a genuinely isolated non-default socket you've verified yourself. It is not a way to silence the check when you're in a hurry.
-- **`hive x assess watch` (without `--record` writing to a live pane's input) is read-only and host-safe** — it only calls `capture-pane`/`display-message`, never `send-keys`. `hive x assess file` and `hive x assess replay` are pure offline file processing and always host-safe.
+- **Anything that mutates a pane runs only inside `mise container`.** `drive` kills and replaces the pane process with `respawn-pane -k`; `scenario` sends real keys. Running either against the host's tmux server has crashed dev environments before (see the repo's `CLAUDE.md` "Integration Tests" rule, which this inherits). Both commands require Docker's marker plus the isolation marker set by the repository's `mise container` task; an arbitrary Docker container fails closed by default, regardless of the tmux socket's name, unless you pass `--allow-host`.
+- **`--allow-host` is a deliberate, eyes-open exception only.** A named socket does not prove isolation, so verify the target yourself before overriding the container gate.
+- **`hive x assess watch` is pane-read-only and host-safe** — with or without `--record`, it only calls `capture-pane`/`display-message` and never sends input. Recording writes the captured pane bytes to a private local file, which can contain source, output, paths, and secrets. `hive x assess file` and `hive x assess replay` are pure offline file processing and always host-safe.
 - **No regression trading** (repeated from step 4 because it's the rule most tempting to skip under time pressure): a green corpus after your change must be a strict superset of the green corpus before it, plus your fix.
