@@ -122,7 +122,7 @@ func TestRefreshCache_ClassifiesAndCarriesState(t *testing.T) {
 		input: classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 101},
 		state: paneState{paneContent: "old", lastCaptureActive: 100},
 	}}}}
-	integ.tracker.Observe(paneKey("sess", "%old"), assess.Snapshot{Content: "x", Tool: "agent"})
+	integ.tracker.Observe(paneKey("sess", "%old"), assess.Snapshot{Content: "x", Tool: "agent", Generation: 1})
 	integ.limiters[paneKey("sess", "%old")] = terminal.NewRateLimiter(1)
 
 	integ.RefreshCache()

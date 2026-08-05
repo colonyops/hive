@@ -10,6 +10,13 @@ import (
 	"github.com/colonyops/hive/internal/core/terminal/assess"
 )
 
+// The pattern battery below is carried from the full-viewport StateTracker
+// this package replaced, and deliberately stays viewport-safe instead of
+// being minimized to what AboveBox typically contains: abovePromptBox falls
+// back to the whole last contiguous block when no prompt box is detected
+// (fullscreen TUIs, clipped panes), which is exactly when the 📂/🌿 footer
+// patterns land in the hashed region — and the blank-line collapse handles
+// blank runs the spinner-glyph strip itself creates.
 var (
 	dynamicStatusPattern   = regexp.MustCompile(`\([^)]*\d+s\s*·[^)]*(?:tokens|↑|↓)[^)]*\)`)
 	progressBarPattern     = regexp.MustCompile(`\[=*>?\s*\]\s*\d+%`)

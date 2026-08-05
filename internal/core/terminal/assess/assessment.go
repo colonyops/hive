@@ -30,7 +30,10 @@ type Assessment struct {
 	Signals []Signal
 
 	// AboveBox is the engine-normalized (ANSI/NBSP) text of the
-	// above-prompt-box region. Stage 2 churn-hashes it directly instead of
-	// re-running StripANSI + region extraction per poll.
+	// above-prompt-box region, handed to Stage 2 so churn hashing never
+	// re-runs region extraction. Stage 2's churn normalization does re-run
+	// StripANSI as boundary defense against a producer handing it
+	// unstripped text; on this already-stripped field that pass is a
+	// fast-path no-op.
 	AboveBox string
 }

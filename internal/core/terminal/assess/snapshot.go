@@ -13,9 +13,10 @@ type Snapshot struct {
 	Tool    string // classified tool ("claude", "codex", ..., "agent")
 	InMode  bool   // pane is in copy-mode/view-mode (tmux #{pane_in_mode})
 
-	// Generation is the transport's refresh generation. Tracker.Observe is
-	// idempotent per (key, Generation): the hive status service resolves the
-	// same primary pane twice per poll cycle, and without this a debounce
-	// counter would double-advance for one real observation.
+	// Generation is the transport's refresh generation. Engine.Assess
+	// ignores it — only Tracker.Observe consumes it, idempotent per
+	// (key, Generation): the hive status service resolves the same primary
+	// pane twice per poll cycle, and without this a debounce counter would
+	// double-advance for one real observation. Stage-1-only callers omit it.
 	Generation uint64
 }

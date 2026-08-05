@@ -519,6 +519,14 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	t.mu.RUnlock()
 
 	t.mu.Lock()
+	// The per-key limiter is the only floor on capture-pane spawn rate; it is
+	// not made redundant by the activity cheap path or Observe's generation
+	// idempotence. Refresh generations can arrive well under 500ms apart
+	// (immediate post-action/post-load batches, a sub-500ms poll_interval),
+	// each with advanced activity for a streaming pane, and generation
+	// idempotence dedupes tracker transitions, not the fork/execs of
+	// overlapping FetchBatch runs. A denied poll observes ≤500ms-stale
+	// content, which the confirm policies absorb.
 	limiter, ok := t.limiters[key]
 	if !ok {
 		limiter = terminal.NewRateLimiter(2)
