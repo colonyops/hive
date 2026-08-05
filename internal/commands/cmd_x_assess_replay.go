@@ -100,16 +100,7 @@ func replayFrames(w io.Writer, tracker *status.Tracker, frames []assessFrame, to
 		published, assessment := observeFrame(tracker, "replay", f, tool, generation, virtualNow)
 		debug, _ := tracker.DebugState("replay")
 
-		out := assessObservationOutput{
-			Timestamp:      f.Timestamp,
-			Generation:     generation,
-			Assessment:     assessStateOutput{State: assessment.State, RuleID: assessment.RuleID, Hold: assessment.Hold},
-			Published:      published,
-			Candidate:      debug.Candidate,
-			CandidatePolls: debug.CandidatePolls,
-			Churned:        debug.Churned,
-			InMode:         f.InMode,
-		}
+		out := newAssessObservation(f.Timestamp, generation, published, assessment, debug, f.InMode)
 		if err := writeAssessObservation(w, jsonl, out); err != nil {
 			return err
 		}

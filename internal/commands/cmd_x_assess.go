@@ -12,6 +12,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/assess"
+	"github.com/colonyops/hive/internal/core/terminal/status"
 )
 
 // assessRegionsOutput mirrors assess.RegionDump for JSON output — a
@@ -79,6 +80,24 @@ type assessStateOutput struct {
 	State  assess.State `json:"state"`
 	RuleID string       `json:"ruleID"`
 	Hold   bool         `json:"hold"`
+}
+
+// newAssessObservation builds the observation record `watch` and `replay`
+// both emit. A single construction site keeps the two JSONL streams
+// field-for-field identical — calibration debugging diffs one against the
+// other, so a field added to the output type must show up in both or not
+// compile.
+func newAssessObservation(ts time.Time, generation uint64, published terminal.Status, assessment assess.Assessment, debug status.DebugState, inMode bool) assessObservationOutput {
+	return assessObservationOutput{
+		Timestamp:      ts,
+		Generation:     generation,
+		Assessment:     assessStateOutput{State: assessment.State, RuleID: assessment.RuleID, Hold: assessment.Hold},
+		Published:      published,
+		Candidate:      debug.Candidate,
+		CandidatePolls: debug.CandidatePolls,
+		Churned:        debug.Churned,
+		InMode:         inMode,
+	}
 }
 
 // writeAssessObservation prints one observation either as a compact JSON

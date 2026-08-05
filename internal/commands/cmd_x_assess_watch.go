@@ -142,16 +142,7 @@ func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 				published, assessment := tracker.Observe(target, snap)
 				debug, _ := tracker.DebugState(target)
 
-				out := assessObservationOutput{
-					Timestamp:      now,
-					Generation:     generation,
-					Assessment:     assessStateOutput{State: assessment.State, RuleID: assessment.RuleID, Hold: assessment.Hold},
-					Published:      published,
-					Candidate:      debug.Candidate,
-					CandidatePolls: debug.CandidatePolls,
-					Churned:        debug.Churned,
-					InMode:         inMode,
-				}
+				out := newAssessObservation(now, generation, published, assessment, debug, inMode)
 				if err := writeAssessObservation(writer, flagJSONL, out); err != nil {
 					return err
 				}
