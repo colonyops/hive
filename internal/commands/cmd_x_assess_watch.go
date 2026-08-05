@@ -87,10 +87,7 @@ func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 			}
 			target := c.Args().First()
 
-			opts := status.DefaultOptions()
-			if cmd.app != nil && cmd.app.Config != nil {
-				opts = status.OptionsFromConfig(cmd.app.Config.Terminal.Status, cmd.app.Config.Tmux.PollInterval)
-			}
+			opts := trackerOptions(cmd.app)
 			interval := opts.PollInterval
 			if c.IsSet("interval") {
 				interval = flagInterval

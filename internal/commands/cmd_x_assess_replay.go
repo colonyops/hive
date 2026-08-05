@@ -53,10 +53,7 @@ func (cmd *ExperimentalCmd) assessReplayCmd() *cli.Command {
 				return err
 			}
 
-			opts := status.DefaultOptions()
-			if cmd.app != nil && cmd.app.Config != nil {
-				opts = status.OptionsFromConfig(cmd.app.Config.Terminal.Status, cmd.app.Config.Tmux.PollInterval)
-			}
+			opts := trackerOptions(cmd.app)
 
 			var virtualNow time.Time
 			opts.Clock = func() time.Time { return virtualNow }

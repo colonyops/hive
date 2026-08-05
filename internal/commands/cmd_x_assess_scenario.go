@@ -118,10 +118,7 @@ func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target
 		return err
 	}
 
-	opts := status.DefaultOptions()
-	if app != nil && app.Config != nil {
-		opts = status.OptionsFromConfig(app.Config.Terminal.Status, app.Config.Tmux.PollInterval)
-	}
+	opts := trackerOptions(app)
 	if interval <= 0 {
 		interval = opts.PollInterval
 	}

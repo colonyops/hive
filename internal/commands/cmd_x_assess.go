@@ -13,7 +13,18 @@ import (
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/assess"
 	"github.com/colonyops/hive/internal/core/terminal/status"
+	"github.com/colonyops/hive/internal/hive"
 )
+
+// trackerOptions resolves the debounce options the watch/replay/scenario
+// commands host their private trackers with: config-derived when the app has
+// one, library defaults otherwise (e.g. running outside a hive workspace).
+func trackerOptions(app *hive.App) status.Options {
+	if app != nil && app.Config != nil {
+		return status.OptionsFromConfig(app.Config.Terminal.Status, app.Config.Tmux.PollInterval)
+	}
+	return status.DefaultOptions()
+}
 
 // assessRegionsOutput mirrors assess.RegionDump for JSON output — a
 // dedicated type keeps the command's wire format independent of the
