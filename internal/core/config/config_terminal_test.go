@@ -21,8 +21,6 @@ func TestLoadTerminalConfirmDefaults(t *testing.T) {
 	assert.True(t, *confirm.Idle.StableContent)
 
 	assert.Equal(t, 2, confirm.Missing.Polls)
-	assert.Zero(t, confirm.Missing.MinDuration)
-	assert.Nil(t, confirm.Missing.StableContent)
 
 	assert.Equal(t, 1, confirm.Approval.Polls)
 	assert.Zero(t, confirm.Approval.MinDuration)

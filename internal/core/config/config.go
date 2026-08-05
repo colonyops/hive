@@ -593,7 +593,7 @@ type TerminalStatusConfig struct {
 // TerminalConfirmConfig holds one confirmation policy per status transition.
 type TerminalConfirmConfig struct {
 	Idle     ConfirmPolicyConfig `json:"idle"     yaml:"idle"`
-	Missing  ConfirmPolicyConfig `json:"missing"  yaml:"missing"` // consumed by the transport: polls N = tolerate N-1 consecutive list-panes failures
+	Missing  MissingPolicyConfig `json:"missing"  yaml:"missing"`
 	Approval ConfirmPolicyConfig `json:"approval" yaml:"approval"`
 }
 
@@ -602,6 +602,15 @@ type ConfirmPolicyConfig struct {
 	Polls         int           `json:"polls"          yaml:"polls"`
 	MinDuration   time.Duration `json:"min_duration"   yaml:"min_duration"`
 	StableContent *bool         `json:"stable_content" yaml:"stable_content"` // nil = default
+}
+
+// MissingPolicyConfig is deliberately polls-only: missing is decided by the
+// tmux transport counting consecutive list-panes failures (polls N tolerates
+// N-1 failures), never by the tracker's duration/content-stability debounce,
+// so min_duration and stable_content have no meaning here — the narrower
+// shape is what keeps them unconfigurable.
+type MissingPolicyConfig struct {
+	Polls int `json:"polls" yaml:"polls"`
 }
 
 // PluginsConfig holds configuration for the plugin system.
@@ -1112,8 +1121,11 @@ func (c *Config) validateTerminalConfirm() error {
 	}
 
 	check("terminal.status.confirm.idle", c.Terminal.Status.Confirm.Idle)
-	check("terminal.status.confirm.missing", c.Terminal.Status.Confirm.Missing)
 	check("terminal.status.confirm.approval", c.Terminal.Status.Confirm.Approval)
+
+	if c.Terminal.Status.Confirm.Missing.Polls < 0 {
+		errs = errs.Append("terminal.status.confirm.missing.polls", fmt.Errorf("must be >= 0, got %d", c.Terminal.Status.Confirm.Missing.Polls))
+	}
 
 	return errs.ToError()
 }

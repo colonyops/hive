@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/assess"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
@@ -99,6 +100,16 @@ func TestWithMissingTolerance(t *testing.T) {
 
 	integ2 := NewFromPreviewMatchers(nil, WithMissingTolerance(0))
 	assert.Equal(t, defaultMissingTolerance, integ2.missingTolerance, "a non-positive tolerance must not override the default")
+}
+
+func TestDefaultMissingToleranceMatchesConfigDefault(t *testing.T) {
+	// Config-less constructions (New, test seams) fall back to
+	// defaultMissingTolerance while production reads the config default —
+	// the one defaults pair not already pinned by
+	// status.TestOptionsFromConfig_NoTerminalSectionMatchesDefaultOptions.
+	cfg, err := config.Load("", t.TempDir())
+	require.NoError(t, err)
+	assert.Equal(t, defaultMissingTolerance, cfg.Terminal.Status.Confirm.Missing.Polls)
 }
 
 func TestRefreshCache_ClassifiesAndCarriesState(t *testing.T) {

@@ -185,7 +185,6 @@ func (c *Config) terminalConfirmWarnings() []ValidationWarning {
 	}
 
 	check("terminal.status.confirm.idle.min_duration", c.Terminal.Status.Confirm.Idle.MinDuration)
-	check("terminal.status.confirm.missing.min_duration", c.Terminal.Status.Confirm.Missing.MinDuration)
 	check("terminal.status.confirm.approval.min_duration", c.Terminal.Status.Confirm.Approval.MinDuration)
 
 	return warnings
