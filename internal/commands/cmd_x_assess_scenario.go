@@ -162,14 +162,14 @@ func runScenario(ctx context.Context, target string, spec *scenarioSpec, sender 
 		generation uint64
 	)
 
-	pollOnce := func(stepIdx int) error {
+	pollOnce := func(stepIdx int) (terminal.Status, error) {
 		content, err := capture.CapturePane(ctx, target)
 		if err != nil {
-			return fmt.Errorf("capture-pane: %w", err)
+			return "", fmt.Errorf("capture-pane: %w", err)
 		}
 		title, inMode, err := paneExtra(ctx, target)
 		if err != nil {
-			return fmt.Errorf("display-message: %w", err)
+			return "", fmt.Errorf("display-message: %w", err)
 		}
 
 		generation++
@@ -182,7 +182,7 @@ func runScenario(ctx context.Context, target string, spec *scenarioSpec, sender 
 
 		log = append(log, scenarioPoll{Poll: pollSeq, Published: published, StepIndex: stepIdx})
 		pollSeq++
-		return nil
+		return published, nil
 	}
 
 	wait := func() error {
@@ -207,7 +207,7 @@ func runScenario(ctx context.Context, target string, spec *scenarioSpec, sender 
 				return log, fmt.Errorf("step %d (key): %w", stepIdx, err)
 			}
 		case scenarioStepExpect:
-			detectedAt, err := awaitExpectation(ctx, stepIdx, step.Expect, wait, pollOnce, &log)
+			detectedAt, err := awaitExpectation(stepIdx, step.Expect, wait, pollOnce)
 			if err != nil {
 				return log, fmt.Errorf("step %d (expect): %w", stepIdx, err)
 			}
@@ -216,7 +216,7 @@ func runScenario(ctx context.Context, target string, spec *scenarioSpec, sender 
 					if err := wait(); err != nil {
 						return log, fmt.Errorf("step %d (expect, hold confirmation): %w", stepIdx, err)
 					}
-					if err := pollOnce(stepIdx); err != nil {
+					if _, err := pollOnce(stepIdx); err != nil {
 						return log, fmt.Errorf("step %d (expect, hold confirmation): %w", stepIdx, err)
 					}
 				}
@@ -231,15 +231,16 @@ func runScenario(ctx context.Context, target string, spec *scenarioSpec, sender 
 // exp.WithinPolls times, returning the 0-based offset of the first poll
 // whose published status matched (or -1 if the window was exhausted with no
 // match).
-func awaitExpectation(_ context.Context, stepIdx int, exp scenarioExpect, wait func() error, pollOnce func(int) error, log *[]scenarioPoll) (int, error) {
+func awaitExpectation(stepIdx int, exp scenarioExpect, wait func() error, pollOnce func(int) (terminal.Status, error)) (int, error) {
 	for i := 0; i < exp.WithinPolls; i++ {
 		if err := wait(); err != nil {
 			return -1, err
 		}
-		if err := pollOnce(stepIdx); err != nil {
+		published, err := pollOnce(stepIdx)
+		if err != nil {
 			return -1, err
 		}
-		if (*log)[len(*log)-1].Published == exp.State {
+		if published == exp.State {
 			return i, nil
 		}
 	}
