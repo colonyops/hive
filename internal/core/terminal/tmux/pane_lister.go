@@ -22,17 +22,19 @@ type TmuxPaneLister struct {
 // listPanesFormat is the delimited format used for `tmux list-panes -a`.
 // tmux replaces literal tab format separators with underscores, so use a
 // printable delimiter that survives format rendering.
-// Fields: session_name, window_index, window_name, pane_current_path,
-// window_activity, pane_id, pane_pid, pane_title, @hive-session.
+// Fields: session_name, window_id, window_index, window_name,
+// pane_current_path, window_activity, pane_id, pane_pid, pane_title,
+// @hive-session.
 const listPanesDelimiter = "|||"
 
-const listPanesFormat = "#{session_name}" + listPanesDelimiter + "#{window_index}" + listPanesDelimiter + "#{window_name}" + listPanesDelimiter +
+const listPanesFormat = "#{session_name}" + listPanesDelimiter + "#{window_id}" + listPanesDelimiter + "#{window_index}" + listPanesDelimiter + "#{window_name}" + listPanesDelimiter +
 	"#{pane_current_path}" + listPanesDelimiter + "#{window_activity}" + listPanesDelimiter + "#{pane_id}" + listPanesDelimiter +
 	"#{pane_pid}" + listPanesDelimiter + "#{pane_title}" + listPanesDelimiter + "#{@hive-session}"
 
 // paneLine is the parsed form of one line of `tmux list-panes` output.
 type paneLine struct {
 	sessName    string
+	winID       string
 	winIdx      string
 	winName     string
 	workDir     string
@@ -76,6 +78,7 @@ func paneInputFromLine(pl paneLine) classifier.PaneInput {
 		SessionName: pl.sessName,
 		PaneID:      pl.paneID,
 		PanePID:     pl.panePID,
+		WindowID:    pl.winID,
 		WindowIndex: pl.winIdx,
 		WindowName:  pl.winName,
 		PaneTitle:   pl.paneTitle,
@@ -87,26 +90,27 @@ func paneInputFromLine(pl paneLine) classifier.PaneInput {
 
 // parsePaneLine parses one delimited line in listPanesFormat.
 func parsePaneLine(line string) (paneLine, bool) {
-	parts := strings.SplitN(line, listPanesDelimiter, 9)
-	if len(parts) < 6 || line == "" {
+	parts := strings.SplitN(line, listPanesDelimiter, 10)
+	if len(parts) < 7 || line == "" {
 		return paneLine{}, false
 	}
 	pl := paneLine{
 		sessName: parts[0],
-		winIdx:   parts[1],
-		winName:  parts[2],
-		workDir:  parts[3],
-		paneID:   parts[5],
+		winID:    parts[1],
+		winIdx:   parts[2],
+		winName:  parts[3],
+		workDir:  parts[4],
+		paneID:   parts[6],
 	}
-	_, _ = fmt.Sscanf(parts[4], "%d", &pl.activity)
-	if len(parts) >= 7 {
-		_, _ = fmt.Sscanf(parts[6], "%d", &pl.panePID)
-	}
+	_, _ = fmt.Sscanf(parts[5], "%d", &pl.activity)
 	if len(parts) >= 8 {
-		pl.paneTitle = parts[7]
+		_, _ = fmt.Sscanf(parts[7], "%d", &pl.panePID)
 	}
 	if len(parts) >= 9 {
-		pl.hiveSession = strings.TrimSpace(parts[8])
+		pl.paneTitle = parts[8]
+	}
+	if len(parts) >= 10 {
+		pl.hiveSession = strings.TrimSpace(parts[9])
 	}
 	return pl, true
 }

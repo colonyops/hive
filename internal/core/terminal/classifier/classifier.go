@@ -43,6 +43,7 @@ type PaneInput struct {
 	SessionName string
 	PaneID      string
 	PanePID     int64
+	WindowID    string
 	WindowIndex string
 	WindowName  string
 	PaneTitle   string

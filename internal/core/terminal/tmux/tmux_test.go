@@ -273,35 +273,56 @@ func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
 func TestDiscoverSession(t *testing.T) {
 	integ := New(nil, nil)
 	integ.cache = map[string]*sessionCache{"my-session": {panes: []cachedPane{
-		{input: classifier.PaneInput{PaneID: "%1", WindowIndex: "0", WindowName: testToolClaude, WorkDir: "/a", Activity: 100}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
-		{input: classifier.PaneInput{PaneID: "%2", WindowIndex: "1", WindowName: testToolCodex, WorkDir: "/b", Activity: 200}, result: classifier.Result{IsAgent: true, Tool: testToolCodex}},
+		{input: classifier.PaneInput{PaneID: "%1", WindowID: "@1", WindowIndex: "0", WindowName: testToolClaude, WorkDir: "/a", Activity: 100}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
+		{input: classifier.PaneInput{PaneID: "%2", WindowID: "@2", WindowIndex: "1", WindowName: testToolCodex, WorkDir: "/b", Activity: 200}, result: classifier.Result{IsAgent: true, Tool: testToolCodex}},
 	}}}
 	integ.cacheTime = time.Now()
 
 	info, err := integ.DiscoverSession(context.Background(), "my-session", map[string]string{SessionPathKey: "/b"})
 	require.NoError(t, err)
 	require.NotNil(t, info)
+	assert.Equal(t, "@2", info.WindowID)
 	assert.Equal(t, "%2", info.PaneID)
 
 	info, err = integ.DiscoverSession(context.Background(), "my-session", map[string]string{"tmux_window": "0"})
 	require.NoError(t, err)
 	require.NotNil(t, info)
+	assert.Equal(t, "@1", info.WindowID)
 	assert.Equal(t, "%1", info.PaneID)
+}
+
+func TestDiscoverSessionReportsAnExistingSessionWithoutAnAgentPane(t *testing.T) {
+	integ := New(nil, nil)
+	integ.cache = map[string]*sessionCache{"shell-only": {panes: []cachedPane{{
+		input:  classifier.PaneInput{PaneID: "%1", WindowID: "@1", WindowIndex: "0", WindowName: "shell"},
+		result: classifier.Result{IsAgent: false},
+	}}}}
+	integ.cacheTime = time.Now()
+
+	info, err := integ.DiscoverSession(t.Context(), "shell-only", nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, info)
+	assert.Equal(t, "shell-only", info.Name)
+	assert.Empty(t, info.PaneID)
+	assert.Empty(t, info.WindowID)
 }
 
 func TestDiscoverAllPanes(t *testing.T) {
 	integ := New(nil, nil)
 	integ.cache = map[string]*sessionCache{"multi-sess": {panes: []cachedPane{
-		{input: classifier.PaneInput{PaneID: "%1", WindowIndex: "0", WindowName: testToolClaude}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
-		{input: classifier.PaneInput{PaneID: "%2", WindowIndex: "0", WindowName: "bash"}, result: classifier.Result{IsAgent: false}},
-		{input: classifier.PaneInput{PaneID: "%3", WindowIndex: "1", WindowName: testToolCodex}, result: classifier.Result{IsAgent: true, Tool: testToolCodex}},
+		{input: classifier.PaneInput{PaneID: "%1", WindowID: "@1", WindowIndex: "0", WindowName: testToolClaude}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
+		{input: classifier.PaneInput{PaneID: "%2", WindowID: "@1", WindowIndex: "0", WindowName: "bash"}, result: classifier.Result{IsAgent: false}},
+		{input: classifier.PaneInput{PaneID: "%3", WindowID: "@2", WindowIndex: "1", WindowName: testToolCodex}, result: classifier.Result{IsAgent: true, Tool: testToolCodex}},
 	}}}
 	integ.cacheTime = time.Now()
 
 	infos, err := integ.DiscoverAllPanes(context.Background(), "multi-sess", nil)
 	require.NoError(t, err)
 	require.Len(t, infos, 2)
+	assert.Equal(t, "@1", infos[0].WindowID)
 	assert.Equal(t, "%1", infos[0].PaneID)
+	assert.Equal(t, "@2", infos[1].WindowID)
 	assert.Equal(t, "%3", infos[1].PaneID)
 }
 
