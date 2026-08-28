@@ -1,0 +1,10 @@
+Codex CLI
+
+▶ Planning next step
+
+╭──────────────────────────────────────────────────────────╮
+│ Should I deploy to staging or production first?          │
+│                                                          │
+│ ❯ 1. staging                                             │
+│   2. production                                          │
+╰──────────────────────────────────────────────────────────╯

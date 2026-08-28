@@ -435,6 +435,7 @@ type Config struct {
 	Review              ReviewConfig           `json:"review"                yaml:"review"`
 	Messaging           MessagingConfig        `json:"messaging"             yaml:"messaging"`
 	Tmux                TmuxConfig             `json:"tmux"                  yaml:"tmux"`
+	Terminal            TerminalConfig         `json:"terminal"              yaml:"terminal"`
 	Database            DatabaseConfig         `json:"database"              yaml:"database"`
 	Plugins             PluginsConfig          `json:"plugins"               yaml:"plugins"`
 	Sources             SourcesConfig          `json:"sources"               yaml:"sources"`
@@ -575,6 +576,41 @@ type TmuxConfig struct {
 // TmuxCaptureRecordingConfig controls opt-in local pane capture recording.
 type TmuxCaptureRecordingConfig struct {
 	Enabled bool `json:"enabled" yaml:"enabled"`
+}
+
+// TerminalConfig holds integration-agnostic terminal status settings.
+// Transport-specific knobs (poll cadence, capture) stay under tmux:.
+type TerminalConfig struct {
+	Status TerminalStatusConfig `json:"status" yaml:"status"`
+}
+
+// TerminalStatusConfig configures the Stage 2 debounce tracker
+// (internal/core/terminal/status.Tracker).
+type TerminalStatusConfig struct {
+	Confirm TerminalConfirmConfig `json:"confirm" yaml:"confirm"`
+}
+
+// TerminalConfirmConfig holds one confirmation policy per status transition.
+type TerminalConfirmConfig struct {
+	Idle     ConfirmPolicyConfig `json:"idle"     yaml:"idle"`
+	Missing  MissingPolicyConfig `json:"missing"  yaml:"missing"`
+	Approval ConfirmPolicyConfig `json:"approval" yaml:"approval"`
+}
+
+// ConfirmPolicyConfig is the YAML/JSON shape of one status.ConfirmPolicy.
+type ConfirmPolicyConfig struct {
+	Polls         int           `json:"polls"          yaml:"polls"`
+	MinDuration   time.Duration `json:"min_duration"   yaml:"min_duration"`
+	StableContent *bool         `json:"stable_content" yaml:"stable_content"` // nil = default
+}
+
+// MissingPolicyConfig is deliberately polls-only: missing is decided by the
+// tmux transport counting consecutive list-panes failures (polls N tolerates
+// N-1 failures), never by the tracker's duration/content-stability debounce,
+// so min_duration and stable_content have no meaning here — the narrower
+// shape is what keeps them unconfigurable.
+type MissingPolicyConfig struct {
+	Polls int `json:"polls" yaml:"polls"`
 }
 
 // PluginsConfig holds configuration for the plugin system.
@@ -935,6 +971,7 @@ func (c *Config) applyDefaults() {
 	if len(c.Tmux.PreviewWindowMatcher) == 0 {
 		c.Tmux.PreviewWindowMatcher = []string{"claude", "gemini", "aider", "codex", "cursor", "crush", "cline", "opencode", "pi", "agent", "llm"}
 	}
+	c.applyTerminalConfirmDefaults()
 	if c.Database.MaxOpenConns == 0 {
 		c.Database.MaxOpenConns = 2
 	}
@@ -957,6 +994,34 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Agents.Default == "" {
 		c.Agents.Default = "claude"
+	}
+}
+
+// applyTerminalConfirmDefaults fills unset (zero) confirm-policy fields.
+// Polls == 0 is the "unset" sentinel here, same as MaxRecycled's "0 means
+// unlimited" pattern elsewhere in this file — a user-set negative value is
+// the only way to express an actually-invalid policy past this point (see
+// Validate).
+func (c *Config) applyTerminalConfirmDefaults() {
+	confirm := &c.Terminal.Status.Confirm
+
+	if confirm.Idle.Polls == 0 {
+		confirm.Idle.Polls = 2
+	}
+	if confirm.Idle.MinDuration == 0 {
+		confirm.Idle.MinDuration = 2 * time.Second
+	}
+	if confirm.Idle.StableContent == nil {
+		stableDefault := true
+		confirm.Idle.StableContent = &stableDefault
+	}
+
+	if confirm.Missing.Polls == 0 {
+		confirm.Missing.Polls = 2
+	}
+
+	if confirm.Approval.Polls == 0 {
+		confirm.Approval.Polls = 1
 	}
 }
 
@@ -1033,7 +1098,36 @@ func (c *Config) Validate() error {
 		c.validateTodos(),
 		c.validateCloneStrategies(),
 		c.validateSources(),
+		c.validateTerminalConfirm(),
 	)
+}
+
+// validateTerminalConfirm rejects negative confirm-policy values. Polls == 0
+// is deliberately accepted: applyDefaults treats it as "unset" and fills in
+// the documented default before Validate ever runs it through Load, so 0 is
+// never distinguishable from "not configured". A negative value survives
+// applyDefaults untouched (its zero-check doesn't match) and is the only
+// invalid state actually expressible at this point.
+func (c *Config) validateTerminalConfirm() error {
+	var errs criterio.FieldErrorsBuilder
+
+	check := func(field string, p ConfirmPolicyConfig) {
+		if p.Polls < 0 {
+			errs = errs.Append(field+".polls", fmt.Errorf("must be >= 0, got %d", p.Polls))
+		}
+		if p.MinDuration < 0 {
+			errs = errs.Append(field+".min_duration", fmt.Errorf("must be >= 0, got %s", p.MinDuration))
+		}
+	}
+
+	check("terminal.status.confirm.idle", c.Terminal.Status.Confirm.Idle)
+	check("terminal.status.confirm.approval", c.Terminal.Status.Confirm.Approval)
+
+	if c.Terminal.Status.Confirm.Missing.Polls < 0 {
+		errs = errs.Append("terminal.status.confirm.missing.polls", fmt.Errorf("must be >= 0, got %d", c.Terminal.Status.Confirm.Missing.Polls))
+	}
+
+	return errs.ToError()
 }
 
 // validateCloneStrategies checks clone_strategy on each rule.

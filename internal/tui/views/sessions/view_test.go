@@ -252,6 +252,49 @@ func TestApplyFilter_NoStatusFilter(t *testing.T) {
 	assert.Equal(t, 2, sessionCount, "all sessions shown when no filter")
 }
 
+func TestStatusMatchesFilter(t *testing.T) {
+	tests := []struct {
+		name   string
+		status terminal.Status
+		filter terminal.Status
+		want   bool
+	}{
+		{"exact match", terminal.StatusActive, terminal.StatusActive, true},
+		{"exact mismatch", terminal.StatusActive, terminal.StatusReady, false},
+		{"approval filter matches question", terminal.StatusQuestion, terminal.StatusApproval, true},
+		{"question filter does not match approval", terminal.StatusApproval, terminal.StatusQuestion, false},
+		{"approval filter does not match active", terminal.StatusActive, terminal.StatusApproval, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, statusMatchesFilter(tt.status, tt.filter))
+		})
+	}
+}
+
+func TestApplyFilter_ApprovalFilterMatchesQuestion(t *testing.T) {
+	ts := kv.New[string, hive.TerminalStatus]()
+	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusApproval})
+	ts.Set("s2", hive.TerminalStatus{Status: terminal.StatusQuestion})
+	ts.Set("s3", hive.TerminalStatus{Status: terminal.StatusReady})
+
+	sessions := []session.Session{
+		newSess("s1", "approval-session"),
+		newSess("s2", "question-session"),
+		newSess("s3", "ready-session"),
+	}
+	v := newFilterTestView(sessions, terminal.StatusApproval, ts)
+	v.applyFilter()
+
+	var sessionIDs []string
+	for _, item := range v.list.Items() {
+		if ti, ok := item.(TreeItem); ok && ti.IsSession() {
+			sessionIDs = append(sessionIDs, ti.Session.ID)
+		}
+	}
+	assert.ElementsMatch(t, []string{"s1", "s2"}, sessionIDs, "approval filter includes question sessions")
+}
+
 func TestApplyFilter_StatusFilterMatches(t *testing.T) {
 	ts := kv.New[string, hive.TerminalStatus]()
 	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusActive})

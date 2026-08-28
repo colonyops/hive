@@ -4,13 +4,18 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"runtime"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/assess"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
 	"github.com/colonyops/hive/internal/core/terminal/process"
+	"github.com/colonyops/hive/internal/core/terminal/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +23,25 @@ import (
 const (
 	testToolClaude = "claude"
 	testToolCodex  = "codex"
+
+	// Content chosen (and shaped after internal/core/terminal/status's own
+	// test fixtures) to land deterministically on one assess.State via the
+	// generic rule set: tool "agent" has no dedicated rule set, so it always
+	// falls back to genericRules.
+	assessContentWorking = "⠋ Thinking… (working)\n"
+	assessContentIdle    = "line one\n❯"
 )
+
+// newImmediateTracker returns a tracker whose confirm policies publish on the
+// first confirming observation, so tests calling GetStatus a fixed number of
+// times don't need clock choreography (fake-clock timing tests live in the
+// status package itself).
+func newImmediateTracker() *status.Tracker {
+	return status.NewTracker(assess.NewEngine(), status.Options{
+		ConfirmIdle:     status.ConfirmPolicy{Polls: 1},
+		ConfirmApproval: status.ConfirmPolicy{Polls: 1},
+	})
+}
 
 func TestSessionCache_FindPane(t *testing.T) {
 	sc := &sessionCache{panes: []cachedPane{
@@ -68,6 +91,29 @@ func TestSessionInfoFromPane(t *testing.T) {
 	assert.Nil(t, sessionInfoFromPane("mysess", nil))
 }
 
+func TestWithStatusOptions(t *testing.T) {
+	integ := NewFromPreviewMatchers(nil, WithStatusOptions(status.Options{ConfirmIdle: status.ConfirmPolicy{Polls: 5}}))
+	require.NotNil(t, integ.tracker)
+}
+
+func TestWithMissingTolerance(t *testing.T) {
+	integ := NewFromPreviewMatchers(nil, WithMissingTolerance(4))
+	assert.Equal(t, 4, integ.missingTolerance)
+
+	integ2 := NewFromPreviewMatchers(nil, WithMissingTolerance(0))
+	assert.Equal(t, defaultMissingTolerance, integ2.missingTolerance, "a non-positive tolerance must not override the default")
+}
+
+func TestDefaultMissingToleranceMatchesConfigDefault(t *testing.T) {
+	// Config-less constructions (New, test seams) fall back to
+	// defaultMissingTolerance while production reads the config default —
+	// the one defaults pair not already pinned by
+	// status.TestOptionsFromConfig_NoTerminalSectionMatchesDefaultOptions.
+	cfg, err := config.Load("", t.TempDir())
+	require.NoError(t, err)
+	assert.Equal(t, defaultMissingTolerance, cfg.Terminal.Status.Confirm.Missing.Polls)
+}
+
 func TestRefreshCache_ClassifiesAndCarriesState(t *testing.T) {
 	lister := &fakePaneLister{panes: []classifier.PaneInput{
 		{SessionName: "sess", PaneID: "%1", PanePID: 101, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 100},
@@ -76,9 +122,9 @@ func TestRefreshCache_ClassifiesAndCarriesState(t *testing.T) {
 	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
 	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
 		input: classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 101},
-		state: paneState{paneContent: "old", cachedStatus: terminal.StatusReady, lastCaptureActive: 100},
+		state: paneState{paneContent: "old", lastCaptureActive: 100},
 	}}}}
-	integ.trackers[paneKey("sess", "%old")] = terminal.NewStateTracker()
+	integ.tracker.Observe(paneKey("sess", "%old"), assess.Snapshot{Content: "x", Tool: "agent", Generation: 1})
 	integ.limiters[paneKey("sess", "%old")] = terminal.NewRateLimiter(1)
 
 	integ.RefreshCache()
@@ -89,7 +135,8 @@ func TestRefreshCache_ClassifiesAndCarriesState(t *testing.T) {
 	assert.True(t, sc.findPane("%1").result.IsAgent)
 	assert.False(t, sc.findPane("%2").result.IsAgent)
 	assert.Equal(t, "old", sc.findPane("%1").state.paneContent)
-	assert.Empty(t, integ.trackers)
+	_, trackedStale := integ.tracker.DebugState(paneKey("sess", "%old"))
+	assert.False(t, trackedStale, "tracker state for a pane key no longer in the active set must be pruned")
 	assert.Empty(t, integ.limiters)
 }
 
@@ -133,9 +180,19 @@ func TestRefreshCache_InvalidatesOnForegroundPIDChange(t *testing.T) {
 	integ.RefreshCache()
 	assert.Equal(t, testToolClaude, integ.cache["sess"].findPane("%1").result.Tool)
 
+	key := paneKey("sess", "%1")
+	integ.tracker.Observe(key, assess.Snapshot{Content: assessContentWorking, Tool: "agent", Generation: 1})
+	oldLimiter := terminal.NewRateLimiter(1)
+	oldContentLimiter := integ.contentLimiters[key]
+	integ.limiters[key] = oldLimiter
+
 	reader.tpgid = 201
 	integ.RefreshCache()
 	assert.Equal(t, testToolCodex, integ.cache["sess"].findPane("%1").result.Tool)
+	_, tracked := integ.tracker.DebugState(key)
+	assert.False(t, tracked, "foreground process replacement must reset tracker state")
+	assert.NotSame(t, oldLimiter, integ.limiters[key], "capture limiter must not survive process replacement")
+	assert.NotSame(t, oldContentLimiter, integ.contentLimiters[key], "classification limiter must restart for the new process")
 }
 
 func TestRefreshCache_ReclassifiesContentBasedPositive(t *testing.T) {
@@ -256,9 +313,16 @@ func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
 		{SessionName: "sess", PaneID: "%1", PanePID: 202, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 200},
 	}}
 	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
+	key := paneKey("sess", "%1")
+	oldLimiter := terminal.NewRateLimiter(1)
+	oldContentLimiter := terminal.NewRateLimiter(1)
+	integ.limiters[key] = oldLimiter
+	integ.contentLimiters[key] = oldContentLimiter
+	integ.tracker.Observe(key, assess.Snapshot{Content: assessContentWorking, Tool: "agent", Generation: 1})
 	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
-		input: classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 101},
-		state: paneState{paneContent: "old", cachedStatus: terminal.StatusReady, lastCaptureActive: 100},
+		input:  classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 101},
+		state:  paneState{paneContent: "old", lastCaptureActive: 100},
+		pollMu: &sync.Mutex{},
 	}}}}
 
 	integ.RefreshCache()
@@ -266,8 +330,198 @@ func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
 	pane := integ.cache["sess"].findPane("%1")
 	require.NotNil(t, pane)
 	assert.Empty(t, pane.state.paneContent)
-	assert.Empty(t, pane.state.cachedStatus)
 	assert.Zero(t, pane.state.lastCaptureActive)
+	_, tracked := integ.tracker.DebugState(key)
+	assert.False(t, tracked, "pane PID replacement must reset tracker state")
+	assert.NotSame(t, oldLimiter, integ.limiters[key], "capture limiter must not survive process replacement")
+	assert.NotSame(t, oldContentLimiter, integ.contentLimiters[key], "classification limiter must restart for the new process")
+}
+
+func TestRefreshCache_ReusesStateCompletedAfterInitialSnapshot(t *testing.T) {
+	reader := &blockingFingerprintReader{
+		ProcessReader: &fakeProcessReader{tpgid: 200, comm: map[int]string{200: testToolClaude}},
+		fingerprint:   200,
+		started:       make(chan struct{}),
+		release:       make(chan struct{}),
+	}
+	input := classifier.PaneInput{
+		SessionName: "sess", PaneID: "%1", PanePID: 100,
+		WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 2,
+	}
+	integ := NewWithReader(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, "agent")}, reader, nil, nil), &fakePaneLister{panes: []classifier.PaneInput{input}}, reader)
+	capture := &blockingStatusCapture{content: assessContentWorking, started: make(chan struct{}), release: make(chan struct{})}
+	integ.capture = capture
+	integ.tracker = newImmediateTracker()
+	integ.refreshGeneration = 1
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:              input,
+		result:             classifier.Result{IsAgent: true, Tool: "agent"},
+		state:              paneState{paneContent: assessContentIdle, lastCaptureActive: 1},
+		processFingerprint: 200,
+		pollMu:             &sync.Mutex{},
+	}}}}
+
+	statusDone := make(chan terminal.Status, 1)
+	go func() {
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		statusDone <- got
+	}()
+	<-capture.started
+
+	refreshDone := make(chan struct{})
+	go func() {
+		integ.RefreshCache()
+		close(refreshDone)
+	}()
+	<-reader.started
+
+	// The refresh already copied its early snapshot. Let GetStatus publish its
+	// fresh capture before allowing refresh to reach final publication.
+	close(capture.release)
+	assert.Equal(t, terminal.StatusActive, <-statusDone)
+	close(reader.release)
+	<-refreshDone
+
+	pane := integ.cache["sess"].findPane("%1")
+	require.NotNil(t, pane)
+	assert.Equal(t, assessContentWorking, pane.state.paneContent)
+	assert.Equal(t, int64(2), pane.state.lastCaptureActive)
+}
+
+func TestRefreshCache_ReplacementResetsObservationCompletedAfterInitialSnapshot(t *testing.T) {
+	reader := &blockingFingerprintReader{
+		ProcessReader: &fakeProcessReader{tpgid: 201, comm: map[int]string{201: testToolCodex}},
+		fingerprint:   201,
+		started:       make(chan struct{}),
+		release:       make(chan struct{}),
+	}
+	oldInput := classifier.PaneInput{
+		SessionName: "sess", PaneID: "%1", PanePID: 100,
+		WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 2,
+	}
+	newInput := oldInput
+	newInput.WindowName = testToolCodex
+	newInput.PaneTitle = testToolCodex
+	integ := NewWithReader(classifier.New(toolPatterns(testToolClaude, testToolCodex), reader, nil, nil), &fakePaneLister{panes: []classifier.PaneInput{newInput}}, reader)
+	capture := &blockingStatusCapture{content: assessContentWorking, started: make(chan struct{}), release: make(chan struct{})}
+	integ.capture = capture
+	integ.tracker = newImmediateTracker()
+	integ.refreshGeneration = 1
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:              oldInput,
+		result:             classifier.Result{IsAgent: true, Tool: "agent"},
+		state:              paneState{paneContent: assessContentIdle, lastCaptureActive: 1},
+		processFingerprint: 200,
+		pollMu:             &sync.Mutex{},
+	}}}}
+
+	statusDone := make(chan terminal.Status, 1)
+	go func() {
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		statusDone <- got
+	}()
+	<-capture.started
+
+	refreshDone := make(chan struct{})
+	go func() {
+		integ.RefreshCache()
+		close(refreshDone)
+	}()
+	<-reader.started
+	close(capture.release)
+	assert.Equal(t, terminal.StatusActive, <-statusDone)
+	close(reader.release)
+	<-refreshDone
+
+	pane := integ.cache["sess"].findPane("%1")
+	require.NotNil(t, pane)
+	assert.Empty(t, pane.state.paneContent)
+	_, tracked := integ.tracker.DebugState(paneKey("sess", "%1"))
+	assert.False(t, tracked)
+}
+
+func TestRefreshCache_RemovalWaitsForInFlightObservationBeforePrune(t *testing.T) {
+	integ := New(nil, &fakePaneLister{})
+	capture := &blockingStatusCapture{content: assessContentWorking, started: make(chan struct{}), release: make(chan struct{})}
+	integ.capture = capture
+	integ.tracker = newImmediateTracker()
+	integ.refreshGeneration = 1
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:  classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 100, Activity: 2},
+		result: classifier.Result{IsAgent: true, Tool: "agent"},
+		state:  paneState{paneContent: assessContentIdle, lastCaptureActive: 1},
+		pollMu: &sync.Mutex{},
+	}}}}
+	atPollGate := make(chan struct{})
+	integ.beforePollGateLock = func() { close(atPollGate) }
+
+	statusDone := make(chan terminal.Status, 1)
+	go func() {
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		statusDone <- got
+	}()
+	<-capture.started
+
+	refreshDone := make(chan struct{})
+	go func() {
+		integ.RefreshCache()
+		close(refreshDone)
+	}()
+	<-atPollGate
+	select {
+	case <-refreshDone:
+		t.Fatal("RefreshCache completed while an observation for the removed pane was still in flight")
+	default:
+	}
+
+	close(capture.release)
+	assert.Equal(t, terminal.StatusActive, <-statusDone)
+	<-refreshDone
+	_, tracked := integ.tracker.DebugState(paneKey("sess", "%1"))
+	assert.False(t, tracked, "removed pane observation must be pruned after it finishes")
+}
+
+func TestRefreshCache_ToleranceExceededWaitsForInFlightObservationBeforePrune(t *testing.T) {
+	integ := New(nil, &flakyPaneLister{fail: true})
+	capture := &blockingStatusCapture{content: assessContentWorking, started: make(chan struct{}), release: make(chan struct{})}
+	integ.capture = capture
+	integ.tracker = newImmediateTracker()
+	integ.missingTolerance = 1
+	integ.refreshGeneration = 1
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:  classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 100, Activity: 2},
+		result: classifier.Result{IsAgent: true, Tool: "agent"},
+		state:  paneState{paneContent: assessContentIdle, lastCaptureActive: 1},
+		pollMu: &sync.Mutex{},
+	}}}}
+	atPollGate := make(chan struct{})
+	integ.beforePollGateLock = func() { close(atPollGate) }
+
+	statusDone := make(chan terminal.Status, 1)
+	go func() {
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		statusDone <- got
+	}()
+	<-capture.started
+
+	refreshDone := make(chan struct{})
+	go func() {
+		integ.RefreshCache()
+		close(refreshDone)
+	}()
+	<-atPollGate
+	select {
+	case <-refreshDone:
+		t.Fatal("RefreshCache completed while a failed refresh still had an observation in flight")
+	default:
+	}
+
+	close(capture.release)
+	assert.Equal(t, terminal.StatusActive, <-statusDone)
+	<-refreshDone
+	assert.Empty(t, integ.cache)
+	_, tracked := integ.tracker.DebugState(paneKey("sess", "%1"))
+	assert.False(t, tracked, "tolerance-exceeded pane observation must be pruned after it finishes")
 }
 
 func TestDiscoverSession(t *testing.T) {
@@ -413,6 +667,7 @@ func TestDiscoverSession_MetaTmuxSessionCompatibility(t *testing.T) {
 func TestGetStatus_ExplicitNonAgentPaneMissing(t *testing.T) {
 	recorder := &fakeCaptureRecorder{}
 	integ := New(nil, nil)
+	integ.tracker = newImmediateTracker()
 	integ.recorder = recorder
 	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{
 		{input: classifier.PaneInput{PaneID: "%1"}, result: classifier.Result{IsAgent: false}},
@@ -429,6 +684,7 @@ func TestGetStatus_ExplicitNonAgentPaneMissing(t *testing.T) {
 func TestGetStatus_UsesPaneKeysAndCapture(t *testing.T) {
 	capture := &fakeCapture{content: "❯"}
 	integ := New(nil, nil)
+	integ.tracker = newImmediateTracker()
 	integ.capture = capture
 	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
 		input:  classifier.PaneInput{PaneID: "%1", WindowIndex: "0", WindowName: testToolClaude, Activity: 10},
@@ -437,20 +693,73 @@ func TestGetStatus_UsesPaneKeysAndCapture(t *testing.T) {
 	integ.cacheTime = time.Now()
 
 	info := &terminal.SessionInfo{Name: "sess", PaneID: "%1"}
-	status, err := integ.GetStatus(context.Background(), info)
+	got, err := integ.GetStatus(context.Background(), info)
 	require.NoError(t, err)
-	assert.Equal(t, terminal.StatusReady, status)
+	assert.Equal(t, terminal.StatusReady, got)
 	assert.Equal(t, "❯", info.PaneContent)
 	assert.Equal(t, testToolClaude, info.DetectedTool)
-	assert.NotNil(t, integ.trackers[paneKey("sess", "%1")])
+	_, tracked := integ.tracker.DebugState(paneKey("sess", "%1"))
+	assert.True(t, tracked)
 	assert.NotNil(t, integ.limiters[paneKey("sess", "%1")])
 	assert.Equal(t, 1, capture.calls)
+}
+
+func TestGetStatus_SerializesCaptureAndObservePerPane(t *testing.T) {
+	capture := &blockingStatusCapture{
+		content: assessContentWorking,
+		started: make(chan struct{}),
+		release: make(chan struct{}),
+	}
+	integ := New(nil, nil)
+	integ.capture = capture
+	integ.tracker = newImmediateTracker()
+	key := paneKey("sess", "%1")
+	integ.tracker.Observe(key, assess.Snapshot{Content: assessContentIdle, Tool: "agent", Generation: 1})
+	integ.refreshGeneration = 2
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input: classifier.PaneInput{PaneID: "%1", Activity: 2},
+		result: classifier.Result{
+			IsAgent: true,
+			Tool:    "agent",
+		},
+		state: paneState{paneContent: assessContentIdle, lastCaptureActive: 1},
+	}}}}
+
+	firstResult := make(chan terminal.Status, 1)
+	go func() {
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		firstResult <- got
+	}()
+	<-capture.started
+
+	secondStarted := make(chan struct{})
+	secondResult := make(chan terminal.Status, 1)
+	go func() {
+		close(secondStarted)
+		got, _ := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+		secondResult <- got
+	}()
+	<-secondStarted
+	for range 100 {
+		select {
+		case got := <-secondResult:
+			t.Fatalf("second observation returned %q before the fresh capture completed", got)
+		default:
+			runtime.Gosched()
+		}
+	}
+
+	close(capture.release)
+	assert.Equal(t, terminal.StatusActive, <-firstResult)
+	assert.Equal(t, terminal.StatusActive, <-secondResult)
+	assert.Equal(t, int32(1), capture.calls.Load())
 }
 
 func TestGetStatus_RecordsFreshCapture(t *testing.T) {
 	capture := &fakeCapture{content: "❯"}
 	recorder := &fakeCaptureRecorder{}
 	integ := New(nil, nil)
+	integ.tracker = newImmediateTracker()
 	integ.capture = capture
 	integ.recorder = recorder
 	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
@@ -458,9 +767,9 @@ func TestGetStatus_RecordsFreshCapture(t *testing.T) {
 		result: classifier.Result{IsAgent: true, Tool: testToolClaude},
 	}}}}
 
-	status, err := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+	got, err := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
 	require.NoError(t, err)
-	assert.Equal(t, terminal.StatusReady, status)
+	assert.Equal(t, terminal.StatusReady, got)
 	require.Len(t, recorder.observations, 1)
 	assert.Equal(t, CaptureObservation{
 		SessionName: "sess",
@@ -468,6 +777,8 @@ func TestGetStatus_RecordsFreshCapture(t *testing.T) {
 		Tool:        testToolClaude,
 		Content:     "❯",
 		Status:      terminal.StatusReady,
+		RuleID:      "claude/prompt-glyph",
+		Signals:     []assess.Signal{{RuleID: "claude/prompt-glyph", Region: "bottomLines", Matched: "❯"}},
 	}, recorder.observations[0])
 
 	_, err = integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
@@ -477,6 +788,7 @@ func TestGetStatus_RecordsFreshCapture(t *testing.T) {
 
 func TestGetStatus_RecorderErrorIsNonFatal(t *testing.T) {
 	integ := New(nil, nil)
+	integ.tracker = newImmediateTracker()
 	integ.capture = &fakeCapture{content: "❯"}
 	integ.recorder = &fakeCaptureRecorder{err: errors.New("disk full")}
 	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
@@ -484,9 +796,112 @@ func TestGetStatus_RecorderErrorIsNonFatal(t *testing.T) {
 		result: classifier.Result{IsAgent: true, Tool: testToolClaude},
 	}}}}
 
-	status, err := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+	got, err := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
 	require.NoError(t, err)
-	assert.Equal(t, terminal.StatusReady, status)
+	assert.Equal(t, terminal.StatusReady, got)
+}
+
+// TestGetStatus_UnchangedContentStillObserves pins the central fix of this
+// redesign: an unchanged frame between polls is itself a confirming
+// observation for a pending idle candidate, not a short-circuited no-op.
+// RefreshCache bumps refreshGeneration every successful poll regardless of
+// whether tmux output changed, and GetStatus must forward every one of those
+// generations to Tracker.Observe.
+func TestGetStatus_UnchangedContentStillObserves(t *testing.T) {
+	capture := &fakeCapture{content: assessContentWorking}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{{
+		SessionName: "sess",
+		PaneID:      "%1",
+		PanePID:     101,
+		WindowIndex: "0",
+		WindowName:  testToolClaude,
+		PaneTitle:   testToolClaude,
+		Activity:    1,
+	}}}
+	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, "agent")}, nil, nil, nil), lister)
+	integ.capture = capture
+	integ.tracker = status.NewTracker(assess.NewEngine(), status.Options{
+		ConfirmIdle: status.ConfirmPolicy{Polls: 2},
+	})
+	integ.RefreshCache()
+	info := &terminal.SessionInfo{Name: "sess", PaneID: "%1"}
+
+	// Poll 1: brand-new key, busy content -> first observation publishes
+	// immediately, no debounce needed yet.
+	got, err := integ.GetStatus(context.Background(), info)
+	require.NoError(t, err)
+	require.Equal(t, terminal.StatusActive, got)
+
+	// Poll 2: content switches to idle and pane activity advances, forcing a
+	// fresh capture. This starts the 2-poll idle candidate.
+	capture.content = assessContentIdle
+	lister.panes[0].Activity = 2
+	integ.limiters = make(map[string]*terminal.RateLimiter) // simulate the capture rate limiter's interval elapsing
+	integ.RefreshCache()
+	got, err = integ.GetStatus(context.Background(), info)
+	require.NoError(t, err)
+	require.Equal(t, terminal.StatusActive, got, "one idle poll must not yet flip the published status")
+
+	// Poll 3: activity is unchanged, so GetStatus serves cached content. The
+	// successful refresh still advances the generation and confirms idle.
+	integ.RefreshCache()
+	got, err = integ.GetStatus(context.Background(), info)
+	require.NoError(t, err)
+	assert.Equal(t, terminal.StatusReady, got, "unchanged content across a new refresh generation must still confirm the idle candidate")
+}
+
+// TestRefreshCache_TransientFailureServesStaleCache pins the transport-level
+// missing tolerance: one list-panes failure must serve the last-known cache
+// (no missing flash), and recovery resets the failure counter.
+func TestRefreshCache_TransientFailureServesStaleCache(t *testing.T) {
+	lister := &flakyPaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 101, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude},
+	}}
+	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
+	require.Equal(t, 2, integ.missingTolerance, "default tolerance should match terminal.status.confirm.missing.polls' default of 2")
+
+	integ.RefreshCache()
+	info, err := integ.DiscoverSession(context.Background(), "sess", nil)
+	require.NoError(t, err)
+	require.NotNil(t, info, "cache must be fresh after a successful refresh")
+
+	lister.fail = true
+	integ.RefreshCache() // failure #1: below missingTolerance, tolerated
+
+	info, err = integ.DiscoverSession(context.Background(), "sess", nil)
+	require.NoError(t, err)
+	assert.NotNil(t, info, "a single transient list-panes failure must not flash the session missing")
+	assert.NotNil(t, integ.cache["sess"], "cache must be kept across a tolerated failure")
+
+	lister.fail = false
+	integ.RefreshCache() // success resets the failure counter
+	assert.Equal(t, 0, integ.refreshFailures)
+
+	info, err = integ.DiscoverSession(context.Background(), "sess", nil)
+	require.NoError(t, err)
+	assert.NotNil(t, info, "recovery after a tolerated failure must never have flashed missing")
+}
+
+// TestRefreshCache_ClearsCacheAfterToleranceExceeded pins the other half of
+// the missing-tolerance policy: reaching missingTolerance clears the cache
+// and publishes missing, same as the pre-Phase-4 unconditional-clear behavior.
+func TestRefreshCache_ClearsCacheAfterToleranceExceeded(t *testing.T) {
+	lister := &flakyPaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 101, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude},
+	}}
+	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
+
+	integ.RefreshCache()
+	require.NotNil(t, integ.cache["sess"])
+
+	lister.fail = true
+	integ.RefreshCache() // failure #1: tolerated
+	integ.RefreshCache() // failure #2: >= missingTolerance, cache cleared
+
+	info, err := integ.DiscoverSession(context.Background(), "sess", nil)
+	require.NoError(t, err)
+	assert.Nil(t, info, "two consecutive failures (missingTolerance=2) must clear the cache and publish missing")
+	assert.Empty(t, integ.cache)
 }
 
 func toolPatterns(tools ...string) []classifier.TitlePattern {
@@ -522,6 +937,19 @@ type blockingPaneLister struct {
 
 func (b *blockingPaneLister) ListAllPanes() ([]classifier.PaneInput, error) { return b.listFn() }
 
+// flakyPaneLister returns panes normally, or a transport error while fail is true.
+type flakyPaneLister struct {
+	panes []classifier.PaneInput
+	fail  bool
+}
+
+func (f *flakyPaneLister) ListAllPanes() ([]classifier.PaneInput, error) {
+	if f.fail {
+		return nil, errors.New("list-panes failed")
+	}
+	return f.panes, nil
+}
+
 // countingProcessReader wraps a ProcessReader and invokes a callback on each
 // Children call so tests can assert how many times the OS is queried.
 type countingProcessReader struct {
@@ -539,6 +967,22 @@ type fakeProcessReader struct {
 	comm  map[int]string
 }
 
+type blockingFingerprintReader struct {
+	process.ProcessReader
+	fingerprint int
+	started     chan struct{}
+	release     chan struct{}
+	once        sync.Once
+}
+
+func (b *blockingFingerprintReader) TPGID(int) (int, error) {
+	b.once.Do(func() {
+		close(b.started)
+		<-b.release
+	})
+	return b.fingerprint, nil
+}
+
 func (f *fakeProcessReader) TPGID(int) (int, error) { return f.tpgid, nil }
 func (f *fakeProcessReader) Comm(pid int) string    { return f.comm[pid] }
 func (f *fakeProcessReader) Cmdline(pid int) ([]string, error) {
@@ -549,6 +993,20 @@ func (f *fakeProcessReader) Cmdline(pid int) ([]string, error) {
 }
 func (f *fakeProcessReader) Environ(int) map[string]string { return nil }
 func (f *fakeProcessReader) Children(int) ([]int, error)   { return nil, nil }
+
+type blockingStatusCapture struct {
+	content string
+	started chan struct{}
+	release chan struct{}
+	calls   atomic.Int32
+}
+
+func (b *blockingStatusCapture) CapturePane(context.Context, string) (string, error) {
+	b.calls.Add(1)
+	close(b.started)
+	<-b.release
+	return b.content, nil
+}
 
 type fakeCapture struct {
 	content string

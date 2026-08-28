@@ -1,0 +1,17 @@
+⚠ `[features].codex_hooks` is deprecated. Use `[features].hooks` instead.
+Enable it with `--enable hooks` or `[features].hooks` in config.toml. See
+https://developers.openai.com/codex/config-basic#feature-flags for details.
+
+╭──────────────────────────────────────────────────╮
+│ >_ OpenAI Codex (v0.1.0)                         │
+│                                                  │
+│ model:     gpt-x xhigh   /model to change        │
+│ directory: ~/example/repo                        │
+╰──────────────────────────────────────────────────╯
+
+  Tip: New Use /fast to enable our fastest inference with increased plan usage.
+
+
+› Use /skills to list available skills
+
+  gpt-x xhigh · ~/example/repo

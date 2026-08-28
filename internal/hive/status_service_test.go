@@ -51,10 +51,32 @@ func TestAggregateStatus(t *testing.T) {
 }
 
 func TestStatusRank(t *testing.T) {
-	assert.Greater(t, statusRank(terminal.StatusApproval), statusRank(terminal.StatusActive))
+	assert.Greater(t, statusRank(terminal.StatusApproval), statusRank(terminal.StatusQuestion))
+	assert.Greater(t, statusRank(terminal.StatusQuestion), statusRank(terminal.StatusActive))
 	assert.Greater(t, statusRank(terminal.StatusActive), statusRank(terminal.StatusMissing))
 	assert.Greater(t, statusRank(terminal.StatusMissing), statusRank(terminal.StatusReady))
 	assert.Zero(t, statusRank(terminal.Status("unknown")))
+}
+
+func TestAggregateStatus_FullOrdering(t *testing.T) {
+	// Highest to lowest priority; aggregateStatus must pick the higher-ranked
+	// status regardless of which side is "current" vs "next".
+	order := []terminal.Status{
+		terminal.StatusApproval,
+		terminal.StatusQuestion,
+		terminal.StatusActive,
+		terminal.StatusMissing,
+		terminal.StatusReady,
+		terminal.Status(""),
+	}
+
+	for hi := 0; hi < len(order); hi++ {
+		for lo := hi + 1; lo < len(order); lo++ {
+			higher, lower := order[hi], order[lo]
+			assert.Equal(t, higher, aggregateStatus(higher, lower), "%s should outrank %s as current", higher, lower)
+			assert.Equal(t, higher, aggregateStatus(lower, higher), "%s should outrank %s as next", higher, lower)
+		}
+	}
 }
 
 type fakeTerminalIntegration struct {

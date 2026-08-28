@@ -248,7 +248,7 @@ func (m *pickModel) applyFilter() {
 		// Specific status filter
 		var statusFiltered []pickItem
 		for _, item := range m.filtered {
-			if string(m.statuses[item.statusKey()]) == m.statusFilter {
+			if statusMatchesFilter(m.statuses[item.statusKey()], m.statusFilter) {
 				statusFiltered = append(statusFiltered, item)
 			}
 		}
@@ -259,6 +259,19 @@ func (m *pickModel) applyFilter() {
 	if m.cursor >= len(m.filtered) {
 		m.cursor = max(len(m.filtered)-1, 0)
 	}
+}
+
+// statusMatchesFilter reports whether a pane's status satisfies the
+// picker's string filter value. "approval" also matches StatusQuestion:
+// question renders at the approval tier. This mirrors
+// sessions.statusMatchesFilter as a separate copy — the picker's filter
+// value is a plain string (not a terminal.Status), and pulling in the TUI
+// package for one three-line predicate isn't worth the dependency.
+func statusMatchesFilter(status terminal.Status, filter string) bool {
+	if string(status) == filter {
+		return true
+	}
+	return filter == string(terminal.StatusApproval) && status == terminal.StatusQuestion
 }
 
 const maxRecents = 3

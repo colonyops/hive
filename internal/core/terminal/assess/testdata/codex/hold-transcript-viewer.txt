@@ -1,0 +1,6 @@
+Codex CLI
+
+── Transcript (ctrl+r to toggle) ──
+
+user: run the example test suite
+assistant: Running go test ./... now.

@@ -1,0 +1,6 @@
+Claude Code
+
+── Transcript (ctrl+r to toggle) ──
+
+user: please summarize the changes
+assistant: Sure, here's a summary of what changed...

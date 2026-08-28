@@ -1,0 +1,4 @@
+π - hive-example
+
+Proceed with cleanup of internal/example/tmp? (y/n)
+>

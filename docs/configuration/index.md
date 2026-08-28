@@ -101,10 +101,42 @@ Agent resolution order is: CLI/session agent, then batch `--agent`, then the las
 
 Pane capture recording is disabled by default. When explicitly enabled, Hive records only fresh captures it already reads from classified agent panes; it does not install agent hooks or trigger extra tmux captures.
 
-Recordings are individual JSON files under `$HIVE_DATA_DIR/recordings/tmux` (normally `~/.local/share/hive/recordings/tmux`). Each filename is the SHA-256 hash of the complete visible pane capture, so identical content is stored only once across panes and Hive processes. Metadata and the weak label come from the first observation of those exact bytes; later identical observations are skipped. Hive stores the whole visible pane; `capture-pane` does not include tmux scrollback history. Directories use mode `0700` and files use mode `0600`. Each record contains the terminal content, an opaque session/pane key, detected tool, and Hive's current state-tracker result as a **weak label**. Weak labels are useful for bootstrapping a training corpus but are not human-verified ground truth. A private `.identity.key` keeps opaque grouping keys stable across Hive processes; exclude that key from any corpus export.
+Recordings are individual JSON files under `$HIVE_DATA_DIR/recordings/tmux` (normally `~/.local/share/hive/recordings/tmux`). Each filename is the SHA-256 hash of the complete visible pane capture, so identical content is stored only once across panes and Hive processes. Metadata and the weak label come from the first observation of those exact bytes; later identical observations are skipped. Hive stores the whole visible pane; `capture-pane` does not include tmux scrollback history. Directories use mode `0700` and files use mode `0600`. Each record contains the terminal content, an opaque session/pane key, detected tool, and the Stage 2 published `terminal.Status` as its **weak label** (`hive_assess_v1`). The separate rule ID and matched signals describe the Stage 1 assessment evidence that fed the tracker. Weak labels are useful for bootstrapping a training corpus but are not human-verified ground truth. A private `.identity.key` keeps opaque grouping keys stable across Hive processes; exclude that key from any corpus export.
 
 !!! warning
     Terminal panes can contain source code, prompts, command output, file paths, and secrets. Hive does not redact, upload, rotate, or delete these recordings. Review and remove local files yourself when they are no longer needed. Enabling recording is an explicit privacy opt-in.
+
+## Terminal
+
+Hive detects agent status in two stages: a stateless per-poll assessment of the visible pane content, then a debounce tracker (`terminal.status`) that turns those assessments into stable, published statuses. Debouncing exists because a single poll can catch a tool mid-redraw; requiring a status to repeat before it's published avoids flickering between `active`/`ready`/`missing` on transient noise.
+
+| Option                                        | Type       | Default | Description                                                              |
+| ---------------------------------------------- | ---------- | ------- | ------------------------------------------------------------------------- |
+| `terminal.status.confirm.idle.polls`           | `int`      | `2`     | Consecutive confirming polls required before leaving `active` for `ready` |
+| `terminal.status.confirm.idle.min_duration`    | `duration` | `2s`    | Minimum wall-clock time the idle candidacy must also span                 |
+| `terminal.status.confirm.idle.stable_content`  | `bool`     | `true`  | Require the pane content to stay unchanged for the whole idle candidacy   |
+| `terminal.status.confirm.missing.polls`        | `int`      | `2`     | See below: governs list-panes failure tolerance, not a debounce policy   |
+| `terminal.status.confirm.approval.polls`       | `int`      | `1`     | Consecutive confirming polls required before leaving `approval`/`question` |
+
+Entering `active`, `approval`, or `question` is always immediate (a busy indicator or a dialog is trusted the moment it's seen); only *leaving* those states is debounced, since a false positive there is a brief flash rather than a missed prompt.
+
+`terminal.status.confirm.missing.polls` is not a `status.Tracker` debounce policy — it is consumed directly by the tmux transport as a list-panes failure tolerance: N polls tolerates N-1 consecutive `tmux list-panes` failures (serving the last-known cache) before a pane is published as `missing`. This keeps a single transient tmux hiccup from flashing every session missing.
+
+Each `polls`/`min_duration` pair is combined, not alternative: the tracker requires `max(polls, ceil(min_duration / tmux.poll_interval))` consecutive confirming polls. Setting `min_duration` shorter than `tmux.poll_interval` has no effect, since the poll-count floor already dominates — `hive doctor` warns about this combination.
+
+```yaml
+terminal:
+  status:
+    confirm:
+      idle:
+        polls: 2
+        min_duration: 2s
+        stable_content: true
+      missing:
+        polls: 2
+      approval:
+        polls: 1
+```
 
 ## TUI
 

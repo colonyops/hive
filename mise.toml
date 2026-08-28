@@ -109,4 +109,4 @@ run = "docker build -f Dockerfile.test -t hive-integration-test . && docker run 
 [tasks."container"]
 description = "Build Docker image and run ephemeral container"
 depends = ["build"]
-run = "docker run --rm -it -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q .)"
+run = "docker run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q .)"

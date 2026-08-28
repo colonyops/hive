@@ -1,0 +1,9 @@
+Claude Code
+
+● Completed the requested change.
+
+──────────────────────────────
+❯ 
+──────────────────────────────
+  example-repo · feat/example-branch · 304k/1m 30% · some-model
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"time"
 
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/pkg/pathutil"
@@ -153,6 +154,38 @@ func (c *Config) Warnings() []ValidationWarning {
 			})
 		}
 	}
+
+	warnings = append(warnings, c.terminalConfirmWarnings()...)
+
+	return warnings
+}
+
+// terminalConfirmWarnings flags a configured min_duration shorter than
+// tmux.poll_interval: effectivePolls' poll-count floor already dominates a
+// sub-interval duration, so it silently has no effect — the same
+// dead-hysteresis bug class a fixed-window hysteresis timer falls into when
+// its window is shorter than the sampling interval.
+func (c *Config) terminalConfirmWarnings() []ValidationWarning {
+	if c.Tmux.PollInterval <= 0 {
+		return nil
+	}
+
+	var warnings []ValidationWarning
+	check := func(item string, d time.Duration) {
+		if d > 0 && d < c.Tmux.PollInterval {
+			warnings = append(warnings, ValidationWarning{
+				Category: "Terminal",
+				Item:     item,
+				Message: fmt.Sprintf(
+					"min_duration %s is shorter than tmux.poll_interval %s; the poll-count floor already dominates, so this duration has no effect",
+					d, c.Tmux.PollInterval,
+				),
+			})
+		}
+	}
+
+	check("terminal.status.confirm.idle.min_duration", c.Terminal.Status.Confirm.Idle.MinDuration)
+	check("terminal.status.confirm.approval.min_duration", c.Terminal.Status.Confirm.Approval.MinDuration)
 
 	return warnings
 }

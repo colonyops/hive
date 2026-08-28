@@ -49,6 +49,7 @@ type PaneInput struct {
 	WorkDir     string
 	Activity    int64
 	HiveSession string
+	InMode      bool // pane is in copy-mode/view-mode (tmux #{pane_in_mode})
 }
 
 // Classifier classifies tmux panes as agent or non-agent.

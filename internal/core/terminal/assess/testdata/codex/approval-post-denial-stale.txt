@@ -1,0 +1,13 @@
+Codex CLI
+
+▶ Running command
+
+Allow command?
+  rm -rf /tmp/example-scratch
+Press enter to confirm or esc to cancel
+
+Command denied. Continuing without the requested change.
+
+╭──────────────────────────────────────────────────────────╮
+│ >                                                        │
+╰──────────────────────────────────────────────────────────╯

@@ -43,10 +43,3 @@ func (rl *RateLimiter) Allow() bool {
 	}
 	return false
 }
-
-// Coalesce executes the provided callback only if the rate limit allows.
-func (rl *RateLimiter) Coalesce(callback func()) {
-	if rl.Allow() {
-		callback()
-	}
-}

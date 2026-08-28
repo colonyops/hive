@@ -14,11 +14,12 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/assess"
 )
 
 const (
-	captureRecordSchemaVersion = 2
-	weakLabelSource            = "hive_state_tracker_v1"
+	captureRecordSchemaVersion = 3
+	weakLabelSource            = "hive_assess_v1"
 	identityKeyFilename        = ".identity.key"
 )
 
@@ -29,6 +30,8 @@ type CaptureObservation struct {
 	Tool        string
 	Content     string
 	Status      terminal.Status
+	RuleID      string          // which assess rule fired
+	Signals     []assess.Signal // matched evidence for the ML corpus track
 }
 
 // CaptureRecorder records fresh pane captures for offline model training.
@@ -54,6 +57,8 @@ type captureRecord struct {
 	ContentSHA256   string          `json:"content_sha256"`
 	WeakLabel       terminal.Status `json:"weak_label"`
 	WeakLabelSource string          `json:"weak_label_source"`
+	RuleID          string          `json:"rule_id,omitempty"`
+	Signals         []assess.Signal `json:"signals,omitempty"`
 }
 
 // NewJSONCaptureRecorder creates a content-addressed capture recorder.
@@ -114,6 +119,8 @@ func (r *JSONCaptureRecorder) Record(observation CaptureObservation) error {
 		ContentSHA256:   hash,
 		WeakLabel:       observation.Status,
 		WeakLabelSource: weakLabelSource,
+		RuleID:          observation.RuleID,
+		Signals:         observation.Signals,
 	}
 	data, err := json.Marshal(record)
 	if err != nil {

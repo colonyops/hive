@@ -1,0 +1,18 @@
+# Drives a claude pane through one full turn: send a prompt, confirm the
+# tracker publishes "working" promptly (idle->working is immediate by
+# design — a false positive here is just a brief flash), then confirm it
+# settles back to "ready" only after the idle confirmation policy's
+# poll-count and hold window are satisfied (see
+# internal/core/terminal/status/options.go's ConfirmIdle) — not on the
+# first idle-looking frame, which would be premature given output can still
+# be churning.
+#
+# Container-only: run via
+#   hive x assess scenario test/calibration/scenarios/claude-turn-lifecycle.yaml --target <pane>
+# inside `mise container`. See .claude/skills/autocalibrate/SKILL.md.
+scenario: claude-turn-lifecycle
+tool: claude
+steps:
+  - send: "summarize the README in one sentence"
+  - expect: {state: working, within_polls: 2}
+  - expect: {state: ready, within_polls: 6, holds_for_polls: 2}
