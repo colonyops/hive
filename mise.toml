@@ -1,6 +1,6 @@
 [tools]
 # Go Tools
-"go" = "1.26"
+"go" = "1.27.1"
 "go:golang.org/x/tools/cmd/deadcode" = "latest"
 "go:github.com/abice/go-enum" = "v0.9.4"
 "github:hay-kot/gobusgen" = "v0.3.0"
