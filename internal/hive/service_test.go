@@ -74,6 +74,7 @@ func (m *mockGit) WorktreeAdd(_ context.Context, _, _, _ string) error          
 func (m *mockGit) WorktreeRemove(_ context.Context, _, _, _ string) error       { return nil }
 func (m *mockGit) Fetch(_ context.Context, _ string) error                      { return nil }
 func (m *mockGit) HasUnpushedCommits(_ context.Context, _ string) (bool, error) { return false, nil }
+
 func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
 	return "main", nil
 }
