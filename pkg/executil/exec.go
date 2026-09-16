@@ -37,6 +37,55 @@ func (w *limitedWriter) Write(p []byte) (int, error) {
 	return origLen, nil
 }
 
+// CommandError describes a failed child process and its capped output.
+type CommandError struct {
+	Command string
+	Dir     string
+	Output  []byte
+	Err     error
+}
+
+func cappedErrorOutput(output []byte) []byte {
+	if len(output) > maxStderrLen {
+		return output[:maxStderrLen]
+	}
+	return output
+}
+
+// NewCommandError creates a command error with at most 500 bytes of child output.
+func NewCommandError(command, dir string, output []byte, err error) *CommandError {
+	return &CommandError{
+		Command: command,
+		Dir:     dir,
+		Output:  bytes.Clone(cappedErrorOutput(output)),
+		Err:     err,
+	}
+}
+
+func (e *CommandError) Error() string {
+	prefix := fmt.Sprintf("exec %s", e.Command)
+	if e.Dir != "" {
+		prefix = fmt.Sprintf("%s in %s", prefix, e.Dir)
+	}
+	msg := strings.TrimSpace(string(cappedErrorOutput(e.Output)))
+	if msg != "" && !strings.Contains(e.Err.Error(), msg) {
+		return fmt.Sprintf("%s: %s: %v", prefix, msg, e.Err)
+	}
+	return fmt.Sprintf("%s: %v", prefix, e.Err)
+}
+
+func (e *CommandError) Unwrap() error {
+	return e.Err
+}
+
+func errorWithOutput(err error, output []byte) error {
+	msg := strings.TrimSpace(string(cappedErrorOutput(output)))
+	if msg == "" {
+		return err
+	}
+	return fmt.Errorf("%s: %w", msg, err)
+}
+
 // RunSh executes a shell command in the given directory (empty means inherit cwd).
 // On failure, stderr is returned as the error message, capped at 500 bytes to
 // prevent large or ANSI-polluted output from corrupting logs or TUI display.
@@ -51,11 +100,7 @@ func RunSh(ctx context.Context, dir, cmd string) error {
 	c.Stdout = io.Discard
 	c.Stderr = &limitedWriter{buf: &buf, max: maxStderrLen}
 	if err := c.Run(); err != nil {
-		msg := strings.TrimSpace(buf.String())
-		if msg != "" {
-			return fmt.Errorf("%s: %w", msg, err)
-		}
-		return err
+		return errorWithOutput(err, buf.Bytes())
 	}
 	return nil
 }
@@ -79,7 +124,7 @@ type RealExecutor struct{}
 func (e *RealExecutor) Run(ctx context.Context, cmd string, args ...string) ([]byte, error) {
 	out, err := exec.CommandContext(ctx, cmd, args...).CombinedOutput()
 	if err != nil {
-		return out, fmt.Errorf("exec %s: %w", cmd, err)
+		return out, NewCommandError(cmd, "", out, err)
 	}
 	return out, nil
 }
@@ -108,7 +153,7 @@ func (e *RealExecutor) RunDir(ctx context.Context, dir, cmd string, args ...stri
 	c.Dir = dir
 	out, err := c.CombinedOutput()
 	if err != nil {
-		return out, fmt.Errorf("exec %s in %s: %w", cmd, dir, err)
+		return out, NewCommandError(cmd, dir, out, err)
 	}
 	return out, nil
 }

@@ -64,6 +64,17 @@ func TestRunSh_NoStderrReturnsExitError(t *testing.T) {
 	assert.Equal(t, 2, exitErr.ExitCode())
 }
 
+func TestCommandError_CapsErrorMessageAfterConstruction(t *testing.T) {
+	err := &CommandError{
+		Command: "build",
+		Output:  []byte(strings.Repeat("B", maxStderrLen*2)),
+		Err:     errors.New("exit status 1"),
+	}
+
+	assert.Contains(t, err.Error(), strings.Repeat("B", maxStderrLen))
+	assert.NotContains(t, err.Error(), strings.Repeat("B", maxStderrLen+1))
+}
+
 func TestRealExecutor_Run(t *testing.T) {
 	exec := &RealExecutor{}
 	ctx := context.Background()
@@ -80,9 +91,34 @@ func TestRealExecutor_Run(t *testing.T) {
 		assert.Contains(t, err.Error(), "exec nonexistent-command-12345")
 	})
 
-	t.Run("command fails", func(t *testing.T) {
-		_, err := exec.Run(ctx, "false")
+	t.Run("command failure includes child output", func(t *testing.T) {
+		out, err := exec.Run(ctx, "sh", "-c", "printf 'remote: Repository not found.\\n' >&2; exit 1")
 		require.Error(t, err)
+		assert.Equal(t, "remote: Repository not found.\n", string(out))
+		assert.Contains(t, err.Error(), "remote: Repository not found.")
+
+		var commandErr *CommandError
+		require.ErrorAs(t, err, &commandErr)
+		assert.Equal(t, "sh", commandErr.Command)
+		assert.Empty(t, commandErr.Dir)
+		assert.Equal(t, out, commandErr.Output)
+	})
+
+	t.Run("silent failure keeps existing error text", func(t *testing.T) {
+		_, err := exec.Run(ctx, "sh", "-c", "exit 7")
+		require.EqualError(t, err, "exec sh: exit status 7")
+	})
+
+	t.Run("failure output is capped", func(t *testing.T) {
+		childOutput := strings.Repeat("A", maxStderrLen*2)
+		out, err := exec.Run(ctx, "sh", "-c", fmt.Sprintf("printf '%%s' '%s' >&2; exit 1", childOutput))
+		require.Error(t, err)
+		assert.Equal(t, childOutput, string(out))
+
+		var commandErr *CommandError
+		require.ErrorAs(t, err, &commandErr)
+		assert.Len(t, commandErr.Output, maxStderrLen)
+		assert.NotContains(t, err.Error(), strings.Repeat("A", maxStderrLen+1))
 	})
 }
 
@@ -94,6 +130,21 @@ func TestRealExecutor_RunDir(t *testing.T) {
 		out, err := exec.RunDir(ctx, "/tmp", "pwd")
 		require.NoError(t, err)
 		assert.Contains(t, string(out), "/tmp")
+	})
+
+	t.Run("failure includes child output", func(t *testing.T) {
+		_, err := exec.RunDir(ctx, "/tmp", "sh", "-c", "printf 'checkout hook failed\\n' >&2; exit 1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "checkout hook failed")
+
+		var commandErr *CommandError
+		require.ErrorAs(t, err, &commandErr)
+		assert.Equal(t, "/tmp", commandErr.Dir)
+	})
+
+	t.Run("silent failure keeps existing error text", func(t *testing.T) {
+		_, err := exec.RunDir(ctx, "/tmp", "sh", "-c", "exit 8")
+		require.EqualError(t, err, "exec sh in /tmp: exit status 8")
 	})
 
 	t.Run("invalid directory", func(t *testing.T) {
