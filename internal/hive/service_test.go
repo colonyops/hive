@@ -2,6 +2,7 @@ package hive
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -1250,6 +1251,109 @@ func TestCreateSession_BranchTemplate(t *testing.T) {
 	})
 }
 
+func TestCreateSession_ErrorIncludesDestinationAndStrategy(t *testing.T) {
+	newService := func(t *testing.T, gitImpl git.Git, rules []config.Rule) *SessionService {
+		t.Helper()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   rules,
+		}
+		return NewSessionService(
+			newMockStore(),
+			gitImpl,
+			cfg,
+			testbus.New(t).EventBus,
+			&executiltest.Exec{},
+			tmpl.New(tmpl.Config{}),
+			zerolog.New(io.Discard),
+			io.Discard,
+			io.Discard,
+		)
+	}
+
+	assertContext := func(t *testing.T, err error, operation, destination, strategy string, cause error) {
+		t.Helper()
+		require.Error(t, err)
+		require.ErrorIs(t, err, cause)
+
+		var createErr *CreateSessionError
+		require.ErrorAs(t, err, &createErr)
+		assert.Equal(t, operation, createErr.Operation)
+		assert.Equal(t, destination, createErr.Destination)
+		assert.Equal(t, strategy, createErr.CloneStrategy)
+		assert.Contains(t, err.Error(), destination)
+		assert.Contains(t, err.Error(), strategy)
+	}
+
+	t.Run("clone failure", func(t *testing.T) {
+		cause := errors.New("clone failed")
+		var destination string
+		spy := &capturingMockGit{
+			CloneFn: func(_ context.Context, _, dest string) error {
+				destination = dest
+				return cause
+			},
+		}
+		svc := newService(t, spy, nil)
+
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:          "clone-failure",
+			Remote:        testRemote,
+			CloneStrategy: config.CloneStrategyFull,
+			SkipSpawn:     true,
+		})
+		assertContext(t, err, "clone repository", destination, config.CloneStrategyFull, cause)
+	})
+
+	t.Run("worktree add failure", func(t *testing.T) {
+		cause := errors.New("worktree failed")
+		var destination string
+		spy := &capturingMockGit{
+			WorktreeAddFn: func(_ context.Context, _, path, _ string) error {
+				destination = path
+				return cause
+			},
+		}
+		svc := newService(t, spy, nil)
+
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:          "worktree-failure",
+			Remote:        testRemote,
+			CloneStrategy: config.CloneStrategyWorktree,
+			SkipSpawn:     true,
+		})
+		assertContext(t, err, "worktree add", destination, config.CloneStrategyWorktree, cause)
+	})
+
+	t.Run("rules failure", func(t *testing.T) {
+		var destination string
+		spy := &capturingMockGit{
+			CloneFn: func(_ context.Context, _, dest string) error {
+				destination = dest
+				return nil
+			},
+		}
+		svc := newService(t, spy, []config.Rule{{Pattern: "["}})
+
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:          "rules-failure",
+			Remote:        testRemote,
+			CloneStrategy: config.CloneStrategyFull,
+			SkipSpawn:     true,
+		})
+		require.Error(t, err)
+
+		var createErr *CreateSessionError
+		require.ErrorAs(t, err, &createErr)
+		assert.Equal(t, "execute rules", createErr.Operation)
+		assert.Equal(t, destination, createErr.Destination)
+		assert.Equal(t, config.CloneStrategyFull, createErr.CloneStrategy)
+		assert.Contains(t, err.Error(), destination)
+		assert.Contains(t, err.Error(), config.CloneStrategyFull)
+	})
+}
+
 func TestCreateSession_DoesNotReuseRecycledWorktree(t *testing.T) {
 	store := newMockStore()
 	remote := "https://github.com/example/repo.git"
@@ -1295,7 +1399,15 @@ func TestCreateSession_DoesNotReuseRecycledWorktree(t *testing.T) {
 // capturingMockGit extends mockGit with optional function overrides for capturing calls.
 type capturingMockGit struct {
 	mockGit
+	CloneFn       func(ctx context.Context, url, dest string) error
 	WorktreeAddFn func(ctx context.Context, repoDir, path, branch string) error
+}
+
+func (m *capturingMockGit) Clone(ctx context.Context, url, dest string) error {
+	if m.CloneFn != nil {
+		return m.CloneFn(ctx, url, dest)
+	}
+	return nil
 }
 
 func (m *capturingMockGit) WorktreeAdd(ctx context.Context, repoDir, path, branch string) error {

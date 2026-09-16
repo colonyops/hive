@@ -2,11 +2,13 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
 	"testing"
 
+	"github.com/colonyops/hive/pkg/executil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -85,10 +87,14 @@ func TestParseDiffStats(t *testing.T) {
 
 // mockExecutor is a simple mock for testing git executor methods.
 type mockExecutor struct {
+	runFunc    func(ctx context.Context, cmd string, args ...string) ([]byte, error)
 	runDirFunc func(ctx context.Context, dir, cmd string, args ...string) ([]byte, error)
 }
 
 func (m *mockExecutor) Run(ctx context.Context, cmd string, args ...string) ([]byte, error) {
+	if m.runFunc != nil {
+		return m.runFunc(ctx, cmd, args...)
+	}
 	return nil, nil
 }
 
@@ -105,6 +111,31 @@ func (m *mockExecutor) RunStream(ctx context.Context, stdout, stderr io.Writer, 
 
 func (m *mockExecutor) RunDirStream(ctx context.Context, dir string, stdout, stderr io.Writer, cmd string, args ...string) error {
 	return nil
+}
+
+func TestExecutor_CloneErrorIncludesRemoteAndOutput(t *testing.T) {
+	remote := "https://github.com/example/missing.git"
+	dest := "/tmp/missing"
+	childErr := errors.New("exit status 128")
+	output := []byte("remote: Repository not found.\nfatal: repository not found\n")
+	mock := &mockExecutor{
+		runFunc: func(_ context.Context, cmd string, args ...string) ([]byte, error) {
+			assert.Equal(t, "git", cmd)
+			assert.Equal(t, []string{"clone", remote, dest}, args)
+			return output, childErr
+		},
+	}
+
+	err := NewExecutor("git", mock).Clone(context.Background(), remote, dest)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), remote)
+	assert.Contains(t, err.Error(), "remote: Repository not found.")
+	assert.Equal(t, 1, strings.Count(err.Error(), "remote: Repository not found."))
+	require.ErrorIs(t, err, childErr)
+
+	var commandErr *executil.CommandError
+	require.ErrorAs(t, err, &commandErr)
+	assert.Equal(t, output, commandErr.Output)
 }
 
 func TestExecutor_Branch(t *testing.T) {

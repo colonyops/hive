@@ -156,6 +156,31 @@ func (s *SessionService) SilenceOutput() (restore func()) {
 	}
 }
 
+// CreateSessionError describes a session creation step that failed after its destination was resolved.
+type CreateSessionError struct {
+	Operation     string
+	Destination   string
+	CloneStrategy string
+	Err           error
+}
+
+func (e *CreateSessionError) Error() string {
+	return fmt.Sprintf("%s (dest=%q strategy=%q): %v", e.Operation, e.Destination, e.CloneStrategy, e.Err)
+}
+
+func (e *CreateSessionError) Unwrap() error {
+	return e.Err
+}
+
+func newCreateSessionError(operation, destination, cloneStrategy string, err error) error {
+	return &CreateSessionError{
+		Operation:     operation,
+		Destination:   destination,
+		CloneStrategy: cloneStrategy,
+		Err:           err,
+	}
+}
+
 // CreateSession creates a new session or recycles an existing one.
 func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) (*session.Session, error) {
 	s.log.Info().Str("name", opts.Name).Str("remote", opts.Remote).Msg("creating session")
@@ -279,21 +304,21 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		if cloneStrategy == config.CloneStrategyWorktree {
 			bareDir, err := s.ensureBareClone(ctx, remote, progress)
 			if err != nil {
-				return nil, fmt.Errorf("ensure bare clone: %w", err)
+				return nil, newCreateSessionError("ensure bare clone", path, cloneStrategy, err)
 			}
 			writeProgressf(progress, "Adding worktree...")
 			branch, err := s.worktreeBranchName(remote, opts.Name, slug, dirID)
 			if err != nil {
-				return nil, err
+				return nil, newCreateSessionError("resolve worktree branch", path, cloneStrategy, err)
 			}
 			if err := s.git.WorktreeAdd(ctx, bareDir, path, branch); err != nil {
-				return nil, fmt.Errorf("worktree add: %w", err)
+				return nil, newCreateSessionError("worktree add", path, cloneStrategy, err)
 			}
 			sess.SetMeta(session.MetaWorktreeBranch, branch)
 		} else {
 			writeProgressf(progress, "Cloning repository...")
 			if err := s.git.Clone(ctx, remote, path); err != nil {
-				return nil, fmt.Errorf("clone repository: %w", err)
+				return nil, newCreateSessionError("clone repository", path, cloneStrategy, err)
 			}
 		}
 
@@ -314,7 +339,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		ID:         dirID,
 	}
 	if err := s.executeRules(ctx, remote, opts.Source, sess.Path, hookData); err != nil {
-		return nil, fmt.Errorf("execute rules: %w", err)
+		return nil, newCreateSessionError("execute rules", sess.Path, cloneStrategy, err)
 	}
 
 	// Save session

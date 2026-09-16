@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,30 +22,38 @@ func NewExecutor(gitPath string, exec executil.Executor) *Executor {
 	return &Executor{gitPath: gitPath, exec: exec}
 }
 
+func (e *Executor) commandError(operation, dir string, output []byte, err error) error {
+	var commandErr *executil.CommandError
+	if !errors.As(err, &commandErr) {
+		err = executil.NewCommandError(e.gitPath, dir, output, err)
+	}
+	return fmt.Errorf("%s: %w", operation, err)
+}
+
 func (e *Executor) Clone(ctx context.Context, url, dest string) error {
-	if _, err := e.exec.Run(ctx, e.gitPath, "clone", url, dest); err != nil {
-		return fmt.Errorf("git clone: %w", err)
+	if out, err := e.exec.Run(ctx, e.gitPath, "clone", url, dest); err != nil {
+		return e.commandError(fmt.Sprintf("git clone %q to %q", url, dest), "", out, err)
 	}
 	return nil
 }
 
 func (e *Executor) Checkout(ctx context.Context, dir, branch string) error {
-	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "checkout", branch); err != nil {
-		return fmt.Errorf("git checkout %s: %w", branch, err)
+	if out, err := e.exec.RunDir(ctx, dir, e.gitPath, "checkout", branch); err != nil {
+		return e.commandError(fmt.Sprintf("git checkout %s", branch), dir, out, err)
 	}
 	return nil
 }
 
 func (e *Executor) Pull(ctx context.Context, dir string) error {
-	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "pull"); err != nil {
-		return fmt.Errorf("git pull: %w", err)
+	if out, err := e.exec.RunDir(ctx, dir, e.gitPath, "pull"); err != nil {
+		return e.commandError("git pull", dir, out, err)
 	}
 	return nil
 }
 
 func (e *Executor) ResetHard(ctx context.Context, dir string) error {
-	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "reset", "--hard"); err != nil {
-		return fmt.Errorf("git reset --hard: %w", err)
+	if out, err := e.exec.RunDir(ctx, dir, e.gitPath, "reset", "--hard"); err != nil {
+		return e.commandError("git reset --hard", dir, out, err)
 	}
 	return nil
 }
@@ -52,7 +61,7 @@ func (e *Executor) ResetHard(ctx context.Context, dir string) error {
 func (e *Executor) RemoteURL(ctx context.Context, dir string) (string, error) {
 	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "remote", "get-url", "origin")
 	if err != nil {
-		return "", fmt.Errorf("git remote get-url: %w", err)
+		return "", e.commandError("git remote get-url", dir, out, err)
 	}
 	return strings.TrimSpace(string(out)), nil
 }
@@ -60,7 +69,7 @@ func (e *Executor) RemoteURL(ctx context.Context, dir string) (string, error) {
 func (e *Executor) IsClean(ctx context.Context, dir string) (bool, error) {
 	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "status", "--porcelain")
 	if err != nil {
-		return false, fmt.Errorf("git status: %w", err)
+		return false, e.commandError("git status", dir, out, err)
 	}
 	return len(strings.TrimSpace(string(out))) == 0, nil
 }
@@ -69,7 +78,7 @@ func (e *Executor) Branch(ctx context.Context, dir string) (string, error) {
 	// Try to get branch name first
 	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "branch", "--show-current")
 	if err != nil {
-		return "", fmt.Errorf("git branch: %w", err)
+		return "", e.commandError("git branch", dir, out, err)
 	}
 
 	branch := strings.TrimSpace(string(out))
@@ -80,7 +89,7 @@ func (e *Executor) Branch(ctx context.Context, dir string) (string, error) {
 	// Empty branch name means detached HEAD - get short commit SHA
 	out, err = e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--short", "HEAD")
 	if err != nil {
-		return "", fmt.Errorf("git rev-parse: %w", err)
+		return "", e.commandError("git rev-parse", dir, out, err)
 	}
 
 	return strings.TrimSpace(string(out)), nil
@@ -90,22 +99,26 @@ func (e *Executor) DefaultBranch(ctx context.Context, dir string) (string, error
 	// Get the default branch from origin's HEAD reference
 	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "symbolic-ref", "refs/remotes/origin/HEAD", "--short")
 	if err != nil {
+		symbolicErr := e.commandError("git symbolic-ref", dir, out, err)
 		// Bare clones (worktree sessions) have no refs/remotes/origin/*; the bare
 		// repo's own HEAD tracks the remote default branch, so resolve it via the
 		// common git dir. Only bare repos qualify: in a non-bare repo the common
 		// dir's HEAD is the checked-out branch, not the default branch.
-		commonDir, cerr := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--path-format=absolute", "--git-common-dir")
-		if cerr != nil {
-			return "", fmt.Errorf("git symbolic-ref: %w", err)
+		commonDir, commonErr := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--path-format=absolute", "--git-common-dir")
+		if commonErr != nil {
+			return "", errors.Join(symbolicErr, e.commandError("git rev-parse --git-common-dir", dir, commonDir, commonErr))
 		}
 		bareDir := strings.TrimSpace(string(commonDir))
-		bare, berr := e.exec.RunDir(ctx, bareDir, e.gitPath, "--no-optional-locks", "rev-parse", "--is-bare-repository")
-		if berr != nil || strings.TrimSpace(string(bare)) != "true" {
-			return "", fmt.Errorf("git symbolic-ref: %w", err)
+		bare, bareErr := e.exec.RunDir(ctx, bareDir, e.gitPath, "--no-optional-locks", "rev-parse", "--is-bare-repository")
+		if bareErr != nil {
+			return "", errors.Join(symbolicErr, e.commandError("git rev-parse --is-bare-repository", bareDir, bare, bareErr))
 		}
-		head, herr := e.exec.RunDir(ctx, bareDir, e.gitPath, "--no-optional-locks", "symbolic-ref", "HEAD", "--short")
-		if herr != nil {
-			return "", fmt.Errorf("git symbolic-ref: %w", err)
+		if strings.TrimSpace(string(bare)) != "true" {
+			return "", symbolicErr
+		}
+		head, headErr := e.exec.RunDir(ctx, bareDir, e.gitPath, "--no-optional-locks", "symbolic-ref", "HEAD", "--short")
+		if headErr != nil {
+			return "", errors.Join(symbolicErr, e.commandError("git symbolic-ref HEAD", bareDir, head, headErr))
 		}
 		return strings.TrimSpace(string(head)), nil
 	}
@@ -135,7 +148,7 @@ func (e *Executor) DiffStats(ctx context.Context, dir string) (additions, deleti
 	}
 
 	if err != nil {
-		return 0, 0, fmt.Errorf("git diff: %w", err)
+		return 0, 0, e.commandError("git diff", dir, out, err)
 	}
 
 	return parseDiffStats(string(out))
@@ -193,41 +206,38 @@ func (e *Executor) IsValidRepo(ctx context.Context, dir string) error {
 		return fmt.Errorf(".git directory missing")
 	}
 
-	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--git-dir"); err != nil {
-		return fmt.Errorf("git rev-parse failed: %w", err)
+	if out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--git-dir"); err != nil {
+		return e.commandError("git rev-parse failed", dir, out, err)
 	}
 
 	return nil
 }
 
 func (e *Executor) CloneBare(ctx context.Context, url, dest string) error {
-	if _, err := e.exec.Run(ctx, e.gitPath, "clone", "--bare", url, dest); err != nil {
-		return fmt.Errorf("git clone --bare: %w", err)
+	if out, err := e.exec.Run(ctx, e.gitPath, "clone", "--bare", url, dest); err != nil {
+		return e.commandError(fmt.Sprintf("git clone --bare %q to %q", url, dest), "", out, err)
 	}
 	return nil
 }
 
 func (e *Executor) WorktreeAdd(ctx context.Context, repoDir, path, branch string) error {
-	if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "worktree", "add", "-b", branch, path); err != nil {
-		return fmt.Errorf("git worktree add: %w", err)
+	if out, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "worktree", "add", "-b", branch, path); err != nil {
+		return e.commandError("git worktree add", repoDir, out, err)
 	}
 	return nil
 }
 
 func (e *Executor) WorktreeRemove(ctx context.Context, repoDir, path, branch string) error {
-	var errs []string
-	if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "worktree", "remove", "--force", path); err != nil {
-		errs = append(errs, fmt.Sprintf("git worktree remove: %v", err))
+	var errs []error
+	if out, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "worktree", "remove", "--force", path); err != nil {
+		errs = append(errs, e.commandError("git worktree remove", repoDir, out, err))
 	}
 	if branch != "" {
-		if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "branch", "-D", branch); err != nil {
-			errs = append(errs, fmt.Sprintf("git branch -D: %v", err))
+		if out, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "branch", "-D", branch); err != nil {
+			errs = append(errs, e.commandError("git branch -D", repoDir, out, err))
 		}
 	}
-	if len(errs) > 0 {
-		return fmt.Errorf("%s", strings.Join(errs, "; "))
-	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func (e *Executor) HasUnpushedCommits(ctx context.Context, dir string) (bool, error) {
@@ -250,7 +260,7 @@ func (e *Executor) HasUnpushedCommits(ctx context.Context, dir string) (bool, er
 		// local default branch mirrors the remote, so compare against it instead.
 		out, err = e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-list", "--count", defaultBranch+"..HEAD")
 		if err != nil {
-			return false, fmt.Errorf("rev-list unpushed: %w", err)
+			return false, e.commandError("rev-list unpushed", dir, out, err)
 		}
 	}
 
@@ -261,20 +271,20 @@ func (e *Executor) HasUnpushedCommits(ctx context.Context, dir string) (bool, er
 func (e *Executor) Fetch(ctx context.Context, dir string) error {
 	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--is-bare-repository")
 	if err != nil {
-		return fmt.Errorf("git rev-parse --is-bare-repository: %w", err)
+		return e.commandError("git rev-parse --is-bare-repository", dir, out, err)
 	}
 
 	args := []string{"fetch", "origin"}
 	if strings.TrimSpace(string(out)) == "true" {
 		branchOut, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "symbolic-ref", "HEAD", "--short")
 		if err != nil {
-			return fmt.Errorf("get bare default branch: %w", err)
+			return e.commandError("get bare default branch", dir, branchOut, err)
 		}
 		branch := strings.TrimSpace(string(branchOut))
 		args = append(args, "+refs/heads/"+branch+":refs/heads/"+branch, "--prune")
 	}
-	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, args...); err != nil {
-		return fmt.Errorf("git fetch: %w", err)
+	if out, err := e.exec.RunDir(ctx, dir, e.gitPath, args...); err != nil {
+		return e.commandError("git fetch", dir, out, err)
 	}
 	return nil
 }
