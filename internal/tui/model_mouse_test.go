@@ -36,20 +36,23 @@ func (s *mouseTestStore) Delete(_ context.Context, _ string) error        { retu
 
 type mouseTestGit struct{}
 
-func (g *mouseTestGit) Clone(_ context.Context, _, _ string) error                { return nil }
-func (g *mouseTestGit) Checkout(_ context.Context, _, _ string) error             { return nil }
-func (g *mouseTestGit) Pull(_ context.Context, _ string) error                    { return nil }
-func (g *mouseTestGit) ResetHard(_ context.Context, _ string) error               { return nil }
-func (g *mouseTestGit) RemoteURL(_ context.Context, _ string) (string, error)     { return "", nil }
-func (g *mouseTestGit) IsClean(_ context.Context, _ string) (bool, error)         { return true, nil }
-func (g *mouseTestGit) Branch(_ context.Context, _ string) (string, error)        { return "main", nil }
+func (g *mouseTestGit) Clone(_ context.Context, _, _ string) error            { return nil }
+func (g *mouseTestGit) Checkout(_ context.Context, _, _ string) error         { return nil }
+func (g *mouseTestGit) Pull(_ context.Context, _ string) error                { return nil }
+func (g *mouseTestGit) ResetHard(_ context.Context, _ string) error           { return nil }
+func (g *mouseTestGit) RemoteURL(_ context.Context, _ string) (string, error) { return "", nil }
+func (g *mouseTestGit) IsClean(_ context.Context, _ string) (bool, error)     { return true, nil }
+
+func (g *mouseTestGit) Branch(_ context.Context, _ string) (string, error) { return "main", nil }
+
 func (g *mouseTestGit) DefaultBranch(_ context.Context, _ string) (string, error) { return "main", nil }
-func (g *mouseTestGit) DiffStats(_ context.Context, _ string) (int, int, error)   { return 0, 0, nil }
-func (g *mouseTestGit) IsValidRepo(_ context.Context, _ string) error             { return nil }
-func (g *mouseTestGit) CloneBare(_ context.Context, _, _ string) error            { return nil }
-func (g *mouseTestGit) WorktreeAdd(_ context.Context, _, _, _ string) error       { return nil }
-func (g *mouseTestGit) WorktreeRemove(_ context.Context, _, _, _ string) error    { return nil }
-func (g *mouseTestGit) Fetch(_ context.Context, _ string) error                   { return nil }
+
+func (g *mouseTestGit) DiffStats(_ context.Context, _ string) (int, int, error) { return 0, 0, nil }
+func (g *mouseTestGit) IsValidRepo(_ context.Context, _ string) error           { return nil }
+func (g *mouseTestGit) CloneBare(_ context.Context, _, _ string) error          { return nil }
+func (g *mouseTestGit) WorktreeAdd(_ context.Context, _, _, _ string) error     { return nil }
+func (g *mouseTestGit) WorktreeRemove(_ context.Context, _, _, _ string) error  { return nil }
+func (g *mouseTestGit) Fetch(_ context.Context, _ string) error                 { return nil }
 func (g *mouseTestGit) HasUnpushedCommits(_ context.Context, _ string) (bool, error) {
 	return false, nil
 }
