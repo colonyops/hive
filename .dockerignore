@@ -1,0 +1,8 @@
+# Whitelist: only send what Dockerfile and Dockerfile.test need to the builder.
+*
+!dist/hive_linux_*/hive
+!dev/config.dev.yaml
+!dev/docker-entrypoint.sh
+!go.mod
+!go.sum
+!test/integration/
