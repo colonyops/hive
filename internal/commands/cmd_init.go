@@ -110,6 +110,46 @@ func detectShell() (shellName, rcFile string) {
 	return "unknown", ""
 }
 
+// defaultRCFile returns the rc file suggested by the init wizard: the file
+// detected for $SHELL, falling back to ~/.zshrc when the shell is unknown.
+// Returns "" when the home directory is unavailable.
+func defaultRCFile() (shellName, rcFile string) {
+	shellName, rcFile = detectShell()
+	if rcFile != "" || shellName != "unknown" {
+		return shellName, rcFile
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return shellName, ""
+	}
+	return shellName, filepath.Join(home, ".zshrc")
+}
+
+// aliasShellFor picks the alias syntax for rcFile. Fish config files (*.fish)
+// use fish syntax; everything else uses POSIX-style alias syntax.
+func aliasShellFor(rcFile string) string {
+	if filepath.Ext(rcFile) == ".fish" {
+		return "fish"
+	}
+	return "posix"
+}
+
+// validateRCFile rejects empty paths, directories, and paths whose parent
+// directory does not exist. The file itself may not exist yet.
+func validateRCFile(s string) error {
+	path := expandTilde(strings.TrimSpace(s))
+	if path == "" {
+		return fmt.Errorf("path is required")
+	}
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		return fmt.Errorf("path is a directory")
+	}
+	if info, err := os.Stat(filepath.Dir(path)); err != nil || !info.IsDir() {
+		return fmt.Errorf("parent directory does not exist")
+	}
+	return nil
+}
+
 // aliasAlreadyPresent reports whether rcFile contains "alias hv" on any line.
 // Returns (false, nil) if the file does not exist.
 func aliasAlreadyPresent(rcFile, aliasName string) (bool, error) {
@@ -496,12 +536,16 @@ func (cmd *InitCmd) run(_ context.Context, _ *cli.Command) error {
 		startDir = h
 	}
 
-	shellName, rcFile := detectShell()
+	_, rcFile := defaultRCFile()
 	aliasAlready := false
-	if shellName != "unknown" && rcFile != "" {
-		aliasAlready, _ = aliasAlreadyPresent(rcFile, "hv")
+	if rcFile != "" {
+		present, err := aliasAlreadyPresent(rcFile, "hv")
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "warning: cannot read %s: %v\n", rcFile, err)
+		}
+		aliasAlready = present
 	}
-	needsAlias := shellName != "unknown" && rcFile != "" && !aliasAlready
+	needsAlias := rcFile != "" && !aliasAlready
 
 	cfgPath := defaultConfigPath()
 	needsConfig := true
@@ -575,19 +619,24 @@ func (cmd *InitCmd) run(_ context.Context, _ *cli.Command) error {
 		groups = append(groups, huh.NewGroup(configFields...))
 	}
 
-	if needsAlias || needsTmux {
-		var sysFields []huh.Field
-		if needsAlias {
-			sysFields = append(sysFields, huh.NewConfirm().
-				Title(fmt.Sprintf("Append alias hv to %s?", rcFile)).
-				Value(&doAlias))
-		}
-		if needsTmux {
-			sysFields = append(sysFields, huh.NewConfirm().
-				Title(fmt.Sprintf("Append bind-key h to %s?", tmuxCfgPath)).
-				Value(&doTmux))
-		}
-		groups = append(groups, huh.NewGroup(sysFields...))
+	if needsAlias {
+		groups = append(groups,
+			huh.NewGroup(huh.NewConfirm().
+				Title("Add hv alias to your shell rc file?").
+				Value(&doAlias)),
+			huh.NewGroup(huh.NewInput().
+				Title("Shell rc file").
+				Description("Where to add the hv alias. Change it if your shell config lives elsewhere.").
+				Value(&rcFile).
+				Validate(validateRCFile),
+			).WithHideFunc(func() bool { return !doAlias }),
+		)
+	}
+
+	if needsTmux {
+		groups = append(groups, huh.NewGroup(huh.NewConfirm().
+			Title(fmt.Sprintf("Append bind-key h to %s?", tmuxCfgPath)).
+			Value(&doTmux)))
 	}
 
 	if len(groups) > 0 {
@@ -600,18 +649,22 @@ func (cmd *InitCmd) run(_ context.Context, _ *cli.Command) error {
 	}
 
 	workspace = expandTilde(workspace)
+	rcFile = expandTilde(strings.TrimSpace(rcFile))
+
+	// The chosen rc file may differ from the default checked above.
+	if needsAlias && doAlias && rcFile != "" {
+		present, err := aliasAlreadyPresent(rcFile, "hv")
+		if err != nil {
+			_, _ = fmt.Fprintf(os.Stderr, "warning: cannot read %s: %v\n", rcFile, err)
+		}
+		aliasAlready = present
+	}
 
 	// ── Apply results ──────────────────────────────────────────────────────
 	var results []stepResult
 
 	// Shell alias
 	switch {
-	case shellName == "unknown":
-		results = append(results, stepResult{
-			name:   "Shell alias",
-			status: statusSkipped,
-			detail: "unknown shell - add manually: alias hv='tmux new-session -As hive hive'",
-		})
 	case rcFile == "":
 		results = append(results, stepResult{name: "Shell alias", status: statusFailed, detail: "cannot determine home directory"})
 	case aliasAlready:
@@ -619,7 +672,7 @@ func (cmd *InitCmd) run(_ context.Context, _ *cli.Command) error {
 	case !doAlias:
 		results = append(results, stepResult{name: "Shell alias", status: statusSkipped, detail: "skipped"})
 	default:
-		if err := appendAlias(rcFile, shellName); err != nil {
+		if err := appendAlias(rcFile, aliasShellFor(rcFile)); err != nil {
 			results = append(results, stepResult{
 				name:    "Shell alias",
 				status:  statusFailed,

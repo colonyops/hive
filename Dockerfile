@@ -38,7 +38,7 @@ COPY dev/config.dev.yaml /etc/hive/config.yaml
 ENV HIVE_CONFIG=/etc/hive/config.yaml
 
 # hv alias
-RUN echo "alias hv='tmux new-session -As hive hive'" >> /root/.bashrc
+# RUN echo "alias hv='tmux new-session -As hive hive'" >> /root/.bashrc
 
 # working repo
 RUN git clone https://github.com/colonyops/hive.git

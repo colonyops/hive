@@ -60,7 +60,7 @@ hive init
 The interactive wizard:
 
 - Detects installed AI agents (Claude, Codex, OpenCode, and others) and writes `~/.config/hive/config.yaml` with your preferred default
-- Appends `alias hv='tmux new-session -As hive hive'` to your shell rc (`.zshrc`, `.bashrc`, or `config.fish`)
+- Appends `alias hv='tmux new-session -As hive hive'` to your shell rc. The path defaults to the file for your `$SHELL` (`~/.zshrc`, `~/.bashrc`, or `config.fish`), falling back to `~/.zshrc`. The wizard lets you change it if your shell config lives elsewhere.
 - Appends `bind-key h switch-client -t hive` to your `~/.tmux.conf` (or `$XDG_CONFIG_HOME/tmux/tmux.conf`)
 
 Type a workspace path to complete setup (tab or `→` to autocomplete directories), then follow the remaining prompts.
