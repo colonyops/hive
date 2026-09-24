@@ -477,7 +477,7 @@ func TestHandleReposDiscoveredIgnoresStaleScan(t *testing.T) {
 	assert.Equal(t, newer, v.discoveredRepos)
 }
 
-func TestHandleSessionRefreshTickAlsoScansWorkspaces(t *testing.T) {
+func TestHandleSessionRefreshTickDoesNotScanWorkspaces(t *testing.T) {
 	v := &View{
 		active:     true,
 		workspaces: []string{"/tmp/workspace"},
@@ -490,7 +490,21 @@ func TestHandleSessionRefreshTickAlsoScansWorkspaces(t *testing.T) {
 	msg := v.handleSessionRefreshTick()()
 	batch, ok := msg.(tea.BatchMsg)
 	assert.True(t, ok)
-	assert.Len(t, batch, 3, "refresh should load sessions, schedule the next refresh, and scan workspaces")
+	assert.Len(t, batch, 2, "refresh should load sessions and schedule the next refresh")
+	assert.Zero(t, v.workspaceScanGeneration)
+}
+
+func TestRefreshWorkspacesStartsManualScan(t *testing.T) {
+	v := &View{
+		workspaces: []string{t.TempDir()},
+		service:    new(hive.SessionService),
+	}
+
+	cmd := v.RefreshWorkspaces()
+	require.NotNil(t, cmd)
+	msg, ok := cmd().(RepositoriesDiscoveredMsg)
+	require.True(t, ok)
+	assert.Equal(t, uint64(1), msg.Generation)
 }
 
 func TestHandleSessionsLoaded_NoTerminalPollWithoutIntegrations(t *testing.T) {

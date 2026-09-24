@@ -416,7 +416,7 @@ func (v *View) handleReposDiscovered(msg RepositoriesDiscoveredMsg) tea.Cmd {
 
 func (v *View) handleWorkspaceWatcherStarted(msg WorkspaceWatcherStartedMsg) tea.Cmd {
 	if msg.Err != nil {
-		log.Warn().Err(msg.Err).Msg("failed to start workspace watcher; periodic refresh remains active")
+		log.Warn().Err(msg.Err).Msg("failed to start workspace watcher; use SessionsRefreshWorkspaces to rescan manually")
 		return v.scanRepoDirs()
 	}
 	v.workspaceWatcher = msg.Watcher
@@ -431,22 +431,21 @@ func (v *View) handleWorkspaceChanged(msg WorkspaceChangedMsg) tea.Cmd {
 		return nil
 	}
 
-	log.Warn().Err(msg.Err).Msg("workspace watcher failed; restarting")
+	log.Warn().Err(msg.Err).Msg("workspace watcher stopped; use SessionsRefreshWorkspaces to rescan manually")
 	if v.workspaceWatcher != nil {
 		_ = v.workspaceWatcher.Close()
 		v.workspaceWatcher = nil
 	}
-	return tea.Batch(v.scanRepoDirs(), v.startWorkspaceWatcher())
+	return nil
 }
 
 func (v *View) handleSessionRefreshTick() tea.Cmd {
 	if v.active && !v.modalActive {
 		v.refreshing = true
-		cmds := []tea.Cmd{v.loadSessions(), v.scheduleSessionRefresh()}
-		if len(v.workspaces) > 0 {
-			cmds = append(cmds, v.scanRepoDirs())
-		}
-		return tea.Batch(cmds...)
+		return tea.Batch(
+			v.loadSessions(),
+			v.scheduleSessionRefresh(),
+		)
 	}
 	return v.scheduleSessionRefresh()
 }
@@ -498,6 +497,9 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 	}
 	if v.handler.IsAction(keyStr, act.TypeSessionsRefreshGitStatuses) {
 		return v, v.RefreshGitStatuses()
+	}
+	if v.handler.IsAction(keyStr, act.TypeSessionsRefreshWorkspaces) {
+		return v, v.RefreshWorkspaces()
 	}
 	if v.handler.IsAction(keyStr, act.TypeSessionsTogglePreview) && v.HasTerminalIntegration() {
 		v.TogglePreview()
@@ -1395,6 +1397,14 @@ func (v *View) startPluginWorker() tea.Cmd {
 		resultsChan := v.pluginManager.StartBackgroundWorker(context.Background(), v.pluginPollInterval)
 		return pluginWorkerStartedMsg{resultsChan: resultsChan}
 	}
+}
+
+// RefreshWorkspaces returns a command that rescans configured workspace directories.
+func (v *View) RefreshWorkspaces() tea.Cmd {
+	if len(v.workspaces) == 0 {
+		return nil
+	}
+	return v.scanRepoDirs()
 }
 
 // RefreshGitStatuses returns a command that refreshes git status for all sessions.

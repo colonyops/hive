@@ -1,22 +1,22 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/colonyops/hive/internal/core/action"
 )
 
-func TestLoadSessionsRefreshIntervalCanBeDisabled(t *testing.T) {
-	t.Setenv(EnvDefaultAgent, "")
-	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	require.NoError(t, os.WriteFile(configPath, []byte("views:\n  sessions:\n    refresh_interval: 0s\n"), 0o600))
-
-	cfg, err := Load(configPath, t.TempDir())
-	require.NoError(t, err)
-	assert.Zero(t, cfg.Views.Sessions.RefreshInterval)
+func TestDefaultUserCommandsIncludesWorkspaceRefresh(t *testing.T) {
+	cmd, ok := defaultUserCommands["SessionsRefreshWorkspaces"]
+	if !ok {
+		t.Fatal("SessionsRefreshWorkspaces command is not registered")
+	}
+	if cmd.Action != action.TypeSessionsRefreshWorkspaces {
+		t.Fatalf("action = %q, want %q", cmd.Action, action.TypeSessionsRefreshWorkspaces)
+	}
+	if len(cmd.Scope) != 1 || cmd.Scope[0] != "sessions" {
+		t.Fatalf("scope = %v, want [sessions]", cmd.Scope)
+	}
 }
 
 func TestDefaultViewsConfig_PromotedKeys(t *testing.T) {

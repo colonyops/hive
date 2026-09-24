@@ -329,6 +329,12 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
+	"SessionsRefreshWorkspaces": {
+		Action: action.TypeSessionsRefreshWorkspaces,
+		Help:   "refresh workspace repositories",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
 	"SessionsTogglePreview": {
 		Action: action.TypeSessionsTogglePreview,
 		Help:   "toggle preview pane",

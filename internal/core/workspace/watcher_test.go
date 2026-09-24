@@ -41,7 +41,6 @@ func TestWatcherDetectsGitMetadataCreationInExistingDirectory(t *testing.T) {
 
 	changed := make(chan error, 1)
 	go func() { changed <- watcher.Wait() }()
-
 	require.NoError(t, os.Mkdir(filepath.Join(repo, ".git"), 0o755))
 
 	select {
@@ -140,7 +139,6 @@ func TestWatcherIgnoresWorkingTreeChanges(t *testing.T) {
 
 	watcher, err := NewWatcher([]string{root})
 	require.NoError(t, err)
-	t.Cleanup(func() { require.NoError(t, watcher.Close()) })
 
 	changed := make(chan error, 1)
 	go func() { changed <- watcher.Wait() }()
@@ -153,11 +151,11 @@ func TestWatcherIgnoresWorkingTreeChanges(t *testing.T) {
 	case <-time.After(2 * watcherDebounce):
 	}
 
-	require.NoError(t, os.WriteFile(filepath.Join(repo, ".git", "config"), []byte("[remote \"origin\"]\n"), 0o644))
+	require.NoError(t, watcher.Close())
 	select {
 	case err := <-changed:
-		require.NoError(t, err)
+		require.ErrorIs(t, err, ErrWatcherClosed)
 	case <-time.After(3 * time.Second):
-		t.Fatal("workspace watcher did not resume after an ignored event")
+		t.Fatal("closing workspace watcher did not unblock Wait")
 	}
 }

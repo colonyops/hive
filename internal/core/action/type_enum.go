@@ -99,6 +99,8 @@ const (
 	TypeDocsSelectRepo Type = "DocsSelectRepo"
 	// TypeSessionsRefreshGitStatuses is a Type of type SessionsRefreshGitStatuses.
 	TypeSessionsRefreshGitStatuses Type = "SessionsRefreshGitStatuses"
+	// TypeSessionsRefreshWorkspaces is a Type of type SessionsRefreshWorkspaces.
+	TypeSessionsRefreshWorkspaces Type = "SessionsRefreshWorkspaces"
 	// TypeSessionsTogglePreview is a Type of type SessionsTogglePreview.
 	TypeSessionsTogglePreview Type = "SessionsTogglePreview"
 	// TypeSessionsNavigateUp is a Type of type SessionsNavigateUp.
@@ -168,6 +170,7 @@ var _TypeNames = []string{
 	string(TypeDocsToggleTree),
 	string(TypeDocsSelectRepo),
 	string(TypeSessionsRefreshGitStatuses),
+	string(TypeSessionsRefreshWorkspaces),
 	string(TypeSessionsTogglePreview),
 	string(TypeSessionsNavigateUp),
 	string(TypeSessionsNavigateDown),
@@ -288,6 +291,8 @@ var _TypeValue = map[string]Type{
 	"docsselectrepo":             TypeDocsSelectRepo,
 	"SessionsRefreshGitStatuses": TypeSessionsRefreshGitStatuses,
 	"sessionsrefreshgitstatuses": TypeSessionsRefreshGitStatuses,
+	"SessionsRefreshWorkspaces":  TypeSessionsRefreshWorkspaces,
+	"sessionsrefreshworkspaces":  TypeSessionsRefreshWorkspaces,
 	"SessionsTogglePreview":      TypeSessionsTogglePreview,
 	"sessionstogglepreview":      TypeSessionsTogglePreview,
 	"SessionsNavigateUp":         TypeSessionsNavigateUp,

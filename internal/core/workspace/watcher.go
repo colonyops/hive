@@ -97,21 +97,10 @@ func (w *Watcher) Wait() error {
 func (w *Watcher) relevant(event fsnotify.Event) bool {
 	path := filepath.Clean(event.Name)
 	for _, root := range w.roots {
-		if path == root || isAncestorOfRoot(path, root) {
+		if path == root || isAncestorOfRoot(path, root) || filepath.Dir(path) == root {
 			return true
 		}
-		rel, err := filepath.Rel(root, path)
-		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			continue
-		}
-
-		parts := strings.Split(rel, string(filepath.Separator))
-		switch {
-		case len(parts) == 1:
-			return true
-		case len(parts) == 2 && parts[1] == ".git":
-			return true
-		case len(parts) == 3 && parts[1] == ".git" && parts[2] == "config":
+		if filepath.Base(path) == ".git" && filepath.Dir(filepath.Dir(path)) == root {
 			return true
 		}
 	}
@@ -136,6 +125,8 @@ func (w *Watcher) refreshWatches() {
 		if err != nil || !info.IsDir() {
 			continue
 		}
+		// kqueue opens descriptors for directory entries, so only non-repository
+		// children are watched for later .git creation.
 		if err := w.fs.Add(root); err != nil {
 			log.Debug().Err(err).Str("dir", root).Msg("failed to watch workspace directory")
 			continue
@@ -151,16 +142,11 @@ func (w *Watcher) refreshWatches() {
 				continue
 			}
 			child := filepath.Join(root, entry.Name())
-			if err := w.fs.Add(child); err != nil {
-				log.Debug().Err(err).Str("dir", child).Msg("failed to watch workspace child directory")
+			if _, err := os.Stat(filepath.Join(child, ".git")); err == nil {
 				continue
 			}
-
-			gitDir := filepath.Join(child, ".git")
-			if info, err := os.Stat(gitDir); err == nil && info.IsDir() {
-				if err := w.fs.Add(gitDir); err != nil {
-					log.Debug().Err(err).Str("dir", gitDir).Msg("failed to watch repository metadata")
-				}
+			if err := w.fs.Add(child); err != nil {
+				log.Debug().Err(err).Str("dir", child).Msg("failed to watch workspace child directory")
 			}
 		}
 	}
