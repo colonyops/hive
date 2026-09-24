@@ -74,10 +74,22 @@ type sessionsLoadedMsg struct {
 	err      error
 }
 
-// reposDiscoveredMsg is sent when repository scanning completes.
-type reposDiscoveredMsg struct {
-	repos []workspace.DiscoveredRepo
-	err   error
+// RepositoriesDiscoveredMsg is sent when workspace repository scanning completes.
+type RepositoriesDiscoveredMsg struct {
+	Repositories []workspace.DiscoveredRepo
+	Generation   uint64
+	Err          error
+}
+
+// WorkspaceWatcherStartedMsg is sent when workspace filesystem watching starts.
+type WorkspaceWatcherStartedMsg struct {
+	Watcher *workspace.Watcher
+	Err     error
+}
+
+// WorkspaceChangedMsg is sent when a workspace filesystem change is detected.
+type WorkspaceChangedMsg struct {
+	Err error
 }
 
 // pluginWorkerStartedMsg is sent when the plugin background worker starts.

@@ -392,6 +392,9 @@ func New(deps Deps, opts Opts) Model {
 // quit sets the quitting flag and emits tui.stopped.
 func (m Model) quit() (Model, tea.Cmd) {
 	m.quitting = true
+	if m.sessionsView != nil {
+		m.sessionsView.Close()
+	}
 	if m.modals.BgStreamCancel != nil {
 		m.modals.BgStreamCancel()
 	}
@@ -553,6 +556,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessions.ErrorMsg:
 		m.notifyErrorf("%v", msg.Err)
 		model, cmd = m, nil
+
+	// Workspace watcher messages must reach the sessions view while a modal is open.
+	case sessions.RepositoriesDiscoveredMsg:
+		model, cmd = m, m.sessionsView.Update(msg)
+	case sessions.WorkspaceWatcherStartedMsg:
+		model, cmd = m, m.sessionsView.Update(msg)
+	case sessions.WorkspaceChangedMsg:
+		model, cmd = m, m.sessionsView.Update(msg)
 
 	// Outbound messages from tasks view
 	case tasks.ActionRequestMsg:
@@ -1233,6 +1244,12 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 				return m, nil
 			}
 			return m, nil
+		}
+
+		// Workspace refresh doesn't require a selected session.
+		if entry.Command.Action == act.TypeWorkspaceRefresh {
+			m.state = stateNormal
+			return m, m.sessionsView.RefreshWorkspaces()
 		}
 
 		// NewSession doesn't require a selected session

@@ -3,14 +3,18 @@ package sessions
 import (
 	"context"
 	"testing"
+	"time"
 
 	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/kv"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // newTestView creates a minimal View with a list for navigation tests.
@@ -437,6 +441,70 @@ func TestHandleSessionsLoaded_NoTerminalPollWhenEmpty(t *testing.T) {
 	v.handleSessionsLoaded(sessionsLoadedMsg{sessions: nil})
 	// The returned cmd may be nil or a no-op batch — either is acceptable.
 	assert.Equal(t, []session.Session(nil), v.allSessions)
+}
+
+func TestHandleWorkspaceWatcherStartedScansAfterWatchInstallation(t *testing.T) {
+	root := t.TempDir()
+	watcher, err := workspace.NewWatcher([]string{root})
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, watcher.Close()) })
+
+	v := &View{
+		workspaces: []string{root},
+		service:    new(hive.SessionService),
+	}
+	cmd := v.handleWorkspaceWatcherStarted(WorkspaceWatcherStartedMsg{Watcher: watcher})
+
+	assert.Same(t, watcher, v.workspaceWatcher)
+	batch, ok := cmd().(tea.BatchMsg)
+	assert.True(t, ok)
+	assert.Len(t, batch, 2, "watcher startup should launch the initial scan and change wait together")
+}
+
+func TestHandleReposDiscoveredIgnoresStaleScan(t *testing.T) {
+	newer := []workspace.DiscoveredRepo{{Name: "newer"}}
+	v := &View{
+		discoveredRepos:         newer,
+		workspaceScanGeneration: 2,
+	}
+
+	cmd := v.handleReposDiscovered(RepositoriesDiscoveredMsg{
+		Repositories: []workspace.DiscoveredRepo{{Name: "stale"}},
+		Generation:   1,
+	})
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, newer, v.discoveredRepos)
+}
+
+func TestHandleSessionRefreshTickDoesNotScanWorkspaces(t *testing.T) {
+	v := &View{
+		active:     true,
+		workspaces: []string{"/tmp/workspace"},
+		cfg: &config.Config{Views: config.ViewsConfig{Sessions: config.SessionsViewConfig{
+			RefreshInterval: time.Second,
+		}}},
+		service: new(hive.SessionService),
+	}
+
+	msg := v.handleSessionRefreshTick()()
+	batch, ok := msg.(tea.BatchMsg)
+	assert.True(t, ok)
+	assert.Len(t, batch, 2, "refresh should load sessions and schedule the next refresh")
+	assert.Zero(t, v.workspaceScanGeneration)
+}
+
+func TestRefreshWorkspacesStartsManualScan(t *testing.T) {
+	v := &View{
+		workspaces: []string{t.TempDir()},
+		service:    new(hive.SessionService),
+	}
+
+	cmd := v.RefreshWorkspaces()
+	require.NotNil(t, cmd)
+	msg, ok := cmd().(RepositoriesDiscoveredMsg)
+	require.True(t, ok)
+	assert.Equal(t, uint64(1), msg.Generation)
 }
 
 func TestHandleSessionsLoaded_NoTerminalPollWithoutIntegrations(t *testing.T) {

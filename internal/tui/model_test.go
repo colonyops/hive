@@ -77,6 +77,26 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 	return m
 }
 
+func TestWorkspaceRefreshCommandDoesNotRequireSelectedSession(t *testing.T) {
+	t.Setenv(config.EnvDefaultAgent, "")
+	root := t.TempDir()
+	m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
+		cfg.Workspaces = []string{root}
+	})
+	commands := config.DefaultUserCommands()
+	m.modals.CommandPalette = NewCommandPalette(map[string]config.UserCommand{
+		"WorkspaceRefresh": commands["WorkspaceRefresh"],
+	}, nil, 80, 24, ViewSessions)
+	m.state = stateCommandPalette
+
+	updated, cmd := m.handleCommandPaletteKey(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}), "enter")
+	result := updated.(Model)
+
+	assert.Equal(t, stateNormal, result.state)
+	require.NotNil(t, cmd)
+	assert.IsType(t, sessions.RepositoriesDiscoveredMsg{}, cmd())
+}
+
 func TestOpenNewSessionFormReadsEnvironmentDefaultAgentAtOpen(t *testing.T) {
 	m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
 		cfg.Agents.AgentSelector = true

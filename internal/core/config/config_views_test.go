@@ -1,6 +1,23 @@
 package config
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/colonyops/hive/internal/core/action"
+)
+
+func TestDefaultUserCommandsIncludesWorkspaceRefresh(t *testing.T) {
+	cmd, ok := defaultUserCommands["WorkspaceRefresh"]
+	if !ok {
+		t.Fatal("WorkspaceRefresh command is not registered")
+	}
+	if cmd.Action != action.TypeWorkspaceRefresh {
+		t.Fatalf("action = %q, want %q", cmd.Action, action.TypeWorkspaceRefresh)
+	}
+	if len(cmd.Scope) != 1 || cmd.Scope[0] != "sessions" {
+		t.Fatalf("scope = %v, want [sessions]", cmd.Scope)
+	}
+}
 
 func TestDefaultViewsConfig_PromotedKeys(t *testing.T) {
 	tests := []struct {
