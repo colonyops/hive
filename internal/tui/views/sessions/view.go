@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -96,8 +97,10 @@ type View struct {
 	focusFilterInput textinput.Model
 
 	// Repository discovery
-	workspaces      []string
-	discoveredRepos []workspace.DiscoveredRepo
+	workspaces              []string
+	discoveredRepos         []workspace.DiscoveredRepo
+	workspaceWatcher        *workspace.Watcher
+	workspaceScanGeneration uint64
 
 	// Layout state
 	width       int
@@ -213,7 +216,7 @@ func (v *View) Init() tea.Cmd {
 	cmds := []tea.Cmd{v.loadSessions()}
 
 	if len(v.workspaces) > 0 {
-		cmds = append(cmds, v.scanRepoDirs())
+		cmds = append(cmds, v.startWorkspaceWatcher())
 	}
 
 	if v.status.Available() {
@@ -249,8 +252,12 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 		return v.handlePluginWorkerStarted(msg)
 	case pluginStatusUpdateMsg:
 		return v.handlePluginStatusUpdate(msg)
-	case reposDiscoveredMsg:
+	case RepositoriesDiscoveredMsg:
 		return v.handleReposDiscovered(msg)
+	case WorkspaceWatcherStartedMsg:
+		return v.handleWorkspaceWatcherStarted(msg)
+	case WorkspaceChangedMsg:
+		return v.handleWorkspaceChanged(msg)
 	case sessionRefreshTickMsg:
 		return v.handleSessionRefreshTick()
 	case animationTickMsg:
@@ -389,10 +396,13 @@ func (v *View) handlePluginStatusUpdate(msg pluginStatusUpdateMsg) tea.Cmd {
 	return listenForPluginResult(v.pluginResultsChan)
 }
 
-func (v *View) handleReposDiscovered(msg reposDiscoveredMsg) tea.Cmd {
-	v.discoveredRepos = msg.repos
-	if msg.err != nil {
-		return ErrorCmd(fmt.Errorf("repo scan error: %w", msg.err))
+func (v *View) handleReposDiscovered(msg RepositoriesDiscoveredMsg) tea.Cmd {
+	if msg.Generation < v.workspaceScanGeneration {
+		return nil
+	}
+	v.discoveredRepos = msg.Repositories
+	if msg.Err != nil {
+		return ErrorCmd(fmt.Errorf("repo scan error: %w", msg.Err))
 	}
 	// Rebuild the tree so headers pick up root checkout paths; the scan
 	// usually completes after the initial session load has built items.
@@ -404,13 +414,39 @@ func (v *View) handleReposDiscovered(msg reposDiscoveredMsg) tea.Cmd {
 	)
 }
 
+func (v *View) handleWorkspaceWatcherStarted(msg WorkspaceWatcherStartedMsg) tea.Cmd {
+	if msg.Err != nil {
+		log.Warn().Err(msg.Err).Msg("failed to start workspace watcher; periodic refresh remains active")
+		return v.scanRepoDirs()
+	}
+	v.workspaceWatcher = msg.Watcher
+	return tea.Batch(v.scanRepoDirs(), v.waitForWorkspaceChange())
+}
+
+func (v *View) handleWorkspaceChanged(msg WorkspaceChangedMsg) tea.Cmd {
+	if msg.Err == nil {
+		return tea.Batch(v.scanRepoDirs(), v.waitForWorkspaceChange())
+	}
+	if errors.Is(msg.Err, workspace.ErrWatcherClosed) {
+		return nil
+	}
+
+	log.Warn().Err(msg.Err).Msg("workspace watcher failed; restarting")
+	if v.workspaceWatcher != nil {
+		_ = v.workspaceWatcher.Close()
+		v.workspaceWatcher = nil
+	}
+	return tea.Batch(v.scanRepoDirs(), v.startWorkspaceWatcher())
+}
+
 func (v *View) handleSessionRefreshTick() tea.Cmd {
 	if v.active && !v.modalActive {
 		v.refreshing = true
-		return tea.Batch(
-			v.loadSessions(),
-			v.scheduleSessionRefresh(),
-		)
+		cmds := []tea.Cmd{v.loadSessions(), v.scheduleSessionRefresh()}
+		if len(v.workspaces) > 0 {
+			cmds = append(cmds, v.scanRepoDirs())
+		}
+		return tea.Batch(cmds...)
 	}
 	return v.scheduleSessionRefresh()
 }
@@ -1325,12 +1361,31 @@ func (v *View) loadSessions() tea.Cmd {
 
 // scanRepoDirs returns a command that scans configured directories for git repositories.
 func (v *View) scanRepoDirs() tea.Cmd {
+	v.workspaceScanGeneration++
+	generation := v.workspaceScanGeneration
 	return func() tea.Msg {
 		repos, err := workspace.ScanRepoDirs(context.Background(), v.workspaces, v.service.Git())
 		if err != nil {
 			log.Warn().Err(err).Msg("repo directory scan encountered errors")
 		}
-		return reposDiscoveredMsg{repos: repos, err: err}
+		return RepositoriesDiscoveredMsg{Repositories: repos, Generation: generation, Err: err}
+	}
+}
+
+func (v *View) startWorkspaceWatcher() tea.Cmd {
+	return func() tea.Msg {
+		watcher, err := workspace.NewWatcher(v.workspaces)
+		return WorkspaceWatcherStartedMsg{Watcher: watcher, Err: err}
+	}
+}
+
+func (v *View) waitForWorkspaceChange() tea.Cmd {
+	if v.workspaceWatcher == nil {
+		return nil
+	}
+	watcher := v.workspaceWatcher
+	return func() tea.Msg {
+		return WorkspaceChangedMsg{Err: watcher.Wait()}
 	}
 }
 
@@ -1444,6 +1499,17 @@ func (v *View) SetActive(active bool) {
 // This affects whether periodic refresh polling fires.
 func (v *View) SetModalActive(active bool) {
 	v.modalActive = active
+}
+
+// Close releases resources owned by the sessions view.
+func (v *View) Close() {
+	if v.workspaceWatcher == nil {
+		return
+	}
+	if err := v.workspaceWatcher.Close(); err != nil && !errors.Is(err, workspace.ErrWatcherClosed) {
+		log.Debug().Err(err).Msg("failed to close workspace watcher")
+	}
+	v.workspaceWatcher = nil
 }
 
 // HasEditorFocus returns true if a text input is active (list filter or focus mode).

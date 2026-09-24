@@ -52,9 +52,11 @@ rules:
 
 ## General Settings
 
+Hive watches configured workspace directories and rescans them when repositories are added, removed, or renamed. The sessions refresh interval provides a polling fallback.
+
 | Option                        | Type       | Default              | Description                                 |
 | ----------------------------- | ---------- | -------------------- | ------------------------------------------- |
-| `workspaces`                  | `[]string` | `[]`                 | Directories to scan for repositories        |
+| `workspaces`                  | `[]string` | `[]`                 | Watched directories containing repositories |
 | `git_path`                    | `string`   | `git`                | Git executable path                         |
 | `copy_command`                | `string`   | `pbcopy` (macOS)     | Command to copy to clipboard                |
 | `auto_delete_corrupted`       | `bool`     | `true`               | Auto-delete corrupted sessions on prune     |
@@ -187,7 +189,7 @@ View-specific settings (keybindings, layout, behavior) are configured per-view u
 | ----------------------------------- | ---------- | ------------- | -------------------------------------------- |
 | `views.sessions.keybindings`        | `map`      |               | Key-to-command mappings                      |
 | `views.sessions.split_ratio`        | `int`      | `25`          | List/preview split percentage (1-80)         |
-| `views.sessions.refresh_interval`   | `duration` | `15s`         | Auto-refresh interval (0 to disable)         |
+| `views.sessions.refresh_interval`   | `duration` | `15s`         | Session and workspace fallback refresh interval (0 to disable) |
 | `views.sessions.preview_enabled`    | `bool`     | `true`        | Enable tmux pane preview sidebar on startup  |
 | `views.sessions.preview_title`      | `string`   |               | Go template for preview panel title          |
 | `views.sessions.preview_status`     | `string`   |               | Go template for preview status line          |

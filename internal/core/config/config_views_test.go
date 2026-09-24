@@ -1,6 +1,23 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestLoadSessionsRefreshIntervalCanBeDisabled(t *testing.T) {
+	t.Setenv(EnvDefaultAgent, "")
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("views:\n  sessions:\n    refresh_interval: 0s\n"), 0o600))
+
+	cfg, err := Load(configPath, t.TempDir())
+	require.NoError(t, err)
+	assert.Zero(t, cfg.Views.Sessions.RefreshInterval)
+}
 
 func TestDefaultViewsConfig_PromotedKeys(t *testing.T) {
 	tests := []struct {
