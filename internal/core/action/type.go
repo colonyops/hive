@@ -48,7 +48,7 @@ package action
 //	DocsToggleTree
 //	DocsSelectRepo
 //	SessionsRefreshGitStatuses
-//	SessionsRefreshWorkspaces
+//	WorkspaceRefresh
 //	SessionsTogglePreview
 //	SessionsNavigateUp
 //	SessionsNavigateDown

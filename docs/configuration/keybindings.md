@@ -108,13 +108,13 @@ A view-specific binding overrides a global binding for the same key.
 
 These commands are available in the command palette (`:`) but have no default keybinding:
 
-| Command          | Description                           |
-| ---------------- | ------------------------------------- |
-| `FilterAll`      | Show all sessions                     |
-| `FilterActive`   | Show sessions with active agents      |
-| `FilterApproval` | Show sessions needing approval        |
-| `FilterReady`    | Show sessions with idle agents        |
-| `GroupToggle`    | Toggle between repo/group tree view   |
-| `SessionsRefreshWorkspaces` | Rescan workspace repositories         |
-| `SendBatch`      | Send message to multiple agents       |
-| `TmuxStart`      | Start tmux session in background      |
+| Command            | Description                         |
+| ------------------ | ----------------------------------- |
+| `FilterAll`        | Show all sessions                   |
+| `FilterActive`     | Show sessions with active agents    |
+| `FilterApproval`   | Show sessions needing approval      |
+| `FilterReady`      | Show sessions with idle agents      |
+| `GroupToggle`      | Toggle between repo/group tree view |
+| `WorkspaceRefresh` | Rescan workspace repositories       |
+| `SendBatch`        | Send message to multiple agents     |
+| `TmuxStart`        | Start tmux session in background    |

@@ -7,12 +7,12 @@ import (
 )
 
 func TestDefaultUserCommandsIncludesWorkspaceRefresh(t *testing.T) {
-	cmd, ok := defaultUserCommands["SessionsRefreshWorkspaces"]
+	cmd, ok := defaultUserCommands["WorkspaceRefresh"]
 	if !ok {
-		t.Fatal("SessionsRefreshWorkspaces command is not registered")
+		t.Fatal("WorkspaceRefresh command is not registered")
 	}
-	if cmd.Action != action.TypeSessionsRefreshWorkspaces {
-		t.Fatalf("action = %q, want %q", cmd.Action, action.TypeSessionsRefreshWorkspaces)
+	if cmd.Action != action.TypeWorkspaceRefresh {
+		t.Fatalf("action = %q, want %q", cmd.Action, action.TypeWorkspaceRefresh)
 	}
 	if len(cmd.Scope) != 1 || cmd.Scope[0] != "sessions" {
 		t.Fatalf("scope = %v, want [sessions]", cmd.Scope)

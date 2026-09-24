@@ -416,7 +416,7 @@ func (v *View) handleReposDiscovered(msg RepositoriesDiscoveredMsg) tea.Cmd {
 
 func (v *View) handleWorkspaceWatcherStarted(msg WorkspaceWatcherStartedMsg) tea.Cmd {
 	if msg.Err != nil {
-		log.Warn().Err(msg.Err).Msg("failed to start workspace watcher; use SessionsRefreshWorkspaces to rescan manually")
+		log.Warn().Err(msg.Err).Msg("failed to start workspace watcher; use WorkspaceRefresh to rescan manually")
 		return v.scanRepoDirs()
 	}
 	v.workspaceWatcher = msg.Watcher
@@ -431,7 +431,7 @@ func (v *View) handleWorkspaceChanged(msg WorkspaceChangedMsg) tea.Cmd {
 		return nil
 	}
 
-	log.Warn().Err(msg.Err).Msg("workspace watcher stopped; use SessionsRefreshWorkspaces to rescan manually")
+	log.Warn().Err(msg.Err).Msg("workspace watcher stopped; use WorkspaceRefresh to rescan manually")
 	if v.workspaceWatcher != nil {
 		_ = v.workspaceWatcher.Close()
 		v.workspaceWatcher = nil
@@ -498,7 +498,7 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 	if v.handler.IsAction(keyStr, act.TypeSessionsRefreshGitStatuses) {
 		return v, v.RefreshGitStatuses()
 	}
-	if v.handler.IsAction(keyStr, act.TypeSessionsRefreshWorkspaces) {
+	if v.handler.IsAction(keyStr, act.TypeWorkspaceRefresh) {
 		return v, v.RefreshWorkspaces()
 	}
 	if v.handler.IsAction(keyStr, act.TypeSessionsTogglePreview) && v.HasTerminalIntegration() {

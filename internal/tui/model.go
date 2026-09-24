@@ -1247,7 +1247,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 		}
 
 		// Workspace refresh doesn't require a selected session.
-		if entry.Command.Action == act.TypeSessionsRefreshWorkspaces {
+		if entry.Command.Action == act.TypeWorkspaceRefresh {
 			m.state = stateNormal
 			return m, m.sessionsView.RefreshWorkspaces()
 		}

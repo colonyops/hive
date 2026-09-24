@@ -329,8 +329,8 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
-	"SessionsRefreshWorkspaces": {
-		Action: action.TypeSessionsRefreshWorkspaces,
+	"WorkspaceRefresh": {
+		Action: action.TypeWorkspaceRefresh,
 		Help:   "refresh workspace repositories",
 		Silent: true,
 		Scope:  []string{"sessions"},

@@ -85,7 +85,7 @@ func TestWorkspaceRefreshCommandDoesNotRequireSelectedSession(t *testing.T) {
 	})
 	commands := config.DefaultUserCommands()
 	m.modals.CommandPalette = NewCommandPalette(map[string]config.UserCommand{
-		"SessionsRefreshWorkspaces": commands["SessionsRefreshWorkspaces"],
+		"WorkspaceRefresh": commands["WorkspaceRefresh"],
 	}, nil, 80, 24, ViewSessions)
 	m.state = stateCommandPalette
 

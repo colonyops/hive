@@ -52,7 +52,7 @@ rules:
 
 ## General Settings
 
-Hive watches configured workspace directories and rescans them when repositories are added, removed, or renamed. Run `:SessionsRefreshWorkspaces` from the command palette to rescan manually.
+Hive watches configured workspace directories and rescans them when repositories are added, removed, or renamed. Run `:WorkspaceRefresh` from the command palette to rescan manually.
 
 | Option                        | Type       | Default              | Description                                 |
 | ----------------------------- | ---------- | -------------------- | ------------------------------------------- |
