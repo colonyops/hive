@@ -54,5 +54,5 @@ ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["bash"]
 
 # Built hive binary (supports multiple TARGETARCH values). Must stay last.
-ARG TARGETARCH=amd64
+ARG TARGETARCH
 COPY --chmod=755 dist/hive_linux_${TARGETARCH}_*/hive /usr/local/bin/hive
