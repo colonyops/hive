@@ -82,6 +82,70 @@ func TestDetectShell(t *testing.T) {
 	}
 }
 
+// TestDefaultRCFile verifies the ~/.zshrc fallback for unknown shells.
+func TestDefaultRCFile(t *testing.T) {
+	tests := []struct {
+		name     string
+		shellEnv string
+		wantRC   string
+	}{
+		{name: "zsh", shellEnv: "/usr/bin/zsh", wantRC: ".zshrc"},
+		{name: "bash", shellEnv: "/usr/bin/bash", wantRC: ".bashrc"},
+		{name: "unknown shell falls back to zshrc", shellEnv: "/usr/bin/tcsh", wantRC: ".zshrc"},
+		{name: "SHELL empty falls back to zshrc", shellEnv: "", wantRC: ".zshrc"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			t.Setenv("HOME", tmpDir)
+			t.Setenv("SHELL", tt.shellEnv)
+
+			_, gotRC := defaultRCFile()
+			assert.Equal(t, filepath.Join(tmpDir, tt.wantRC), gotRC)
+		})
+	}
+}
+
+// TestAliasShellFor verifies alias syntax is chosen from the rc file path.
+func TestAliasShellFor(t *testing.T) {
+	assert.Equal(t, "fish", aliasShellFor("/home/u/.config/fish/config.fish"))
+	assert.Equal(t, "fish", aliasShellFor("/home/u/.config/fish/conf.d/hive.fish"))
+	assert.Equal(t, "posix", aliasShellFor("/home/u/.zshrc"))
+	assert.Equal(t, "posix", aliasShellFor("/home/u/.config/zsh/aliases.zsh"))
+	assert.Equal(t, "posix", aliasShellFor("/home/u/.bashrc"))
+}
+
+// TestValidateRCFile covers accepted and rejected rc file paths.
+func TestValidateRCFile(t *testing.T) {
+	dir := t.TempDir()
+	existing := filepath.Join(dir, ".zshrc")
+	require.NoError(t, os.WriteFile(existing, []byte{}, 0o644))
+
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{name: "existing file", input: existing},
+		{name: "new file in existing dir", input: filepath.Join(dir, "aliases.zsh")},
+		{name: "empty", input: "  ", wantErr: true},
+		{name: "directory", input: dir, wantErr: true},
+		{name: "missing parent dir", input: filepath.Join(dir, "nope", ".zshrc"), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRCFile(tt.input)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 // TestAliasAlreadyPresent covers file-exists, alias-present, and file-missing cases.
 func TestAliasAlreadyPresent(t *testing.T) {
 	t.Run("file contains alias hv", func(t *testing.T) {
