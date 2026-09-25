@@ -97,7 +97,14 @@ func newTestServiceWithBus(t *testing.T, store session.Store, cfg *config.Config
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	return NewSessionService(store, &mockGit{}, cfg, bus, &executiltest.Exec{}, renderer, log, io.Discard, io.Discard)
+	return withAgentsOnPath(NewSessionService(store, &mockGit{}, cfg, bus, &executiltest.Exec{}, renderer, log, io.Discard, io.Discard))
+}
+
+// withAgentsOnPath makes every agent command resolve so tests do not depend
+// on which agents the machine running them has installed.
+func withAgentsOnPath(svc *SessionService) *SessionService {
+	svc.SetLookPath(func(_ context.Context, name string) (string, error) { return "/usr/local/bin/" + name, nil })
+	return svc
 }
 
 func TestRenameSession(t *testing.T) {
@@ -194,7 +201,7 @@ func TestCreateSession_SlugUsedAsTmuxName(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard)
+	svc := withAgentsOnPath(NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard))
 
 	sess, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:       "My Feature",
@@ -257,7 +264,7 @@ func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard)
+	svc := withAgentsOnPath(NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard))
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:     "agent override",
@@ -288,7 +295,7 @@ func TestCreateSession_RuleAgentOverridesSpawnRenderer(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard)
+	svc := withAgentsOnPath(NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard))
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:   "rule agent override",
@@ -319,7 +326,7 @@ func TestCreateSession_AgentKeyOverridesRuleAgent(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard)
+	svc := withAgentsOnPath(NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard))
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:     "cli agent override",
@@ -1184,7 +1191,7 @@ func TestCreateSession_BranchTemplate(t *testing.T) {
 		}
 		log := zerolog.New(io.Discard)
 		renderer := tmpl.New(tmpl.Config{})
-		return NewSessionService(store, gitImpl, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, log, io.Discard, io.Discard)
+		return withAgentsOnPath(NewSessionService(store, gitImpl, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, log, io.Discard, io.Discard))
 	}
 
 	t.Run("valid template uses rendered branch", func(t *testing.T) {
@@ -1259,7 +1266,7 @@ func TestCreateSession_ErrorIncludesDestinationAndStrategy(t *testing.T) {
 			GitPath: "git",
 			Rules:   rules,
 		}
-		return NewSessionService(
+		return withAgentsOnPath(NewSessionService(
 			newMockStore(),
 			gitImpl,
 			cfg,
@@ -1269,7 +1276,7 @@ func TestCreateSession_ErrorIncludesDestinationAndStrategy(t *testing.T) {
 			zerolog.New(io.Discard),
 			io.Discard,
 			io.Discard,
-		)
+		))
 	}
 
 	assertContext := func(t *testing.T, err error, operation, destination, strategy string, cause error) {
@@ -1382,7 +1389,7 @@ func TestCreateSession_DoesNotReuseRecycledWorktree(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	svc := NewSessionService(store, spy, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, log, io.Discard, io.Discard)
+	svc := withAgentsOnPath(NewSessionService(store, spy, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, log, io.Discard, io.Discard))
 
 	sess, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:      "new-feature",

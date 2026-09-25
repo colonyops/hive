@@ -44,11 +44,13 @@ func TestClient_CreateSession(t *testing.T) {
 		}, true)
 		require.NoError(t, err)
 
-		// new-session + set-option (pane tag) + 2 set-hook + select-window
-		require.Len(t, rec.Commands, 5)
-		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[0].Args)
-		assert.Equal(t, []string{"set-option", "-p", "-t", "sess", "@hive-session", "sess"}, rec.Commands[1].Args)
-		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[4].Args)
+		// new-session + remain-on-exit + respawn-pane + set-option (pane tag) + 2 set-hook + select-window
+		require.Len(t, rec.Commands, 7)
+		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-P", "-F", "#{pane_id}", "-c", "/work", "--", "cat"}, rec.Commands[0].Args)
+		assert.Equal(t, []string{"set-option", "-w", "-t", "sess:agent", "remain-on-exit", "on"}, rec.Commands[1].Args)
+		assert.Equal(t, []string{"respawn-pane", "-k", "-t", "sess:agent", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[2].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess", "@hive-session", "sess"}, rec.Commands[3].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[6].Args)
 	})
 
 	t.Run("two windows", func(t *testing.T) {
@@ -61,12 +63,12 @@ func TestClient_CreateSession(t *testing.T) {
 		}, true)
 		require.NoError(t, err)
 
-		// new-session + set-option + 2 set-hook + new-window + set-option + select-window
-		require.Len(t, rec.Commands, 7)
-		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[0].Args)
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "shell", "-c", "/work"}, rec.Commands[4].Args)
-		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:shell", "@hive-session", "sess"}, rec.Commands[5].Args)
-		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[6].Args)
+		// new-session + remain-on-exit + respawn-pane + set-option + 2 set-hook + new-window + set-option + select-window
+		require.Len(t, rec.Commands, 9)
+		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-P", "-F", "#{pane_id}", "-c", "/work", "--", "cat"}, rec.Commands[0].Args)
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "shell", "-P", "-F", "#{pane_id}", "-c", "/work"}, rec.Commands[6].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:shell", "@hive-session", "sess"}, rec.Commands[7].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[8].Args)
 	})
 
 	t.Run("window with panes", func(t *testing.T) {
@@ -86,13 +88,14 @@ func TestClient_CreateSession(t *testing.T) {
 		}, true)
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 9)
-		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[0].Args)
-		assert.Equal(t, []string{"split-window", "-t", "sess:agent", "-h", "-l", "30%", "-c", "/work", "--", "sh", "-c", "npm test"}, rec.Commands[4].Args)
-		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:agent", "@hive-session", "sess"}, rec.Commands[5].Args)
-		assert.Equal(t, []string{"split-window", "-t", "sess:agent", "-v", "-c", "/logs"}, rec.Commands[6].Args)
+		require.Len(t, rec.Commands, 11)
+		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-P", "-F", "#{pane_id}", "-c", "/work", "--", "cat"}, rec.Commands[0].Args)
+		assert.Equal(t, []string{"respawn-pane", "-k", "-t", "sess:agent", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[2].Args)
+		assert.Equal(t, []string{"split-window", "-t", "sess:agent", "-P", "-F", "#{pane_id}", "-h", "-l", "30%", "-c", "/work", "--", "sh", "-c", "npm test"}, rec.Commands[6].Args)
 		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:agent", "@hive-session", "sess"}, rec.Commands[7].Args)
-		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[8].Args)
+		assert.Equal(t, []string{"split-window", "-t", "sess:agent", "-P", "-F", "#{pane_id}", "-v", "-c", "/logs"}, rec.Commands[8].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:agent", "@hive-session", "sess"}, rec.Commands[9].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[10].Args)
 	})
 
 	t.Run("three windows with dir override", func(t *testing.T) {
@@ -106,10 +109,12 @@ func TestClient_CreateSession(t *testing.T) {
 		}, true)
 		require.NoError(t, err)
 
-		// new-session + set-option + 2 set-hook + 2*(new-window + set-option) + select-window
-		require.Len(t, rec.Commands, 9)
-		// Third window (index 6) uses custom dir: new-window for "shell" is index 4, "logs" is index 6
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "logs", "-c", "/var/log", "--", "sh", "-c", "tail -f /var/log/app.log"}, rec.Commands[6].Args)
+		// agent: new-session + remain-on-exit + respawn-pane + set-option, 2 set-hook,
+		// shell: new-window + set-option, logs: new-window + remain-on-exit + respawn-pane + set-option,
+		// select-window
+		require.Len(t, rec.Commands, 13)
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "logs", "-P", "-F", "#{pane_id}", "-c", "/var/log", "--", "cat"}, rec.Commands[8].Args)
+		assert.Equal(t, []string{"respawn-pane", "-k", "-t", "sess:logs", "-c", "/var/log", "--", "sh", "-c", "tail -f /var/log/app.log"}, rec.Commands[10].Args)
 	})
 
 	t.Run("focus second window", func(t *testing.T) {
@@ -159,8 +164,11 @@ func TestClient_CreateSession(t *testing.T) {
 		}, true)
 		require.NoError(t, err)
 
-		// new-session should NOT have "--", "sh", "-c" suffix
-		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "shell", "-c", "/work"}, rec.Commands[0].Args)
+		// new-session should NOT have a command suffix, and no respawn-pane follows
+		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "shell", "-P", "-F", "#{pane_id}", "-c", "/work"}, rec.Commands[0].Args)
+		for _, cmd := range rec.Commands {
+			assert.NotEqual(t, "respawn-pane", cmd.Args[0])
+		}
 	})
 }
 
@@ -342,12 +350,13 @@ func TestClient_AddWindows(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// 2 set-hook + 2*(new-window + set-option)
-		require.Len(t, rec.Commands, 6)
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w1", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[2].Args)
-		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:w1", "@hive-session", "sess"}, rec.Commands[3].Args)
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w2", "-c", "/work"}, rec.Commands[4].Args)
-		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:w2", "@hive-session", "sess"}, rec.Commands[5].Args)
+		// 2 set-hook + w1: new-window + remain-on-exit + respawn-pane + set-option, w2: new-window + set-option
+		require.Len(t, rec.Commands, 8)
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w1", "-P", "-F", "#{pane_id}", "-c", "/work", "--", "cat"}, rec.Commands[2].Args)
+		assert.Equal(t, []string{"respawn-pane", "-k", "-t", "sess:w1", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[4].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:w1", "@hive-session", "sess"}, rec.Commands[5].Args)
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w2", "-P", "-F", "#{pane_id}", "-c", "/work"}, rec.Commands[6].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:w2", "@hive-session", "sess"}, rec.Commands[7].Args)
 	})
 
 	t.Run("selects focused window", func(t *testing.T) {

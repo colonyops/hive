@@ -3,6 +3,7 @@ package tmpl
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"strings"
 	"text/template"
@@ -17,13 +18,6 @@ func shellQuote(s string) string {
 	// Replace ' with '\'' (end quote, escaped quote, start quote)
 	escaped := strings.ReplaceAll(s, "'", `'\''`)
 	return "'" + escaped + "'"
-}
-
-func stringOrDefault(s, def string) string {
-	if s != "" {
-		return s
-	}
-	return def
 }
 
 // Config holds all template rendering context.
@@ -59,8 +53,8 @@ func New(cfg Config) *Renderer {
 			"join":         strings.Join,
 			"hiveTmux":     func() string { return cfg.scriptPath("hive-tmux") },
 			"agentSend":    func() string { return cfg.scriptPath("agent-send") },
-			"agentCommand": func() string { return stringOrDefault(cfg.AgentCommand, "claude") },
-			"agentWindow":  func() string { return stringOrDefault(cfg.AgentWindow, "claude") },
+			"agentCommand": func() string { return cmp.Or(cfg.AgentCommand, "claude") },
+			"agentWindow":  func() string { return cmp.Or(cfg.AgentWindow, "claude") },
 			"agentFlags":   func() string { return cfg.AgentFlags },
 		},
 	}
@@ -111,4 +105,14 @@ func (r *Renderer) ValidateSyntax(tmpl string) error {
 		return fmt.Errorf("parse template: %w", err)
 	}
 	return nil
+}
+
+// AgentCommand returns the value the agentCommand template function renders.
+func (r *Renderer) AgentCommand() string {
+	return cmp.Or(r.cfg.AgentCommand, "claude")
+}
+
+// AgentWindow returns the value the agentWindow template function renders.
+func (r *Renderer) AgentWindow() string {
+	return cmp.Or(r.cfg.AgentWindow, "claude")
 }
