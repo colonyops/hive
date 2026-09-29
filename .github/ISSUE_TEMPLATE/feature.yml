@@ -1,0 +1,55 @@
+name: Feature request
+description: Suggest a new capability or an improvement to an existing one.
+type: Feature
+body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      description: Please confirm the following before filing.
+      options:
+        - label: I searched the existing issues and did not find a request for this feature.
+          required: true
+
+  - type: dropdown
+    id: artifact
+    attributes:
+      label: Which part of Hive?
+      options:
+        - hive CLI/TUI
+        - Docs sites
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the situation and what you cannot do today. Focus on the outcome you want rather than a specific implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What solution would you like?
+      description: Describe how you would expect this to work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What alternatives have you considered?
+      description: Other approaches you tried or thought about, including workarounds you use today.
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Anything else that helps explain the request, such as screenshots, example configuration, or links to related issues.
+    validations:
+      required: false

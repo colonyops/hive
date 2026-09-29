@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: hive CLI documentation
+    url: https://colonyops.github.io/hive/
+    about: Sessions, configuration, keybindings, plugins, and messaging.
+  - name: Hive Desktop documentation
+    url: https://hivedesktop.com/docs
+    about: Setup, sources, flows, terminal mode, and troubleshooting.
+  - name: Report a security vulnerability
+    url: https://github.com/colonyops/hive/security/advisories/new
+    about: Report vulnerabilities privately through a security advisory. Do not open a public issue.
