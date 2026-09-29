@@ -1,0 +1,19 @@
+name: Set up Go environment
+description: Go from go.mod, then mise tools
+
+inputs:
+  mise-install-args:
+    description: Passed to jdx/mise-action install_args. Empty installs every tool.
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version-file: go.mod
+        cache-dependency-path: go.sum
+
+    - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      with:
+        install_args: ${{ inputs.mise-install-args }}

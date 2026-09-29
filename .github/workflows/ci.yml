@@ -1,0 +1,157 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+# event_name is in the group so that a run that publish.yml calls does not
+# share a group with the push run on the same ref.
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Only a pull request filters by path. Every other event runs every job.
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      go: ${{ steps.filter.outputs.go }}
+      cli-integration: ${{ steps.filter.outputs.cli-integration }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: |
+            go:
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+              - '.golangci.yml'
+              - 'sqlc.yaml'
+              - 'internal/data/db/**'
+              - 'mise.toml'
+              - '.github/workflows/**'
+              - '.github/actions/**'
+            cli-integration:
+              - 'main.go'
+              - 'internal/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile.test'
+              - '.dockerignore'
+              - 'test/integration/**'
+              - '.goreleaser.yml'
+              - 'dev/**'
+              - 'mise.toml'
+              - '.github/workflows/ci.yml'
+              - '.github/actions/**'
+            docs:
+              - 'docs/**'
+              - 'zensical.toml'
+              - 'overrides/**'
+              - 'scripts/generate-llmstxt.sh'
+              - 'mise.toml'
+              - '.github/workflows/ci.yml'
+
+  go:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-go-env
+
+      - name: Check generated files are up-to-date
+        run: |
+          mise run --force generate
+          git diff --exit-code -- '*.gen.go' 'internal/data/db/db.go' 'internal/data/db/models.go' 'internal/data/db/queries.sql.go' || (echo "Generated files are out of date. Run 'mise run generate' and commit the result." && exit 1)
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        if: github.event_name == 'pull_request'
+        run: go test ./...
+
+      - name: Test with the race detector
+        if: github.event_name != 'pull_request'
+        run: go test -race ./...
+
+  go-lint:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.go == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-go-env
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.13.2
+          args: --timeout=6m
+
+      - name: Lint workflows
+        run: mise run lint:workflows
+
+  integration:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.cli-integration == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-go-env
+
+      - name: Build binary
+        run: mise run build
+
+      - name: Build test image
+        run: docker build -f Dockerfile.test -t hive-integration-test .
+
+      - name: Run integration tests
+        run: docker run --rm hive-integration-test
+
+  docs:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    env:
+      # Without this, mise run installs every tool in mise.toml, Go tools
+      # included, before it builds the site.
+      MISE_TASK_RUN_AUTO_INSTALL: "false"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+        with:
+          install_args: uv pipx:zensical
+
+      - name: Build the docs site
+        run: mise run docs:build
+
+  # The one required check. A job that a path filter skipped reports
+  # "skipped", which passes. A failure in changes skips its dependents and
+  # fails here.
+  ci-ok:
+    if: always()
+    needs: [changes, go, go-lint, integration, docs]
+    runs-on: ubuntu-latest
+    steps:
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
