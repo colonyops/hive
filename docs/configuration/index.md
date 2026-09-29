@@ -91,6 +91,8 @@ export HIVE_DEFAULT_AGENT=codex
 
 Agent resolution order is: CLI/session agent, then batch `--agent`, then the last matching `rules[].agent`, then `HIVE_DEFAULT_AGENT`, then `agents.default`. Sessions can run multiple agents by opening additional tmux windows — use `tmux.preview_window_matcher` to control which windows the TUI monitors.
 
+Before cloning, Hive checks that the resolved agent's command exists on `PATH` (or, for an absolute path, that the file is executable) and fails with `agent "<name>": command "<cmd>" not found on PATH` if it doesn't. The check only runs when the spawn templates use `{{ agentCommand }}`. If any window or pane command exits within a moment of starting (for example `nvim` isn't installed), Hive reports the command, its exit status, and its last output, then removes the new session.
+
 ## Tmux
 
 | Option                        | Type       | Default                             | Description                           |

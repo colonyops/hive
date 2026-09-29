@@ -112,6 +112,7 @@ type SessionService struct {
 	out        *switchWriter
 	err        *switchWriter
 	bareMu     sync.Map // map[remote → *sync.Mutex]
+	lookPath   LookPathFunc
 }
 
 // NewSessionService creates a new SessionService.
@@ -141,6 +142,7 @@ func NewSessionService(
 		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, renderer, out, err),
 		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), out),
 		renderer:   renderer,
+		lookPath:   defaultLookPath,
 	}
 }
 
@@ -220,6 +222,22 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 
 	if err := session.ValidateName(opts.Name); err != nil {
 		return nil, err
+	}
+
+	// Resolve and check the agent before cloning so a missing agent binary
+	// fails fast instead of leaving a clone whose terminal exits at once.
+	var strategy config.SpawnStrategy
+	var spawnRenderer *tmpl.Renderer
+	if !opts.SkipSpawn {
+		strategy = config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
+		var err error
+		spawnRenderer, err = s.rendererForAgent(firstNonEmpty(opts.AgentKey, strategy.Agent))
+		if err != nil {
+			return nil, err
+		}
+		if err := s.checkSpawnAgent(ctx, strategy, spawnRenderer); err != nil {
+			return nil, err
+		}
 	}
 
 	var sess session.Session
@@ -361,22 +379,9 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	}
 
 	if !opts.SkipSpawn {
-		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
-		renderer, err := s.rendererForAgent(firstNonEmpty(opts.AgentKey, strategy.Agent))
-		if err != nil {
-			return nil, err
-		}
-		switch {
-		case strategy.IsWindows():
-			if err := s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background, renderer); err != nil {
-				return nil, fmt.Errorf("spawn terminal: %w", err)
-			}
-		case len(strategy.Commands) > 0:
-			if err := s.spawner.SpawnWith(ctx, strategy.Commands, data, renderer); err != nil {
-				return nil, fmt.Errorf("spawn terminal: %w", err)
-			}
-		default:
-			return nil, fmt.Errorf("spawn terminal: no spawn strategy resolved for remote %q", remote)
+		if err := s.spawnTerminal(ctx, strategy, spawnRenderer, remote, data, opts); err != nil {
+			s.cleanupFailedSpawn(ctx, sess)
+			return nil, newCreateSessionError("spawn terminal", sess.Path, cloneStrategy, err)
 		}
 	}
 
@@ -386,6 +391,32 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	s.bus.PublishSessionCreated(eventbus.SessionCreatedPayload{Session: &sess})
 
 	return &sess, nil
+}
+
+func (s *SessionService) spawnTerminal(ctx context.Context, strategy config.SpawnStrategy, renderer *tmpl.Renderer, remote string, data SpawnData, opts CreateOptions) error {
+	switch {
+	case strategy.IsWindows():
+		return s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background, renderer)
+	case len(strategy.Commands) > 0:
+		return s.spawner.SpawnWith(ctx, strategy.Commands, data, renderer)
+	default:
+		return fmt.Errorf("no spawn strategy resolved for remote %q", remote)
+	}
+}
+
+// cleanupFailedSpawn deletes a session whose terminal failed to start, so no
+// active session without a terminal remains. Delete (not recycle) matches
+// CreateSessionWithWindows and avoids running recycle commands on a checkout
+// that may be half set up. When the tmux session exists anyway (e.g. only the
+// attach step failed), the session is usable and is kept.
+func (s *SessionService) cleanupFailedSpawn(ctx context.Context, sess session.Session) {
+	if _, err := s.executor.Run(ctx, "tmux", "has-session", "-t", "="+sess.Slug); err == nil {
+		s.log.Warn().Str("session_id", sess.ID).Msg("spawn failed but tmux session exists, keeping session")
+		return
+	}
+	if err := s.DeleteSession(ctx, sess.ID); err != nil {
+		s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("failed to clean up session after spawn failure")
+	}
 }
 
 // worktreeBranchName returns the branch name for a worktree session, applying
@@ -473,8 +504,10 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 		return fmt.Errorf("recycle session %s: %w", id, err)
 	}
 
-	// Kill associated tmux session (best-effort)
-	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Slug); err != nil {
+	// Kill associated tmux session (best-effort). The "=" prefix makes tmux
+	// match the name exactly; a bare name also matches other sessions that
+	// start with it.
+	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", "="+sess.Slug); err != nil {
 		s.log.Debug().Err(err).Str("session", sess.Slug).Msg("no tmux session to kill")
 	}
 
@@ -608,8 +641,10 @@ func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 		}
 	}
 
-	// Kill associated tmux session (best-effort)
-	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Slug); err != nil {
+	// Kill associated tmux session (best-effort). The "=" prefix makes tmux
+	// match the name exactly; a bare name also matches other sessions that
+	// start with it.
+	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", "="+sess.Slug); err != nil {
 		s.log.Debug().Err(err).Str("session", sess.Slug).Msg("no tmux session to kill")
 	}
 
