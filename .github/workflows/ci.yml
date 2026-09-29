@@ -42,6 +42,7 @@ jobs:
               - 'sqlc.yaml'
               - 'internal/data/db/**'
               - 'mise.toml'
+              - 'cmd/hive/scripts/**'
               - '.github/workflows/**'
               - '.github/actions/**'
             cli-integration:
@@ -106,6 +107,9 @@ jobs:
 
       - name: Lint workflows
         run: mise run lint:workflows
+
+      - name: Test the release tag script
+        run: mise run test:release-tag
 
   integration:
     needs: changes
