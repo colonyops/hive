@@ -9,12 +9,6 @@ Run `mise run check`. If you changed config behavior, also run
 
 The pull request template describes the title format and the scope list.
 
-## Labels
-
-`.github/labels.yml` declares the repository labels. To add or change a label,
-edit that file and run `mise run github:labels`. A label that is not in the file
-is deleted the next time someone runs the task with `--prune`.
-
 ## Writing style
 
 This guidance applies to all contributor prose. It includes pull request
