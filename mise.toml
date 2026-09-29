@@ -12,6 +12,10 @@ golangci-lint = "2.13.2"
 uv = "latest"
 "pipx:zensical" = "latest"
 
+# GitHub Tools
+yq = "4.53.6"
+actionlint = "1.7.12"
+
 [env]
 HIVE_LOG_LEVEL = "debug"
 HIVE_LOG_FILE = "./dev.log"
@@ -100,6 +104,14 @@ run = "zensical serve"
 [tasks."docs:build"]
 description = "Build documentation site with llms.txt"
 run = ["zensical build", "./scripts/generate-llmstxt.sh"]
+
+[tasks."github:labels"]
+description = "Sync repo labels with .github/labels.yml (args: [--dry-run] [--prune] [--repo owner/name])"
+run = "./scripts/github-labels.sh"
+
+[tasks."lint:workflows"]
+description = "Lint GitHub workflows and local actions"
+run = "actionlint"
 
 [tasks.integration]
 description = "Run Docker-based integration tests"
