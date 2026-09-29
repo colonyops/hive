@@ -6,10 +6,12 @@ import (
 	"image/color"
 
 	lipgloss "charm.land/lipgloss/v2"
+
+	"github.com/colonyops/hive/internal/core/theme"
 )
 
 // CurrentPalette holds the active theme palette.
-var CurrentPalette Palette
+var CurrentPalette theme.Palette
 
 // Semantic color aliases set by SetTheme.
 var (
@@ -128,7 +130,7 @@ var (
 var ColorPool []color.Color
 
 // SetTheme sets the active palette and rebuilds all global styles.
-func SetTheme(p Palette) {
+func SetTheme(p theme.Palette) {
 	CurrentPalette = p
 
 	ColorPrimary = p.Primary
@@ -424,5 +426,6 @@ func PulseColor(base color.Color, frame, frames int, minBrightness float64) colo
 
 // nolint:gochecknoinits // bootstrap default theme before any style is accessed.
 func init() {
-	SetTheme(themes[DefaultTheme])
+	p, _ := theme.Get(theme.Default)
+	SetTheme(p)
 }

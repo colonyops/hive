@@ -6,7 +6,6 @@ import (
 	"context"
 	"time"
 
-	"charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 )
@@ -50,7 +49,6 @@ type StatusProvider interface {
 
 // Status represents plugin status to display in the UI.
 type Status struct {
-	Label string         // e.g., "0/3", "PR#42", "main +2/-1"
-	Icon  string         // e.g., "●", "◆", "!"
-	Style lipgloss.Style // color/formatting
+	Label string // e.g., "0/3", "PR#42", "main +2/-1"
+	Icon  string // e.g., "●", "◆", "!"
 }

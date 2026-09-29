@@ -27,6 +27,7 @@ import (
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/theme"
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/internal/tui/sourcepicker"
 
@@ -2143,9 +2144,9 @@ func (m *Model) notifyError(format string, args ...any) tea.Cmd {
 
 // applyTheme switches the active theme at runtime.
 func (m *Model) applyTheme(name string) {
-	palette, ok := styles.GetPalette(name)
+	palette, ok := theme.Get(name)
 	if !ok {
-		m.publishNotificationf(notify.LevelError, "unknown theme %q, available: %v", name, styles.ThemeNames())
+		m.publishNotificationf(notify.LevelError, "unknown theme %q, available: %v", name, theme.Names())
 		return
 	}
 	styles.SetTheme(palette)

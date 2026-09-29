@@ -11,20 +11,21 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/rs/zerolog"
 )
 
 // FileCopier copies files from a source directory to a destination.
 type FileCopier struct {
 	log    zerolog.Logger
+	styler OutputStyler
 	stdout io.Writer
 }
 
 // NewFileCopier creates a new FileCopier.
-func NewFileCopier(log zerolog.Logger, stdout io.Writer) *FileCopier {
+func NewFileCopier(log zerolog.Logger, styler OutputStyler, stdout io.Writer) *FileCopier {
 	return &FileCopier{
 		log:    log,
+		styler: styler,
 		stdout: stdout,
 	}
 }
@@ -262,10 +263,10 @@ func (c *FileCopier) copyRegularFile(src, dst string, srcInfo fs.FileInfo) error
 
 // printCopyHeader prints a styled header for a copy operation.
 func (c *FileCopier) printCopyHeader(pattern string, count int) {
-	divider := styles.TextMutedStyle.Render(strings.Repeat("─", 50))
-	header := styles.CommandHeaderStyle.Render("copy")
-	patternLabel := styles.TextForegroundStyle.Render(pattern)
-	countLabel := styles.TextMutedStyle.Render(fmt.Sprintf("[%d files]", count))
+	divider := c.styler.Muted(strings.Repeat("─", 50))
+	header := c.styler.Header("copy")
+	patternLabel := c.styler.Text(pattern)
+	countLabel := c.styler.Muted(fmt.Sprintf("[%d files]", count))
 
 	_, _ = fmt.Fprintln(c.stdout)
 	_, _ = fmt.Fprintln(c.stdout, divider)

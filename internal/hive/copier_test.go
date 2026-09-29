@@ -103,7 +103,7 @@ func TestFileCopier_CopyFiles(t *testing.T) {
 			// Create copier
 			var buf bytes.Buffer
 			log := zerolog.New(&buf).Level(zerolog.DebugLevel)
-			copier := NewFileCopier(log, &buf)
+			copier := NewFileCopier(log, PlainStyler{}, &buf)
 
 			// Run copy
 			err := copier.CopyFiles(context.Background(), tt.rule, sourceDir, destDir)
@@ -152,7 +152,7 @@ func TestFileCopier_PreservesPermissions(t *testing.T) {
 
 	var buf bytes.Buffer
 	log := zerolog.New(&buf).Level(zerolog.DebugLevel)
-	copier := NewFileCopier(log, &buf)
+	copier := NewFileCopier(log, PlainStyler{}, &buf)
 
 	rule := config.Rule{Copy: []string{"script.sh"}}
 
@@ -182,7 +182,7 @@ func TestFileCopier_OverwritesExisting(t *testing.T) {
 
 	var buf bytes.Buffer
 	log := zerolog.New(&buf).Level(zerolog.DebugLevel)
-	copier := NewFileCopier(log, &buf)
+	copier := NewFileCopier(log, PlainStyler{}, &buf)
 
 	rule := config.Rule{Copy: []string{"config.txt"}}
 
@@ -208,7 +208,7 @@ func TestFileCopier_CreatesParentDirectories(t *testing.T) {
 
 	var buf bytes.Buffer
 	log := zerolog.New(&buf).Level(zerolog.DebugLevel)
-	copier := NewFileCopier(log, &buf)
+	copier := NewFileCopier(log, PlainStyler{}, &buf)
 
 	rule := config.Rule{Copy: []string{"a/b/c/file.txt"}}
 
@@ -233,7 +233,7 @@ func TestFileCopier_RespectsContextCancellation(t *testing.T) {
 
 	var buf bytes.Buffer
 	log := zerolog.New(&buf).Level(zerolog.DebugLevel)
-	copier := NewFileCopier(log, &buf)
+	copier := NewFileCopier(log, PlainStyler{}, &buf)
 
 	rule := config.Rule{Copy: []string{"test.txt"}}
 
@@ -259,7 +259,7 @@ func TestFileCopier_CopiesSymlink(t *testing.T) {
 
 	var buf bytes.Buffer
 	log := zerolog.New(&buf).Level(zerolog.DebugLevel)
-	copier := NewFileCopier(log, &buf)
+	copier := NewFileCopier(log, PlainStyler{}, &buf)
 
 	rule := config.Rule{Copy: []string{"link.txt"}}
 
@@ -290,7 +290,7 @@ func TestFileCopier_CopiesSymlinkWithAbsoluteTarget(t *testing.T) {
 
 	var buf bytes.Buffer
 	log := zerolog.New(&buf).Level(zerolog.DebugLevel)
-	copier := NewFileCopier(log, &buf)
+	copier := NewFileCopier(log, PlainStyler{}, &buf)
 
 	rule := config.Rule{Copy: []string{"abs-link"}}
 
@@ -320,7 +320,7 @@ func TestFileCopier_OverwritesExistingSymlink(t *testing.T) {
 
 	var buf bytes.Buffer
 	log := zerolog.New(&buf).Level(zerolog.DebugLevel)
-	copier := NewFileCopier(log, &buf)
+	copier := NewFileCopier(log, PlainStyler{}, &buf)
 
 	rule := config.Rule{Copy: []string{"link"}}
 

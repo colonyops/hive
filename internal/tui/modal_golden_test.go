@@ -8,11 +8,12 @@ import (
 
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/theme"
 )
 
 func TestMain(m *testing.M) {
 	// Use a fixed theme so golden output is deterministic across machines.
-	p, ok := styles.GetPalette("tokyo-night")
+	p, ok := theme.Get("tokyo-night")
 	if !ok {
 		panic("tokyo-night theme not found")
 	}

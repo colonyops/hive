@@ -40,20 +40,21 @@ tui:
 
 ## Adding a Theme
 
-Add a new palette to `internal/core/styles/themes.go`:
+Add a new palette to `internal/core/theme/theme.go`:
 
 ```go
 "my-theme": {
-    Primary:    lipgloss.Color("#hex"),
-    Secondary:  lipgloss.Color("#hex"),
-    Foreground: lipgloss.Color("#hex"),
-    Muted:      lipgloss.Color("#hex"),
-    Background: lipgloss.Color("#hex"),
-    Surface:    lipgloss.Color("#hex"),
-    Success:    lipgloss.Color("#hex"),
-    Warning:    lipgloss.Color("#hex"),
-    Error:      lipgloss.Color("#hex"),
+    Primary:    hex("#rrggbb"),
+    Secondary:  hex("#rrggbb"),
+    Foreground: hex("#rrggbb"),
+    Muted:      hex("#rrggbb"),
+    Background: hex("#rrggbb"),
+    Surface:    hex("#rrggbb"),
+    SurfaceLow: hex("#rrggbb"),
+    Success:    hex("#rrggbb"),
+    Warning:    hex("#rrggbb"),
+    Error:      hex("#rrggbb"),
 },
 ```
 
-All 70+ lipgloss styles are rebuilt from these 9 colors by `SetTheme()`, so adding a palette entry is all that's needed.
+All 70+ lipgloss styles are rebuilt from these 10 colors by `SetTheme()`, so adding a palette entry is all that's needed.

@@ -8,11 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/hive/plugins/pluglib"
 )
@@ -132,32 +130,25 @@ func infoToStatus(info prInfo) plugins.Status {
 	}
 
 	var label string
-	var style lipgloss.Style
 
 	if info.IsDraft {
 		label = "draft"
-		style = lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	} else {
 		switch info.State {
 		case "OPEN":
 			label = "open"
-			style = lipgloss.NewStyle().Foreground(styles.ColorSuccess)
 		case "MERGED":
 			label = "merged"
-			style = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
 		case "CLOSED":
 			label = "closed"
-			style = lipgloss.NewStyle().Foreground(styles.ColorMuted)
 		default:
 			label = info.State
-			style = lipgloss.NewStyle()
 		}
 	}
 
 	return plugins.Status{
 		Label: label,
 		Icon:  "PR",
-		Style: style,
 	}
 }
 

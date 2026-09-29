@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/theme"
 	"github.com/colonyops/hive/pkg/pathutil"
 	"github.com/hay-kot/criterio"
 	"gopkg.in/yaml.v3"
@@ -135,7 +135,7 @@ var defaultUserCommands = map[string]UserCommand{
 	},
 	"ThemePreview": {
 		Action: action.TypeSetTheme,
-		Help:   "preview theme (" + strings.Join(styles.ThemeNames(), ", ") + ")",
+		Help:   "preview theme (" + strings.Join(theme.Names(), ", ") + ")",
 		Silent: true,
 	},
 	"Notifications": {
@@ -963,7 +963,7 @@ func (c *Config) applyDefaults() {
 		c.Context.SymlinkName = defaults.Context.SymlinkName
 	}
 	if c.TUI.Theme == "" {
-		c.TUI.Theme = styles.DefaultTheme
+		c.TUI.Theme = theme.Default
 	}
 	if c.Views.Sessions.GroupBy == "" {
 		c.Views.Sessions.GroupBy = GroupByRepo
@@ -1276,8 +1276,8 @@ func (c *Config) validateAgents() error {
 
 // validateTheme checks that the configured theme name is a valid built-in theme.
 func (c *Config) validateTheme() error {
-	if _, ok := styles.GetPalette(c.TUI.Theme); !ok {
-		return fmt.Errorf("tui.theme: unknown theme %q, available themes: %v", c.TUI.Theme, styles.ThemeNames())
+	if _, ok := theme.Get(c.TUI.Theme); !ok {
+		return fmt.Errorf("tui.theme: unknown theme %q, available themes: %v", c.TUI.Theme, theme.Names())
 	}
 	return nil
 }

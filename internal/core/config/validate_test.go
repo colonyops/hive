@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/theme"
 	"github.com/hay-kot/criterio"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +21,7 @@ func validConfig(t *testing.T) *Config {
 		GitPath: "git",
 		DataDir: t.TempDir(),
 		Git:     GitConfig{StatusWorkers: 1},
-		TUI:     TUIConfig{Theme: styles.DefaultTheme},
+		TUI:     TUIConfig{Theme: theme.Default},
 		Views:   ViewsConfig{Sessions: SessionsViewConfig{GroupBy: GroupByRepo}},
 		Agents: AgentsConfig{
 			Default:  "claude",

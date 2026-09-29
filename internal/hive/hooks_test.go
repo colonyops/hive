@@ -20,7 +20,7 @@ func TestRunHooks_RendersTemplateVariables(t *testing.T) {
 	// Use a temp dir as the working directory
 	dir := t.TempDir()
 
-	runner := NewHookRunner(log, &executil.RealExecutor{}, renderer, &stdout, &stderr)
+	runner := NewHookRunner(log, &executil.RealExecutor{}, renderer, PlainStyler{}, &stdout, &stderr)
 
 	rule := config.Rule{
 		Pattern:  "",
@@ -44,7 +44,7 @@ func TestRunHooks_RendersOwnerAndRepo(t *testing.T) {
 	log := zerolog.Nop()
 	dir := t.TempDir()
 
-	runner := NewHookRunner(log, &executil.RealExecutor{}, renderer, &stdout, &stderr)
+	runner := NewHookRunner(log, &executil.RealExecutor{}, renderer, PlainStyler{}, &stdout, &stderr)
 
 	rule := config.Rule{
 		Commands: []string{"echo {{ .Owner }}/{{ .Repo }}"},
@@ -66,7 +66,7 @@ func TestRunHooks_InvalidTemplateFails(t *testing.T) {
 	log := zerolog.Nop()
 	dir := t.TempDir()
 
-	runner := NewHookRunner(log, &executil.RealExecutor{}, renderer, &stdout, &stderr)
+	runner := NewHookRunner(log, &executil.RealExecutor{}, renderer, PlainStyler{}, &stdout, &stderr)
 
 	rule := config.Rule{
 		Commands: []string{"echo {{ .Unclosed"},
@@ -82,7 +82,7 @@ func TestRunHooks_EmptyCommandsIsNoop(t *testing.T) {
 	renderer := testRenderer()
 	log := zerolog.Nop()
 
-	runner := NewHookRunner(log, &executil.RealExecutor{}, renderer, &stdout, &stderr)
+	runner := NewHookRunner(log, &executil.RealExecutor{}, renderer, PlainStyler{}, &stdout, &stderr)
 
 	rule := config.Rule{}
 	err := runner.RunHooks(context.Background(), rule, t.TempDir(), config.SpawnTemplateData{})

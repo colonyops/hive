@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
@@ -18,16 +17,18 @@ type HookRunner struct {
 	log      zerolog.Logger
 	executor executil.Executor
 	renderer *tmpl.Renderer
+	styler   OutputStyler
 	stdout   io.Writer
 	stderr   io.Writer
 }
 
 // NewHookRunner creates a new HookRunner.
-func NewHookRunner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, stdout, stderr io.Writer) *HookRunner {
+func NewHookRunner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, styler OutputStyler, stdout, stderr io.Writer) *HookRunner {
 	return &HookRunner{
 		log:      log,
 		executor: executor,
 		renderer: renderer,
+		styler:   styler,
 		stdout:   stdout,
 		stderr:   stderr,
 	}
@@ -66,10 +67,10 @@ func (h *HookRunner) RunHooks(ctx context.Context, rule config.Rule, path string
 
 // printCommandHeader prints a styled header for a hook command.
 func (h *HookRunner) printCommandHeader(cmdNum, totalCmds int, cmd string) {
-	divider := styles.TextMutedStyle.Render(strings.Repeat("─", 50))
-	header := styles.CommandHeaderStyle.Render("hook")
-	cmdLabel := styles.TextMutedStyle.Render(fmt.Sprintf("[%d/%d]", cmdNum, totalCmds))
-	command := styles.TextForegroundStyle.Render(cmd)
+	divider := h.styler.Muted(strings.Repeat("─", 50))
+	header := h.styler.Header("hook")
+	cmdLabel := h.styler.Muted(fmt.Sprintf("[%d/%d]", cmdNum, totalCmds))
+	command := h.styler.Text(cmd)
 
 	_, _ = fmt.Fprintln(h.stdout)
 	_, _ = fmt.Fprintln(h.stdout, divider)

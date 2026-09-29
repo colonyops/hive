@@ -75,6 +75,7 @@ func newMouseTestSessionService(t *testing.T) *hive.SessionService {
 		tb.EventBus,
 		&executiltest.Exec{},
 		r,
+		hive.PlainStyler{},
 		log,
 		io.Discard,
 		io.Discard,

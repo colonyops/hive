@@ -122,6 +122,7 @@ func NewSessionService(
 	bus *eventbus.EventBus,
 	exec executil.Executor,
 	renderer *tmpl.Renderer,
+	styler OutputStyler,
 	log zerolog.Logger,
 	stdout, stderr io.Writer,
 ) *SessionService {
@@ -138,8 +139,8 @@ func NewSessionService(
 		err:        err,
 		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec, log.With().Str("component", "tmux").Logger()), out, err),
 		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
-		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, renderer, out, err),
-		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), out),
+		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, renderer, styler, out, err),
+		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), styler, out),
 		renderer:   renderer,
 	}
 }

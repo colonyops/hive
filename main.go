@@ -18,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/theme"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/hive"
@@ -234,7 +235,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			})
 
 			// Apply configured theme (validation ensures name is valid)
-			palette, _ := styles.GetPalette(cfg.TUI.Theme)
+			palette, _ := theme.Get(cfg.TUI.Theme)
 			styles.SetTheme(palette)
 
 			// Open database connection
@@ -285,7 +286,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				svcLogger = log.With().Str("component", "hive").Logger()
 			)
 
-			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, bus, exec, renderer, svcLogger, os.Stdout, os.Stderr)
+			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, bus, exec, renderer, styles.CLIOutputStyler{}, svcLogger, os.Stdout, os.Stderr)
 			termMgr := hive.NewTerminalManager(cfg)
 
 			// Create all plugin instances, collect availability info for doctor,
