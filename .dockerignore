@@ -1,8 +1,9 @@
-# Whitelist: only send what Dockerfile and Dockerfile.test need to the builder.
+# Whitelist: only send what cmd/hive/Dockerfile and cmd/hive/Dockerfile.test
+# need to the builder. The build context is the repository root.
 *
 !dist/hive_linux_*/hive
-!dev/config.dev.yaml
-!dev/docker-entrypoint.sh
+!cmd/hive/dev/config.dev.yaml
+!cmd/hive/dev/docker-entrypoint.sh
 !go.mod
 !go.sum
 !test/integration/

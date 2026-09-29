@@ -33,7 +33,7 @@ git log -5 --oneline
 git show <commit-sha>
 
 # Check specific files
-git diff HEAD~1 internal/tui/model.go
+git diff HEAD~1 cmd/hive/internal/tui/model.go
 ```
 
 **Look for:**

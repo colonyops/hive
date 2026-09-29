@@ -1,0 +1,191 @@
+package tui
+
+import (
+	"strings"
+
+	"charm.land/bubbles/v2/spinner"
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/cmd/hive/internal/styles"
+	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
+)
+
+// Output modal layout constants.
+const (
+	outputModalMaxWidth   = 100 // maximum modal width in columns
+	outputModalMaxHeight  = 20  // maximum modal height in rows
+	outputModalMargin     = 4   // margin from screen edges
+	outputModalChrome     = 6   // rows for title, status, help, and spacing
+	outputModalPadding    = 4   // padding inside content area
+	outputModalTruncation = 7   // space for "..." when truncating lines
+	outputModalMaxLines   = 100 // max lines to buffer
+)
+
+// Pulse animation constants.
+const (
+	outputPulseFrames    = 12  // total frames in one pulse cycle
+	outputPulseMinBright = 0.6 // minimum brightness at midpoint
+)
+
+// OutputModal displays streaming command output in a modal dialog.
+type OutputModal struct {
+	title    string
+	lines    []string
+	running  bool
+	err      error
+	spinner  spinner.Model
+	maxLines int // max lines to keep in buffer
+	frame    int // animation frame counter
+}
+
+// NewOutputModal creates a new output modal with the given title.
+func NewOutputModal(title string) OutputModal {
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+
+	return OutputModal{
+		title:    title,
+		lines:    make([]string, 0),
+		running:  true,
+		spinner:  s,
+		maxLines: outputModalMaxLines,
+	}
+}
+
+// AddLine appends a line of output to the modal.
+func (m *OutputModal) AddLine(line string) {
+	// Split on newlines in case multiple lines come at once
+	newLines := strings.Split(strings.TrimRight(line, "\n"), "\n")
+	m.lines = append(m.lines, newLines...)
+
+	// Trim to max lines
+	if len(m.lines) > m.maxLines {
+		m.lines = m.lines[len(m.lines)-m.maxLines:]
+	}
+}
+
+// SetComplete marks the modal as complete with optional error.
+func (m *OutputModal) SetComplete(err error) {
+	m.running = false
+	m.err = err
+}
+
+// IsRunning returns true if the command is still running.
+func (m *OutputModal) IsRunning() bool {
+	return m.running
+}
+
+// Spinner returns the spinner model for tick updates.
+func (m *OutputModal) Spinner() spinner.Model {
+	return m.spinner
+}
+
+// SetSpinner updates the spinner model.
+func (m *OutputModal) SetSpinner(s spinner.Model) {
+	m.spinner = s
+}
+
+// AdvanceFrame increments the animation frame counter.
+func (m *OutputModal) AdvanceFrame() {
+	m.frame++
+}
+
+// Overlay renders the output modal centered over the background.
+func (m OutputModal) Overlay(background string, width, height int) string {
+	// Calculate modal dimensions - use most of the screen
+	modalWidth := min(width-outputModalMargin, outputModalMaxWidth)
+	modalHeight := min(height-outputModalMargin, outputModalMaxHeight)
+	contentHeight := modalHeight - outputModalChrome
+
+	// Build content lines with per-line status indicators
+	var contentBuilder strings.Builder
+
+	// Show last N lines that fit
+	startIdx := 0
+	if len(m.lines) > contentHeight {
+		startIdx = len(m.lines) - contentHeight
+	}
+
+	indicatorWidth := 4 // "● " or spinner + space, with safety margin
+	maxLineWidth := modalWidth - outputModalPadding - indicatorWidth
+
+	for i := startIdx; i < len(m.lines); i++ {
+		line := m.lines[i]
+		// Truncate long lines
+		if len(line) > maxLineWidth {
+			line = line[:maxLineWidth-3] + "..."
+		}
+
+		var indicator string
+		if m.running && i == len(m.lines)-1 {
+			c := styles.PulseColor(styles.ColorSuccess, m.frame, outputPulseFrames, outputPulseMinBright)
+			indicator = lipgloss.NewStyle().Foreground(c).Render("●")
+		} else {
+			indicator = styles.TextSuccessStyle.Render("●")
+		}
+		contentBuilder.WriteString(indicator + " " + styles.TextMutedStyle.Render(line))
+
+		if i < len(m.lines)-1 {
+			contentBuilder.WriteString("\n")
+		}
+	}
+
+	// Pad with empty lines if needed
+	lineCount := len(m.lines) - startIdx
+	for i := lineCount; i < contentHeight; i++ {
+		contentBuilder.WriteString("\n")
+	}
+
+	content := contentBuilder.String()
+
+	// Build status line
+	var status string
+	switch {
+	case m.running:
+		dots := strings.Repeat(".", m.frame/3%4)
+		pad := strings.Repeat(" ", 3-len(dots))
+		c := styles.PulseColor(styles.ColorSuccess, m.frame, outputPulseFrames, outputPulseMinBright)
+		status = lipgloss.NewStyle().Foreground(c).Render("● Running"+dots) + pad
+	case m.err != nil:
+		status = styles.TextErrorStyle.Render("✗ Error: " + m.err.Error())
+	default:
+		status = styles.TextSuccessStyle.Render("✓ Complete")
+	}
+
+	// Build help line
+	var help string
+	if m.running {
+		help = components.KeyHints(
+			components.HelpEntry{Key: "b", Desc: "background"},
+			components.HelpEntry{Key: "esc", Desc: "cancel"},
+		)
+	} else {
+		help = components.KeyHints(components.HelpEntry{Key: "enter/esc", Desc: "close"})
+	}
+
+	// Assemble modal content
+	modalContent := lipgloss.JoinVertical(
+		lipgloss.Left,
+		styles.ModalTitleStyle.Render(m.title),
+		"",
+		lipgloss.NewStyle().Width(modalWidth-outputModalPadding).Render(content),
+		"",
+		status,
+		styles.ModalHelpStyle.Render(help),
+	)
+
+	modal := styles.ModalStyle.Render(modalContent)
+
+	// Use Compositor/Layer for true overlay (background remains visible)
+	bgLayer := lipgloss.NewLayer(background)
+	modalLayer := lipgloss.NewLayer(modal)
+
+	// Center the modal
+	modalW := lipgloss.Width(modal)
+	modalH := lipgloss.Height(modal)
+	centerX := (width - modalW) / 2
+	centerY := (height - modalH) / 2
+	modalLayer.X(centerX).Y(centerY).Z(1)
+
+	compositor := lipgloss.NewCompositor(bgLayer, modalLayer)
+	return compositor.Render()
+}

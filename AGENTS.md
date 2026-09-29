@@ -39,8 +39,15 @@ Key capabilities:
 ### Code Structure
 
 ```
-internal/
-├── commands/       # CLI command handlers (urfave/cli/v3)
+main.go             # Wrapper that keeps `go install github.com/colonyops/hive@latest` working
+cmd/hive/
+├── main.go         # The hive program
+├── cli/            # Entry code that both main.go files run
+└── internal/       # CLI-only code
+    ├── commands/   # CLI command handlers (urfave/cli/v3)
+    ├── styles/     # lipgloss styles
+    └── tui/        # Bubble Tea TUI (tree view, modals, keybindings)
+internal/           # Shared with Hive Desktop
 ├── core/
 │   ├── config/     # Configuration loading, validation, defaults
 │   ├── git/        # Git operations (clone, pull, status)
@@ -50,22 +57,22 @@ internal/
 │   └── terminal/   # Terminal status monitoring (tmux)
 ├── store/
 │   └── jsonfile/   # JSON file session storage implementation
-├── tui/            # Bubble Tea TUI (tree view, modals, keybindings)
 ├── messaging/      # Pub/sub messaging between agents
-├── printer/        # Output formatting utilities
-└── styles/         # Shared lipgloss styles
+└── printer/        # Output formatting utilities
 ```
+
+Shared `internal/` must not import charm or anything below `cmd/`. Hive Desktop uses those packages, and depguard fails the lint on a violation. UI code goes below `cmd/hive/internal/`.
 
 ### Key Files
 
 | File                                        | Purpose                                             |
 | ------------------------------------------- | --------------------------------------------------- |
-| `main.go`                                   | CLI entry point, global flags, command registration |
+| `cmd/hive/cli/cli.go`                       | CLI entry point, global flags, command registration |
 | `internal/hive/service.go`                  | Service layer - coordinates sessions, git, rules    |
 | `internal/core/config/config.go`            | Config structs, loading, defaults                   |
 | `internal/core/config/validate.go`          | Template data structs, validation                   |
-| `internal/tui/model.go`                     | TUI model, update loop, view rendering              |
-| `internal/tui/tree_view.go`                 | Session tree with status indicators                 |
+| `cmd/hive/internal/tui/model.go`            | TUI model, update loop, view rendering              |
+| `cmd/hive/internal/tui/views/sessions/tree_view.go` | Session tree with status indicators         |
 | `internal/integration/terminal/detector.go` | AI agent status detection patterns                  |
 
 ## Development
@@ -99,12 +106,12 @@ This is the preferred way to test CLI/TUI behavior, session creation, branch tem
 
 ### Environment
 
-Dev environment uses `config.dev.yaml` and `.data/` for isolation:
+Dev environment uses `cmd/hive/dev/config.dev.yaml` and `.data/` for isolation:
 
 ```bash
 HIVE_LOG_LEVEL=debug
 HIVE_LOG_FILE=./dev.log
-HIVE_CONFIG=./config.dev.yaml
+HIVE_CONFIG=./cmd/hive/dev/config.dev.yaml
 HIVE_DATA_DIR=./.data
 ```
 
@@ -212,7 +219,7 @@ The TUI dispatches keystrokes through three layers, in this order:
 2. **Layer 2: configurable via `KeybindingResolver`** - every other user-overridable key. Default bindings live in `defaultViewsConfig` (`internal/core/config/config_views.go`), and user config in `cfg.Views.{Global,Sessions,Tasks,Review}.Keybindings` overrides those defaults because `maps.Copy(merged, user)` overlays user values onto the merged map.
 3. **Layer 3: bubbles list internals** - the underlying list component claims keys like `g`, `G`, `j`, `k`, `h`, `l`, `u`, `d`, `f`, `b`, `/`, `?`, `q`, and `esc`. This is intentionally out of scope for hive keybinding configuration: the resolver consumes configured bindings before the list sees them.
 
-When adding a new overridable key, do not add a new `if keyStr == "X"` block in view code. Register an `action.Type` in `internal/core/action/type.go`, add a default `UserCommand` in `defaultUserCommands` (`internal/core/config/config.go`), bind it in `defaultViewsConfig`, and dispatch it from `internal/tui/model_handlers.go`.
+When adding a new overridable key, do not add a new `if keyStr == "X"` block in view code. Register an `action.Type` in `internal/core/action/type.go`, add a default `UserCommand` in `defaultUserCommands` (`internal/core/config/config.go`), bind it in `defaultViewsConfig`, and dispatch it from `cmd/hive/internal/tui/model_handlers.go`.
 
 ### Session States
 

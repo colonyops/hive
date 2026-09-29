@@ -26,7 +26,7 @@ Integration Tests   → End-to-end workflows with teatest
 Match test files to implementation files:
 
 ```
-internal/tui/diff/
+cmd/hive/internal/tui/diff/
 ├── diffviewer.go
 ├── diffviewer_test.go           # Component behavior tests
 ├── diffviewer_editor_test.go    # Feature-specific tests
@@ -294,7 +294,7 @@ This generates:
 go test ./... -update
 
 # Update specific test
-go test ./internal/tui/diff -run TestFileTreeView_SingleFile -update
+go test ./cmd/hive/internal/tui/diff -run TestFileTreeView_SingleFile -update
 ```
 
 ## Test Utilities
@@ -636,10 +636,10 @@ mise run test
 mise watch test
 
 # Specific package
-go test ./internal/tui/diff
+go test ./cmd/hive/internal/tui/diff
 
 # Specific test
-go test ./internal/tui/diff -run TestDiffViewerScrollDown
+go test ./cmd/hive/internal/tui/diff -run TestDiffViewerScrollDown
 
 # With coverage
 mise run coverage
@@ -648,7 +648,7 @@ mise run coverage
 go test ./... -update
 
 # Verbose output
-go test ./internal/tui/diff -v
+go test ./cmd/hive/internal/tui/diff -v
 ```
 
 ## Summary

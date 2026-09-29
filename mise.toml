@@ -48,18 +48,18 @@ run = ["go generate ./...", "sqlc generate"]
 alias = "default"
 description = "Run hive with global config (supports CLI args)"
 depends = ["generate"]
-run = "go run ."
+run = "go run ./cmd/hive"
 
 [tasks.dev]
 description = "Run hive with dev config (supports CLI args)"
 depends = ["generate"]
-env = { HIVE_LOG_LEVEL = "debug", HIVE_LOG_FILE = "./dev.log", HIVE_CONFIG = "./dev/config.dev.yaml", HIVE_DATA_DIR = "./.data" }
-run = "go run ."
+env = { HIVE_LOG_LEVEL = "debug", HIVE_LOG_FILE = "./dev.log", HIVE_CONFIG = "./cmd/hive/dev/config.dev.yaml", HIVE_DATA_DIR = "./.data" }
+run = "go run ./cmd/hive"
 
 [tasks.build]
 description = "Build with goreleaser"
 depends = ["generate"]
-run = "goreleaser build --snapshot --clean"
+run = "goreleaser build --snapshot --clean --config cmd/hive/.goreleaser.yml"
 
 [tasks.test]
 description = "Run all go tests"
@@ -88,13 +88,13 @@ run = ["go mod tidy", { tasks = ["lint", "test", "deadcode"] }]
 
 [tasks.validate]
 description = "Run doctor with dev config"
-env = { HIVE_CONFIG = "./dev/config.dev.yaml" }
-run = "go run . doctor"
+env = { HIVE_CONFIG = "./cmd/hive/dev/config.dev.yaml" }
+run = "go run ./cmd/hive doctor"
 
 [tasks."validate:invalid"]
 description = "Run doctor with intentionally invalid config"
-env = { HIVE_CONFIG = "./dev/config.invalid.yaml" }
-run = "go run . doctor || true"
+env = { HIVE_CONFIG = "./cmd/hive/dev/config.invalid.yaml" }
+run = "go run ./cmd/hive doctor || true"
 
 [tasks."docs:serve"]
 description = "Serve documentation site locally"
@@ -111,19 +111,19 @@ run = "actionlint"
 [tasks.integration]
 description = "Run Docker-based integration tests"
 depends = ["build"]
-run = "docker build -f Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
+run = "docker build -f cmd/hive/Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
 
 [tasks."build:container"]
 description = "Build only the linux binary for the host arch (used by container images)"
 depends = ["generate"]
-run = "GOOS=linux goreleaser build --snapshot --clean --single-target"
+run = "GOOS=linux goreleaser build --snapshot --clean --single-target --config cmd/hive/.goreleaser.yml"
 
 [tasks."container"]
 description = "Build Docker image and run ephemeral container"
 depends = ["build:container"]
-run = "docker run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q .)"
+run = "docker run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q -f cmd/hive/Dockerfile .)"
 
 [tasks."container:rootless"]
 description = "Build image and run ephemeral container with rootless podman"
 depends = ["build:container"]
-run = "podman run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(podman build -q .)"
+run = "podman run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(podman build -q -f cmd/hive/Dockerfile .)"

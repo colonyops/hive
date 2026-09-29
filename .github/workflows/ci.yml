@@ -46,15 +46,13 @@ jobs:
               - '.github/actions/**'
             cli-integration:
               - 'main.go'
+              - 'cmd/hive/**'
               - 'internal/**'
               - 'pkg/**'
               - 'go.mod'
               - 'go.sum'
-              - 'Dockerfile.test'
               - '.dockerignore'
               - 'test/integration/**'
-              - '.goreleaser.yml'
-              - 'dev/**'
               - 'mise.toml'
               - '.github/workflows/ci.yml'
               - '.github/actions/**'
@@ -122,7 +120,7 @@ jobs:
         run: mise run build
 
       - name: Build test image
-        run: docker build -f Dockerfile.test -t hive-integration-test .
+        run: docker build -f cmd/hive/Dockerfile.test -t hive-integration-test .
 
       - name: Run integration tests
         run: docker run --rm hive-integration-test

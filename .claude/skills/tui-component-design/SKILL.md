@@ -15,7 +15,7 @@ Best practices for building maintainable, testable TUI components using Bubblete
 Each component should be in its own file with clear boundaries:
 
 ```
-internal/tui/diff/
+cmd/hive/internal/tui/diff/
 ├── model.go           # Top-level compositor that orchestrates sub-components
 ├── diffviewer.go      # Diff content display with scrolling and selection
 ├── filetree.go        # File navigation tree with expand/collapse

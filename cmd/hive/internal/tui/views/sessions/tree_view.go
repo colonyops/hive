@@ -1,0 +1,718 @@
+package sessions
+
+import (
+	"fmt"
+	"image/color"
+	"io"
+	"strings"
+
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/cmd/hive/internal/styles"
+	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
+	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/workspace"
+	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/pkg/kv"
+)
+
+// Tree characters for rendering the session tree.
+const (
+	treeBranch = "├─"
+	treeLast   = "└─"
+)
+
+// Animation constants.
+const (
+	// AnimationFrameCount is the total number of frames in the fade animation.
+	AnimationFrameCount = 12
+)
+
+// activeAnimationColors caches the pulse colors derived from the current theme.
+var (
+	activeAnimationColors []color.Color
+	activeAnimationSeed   uint32 // R channel of seed color, used to detect theme changes
+)
+
+// ClearAnimationColors resets the cached animation colors so they regenerate
+// from the current theme on next render. Call after a theme change.
+func ClearAnimationColors() {
+	activeAnimationColors = nil
+}
+
+// generatePulseColors creates a symmetric fade animation from a seed color.
+// It dims the color to minBrightness (0.0–1.0) at the midpoint and returns to full brightness.
+func generatePulseColors(base color.Color, frames int, minBrightness float64) []color.Color {
+	colors := make([]color.Color, frames)
+	for i := range frames {
+		colors[i] = styles.PulseColor(base, i, frames, minBrightness)
+	}
+	return colors
+}
+
+// Star indicator for current repository.
+const currentRepoIndicator = "◆"
+
+// renderStatusIndicator returns the styled status indicator for a session.
+// For active sessions with terminal integration, it uses terminal status.
+// For recycled sessions or when no terminal status is available, it falls back to session state.
+// The animFrame parameter controls the fade animation for active status (0 to AnimationFrameCount-1).
+func renderStatusIndicator(state session.State, termStatus *hive.TerminalStatus, treeStyles TreeDelegateStyles, animFrame int) string {
+	// Recycled sessions always show recycled indicator
+	if state == session.StateRecycled {
+		return treeStyles.StatusRecycled.Render(styles.StatusIndicatorRecycled)
+	}
+
+	// If we have terminal status for active sessions, use it
+	if state == session.StateActive && termStatus != nil {
+		switch termStatus.Status {
+		case terminal.StatusActive:
+			return renderActiveIndicator(animFrame)
+		case terminal.StatusApproval:
+			return treeStyles.StatusApproval.Render(styles.StatusIndicatorApproval)
+		case terminal.StatusQuestion:
+			// Question renders at the approval tier: same icon and style,
+			// no dedicated indicator.
+			return treeStyles.StatusApproval.Render(styles.StatusIndicatorApproval)
+		case terminal.StatusReady:
+			return treeStyles.StatusReady.Render(styles.StatusIndicatorReady)
+		case terminal.StatusMissing:
+			return treeStyles.StatusUnknown.Render(styles.StatusIndicatorMissing)
+		}
+	}
+
+	// Default: active session without terminal status shows as unknown
+	// We only show active (green) when we have positive confirmation of activity
+	if state == session.StateActive {
+		return treeStyles.StatusUnknown.Render(styles.StatusIndicatorMissing)
+	}
+
+	return treeStyles.StatusRecycled.Render(styles.StatusIndicatorRecycled)
+}
+
+// renderActiveIndicator renders the active status with fade animation.
+func renderActiveIndicator(frame int) string {
+	// Regenerate colors if the theme's green changed
+	r, _, _, _ := styles.ColorSuccess.RGBA() //nolint:dogsled // RGBA returns 4 values, only r is needed for seed
+	if activeAnimationColors == nil || activeAnimationSeed != r {
+		activeAnimationColors = generatePulseColors(styles.ColorSuccess, AnimationFrameCount, 0.80)
+		activeAnimationSeed = r
+	}
+
+	if frame < 0 || frame >= len(activeAnimationColors) {
+		frame = 0
+	}
+	style := lipgloss.NewStyle().Foreground(activeAnimationColors[frame])
+	return style.Render(styles.StatusIndicatorActive)
+}
+
+// TreeItem represents an item in the tree view.
+// It can be either a repo header, a session entry, or a recycled placeholder.
+type TreeItem struct {
+	// IsHeader indicates this is a repo header, not a session.
+	IsHeader bool
+
+	// Header fields (only used when IsHeader is true)
+	RepoName      string
+	RepoRemote    string // Git remote URL for the repo group
+	RootPath      string // Path to the workspace checkout this repo was sourced from (empty if none discovered)
+	IsCurrentRepo bool
+
+	// Session fields (only used when IsHeader is false and IsRecycledPlaceholder is false)
+	Session      session.Session
+	IsLastInRepo bool   // Used to render └─ vs ├─
+	RepoPrefix   string // The repo name for filtering purposes
+
+	// Recycled placeholder fields (only used when IsRecycledPlaceholder is true)
+	IsRecycledPlaceholder bool
+	RecycledCount         int
+	RecycledSessions      []session.Session // Actual recycled sessions for deletion support
+
+	// Window sub-item fields (only used when IsWindowItem is true)
+	IsWindowItem  bool
+	WindowIndex   string
+	WindowName    string
+	ParentSession session.Session // Session this window belongs to
+	IsLastWindow  bool            // For └─ vs ├─ rendering within the window group
+
+	// Pane sub-item fields (only used when IsPaneItem is true)
+	IsPaneItem   bool
+	PaneID       string
+	PaneTool     string
+	PaneStatus   terminal.Status
+	ParentWindow string
+	IsLastPane   bool
+}
+
+// IsSession returns true when this item represents a regular session (not a
+// header, recycled placeholder, window sub-item, or pane sub-item).
+func (i TreeItem) IsSession() bool {
+	return !i.IsHeader && !i.IsRecycledPlaceholder && !i.IsWindowItem && !i.IsPaneItem
+}
+
+// FilterValue returns the value used for filtering.
+// Headers are not filterable (return empty).
+// Sessions return "repoName sessionName" to allow searching by either.
+// Recycled placeholders return "repoName recycled" to allow filtering.
+func (i TreeItem) FilterValue() string {
+	if i.IsHeader {
+		return ""
+	}
+	if i.IsRecycledPlaceholder {
+		return i.RepoPrefix + " recycled"
+	}
+	if i.IsPaneItem {
+		return i.RepoPrefix + " " + i.ParentSession.Name + " " + i.ParentWindow + " " + i.PaneID + " " + i.PaneTool
+	}
+	if i.IsWindowItem {
+		return i.RepoPrefix + " " + i.ParentSession.Name + " " + i.WindowName
+	}
+	return i.RepoPrefix + " " + i.Session.Name
+}
+
+// BuildTreeItems converts repo groups into tree items for the list.
+// Workspace repos are matched to groups by remote identity so headers can
+// surface the root checkout's path (git status, open-repo target).
+func BuildTreeItems(groups []RepoGroup, localRemote string, workspaceRepos []workspace.DiscoveredRepo) []list.Item {
+	if len(groups) == 0 {
+		return nil
+	}
+
+	rootPaths := make(map[string]string, len(workspaceRepos))
+	for _, repo := range workspaceRepos {
+		if identity := git.RemoteIdentity(repo.Remote); identity != "" {
+			rootPaths[identity] = repo.Path
+		}
+	}
+
+	items := make([]list.Item, 0)
+
+	for _, group := range groups {
+		if len(group.Sessions) == 0 {
+			continue
+		}
+
+		// Add header
+		header := TreeItem{
+			IsHeader:      true,
+			RepoName:      group.Name,
+			RepoRemote:    group.Remote,
+			RootPath:      rootPaths[git.RemoteIdentity(group.Remote)],
+			IsCurrentRepo: group.Remote == localRemote,
+		}
+		items = append(items, header)
+
+		// Add active sessions
+		for idx, s := range group.Sessions {
+			isLast := idx == len(group.Sessions)-1
+			item := TreeItem{
+				IsHeader:     false,
+				Session:      s,
+				IsLastInRepo: isLast,
+				RepoPrefix:   group.Name,
+			}
+			items = append(items, item)
+		}
+	}
+
+	return items
+}
+
+// TreeDelegateStyles defines the styles for the tree delegate.
+type TreeDelegateStyles struct {
+	// Header styles
+	HeaderNormal   lipgloss.Style
+	HeaderSelected lipgloss.Style
+	HeaderStar     lipgloss.Style
+
+	// Session styles
+	TreeLine       lipgloss.Style
+	SessionName    lipgloss.Style
+	SessionBranch  lipgloss.Style
+	SessionID      lipgloss.Style
+	StatusActive   lipgloss.Style
+	StatusApproval lipgloss.Style
+	StatusReady    lipgloss.Style
+	StatusUnknown  lipgloss.Style
+	StatusRecycled lipgloss.Style
+
+	// Selection styles
+	Selected       lipgloss.Style
+	SelectedBorder lipgloss.Style
+	FilterMatch    lipgloss.Style
+	SelectedMatch  lipgloss.Style
+}
+
+// DefaultTreeDelegateStyles returns the default styles for tree rendering.
+func DefaultTreeDelegateStyles() TreeDelegateStyles {
+	return TreeDelegateStyles{
+		HeaderNormal:   lipgloss.NewStyle().Bold(true).Foreground(styles.ColorForeground),
+		HeaderSelected: lipgloss.NewStyle().Bold(true).Foreground(styles.ColorPrimary),
+		HeaderStar:     lipgloss.NewStyle().Foreground(styles.ColorWarning),
+
+		TreeLine:       lipgloss.NewStyle().Foreground(styles.ColorMuted),
+		SessionName:    lipgloss.NewStyle().Foreground(styles.ColorForeground),
+		SessionBranch:  lipgloss.NewStyle().Foreground(styles.ColorMuted),
+		SessionID:      lipgloss.NewStyle().Foreground(styles.ColorSecondary),
+		StatusActive:   lipgloss.NewStyle().Foreground(styles.ColorSuccess),
+		StatusApproval: lipgloss.NewStyle().Foreground(styles.ColorWarning),
+		StatusReady:    lipgloss.NewStyle().Foreground(styles.ColorSecondary),
+		StatusUnknown:  lipgloss.NewStyle().Foreground(styles.ColorMuted).Faint(true),
+		StatusRecycled: lipgloss.NewStyle().Foreground(styles.ColorMuted),
+
+		Selected:       lipgloss.NewStyle().Foreground(styles.ColorPrimary).Bold(true),
+		SelectedBorder: lipgloss.NewStyle().Foreground(styles.ColorPrimary),
+		FilterMatch:    lipgloss.NewStyle().Underline(true),
+		SelectedMatch:  lipgloss.NewStyle().Underline(true).Foreground(styles.ColorPrimary).Bold(true),
+	}
+}
+
+// ColumnWidths holds the calculated widths for aligned columns.
+type ColumnWidths struct {
+	Name   int
+	Branch int
+	ID     int
+}
+
+// CalculateColumnWidths calculates the maximum widths for each column within a repo group.
+func CalculateColumnWidths(sessions []session.Session, gitBranches map[string]string) ColumnWidths {
+	var widths ColumnWidths
+
+	for _, s := range sessions {
+		if len(s.Name) > widths.Name {
+			widths.Name = len(s.Name)
+		}
+
+		branch := gitBranches[s.Path]
+		if len(branch) > widths.Branch {
+			widths.Branch = len(branch)
+		}
+
+		shortID := s.ID
+		if len(shortID) > 4 {
+			shortID = shortID[len(shortID)-4:]
+		}
+		if len(shortID) > widths.ID {
+			widths.ID = len(shortID)
+		}
+	}
+
+	return widths
+}
+
+// TreeDelegate handles rendering of tree items in the list.
+type TreeDelegate struct {
+	Styles           TreeDelegateStyles
+	GitStatuses      *kv.Store[string, GitStatus]
+	TerminalStatuses *kv.Store[string, hive.TerminalStatus]
+	PluginStatuses   map[string]*kv.Store[string, plugins.Status] // plugin name -> session ID -> status
+	ColumnWidths     *ColumnWidths
+	AnimationFrame   int  // Current frame for status animations
+	PreviewMode      bool // When true, show minimal info (session names only)
+	IconsEnabled     bool // When true, show nerd font icons
+}
+
+// NewTreeDelegate creates a new tree delegate with default styles.
+func NewTreeDelegate() TreeDelegate {
+	return TreeDelegate{
+		Styles: DefaultTreeDelegateStyles(),
+	}
+}
+
+// Height returns the height of each item.
+// Headers are 1 line, sessions are 1 line.
+func (d TreeDelegate) Height() int {
+	return 1
+}
+
+// Spacing returns the spacing between items.
+func (d TreeDelegate) Spacing() int {
+	return 0
+}
+
+// Update handles item updates.
+func (d TreeDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd {
+	return nil
+}
+
+// Render renders a single tree item.
+func (d TreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
+	treeItem, ok := item.(TreeItem)
+	if !ok {
+		return
+	}
+
+	isSelected := index == m.Index()
+
+	// Build the line content
+	var line string
+	switch {
+	case treeItem.IsHeader:
+		line = d.renderHeader(treeItem, isSelected, m, index)
+	case treeItem.IsRecycledPlaceholder:
+		line = d.renderRecycledPlaceholder(treeItem, isSelected)
+	case treeItem.IsPaneItem:
+		line = d.renderPane(treeItem, isSelected)
+	case treeItem.IsWindowItem:
+		line = d.renderWindow(treeItem, isSelected)
+	default:
+		line = d.renderSession(treeItem, isSelected, m, index)
+	}
+
+	// Selection indicator: a single-cell gutter keeps rows close to the left
+	// edge; the bar sits directly against the item content.
+	var prefix string
+	if isSelected {
+		prefix = d.Styles.SelectedBorder.Render("┃")
+	} else {
+		prefix = " "
+	}
+
+	_, _ = fmt.Fprintf(w, "%s%s", prefix, line)
+}
+
+// renderHeader renders a repository header. When the repo has a discovered
+// workspace checkout (RootPath), the header also surfaces that checkout's
+// agent status dot and git status, making the root repo visible in the tree.
+func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, _ list.Model, _ int) string {
+	// Repo name
+	nameStyle := d.Styles.HeaderNormal
+	if isSelected {
+		nameStyle = d.Styles.HeaderSelected
+	}
+	result := nameStyle.Render(item.RepoName)
+
+	// Append indicator for current repo
+	if item.IsCurrentRepo {
+		result += " " + d.Styles.HeaderStar.Render(currentRepoIndicator)
+	}
+
+	if item.RootPath == "" {
+		return result
+	}
+
+	// Status dot only when an agent is actually running in the root checkout;
+	// StatusMissing is the common case and would just add noise to every header.
+	if d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(hive.RootStatusKey(item.RootPath)); ok && ts.Status != terminal.StatusMissing {
+			result = renderStatusIndicator(session.StateActive, &ts, d.Styles, d.AnimationFrame) + " " + result
+		}
+	}
+
+	if !d.PreviewMode {
+		result += d.renderGitStatus(item.RootPath)
+	}
+
+	return result
+}
+
+// renderRecycledPlaceholder renders the collapsed recycled sessions placeholder.
+func (d TreeDelegate) renderRecycledPlaceholder(item TreeItem, isSelected bool) string {
+	// Tree prefix
+	var prefix string
+	if item.IsLastInRepo {
+		prefix = " " + treeLast
+	} else {
+		prefix = " " + treeBranch
+	}
+	prefixStyled := d.Styles.TreeLine.Render(prefix)
+
+	// Label with count
+	labelStyle := d.Styles.StatusRecycled
+	if isSelected {
+		labelStyle = d.Styles.Selected
+	}
+	label := labelStyle.Render(fmt.Sprintf("Recycled (%d)", item.RecycledCount))
+
+	return fmt.Sprintf("%s %s", prefixStyled, label)
+}
+
+// renderSession renders a session entry.
+func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model, index int) string {
+	// Tree prefix
+	var prefix string
+	if item.IsLastInRepo {
+		prefix = " " + treeLast
+	} else {
+		prefix = " " + treeBranch
+	}
+	prefixStyled := d.Styles.TreeLine.Render(prefix)
+
+	// Get terminal status if available
+	var termStatus *hive.TerminalStatus
+	if d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(item.Session.ID); ok {
+			termStatus = &ts
+		}
+	}
+
+	// Status indicator - use terminal status for active sessions
+	statusStr := renderStatusIndicator(item.Session.State, termStatus, d.Styles, d.AnimationFrame)
+
+	// Session name with filter matching
+	nameStyle := d.Styles.SessionName
+	matchStyle := d.Styles.FilterMatch
+	if isSelected {
+		nameStyle = d.Styles.Selected
+		matchStyle = d.Styles.SelectedMatch
+	}
+
+	// Get filter matches
+	matches := m.MatchesForItem(index)
+	matchSet := make(map[int]bool, len(matches))
+	for _, idx := range matches {
+		matchSet[idx] = true
+	}
+
+	// FilterValue is "repoName sessionName", so name offset is len(repoName)+1
+	nameOffset := len([]rune(item.RepoPrefix)) + 1
+	name := d.renderWithMatches(item.Session.Name, nameOffset, matchSet, nameStyle, matchStyle)
+
+	// Pad name to align columns (add spaces after styled name)
+	namePadding := ""
+	if d.ColumnWidths != nil && d.ColumnWidths.Name > 0 {
+		padLen := d.ColumnWidths.Name - len(item.Session.Name)
+		if padLen > 0 {
+			namePadding = components.Pad(padLen)
+		}
+	}
+
+	// Short ID (always show)
+	shortID := item.Session.ID
+	if len(shortID) > 4 {
+		shortID = shortID[len(shortID)-4:]
+	}
+	id := d.Styles.SessionID.Render(" #" + shortID)
+
+	// In preview mode, show minimal info (status + name + ID only)
+	if d.PreviewMode {
+		return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, id)
+	}
+
+	// Full mode: show ID, git status, and plugin statuses
+	gitInfo := d.renderGitStatus(item.Session.Path)
+	pluginInfo := d.renderPluginStatuses(item.Session.ID)
+
+	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
+}
+
+// renderPane renders a pane sub-item nested under a window.
+func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
+	var connector string
+	if item.IsLastPane {
+		connector = treeLast
+	} else {
+		connector = treeBranch
+	}
+
+	var parentLine string
+	if item.IsLastInRepo {
+		parentLine = "         "
+	} else {
+		parentLine = " │       "
+	}
+	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
+
+	termStatus := &hive.TerminalStatus{Status: item.PaneStatus}
+	statusStr := renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
+
+	nameStyle := d.Styles.SessionName
+	if isSelected {
+		nameStyle = d.Styles.Selected
+	}
+
+	paneID := styles.TextMutedStyle.Render(displayPaneID(item.PaneID))
+	name := paneID
+	if item.PaneTool != "" {
+		name += " " + nameStyle.Render(item.PaneTool)
+	}
+
+	return fmt.Sprintf("%s %s %s", prefixStyled, statusStr, name)
+}
+
+func displayPaneID(paneID string) string {
+	if strings.HasPrefix(paneID, "%") {
+		return "#" + strings.TrimPrefix(paneID, "%")
+	}
+	return paneID
+}
+
+func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
+	// Deeper indent: "│     ├─" or "│     └─" depending on position
+	var connector string
+	if item.IsLastWindow {
+		connector = treeLast
+	} else {
+		connector = treeBranch
+	}
+
+	// The parent session's tree line continues vertically
+	var parentLine string
+	if item.IsLastInRepo {
+		parentLine = "     " // parent was └─, no continuing line
+	} else {
+		parentLine = " │   " // parent was ├─, line continues
+	}
+	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
+
+	// Get per-window terminal status from the delegate's store
+	var windowStatus *hive.WindowStatus
+	if d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(item.ParentSession.ID); ok {
+			for i := range ts.Windows {
+				if ts.Windows[i].WindowIndex == item.WindowIndex {
+					windowStatus = &ts.Windows[i]
+					break
+				}
+			}
+		}
+	}
+
+	// Status indicator
+	var statusStr string
+	if windowStatus != nil {
+		termStatus := &hive.TerminalStatus{Status: windowStatus.Status}
+		statusStr = renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
+	} else {
+		statusStr = d.Styles.StatusUnknown.Render(styles.StatusIndicatorMissing)
+	}
+
+	// Window name
+	nameStyle := d.Styles.SessionName
+	if isSelected {
+		nameStyle = d.Styles.Selected
+	}
+	name := nameStyle.Render(item.WindowName)
+
+	// Only show a compact index when needed to disambiguate window names.
+	// Also show when the window name is empty.
+	showIndex := item.WindowName == ""
+	if !showIndex && d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(item.ParentSession.ID); ok {
+			for i := range ts.Windows {
+				if ts.Windows[i].WindowName == item.WindowName && ts.Windows[i].WindowIndex != item.WindowIndex {
+					showIndex = true
+					break
+				}
+			}
+		}
+	}
+
+	var indexStr string
+	if showIndex {
+		indexStr = d.Styles.SessionBranch.Render(fmt.Sprintf(" #%s", item.WindowIndex))
+	}
+
+	return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, indexStr)
+}
+
+// renderGitStatus returns the formatted git status for a session path.
+func (d TreeDelegate) renderGitStatus(path string) string {
+	if d.GitStatuses == nil {
+		return styles.TextMutedStyle.Render(" ...")
+	}
+
+	status, ok := d.GitStatuses.Get(path)
+	if !ok || status.IsLoading {
+		return styles.TextMutedStyle.Render(" ...")
+	}
+
+	if status.Error != nil {
+		return ""
+	}
+
+	// Format with icons: ( branch) +N -N [dirty icon]
+	// Format without icons: (branch) +N -N • clean/dirty
+	var branch string
+	if d.IconsEnabled {
+		branch = d.Styles.SessionBranch.Render(" (" + styles.IconGitBranch + " " + status.Branch + ")")
+	} else {
+		branch = d.Styles.SessionBranch.Render(" (" + status.Branch + ")")
+	}
+	additions := styles.TextSuccessStyle.Render(fmt.Sprintf(" +%d", status.Additions))
+	deletions := styles.TextErrorStyle.Render(fmt.Sprintf(" -%d", status.Deletions))
+
+	var indicator string
+	if d.IconsEnabled {
+		// With icons: show yellow git icon for uncommitted, nothing for clean
+		if status.HasChanges {
+			indicator = styles.TextWarningStyle.Render(" " + styles.IconGit)
+		}
+	} else {
+		// Without icons: show text indicator
+		if status.HasChanges {
+			indicator = styles.TextWarningStyle.Render(" • uncommitted")
+		} else {
+			indicator = styles.TextMutedStyle.Render(" • clean")
+		}
+	}
+
+	return branch + additions + deletions + indicator
+}
+
+// renderPluginStatuses returns formatted plugin status indicators for a session.
+func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
+	if len(d.PluginStatuses) == 0 {
+		return ""
+	}
+
+	// Neutral gray style for all plugin text
+	neutralStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
+
+	var parts []string
+	pluginOrder := []string{PluginGitHub}
+	for _, name := range pluginOrder {
+		store, ok := d.PluginStatuses[name]
+		if !ok || store == nil {
+			continue
+		}
+		status, ok := store.Get(sessionID)
+		if !ok || status.Label == "" {
+			continue
+		}
+
+		icon := status.Icon
+		if d.IconsEnabled && name == PluginGitHub {
+			icon = styles.IconGithub
+		}
+
+		parts = append(parts, icon+neutralStyle.Render(status.Label))
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+
+	// Join all parts with bullet separators
+	result := ""
+	for i, part := range parts {
+		if i == 0 {
+			result = " " + neutralStyle.Render("•") + " " + part
+		} else {
+			result += " " + neutralStyle.Render("•") + " " + part
+		}
+	}
+	return result
+}
+
+// renderWithMatches renders text with underlined characters at matched positions.
+func (d TreeDelegate) renderWithMatches(text string, offset int, matchSet map[int]bool, baseStyle, matchStyle lipgloss.Style) string {
+	if len(matchSet) == 0 {
+		return baseStyle.Render(text)
+	}
+
+	runes := []rune(text)
+	var result string
+	for i, r := range runes {
+		if matchSet[offset+i] {
+			result += matchStyle.Render(string(r))
+		} else {
+			result += baseStyle.Render(string(r))
+		}
+	}
+	return result
+}

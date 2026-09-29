@@ -19,7 +19,7 @@ Hive detects agent status in two stages: `internal/core/terminal/assess` (Stage 
 1. **Find mismatches.** Run the automated guardrail:
 
    ```bash
-   go test ./internal/commands/... -run TestCalibrationCorpus_ReplayMatchesExpected -v
+   go test ./cmd/hive/internal/commands/... -run TestCalibrationCorpus_ReplayMatchesExpected -v
    ```
 
    This replays every `test/calibration/sequences/*.jsonl` through a fresh `assess.Engine` + `status.Tracker` on a virtual clock (never wall time, never an ambient config file — `status.DefaultOptions()` only) and diffs the published-status sequence against its `.expected.json` sidecar. A failing subtest names the sequence and the exact frame index where the sequences diverge.

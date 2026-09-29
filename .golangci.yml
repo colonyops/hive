@@ -37,6 +37,29 @@ linters:
                 details.
             - pkg: github.com/pkg/errors
               desc: Should be replaced by standard lib errors package
+        # depguard matches these globs against absolute paths. A checkout
+        # below a directory named "cmd" exempts every file from this rule.
+        shared-surface-free:
+          files:
+            - "**/internal/**"
+            - "!**/cmd/**"
+          deny:
+            - pkg: charm.land
+              desc: Shared internal/ must not render. Put UI code below cmd/<artifact>/internal.
+            - pkg: github.com/charmbracelet
+              desc: Shared internal/ must not render. Put UI code below cmd/<artifact>/internal.
+            - pkg: github.com/wailsapp
+              desc: Shared internal/ must not depend on the desktop runtime.
+        cli-no-desktop-deps:
+          files:
+            - "**/cmd/hive/**"
+          deny:
+            - pkg: github.com/wailsapp
+              desc: The CLI must not depend on the desktop runtime.
+            - pkg: github.com/dop251/goja
+              desc: The CLI must not depend on the desktop flow runtime.
+            - pkg: go.opentelemetry.io/otel/sdk
+              desc: The CLI must not depend on the desktop telemetry runtime.
     exhaustive:
       default-signifies-exhaustive: true
     gocritic:

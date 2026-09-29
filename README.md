@@ -117,7 +117,7 @@ mise run dev
 
 `mise run dev` runs hive with project-local defaults from `mise.toml`:
 
-- `HIVE_CONFIG=./config.dev.yaml`
+- `HIVE_CONFIG=./cmd/hive/dev/config.dev.yaml`
 - `HIVE_DATA_DIR=./.data`
 - `HIVE_LOG_FILE=./dev.log`
 - `HIVE_LOG_LEVEL=debug`
@@ -128,7 +128,7 @@ This isolates contributor testing from your personal/global hive sessions.
 
 | Mode   | Config Path                  | Data Directory        | Use Case                                |
 | ------ | ---------------------------- | --------------------- | --------------------------------------- |
-| Dev    | `./config.dev.yaml`          | `./.data`             | Contributing and testing changes safely |
+| Dev    | `./cmd/hive/dev/config.dev.yaml` | `./.data`         | Contributing and testing changes safely |
 | Global | `~/.config/hive/config.yaml` | `~/.local/share/hive` | Day-to-day hive usage                   |
 
 Run with dev config:
