@@ -9,10 +9,15 @@ settings/#updates) and at the paths before the site became a Zensical
 site (/docs/...); the CLI's README and the GitHub Pages redirect from
 colonyops.github.io/hive/ bring visitors to the CLI's pre-merge paths.
 
+Targets are written relative to the stub, so the stubs work wherever the
+site is served: at the root of hivedesktop.com and under the /hive/ prefix
+of colonyops.github.io until the domain moves.
+
 The table is frozen at the merge. A page that moves later gets a new row;
 a page that is new does not.
 """
 
+import posixpath
 import sys
 from pathlib import Path
 
@@ -103,6 +108,13 @@ def table() -> dict[str, str]:
     return rows
 
 
+def relative(old: str, new: str) -> str:
+    path, _, fragment = new.partition("#")
+    rel = posixpath.relpath("/" + path, "/" + old)
+    rel = "./" if rel == "." else rel + "/"
+    return rel + ("#" + fragment if fragment else "")
+
+
 def main() -> int:
     if not SITE.is_dir():
         print(f"redirects: {SITE} does not exist; run the build first", file=sys.stderr)
@@ -113,7 +125,7 @@ def main() -> int:
             print(f"redirects: {old} is a real page; drop it from the table", file=sys.stderr)
             return 1
         stub.parent.mkdir(parents=True, exist_ok=True)
-        stub.write_text(STUB.format(target="/" + new), encoding="utf-8")
+        stub.write_text(STUB.format(target=relative(old, new)), encoding="utf-8")
     print(f"redirects: wrote {len(table())} stubs")
     return 0
 

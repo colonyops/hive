@@ -10,7 +10,6 @@ repo_url = "https://github.com/colonyops/hive"
 repo_name = "colonyops/hive"
 extra_css = ["stylesheets/extra.css"]
 extra_javascript = ["javascripts/download.js", "javascripts/demos.js"]
-custom_dir = "overrides"
 
 nav = [
   { "Home" = "index.md" },
@@ -79,6 +78,7 @@ nav = [
 ]
 
 [project.theme]
+custom_dir = "overrides"
 favicon = "assets/favicon.svg"
 variant = "modern"
 features = [

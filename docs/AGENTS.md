@@ -94,14 +94,17 @@ every URL the site used to serve: the desktop docs before they moved under
 `colonyops.github.io/hive/` address redirects to this domain with the path
 kept). The table is frozen at the merge: a page that moves later gets a new
 row there, and the script fails when a row would overwrite a real page.
+Targets are relative to the stub, so the stubs work under a path prefix as
+well as at the root.
 
 ## CI and deploy
 
 `.github/workflows/ci.yml` runs `mise run docs:build` on every PR that
 touches `docs/` (the `site` job), so a broken link or a missing nav file
-fails the PR. `.github/workflows/deploy-site.yml` runs the same build on a
-push to `main` that touches `docs/**` and deploys `docs/site/` to GitHub
-Pages.
+fails the PR. `.github/workflows/deploy-site.yml` runs the same build and
+deploys `docs/site/` to GitHub Pages. The publish workflow calls it after a
+CLI release, so a docs change goes live with the next release; dispatch it
+by hand to deploy without one.
 
 ## Guardrails
 

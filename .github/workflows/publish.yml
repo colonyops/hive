@@ -70,3 +70,15 @@ jobs:
           GORELEASER_PREVIOUS_TAG: ${{ steps.tag.outputs.previous }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+  docs:
+    name: "Deploy Docs"
+    if: ${{ !inputs.dry_run }}
+    needs:
+      - release
+    # A called workflow gets at most the permissions of the job that calls it.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/deploy-site.yml
