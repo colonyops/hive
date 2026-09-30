@@ -11,21 +11,22 @@ import (
 
 // NewTerminalManager builds the terminal integration manager from config.
 // tmux is always enabled; availability is checked lazily by the manager.
-func NewTerminalManager(cfg *config.Config) *terminal.Manager {
+func NewTerminalManager(cfg *config.Config, source terminal.PaneSource) *terminal.Manager {
 	mgr := terminal.NewManager([]string{"tmux"})
-	mgr.Register(newTmuxIntegration(cfg))
+	mgr.Register(newTmuxIntegration(cfg, source))
 	return mgr
 }
 
-func newTmuxIntegration(cfg *config.Config) *terminaltmux.Integration {
+func newTmuxIntegration(cfg *config.Config, source terminal.PaneSource) *terminaltmux.Integration {
+	options := []terminaltmux.Option{terminaltmux.WithPaneSource(source)}
 	if cfg == nil {
-		return terminaltmux.NewFromPreviewMatchers(nil)
+		return terminaltmux.NewFromPreviewMatchers(nil, options...)
 	}
 
-	options := []terminaltmux.Option{
+	options = append(options,
 		terminaltmux.WithStatusOptions(status.OptionsFromConfig(cfg.Terminal.Status, cfg.Tmux.PollInterval)),
 		terminaltmux.WithMissingTolerance(cfg.Terminal.Status.Confirm.Missing.Polls),
-	}
+	)
 	if cfg.Tmux.CaptureRecording.Enabled {
 		recorder, err := terminaltmux.NewJSONCaptureRecorder(cfg.TmuxCaptureRecordingsDir())
 		if err != nil {

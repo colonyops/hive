@@ -1,7 +1,11 @@
 // Package terminal provides interfaces for terminal multiplexer integrations.
 package terminal
 
-import "context"
+import (
+	"context"
+
+	"github.com/colonyops/hive/internal/core/multiplexer"
+)
 
 // Status represents the detected state of a terminal session.
 type Status string
@@ -16,6 +20,7 @@ const (
 
 // SessionInfo holds information about a discovered terminal session.
 type SessionInfo struct {
+	Target       multiplexer.Target
 	Name         string // terminal session name (e.g., tmux session name)
 	WindowIndex  string // tmux window index (e.g., "0", "1")
 	PaneID       string // tmux pane ID in %N format
@@ -35,7 +40,7 @@ type Integration interface {
 
 	// RefreshCache updates cached session data. Call once per poll cycle
 	// to batch tmux queries efficiently.
-	RefreshCache()
+	RefreshCache(ctx context.Context)
 
 	// DiscoverSession finds a terminal session for the given slug and metadata.
 	// Returns nil if no matching session is found.

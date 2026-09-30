@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/colonyops/hive/internal/core/action"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -321,7 +322,9 @@ func (m *mockTmuxOpener) OpenTmuxSession(_ context.Context, name, path, remote, 
 	return m.openErr
 }
 
-type mockWindowSpawner struct{}
+type mockWindowSpawner struct {
+	killed []multiplexer.Target
+}
 
 func (m *mockWindowSpawner) AddWindowsToTmuxSession(_ context.Context, _, _ string, _ []action.WindowSpec, _ bool) error {
 	return nil
@@ -331,10 +334,16 @@ func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, _ action
 	return nil
 }
 
+func (m *mockWindowSpawner) KillTmuxWindow(_ context.Context, target multiplexer.Target) error {
+	m.killed = append(m.killed, target)
+	return nil
+}
+
 // Service tests
 
 func TestService_CreateExecutor(t *testing.T) {
-	svc := NewService(&mockDeleter{}, &mockRecycler{}, &mockTmuxOpener{}, &mockWindowSpawner{}, nil)
+	windowService := &mockWindowSpawner{}
+	svc := NewService(&mockDeleter{}, &mockRecycler{}, &mockTmuxOpener{}, windowService, windowService, nil)
 
 	tests := []struct {
 		name    string
@@ -375,6 +384,11 @@ func TestService_CreateExecutor(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "kill window action",
+			action:  Action{Type: action.TypeKillWindow, WindowTarget: &multiplexer.Target{Session: "sess", Window: "2"}},
+			wantErr: false,
+		},
+		{
 			name:    "spawn windows missing payload",
 			action:  Action{Type: action.TypeSpawnWindows},
 			wantErr: true,
@@ -398,4 +412,15 @@ func TestService_CreateExecutor(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestServiceKillWindowExecutorDelegatesTypedTarget(t *testing.T) {
+	windowService := &mockWindowSpawner{}
+	svc := NewService(nil, nil, nil, nil, windowService, nil)
+	target := multiplexer.Target{Session: "sess", Window: "2"}
+
+	executor, err := svc.CreateExecutor(Action{Type: action.TypeKillWindow, WindowTarget: &target})
+	require.NoError(t, err)
+	require.NoError(t, ExecuteSync(context.Background(), executor))
+	assert.Equal(t, []multiplexer.Target{target}, windowService.killed)
 }

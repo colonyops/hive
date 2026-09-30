@@ -388,9 +388,9 @@ func TestApplyFilter_NoTerminalStatusExcluded(t *testing.T) {
 // Available() returns true so it registers as an enabled integration.
 type mockIntegration struct{}
 
-func (m *mockIntegration) Name() string    { return "mock" }
-func (m *mockIntegration) Available() bool { return true }
-func (m *mockIntegration) RefreshCache()   {}
+func (m *mockIntegration) Name() string                 { return "mock" }
+func (m *mockIntegration) Available() bool              { return true }
+func (m *mockIntegration) RefreshCache(context.Context) {}
 func (m *mockIntegration) DiscoverSession(_ context.Context, _ string, _ map[string]string) (*terminal.SessionInfo, error) {
 	return nil, nil
 }

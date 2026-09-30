@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"time"
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/assess"
 	"github.com/colonyops/hive/internal/core/terminal/status"
@@ -18,37 +18,46 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 )
 
-// tmuxSender sends real input to a tmux pane. A production sender talks to
-// the real tmux binary (realTmuxSender); scenario tests inject a fake so a
-// scenario run is never exercised against a live pane in this repo.
+// tmuxSender sends input to the pane under test. Production binds a resolved
+// pane target to the shared client; scenario tests inject a fake so a run is
+// never exercised against a live pane in this repo.
 type tmuxSender interface {
-	SendText(ctx context.Context, target, text string) error
-	SendKey(ctx context.Context, target, key string) error
+	SendText(ctx context.Context, text string) error
+	SendKey(ctx context.Context, key string) error
 }
 
-// realTmuxSender is the production tmuxSender.
-type realTmuxSender struct{}
-
-// SendText types text literally (-l, so nothing in it is ever read as a
-// tmux key name) followed by a separate Enter — this is `send`'s wire
-// semantics ("send-keys text + Enter" per the scenario format).
-func (realTmuxSender) SendText(ctx context.Context, target, text string) error {
-	if err := exec.CommandContext(ctx, "tmux", "send-keys", "-t", target, "-l", "--", text).Run(); err != nil {
-		return fmt.Errorf("tmux send-keys (text): %w", err)
-	}
-	if err := exec.CommandContext(ctx, "tmux", "send-keys", "-t", target, "Enter").Run(); err != nil {
-		return fmt.Errorf("tmux send-keys (Enter): %w", err)
-	}
-	return nil
+type scenarioInput interface {
+	SendLiteral(ctx context.Context, target multiplexer.Target, text string) error
+	SendKey(ctx context.Context, target multiplexer.Target, key multiplexer.NamedKey) error
 }
 
-// SendKey sends one named key (tmux's own key-name vocabulary: "Down",
-// "Enter", "C-c", ...) — this is `key`'s wire semantics.
-func (realTmuxSender) SendKey(ctx context.Context, target, key string) error {
-	if err := exec.CommandContext(ctx, "tmux", "send-keys", "-t", target, key).Run(); err != nil {
-		return fmt.Errorf("tmux send-keys (key %s): %w", key, err)
+type scenarioResolvedSender struct {
+	input  scenarioInput
+	target multiplexer.Target
+}
+
+// SendText types text literally followed by a separate Enter, which is the
+// scenario format's `send` wire semantics. Literal mode means nothing in the
+// text is ever read as a tmux key name.
+func (s scenarioResolvedSender) SendText(ctx context.Context, text string) error {
+	if err := s.input.SendLiteral(ctx, s.target, text); err != nil {
+		return err
 	}
-	return nil
+	enter, err := multiplexer.NewNamedKey("Enter")
+	if err != nil {
+		return err
+	}
+	return s.input.SendKey(ctx, s.target, enter)
+}
+
+// SendKey sends one named key in tmux's own vocabulary ("Down", "Enter",
+// "C-c"), which is the scenario format's `key` wire semantics.
+func (s scenarioResolvedSender) SendKey(ctx context.Context, key string) error {
+	named, err := multiplexer.NewNamedKey(key)
+	if err != nil {
+		return err
+	}
+	return s.input.SendKey(ctx, s.target, named)
 }
 
 // assessScenarioCmd registers `hive x assess scenario`: it drives a tmux
@@ -121,8 +130,17 @@ func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target
 		return err
 	}
 
+	if app.Multiplexer == nil {
+		return fmt.Errorf("tmux is unavailable")
+	}
+	pane, err := app.Multiplexer.ResolveTarget(ctx, target)
+	if err != nil {
+		return err
+	}
+
 	tracker := status.NewTracker(assess.NewEngine(), opts)
-	log, runErr := runScenario(ctx, target, spec, realTmuxSender{}, terminaltmux.TmuxCapture{}, paneExtra, tracker, scenarioWait(ctx, interval))
+	sender := scenarioResolvedSender{input: app.Multiplexer, target: pane.Target}
+	log, runErr := runScenario(ctx, target, spec, sender, terminaltmux.TmuxCapture{}, paneExtra, tracker, scenarioWait(ctx, interval))
 	report := scoreScenario(spec, log)
 
 	enc := json.NewEncoder(w)
@@ -212,11 +230,11 @@ func runScenario(ctx context.Context, target string, spec *scenarioSpec, sender 
 	for stepIdx, step := range spec.Steps {
 		switch step.Kind {
 		case scenarioStepSend:
-			if err := sender.SendText(ctx, target, step.Send); err != nil {
+			if err := sender.SendText(ctx, step.Send); err != nil {
 				return log, fmt.Errorf("step %d (send): %w", stepIdx, err)
 			}
 		case scenarioStepKey:
-			if err := sender.SendKey(ctx, target, step.Key); err != nil {
+			if err := sender.SendKey(ctx, step.Key); err != nil {
 				return log, fmt.Errorf("step %d (key): %w", stepIdx, err)
 			}
 		case scenarioStepExpect:

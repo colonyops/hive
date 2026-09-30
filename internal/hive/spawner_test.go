@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -42,12 +43,12 @@ func TestRenderWindowCommon_Panes(t *testing.T) {
 	rw, err := renderWindow(r, w, SpawnData{Name: "test-session", Path: "/tmp/test"})
 	require.NoError(t, err)
 	require.Len(t, rw.Panes, 2)
-	assert.Equal(t, "/tmp/test", rw.Dir)
+	assert.Equal(t, "/tmp/test", rw.WorkingDirectory)
 	assert.Equal(t, "claude --session test-session", rw.Panes[0].Command)
 	assert.Equal(t, "npm test", rw.Panes[1].Command)
-	assert.Equal(t, "/tmp/tests", rw.Panes[1].Dir)
+	assert.Equal(t, "/tmp/tests", rw.Panes[1].WorkingDirectory)
 	assert.Equal(t, "30%", rw.Panes[1].Size)
-	assert.Equal(t, "horizontal", rw.Panes[1].Split)
+	assert.Equal(t, multiplexer.SplitHorizontal, rw.Panes[1].Split)
 }
 
 func TestRenderUserCommandWindows(t *testing.T) {

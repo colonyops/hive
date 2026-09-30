@@ -42,16 +42,18 @@ type Service struct {
 	recycler      SessionRecycler
 	tmuxOpener    TmuxOpener
 	windowSpawner WindowSpawner
+	windowKiller  WindowKiller
 	creator       SessionCreator
 }
 
 // NewService creates a new command service with the given dependencies.
-func NewService(deleter SessionDeleter, recycler SessionRecycler, tmuxOpener TmuxOpener, windowSpawner WindowSpawner, creator SessionCreator) *Service {
+func NewService(deleter SessionDeleter, recycler SessionRecycler, tmuxOpener TmuxOpener, windowSpawner WindowSpawner, windowKiller WindowKiller, creator SessionCreator) *Service {
 	return &Service{
 		deleter:       deleter,
 		recycler:      recycler,
 		tmuxOpener:    tmuxOpener,
 		windowSpawner: windowSpawner,
+		windowKiller:  windowKiller,
 		creator:       creator,
 	}
 }
@@ -83,6 +85,14 @@ func (s *Service) CreateExecutor(a Action) (Executor, error) {
 			cmd: a.ShellCmd,
 			dir: a.ShellDir,
 		}, nil
+	case action.TypeKillWindow:
+		if a.WindowTarget == nil {
+			return nil, fmt.Errorf("KillWindow action missing target")
+		}
+		if s.windowKiller == nil {
+			return nil, fmt.Errorf("KillWindow service unavailable")
+		}
+		return &killWindowExecutor{killer: s.windowKiller, target: *a.WindowTarget}, nil
 	case action.TypeSpawnWindows:
 		if a.SpawnWindows == nil {
 			return nil, fmt.Errorf("SpawnWindows action missing payload")

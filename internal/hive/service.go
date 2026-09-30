@@ -16,8 +16,8 @@ import (
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/session"
-	coretmux "github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/randid"
@@ -105,6 +105,7 @@ type SessionService struct {
 	log        zerolog.Logger
 	bus        *eventbus.EventBus
 	spawner    *Spawner
+	lifecycle  SessionLifecycle
 	recycler   *Recycler
 	hookRunner *HookRunner
 	fileCopier *FileCopier
@@ -125,9 +126,13 @@ func NewSessionService(
 	styler OutputStyler,
 	log zerolog.Logger,
 	stdout, stderr io.Writer,
+	client SessionMultiplexer,
 ) *SessionService {
 	out := &switchWriter{w: stdout}
 	err := &switchWriter{w: stderr}
+	if client == nil {
+		panic("hive.NewSessionService: multiplexer is required")
+	}
 	return &SessionService{
 		sessions:   sessions,
 		git:        gitClient,
@@ -137,7 +142,8 @@ func NewSessionService(
 		log:        log,
 		out:        out,
 		err:        err,
-		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec, log.With().Str("component", "tmux").Logger()), out, err),
+		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, client, out, err),
+		lifecycle:  client,
 		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
 		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, renderer, styler, out, err),
 		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), styler, out),
@@ -474,10 +480,10 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 		return fmt.Errorf("recycle session %s: %w", id, err)
 	}
 
-	// Kill associated tmux session (best-effort)
-	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Slug); err != nil {
-		s.log.Debug().Err(err).Str("session", sess.Slug).Msg("no tmux session to kill")
-	}
+	s.killSessionTarget(ctx, sess)
+	// The recycled clone keeps its record when a new session reuses it, so a
+	// persisted tmux name from a past rename must not outlive its tmux session.
+	sess.ClearMeta(session.MetaTmuxSession)
 
 	sess.MarkRecycled(time.Now())
 
@@ -512,9 +518,22 @@ func (s *SessionService) RenameSession(ctx context.Context, id, newName string) 
 	}
 
 	oldName := sess.Name
+	oldTarget := SessionTarget(sess)
 	sess.Name = newName
 	sess.Slug = slug
 	sess.UpdatedAt = time.Now()
+
+	// Persist the tmux name that actually exists after the rename attempt. A
+	// failed tmux rename (session already gone, or never created) must leave the
+	// old name on record so later kill/attach/open calls still find it.
+	if oldTarget.Session != "" && oldTarget.Session != slug {
+		if tmuxErr := s.lifecycle.RenameSession(ctx, oldTarget, slug); tmuxErr != nil {
+			sess.SetMeta(session.MetaTmuxSession, oldTarget.Session)
+			s.log.Debug().Err(tmuxErr).Str("old", oldTarget.Session).Str("new", slug).Msg("tmux rename-session failed")
+		} else {
+			sess.SetMeta(session.MetaTmuxSession, slug)
+		}
+	}
 
 	if err := s.sessions.Save(ctx, sess); err != nil {
 		return fmt.Errorf("save session: %w", err)
@@ -609,10 +628,7 @@ func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 		}
 	}
 
-	// Kill associated tmux session (best-effort)
-	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Slug); err != nil {
-		s.log.Debug().Err(err).Str("session", sess.Slug).Msg("no tmux session to kill")
-	}
+	s.killSessionTarget(ctx, sess)
 
 	// Remove directory
 	if err := os.RemoveAll(sess.Path); err != nil {
@@ -807,6 +823,35 @@ func (s *SessionService) DetectSession(ctx context.Context) (string, error) {
 	return detector.DetectSession(ctx)
 }
 
+// killSessionTarget kills the session's tmux session. Best-effort: the tmux
+// session may never have been created or may already be gone.
+func (s *SessionService) killSessionTarget(ctx context.Context, sess session.Session) {
+	target := SessionTarget(sess)
+	if err := s.lifecycle.KillSession(ctx, target); err != nil {
+		s.log.Debug().Err(err).Str("session", target.Session).Msg("no tmux session to kill")
+	}
+}
+
+// CurrentSession returns the current multiplexer session identity.
+func (s *SessionService) CurrentSession(ctx context.Context) (multiplexer.Target, error) {
+	return s.lifecycle.CurrentSession(ctx)
+}
+
+// AttachOrSwitch connects to a qualified multiplexer target.
+func (s *SessionService) AttachOrSwitch(ctx context.Context, target multiplexer.Target, streams multiplexer.AttachStreams) error {
+	return s.lifecycle.AttachOrSwitch(ctx, target, streams)
+}
+
+// SwitchTmuxSession switches or attaches to a session name.
+func (s *SessionService) SwitchTmuxSession(ctx context.Context, name string) error {
+	return s.AttachOrSwitch(ctx, multiplexer.Target{Session: name}, multiplexer.AttachStreams{Stdin: os.Stdin, Stdout: s.out, Stderr: s.err})
+}
+
+// KillTmuxWindow kills one qualified tmux window.
+func (s *SessionService) KillTmuxWindow(ctx context.Context, target multiplexer.Target) error {
+	return s.lifecycle.KillWindow(ctx, target)
+}
+
 // OpenTmuxSession opens (or creates) a tmux session for the given session parameters.
 // It resolves the spawn strategy, renders window templates, and delegates to the spawner.
 func (s *SessionService) OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error {
@@ -816,10 +861,21 @@ func (s *SessionService) OpenTmuxSession(ctx context.Context, name, path, remote
 	}
 
 	owner, repo := git.ExtractOwnerRepo(remote)
+	tmuxName := session.Slugify(name)
+	if sessions, listErr := s.sessions.List(ctx); listErr != nil {
+		s.log.Debug().Err(listErr).Str("path", path).Msg("failed to resolve persisted tmux session target")
+	} else {
+		for _, sess := range sessions {
+			if (path != "" && sess.Path == path) || (path == "" && sess.Name == name) {
+				tmuxName = SessionTarget(sess).Session
+				break
+			}
+		}
+	}
 	data := SpawnData{
 		Path:       path,
 		Name:       name,
-		Slug:       session.Slugify(name),
+		Slug:       tmuxName,
 		ContextDir: s.config.RepoContextDir(owner, repo),
 		Owner:      owner,
 		Repo:       repo,
@@ -1056,8 +1112,8 @@ func (s *SessionService) enforceMaxRecycled(ctx context.Context, remote, cloneSt
 	return nil
 }
 
-// AddWindowsToTmuxSession adds windows to an existing tmux session, converting action.WindowSpec
-// to coretmux.RenderedWindow. Satisfies the command.WindowSpawner interface.
+// AddWindowsToTmuxSession adds windows to an existing tmux session.
+// It satisfies the command.WindowSpawner interface.
 func (s *SessionService) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []action.WindowSpec, background bool) error {
 	return s.spawner.AddWindowsToTmuxSession(ctx, tmuxName, workDir, renderedWindowsFromSpecs(windows), background)
 }
@@ -1088,21 +1144,26 @@ func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req actio
 		}
 	}
 
-	if err := s.spawner.tmux.CreateSession(ctx, sess.Slug, sess.Path, renderedWindowsFromSpecs(windows), background); err != nil {
+	if err := s.spawner.tmux.CreateSession(ctx, multiplexer.SessionSpec{
+		Target:           SessionTarget(*sess),
+		WorkingDirectory: sess.Path,
+		Windows:          renderedWindowsFromSpecs(windows),
+		Background:       background,
+	}); err != nil {
 		cleanup()
 		return fmt.Errorf("create tmux session: %w", err)
 	}
 	return nil
 }
 
-func renderedWindowsFromSpecs(windows []action.WindowSpec) []coretmux.RenderedWindow {
-	rendered := make([]coretmux.RenderedWindow, len(windows))
+func renderedWindowsFromSpecs(windows []action.WindowSpec) []multiplexer.WindowSpec {
+	rendered := make([]multiplexer.WindowSpec, len(windows))
 	for i, w := range windows {
-		rendered[i] = coretmux.RenderedWindow{Name: w.Name, Command: w.Command, Dir: w.Dir, Focus: w.Focus}
+		rendered[i] = multiplexer.WindowSpec{Name: w.Name, Command: w.Command, WorkingDirectory: w.Dir, Focus: w.Focus}
 		if len(w.Panes) > 0 {
-			rendered[i].Panes = make([]coretmux.RenderedPane, len(w.Panes))
+			rendered[i].Panes = make([]multiplexer.PaneSpec, len(w.Panes))
 			for j, p := range w.Panes {
-				rendered[i].Panes[j] = coretmux.RenderedPane{Command: p.Command, Dir: p.Dir, Size: p.Size, Split: p.Split}
+				rendered[i].Panes[j] = multiplexer.PaneSpec{Command: p.Command, WorkingDirectory: p.Dir, Size: p.Size, Split: multiplexer.SplitDirection(p.Split)}
 			}
 		}
 	}

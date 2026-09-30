@@ -13,7 +13,7 @@ func TestNewTmuxIntegrationCaptureRecordingDisabled(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.DataDir = t.TempDir()
 
-	assert.NotNil(t, newTmuxIntegration(&cfg))
+	assert.NotNil(t, newTmuxIntegration(&cfg, nil))
 	_, err := os.Stat(cfg.TmuxCaptureRecordingsDir())
 	assert.ErrorIs(t, err, os.ErrNotExist)
 }
@@ -23,7 +23,7 @@ func TestNewTmuxIntegrationCaptureRecordingEnabled(t *testing.T) {
 	cfg.DataDir = t.TempDir()
 	cfg.Tmux.CaptureRecording.Enabled = true
 
-	assert.NotNil(t, newTmuxIntegration(&cfg))
+	assert.NotNil(t, newTmuxIntegration(&cfg, nil))
 	info, err := os.Stat(cfg.TmuxCaptureRecordingsDir())
 	require.NoError(t, err)
 	assert.True(t, info.IsDir())

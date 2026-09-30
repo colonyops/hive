@@ -3,6 +3,7 @@ package tmux
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -41,11 +42,10 @@ type Integration struct {
 	missingTolerance   int
 	limiters           map[string]*terminal.RateLimiter
 	contentLimiters    map[string]*terminal.RateLimiter // per-pane Tier 3 rate limiter
-	commander          Commander
 	classifier         *classifier.Classifier
 	classCache         *classifier.Cache
 	processReader      process.ProcessReader
-	lister             PaneLister
+	source             terminal.PaneSource
 	capture            classifier.ContentCapture
 	recorder           CaptureRecorder
 	beforePollGateLock func() // deterministic seam for refresh/GetStatus overlap tests
@@ -141,14 +141,11 @@ func WithCaptureRecorder(recorder CaptureRecorder) Option {
 	}
 }
 
-// WithCommander uses commander for tmux discovery, pane listing, and capture.
-// Embedders can supply an absolute binary, environment, or socket selection
-// without changing the process-wide environment.
-func WithCommander(commander Commander) Option {
+// WithPaneSource supplies tmux pane discovery and capture.
+func WithPaneSource(source terminal.PaneSource) Option {
 	return func(integration *Integration) {
-		if commander != nil {
-			integration.commander = commander
-		}
+		integration.source = source
+		integration.capture = PaneCapture{Source: source}
 	}
 }
 
@@ -183,35 +180,8 @@ func NewFromPreviewMatchers(previewMatchers []string, options ...Option) *Integr
 		option(integration)
 	}
 
-	capture := TmuxCapture{commander: integration.commander}
 	agentNames := classifier.ToolNamesFromPatterns(previewMatchers)
-	integration.classifier = classifier.New(classifier.TitlePatternsFromConfig(previewMatchers, agentNames), reader, capture, content.NewScorer())
-	integration.lister = TmuxPaneLister{commander: integration.commander}
-	integration.capture = capture
-	return integration
-}
-
-// New creates a new tmux integration.
-func New(cls *classifier.Classifier, lister PaneLister) *Integration {
-	return NewWithReader(cls, lister, process.OSReader{})
-}
-
-// NewWithReader creates a tmux integration with explicit dependencies for tests.
-func NewWithReader(cls *classifier.Classifier, lister PaneLister, reader process.ProcessReader) *Integration {
-	if reader == nil {
-		reader = process.OSReader{}
-	}
-	integration := newIntegration(reader)
-	capture := TmuxCapture{commander: integration.commander}
-	if cls == nil {
-		cls = classifier.New(nil, reader, capture, nil)
-	}
-	if lister == nil {
-		lister = TmuxPaneLister{commander: integration.commander}
-	}
-	integration.classifier = cls
-	integration.lister = lister
-	integration.capture = capture
+	integration.classifier = classifier.New(classifier.TitlePatternsFromConfig(previewMatchers, agentNames), reader, integration.capture, content.NewScorer())
 	return integration
 }
 
@@ -221,7 +191,6 @@ func newIntegration(reader process.ProcessReader) *Integration {
 		tracker:          status.NewTracker(assess.NewEngine(), status.DefaultOptions()),
 		limiters:         make(map[string]*terminal.RateLimiter),
 		contentLimiters:  make(map[string]*terminal.RateLimiter),
-		commander:        execCommander{},
 		classCache:       classifier.NewCache(),
 		processReader:    reader,
 		missingTolerance: defaultMissingTolerance,
@@ -236,14 +205,17 @@ func (t *Integration) Name() string { return "tmux" }
 
 // Available returns true if tmux is installed and accessible.
 func (t *Integration) Available() bool {
-	return t.commander != nil && t.commander.Available()
+	if available, ok := t.source.(interface{ Available() bool }); ok {
+		return available.Available()
+	}
+	return t.source != nil
 }
 
 // RefreshCache updates cached pane classifications. Call once per poll cycle.
 // A TryLock guard ensures that if a previous refresh is still running (e.g.
 // because Tier 3 capture-pane calls are slow), the new call returns immediately
 // rather than stacking up concurrent tmux subprocess storms.
-func (t *Integration) RefreshCache() {
+func (t *Integration) RefreshCache(ctx context.Context) {
 	if !t.refreshMu.TryLock() {
 		// A refresh is already in progress; skip this cycle.
 		log.Debug().Msg("tmux RefreshCache skipped: previous refresh still running")
@@ -255,10 +227,23 @@ func (t *Integration) RefreshCache() {
 	// classifications share one OS call instead of one per pane.
 	snapshotCls := t.classifier.WithReader(process.NewSnapshotReader(t.processReader))
 
-	panes, err := t.lister.ListAllPanes()
+	if t.source == nil {
+		t.handleRefreshFailure(fmt.Errorf("tmux pane source is unavailable"))
+		return
+	}
+	muxPanes, err := t.source.ListPanes(ctx)
 	if err != nil {
+		if ctx.Err() != nil {
+			t.keepCacheFreshAfterCancellation()
+			log.Debug().Err(ctx.Err()).Msg("tmux RefreshCache canceled, preserving cache")
+			return
+		}
 		t.handleRefreshFailure(err)
 		return
+	}
+	panes := make([]classifier.PaneInput, 0, len(muxPanes))
+	for _, pane := range muxPanes {
+		panes = append(panes, classifier.InputFromPane(pane))
 	}
 
 	type paneSnapshot struct {
@@ -300,6 +285,10 @@ func (t *Integration) RefreshCache() {
 	reusedPanes := make(map[string]paneSnapshot)
 	replacedKeys := make(map[string]bool)
 	for _, input := range panes {
+		if ctx.Err() != nil {
+			t.keepCacheFreshAfterCancellation()
+			return
+		}
 		if input.SessionName == "" || input.PaneID == "" {
 			continue
 		}
@@ -329,7 +318,7 @@ func (t *Integration) RefreshCache() {
 			// On the first call Allow() returns true; subsequent calls within
 			// contentCheckInterval use only Tiers 1 and 2.
 			if t.contentLimiterAllow(key) {
-				result = snapshotCls.Classify(context.Background(), input)
+				result = snapshotCls.Classify(ctx, input)
 			} else {
 				result = snapshotCls.ClassifyStable(input)
 			}
@@ -359,6 +348,10 @@ func (t *Integration) RefreshCache() {
 		sc.panes = append(sc.panes, entry)
 	}
 
+	if ctx.Err() != nil {
+		t.keepCacheFreshAfterCancellation()
+		return
+	}
 	t.classCache.Prune(activePaneIDs)
 
 	// GetStatus takes pollMu before re-entering t.mu. Acquire every old pane's
@@ -402,6 +395,14 @@ func (t *Integration) RefreshCache() {
 		t.tracker.Reset(key)
 	}
 	t.tracker.Prune(activeKeys)
+}
+
+func (t *Integration) keepCacheFreshAfterCancellation() {
+	t.mu.Lock()
+	if len(t.cache) > 0 {
+		t.cacheTime = time.Now()
+	}
+	t.mu.Unlock()
 }
 
 // handleRefreshFailure applies the transport's missing-tolerance policy to a
@@ -520,9 +521,6 @@ func (t *Integration) prunePaneKeysLocked(activeKeys map[string]bool) {
 	}
 }
 
-// SessionPathKey is the metadata key callers inject to pass session path.
-const SessionPathKey = "_session_path"
-
 // findSessionCache locates the sessionCache for a slug using metadata, exact match, or @hive-session tags.
 // Must be called with t.mu held (read or write).
 func (t *Integration) findSessionCache(slug string, metadata map[string]string) (string, *sessionCache) {
@@ -566,7 +564,7 @@ func (t *Integration) DiscoverSession(_ context.Context, slug string, metadata m
 		return sessionInfoFromPane(sessionName, pane), nil
 	}
 
-	pane := disambiguatePane(sc, metadata[SessionPathKey], slug)
+	pane := disambiguatePane(sc, metadata[terminal.SessionPathKey], slug)
 	return sessionInfoFromPane(sessionName, pane), nil
 }
 
@@ -598,7 +596,15 @@ func sessionInfoFromPane(sessionName string, pane *cachedPane) *terminal.Session
 	if pane == nil {
 		return nil
 	}
+	target := pane.input.Target
+	if target.Session == "" {
+		target.Session = sessionName
+	}
+	if target.Window == "" {
+		target.Window = pane.input.WindowIndex
+	}
 	return &terminal.SessionInfo{
+		Target:       target,
 		Name:         sessionName,
 		WindowIndex:  pane.input.WindowIndex,
 		PaneID:       pane.input.PaneID,
@@ -694,7 +700,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		content = prevContent
 	default:
 		var err error
-		content, err = t.capture.CapturePane(ctx, paneID)
+		content, err = t.capture.CapturePane(ctx, pane.input.Target)
 		if err != nil {
 			return terminal.StatusMissing, err
 		}

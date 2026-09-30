@@ -6,4 +6,8 @@
 !cmd/hive/dev/docker-entrypoint.sh
 !go.mod
 !go.sum
+!internal/
+!internal/**
+!pkg/
+!pkg/**
 !test/integration/

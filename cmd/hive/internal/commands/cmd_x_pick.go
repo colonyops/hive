@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"maps"
 	"os"
-	"os/exec"
 	"sort"
 	"strings"
 	"time"
@@ -17,11 +16,12 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
-	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
-	"github.com/colonyops/hive/internal/core/tmux"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
+	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 )
 
@@ -53,6 +53,7 @@ func loadRecents(ctx context.Context, kvStore kv.KV) map[string]time.Time {
 // pickItem represents a selectable item in the session picker.
 type pickItem struct {
 	Session     session.Session
+	Target      multiplexer.Target
 	WindowName  string // tmux window name for window or pane rows
 	WindowIndex string // tmux window index for window or pane rows
 	PaneID      string // tmux pane ID for pane rows
@@ -436,11 +437,12 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 		if mgr == nil || !mgr.HasEnabledIntegrations() {
 			return statusRefreshMsg{items: items}
 		}
-		mgr.RefreshAll()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		mgr.RefreshAll(ctx)
 
 		statuses := make(map[string]terminal.Status)
 		var expanded []pickItem
-		ctx := context.Background()
 
 		for _, item := range items {
 			// Skip terminal sub-items; we only expand from base session items.
@@ -452,7 +454,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 			if item.Session.Path != "" {
 				metadata = make(map[string]string, len(item.Session.Metadata)+1)
 				maps.Copy(metadata, item.Session.Metadata)
-				metadata[terminaltmux.SessionPathKey] = item.Session.Path
+				metadata[terminal.SessionPathKey] = item.Session.Path
 			}
 
 			info, integration, err := mgr.DiscoverSession(ctx, item.Session.Slug, metadata)
@@ -493,8 +495,13 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 					wStatus = terminal.StatusMissing
 				}
 
+				target := wi.Target
+				if target.Session == "" {
+					target.Session = hive.SessionTarget(item.Session).Session
+				}
 				windowItem := pickItem{
 					Session:     item.Session,
+					Target:      target,
 					WindowName:  wi.WindowName,
 					WindowIndex: wi.WindowIndex,
 					PaneID:      wi.PaneID,
@@ -550,7 +557,12 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 
 			// Filter to active sessions only
 			var items []pickItem
-			currentSlug := tmux.DetectCurrentTmuxSession()
+			var currentSlug string
+			if current, currentErr := cmd.app.Sessions.CurrentSession(ctx); currentErr != nil {
+				log.Debug().Err(currentErr).Msg("tmux session detection failed")
+			} else {
+				currentSlug = current.Session
+			}
 
 			for _, s := range sessions {
 				if s.State != session.StateActive {
@@ -559,12 +571,14 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				if flagRepo != "" && !strings.Contains(strings.ToLower(s.Remote), strings.ToLower(flagRepo)) {
 					continue
 				}
-				if flagHideCurrent && s.Slug == currentSlug {
+				target := hive.SessionTarget(s)
+				if flagHideCurrent && target.Session == currentSlug {
 					continue
 				}
 				items = append(items, pickItem{
 					Session:   s,
-					IsCurrent: s.Slug == currentSlug,
+					Target:    target,
+					IsCurrent: target.Session == currentSlug,
 				})
 			}
 
@@ -622,56 +636,9 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				return err
 			}
 
-			slug := result.selected.Session.Slug
-			target := result.selected.WindowIndex
-			if result.selected.PaneID != "" {
-				target = result.selected.PaneID
-			} else if target == "" {
-				target = result.selected.WindowName
-			}
-			return switchTmux(slug, target)
+			return cmd.app.Sessions.AttachOrSwitch(ctx, result.selected.Target, multiplexer.AttachStreams{
+				Stdin: os.Stdin, Stdout: c.Root().Writer, Stderr: os.Stderr,
+			})
 		},
 	}
-}
-
-// switchTmux switches to or attaches the named tmux session.
-// If target is non-empty, it selects that window name or pane ID before attaching
-// so the correct target is visible on entry (attach-session blocks until detach).
-func switchTmux(name string, target string) error {
-	if strings.TrimSpace(os.Getenv("TMUX")) != "" {
-		cmd := exec.Command("tmux", "switch-client", "-t", name)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return err
-		}
-		selectTmuxTarget(name, target)
-		return nil
-	}
-
-	selectTmuxTarget(name, target)
-	cmd := exec.Command("tmux", "attach-session", "-t", name)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
-}
-
-func selectTmuxTarget(sessionName, target string) {
-	if target == "" {
-		return
-	}
-	// Best-effort: the target may have been renamed or closed since the picker opened.
-	if strings.HasPrefix(target, "%") {
-		out, err := exec.Command("tmux", "display-message", "-p", "-t", target, "#{session_name}:#{window_index}").Output()
-		if err == nil {
-			if windowTarget := strings.TrimSpace(string(out)); windowTarget != "" {
-				_ = exec.Command("tmux", "select-window", "-t", windowTarget).Run()
-			}
-		}
-		_ = exec.Command("tmux", "select-pane", "-t", target).Run()
-		return
-	}
-	_ = exec.Command("tmux", "select-window", "-t", sessionName+":"+target).Run()
 }

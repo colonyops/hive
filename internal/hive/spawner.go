@@ -5,21 +5,22 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
 	"github.com/colonyops/hive/internal/core/config"
-	coretmux "github.com/colonyops/hive/internal/core/tmux"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 )
 
-// SessionClient is the interface used by consumers that create/open tmux sessions.
-type SessionClient interface {
-	CreateSession(ctx context.Context, name, workDir string, windows []coretmux.RenderedWindow, background bool) error
-	OpenSession(ctx context.Context, name, workDir string, windows []coretmux.RenderedWindow, background bool, targetWindow string) error
-	AddWindows(ctx context.Context, name, workDir string, windows []coretmux.RenderedWindow) error
-	AttachOrSwitch(ctx context.Context, name string) error
+// SessionCreator is the interface used by consumers that create and open sessions.
+type SessionCreator interface {
+	CreateSession(ctx context.Context, spec multiplexer.SessionSpec) error
+	OpenSession(ctx context.Context, spec multiplexer.SessionSpec, selection multiplexer.Target) error
+	AddWindows(ctx context.Context, target multiplexer.Target, windows []multiplexer.WindowSpec) error
+	AttachOrSwitch(ctx context.Context, target multiplexer.Target, streams multiplexer.AttachStreams) error
 }
 
 // SpawnData is the template context for spawn commands.
@@ -38,13 +39,13 @@ type Spawner struct {
 	log      zerolog.Logger
 	executor executil.Executor
 	renderer *tmpl.Renderer
-	tmux     SessionClient
+	tmux     SessionCreator
 	stdout   io.Writer
 	stderr   io.Writer
 }
 
 // NewSpawner creates a new Spawner.
-func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, tmuxClient SessionClient, stdout, stderr io.Writer) *Spawner {
+func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, tmuxClient SessionCreator, stdout, stderr io.Writer) *Spawner {
 	return &Spawner{
 		log:      log,
 		executor: executor,
@@ -93,7 +94,12 @@ func (s *Spawner) SpawnWindowsWith(ctx context.Context, windows []config.WindowC
 
 	s.log.Debug().Int("windows", len(rendered)).Bool("background", background).Msg("spawning tmux session")
 
-	if err := s.tmux.CreateSession(ctx, data.Slug, data.Path, rendered, background); err != nil {
+	if err := s.tmux.CreateSession(ctx, multiplexer.SessionSpec{
+		Target:           multiplexer.Target{Session: data.Slug},
+		WorkingDirectory: data.Path,
+		Windows:          rendered,
+		Background:       background,
+	}); err != nil {
 		return fmt.Errorf("create tmux session: %w", err)
 	}
 
@@ -116,7 +122,12 @@ func (s *Spawner) OpenWindowsWith(ctx context.Context, windows []config.WindowCo
 
 	s.log.Debug().Int("windows", len(rendered)).Bool("background", background).Str("targetWindow", targetWindow).Msg("opening tmux session")
 
-	if err := s.tmux.OpenSession(ctx, data.Slug, data.Path, rendered, background, targetWindow); err != nil {
+	if err := s.tmux.OpenSession(ctx, multiplexer.SessionSpec{
+		Target:           multiplexer.Target{Session: data.Slug},
+		WorkingDirectory: data.Path,
+		Windows:          rendered,
+		Background:       background,
+	}, targetFromLegacy(data.Slug, targetWindow)); err != nil {
 		return fmt.Errorf("open tmux session: %w", err)
 	}
 
@@ -124,9 +135,9 @@ func (s *Spawner) OpenWindowsWith(ctx context.Context, windows []config.WindowCo
 }
 
 // RenderWindows renders a slice of WindowConfig templates against SpawnData,
-// producing fully-resolved RenderedWindow values ready for the tmux Client.
-func RenderWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data SpawnData) ([]coretmux.RenderedWindow, error) {
-	rendered := make([]coretmux.RenderedWindow, 0, len(windows))
+// producing fully resolved window specifications for the multiplexer client.
+func RenderWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data SpawnData) ([]multiplexer.WindowSpec, error) {
+	rendered := make([]multiplexer.WindowSpec, 0, len(windows))
 	for _, w := range windows {
 		rw, err := renderWindow(renderer, w, data)
 		if err != nil {
@@ -139,17 +150,17 @@ func RenderWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data 
 
 // renderWindowCommon is the shared rendering core used by renderWindow and renderWindowMap.
 // render is a closure that evaluates a single template string against the caller's data context.
-func renderWindowCommon(w config.WindowConfig, render func(string) (string, error)) (coretmux.RenderedWindow, error) {
+func renderWindowCommon(w config.WindowConfig, render func(string) (string, error)) (multiplexer.WindowSpec, error) {
 	name, err := render(w.Name)
 	if err != nil {
-		return coretmux.RenderedWindow{}, fmt.Errorf("name template: %w", err)
+		return multiplexer.WindowSpec{}, fmt.Errorf("name template: %w", err)
 	}
 
 	var command string
 	if w.Command != "" {
 		command, err = render(w.Command)
 		if err != nil {
-			return coretmux.RenderedWindow{}, fmt.Errorf("command template: %w", err)
+			return multiplexer.WindowSpec{}, fmt.Errorf("command template: %w", err)
 		}
 		command = strings.TrimSpace(command)
 	}
@@ -158,20 +169,20 @@ func renderWindowCommon(w config.WindowConfig, render func(string) (string, erro
 	if w.Dir != "" {
 		dir, err = render(w.Dir)
 		if err != nil {
-			return coretmux.RenderedWindow{}, fmt.Errorf("dir template: %w", err)
+			return multiplexer.WindowSpec{}, fmt.Errorf("dir template: %w", err)
 		}
 	}
 
 	panes, err := renderPanes(w.Panes, render)
 	if err != nil {
-		return coretmux.RenderedWindow{}, err
+		return multiplexer.WindowSpec{}, err
 	}
 
-	return coretmux.RenderedWindow{Name: name, Command: command, Dir: dir, Focus: w.Focus, Panes: panes}, nil
+	return multiplexer.WindowSpec{Name: name, Command: command, WorkingDirectory: dir, Focus: w.Focus, Panes: panes}, nil
 }
 
-func renderPanes(panes []config.PaneConfig, render func(string) (string, error)) ([]coretmux.RenderedPane, error) {
-	rendered := make([]coretmux.RenderedPane, 0, len(panes))
+func renderPanes(panes []config.PaneConfig, render func(string) (string, error)) ([]multiplexer.PaneSpec, error) {
+	rendered := make([]multiplexer.PaneSpec, 0, len(panes))
 	for i, p := range panes {
 		rp, err := renderPane(p, render)
 		if err != nil {
@@ -182,12 +193,12 @@ func renderPanes(panes []config.PaneConfig, render func(string) (string, error))
 	return rendered, nil
 }
 
-func renderPane(p config.PaneConfig, render func(string) (string, error)) (coretmux.RenderedPane, error) {
+func renderPane(p config.PaneConfig, render func(string) (string, error)) (multiplexer.PaneSpec, error) {
 	var command string
 	if p.Command != "" {
 		rendered, err := render(p.Command)
 		if err != nil {
-			return coretmux.RenderedPane{}, fmt.Errorf("command template: %w", err)
+			return multiplexer.PaneSpec{}, fmt.Errorf("command template: %w", err)
 		}
 		command = strings.TrimSpace(rendered)
 	}
@@ -196,7 +207,7 @@ func renderPane(p config.PaneConfig, render func(string) (string, error)) (coret
 	if p.Dir != "" {
 		rendered, err := render(p.Dir)
 		if err != nil {
-			return coretmux.RenderedPane{}, fmt.Errorf("dir template: %w", err)
+			return multiplexer.PaneSpec{}, fmt.Errorf("dir template: %w", err)
 		}
 		dir = rendered
 	}
@@ -205,16 +216,16 @@ func renderPane(p config.PaneConfig, render func(string) (string, error)) (coret
 	if p.Size != "" {
 		rendered, err := render(p.Size)
 		if err != nil {
-			return coretmux.RenderedPane{}, fmt.Errorf("size template: %w", err)
+			return multiplexer.PaneSpec{}, fmt.Errorf("size template: %w", err)
 		}
 		size = strings.TrimSpace(rendered)
 	}
 
-	return coretmux.RenderedPane{Command: command, Dir: dir, Size: size, Split: p.Split}, nil
+	return multiplexer.PaneSpec{Command: command, WorkingDirectory: dir, Size: size, Split: multiplexer.SplitDirection(p.Split)}, nil
 }
 
 // renderWindow renders a single WindowConfig against SpawnData.
-func renderWindow(renderer *tmpl.Renderer, w config.WindowConfig, data SpawnData) (coretmux.RenderedWindow, error) {
+func renderWindow(renderer *tmpl.Renderer, w config.WindowConfig, data SpawnData) (multiplexer.WindowSpec, error) {
 	return renderWindowCommon(w, func(tmplStr string) (string, error) {
 		return renderer.Render(tmplStr, data)
 	})
@@ -222,7 +233,7 @@ func renderWindow(renderer *tmpl.Renderer, w config.WindowConfig, data SpawnData
 
 // renderWindowMap renders a single WindowConfig against a map[string]any data context.
 // Used for UserCommand windows, which carry .Form and session variables as a map.
-func renderWindowMap(renderer *tmpl.Renderer, w config.WindowConfig, data map[string]any) (coretmux.RenderedWindow, error) {
+func renderWindowMap(renderer *tmpl.Renderer, w config.WindowConfig, data map[string]any) (multiplexer.WindowSpec, error) {
 	return renderWindowCommon(w, func(tmplStr string) (string, error) {
 		return renderer.Render(tmplStr, data)
 	})
@@ -230,8 +241,8 @@ func renderWindowMap(renderer *tmpl.Renderer, w config.WindowConfig, data map[st
 
 // RenderUserCommandWindows renders windows from a UserCommand using the provided template data map.
 // Unlike RenderWindows, it accepts map[string]any to include .Form and session variables.
-func RenderUserCommandWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data map[string]any) ([]coretmux.RenderedWindow, error) {
-	rendered := make([]coretmux.RenderedWindow, 0, len(windows))
+func RenderUserCommandWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data map[string]any) ([]multiplexer.WindowSpec, error) {
+	rendered := make([]multiplexer.WindowSpec, 0, len(windows))
 	for _, w := range windows {
 		rw, err := renderWindowMap(renderer, w, data)
 		if err != nil {
@@ -242,14 +253,34 @@ func RenderUserCommandWindows(renderer *tmpl.Renderer, windows []config.WindowCo
 	return rendered, nil
 }
 
+// targetFromLegacy converts the TmuxWindow template value into a Target. The
+// legacy value is either a window name/index or a native %N pane ID; a pane ID
+// is carried in Pane with an empty Window so the adapter can resolve its window.
+func targetFromLegacy(sessionName, selection string) multiplexer.Target {
+	target := multiplexer.Target{Session: sessionName}
+	if strings.HasPrefix(selection, "%") {
+		target.Pane = selection
+	} else {
+		target.Window = selection
+	}
+	return target
+}
+
 // AddWindowsToTmuxSession adds pre-rendered windows to an existing tmux session.
-// If background is false, switches to the session after adding windows.
-func (s *Spawner) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []coretmux.RenderedWindow, background bool) error {
-	if err := s.tmux.AddWindows(ctx, tmuxName, workDir, windows); err != nil {
+// Windows without a working directory inherit workDir. If background is false,
+// it switches to the session after adding windows.
+func (s *Spawner) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []multiplexer.WindowSpec, background bool) error {
+	for i := range windows {
+		if windows[i].WorkingDirectory == "" {
+			windows[i].WorkingDirectory = workDir
+		}
+	}
+	target := multiplexer.Target{Session: tmuxName}
+	if err := s.tmux.AddWindows(ctx, target, windows); err != nil {
 		return fmt.Errorf("add windows to %q: %w", tmuxName, err)
 	}
 	if !background {
-		if err := s.tmux.AttachOrSwitch(ctx, tmuxName); err != nil {
+		if err := s.tmux.AttachOrSwitch(ctx, target, multiplexer.AttachStreams{Stdin: os.Stdin, Stdout: s.stdout, Stderr: s.stderr}); err != nil {
 			return fmt.Errorf("switch to session %q: %w", tmuxName, err)
 		}
 	}

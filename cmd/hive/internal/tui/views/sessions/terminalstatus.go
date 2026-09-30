@@ -18,6 +18,8 @@ type TerminalStatusBatchCompleteMsg struct {
 // TerminalPollTickMsg triggers a terminal status poll cycle.
 type TerminalPollTickMsg struct{}
 
+const terminalStatusBatchTimeout = 5 * time.Second
+
 // FetchTerminalStatusBatch returns a command that fetches terminal status for
 // sessions and workspace root checkouts in a single batch.
 func FetchTerminalStatusBatch(status *hive.StatusService, sessions []*session.Session, roots []hive.RootRepoTarget) tea.Cmd {
@@ -26,7 +28,9 @@ func FetchTerminalStatusBatch(status *hive.StatusService, sessions []*session.Se
 	}
 
 	return func() tea.Msg {
-		return TerminalStatusBatchCompleteMsg{Results: status.FetchBatch(context.Background(), sessions, roots)}
+		ctx, cancel := context.WithTimeout(context.Background(), terminalStatusBatchTimeout)
+		defer cancel()
+		return TerminalStatusBatchCompleteMsg{Results: status.FetchBatch(ctx, sessions, roots)}
 	}
 }
 

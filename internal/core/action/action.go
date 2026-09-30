@@ -1,5 +1,7 @@
 package action
 
+import "github.com/colonyops/hive/internal/core/multiplexer"
+
 // PaneSpec is a fully-rendered pane definition carried in a SpawnWindows action.
 type PaneSpec struct {
 	Command string
@@ -9,7 +11,7 @@ type PaneSpec struct {
 }
 
 // WindowSpec is a fully-rendered window definition carried in a SpawnWindows action.
-// Fields mirror coretmux.RenderedWindow to avoid a cross-package dependency on the tmux layer.
+// Fields mirror multiplexer.WindowSpec while keeping command payloads independent.
 type WindowSpec struct {
 	Name    string
 	Command string
@@ -60,6 +62,7 @@ type Action struct {
 	ShellCmd      string               // For shell actions, the rendered command
 	ShellDir      string               // Working directory for TypeShell (empty = hive process cwd)
 	SpawnWindows  *SpawnWindowsPayload // For TypeSpawnWindows
+	WindowTarget  *multiplexer.Target  // For TypeKillWindow
 	SessionID     string
 	SessionName   string // Session display name (for tmux actions)
 	SessionPath   string

@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -390,7 +391,7 @@ type fakeCapture struct {
 	calls   int
 }
 
-func (f *fakeCapture) CapturePane(_ context.Context, _ string) (string, error) {
+func (f *fakeCapture) CapturePane(_ context.Context, _ multiplexer.Target) (string, error) {
 	f.calls++
 	return f.content, f.err
 }

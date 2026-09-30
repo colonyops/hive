@@ -651,7 +651,7 @@ func (m Model) handleStreamComplete(msg streamCompleteMsg) (tea.Model, tea.Cmd) 
 		}
 		cmds := []tea.Cmd{m.refreshSessions()}
 		if result.sessionName != nil && *result.sessionName != "" {
-			cmds = append(cmds, switchTmuxSession(*result.sessionName))
+			cmds = append(cmds, m.switchTmuxSession(*result.sessionName))
 		}
 		return m, tea.Batch(cmds...)
 	}
@@ -1616,12 +1616,10 @@ func (m Model) refreshSessions() tea.Cmd {
 	return func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
 
-// switchTmuxSession returns a command that switches the tmux client to the
-// named session. Errors are logged but not surfaced — the session is already
-// created and the user can switch manually.
-func switchTmuxSession(name string) tea.Cmd {
+// switchTmuxSession switches the client through the session service.
+func (m Model) switchTmuxSession(name string) tea.Cmd {
 	return func() tea.Msg {
-		if err := exec.Command("tmux", "switch-client", "-t", name).Run(); err != nil {
+		if err := m.service.SwitchTmuxSession(context.Background(), name); err != nil {
 			log.Debug().Err(err).Str("session", name).Msg("tmux switch-client failed")
 		}
 		return nil

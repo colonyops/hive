@@ -34,6 +34,7 @@ import (
 	plugintmux "github.com/colonyops/hive/internal/hive/plugins/tmux"
 	"github.com/colonyops/hive/internal/hive/scripts"
 	"github.com/colonyops/hive/internal/hive/sweep"
+	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -291,8 +292,9 @@ Run 'hive new' to create a new session from the current repository.`,
 				svcLogger = log.With().Str("component", "hive").Logger()
 			)
 
-			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, bus, exec, renderer, styles.CLIOutputStyler{}, svcLogger, os.Stdout, os.Stderr)
-			termMgr := hive.NewTerminalManager(cfg)
+			tmuxClient := tmuxadapter.NewDefault(svcLogger.With().Str("component", "tmux").Logger())
+			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, bus, exec, renderer, styles.CLIOutputStyler{}, svcLogger, os.Stdout, os.Stderr, tmuxClient)
+			termMgr := hive.NewTerminalManager(cfg, tmuxClient)
 
 			// Create all plugin instances, collect availability info for doctor,
 			// then register with the manager.
@@ -346,6 +348,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				cfg,
 				bus,
 				termMgr,
+				tmuxClient,
 				pluginMgr,
 				commandSet,
 				database,

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/terminal/content"
 	"github.com/colonyops/hive/internal/core/terminal/process"
 )
@@ -24,7 +25,7 @@ const (
 
 // ContentCapture abstracts pane content retrieval for Tier 3.
 type ContentCapture interface {
-	CapturePane(ctx context.Context, target string) (string, error)
+	CapturePane(ctx context.Context, target multiplexer.Target) (string, error)
 }
 
 // ContentScorer scores terminal content for agent-like signals.
@@ -40,6 +41,7 @@ type TitlePattern struct {
 
 // PaneInput holds the raw data for one pane from tmux list-panes.
 type PaneInput struct {
+	Target      multiplexer.Target
 	SessionName string
 	PaneID      string
 	PanePID     int64
@@ -50,6 +52,23 @@ type PaneInput struct {
 	Activity    int64
 	HiveSession string
 	InMode      bool // pane is in copy-mode/view-mode (tmux #{pane_in_mode})
+}
+
+// InputFromPane converts a discovered multiplexer pane into classifier input.
+func InputFromPane(pane multiplexer.Pane) PaneInput {
+	return PaneInput{
+		Target:      pane.Target,
+		SessionName: pane.Target.Session,
+		PaneID:      pane.NativeID,
+		PanePID:     pane.PID,
+		WindowIndex: pane.Target.Window,
+		WindowName:  pane.WindowName,
+		PaneTitle:   pane.Title,
+		WorkDir:     pane.WorkingDirectory,
+		Activity:    pane.Activity,
+		HiveSession: pane.HiveSession,
+		InMode:      pane.InMode,
+	}
 }
 
 // Classifier classifies tmux panes as agent or non-agent.
@@ -105,7 +124,11 @@ func (c *Classifier) classify(ctx context.Context, input PaneInput, allowContent
 		return Result{IsAgent: true, Tool: tool, Confidence: ConfidenceHigh, Tier: tierProcess, ClassifiedAt: classifiedAt}
 	}
 	if allowContent {
-		if tool, ok := c.classifyContent(ctx, input.PaneID); ok {
+		target := input.Target
+		if target.Pane == "" {
+			target.Pane = input.PaneID
+		}
+		if tool, ok := c.classifyContent(ctx, target); ok {
 			return Result{IsAgent: true, Tool: tool, Confidence: ConfidenceMedium, Tier: tierContent, ClassifiedAt: classifiedAt}
 		}
 	}
@@ -257,11 +280,11 @@ func isArgvFlag(arg string) bool {
 	return arg == "" || arg == "--" || strings.HasPrefix(arg, "-")
 }
 
-func (c *Classifier) classifyContent(ctx context.Context, paneID string) (tool string, ok bool) {
-	if c.scorer == nil || c.capture == nil || paneID == "" {
+func (c *Classifier) classifyContent(ctx context.Context, target multiplexer.Target) (tool string, ok bool) {
+	if c.scorer == nil || c.capture == nil || target.Pane == "" {
 		return "", false
 	}
-	paneContent, err := c.capture.CapturePane(ctx, paneID)
+	paneContent, err := c.capture.CapturePane(ctx, target)
 	if err != nil || paneContent == "" {
 		return "", false
 	}

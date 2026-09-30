@@ -15,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
 	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/hive"
@@ -57,9 +58,36 @@ func (g *mouseTestGit) HasUnpushedCommits(_ context.Context, _ string) (bool, er
 	return false, nil
 }
 
+type mouseTestMultiplexer struct{}
+
+func (mouseTestMultiplexer) CreateSession(context.Context, multiplexer.SessionSpec) error { return nil }
+
+func (mouseTestMultiplexer) OpenSession(context.Context, multiplexer.SessionSpec, multiplexer.Target) error {
+	return nil
+}
+
+func (mouseTestMultiplexer) AddWindows(context.Context, multiplexer.Target, []multiplexer.WindowSpec) error {
+	return nil
+}
+
+func (mouseTestMultiplexer) AttachOrSwitch(context.Context, multiplexer.Target, multiplexer.AttachStreams) error {
+	return nil
+}
+
+func (mouseTestMultiplexer) CurrentSession(context.Context) (multiplexer.Target, error) {
+	return multiplexer.Target{}, nil
+}
+
+func (mouseTestMultiplexer) RenameSession(context.Context, multiplexer.Target, string) error {
+	return nil
+}
+func (mouseTestMultiplexer) KillSession(context.Context, multiplexer.Target) error { return nil }
+func (mouseTestMultiplexer) KillWindow(context.Context, multiplexer.Target) error  { return nil }
+
 var (
-	_ session.Store = (*mouseTestStore)(nil)
-	_ git.Git       = (*mouseTestGit)(nil)
+	_ session.Store           = (*mouseTestStore)(nil)
+	_ git.Git                 = (*mouseTestGit)(nil)
+	_ hive.SessionMultiplexer = mouseTestMultiplexer{}
 )
 
 // newMouseTestSessionService creates a minimal SessionService for mouse tests.
@@ -79,6 +107,7 @@ func newMouseTestSessionService(t *testing.T) *hive.SessionService {
 		log,
 		io.Discard,
 		io.Discard,
+		mouseTestMultiplexer{},
 	)
 }
 

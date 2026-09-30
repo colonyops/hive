@@ -146,6 +146,13 @@ func (s *Session) SetMeta(key, value string) {
 	s.Metadata[key] = value
 }
 
+// ClearMeta removes a metadata key. It is a no-op when the key is absent.
+func (s *Session) ClearMeta(key string) {
+	if s.Metadata != nil {
+		delete(s.Metadata, key)
+	}
+}
+
 // Group returns the user-assigned group for tree view organization, or empty string if unset.
 func (s *Session) Group() string {
 	return s.GetMeta(MetaGroup)
@@ -155,9 +162,7 @@ func (s *Session) Group() string {
 // An empty value clears the group assignment.
 func (s *Session) SetGroup(group string) {
 	if group == "" {
-		if s.Metadata != nil {
-			delete(s.Metadata, MetaGroup)
-		}
+		s.ClearMeta(MetaGroup)
 		return
 	}
 	s.SetMeta(MetaGroup, group)

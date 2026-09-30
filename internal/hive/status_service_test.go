@@ -83,9 +83,9 @@ type fakeTerminalIntegration struct {
 	statuses map[string]terminal.Status
 }
 
-func (f *fakeTerminalIntegration) Name() string    { return "fake" }
-func (f *fakeTerminalIntegration) Available() bool { return true }
-func (f *fakeTerminalIntegration) RefreshCache()   {}
+func (f *fakeTerminalIntegration) Name() string                 { return "fake" }
+func (f *fakeTerminalIntegration) Available() bool              { return true }
+func (f *fakeTerminalIntegration) RefreshCache(context.Context) {}
 func (f *fakeTerminalIntegration) DiscoverSession(context.Context, string, map[string]string) (*terminal.SessionInfo, error) {
 	return nil, nil
 }

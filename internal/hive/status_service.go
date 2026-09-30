@@ -10,7 +10,6 @@ import (
 
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
-	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 )
 
 const terminalStatusTimeout = 2 * time.Second
@@ -98,7 +97,7 @@ func (s *StatusService) FetchBatch(ctx context.Context, sessions []*session.Sess
 	}
 
 	// Refresh integration caches once before fetching statuses
-	s.term.RefreshAll()
+	s.term.RefreshAll(ctx)
 
 	var mu sync.Mutex
 	sem := make(chan struct{}, s.workers)
@@ -156,7 +155,7 @@ func (s *StatusService) FetchBatch(ctx context.Context, sessions []*session.Sess
 func (s *StatusService) fetchRoot(ctx context.Context, target RootRepoTarget) TerminalStatus {
 	status := TerminalStatus{Status: terminal.StatusMissing}
 
-	metadata := map[string]string{terminaltmux.SessionPathKey: target.Path}
+	metadata := map[string]string{terminal.SessionPathKey: target.Path}
 	info, integration, err := s.term.DiscoverSession(ctx, target.Name, metadata)
 	if err != nil {
 		log.Debug().Err(err).Str("repo", target.Name).Msg("root repo terminal discovery failed")
@@ -192,7 +191,7 @@ func (s *StatusService) FetchSession(ctx context.Context, sess *session.Session)
 	if sess.Path != "" {
 		metadata = make(map[string]string, len(sess.Metadata)+1)
 		maps.Copy(metadata, sess.Metadata)
-		metadata[terminaltmux.SessionPathKey] = sess.Path
+		metadata[terminal.SessionPathKey] = sess.Path
 	}
 
 	// Try to discover terminal session

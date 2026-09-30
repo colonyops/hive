@@ -15,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
 	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -82,6 +83,31 @@ func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
 func (m *mockGit) DiffStats(_ context.Context, _ string) (int, int, error) { return 0, 0, nil }
 func (m *mockGit) IsValidRepo(_ context.Context, _ string) error           { return nil }
 
+type testMultiplexer struct{}
+
+func (testMultiplexer) CreateSession(context.Context, multiplexer.SessionSpec) error { return nil }
+func (testMultiplexer) OpenSession(context.Context, multiplexer.SessionSpec, multiplexer.Target) error {
+	return nil
+}
+
+func (testMultiplexer) AddWindows(context.Context, multiplexer.Target, []multiplexer.WindowSpec) error {
+	return nil
+}
+
+func (testMultiplexer) AttachOrSwitch(context.Context, multiplexer.Target, multiplexer.AttachStreams) error {
+	return nil
+}
+
+func (testMultiplexer) CurrentSession(context.Context) (multiplexer.Target, error) {
+	return multiplexer.Target{}, nil
+}
+
+func (testMultiplexer) RenameSession(context.Context, multiplexer.Target, string) error { return nil }
+
+func (testMultiplexer) KillSession(context.Context, multiplexer.Target) error { return nil }
+
+func (testMultiplexer) KillWindow(context.Context, multiplexer.Target) error { return nil }
+
 func newTestService(t *testing.T, store session.Store, cfg *config.Config) *SessionService {
 	t.Helper()
 	return newTestServiceWithBus(t, store, cfg, testbus.New(t).EventBus)
@@ -97,7 +123,7 @@ func newTestServiceWithBus(t *testing.T, store session.Store, cfg *config.Config
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	return NewSessionService(store, &mockGit{}, cfg, bus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard)
+	return NewSessionService(store, &mockGit{}, cfg, bus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
 }
 
 func TestRenameSession(t *testing.T) {
@@ -144,6 +170,47 @@ func TestRenameSession_Slugify(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "My Feature Branch", updated.Name)
 	assert.Equal(t, "my-feature-branch", updated.Slug)
+}
+
+type renameMultiplexer struct {
+	testMultiplexer
+	from multiplexer.Target
+	to   string
+	err  error
+}
+
+func (m *renameMultiplexer) RenameSession(_ context.Context, from multiplexer.Target, to string) error {
+	m.from = from
+	m.to = to
+	return m.err
+}
+
+func TestRenameSessionPersistsActualTmuxTarget(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		renameErr error
+		wantMeta  string
+	}{
+		{name: "success stores new target", wantMeta: "new-name"},
+		{name: "failure retains old actual target", renameErr: assert.AnError, wantMeta: "actual-old"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newMockStore()
+			sess := session.Session{ID: "test1", Name: "old-name", Slug: "old-name", Path: "/tmp/test", Remote: testRemote, State: session.StateActive}
+			sess.SetMeta(session.MetaTmuxSession, "actual-old")
+			require.NoError(t, store.Save(context.Background(), sess))
+			svc := newTestService(t, store, nil)
+			mux := &renameMultiplexer{err: tt.renameErr}
+			svc.lifecycle = mux
+
+			require.NoError(t, svc.RenameSession(context.Background(), sess.ID, "new-name"))
+			updated, err := store.Get(context.Background(), sess.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "actual-old", mux.from.Session)
+			assert.Equal(t, "new-name", mux.to)
+			assert.Equal(t, tt.wantMeta, updated.GetMeta(session.MetaTmuxSession))
+		})
+	}
 }
 
 func TestRenameSession_NotFound(t *testing.T) {
@@ -194,7 +261,8 @@ func TestCreateSession_SlugUsedAsTmuxName(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard)
+	mux := &captureMultiplexer{capturedName: &capturedTmuxName}
+	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, mux)
 
 	sess, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:       "My Feature",
@@ -209,7 +277,17 @@ func TestCreateSession_SlugUsedAsTmuxName(t *testing.T) {
 		"tmux session should be created with the slug, not the display name")
 }
 
-// capturingExec records the tmux session name passed to new-session for assertion.
+type captureMultiplexer struct {
+	testMultiplexer
+	capturedName *string
+}
+
+func (m *captureMultiplexer) CreateSession(_ context.Context, spec multiplexer.SessionSpec) error {
+	*m.capturedName = spec.Target.Session
+	return nil
+}
+
+// capturingExec records command execution for assertion.
 type capturingExec struct {
 	capturedName *string
 }
@@ -257,7 +335,7 @@ func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard)
+	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:     "agent override",
@@ -288,7 +366,7 @@ func TestCreateSession_RuleAgentOverridesSpawnRenderer(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard)
+	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:   "rule agent override",
@@ -319,7 +397,7 @@ func TestCreateSession_AgentKeyOverridesRuleAgent(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard)
+	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:     "cli agent override",
@@ -864,6 +942,37 @@ func TestRecycleSession_PathUnchanged(t *testing.T) {
 	assert.Equal(t, session.StateRecycled, recycled.State)
 }
 
+type killMultiplexer struct {
+	testMultiplexer
+	killed []multiplexer.Target
+}
+
+func (m *killMultiplexer) KillSession(_ context.Context, target multiplexer.Target) error {
+	m.killed = append(m.killed, target)
+	return nil
+}
+
+func TestRecycleSession_KillsPersistedTargetAndClearsIt(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+	svc := newTestService(t, store, cfg)
+	mux := &killMultiplexer{}
+	svc.lifecycle = mux
+
+	sessDir := filepath.Join(cfg.ReposDir(), "repo-x7k2qp")
+	require.NoError(t, os.MkdirAll(sessDir, 0o755))
+	sess := session.Session{ID: "abc123", Name: "renamed", Slug: "renamed", State: session.StateActive, Path: sessDir, Remote: testRemote}
+	sess.SetMeta(session.MetaTmuxSession, "original")
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	require.NoError(t, svc.RecycleSession(context.Background(), "abc123", io.Discard))
+
+	assert.Equal(t, []multiplexer.Target{{Session: "original"}}, mux.killed)
+	recycled, err := store.Get(context.Background(), "abc123")
+	require.NoError(t, err)
+	assert.Empty(t, recycled.GetMeta(session.MetaTmuxSession), "a reused clone must target its new slug, not the killed tmux session")
+}
+
 func TestCreateSession_RecycledSessionKeepsPath(t *testing.T) {
 	store := newMockStore()
 	cfg := &config.Config{
@@ -1184,7 +1293,7 @@ func TestCreateSession_BranchTemplate(t *testing.T) {
 		}
 		log := zerolog.New(io.Discard)
 		renderer := tmpl.New(tmpl.Config{})
-		return NewSessionService(store, gitImpl, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard)
+		return NewSessionService(store, gitImpl, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
 	}
 
 	t.Run("valid template uses rendered branch", func(t *testing.T) {
@@ -1270,6 +1379,7 @@ func TestCreateSession_ErrorIncludesDestinationAndStrategy(t *testing.T) {
 			zerolog.New(io.Discard),
 			io.Discard,
 			io.Discard,
+			testMultiplexer{},
 		)
 	}
 
@@ -1383,7 +1493,7 @@ func TestCreateSession_DoesNotReuseRecycledWorktree(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	svc := NewSessionService(store, spy, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard)
+	svc := NewSessionService(store, spy, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
 
 	sess, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:      "new-feature",

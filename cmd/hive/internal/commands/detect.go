@@ -41,6 +41,7 @@ type detectPaneOutput struct {
 	PaneID      string `json:"paneID"`
 	PanePID     int64  `json:"panePID"`
 	WindowIndex string `json:"windowIndex"`
+	PaneIndex   string `json:"paneIndex"`
 	WindowName  string `json:"windowName"`
 	IsAgent     bool   `json:"isAgent"`
 	Tool        string `json:"tool,omitempty"`
@@ -66,27 +67,32 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 
-	lister := terminaltmux.TmuxPaneLister{}
-	panes, err := lister.ListAllPanes()
+	if cmd.app.Multiplexer == nil {
+		return fmt.Errorf("tmux is unavailable")
+	}
+	source := cmd.app.Multiplexer
+	panes, err := source.ListPanes(ctx)
 	if err != nil {
 		return err
 	}
 
 	tmuxSessions := detectTmuxSessionNames(sess)
 
-	cls := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher).Classifier()
-	capture := terminaltmux.TmuxCapture{}
+	capture := terminaltmux.PaneCapture{Source: source}
+	cls := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher, terminaltmux.WithPaneSource(source)).Classifier()
 	engine := assess.NewEngine()
 	out := detectOutput{Session: sess.Slug}
 	for _, pane := range panes {
-		if !tmuxSessions[pane.SessionName] {
+		if !tmuxSessions[pane.Target.Session] {
 			continue
 		}
-		result := cls.Classify(ctx, pane)
+		input := classifier.InputFromPane(pane)
+		result := cls.Classify(ctx, input)
 		paneOut := detectPaneOutput{
-			PaneID:      pane.PaneID,
-			PanePID:     pane.PanePID,
-			WindowIndex: pane.WindowIndex,
+			PaneID:      pane.NativeID,
+			PanePID:     pane.PID,
+			WindowIndex: pane.Target.Window,
+			PaneIndex:   pane.Target.Pane,
 			WindowName:  pane.WindowName,
 			IsAgent:     result.IsAgent,
 			Tool:        result.Tool,
@@ -95,7 +101,7 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 			InMode:      pane.InMode,
 		}
 		if result.IsAgent {
-			paneOut.Assessment, paneOut.RuleID = assessDetectedAgentPane(ctx, pane, result.Tool, capture, engine)
+			paneOut.Assessment, paneOut.RuleID = assessDetectedAgentPane(ctx, input, result.Tool, capture, engine)
 		}
 		out.Panes = append(out.Panes, paneOut)
 	}
@@ -105,8 +111,8 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 	return enc.Encode(out)
 }
 
-func assessDetectedAgentPane(ctx context.Context, pane classifier.PaneInput, tool string, capture assessPaneCapture, engine *assess.Engine) (string, string) {
-	content, err := capture.CapturePane(ctx, pane.PaneID)
+func assessDetectedAgentPane(ctx context.Context, pane classifier.PaneInput, tool string, capture classifier.ContentCapture, engine *assess.Engine) (string, string) {
+	content, err := capture.CapturePane(ctx, pane.Target)
 	if err != nil {
 		return "", ""
 	}

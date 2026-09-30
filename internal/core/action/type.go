@@ -23,6 +23,7 @@ package action
 //	PrevActive
 //	DeleteRecycledBatch
 //	SpawnWindows
+//	KillWindow
 //	HiveInfo
 //	HiveDoctor
 //	GroupSet

@@ -55,9 +55,9 @@ func (m *Manager) EnabledIntegrations() []Integration {
 }
 
 // RefreshAll calls RefreshCache on all enabled integrations.
-func (m *Manager) RefreshAll() {
+func (m *Manager) RefreshAll(ctx context.Context) {
 	for _, i := range m.EnabledIntegrations() {
-		i.RefreshCache()
+		i.RefreshCache(ctx)
 	}
 }
 

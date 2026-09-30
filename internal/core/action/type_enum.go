@@ -49,6 +49,8 @@ const (
 	TypeDeleteRecycledBatch Type = "DeleteRecycledBatch"
 	// TypeSpawnWindows is a Type of type SpawnWindows.
 	TypeSpawnWindows Type = "SpawnWindows"
+	// TypeKillWindow is a Type of type KillWindow.
+	TypeKillWindow Type = "KillWindow"
 	// TypeHiveInfo is a Type of type HiveInfo.
 	TypeHiveInfo Type = "HiveInfo"
 	// TypeHiveDoctor is a Type of type HiveDoctor.
@@ -145,6 +147,7 @@ var _TypeNames = []string{
 	string(TypePrevActive),
 	string(TypeDeleteRecycledBatch),
 	string(TypeSpawnWindows),
+	string(TypeKillWindow),
 	string(TypeHiveInfo),
 	string(TypeHiveDoctor),
 	string(TypeGroupSet),
@@ -241,6 +244,8 @@ var _TypeValue = map[string]Type{
 	"deleterecycledbatch":        TypeDeleteRecycledBatch,
 	"SpawnWindows":               TypeSpawnWindows,
 	"spawnwindows":               TypeSpawnWindows,
+	"KillWindow":                 TypeKillWindow,
+	"killwindow":                 TypeKillWindow,
 	"HiveInfo":                   TypeHiveInfo,
 	"hiveinfo":                   TypeHiveInfo,
 	"HiveDoctor":                 TypeHiveDoctor,

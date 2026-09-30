@@ -1,12 +1,15 @@
 package hive
 
 import (
+	"context"
+
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/doctor"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/data/db"
@@ -23,6 +26,16 @@ type BuildInfo struct {
 	Date    string
 }
 
+// Multiplexer exposes the shared operations used by application commands.
+type Multiplexer interface {
+	SessionMultiplexer
+	terminal.PaneSource
+	ResolveTarget(ctx context.Context, raw string) (multiplexer.Pane, error)
+	SendLiteral(ctx context.Context, target multiplexer.Target, text string) error
+	SendKey(ctx context.Context, target multiplexer.Target, key multiplexer.NamedKey) error
+	Paste(ctx context.Context, target multiplexer.Target, text []byte, opts multiplexer.PasteOptions) error
+}
+
 // App is the central entry point for all hive operations.
 // Commands and TUI consume App instead of cherry-picking raw dependencies.
 type App struct {
@@ -34,16 +47,17 @@ type App struct {
 	Honeycomb *HoneycombService
 	Status    *StatusService
 
-	Bus        *eventbus.EventBus
-	Terminal   *terminal.Manager
-	Plugins    *plugins.Manager
-	CommandSet *plugins.CommandSet
-	Config     *config.Config
-	DB         *db.DB
-	KV         kv.KV
-	Renderer   *tmpl.Renderer
-	Build      BuildInfo
-	Sources    *sources.Registry
+	Bus         *eventbus.EventBus
+	Terminal    *terminal.Manager
+	Multiplexer Multiplexer
+	Plugins     *plugins.Manager
+	CommandSet  *plugins.CommandSet
+	Config      *config.Config
+	DB          *db.DB
+	KV          kv.KV
+	Renderer    *tmpl.Renderer
+	Build       BuildInfo
+	Sources     *sources.Registry
 }
 
 // NewApp constructs an App from explicit dependencies.
@@ -55,6 +69,7 @@ func NewApp(
 	cfg *config.Config,
 	bus *eventbus.EventBus,
 	termMgr *terminal.Manager,
+	multiplexer Multiplexer,
 	pluginMgr *plugins.Manager,
 	commandSet *plugins.CommandSet,
 	database *db.DB,
@@ -64,20 +79,21 @@ func NewApp(
 	logger zerolog.Logger,
 ) *App {
 	return &App{
-		Sessions:   sessions,
-		Messages:   NewMessageService(msgStore, cfg, bus),
-		Context:    NewContextService(cfg, sessions.git),
-		Doctor:     NewDoctorService(sessions.sessions, cfg, pluginInfos),
-		Todos:      NewTodoService(todoStore, bus, cfg, logger.With().Str("component", "todos").Logger()),
-		Honeycomb:  NewHoneycombService(hcStore, logger.With().Str("component", "honeycomb").Logger()),
-		Status:     NewStatusService(termMgr, cfg.Git.StatusWorkers),
-		Bus:        bus,
-		Terminal:   termMgr,
-		Plugins:    pluginMgr,
-		CommandSet: commandSet,
-		Config:     cfg,
-		DB:         database,
-		KV:         kvStore,
-		Renderer:   renderer,
+		Sessions:    sessions,
+		Messages:    NewMessageService(msgStore, cfg, bus),
+		Context:     NewContextService(cfg, sessions.git),
+		Doctor:      NewDoctorService(sessions.sessions, cfg, pluginInfos),
+		Todos:       NewTodoService(todoStore, bus, cfg, logger.With().Str("component", "todos").Logger()),
+		Honeycomb:   NewHoneycombService(hcStore, logger.With().Str("component", "honeycomb").Logger()),
+		Status:      NewStatusService(termMgr, cfg.Git.StatusWorkers),
+		Bus:         bus,
+		Terminal:    termMgr,
+		Multiplexer: multiplexer,
+		Plugins:     pluginMgr,
+		CommandSet:  commandSet,
+		Config:      cfg,
+		DB:          database,
+		KV:          kvStore,
+		Renderer:    renderer,
 	}
 }

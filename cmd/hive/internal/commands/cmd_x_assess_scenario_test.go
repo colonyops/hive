@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/assess"
 	"github.com/colonyops/hive/internal/core/terminal/status"
@@ -19,6 +20,36 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
 )
+
+type fakeScenarioInput struct {
+	literal string
+	keys    []multiplexer.NamedKey
+	targets []multiplexer.Target
+}
+
+func (f *fakeScenarioInput) SendLiteral(_ context.Context, target multiplexer.Target, text string) error {
+	f.targets = append(f.targets, target)
+	f.literal = text
+	return nil
+}
+
+func (f *fakeScenarioInput) SendKey(_ context.Context, target multiplexer.Target, key multiplexer.NamedKey) error {
+	f.targets = append(f.targets, target)
+	f.keys = append(f.keys, key)
+	return nil
+}
+
+func TestScenarioResolvedSenderSeparatesLiteralAndEnter(t *testing.T) {
+	input := &fakeScenarioInput{}
+	target := multiplexer.Target{Session: "work", Window: "0", Pane: "1"}
+	sender := scenarioResolvedSender{input: input, target: target}
+
+	require.NoError(t, sender.SendText(context.Background(), "-- quotes; λ"))
+	require.NoError(t, sender.SendKey(context.Background(), "C-c"))
+	assert.Equal(t, "-- quotes; λ", input.literal)
+	assert.Equal(t, []multiplexer.NamedKey{"Enter", "C-c"}, input.keys)
+	assert.Equal(t, []multiplexer.Target{target, target, target}, input.targets)
+}
 
 func TestAssessScenarioCmd_MissingArgErrors(t *testing.T) {
 	flags := &Flags{}
@@ -119,12 +150,12 @@ type fakeScenarioSender struct {
 	keyErr  error
 }
 
-func (f *fakeScenarioSender) SendText(_ context.Context, _ string, text string) error {
+func (f *fakeScenarioSender) SendText(_ context.Context, text string) error {
 	f.events = append(f.events, "send:"+text)
 	return f.sendErr
 }
 
-func (f *fakeScenarioSender) SendKey(_ context.Context, _ string, key string) error {
+func (f *fakeScenarioSender) SendKey(_ context.Context, key string) error {
 	f.events = append(f.events, "key:"+key)
 	return f.keyErr
 }

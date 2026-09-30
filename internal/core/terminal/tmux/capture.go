@@ -5,7 +5,8 @@ import (
 	"fmt"
 )
 
-// TmuxCapture implements classifier.ContentCapture via tmux capture-pane.
+// TmuxCapture captures a pane by raw tmux target string. The assess commands
+// use it because they accept any tmux target syntax from the user.
 type TmuxCapture struct {
 	commander Commander
 }

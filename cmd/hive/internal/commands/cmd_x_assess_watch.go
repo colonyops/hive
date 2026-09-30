@@ -21,8 +21,7 @@ import (
 
 // paneExtraDelimiter separates pane_title from pane_in_mode in one
 // display-message call; tmux replaces literal tabs in format strings, so use
-// a printable delimiter (matches internal/core/terminal/tmux/pane_lister.go's
-// convention).
+// a printable delimiter (matches the tmux adapter's list-panes convention).
 const paneExtraDelimiter = "|||"
 
 type assessPaneCapture interface {

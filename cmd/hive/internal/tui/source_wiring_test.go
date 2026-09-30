@@ -142,7 +142,7 @@ func multiResult(id, nameTemplate string) sourcepicker.Result {
 
 func TestCreateSourceSessions_FanOut(t *testing.T) {
 	creator := &fakeSessionCreator{}
-	m := Model{cmdService: command.NewService(nil, nil, nil, nil, creator)}
+	m := Model{cmdService: command.NewService(nil, nil, nil, nil, nil, creator)}
 	out := make(chan string, 100)
 
 	results := []sourcepicker.Result{
@@ -163,7 +163,7 @@ func TestCreateSourceSessions_FanOut(t *testing.T) {
 
 func TestCreateSourceSessions_PartialFailureContinues(t *testing.T) {
 	creator := &fakeSessionCreator{}
-	m := Model{cmdService: command.NewService(nil, nil, nil, nil, creator)}
+	m := Model{cmdService: command.NewService(nil, nil, nil, nil, nil, creator)}
 	out := make(chan string, 100)
 
 	results := []sourcepicker.Result{
@@ -193,7 +193,7 @@ func TestCreateSourceSessions_PartialFailureContinues(t *testing.T) {
 
 func TestCreateSourceSessions_SingleItemErrorPassesThrough(t *testing.T) {
 	creator := &fakeSessionCreator{}
-	m := Model{cmdService: command.NewService(nil, nil, nil, nil, creator)}
+	m := Model{cmdService: command.NewService(nil, nil, nil, nil, nil, creator)}
 	out := make(chan string, 100)
 
 	var firstID, firstName string

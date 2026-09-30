@@ -20,6 +20,7 @@ type detectPaneResult struct {
 	PaneID      string `json:"paneID"`
 	PanePID     int64  `json:"panePID"`
 	WindowIndex string `json:"windowIndex"`
+	PaneIndex   string `json:"paneIndex"`
 	WindowName  string `json:"windowName"`
 	IsAgent     bool   `json:"isAgent"`
 	Tool        string `json:"tool"`
@@ -56,6 +57,7 @@ func TestDetect_SinglePaneSession(t *testing.T) {
 		assert.NotEmpty(t, pane.PaneID)
 		assert.NotZero(t, pane.PanePID)
 		assert.NotEmpty(t, pane.WindowIndex)
+		assert.NotEmpty(t, pane.PaneIndex)
 	}
 }
 

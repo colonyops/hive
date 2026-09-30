@@ -23,7 +23,6 @@ import (
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
@@ -164,8 +163,14 @@ func New(opts ViewOpts) *View {
 	focusInputStyles.Cursor.Color = styles.ColorPrimary
 	focusInput.SetStyles(focusInputStyles)
 
-	// Detect current tmux session to prevent recursive preview
-	currentTmux := tmux.DetectCurrentTmuxSession()
+	// Detect the current session once to prevent recursive preview.
+	currentCtx, cancelCurrent := context.WithTimeout(context.Background(), time.Second)
+	currentTarget, currentErr := opts.Service.CurrentSession(currentCtx)
+	cancelCurrent()
+	currentTmux := currentTarget.Session
+	if currentErr != nil {
+		log.Debug().Err(currentErr).Msg("tmux session detection failed")
+	}
 
 	previewTemplates := ParsePreviewTemplates(
 		cfg.Views.Sessions.PreviewTitle,
@@ -567,7 +572,7 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 		resolveTarget = *selected
 	}
 	action, actionOK := v.handler.Resolve(keyStr, resolveTarget)
-	action = MaybeOverrideWindowDelete(action, treeItem, v.renderer)
+	action = MaybeOverrideWindowDelete(action, treeItem)
 	if actionOK {
 		return v, func() tea.Msg { return ActionRequestMsg{Action: action} }
 	}
@@ -1756,7 +1761,7 @@ func listenForPluginResult(ch <-chan plugins.Result) tea.Cmd {
 
 // MaybeOverrideWindowDelete converts a delete action into a tmux window kill
 // when a window sub-item is selected. This keeps "d" context-aware.
-func MaybeOverrideWindowDelete(action act.Action, treeItem *TreeItem, renderer *tmpl.Renderer) act.Action {
+func MaybeOverrideWindowDelete(action act.Action, treeItem *TreeItem) act.Action {
 	if treeItem == nil || !treeItem.IsWindowItem {
 		return action
 	}
@@ -1764,29 +1769,16 @@ func MaybeOverrideWindowDelete(action act.Action, treeItem *TreeItem, renderer *
 		return action
 	}
 
-	tmuxSession := treeItem.ParentSession.GetMeta(session.MetaTmuxSession)
-	if tmuxSession == "" {
-		tmuxSession = treeItem.ParentSession.Slug
-	}
-	if tmuxSession == "" {
-		tmuxSession = treeItem.ParentSession.Name
-	}
-	if tmuxSession == "" || treeItem.WindowIndex == "" {
-		action.Err = fmt.Errorf("unable to resolve tmux window target")
+	target := hive.SessionTarget(treeItem.ParentSession)
+	target.Window = treeItem.WindowIndex
+	if err := target.ValidateWindow(); err != nil {
+		action.Err = fmt.Errorf("unable to resolve tmux window target: %w", err)
 		return action
 	}
 
-	target := tmuxSession + ":" + treeItem.WindowIndex
-	cmd, err := renderer.Render("tmux kill-window -t {{ .Target | shq }}", map[string]string{
-		"Target": target,
-	})
-	if err != nil {
-		action.Err = err
-		return action
-	}
-
-	action.Type = act.TypeShell
-	action.ShellCmd = cmd
+	action.Type = act.TypeKillWindow
+	action.WindowTarget = &target
+	action.ShellCmd = ""
 	if treeItem.WindowName != "" {
 		action.Confirm = fmt.Sprintf("Kill tmux window %q?", treeItem.WindowName)
 	} else {
