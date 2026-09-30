@@ -14,6 +14,8 @@ Hive includes a built-in task tracker designed for multi-agent coordination. The
 
 **Auto-detection** — Session ID and repository are detected from the working directory automatically. No configuration needed.
 
+[Hive Desktop](../../desktop/code/terminal-mode.md#tasks) reads the same task tree from its Code area.
+
 ## Quick Start
 
 ### Create an epic with tasks

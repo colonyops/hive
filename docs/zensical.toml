@@ -1,0 +1,130 @@
+# hivedesktop.com: the landing page and the docs for the hive CLI and Hive
+# Desktop. `mise run docs:build` runs `zensical build --strict` in this
+# directory, then scripts/llms.py and scripts/redirects.py.
+
+[project]
+site_name = "Hive"
+site_url = "https://hivedesktop.com/"
+site_description = "Hive runs your coding agents in isolated tmux sessions, and Hive Desktop adds an inbox that collects pull requests, issues, and alerts into feeds and hands any item to an agent."
+repo_url = "https://github.com/colonyops/hive"
+repo_name = "colonyops/hive"
+extra_css = ["stylesheets/extra.css"]
+extra_javascript = ["javascripts/download.js", "javascripts/demos.js"]
+custom_dir = "overrides"
+
+nav = [
+  { "Home" = "index.md" },
+  { "Desktop" = [
+    { "Getting Started" = [
+      "desktop/getting-started/index.md",
+      "desktop/getting-started/features.md",
+      "desktop/getting-started/agent-and-repos.md",
+      "desktop/getting-started/sign-in.md",
+      "desktop/getting-started/notifications.md",
+      "desktop/getting-started/first-feed.md",
+    ]},
+    { "Inbox" = [
+      "desktop/inbox/how-it-works.md",
+      "desktop/inbox/flows.md",
+      "desktop/inbox/sources.md",
+      "desktop/inbox/actions.md",
+      "desktop/inbox/menu-bar.md",
+    ]},
+    { "Code" = [
+      "desktop/code/terminal-mode.md",
+    ]},
+    { "Chats" = [
+      "desktop/chats/agent-workspaces.md",
+    ]},
+    { "Configuration" = [
+      "desktop/configuration/settings.md",
+      "desktop/configuration/keybindings.md",
+    ]},
+    { "Resources" = [
+      "desktop/getting-started/build-from-source.md",
+      "desktop/getting-started/troubleshooting.md",
+    ]},
+  ]},
+  { "CLI" = [
+    { "Getting Started" = [
+      "cli/getting-started/index.md",
+      "cli/getting-started/sessions.md",
+      "cli/getting-started/context.md",
+      "cli/getting-started/messaging.md",
+      "cli/getting-started/task-tracking.md",
+      "cli/getting-started/todos.md",
+      "cli/getting-started/session-picker.md",
+      "cli/getting-started/claude-plugin.md",
+    ]},
+    { "Configuration" = [
+      "cli/configuration/index.md",
+      "cli/configuration/rules.md",
+      "cli/configuration/commands.md",
+      "cli/configuration/keybindings.md",
+      "cli/configuration/todos.md",
+      "cli/configuration/plugins.md",
+      "cli/configuration/sources.md",
+      "cli/configuration/themes.md",
+    ]},
+    { "Recipes" = [
+      "cli/recipes/index.md",
+      "cli/recipes/sequential-chain-review.md",
+      "cli/recipes/parallel-code-review.md",
+      "cli/recipes/inter-agent-code-review.md",
+      "cli/recipes/ralph-loop.md",
+      "cli/recipes/git-backed-context.md",
+    ]},
+    { "FAQ" = "cli/faq.md" },
+  ]},
+]
+
+[project.theme]
+favicon = "assets/favicon.svg"
+variant = "modern"
+features = [
+  "navigation.instant",
+  "navigation.tabs",
+  "navigation.sections",
+  "navigation.top",
+  "toc.follow",
+  "content.code.copy",
+]
+
+[project.theme.icon]
+logo = "fontawesome/brands/hive"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "deep purple"
+accent = "amber"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "deep purple"
+accent = "amber"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/colonyops/hive"
+
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+
+[project.markdown_extensions.pymdownx.emoji]
+emoji_index = "zensical.extensions.emoji.twemoji"
+emoji_generator = "zensical.extensions.emoji.to_svg"
+
+[project.markdown_extensions.pymdownx.tabbed]
+alternate_style = true

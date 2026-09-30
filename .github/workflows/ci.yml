@@ -25,7 +25,7 @@ jobs:
     outputs:
       go: ${{ steps.filter.outputs.go }}
       cli-integration: ${{ steps.filter.outputs.cli-integration }}
-      docs: ${{ steps.filter.outputs.docs }}
+      site: ${{ steps.filter.outputs.site }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -56,11 +56,8 @@ jobs:
               - 'mise.toml'
               - '.github/workflows/ci.yml'
               - '.github/actions/**'
-            docs:
+            site:
               - 'docs/**'
-              - 'zensical.toml'
-              - 'overrides/**'
-              - 'scripts/generate-llmstxt.sh'
               - 'mise.toml'
               - '.github/workflows/ci.yml'
 
@@ -78,16 +75,19 @@ jobs:
           mise run --force generate
           git diff --exit-code -- '*.gen.go' 'internal/data/db/db.go' 'internal/data/db/models.go' 'internal/data/db/queries.sql.go' || (echo "Generated files are out of date. Run 'mise run generate' and commit the result." && exit 1)
 
+      - name: Check go.mod and go.sum are tidy
+        run: mise run check:tidy
+
       - name: Build
         run: go build ./...
 
       - name: Test
         if: github.event_name == 'pull_request'
-        run: go test ./...
+        run: mise run test
 
       - name: Test with the race detector
         if: github.event_name != 'pull_request'
-        run: go test -race ./...
+        run: mise run test:race
 
   go-lint:
     needs: changes
@@ -107,6 +107,9 @@ jobs:
       - name: Lint workflows
         run: mise run lint:workflows
 
+      - name: Check goreleaser config
+        run: mise run check:goreleaser
+
   integration:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.cli-integration == 'true'
@@ -116,18 +119,12 @@ jobs:
 
       - uses: ./.github/actions/setup-go-env
 
-      - name: Build binary
-        run: mise run build
-
-      - name: Build test image
-        run: docker build -f cmd/hive/Dockerfile.test -t hive-integration-test .
-
       - name: Run integration tests
-        run: docker run --rm hive-integration-test
+        run: mise run integration
 
-  docs:
+  site:
     needs: changes
-    if: github.event_name != 'pull_request' || needs.changes.outputs.docs == 'true'
+    if: github.event_name != 'pull_request' || needs.changes.outputs.site == 'true'
     runs-on: ubuntu-latest
     env:
       # Without this, mise run installs every tool in mise.toml, Go tools
@@ -138,9 +135,9 @@ jobs:
 
       - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
         with:
-          install_args: uv pipx:zensical
+          install_args: python uv
 
-      - name: Build the docs site
+      - name: Build the site
         run: mise run docs:build
 
   # The one required check. A job that a path filter skipped reports
@@ -148,7 +145,7 @@ jobs:
   # fails here.
   ci-ok:
     if: always()
-    needs: [changes, go, go-lint, integration, docs]
+    needs: [changes, go, go-lint, integration, site]
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

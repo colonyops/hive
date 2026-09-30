@@ -1,16 +1,20 @@
+[task_config]
+# The site's tasks (docs:*) live beside the site.
+includes = ["docs/tasks.toml"]
+
 [tools]
 # Go Tools
 "go" = "1.27.1"
-"go:golang.org/x/tools/cmd/deadcode" = "latest"
+"go:golang.org/x/tools/cmd/deadcode" = "0.49.0"
 "go:github.com/abice/go-enum" = "v0.9.4"
 "github:hay-kot/gobusgen" = "v0.3.0"
 "github:sqlc-dev/sqlc" = "v1.31.1"
 golangci-lint = "2.13.2"
-"goreleaser" = "latest"
+"goreleaser" = "2.17.1"
 
-# Docs Site Tools
-uv = "latest"
-"pipx:zensical" = "latest"
+# Site Tools (docs/). Zensical itself is pinned in docs/pyproject.toml.
+python = "3.13.13"
+uv = "0.12.13"
 
 # GitHub Tools
 actionlint = "1.7.12"
@@ -65,6 +69,10 @@ run = "goreleaser build --snapshot --clean --config cmd/hive/.goreleaser.yml"
 description = "Run all go tests"
 run = "go test ./..."
 
+[tasks."test:race"]
+description = "Run all go tests with the race detector; CI runs this on main"
+run = "go test -race ./..."
+
 [tasks.coverage]
 description = "Run tests with race detection and coverage"
 quiet = true
@@ -78,13 +86,33 @@ run = "golangci-lint run ./..."
 description = "Run golangci-lint fmt"
 run = "golangci-lint fmt ./..."
 
-[tasks.deadcode]
-description = "Check for unreachable code"
+[tasks.tidy]
+description = "Tidy go.mod and go.sum; the counterpart of check:tidy that changes files"
+run = "go mod tidy"
+
+[tasks."check:tidy"]
+description = "Fail when go.mod or go.sum need tidying"
+run = "go mod tidy -diff"
+
+[tasks."check:goreleaser"]
+description = "Validate the goreleaser config"
+run = "goreleaser check --config cmd/hive/.goreleaser.yml"
+
+# A report, not a gate: Hive Desktop calls into the shared internal/ packages
+# from its own module, so a finding here is not proof that the function is
+# dead. It becomes a failing gate once the desktop code is in this repository.
+[tasks."check:deadcode"]
+description = "Report functions unreachable from any main or test in this module; ci only, not check"
 run = "deadcode -test ./..."
 
 [tasks.check]
-description = "Run tidy, lint, test, and deadcode"
-run = ["go mod tidy", { tasks = ["lint", "test", "deadcode"] }]
+description = "The fast gate: tidy check, lint, tests, and the goreleaser config check. Read-only; needs no Python or Docker"
+run = [{ tasks = ["check:tidy", "lint", "test", "check:goreleaser"] }]
+
+[tasks.ci]
+description = "Everything CI runs: check, the site build, the deadcode report, and the Docker integration tests"
+depends = ["check", "docs:build"]
+run = [{ tasks = ["check:deadcode", "integration"] }]
 
 [tasks.validate]
 description = "Run doctor with dev config"
@@ -95,14 +123,6 @@ run = "go run ./cmd/hive doctor"
 description = "Run doctor with intentionally invalid config"
 env = { HIVE_CONFIG = "./cmd/hive/dev/config.invalid.yaml" }
 run = "go run ./cmd/hive doctor || true"
-
-[tasks."docs:serve"]
-description = "Serve documentation site locally"
-run = "zensical serve"
-
-[tasks."docs:build"]
-description = "Build documentation site with llms.txt"
-run = ["zensical build", "./scripts/generate-llmstxt.sh"]
 
 [tasks."lint:workflows"]
 description = "Lint GitHub workflows and local actions"

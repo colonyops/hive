@@ -27,6 +27,9 @@ dist/
 agent-deck/
 diffnav
 site/
+# The site's Python environment and Zensical's cache (docs/)
+.venv/
+.cache/
 # binary
 /hive
 /cmd/hive/hive

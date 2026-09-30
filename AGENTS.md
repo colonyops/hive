@@ -47,6 +47,7 @@ cmd/hive/
     ├── commands/   # CLI command handlers (urfave/cli/v3)
     ├── styles/     # lipgloss styles
     └── tui/        # Bubble Tea TUI (tree view, modals, keybindings)
+docs/               # hivedesktop.com: the landing page and the docs for the CLI and Hive Desktop (see docs/AGENTS.md)
 internal/           # Shared with Hive Desktop
 ├── core/
 │   ├── config/     # Configuration loading, validation, defaults
@@ -86,8 +87,11 @@ mise run dev -- new       # Example: run 'hive new' with dev config
 mise run build            # Build with goreleaser
 mise run test             # Run tests with go test
 mise run lint             # Run golangci-lint
-mise run check            # tidy + lint + test (full validation)
+mise run check            # check:tidy + lint + test + goreleaser check; read-only, no Python or Docker
+mise run ci               # check + site build + deadcode report + Docker integration tests
+mise run tidy             # go mod tidy (the counterpart of check:tidy that changes files)
 mise run coverage         # Generate coverage report
+mise run docs:build       # Build hivedesktop.com into docs/site/ (docs:serve for live reload)
 mise container            # Build and launch an ephemeral Docker container with hive pre-installed
 ```
 

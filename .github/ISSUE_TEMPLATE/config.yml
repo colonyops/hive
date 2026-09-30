@@ -1,10 +1,10 @@
 blank_issues_enabled: true
 contact_links:
   - name: hive CLI documentation
-    url: https://colonyops.github.io/hive/
+    url: https://hivedesktop.com/cli/
     about: Sessions, configuration, keybindings, plugins, and messaging.
   - name: Hive Desktop documentation
-    url: https://hivedesktop.com/docs
+    url: https://hivedesktop.com/desktop/getting-started/
     about: Setup, sources, flows, terminal mode, and troubleshooting.
   - name: Report a security vulnerability
     url: https://github.com/colonyops/hive/security/advisories/new

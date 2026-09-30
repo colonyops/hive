@@ -1,0 +1,11 @@
+[project]
+name = "hivedesktop-site"
+version = "0.0.0"
+description = "hivedesktop.com, built with Zensical"
+requires-python = ">=3.13"
+dependencies = [
+  "zensical==0.0.59",
+]
+
+[tool.uv]
+package = false

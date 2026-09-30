@@ -1,0 +1,27 @@
+# hivedesktop.com. Included by the root mise.toml, so these run from anywhere
+# in the repo as `mise run docs:<task>`. Every task runs inside docs/, where
+# pyproject.toml pins Zensical and uv.lock resolves it.
+
+["docs:install"]
+description = "Install the site's Python dependencies from uv.lock; once per fresh worktree"
+dir = "{{config_root}}/docs"
+run = "uv sync --frozen"
+
+["docs:build"]
+description = "Build the site into docs/site/ in strict mode, then publish llms.txt, the Markdown twins, and the redirect stubs"
+dir = "{{config_root}}/docs"
+run = [
+  "uv run --frozen zensical build --clean --strict",
+  "uv run --frozen python scripts/llms.py",
+  "uv run --frozen python scripts/redirects.py",
+]
+
+["docs:serve"]
+description = "Serve the site with browser live reload on http://127.0.0.1:8000"
+dir = "{{config_root}}/docs"
+run = "uv run --frozen zensical serve"
+
+["docs:lock"]
+description = "Re-resolve uv.lock after editing docs/pyproject.toml"
+dir = "{{config_root}}/docs"
+run = "uv lock"

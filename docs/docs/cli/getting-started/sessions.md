@@ -49,6 +49,8 @@ An isolated git clone in a dedicated directory with its own terminal environment
 
 **Not to be confused with**: Tmux session (see relationship below)
 
+[Hive Desktop](../../desktop/code/terminal-mode.md) shows the same sessions in its Code area when both use the same Hive data root, which is the default.
+
 ## Agent
 
 An AI tool instance (Claude, Aider, Codex) running within a session. Each agent runs in its own tmux window and is independently monitored by the TUI.

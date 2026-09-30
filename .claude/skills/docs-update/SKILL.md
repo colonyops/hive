@@ -50,16 +50,16 @@ Documentation files to check:
 | File | Update When |
 |------|-------------|
 | `README.md` | Keybindings, features, config options, CLI commands |
-| `docs/recipes/*.md` | Integration-specific changes |
+| `docs/docs/cli/recipes/*.md` | Integration-specific changes |
 | CLI help text | New commands, flags, or changed behavior |
 
 **Search commands:**
 ```bash
 # Find documentation files
-find . -name "*.md" -not -path "./agent-deck/*" | head -20
+find docs/docs/cli -name "*.md" | head -40
 
 # Search for specific content
-grep -r "keybindings" README.md docs/
+grep -r "keybindings" README.md docs/docs/cli/
 grep -r "Default keybindings" README.md
 ```
 
@@ -96,7 +96,7 @@ Add new commands or flags with descriptions and examples.
 
 #### Recipe Updates
 
-Update `docs/recipes/tmux-integration.md` when:
+Update `docs/docs/cli/recipes/*.md` when:
 - Adding tmux-specific keybindings
 - Changing tmux integration behavior
 - Adding new status indicators
@@ -107,7 +107,7 @@ Check that documentation is accurate and complete:
 
 ```bash
 # Search for old keybinding references
-grep -r "old-key" README.md docs/
+grep -r "old-key" README.md docs/docs/cli/
 
 # Verify all new features are documented
 grep -r "new-feature" README.md
@@ -121,7 +121,7 @@ grep -rn "keybindings" README.md
 Commit documentation changes separately from code changes:
 
 ```bash
-git add README.md docs/
+git add README.md docs/docs/cli/
 git commit -m "docs: describe what was updated
 
 Detailed description of changes."

@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/assets/favicon.svg" alt="Hive" width="80">
+<img src="docs/docs/assets/favicon.svg" alt="Hive" width="80">
 
 # hive
 
@@ -13,7 +13,7 @@ Manage multiple AI agent sessions in isolated git environments with real-time st
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-7aa2f7?style=for-the-badge&labelColor=1a1b26)](https://github.com/colonyops/hive)
 [![Release](https://img.shields.io/github/v/release/colonyops/hive?style=for-the-badge&color=e0af68&labelColor=1a1b26)](https://github.com/colonyops/hive/releases)
 
-[Documentation](https://colonyops.github.io/hive/) | [Getting Started](https://colonyops.github.io/hive/getting-started/) | [Configuration](https://colonyops.github.io/hive/configuration/) | [Contributing](#contributing)
+[Documentation](https://hivedesktop.com/cli/) | [Getting Started](https://hivedesktop.com/cli/getting-started/) | [Configuration](https://hivedesktop.com/cli/configuration/) | [Contributing](#contributing)
 
 </div>
 
@@ -64,7 +64,7 @@ hv          # launch
 
 Press `n` to create sessions, `enter` to open them, and `:` for the command palette.
 
-See the [Getting Started guide](https://colonyops.github.io/hive/getting-started/) for full setup instructions.
+See the [Getting Started guide](https://hivedesktop.com/cli/getting-started/) for full setup instructions.
 
 ## Status Indicators
 
@@ -78,19 +78,19 @@ See the [Getting Started guide](https://colonyops.github.io/hive/getting-started
 
 ## Documentation
 
-Full documentation is available at **[colonyops.github.io/hive](https://colonyops.github.io/hive/)**.
+Full documentation is available at **[hivedesktop.com/cli](https://hivedesktop.com/cli/)**.
 
-- [Getting Started](https://colonyops.github.io/hive/getting-started/) — Terminology, quick start, first session
-- [Configuration](https://colonyops.github.io/hive/configuration/) — Config file, rules, templates, options
-- [User Commands](https://colonyops.github.io/hive/configuration/commands/) — User commands and command palette
-- [Keybindings](https://colonyops.github.io/hive/configuration/keybindings/) — Key mappings and palette commands
-- [Task Tracking](https://colonyops.github.io/hive/getting-started/task-tracking/) — Built-in epics and tasks for multi-agent coordination
-- [Messaging](https://colonyops.github.io/hive/getting-started/messaging/) — Inter-agent pub/sub communication
-- [Todos (Experimental)](https://colonyops.github.io/hive/getting-started/todos/) — Operator todo lifecycle and CLI usage
-- [Plugins](https://colonyops.github.io/hive/configuration/plugins/) — Claude, tmux, and other plugins
-- [Themes](https://colonyops.github.io/hive/configuration/themes/) — Built-in themes and custom palettes
-- [Context & Review](https://colonyops.github.io/hive/getting-started/context/) — Shared context directories and review tool
-- [FAQ](https://colonyops.github.io/hive/faq/) — Common questions
+- [Getting Started](https://hivedesktop.com/cli/getting-started/) — Terminology, quick start, first session
+- [Configuration](https://hivedesktop.com/cli/configuration/) — Config file, rules, templates, options
+- [User Commands](https://hivedesktop.com/cli/configuration/commands/) — User commands and command palette
+- [Keybindings](https://hivedesktop.com/cli/configuration/keybindings/) — Key mappings and palette commands
+- [Task Tracking](https://hivedesktop.com/cli/getting-started/task-tracking/) — Built-in epics and tasks for multi-agent coordination
+- [Messaging](https://hivedesktop.com/cli/getting-started/messaging/) — Inter-agent pub/sub communication
+- [Todos (Experimental)](https://hivedesktop.com/cli/getting-started/todos/) — Operator todo lifecycle and CLI usage
+- [Plugins](https://hivedesktop.com/cli/configuration/plugins/) — Claude, tmux, and other plugins
+- [Themes](https://hivedesktop.com/cli/configuration/themes/) — Built-in themes and custom palettes
+- [Context & Review](https://hivedesktop.com/cli/getting-started/context/) — Shared context directories and review tool
+- [FAQ](https://hivedesktop.com/cli/faq/) — Common questions
 
 ## Dependencies
 
