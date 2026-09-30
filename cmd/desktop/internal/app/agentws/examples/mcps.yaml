@@ -1,0 +1,13 @@
+version: 1
+servers:
+  home-assistant:
+    title: Home Assistant
+    type: http
+    url: http://homeassistant.local:8123/mcp
+    headers:
+      Authorization: "Bearer op://vault/item/token"
+  local-tool:
+    command: npx
+    args: ["-y", "@example/mcp"]
+    env:
+      TOKEN: "op://vault/item/token"

@@ -1,0 +1,999 @@
+@import "tailwindcss";
+@import "../assets/fonts/terminal-fonts.css";
+
+@theme inline {
+  --color-app: var(--hv-app);
+  --color-raised: var(--hv-raised);
+  --color-sidebar: var(--hv-sidebar);
+  --color-pane: var(--hv-pane);
+  --color-list: var(--hv-list);
+  --color-chip: var(--hv-chip);
+  --color-hover: var(--hv-hover);
+  --color-action-card: var(--hv-action-card);
+  --color-action-hover: var(--hv-action-hover);
+  --color-action-hover-border: var(--hv-action-hover-border);
+  --color-border: var(--hv-border);
+  --color-card: var(--hv-card);
+  --color-strong: var(--hv-strong);
+  --color-row: var(--hv-row);
+  --color-row-hover: var(--hv-row-hover);
+  --color-text: var(--hv-text);
+  --color-text-2: var(--hv-text-2);
+  --color-text-3: var(--hv-text-3);
+  --color-text-4: var(--hv-text-4);
+  --color-accent: var(--hv-accent);
+  --color-accent-contrast: var(--hv-accent-contrast);
+  --color-accent-tint: var(--hv-accent-tint);
+  --color-kind-pr: var(--hv-kind-pr);
+  --color-kind-pr-tint: var(--hv-kind-pr-tint);
+  --color-kind-issue: var(--hv-kind-issue);
+  --color-kind-issue-tint: var(--hv-kind-issue-tint);
+  --color-feeds: var(--hv-feeds);
+  --color-selection: var(--hv-selection);
+  --color-backdrop: var(--hv-backdrop);
+  --color-scrim-strong: var(--hv-scrim-strong);
+  --color-code-key: var(--hv-code-key);
+  --color-code-string: var(--hv-code-string);
+  --color-code-comment: var(--hv-code-comment);
+  --color-severity-info: var(--hv-severity-info);
+  --color-severity-info-tint: var(--hv-severity-info-tint);
+  --color-severity-success: var(--hv-severity-success);
+  --color-severity-success-tint: var(--hv-severity-success-tint);
+  --color-severity-success-border: var(--hv-severity-success-border);
+  --color-severity-warning: var(--hv-severity-warning);
+  --color-severity-warning-tint: var(--hv-severity-warning-tint);
+  --color-severity-warning-border: var(--hv-severity-warning-border);
+  --color-severity-error: var(--hv-severity-error);
+  --color-severity-error-tint: var(--hv-severity-error-tint);
+  --color-severity-error-border: var(--hv-severity-error-border);
+  --color-severity-auto-tint: var(--hv-severity-auto-tint);
+  --color-severity-auto-border: var(--hv-severity-auto-border);
+  --color-severity-running: var(--hv-severity-running);
+  --color-severity-running-tint: var(--hv-severity-running-tint);
+
+  /* Flows canvas (8a/8c) — per-node-type accent hues + the graph surface's
+     own chrome. The node-* hues are theme-invariant (defined once below,
+     same as kind-pr/kind-issue/feeds above): a node's role color is part of
+     its identity on the canvas, not the app's chrome theme. The canvas-*
+     surface tokens ARE redefined per theme (below) since they need to sit at
+     the right contrast against each theme's differing background lightness. */
+  --color-node-blue: var(--hv-node-blue);
+  --color-node-blue-tint: var(--hv-node-blue-tint);
+  --color-node-purple: var(--hv-node-purple);
+  --color-node-purple-tint: var(--hv-node-purple-tint);
+  --color-node-teal: var(--hv-node-teal);
+  --color-node-teal-tint: var(--hv-node-teal-tint);
+  --color-node-green: var(--hv-node-green);
+  --color-node-green-tint: var(--hv-node-green-tint);
+  --color-node-orange: var(--hv-node-orange);
+  --color-node-orange-tint: var(--hv-node-orange-tint);
+  --color-node-port: var(--hv-node-port);
+  --color-brand-github: var(--hv-brand-github);
+  --color-brand-github-tint: var(--hv-brand-github-tint);
+  --color-brand-grafana: var(--hv-brand-grafana);
+  --color-brand-grafana-tint: var(--hv-brand-grafana-tint);
+  --color-brand-posthog: var(--hv-brand-posthog);
+  --color-brand-posthog-tint: var(--hv-brand-posthog-tint);
+  --color-brand-gitea: var(--hv-brand-gitea);
+  --color-brand-gitea-tint: var(--hv-brand-gitea-tint);
+  --color-canvas: var(--hv-canvas);
+  --color-canvas-dot: var(--hv-canvas-dot);
+  --color-canvas-toolbar: var(--hv-canvas-toolbar);
+}
+
+@theme {
+  --font-sans: "Inter Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+/* The default dark and light themes are the Theme Redesign's Hive Signal
+   palette: cool neutrals, amber as the only warm hue. */
+:root,
+[data-theme="dark"] {
+  --hv-app: #101318;
+  --hv-raised: #1b2029;
+  --hv-sidebar: #151922;
+  --hv-pane: #151922;
+  --hv-list: #101318;
+  --hv-chip: #232a36;
+  --hv-hover: #303948;
+  --hv-action-card: #1b2029;
+  --hv-action-hover: #232a36;
+  --hv-action-hover-border: #414d5e;
+  --hv-border: #232936;
+  --hv-card: #303948;
+  --hv-strong: #414d5e;
+  --hv-row: #1b2029;
+  --hv-row-hover: #14181f;
+  --hv-text: #e9edf4;
+  --hv-text-2: #a6b0c0;
+  --hv-text-3: #7a8698;
+  --hv-text-4: #55606f;
+  --hv-accent: #f5b23f;
+  --hv-accent-contrast: #101318;
+  --hv-accent-tint: rgba(245, 178, 63, 0.13);
+  --hv-kind-pr: #4ade80;
+  --hv-kind-pr-tint: rgba(74, 222, 128, 0.13);
+  --hv-kind-issue: #facc15;
+  --hv-kind-issue-tint: rgba(250, 204, 21, 0.13);
+  --hv-feeds: #34d399;
+  --hv-selection: rgba(245, 178, 63, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-scrim-strong: rgba(0, 0, 0, 0.7);
+  --hv-code-key: #6ba8f0;
+  --hv-code-string: #8fd67f;
+  --hv-code-comment: #55606f;
+
+  /* Terminal ANSI palette — sampled by lib/terminalTheme.ts for xterm, which
+     paints to a canvas and cannot read CSS variables; not Tailwind tokens.
+     Midnight inherits this set from :root, the same way it inherits
+     severity-*. */
+
+  /* Unstyled terminal output, and deliberately not --hv-text. That colour is
+     tuned for small UI labels on panels and lands near 16:1 against --hv-app,
+     which is glare over a full screen of monospace; established terminal
+     schemes sit around 8-12:1. A theme that omits this falls back to
+     --hv-text, which is what the light themes want — their ANSI white is a
+     pale grey that would vanish on a white background. */
+  --hv-term-foreground: #c4c8cf;
+  --hv-term-black: #1b2029;
+  --hv-term-red: #ef7183;
+  --hv-term-green: #8fd67f;
+  --hv-term-yellow: #e6b45a;
+  --hv-term-blue: #6ba8f0;
+  --hv-term-magenta: #b98ef0;
+  --hv-term-cyan: #5fc8de;
+  --hv-term-white: #b8c1cf;
+  --hv-term-bright-black: #55606f;
+  --hv-term-bright-red: #ff8b9b;
+  --hv-term-bright-green: #a6e695;
+  --hv-term-bright-yellow: #f5c973;
+  --hv-term-bright-blue: #86bcff;
+  --hv-term-bright-magenta: #cba6ff;
+  --hv-term-bright-cyan: #7adcf0;
+  --hv-term-bright-white: #e9edf4;
+
+  /* Toast/overlay severity accents (design spec "shared design tokens" §0 —
+     dark-theme reference hexes). Kept theme-invariant, same as the
+     kind-pr/kind-issue item-type colors above: severity meaning (info,
+     success, error, automatic) shouldn't shift with the app's chrome theme. */
+  --hv-severity-info: #7aa2f7;
+  --hv-severity-info-tint: rgba(122, 162, 247, 0.15);
+  --hv-severity-success: #4ade80;
+  --hv-severity-success-tint: rgba(74, 222, 128, 0.15);
+  --hv-severity-success-border: #2c4a38;
+  --hv-severity-warning: #fbbf24;
+  --hv-severity-warning-tint: rgba(251, 191, 36, 0.15);
+  --hv-severity-warning-border: #4a3d20;
+  --hv-severity-error: #f7768e;
+  --hv-severity-error-tint: rgba(247, 118, 142, 0.15);
+  --hv-severity-error-border: #4a2b32;
+  --hv-severity-auto-tint: rgba(245, 158, 11, 0.15);
+  --hv-severity-auto-border: #4a3f22;
+  --hv-severity-running: #60a5fa;
+  --hv-severity-running-tint: rgba(96, 165, 250, 0.15);
+
+  /* Flows canvas (8a/8c) node-role hues — theme-invariant, see the
+     @theme inline comment above. */
+  --hv-node-blue: #60a5fa;
+  --hv-node-blue-tint: rgba(96, 165, 250, 0.13);
+  --hv-node-purple: #a78bfa;
+  --hv-node-purple-tint: rgba(167, 139, 250, 0.13);
+  --hv-node-teal: #2dd4bf;
+  --hv-node-teal-tint: rgba(45, 212, 191, 0.13);
+  --hv-node-green: #34d399;
+  --hv-node-green-tint: rgba(52, 211, 153, 0.13);
+  --hv-node-orange: #f2803c;
+  --hv-node-orange-tint: rgba(242, 128, 60, 0.13);
+
+  /* Connector brand hues, for source nodes that stand for a real product.
+     Theme-invariant for the same reason the node-role hues above are: a
+     vendor's identity is not the app's chrome.
+
+     GitHub is the exception — its brand is monochrome (#181717), which
+     disappears against a dark canvas, so it takes a legible neutral drawn
+     from GitHub's own muted foreground instead of the literal mark color.
+     PostHog's cap is their brand blue rather than their orange: their orange
+     sits a few degrees from Grafana's, and the cap is the part that still
+     carries once zoom has shrunk the logomark away. */
+  --hv-brand-github: #8b949e;
+  --hv-brand-github-tint: rgba(139, 148, 158, 0.15);
+  --hv-brand-grafana: #f46800;
+  --hv-brand-grafana-tint: rgba(244, 104, 0, 0.15);
+  --hv-brand-posthog: #1d4aff;
+  --hv-brand-posthog-tint: rgba(29, 74, 255, 0.15);
+  --hv-brand-gitea: #609926;
+  --hv-brand-gitea-tint: rgba(96, 153, 38, 0.15);
+
+  /* Flows canvas surface chrome — a dark recess relative to --hv-app. */
+  --hv-canvas: #0e1014;
+  --hv-canvas-dot: #1f2530;
+  --hv-canvas-toolbar: #12161d;
+  --hv-node-port: #4b5666;
+}
+
+[data-theme="light"] {
+  --hv-app: #ffffff;
+  --hv-raised: #eceff4;
+  --hv-sidebar: #f6f8fa;
+  --hv-pane: #ffffff;
+  --hv-list: #ffffff;
+  --hv-chip: #e4e8ef;
+  --hv-hover: #d6dce6;
+  --hv-action-card: #eceff4;
+  --hv-action-hover: #e4e8ef;
+  --hv-action-hover-border: #b0b9c6;
+  --hv-border: #e3e8ef;
+  --hv-card: #d6dce6;
+  --hv-strong: #b0b9c6;
+  --hv-row: #eceff4;
+  --hv-row-hover: #f5f7fa;
+  --hv-text: #121722;
+  --hv-text-2: #4b5568;
+  --hv-text-3: #6a7688;
+  --hv-text-4: #99a3b2;
+  --hv-accent: #f5a524;
+  --hv-accent-contrast: #14100a;
+  --hv-accent-tint: #fdecd9;
+  --hv-selection: rgba(245, 165, 36, 0.1);
+  --hv-backdrop: rgba(18, 23, 34, 0.25);
+  --hv-scrim-strong: rgba(18, 23, 34, 0.45);
+  --hv-code-key: #1657b8;
+  --hv-code-string: #2f6b2a;
+  --hv-code-comment: #99a3b2;
+
+  /* A darker ANSI set — the stock palette is built for dark backgrounds and
+     washes out on white. */
+  --hv-term-foreground: #121722;
+  --hv-term-black: #121722;
+  --hv-term-red: #b02436;
+  --hv-term-green: #2f6b2a;
+  --hv-term-yellow: #8a5c08;
+  --hv-term-blue: #1657b8;
+  --hv-term-magenta: #7b2aa8;
+  --hv-term-cyan: #0e6a80;
+  --hv-term-white: #cbd2dc;
+  --hv-term-bright-black: #4b5568;
+  --hv-term-bright-red: #cf3348;
+  --hv-term-bright-green: #3f8a36;
+  --hv-term-bright-yellow: #a8740f;
+  --hv-term-bright-blue: #2168d8;
+  --hv-term-bright-magenta: #9438c9;
+  --hv-term-bright-cyan: #12829c;
+  --hv-term-bright-white: #eceff4;
+
+  /* Flows canvas surface chrome — a light recess relative to --hv-app. */
+  --hv-canvas: #f4f6f8;
+  --hv-canvas-dot: #d9dfe8;
+  --hv-canvas-toolbar: #fafcfc;
+  --hv-node-port: #a4acb8;
+}
+
+[data-theme="midnight"] {
+  --hv-app: #0b0d17;
+  --hv-raised: #141829;
+  --hv-sidebar: #171c30;
+  --hv-pane: #0f1320;
+  --hv-list: #0b0d17;
+  --hv-chip: #1e2440;
+  --hv-hover: #2a3252;
+  --hv-action-card: #171c30;
+  --hv-action-hover: #1e2440;
+  --hv-action-hover-border: #2a3252;
+  --hv-border: #2a3252;
+  --hv-card: #2a3252;
+  --hv-strong: #3a4568;
+  --hv-row: #1e2440;
+  --hv-row-hover: #1b2138;
+  --hv-text: #eaf0ff;
+  --hv-text-2: #8791b8;
+  --hv-text-3: #6b76a0;
+  --hv-text-4: #4a5480;
+  --hv-accent: #f59e0b;
+  --hv-accent-contrast: #0b0d17;
+  --hv-accent-tint: #3a2f18;
+  --hv-selection: rgba(245, 158, 11, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-scrim-strong: rgba(0, 0, 0, 0.7);
+  --hv-code-key: #7dcfff;
+  --hv-code-string: #9ece6a;
+  --hv-code-comment: #4a5480;
+
+  /* The one terminal colour midnight sets: it inherits the rest of the ANSI
+     palette from :root, but that foreground is a neutral grey and this theme
+     is the bluest of the set. */
+  --hv-term-foreground: #c3c9db;
+
+  /* Flows canvas surface chrome — a dark recess relative to --hv-app. */
+  --hv-canvas: #08090f;
+  --hv-canvas-dot: #1c2238;
+  --hv-canvas-toolbar: #0d1020;
+  --hv-node-port: #46507a;
+}
+
+[data-theme="gruvbox"] {
+  --hv-app: #1d2021;
+  --hv-raised: #32302f;
+  --hv-sidebar: #3c3836;
+  --hv-pane: #282828;
+  --hv-list: #1d2021;
+  --hv-chip: #3c3836;
+  --hv-hover: #504945;
+  --hv-action-card: #3c3836;
+  --hv-action-hover: #3c3836;
+  --hv-action-hover-border: #504945;
+  --hv-border: #504945;
+  --hv-card: #665c54;
+  --hv-strong: #7c6f64;
+  --hv-row: #504945;
+  --hv-row-hover: #3a3735;
+  --hv-text: #fbf1c7;
+  --hv-text-2: #bdae93;
+  --hv-text-3: #a89984;
+  --hv-text-4: #928374;
+  --hv-accent: #f59e0b;
+  --hv-accent-contrast: #1d2021;
+  --hv-accent-tint: #3a2f18;
+  --hv-selection: rgba(245, 158, 11, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-scrim-strong: rgba(0, 0, 0, 0.7);
+  --hv-code-key: #83a598;
+  --hv-code-string: #b8bb26;
+  --hv-code-comment: #928374;
+
+  /* The canonical gruvbox-dark terminal palette. fg1, not the fg0 --hv-text
+     carries: fg0 is gruvbox's high-contrast variant, fg1 its body text. */
+  --hv-term-foreground: #ebdbb2;
+  --hv-term-black: #282828;
+  --hv-term-red: #cc241d;
+  --hv-term-green: #98971a;
+  --hv-term-yellow: #d79921;
+  --hv-term-blue: #458588;
+  --hv-term-magenta: #b16286;
+  --hv-term-cyan: #689d6a;
+  --hv-term-white: #a89984;
+  --hv-term-bright-black: #928374;
+  --hv-term-bright-red: #fb4934;
+  --hv-term-bright-green: #b8bb26;
+  --hv-term-bright-yellow: #fabd2f;
+  --hv-term-bright-blue: #83a598;
+  --hv-term-bright-magenta: #d3869b;
+  --hv-term-bright-cyan: #8ec07c;
+  --hv-term-bright-white: #ebdbb2;
+
+  /* Flows canvas surface chrome — a dark recess relative to --hv-app. */
+  --hv-canvas: #181a1b;
+  --hv-canvas-dot: #32302f;
+  --hv-canvas-toolbar: #212425;
+  --hv-node-port: #7c6f64;
+}
+
+/* The five community theme families below (dark + light each) are the Theme
+   Redesign palettes. Each block carries the full per-theme token set,
+   including its own ANSI colors; selection/backdrop/scrim and the
+   flows-canvas chrome are derived from each palette following the
+   conventions of the blocks above. */
+
+[data-theme="slate"] {
+  --hv-app: #0e1116;
+  --hv-raised: #1a1f2a;
+  --hv-sidebar: #171b24;
+  --hv-pane: #131720;
+  --hv-list: #0e1116;
+  --hv-chip: #232936;
+  --hv-hover: #2c3444;
+  --hv-action-card: #1a1f2a;
+  --hv-action-hover: #232936;
+  --hv-action-hover-border: #333c4d;
+  --hv-border: #262d3a;
+  --hv-card: #333c4d;
+  --hv-strong: #3f4a5e;
+  --hv-row: #1e242f;
+  --hv-row-hover: #232a36;
+  --hv-text: #e8ecf4;
+  --hv-text-2: #a2adc0;
+  --hv-text-3: #76839a;
+  --hv-text-4: #4f5b70;
+  --hv-accent: #7aa7f8;
+  --hv-accent-contrast: #0e1116;
+  --hv-accent-tint: rgba(122, 167, 247, 0.12);
+  --hv-selection: rgba(122, 167, 248, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-scrim-strong: rgba(0, 0, 0, 0.7);
+  --hv-code-key: #8ce2fb;
+  --hv-code-string: #b4e97e;
+  --hv-code-comment: #565f89;
+
+  --hv-term-foreground: #c2c9d8;
+  --hv-term-black: #1b2029;
+  --hv-term-red: #f2778f;
+  --hv-term-green: #9fd96a;
+  --hv-term-yellow: #ecb44f;
+  --hv-term-blue: #7aa7f8;
+  --hv-term-magenta: #c39bf9;
+  --hv-term-cyan: #6fd3f2;
+  --hv-term-white: #b8c2d9;
+  --hv-term-bright-black: #565f89;
+  --hv-term-bright-red: #ff8fa3;
+  --hv-term-bright-green: #b4e97e;
+  --hv-term-bright-yellow: #f7c96b;
+  --hv-term-bright-blue: #94bcff;
+  --hv-term-bright-magenta: #d3b2ff;
+  --hv-term-bright-cyan: #8ce2fb;
+  --hv-term-bright-white: #e6ecf7;
+
+  --hv-canvas: #0c0e13;
+  --hv-canvas-dot: #1e2430;
+  --hv-canvas-toolbar: #10141b;
+  --hv-node-port: #475267;
+}
+
+[data-theme="slate-light"] {
+  --hv-app: #ffffff;
+  --hv-raised: #e7ebf1;
+  --hv-sidebar: #eef1f5;
+  --hv-pane: #f7f8fa;
+  --hv-list: #ffffff;
+  --hv-chip: #e3e8ef;
+  --hv-hover: #d7dde7;
+  --hv-action-card: #f7f8fa;
+  --hv-action-hover: #eef1f5;
+  --hv-action-hover-border: #cbd3de;
+  --hv-border: #dde3ea;
+  --hv-card: #cbd3de;
+  --hv-strong: #b3bdcc;
+  --hv-row: #e8ecf2;
+  --hv-row-hover: #f0f3f7;
+  --hv-text: #10151c;
+  --hv-text-2: #4a5567;
+  --hv-text-3: #6b7688;
+  --hv-text-4: #98a2b3;
+  --hv-accent: #1653b8;
+  --hv-accent-contrast: #ffffff;
+  --hv-accent-tint: #e4ecfb;
+  --hv-selection: rgba(22, 83, 184, 0.1);
+  --hv-backdrop: rgba(16, 21, 28, 0.25);
+  --hv-scrim-strong: rgba(16, 21, 28, 0.45);
+  --hv-code-key: #1653b8;
+  --hv-code-string: #2f6b1f;
+  --hv-code-comment: #6b7688;
+
+  --hv-term-foreground: #10151c;
+  --hv-term-black: #1b2029;
+  --hv-term-red: #b3261e;
+  --hv-term-green: #2f6b1f;
+  --hv-term-yellow: #8a5300;
+  --hv-term-blue: #1653b8;
+  --hv-term-magenta: #8b2a9c;
+  --hv-term-cyan: #0f6a80;
+  --hv-term-white: #cbd3de;
+  --hv-term-bright-black: #4a5567;
+  --hv-term-bright-red: #d13a2e;
+  --hv-term-bright-green: #3f8a28;
+  --hv-term-bright-yellow: #a86a00;
+  --hv-term-bright-blue: #2168d8;
+  --hv-term-bright-magenta: #a83ab8;
+  --hv-term-bright-cyan: #14829c;
+  --hv-term-bright-white: #f2f4f7;
+
+  --hv-canvas: #ecf0f4;
+  --hv-canvas-dot: #d9dfe8;
+  --hv-canvas-toolbar: #f2f4f8;
+  --hv-node-port: #a6b0be;
+}
+
+[data-theme="one-dark"] {
+  --hv-app: #1b1f24;
+  --hv-raised: #282c34;
+  --hv-sidebar: #23272e;
+  --hv-pane: #21252b;
+  --hv-list: #1b1f24;
+  --hv-chip: #2f343d;
+  --hv-hover: #3a4048;
+  --hv-action-card: #282c34;
+  --hv-action-hover: #2f343d;
+  --hv-action-hover-border: #3e4451;
+  --hv-border: #2c313a;
+  --hv-card: #3e4451;
+  --hv-strong: #4b5263;
+  --hv-row: #262b33;
+  --hv-row-hover: #22262d;
+  --hv-text: #dfe3ea;
+  --hv-text-2: #abb2bf;
+  --hv-text-3: #7f8798;
+  --hv-text-4: #5c6370;
+  --hv-accent: #61afef;
+  --hv-accent-contrast: #1b1f24;
+  --hv-accent-tint: rgba(97, 175, 239, 0.14);
+  --hv-selection: rgba(97, 175, 239, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-scrim-strong: rgba(0, 0, 0, 0.7);
+  --hv-code-key: #61afef;
+  --hv-code-string: #98c379;
+  --hv-code-comment: #5c6370;
+
+  /* One Dark's own foreground. */
+  --hv-term-foreground: #abb2bf;
+  --hv-term-black: #282c34;
+  --hv-term-red: #e06c75;
+  --hv-term-green: #98c379;
+  --hv-term-yellow: #e5c07b;
+  --hv-term-blue: #61afef;
+  --hv-term-magenta: #c678dd;
+  --hv-term-cyan: #56b6c2;
+  --hv-term-white: #abb2bf;
+  --hv-term-bright-black: #5c6370;
+  --hv-term-bright-red: #ff7a85;
+  --hv-term-bright-green: #a8d98a;
+  --hv-term-bright-yellow: #f0cd8c;
+  --hv-term-bright-blue: #74bcff;
+  --hv-term-bright-magenta: #d68eea;
+  --hv-term-bright-cyan: #66c7d3;
+  --hv-term-bright-white: #eef1f7;
+
+  --hv-canvas: #171a1f;
+  --hv-canvas-dot: #2c3038;
+  --hv-canvas-toolbar: #1e2228;
+  --hv-node-port: #545a6a;
+}
+
+[data-theme="one-light"] {
+  --hv-app: #ffffff;
+  --hv-raised: #eaecef;
+  --hv-sidebar: #f2f3f5;
+  --hv-pane: #fafafa;
+  --hv-list: #ffffff;
+  --hv-chip: #e5e8ec;
+  --hv-hover: #d7dbe0;
+  --hv-action-card: #fafafa;
+  --hv-action-hover: #f2f3f5;
+  --hv-action-hover-border: #cdd2d9;
+  --hv-border: #e1e4e8;
+  --hv-card: #cdd2d9;
+  --hv-strong: #b6bcc4;
+  --hv-row: #eceef1;
+  --hv-row-hover: #f5f6f8;
+  --hv-text: #1f2228;
+  --hv-text-2: #4a4f58;
+  --hv-text-3: #6b7280;
+  --hv-text-4: #9aa1ab;
+  --hv-accent: #4078f2;
+  --hv-accent-contrast: #ffffff;
+  --hv-accent-tint: #e5edfe;
+  --hv-selection: rgba(64, 120, 242, 0.1);
+  --hv-backdrop: rgba(31, 34, 40, 0.25);
+  --hv-scrim-strong: rgba(31, 34, 40, 0.45);
+  --hv-code-key: #4078f2;
+  --hv-code-string: #50a14f;
+  --hv-code-comment: #8b949e;
+
+  --hv-term-foreground: #1f2228;
+  --hv-term-black: #383a42;
+  --hv-term-red: #e45649;
+  --hv-term-green: #50a14f;
+  --hv-term-yellow: #c18401;
+  --hv-term-blue: #4078f2;
+  --hv-term-magenta: #a626a4;
+  --hv-term-cyan: #0184bc;
+  --hv-term-white: #cdd2d9;
+  --hv-term-bright-black: #4a4f58;
+  --hv-term-bright-red: #d0382c;
+  --hv-term-bright-green: #3f8b3e;
+  --hv-term-bright-yellow: #a87400;
+  --hv-term-bright-blue: #2f68e0;
+  --hv-term-bright-magenta: #91218f;
+  --hv-term-bright-cyan: #0172a3;
+  --hv-term-bright-white: #f2f3f5;
+
+  --hv-canvas: #f0f1f4;
+  --hv-canvas-dot: #dadee2;
+  --hv-canvas-toolbar: #f6f6f8;
+  --hv-node-port: #a9afb6;
+}
+
+[data-theme="tokyo-night"] {
+  --hv-app: #1a1b26;
+  --hv-raised: #24283b;
+  --hv-sidebar: #1f2130;
+  --hv-pane: #1f2130;
+  --hv-list: #1a1b26;
+  --hv-chip: #2a2e42;
+  --hv-hover: #2f334d;
+  --hv-action-card: #24283b;
+  --hv-action-hover: #2a2e42;
+  --hv-action-hover-border: #414868;
+  --hv-border: #2b2e45;
+  --hv-card: #2f334d;
+  --hv-strong: #414868;
+  --hv-row: #222436;
+  --hv-row-hover: #1e2030;
+  --hv-text: #c0caf5;
+  --hv-text-2: #a9b1d6;
+  --hv-text-3: #787c99;
+  --hv-text-4: #565f89;
+  --hv-accent: #7aa2f7;
+  --hv-accent-contrast: #1a1b26;
+  --hv-accent-tint: rgba(122, 162, 247, 0.13);
+  --hv-selection: rgba(122, 162, 247, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-scrim-strong: rgba(0, 0, 0, 0.7);
+  --hv-code-key: #7aa2f7;
+  --hv-code-string: #9ece6a;
+  --hv-code-comment: #565f89;
+
+  --hv-term-foreground: #a9b1d6;
+  --hv-term-black: #15161e;
+  --hv-term-red: #f7768e;
+  --hv-term-green: #9ece6a;
+  --hv-term-yellow: #e0af68;
+  --hv-term-blue: #7aa2f7;
+  --hv-term-magenta: #bb9af7;
+  --hv-term-cyan: #7dcfff;
+  --hv-term-white: #a9b1d6;
+  --hv-term-bright-black: #414868;
+  --hv-term-bright-red: #ff7a93;
+  --hv-term-bright-green: #b9f27c;
+  --hv-term-bright-yellow: #ff9e64;
+  --hv-term-bright-blue: #7da6ff;
+  --hv-term-bright-magenta: #bb9af7;
+  --hv-term-bright-cyan: #0db9d7;
+  --hv-term-bright-white: #c0caf5;
+
+  --hv-canvas: #161720;
+  --hv-canvas-dot: #272b3e;
+  --hv-canvas-toolbar: #1c1e2b;
+  --hv-node-port: #4c5478;
+}
+
+[data-theme="tokyo-night-day"] {
+  --hv-app: #ffffff;
+  --hv-raised: #eff0f5;
+  --hv-sidebar: #f6f7fa;
+  --hv-pane: #ffffff;
+  --hv-list: #ffffff;
+  --hv-chip: #e4e6ee;
+  --hv-hover: #d7dae6;
+  --hv-action-card: #eff0f5;
+  --hv-action-hover: #e4e6ee;
+  --hv-action-hover-border: #b3b6c4;
+  --hv-border: #dcdee6;
+  --hv-card: #d7dae6;
+  --hv-strong: #b3b6c4;
+  --hv-row: #e9eaf0;
+  --hv-row-hover: #f4f5f8;
+  --hv-text: #1b1f33;
+  --hv-text-2: #4c5279;
+  --hv-text-3: #6c7196;
+  --hv-text-4: #9aa0bd;
+  --hv-accent: #2e7de9;
+  --hv-accent-contrast: #ffffff;
+  --hv-accent-tint: #e2ecfd;
+  --hv-selection: rgba(46, 125, 233, 0.1);
+  --hv-backdrop: rgba(27, 31, 51, 0.25);
+  --hv-scrim-strong: rgba(27, 31, 51, 0.45);
+  --hv-code-key: #2e7de9;
+  --hv-code-string: #587539;
+  --hv-code-comment: #9aa0bd;
+
+  --hv-term-foreground: #1b1f33;
+  --hv-term-black: #b4b5b9;
+  --hv-term-red: #f52a65;
+  --hv-term-green: #587539;
+  --hv-term-yellow: #8c6c3e;
+  --hv-term-blue: #2e7de9;
+  --hv-term-magenta: #9854f1;
+  --hv-term-cyan: #007197;
+  --hv-term-white: #6172b0;
+  --hv-term-bright-black: #a1a6c5;
+  --hv-term-bright-red: #c31c4b;
+  --hv-term-bright-green: #476128;
+  --hv-term-bright-yellow: #755a2e;
+  --hv-term-bright-blue: #1c5fc4;
+  --hv-term-bright-magenta: #7f3fd6;
+  --hv-term-bright-cyan: #005f80;
+  --hv-term-bright-white: #3760bf;
+
+  --hv-canvas: #f4f5f9;
+  --hv-canvas-dot: #dbdde8;
+  --hv-canvas-toolbar: #fafbfc;
+  --hv-node-port: #a6a9b6;
+}
+
+[data-theme="catppuccin-mocha"] {
+  --hv-app: #181825;
+  --hv-raised: #232336;
+  --hv-sidebar: #1e1e2e;
+  --hv-pane: #1e1e2e;
+  --hv-list: #181825;
+  --hv-chip: #313244;
+  --hv-hover: #45475a;
+  --hv-action-card: #232336;
+  --hv-action-hover: #313244;
+  --hv-action-hover-border: #585b70;
+  --hv-border: #2b2b3f;
+  --hv-card: #45475a;
+  --hv-strong: #585b70;
+  --hv-row: #232336;
+  --hv-row-hover: #1c1c2b;
+  --hv-text: #cdd6f4;
+  --hv-text-2: #bac2de;
+  --hv-text-3: #7f849c;
+  --hv-text-4: #6c7086;
+  --hv-accent: #89b4fa;
+  --hv-accent-contrast: #181825;
+  --hv-accent-tint: rgba(137, 180, 250, 0.13);
+  --hv-selection: rgba(137, 180, 250, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-scrim-strong: rgba(0, 0, 0, 0.7);
+  --hv-code-key: #89b4fa;
+  --hv-code-string: #a6e3a1;
+  --hv-code-comment: #6c7086;
+
+  --hv-term-foreground: #bac2de;
+  --hv-term-black: #45475a;
+  --hv-term-red: #f38ba8;
+  --hv-term-green: #a6e3a1;
+  --hv-term-yellow: #f9e2af;
+  --hv-term-blue: #89b4fa;
+  --hv-term-magenta: #cba6f7;
+  --hv-term-cyan: #94e2d5;
+  --hv-term-white: #bac2de;
+  --hv-term-bright-black: #585b70;
+  --hv-term-bright-red: #f5a3bc;
+  --hv-term-bright-green: #b4e8af;
+  --hv-term-bright-yellow: #fbe9c2;
+  --hv-term-bright-blue: #9dc1fb;
+  --hv-term-bright-magenta: #d5b8f9;
+  --hv-term-bright-cyan: #a5e9de;
+  --hv-term-bright-white: #cdd6f4;
+
+  --hv-canvas: #14141f;
+  --hv-canvas-dot: #2a2a3d;
+  --hv-canvas-toolbar: #1b1b2a;
+  --hv-node-port: #62667b;
+}
+
+[data-theme="catppuccin-latte"] {
+  --hv-app: #ffffff;
+  --hv-raised: #e6e9ef;
+  --hv-sidebar: #f4f5f8;
+  --hv-pane: #ffffff;
+  --hv-list: #ffffff;
+  --hv-chip: #e0e3ea;
+  --hv-hover: #ccd0da;
+  --hv-action-card: #e6e9ef;
+  --hv-action-hover: #e0e3ea;
+  --hv-action-hover-border: #acb0be;
+  --hv-border: #dfe2e9;
+  --hv-card: #ccd0da;
+  --hv-strong: #acb0be;
+  --hv-row: #e8ebf1;
+  --hv-row-hover: #f4f5f8;
+  --hv-text: #3c3f52;
+  --hv-text-2: #5c5f77;
+  --hv-text-3: #6c6f85;
+  --hv-text-4: #9ca0b0;
+  --hv-accent: #1e66f5;
+  --hv-accent-contrast: #ffffff;
+  --hv-accent-tint: #e4ecfe;
+  --hv-selection: rgba(30, 102, 245, 0.1);
+  --hv-backdrop: rgba(60, 63, 82, 0.25);
+  --hv-scrim-strong: rgba(60, 63, 82, 0.45);
+  --hv-code-key: #1e66f5;
+  --hv-code-string: #40a02b;
+  --hv-code-comment: #9ca0b0;
+
+  --hv-term-foreground: #3c3f52;
+  --hv-term-black: #5c5f77;
+  --hv-term-red: #d20f39;
+  --hv-term-green: #40a02b;
+  --hv-term-yellow: #df8e1d;
+  --hv-term-blue: #1e66f5;
+  --hv-term-magenta: #8839ef;
+  --hv-term-cyan: #179299;
+  --hv-term-white: #acb0be;
+  --hv-term-bright-black: #6c6f85;
+  --hv-term-bright-red: #b00c30;
+  --hv-term-bright-green: #347f22;
+  --hv-term-bright-yellow: #a06a12;
+  --hv-term-bright-blue: #1552c8;
+  --hv-term-bright-magenta: #7124d0;
+  --hv-term-bright-cyan: #127a80;
+  --hv-term-bright-white: #dce0e8;
+
+  --hv-canvas: #f0f2f6;
+  --hv-canvas-dot: #d0d4dd;
+  --hv-canvas-toolbar: #fafafc;
+  --hv-node-port: #a0a4b1;
+}
+
+[data-theme="nord"] {
+  --hv-app: #2b303b;
+  --hv-raised: #3b4252;
+  --hv-sidebar: #2e3440;
+  --hv-pane: #2e3440;
+  --hv-list: #2b303b;
+  --hv-chip: #434c5e;
+  --hv-hover: #4c566a;
+  --hv-action-card: #3b4252;
+  --hv-action-hover: #434c5e;
+  --hv-action-hover-border: #4c566a;
+  --hv-border: #39414f;
+  --hv-card: #4c566a;
+  --hv-strong: #4c566a;
+  --hv-row: #333a47;
+  --hv-row-hover: #2c313c;
+  --hv-text: #eceff4;
+  --hv-text-2: #d8dee9;
+  --hv-text-3: #97a1b5;
+  --hv-text-4: #616e88;
+  --hv-accent: #88c0d0;
+  --hv-accent-contrast: #2b303b;
+  --hv-accent-tint: rgba(136, 192, 208, 0.13);
+  --hv-selection: rgba(136, 192, 208, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-scrim-strong: rgba(0, 0, 0, 0.7);
+  --hv-code-key: #81a1c1;
+  --hv-code-string: #a3be8c;
+  --hv-code-comment: #616e88;
+
+  /* Nord4, Nord's text colour — --hv-text carries Nord6, the brightest snow
+     shade, which is a surface colour upstream rather than a text one. */
+  --hv-term-foreground: #d8dee9;
+  --hv-term-black: #3b4252;
+  --hv-term-red: #bf616a;
+  --hv-term-green: #a3be8c;
+  --hv-term-yellow: #ebcb8b;
+  --hv-term-blue: #81a1c1;
+  --hv-term-magenta: #b48ead;
+  --hv-term-cyan: #88c0d0;
+  --hv-term-white: #e5e9f0;
+  --hv-term-bright-black: #4c566a;
+  --hv-term-bright-red: #d08770;
+  --hv-term-bright-green: #b5cc9a;
+  --hv-term-bright-yellow: #f0d9a5;
+  --hv-term-bright-blue: #9ab5cf;
+  --hv-term-bright-magenta: #c4a2bf;
+  --hv-term-bright-cyan: #8fbcbb;
+  --hv-term-bright-white: #eceff4;
+
+  --hv-canvas: #252932;
+  --hv-canvas-dot: #3f4758;
+  --hv-canvas-toolbar: #2c323e;
+  --hv-node-port: #566279;
+}
+
+[data-theme="nord-light"] {
+  --hv-app: #ffffff;
+  --hv-raised: #eceff4;
+  --hv-sidebar: #f5f7f9;
+  --hv-pane: #ffffff;
+  --hv-list: #ffffff;
+  --hv-chip: #e3e8ee;
+  --hv-hover: #d8dee9;
+  --hv-action-card: #eceff4;
+  --hv-action-hover: #e3e8ee;
+  --hv-action-hover-border: #b6bfcc;
+  --hv-border: #e0e5ec;
+  --hv-card: #d8dee9;
+  --hv-strong: #b6bfcc;
+  --hv-row: #eceff4;
+  --hv-row-hover: #f6f8fa;
+  --hv-text: #2e3440;
+  --hv-text-2: #4c566a;
+  --hv-text-3: #6b7688;
+  --hv-text-4: #9aa4b2;
+  --hv-accent: #4c6f96;
+  --hv-accent-contrast: #ffffff;
+  --hv-accent-tint: #e6edf4;
+  --hv-selection: rgba(76, 111, 150, 0.1);
+  --hv-backdrop: rgba(46, 52, 64, 0.25);
+  --hv-scrim-strong: rgba(46, 52, 64, 0.45);
+  --hv-code-key: #3f6d95;
+  --hv-code-string: #4e6b34;
+  --hv-code-comment: #9aa4b2;
+
+  --hv-term-foreground: #2e3440;
+  --hv-term-black: #3b4252;
+  --hv-term-red: #a33a44;
+  --hv-term-green: #4e6b34;
+  --hv-term-yellow: #8a6b1f;
+  --hv-term-blue: #3f6d95;
+  --hv-term-magenta: #7b4f78;
+  --hv-term-cyan: #2f6f74;
+  --hv-term-white: #b6bfcc;
+  --hv-term-bright-black: #4c566a;
+  --hv-term-bright-red: #bf4b56;
+  --hv-term-bright-green: #5f8040;
+  --hv-term-bright-yellow: #a37f2a;
+  --hv-term-bright-blue: #4c7fab;
+  --hv-term-bright-magenta: #8f5f8c;
+  --hv-term-bright-cyan: #3a8388;
+  --hv-term-bright-white: #eceff4;
+
+  --hv-canvas: #f3f5f8;
+  --hv-canvas-dot: #dbe1eb;
+  --hv-canvas-toolbar: #fafbfc;
+  --hv-node-port: #a9b2be;
+}
+
+@keyframes hivePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* The "scroll to bottom" pill both terminal panes float over their grid — the
+   Code view's and the chat one's — so it is defined once here rather than in
+   either component's scoped styles. It pops rather than fades in: it appears
+   over live output, and motion is what separates it from the text moving
+   behind it. Overshooting the scale on the way in is the whole effect; leaving
+   is a plain shrink, because an affordance on its way out should not ask for
+   attention. */
+.tail-pill-enter-active {
+  transition: opacity 0.12s ease, transform 0.18s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+.tail-pill-leave-active {
+  transition: opacity 0.1s ease, transform 0.1s ease;
+}
+
+.tail-pill-enter-from,
+.tail-pill-leave-to {
+  opacity: 0;
+  transform: scale(0.85) translateY(4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tail-pill-enter-active,
+  .tail-pill-leave-active {
+    transition: none;
+  }
+}
+
+.hive-scroll::-webkit-scrollbar {
+  width: 9px;
+}
+
+/* These are vertical scroll regions; a resize handle straddling the panel edge
+   (positioned a few px outside) otherwise triggers a stray horizontal
+   scrollbar. Suppress it — horizontal content here never needs to scroll. */
+.hive-scroll::-webkit-scrollbar:horizontal {
+  display: none;
+}
+
+.hive-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-strong);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: content-box;
+}
+
+.hive-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body {
+  margin: 0;
+  background: var(--color-app);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  /* JetBrains Mono's coding ligatures are `calt`, which `none` covers. Set here
+     and inherited rather than on the mono selectors, because every surface that
+     reaches for var(--font-mono) would otherwise have to remember. Panes are
+     unaffected either way — an atlas renderer rasterises one cell at a time, so
+     no ligature can form — but xterm's last-resort DOM renderer emits runs. */
+  font-variant-ligatures: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+[data-file-drop-target].file-drop-target-active {
+  outline: 2px solid var(--color-text-3);
+  outline-offset: -2px;
+}

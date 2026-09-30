@@ -1,0 +1,33 @@
+# solo tmux layout for Hive Desktop development. `solo up` from anywhere in the
+# worktree brings up the whole dev session; `solo down` tears it back down.
+#
+# This lives in the repo rather than ~/.config/solo/config.yaml for two reasons:
+# it is versioned with the tasks it invokes, and a global entry would have to be
+# keyed on a worktree basename (hive-desktop-j28hih) that differs per worktree.
+#
+# devserver is listed first so it starts linking sooner, but the tabs are not
+# ordered: nothing gates the desktop tab on the proxy being up. A proxy that is
+# not answering yet surfaces as transport errors in the desktop logs, which is
+# the same place any other GitHub failure shows up.
+tabs:
+  # The shared GitHub proxy: response cache + event simulator dashboard on
+  # http://127.0.0.1:7777. It is a singleton across every worktree, so if one is
+  # already running from another session this stands by and takes over if that
+  # one stops, instead of failing on the port.
+  - title: devserver
+    cmd: mise run desktop:devserver
+
+  # The app, the Vite server and the file watcher. `solo down` stops this by
+  # sending the window an interrupt, but the teardown does not depend on that
+  # landing: the task runs the dev runner under `devtools run`, which also
+  # watches for the terminal going away and stops the session either way
+  # (ADR shutdown-is-signalled-and-bounded). Killing this window is therefore safe — it cannot leave the app
+  # running with nothing supervising it, which is what used to happen.
+  - title: desktop
+    cmd: mise run desktop:dev
+
+# Long enough to cover the supervisor's own worst case — the app's shutdown
+# grace plus the runner's — so `solo down` reports a window as stopped when it
+# has actually finished, rather than force-killing a teardown in progress. A
+# normal stop takes about a second.
+timeout: 30

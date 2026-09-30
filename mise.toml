@@ -1,16 +1,26 @@
+# One root config for the whole repository. The hive CLI, the root program,
+# holds the bare task names (`dev`, `build`, `test`, `check`). The other
+# projects' tasks are included from task files beside them and carry a prefix:
+# `desktop:*` from cmd/desktop/tasks.toml and `docs:*` from docs/tasks.toml.
+
 [task_config]
-# The site's tasks (docs:*) live beside the site.
-includes = ["docs/tasks.toml"]
+includes = ["cmd/desktop/tasks.toml", "docs/tasks.toml"]
 
 [tools]
 # Go Tools
 "go" = "1.27.1"
 "go:golang.org/x/tools/cmd/deadcode" = "0.49.0"
+"go:golang.org/x/vuln/cmd/govulncheck" = "v1.6.0"
 "go:github.com/abice/go-enum" = "v0.9.4"
 "github:hay-kot/gobusgen" = "v0.3.0"
 "github:sqlc-dev/sqlc" = "v1.31.1"
 golangci-lint = "2.13.2"
 "goreleaser" = "2.17.1"
+lefthook = "2.1.14"
+
+# Hive Desktop (cmd/desktop): the Wails CLI and Node for the frontend.
+"go:github.com/wailsapp/wails/v3/cmd/wails3" = "v3.0.0-beta.21"
+node = "22.23.2"
 
 # Site Tools (docs/). Zensical itself is pinned in docs/pyproject.toml.
 python = "3.13.13"
@@ -23,30 +33,61 @@ actionlint = "1.7.12"
 HIVE_LOG_LEVEL = "debug"
 HIVE_LOG_FILE = "./dev.log"
 
+# A tool install wires the git hooks and prepares this worktree's isolated
+# desktop instance. The enter hook only fills a missing launch.env.
+[hooks]
+postinstall = { task = "setup" }
+enter = "test -f '{{config_root}}/launch.env' || (cd '{{config_root}}' && go run ./cmd/desktop/devtools prepare)"
+
+[tasks.setup]
+description = "Install git hooks and prepare this worktree's isolated desktop launch environment"
+depends = ["desktop:dev:prepare"]
+run = "./scripts/hooks/install.sh"
+
+# ── Code generation ──────────────────────────────────────────────────────────
+
 [tasks."generate:enums"]
 description = "Generate enum methods using go-enum"
-sources = ["internal/core/action/type.go", "internal/core/hc/item.go", "internal/core/notify/store.go", "internal/core/todo/todo.go", "internal/sources/backend.go"]
-outputs = ["internal/core/action/type_enum.go", "internal/core/hc/item_enum.go", "internal/core/notify/store_enum.go", "internal/core/todo/todo_enum.go", "internal/sources/backend_enum.go"]
-run = "go-enum --nocase --names --marshal -f internal/core/action/type.go -f internal/core/hc/item.go -f internal/core/notify/store.go -f internal/core/todo/todo.go -f internal/sources/backend.go"
+# The file list appears twice on purpose. `sources` must be a literal array:
+# templating it from a [vars] entry renders to a path that matches nothing, and
+# mise then silently reruns the task every time instead of erroring.
+sources = [
+  "internal/core/action/type.go",
+  "internal/core/hc/item.go",
+  "internal/core/notify/store.go",
+  "internal/core/todo/todo.go",
+  "internal/sources/backend.go",
+  "cmd/desktop/internal/app/activity/activity.go",
+  "cmd/desktop/internal/app/jobs/jobs.go",
+  "cmd/desktop/internal/app/data/models/classify.go",
+  "cmd/desktop/internal/app/flow/flow.go",
+  "cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go",
+  "cmd/desktop/internal/app/agentws/workspace.go",
+  "cmd/desktop/internal/app/schedule/spec.go",
+]
+outputs = { auto = true }
+run = "go-enum --nocase --names --marshal -f internal/core/action/type.go -f internal/core/hc/item.go -f internal/core/notify/store.go -f internal/core/todo/todo.go -f internal/sources/backend.go -f cmd/desktop/internal/app/activity/activity.go -f cmd/desktop/internal/app/jobs/jobs.go -f cmd/desktop/internal/app/data/models/classify.go -f cmd/desktop/internal/app/flow/flow.go -f cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go -f cmd/desktop/internal/app/agentws/workspace.go -f cmd/desktop/internal/app/schedule/spec.go"
+
+[tasks."generate:sqlc"]
+description = "Generate both store layers (hive.db and the desktop pipeline) from sqlc.yaml"
+sources = [
+  "internal/data/db/queries/*.sql",
+  "internal/data/db/migrations/*.up.sql",
+  "cmd/desktop/internal/app/data/queries/queries/*.sql",
+  "cmd/desktop/internal/app/data/queries/migrations/*.up.sql",
+  "sqlc.yaml",
+]
+outputs = { auto = true }
+run = "sqlc generate"
 
 [tasks.generate]
 description = "Run all code generators"
-depends = ["generate:enums"]
-sources = [
-  "internal/core/eventbus/events.go",
-  "internal/data/db/queries/queries.sql",
-  "internal/data/db/queries/queries_hc.sql",
-  "internal/data/db/migrations/*.up.sql",
-  "sqlc.yaml",
-]
-outputs = [
-  "internal/core/eventbus/eventbus.gen.go",
-  "internal/data/db/db.go",
-  "internal/data/db/models.go",
-  "internal/data/db/queries.sql.go",
-  "internal/data/db/queries_hc.sql.go",
-]
-run = ["go generate ./...", "sqlc generate"]
+depends = ["generate:enums", "generate:sqlc"]
+sources = ["internal/core/eventbus/events.go"]
+outputs = ["internal/core/eventbus/eventbus.gen.go"]
+run = "go generate ./..."
+
+# ── The hive CLI ─────────────────────────────────────────────────────────────
 
 [tasks.start]
 alias = "default"
@@ -61,9 +102,41 @@ env = { HIVE_LOG_LEVEL = "debug", HIVE_LOG_FILE = "./dev.log", HIVE_CONFIG = "./
 run = "go run ./cmd/hive"
 
 [tasks.build]
-description = "Build with goreleaser"
+description = "Build the hive CLI with goreleaser"
 depends = ["generate"]
 run = "goreleaser build --snapshot --clean --config cmd/hive/.goreleaser.yml"
+
+[tasks.validate]
+description = "Run doctor with dev config"
+env = { HIVE_CONFIG = "./cmd/hive/dev/config.dev.yaml" }
+run = "go run ./cmd/hive doctor"
+
+[tasks."validate:invalid"]
+description = "Run doctor with intentionally invalid config"
+env = { HIVE_CONFIG = "./cmd/hive/dev/config.invalid.yaml" }
+run = "go run ./cmd/hive doctor || true"
+
+[tasks.integration]
+description = "Run the CLI's Docker-based integration tests"
+depends = ["build"]
+run = "docker build -f cmd/hive/Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
+
+[tasks."build:container"]
+description = "Build only the linux binary for the host arch (used by container images)"
+depends = ["generate"]
+run = "GOOS=linux goreleaser build --snapshot --clean --single-target --config cmd/hive/.goreleaser.yml"
+
+[tasks."container"]
+description = "Build Docker image and run ephemeral container"
+depends = ["build:container"]
+run = "docker run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q -f cmd/hive/Dockerfile .)"
+
+[tasks."container:rootless"]
+description = "Build image and run ephemeral container with rootless podman"
+depends = ["build:container"]
+run = "podman run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(podman build -q -f cmd/hive/Dockerfile .)"
+
+# ── Quality gates ────────────────────────────────────────────────────────────
 
 [tasks.test]
 description = "Run all go tests"
@@ -86,64 +159,101 @@ run = "golangci-lint run ./..."
 description = "Run golangci-lint fmt"
 run = "golangci-lint fmt ./..."
 
+[tasks."fmt:staged"]
+description = "Run golangci-lint fmt on the given Go files (pre-commit hook target)"
+run = "golangci-lint fmt"
+
 [tasks.tidy]
 description = "Tidy go.mod and go.sum; the counterpart of check:tidy that changes files"
 run = "go mod tidy"
 
 [tasks."check:tidy"]
 description = "Fail when go.mod or go.sum need tidying"
-run = "go mod tidy -diff"
+run = """
+go mod tidy -diff || {
+  echo "go.mod/go.sum are not tidy. Run 'mise run tidy' and commit the result." >&2
+  exit 1
+}
+"""
+
+[tasks."check:generate"]
+description = "Verify generated code (enums, sqlc, gobusgen) matches its sources"
+run = """
+mise run --force generate
+# -N registers files the generators created that the checkout lacks: plain
+# git diff cannot see an untracked file, so a brand-new enum or query output
+# would pass unnoticed. The diff is against the index, not HEAD, so it also
+# answers correctly as a pre-commit hook.
+git add -N internal cmd/desktop/internal
+git diff --exit-code -- '*_enum.go' '*.gen.go' 'internal/data/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' || {
+  echo "Generated files are out of date. Run 'mise run generate' and commit the result." >&2
+  exit 1
+}
+"""
 
 [tasks."check:goreleaser"]
 description = "Validate the goreleaser config"
 run = "goreleaser check --config cmd/hive/.goreleaser.yml"
 
-# A report, not a gate: Hive Desktop calls into the shared internal/ packages
-# from its own module, so a finding here is not proof that the function is
-# dead. It becomes a failing gate once the desktop code is in this repository.
+[tasks."check:adr"]
+description = "Verify ADR ids, metadata, citations, and the generated index"
+run = "go run ./cmd/tools/adr check"
+
+# Not part of `check`: this builds the whole program's SSA and takes ~40s.
 [tasks."check:deadcode"]
-description = "Report functions unreachable from any main or test in this module; ci only, not check"
-run = "deadcode -test ./..."
+description = "Fail on functions unreachable from any main or test entry point"
+run = """
+# -test counts test files as entry points, so a helper only a test calls is
+# reachable, not dead. Not piped straight into grep: deadcode's own failures
+# go to stderr, so a broken analysis would leave an empty report and pass.
+if ! found=$(deadcode -test ./...); then
+  echo "deadcode failed to analyze the program (see the error above)." >&2
+  exit 1
+fi
+# deadcode exits 0 even when it reports findings, so the output is the gate.
+if [ -n "$found" ]; then
+  echo "$found" >&2
+  echo "Unreachable functions found. Delete them, or wire up the caller that should have been calling them." >&2
+  exit 1
+fi
+"""
 
+# Not part of `check`: needs the network for the vulnerability database.
+# Exits 3 only when a vulnerable symbol is actually reachable from this code.
+[tasks."check:vuln"]
+description = "Scan dependencies for known vulnerabilities reachable from this code (network: fetches the vuln database)"
+run = "govulncheck ./..."
+
+# The whole Go gate, in one definition, so lefthook's pre-push and CI can both
+# call `mise run check` instead of restating the sequence. Ordered, not
+# `depends`: check:generate rewrites the .go files that lint and test read.
 [tasks.check]
-description = "The fast gate: tidy check, lint, tests, and the goreleaser config check. Read-only; needs no Python or Docker"
-run = [{ tasks = ["check:tidy", "lint", "test", "check:goreleaser"] }]
+description = "The Go gate: generated code, ADRs, migrations, tidy, lint, tests, goreleaser config. Needs no Python, Node, or Docker"
+run = [
+  { tasks = ["check:generate"] },
+  { tasks = ["check:adr", "desktop:check:migrations", "check:tidy", "lint", "test", "check:goreleaser"] },
+]
 
+# Everything CI runs, in one command. e2e is here and nowhere else: it was
+# dropped from CI for being too slow, so local is the only place it runs.
 [tasks.ci]
-description = "Everything CI runs: check, the site build, the deadcode report, and the Docker integration tests"
-depends = ["check", "docs:build"]
-run = [{ tasks = ["check:deadcode", "integration"] }]
-
-[tasks.validate]
-description = "Run doctor with dev config"
-env = { HIVE_CONFIG = "./cmd/hive/dev/config.dev.yaml" }
-run = "go run ./cmd/hive doctor"
-
-[tasks."validate:invalid"]
-description = "Run doctor with intentionally invalid config"
-env = { HIVE_CONFIG = "./cmd/hive/dev/config.invalid.yaml" }
-run = "go run ./cmd/hive doctor || true"
+description = "Run every gate locally: Go, the desktop bindings and frontend, the site, the CLI integration tests, and the e2e suite CI does not run"
+run = [
+  { tasks = ["check:generate"] },
+  { tasks = ["desktop:check:bindings", "check:adr", "desktop:check:migrations", "check:tidy"] },
+  { tasks = ["lint", "test", "check:deadcode", "check:vuln", "check:goreleaser", "docs:build"] },
+  { tasks = ["desktop:frontend:install"] },
+  { tasks = ["desktop:frontend:build", "desktop:frontend:test"] },
+  { tasks = ["integration"] },
+  { tasks = ["desktop:e2e"] },
+]
 
 [tasks."lint:workflows"]
 description = "Lint GitHub workflows and local actions"
 run = "actionlint"
 
-[tasks.integration]
-description = "Run Docker-based integration tests"
-depends = ["build"]
-run = "docker build -f cmd/hive/Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
+# ── Repository tooling ───────────────────────────────────────────────────────
 
-[tasks."build:container"]
-description = "Build only the linux binary for the host arch (used by container images)"
-depends = ["generate"]
-run = "GOOS=linux goreleaser build --snapshot --clean --single-target --config cmd/hive/.goreleaser.yml"
-
-[tasks."container"]
-description = "Build Docker image and run ephemeral container"
-depends = ["build:container"]
-run = "docker run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q -f cmd/hive/Dockerfile .)"
-
-[tasks."container:rootless"]
-description = "Build image and run ephemeral container with rootless podman"
-depends = ["build:container"]
-run = "podman run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(podman build -q -f cmd/hive/Dockerfile .)"
+[tasks."adr:new"]
+description = 'Start a new ADR: mise run adr:new -- "The decision, as a sentence"'
+run = "go run ./cmd/tools/adr new"

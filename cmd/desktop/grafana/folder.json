@@ -1,0 +1,11 @@
+{
+  "apiVersion": "folder.grafana.app/v1",
+  "kind": "Folder",
+  "metadata": {
+    "name": "hive-desktop"
+  },
+  "spec": {
+    "description": "Telemetry from the Hive Desktop app's own OTLP and profile export.",
+    "title": "Hive Desktop"
+  }
+}

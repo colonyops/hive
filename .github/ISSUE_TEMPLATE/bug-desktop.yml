@@ -1,0 +1,63 @@
+name: Bug report (Hive Desktop)
+description: Report something in the desktop app that does not work as expected.
+type: Bug
+labels: ["area/desktop"]
+body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      description: Please confirm the following before filing.
+      options:
+        - label: I searched the existing issues and did not find a report of this bug.
+          required: true
+        - label: This is not a security vulnerability. Vulnerabilities are reported through a private security advisory, not a public issue.
+          required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the bug. Include the exact text of any error message.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: The steps needed to trigger the bug, and whether it happens every time.
+      placeholder: |
+        1. Open Settings > Sources
+        2. Delete a source that has an active feed
+        3. Refresh the page
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen instead.
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Settings > About shows the version and channel. Write "built from source" if you built the app yourself.
+      placeholder: 0.2.0 (beta)
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Your operating system and version, plus anything else the bug involves, such as the tmux version for a terminal bug or the coding agent you use.
+      placeholder: |
+        - macOS 26.0
+        - tmux 3.5a (Homebrew)
+    validations:
+      required: true

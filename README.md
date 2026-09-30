@@ -19,6 +19,11 @@ Manage multiple AI agent sessions in isolated git environments with real-time st
 
 ---
 
+This repository holds two programs on one session engine:
+
+- **hive**, the CLI/TUI documented below (`cmd/hive`).
+- **Hive Desktop**, a desktop app with an inbox that collects pull requests, issues, and alerts into feeds, a Code area for the same sessions, and agent chat workspaces (`cmd/desktop`). Download it and read its docs at [hivedesktop.com](https://hivedesktop.com/desktop/getting-started/).
+
 ## Installation
 
 ```bash

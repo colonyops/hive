@@ -1,0 +1,25 @@
+# Isolated composition fixture for source-to-commit.spec.ts.
+# The function node ensures this smoke test crosses a script node — the one
+# part of the graph that leaves Go for an interpreter — before the feed
+# terminal's output is committed. The parallel dedup-once -> smoke-notify
+# branch proves KV-backed dedup: the notify fires once per item ever, while
+# the feed keeps receiving every revision.
+version: 1
+name: Source to Commit Smoke
+nodes:
+  - { id: fixture-source, type: sources.github, credential: github/octocat, kind: search, query: "is:open" }
+  - { id: worker-transform, type: function, on_message: "return msg" }
+  - { id: smoke-feed, type: feed, name: "Smoke feed" }
+  - id: dedup-once
+    type: function
+    on_message: |
+      const k = JSON.stringify([msg.SourceKind, msg.SourceScope, msg.Key])
+      if (kv.has(k)) return null
+      kv.set(k, true)
+      return msg
+  - { id: smoke-notify, type: notify, title: "{{ .Payload.title }}" }
+wires:
+  - { from: fixture-source, to: worker-transform }
+  - { from: worker-transform, to: smoke-feed }
+  - { from: fixture-source, to: dedup-once }
+  - { from: dedup-once, to: smoke-notify }

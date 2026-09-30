@@ -1,0 +1,158 @@
+Author or edit a Hive Desktop agent workspace: a named, durable directory
+where a CLI agent runs against a purpose-built MCP tool set, for work that has
+no repository.
+{{template "app" .}}
+Every workspace lives under {{.Env.AgentWorkspacesDir}}:
+
+    {{.Env.AgentWorkspacesDir}}/mcps.yaml                      — your own MCP server library
+    {{.Env.AgentWorkspacesDir}}/skills.yml                     — your skill package library
+    {{.Env.AgentWorkspacesDir}}/.shared/skills/<slug>/SKILL.md — skills you author
+    {{.Env.AgentWorkspacesDir}}/<dir>/agent-workspace.yaml     — one workspace's manifest
+    {{.Env.AgentWorkspacesDir}}/<dir>/AGENTS.md                — the workspace's own instructions, hand-edited
+
+`<dir>` is the workspace's directory name and its whole identity — there is no
+separate id field, so create one by creating the directory. Opening a
+workspace regenerates everything else under `<dir>` (`CLAUDE.md`, `.mcp.json`,
+`.codex/config.toml`, `.claude/`, `.agents/`, an empty `docs/`) from the
+manifest and `AGENTS.md`. None of that generated output is meant to be
+hand-edited — it is silently replaced the next time the workspace opens. One
+directory is neither authored nor regenerated: `canvases/` holds artifacts a
+chat's agent wrote through the `hive-canvas` MCP tools, and Hive leaves it
+alone. Put
+prose in `AGENTS.md`, not in the manifest: `agent-workspace.yaml` carries no
+`system_prompt` field.
+{{template "yaml-strict" .}}
+## agent-workspace.yaml schema
+
+- `version` — must be `5`.
+- `name` — display name shown on the workspace's card.
+- `command` — the whole invocation, as a Go template rendered when a session starts. It is required, and it is the only thing that decides what runs. There is no `agent` key: Hive reads the label off the command's first word to pick the icon, the activity indicator and the resume probe, and a CLI it has never heard of is a normal workspace.
+
+  Available fields: `.Dir` (the workspace directory), `.MCPConfig` (the generated `.mcp.json`, written for every workspace whatever the agent), `.SessionID` (a uuid Hive minted), `.Resume` (true when reattaching to a conversation), and `.Prompt` (an optional opening message for a schedule, New Session form, or action). `shq` quotes a value for the shell: use it on every interpolated value.
+
+  A workspace with `schedules:` or one used by a prompted launch needs a command that passes `.Prompt` through `shq`. Hive refuses a prompt-dropping or unquoted command because the detached chat would either sit idle or let prompt text become shell syntax. End the command with `{{ "{{ if .Prompt }}-- {{ .Prompt | shq }}{{ end }}" }}`, which is what the shipped presets do.
+
+  The line runs as `cd <workspace> && <your command>` under a login shell, so an env prefix or a pipeline works. Break it across several lines for readability; they are folded before rendering.
+
+  Pin the session id (`--session-id {{ "{{ .SessionID }}" }}`) or Hive cannot address the conversation later. Branch on `.Resume` or a reopened session relaunches fresh — Hive decides a command supports resume by rendering it both ways and checking that the output differs.
+
+  A claude workspace usually wants:
+
+  ```yaml
+  command: >-
+    claude --permission-mode acceptEdits
+    --strict-mcp-config --mcp-config {{ "{{ .MCPConfig | shq }}" }}
+    {{ "{{ if .Resume }}--resume{{ else }}--session-id{{ end }} {{ .SessionID }}" }}
+    {{ "{{ if .Prompt }}-- {{ .Prompt | shq }}{{ end }}" }}
+  ```
+
+  `--dangerously-skip-permissions` (and codex's `--dangerously-bypass-approvals-and-sandbox`) skips prompting entirely. Hive flags a command carrying one, but the flag is yours to add: reserve it for a workspace you already trust completely, remembering that every enabled MCP server is in reach.
+- `mcps` — optional list of MCP server ids this workspace enables. Each id is either one of the shipped catalogue entries below or a key from your own mcps.yaml `servers:` map; an mcps.yaml entry can also replace a shipped entry of the same id.
+- `skills` — optional list of **skill package** names this workspace enables, each a key from skills.yml's `packages:` map. Packages are the unit, never individual skills: `skills: [hive]` carries every `hive-*` skill this build ships, because that is what the seeded package's pattern selects. Naming a skill slug here (`hive-mcp`) enables nothing — it is read as a package that does not exist and reported when the workspace opens. Opening renders the selected skills into `.claude/skills/` and `.agents/skills/`.
+- `schedules` - optional list of recurring chats this workspace launches on its own, on a cron schedule. See "schedules schema" below.
+
+## schedules schema
+
+Recurring chats this workspace launches on its own. Each entry in the
+`schedules` list:
+
+- `id` - required, `[a-z0-9-]+`, unique within this workspace.
+- `name` - optional, shown in the UI and used to name the launched chat; defaults to `id`.
+- `cron` - required. A 5-field cron expression, or one of `@hourly`, `@daily`, `@weekly`, `@monthly`, `@every 1h`. Evaluated in local time.
+- `prompt` - required. A Go `text/template` string, rendered into the agent's opening message. See "Prompt template variables" below.
+- `disabled` - optional; `true` skips this schedule. Omitted means enabled.
+- `on_missed` - optional, `run` (default) or `skip`. `run` folds every occurrence Hive missed while it was closed into one catch-up launch; `skip` records a missed occurrence instead of launching.
+
+Hive frames a scheduled chat before it starts: it tells the agent which
+schedule and workspace started it, that nobody is watching, and how to end the
+session when the task is done (a `curl` to Hive's loopback server with a token
+the launch handed the process). The agent MUST end the session; a chat left
+open blocks the schedule's next run. Write `prompt` as the task itself and
+leave that framing to Hive.
+
+An id is `[a-z0-9-]+` and must be unique in the workspace, so do not reuse one
+for a different schedule. Changing a schedule's `cron` restarts its cursor, so
+nothing back-fires: Hive only ever measures missed occurrences since the last
+time this exact `cron` ran, never since the schedule was first created. An
+edit to `schedules:` -- yours or the agent's -- takes effect the next time this
+workspace opens; no restart needed. With the `hive-desktop` MCP server
+declared in `mcps:`, `put_schedule`, `remove_schedule`, `list_schedules` and
+`preview_schedule` make the same edit in place, one entry at a time, without
+touching the rest of the file; a `put_schedule` on an existing id changes only
+the fields it passes.
+
+### Prompt template variables
+
+`prompt` renders with:
+
+- `{{"{{ .Now }}"}}` - the time the prompt is rendered.
+- `{{"{{ .ScheduledFor }}"}}` - the occurrence this run honors.
+- `{{"{{ .LastRun }}"}}` - the `ScheduledFor` of this schedule's previous launched run; unset on the first run. `date` renders it as empty text when unset, but write `{{"{{ if .LastRun }}"}}...{{"{{ end }}"}}` when you want different wording for the first run, as in the example below.
+- `{{"{{ .Reason }}"}}` - why this run is happening: `due`, `catch_up`, or `manual` (a "Run now" from the UI).
+- `{{"{{ .Missed }}"}}` - how many earlier occurrences in the same window were folded into this run.
+- `{{"{{ .Schedule.ID }}"}}`, `{{"{{ .Schedule.Name }}"}}`, `{{"{{ .Schedule.Cron }}"}}` - this schedule's own fields.
+- `{{"{{ .Workspace.Dir }}"}}`, `{{"{{ .Workspace.Name }}"}}` - the workspace running it.
+- `{{"{{ date \"2006-01-02\" .Now }}"}}` - a helper that formats a time value with a Go reference-time layout.
+
+A weekly summary that reads back how long it has been since the last run:
+
+```yaml
+schedules:
+  - id: weekly-summary
+    name: Weekly product summary
+    cron: "0 9 * * 5"
+    prompt: |
+      Summarize product activity since {{"{{ if .LastRun }}"}}{{"{{ date \"2006-01-02\" .LastRun }}"}}{{"{{ else }}"}}last week{{"{{ end }}"}}.
+      Check this workspace's MCP servers and write up what changed.
+```
+
+## skills.yml schema
+
+The skill package library — which skills a workspace can enable as a unit.
+
+- `version` — must be `1`.
+- `packages` — a map of package name to definition. Each entry has an optional `title` and `description`, an `include` list (required, at least one pattern), and an optional `exclude` list.
+
+  Patterns are globs over skill *names*, not file paths: `include: ["hive-*"]` selects every shipped skill, `exclude` then carves out. A pattern with no wildcard is an exact name, so selecting one skill needs no separate syntax. A package holds no copy of a skill, so one skill can belong to several packages and a newly authored skill joins every workspace whose enabled package already matches its name.
+
+  Names come from two sources in one flat name-space: the skills this build ships (`hive-*`, rendered per install) and the ones authored at `.shared/skills/<name>/SKILL.md`. An authored file of the same name as a shipped skill wins.
+
+## mcps.yaml schema
+
+Your own MCP server library — the escape hatch beyond the shipped catalogue.
+
+- `version` — must be `1`.
+- `servers` — a map of id to server declaration. Each entry is one of:
+  - a **stdio** server: `command` (required), `args`, `env`.
+  - an **http** or **sse** server: `type: http` or `type: sse`, `url` (required), `headers`.
+
+  `type` defaults to `stdio` when omitted. A stdio entry rejects `url`/`headers`; an http or sse entry rejects `command`/`args`/`env`.
+
+## Shipped MCP catalogue
+{{range .Types}}
+{{section 3 .Type .Doc}}
+{{end}}
+## Worked example
+
+A complete, valid `agent-workspace.yaml` naming shipped catalogue entries
+(`hive-desktop`, `playwright`), an `mcps.yaml` entry (`home-assistant`), and
+the seeded `hive` skill package. `hive-desktop` is this install itself —
+declaring it is what lets a session read the inbox and dry-run a flow rather
+than guessing at the app's state:
+
+```yaml
+{{.WorkspaceExample}}
+```
+
+The `mcps.yaml` it references:
+
+```yaml
+{{.MCPsExample}}
+```
+
+And the `skills.yml` defining the `hive` package it enables:
+
+```yaml
+{{.SkillsExample}}
+```
+{{template "task" .}}

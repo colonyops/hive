@@ -1,0 +1,61 @@
+{{/*
+Shared fragments composed by the individual prompt templates. Wording that
+appears in more than one prompt belongs here so it is written — and corrected —
+once. Every fragment is executed with the owning prompt's data map, which
+always carries .Env.
+*/}}
+
+{{define "app"}}
+Hive Desktop is a desktop app that turns GitHub activity and webhook deliveries
+into triaged feeds and automated coding-agent sessions. Its configuration is
+plain text on this machine, meant to be edited directly:
+
+- {{.Env.FlowsDir}}/<id>.yaml — flows: the graph that decides what reaches which feed and what fires an action.
+- {{.Env.ActionsPath}} — actions: what a feed item, a terminal session or window, or a flow node can trigger.
+- {{.Env.SettingsPath}} — app settings: polling, updates, notifications, appearance, keyboard shortcuts.
+{{end}}
+
+{{define "yaml-strict"}}
+Rules for every file above:
+
+- The schema is strict: an unknown key is a hard error, not a warning. Do not invent fields.
+- The app watches these files and reloads on save — no restart, no build step.
+- A file that fails to parse is rejected as a whole and the last good version stays live, so a mistake degrades to "nothing changed" rather than a broken app.
+{{end}}
+
+{{define "template-data"}}
+## Template data
+
+Every `*_template` field is a Go `text/template` rendered over whatever the
+action was invoked against. **Which values exist depends on the target**, so a
+template that reads the wrong target's data fails the run rather than rendering
+a blank command.
+
+On the `item` target — a feed item, in the detail pane or from a flow `action`
+node:
+
+- `{{"{{ .Payload.<field> }}"}}` — the item's payload. GitHub items carry `repo`, `title`, `url`, `num`, `author`, `body`, `labels`, and `state`; webhook items carry whatever was POSTed.
+- `{{"{{ .Key }}"}}` — the item's stable identity, e.g. `colonyops/hive#2841`.
+- `{{"{{ .Raw }}"}}` — the payload as raw JSON.
+
+On the `session` and `window` targets — a terminal session row, or a window row
+inside it:
+
+- `{{"{{ .Session.Path }}"}}` — the session's checkout on disk. This is also the default working directory of a `shell` action run from a terminal target, so a command that just works in the checkout does not have to name it.
+- `{{"{{ .Session.Slug }}"}}` — the session's slug, which is also its tmux session name.
+- `{{"{{ .Session.Name }}"}}`, `{{"{{ .Session.ID }}"}}`, `{{"{{ .Session.Repo }}"}}`, `{{"{{ .Session.Branch }}"}}` — the session's name, hive id, remote, and worktree branch (blank for a session that is not a worktree).
+- `{{"{{ .Window.ID }}"}}` — the tmux window id, on the `window` target only. Addressed as `{{"{{ .Session.Slug }}"}}:{{"{{ .Window.ID }}"}}` in a tmux command. There is no window name: the id survives a rename and the name does not.
+- `{{"{{ .Key }}"}}` — the session's slug.
+
+On every target:
+
+- `{{"{{ .Inputs.<name> }}"}}` — a value the user typed or chose when running the action, for each input the action declares. Undeclared names are a render error, so declare what you reference.
+{{end}}
+
+{{define "task"}}
+---
+
+What I want:
+
+<describe it here>
+{{end}}

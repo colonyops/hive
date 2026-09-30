@@ -1,0 +1,54 @@
+{
+  "name": "fan-out gives each branch its own payload",
+  "why": "One wire per branch is not enough: two function nodes downstream of the same source both rewrite the payload they are handed. If they shared it, whichever ran second would win for both, and which one that is depends on traversal order rather than on the flow.",
+  "flow": {
+    "id": "fan",
+    "name": "Fan",
+    "enabled": true,
+    "nodes": [
+      { "id": "src", "type": "sources.webhook", "path": "hook" },
+      { "id": "a", "type": "function", "on_message": "msg.Payload.tag = 'a'; return msg" },
+      { "id": "b", "type": "function", "on_message": "msg.Payload.tag = 'b'; return msg" },
+      { "id": "na", "type": "notify", "title": "A" },
+      { "id": "nb", "type": "notify", "title": "B" }
+    ],
+    "wires": [
+      { "from": "src", "to": "a" },
+      { "from": "src", "to": "b" },
+      { "from": "a", "to": "na" },
+      { "from": "b", "to": "nb" }
+    ]
+  },
+  "batch": [
+    {
+      "ID": "1", "Key": "k", "Topic": "source:fan/src", "Ts": 1, "Snapshot": null,
+      "SourceKind": "webhook", "SourceScope": "hook", "OccurrenceKey": "oc",
+      "Payload": { "v": 1 }
+    }
+  ],
+  "expected": {
+    "consumer": "fan",
+    "upToOffset": 1,
+    "outputs": [
+      {
+        "sink": { "kind": "notify", "targetId": "fan/na" },
+        "key": "k", "occurrenceKey": "oc", "payload": { "v": 1, "tag": "a" },
+        "sourceKind": "webhook", "sourceScope": "hook", "sourceTopic": "source:fan/src"
+      },
+      {
+        "sink": { "kind": "notify", "targetId": "fan/nb" },
+        "key": "k", "occurrenceKey": "oc", "payload": { "v": 1, "tag": "b" },
+        "sourceKind": "webhook", "sourceScope": "hook", "sourceTopic": "source:fan/src"
+      }
+    ],
+    "feedSnapshots": [],
+    "discards": [],
+    "nodeRuns": [
+      { "flowId": "fan", "nodeId": "src", "ok": true, "inCount": 1, "outCount": 1, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "fan", "nodeId": "a", "ok": true, "inCount": 1, "outCount": 1, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "fan", "nodeId": "b", "ok": true, "inCount": 1, "outCount": 1, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "fan", "nodeId": "na", "ok": true, "inCount": 1, "outCount": 1, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "fan", "nodeId": "nb", "ok": true, "inCount": 1, "outCount": 1, "dropCount": 0, "err": "", "durMs": 0 }
+    ]
+  }
+}

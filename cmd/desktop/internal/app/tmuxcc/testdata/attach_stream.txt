@@ -1,0 +1,23 @@
+%begin 1753719000 0 0
+%end 1753719000 0 0
+%session-changed $1 hive-demo
+%begin 1753719001 1 1
+%end 1753719001 1 1
+%begin 1753719002 2 1
+@1 1 %1 claude
+@2 0 %2 shell
+%end 1753719002 2 1
+%begin 1753719003 3 1
+claude> ready
+%end 1753719003 3 1
+%output %1 thinking\015\012
+%window-add @3
+%window-renamed @3 logs
+%session-window-changed $1 @2
+%window-pane-changed @2 %7
+%output %7 $ \033[1mls\033[0m\015\012
+%noop
+%pause %1
+%continue %1
+%window-close @3
+%exit server exited

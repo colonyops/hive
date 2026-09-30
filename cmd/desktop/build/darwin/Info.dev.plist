@@ -1,0 +1,50 @@
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>CFBundlePackageType</key>
+            <string>APPL</string>
+        <key>CFBundleName</key>
+            <string>Hive</string>
+        <key>CFBundleDisplayName</key>
+            <string>Hive</string>
+        <key>CFBundleExecutable</key>
+            <string>hive-desktop</string>
+        <key>CFBundleIdentifier</key>
+            <string>com.hivedesktop.app</string>
+        <key>CFBundleVersion</key>
+            <string>0.1.0</string>
+        <key>CFBundleShortVersionString</key>
+            <string>0.1.0</string>
+        <key>CFBundleIconFile</key>
+            <string>icons</string>
+        <key>LSApplicationCategoryType</key>
+            <string>public.app-category.developer-tools</string>
+        <key>LSMinimumSystemVersion</key>
+            <string>12.0.0</string>
+        <key>NSHighResolutionCapable</key>
+            <string>true</string>
+        <key>NSAppleEventsUsageDescription</key>
+            <string>A command running within Hive may control another application using AppleScript.</string>
+        <key>NSDesktopFolderUsageDescription</key>
+            <string>A command running within Hive may access files in your Desktop folder.</string>
+        <key>NSDocumentsFolderUsageDescription</key>
+            <string>A command running within Hive may access files in your Documents folder.</string>
+        <key>NSDownloadsFolderUsageDescription</key>
+            <string>A command running within Hive may access files in your Downloads folder.</string>
+        <key>NSLocalNetworkUsageDescription</key>
+            <string>A command running within Hive may connect to development servers and other devices on your local network.</string>
+        <key>NSNetworkVolumesUsageDescription</key>
+            <string>A command running within Hive may access files on network volumes.</string>
+        <key>NSRemovableVolumesUsageDescription</key>
+            <string>A command running within Hive may access files on removable volumes.</string>
+        <key>NSSystemAdministrationUsageDescription</key>
+            <string>A command running within Hive may request elevated privileges.</string>
+        <key>NSHumanReadableCopyright</key>
+            <string>© 2026 ColonyOps</string>
+        <key>NSAppTransportSecurity</key>
+        <dict>
+            <key>NSAllowsLocalNetworking</key>
+            <true/>
+        </dict>
+    </dict>
+</plist>

@@ -1,0 +1,58 @@
+Write the body of a Hive Desktop pipeline `function` node that transforms
+webhook payloads arriving on the "{{.Path}}" endpoint.
+
+## Contract
+
+The code you write is the body of:
+
+    function on_message(msg, node, state) { /* your code */ }
+
+- `msg.Payload` is the delivered webhook JSON, already parsed — an object or array, not a string.
+- Return `msg` to pass it downstream, or `null` to drop it.
+- Reshape by REPLACING the payload: `return { ...msg, Payload: mapped }`.
+- CRITICAL: never change `msg.Key`, `msg.Topic`, `msg.SourceKind`, or `msg.SourceScope`. Feed membership resolves by them, and altering them stalls the flow's commit.
+- Plain synchronous JavaScript: no network, no imports. It runs in a sandboxed Web Worker with a 5s default timeout.
+
+## Target shape
+
+Map into the canonical item contract, which Hive feeds render richly:
+
+```jsonc
+{
+  "id": "unique-stable-id",        // string, required — item identity
+  "kind": "PR" | "Issue" | string, // optional — the item's type label, and what
+                                   // actions target via applies_to; omitted
+                                   // means the kind "Item"
+  "repo": "owner/name",            // string — repo line in the feed row
+  "title": "human readable title", // string, required for a useful row
+  "url": "https://…",              // string — opened by the o/Enter shortcut
+  "num": 123,                      // number, optional — item number badge
+  "author": "login",               // string, optional
+  "body": "longer text",           // string, optional — detail pane snippet
+  "labels": ["a", "b"],            // string[], optional
+  "state": "open" | "resolved" | "closed" | "done" | string, // optional — resolved/closed/done archive the item; a later non-terminal state resurfaces it
+  "updatedAt": 1712345678901       // unix milliseconds, optional
+}
+```
+
+Map as many fields as the input supports; `id`, `title`, and `url` matter most.
+Keep any extra source fields downstream nodes might filter on — unknown fields
+are allowed.
+
+## Input
+{{if .Sample}}
+A real payload captured from this endpoint:
+
+```json
+{{.Sample}}
+```
+{{else}}
+No payload has been captured from this endpoint yet. Here is a sample payload
+the sender will POST:
+
+```json
+<paste a sample payload here>
+```
+{{end}}
+Reply with ONLY the JavaScript statements for the `on_message` body — no
+function wrapper, no markdown fences, no commentary.

@@ -1,0 +1,12 @@
+{
+  "feeds": [
+    {
+      "archived": 0,
+      "declared": true,
+      "id": "hooks/inbox",
+      "name": "Inbox",
+      "total": 1,
+      "unread": 1
+    }
+  ]
+}

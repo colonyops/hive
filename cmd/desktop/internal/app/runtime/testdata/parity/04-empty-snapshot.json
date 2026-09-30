@@ -1,0 +1,36 @@
+{
+  "name": "an empty snapshot still declares its feed scope and produces no items",
+  "why": "This is the case the wire contract is shaped around. A successful poll that returned nothing is a snapshot with zero items, and it must still reconcile the feed down to empty. If the empty snapshot were mistaken for an ordinary item event, the boundary row (whose Key is the empty string) would be routed as an item, the commit would fail forever resolving an inbox row that does not exist, and the consumer would be wedged at that offset. Note that the message produces no discard: it was consumed as a snapshot, not dropped.",
+  "flow": {
+    "id": "empty",
+    "name": "Empty",
+    "enabled": true,
+    "nodes": [
+      { "id": "gh", "type": "sources.github", "kind": "search", "query": "is:open" },
+      { "id": "inbox", "type": "feed" }
+    ],
+    "wires": [{ "from": "gh", "to": "inbox" }]
+  },
+  "batch": [
+    {
+      "ID": "7",
+      "Key": "",
+      "Topic": "source:empty/gh",
+      "Ts": 1,
+      "Payload": [],
+      "Snapshot": [],
+      "SourceKind": "github",
+      "SourceScope": "search"
+    }
+  ],
+  "expected": {
+    "consumer": "empty",
+    "upToOffset": 7,
+    "outputs": [],
+    "feedSnapshots": [
+      { "feedId": "empty/inbox", "sourceTopic": "source:empty/gh", "snapshotId": "7" }
+    ],
+    "discards": [],
+    "nodeRuns": []
+  }
+}

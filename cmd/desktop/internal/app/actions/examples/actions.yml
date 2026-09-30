@@ -1,0 +1,100 @@
+version: 1
+actions:
+  - id: review-pr
+    label: Review PR
+    type: launch-session
+    show_in_detail: true
+    applies_to: [pr]
+    repo_template: "https://github.com/{{ .Payload.repo }}.git"
+    prompt_template: |
+      Review pull request {{ .Payload.title }}
+
+      {{ .Payload.url }}
+  - id: start-implementation
+    label: Start implementation
+    type: launch-session
+    show_in_detail: true
+    applies_to: [issue]
+    agent: claude
+    repo_template: "https://github.com/{{ .Payload.repo }}.git"
+    prompt_template: |
+      Work on {{ .Payload.title }}
+
+      {{ .Payload.url }}
+
+      {{ .Payload.body }}
+  - id: triage-alert
+    label: Triage alert
+    type: launch-session
+    show_in_detail: true
+    applies_to: [alert]
+    workspace: incident-triage
+    prompt_template: |
+      Triage {{ .Payload.title }}
+
+      {{ .Payload.url }}
+  - id: open-in-editor
+    label: Open in editor
+    type: shell
+    show_in_detail: true
+    timeout: "30s"
+    cwd: /tmp
+    env:
+      EDITOR: code
+    command_template: '$EDITOR --goto {{ .Payload.repo | shq }}'
+  - id: open-session-in-zed
+    label: Open in Zed
+    type: shell
+    targets: [session]
+    command_template: 'zed {{ .Session.Path | shq }}'
+  - id: run-tests
+    label: Run tests
+    type: shell
+    targets: [session]
+    timeout: "10m"
+    command_template: 'mise run test'
+  - id: interrupt-window
+    label: Interrupt agent
+    type: shell
+    targets: [window]
+    command_template: 'tmux send-keys -t {{ printf "%s:%s" .Session.Slug .Window.ID | shq }} C-c'
+  - id: notify-oncall
+    label: Notify oncall
+    type: publish-message
+    show_in_detail: false
+    topic: oncall.alerts
+    message_template: "{{ .Payload.title }} — {{ .Payload.url }}"
+  - id: copy-checkout
+    label: Copy checkout command
+    type: clipboard
+    show_in_detail: true
+    applies_to: [pr]
+    text_template: "gh pr checkout {{ .Payload.num }} -R {{ .Payload.repo }}"
+  - id: silence-alert
+    label: Silence alert
+    type: clipboard
+    show_in_detail: true
+    inputs:
+      - name: reason
+        label: Reason
+        type: multiline
+        required: true
+        placeholder: why this alert is being silenced
+      - name: window
+        label: For how long
+        type: select
+        default: 1h
+        options: [1h, 24h, 7d]
+    text_template: |
+      amtool silence add alertname={{ .Payload.title | shq }} \
+        --duration {{ .Inputs.window }} --comment {{ .Inputs.reason | shq }}
+launchers:
+  - id: lazygit
+    label: lazygit
+    icon: git-branch
+    command: lazygit
+  - id: dotfiles
+    label: Edit dotfiles
+    icon: folder
+    cwd: ~/.dotfiles
+    command: $EDITOR .

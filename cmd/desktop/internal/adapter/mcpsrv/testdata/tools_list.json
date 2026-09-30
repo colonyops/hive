@@ -1,0 +1,1262 @@
+[
+  {
+    "description": "Clear a source node's feed-mark image so its items revert to the node's icon.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "nodeId": {
+          "description": "Node id within that profile's flow; ids come from get_flow.",
+          "type": "string"
+        },
+        "profileId": {
+          "description": "Profile id from list_profiles.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId",
+        "nodeId"
+      ],
+      "type": "object"
+    },
+    "name": "clear_node_image",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "hasImage": {
+          "type": "boolean"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "profileId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId",
+        "nodeId",
+        "hasImage"
+      ],
+      "type": "object"
+    },
+    "title": "Clear a source node's feed mark"
+  },
+  {
+    "description": "Clear a profile's avatar so its rail reverts to the letter chip.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "description": "Profile id from list_profiles.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId"
+      ],
+      "type": "object"
+    },
+    "name": "clear_profile_image",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "hasImage": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "enabled",
+        "valid",
+        "hasImage"
+      ],
+      "type": "object"
+    },
+    "title": "Clear a profile's avatar"
+  },
+  {
+    "description": "Create a profile, seeded with the starter graph when exactly one GitHub account is connected and empty otherwise.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Display name for the new profile.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "name": "create_profile",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "hasImage": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "enabled",
+        "valid",
+        "hasImage"
+      ],
+      "type": "object"
+    },
+    "title": "Create a profile"
+  },
+  {
+    "description": "Delete a profile, its flow files, its avatar, and its inbox state. This is not reversible. An id that matches no profile is not_found — nothing is ever reported as deleted that was not.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "description": "Profile id from list_profiles.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId"
+      ],
+      "type": "object"
+    },
+    "name": "delete_profile",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "deleted": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "deleted"
+      ],
+      "type": "object"
+    },
+    "title": "Delete a profile"
+  },
+  {
+    "description": "Dry-run a flow against input you supply and report what every node did, committing nothing — no feed membership, inbox rows, notifications, queued actions or durable kv. Name the flow with exactly one of flowId (an installed flow, enabled or not), flow (a flow document as a JSON object, same schema as flows/\u003cid\u003e.yaml, version included) or flowYaml (that document as YAML text), so an unsaved edit can be executed before it is deployed. Messages are delivered to nodeId — any node, not only a source, which is how one function node is exercised in isolation against a captured payload; get_flow is where node ids come from. Sources never fetch: a source node relays what you inject. Envelope fields left empty are filled in. kv seeds an in-memory sandbox (nodeId -\u003e key -\u003e value) that is the whole world a kv.get sees, so notify-once logic is testable against a known starting state; what the run would have written comes back in kvMutations. Each node reports its drops, timing, console output, and a structured error with line and column for a script failure, whose line numbers are relative to the on_message body you wrote. detail controls how many copies of each message body come back: \"emitted\" (the default) reports what each node put on its output ports, \"summary\" drops message bodies entirely — use it for a snapshot run, whose payloads would otherwise be repeated once per node per item — and \"full\" adds each node's received messages. Prefer this over deploying an edit and waiting for a poll.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "description": "How much of each message body to report — one of summary, emitted (the default) or full.",
+          "type": "string"
+        },
+        "flow": {
+          "additionalProperties": true,
+          "description": "A flow document as a JSON object, same schema as flows/\u003cid\u003e.yaml including version.",
+          "type": "object"
+        },
+        "flowId": {
+          "description": "An installed flow's id, enabled or not.",
+          "type": "string"
+        },
+        "flowIdOverride": {
+          "description": "The id an inline document runs under; scopes node KV and output feed ids only, and installs nothing.",
+          "type": "string"
+        },
+        "flowYaml": {
+          "description": "That same flow document as YAML text.",
+          "type": "string"
+        },
+        "kv": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "description": "Seeds an in-memory KV sandbox as nodeId -\u003e key -\u003e value; durable KV is neither read nor written.",
+          "type": "object"
+        },
+        "messages": {
+          "description": "The messages to deliver.",
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "ID": {
+                "description": "Message id; a synthetic one is generated when empty.",
+                "type": "string"
+              },
+              "Key": {
+                "description": "The source's own key for this item.",
+                "type": "string"
+              },
+              "OccurrenceKey": {
+                "description": "Distinguishes repeat occurrences of one item.",
+                "type": "string"
+              },
+              "Payload": {
+                "description": "The item's payload as arbitrary JSON."
+              },
+              "Snapshot": {
+                "description": "A full source snapshot; present makes this a snapshot message, which declares feed reconciliation exactly as a poll would. An empty array is still a snapshot.",
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "payload": {
+                      "description": "The item's payload as arbitrary JSON."
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "payload"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              },
+              "SourceKind": {
+                "description": "The source connector kind.",
+                "type": "string"
+              },
+              "SourceScope": {
+                "description": "The source's scope within that kind.",
+                "type": "string"
+              },
+              "Topic": {
+                "description": "Event topic; defaults to the source node's own topic when injecting at a source.",
+                "type": "string"
+              },
+              "Ts": {
+                "description": "Unix millisecond timestamp.",
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "nodeId": {
+          "description": "The node messages are delivered to — any node, not only a source. Node ids come from get_flow.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "nodeId",
+        "messages"
+      ],
+      "type": "object"
+    },
+    "name": "execute_flow",
+    "title": "Dry-run a flow"
+  },
+  {
+    "description": "Return one profile's graph: every node with its id, type and config, and the wires between them. This is where node ids come from — execute_flow's nodeId and the node-image tools take them. A profile whose flow file does not parse still answers, with valid=false and the load error.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "description": "Profile id from list_profiles.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId"
+      ],
+      "type": "object"
+    },
+    "name": "get_flow",
+    "title": "Read a profile's flow"
+  },
+  {
+    "description": "Return a source node's feed-mark image as a PNG. A node with no mark is not_found — its items fall back to the node's glyph.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "nodeId": {
+          "description": "Node id within that profile's flow; ids come from get_flow.",
+          "type": "string"
+        },
+        "profileId": {
+          "description": "Profile id from list_profiles.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId",
+        "nodeId"
+      ],
+      "type": "object"
+    },
+    "name": "get_node_image",
+    "title": "Read a source node's feed mark"
+  },
+  {
+    "description": "Return a profile's avatar as a PNG image. A profile with no avatar is not_found — its rail falls back to a letter chip.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "profileId": {
+          "description": "Profile id from list_profiles.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId"
+      ],
+      "type": "object"
+    },
+    "name": "get_profile_image",
+    "title": "Read a profile's avatar"
+  },
+  {
+    "description": "Report the running build and whether the webhook listener is up, on which host and port. Use this first to confirm the app is reachable and to discover the webhook base URL a push should go to.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "get_status",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "description": "The running build's version.",
+          "type": "string"
+        },
+        "webhook": {
+          "additionalProperties": false,
+          "properties": {
+            "host": {
+              "description": "Host the listener is bound to.",
+              "type": "string"
+            },
+            "pathPrefix": {
+              "description": "Path prefix webhook deliveries are posted under.",
+              "type": "string"
+            },
+            "port": {
+              "description": "Port the listener is bound to; 0 when it is not running.",
+              "type": "integer"
+            },
+            "running": {
+              "description": "Whether the loopback webhook listener is accepting deliveries.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "running",
+            "host",
+            "port",
+            "pathPrefix"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "version",
+        "webhook"
+      ],
+      "type": "object"
+    },
+    "title": "Desktop status"
+  },
+  {
+    "description": "List the action catalog with the actions.yml it was loaded from and whether that file currently parses. An invalid edit leaves the previous catalog in effect and reports its error here, so this is how to confirm an edit actually loaded.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "list_actions",
+    "title": "List the action catalog"
+  },
+  {
+    "description": "List the feeds a profile's graph declares, with their total, unread and archived counts. A declared feed nothing has landed in yet still lists, at zero — so an empty feed and a feed id that does not exist are different answers.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "description": "Profile id to list feeds for; ids come from list_profiles.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile"
+      ],
+      "type": "object"
+    },
+    "name": "list_feeds",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "feeds": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "archived": {
+                "type": "integer"
+              },
+              "declared": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "unread": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "declared",
+              "total",
+              "unread",
+              "archived"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "feeds"
+      ],
+      "type": "object"
+    },
+    "title": "List feeds"
+  },
+  {
+    "description": "List a profile's inbox items, optionally scoped to one feed or resolved by the source's own external id. Each item carries the id of the feed claiming it, empty when unrouted. detail defaults to summary, which omits each item's raw source payload — a payload is as large as the source made it (a PR body is kilobytes) and a listing repeats it per item, so a whole feed at full is megabytes. Ask for full once you have narrowed to the items you need, by feed, by externalId or with limit.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "archived": {
+          "description": "When true, list archived items instead of active ones.",
+          "type": "boolean"
+        },
+        "detail": {
+          "description": "summary (the default) omits each item's raw source payload; full includes it, and its size is the source's to decide.",
+          "type": "string"
+        },
+        "externalId": {
+          "description": "A source's own id (e.g. a GitHub node id); returns every matching item across profiles.",
+          "type": "string"
+        },
+        "feed": {
+          "description": "Feed id from list_feeds (e.g. hive/desktop-prs) to return only that feed's items.",
+          "type": "string"
+        },
+        "limit": {
+          "description": "Maximum items to return; defaults to 200.",
+          "type": "integer"
+        },
+        "profile": {
+          "description": "Profile id to scope to; required when feed is set.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_inbox",
+    "title": "List inbox items"
+  },
+  {
+    "description": "List one inbox item's lifecycle events, resolved by itemId or by an externalId that matches exactly one item. An externalId matching items in more than one profile is a conflict — pass profile to disambiguate. Each event's own detail is source-specific raw JSON and is omitted unless detail is full.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "description": "summary (the default) omits each event's raw source-specific detail; full includes it.",
+          "type": "string"
+        },
+        "externalId": {
+          "description": "External id resolving to one item; provide this or itemId.",
+          "type": "string"
+        },
+        "itemId": {
+          "description": "Inbox item id. Provide this or externalId.",
+          "type": "integer"
+        },
+        "limit": {
+          "description": "Maximum events to return; defaults to 50.",
+          "type": "integer"
+        },
+        "profile": {
+          "description": "Profile id used to disambiguate an externalId that matches items in more than one profile.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_inbox_item_events",
+    "title": "List an inbox item's events"
+  },
+  {
+    "description": "List the hive sessions one inbox item created, newest first, each with the state hive reports for it now; slug is the tmux session name an attach targets. Resolved by itemId or by an externalId matching exactly one item. Links to sessions hive no longer has are dropped as a side effect of this read, but only when hive answered — a failed listing drops nothing.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "externalId": {
+          "description": "External id resolving to one item; provide this or itemId.",
+          "type": "string"
+        },
+        "itemId": {
+          "description": "Inbox item id. Provide this or externalId.",
+          "type": "integer"
+        },
+        "profile": {
+          "description": "Profile id used to disambiguate an externalId that matches items in more than one profile.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_item_sessions",
+    "title": "List the hive sessions an inbox item started"
+  },
+  {
+    "description": "List every profile with its load status and whether it has an avatar. Profile ids from here are what every other tool's profile argument takes; get_flow turns one into its graph and node ids. A profile whose flow file does not parse still lists, with valid=false.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "list_profiles",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "profiles": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "hasImage": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "valid": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "enabled",
+              "valid",
+              "hasImage"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "profiles"
+      ],
+      "type": "object"
+    },
+    "title": "List profiles"
+  },
+  {
+    "description": "List one workspace's schedules in manifest order, each with when it fires next and its newest run whatever the outcome. A workspace that does not exist is not_found; one whose manifest does not parse is invalid, with the reason.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "workspace": {
+          "description": "The workspace directory name, as list_workspaces reports it in dir. For the workspace this chat runs in, this process's HIVE_AGENT_WORKSPACE holds the workspace's absolute path: pass it as is, or its last path segment.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspace"
+      ],
+      "type": "object"
+    },
+    "name": "list_schedules",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "schedules": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "cron": {
+                "type": "string"
+              },
+              "disabled": {
+                "type": "boolean"
+              },
+              "id": {
+                "type": "string"
+              },
+              "lastRun": {
+                "additionalProperties": false,
+                "description": "The newest run whatever its outcome. Absent when the schedule has never run.",
+                "properties": {
+                  "error": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "missed": {
+                    "description": "How many earlier occurrences were folded into this run.",
+                    "type": "integer"
+                  },
+                  "reason": {
+                    "description": "due, catch_up, or manual.",
+                    "type": "string"
+                  },
+                  "scheduleId": {
+                    "type": "string"
+                  },
+                  "scheduledFor": {
+                    "description": "RFC 3339, local time: the occurrence this run honored.",
+                    "type": "string"
+                  },
+                  "session": {
+                    "description": "The chat the run launched. Absent when it launched none, and once that chat has ended: a scheduled chat deletes itself when its task is done.",
+                    "type": [
+                      "null",
+                      "integer"
+                    ]
+                  },
+                  "startedAt": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "description": "launched, skipped, or failed.",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "scheduleId",
+                  "scheduledFor",
+                  "startedAt",
+                  "reason",
+                  "status",
+                  "missed"
+                ],
+                "type": [
+                  "null",
+                  "object"
+                ]
+              },
+              "name": {
+                "description": "As stored. Absent when the schedule has none; the UI and the launched chat then use the id.",
+                "type": "string"
+              },
+              "nextRunAt": {
+                "description": "RFC 3339, local time. Absent when the schedule is disabled or its cron does not parse.",
+                "type": "string"
+              },
+              "onMissed": {
+                "type": "string"
+              },
+              "prompt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "cron",
+              "prompt",
+              "disabled",
+              "onMissed"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "workspace": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspace",
+        "schedules"
+      ],
+      "type": "object"
+    },
+    "title": "List a workspace's scheduled chats"
+  },
+  {
+    "description": "List every agent workspace with its command template, whether that command carries a permission bypass (danger), and its schedule ids. dir is what every schedule tool's workspace argument takes. A workspace whose manifest does not parse still lists, with problem set; it refuses schedule writes until the file is fixed.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "list_workspaces",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "workspaces": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "command": {
+                "type": "string"
+              },
+              "danger": {
+                "type": "boolean"
+              },
+              "dir": {
+                "description": "The directory name every schedule tool's workspace argument takes.",
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "problem": {
+                "type": "string"
+              },
+              "schedules": {
+                "description": "The ids of the workspace's schedules.",
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "null",
+                  "array"
+                ]
+              }
+            },
+            "required": [
+              "dir",
+              "name",
+              "command",
+              "danger",
+              "schedules"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "workspaces"
+      ],
+      "type": "object"
+    },
+    "title": "List agent workspaces"
+  },
+  {
+    "description": "Report the next occurrences a cron expression produces and the prompt template rendered against sample data, both with a previous run behind it and as the first run sees it with .LastRun unset, without saving anything. A cron or template that does not parse comes back in cronError or promptError rather than as a failed call. Use it before put_schedule.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "cron": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        },
+        "workspace": {
+          "description": "The workspace directory name, as list_workspaces reports it in dir. For the workspace this chat runs in, this process's HIVE_AGENT_WORKSPACE holds the workspace's absolute path: pass it as is, or its last path segment.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspace",
+        "cron",
+        "prompt"
+      ],
+      "type": "object"
+    },
+    "name": "preview_schedule",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "cronError": {
+          "type": "string"
+        },
+        "firstRunPrompt": {
+          "description": "The same template as the first run sees it, with .LastRun unset. Empty when it does not render.",
+          "type": "string"
+        },
+        "next": {
+          "description": "The next occurrences the cron produces, RFC 3339 local time. Empty when it does not parse.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "prompt": {
+          "description": "The template rendered against sample data with a previous run behind it. Empty when it does not render.",
+          "type": "string"
+        },
+        "promptError": {
+          "description": "Why the template does not render. One that only fails on the first run says so.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "next",
+        "prompt",
+        "firstRunPrompt"
+      ],
+      "type": "object"
+    },
+    "title": "Dry-run a schedule edit"
+  },
+  {
+    "description": "Create or update one schedule in a workspace's agent-workspace.yaml. A new id is appended and needs cron and prompt. An existing id is edited in place, field by field: a field you omit keeps its stored value, so re-timing a paused schedule leaves it paused, and name: \"\" clears the name. Every other key and comment in the file is kept. The cron and the prompt template are validated before anything is written; a rejected edit is invalid and leaves the file as it was. The schedule is live as soon as the call returns. A new or re-timed schedule never fires for a time before it existed.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "cron": {
+          "description": "A 5-field cron expression, or @hourly, @daily, @weekly, @monthly, @every 1h. Local time. Required for a new schedule.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "disabled": {
+          "description": "true pauses the schedule, false resumes it. Omitted, an existing schedule keeps its state.",
+          "type": [
+            "null",
+            "boolean"
+          ]
+        },
+        "id": {
+          "description": "[a-z0-9-]+, unique in the workspace. An existing id is edited in place; a new one is appended.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Optional. Shown in the UI and used to name the launched chat; when empty, both fall back to the id, and list_schedules reports no name. Pass \"\" to clear a stored name.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "onMissed": {
+          "description": "run (a new schedule's default) folds occurrences missed while the app was closed into one catch-up launch; skip records them instead of launching. Omitted, an existing schedule keeps its setting.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "prompt": {
+          "description": "A Go text/template rendered into the agent's opening message. Required for a new schedule. Variables: .Now, .ScheduledFor, .LastRun (unset on the first run: guard it with {{ if .LastRun }}), .Reason, .Missed, .Schedule.ID, .Schedule.Name, .Schedule.Cron, .Workspace.Dir, .Workspace.Name; date \"2006-01-02\" .LastRun formats a time and renders empty when it is unset. Write the task itself: Hive frames it with what started the chat and how to end the session. Use preview_schedule to check both renders.",
+          "type": [
+            "null",
+            "string"
+          ]
+        },
+        "workspace": {
+          "description": "The workspace directory name, as list_workspaces reports it in dir. For the workspace this chat runs in, this process's HIVE_AGENT_WORKSPACE holds the workspace's absolute path: pass it as is, or its last path segment.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspace",
+        "id"
+      ],
+      "type": "object"
+    },
+    "name": "put_schedule",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "cron": {
+          "type": "string"
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "lastRun": {
+          "additionalProperties": false,
+          "description": "The newest run whatever its outcome. Absent when the schedule has never run.",
+          "properties": {
+            "error": {
+              "type": "string"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "missed": {
+              "description": "How many earlier occurrences were folded into this run.",
+              "type": "integer"
+            },
+            "reason": {
+              "description": "due, catch_up, or manual.",
+              "type": "string"
+            },
+            "scheduleId": {
+              "type": "string"
+            },
+            "scheduledFor": {
+              "description": "RFC 3339, local time: the occurrence this run honored.",
+              "type": "string"
+            },
+            "session": {
+              "description": "The chat the run launched. Absent when it launched none, and once that chat has ended: a scheduled chat deletes itself when its task is done.",
+              "type": [
+                "null",
+                "integer"
+              ]
+            },
+            "startedAt": {
+              "type": "string"
+            },
+            "status": {
+              "description": "launched, skipped, or failed.",
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "scheduleId",
+            "scheduledFor",
+            "startedAt",
+            "reason",
+            "status",
+            "missed"
+          ],
+          "type": [
+            "null",
+            "object"
+          ]
+        },
+        "name": {
+          "description": "As stored. Absent when the schedule has none; the UI and the launched chat then use the id.",
+          "type": "string"
+        },
+        "nextRunAt": {
+          "description": "RFC 3339, local time. Absent when the schedule is disabled or its cron does not parse.",
+          "type": "string"
+        },
+        "onMissed": {
+          "type": "string"
+        },
+        "prompt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "cron",
+        "prompt",
+        "disabled",
+        "onMissed"
+      ],
+      "type": "object"
+    },
+    "title": "Create or update a scheduled chat"
+  },
+  {
+    "description": "Force one producer tick across all sources, dropping fetch caches. Returns aggregate totals rather than a per-source breakdown. Use it after changing a flow or pushing a test event instead of waiting for the next poll.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "name": "refresh_sources",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "appended": {
+          "description": "Number of inbox items appended across all sources.",
+          "type": "integer"
+        },
+        "failed": {
+          "description": "Number of sources that failed this tick.",
+          "type": "integer"
+        },
+        "sources": {
+          "description": "Number of sources that ran this tick.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sources",
+        "appended",
+        "failed"
+      ],
+      "type": "object"
+    },
+    "title": "Force a source refresh"
+  },
+  {
+    "description": "Delete one schedule from a workspace's agent-workspace.yaml. Its run history stays readable through schedule_runs. An id that matches no schedule is not_found; nothing is ever reported as removed that was not.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "workspace": {
+          "description": "The workspace directory name, as list_workspaces reports it in dir. For the workspace this chat runs in, this process's HIVE_AGENT_WORKSPACE holds the workspace's absolute path: pass it as is, or its last path segment.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspace",
+        "id"
+      ],
+      "type": "object"
+    },
+    "name": "remove_schedule",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "removed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "removed"
+      ],
+      "type": "object"
+    },
+    "title": "Remove a scheduled chat"
+  },
+  {
+    "description": "List one schedule's runs, newest first: what each honored, why it ran, whether it launched a chat, and any error. An empty list means the schedule has not run. History outlives the schedule, so a removed schedule still answers; a workspace that does not exist, or an id that is neither declared nor has ever run, is not_found. A run's session is the chat it launched, gone once that chat has ended. Running a schedule now is not a tool here: it spawns an agent CLI, which this server never does. That is the Chats area's \"Run now\".",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "limit": {
+          "description": "How many newest runs to return. 0 takes the default of 50.",
+          "type": "integer"
+        },
+        "workspace": {
+          "description": "The workspace directory name, as list_workspaces reports it in dir. For the workspace this chat runs in, this process's HIVE_AGENT_WORKSPACE holds the workspace's absolute path: pass it as is, or its last path segment.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workspace",
+        "id"
+      ],
+      "type": "object"
+    },
+    "name": "schedule_runs",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "runs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "missed": {
+                "description": "How many earlier occurrences were folded into this run.",
+                "type": "integer"
+              },
+              "reason": {
+                "description": "due, catch_up, or manual.",
+                "type": "string"
+              },
+              "scheduleId": {
+                "type": "string"
+              },
+              "scheduledFor": {
+                "description": "RFC 3339, local time: the occurrence this run honored.",
+                "type": "string"
+              },
+              "session": {
+                "description": "The chat the run launched. Absent when it launched none, and once that chat has ended: a scheduled chat deletes itself when its task is done.",
+                "type": [
+                  "null",
+                  "integer"
+                ]
+              },
+              "startedAt": {
+                "type": "string"
+              },
+              "status": {
+                "description": "launched, skipped, or failed.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "scheduleId",
+              "scheduledFor",
+              "startedAt",
+              "reason",
+              "status",
+              "missed"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "runs"
+      ],
+      "type": "object"
+    },
+    "title": "Read a schedule's run history"
+  },
+  {
+    "description": "Set a source node's feed-mark image from base64-encoded image bytes (PNG, JPEG, GIF or WebP). It is normalized to a 128x128 PNG and shown on that source's items instead of its icon. Webhook and command sources carry a mark; other node types are rejected.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "imageBase64": {
+          "description": "The image as base64 (PNG, JPEG, GIF or WebP). A data: URL is accepted and its prefix ignored.",
+          "type": "string"
+        },
+        "nodeId": {
+          "description": "Node id within that profile's flow; ids come from get_flow.",
+          "type": "string"
+        },
+        "profileId": {
+          "description": "Profile id from list_profiles.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId",
+        "nodeId",
+        "imageBase64"
+      ],
+      "type": "object"
+    },
+    "name": "set_node_image",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "hasImage": {
+          "type": "boolean"
+        },
+        "nodeId": {
+          "type": "string"
+        },
+        "profileId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId",
+        "nodeId",
+        "hasImage"
+      ],
+      "type": "object"
+    },
+    "title": "Set a source node's feed mark"
+  },
+  {
+    "description": "Set a profile's avatar from base64-encoded image bytes (PNG, JPEG, GIF or WebP — the format is sniffed, so no media type is needed). The image is normalized to a 128x128 PNG.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "imageBase64": {
+          "description": "The image as base64 (PNG, JPEG, GIF or WebP). A data: URL is accepted and its prefix ignored.",
+          "type": "string"
+        },
+        "profileId": {
+          "description": "Profile id from list_profiles.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profileId",
+        "imageBase64"
+      ],
+      "type": "object"
+    },
+    "name": "set_profile_image",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "hasImage": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "enabled",
+        "valid",
+        "hasImage"
+      ],
+      "type": "object"
+    },
+    "title": "Set a profile's avatar"
+  }
+]

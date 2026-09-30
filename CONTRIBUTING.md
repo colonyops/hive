@@ -5,7 +5,9 @@ The [README](README.md#contributing) covers prerequisites and local setup.
 ## Before you open a pull request
 
 Run `mise run check`. If you changed config behavior, also run
-`mise run validate`.
+`mise run validate`. A change to the desktop app owes what `cmd/desktop/AGENTS.md`
+asks for: a release-notes fragment and, for a Wails service change,
+regenerated bindings.
 
 The pull request template describes the title format and the scope list.
 
@@ -23,7 +25,7 @@ text. Use this practical subset:
 
 - Use words from the STE approved-vocabulary dictionary. Technical names that
   are not in the dictionary can be used as-is. Examples: `hc`, `tmux`, `mise`,
-  `sqlc`, Bubble Tea.
+  `sqlc`, `devserver`, `lefthook`, Bubble Tea, Wails, ADR.
 - Use one word for one meaning. Do not vary synonyms for style.
 - Use active voice only. Do not use passive constructions.
 - Use present or simple past tense. Do not use `-ing` gerunds or participles as

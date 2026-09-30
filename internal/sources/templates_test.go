@@ -1,54 +1,12 @@
 package sources_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// fakeSource is a minimal in-memory Source implementation shared by
-// tests in this package and later phases (TUI, registry).
-type fakeSource struct {
-	name      string
-	available bool
-	manifest  sources.Manifest
-	items     []sources.Item
-	detail    sources.Detail
-
-	initErr   error
-	searchErr error
-	detailErr error
-}
-
-func (f *fakeSource) Name() string { return f.name }
-
-func (f *fakeSource) Available(_ context.Context) bool { return f.available }
-
-func (f *fakeSource) Initialize(_ context.Context) (sources.Manifest, error) {
-	if f.initErr != nil {
-		return sources.Manifest{}, f.initErr
-	}
-	return f.manifest, nil
-}
-
-func (f *fakeSource) Search(_ context.Context, _ sources.SearchParams) (sources.SearchResult, error) {
-	if f.searchErr != nil {
-		return sources.SearchResult{}, f.searchErr
-	}
-	return sources.SearchResult{Items: f.items}, nil
-}
-
-func (f *fakeSource) FetchDetail(_ context.Context, _ sources.FetchDetailParams) (sources.Detail, error) {
-	if f.detailErr != nil {
-		return sources.Detail{}, f.detailErr
-	}
-	return f.detail, nil
-}
-
-var _ sources.Source = (*fakeSource)(nil)
 
 func TestRenderSessionTemplates(t *testing.T) {
 	tests := []struct {
@@ -182,7 +140,3 @@ func TestRenderSessionTemplates(t *testing.T) {
 		})
 	}
 }
-
-// Interface compliance of the test double is guaranteed at compile time by
-// the `var _ sources.Source = (*fakeSource)(nil)` assertion above;
-// no runtime test is needed.

@@ -1,0 +1,62 @@
+{
+  "name": "a function node's port-indexed return routes per port",
+  "why": "JavaScript's return shapes overlap: an array is either 'several messages on port 0' or 'one entry per port', and only the node's declared output count says which. Getting the disambiguation wrong sends every message down one branch.",
+  "flow": {
+    "id": "fn",
+    "name": "Fn",
+    "enabled": true,
+    "nodes": [
+      { "id": "src", "type": "sources.webhook", "path": "hook" },
+      {
+        "id": "split",
+        "type": "function",
+        "on_message": "return msg.Payload.n > 1 ? [msg, null] : [null, msg]",
+        "outputs": 2
+      },
+      { "id": "hi", "type": "feed" },
+      { "id": "lo", "type": "notify", "title": "low" }
+    ],
+    "wires": [
+      { "from": "src", "to": "split" },
+      { "from": "split", "out": 0, "to": "hi" },
+      { "from": "split", "out": 1, "to": "lo" }
+    ]
+  },
+  "batch": [
+    {
+      "ID": "1", "Key": "big", "Topic": "source:fn/src", "Ts": 1, "Snapshot": null,
+      "SourceKind": "webhook", "SourceScope": "hook", "OccurrenceKey": "oc-big",
+      "Payload": { "n": 2 }
+    },
+    {
+      "ID": "2", "Key": "small", "Topic": "source:fn/src", "Ts": 2, "Snapshot": null,
+      "SourceKind": "webhook", "SourceScope": "hook", "OccurrenceKey": "oc-small",
+      "Payload": { "n": 1 }
+    }
+  ],
+  "expected": {
+    "consumer": "fn",
+    "upToOffset": 2,
+    "outputs": [
+      {
+        "sink": { "kind": "feed", "targetId": "fn/hi" },
+        "key": "big", "payload": { "n": 2 }, "sourceKind": "webhook", "sourceScope": "hook",
+        "sourceTopic": "source:fn/src"
+      },
+      {
+        "sink": { "kind": "notify", "targetId": "fn/lo" },
+        "key": "small", "occurrenceKey": "oc-small", "payload": { "n": 1 },
+        "sourceKind": "webhook", "sourceScope": "hook",
+        "sourceTopic": "source:fn/src"
+      }
+    ],
+    "feedSnapshots": [],
+    "discards": [],
+    "nodeRuns": [
+      { "flowId": "fn", "nodeId": "src", "ok": true, "inCount": 2, "outCount": 2, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "fn", "nodeId": "split", "ok": true, "inCount": 2, "outCount": 2, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "fn", "nodeId": "hi", "ok": true, "inCount": 1, "outCount": 1, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "fn", "nodeId": "lo", "ok": true, "inCount": 1, "outCount": 1, "dropCount": 0, "err": "", "durMs": 0 }
+    ]
+  }
+}

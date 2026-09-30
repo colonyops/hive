@@ -4,24 +4,33 @@ linters:
   enable:
     - asciicheck
     - bodyclose
+    - containedctx
+    - contextcheck
     - depguard
     - dogsled
     - errcheck
     - errorlint
     - exhaustive
+    - forbidigo
+    - forcetypeassert
     - gochecknoinits
     - gocritic
     - goprintffuncname
     - govet
     - ineffassign
+    - interfacebloat
     - misspell
+    - modernize
     - nakedret
+    - noctx
     - revive
+    - sqlclosecheck
     - staticcheck
     - tagalign
     - testifylint
     - unconvert
     - unused
+    - usetesting
     - whitespace
     - zerologlint
   settings:
@@ -50,6 +59,78 @@ linters:
               desc: Shared internal/ must not render. Put UI code below cmd/<artifact>/internal.
             - pkg: github.com/wailsapp
               desc: Shared internal/ must not depend on the desktop runtime.
+        core:
+          files:
+            - "**/cmd/desktop/internal/app/**"
+          deny:
+            - pkg: github.com/wailsapp/wails/v3
+              desc: |
+                cmd/desktop/internal/app is the headless core: no transport, no
+                Wails. A Wails service struct belongs in
+                cmd/desktop/internal/adapter/wailsui; a core package that needs
+                something from the outside declares an interface and takes it
+                as a constructor parameter. See docs/architecture.md, "Layers
+                and the dependency rule".
+            - pkg: github.com/colonyops/hive/cmd/desktop/internal/adapter
+              desc: |
+                Dependencies point one way: adapter -> app -> shared internal.
+                A core package that needs something from an adapter has the
+                interface backwards — declare it in app and let the adapter
+                satisfy it structurally.
+        # The OpenTelemetry API/SDK split (docs/architecture.md, "Telemetry").
+        # Any package may import the API and declare its own instruments
+        # against the global provider, which is the no-op provider until
+        # cmd/desktop/internal/app/telemetry registers a real one. The SDK
+        # stays in one place. Test files are exempt because asserting on
+        # telemetry is what the SDK's in-memory readers are for.
+        otelsdk:
+          files:
+            - "$all"
+            - "!$test"
+            - "!**/cmd/desktop/internal/app/telemetry/**"
+          deny:
+            - pkg: go.opentelemetry.io/otel/sdk
+              desc: |
+                The OTel SDK is cmd/desktop/internal/app/telemetry's. A package
+                that emits declares package-level instruments through
+                cmd/desktop/internal/app/observe and needs no SDK type to do
+                it. See docs/architecture.md, "Telemetry".
+            - pkg: go.opentelemetry.io/otel/exporters
+              desc: |
+                An exporter is wired once, in cmd/desktop/internal/app/telemetry.
+                See docs/architecture.md, "Telemetry".
+        # cmd/desktop/internal/app consumes the shared hive packages only
+        # through the seam in dispatch/hive_adapters.go (docs/architecture.md,
+        # "Bounded Context"). The files list is the allowlist of files that sit
+        # on that seam.
+        hivecore:
+          files:
+            - "**/cmd/desktop/internal/app/**"
+            - "!**/cmd/desktop/internal/app/app.go"
+            - "!**/cmd/desktop/internal/app/dispatch/hive_adapters.go"
+            - "!**/cmd/desktop/internal/app/dispatch/hive_adapters_test.go"
+            - "!**/cmd/desktop/internal/app/dispatch/hive_hc_adapters.go"
+            - "!**/cmd/desktop/internal/app/dispatch/hive_hc_adapters_test.go"
+            - "!**/cmd/desktop/internal/app/dispatch/session_git_status_test.go"
+            - "!**/cmd/desktop/internal/app/dispatch/launch_session_executor_test.go"
+            - "!**/cmd/desktop/internal/app/data/queries/dbext.go"
+            - "!**/cmd/desktop/internal/app/data/queries/dbext_test.go"
+            - "!**/cmd/desktop/internal/app/hiveconf/hiveconf_test.go"
+          deny:
+            - pkg: github.com/colonyops/hive/internal/core
+              desc: &seam |
+                cmd/desktop/internal/app consumes the shared hive packages only
+                through the seam: declare a narrow interface here, let the
+                shared type satisfy it structurally, and convert at the
+                boundary in dispatch/hive_adapters.go. If this file genuinely
+                belongs at the seam, extend the allowlist in this rule's
+                `files`, with a comment saying why.
+            - pkg: github.com/colonyops/hive/internal/data
+              desc: *seam
+            - pkg: github.com/colonyops/hive/internal/hive
+              desc: *seam
+            - pkg: github.com/colonyops/hive/internal/sources
+              desc: *seam
         cli-no-desktop-deps:
           files:
             - "**/cmd/hive/**"
@@ -60,11 +141,35 @@ linters:
               desc: The CLI must not depend on the desktop flow runtime.
             - pkg: go.opentelemetry.io/otel/sdk
               desc: The CLI must not depend on the desktop telemetry runtime.
+            - pkg: github.com/colonyops/hive/cmd/desktop
+              desc: The CLI must not import the desktop program.
     exhaustive:
       default-signifies-exhaustive: true
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^application\.Get$
+          msg: >-
+            Rule 2: application.Get() is only valid inside
+            cmd/desktop/internal/adapter/wailsui. Take what you need as a
+            constructor parameter instead.
+        - pattern: ^context\.Background$
+          msg: >-
+            Rule 3: context.Context is the first parameter of every core
+            method. context.Background() inside a service method makes CLI
+            cancellation and HTTP deadlines impossible.
+        - pattern: ^emit[A-Z]\w*$
+          msg: >-
+            Rule 5: the core publishes a typed payload to app/events. Wake-up
+            degradation belongs to the wailsui adapter subscriber.
     gocritic:
       enabled-checks:
         - ruleguard
+    interfacebloat:
+      # Consumer-defined interfaces here are narrow, but
+      # dispatch.OutputCommandStore has seven that are the complete lifecycle
+      # of one entity, and the worker calls all seven.
+      max: 8
     revive:
       confidence: 3
       severity: warning
@@ -80,6 +185,34 @@ linters:
       enable-all: true
   exclusions:
     generated: lax
+    rules:
+      # The linters Hive Desktop adopted beyond the shared set apply to the
+      # desktop program only. The CLI and the shared packages keep the set
+      # they were written against.
+      - path-except: (^|/)cmd/desktop/
+        linters: [containedctx, contextcheck, forbidigo, forcetypeassert, interfacebloat, modernize, noctx, sqlclosecheck, usetesting]
+      # forbidigo has no per-rule path filter, so the scope of its rules is
+      # carved here. The adapter and package main are where application.Get,
+      # context.Background and the emit helpers belong. Directory rules match
+      # "(^|/)dir/", never "^dir/": golangci-lint reports a file relative to a
+      # base derived from the shared build cache, so an anchored exclusion can
+      # silently stop matching in a second checkout.
+      - path: (^|/)cmd/desktop/internal/adapter/wailsui/
+        linters: [forbidigo]
+      - path: (^|/)cmd/desktop/[^/]+\.go$
+        linters: [forbidigo]
+      # app.App holds the application's lifetime context. The config watchers
+      # and the auth change hook are wired at construction and run on their
+      # own goroutines, so there is no caller context to thread.
+      - path: (^|/)cmd/desktop/internal/app/app\.go
+        linters: [containedctx]
+      # Desktop dev and release tooling: a main() is a legitimate context
+      # root, and a git subprocess in a build tool needs no cancellation.
+      - path: (^|/)cmd/desktop/(devserver|devtools)/
+        linters: [forbidigo, noctx, contextcheck]
+      # httptest.NewRequest and http.Post in tests.
+      - path: _test\.go
+        linters: [noctx]
     paths:
       - third_party$
       - builtin$

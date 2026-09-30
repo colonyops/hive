@@ -1,0 +1,11 @@
+version: 1
+packages:
+  hive:
+    title: Hive
+    description: Configure Hive Desktop itself — flows, actions, settings, webhooks.
+    include:
+      - "hive-*"
+  infra:
+    title: Infrastructure
+    include: ["terraform-*", "k8s-*", "runbook"]
+    exclude: ["terraform-experimental"]

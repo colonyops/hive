@@ -26,6 +26,7 @@ jobs:
       go: ${{ steps.filter.outputs.go }}
       cli-integration: ${{ steps.filter.outputs.cli-integration }}
       site: ${{ steps.filter.outputs.site }}
+      desktop-frontend: ${{ steps.filter.outputs.desktop-frontend }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -41,7 +42,12 @@ jobs:
               - '.golangci.yml'
               - 'sqlc.yaml'
               - 'internal/data/db/**'
+              - 'cmd/desktop/internal/app/data/queries/**'
+              - 'cmd/desktop/frontend/bindings/**'
+              - 'cmd/desktop/scripts/**'
+              - 'docs/decisions/**'
               - 'mise.toml'
+              - 'cmd/desktop/tasks.toml'
               - '.github/workflows/**'
               - '.github/actions/**'
             cli-integration:
@@ -60,6 +66,10 @@ jobs:
               - 'docs/**'
               - 'mise.toml'
               - '.github/workflows/ci.yml'
+            desktop-frontend:
+              - 'cmd/desktop/frontend/**'
+              - 'cmd/desktop/internal/app/flow/docs/**'
+              - '.github/workflows/ci.yml'
 
   go:
     needs: changes
@@ -71,9 +81,19 @@ jobs:
       - uses: ./.github/actions/setup-go-env
 
       - name: Check generated files are up-to-date
-        run: |
-          mise run --force generate
-          git diff --exit-code -- '*.gen.go' 'internal/data/db/db.go' 'internal/data/db/models.go' 'internal/data/db/queries.sql.go' || (echo "Generated files are out of date. Run 'mise run generate' and commit the result." && exit 1)
+        run: mise run check:generate
+
+      # Binding method IDs hash the Go package path, so a service that moved
+      # without a regenerate leaves committed TypeScript that typechecks and
+      # fails every RPC at runtime. Nothing else in this workflow can see it.
+      - name: Check Wails bindings are up-to-date
+        run: mise run desktop:check:bindings
+
+      - name: Check ADR ids, citations, and index
+        run: mise run check:adr
+
+      - name: Check desktop migrations are ordered and released history is immutable
+        run: mise run desktop:check:migrations
 
       - name: Check go.mod and go.sum are tidy
         run: mise run check:tidy
@@ -110,6 +130,15 @@ jobs:
       - name: Check goreleaser config
         run: mise run check:goreleaser
 
+      # Neither is in `mise run check`: deadcode builds the program's SSA and
+      # govulncheck needs the network, so both are past what a pre-push hook
+      # should cost.
+      - name: Check for unreachable code
+        run: mise run check:deadcode
+
+      - name: Check dependencies for known vulnerabilities
+        run: mise run check:vuln
+
   integration:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.cli-integration == 'true'
@@ -121,6 +150,52 @@ jobs:
 
       - name: Run integration tests
         run: mise run integration
+
+  # The vue-tsc typecheck and the vitest suite are independent; one job made
+  # the shorter wait on the longer.
+  desktop-frontend-build:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.desktop-frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cmd/desktop/frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cmd/desktop/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+  desktop-frontend-test:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.desktop-frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cmd/desktop/frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cmd/desktop/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Test frontend
+        run: npm test
 
   site:
     needs: changes
@@ -145,7 +220,7 @@ jobs:
   # fails here.
   ci-ok:
     if: always()
-    needs: [changes, go, go-lint, integration, site]
+    needs: [changes, go, go-lint, integration, desktop-frontend-build, desktop-frontend-test, site]
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

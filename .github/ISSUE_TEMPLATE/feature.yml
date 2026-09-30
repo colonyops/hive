@@ -17,6 +17,7 @@ body:
       label: Which part of Hive?
       options:
         - hive CLI/TUI
+        - Hive Desktop
         - Docs sites
         - Not sure
     validations:

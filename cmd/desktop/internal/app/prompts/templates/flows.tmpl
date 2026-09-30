@@ -1,0 +1,38 @@
+Author or edit a Hive Desktop pipeline flow.
+{{template "app" .}}
+Write the flow to {{.Env.FlowsDir}}/<id>.yaml. The flow's id is the filename
+stem — flows/triage.yaml is the flow "triage" — and is never written inside the
+file. A sibling flows/<id>.ui.yaml holds canvas positions; leave it alone, the
+app maintains it.
+{{template "yaml-strict" .}}
+## Top-level schema
+
+- `version` — must be `1`.
+- `name` — display name.
+- `enabled` — optional bool, defaults to true.
+- `nodes` — the graph's nodes. Every node has:
+  - `id` — unique within the flow.
+  - `type` — one of the node types documented below.
+  - `name` — optional display name; falls back to the type's label.
+  - `disabled` — optional bool. A disabled node drops every message it receives instead of running.
+  - plus that type's own fields, **flattened at the same level** — not nested under a `config:` key.
+- `wires` — connections, each `{ from, out, to }`. `from`/`to` are node ids; `out` is the source node's output port index and defaults to 0, so omit it for single-output nodes.
+
+A node's ports are fixed by its type: wiring into a source, out of a terminal,
+or to an output index the type does not have is a validation error.
+
+## Node types
+{{range .Groups}}
+### {{.Name}}
+{{range .Types}}
+{{section 4 .Type .Doc}}
+{{end}}{{end}}
+## Worked example
+
+A complete, valid flow — a GitHub search filtered down to non-bot PRs in one
+org, tagged by a function node, then routed to both a feed and an action:
+
+```yaml
+{{.Example}}
+```
+{{template "task" .}}

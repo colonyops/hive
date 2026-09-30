@@ -23,3 +23,16 @@ sql:
             go_type:
               import: "github.com/colonyops/hive/internal/core/hc"
               type: "ItemType"
+  - engine: "sqlite"
+    queries:
+      - "cmd/desktop/internal/app/data/queries/queries"
+    schema: "cmd/desktop/internal/app/data/queries/migrations/*.up.sql"
+    gen:
+      go:
+        package: "queries"
+        out: "cmd/desktop/internal/app/data/queries"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: false
+        emit_exact_table_names: false
+        emit_empty_slices: true

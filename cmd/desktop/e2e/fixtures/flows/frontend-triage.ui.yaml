@@ -1,0 +1,7 @@
+nodes:
+  gh-source:
+    x: 48
+    y: 48
+  notifications-inbox:
+    x: 360
+    y: 48

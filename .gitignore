@@ -30,6 +30,31 @@ site/
 # The site's Python environment and Zensical's cache (docs/)
 .venv/
 .cache/
-# binary
+
+# Hive Desktop (cmd/desktop)
+.DS_Store
+*.log
+bin/
+node_modules/
+# `wails3 generate bindings` stages into a temp directory beside the frontend
+# and swaps it into cmd/desktop/frontend/bindings/. An interrupted run leaves
+# one behind, and it is 68 files a `git add -A` will take.
+cmd/desktop/frontend/.bindings-tmp-*/
+# Local env
+.env
+launch.env
+launch.onboarding.env
+overrides.env
+.hive-desktop/
+.hive-desktop-onboarding/
+.hive-desktop.lock/
+.hive-desktop.lock.stale.*/
+.hive-desktop-onboarding.lock/
+.hive-desktop-onboarding.lock.stale.*/
+# Binaries `go build ./cmd/<name>` drops in the repo root
 /hive
 /cmd/hive/hive
+/adr
+/devserver
+/devtools
+/release

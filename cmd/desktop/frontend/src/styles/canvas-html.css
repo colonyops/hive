@@ -1,0 +1,200 @@
+/* Agent-authored html canvas blocks. The agent writes semantic markup and
+   picks names from the hv- vocabulary; every colour, size and space below is
+   the app's, so a canvas follows the theme, survives a restyle, and two
+   canvases written months apart still look like the same product
+   (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).
+
+   internal/app/canvas/html.go holds the allowlist this file styles, and
+   TestHTMLVocabularyIsStyledAndDocumented fails when the two drift apart.
+
+   Deliberately not .markdown-body: that sheet is shared with untrusted GitHub
+   issue and PR bodies and must not grow a layout vocabulary. */
+.hv-html {
+  --hv-font-size: 13.5px;
+  --hv-line-height: 1.65;
+  container-type: inline-size;
+  overflow-wrap: break-word;
+  font-size: var(--hv-font-size);
+  line-height: var(--hv-line-height);
+
+  /* A block may write any class, so it may reach the global utilities and
+     position itself. contain: layout makes this element the containing block
+     for fixed and absolute descendants, which keeps a block inside the pane
+     it was written for. Measured: without it, `class="fixed inset-0"` covers
+     the whole window; with it, the sidebar still paints on top
+     (ADR a-canvas-html-block-is-restricted-by-what-it-can-reach-not-by-how-it-looks).
+     container-type alone does not do this. */
+  contain: layout;
+}
+
+/* Base elements, so an agent that names no class at all still gets a
+   readable document. */
+.hv-html h1, .hv-html h2, .hv-html h3,
+.hv-html h4, .hv-html h5, .hv-html h6 {
+  margin: 16px 0 8px; color: var(--color-text); font-weight: 650;
+  line-height: calc(var(--hv-line-height) * 0.79);
+}
+.hv-html h1 { font-size: 1.333em; }
+.hv-html h2 { font-size: 1.185em; }
+.hv-html h3 { font-size: 1.074em; }
+.hv-html h4, .hv-html h5, .hv-html h6 { font-size: 1em; }
+.hv-html *:first-child { margin-top: 0; }
+.hv-html *:last-child { margin-bottom: 0; }
+.hv-html p { margin: 8px 0; }
+.hv-html a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.hv-html a:hover { text-decoration-thickness: 2px; }
+.hv-html strong, .hv-html b { color: var(--color-text); font-weight: 650; }
+.hv-html s { color: var(--color-text-3); }
+.hv-html small { font-size: 0.86em; }
+.hv-html mark { padding: 0 3px; border-radius: 4px; background: var(--color-accent-tint); color: var(--color-text); }
+.hv-html abbr { text-decoration: underline dotted; }
+.hv-html ul, .hv-html ol { margin: 8px 0; padding-left: 22px; }
+.hv-html ul { list-style: disc; }
+.hv-html ol { list-style: decimal; }
+.hv-html li { margin: 3px 0; }
+.hv-html li::marker { color: var(--color-text-4); }
+.hv-html dl { margin: 8px 0; }
+.hv-html dd { margin: 0 0 4px; }
+.hv-html blockquote {
+  margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--color-border);
+  color: var(--color-text-3);
+}
+.hv-html hr { margin: 14px 0; border: 0; border-top: 1px solid var(--color-border); }
+.hv-html code, .hv-html kbd, .hv-html samp {
+  padding: 1.5px 6px; border-radius: 5px; background: var(--color-card);
+  font-family: var(--font-mono); font-size: 0.86em;
+}
+.hv-html pre {
+  margin: 10px 0; padding: 12px 14px; overflow-x: auto; border-radius: 7px;
+  background: var(--color-card); line-height: calc(var(--hv-line-height) * 0.91);
+}
+.hv-html pre code { padding: 0; background: transparent; }
+.hv-html table {
+  display: block; margin: 10px 0; overflow-x: auto;
+  border-collapse: collapse; font-size: 0.95em;
+}
+.hv-html th, .hv-html td { padding: 5px 11px; border: 1px solid var(--color-border); text-align: left; }
+.hv-html th { background: var(--color-card); color: var(--color-text); font-weight: 650; }
+.hv-html caption { padding-bottom: 6px; color: var(--color-text-4); font-size: 0.9em; text-align: left; }
+.hv-html details {
+  margin: 10px 0; padding: 8px 12px; border: 1px solid var(--color-border);
+  border-radius: 7px; background: var(--color-card);
+}
+.hv-html summary { cursor: pointer; color: var(--color-text); font-weight: 650; }
+.hv-html details[open] summary { margin-bottom: 8px; }
+.hv-html img { max-width: 100%; height: auto; border-radius: 6px; }
+.hv-html figure { margin: 10px 0; }
+.hv-html figcaption { margin-top: 4px; color: var(--color-text-4); font-size: 0.86em; }
+
+/* Layout. Structure only — a container never sets a colour, so nesting one
+   inside another cannot produce a combination the theme has no answer for. */
+.hv-stack { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; }
+.hv-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; }
+.hv-grid {
+  display: grid; gap: 10px; margin: 10px 0;
+  grid-template-columns: repeat(var(--hv-cols, 2), minmax(0, 1fr));
+}
+.hv-cols-2 { --hv-cols: 2; }
+.hv-cols-3 { --hv-cols: 3; }
+.hv-cols-4 { --hv-cols: 4; }
+
+/* The pane is user-resizable down to 300px, where any multi-column grid is
+   unreadable. The em threshold grows with the reader's text size, so larger
+   type earns a single column sooner. */
+@container (max-width: 26.667em) {
+  .hv-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Containers. */
+.hv-card {
+  padding: 10px 12px; border: 1px solid var(--color-border);
+  border-radius: 8px; background: var(--color-raised);
+}
+.hv-panel { padding: 10px 12px; border-radius: 8px; background: var(--color-card); }
+.hv-callout {
+  --hv-tone: var(--color-text-3);
+  margin: 10px 0; padding: 8px 12px;
+  border-left: 3px solid var(--hv-tone); border-radius: 0 7px 7px 0;
+  background: color-mix(in srgb, var(--hv-tone) 8%, transparent);
+  color: var(--color-text-2);
+}
+
+/* Data. */
+.hv-stat { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.hv-stat-value {
+  color: var(--color-text); font-size: 1.407em; font-weight: 650;
+  line-height: calc(var(--hv-line-height) * 0.73); font-variant-numeric: tabular-nums;
+}
+.hv-stat-label {
+  color: var(--color-text-4); font-size: 0.778em; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.hv-kv {
+  display: grid; grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 14px; margin: 10px 0;
+}
+.hv-kv dt { color: var(--color-text-3); }
+.hv-kv dd { min-width: 0; margin: 0; color: var(--color-text); }
+
+/* Emphasis. */
+.hv-badge {
+  --hv-tone: var(--color-text-3);
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 8px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--hv-tone) 35%, transparent);
+  background: color-mix(in srgb, var(--hv-tone) 14%, transparent);
+  color: var(--hv-tone);
+  font-size: 0.815em; font-weight: 600;
+  line-height: calc(var(--hv-line-height) * 1.03); white-space: nowrap;
+}
+.hv-muted { color: var(--color-text-4); }
+.hv-mono { font-family: var(--font-mono); font-size: 0.9em; font-variant-numeric: tabular-nums; }
+
+/* Diagrams. These are defaults an agent gets for free, not rules: a drawing
+   with no class on it still follows the theme, and anything it sets for
+   itself wins.
+
+   A viewBox is what makes a drawing scalable, so that is what the width rule
+   selects on. A drawing that states its own width and height keeps it, and
+   max-width stops either kind from overflowing the pane. */
+.hv-html svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 10px 0;
+  color: var(--color-text-3);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  font-size: 0.889em;
+}
+
+.hv-html svg[viewBox] { width: 100%; }
+
+/* No font rule here: it lives on the svg above so that hv-mono and hv-muted
+   win on a <text> exactly as they do on a <span>. */
+.hv-html svg text { fill: currentColor; stroke: none; }
+
+/* Roles. Each takes its colour from --hv-tone when a tone class sets one —
+   on the element, or on a <g> around a whole path — and otherwise from the
+   ink that role reads best in. */
+.hv-html svg .hv-node {
+  fill: var(--color-raised); stroke: currentColor;
+  color: var(--hv-tone, var(--color-border));
+}
+.hv-html svg .hv-edge { fill: none; stroke: currentColor; color: var(--hv-tone, var(--color-text-4)); }
+.hv-html svg .hv-arrow { fill: currentColor; stroke: none; color: var(--hv-tone, var(--color-text-4)); }
+.hv-html svg .hv-label { color: var(--hv-tone, var(--color-text)); font-weight: 600; }
+.hv-html svg .hv-dashed { stroke-dasharray: 5 4; }
+
+/* Tones for hv-callout, hv-badge and the diagram roles. These must stay after
+   the two components: they carry the same specificity, so source order is the
+   only thing that lets `class="hv-badge hv-error"` win over the component's
+   own default tone. */
+.hv-info { --hv-tone: var(--color-severity-info); }
+.hv-success { --hv-tone: var(--color-severity-success); }
+.hv-warn { --hv-tone: var(--color-severity-warning); }
+.hv-error { --hv-tone: var(--color-severity-error); }
+.hv-accent { --hv-tone: var(--color-accent); }

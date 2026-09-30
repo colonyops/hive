@@ -1,17 +1,80 @@
 # Agent Instructions
 
-## Project Overview
+One repository, one Go module, four things in it:
 
-**Hive** is a CLI/TUI for managing multiple AI agent sessions in isolated git environments. Instead of manually managing worktrees, hive handles cloning, recycling, and spawning terminal sessions with your preferred AI tool.
+| Path | What | Guide |
+| --- | --- | --- |
+| `cmd/hive/` | The **hive CLI/TUI**: a tmux-native command center that runs coding agents in isolated git clones with live status, shared context, tasks, and inter-agent messaging. The root program (`main.go` keeps `go install github.com/colonyops/hive@latest` working). | This file |
+| `cmd/desktop/` | **Hive Desktop**, the Wails v3 app: an inbox that collects work into feeds, a Code area on the CLI's session engine, and agent chat workspaces. | [`cmd/desktop/AGENTS.md`](cmd/desktop/AGENTS.md) |
+| `internal/` | The packages both programs share: config, sessions, git, the `hive.db` stores, messaging, hc, terminal status, HTTP plumbing. | [`docs/architecture.md`](docs/architecture.md) |
+| `docs/` | hivedesktop.com: the landing page and the product docs for both programs (Zensical; pages under `docs/docs/`). The contributor docs sit beside it: `docs/architecture.md`, `docs/decisions/`, `docs/distribution.md`. | [`docs/AGENTS.md`](docs/AGENTS.md) |
+| `cmd/tools/` | Development and release binaries that never ship: `adr` (decision records) and `release` (the desktop publisher and changelog commands, plus `release cli tag` for the CLI's publish workflow). | |
 
-Key capabilities:
+## Before building a feature
 
-- **Session Management** - Create, recycle, and prune isolated git clones
-- **Terminal Integration** - Real-time status monitoring of AI agents in tmux
-- **Inter-agent Messaging** - Pub/sub communication between sessions
-- **Context Directories** - Shared storage per repository via `.hive` symlinks
+**Read [`docs/architecture.md`](docs/architecture.md) first.** It is the
+standing reference for how the desktop app is structured and how it should
+grow: the core/adapter shape, the named patterns each part follows, the
+directory layout, the extension points, and the rules every PR is reviewed
+against. The document describes a **target state**; where the current code
+and the document disagree, the document wins for new work.
 
-## Architecture
+Shared `internal/` must not import charm, Wails, or anything below `cmd/`.
+`cmd/hive` must not import the desktop program, and `cmd/desktop/internal/app`
+consumes the shared packages only through its seam. depguard fails the lint on
+a violation (`.golangci.yml`).
+
+## Comments
+
+Much of the existing code is densely commented. **It is not the target; do not
+match it.** Draft, then delete every comment a competent reader could derive
+from the code itself. The same restraint applies to prose: an ADR states the
+decision and the constraint that forced it, not every alternative considered.
+
+## Documentation
+
+- `docs/architecture.md` is the standing architectural reference. Keep it
+  current when the shape changes; it is reviewed as a spec, not as prose.
+- Record notable architecture and infrastructure decisions as ADRs in
+  `docs/decisions/`. Start one with
+  `mise run adr:new -- "The decision, as a sentence"`. Never hand-name the
+  file and never add a number (ADR adr-ids-are-not-allocated). Cite an ADR by
+  its slug alone, `(ADR terminal-transport)`, and link it as
+  `[…](decisions/2026-07-28-terminal-transport.md)`; `mise run check:adr`
+  fails on a citation that does not resolve.
+- Distribution facts for the desktop (bucket, domains, manifest schema,
+  runbooks) live in `docs/distribution.md`.
+- User-facing product docs are the site under `docs/docs/`; the `web-docs`
+  and `docs-audit` skills govern them.
+
+## Quality gates
+
+Every gate is a mise task (`mise tasks`). The hive CLI holds the bare task
+names; the desktop's are `desktop:*` (`cmd/desktop/tasks.toml`) and the
+site's are `docs:*` (`docs/tasks.toml`). lefthook runs the relevant gates as
+git hooks; `mise install` wires them up (`postinstall` → `scripts/hooks/install.sh`).
+
+- **pre-commit** (~0.1s): formats staged Go files and re-stages them; when a
+  generator input is staged, regenerates and blocks if the committed output
+  differs.
+- **pre-push**: `mise run check` (generated code, ADRs, desktop migrations,
+  tidy, lint, Go tests, goreleaser config), plus the frontend unit tests when
+  the push touches `cmd/desktop/frontend/`. `check` needs no Python, Node, or
+  Docker.
+- **CI-only**: `check:deadcode`, `check:vuln`, `desktop:check:bindings`, the
+  frontend build and tests, the site build, and the CLI's Docker integration
+  tests.
+
+**`mise run ci` runs every gate, including the desktop e2e suite that GitHub
+CI does not run.** Prefer it over pushing to find out.
+
+Wails TS bindings are deliberately not hooked: they need a full app build. Run
+`mise run desktop:bindings` when a service surface changes; CI checks them.
+
+**Never bypass a hook**: no `LEFTHOOK=0`, `git commit -n`, or
+`git push --no-verify`. A failing gate is a task to finish.
+
+## The hive CLI
 
 ### Core Concepts
 
@@ -47,7 +110,9 @@ cmd/hive/
     ├── commands/   # CLI command handlers (urfave/cli/v3)
     ├── styles/     # lipgloss styles
     └── tui/        # Bubble Tea TUI (tree view, modals, keybindings)
-docs/               # hivedesktop.com: the landing page and the docs for the CLI and Hive Desktop (see docs/AGENTS.md)
+cmd/desktop/        # Hive Desktop (see cmd/desktop/AGENTS.md)
+cmd/tools/          # adr, release
+docs/               # hivedesktop.com (docs/docs/) and the contributor docs (see docs/AGENTS.md)
 internal/           # Shared with Hive Desktop
 ├── core/
 │   ├── config/     # Configuration loading, validation, defaults
@@ -62,7 +127,7 @@ internal/           # Shared with Hive Desktop
 └── printer/        # Output formatting utilities
 ```
 
-Shared `internal/` must not import charm or anything below `cmd/`. Hive Desktop uses those packages, and depguard fails the lint on a violation. UI code goes below `cmd/hive/internal/`.
+UI code goes below `cmd/hive/internal/`.
 
 ### Key Files
 
@@ -76,26 +141,25 @@ Shared `internal/` must not import charm or anything below `cmd/`. Hive Desktop 
 | `cmd/hive/internal/tui/views/sessions/tree_view.go` | Session tree with status indicators         |
 | `internal/integration/terminal/detector.go` | AI agent status detection patterns                  |
 
-## Development
+### Development
 
-### Commands
+#### Commands
 
 ```bash
 mise run start            # Run with global config (supports CLI args)
 mise run dev              # Run with dev config (supports CLI args)
 mise run dev -- new       # Example: run 'hive new' with dev config
 mise run build            # Build with goreleaser
-mise run test             # Run tests with go test
+mise run test             # Run every Go test in the module (CLI, shared, desktop)
 mise run lint             # Run golangci-lint
-mise run check            # check:tidy + lint + test + goreleaser check; read-only, no Python or Docker
-mise run ci               # check + site build + deadcode report + Docker integration tests
+mise run check            # The Go gate; read-only
+mise run ci               # Every gate, including the site, the frontend, and e2e
 mise run tidy             # go mod tidy (the counterpart of check:tidy that changes files)
 mise run coverage         # Generate coverage report
-mise run docs:build       # Build hivedesktop.com into docs/site/ (docs:serve for live reload)
 mise container            # Build and launch an ephemeral Docker container with hive pre-installed
 ```
 
-### Manual Testing
+#### Manual Testing
 
 Use `mise container` to manually test hive end-to-end. It builds the current branch and drops you into an isolated Docker container with hive installed and tmux available — no need to install a local binary or worry about polluting your dev environment.
 
@@ -108,7 +172,7 @@ hv ls
 
 This is the preferred way to test CLI/TUI behavior, session creation, branch templates, tmux integration, and anything that requires a real git environment. Do NOT attempt to test by manually building and replacing a binary in your PATH.
 
-### Environment
+#### Environment
 
 Dev environment uses `cmd/hive/dev/config.dev.yaml` and `.data/` for isolation:
 
@@ -119,9 +183,9 @@ HIVE_CONFIG=./cmd/hive/dev/config.dev.yaml
 HIVE_DATA_DIR=./.data
 ```
 
-## Code Generation
+### Code Generation
 
-### go-enum
+#### go-enum
 
 Enum types use `// ENUM(...)` comments processed by go-enum. Generated files (`*_enum.go`) are committed and must never be edited manually.
 
@@ -140,7 +204,7 @@ This generates constants (`ItemTypeEpic`, `ItemTypeTask`), `ParseItemType`, `IsV
 
 **When adding a new value**, update the `ENUM(...)` comment, run `mise run generate:enums`, then update any `switch` statements or `criterio.OneOf(...)` validators that enumerate the values. Also add the source file to `sources` in `mise.toml` under `[tasks."generate:enums"]` if it's a new file.
 
-### sqlc
+#### sqlc
 
 Queries live in `internal/data/db/queries/`. Generated files (`queries*.sql.go`, `models.go`) are committed and must never be edited manually.
 
@@ -155,9 +219,9 @@ sqlc generate        # directly
 
 Always commit the generated `*.sql.go` and `models.go` alongside the SQL changes in the same commit.
 
-## Code Patterns
+### Code Patterns
 
-### Integration Tests
+#### Integration Tests
 
 Integration tests live in `test/integration/` and require a compiled binary. They use the `integration` build tag and are excluded from the standard `mise run test` run.
 
@@ -184,7 +248,7 @@ What belongs in integration tests vs unit tests:
 - **Integration**: end-to-end CLI flag wiring, stdin/stdout behavior, multi-command workflows, session detection
 - **Unit**: business logic, validation rules, store behavior (using real SQLite via `db.Open(t.TempDir(), ...)`), service orchestration
 
-### Bubble Tea (TUI)
+#### Bubble Tea (TUI)
 
 Standard Model/Update/View pattern. Key messages:
 
@@ -193,14 +257,14 @@ Standard Model/Update/View pattern. Key messages:
 - `terminalPollTickMsg` - Terminal status polling tick
 - `actionCompleteMsg` - Keybinding action finished
 
-### Configuration
+#### Configuration
 
 Two validation phases:
 
 1. **Basic** (`Validate()`) - Struct validation, required fields
 2. **Deep** (`ValidateDeep()`) - File access, template syntax, regex patterns
 
-### Templates
+#### Templates
 
 Commands support Go templates with `shq` function for shell quoting:
 
@@ -211,11 +275,11 @@ spawn:
 
 Available variables vary by context - see `internal/core/config/validate.go` for `*TemplateData` structs.
 
-### Error Handling
+#### Error Handling
 
 Never silently discard errors. If an error cannot be presented to the user (e.g., in background polling, cache refresh, or TUI status fetching), log it at an appropriate level (`debug` for expected/transient failures, `warn` for configuration problems). Prefer degraded behavior with logging over silent fallbacks — for example, show a `StatusMissing` indicator instead of dropping an item from the UI.
 
-### Keybinding Precedence
+#### Keybinding Precedence
 
 The TUI dispatches keystrokes through three layers, in this order:
 
@@ -225,7 +289,7 @@ The TUI dispatches keystrokes through three layers, in this order:
 
 When adding a new overridable key, do not add a new `if keyStr == "X"` block in view code. Register an `action.Type` in `internal/core/action/type.go`, add a default `UserCommand` in `defaultUserCommands` (`internal/core/config/config.go`), bind it in `defaultViewsConfig`, and dispatch it from `cmd/hive/internal/tui/model_handlers.go`.
 
-### Session States
+#### Session States
 
 ```
 (new) ──► active ──► recycled ──► (deleted)
@@ -237,7 +301,7 @@ When adding a new overridable key, do not add a new `if keyStr == "X"` block in 
 
 `hive hc` is the built-in task coordination system for multi-agent workflows. A conductor creates epics and tasks; workers claim and complete them.
 
-### Quick Reference
+#### Quick Reference
 
 ```bash
 # Conductor: create work (simple)
@@ -278,7 +342,7 @@ hive hc list --status done            # filter by specific status
 hive hc list --session <session-id>   # filter by session
 ```
 
-### Key Commands
+#### Key Commands
 
 | Command | Purpose |
 | ------- | ------- |

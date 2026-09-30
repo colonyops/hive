@@ -1,0 +1,121 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    // Rewrite `uses: org/action@v1` to a digest plus a version comment, then
+    // keep the digest current. Tags are mutable; digests are not.
+    "helpers:pinGitHubActionDigests",
+    // Same reasoning for FROM lines. desktop/e2e/Dockerfile is already
+    // digest-pinned by hand; this keeps that property from regressing.
+    "docker:pinDigests",
+  ],
+  timezone: "America/Chicago",
+
+  // Weekly batch, Monday before 5am. Security fixes opt out (see
+  // vulnerabilityAlerts). Cron rather than the "before 5am on monday" dialect:
+  // that syntax is deprecated and slated for removal in a future major.
+  schedule: ["* 0-4 * * 1"],
+  prConcurrentLimit: 5,
+  prHourlyLimit: 0,
+
+  // Mirror the local supply-chain policy: cmd/desktop/frontend/.npmrc refuses
+  // installs of releases younger than 7 days, so a bot PR proposing one would
+  // be uninstallable by anyone honouring that setting (pnpm/bun) and would
+  // reintroduce the exposure the setting exists to block. `strict` withholds
+  // the update entirely rather than opening a PR that then sits pending.
+  minimumReleaseAge: "7 days",
+  internalChecksFilter: "strict",
+
+  // ignorePaths is not mergeable, so this REPLACES the list config:recommended
+  // supplies via :ignoreModulesAndTests rather than adding to it — the first
+  // eight entries restore that default and must stay.
+  //
+  // cmd/desktop/build is wails3-generated scaffolding that `wails3 update
+  // build-assets` regenerates, so bot edits there would be silently reverted
+  // (Dockerfile.cross and Dockerfile.server both parse as Dockerfiles, so
+  // without this they would get PRs).
+  ignorePaths: [
+    "**/node_modules/**",
+    "**/bower_components/**",
+    "**/vendor/**",
+    "**/examples/**",
+    "**/__tests__/**",
+    "**/test/**",
+    "**/tests/**",
+    "**/__fixtures__/**",
+    "cmd/desktop/build/**",
+  ],
+
+  postUpdateOptions: ["gomodTidy"],
+
+  // Order matters: Renovate applies these in sequence and later rules override
+  // earlier ones. The broad grouping rules come first; the lockstep rules that
+  // must not be overridden come last.
+  packageRules: [
+    {
+      description: "Actions are low-risk and numerous; one weekly PR keeps them from dominating the queue.",
+      matchManagers: ["github-actions"],
+      groupName: "github actions",
+      automerge: true,
+    },
+    {
+      description: "Dev tooling moves fast and breaks only CI, never users. Majors still get their own PR to be judged on their own merits.",
+      matchDepTypes: ["devDependencies"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "dev dependencies (non-major)",
+      // Without this the branch name inherits the parentheses verbatim.
+      groupSlug: "dev-dependencies",
+    },
+    {
+      description: "Runtime Go dependencies, non-major.",
+      matchManagers: ["gomod"],
+      matchDepTypes: ["require"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "go modules (non-major)",
+      groupSlug: "go-modules",
+      automerge: true,
+    },
+    {
+      description: "Go major updates get their own PR and wait for approval on the dependency dashboard.",
+      matchManagers: ["gomod"],
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
+    },
+
+    // --- Lockstep groups: these deps are duplicated across manifests and a
+    // --- split PR leaves the tree broken, so they must land together.
+    {
+      description: "Go toolchain version is repeated in go.mod (`go` directive), mise.toml ([tools].go), and the e2e Dockerfile base image.",
+      matchPackageNames: ["go", "golang", "golang/go"],
+      groupName: "go toolchain",
+    },
+    {
+      description: "golangci-lint is pinned in mise.toml and again as the golangci-lint-action `version:` input in ci.yml, which Renovate reads natively as a uses-with dep. Drift between the two means local and CI disagree on which lint rules apply.",
+      matchPackageNames: ["golangci-lint", "golangci/golangci-lint"],
+      groupName: "golangci-lint",
+    },
+    {
+      description: "cmd/desktop/e2e/Dockerfile's playwright base image tag must equal @playwright/test in cmd/desktop/e2e/package.json — the browsers ship inside the image, so a mismatch pairs a driver with browsers it does not support.",
+      matchPackageNames: ["@playwright/test", "mcr.microsoft.com/playwright"],
+      groupName: "playwright",
+    },
+    {
+      description: "Wails v3 alpha spans three manifests: the Go library, the wails3 CLI in mise.toml, and the JS runtime the frontend imports. These are alphas with breaking changes between builds, so batch them and expect to verify by hand.",
+      matchPackageNames: [
+        "github.com/wailsapp/wails/v3",
+        "github.com/wailsapp/wails/v3/cmd/wails3",
+        "go:github.com/wailsapp/wails/v3/cmd/wails3",
+        "@wailsio/runtime",
+      ],
+      groupName: "wails v3",
+    },
+  ],
+
+  vulnerabilityAlerts: {
+    description: "Security fixes bypass the weekly batch, the grouping, and the 7-day age gate — a known CVE is a larger exposure than a fresh release might be.",
+    schedule: [],
+    minimumReleaseAge: null,
+    groupName: null,
+    labels: ["security"],
+  },
+}

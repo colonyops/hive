@@ -22,7 +22,7 @@ can be used against every installed copy before a fix is available.
 
 A report is easier to act on when it includes:
 
-- The affected version, from `hive --version`.
+- The affected version, from `hive --version` or Hive Desktop's About pane.
 - Your operating system and version.
 - The preconditions an attacker needs, such as local access, a malicious
   repository, or a crafted message from another session.
@@ -69,6 +69,5 @@ Any way to cross one of these boundaries without the user's action is in scope.
 
 ## Hive Desktop
 
-Hive Desktop has its own repository and its own policy. Report desktop
-vulnerabilities at
-https://github.com/hay-kot/hive-desktop/security/advisories/new.
+Hive Desktop lives in this repository. Report a desktop vulnerability through
+the same advisory form; name the app and the version from its About pane.

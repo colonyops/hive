@@ -1,0 +1,175 @@
+# Hive Desktop. Included by the root mise.toml, so these run from anywhere in
+# the repo as `mise run desktop:<task>`. Tasks that drive Wails or npm run
+# inside cmd/desktop (or its frontend); the rest run from the repo root, where
+# the module and the release tool's paths live.
+
+# ── Build and run ────────────────────────────────────────────────────────────
+
+["desktop:build"]
+description = "Build the desktop app"
+dir = "{{config_root}}/cmd/desktop"
+run = "wails3 build"
+
+["desktop:build:linux"]
+description = "Build the Linux desktop binary in a container (ARCH=amd64|arm64, default: this machine's)"
+# Runs the same `wails3 task linux:build` the release pipeline runs, just inside
+# a container, so a Linux binary built here matches the published one. Output
+# lands in cmd/desktop/bin/hive-desktop, overwriting any native build there.
+run = './cmd/desktop/scripts/build/build-linux-docker.sh ${ARCH:+--arch=$ARCH}'
+
+["desktop:build:linux:image"]
+description = "Pre-build the container image that compiles Linux binaries (ARCH=amd64|arm64)"
+run = './cmd/desktop/scripts/build/build-linux-docker.sh --image-only ${ARCH:+--arch=$ARCH}'
+
+["desktop:dev"]
+description = "Run Wails directly using launch.env and this worktree's isolated .hive-desktop instance"
+dir = "{{config_root}}/cmd/desktop"
+# launch.env is generated; optional overrides.env is developer-authored and
+# wins because mise loads it second.
+env = { _.file = ["launch.env", "overrides.env"], VITE_HIVE_DEV_BRANCH = "{{ exec(command='git branch --show-current') }}" }
+# The runner goes through `devtools run` rather than being exec'd directly: it
+# leaves the app running when the terminal closes, and it only ever SIGKILLs
+# the app. See cmd/desktop/devtools/devsession.go and ADR shutdown-is-signalled-and-bounded.
+run = """
+test -f ../../launch.env || {
+  echo "launch.env is missing; run 'mise run desktop:dev:prepare' first" >&2
+  exit 1
+}
+go run ./devtools run -- wails3 dev -config ./build/config.yml
+"""
+
+["desktop:dev:prepare"]
+description = "Create or reuse this worktree's desktop instance and generate launch.env"
+run = "go run ./cmd/desktop/devtools prepare"
+
+["desktop:dev:fresh"]
+description = "Safely recreate this worktree's desktop instance and regenerate launch.env"
+run = "go run ./cmd/desktop/devtools fresh"
+
+["desktop:dev:onboarding"]
+description = "Launch live onboarding with fresh isolated data, config, and credentials"
+run = [
+  "go run ./cmd/desktop/devtools onboarding",
+  "mise run desktop:dev:onboarding:launch",
+]
+
+["desktop:dev:onboarding:launch"]
+hide = true
+dir = "{{config_root}}/cmd/desktop"
+env = { _.file = ["launch.onboarding.env"], VITE_HIVE_DEV_BRANCH = "{{ exec(command='git branch --show-current') }}", HIVE_DESKTOP_DEVELOPMENT_MOCKS_MODE = "" }
+run = "unset HIVE_DEFAULT_AGENT; go run ./devtools run -- wails3 dev -config ./build/config.yml"
+
+["desktop:dev:reset"]
+description = "Safely delete this worktree's marked desktop instance and launch.env"
+run = "go run ./cmd/desktop/devtools reset"
+
+["desktop:serve"]
+description = "Build and run the desktop app as a headless HTTP server (server build)"
+# Deliberately not `wails3 task common:run:server`: that path regenerates
+# bindings with -tags server, which would fight the committed set
+# desktop:check:bindings verifies. The server binary embeds frontend/dist, so
+# the frontend must be built first. Port override: WAILS_SERVER_PORT.
+run = [
+  "cd cmd/desktop/frontend && npm run build",
+  "go build -tags server -o ./cmd/desktop/bin/hive-desktop-server ./cmd/desktop",
+  "./cmd/desktop/bin/hive-desktop-server",
+]
+
+["desktop:devserver"]
+description = "Run the dev GitHub proxy + event simulator (see cmd/desktop/devserver). Point instances at it with HIVE_DESKTOP_DEVELOPMENT_GITHUB_API_BASE."
+run = "go run ./cmd/desktop/devserver --config cmd/desktop/devserver/devserver.yaml"
+
+# ── Generated assets ─────────────────────────────────────────────────────────
+
+# `bindings` and `icons` are not in the root `generate`: both need a full app
+# build or image tooling, well past what a routine regeneration should cost.
+["desktop:bindings"]
+description = "Regenerate the desktop's Wails TS bindings"
+dir = "{{config_root}}/cmd/desktop"
+run = "wails3 generate bindings -clean=true -ts -i"
+
+["desktop:icons"]
+description = "Regenerate desktop icon assets from SVG masters"
+dir = "{{config_root}}/cmd/desktop"
+run = "./build/icons/generate.sh"
+
+# ── Gates ────────────────────────────────────────────────────────────────────
+
+["desktop:check:bindings"]
+description = "Verify the committed Wails TS bindings match the Go service surface"
+run = """
+mise run desktop:bindings
+# -N registers files the generator created that the checkout lacks: -clean=true
+# deletes and recreates the tree, and plain git diff cannot see an untracked
+# file. The diff is against HEAD because that same git add stages the
+# deletions -clean=true made, which a worktree-only diff would report as clean.
+git add -N cmd/desktop/frontend/bindings
+git diff HEAD --exit-code -- cmd/desktop/frontend/bindings || {
+  echo "Wails bindings are out of date. Run 'mise run desktop:bindings' and commit the result." >&2
+  exit 1
+}
+"""
+
+["desktop:check:migrations"]
+description = "Verify the desktop's SQLite migrations are ordered and released history is immutable"
+run = "./cmd/desktop/scripts/check-migration-order.sh"
+
+["desktop:test"]
+description = "Run the desktop slice: frontend vitest + the app's Go packages"
+depends = ["desktop:frontend:test"]
+run = "go test ./cmd/desktop/..."
+
+["desktop:e2e"]
+description = "Run desktop e2e tests in the pinned Docker/Playwright environment"
+run = "./cmd/desktop/e2e/scripts/run-docker.sh"
+
+["desktop:frontend:build"]
+description = "Typecheck and build the desktop frontend"
+dir = "{{config_root}}/cmd/desktop/frontend"
+run = "npm run build"
+
+# `mise run ci` has to work from a fresh clone, where the frontend tasks would
+# otherwise fail with a bare "vitest: command not found". Deliberately not a
+# dependency of the frontend tasks themselves: lefthook's pre-push job skips
+# them when node_modules is absent, and that stays a skip rather than becoming
+# an install nobody asked for mid-push.
+["desktop:frontend:install"]
+description = "Install desktop frontend dependencies when they are missing"
+dir = "{{config_root}}/cmd/desktop/frontend"
+run = "test -d node_modules || npm ci"
+
+["desktop:frontend:test"]
+description = "Run desktop frontend unit tests (vitest)"
+dir = "{{config_root}}/cmd/desktop/frontend"
+run = "npm test"
+
+# ── Release notes and releases ───────────────────────────────────────────────
+
+["desktop:changelog:new"]
+description = 'Add one release note to the desktop changelog draft: mise run desktop:changelog:new -- --kind <added|changed|fixed> "The note"'
+run = "go run ./cmd/tools/release changelog new"
+
+["desktop:changelog:pr"]
+description = "Open the PR that lands the promoted desktop release notes (args: [--dry-run])"
+run = "go run ./cmd/tools/release changelog pr"
+
+["desktop:changelog:promote"]
+description = "Promote the desktop changelog draft into a stable release's entry: mise run desktop:changelog:promote -- <stable|version>"
+run = "go run ./cmd/tools/release changelog promote"
+
+["desktop:release:diff"]
+description = "List commits since the latest desktop release"
+run = "git log $(git describe --tags --abbrev=0 --match 'desktop-v*')..HEAD --pretty=format:'- %s (%h)'"
+
+["desktop:release"]
+description = "Interactively select a channel and version increment, validate, confirm, and publish a desktop release (args: [--dry-run] [dev|beta|stable] [version])"
+interactive = true
+# 1Password exposes its local environment as a FIFO, so loading it globally
+# races any aggregate task whose children start concurrently.
+env = { _.file = { path = ".env", redact = true } }
+run = "go run ./cmd/tools/release run"
+
+["desktop:release:publish"]
+description = "Low-level desktop publisher (args: <version> [flags]); prefer `mise run desktop:release` for a public release"
+env = { _.file = { path = ".env", redact = true } }
+run = "go run ./cmd/tools/release publish"

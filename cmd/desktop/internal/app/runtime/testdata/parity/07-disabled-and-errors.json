@@ -1,0 +1,43 @@
+{
+  "name": "a disabled node and a throwing node both account for their message",
+  "why": "Neither is allowed to swallow a message: a disabled node drops it as a plain discard and stays ok, while a thrown error marks the node not-ok and still discards. The run keeps going either way, because one broken node must not stop the batch — and every message must reach some accounting, or the offset cannot advance. Error text is engine-specific and deliberately not compared.",
+  "flow": {
+    "id": "err",
+    "name": "Err",
+    "enabled": true,
+    "nodes": [
+      { "id": "src", "type": "sources.webhook", "path": "hook" },
+      { "id": "boom", "type": "function", "on_message": "throw new Error('nope')" },
+      { "id": "off", "type": "function", "on_message": "return msg", "disabled": true },
+      { "id": "out", "type": "notify", "title": "t" }
+    ],
+    "wires": [
+      { "from": "src", "to": "boom" },
+      { "from": "src", "to": "off" },
+      { "from": "boom", "to": "out" },
+      { "from": "off", "to": "out" }
+    ]
+  },
+  "batch": [
+    {
+      "ID": "1", "Key": "k", "Topic": "source:err/src", "Ts": 1, "Snapshot": null,
+      "SourceKind": "webhook", "SourceScope": "hook",
+      "Payload": { "v": 1 }
+    }
+  ],
+  "expected": {
+    "consumer": "err",
+    "upToOffset": 1,
+    "outputs": [],
+    "feedSnapshots": [],
+    "discards": [
+      { "msgId": "1", "nodeId": "boom" },
+      { "msgId": "1", "nodeId": "off" }
+    ],
+    "nodeRuns": [
+      { "flowId": "err", "nodeId": "src", "ok": true, "inCount": 1, "outCount": 1, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "err", "nodeId": "boom", "ok": false, "inCount": 1, "outCount": 0, "dropCount": 1, "err": "!", "durMs": 0 },
+      { "flowId": "err", "nodeId": "off", "ok": true, "inCount": 1, "outCount": 0, "dropCount": 1, "err": "", "durMs": 0 }
+    ]
+  }
+}

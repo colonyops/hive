@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>hive devserver</title>
+<!-- Inline so the browser never requests /favicon.ico. That path shares an
+     origin with the GitHub passthrough, and a request for it would be proxied
+     upstream and counted as a real API call. -->
+<link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="%236ea8fe"/></svg>'>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --line: #262b36; --text: #e6e9ef;
+    --muted: #8b93a5; --accent: #6ea8fe; --good: #4ec9a0; --warn: #e0a458; --bad: #e06c75;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f6f7f9; --panel: #fff; --line: #e2e5ea; --text: #1a1d23;
+      --muted: #6b7280; --accent: #2563eb; --good: #0f8a63; --warn: #b45309; --bad: #b91c1c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 1.5rem; background: var(--bg); color: var(--text);
+    font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  h1 { font-size: 1rem; margin: 0 0 1rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  h2 { font-size: .8rem; margin: 0 0 .75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 1rem; }
+  .stats { display: flex; flex-wrap: wrap; gap: 1.25rem; margin-bottom: 1rem; }
+  .stat { display: flex; flex-direction: column; }
+  .stat b { font-size: 1.25rem; font-weight: 600; }
+  .stat span { color: var(--muted); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; }
+  .item { border-top: 1px solid var(--line); padding: .75rem 0; }
+  .item:first-of-type { border-top: 0; }
+  .item-head { display: flex; gap: .5rem; align-items: baseline; flex-wrap: wrap; }
+  .item-title { color: var(--muted); }
+  .btns { display: flex; flex-wrap: wrap; gap: .25rem; margin-top: .5rem; }
+  button {
+    font: inherit; font-size: .75rem; padding: .25rem .5rem; cursor: pointer;
+    background: transparent; color: var(--accent); border: 1px solid var(--line); border-radius: 4px;
+  }
+  button:hover { border-color: var(--accent); }
+  button.danger { color: var(--bad); }
+  select, input {
+    font: inherit; font-size: .75rem; padding: .25rem; background: var(--bg);
+    color: var(--text); border: 1px solid var(--line); border-radius: 4px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: .75rem; }
+  td { padding: .2rem .4rem .2rem 0; vertical-align: top; }
+  .tag { font-size: .7rem; padding: 0 .35rem; border-radius: 3px; border: 1px solid var(--line); }
+  .ok { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .muted { color: var(--muted); }
+  .scroll { max-height: 260px; overflow-y: auto; }
+  .empty { color: var(--muted); font-style: italic; }
+  /* Items list. A real feed produces hundreds of observed items, so rows are
+     one line and actions only render for the open row — otherwise the panel is
+     thousands of buttons tall. */
+  .controls { display: flex; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+  .controls input[type=search] { flex: 1; min-width: 0; }
+  .controls label {
+    display: flex; align-items: center; gap: .3rem; cursor: pointer;
+    color: var(--muted); font-size: .75rem; white-space: nowrap;
+  }
+  #items { max-height: 420px; overflow-y: auto; }
+  .row {
+    display: flex; gap: .5rem; align-items: baseline;
+    padding: .3rem 0; border-top: 1px solid var(--line); cursor: pointer;
+  }
+  .row:first-child { border-top: 0; }
+  .row:hover { background: color-mix(in srgb, currentColor 6%, transparent); }
+  .row .caret { flex: none; width: .7rem; color: var(--muted); }
+  .row .key { flex: none; }
+  .row .row-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .row .dot { flex: none; color: var(--warn); }
+  .detail { padding: .1rem 0 .7rem 1.2rem; }
+  .detail .overlay-json { font-size: .7rem; color: var(--muted); margin-bottom: .4rem; word-break: break-all; }
+  .more { padding-top: .5rem; display: flex; gap: .5rem; align-items: center; }
+  #toast {
+    position: fixed; bottom: 1rem; right: 1rem; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 6px; padding: .5rem .75rem;
+    font-size: .75rem; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<h1>hive devserver &middot; <span id="upstream" class="muted"></span></h1>
+
+<div class="stats panel" id="stats"></div>
+
+<div class="grid">
+  <div class="panel">
+    <h2>Items <span id="items-count" class="muted"></span>
+      <button id="clear-all" class="danger">clear overlays</button></h2>
+    <!-- Rendered once, outside the polled region: re-creating the input every
+         2s would steal focus and wipe what is being typed. -->
+    <div class="controls">
+      <input id="items-filter" type="search" placeholder="filter by repo, number, or title…"
+             autocomplete="off" spellcheck="false">
+      <label><input type="checkbox" id="items-overlaid"> overlaid only</label>
+    </div>
+    <div id="items"></div>
+    <div id="items-more" class="more"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Scenarios</h2>
+    <div id="scenarios"></div>
+
+    <h2 style="margin-top:1.5rem">Webhook pusher</h2>
+    <div id="pusher"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Proxy activity <button id="purge" class="danger">purge cache</button></h2>
+    <div class="scroll"><table id="recent"></table></div>
+
+    <h2 style="margin-top:1.5rem">Pushes</h2>
+    <div class="scroll"><table id="pushes"></table></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let toastTimer;
+
+function toast(message, bad) {
+  const el = $('toast');
+  el.textContent = message;
+  el.className = 'show';
+  el.style.color = bad ? 'var(--bad)' : 'var(--good)';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ''; }, 2500);
+}
+
+async function post(path, body) {
+  const resp = await fetch(path, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: body === undefined ? '{}' : JSON.stringify(body),
+  });
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    const fields = Object.entries(data.fields || {}).map(([k, v]) => k + ' ' + v).join('; ');
+    toast(fields || data.message || ('HTTP ' + resp.status), true);
+    return null;
+  }
+  return data;
+}
+
+function ago(iso) {
+  if (!iso || iso.startsWith('0001')) return 'never';
+  const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (seconds < 60) return Math.floor(seconds) + 's ago';
+  if (seconds < 3600) return Math.floor(seconds / 60) + 'm ago';
+  return Math.floor(seconds / 3600) + 'h ago';
+}
+
+function outcomeClass(outcome) {
+  return {hit: 'ok', revalidated: 'ok', miss: 'warn', stale: 'warn', error: 'bad'}[outcome] || 'muted';
+}
+
+let state = {};
+
+function renderStats() {
+  const s = state.stats || {};
+  const total = s.requests || 0;
+  const hitRate = total ? Math.round(((s.cacheHits || 0) / total) * 100) : 0;
+  $('upstream').textContent = state.upstream + '  ttl ' + state.cacheTTL;
+  $('stats').innerHTML = [
+    ['requests', total], ['cache hits', (s.cacheHits || 0) + ' (' + hitRate + '%)'],
+    ['upstream calls', s.upstreamCalls || 0], ['revalidated 304', s.revalidated || 0],
+    ['served stale', s.servedStale || 0], ['errors', s.errors || 0],
+    ['cached entries', state.cacheEntries || 0], ['last upstream', ago(s.lastUpstreamAt)],
+  ].map(([label, value]) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`).join('');
+}
+
+// View state for the items list. Kept outside render so the 2s poll does not
+// reset what you filtered, opened, or scrolled past.
+const itemsView = {filter: '', overlaidOnly: false, open: null, limit: 25};
+const ITEMS_PAGE = 25;
+
+function matchesFilter(item, needle) {
+  if (!needle) return true;
+  return (item.repo + '#' + item.num + ' ' + (item.title || '')).toLowerCase().includes(needle);
+}
+
+function renderItems() {
+  const all = state.items || [];
+  const overlays = state.overlays || {};
+  const needle = itemsView.filter.trim().toLowerCase();
+  const matching = all.filter((item) =>
+    matchesFilter(item, needle) && (!itemsView.overlaidOnly || overlays[item.repo + '#' + item.num]));
+
+  $('items-count').textContent = needle || itemsView.overlaidOnly
+    ? `${matching.length} of ${all.length}` : `${all.length}`;
+
+  if (!all.length) {
+    $('items').innerHTML = '<p class="empty">No items observed yet. Start a desktop instance pointed at this proxy.</p>';
+    $('items-more').innerHTML = '';
+    return;
+  }
+  if (!matching.length) {
+    $('items').innerHTML = '<p class="empty">No items match.</p>';
+    $('items-more').innerHTML = '';
+    return;
+  }
+
+  const visible = matching.slice(0, itemsView.limit);
+  $('items').innerHTML = visible.map((item) => {
+    const key = item.repo + '#' + item.num;
+    const overlay = overlays[key];
+    const open = itemsView.open === key;
+    const row = `<div class="row" data-row="${escapeHtml(key)}">
+      <span class="caret">${open ? '▾' : '▸'}</span>
+      <strong class="key">${escapeHtml(key)}</strong>
+      <span class="tag">${escapeHtml(item.kind || '?')}</span>
+      <span class="tag">${escapeHtml(item.state || '?')}</span>
+      <span class="row-title">${escapeHtml(item.title || '')}</span>
+      ${overlay ? '<span class="dot" title="overlaid">●</span>' : ''}
+    </div>`;
+    if (!open) return row;
+
+    const buttons = (state.actions || [])
+      .map((a) => `<button data-action="${a.name}" data-repo="${escapeHtml(item.repo)}" data-num="${item.num}">${escapeHtml(a.label)}</button>`)
+      .join('');
+    const clear = overlay
+      ? `<button class="danger" data-clear="1" data-repo="${escapeHtml(item.repo)}" data-num="${item.num}">clear</button>` : '';
+    const json = overlay
+      ? `<div class="overlay-json">${escapeHtml(JSON.stringify(overlay))}</div>` : '';
+    return row + `<div class="detail">${json}<div class="btns">${buttons}${clear}</div></div>`;
+  }).join('');
+
+  $('items-more').innerHTML = matching.length > visible.length
+    ? `<button id="items-show-more">show ${Math.min(ITEMS_PAGE, matching.length - visible.length)} more</button>
+       <span class="muted">showing ${visible.length} of ${matching.length}</span>`
+    : '';
+}
+
+function renderScenarios() {
+  const scenarios = state.scenarios || [];
+  if (!scenarios.length) {
+    $('scenarios').innerHTML = '<p class="empty">No scenarios running. Drive one with POST /_ctl/scenario.</p>';
+    return;
+  }
+  $('scenarios').innerHTML = scenarios.map((s) => `<div class="item">
+    <div class="item-head">
+      <strong>${escapeHtml(s.name)}</strong>
+      <span class="tag">${s.steps} steps</span>
+      <span class="tag warn">running</span>
+    </div>
+  </div>`).join('');
+}
+
+function renderPusher() {
+  const targets = state.targets || [];
+  const payloads = state.payloads || [];
+  if (!targets.length || !payloads.length) {
+    $('pusher').innerHTML = '<p class="empty">Configure webhooks.targets and webhooks.payloads to push events.</p>';
+    return;
+  }
+  $('pusher').innerHTML = `<div class="btns">
+    <select id="push-target">${targets.map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('')}</select>
+    <select id="push-payload">${payloads.map((p) => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('')}</select>
+    <button id="push">push</button>
+  </div>
+  <div class="muted" style="font-size:.7rem;margin-top:.4rem">${escapeHtml(targets.map((t) => t.name + ' → ' + t.url).join('  ·  '))}</div>`;
+}
+
+function renderRecent() {
+  const rows = state.recent || [];
+  $('recent').innerHTML = rows.length ? rows.map((r) => `<tr>
+    <td class="muted">${ago(r.at)}</td>
+    <td class="${outcomeClass(r.outcome)}">${escapeHtml(r.outcome)}</td>
+    <td>${escapeHtml(r.label)}</td>
+    <td class="muted">${r.status || ''}${r.overlaid ? ' <span class="tag warn">overlaid</span>' : ''}</td>
+  </tr>`).join('') : '<tr><td class="empty">No requests proxied yet.</td></tr>';
+}
+
+function renderPushes() {
+  const rows = state.pushes || [];
+  $('pushes').innerHTML = rows.length ? rows.map((p) => `<tr>
+    <td class="muted">${ago(p.at)}</td>
+    <td class="${p.error ? 'bad' : 'ok'}">${p.error ? 'failed' : p.status}</td>
+    <td>${escapeHtml(p.target)} / ${escapeHtml(p.payload)}</td>
+    <td class="muted">${escapeHtml(p.error || p.response || '')}</td>
+  </tr>`).join('') : '<tr><td class="empty">No pushes yet.</td></tr>';
+}
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) =>
+    ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+}
+
+async function refresh() {
+  try {
+    const resp = await fetch('/_ctl/state');
+    state = await resp.json();
+  } catch {
+    return;
+  }
+  renderStats(); renderItems(); renderScenarios(); renderPusher(); renderRecent(); renderPushes();
+}
+
+// Filter and toggle re-render immediately from cached state; they never need
+// to wait for the next poll.
+$('items-filter').addEventListener('input', (event) => {
+  itemsView.filter = event.target.value;
+  itemsView.limit = ITEMS_PAGE;   // a new filter starts from the top
+  renderItems();
+});
+$('items-overlaid').addEventListener('change', (event) => {
+  itemsView.overlaidOnly = event.target.checked;
+  itemsView.limit = ITEMS_PAGE;
+  renderItems();
+});
+
+// Row clicks toggle the open row. One at a time: the action set is eleven
+// buttons, and showing several at once is what made this panel unusable.
+document.addEventListener('click', (event) => {
+  const row = event.target.closest('.row');
+  if (!row || event.target.closest('button')) return;
+  itemsView.open = itemsView.open === row.dataset.row ? null : row.dataset.row;
+  renderItems();
+});
+
+document.addEventListener('click', async (event) => {
+  const el = event.target.closest('button');
+  if (!el) return;
+
+  if (el.id === 'items-show-more') {
+    itemsView.limit += ITEMS_PAGE;
+    renderItems();
+    return;
+  }
+
+  if (el.dataset.action) {
+    const done = await post('/_ctl/action',
+      {repo: el.dataset.repo, num: Number(el.dataset.num), action: el.dataset.action});
+    if (done) toast(el.dataset.action + ' → ' + done.item);
+  } else if (el.dataset.clear) {
+    const done = await post('/_ctl/overlay/clear', {repo: el.dataset.repo, num: Number(el.dataset.num)});
+    if (done) toast('cleared ' + done.item);
+  } else if (el.id === 'clear-all') {
+    if (await post('/_ctl/overlays/clear')) toast('all overlays cleared');
+  } else if (el.id === 'purge') {
+    if (await post('/_ctl/cache/purge')) toast('cache purged');
+  } else if (el.id === 'push') {
+    const done = await post('/_ctl/webhooks/push',
+      {target: $('push-target').value, payload: $('push-payload').value});
+    if (done) toast('pushed → HTTP ' + done.result.status);
+  }
+  refresh();
+});
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+{
+  "detail": "full",
+  "items": [
+    {
+      "externalId": "golden-1",
+      "feedId": "hooks/inbox",
+      "firstSeenAt": 1700000000000,
+      "id": 1,
+      "lastEventAt": 1700000001000,
+      "lifecycle": "active",
+      "payload": {
+        "number": 1
+      },
+      "profileId": "hooks",
+      "revision": 1,
+      "sourceKind": "webhook",
+      "sourceScope": "ci",
+      "title": "Golden item",
+      "unread": true,
+      "url": "https://example.test/items/golden-1"
+    }
+  ]
+}

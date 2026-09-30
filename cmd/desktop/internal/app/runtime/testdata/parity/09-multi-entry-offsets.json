@@ -1,0 +1,60 @@
+{
+  "name": "a message accepted by two entry nodes, and an offset that is not the last in the batch",
+  "why": "A source entry only takes its own topic, but any other entry node takes everything — so one message can enter the graph at two places and each entry needs its own copy. The committed offset is the highest in the batch rather than the last one seen, which is what lets a caller assemble a batch itself (the replay protocol does) without wedging the cursor.",
+  "flow": {
+    "id": "multi",
+    "name": "Multi",
+    "enabled": true,
+    "nodes": [
+      { "id": "src", "type": "sources.github", "kind": "notifications" },
+      { "id": "tap", "type": "function", "on_message": "msg.Payload.seen = true; return msg" },
+      { "id": "inbox", "type": "feed" },
+      { "id": "log", "type": "notify", "title": "t" }
+    ],
+    "wires": [
+      { "from": "src", "to": "inbox" },
+      { "from": "tap", "to": "log" }
+    ]
+  },
+  "batch": [
+    {
+      "ID": "30", "Key": "mine", "Topic": "source:multi/src", "Ts": 1, "Snapshot": null,
+      "SourceKind": "github", "SourceScope": "notifications", "OccurrenceKey": "oc-30",
+      "Payload": { "v": 1 }
+    },
+    {
+      "ID": "28", "Key": "theirs", "Topic": "source:other/src", "Ts": 2, "Snapshot": null,
+      "SourceKind": "github", "SourceScope": "notifications", "OccurrenceKey": "oc-28",
+      "Payload": { "v": 2 }
+    }
+  ],
+  "expected": {
+    "consumer": "multi",
+    "upToOffset": 30,
+    "outputs": [
+      {
+        "sink": { "kind": "feed", "targetId": "multi/inbox" },
+        "key": "mine", "payload": { "v": 1 }, "sourceKind": "github", "sourceScope": "notifications",
+        "sourceTopic": "source:multi/src"
+      },
+      {
+        "sink": { "kind": "notify", "targetId": "multi/log" },
+        "key": "mine", "occurrenceKey": "oc-30", "payload": { "v": 1, "seen": true },
+        "sourceKind": "github", "sourceScope": "notifications", "sourceTopic": "source:multi/src"
+      },
+      {
+        "sink": { "kind": "notify", "targetId": "multi/log" },
+        "key": "theirs", "occurrenceKey": "oc-28", "payload": { "v": 2, "seen": true },
+        "sourceKind": "github", "sourceScope": "notifications", "sourceTopic": "source:other/src"
+      }
+    ],
+    "feedSnapshots": [],
+    "discards": [],
+    "nodeRuns": [
+      { "flowId": "multi", "nodeId": "src", "ok": true, "inCount": 1, "outCount": 1, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "multi", "nodeId": "tap", "ok": true, "inCount": 2, "outCount": 2, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "multi", "nodeId": "inbox", "ok": true, "inCount": 1, "outCount": 1, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "multi", "nodeId": "log", "ok": true, "inCount": 2, "outCount": 2, "dropCount": 0, "err": "", "durMs": 0 }
+    ]
+  }
+}

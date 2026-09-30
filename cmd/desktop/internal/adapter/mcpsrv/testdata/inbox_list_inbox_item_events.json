@@ -1,0 +1,17 @@
+{
+  "detail": "full",
+  "events": [
+    {
+      "attention": "activity",
+      "createdAt": 1700000002000,
+      "detail": {
+        "changed": "title"
+      },
+      "id": 1,
+      "itemId": 1,
+      "kind": "updated",
+      "summary": "Golden event",
+      "transition": "none"
+    }
+  ]
+}

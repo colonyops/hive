@@ -1,0 +1,120 @@
+Configure Hive Desktop's application settings.
+{{template "app" .}}
+Edit {{.Env.SettingsPath}}. Every key is optional; omitted values use safe
+compiled defaults. The app reloads user-facing settings on save. The HTTP
+listener and the development listeners are startup configuration: they are
+read once and take effect on the next launch.
+
+## Schema
+
+```yaml
+polling:
+  interval: 5m            # Go duration; minimum 60s. Default 5m.
+
+updates:
+  enabled: true           # check for and offer app updates
+  channel: stable         # stable, beta, or dev; omit to follow the build
+
+notifications:
+  enabled: true
+  delivery: auto          # auto, system, or app
+  sound: true
+
+appearance:
+  theme: dark             # frontend theme id
+  canvas_font_size: ""    # small, medium, large, or xl; empty means medium
+  canvas_line_spacing: "" # compact, standard, or relaxed; empty means standard
+  terminal_font_size: 0  # text size in pixels, 8-64; 0 means 13
+  terminal_font_family: "" # any installed monospace family; empty is the bundled JetBrains Mono
+  terminal_font_weight: 0 # 300, 350, 400, 600, or 700; 0 means the default, 350
+  terminal_font_weight_bold: 0 # weight bold cells draw at; 0 means the default, 700
+  terminal_line_height: 0 # 1 to 1.6 in tenths; 0 means the default, 1.2
+  terminal_letter_spacing: 0 # extra tracking in device pixels, 0 to 3
+  terminal_show_windows: true # list every active session's windows in the terminal sidebar
+  terminal_show_status_bar: true # git and pull-request state above the attached session
+  terminal_pool_size: 3   # sessions kept attached for instant switching (1-6)
+
+profiles:                 # the profile rail
+  order:                  # flow ids, top of the rail first. Ids left out sort
+    - personal            # alphabetically after every id named here, and an id
+    - hive                # naming no flow is ignored.
+
+menu_bar:                 # the menu bar (tray) dropdown
+  feeds:                  # at most 3 pinned feeds, top first
+    - feed: work/reviews  # <profile id>/<feed node id>
+      limit: 3            # items listed, 1-10; omitted means 3
+
+http:                     # the local loopback server; webhook ingress and the
+                          # terminal transport both ride it
+  enabled: true           # on by default; read at startup
+  host: 127.0.0.1         # loopback only
+  port: 0                 # 0 asks the OS to choose
+
+keybindings:               # sparse overrides keyed by command id
+  feed.next: [j, arrowdown]
+
+paths:
+  tmux: ""                 # absolute path to a tmux binary; empty discovers one
+
+editor:
+  command: ""              # single-word CLI launcher "Open in editor" actions run
+                           # on a directory (zed, code, cursor, subl, or a path);
+                           # "" means none configured
+
+agent_workspaces:
+  dir: ""                  # workspace root; empty is the config dir's workspaces/.
+                           # A leading ~ is expanded at read time.
+  session_end_delay: 10s   # grace between a chat asking to end its own session
+                           # (a scheduled chat does when its task is done) and
+                           # the session being ended
+
+onboarding:
+  completed: false         # written by the app when first run ends; remove the
+                           # key to walk first run again
+
+telemetry:
+  enabled: false           # export the app's own metrics, logs and traces over OTLP
+  endpoint: ""             # signal-less OTLP base, https only; no collector needed
+  instance_id: ""          # the endpoint's basic-auth username
+  host_id: ""              # optional OpenTelemetry host.id for this machine
+  token: ""                # a REFERENCE, never a token. A literal is rejected.
+                           # These three accept env:NAME, file:/path, or
+                           # op://vault/item/field; only token requires one.
+  profiles:
+    enabled: false         # push CPU and heap profiles directly with Pyroscope
+    endpoint: ""           # Grafana Cloud Profiles base URL, https only
+    user: ""               # the Profiles basic-auth username
+    token: ""              # a REFERENCE, with the same forms and rules above
+
+development:
+  mocks:
+    mode: live             # live, feed, pipeline, onboarding, action-smoke
+  github:
+    api_base: ""           # point GitHub sources at a local proxy
+  vite: {host: 127.0.0.1, port: 0}
+  wails: {host: 127.0.0.1, port: 0}
+  pprof:
+    enabled: false         # serves /debug/pprof on the local server
+  perf:
+    enabled: false         # record UI performance spans to a JSONL file
+  metrics:
+    enabled: false         # serves /metrics on the local server for a scrape
+  debug:
+    pause_ingest: 0s
+    pause_commit: 0s
+```
+
+## Rules
+
+- Unknown keys, multiple YAML documents, invalid closed-set values, unsafe listener hosts, and invalid ports are rejected.
+- `version` is written and migrated by the app. Do not add or edit it.
+- `polling.interval` below 60s is rejected.
+- Durations are strings like `5m`; a bare number is not seconds.
+- `http` is on by default. `development.pprof` defaults off. Configured listener hosts must be loopback.
+- `telemetry.enabled` requires `telemetry.endpoint`, `telemetry.instance_id` and `telemetry.token`, and the endpoint must be https. It is the one URL setting that is deliberately not loopback-only.
+- `telemetry.host_id` is optional. When set, it becomes the OpenTelemetry `host.id` resource attribute and the `host_id` profile label. Use a stable unique id for the machine, not the OTLP `instance_id` username. Hive generates a new OpenTelemetry `service.instance.id` for each launch.
+- `telemetry.token` must be a reference (`env:`, `file:`, `op://`), never a pasted credential; a literal is a validation error. `telemetry.endpoint` and `telemetry.instance_id` accept either a reference or a written-out value, so one secret can hold a whole destination. Prefer `file:` or `op://` for an installed app, since a launched .app inherits almost no environment.
+- `profiles.order` never has to be exhaustive: name only the profiles whose position matters. Dragging a tile in the rail rewrites the whole key; editing it here takes effect on the next launch.
+- `menu_bar.feeds` names feeds by id, `<profile id>/<feed node id>`. A pin naming no feed is skipped. Settings ▸ Menu bar rewrites the whole list; a hand edit shows up on the next menu refresh.
+- `keybindings` has its own command-id vocabulary. Read the ids off Settings ▸ Keyboard rather than guessing them. A binding can be a single combo (`j`) or a space-separated sequence of combos pressed in order (`g i`).
+{{template "task" .}}

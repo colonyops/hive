@@ -1,0 +1,43 @@
+# wails3's dispatch target, not a developer entry point. `wails3 build` and
+# `wails3 package` run the tasks of those names here, and build/config.yml's
+# dev_mode executes `wails3 task run`. Everything a human or agent types is a
+# mise task (ADR mise-is-the-task-interface-and-the-taskfile-is-wails3-build-dispatch).
+version: '3'
+
+vars:
+  APP_NAME: "hive-desktop"
+  BIN_DIR: "bin"
+  PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "npm"}}'
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+  # Target OS for build/package/run. Defaults to the host OS, and is overridden
+  # by `wails3 build GOOS=...` (or the GOOS env var) for cross-compilation. The
+  # tasks below dispatch to the matching platform Taskfile via this variable.
+  GOOS: '{{.GOOS | default OS}}'
+  # cmd/desktop/ is a package within the repository's Go module.
+  MODULE_ROOT: '../..'
+
+includes:
+  common: ./build/Taskfile.yml
+  darwin: ./build/darwin/Taskfile.yml
+  linux: ./build/linux/Taskfile.yml
+
+tasks:
+  build:
+    summary: Builds the application
+    cmds:
+      - task: "{{.GOOS}}:build"
+
+  package:
+    summary: Packages a production build of the application
+    cmds:
+      - task: "{{.GOOS}}:package"
+
+  run:
+    summary: Runs the application
+    cmds:
+      - task: "{{.GOOS}}:run"
+
+  setup:docker:
+    summary: Builds Docker image for cross-compilation (~800MB download)
+    cmds:
+      - task: common:setup:docker

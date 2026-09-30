@@ -1,0 +1,77 @@
+# Git hooks, managed by lefthook. Installed by `mise install` (see the
+# [hooks] postinstall in mise.toml) or `mise run setup`.
+#
+# Jobs delegate to mise tasks so the gate definitions live in mise.toml alone
+# and cannot drift from what CI runs. CI stays the source of truth; these hooks
+# are a fast local mirror of it, not a replacement.
+#
+# Emergency escape hatch: `LEFTHOOK=0 git commit ...` / `git push --no-verify`.
+# Agents must never use it — see AGENTS.md.
+
+assert_lefthook_installed: true
+
+# Seconds, not minutes: formatting and cheap hygiene only. Anything that
+# compiles or tests belongs in pre-push.
+#
+# piped, not parallel: `mise run fmt:staged` and the generators both rewrite .go
+# files that the other reads, so running them concurrently risks a torn read
+# and a failure nobody can reproduce. Sequential costs ~0.5s at worst.
+pre-commit:
+  piped: true
+  jobs:
+    # Formats staged Go files in place and re-stages them, rather than failing
+    # the commit — an agent loop that has to re-run and re-commit for
+    # whitespace wastes a turn. Caveat: a file that is only partially staged
+    # gets its unstaged hunks staged along with the formatting.
+    - name: gofmt
+      glob: "*.go"
+      run: mise run fmt:staged {staged_files}
+      stage_fixed: true
+
+    # Only fires when a generator input is staged, so ordinary commits pay
+    # nothing for it.
+    - name: generated-code
+      glob:
+        - "sqlc.yaml"
+        - "internal/data/db/queries/*.sql"
+        - "internal/data/db/migrations/*.sql"
+        - "internal/core/eventbus/events.go"
+        - "internal/core/action/type.go"
+        - "internal/core/hc/item.go"
+        - "internal/core/notify/store.go"
+        - "internal/core/todo/todo.go"
+        - "internal/sources/backend.go"
+        - "cmd/desktop/internal/app/data/queries/queries/*.sql"
+        - "cmd/desktop/internal/app/data/queries/migrations/*.sql"
+        - "cmd/desktop/internal/app/activity/activity.go"
+        - "cmd/desktop/internal/app/jobs/jobs.go"
+        - "cmd/desktop/internal/app/data/models/classify.go"
+        - "cmd/desktop/internal/app/flow/flow.go"
+        - "cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go"
+        - "cmd/desktop/internal/app/agentws/workspace.go"
+        - "cmd/desktop/internal/app/schedule/spec.go"
+      run: mise run check:generate
+
+# Push is the meaningful boundary for headless work — the wrap/PR step — so the
+# full gates run here. Wails TS bindings and the e2e suite are deliberately
+# absent: both need a full app build (minutes), and CI covers them.
+#
+# The Go gate is a single mise task rather than one job per step: `mise run
+# check` owns the sequence (and the ordering constraint that check:generate
+# must finish before lint and test read its output), so this file and the
+# release workflow cannot drift from it. ~3s for a Go-only push, ~7s with the
+# frontend.
+pre-push:
+  piped: true
+  jobs:
+    - name: check
+      run: mise run check
+
+    - name: frontend-test
+      glob: "cmd/desktop/frontend/*"
+      run: |
+        if [ ! -d cmd/desktop/frontend/node_modules ]; then
+          echo "SKIP frontend tests: cmd/desktop/frontend/node_modules is missing (run 'mise run desktop:frontend:install')." >&2
+          exit 0
+        fi
+        mise run desktop:frontend:test

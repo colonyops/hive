@@ -1,0 +1,104 @@
+# devserver — checked-in development config.
+#
+#   mise run devserver          # passes this file as --config
+#   HIVE_DESKTOP_DEVELOPMENT_GITHUB_API_BASE=http://127.0.0.1:7777 mise run dev
+#
+# Everything here is inert on startup: no overlays are declared, so connected
+# instances see real GitHub data until you click something on the dashboard.
+# That is deliberate — a proxy that silently rewrote data the moment it started
+# would make every subsequent bug suspect.
+#
+# Edit this file freely; it is a development default, not a fixture. This is
+# the only config location — development configuration is versioned with the
+# code it simulates, so there is deliberately no per-user file in a home
+# directory that could change what a dev instance sees invisibly.
+#
+# The listen address below is the one every worktree's launch.env is pointed
+# at, so changing it here moves every instance with it.
+
+listen: 127.0.0.1:7777
+upstream: https://api.github.com
+
+cache:
+  # How long a response is served before revalidating. Revalidation sends
+  # If-None-Match, and a 304 costs no primary rate-limit quota, so a short TTL
+  # is cheap. The desktop's own poll floor is 60s.
+  ttl: 5m
+  # Defaults to $XDG_CACHE_HOME/hive/devserver/cache.db (~/.cache/...). It is
+  # deliberately independent of the desktop's data root — that is isolated per
+  # worktree, which would unshare the cache and discard it on reset.
+  # path: ~/.cache/hive/devserver/cache.db
+
+# ── Overlays ─────────────────────────────────────────────────────────────────
+# Rewrite what GitHub appears to say about a specific item. Left empty on
+# purpose: anything declared here applies from the very first request, before
+# you have touched the dashboard. Use the dashboard for exploration, and add
+# entries here only to pin a state you want back on every restart.
+#
+# overlays:
+#   - match: {repo: colonyops/hive, num: 58}
+#     set:
+#       state: open                  # open | closed | merged
+#       reason: approval_requested   # becomes the feed's activity summary
+#       labels: [needs-review]
+#       absent: true                 # drop from search results while the
+#                                    # state lookup still answers — how a
+#                                    # merged PR really behaves, and the only
+#                                    # way to exercise ConfirmAbsence
+#       title: Overridden title
+#       draft: false
+#       updated_at: 2026-07-25T12:00:00Z   # auto-stamped to now when omitted
+
+# ── Scenarios ────────────────────────────────────────────────────────────────
+# Multi-step lifecycle sequences are not configured here. They are composed and
+# driven at runtime through POST /_ctl/scenario — an agent builds the sequence
+# it needs for a test rather than picking from a fixed list. See the skill in
+# .agents/skills/devserver and GET /_ctl/help.
+
+# ── Webhook pusher ───────────────────────────────────────────────────────────
+# Payloads are ready to use; targets are not, because the desktop's webhook
+# port is drawn at random per install (ADR local-webhook-listener). Take the base URL from
+# Settings ▸ Webhooks, append a sources.webhook node's path, and uncomment:
+#
+#   targets:
+#     - name: local-desktop
+#       url: http://127.0.0.1:24681/hooks/devserver
+#       secret: dev-secret          # must match the node's configured secret
+webhooks:
+  # A stable top-level "id" makes re-delivery update the same inbox item;
+  # without one the listener hashes the body, so every push is a new item.
+  # Following the canonical item contract (ADR canonical-item-contract) renders the payload as a
+  # first-party feed row rather than a bare title.
+  payloads:
+    pr-opened:
+      id: devserver-pr-1
+      kind: PR
+      repo: acme/widgets
+      num: 1
+      title: Add retry to fetch
+      url: https://github.com/acme/widgets/pull/1
+      state: open
+      author: someone
+
+    # Same id, so this updates the item pr-opened created rather than adding a
+    # second one. The webhook classifier treats resolved/closed/done as
+    # terminal, so this archives it.
+    pr-merged:
+      id: devserver-pr-1
+      kind: PR
+      repo: acme/widgets
+      num: 1
+      title: Add retry to fetch
+      url: https://github.com/acme/widgets/pull/1
+      state: resolved
+      author: someone
+
+    issue-opened:
+      id: devserver-issue-1
+      kind: Issue
+      repo: acme/widgets
+      num: 2
+      title: Retries should be configurable
+      url: https://github.com/acme/widgets/issues/2
+      state: open
+      author: someone
