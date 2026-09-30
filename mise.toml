@@ -104,10 +104,6 @@ run = "zensical serve"
 description = "Build documentation site with llms.txt"
 run = ["zensical build", "./scripts/generate-llmstxt.sh"]
 
-[tasks."test:release-tag"]
-description = "Test the script that selects the CLI release tag"
-run = "./cmd/hive/scripts/release-tag_test.sh"
-
 [tasks."lint:workflows"]
 description = "Lint GitHub workflows and local actions"
 run = "actionlint"
