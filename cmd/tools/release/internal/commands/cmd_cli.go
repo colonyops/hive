@@ -1,4 +1,6 @@
-package main
+// Package commands holds one type per release command. A command registers
+// itself on the root command, so main.go is a list of registrations.
+package commands
 
 import (
 	"cmp"
@@ -20,35 +22,56 @@ const cliTagPattern = "v[0-9]*"
 
 var errNoCLITag = errors.New("no v* tag reachable from HEAD")
 
-func newCLICommand() *cli.Command {
-	return &cli.Command{
+// CLICmd is `release cli`, the release steps of the hive CLI.
+type CLICmd struct {
+	bump   string
+	dryRun bool
+}
+
+func NewCLICmd() *CLICmd {
+	return &CLICmd{}
+}
+
+func (cmd *CLICmd) Register(app *cli.Command) *cli.Command {
+	app.Commands = append(app.Commands, &cli.Command{
 		Name:  "cli",
 		Usage: "release steps for the hive CLI",
 		Commands: []*cli.Command{
 			{
-				Name:      "tag",
-				Usage:     "select the release tag for HEAD, create it, and push it",
-				ArgsUsage: "<patch|minor|major>",
+				Name:  "tag",
+				Usage: "select the release tag for HEAD, create it, and push it",
 				Description: "Finds the newest v* tag on the ancestry of HEAD, bumps it, tags HEAD, and pushes the tag. " +
 					"A v* tag that is already on HEAD is used again and the bump level is ignored, so a release that " +
 					"failed after the tag push can run again on the same commit. Prints current=<tag> previous=<tag>, " +
 					"and writes the two values to the GITHUB_OUTPUT file when that variable is set.",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "dry-run", Usage: "create the tag in the local repository only and push nothing"},
+					&cli.StringFlag{
+						Name:        "bump",
+						Usage:       "bump level: patch, minor, or major",
+						Sources:     cli.EnvVars("RELEASE_BUMP"),
+						Required:    true,
+						Destination: &cmd.bump,
+					},
+					&cli.BoolFlag{
+						Name:        "dry-run",
+						Usage:       "create the tag in the local repository only and push nothing",
+						Sources:     cli.EnvVars("RELEASE_DRY_RUN"),
+						Destination: &cmd.dryRun,
+					},
 				},
-				Action: func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 1 {
-						return errors.New("expected one argument: patch, minor, or major")
-					}
-					level, err := parseCLIBumpLevel(cmd.Args().First())
-					if err != nil {
-						return err
-					}
-					return runCLITag(ctx, level, cmd.Bool("dry-run"), os.Stdout, os.Stderr)
-				},
+				Action: cmd.tag,
 			},
 		},
+	})
+	return app
+}
+
+func (cmd *CLICmd) tag(ctx context.Context, _ *cli.Command) error {
+	level, err := parseCLIBumpLevel(cmd.bump)
+	if err != nil {
+		return err
 	}
+	return runCLITag(ctx, level, cmd.dryRun, os.Stdout, os.Stderr)
 }
 
 type cliBumpLevel string

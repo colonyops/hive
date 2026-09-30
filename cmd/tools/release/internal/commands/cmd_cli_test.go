@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/urfave/cli/v3"
 )
 
 func TestParseCLIVersion(t *testing.T) {
@@ -351,16 +352,43 @@ func TestRunCLITag(t *testing.T) {
 	})
 }
 
-func TestCLITagCommand(t *testing.T) {
-	newCLITestRepo(t)
-	cliTestTag(t, "v0.1.0")
-	cliTestCommit(t, "work")
+func newTestReleaseCommand() *cli.Command {
+	return NewCLICmd().Register(&cli.Command{Name: "release"})
+}
 
-	ctx := context.WithoutCancel(t.Context())
-	require.NoError(t, newReleaseCommand().Run(ctx, []string{"release", "cli", "tag", "--dry-run", "patch"}))
-	assert.Equal(t, "v0.1.0\nv0.1.1", cliTestGit(t, "tag", "--list", "v*"))
-	assert.Empty(t, cliTestOriginTags(t))
+func TestCLICmdTag(t *testing.T) {
+	t.Run("flags", func(t *testing.T) {
+		newCLITestRepo(t)
+		cliTestTag(t, "v0.1.0")
+		cliTestCommit(t, "work")
 
-	require.Error(t, newReleaseCommand().Run(ctx, []string{"release", "cli", "tag", "--dry-run"}))
-	require.Error(t, newReleaseCommand().Run(ctx, []string{"release", "cli", "tag", "--dry-run", "huge"}))
+		ctx := context.WithoutCancel(t.Context())
+		require.NoError(t, newTestReleaseCommand().Run(ctx, []string{"release", "cli", "tag", "--dry-run", "--bump", "patch"}))
+		assert.Equal(t, "v0.1.0\nv0.1.1", cliTestGit(t, "tag", "--list", "v*"))
+		assert.Empty(t, cliTestOriginTags(t))
+	})
+
+	t.Run("environment variables", func(t *testing.T) {
+		newCLITestRepo(t)
+		cliTestTag(t, "v0.1.0")
+		cliTestCommit(t, "work")
+		t.Setenv("RELEASE_BUMP", "minor")
+		t.Setenv("RELEASE_DRY_RUN", "true")
+
+		ctx := context.WithoutCancel(t.Context())
+		require.NoError(t, newTestReleaseCommand().Run(ctx, []string{"release", "cli", "tag"}))
+		assert.Equal(t, "v0.1.0\nv0.2.0", cliTestGit(t, "tag", "--list", "v*"))
+		assert.Empty(t, cliTestOriginTags(t))
+	})
+
+	t.Run("the bump level is required", func(t *testing.T) {
+		newCLITestRepo(t)
+		cliTestTag(t, "v0.1.0")
+		cliTestCommit(t, "work")
+
+		ctx := context.WithoutCancel(t.Context())
+		require.Error(t, newTestReleaseCommand().Run(ctx, []string{"release", "cli", "tag", "--dry-run"}))
+		require.Error(t, newTestReleaseCommand().Run(ctx, []string{"release", "cli", "tag", "--dry-run", "--bump", "huge"}))
+		assert.Equal(t, "v0.1.0", cliTestGit(t, "tag", "--list", "v*"))
+	})
 }

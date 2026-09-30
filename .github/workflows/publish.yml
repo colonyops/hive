@@ -49,13 +49,12 @@ jobs:
       - name: Select the release tag
         id: tag
         env:
-          LEVEL: ${{ inputs.semverbump }}
-          DRY_RUN: ${{ inputs.dry_run && '--dry-run' || '' }}
+          RELEASE_BUMP: ${{ inputs.semverbump }}
+          RELEASE_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # shellcheck disable=SC2086 # DRY_RUN is one flag or nothing
-          go run ./cmd/tools/release cli tag $DRY_RUN "$LEVEL"
+          go run ./cmd/tools/release cli tag
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io

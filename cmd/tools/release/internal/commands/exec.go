@@ -1,4 +1,4 @@
-package main
+package commands
 
 import (
 	"context"
@@ -10,8 +10,7 @@ import (
 )
 
 // The helpers in this file have the names and signatures of the helpers in the
-// Hive Desktop release tool. That tool moves into this directory. Delete this
-// file then, and the CLI code uses the helpers of that tool.
+// Hive Desktop release tool, so that the two tools merge into one package.
 
 func commandOutput(ctx context.Context, name string, args ...string) (string, error) {
 	command := exec.CommandContext(ctx, name, args...)

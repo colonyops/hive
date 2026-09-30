@@ -7,19 +7,20 @@ import (
 	"os"
 
 	"github.com/urfave/cli/v3"
+
+	"github.com/colonyops/hive/cmd/tools/release/internal/commands"
 )
 
 func main() {
-	if err := newReleaseCommand().Run(context.Background(), os.Args); err != nil {
+	app := &cli.Command{
+		Name:  "release",
+		Usage: "release steps for the programs in this repository",
+	}
+
+	app = commands.NewCLICmd().Register(app)
+
+	if err := app.Run(context.Background(), os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, "release:", err)
 		os.Exit(1)
-	}
-}
-
-func newReleaseCommand() *cli.Command {
-	return &cli.Command{
-		Name:     "release",
-		Usage:    "release steps for the programs in this repository",
-		Commands: []*cli.Command{newCLICommand()},
 	}
 }
