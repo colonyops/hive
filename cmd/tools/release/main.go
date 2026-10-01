@@ -360,7 +360,7 @@ func printReleasePlan(plan releasePlan) {
 }
 
 func verifyMigrationOrder(ctx context.Context) error {
-	if err := quietCommand(ctx, "./scripts/check-migration-order.sh"); err != nil {
+	if err := quietCommand(ctx, "./cmd/desktop/scripts/check-migration-order.sh"); err != nil {
 		return fmt.Errorf("verify migration order: %w", err)
 	}
 	return nil
