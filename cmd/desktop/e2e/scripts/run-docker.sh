@@ -4,7 +4,7 @@ set -euo pipefail
 # E2E includes server builds, tmux-aware Hive services, and Playwright browser
 # binaries. Keep all of that inside the pinned container: there is deliberately
 # no host Playwright fallback.
-cd "$(dirname "$0")/../../.."
+cd "$(dirname "$0")/../../../.."
 
 if ! docker info >/dev/null 2>&1; then
   echo "error: Docker is required for the e2e suite; host Playwright is intentionally unsupported" >&2

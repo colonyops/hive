@@ -1,0 +1,18 @@
+# Applies to cmd/desktop/e2e/Dockerfile only (Docker reads <Dockerfile>.dockerignore
+# beside the Dockerfile ahead of the root .dockerignore, which is the CLI
+# image's whitelist). The e2e image copies the whole module and builds the
+# frontend itself, so only local state and build output stay out.
+.git
+**/node_modules
+cmd/desktop/bin
+cmd/desktop/e2e/test-results
+dist
+docs/site
+docs/.venv
+docs/.cache
+.data
+.hive-desktop*
+*.log
+launch.env
+launch.onboarding.env
+overrides.env

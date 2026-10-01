@@ -9,7 +9,7 @@ if [[ ! "${HIVE_DESKTOP_E2E_HARNESS:-}" =~ ^[[:xdigit:]]{64}$ ]]; then
   exit 1
 fi
 
-cd "$(dirname "$0")/../../.."
+cd "$(dirname "$0")/../../../.."
 # The frontend and server binary are built at image-build time
 # (cmd/desktop/e2e/Dockerfile), so this launcher only starts servers and the
 # Playwright webServer timeout covers startup alone, not compilation.
