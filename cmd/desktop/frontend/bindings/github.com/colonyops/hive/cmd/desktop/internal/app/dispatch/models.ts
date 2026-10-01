@@ -331,9 +331,8 @@ export interface SessionStatus {
 }
 
 /**
- * SessionSummary is one session as the desktop's session list sees it. Slug is
- * the tmux session name, which is what a terminal attach targets. It stays a
- * projection: the rest of a session is read on demand as a SessionDetail.
+ * SessionSummary is one session as the desktop's session list sees it. The
+ * persisted tmux target stays internal; the rest is the frontend projection.
  */
 export interface SessionSummary {
     "id": string;
