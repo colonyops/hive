@@ -45,7 +45,10 @@ func TestExecRunnerReturnsBoundedCommandError(t *testing.T) {
 }
 
 func TestExecRunnerHonorsCancellation(t *testing.T) {
-	installFakeTmux(t, "sleep 10\n")
+	// The forked sleeper inherits the stdio pipes and outlives the killed
+	// shell. On Linux, Wait blocks on those pipes until the sleeper exits
+	// unless the runner sets WaitDelay.
+	installFakeTmux(t, "sleep 10 &\nwait\n")
 	runner := execRunner{}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()

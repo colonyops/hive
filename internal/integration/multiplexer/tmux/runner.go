@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"os/exec"
+	"time"
 
 	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/pkg/executil"
@@ -19,6 +20,12 @@ type Runner interface {
 }
 
 const maxDiagnosticBytes = 500
+
+// pipeWaitDelay bounds how long Wait blocks on stdio pipes after the context
+// kills tmux. A child that tmux forked can keep the pipes open after tmux
+// itself is gone; without a delay, Wait would wait for that child instead of
+// honouring the cancellation.
+const pipeWaitDelay = 500 * time.Millisecond
 
 type diagnosticBuffer struct {
 	bytes.Buffer
@@ -56,6 +63,7 @@ func (execRunner) Input(ctx context.Context, input io.Reader, args ...string) ([
 
 func runCaptured(ctx context.Context, input io.Reader, args ...string) ([]byte, []byte, error) {
 	cmd := exec.CommandContext(ctx, "tmux", args...)
+	cmd.WaitDelay = pipeWaitDelay
 	cmd.Stdin = input
 	var stdout bytes.Buffer
 	var stderr diagnosticBuffer
@@ -76,6 +84,7 @@ func runCaptured(ctx context.Context, input io.Reader, args ...string) ([]byte, 
 
 func (execRunner) Interactive(ctx context.Context, streams multiplexer.AttachStreams, args ...string) error {
 	cmd := exec.CommandContext(ctx, "tmux", args...)
+	cmd.WaitDelay = pipeWaitDelay
 	cmd.Stdin = streams.Stdin
 	cmd.Stdout = streams.Stdout
 	var diagnostics diagnosticBuffer
