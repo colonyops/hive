@@ -117,14 +117,15 @@ internal/           # Shared with Hive Desktop
 ├── core/
 │   ├── config/     # Configuration loading, validation, defaults
 │   ├── git/        # Git operations (clone, pull, status)
-│   └── session/    # Session model and Store interface
+│   ├── session/    # Session model and Store interface
+│   ├── hc/         # Honeycomb task model
+│   ├── messaging/  # Pub/sub messaging between agents
+│   └── terminal/   # Terminal status detection (tmux, assess rules)
+├── data/           # hive.db: migrations, sqlc queries, stores
 ├── hive/           # Service layer - orchestrates all operations
-├── integration/
-│   └── terminal/   # Terminal status monitoring (tmux)
-├── store/
-│   └── jsonfile/   # JSON file session storage implementation
-├── messaging/      # Pub/sub messaging between agents
-└── printer/        # Output formatting utilities
+├── sources/        # CLI-backed issue and PR sources (gh, tea)
+├── web/            # HTTP plumbing shared with cmd/desktop/devserver
+└── tmuxtest/       # tmux test helpers
 ```
 
 UI code goes below `cmd/hive/internal/`.
@@ -139,7 +140,7 @@ UI code goes below `cmd/hive/internal/`.
 | `internal/core/config/validate.go`          | Template data structs, validation                   |
 | `cmd/hive/internal/tui/model.go`            | TUI model, update loop, view rendering              |
 | `cmd/hive/internal/tui/views/sessions/tree_view.go` | Session tree with status indicators         |
-| `internal/integration/terminal/detector.go` | AI agent status detection patterns                  |
+| `internal/core/terminal/assess/rules_*.go` | AI agent status detection rules                     |
 
 ### Development
 
@@ -356,7 +357,7 @@ hive hc list --session <session-id>   # filter by session
 | `hive hc context <epic-id>` | Epic context block; `--json` for JSON output |
 | `hive hc prune` | Remove old completed items |
 
-See `.claude/skills/hc/SKILL.md` for full agent usage guide.
+See `claude-plugin/hive/skills/hc/SKILL.md` for the full agent usage guide.
 
 ## Landing the Plane (Session Completion)
 

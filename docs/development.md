@@ -19,6 +19,10 @@ work is reviewed against it.
 
 ## Setup
 
+You need git, [mise](https://mise.jdx.dev), and tmux. mise installs Go, Node,
+and every other tool from `mise.toml`. Docker runs the desktop e2e suite, the
+CLI integration tests, and the Linux desktop build.
+
 ```sh
 mise trust                         # once per clone, before mise reads mise.toml
 mise install                       # toolchain + git hooks (lefthook)
@@ -30,6 +34,19 @@ mise run desktop:frontend:install  # frontend deps, for the desktop app and its 
 Installing the hooks sets this clone's `core.hooksPath` to its own `.git/hooks`, which takes precedence over a global `core.hooksPath` — global hooks will not run in this repo.
 
 ## Running it
+
+The hive CLI:
+
+```sh
+mise run dev                # hive with the dev config: mise run dev -- new, mise run dev -- doctor
+mise run start              # hive with your global config
+```
+
+`mise run dev` reads `cmd/hive/dev/config.dev.yaml` and keeps its data in
+`./.data` and its log in `./dev.log`, so it never touches your own sessions
+under `~/.config/hive` and `~/.local/share/hive`.
+
+Hive Desktop:
 
 ```sh
 mise run desktop:dev                       # the app, against this worktree's isolated instance
@@ -45,13 +62,8 @@ namespace, then runs the real GitHub connection flow without mock providers.
 ## Quality gates
 
 Every gate is a mise task, and lefthook runs the relevant ones as git hooks.
-
-- **pre-commit** formats staged Go files and regenerates when a generator input is staged.
-- **pre-push** runs `mise run check` (generated-code drift, ADRs, desktop migrations, tidy, lint, test, goreleaser config), plus the frontend unit tests when the push touches `cmd/desktop/frontend/`.
-- **`mise run ci`** is the superset: everything CI runs, plus the CLI's Docker integration tests and the e2e suite that GitHub CI does not run.
-
-Read the `check` task rather than a copy of it — it is the single definition the
-hooks, CI, and the release tool all share. Details, including why each gate
-sits where it does, are in [`../AGENTS.md`](../AGENTS.md).
+Run `mise run check` before you push, and `mise run ci` for every gate,
+including the e2e suite that GitHub CI does not run. The root
+[`AGENTS.md`](../AGENTS.md) lists what each hook runs and why.
 
 Never bypass a hook. A failing gate is a task to finish, not a flag to add.

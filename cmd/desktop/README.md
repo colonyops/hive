@@ -40,10 +40,10 @@ from the tray menu.
 
 ## Pinned versions
 
-- Wails CLI and Go module: `github.com/wailsapp/wails/v3 v3.0.0-beta.4`
-- npm runtime: `@wailsio/runtime 3.0.0-alpha.97`
+- Wails CLI and Go module: `github.com/wailsapp/wails/v3 v3.0.0-beta.21`
+- npm runtime: `@wailsio/runtime 3.0.0-beta.21`
 
-`3.0.0-alpha.97` is the runtime version bundled by the pinned Wails Go module.
+`3.0.0-beta.21` is the runtime version bundled by the pinned Wails Go module.
 The project was scaffolded from `wails3 init -t vue -n hive-desktop`, the Vue +
 TypeScript template of the alpha it started on.
 
@@ -51,7 +51,7 @@ From the repository root, `mise install` provisions the matching Wails CLI.
 The manual equivalent is:
 
 ```sh
-go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.4
+go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-beta.21
 ```
 
 ## Parent-module adaptations
@@ -68,14 +68,13 @@ module root, and their module-file task inputs point at `../../go.mod` and
 `../../go.sum`. The template's unused iOS option-overlay stubs were removed;
 they were subdirectory files rather than code compiled with the desktop package.
 
-A `main` package named `desktop` cannot use an unqualified `go build
-./desktop` output at the repository root: Go would try to write a `desktop`
-binary where this directory already exists. Always give the desktop binary an
-explicit output path:
+An unqualified `go build ./cmd/desktop` writes a binary named `desktop` into
+the current directory. Always give the desktop binary an explicit output path
+under the gitignored `cmd/desktop/bin/`:
 
 ```sh
-go build -o ./desktop/bin/hive-desktop ./desktop
-go build -tags server -o ./desktop/bin/hive-desktop-server ./desktop
+go build -o ./cmd/desktop/bin/hive-desktop ./cmd/desktop
+go build -tags server -o ./cmd/desktop/bin/hive-desktop-server ./cmd/desktop
 ```
 
 `frontend/dist/.gitkeep` is tracked and embedded by `//go:embed
@@ -88,7 +87,7 @@ Wails CLI identifies that directory as the application package while Go walks
 up to the parent module:
 
 ```sh
-cd desktop
+cd cmd/desktop
 wails3 generate bindings -clean=true -ts -i
 ```
 
@@ -397,8 +396,8 @@ The headless core lives under `cmd/desktop/internal/app/**` and every Wails serv
 fallback, with tokens stored in the OS keychain (`HIVE_GITHUB_TOKEN` is a
 read-only headless override). The device flow uses the registered Hive Desktop
 OAuth app's public client ID by default; `HIVE_GITHUB_CLIENT_ID` overrides it,
-e.g. to test another registration. `internal/github` is the shared
-GitHub REST client, vendored rather than desktop-owned.
+e.g. to test another registration. The GitHub REST client is desktop-owned:
+`cmd/desktop/internal/app/sources/github/ghclient`.
 
 `HIVE_DESKTOP_DEVELOPMENT_MOCKS_MODE` selects deterministic offline backends:
 `feed` starts authenticated, while `onboarding` starts signed out with a fake
@@ -457,7 +456,7 @@ the app's bundle identity.
 its frontend URL with localhost; its port defaults to `0`. `development.wails`
 uses a loopback host and port `0` by default. `cmd/desktop/devtools prepare` chooses
 distinct free ports and atomically writes the gitignored, non-secret
-`launch.env`; the `dev` mise task loads it, then loads the optional,
+`launch.env`; the `desktop:dev` mise task loads it, then loads the optional,
 gitignored developer-authored `overrides.env` so explicit overrides win without
 special handling in devtools. The generated values bridge to framework-owned
 `WAILS_VITE_*` and `WAILS_SERVER_*` variables. Override those framework names
@@ -497,7 +496,7 @@ The tray master is **not** a scaled `hive-mark.svg`. At 18-44px the app mark's
 connector strokes fall below a pixel and its hexagons close up, so the tray
 redraws the same four-node figure with wider spacing, much thicker strokes, and
 the amber/gray split carried as opacity (macOS tints a template through its
-alpha). `web/public/favicon.svg` is a third copy on the tray's proportions, so
+alpha). `docs/docs/assets/favicon.svg` is a third copy on the tray's proportions, so
 a change to the mark has to land in all three.
 
 The script requires librsvg (`rsvg-convert`), ImageMagick (`magick`), and

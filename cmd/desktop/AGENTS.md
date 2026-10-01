@@ -1,11 +1,11 @@
 # Agent Instructions — Hive Desktop
 
-Scope: `desktop/`, `cmd/desktop/internal/adapter/wailsui/**`, `cmd/desktop/internal/app/**`. The
-repository-root `AGENTS.md` also applies.
+Scope: `cmd/desktop/` and everything below it. The repository-root `AGENTS.md`
+also applies.
 
 Two references, neither duplicated here — read them instead:
 
-- **`../docs/architecture.md`** — read before adding a subsystem, an entrypoint,
+- **`docs/architecture.md`** — read before adding a subsystem, an entrypoint,
   or an extension point. It names the pattern each part of the app follows.
   Where it and the code disagree, it wins for new work.
 - **`cmd/desktop/README.md`** — the long-form reference: native shell, pinned
@@ -42,7 +42,7 @@ instance. `solo up` brings up devserver + app together from `.solo.yml`.
   Docker-only and there is no host fallback.
 - **Never verify UI with a local GUI build.** Use `mise run desktop:serve` and drive it
   with browser tooling. Assets are `//go:embed`ded, so a frontend edit needs a
-  re-run; use `dev` for a Vite HMR loop instead.
+  re-run; use `desktop:dev` for a Vite HMR loop instead.
 - **Never edit generated files** — `frontend/bindings/`, `data/queries/models.go`,
   `data/queries/*.sql.go`, `*_enum.go`.
 - **Never add `init()`.** `gochecknoinits` is on; use package-variable
@@ -58,7 +58,7 @@ instance. `solo up` brings up devserver + app together from `.solo.yml`.
   credential refs only.
 - **Never gate the app on being connected to GitHub.**
 - **Never `go build ./cmd/desktop`** without `-o` — the package is `main` and named `desktop`, so
-  it collides with the directory. Use
+  it drops a stray `desktop` binary in the current directory. Use
   `go build -o ./cmd/desktop/bin/hive-desktop ./cmd/desktop` (`-tags server` for
   headless). The mise tasks already do this.
 
@@ -92,8 +92,8 @@ instance. `solo up` brings up devserver + app together from `.solo.yml`.
 
 Run `mise run generate` (sqlc, enums) and commit the output alongside its input.
 
-`mise run desktop:bindings` **must** run with the working directory at `desktop/` so the
-Wails CLI treats it as the app package. Binding method ids hash the Go package
+`mise run desktop:bindings` runs the Wails CLI from `cmd/desktop/`, so the CLI
+treats that directory as the app package. Binding method ids hash the Go package
 path, so _moving_ a service invalidates them; `mise run desktop:check:bindings` catches
 it.
 

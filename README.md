@@ -104,64 +104,7 @@ Full documentation is available at **[hivedesktop.com/cli](https://hivedesktop.c
 
 ## Contributing
 
-### Prerequisites
-
-- Go `1.25+`
-- `git`
-- `tmux`
-- `mise` (https://mise.jdx.dev)
-- `golangci-lint`
-
-### Local Dev Setup
-
-```bash
-git clone https://github.com/colonyops/hive.git
-cd hive
-mise run dev
-```
-
-`mise run dev` runs hive with project-local defaults from `mise.toml`:
-
-- `HIVE_CONFIG=./cmd/hive/dev/config.dev.yaml`
-- `HIVE_DATA_DIR=./.data`
-- `HIVE_LOG_FILE=./dev.log`
-- `HIVE_LOG_LEVEL=debug`
-
-This isolates contributor testing from your personal/global hive sessions.
-
-### Dev Config vs Global Config
-
-| Mode   | Config Path                  | Data Directory        | Use Case                                |
-| ------ | ---------------------------- | --------------------- | --------------------------------------- |
-| Dev    | `./cmd/hive/dev/config.dev.yaml` | `./.data`         | Contributing and testing changes safely |
-| Global | `~/.config/hive/config.yaml` | `~/.local/share/hive` | Day-to-day hive usage                   |
-
-Run with dev config:
-
-```bash
-mise run dev
-mise run dev -- new
-mise run dev -- doctor
-```
-
-Run against your global config:
-
-```bash
-mise run start
-mise run start -- doctor
-```
-
-### Common Contributor Commands
-
-```bash
-mise run test
-mise run lint
-mise run check
-mise run build
-mise run validate
-```
-
-Before opening a PR, run `mise run check`. If you changed config behavior, also run `mise run validate` and `mise run dev -- doctor`.
+See [CONTRIBUTING.md](CONTRIBUTING.md). [docs/development.md](docs/development.md) covers setup, the repository layout, running each program, and the quality gates.
 
 ## Acknowledgments
 

@@ -11,7 +11,7 @@ individual choices; this document describes the shape everything fits into.
 > **Status: partly built.** The dependency rule, the wrapper idiom, and the
 > consumer-defined-interface style hold today, and so does the core's shape:
 > the `app`/`adapter` split (`cmd/desktop/internal/app/` is the core,
-> `cmd/desktop/internal/adapter/wailsui/` holds every Wails service, `desktop/` is
+> `cmd/desktop/internal/adapter/wailsui/` holds every Wails service, `cmd/desktop/*.go` is
 > `main()` plus build info), the `app.App` facade with one service per
 > domain, `app.Error` with its `Kind` vocabulary, the typed `app/events` bus,
 > and `context.Context` first on every core method.
@@ -1178,7 +1178,7 @@ The probe answers more than PATH, and all of it is used.
 **A child gets the shell's variables too, with this process winning every name
 it defines** (ADR a-subprocess-inherits-the-whole-shell-environment-not-just-its-path). `EDITOR` in a `.zshrc` is the case: the probe
 had it and `Environ` discarded it, so an agent CLI's "open in editor" resolved
-against PATH instead (#279). What is *not* adopted is a closed list —
+against PATH instead (hay-kot/hive-desktop#279). What is *not* adopted is a closed list —
 `SHLVL`, `_`, `PWD`, `OLDPWD`, `TERM`, `TMUX`, `TMUX_PANE`, `SHELL` — describing
 the probe shell's own process rather than the child's. Two rules follow:
 
@@ -2331,7 +2331,7 @@ ADR goja-script-runtime.
 
 ## Rules for every PR
 
-1. **No logic in `desktop/` or `adapter/wailsui/`.** A bound method builds a
+1. **No logic in `cmd/desktop/*.go` or `adapter/wailsui/`.** A bound method builds a
    request and calls a service. More than ~5 lines means it belongs in `app/`.
 2. **No `application.Get()` outside `adapter/wailsui/`.**
 3. **`context.Context` first, always.** No `context.Background()` in a service

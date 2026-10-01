@@ -18,7 +18,7 @@ Publishing records the release on GitHub as its final step: it pushes the
 `desktop-v<version>` tag and creates a GitHub Release whose body is the
 version's committed release notes (dev and beta marked prerelease). Downloads
 still come from R2 (decision 0003); the release attaches no artifacts. That step
-is idempotent — `go run ./cmd/release github <version>` re-records a release
+is idempotent — `go run ./cmd/tools/release github <version>` re-records a release
 whose GitHub step failed after the upload.
 
 **Only a stable release needs a changelog entry.** Notes are embedded in the
@@ -59,13 +59,13 @@ Reject missing or unknown channels instead of guessing.
    tag. If no explicit version was supplied, run:
 
    ```bash
-   go run ./cmd/release prepare <channel>
+   go run ./cmd/tools/release prepare <channel>
    ```
 
    Otherwise run:
 
    ```bash
-   go run ./cmd/release prepare <channel> <version>
+   go run ./cmd/tools/release prepare <channel> <version>
    ```
 
    For a **stable** release, `prepare` also refuses a version with no changelog
@@ -100,8 +100,8 @@ Reject missing or unknown channels instead of guessing.
 7. After confirmation, run the same local gates used before pushes:
 
    ```bash
-   mi check
-   mi frontend:test
+   mise run check
+   mise run desktop:frontend:test
    ```
 
    Stop on the first failure. Verify the worktree is still clean and `HEAD`
@@ -113,7 +113,7 @@ Reject missing or unknown channels instead of guessing.
    ```
 
    Do not read `.env`, print credential environment variables, or call
-   `go run ./cmd/release publish` directly. The publisher verifies every affected
+   `go run ./cmd/tools/release publish` directly. The publisher verifies every affected
    live manifest and downloads the public artifact to check its size and SHA-256
    before it succeeds.
 
@@ -124,7 +124,7 @@ Reject missing or unknown channels instead of guessing.
    mise run desktop:release:publish -- <version> --resume
    ```
 
-   Resume skips the web deploy, builds, signing, and Apple submissions. It
+   Resume skips builds, signing, and Apple submissions. It
    re-verifies the local artifacts, reuses only byte-identical R2 objects,
    uploads missing objects, and finishes partial manifest writes before the
    normal live verification and GitHub step. Stop if resume reports a local or
@@ -136,7 +136,7 @@ Reject missing or unknown channels instead of guessing.
    already live and verified; re-run just the idempotent GitHub step:
 
     ```bash
-    go run ./cmd/release github <version>
+    go run ./cmd/tools/release github <version>
     ```
 
     Report the version, pushed tag and its GitHub Release URL, affected channel

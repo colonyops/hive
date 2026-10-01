@@ -50,7 +50,8 @@ Earns nothing:
 - tests, fixtures, mocks, e2e specs;
 - CI, mise tasks, lefthook, `cmd/` development tooling;
 - `docs/`, ADRs, `AGENTS.md`, agent skills;
-- a `hivecore` vendor sync or a dependency bump that changes nothing visible;
+- a change to the shared `internal/` packages or a dependency bump that changes
+  nothing visible in the desktop app;
 - a fix to something that never reached a build a user runs -- if the bug was
   introduced and fixed inside the same draft cycle, correct or delete the
   fragment that described it instead of adding a "Fixed" note beneath it.

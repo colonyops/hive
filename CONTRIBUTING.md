@@ -1,6 +1,7 @@
 # Contributing
 
-The [README](README.md#contributing) covers prerequisites and local setup.
+[docs/development.md](docs/development.md) covers prerequisites, setup, and
+how to run the hive CLI and Hive Desktop.
 
 ## Before you open a pull request
 

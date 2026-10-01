@@ -8,7 +8,7 @@ Concrete infrastructure and runbook for shipping the desktop app. Decisions behi
 | ----- | ----- |
 | Cloudflare account | `bce6b95e4e84d92b1972d3b55b6cfaf6` |
 | Zone | `hivedesktop.com` (`654b5078db773efcbf7c73b7c67eae89`) |
-| Landing page worker | `hive-desktop-web` → https://hivedesktop.com (config: `web/wrangler.jsonc`) |
+| Landing page | GitHub Pages → https://hivedesktop.com (source: `docs/`, deployed by `.github/workflows/deploy-site.yml`) |
 | Artifact bucket | R2 `hive-desktop-releases` (ENAM, Standard) |
 | Download domain | https://dl.hivedesktop.com (bucket custom domain, public, TLS ≥ 1.2) |
 | Liveness probe | https://dl.hivedesktop.com/healthcheck.txt |
@@ -81,15 +81,15 @@ Platform keys come from `platformKey` in `cmd/desktop/internal/adapter/wailsui/u
 
 ## Landing page
 
-The download buttons on hivedesktop.com resolve through a channel manifest at runtime, so shipping a release does not require redeploying the site. `dl.hivedesktop.com` sends no CORS headers, so the page fetches the same-origin `/api/latest` route on the worker, which proxies the manifest and caches it at the edge for 5 minutes. `?channel=stable|beta|dev` selects the channel and stable is the default; an unknown value is a 400 rather than a path the worker will fetch.
+The download buttons on hivedesktop.com resolve through a channel manifest at runtime, so shipping a release does not require redeploying the site. The page fetches `channels/<channel>/latest.json` from `dl.hivedesktop.com` directly. The bucket must allow cross-origin reads from `https://hivedesktop.com`; without that rule the fetch fails and the buttons keep their fallback links.
 
-Two surfaces consume it (`docs/docs/desktop/javascripts/download.js`): the landing page's hero and CTA buttons, which offer the visitor's own platform, and the `## Install` section of Getting Started, which lists every platform in the manifest with its file size and SHA-256. Both read `installer_url`, `installer_sha256`, and `installer_size` as a set when present and fall back to `url` otherwise: on macOS the zip is the updater's artifact, and handing it to a first-time visitor is the problem the DMG exists to solve. The proxy passes the manifest through untouched, so the page reads the manifest's own `channel` field to label a prerelease.
+Two surfaces consume it (`docs/docs/javascripts/download.js`): the landing page's hero and CTA buttons, which offer the visitor's own platform, and the `## Install` section of Getting Started, which lists every platform in the manifest with its file size and SHA-256. Both read `installer_url`, `installer_sha256`, and `installer_size` as a set when present and fall back to `url` otherwise: on macOS the zip is the updater's artifact, and handing it to a first-time visitor is the problem the DMG exists to solve. The page reads the manifest's own `channel` field to label a prerelease.
 
 Both surfaces are an upgrade over markup that already works — the buttons start as links to the `## Install` section and the panel starts as a pointer at the install script — so a failed fetch or a platform with no build leaves a page that still tells a visitor how to install. **`download.js` asks for `dev`** because no stable manifest exists; that constant is what changes when one does.
 
 ## Install script
 
-The one-line installer ([ADR install-script](decisions/2026-07-27-install-script.md)) is a static asset served by the same worker and shipped by `deploy-web.yml`:
+The one-line installer ([ADR install-script](decisions/2026-07-27-install-script.md)) is a static file of the site, `docs/docs/install.sh`, and `deploy-site.yml` deploys it with the site:
 
 ```
 curl -fsSL https://hivedesktop.com/install.sh | bash
@@ -98,11 +98,11 @@ curl -fsSL https://hivedesktop.com/install.sh | bash
 It detects OS+arch, resolves the channel's latest build from the **same manifest the updater reads** (`channels/<channel>/latest.json`), and verifies the artifact's sha256 from the manifest before installing. On macOS it unzips `Hive.app` into `/Applications` (falling back to `~/Applications`). On Linux it installs under `~/.local/share/hive`, checks the binary's linked runtime libraries, and writes the icon and `.desktop` entry under `XDG_DATA_HOME` (defaulting to `~/.local/share`). The channel defaults to stable; pass another with `… | bash -s -- --channel dev` or the `HIVE_CHANNEL` env var. It always installs the channel's latest — no version pin — and re-running upgrades in place. It leaves `PATH` unchanged because the `hive` command belongs to the separate CLI product.
 
 - **No stable or beta manifest exists yet** — only `dev`. Until one is published the default `curl … | bash` fails on the missing stable manifest, and the site's download buttons ask for `dev` explicitly.
-- The script and its page are public and crawlable: `docs/docs/desktop/install.sh` and the `## Install` section of `docs/docs/desktop/getting-started/index.md`, both in the generated sitemap. They sat behind a path token before the URL became public (ADR [install-script](decisions/2026-07-27-install-script.md)). The URL is published in the README and the docs, so treat it as stable.
+- The script and its page are public and crawlable: `docs/docs/install.sh` and the `## Install` section of `docs/docs/desktop/getting-started/index.md`, both in the generated sitemap. They sat behind a path token before the URL became public (ADR [install-script](decisions/2026-07-27-install-script.md)). The URL is published in the README and the docs, so treat it as stable.
 
 ## Problem reporting
 
-"Report a problem" (System settings ▸ Diagnostics) opens `issues/new?template=bug.yml` with the build version and the OS/arch/commit line filled in, and attaches nothing. "Save a diagnostic bundle" is a separate command that writes `<DataDir>/reports/hive-report-<id>.json.gz` and opens no browser. Nothing is uploaded, and a bundle must never go on an issue: ask for one and give the reporter a private channel (ADR [problem-reports-are-github-issues](decisions/2026-09-14-problem-reports-are-github-issues.md)).
+"Report a problem" (System settings ▸ Diagnostics) opens `issues/new?template=bug-desktop.yml` on colonyops/hive with the build version and the OS/arch/commit line filled in, and attaches nothing. "Save a diagnostic bundle" is a separate command that writes `<DataDir>/reports/hive-report-<id>.json.gz` and opens no browser. Nothing is uploaded, and a bundle must never go on an issue: ask for one and give the reporter a private channel (ADR [problem-reports-are-github-issues](decisions/2026-09-14-problem-reports-are-github-issues.md)).
 
 There is no infrastructure behind it — no bucket, no token, no worker route. **Teardown of the retired path is still owed.** Wrangler cannot list objects, so the inventory goes through the S3 API with the same credential pair `publish` uses (`R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`, repo-root `.env`):
 
@@ -112,9 +112,9 @@ There is no infrastructure behind it — no bucket, no token, no worker route. *
 curl --aws-sigv4 aws:amz:auto:s3 --user "$R2_ACCESS_KEY_ID:$R2_SECRET_ACCESS_KEY" \
   "https://$R2_ACCOUNT_ID.r2.cloudflarestorage.com/hive-desktop-reports?list-type=2&prefix=reports/"
 
-# 2. Then delete the bucket and the worker secret. Both are irreversible.
+# 2. Then delete the bucket and the secret of the retired hive-desktop-web worker. Both are irreversible.
 wrangler r2 bucket delete hive-desktop-reports
-cd web && wrangler secret delete REPORT_TOKEN
+wrangler secret delete REPORT_TOKEN --name hive-desktop-web
 
 # 3. Drop the WAF rate-limiting rule on hivedesktop.com + /api/report (dashboard).
 ```
@@ -147,22 +147,20 @@ mise run desktop:build:linux                    # binary only → cmd/desktop/bi
 
 Building the non-host architecture (amd64 on Apple Silicon) works but runs the image build *and* the compile under emulation — budget considerably more time. The Go module cache is mounted **read-only** from the host and `GOPROXY=off` is set, so the container resolves every module from that cache and never fetches one itself, and the third-party npm code it runs (with lifecycle scripts disabled) cannot poison the cache the host's own builds trust; `node_modules` lives in a per-arch named volume so the host's macOS-native copy is never mounted in.
 
-The web landing page and worker are **not** independent of a release. Before the app build, `publish` deploys `web/` (`mise run install && mise run deploy` from inside `web/`, which builds the Zensical site and runs `wrangler deploy`) and verifies the worker is live (`GET /api/latest?channel=__probe__` must return `400`; an unknown channel stops at the worker's own validation without reading the manifest bucket, and a missing worker falls through to the static assets and answers `404`). This runs first because the R2 upload is the only irreversible step: a broken or misconfigured backend aborts the release before any immutable artifact ships, keeping the app and its backend in sync or failing loudly. `--skip-web` opts out. Pushing to `main` under `web/**` still deploys the site on its own (`.github/workflows/deploy-web.yml`) for web-only changes.
-
 **Local release** (the normal path; secrets from the gitignored repo-root `.env`, loaded by mise):
 
 ```bash
-mise release                         # select the channel and patch/minor/major increment
-mise release dev                     # preselect the channel, then select the increment
-mise release dev 1.4.0-dev.1         # preselect the channel and exact version
-mise release --dry-run               # exercise the prompts without publishing
+mise run desktop:release                    # select the channel and patch/minor/major increment
+mise run desktop:release -- dev             # preselect the channel, then select the increment
+mise run desktop:release -- dev 1.4.0-dev.1 # preselect the channel and exact version
+mise run desktop:release -- --dry-run       # exercise the prompts without publishing
 ```
 
-The interactive command refreshes release tags, checks the source and GitHub authentication, and computes the normal patch-oriented candidate from live manifests. It shows the exact resulting version for patch, minor, and major choices; patch preserves normal channel progression (for example, the next dev prerelease or a dev-to-beta promotion), while minor and major start a new base version at prerelease `.1` where applicable. Publishing requires an explicit confirmation that defaults to cancel. It then runs `mi check` and `mi frontend:test`, verifies that the confirmed commit is still current and clean, and publishes.
+The interactive command refreshes release tags, checks the source and GitHub authentication, and computes the normal patch-oriented candidate from live manifests. It shows the exact resulting version for patch, minor, and major choices; patch preserves normal channel progression (for example, the next dev prerelease or a dev-to-beta promotion), while minor and major start a new base version at prerelease `.1` where applicable. Publishing requires an explicit confirmation that defaults to cancel. It then runs `mi check` and `mi desktop:frontend:test`, verifies that the confirmed commit is still current and clean, and publishes.
 
 `--dry-run` is a prompt preview that also works from a dirty feature worktree. It reads live manifests and tags and validates the selected version, but skips the clean-main and GitHub-authentication requirements and stops after confirmation without running gates, building artifacts, uploading, tagging, or creating a GitHub release.
 
-`mise run desktop:release:publish -- <version>` is the low-level publisher used for local build diagnostics and recovery (`--skip-upload`, `--skip-notarize` with `--skip-upload`, `--skip-web`, `--force`, `--resume`); do not use it to bypass the interactive confirmation for a normal public release. `publish` verifies every affected live manifest and downloads the public artifact to verify its size and SHA-256, then pushes the `desktop-v1.4.0-dev.1` tag and creates its GitHub Release — do not tag by hand. A local build (`--skip-upload`) records nothing on GitHub. `verify` remains available for later diagnostics without rebuilding, and `release github <version>` re-records the GitHub side alone.
+`mise run desktop:release:publish -- <version>` is the low-level publisher used for local build diagnostics and recovery (`--skip-upload`, `--skip-notarize` with `--skip-upload`, `--force`, `--resume`); do not use it to bypass the interactive confirmation for a normal public release. `publish` verifies every affected live manifest and downloads the public artifact to verify its size and SHA-256, then pushes the `desktop-v1.4.0-dev.1` tag and creates its GitHub Release — do not tag by hand. A local build (`--skip-upload`) records nothing on GitHub. `verify` remains available for later diagnostics without rebuilding, and `release github <version>` re-records the GitHub side alone.
 
 Rules enforced by the publisher:
 1. Release preparation requires a clean, current `main`. Publishing requires the same state. Source state is checked again immediately before upload.
@@ -181,9 +179,9 @@ R2 HEAD, GET, and PUT calls retry bounded transient curl failures, including con
 mise run desktop:release:publish -- <version> --resume
 ```
 
-Resume does not deploy the web worker, rebuild, sign, or submit anything to Apple. It loads the four versioned artifacts already in `cmd/desktop/bin`, verifies both macOS signatures and stapled tickets, checks both Linux archive shapes, confirms every binary carries the current release commit, and reconstructs `SHA256SUMS`. It downloads every object already present under the release prefix and reuses it only when its bytes match the local artifact, uploads missing objects, and completes any channel manifests not already written. A manifest already on the version must have identical notes and artifact metadata; a conflicting or newer manifest stops recovery.
+Resume does not rebuild, sign, or submit anything to Apple. It loads the four versioned artifacts already in `cmd/desktop/bin`, verifies both macOS signatures and stapled tickets, checks both Linux archive shapes, confirms every binary carries the current release commit, and reconstructs `SHA256SUMS`. It downloads every object already present under the release prefix and reuses it only when its bytes match the local artifact, uploads missing objects, and completes any channel manifests not already written. A manifest already on the version must have identical notes and artifact metadata; a conflicting or newer manifest stops recovery.
 
-Do not cut a replacement version for a partial upload, and do not use `--force`: both discard the verified build that resume exists to preserve. If `cmd/desktop/bin` was deleted or any local artifact differs from an already-uploaded object, the interrupted version cannot be resumed safely. If R2 and the manifests are already live and only the final GitHub step failed, use `go run ./cmd/release github <version>` instead.
+Do not cut a replacement version for a partial upload, and do not use `--force`: both discard the verified build that resume exists to preserve. If `cmd/desktop/bin` was deleted or any local artifact differs from an already-uploaded object, the interrupted version cannot be resumed safely. If R2 and the manifests are already live and only the final GitHub step failed, use `go run ./cmd/tools/release github <version>` instead.
 
 ## Installing on macOS
 
@@ -234,7 +232,6 @@ Dev builds are pruned by a scheduled job (delete `-dev.` versions older than N d
 
 ## Credentials
 
-- `CLOUDFLARE_API_TOKEN` (repo secret) — web deploys; Workers edit on the account + `hivedesktop.com` zone. Dashboard-created (OAuth sessions cannot mint API tokens).
-- `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (repo secrets + local `.env`) — S3 credentials for `hive-desktop-releases`.
+- `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` (local `.env`) — S3 credentials for `hive-desktop-releases`.
 - Signing/notary set (local `.env`): `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PWD`, `MACOS_SIGN_IDENTITY`, `AC_API_KEY`, `AC_API_KEY_ID`, `AC_API_ISSUER_ID`. macOS only — Linux publishing needs nothing beyond the R2 pair.
 - `gh` authentication (`gh auth status`) — the maintainer's own GitHub login, used to create the GitHub Release; the tag push uses `git`'s configured push credentials. Not a repo secret. `publish` checks it in preflight so a missing login aborts before the upload.
