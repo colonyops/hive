@@ -1,16 +1,18 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/colonyops/hive/cmd/desktop/releasenotes"
+	"github.com/colonyops/hive/internal/releasenotes"
 )
 
 // A prerelease publishes whatever the draft says and is never gated on an
 // entry of its own — that is what makes cutting one cost no changelog work.
 func TestNotesForAPrereleaseUsesTheDraft(t *testing.T) {
-	entries, err := releasenotes.Load()
+	entries, err := desktopProduct.embedded()
 	if err != nil {
 		t.Fatalf("load changelog: %v", err)
 	}
@@ -104,10 +106,65 @@ func TestFragmentSlugProducesAParseableName(t *testing.T) {
 }
 
 func TestNewFragmentRejectsANoteWithNoWords(t *testing.T) {
-	if _, err := newFragment(releasenotes.KindAdded, "   "); err == nil {
+	if _, err := newFragment(cliProduct, releasenotes.KindAdded, "   "); err == nil {
 		t.Fatal("expected an empty note to be rejected")
 	}
-	if _, err := newFragment(releasenotes.KindAdded, "***"); err == nil {
+	if _, err := newFragment(cliProduct, releasenotes.KindAdded, "***"); err == nil {
 		t.Fatal("expected a note with no words to be rejected")
+	}
+}
+
+func TestParseProduct(t *testing.T) {
+	for _, p := range products {
+		got, err := parseProduct(p.name)
+		if err != nil || got.dir != p.dir {
+			t.Errorf("parseProduct(%q) = %+v, %v", p.name, got, err)
+		}
+	}
+	if _, err := parseProduct("relay"); err == nil {
+		t.Fatal("expected an unknown product to be rejected")
+	}
+}
+
+// The release tool writes into a product's directory and reads it back
+// through the product's embed, so the two have to name the same tree.
+func TestProductDirMatchesItsEmbed(t *testing.T) {
+	for _, p := range products {
+		onDisk, err := releasenotes.Load(os.DirFS(filepath.Join("..", "..", "..", p.dir)))
+		if err != nil {
+			t.Fatalf("%s: load from disk: %v", p.name, err)
+		}
+		embedded, err := p.embedded()
+		if err != nil {
+			t.Fatalf("%s: load embed: %v", p.name, err)
+		}
+		if len(onDisk) != len(embedded) {
+			t.Errorf("%s: %s holds %d entries, the embed %d", p.name, p.dir, len(onDisk), len(embedded))
+		}
+	}
+}
+
+// Two notes that open the same way, written in the same second, build the same
+// name. The second must not replace the first.
+func TestNewFragmentRefusesToOverwrite(t *testing.T) {
+	p := product{name: "test", dir: t.TempDir()}
+	first, err := newFragment(p, releasenotes.KindAdded, "**The same note with seven words here.** first")
+	if err != nil {
+		t.Fatalf("first fragment: %v", err)
+	}
+
+	second, err := newFragment(p, releasenotes.KindFixed, "**The same note with seven words here.** second")
+	if err == nil {
+		if second != first {
+			return // the clock ticked between the two writes
+		}
+		t.Fatal("expected the second write to be refused")
+	}
+	raw, readErr := os.ReadFile(first)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !strings.Contains(string(raw), "first") {
+		t.Fatalf("first fragment was overwritten: %s", raw)
 	}
 }

@@ -144,19 +144,7 @@ description = "Run desktop frontend unit tests (vitest)"
 dir = "{{config_root}}/cmd/desktop/frontend"
 run = "npm test"
 
-# ── Release notes and releases ───────────────────────────────────────────────
-
-["desktop:changelog:new"]
-description = 'Add one release note to the desktop changelog draft: mise run desktop:changelog:new -- --kind <added|changed|fixed> "The note"'
-run = "go run ./cmd/tools/release changelog new"
-
-["desktop:changelog:pr"]
-description = "Open the PR that lands the promoted desktop release notes (args: [--dry-run])"
-run = "go run ./cmd/tools/release changelog pr"
-
-["desktop:changelog:promote"]
-description = "Promote the desktop changelog draft into a stable release's entry: mise run desktop:changelog:promote -- <stable|version>"
-run = "go run ./cmd/tools/release changelog promote"
+# ── Releases ─────────────────────────────────────────────────────────────────
 
 ["desktop:release:diff"]
 description = "List commits since the latest desktop release"

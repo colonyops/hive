@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
-	"github.com/colonyops/hive/cmd/desktop/releasenotes"
+	"github.com/colonyops/hive/internal/releasenotes"
 )
 
 // ReleaseNote is the frontend-facing view of one set of release notes. Date is

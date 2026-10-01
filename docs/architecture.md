@@ -261,6 +261,7 @@ in the same PR, with the CLI in mind.
 
 ```
 cmd/hive/                         # the hive CLI/TUI, a separate program
+  releasenotes/                   # the CLI's embedded changelog
 cmd/tools/                        # repo-wide tooling: adr, release
 main.go  go.mod                   # one module for every program
 
@@ -270,7 +271,7 @@ cmd/desktop/                      # Wails app package — stays `main`, stays he
   tasks.toml                      # the desktop:* mise tasks
   devtools/                       # dev settings → Wails/Vite environment bridge
   devserver/                      # the dev GitHub proxy and event simulator
-  releasenotes/                   # the embedded changelog and its parser
+  releasenotes/                   # the desktop's embedded changelog
   build/  e2e/  frontend/  grafana/  scripts/
     frontend/src/pipeline/
       nodes/*/                    # config.ts, editor.vue, index.ts — editor only.
@@ -372,14 +373,6 @@ cmd/desktop/internal/
                                   #   this process defines none (ADR a-subprocess-inherits-the-whole-shell-environment-not-just-its-path)
     jobs/  activity/              # domain types, enums, and consumer-defined
                                   #   Recorder ports; persistence lives in data/stores
-    releasenotes/                 # the changelog that ships in the binary
-      changelog/                  #   <version>.md per stable release, embedded
-        unreleased/               #   the draft: one file per change, rendered at
-                                  #   load, so two branches writing release notes
-                                  #   never conflict. `mise run desktop:changelog:new`
-                                  #   writes one; promotion collapses them
-                                  #   (ADRs release-notes-ship-inside-the-binary,
-                                  #   release-notes-accumulate-as-fragments)
     perf/                         # UI performance spans -> a size-capped JSONL
                                   #   file; development-gated, no aggregation
                                   #   and no dependencies (ADR ui-performance-spans-are-recorded-to-jsonl)
@@ -440,6 +433,13 @@ internal/                         # shared with the CLI (the seam)
                                   #   (ADR http-handler-conventions): error wire shape, version
                                   #   handler; mid/ (error + logger middleware),
                                   #   extractors/ (Body/Query decode + validate)
+  releasenotes/                   # the changelog parser each program's embed feeds:
+                                  #   <version>.md per release, unreleased/ one file
+                                  #   per change so concurrent branches never
+                                  #   conflict. `mise run changelog:new` writes one;
+                                  #   promotion collapses every program's at once
+                                  #   (ADRs release-notes-ship-inside-the-binary,
+                                  #   release-notes-accumulate-as-fragments)
   tmuxtest/                       # real-tmux test helpers
 ```
 

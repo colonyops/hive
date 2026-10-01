@@ -4,12 +4,13 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/colonyops/hive/cmd/desktop/releasenotes"
+	"github.com/colonyops/hive/internal/releasenotes"
 )
 
 const promotedStatus = `?? cmd/desktop/releasenotes/changelog/0.5.0.md
+?? cmd/hive/releasenotes/changelog/0.5.0.md
  D cmd/desktop/releasenotes/changelog/unreleased/20260912T135002-a-thing.md
- D cmd/desktop/releasenotes/changelog/unreleased/20260912T135003-another-thing.md
+ D cmd/hive/releasenotes/changelog/unreleased/20260912T135003-another-thing.md
 `
 
 func TestParsePromotedStatus(t *testing.T) {
@@ -20,8 +21,13 @@ func TestParsePromotedStatus(t *testing.T) {
 	if found.version != "0.5.0" {
 		t.Errorf("version = %q, want 0.5.0", found.version)
 	}
-	if found.entryPath != "cmd/desktop/releasenotes/changelog/0.5.0.md" {
-		t.Errorf("entryPath = %q", found.entryPath)
+	var paths []string
+	for _, entry := range found.entries {
+		paths = append(paths, entry.path)
+	}
+	want := []string{"cmd/desktop/releasenotes/changelog/0.5.0.md", "cmd/hive/releasenotes/changelog/0.5.0.md"}
+	if strings.Join(paths, ",") != strings.Join(want, ",") {
+		t.Errorf("entries = %v, want %v", paths, want)
 	}
 	if len(found.fragments) != 2 {
 		t.Errorf("fragments = %d, want 2", len(found.fragments))
@@ -44,7 +50,9 @@ func TestParsePromotedStatusRequiresAPromotion(t *testing.T) {
 	for name, status := range map[string]string{
 		"nothing at all": "",
 		"only deletions": " D cmd/desktop/releasenotes/changelog/unreleased/20260912T135002-a-thing.md\n",
-		"only an entry":  "?? cmd/desktop/releasenotes/changelog/0.5.0.md\n",
+		"only entries":   "?? cmd/desktop/releasenotes/changelog/0.5.0.md\n?? cmd/hive/releasenotes/changelog/0.5.0.md\n",
+		"one product": "?? cmd/desktop/releasenotes/changelog/0.5.0.md\n" +
+			" D cmd/desktop/releasenotes/changelog/unreleased/20260912T135002-a-thing.md\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := parsePromotedStatus(status); err == nil {
@@ -54,10 +62,18 @@ func TestParsePromotedStatusRequiresAPromotion(t *testing.T) {
 	}
 }
 
-func TestParsePromotedStatusRefusesTwoEntries(t *testing.T) {
+func TestParsePromotedStatusRefusesTwoVersions(t *testing.T) {
 	_, err := parsePromotedStatus(promotedStatus + "?? cmd/desktop/releasenotes/changelog/0.6.0.md\n")
-	if err == nil || !strings.Contains(err.Error(), "two new changelog entries") {
-		t.Fatalf("expected two entries to be refused, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "two versions") {
+		t.Fatalf("expected two versions to be refused, got %v", err)
+	}
+}
+
+// A product with no fragments still gets an entry, and its body stays empty.
+func TestValidatePromotedEntryAcceptsAnEmptyBody(t *testing.T) {
+	entry := releasenotes.Entry{Version: "0.5.0", Summary: "No changes to the hive CLI."}
+	if err := validatePromotedEntry(entry, "0.5.0.md"); err != nil {
+		t.Fatalf("an entry with a summary and no body should pass, got %v", err)
 	}
 }
 

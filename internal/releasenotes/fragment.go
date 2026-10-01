@@ -65,7 +65,7 @@ type fragmentHeader struct {
 func parseFragment(filename string, raw []byte) (Fragment, error) {
 	if err := CheckFragmentName(filename); err != nil {
 		return Fragment{}, fmt.Errorf(
-			"changelog %s/%s: %w; write one with `mise run desktop:changelog:new`", UnreleasedDir, filename, err)
+			"changelog %s/%s: %w; write one with `mise run changelog:new`", UnreleasedDir, filename, err)
 	}
 
 	header, body, err := splitFrontmatter(raw)

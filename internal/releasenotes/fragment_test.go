@@ -95,18 +95,6 @@ func TestRenderDraftIndentsContinuationLines(t *testing.T) {
 	assert.Equal(t, "## Added\n\n- **A.** first line\n  second line\n\n  second paragraph", body)
 }
 
-// The committed fragments are the draft every prerelease build ships, so they
-// are held to the same bar as a release entry.
-func TestCommittedFragmentsParse(t *testing.T) {
-	fragments, err := Fragments()
-	require.NoError(t, err)
-
-	for _, fragment := range fragments {
-		assert.NotEmpty(t, fragment.Body, "%s has an empty body", fragment.Name)
-		assert.Contains(t, Kinds, fragment.Kind, "%s has an unknown kind", fragment.Name)
-	}
-}
-
 // Every branch open when the draft became a directory still edits next.md, and
 // git merges that cleanly. The parse is the only thing that can say so.
 func TestParseEntryExplainsAResurrectedNextMd(t *testing.T) {

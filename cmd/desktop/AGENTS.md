@@ -121,7 +121,8 @@ store works live and silently fails otherwise.
 
 A user-visible change adds a fragment to
 `cmd/desktop/releasenotes/changelog/unreleased/` **in the PR that earns it**,
-with `mise run desktop:changelog:new -- --kind <added|changed|fixed> "..."`. One file
+with `mise run changelog:new -- --product desktop --kind <added|changed|fixed> "..."`
+(the `release-notes` skill). One file
 per change is what keeps concurrent branches from conflicting over the
 changelog (ADR release-notes-accumulate-as-fragments). The fragments render as
 the draft; prereleases publish it as it stands, and a stable release promotes

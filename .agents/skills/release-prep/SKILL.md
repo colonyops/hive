@@ -1,6 +1,6 @@
 ---
-name: desktop-release-prep
-description: Curate Hive Desktop's accumulated changelog fragments into the next stable release entry, then create the release-notes pull request. Use when explicitly asked to prepare stable release notes or invoked as `/desktop-release-prep [version]`.
+name: release-prep
+description: Curate every program's accumulated changelog fragments into its entry for the next stable release, then create the release-notes pull request. Use when explicitly asked to prepare stable release notes or invoked as `/release-prep [version]`.
 compatibility: Requires git, Go, mise, GitHub CLI authentication, and access to the live release manifests used for version selection.
 argument-hint: "[stable|version]"
 disable-model-invocation: true
@@ -8,9 +8,10 @@ disable-model-invocation: true
 
 # Prepare stable release notes
 
-Prepare the changelog entry that must land before a stable Hive Desktop release.
-This command edits product copy, then delegates the branch, commit, push, and pull
-request to the repository's release tooling.
+Prepare the changelog entries that must land before a stable release. Every
+release ships the hive CLI and Hive Desktop under one version, so promotion
+writes one entry per program. This command edits product copy, then delegates
+the branch, commit, push, and pull request to the repository's release tooling.
 
 Do not use this for dev or beta releases. They publish the accumulated draft as
 it stands and need no release-notes pull request.
@@ -27,10 +28,10 @@ arguments.
 Resolve the repository root with `git rev-parse --show-toplevel`, change to it,
 and run every command from there. Read these files before editing:
 
-- [`../desktop-release-notes/SKILL.md`](../desktop-release-notes/SKILL.md) for product-copy rules;
+- [`../release-notes/SKILL.md`](../release-notes/SKILL.md) for product-copy rules;
 - `docs/distribution.md` for the current release contract.
 
-The repository command `mise run desktop:changelog:pr` is the authority on the branch,
+The repository command `mise run changelog:pr` is the authority on the branch,
 commit, push, and pull request. Do not use `pr-create-auto`, create the branch by
 hand, or write a separate commit.
 
@@ -53,25 +54,28 @@ make the checks pass.
 
 Two worktree states are valid:
 
-1. **Clean:** run `mise run desktop:changelog:promote -- <stable|version>`.
+1. **Clean:** run `mise run changelog:promote -- <stable|version>`.
 2. **Already promoted:** continue without promoting again when the only changes
-   are one untracked `cmd/desktop/releasenotes/changelog/<version>.md` file and
-   deleted files under `cmd/desktop/releasenotes/changelog/unreleased/`.
+   are one untracked `<version>.md` in each of `cmd/hive/releasenotes/changelog/`
+   and `cmd/desktop/releasenotes/changelog/`, all for the same version, and
+   deleted files under their `unreleased/` directories.
 
 For an already promoted tree, require the entry filename to match an explicit
 version argument. Any other dirty state is unrelated work. Stop and report it.
 
-Promotion writes an empty `summary`, combines the fragments into one entry, and
-deletes those fragments. Never create or rename the versioned entry by hand.
+Promotion writes an empty `summary`, combines each program's fragments into
+its entry, and deletes those fragments. A program with no fragments still gets
+an entry, with an empty body. Never create or rename a versioned entry by hand.
 
-## 3. Curate the entry
+## 3. Curate the entries
 
+Curate each program's entry on its own: its readers are that program's users.
 Read the promoted entry, its deleted source fragments from `HEAD`, and recent
 committed entries for voice and structure. Read the commit history since the
 last stable release when a note needs verification. Inspect a focused diff only
 when the history does not establish the user-visible behavior.
 
-Edit the promoted entry as one release, not as a list of pull requests:
+Edit each promoted entry as one release, not as a list of pull requests:
 
 - write one quoted `summary` sentence that names the release's main user-facing
   outcomes;
@@ -88,7 +92,10 @@ Follow the release-notes skill's product-copy rules. The summary and each bullet
 must describe what the user gets in the stable release. Do not write a work log
 or a release-process summary.
 
-Read the complete entry again after editing. Check that the summary covers the
+An entry with an empty body still needs a `summary`. Say in one sentence that
+the release has no user-facing changes to that program; do not invent any.
+
+Read each complete entry again after editing. Check that the summary covers the
 body, near-duplicate bullets are gone, and every sentence still describes the
 current product.
 
@@ -97,19 +104,19 @@ current product.
 Run the focused parser tests and the release tool's dry run:
 
 ```bash
-go test ./cmd/desktop/releasenotes/...
-mise run desktop:changelog:pr -- --dry-run
+go test ./cmd/hive/releasenotes/... ./cmd/desktop/releasenotes/...
+mise run changelog:pr -- --dry-run
 ```
 
-Run `git diff --check`, then read the complete entry and deleted-fragment list
+Run `git diff --check`, then read each complete entry and the deleted-fragment list
 one final time. Fix all failures before continuing. Then run:
 
 ```bash
-mise run desktop:changelog:pr
+mise run changelog:pr
 ```
 
 This command creates the fixed release-notes branch, commits only the promoted
-entry and deleted fragments, pushes the branch, and opens the pull request. The
+entries and deleted fragments, pushes the branch, and opens the pull request. The
 git hooks run the repository checks. Do not duplicate those steps with manual
 git or `gh` commands.
 

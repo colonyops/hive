@@ -201,6 +201,18 @@ run = [
 
 # ── Repository tooling ───────────────────────────────────────────────────────
 
+[tasks."changelog:new"]
+description = 'Add one release note to a changelog draft: mise run changelog:new -- --product <cli|desktop> --kind <added|changed|fixed> "The note"'
+run = "go run ./cmd/tools/release changelog new"
+
+[tasks."changelog:promote"]
+description = "Promote every program's changelog draft into its entry for one stable release: mise run changelog:promote -- <stable|version>"
+run = "go run ./cmd/tools/release changelog promote"
+
+[tasks."changelog:pr"]
+description = "Open the PR that lands the promoted release notes (args: [--dry-run])"
+run = "go run ./cmd/tools/release changelog pr"
+
 [tasks."adr:new"]
 description = 'Start a new ADR: mise run adr:new -- "The decision, as a sentence"'
 run = "go run ./cmd/tools/adr new"

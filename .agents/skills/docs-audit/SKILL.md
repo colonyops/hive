@@ -104,9 +104,8 @@ is reachable by URL only, which is the same as not existing.
   are the agent's reference. A field documented on the site but not there
   means the Hive workspace writes it wrong. That is the `desktop-shipped-skills`
   skill's procedure; run it beside this one.
-- **A user-visible desktop change owes a release-notes fragment** in
-  `cmd/desktop/releasenotes/changelog/unreleased/`. That is the
-  `desktop-release-notes` skill.
+- **A user-visible change owes a release-notes fragment** in the changelog
+  of the program it changes. That is the `release-notes` skill.
 - **Developer-only facts** (mock modes, `launch.env`, the devserver) belong
   on the build page only to the extent a person building the app must know
   them. The rest is `docs/development.md` and `cmd/desktop/AGENTS.md`.

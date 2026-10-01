@@ -10,7 +10,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
-	"github.com/colonyops/hive/cmd/desktop/releasenotes"
+	"github.com/colonyops/hive/internal/releasenotes"
 )
 
 func newTestCore(t *testing.T) *app.ReleaseNotesService {

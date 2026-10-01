@@ -6,7 +6,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
-	"github.com/colonyops/hive/cmd/desktop/releasenotes"
+	desktopnotes "github.com/colonyops/hive/cmd/desktop/releasenotes"
+	"github.com/colonyops/hive/internal/releasenotes"
 )
 
 // How a pending set of release notes should be surfaced.
@@ -44,7 +45,7 @@ type ReleaseNotesService struct {
 // exported for the same reason NewSettingsService is: it depends on nothing but
 // a path and a logger, so the adapter can build one without standing up an App.
 func NewReleaseNotesService(paths settings.Paths, logger zerolog.Logger) *ReleaseNotesService {
-	entries, err := releasenotes.Load()
+	entries, err := desktopnotes.Load()
 	if err != nil {
 		// A malformed entry is a committed mistake that the package's own test
 		// and the release gate both catch, so it cannot reach a published

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colonyops/hive/cmd/desktop/releasenotes"
+	"github.com/colonyops/hive/internal/releasenotes"
 	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 
@@ -139,17 +139,17 @@ func newReleaseCommand() *cli.Command {
 			},
 			{
 				Name:  "changelog",
-				Usage: "manage the release notes embedded in the app",
+				Usage: "manage the release notes each program embeds",
 				Commands: []*cli.Command{
 					{
 						Name:      "promote",
-						Usage:     "turn the accumulated draft into a stable release's changelog entry",
+						Usage:     "turn every program's accumulated draft into its changelog entry for one stable release",
 						ArgsUsage: "<stable|version>",
-						Description: "Collapses cmd/desktop/releasenotes/changelog/unreleased/ into <version>.md, stamping the version and date, and " +
-							"deletes the fragments. Edit the entry before committing it: it is the sum of every pull request since the last " +
-							"release, so consolidate near-duplicate bullets and write the summary. Commit the result before releasing: the notes " +
-							"are embedded in the binary, and `release publish` refuses a stable version that has no entry. Prereleases need none " +
-							"— they publish the draft as it stands.",
+						Description: "Collapses each program's changelog/unreleased/ into its <version>.md, stamping the version and date, and " +
+							"deletes the fragments. Every program gets an entry, because every release ships every program. Edit the entries " +
+							"before committing them: each is the sum of every pull request since the last release, so consolidate near-duplicate " +
+							"bullets and write the summaries. Commit the result before releasing: the notes are embedded in the binaries, and " +
+							"`release publish` refuses a stable version that has no entry. Prereleases need none — they publish the draft as it stands.",
 						Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
 							if cmd.NArg() != 1 {
 								return cli.Exit("expected \"stable\" or an explicit stable version", 2)
@@ -158,19 +158,21 @@ func newReleaseCommand() *cli.Command {
 							if err != nil {
 								return err
 							}
-							path, err := promoteDraft(ctx, version)
+							paths, err := promoteDrafts(ctx, version)
 							if err != nil {
 								return err
 							}
-							fmt.Printf("wrote %s\n", path)
-							fmt.Println("consolidate the bullets and write its summary, then run `mise run desktop:changelog:pr`")
+							for _, path := range paths {
+								fmt.Printf("wrote %s\n", path)
+							}
+							fmt.Println("consolidate the bullets and write each summary, then run `mise run changelog:pr`")
 							return nil
 						}),
 					},
 					{
 						Name:  "pr",
 						Usage: "open the pull request that lands the promoted release notes",
-						Description: "Commits the entry that `changelog promote` wrote, plus the fragments it deleted, on a branch of its own, " +
+						Description: "Commits the entries that `changelog promote` wrote, plus the fragments it deleted, on a branch of its own, " +
 							"and opens its pull request. It refuses a worktree that holds anything else, and an entry whose summary is " +
 							"still empty. Run it after you edit the entry. The release itself cannot write the entry, because a release " +
 							"requires a clean tree identical to origin/main.",
@@ -188,11 +190,17 @@ func newReleaseCommand() *cli.Command {
 						Name:      "new",
 						Usage:     "write one unreleased change to the changelog draft",
 						ArgsUsage: "<note>",
-						Description: "Adds a file to cmd/desktop/releasenotes/changelog/unreleased/ holding one bullet of the release notes. " +
+						Description: "Adds a file to the program's changelog/unreleased/ holding one bullet of its release notes. " +
 							"The name is built from a UTC timestamp and the note, so concurrent branches each add a file instead of " +
-							"conflicting over one. The note is product copy a user reads inside the app — read the release-notes skill " +
+							"conflicting over one. The note is product copy a user reads — read the release-notes skill " +
 							"before writing one. Pass it as the argument, or on stdin for a note that spans lines.",
 						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:     "product",
+								Aliases:  []string{"p"},
+								Usage:    fmt.Sprintf("the program the change ships in: one of %v", productNames()),
+								Required: true,
+							},
 							&cli.StringFlag{
 								Name:     "kind",
 								Aliases:  []string{"k"},
@@ -201,6 +209,10 @@ func newReleaseCommand() *cli.Command {
 							},
 						},
 						Action: withRepoRoot(func(_ context.Context, cmd *cli.Command) error {
+							product, err := parseProduct(cmd.String("product"))
+							if err != nil {
+								return cli.Exit(err.Error(), 2)
+							}
 							kind, ok := releasenotes.ParseKind(cmd.String("kind"))
 							if !ok {
 								return cli.Exit(fmt.Sprintf("--kind must be one of %v", releasenotes.Kinds), 2)
@@ -209,7 +221,7 @@ func newReleaseCommand() *cli.Command {
 							if err != nil {
 								return err
 							}
-							path, err := newFragment(kind, note)
+							path, err := newFragment(product, kind, note)
 							if err != nil {
 								return err
 							}

@@ -4,15 +4,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 )
 
 // versionRE matches the closed set of publishable versions cmd/tools/release
 // enforces: X.Y.Z with an optional -dev.N / -beta.N identifier.
 var versionRE = regexp.MustCompile(`^([0-9]+)\.([0-9]+)\.([0-9]+)(?:-(dev|beta)\.([0-9]+))?$`)
 
-// version is a published desktop version decomposed for ordering.
+// version is a published version decomposed for ordering.
 type version struct {
 	major      int
 	minor      int
@@ -50,17 +48,6 @@ func parseVersion(s string) (version, bool) {
 	return version{major: parts[0], minor: parts[1], patch: parts[2], prerelease: m[4], number: parts[3]}, true
 }
 
-func (v version) channel() string {
-	switch v.prerelease {
-	case "dev":
-		return settings.ChannelDev
-	case "beta":
-		return settings.ChannelBeta
-	default:
-		return settings.ChannelStable
-	}
-}
-
 // IsPublished reports whether version names a release this project publishes.
 // It is false for source builds ("dev"), "(devel)", go module pseudo-versions
 // and foreign prerelease identifiers — builds with no release to describe.
@@ -88,11 +75,11 @@ func IsNewer(a, b string) bool {
 // promotion path. SemVer sorts the words "beta" and "dev" lexically, which is
 // the reverse of how a build is promoted here, so ordering goes through this
 // rank instead (ADR release-channels).
-func channelRank(channel string) int {
-	switch channel {
-	case settings.ChannelDev:
+func channelRank(prerelease string) int {
+	switch prerelease {
+	case "dev":
 		return 0
-	case settings.ChannelBeta:
+	case "beta":
 		return 1
 	default:
 		return 2
@@ -107,7 +94,7 @@ func compare(a, b version) int {
 			return sign(pair[0] - pair[1])
 		}
 	}
-	if ra, rb := channelRank(a.channel()), channelRank(b.channel()); ra != rb {
+	if ra, rb := channelRank(a.prerelease), channelRank(b.prerelease); ra != rb {
 		return sign(ra - rb)
 	}
 	return sign(a.number - b.number)

@@ -6,9 +6,10 @@ how to run the hive CLI and Hive Desktop.
 ## Before you open a pull request
 
 Run `mise run check`. If you changed config behavior, also run
-`mise run cli:validate`. A change to the desktop app owes what `cmd/desktop/AGENTS.md`
-asks for: a release-notes fragment and, for a Wails service change,
-regenerated bindings.
+`mise run cli:validate`. A user-visible change to either program owes a
+release-notes fragment in that program's changelog
+(`mise run changelog:new`; see `.agents/skills/release-notes/SKILL.md`). A
+Wails service change also owes regenerated bindings (`cmd/desktop/AGENTS.md`).
 
 The pull request template describes the title format and the scope list.
 

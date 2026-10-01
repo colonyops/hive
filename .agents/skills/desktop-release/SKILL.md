@@ -72,9 +72,9 @@ Reject missing or unknown channels instead of guessing.
    entry, naming the file it wants. **This is not recoverable inside the release
    run**: the entry has to be committed on `main` before publishing, and step 3
    requires a clean tree identical to `origin/main`, so it cannot be written
-   here. Stop and tell the operator to run `/desktop-release-prep <version>`.
+   here. Stop and tell the operator to run `/release-prep <version>`.
 
-   The `desktop-release-prep` skill promotes the accumulated fragments, curates the
+   The `release-prep` skill promotes the accumulated fragments, curates the
    stable entry, validates it, and runs the repository command that creates the
    branch, commit, push, and pull request. Never create those by hand. Restart
    this procedure from step 2 after the pull request merges.
