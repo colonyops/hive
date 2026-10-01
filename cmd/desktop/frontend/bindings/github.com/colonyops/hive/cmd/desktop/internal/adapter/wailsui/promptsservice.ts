@@ -6,7 +6,7 @@
  * "LLM prompts" settings section lists Catalog(), and context-scoped surfaces
  * call Render() with instance data.
  * 
- * Prompt text lives in internal/app/prompts, not here and not in any Vue
+ * Prompt text lives in cmd/desktop/internal/app/prompts, not here and not in any Vue
  * component — this is transport only.
  * @module
  */

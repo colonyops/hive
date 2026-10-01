@@ -13,7 +13,7 @@ export interface Flow {
 
     /**
      * Image is the content hash of the profile's avatar, whose normalized PNG
-     * lives in the app data dir (see internal/app/profileimg). It is owned by
+     * lives in the app data dir (see cmd/desktop/internal/app/profileimg). It is owned by
      * SetImage, not the graph editor: FlowStore.Save preserves whatever is on
      * disk so a graph save never drops it. Empty means "no avatar" — the rail
      * falls back to the letter chip.

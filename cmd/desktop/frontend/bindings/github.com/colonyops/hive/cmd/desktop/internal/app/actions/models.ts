@@ -154,7 +154,7 @@ export interface Launcher {
 
     /**
      * Icon is the glyph the command palette shows, from the launcher set in
-     * internal/app/icons. Empty means the terminal glyph.
+     * cmd/desktop/internal/app/icons. Empty means the terminal glyph.
      */
     "icon"?: string;
 }
