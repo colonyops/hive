@@ -64,9 +64,8 @@ by the root `go.mod`.
 
 The Wails Taskfiles still run from `cmd/desktop/`, which lets Go discover the
 parent module automatically. Their `go:mod:tidy` task explicitly runs from the
-module root, and their module-file task inputs point at `../go.mod` and
-`../go.sum`. The Android and iOS binding-generation task inputs use those same
-parent paths. The template's unused iOS option-overlay stubs were removed;
+module root, and their module-file task inputs point at `../../go.mod` and
+`../../go.sum`. The template's unused iOS option-overlay stubs were removed;
 they were subdirectory files rather than code compiled with the desktop package.
 
 A `main` package named `desktop` cannot use an unqualified `go build
