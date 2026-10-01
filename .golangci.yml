@@ -206,8 +206,8 @@ linters:
       # own goroutines, so there is no caller context to thread.
       - path: (^|/)cmd/desktop/internal/app/app\.go
         linters: [containedctx]
-      # Desktop dev and release tooling: a main() is a legitimate context
-      # root, and a git subprocess in a build tool needs no cancellation.
+      # Desktop dev tooling: a main() is a legitimate context
+      # root, and a subprocess in a dev tool needs no cancellation.
       - path: (^|/)cmd/desktop/(devserver|devtools)/
         linters: [forbidigo, noctx, contextcheck]
       # httptest.NewRequest and http.Post in tests.

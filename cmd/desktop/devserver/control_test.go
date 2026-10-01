@@ -538,7 +538,7 @@ func TestResolveConfigPath(t *testing.T) {
 }
 
 // TestRepoConfigIsValidAndInert guards the checked-in development config that
-// `mise run devserver` passes. It must parse, and it must declare no overlays:
+// `mise run desktop:devserver` passes. It must parse, and it must declare no overlays:
 // a config that rewrote data the moment devserver started would make every
 // subsequent bug suspect.
 func TestRepoConfigIsValidAndInert(t *testing.T) {

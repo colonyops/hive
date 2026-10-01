@@ -16,7 +16,7 @@ import (
 )
 
 // cliTagPattern selects the release tags of the CLI. The repository also holds
-// tags of other programs, such as desktop/v1.2.3, and `git describe` without a
+// tags of other programs, such as desktop-v1.2.3, and `git describe` without a
 // pattern returns the nearest tag of any name.
 const cliTagPattern = "v[0-9]*"
 

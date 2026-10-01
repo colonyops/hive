@@ -96,12 +96,12 @@ func newReleaseCommand() *cli.Command {
 				ArgsUsage: "<version>",
 				Description: "Public publishing requires a clean current main or a matching CI tag on main; the command builds the universal macOS app, signs it, " +
 					"notarizes and staples it, packages and verifies it, uploads immutable artifacts to R2, updates the channel cascade, and verifies the public artifact. " +
-					"For local publishing, run this through `mise run release:publish -- <version>` so mise loads credentials.",
+					"For local publishing, run this through `mise run desktop:release:publish -- <version>` so mise loads credentials.",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "skip-notarize", Usage: "skip notarization and stapling (requires --skip-upload)"},
 					&cli.BoolFlag{Name: "skip-upload", Usage: "build and package without publishing"},
 					&cli.BoolFlag{Name: "force", Usage: "permit overwriting an existing immutable release"},
-					&cli.BoolFlag{Name: "resume", Usage: "reuse verified desktop/bin artifacts and finish an interrupted upload without rebuilding"},
+					&cli.BoolFlag{Name: "resume", Usage: "reuse verified cmd/desktop/bin artifacts and finish an interrupted upload without rebuilding"},
 				},
 				Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 1 {
@@ -163,7 +163,7 @@ func newReleaseCommand() *cli.Command {
 								return err
 							}
 							fmt.Printf("wrote %s\n", path)
-							fmt.Println("consolidate the bullets and write its summary, then run `mise run changelog:pr`")
+							fmt.Println("consolidate the bullets and write its summary, then run `mise run desktop:changelog:pr`")
 							return nil
 						}),
 					},

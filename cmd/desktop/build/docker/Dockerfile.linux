@@ -7,7 +7,7 @@
 # GTK's API surface moves fast enough to matter — Debian bookworm's GTK 4.8
 # cannot compile this app (GtkFileDialog landed in 4.10).
 #
-# Build it through `mise run build:linux`, which takes the wails3 pin
+# Build it through `mise run desktop:build:linux`, which takes the wails3 pin
 # from mise.toml and rebuilds the image whenever this file or that pin changes.
 # Cross-architecture works via emulation: pass --platform to docker.
 #

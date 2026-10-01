@@ -9,7 +9,7 @@ import (
 )
 
 func (p *publisher) resumePublish(ctx context.Context) error {
-	fmt.Printf("==> resuming %s from verified artifacts in desktop/bin\n", p.options.version)
+	fmt.Printf("==> resuming %s from verified artifacts in cmd/desktop/bin\n", p.options.version)
 	artifacts, err := p.loadReleaseArtifacts(ctx)
 	if err != nil {
 		return err

@@ -3,7 +3,7 @@
 #
 # This lives in the repo rather than ~/.config/solo/config.yaml for two reasons:
 # it is versioned with the tasks it invokes, and a global entry would have to be
-# keyed on a worktree basename (hive-desktop-j28hih) that differs per worktree.
+# keyed on a worktree basename (hive-kzp9yu) that differs per worktree.
 #
 # devserver is listed first so it starts linking sooner, but the tabs are not
 # ordered: nothing gates the desktop tab on the proxy being up. A proxy that is

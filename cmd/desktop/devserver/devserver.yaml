@@ -1,7 +1,7 @@
 # devserver — checked-in development config.
 #
-#   mise run devserver          # passes this file as --config
-#   HIVE_DESKTOP_DEVELOPMENT_GITHUB_API_BASE=http://127.0.0.1:7777 mise run dev
+#   mise run desktop:devserver  # passes this file as --config
+#   HIVE_DESKTOP_DEVELOPMENT_GITHUB_API_BASE=http://127.0.0.1:7777 mise run desktop:dev
 #
 # Everything here is inert on startup: no overlays are declared, so connected
 # instances see real GitHub data until you click something on the dashboard.

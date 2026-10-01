@@ -33,7 +33,7 @@ func TestParseCLIVersion(t *testing.T) {
 		})
 	}
 
-	for _, tag := range []string{"", "1.2.3", "v1.2", "v1.2.3.4", "v1.x.3", "v-1.2.3", "desktop/v1.2.3", "v2-experiment"} {
+	for _, tag := range []string{"", "1.2.3", "v1.2", "v1.2.3.4", "v1.x.3", "v-1.2.3", "desktop-v1.2.3", "v2-experiment"} {
 		t.Run("rejects "+tag, func(t *testing.T) {
 			_, err := parseCLIVersion(tag)
 			assert.Error(t, err)
@@ -186,7 +186,7 @@ func TestReadCLITagState(t *testing.T) {
 		newCLITestRepo(t)
 		cliTestTag(t, "v0.1.0")
 		cliTestCommit(t, "desktop release")
-		cliTestTag(t, "desktop/v0.2.0")
+		cliTestTag(t, "desktop-v0.2.0")
 		cliTestCommit(t, "work")
 
 		state, err := readCLITagState(t.Context())
@@ -200,7 +200,7 @@ func TestReadCLITagState(t *testing.T) {
 		newCLITestRepo(t)
 		cliTestTag(t, "v0.1.0")
 		cliTestCommit(t, "work")
-		cliTestTag(t, "desktop/v9.9.9")
+		cliTestTag(t, "desktop-v9.9.9")
 
 		state, err := readCLITagState(t.Context())
 		require.NoError(t, err)
@@ -236,7 +236,7 @@ func TestReadCLITagState(t *testing.T) {
 
 	t.Run("no CLI tag", func(t *testing.T) {
 		newCLITestRepo(t)
-		cliTestTag(t, "desktop/v0.2.0")
+		cliTestTag(t, "desktop-v0.2.0")
 		cliTestCommit(t, "work")
 
 		state, err := readCLITagState(t.Context())
@@ -291,7 +291,7 @@ func TestRunCLITag(t *testing.T) {
 		newCLITestRepo(t)
 		cliTestTag(t, "v0.59.0")
 		cliTestCommit(t, "work")
-		cliTestTag(t, "desktop/v9.9.9")
+		cliTestTag(t, "desktop-v9.9.9")
 
 		stdout, _, err := run(t, cliBumpMinor, true)
 		require.NoError(t, err)
@@ -328,7 +328,7 @@ func TestRunCLITag(t *testing.T) {
 
 	t.Run("no CLI tag is an error and makes no tag", func(t *testing.T) {
 		newCLITestRepo(t)
-		cliTestTag(t, "desktop/v0.2.0")
+		cliTestTag(t, "desktop-v0.2.0")
 		cliTestCommit(t, "work")
 
 		_, _, err := run(t, cliBumpPatch, true)

@@ -5,7 +5,7 @@
     // Rewrite `uses: org/action@v1` to a digest plus a version comment, then
     // keep the digest current. Tags are mutable; digests are not.
     "helpers:pinGitHubActionDigests",
-    // Same reasoning for FROM lines. desktop/e2e/Dockerfile is already
+    // Same reasoning for FROM lines. cmd/desktop/e2e/Dockerfile is already
     // digest-pinned by hand; this keeps that property from regressing.
     "docker:pinDigests",
   ],

@@ -398,7 +398,7 @@ func (p *publisher) build(ctx context.Context) error {
 	}
 	app := filepath.Join(desktopDir, "bin", "Hive.app")
 	if info, err := os.Stat(app); err != nil || !info.IsDir() {
-		return errors.New("build did not produce desktop/bin/Hive.app")
+		return errors.New("build did not produce cmd/desktop/bin/Hive.app")
 	}
 	base := p.options.version.base
 	baseText := fmt.Sprintf("%d.%d.%d", base.major, base.minor, base.patch)
@@ -573,7 +573,7 @@ func (p *publisher) packageApp(ctx context.Context) (releaseArtifact, error) {
 	zipName := fmt.Sprintf("Hive-%s-darwin-universal.zip", p.options.version)
 	zipPath := filepath.Join(desktopDir, "bin", zipName)
 	fmt.Printf("==> packaging %s\n", zipName)
-	// ditto must run in desktop/bin so the archive has Hive.app at its root.
+	// ditto must run in cmd/desktop/bin so the archive has Hive.app at its root.
 	command := exec.CommandContext(ctx, "ditto", "-c", "-k", "--norsrc", "--noextattr", "--noacl", "--keepParent", "Hive.app", zipName)
 	command.Dir = filepath.Join(desktopDir, "bin")
 	command.Stdout, command.Stderr = os.Stdout, os.Stderr

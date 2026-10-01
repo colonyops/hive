@@ -57,11 +57,11 @@ func parsePromotedStatus(status string) (promoted, error) {
 
 	if len(unexpected) > 0 {
 		return promoted{}, fmt.Errorf(
-			"worktree holds changes that are not the promoted release notes: %s\ncommit or stash them, then run `mise run changelog:promote` again",
+			"worktree holds changes that are not the promoted release notes: %s\ncommit or stash them, then run `mise run desktop:changelog:promote` again",
 			strings.Join(unexpected, ", "))
 	}
 	if result.entryPath == "" {
-		return promoted{}, errors.New("no promoted changelog entry in the worktree; run `mise run changelog:promote -- <stable|version>` first")
+		return promoted{}, errors.New("no promoted changelog entry in the worktree; run `mise run desktop:changelog:promote -- <stable|version>` first")
 	}
 	if len(result.fragments) == 0 {
 		return promoted{}, fmt.Errorf("%s exists but no fragments were deleted; this is not a promotion", result.entryPath)

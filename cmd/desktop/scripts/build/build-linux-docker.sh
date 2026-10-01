@@ -2,7 +2,7 @@
 # build-linux-docker.sh — build the Linux desktop binary in a container.
 #
 # Usage:
-#   ./scripts/build/build-linux-docker.sh [--arch=amd64|arm64] [--image-only]
+#   ./cmd/desktop/scripts/build/build-linux-docker.sh [--arch=amd64|arm64] [--image-only]
 #
 # Exists so a non-Linux host (or a Linux host targeting the other architecture)
 # can produce a release Linux binary: it runs the same `wails3 task

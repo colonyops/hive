@@ -46,7 +46,7 @@ func notesFor(version releaseVersion) (releasenotes.Entry, error) {
 	}
 	if version.channel() == "stable" {
 		return releasenotes.Entry{}, fmt.Errorf(
-			"no changelog entry for %s: promote the draft with `mise run changelog:promote -- %s` and commit it before releasing",
+			"no changelog entry for %s: promote the draft with `mise run desktop:changelog:promote -- %s` and commit it before releasing",
 			version, version)
 	}
 	entry, _ := entries.Draft()

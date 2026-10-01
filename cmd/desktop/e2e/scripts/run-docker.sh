@@ -23,7 +23,7 @@ E2E_HARNESS_MARKER="$(openssl rand -hex 32)"
 docker build --file cmd/desktop/e2e/Dockerfile --tag "${IMAGE_TAG}" .
 
 # Mount the results dirs out of the --rm container so failure traces and
-# screenshots survive the run (CI uploads test-results as an artifact).
+# screenshots survive the run.
 mkdir -p cmd/desktop/e2e/test-results cmd/desktop/e2e/screenshots
 # --ipc=host: Chromium can exhaust Docker's default 64MB /dev/shm and crash
 # mid-suite (playwright.dev/docs/docker); host IPC is the documented fix.
