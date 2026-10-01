@@ -120,7 +120,7 @@ See [Terminal mode](../code/terminal-mode.md#shared-tmux-sizing).
 
 ## Report a problem
 
-Open **Settings ▸ System** and select **Report a problem**. Hive opens a new issue at [github.com/hay-kot/hive-desktop/issues](https://github.com/hay-kot/hive-desktop/issues) with your version and platform filled in. Nothing from your machine is attached. Describe the problem and paste the log lines that show it.
+Open **Settings ▸ System** and select **Report a problem**. Hive opens a new issue at [github.com/colonyops/hive/issues](https://github.com/colonyops/hive/issues) with your version and platform filled in. Nothing from your machine is attached. Describe the problem and paste the log lines that show it.
 
 The default log path is:
 

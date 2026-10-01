@@ -141,4 +141,4 @@ Profile export collects CPU, allocation, and in-use heap profiles. It does not c
 
 Tokens must use `env:`, `file:`, or `op://` references. Hive rejects literal telemetry tokens in the settings file. Endpoints and users may also use these references.
 
-A ready-made Grafana dashboard for these signals is in the repository's [`grafana/`](https://github.com/hay-kot/hive-desktop/tree/main/grafana) directory. Push it to your stack with [gcx](https://github.com/grafana/gcx). Its README maps each metric, span, and profile to the query that reads it.
+A ready-made Grafana dashboard for these signals is in the repository's [`cmd/desktop/grafana/`](https://github.com/colonyops/hive/tree/main/cmd/desktop/grafana) directory. Push it to your stack with [gcx](https://github.com/grafana/gcx). Its README maps each metric, span, and profile to the query that reads it.

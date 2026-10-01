@@ -20,36 +20,36 @@ Windows is not supported.
 ## Set up
 
 ```sh
-git clone https://github.com/hay-kot/hive-desktop.git
-cd hive-desktop
+git clone https://github.com/colonyops/hive.git
+cd hive
 mise trust
 mise install
-cd desktop/frontend && npm ci && cd ../..
+mise run desktop:frontend:install
 ```
 
 ## Build
 
 ```sh
-mise run build
+mise run desktop:build
 ```
 
-The binary is written to `desktop/bin/hive-desktop`. On macOS, create a local app bundle with:
+The binary is written to `cmd/desktop/bin/hive-desktop`. On macOS, create a local app bundle with:
 
 ```sh
-cd desktop && wails3 package
+cd cmd/desktop && wails3 package
 ```
 
 For Linux, Docker must be running:
 
 ```sh
-mise run build:linux
-ARCH=arm64 mise run build:linux
+mise run desktop:build:linux
+ARCH=arm64 mise run desktop:build:linux
 ```
 
 ## Run a development build
 
 ```sh
-mise run dev
+mise run desktop:dev
 ```
 
 Development runs use isolated config and data directories. See `docs/development.md` in the repository for the devserver, fixtures, tests, and quality checks.
