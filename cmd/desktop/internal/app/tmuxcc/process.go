@@ -186,6 +186,27 @@ func socketFromTMUX(v string) string {
 	return socket
 }
 
+// RunnerEnviron adapts Desktop's resolved environment for one-shot tmux
+// commands without exposing the parent client's tmux variables to child panes.
+func RunnerEnviron(environ func(context.Context) []string) func(context.Context) []string {
+	return func(ctx context.Context) []string {
+		if environ == nil {
+			return detachedEnv(nil)
+		}
+		return detachedEnv(environ(ctx))
+	}
+}
+
+// RunnerArgs keeps one-shot commands on an inherited custom tmux socket after
+// RunnerEnviron removes the parent client's tmux variables.
+func RunnerArgs(args []string) []string {
+	socket := socketFromTMUX(os.Getenv("TMUX"))
+	if socket == "" {
+		return args
+	}
+	return append([]string{"-S", socket}, args...)
+}
+
 // detachedEnv drops base's tmux client variables so the command runs as an
 // independent client rather than nesting. A nil base is this process's own
 // environment, which is what a caller outside the app's composition root gets.

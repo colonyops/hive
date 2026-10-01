@@ -267,38 +267,44 @@ func (m *Manager) Subscribe(slug string) (<-chan Event, func(), error) {
 	return ch, unsubscribe, nil
 }
 
-// RenameSession renames the live tmux session named from to to, and drops the
-// control client registered under the old slug so nothing keeps addressing a
-// name tmux no longer answers to; the frontend re-attaches under the new one.
+// RenameSession renames a live tmux session when one exists.
+func (m *Manager) RenameSession(ctx context.Context, from, to string) error {
+	_, err := m.RenameSessionIfPresent(ctx, from, to)
+	return err
+}
+
+// RenameSessionIfPresent renames the live tmux session named from to to and
+// reports whether it changed tmux. It drops the control client registered under
+// the old slug so nothing keeps addressing a name tmux no longer answers to.
 //
-// A session hive knows about does not have to have a tmux session behind it —
-// it may never have been spawned, or its tmux server may have been restarted —
+// A session hive knows about does not have to have a tmux session behind it --
+// it may never have been spawned, or its tmux server may have been restarted --
 // so an absent one is success, not an error. Existence is probed with
 // has-session rather than inferred from rename-session's stderr, because the
 // alternative is matching on tmux's message text.
-func (m *Manager) RenameSession(ctx context.Context, from, to string) error {
+func (m *Manager) RenameSessionIfPresent(ctx context.Context, from, to string) (bool, error) {
 	if from == "" || to == "" {
-		return fmt.Errorf("%w: empty slug", ErrInvalidName)
+		return false, fmt.Errorf("%w: empty slug", ErrInvalidName)
 	}
 	if from == to {
-		return nil
+		return false, nil
 	}
 	// tmux being unavailable means there is no live session to keep in step:
 	// the rename is a store-only concern and must not be blocked by it.
 	if err := m.Available(ctx); err != nil {
-		return nil
+		return false, nil
 	}
 	if _, err := m.oneShot(ctx, "has-session", "-t", from); err != nil {
-		return nil
+		return false, nil
 	}
 	if _, err := m.oneShot(ctx, "rename-session", "-t", from, to); err != nil {
-		return fmt.Errorf("tmuxcc: rename session %s to %s: %w", from, to, err)
+		return false, fmt.Errorf("tmuxcc: rename session %s to %s: %w", from, to, err)
 	}
 	if mc, ok := m.managed(from); ok {
 		_ = mc.client.Close(ctx)
 		m.remove(from, mc.gen)
 	}
-	return nil
+	return true, nil
 }
 
 // NewWindow creates a window in a session this app holds no control client for,

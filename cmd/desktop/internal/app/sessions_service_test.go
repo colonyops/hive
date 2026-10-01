@@ -68,13 +68,14 @@ type fakeSessionManager struct {
 	// unreachable presents behind a hive listing that succeeded.
 	runningErr error
 
-	renamed   [][2]string
-	deleted   []string
-	recycled  []string
-	pruned    int
-	renameErr error
-	spawned   [][3]string
-	spawnErr  error
+	renamed     [][2]string
+	deleted     []string
+	recycled    []string
+	pruned      int
+	renameErr   error
+	afterRename func()
+	spawned     [][3]string
+	spawnErr    error
 }
 
 func (f *fakeSessionManager) ListSessions(context.Context) ([]dispatch.SessionSummary, error) {
@@ -120,6 +121,9 @@ func (f *fakeSessionManager) SessionRisk(context.Context, string) (dispatch.Sess
 }
 
 func (f *fakeSessionManager) RenameSession(_ context.Context, id, name string) error {
+	if f.afterRename != nil {
+		f.afterRename()
+	}
 	if f.renameErr != nil {
 		return f.renameErr
 	}
@@ -155,13 +159,16 @@ func (f *fakeSessionManager) SpawnTmuxSession(_ context.Context, name, path, rep
 }
 
 type fakeSessionTmux struct {
-	renames [][2]string
-	err     error
+	renames     [][2]string
+	contextErrs []error
+	absent      bool
+	err         error
 }
 
-func (f *fakeSessionTmux) RenameSession(_ context.Context, from, to string) error {
+func (f *fakeSessionTmux) RenameSessionIfPresent(ctx context.Context, from, to string) (bool, error) {
 	f.renames = append(f.renames, [2]string{from, to})
-	return f.err
+	f.contextErrs = append(f.contextErrs, ctx.Err())
+	return !f.absent && f.err == nil, f.err
 }
 
 // fakeJobRunner runs the tracked function synchronously so tests can observe
@@ -436,15 +443,44 @@ func TestSessionsService_RenameSessionLeavesTheStoreAloneWhenTmuxFails(t *testin
 	assert.Empty(t, manager.renamed, "the slug must not move without its tmux session")
 }
 
-func TestSessionsService_RenameSessionRollsTmuxBackWhenTheStoreFails(t *testing.T) {
+func TestSessionsService_RenameSessionRollsActualTmuxTargetBackWhenTheStoreFails(t *testing.T) {
 	manager, _ := activeSession()
+	detail := manager.details["s1"]
+	detail.TmuxSession = "actual-review-81"
+	manager.details["s1"] = detail
 	manager.renameErr = errors.New("disk full")
 	tmux := &fakeSessionTmux{}
 	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
 
 	_, err := svc.RenameSession(t.Context(), "s1", "review 82")
 	assert.Equal(t, KindInternal, KindOf(err))
-	assert.Equal(t, [][2]string{{"review-81", "review-82"}, {"review-82", "review-81"}}, tmux.renames)
+	assert.Equal(t, [][2]string{{"actual-review-81", "review-82"}, {"review-82", "actual-review-81"}}, tmux.renames)
+}
+
+func TestSessionsService_RenameSessionDoesNotRollBackAnAbsentTmuxSession(t *testing.T) {
+	manager, _ := activeSession()
+	manager.renameErr = errors.New("disk full")
+	tmux := &fakeSessionTmux{absent: true}
+	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+
+	_, err := svc.RenameSession(t.Context(), "s1", "review 82")
+	assert.Equal(t, KindInternal, KindOf(err))
+	assert.Equal(t, [][2]string{{"review-81", "review-82"}}, tmux.renames)
+}
+
+func TestSessionsService_RenameSessionRollbackOutlivesRequestCancellation(t *testing.T) {
+	manager, _ := activeSession()
+	manager.renameErr = context.Canceled
+	ctx, cancel := context.WithCancel(t.Context())
+	manager.afterRename = cancel
+	tmux := &fakeSessionTmux{}
+	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+
+	_, err := svc.RenameSession(ctx, "s1", "review 82")
+	assert.Equal(t, KindInternal, KindOf(err))
+	require.Len(t, tmux.contextErrs, 2)
+	assert.NoError(t, tmux.contextErrs[0])
+	assert.NoError(t, tmux.contextErrs[1])
 }
 
 func TestSessionsService_RenameSessionRejectsASlugCollision(t *testing.T) {
@@ -456,6 +492,20 @@ func TestSessionsService_RenameSessionRejectsASlugCollision(t *testing.T) {
 	// "review/82" slugifies onto s2's slug, which would give both sessions the
 	// same tmux session name and the same directory slug.
 	_, err := svc.RenameSession(t.Context(), "s1", "review/82")
+	assert.Equal(t, KindInvalid, KindOf(err))
+	assert.Empty(t, tmux.renames)
+	assert.Empty(t, manager.renamed)
+}
+
+func TestSessionsService_RenameSessionRejectsAPersistedTmuxTargetCollision(t *testing.T) {
+	manager, _ := activeSession()
+	manager.sessions = append(manager.sessions, dispatch.SessionSummary{
+		ID: "s2", Name: "Renamed Elsewhere", Slug: "renamed-elsewhere", TmuxSession: "review-82",
+	})
+	tmux := &fakeSessionTmux{}
+	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+
+	_, err := svc.RenameSession(t.Context(), "s1", "review 82")
 	assert.Equal(t, KindInvalid, KindOf(err))
 	assert.Empty(t, tmux.renames)
 	assert.Empty(t, manager.renamed)

@@ -567,7 +567,9 @@ func TestManagerRenameSessionRenamesTheLiveSession(t *testing.T) {
 		runTmux: cmds.run,
 	})
 
-	require.NoError(t, m.RenameSession(t.Context(), "hive-demo", "hive-demo-2"))
+	renamed, err := m.RenameSessionIfPresent(t.Context(), "hive-demo", "hive-demo-2")
+	require.NoError(t, err)
+	require.True(t, renamed)
 	require.Equal(t, [][]string{
 		{"has-session", "-t", "hive-demo"},
 		{"rename-session", "-t", "hive-demo", "hive-demo-2"},
@@ -584,7 +586,9 @@ func TestManagerRenameSessionTreatsAnAbsentSessionAsSuccess(t *testing.T) {
 
 	// A hive session that was never spawned, or whose tmux server restarted,
 	// still has to be renamable.
-	require.NoError(t, m.RenameSession(t.Context(), "hive-demo", "hive-demo-2"))
+	renamed, err := m.RenameSessionIfPresent(t.Context(), "hive-demo", "hive-demo-2")
+	require.NoError(t, err)
+	require.False(t, renamed)
 	require.Len(t, cmds.calls, 1, "no rename is attempted for a session that is not there")
 }
 

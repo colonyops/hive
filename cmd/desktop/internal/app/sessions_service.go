@@ -23,10 +23,11 @@ import (
 
 // Job action ids label session jobs in the jobs UI.
 const (
-	newSessionJobActionID     = "new-session"
-	deleteSessionJobActionID  = "delete-session"
-	recycleSessionJobActionID = "recycle-session"
-	pruneSessionsJobActionID  = "prune-sessions"
+	newSessionJobActionID        = "new-session"
+	deleteSessionJobActionID     = "delete-session"
+	recycleSessionJobActionID    = "recycle-session"
+	pruneSessionsJobActionID     = "prune-sessions"
+	sessionRenameRollbackTimeout = 5 * time.Second
 )
 
 type sessionLauncher interface {
@@ -65,11 +66,12 @@ type sessionGitSource interface {
 	SessionGitStatus(ctx context.Context, id string) (dispatch.SessionGitStatus, error)
 }
 
-// sessionTmux renames the live tmux session behind a slug. Hive's rename
-// recomputes the slug and saves; the tmux session keeps its old name, so
-// without this the stored slug addresses nothing.
+// sessionTmux preflights a live tmux rename before Hive updates the record.
+// The shared Hive service repeats the lifecycle operation to persist its actual
+// multiplexer target; Desktop's manager treats that second, absent source as a
+// successful no-op.
 type sessionTmux interface {
-	RenameSession(ctx context.Context, from, to string) error
+	RenameSessionIfPresent(ctx context.Context, from, to string) (bool, error)
 }
 
 // sessionJobRunner runs slow session work as a tracked background job so a
@@ -649,13 +651,10 @@ func (s *SessionsService) setFailedCreate(draft *dispatch.SessionDraft) {
 
 // RenameSession renames a session and returns its new summary.
 //
-// Hive's rename recomputes the slug, and the slug is the tmux session name, so
-// the live tmux session is renamed in the same breath — otherwise the stored
-// slug addresses a session tmux does not have and every subsequent attach
-// fails. tmux goes first: a collision or a missing binary then aborts before
-// anything is written, and the store write is the only step left to fail. If it
-// does, the tmux rename is put back, because the one state we must not leave
-// behind is a slug that does not name its own tmux session.
+// Desktop preflights the live tmux rename so a collision cannot move the record
+// onto another session's target. The shared Hive service then updates the
+// record and its persisted multiplexer target. If that update fails, Desktop
+// puts the live tmux name back.
 func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (dispatch.SessionSummary, error) {
 	if strings.TrimSpace(id) == "" {
 		return dispatch.SessionSummary{}, Errorf(KindInvalid, "session id is required")
@@ -677,12 +676,21 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (d
 		return dispatch.SessionSummary{}, err
 	}
 
-	if err := s.tmux.RenameSession(ctx, current.Slug, slug); err != nil {
+	tmuxSession := current.TmuxSession
+	if tmuxSession == "" {
+		tmuxSession = current.Slug
+	}
+	tmuxRenamed, err := s.tmux.RenameSessionIfPresent(ctx, tmuxSession, slug)
+	if err != nil {
 		return dispatch.SessionSummary{}, Wrap(err, KindConflict, "renaming the terminal session for %q", current.Name)
 	}
 	if err := s.manager.RenameSession(ctx, id, name); err != nil {
-		if rollback := s.tmux.RenameSession(ctx, slug, current.Slug); rollback != nil {
-			return dispatch.SessionSummary{}, Wrap(err, KindInternal, "renaming session %q (its terminal session is now named %q)", current.Name, slug)
+		if tmuxRenamed {
+			rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionRenameRollbackTimeout)
+			defer cancel()
+			if _, rollbackErr := s.tmux.RenameSessionIfPresent(rollbackCtx, slug, tmuxSession); rollbackErr != nil {
+				return dispatch.SessionSummary{}, Wrap(err, KindInternal, "renaming session %q (its terminal session is now named %q)", current.Name, slug)
+			}
 		}
 		return dispatch.SessionSummary{}, Wrap(err, KindInternal, "renaming session %q", current.Name)
 	}
@@ -811,17 +819,16 @@ func (s *SessionsService) destructiveJob(ctx context.Context, id, label, actionI
 	}), nil
 }
 
-// assertSlugFree rejects a rename that would give two sessions the same slug.
-// Hive validates the new name but does not check it for collisions, and the
-// session table has no uniqueness constraint, so nothing upstream stops two
-// sessions sharing one tmux session name and one directory slug.
+// assertSlugFree rejects a rename that would give two sessions the same slug
+// or live tmux target. Hive validates the new name but does not check it for
+// collisions, and the session table has no uniqueness constraint.
 func (s *SessionsService) assertSlugFree(ctx context.Context, id, slug string) error {
 	sessions, err := s.manager.ListSessions(ctx)
 	if err != nil {
 		return Wrap(err, KindInternal, "checking existing session names")
 	}
 	for _, other := range sessions {
-		if other.ID != id && other.Slug == slug {
+		if other.ID != id && (other.Slug == slug || other.TmuxSession == slug) {
 			return Errorf(KindInvalid, "a session named %q already exists", other.Name)
 		}
 	}

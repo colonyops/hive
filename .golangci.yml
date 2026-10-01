@@ -129,6 +129,8 @@ linters:
               desc: *seam
             - pkg: github.com/colonyops/hive/internal/hive
               desc: *seam
+            - pkg: github.com/colonyops/hive/internal/integration
+              desc: *seam
             - pkg: github.com/colonyops/hive/internal/sources
               desc: *seam
         cli-no-desktop-deps:

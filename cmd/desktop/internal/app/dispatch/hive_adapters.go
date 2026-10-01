@@ -100,15 +100,15 @@ type sessionWindowSource interface {
 	ListSessionWindows(context.Context, []string) (map[string][]SessionWindowRef, error)
 }
 
-// SessionSummary is one session as the desktop's session list sees it. Slug is
-// the tmux session name, which is what a terminal attach targets. It stays a
-// projection: the rest of a session is read on demand as a SessionDetail.
+// SessionSummary is one session as the desktop's session list sees it. The
+// persisted tmux target stays internal; the rest is the frontend projection.
 type SessionSummary struct {
-	ID    string `json:"id"`
-	Name  string `json:"name"`
-	Slug  string `json:"slug"`
-	Repo  string `json:"repo"`
-	State string `json:"state"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Slug        string `json:"slug"`
+	Repo        string `json:"repo"`
+	State       string `json:"state"`
+	TmuxSession string `json:"-"`
 }
 
 // ItemSessionView is one hive session an inbox item spawned. Only CreatedAt
@@ -156,6 +156,7 @@ type SessionDetail struct {
 	Path           string    `json:"path"`
 	CloneStrategy  string    `json:"cloneStrategy"`
 	WorktreeBranch string    `json:"worktreeBranch"`
+	TmuxSession    string    `json:"-"`
 	Tags           []string  `json:"tags"`
 	CreatedAt      time.Time `json:"createdAt"`
 	UpdatedAt      time.Time `json:"updatedAt"`
@@ -490,7 +491,7 @@ func (m *HiveSessionManager) SessionStatuses(ctx context.Context) (SessionStatus
 		if !ok {
 			continue
 		}
-		refs := windowSets[s.Slug]
+		refs := windowSets[hive.SessionTarget(*s).Session]
 		item := SessionStatus{SessionID: s.ID, Running: len(refs) > 0, Windows: []SessionWindowStatus{}}
 		if m.windows == nil {
 			item.Running = status.Status != terminal.StatusMissing
@@ -524,11 +525,11 @@ func (m *HiveSessionManager) sessionWindows(ctx context.Context, sessions []*ses
 	if m.windows == nil {
 		return nil, nil
 	}
-	slugs := make([]string, 0, len(sessions))
+	targets := make([]string, 0, len(sessions))
 	for _, s := range sessions {
-		slugs = append(slugs, s.Slug)
+		targets = append(targets, hive.SessionTarget(*s).Session)
 	}
-	return m.windows.ListSessionWindows(ctx, slugs)
+	return m.windows.ListSessionWindows(ctx, targets)
 }
 
 func stableWindowID(index, name string, refs []SessionWindowRef) string {
@@ -599,7 +600,7 @@ func (m *HiveSessionManager) RunningSessions(ctx context.Context, ids []string) 
 	}
 	if m.windows != nil {
 		for _, s := range subset {
-			if len(windowSets[s.Slug]) > 0 {
+			if len(windowSets[hive.SessionTarget(*s).Session]) > 0 {
 				running[s.ID] = true
 			}
 		}
@@ -626,6 +627,7 @@ func (m *HiveSessionManager) SessionDetail(ctx context.Context, id string) (Sess
 		Path:           s.Path,
 		CloneStrategy:  s.CloneStrategy,
 		WorktreeBranch: s.GetMeta(session.MetaWorktreeBranch),
+		TmuxSession:    hive.SessionTarget(s).Session,
 		Tags:           s.Tags,
 		CreatedAt:      s.CreatedAt,
 		UpdatedAt:      s.UpdatedAt,
@@ -782,11 +784,12 @@ func (m *HiveSessionManager) PruneSessions(ctx context.Context) (int, error) {
 
 func sessionSummaryOf(s session.Session) SessionSummary {
 	return SessionSummary{
-		ID:    s.ID,
-		Name:  s.Name,
-		Slug:  s.Slug,
-		Repo:  s.Remote,
-		State: string(s.State),
+		ID:          s.ID,
+		Name:        s.Name,
+		Slug:        s.Slug,
+		Repo:        s.Remote,
+		State:       string(s.State),
+		TmuxSession: hive.SessionTarget(s).Session,
 	}
 }
 

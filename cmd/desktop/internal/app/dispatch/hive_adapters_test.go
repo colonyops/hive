@@ -14,11 +14,13 @@ import (
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/session"
 	coreterminal "github.com/colonyops/hive/internal/core/terminal"
 	coredb "github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	hivesvc "github.com/colonyops/hive/internal/hive"
+	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
@@ -92,6 +94,11 @@ func newHiveSessionService(t *testing.T, cfg *config.Config, exec executil.Execu
 
 func newHiveSessionServiceOver(t *testing.T, store session.Store, cfg *config.Config, exec executil.Executor) *hivesvc.SessionService {
 	t.Helper()
+	runner, ok := exec.(tmuxadapter.Runner)
+	if !ok {
+		runner = noopTmuxRunner{}
+	}
+	tmuxClient := tmuxadapter.New(runner, zerolog.Nop())
 	return hivesvc.NewSessionService(
 		store,
 		git.NewExecutor("git", exec),
@@ -103,7 +110,24 @@ func newHiveSessionServiceOver(t *testing.T, store session.Store, cfg *config.Co
 		zerolog.Nop(),
 		io.Discard,
 		io.Discard,
+		tmuxClient,
 	)
+}
+
+type noopTmuxRunner struct{}
+
+func (noopTmuxRunner) Available() bool { return true }
+
+func (noopTmuxRunner) Capture(context.Context, ...string) ([]byte, []byte, error) {
+	return nil, nil, nil
+}
+
+func (noopTmuxRunner) Input(context.Context, io.Reader, ...string) ([]byte, []byte, error) {
+	return nil, nil, nil
+}
+
+func (noopTmuxRunner) Interactive(context.Context, multiplexer.AttachStreams, ...string) error {
+	return nil
 }
 
 func openCoreDB(t *testing.T) *coredb.DB {
@@ -179,6 +203,20 @@ func (e *recordingExecutor) RunDirStream(_ context.Context, _ string, _, _ io.Wr
 	return e.record(cmd, args)
 }
 
+func (*recordingExecutor) Available() bool { return true }
+
+func (e *recordingExecutor) Capture(_ context.Context, args ...string) ([]byte, []byte, error) {
+	return nil, nil, e.record("tmux", args)
+}
+
+func (e *recordingExecutor) Input(_ context.Context, _ io.Reader, args ...string) ([]byte, []byte, error) {
+	return nil, nil, e.record("tmux", args)
+}
+
+func (e *recordingExecutor) Interactive(_ context.Context, _ multiplexer.AttachStreams, args ...string) error {
+	return e.record("tmux", args)
+}
+
 // spawnConfig is a rule whose windows are distinguishable from hive's defaults,
 // so the test can tell "hive rendered the configured spawn" from "something here
 // built a window set of its own".
@@ -230,8 +268,8 @@ func TestHiveSessionManagerListsEveryState(t *testing.T) {
 	got, err := manager.ListSessions(t.Context())
 	require.NoError(t, err)
 	assert.ElementsMatch(t, []SessionSummary{
-		{ID: "s1", Name: "review 81", Slug: "review-81", Repo: "acme/site", State: "active"},
-		{ID: "s2", Name: "old", Slug: "old", State: "recycled"},
+		{ID: "s1", Name: "review 81", Slug: "review-81", Repo: "acme/site", State: "active", TmuxSession: "review-81"},
+		{ID: "s2", Name: "old", Slug: "old", State: "recycled", TmuxSession: "old"},
 	}, got)
 }
 
@@ -249,11 +287,11 @@ func TestHiveSessionManagerProjectsLiveStatusForActiveSessions(t *testing.T) {
 		},
 	}
 	windows := &fakeSessionWindowSource{results: map[string][]SessionWindowRef{
-		"one": {{ID: "@1", Index: "0", Name: "claude"}, {ID: "@2", Index: "2", Name: "pi"}},
-		"two": {{ID: "@3", Index: "1", Name: "codex"}},
+		"actual-one": {{ID: "@1", Index: "0", Name: "claude"}, {ID: "@2", Index: "2", Name: "pi"}},
+		"two":        {{ID: "@3", Index: "1", Name: "codex"}},
 	}}
 	manager := NewHiveSessionManager(listingSessionManagement{sessions: []session.Session{
-		{ID: "s1", Slug: "one", State: session.StateActive},
+		{ID: "s1", Slug: "one", State: session.StateActive, Metadata: map[string]string{session.MetaTmuxSession: "actual-one"}},
 		{ID: "s2", Slug: "two", State: session.StateActive},
 		{ID: "s3", Slug: "three", State: session.StateRecycled},
 		{ID: "s4", Slug: "four", State: session.StateActive},
@@ -274,7 +312,7 @@ func TestHiveSessionManagerProjectsLiveStatusForActiveSessions(t *testing.T) {
 	assert.Equal(t, "s1", statuses.seen[0].ID)
 	assert.Equal(t, "s2", statuses.seen[1].ID)
 	assert.Equal(t, "s4", statuses.seen[2].ID)
-	assert.Equal(t, []string{"one", "two", "four"}, windows.seen)
+	assert.Equal(t, []string{"actual-one", "two", "four"}, windows.seen)
 }
 
 func TestStableWindowIDFallsBackToNameWhenAnIndexWasReused(t *testing.T) {
@@ -300,10 +338,10 @@ func TestStableWindowIDDoesNotMapADepartedIndexedWindowToTheSoleSurvivor(t *test
 func TestHiveSessionManagerRunningSessionsProbesOnlyTheNamedActiveSessions(t *testing.T) {
 	statuses := &fakeSessionStatusSource{available: true}
 	windows := &fakeSessionWindowSource{results: map[string][]SessionWindowRef{
-		"one": {{ID: "@1", Index: "0"}},
+		"actual-one": {{ID: "@1", Index: "0"}},
 	}}
 	manager := NewHiveSessionManager(listingSessionManagement{sessions: []session.Session{
-		{ID: "s1", Slug: "one", State: session.StateActive},
+		{ID: "s1", Slug: "one", State: session.StateActive, Metadata: map[string]string{session.MetaTmuxSession: "actual-one"}},
 		{ID: "s2", Slug: "two", State: session.StateRecycled},
 		{ID: "s3", Slug: "three", State: session.StateActive},
 	}}, statuses, windows, nil, time.Second)
@@ -312,7 +350,7 @@ func TestHiveSessionManagerRunningSessionsProbesOnlyTheNamedActiveSessions(t *te
 	require.NoError(t, err)
 	assert.Equal(t, map[string]bool{"s1": true}, got)
 	// s2 is recycled and s3 was not asked about, so neither is probed.
-	assert.Equal(t, []string{"one"}, windows.seen)
+	assert.Equal(t, []string{"actual-one"}, windows.seen)
 }
 
 // Terminal mode ships dark, so this is the default install: no liveness source
@@ -358,7 +396,7 @@ func TestHiveSessionManagerDetailReadsWorktreeMetadata(t *testing.T) {
 	assert.Equal(t, SessionDetail{
 		ID: "s1", Name: "review 81", Slug: "review-81", Repo: "acme/site", State: "active",
 		Path: "/tmp/review-81", CloneStrategy: session.CloneStrategyWorktree,
-		WorktreeBranch: "hive/review-81", Tags: []string{"pr-81"}, CreatedAt: now, UpdatedAt: now,
+		WorktreeBranch: "hive/review-81", TmuxSession: "review-81", Tags: []string{"pr-81"}, CreatedAt: now, UpdatedAt: now,
 	}, detail)
 
 	_, err = manager.SessionDetail(t.Context(), "missing")
@@ -375,9 +413,6 @@ func TestHiveSessionManagerRenameReSlugsTheSession(t *testing.T) {
 	detail, err := manager.SessionDetail(t.Context(), "s1")
 	require.NoError(t, err)
 	assert.Equal(t, "Review 82", detail.Name)
-	// The slug moving is the hazard the desktop compensates for: it is the tmux
-	// session name, and hive renames the record without renaming tmux. See
-	// app.SessionsService.RenameSession and ADR terminal-atlas-renderer.
 	assert.Equal(t, "review-82", detail.Slug)
 	assert.Equal(t, "/tmp/review-81", detail.Path, "the directory keeps the slug it was cloned under")
 }

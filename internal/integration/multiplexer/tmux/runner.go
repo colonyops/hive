@@ -3,6 +3,7 @@ package tmux
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os/exec"
 	"time"
@@ -17,6 +18,25 @@ type Runner interface {
 	Capture(ctx context.Context, args ...string) (stdout, stderr []byte, err error)
 	Input(ctx context.Context, input io.Reader, args ...string) (stdout, stderr []byte, err error)
 	Interactive(ctx context.Context, streams multiplexer.AttachStreams, args ...string) error
+}
+
+// ExecRunnerOptions configures an executable-backed Runner.
+type ExecRunnerOptions struct {
+	// Binary resolves the tmux executable for each command. Nil uses PATH.
+	Binary func(context.Context) (string, error)
+	// Environ returns the child environment. Nil inherits the process environment.
+	Environ func(context.Context) []string
+	// PrepareArgs can add server-selection arguments before execution.
+	PrepareArgs func([]string) []string
+}
+
+// NewExecRunner creates a Runner that invokes a configurable tmux executable.
+func NewExecRunner(options ExecRunnerOptions) Runner {
+	return execRunner{
+		binary:      options.Binary,
+		environ:     options.Environ,
+		prepareArgs: options.PrepareArgs,
+	}
 }
 
 const maxDiagnosticBytes = 500
@@ -46,24 +66,34 @@ func (b *diagnosticBuffer) Write(p []byte) (int, error) {
 	return originalLen, nil
 }
 
-type execRunner struct{}
+type execRunner struct {
+	binary      func(context.Context) (string, error)
+	environ     func(context.Context) []string
+	prepareArgs func([]string) []string
+}
 
-func (execRunner) Available() bool {
+func (r execRunner) Available() bool {
+	if r.binary != nil {
+		_, err := r.binary(context.Background())
+		return err == nil
+	}
 	_, err := exec.LookPath("tmux")
 	return err == nil
 }
 
-func (execRunner) Capture(ctx context.Context, args ...string) ([]byte, []byte, error) {
-	return runCaptured(ctx, nil, args...)
+func (r execRunner) Capture(ctx context.Context, args ...string) ([]byte, []byte, error) {
+	return r.runCaptured(ctx, nil, args...)
 }
 
-func (execRunner) Input(ctx context.Context, input io.Reader, args ...string) ([]byte, []byte, error) {
-	return runCaptured(ctx, input, args...)
+func (r execRunner) Input(ctx context.Context, input io.Reader, args ...string) ([]byte, []byte, error) {
+	return r.runCaptured(ctx, input, args...)
 }
 
-func runCaptured(ctx context.Context, input io.Reader, args ...string) ([]byte, []byte, error) {
-	cmd := exec.CommandContext(ctx, "tmux", args...)
-	cmd.WaitDelay = pipeWaitDelay
+func (r execRunner) runCaptured(ctx context.Context, input io.Reader, args ...string) ([]byte, []byte, error) {
+	cmd, binary, err := r.command(ctx, args...)
+	if err != nil {
+		return nil, nil, err
+	}
 	cmd.Stdin = input
 	var stdout bytes.Buffer
 	var stderr diagnosticBuffer
@@ -77,14 +107,16 @@ func runCaptured(ctx context.Context, input io.Reader, args ...string) ([]byte, 
 		if ctx.Err() != nil {
 			err = ctx.Err()
 		}
-		return stdout.Bytes(), stderr.Bytes(), executil.NewCommandError("tmux", "", diagnostics, err)
+		return stdout.Bytes(), stderr.Bytes(), executil.NewCommandError(binary, "", diagnostics, err)
 	}
 	return stdout.Bytes(), stderr.Bytes(), nil
 }
 
-func (execRunner) Interactive(ctx context.Context, streams multiplexer.AttachStreams, args ...string) error {
-	cmd := exec.CommandContext(ctx, "tmux", args...)
-	cmd.WaitDelay = pipeWaitDelay
+func (r execRunner) Interactive(ctx context.Context, streams multiplexer.AttachStreams, args ...string) error {
+	cmd, binary, err := r.command(ctx, args...)
+	if err != nil {
+		return err
+	}
 	cmd.Stdin = streams.Stdin
 	cmd.Stdout = streams.Stdout
 	var diagnostics diagnosticBuffer
@@ -97,7 +129,28 @@ func (execRunner) Interactive(ctx context.Context, streams multiplexer.AttachStr
 		if ctx.Err() != nil {
 			err = ctx.Err()
 		}
-		return executil.NewCommandError("tmux", "", diagnostics.Bytes(), err)
+		return executil.NewCommandError(binary, "", diagnostics.Bytes(), err)
 	}
 	return nil
+}
+
+func (r execRunner) command(ctx context.Context, args ...string) (*exec.Cmd, string, error) {
+	binary := "tmux"
+	if r.binary != nil {
+		resolved, err := r.binary(ctx)
+		if err != nil {
+			return nil, "", fmt.Errorf("resolve tmux executable: %w", err)
+		}
+		binary = resolved
+	}
+	prepared := append([]string(nil), args...)
+	if r.prepareArgs != nil {
+		prepared = r.prepareArgs(prepared)
+	}
+	cmd := exec.CommandContext(ctx, binary, prepared...)
+	cmd.WaitDelay = pipeWaitDelay
+	if r.environ != nil {
+		cmd.Env = r.environ(ctx)
+	}
+	return cmd, binary, nil
 }

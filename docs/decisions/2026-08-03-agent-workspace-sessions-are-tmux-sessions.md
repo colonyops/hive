@@ -76,8 +76,8 @@ a server-side process tree that outlives any one client, including this one.
 7. **SessionActivity (hc-ou4o02zx) returns to the proven classification path.**
    `AgentWorkspacesService.SessionActivity` runs `tmuxcc.Manager.CapturePane`
    (`capture-pane -t <name> -p -J`, the identical invocation
-   `internal/hivecore/core/terminal/tmux.TmuxCapture` runs for hive's own
-   sessions) through `dispatch.ClassifyAgentScreen`, a thin wrapper over
+   `internal/integration/multiplexer/tmux.Client` runs for Hive's own sessions)
+   through `dispatch.ClassifyAgentScreen`, a thin wrapper over
    `terminal.NewDetector(agent).DetectStatus` — the classifier the spike's
    falsifying fixtures were written against, fed the input it was actually
    tuned on. The in-flight VT-emulation `ProjectScreen` phase-8 was building

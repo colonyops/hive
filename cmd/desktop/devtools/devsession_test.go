@@ -54,9 +54,9 @@ func TestCommandName(t *testing.T) {
 	t.Parallel()
 
 	require.Equal(t, appProcessName, commandName("bin/Hive.dev.app/Contents/MacOS/hive-desktop"))
-	require.Equal(t, appProcessName, commandName("/repo/desktop/bin/hive-desktop --flag"))
+	require.Equal(t, appProcessName, commandName("/repo/cmd/desktop/bin/hive-desktop --flag"))
 	// The rebuild that produces the binary must not be mistaken for it.
-	require.Equal(t, "go", commandName("go build -o ./bin/hive-desktop ./desktop"))
+	require.Equal(t, "go", commandName("go build -o ./bin/hive-desktop ./cmd/desktop"))
 }
 
 func TestWatchProcessFiresWhenTheProcessIsGone(t *testing.T) {

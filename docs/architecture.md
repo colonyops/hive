@@ -1536,19 +1536,22 @@ and active/approval/ready/missing agent activity keyed by stable tmux window id.
 The session row renders liveness; activity belongs to the window row. Terminal
 mode polls that projection only while mounted, at Hive's configured tmux
 interval. The Hive anti-corruption layer drops captured pane content and
-provider errors before the Wails boundary, and its status integration runs
-through `tmuxcc.Commander`, so detection uses the same resolved binary,
-environment, and tmux server socket as control-mode attaches.
+provider errors before the Wails boundary. Status detection and Hive session
+lifecycle share `internal/integration/multiplexer/tmux`; Desktop's composition
+root configures its runner so both use the same resolved binary, environment,
+and tmux server socket as control-mode attaches.
 
 The slug is load-bearing in both products, so **`session.Slug` must equal the
-live tmux session name**, and the desktop is what keeps it that way. Hive's
-`RenameSession` re-slugs the record and leaves tmux alone, so
-`app.SessionsService.RenameSession` renames the tmux session first, writes the
-record second, and rolls the tmux rename back if that write fails — with a slug
-collision rejected up front, because hive checks none and the table has no
-uniqueness constraint. ADR session-rename-keeps-slug-and-tmux-in-step. A change that gives the slug a second identity,
-or that makes something else the attach target, has to revisit that ADR rather
-than work around it.
+live tmux session name**. Hive's `RenameSession` now updates the multiplexer
+through its injected lifecycle adapter and persists the actual target. Desktop
+still preflights the rename so a tmux collision aborts before the record moves,
+and rolls the live name back if Hive's update fails. The Desktop composition
+wrapper routes Hive's follow-up through `tmuxcc.Manager`, which treats the
+already-renamed source as a successful no-op and keeps control-mode client state
+in step. Desktop also rejects a slug collision up front because the table has no
+uniqueness constraint. ADR session-rename-keeps-slug-and-tmux-in-step. A change
+that gives the slug a second identity, or that makes something else the attach
+target, has to revisit that ADR rather than work around it.
 
 Session lifecycle (read, rename, delete, recycle, prune, and spawning the tmux
 session a slug names) reaches hive through `dispatch.HiveSessionManager`, a
@@ -1637,9 +1640,10 @@ load-bearing:
 `paths.tmux`, then `$PATH`, then the prefixes package managers install
 into, and remembers only success — installing tmux does not need a relaunch.
 `tmuxcc` holds none of that policy: it takes a `func() (string, error)` and the
-resolved path travels on `Options.Binary`. Hive session spawning execs tmux from
-the shared packages, so it gets the same binary through `app.tmuxExecutor`, a
-decorator over `executil.Executor` that substitutes the command name `tmux`.
+resolved path travels on `Options.Binary`. Hive session lifecycle and status
+use the shared tmux adapter. The composition root configures its executable
+runner with the same binary resolver, subprocess environment, and inherited
+tmux socket as the control-mode client.
 
 The bearer token is minted per run in `cmd/desktop/main.go` and
 passed to the two

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -53,6 +54,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	coreterminal "github.com/colonyops/hive/internal/core/terminal"
 	terminalstatus "github.com/colonyops/hive/internal/core/terminal/status"
 	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
@@ -60,6 +62,7 @@ import (
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/scripts"
+	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
 )
 
 // Config is everything App needs that it cannot resolve itself.
@@ -343,7 +346,11 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		a.fetchers.SetRecorder(a.Activity)
 	}
 
-	a.terminals = tmuxcc.NewManager(runCtx, tmuxcc.ManagerOptions{Logger: cfg.Logger, Binary: a.tmux.Path, Environ: a.execEnv.Environ})
+	a.terminals = tmuxcc.NewManager(runCtx, tmuxcc.ManagerOptions{
+		Logger:  cfg.Logger,
+		Binary:  func() (string, error) { return a.resolveTmuxBinary(runCtx) },
+		Environ: a.execEnv.Environ,
+	})
 	if err := a.openHiveRuntime(runCtx, cfg); err != nil {
 		_ = a.db.Close()
 		cancel()
@@ -1291,6 +1298,52 @@ func (a *App) loadHiveConfig(ctx context.Context, dataDir string) (*config.Confi
 // hiveServices is everything the Hive config decides. Its fields are what a
 // reload replaces; anything not here is either process-lived (the database,
 // the bus) or this app's own (the tmux pool).
+func newTmuxRunner(
+	binary func(context.Context) (string, error),
+	environ func(context.Context) []string,
+) tmuxadapter.Runner {
+	return tmuxadapter.NewExecRunner(tmuxadapter.ExecRunnerOptions{
+		Binary:      binary,
+		Environ:     tmuxcc.RunnerEnviron(environ),
+		PrepareArgs: tmuxcc.RunnerArgs,
+	})
+}
+
+func (a *App) resolveTmuxBinary(ctx context.Context) (string, error) {
+	return resolveTmuxBinary(ctx, a.tmux.Path, a.execEnv.LookPath)
+}
+
+func resolveTmuxBinary(
+	ctx context.Context,
+	locate func() (string, error),
+	lookPath func(context.Context, string) (string, error),
+) (string, error) {
+	path, err := locate()
+	if err == nil || !errors.Is(err, tmuxbin.ErrNotFound) {
+		return path, err
+	}
+	return lookPath(ctx, "tmux")
+}
+
+type tmuxSessionRenamer interface {
+	RenameSession(ctx context.Context, from, to string) error
+}
+
+// hiveMultiplexer keeps the one-shot adapter and Desktop's control-mode client
+// on the same session name. A raw rename would leave the control-mode manager
+// registered under the old name.
+type hiveMultiplexer struct {
+	*tmuxadapter.Client
+	renamer tmuxSessionRenamer
+}
+
+func (m hiveMultiplexer) RenameSession(ctx context.Context, target multiplexer.Target, newName string) error {
+	if err := target.ValidateSession(); err != nil {
+		return err
+	}
+	return m.renamer.RenameSession(ctx, target.Session, newName)
+}
+
 type hiveServices struct {
 	sessions      *hive.SessionService
 	statuses      *hive.StatusService
@@ -1316,8 +1369,14 @@ func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus
 		AgentWindow:  hiveCfg.Agents.Default,
 		AgentFlags:   profile.ShellFlags(),
 	})
-	exec := newTmuxExecutor(newEnvExecutor(a.execEnv), a.tmux)
+	exec := newEnvExecutor(a.execEnv)
 	gitExec := git.NewExecutor(hiveCfg.GitPath, exec)
+	serviceLogger := a.logger.With().Str("component", "hive-actions").Logger()
+	tmuxBinary := func(ctx context.Context) (string, error) {
+		return a.resolveTmuxBinary(ctx)
+	}
+	tmuxClient := tmuxadapter.New(newTmuxRunner(tmuxBinary, a.execEnv.Environ), serviceLogger.With().Str("component", "tmux").Logger())
+	sessionMultiplexer := hiveMultiplexer{Client: tmuxClient, renamer: a.terminals}
 	sessions := hive.NewSessionService(
 		stores.NewSessionStore(database),
 		gitExec,
@@ -1326,15 +1385,16 @@ func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus
 		exec,
 		renderer,
 		hive.PlainStyler{},
-		a.logger.With().Str("component", "hive-actions").Logger(),
+		serviceLogger,
 		io.Discard,
 		io.Discard,
+		sessionMultiplexer,
 	)
 
 	var statusService *hive.StatusService
 	if a.mock == "" {
 		statusOptions := []terminaltmux.Option{
-			terminaltmux.WithCommander(tmuxcc.NewCommander(a.tmux.Path, a.execEnv.Environ)),
+			terminaltmux.WithPaneSource(tmuxClient),
 			terminaltmux.WithStatusOptions(terminalstatus.OptionsFromConfig(hiveCfg.Terminal.Status, hiveCfg.Tmux.PollInterval)),
 			terminaltmux.WithMissingTolerance(hiveCfg.Terminal.Status.Confirm.Missing.Polls),
 		}

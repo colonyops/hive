@@ -52,9 +52,10 @@ ADR subprocess-environment. `tmuxcc` had a bare `os.Environ()`. That asymmetry w
    what a shell that says nothing leaves behind: the app's own resolved PATH
    rather than the launcher's.
 
-4. **`tmuxcc.Commander` takes the same hook**, so hive's pane-capture status
-   detection runs with the environment control-mode attaches do rather than
-   quietly keeping the inherited one.
+4. **The Desktop composition root gives the shared tmux runner the same hook**,
+   so session lifecycle and pane-capture status detection use
+   the environment control-mode attaches do rather than quietly keeping the
+   inherited one.
 
 5. **A session that dies before it can be attached to says so on screen.** The
    launch response is the only place its notice exists — the session listing
