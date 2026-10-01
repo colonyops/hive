@@ -163,9 +163,9 @@ checksum = "sha256:a3911b5e0e1b1053f25ed0675f4c1c6aad1e2bfcf253df2b9be4caabd2edd
 url = "https://dl.google.com/go/go1.27.1.windows-amd64.zip"
 
 [[tools."go:github.com/abice/go-enum"]]
-version = "0.9.4"
+version = "0.9.5"
 backend = "go:github.com/abice/go-enum"
-specifiers = ["v0.9.4"]
+specifiers = ["v0.9.5"]
 
 [[tools."go:github.com/wailsapp/wails/v3/cmd/wails3"]]
 version = "v3.0.0-beta.21"
