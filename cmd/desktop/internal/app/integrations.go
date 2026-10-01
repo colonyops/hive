@@ -37,7 +37,7 @@ func (i Integration) Connected() bool { return len(i.Accounts) > 0 || i.EnvOverr
 // IntegrationsService lists the connector registry with each entry's connection
 // state. It is deliberately generic — acquiring a credential is provider-specific
 // and lives on that connector's own service (GitHubService's device flow), so
-// adding a connector is a change to internal/app/sources alone.
+// adding a connector is a change to cmd/desktop/internal/app/sources alone.
 type IntegrationsService struct{ creds credentials.Store }
 
 func newIntegrationsService(creds credentials.Store) *IntegrationsService {

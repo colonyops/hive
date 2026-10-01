@@ -7,7 +7,7 @@ package icons
 // feed is the scoped set of glyphs a feed node (sidebar entry) or a webhook
 // source node (feed-item rows) may carry. It is intentionally small — a
 // curated list rather than every available icon — and must stay in sync with
-// the frontend's feed icon registry (desktop/frontend/src/lib/feedIcons.ts).
+// the frontend's feed icon registry (cmd/desktop/frontend/src/lib/feedIcons.ts).
 var feed = map[string]bool{
 	"git-branch":       true,
 	"git-pull-request": true,
@@ -36,7 +36,7 @@ var feed = map[string]bool{
 // launcher is the scoped set of glyphs a pop-up terminal launcher may carry in
 // the command palette. It is its own set rather than a share of feed's: these
 // name programs and tasks, not the kinds of thing a feed carries. It must stay
-// in sync with desktop/frontend/src/lib/launcherIcons.ts.
+// in sync with cmd/desktop/frontend/src/lib/launcherIcons.ts.
 var launcher = map[string]bool{
 	"terminal":      true,
 	"git-branch":    true,

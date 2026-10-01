@@ -11,7 +11,7 @@ import (
 
 // The frontend install has to stay skippable while its lockfile is unchanged:
 // every `wails3 dev` rebuild runs it as a dependency, and an npm ci there
-// deletes node_modules under a concurrent vitest run (#120). `wails3 update
+// deletes node_modules under a concurrent vitest run (hay-kot/hive-desktop#120). `wails3 update
 // build-assets` rewrites this file from the upstream template, whose
 // directory-named `generates` is what broke the skip, so pin the declaration.
 func TestFrontendInstallIsSkippableWhenLockfileIsUnchanged(t *testing.T) {

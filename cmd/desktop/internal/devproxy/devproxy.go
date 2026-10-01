@@ -1,4 +1,4 @@
-// Package devproxy is the contract shared by cmd/devserver and cmd/devtools:
+// Package devproxy is the contract shared by cmd/desktop/devserver and cmd/desktop/devtools:
 // where the development GitHub proxy listens, and how to tell whether one is
 // already running there.
 //
@@ -109,10 +109,10 @@ func ListenFromConfig(root string) string {
 }
 
 // EnvAPIBase names the desktop setting this package's address feeds. It is
-// duplicated from internal/app/settings rather than imported because
-// cmd/devserver must not depend on an app package for a string (ADR devserver-github-proxy: the
+// duplicated from cmd/desktop/internal/app/settings rather than imported because
+// cmd/desktop/devserver must not depend on an app package for a string (ADR devserver-github-proxy: the
 // app does not import devserver and devserver does not import the app), and
 // both binaries need the name — devtools to read it, devserver to name it in
-// the hint it prints at startup. cmd/devtools imports both packages and asserts
+// the hint it prints at startup. cmd/desktop/devtools imports both packages and asserts
 // the two spellings agree.
 const EnvAPIBase = "HIVE_DESKTOP_DEVELOPMENT_GITHUB_API_BASE"

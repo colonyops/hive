@@ -1,4 +1,4 @@
-// Runs on the backend (internal/app/sources/grafana); role 'source' means no runtime.ts here.
+// Runs on the backend (cmd/desktop/internal/app/sources/grafana); role 'source' means no runtime.ts here.
 
 import GrafanaMark from '../../../components/marks/GrafanaMark.vue'
 import { intervalError } from '../../lib/sourceInterval'

@@ -10,8 +10,8 @@ import (
 // docs/<type>.md. These files are the single source of truth for how a node
 // type is explained to a human *and* to an LLM: the desktop node editor
 // drawer and palette import them directly through the frontend's
-// "@nodedocs" Vite alias (see desktop/frontend/vite.config.ts), and
-// internal/app/prompts renders the same bytes into the flows authoring
+// "@nodedocs" Vite alias (see cmd/desktop/frontend/vite.config.ts), and
+// cmd/desktop/internal/app/prompts renders the same bytes into the flows authoring
 // prompt. Documentation lives here, next to the schema that validates it,
 // so the two cannot drift.
 //

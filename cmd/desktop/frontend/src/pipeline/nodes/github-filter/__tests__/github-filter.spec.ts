@@ -1,5 +1,5 @@
 // The filter *rule* — glob dialect, group composition, exclude precedence —
-// is Go's, and its tests live with it in internal/app/runtime/filter_test.go
+// is Go's, and its tests live with it in cmd/desktop/internal/app/runtime/filter_test.go
 // and the engine's parity fixtures. What is left here is the editor's half:
 // the drawer's live validity check.
 

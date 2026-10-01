@@ -12,7 +12,7 @@ import (
 
 // TestNodeTypesMatchPipelineNodeDirectories is the bijection between the Go
 // node registry and the frontend's per-type editor directories. A node type
-// registered in Go with no matching desktop/frontend/src/pipeline/nodes/<type>
+// registered in Go with no matching cmd/desktop/frontend/src/pipeline/nodes/<type>
 // directory has no palette entry, drawer, or editor — it fails silently,
 // nothing else in the build catches it, and the seven type strings hardcoded
 // in the pipeline's node-loading spec do not notice either. Same pattern as

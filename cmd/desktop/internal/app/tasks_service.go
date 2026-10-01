@@ -11,7 +11,7 @@ import (
 // taskSource is the seam's HiveHoneycomb surface TasksService consumes. It is
 // declared here, over dispatch's projection types, rather than importing
 // dispatch.HiveHoneycomb directly, so a fake can stand in without pulling in
-// hivecore (depguard forbids that import in this package).
+// the shared hive packages (depguard forbids that import in this package).
 type taskSource interface {
 	ListTasks(ctx context.Context, repoKey string) ([]dispatch.TaskItem, error)
 	TaskDetail(ctx context.Context, id string) (dispatch.TaskDetail, error)

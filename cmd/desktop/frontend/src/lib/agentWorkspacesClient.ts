@@ -1,6 +1,6 @@
 // The Agents area's control-plane transport: plain fetch calls against
 // /api/terminal/agents/*, using the bearer token AgentsService.Endpoint()
-// hands the webview (internal/adapter/httpapi/ctrl_agent_workspaces.go). The
+// hands the webview (cmd/desktop/internal/adapter/httpapi/ctrl_agent_workspaces.go). The
 // data plane is the tmux stream terminal mode uses (ADR agent-workspace-sessions-are-tmux-sessions) — a session is
 // a tmux session, just not a hive one — so this module reuses
 // terminalClient's openStream(name)/decodeFrame/encodeInputFrames as-is

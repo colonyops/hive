@@ -107,7 +107,7 @@ func TestAlertsProduceEmitsOnePerFiringAlert(t *testing.T) {
 	assert.Equal(t, "DiskFull", second.Title, "title falls back to the alertname")
 }
 
-// #323: an alert carries everything the canonical item contract asks for, so it
+// hay-kot/hive-desktop#323: an alert carries everything the canonical item contract asks for, so it
 // renders as an alert rather than as a heading and a timestamp.
 func TestAlertsProduceFillsTheCanonicalContract(t *testing.T) {
 	t.Parallel()
@@ -188,7 +188,7 @@ func TestAlertsProduceWithoutAnnotationsOrRuleUID(t *testing.T) {
 	assert.Empty(t, payload.Repo)
 }
 
-// The whole point of #240: the narrowing happens at the stack, not after the
+// The whole point of hay-kot/hive-desktop#240: the narrowing happens at the stack, not after the
 // payload has already crossed the wire.
 func TestAlertsProduceFiltersServerSide(t *testing.T) {
 	t.Parallel()

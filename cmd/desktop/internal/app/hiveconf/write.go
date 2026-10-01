@@ -45,7 +45,7 @@ func invalid(format string, args ...any) error {
 
 // Check inspects a candidate config before it replaces the file. Apply hands
 // it the temp file's path and an error stops the rename. It exists because the
-// loader whose opinion matters, hive's own, lives across the hivecore seam
+// loader whose opinion matters, hive's own, lives across the shared-package seam
 // this package does not cross.
 type Check func(path string) error
 

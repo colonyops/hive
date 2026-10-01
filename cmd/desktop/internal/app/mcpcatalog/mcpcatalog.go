@@ -3,7 +3,7 @@
 // registry that holds every entry.
 //
 // It follows the source connector precedent (connector.Descriptor,
-// internal/app/sources/connector) but carries no config factory: a shipped
+// cmd/desktop/internal/app/sources/connector) but carries no config factory: a shipped
 // entry has no per-workspace configuration in M1, so there is nothing for a
 // factory to construct. It is deliberately a leaf — a workspace names an MCP
 // only by its Type string (agentws.Workspace.MCPs []string), so this package

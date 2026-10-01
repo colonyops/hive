@@ -3,7 +3,7 @@
 // the app constructs per use.
 //
 // It is deliberately a leaf. The registry that holds every descriptor is a
-// package-level map in one file (internal/app/sources), which means that
+// package-level map in one file (cmd/desktop/internal/app/sources), which means that
 // package imports the connector packages — so the connector packages cannot
 // import it back. They name their vocabulary from here instead.
 package connector

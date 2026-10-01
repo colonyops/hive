@@ -54,7 +54,7 @@ func TestTmuxExecutorSubstitutesTheLocatedBinary(t *testing.T) {
 	require.Equal(t, []string{located, located, located, located, "git"}, inner.commands)
 }
 
-// Discovery failing must not change which command runs: the vendored caller's
+// Discovery failing must not change which command runs: hive's caller's
 // own "tmux not found" is a better error than anything a rewrite could produce.
 func TestTmuxExecutorFallsThroughWhenDiscoveryFails(t *testing.T) {
 	inner := &recordingExecutor{}

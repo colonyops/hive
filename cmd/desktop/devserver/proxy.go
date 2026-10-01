@@ -371,7 +371,7 @@ type route struct {
 //
 // POST /graphql is cacheable despite being a POST: the desktop uses it as a
 // read, batching every search into one document
-// (internal/app/sources/github/ghclient/client.go, SearchIssuesBatch).
+// (cmd/desktop/internal/app/sources/github/ghclient/client.go, SearchIssuesBatch).
 func classify(method, path string) route {
 	r := route{method: method, path: path, label: path}
 	switch {

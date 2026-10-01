@@ -33,7 +33,7 @@ type KeychainStore struct {
 }
 
 // NewKeychainStore builds a store whose ref index lives at indexPath. The
-// path is a parameter rather than derived from internal/app/settings so this
+// path is a parameter rather than derived from cmd/desktop/internal/app/settings so this
 // package stays a leaf and a test can point it at a temp dir.
 func NewKeychainStore(indexPath string) *KeychainStore {
 	return NewKeychainStoreWithService(indexPath, keyringService)

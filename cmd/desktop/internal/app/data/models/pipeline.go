@@ -6,7 +6,7 @@ import (
 )
 
 // Msg is the pipeline's generic log record, appended by sources and consumed
-// by the graph runtime (internal/app/runtime).
+// by the graph runtime (cmd/desktop/internal/app/runtime).
 //
 // It mirrors the design's { id, key, topic, ts, payload } contract,
 // with Snapshot populated only for an authoritative full-source snapshot,
@@ -150,7 +150,7 @@ type KVMutation struct {
 	ExpiresAt int64  `json:"expiresAt,omitempty"` // unix ms, 0 = no expiry
 }
 
-// CommitBatch is the graph runtime's (internal/app/runtime) atomic write: it
+// CommitBatch is the graph runtime's (cmd/desktop/internal/app/runtime) atomic write: it
 // advances a consumer's committed offset and persists the outputs/node-run
 // metrics produced while processing up to that offset, all in one transaction
 // (see stores.EventLogStore.Commit).

@@ -34,7 +34,7 @@ type Launcher struct {
 	// while you are in one (ADR quick-terminal-launchers-are-session-scoped).
 	Cwd string `json:"cwd,omitempty" yaml:"cwd,omitempty"`
 	// Icon is the glyph the command palette shows, from the launcher set in
-	// internal/app/icons. Empty means the terminal glyph.
+	// cmd/desktop/internal/app/icons. Empty means the terminal glyph.
 	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
 }
 

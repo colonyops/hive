@@ -11,7 +11,7 @@
 //
 // That split is also what keeps the import graph acyclic: this package
 // imports the connector packages, so they must not import it. They name their
-// vocabulary from internal/app/sources/connector instead.
+// vocabulary from cmd/desktop/internal/app/sources/connector instead.
 package sources
 
 import (

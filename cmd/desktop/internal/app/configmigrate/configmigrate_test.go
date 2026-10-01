@@ -398,7 +398,7 @@ func TestSettings_TerminalStatusBarStepLeavesAMissingAppearanceSectionAlone(t *t
 	assert.NotContains(t, doc, "appearance")
 }
 
-// The identity case #309 is about: a manifest listing exactly the shipped set
+// The identity case hay-kot/hive-desktop#309 is about: a manifest listing exactly the shipped set
 // resolves to the same skills through the hive package, so rewriting it is
 // not inference. It is also the case that actually bites — the seeded hive
 // workspace every install carries.
@@ -417,7 +417,7 @@ func TestAgentWorkspace_CollapsesTheExactShippedSetOntoTheHivePackage(t *testing
 
 // A partial list cannot be migrated: mapping [hive-mcp] to [hive] would grant
 // five skills the workspace never carried. It is left for a human, which is
-// what the editor's warning now points at (#307).
+// what the editor's warning now points at (hay-kot/hive-desktop#307).
 func TestAgentWorkspace_LeavesAPartialSkillListAlone(t *testing.T) {
 	t.Parallel()
 

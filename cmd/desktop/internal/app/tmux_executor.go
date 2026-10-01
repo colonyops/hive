@@ -11,9 +11,10 @@ import (
 
 // tmuxExecutor is Hive's shell executor with one substitution: a `tmux` command
 // runs the binary discovery found (ADR tmux-discovery). Session spawn, recycle and kill
-// all exec tmux by bare name from vendored code, so a desktop launch — whose
-// PATH holds no Homebrew or Nix prefix — cannot create a session at all without
-// this. Decorating the interface is what keeps internal/hivecore untouched.
+// all exec tmux by bare name from the shared session code, so a desktop launch
+// — whose PATH holds no Homebrew or Nix prefix — cannot create a session at all
+// without this. Decorating the interface keeps the discovery out of the shared
+// packages, which the CLI also runs.
 type tmuxExecutor struct {
 	executil.Executor
 	tmux *tmuxbin.Resolver

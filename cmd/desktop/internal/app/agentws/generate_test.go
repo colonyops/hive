@@ -306,7 +306,7 @@ func TestGenerateReportsAnEvictedAuthoredFile(t *testing.T) {
 // TestGenerateReportsAnUnwritableWorkspace: a read-only workspace directory
 // must surface the write failure rather than half-generating.
 // Precedent: TestSeedDefaultsIfMissingReportsDirectoryFailure
-// (internal/app/actions/seed_test.go).
+// (cmd/desktop/internal/app/actions/seed_test.go).
 func TestGenerateReportsAnUnwritableWorkspace(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("running as root: chmod 0o500 does not block writes")

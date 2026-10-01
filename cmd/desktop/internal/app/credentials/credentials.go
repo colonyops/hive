@@ -4,7 +4,7 @@
 //
 // It is deliberately a leaf: no dependency on app, flow, or any connector, so
 // a connector package can import it without a cycle — the same rule that put
-// the connector vocabulary in internal/app/sources/connector.
+// the connector vocabulary in cmd/desktop/internal/app/sources/connector.
 //
 // Two rules govern everything here. **Config holds refs, never tokens**:
 // flows/ is dotfiles-managed, so a token embedded in a node's config is a

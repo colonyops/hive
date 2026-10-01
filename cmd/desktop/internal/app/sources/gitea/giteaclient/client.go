@@ -1,7 +1,7 @@
 // Package giteaclient is the desktop's Gitea/Forgejo REST client: token
 // validation, the issue/PR search, the notification inbox, and the single-issue
 // lookup absence confirmation needs. It owns no feed concepts — caching,
-// cadence and item shaping live in internal/app/sources/gitea — and no
+// cadence and item shaping live in cmd/desktop/internal/app/sources/gitea — and no
 // persistence: the caller builds a client per tick from a freshly resolved
 // host and token.
 //

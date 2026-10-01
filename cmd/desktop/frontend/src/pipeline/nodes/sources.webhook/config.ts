@@ -4,7 +4,7 @@
 // Go and appended to the event log under topic "source:<flowId>/<nodeId>" —
 // the frontend never executes the source, it only consumes the msgs the
 // backend already appended (role: 'source', no runtime.ts), exactly like
-// sources.github. See internal/app/sources/webhook/webhook_source.go.
+// sources.github. See cmd/desktop/internal/app/sources/webhook/webhook_source.go.
 
 import IconWebhook from '~icons/lucide/webhook'
 

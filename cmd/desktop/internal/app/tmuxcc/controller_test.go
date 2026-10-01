@@ -319,7 +319,7 @@ func TestParseWindowLine(t *testing.T) {
 
 // reconcile's snapshot is fetched before it is merged, so a window added in
 // between is in the set and not in the snapshot. Treating that absence as a
-// close drops a window tmux is still holding (#278). Only the removal pass is
+// close drops a window tmux is still holding (hay-kot/hive-desktop#278). Only the removal pass is
 // unsafe against a stale snapshot; the add and update pass is idempotent.
 func TestControllerReconcileKeepsWindowsAddedAfterTheSnapshot(t *testing.T) {
 	t.Parallel()

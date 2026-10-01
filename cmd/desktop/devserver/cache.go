@@ -25,7 +25,7 @@ const busyTimeoutMS = 5000
 // upstream request per unique call per TTL.
 //
 // It also stores validators, which the desktop client itself does not
-// (tracked in #62). Revalidating with If-None-Match costs no primary
+// (tracked in hay-kot/hive-desktop#62). Revalidating with If-None-Match costs no primary
 // rate-limit quota when upstream answers 304, so an expired entry is usually
 // far cheaper than a fresh fetch.
 type Cache struct {

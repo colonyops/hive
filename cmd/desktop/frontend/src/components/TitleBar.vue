@@ -92,7 +92,7 @@ const emit = defineEmits<{
 }>()
 
 // macOS draws its native traffic lights over the top-left of this bar
-// (hidden-inset chrome configured in desktop/main.go). Pad the left cluster past
+// (hidden-inset chrome configured in cmd/desktop/main.go). Pad the left cluster past
 // them and keep the height in sync with InvisibleTitleBarHeight (42) in main.go
 // so the controls stay vertically centered.
 const isMac = navigator.userAgent.includes('Mac')

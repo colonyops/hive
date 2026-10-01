@@ -135,8 +135,8 @@ func TestStoreContract(t *testing.T) {
 				assert.Equal(t, []Ref{second, ref, other}, refs)
 
 				// Two accounts of one provider are genuinely separate
-				// credentials — the dimension the vendored single-slot token
-				// store could not express.
+				// credentials — the dimension the single-slot token
+				// store it replaced could not express.
 				got, err := store.Get(second)
 				require.NoError(t, err)
 				assert.Equal(t, "three", got)

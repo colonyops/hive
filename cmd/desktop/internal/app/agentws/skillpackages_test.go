@@ -182,7 +182,7 @@ func TestSkillNameCatalogueNamesWhatSelectsEachSkill(t *testing.T) {
 	assert.Empty(t, bySlug["hive-settings"].SelectedBy, "an excluded skill is selected by nothing")
 }
 
-// TestExplainUnresolvedSeparatesASkillFromATypo is #307: both cases reach
+// TestExplainUnresolvedSeparatesASkillFromATypo is hay-kot/hive-desktop#307: both cases reach
 // SelectSkills as an undefined package name, and only one of them has a fix
 // the user can act on.
 func TestExplainUnresolvedSeparatesASkillFromATypo(t *testing.T) {

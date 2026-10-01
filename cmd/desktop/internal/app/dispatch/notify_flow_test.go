@@ -54,7 +54,7 @@ func TestNotifyTerminal_DeliversThroughTheWorker(t *testing.T) {
 	activityRecorder := &notifyActivityRecorder{}
 	worker.SetRecorder(activityRecorder)
 
-	// What the graph runtime (internal/app/runtime) commits for a message
+	// What the graph runtime (cmd/desktop/internal/app/runtime) commits for a message
 	// reaching a notify terminal.
 	commit := func(offset int64, occurrence string) {
 		t.Helper()

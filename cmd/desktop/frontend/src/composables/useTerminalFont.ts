@@ -36,7 +36,7 @@ export const terminalFontWeightLabels: Record<TerminalFontWeight, string> = {
 // canvas atlas (ADR terminal-atlas-renderer) and Canvas2D text does not inherit the
 // `-webkit-font-smoothing: antialiased` the rest of the app is drawn with, so a
 // face renders heavier here than the same face does in the DOM — which is what
-// #181 reports as "everything is bold". Regular is what that issue was filed
+// hay-kot/hive-desktop#181 reports as "everything is bold". Regular is what that issue was filed
 // about and Light reads too thin at these sizes on a dark background, so the
 // usable range is narrow and the default sits between them.
 export const defaultTerminalFontWeight: TerminalFontWeight = 350

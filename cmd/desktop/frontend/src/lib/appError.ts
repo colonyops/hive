@@ -1,5 +1,5 @@
 // Every error a Go binding call returns arrives here classified. The Go core
-// assigns a Kind (internal/app/errors.go), the Wails adapter serializes it
+// assigns a Kind (cmd/desktop/internal/app/errors.go), the Wails adapter serializes it
 // through MarshalError, and the runtime hands it back as the thrown
 // exception's `cause`.
 //

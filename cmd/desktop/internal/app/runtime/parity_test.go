@@ -18,7 +18,7 @@ import (
 // suite: a flow, a batch of event-log messages, and the exact CommitBatch
 // that batch is worth. They began as the proof a port was faithful — this
 // test ran them through the Go engine while
-// desktop/frontend/src/pipeline/engine/__tests__/parity.spec.ts ran the same
+// cmd/desktop/frontend/src/pipeline/engine/__tests__/parity.spec.ts ran the same
 // files through the TypeScript engine it replaced, each comparing against the
 // same expected commit. That TypeScript engine and its parity spec are long
 // gone; this file is now the only thing that runs these fixtures, and a

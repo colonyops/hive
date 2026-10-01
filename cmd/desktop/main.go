@@ -1,7 +1,7 @@
 // Command hive-desktop is the desktop app's entrypoint. It does four things:
 // apply the bootstrap overrides, build the headless core, mount the Wails
-// adapter over it, and run. Everything else belongs to internal/app (what the
-// app does) or internal/adapter/wailsui (how a window talks to it).
+// adapter over it, and run. Everything else belongs to cmd/desktop/internal/app (what the
+// app does) or cmd/desktop/internal/adapter/wailsui (how a window talks to it).
 package main
 
 import (
@@ -159,7 +159,7 @@ func main() {
 	}
 
 	// A redirected API base means every item this run shows may be stale or
-	// deliberately rewritten by cmd/devserver. That is invisible in the UI, so
+	// deliberately rewritten by cmd/desktop/devserver. That is invisible in the UI, so
 	// it is worth a line in the log before anything fetches.
 	if base := cfg.GitHubAPIBase(); base != "" {
 		logger.Warn().
@@ -376,7 +376,7 @@ const shutdownGrace = 10 * time.Second
 // default disposition with the databases mid-write and the tmux control
 // clients still attached.
 //
-// os/signal is wired here rather than in internal/app because the disposition
+// os/signal is wired here rather than in cmd/desktop/internal/app because the disposition
 // belongs to the process, not the core — App.Close documents why the core must
 // register none of its own.
 //

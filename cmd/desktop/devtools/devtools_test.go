@@ -263,8 +263,8 @@ func TestLockRejectsDifferentOwner(t *testing.T) {
 	assert.ErrorContains(t, lock.acquire(), "belongs to")
 }
 
-// devproxy duplicates the env name rather than importing internal/app/settings,
-// which keeps cmd/devserver free of any dependency on app packages. devtools
+// devproxy duplicates the env name rather than importing cmd/desktop/internal/app/settings,
+// which keeps cmd/desktop/devserver free of any dependency on app packages. devtools
 // imports both, so it is the one place the two spellings can be compared.
 func TestDevproxyEnvNameMatchesSettings(t *testing.T) {
 	assert.Equal(t, settings.EnvGitHubAPIBase, devproxy.EnvAPIBase)

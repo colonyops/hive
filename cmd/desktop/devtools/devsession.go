@@ -23,7 +23,7 @@ const (
 	// bin/, but both keep APP_NAME, so the base name identifies it on either.
 	appProcessName = "hive-desktop"
 
-	// appGrace outlasts the app's own shutdown watchdog (desktop/main.go), so
+	// appGrace outlasts the app's own shutdown watchdog (cmd/desktop/main.go), so
 	// reaching it means the app is not going to exit on its own and the runner's
 	// kill is what will end it.
 	appGrace = 12 * time.Second

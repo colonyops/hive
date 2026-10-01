@@ -532,7 +532,7 @@ func TestListActionsReportsTheCatalogAndItsLoadStatus(t *testing.T) {
 
 // A malformed actions.yml keeps the last-good catalog in effect, so without a
 // reported error an editor cannot tell "accepted" from "rejected and ignored"
-// (issue #111). This is the failure the tool's valid/error pair exists for.
+// (issue hay-kot/hive-desktop#111). This is the failure the tool's valid/error pair exists for.
 func TestListActionsSurfacesAParseError(t *testing.T) {
 	_, session := testSession(t, func(t *testing.T, configDir string) {
 		t.Helper()

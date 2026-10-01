@@ -54,7 +54,7 @@ func NewStore(overlays []Overlay) *Store {
 // Apply merges mutations onto an item's overlay and returns the result. An
 // UpdatedAt is stamped when the caller did not supply one: the desktop's
 // classifier ignores any change that does not advance updatedAt
-// (internal/app/sources/github/classify.go:82), so an un-stamped mutation
+// (cmd/desktop/internal/app/sources/github/classify.go:82), so an un-stamped mutation
 // would be invisible.
 func (s *Store) Apply(key string, next Mutations) Mutations {
 	s.mu.Lock()

@@ -7,7 +7,7 @@
 // "triage.yaml" -> id "triage") so the file and its id can never disagree.
 //
 // This package is deliberately self-contained: it does not know about Wails,
-// the desktop pipeline database, or internal/app/sources/github/feed. Cross-file action
+// the desktop pipeline database, or cmd/desktop/internal/app/sources/github/feed. Cross-file action
 // lookups are supplied by the caller through the Refs interface, so actions can
 // stay owned by their own package without this package depending on them.
 package flow
@@ -30,7 +30,7 @@ type Flow struct {
 	Enabled   bool            `json:"enabled"`
 	Resurface ResurfacePolicy `json:"resurface,omitempty"`
 	// Image is the content hash of the profile's avatar, whose normalized PNG
-	// lives in the app data dir (see internal/app/profileimg). It is owned by
+	// lives in the app data dir (see cmd/desktop/internal/app/profileimg). It is owned by
 	// SetImage, not the graph editor: FlowStore.Save preserves whatever is on
 	// disk so a graph save never drops it. Empty means "no avatar" — the rail
 	// falls back to the letter chip.

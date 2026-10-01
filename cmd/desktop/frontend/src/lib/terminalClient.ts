@@ -1,6 +1,6 @@
 // The terminal transport. Control actions are plain fetch calls against the
 // loopback HTTP API; the data plane is a native WebSocket carrying the binary
-// frames defined in internal/adapter/httpapi/terminal_stream.go:
+// frames defined in cmd/desktop/internal/adapter/httpapi/terminal_stream.go:
 //
 //   server -> client
 //     0x00 Output      [0x00][winLen u8][windowId][paneLen u8][paneId][raw bytes]

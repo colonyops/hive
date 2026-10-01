@@ -162,7 +162,7 @@ func TestEnvironCarriesThePathAndThisProcess(t *testing.T) {
 
 // EDITOR set in .zshrc is the case that motivated adopting more than PATH: an
 // agent CLI's "open in editor" had nothing to resolve and fell back to whatever
-// was on PATH (#279).
+// was on PATH (hay-kot/hive-desktop#279).
 func TestEnvironAdoptsShellVariablesThisProcessLacks(t *testing.T) {
 	t.Setenv("HIVE_EXECENV_EDITOR", "")
 	require.NoError(t, os.Unsetenv("HIVE_EXECENV_EDITOR"), "t.Setenv registers the restore; this makes it absent")

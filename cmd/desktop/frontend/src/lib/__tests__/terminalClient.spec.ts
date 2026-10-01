@@ -18,7 +18,7 @@ const endpoint = {
   token: 'tok-123',
 }
 
-// Mirrors encodeOutputFrame in internal/adapter/httpapi/terminal_stream.go.
+// Mirrors encodeOutputFrame in cmd/desktop/internal/adapter/httpapi/terminal_stream.go.
 function outputFrame(windowId: string, paneId: string, data: string): ArrayBuffer {
   const win = encoder.encode(windowId)
   const pane = encoder.encode(paneId)

@@ -3,7 +3,7 @@
 // text. It owns the format's rules — the naming constraints a target agent
 // enforces and the frontmatter template — and nothing else. Where a rendered
 // skill is written, and by whom, is the workspace generator's business
-// (internal/app/agentws, ADR skills-are-declared-by-a-workspace).
+// (cmd/desktop/internal/app/agentws, ADR skills-are-declared-by-a-workspace).
 package skills
 
 import (

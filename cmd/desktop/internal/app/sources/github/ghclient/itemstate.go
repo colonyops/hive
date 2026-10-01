@@ -91,7 +91,7 @@ func buildItemStateQuery(refs []ItemRef) (doc string, variables map[string]any) 
 		fmt.Fprintf(&b, "    issueOrPullRequest(number: $i%d) {\n", i)
 		// repository { nameWithOwner } is unused by this client — results map
 		// back by alias index — but it makes each node self-identifying for
-		// cmd/devserver's overlay rewriter, which only sees the response body.
+		// cmd/desktop/devserver's overlay rewriter, which only sees the response body.
 		// A future change to this selection set must not drop it.
 		b.WriteString(`      __typename
       ... on Issue { number state updatedAt author { login } repository { nameWithOwner } }

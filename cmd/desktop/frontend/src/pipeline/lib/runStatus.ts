@@ -5,7 +5,7 @@
 // can never disagree with what an individual card shows.
 //
 // "running" has no real per-node signal yet — node_run rows are only ever
-// written for a *completed* run through internal/app/runtime's engine, so
+// written for a *completed* run through cmd/desktop/internal/app/runtime's engine, so
 // there is no backend concept of "this node is mid-execution" today. Callers
 // pass an explicit `running: boolean` instead (see FlowsCanvas's
 // `runningNodeIds` prop); idle/ok/error classification falls back to the

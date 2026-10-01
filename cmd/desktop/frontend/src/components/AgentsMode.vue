@@ -66,7 +66,7 @@ const { recents, reloadRecents } = useAgentSessionsAll()
 // same bare warning: a manifest written before packages were the enablement
 // unit enumerates skill slugs, and a typo names nothing at all. Only the
 // first has a fix on screen — a package that already selects that skill — so
-// the two are reported as separate lines (#307).
+// the two are reported as separate lines (hay-kot/hive-desktop#307).
 const missingSkillNames = computed(() => missingPackages.value.filter((entry) => entry.skill))
 const unknownPackageNames = computed(() => missingPackages.value.filter((entry) => !entry.skill).map((entry) => entry.name))
 
@@ -505,7 +505,7 @@ async function revealPaneWorkspace(): Promise<void> {
 
 // ── The session pane ─────────────────────────────────────────────────────────
 // Mirrors PopupTerminal.vue's xterm wiring over the same wire protocol
-// (internal/adapter/httpapi/pty_stream.go); only the launch call and the
+// (cmd/desktop/internal/adapter/httpapi/pty_stream.go); only the launch call and the
 // control-plane base differ, per the shared client this composable resolves.
 
 async function launchIntoPane(workspace: string, action: (size: { cols?: number; rows?: number }) => Promise<AgentSession>): Promise<void> {

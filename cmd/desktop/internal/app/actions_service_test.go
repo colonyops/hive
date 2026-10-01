@@ -165,7 +165,7 @@ func TestActionsServicePublishesOnEveryMutatingMethod(t *testing.T) {
 
 // flowOnlyUsage is the half of the usage check this adapter test cares about.
 // The full checker, including the nonterminal command count, is core logic
-// and is tested in internal/app.
+// and is tested in cmd/desktop/internal/app.
 type flowOnlyUsage struct{ flows *flow.FlowStore }
 
 func (u flowOnlyUsage) Usage(_ context.Context, id string) (actions.ActionUsage, error) {

@@ -13,7 +13,7 @@ import (
 )
 
 // fakeTaskSource stands in for dispatch.HiveHoneycomb without importing
-// hivecore. err* fields fail their matching method; everything else records
+// the shared hive packages. err* fields fail their matching method; everything else records
 // what it was called with, for assertions that don't care about kind mapping.
 type fakeTaskSource struct {
 	items    []dispatch.TaskItem

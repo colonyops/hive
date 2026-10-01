@@ -30,7 +30,7 @@ function message(error: unknown, fallback: string): string {
 }
 
 /**
- * Names what a destructive operation does to this session. Hazard 2 of #144: a
+ * Names what a destructive operation does to this session. Hazard 2 of hay-kot/hive-desktop#144: a
  * generic "are you sure" hides the only thing worth confirming, which is what
  * this session in particular is holding; that part is riskDetails.
  */

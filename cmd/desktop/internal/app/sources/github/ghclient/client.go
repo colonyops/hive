@@ -2,7 +2,7 @@
 // authentication (OAuth device flow, PAT validation via User) and the typed
 // API calls the connector needs (batched search, notifications, single-issue
 // hydration). It owns no feed concepts — caching, polling cadence, and
-// unread state live in internal/app/sources/github/feed — and no
+// unread state live in cmd/desktop/internal/app/sources/github/feed — and no
 // persistence: callers hold whatever token they have and pass it in via
 // WithTokenCopy.
 //
@@ -53,7 +53,7 @@ type options struct {
 
 type Option func(*options)
 
-// WithAPIBase overrides the REST API base URL (tests, cmd/devserver).
+// WithAPIBase overrides the REST API base URL (tests, cmd/desktop/devserver).
 func WithAPIBase(base string) Option {
 	return func(o *options) { o.apiBase = base }
 }

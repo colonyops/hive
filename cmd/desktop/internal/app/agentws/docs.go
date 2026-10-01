@@ -7,9 +7,9 @@ import (
 
 // examplesFS holds the canonical worked example: an agent-workspace.yaml
 // naming a shipped catalogue entry, an mcps.yaml entry and a skills.yml
-// package, plus the two library files it references. internal/app/prompts
+// package, plus the two library files it references. cmd/desktop/internal/app/prompts
 // embeds all three in the hive-agent-workspaces authoring prompt, following
-// the actions.ExampleYAML() contract (internal/app/actions/docs.go) —
+// the actions.ExampleYAML() contract (cmd/desktop/internal/app/actions/docs.go) —
 // TestExampleYAMLIsValid parses and validates these bytes, so a prompt example
 // that no longer loads fails the build rather than misleading an agent.
 //

@@ -8,7 +8,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 )
 
-// versionRE matches the closed set of publishable versions cmd/release
+// versionRE matches the closed set of publishable versions cmd/tools/release
 // enforces: X.Y.Z with an optional -dev.N / -beta.N identifier.
 var versionRE = regexp.MustCompile(`^([0-9]+)\.([0-9]+)\.([0-9]+)(?:-(dev|beta)\.([0-9]+))?$`)
 

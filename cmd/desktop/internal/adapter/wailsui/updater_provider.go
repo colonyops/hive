@@ -30,7 +30,7 @@ const DefaultManifestBaseURL = "https://dl.hivedesktop.com"
 const artifactURLKey = "manifest.artifact.url"
 
 // manifestProvider implements updater.Provider against the channel manifests
-// published by cmd/release: GET
+// published by cmd/tools/release: GET
 // <base>/desktop/channels/<channel>/latest.json, compare semver, download the
 // manifest's artifact URL, and let the Updater verify the manifest's sha256
 // (decisions 0003/0004; schema in docs/distribution.md). The provider holds no

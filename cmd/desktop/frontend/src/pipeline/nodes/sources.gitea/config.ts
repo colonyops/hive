@@ -1,4 +1,4 @@
-// Runs on the backend (internal/app/sources/gitea); role 'source' means no runtime.ts here.
+// Runs on the backend (cmd/desktop/internal/app/sources/gitea); role 'source' means no runtime.ts here.
 
 import GiteaMark from '../../../components/marks/GiteaMark.vue'
 import { intervalError } from '../../lib/sourceInterval'

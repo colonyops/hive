@@ -78,7 +78,7 @@ func encodeDoc(doc *yaml.Node) ([]byte, error) {
 
 // writeFileAtomic writes data to path via a temp-file-then-rename, so a
 // crash mid-write never leaves a half-written flow/layout file — the same
-// pattern as internal/app/sources/github/feed/store.go's writeFileAtomic, duplicated
+// pattern as cmd/desktop/internal/app/sources/github/feed/store.go's writeFileAtomic, duplicated
 // here to keep package flow decoupled from feed.
 func writeFileAtomic(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {

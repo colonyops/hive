@@ -5,7 +5,7 @@
 //
 // The commit protocol's types (Msg, CommitBatch, Output, Sink, …) used to be
 // re-exported here, because the graph ran in this process. It runs in Go now
-// (internal/app/runtime, ADR flow-engine-in-go), so nothing on this side constructs a
+// (cmd/desktop/internal/app/runtime, ADR flow-engine-in-go), so nothing on this side constructs a
 // commit and there is no wire contract left to mirror.
 
 export interface FlowNode {

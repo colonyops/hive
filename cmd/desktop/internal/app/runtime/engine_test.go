@@ -118,7 +118,7 @@ func snapshotSource(t *testing.T, db *queries.DB, flowID string, obs ...observat
 // splitFlow is a source → function → feed, where the function splits one
 // source message into per-entity feed items under keys it mints. It is the
 // shape that turns a single grafana metrics result into one durable item per
-// series (issue #117).
+// series (issue hay-kot/hive-desktop#117).
 func splitFlow(id, script string) flow.Flow {
 	return flow.Flow{
 		ID:      id,
@@ -397,7 +397,7 @@ func TestEngineKeepsTheLastGoodRunnerWhenAReloadFails(t *testing.T) {
 }
 
 // A function node splitting one source message into per-entity feed items is
-// the first-party answer to issue #117: the metrics source stays one message
+// the first-party answer to issue hay-kot/hive-desktop#117: the metrics source stays one message
 // per node, and the split — the keys and payloads — lives in author JavaScript.
 // Each series becomes its own durable item, and a series leaving the query
 // drops that item alone, because the split messages inherit the source

@@ -64,7 +64,7 @@ func (c *ActionConfig) Validate(refs Refs) error {
 
 // notifySeverities is the closed set a notify node may declare. It is the
 // same vocabulary the app-level notification path already speaks
-// (internal/adapter/wailsui's Input.Severity), so a flow node and a built-in
+// (cmd/desktop/internal/adapter/wailsui's Input.Severity), so a flow node and a built-in
 // notification map to the same native interruption level rather than
 // inventing a second urgency scale.
 var notifySeverities = map[string]bool{
@@ -96,7 +96,7 @@ const (
 // arriving message enqueues an output_command that the notify executor
 // delivers as a native OS notification, with Title/Body rendered as Go
 // text/templates over the message (the same templating story as an action's
-// prompt_template — see internal/app/actions/launch_session.go).
+// prompt_template — see cmd/desktop/internal/app/actions/launch_session.go).
 //
 // The node cannot override the app's notification settings: the executor
 // checks the global kill switch before every delivery, so "notifications

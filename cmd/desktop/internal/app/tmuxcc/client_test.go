@@ -345,7 +345,7 @@ func TestWindowAddTriggersReconcile(t *testing.T) {
 // window that appeared while it was in flight is missing from it. Removing what
 // the snapshot does not have drops a window tmux is still holding and publishes
 // a close for it, and every rename, close or select on that id fails until a
-// later reconcile puts it back (#278).
+// later reconcile puts it back (hay-kot/hive-desktop#278).
 func TestReconcileKeepsAWindowItsSnapshotIsTooOldToHold(t *testing.T) {
 	t.Parallel()
 

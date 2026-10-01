@@ -713,9 +713,9 @@ type RescopeInboxItemParams struct {
 	ID          int64  `json:"id"`
 }
 
-// Move a row to a new source_scope. Used to heal pre-#63 rows written with an
-// empty scope onto the account-scoped identity every post-#63 read keys on
-// (issue #95); the caller only rescopes when the target identity is free, so
+// Move a row to a new source_scope. Used to heal rows written before hay-kot/hive-desktop#63 with an
+// empty scope onto the account-scoped identity every later read keys on
+// (issue hay-kot/hive-desktop#95); the caller only rescopes when the target identity is free, so
 // this never collides with the UNIQUE (profile_id, source_kind, source_scope,
 // external_id) index.
 func (q *Queries) RescopeInboxItem(ctx context.Context, arg RescopeInboxItemParams) error {

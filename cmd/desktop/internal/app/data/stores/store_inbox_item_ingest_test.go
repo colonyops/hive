@@ -33,10 +33,10 @@ func TestIngestObservation_DuplicatePayloadWritesNothing(t *testing.T) {
 	assert.Equal(t, 1, events)
 }
 
-// A changed pre-#63 item (empty source_scope) must be rewritten onto the
+// A changed item from before hay-kot/hive-desktop#63 (empty source_scope) must be rewritten onto the
 // account scope in place, not forked into a scoped duplicate beside the
 // original — which would strand the row that carries the user's triage
-// decisions. See issue #95.
+// decisions. See issue hay-kot/hive-desktop#95.
 func TestIngestObservation_HealsChangedLegacyEmptyScopeItemInPlace(t *testing.T) {
 	st, db := openTestStores(t)
 	ctx := t.Context()

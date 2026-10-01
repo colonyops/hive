@@ -7,7 +7,7 @@ import (
 )
 
 // Seed exposes test fixtures without exposing generated queries outside
-// internal/app/data.
+// cmd/desktop/internal/app/data.
 type Seed struct {
 	q *queries.DB
 }

@@ -1,7 +1,7 @@
 // The scoped set of glyphs a pop-up terminal launcher may show in the command
 // palette. This is the single frontend source of truth: the action editor's
 // icon dropdown and the palette row both read from here, and it must stay in
-// sync with the Go allow-list in internal/app/icons (launcher).
+// sync with the Go allow-list in cmd/desktop/internal/app/icons (launcher).
 //
 // Icon components are imported statically because `~icons/lucide/<name>` is a
 // build-time virtual module — the path can't be constructed dynamically — so

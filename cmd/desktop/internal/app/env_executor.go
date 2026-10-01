@@ -18,8 +18,8 @@ import (
 // reach it as `sh -c`, so without this they run with the PATH a desktop launch
 // inherits and a session cannot be created at all on a machine whose tools came
 // from a package manager. It replaces executil.RealExecutor rather than
-// decorating it: the vendored implementation exposes no seam for the child's
-// environment, and internal/hivecore must stay untouched.
+// decorating it: the shared implementation exposes no seam for the child's
+// environment, and the CLI that also runs it has no need for one.
 type envExecutor struct {
 	env *execenv.Resolver
 }

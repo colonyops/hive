@@ -1,5 +1,5 @@
 <template>
-  <!-- Hive's own mark, the glyph from desktop/build/icons/hive-mark.svg with
+  <!-- Hive's own mark, the glyph from cmd/desktop/build/icons/hive-mark.svg with
        the app-icon tile dropped: this renders on the app's own surfaces, which
        already supply the background the tile exists to provide off-app. The
        cells take currentColor so a caller tints it with the accent; the two

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/xterm'
 
 // The byte layout a first paint arrives in is decided in Go
-// (internal/app/tmuxcc/client.go, ADR terminal-first-paint-carries-scrollback), but whether it lands correctly is
+// (cmd/desktop/internal/app/tmuxcc/client.go, ADR terminal-first-paint-carries-scrollback), but whether it lands correctly is
 // decided by xterm. These tests pin the emulator behaviour that layout is built
 // on, so a change to either side has something to fail against.
 

@@ -46,7 +46,7 @@ func TestInboxItemStore_IDByExternalID(t *testing.T) {
 	}
 }
 
-// The commit path resolves ids only, and a pre-#63 unscoped row has to heal
+// The commit path resolves ids only, and an unscoped row from before hay-kot/hive-desktop#63 has to heal
 // onto its scope there exactly as it does through ResolveScoped.
 func TestInboxItemStore_ResolveScopedID(t *testing.T) {
 	st, db := openTestStores(t)

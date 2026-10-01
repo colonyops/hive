@@ -286,7 +286,7 @@ function sanitizeOverrides(value: unknown): Overrides {
 // The durable record is settings.yaml's `keybindings` section, so shortcuts
 // live alongside the rest of the user's config and can be managed from a
 // dotfiles repo or handed to an agent (see the "Keyboard shortcuts" prompt in
-// internal/app/prompts). Webview localStorage is not a candidate: it is
+// cmd/desktop/internal/app/prompts). Webview localStorage is not a candidate: it is
 // partitioned per bundle id and per dev-server port and macOS may purge it
 // outright, so a rebind could silently vanish.
 //

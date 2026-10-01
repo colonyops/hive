@@ -1,6 +1,6 @@
 // The pop-up terminal's transport. Control actions are plain fetch calls
 // against the loopback HTTP API; the data plane is a native WebSocket carrying
-// the frames defined in internal/adapter/httpapi/pty_stream.go. One socket
+// the frames defined in cmd/desktop/internal/adapter/httpapi/pty_stream.go. One socket
 // carries one terminal, so nothing on this wire is addressed:
 //
 //   server -> client

@@ -251,7 +251,7 @@ const skillRows = computed<SkillPackageRow[]>(() => {
 
 // A name skills.yml does not define is a package that never existed *or* a
 // skill slug from a manifest written before packages were the enablement unit
-// (#307). Only the second has a fix on screen, and saying "not defined in
+// (hay-kot/hive-desktop#307). Only the second has a fix on screen, and saying "not defined in
 // skills.yml" for both hides it.
 function missingSkillWarning(name: string, selectedBy: string[] | undefined): string {
   if (!selectedBy) return 'not defined in skills.yml — an enabled package without a definition brings nothing'

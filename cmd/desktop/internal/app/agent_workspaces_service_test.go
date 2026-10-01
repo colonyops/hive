@@ -1328,7 +1328,7 @@ func mcpCatalogueItem(t *testing.T, svc *AgentWorkspacesService, id string) MCPC
 // A stdio command is validated against the PATH a session launches with, not
 // the one this process inherited: a desktop launch gets launchd's
 // /usr/bin:/bin:/usr/sbin:/sbin, so validating against it warned on every
-// stdio entry — the shipped npx ones included — on a stock install (#266).
+// stdio entry — the shipped npx ones included — on a stock install (hay-kot/hive-desktop#266).
 func TestMCPCatalogueValidatesAgainstTheResolvedPATH(t *testing.T) {
 	isolateConfig(t)
 	root := t.TempDir()
@@ -1418,7 +1418,7 @@ func TestResizeSessionResizesTheLiveTerminal(t *testing.T) {
 	require.Error(t, err)
 }
 
-// TestOpenNamesTheFixWhenAnEnabledNameIsASkill is #307: a manifest written
+// TestOpenNamesTheFixWhenAnEnabledNameIsASkill is hay-kot/hive-desktop#307: a manifest written
 // before packages were the enablement unit enumerates skill slugs, and the
 // bare "not defined in skills.yml" that produces is accurate and useless.
 // The report has to say the name is a skill and which package already

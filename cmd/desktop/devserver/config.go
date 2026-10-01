@@ -84,7 +84,7 @@ type Overlay struct {
 // value" — clearing labels and leaving labels alone are different intents.
 //
 // The set is deliberately narrow: it is exactly what the desktop's GitHub
-// classifier reads (internal/app/sources/github/classify.go), plus the
+// classifier reads (cmd/desktop/internal/app/sources/github/classify.go), plus the
 // display fields needed to keep a mutated item legible in the feed.
 type Mutations struct {
 	// State is open, closed, or merged. It drives the classifier's lifecycle
@@ -278,7 +278,7 @@ func validateMutations(m Mutations) error {
 }
 
 // The checked-in config path and the default bind address live in
-// cmd/internal/devproxy: cmd/devtools reads both to point a worktree's
+// cmd/desktop/internal/devproxy: cmd/desktop/devtools reads both to point a worktree's
 // launch.env at the same proxy, and a second copy here would let them drift.
 
 // DefaultCachePath is the cache database's default location:

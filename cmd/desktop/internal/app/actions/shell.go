@@ -8,7 +8,7 @@ import (
 // ShellConfig is a shell action: it runs an author-trusted shell command
 // rendered from the msg payload. CommandTemplate is a Go text/template
 // string (rendered with the shared "shq" shell-quoting helper available —
-// see internal/app/ingest's ShellExecutor) — this package only parses
+// see cmd/desktop/internal/app/ingest's ShellExecutor) — this package only parses
 // and validates the config, it never renders or executes it.
 type ShellConfig struct {
 	// CommandTemplate renders the command line to run via `sh -c`.

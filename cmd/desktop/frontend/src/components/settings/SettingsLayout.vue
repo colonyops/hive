@@ -13,7 +13,7 @@ useEscapeToClose(close)
 
 <template>
   <!--
-    Two query containers scope every settings page's responsive behaviour (#35).
+    Two query containers scope every settings page's responsive behaviour (hay-kot/hive-desktop#35).
     They are declared once here so views inherit the breakpoints instead of each
     re-solving them, and a container query — not a viewport `md:` — is the right
     tool: these panes are far narrower than the window (profile rail + this nav

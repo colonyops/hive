@@ -46,9 +46,9 @@ SELECT * FROM inbox_item WHERE id = ?;
 SELECT * FROM inbox_item WHERE id = ? AND profile_id = ? AND archived_at IS NULL;
 
 -- name: RescopeInboxItem :exec
--- Move a row to a new source_scope. Used to heal pre-#63 rows written with an
--- empty scope onto the account-scoped identity every post-#63 read keys on
--- (issue #95); the caller only rescopes when the target identity is free, so
+-- Move a row to a new source_scope. Used to heal rows written before hay-kot/hive-desktop#63 with an
+-- empty scope onto the account-scoped identity every later read keys on
+-- (issue hay-kot/hive-desktop#95); the caller only rescopes when the target identity is free, so
 -- this never collides with the UNIQUE (profile_id, source_kind, source_scope,
 -- external_id) index.
 UPDATE inbox_item SET source_scope = sqlc.arg(source_scope) WHERE id = sqlc.arg(id);

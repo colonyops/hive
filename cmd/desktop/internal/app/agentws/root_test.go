@@ -53,7 +53,7 @@ func TestEnsureRoot(t *testing.T) {
 	})
 
 	// Precedent: TestSeedDefaultsIfMissingReportsDirectoryFailure
-	// (internal/app/actions/seed_test.go) — a read-only parent must surface as
+	// (cmd/desktop/internal/app/actions/seed_test.go) — a read-only parent must surface as
 	// a write failure, not be silently swallowed into a false "success".
 	t.Run("ReadOnlyParentReportsTheWriteError", func(t *testing.T) {
 		if os.Geteuid() == 0 {

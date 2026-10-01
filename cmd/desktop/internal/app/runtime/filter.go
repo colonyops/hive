@@ -14,7 +14,7 @@ import (
 
 // filterableItem is the GitHub item shape a github-filter node inspects, read
 // off a message's Payload. It mirrors the json tags of
-// internal/app/sources/github/feed.Item — the same shape github_source.go
+// cmd/desktop/internal/app/sources/github/feed.Item — the same shape github_source.go
 // encodes as a message payload. Fields it does not name are ignored.
 type filterableItem struct {
 	Repo   string   `json:"repo"`

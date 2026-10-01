@@ -24,7 +24,7 @@ import (
 //
 // The goroutine assertion is the part that matters. Every background
 // subsystem here — the producer, the output worker, retention, the config
-// watchers, the event bus and its subscribers, the vendored hive event bus —
+// watchers, the event bus and its subscribers, the shared hive event bus —
 // detaches a goroutine, and a Close that forgets one leaks it silently for
 // the life of the process. Nothing else in the suite would notice.
 //

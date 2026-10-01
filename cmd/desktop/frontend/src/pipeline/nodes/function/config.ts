@@ -2,7 +2,7 @@
 // is the editor's half: its Config shape, its palette metadata, and the
 // compile()/checkSyntax() helpers behind the drawer's live syntax check.
 //
-// The script is executed by Go (internal/app/runtime/js), through goja. The
+// The script is executed by Go (cmd/desktop/internal/app/runtime/js), through goja. The
 // two compilers are different engines, so this check is a fast local warning
 // about obvious syntax errors, not the authority — SaveFlow is, and it
 // compiles with the engine that will actually run the script.

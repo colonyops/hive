@@ -103,7 +103,7 @@ linters:
         # through the seam in dispatch/hive_adapters.go (docs/architecture.md,
         # "Bounded Context"). The files list is the allowlist of files that sit
         # on that seam.
-        hivecore:
+        app-shared-via-seam:
           files:
             - "**/cmd/desktop/internal/app/**"
             - "!**/cmd/desktop/internal/app/app.go"

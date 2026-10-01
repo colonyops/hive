@@ -180,7 +180,7 @@ func TestStateResetPipelineModeWipesWithoutReseeding(t *testing.T) {
 }
 
 // setStateResetEnv points every mutable path at a private temp root, mirroring
-// how desktop/e2e/scripts/serve.sh isolates each server instance.
+// how cmd/desktop/e2e/scripts/serve.sh isolates each server instance.
 func setStateResetEnv(t *testing.T, mode string) string {
 	t.Helper()
 	root := t.TempDir()

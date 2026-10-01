@@ -61,7 +61,7 @@ type processor interface {
 // Source types are not listed: a source is a relay by definition — the core
 // ingests for it, so at run time it only forwards what was routed to it — and
 // deriving them from the connector registry is what keeps adding a connector
-// a change to internal/app/sources alone.
+// a change to cmd/desktop/internal/app/sources alone.
 var behaviors = buildBehaviors(map[string]behavior{
 	"github-filter": {processor: newFilterNode},
 	"function":      {processor: newFunctionNode, kvCapable: true},

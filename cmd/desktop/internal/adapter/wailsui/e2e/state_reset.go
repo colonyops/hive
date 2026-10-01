@@ -32,7 +32,7 @@ const stateResetPath = "/_e2e/reset"
 
 // coreResetTables is the subset of hive.db tables the desktop's action path
 // writes (launch-session creates sessions; publish-message creates messages,
-// which readers acknowledge in message_reads). Other hivecore tables are
+// which readers acknowledge in message_reads). Other hive.db tables are
 // never touched by the desktop app, so a reset leaves them alone.
 var coreResetTables = []string{"message_reads", "messages", "sessions"}
 
@@ -68,8 +68,8 @@ type StateReset struct {
 // run after startup seeding — the mock inbox rows and actions.yml defaults —
 // so the captured baseline is the post-boot state a fresh server would show.
 //
-// core is the raw connection to the vendored Hive action database (sessions,
-// messages) — the caller passes app.App.HiveConn() rather than the vendored
+// core is the raw connection to the shared Hive action database (sessions,
+// messages) — the caller passes app.App.HiveConn() rather than the
 // *coredb.DB itself.
 func NewStateResetHarness(db *queries.DB, st *stores.Stores, core *sql.DB, logger zerolog.Logger) *StateReset {
 	b, _ := settings.LoadBootstrap()
@@ -244,7 +244,7 @@ func stateResetMiddleware(reset *StateReset) application.Middleware {
 }
 
 // e2eHarnessMarkerValid reports whether HIVE_DESKTOP_E2E_HARNESS carries the
-// 256-bit hex marker desktop/e2e/scripts/run-docker.sh mints. It keeps mock
+// 256-bit hex marker cmd/desktop/e2e/scripts/run-docker.sh mints. It keeps mock
 // mode alone from enabling test-only routes.
 func e2eHarnessMarkerValid() bool {
 	marker := strings.TrimSpace(os.Getenv(settings.EnvE2EHarness))

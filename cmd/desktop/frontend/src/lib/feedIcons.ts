@@ -3,7 +3,7 @@
 // dropdown, the feed config validator, and the sidebar row all read from here.
 // It is intentionally curated (a handful of feed-relevant icons) rather than
 // exposing every available icon, and must stay in sync with the Go allow-list
-// in internal/app/flow/nodes_terminal.go (feedIcons).
+// in cmd/desktop/internal/app/flow/nodes_terminal.go (feedIcons).
 //
 // Icon components are imported statically because `~icons/lucide/<name>` is a
 // build-time virtual module — the path can't be constructed dynamically — so

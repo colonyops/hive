@@ -1,7 +1,7 @@
 // Package wailsui is the Wails driving adapter: the service structs the
 // frontend calls over RPC, the native shell (window, tray, updater,
 // notifications), and the event signals it emits. It is the only package
-// allowed to import Wails; internal/app knows nothing about it.
+// allowed to import Wails; cmd/desktop/internal/app knows nothing about it.
 package wailsui
 
 import (

@@ -1,6 +1,6 @@
 // Package actions implements the desktop pipeline's actions.yml schema: the
 // output/action layer a flow's terminal `action` node targets (see
-// internal/app/flow's ActionConfig) and the source for the
+// cmd/desktop/internal/app/flow's ActionConfig) and the source for the
 // desktop detail pane's action buttons.
 //
 // It mirrors the flow package's registry + two-pass strict decode: a

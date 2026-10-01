@@ -30,7 +30,7 @@ const maxProgressTailLines = 20
 // hive redirects its service writers at the same target.
 //
 // hive swaps those writers service-wide for the call, so two concurrent creates
-// interleave. That is a vendored flaw costing a misattributed diagnostic line.
+// interleave. That is a flaw in the shared hive service, costing a misattributed diagnostic line.
 type sessionProgress struct {
 	mu    sync.Mutex
 	lines []string

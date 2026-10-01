@@ -17,7 +17,7 @@ func ShortCommit(c string) string {
 }
 
 // releaseVersionRE matches the closed set of publishable versions enforced by
-// cmd/release: X.Y.Z with an optional -dev.N / -beta.N
+// cmd/tools/release: X.Y.Z with an optional -dev.N / -beta.N
 // prerelease identifier.
 var releaseVersionRE = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-(dev|beta)\.[0-9]+)?$`)
 

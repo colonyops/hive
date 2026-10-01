@@ -2,7 +2,7 @@
 // pass, port 1 fail). This file is the editor's half of the node: its Config
 // shape, its palette metadata, and a live validity check.
 //
-// The rule itself lives in Go (internal/app/runtime/filter.go), which is what
+// The rule itself lives in Go (cmd/desktop/internal/app/runtime/filter.go), which is what
 // evaluates it. Its glob dialect is unusual — "[", "]", "?", "{" and "}" are
 // literal characters — so a second implementation here would be a second
 // place for that to drift.

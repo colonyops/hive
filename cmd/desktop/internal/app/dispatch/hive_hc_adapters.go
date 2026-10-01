@@ -10,7 +10,7 @@ import (
 )
 
 // TaskStatus mirrors hc's status vocabulary so the desktop's tasks view can
-// filter and set status without importing hivecore. Values match hc.Status's
+// filter and set status without importing the shared hc package. Values match hc.Status's
 // own strings.
 const (
 	TaskStatusOpen       = string(hc.StatusOpen)
@@ -27,13 +27,13 @@ const (
 )
 
 // ErrTaskNotFound is the seam-local translation of hc.ErrNotFound, so a core
-// service can classify a missing task without importing the vendored hc
+// service can classify a missing task without importing the shared hc
 // package.
 var ErrTaskNotFound = errors.New("task not found")
 
-// HoneycombManagement is the vendored hc surface the desktop's tasks view
+// HoneycombManagement is the shared hc surface the desktop's tasks view
 // manages issues through. Every method matches hive's HoneycombService
-// structurally, so an upstream signature change breaks this file rather than
+// structurally, so a signature change in the shared package breaks this file rather than
 // the core.
 type HoneycombManagement interface {
 	ListItems(ctx context.Context, filter hc.ListFilter) ([]hc.Item, error)

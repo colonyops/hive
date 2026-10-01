@@ -1,4 +1,4 @@
-// Evaluation is Go's (internal/app/runtime/js, through goja) and its tests
+// Evaluation is Go's (cmd/desktop/internal/app/runtime/js, through goja) and its tests
 // live there — including the return-shape rules, state across messages, and
 // timeouts. What is left here is the editor's half: the live syntax check the
 // drawer shows while typing.

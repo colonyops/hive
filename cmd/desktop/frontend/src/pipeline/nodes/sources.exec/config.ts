@@ -1,4 +1,4 @@
-// Runs on the backend (internal/app/sources/exec); role 'source' means no runtime.ts here.
+// Runs on the backend (cmd/desktop/internal/app/sources/exec); role 'source' means no runtime.ts here.
 
 import IconTerminal from '~icons/lucide/terminal'
 import { DURATION, intervalError } from '../../lib/sourceInterval'

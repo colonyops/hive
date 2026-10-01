@@ -257,7 +257,7 @@ func (s *SessionsService) preferredEnvAgent(ctx context.Context, agents []string
 // This runs synchronously on the click that starts a session
 // (CreateSession builds the request before handing off to the job), so the
 // options read -- a git subprocess per configured workspace
-// (desktop/frontend/src/composables/useNewSession.ts) -- is gated on there
+// (cmd/desktop/frontend/src/composables/useNewSession.ts) -- is gated on there
 // being an override to validate. The env read is a cached map lookup, so
 // checking it first is free for the common case of no override at all.
 func (s *SessionsService) resolveLaunchAgent(ctx context.Context, requested string) string {

@@ -22,8 +22,8 @@ import (
 )
 
 // AgentActivityStatus is this app's own vocabulary for a captured tmux pane's
-// detected state, projected from Hive's vendored assessment engine at this seam
-// so no app signature carries a vendored type (Bounded Context,
+// detected state, projected from Hive's shared assessment engine at this seam
+// so no app signature carries a shared hive type (Bounded Context,
 // architecture.md).
 type AgentActivityStatus string
 
@@ -53,7 +53,7 @@ func ClassifyAgentScreen(agent, screen string) AgentActivityStatus {
 
 // ErrDuplicateSessionName is the seam-local translation of Hive's
 // session.ErrDuplicateName, so a core service can classify a name collision
-// without importing the vendored session package.
+// without importing the shared session package.
 var ErrDuplicateSessionName = errors.New("session name already exists")
 
 type SessionCreator interface {
@@ -65,9 +65,9 @@ type sessionLaunchOptionsSource interface {
 	ResolveSessionLaunchRepository(context.Context, string) (hive.SessionLaunchRepository, error)
 }
 
-// SessionManagement is the vendored session surface the desktop manages
+// SessionManagement is the shared session surface the desktop manages
 // sessions through. Every method matches hive's SessionService structurally, so
-// an upstream signature change breaks this file rather than the core.
+// a signature change in the shared package breaks this file rather than the core.
 type SessionManagement interface {
 	ListSessions(context.Context) ([]session.Session, error)
 	GetSession(context.Context, string) (session.Session, error)
@@ -414,7 +414,7 @@ type managerHive struct {
 	statusPollInterval time.Duration
 }
 
-// sessionGit is the read-only slice of the vendored git executor a session's
+// sessionGit is the read-only slice of the shared git executor a session's
 // status needs. Narrowed rather than taking git.Git whole so the seam cannot
 // grow a Checkout or a ResetHard: reporting status must not move a worktree.
 type sessionGit interface {
@@ -459,7 +459,7 @@ func (m *HiveSessionManager) ListSessions(ctx context.Context) ([]SessionSummary
 }
 
 // SessionStatuses projects Hive's terminal detection without exposing pane
-// content or vendored status types beyond this anti-corruption layer.
+// content or shared status types beyond this anti-corruption layer.
 func (m *HiveSessionManager) SessionStatuses(ctx context.Context) (SessionStatusSnapshot, error) {
 	h := m.hive()
 	snapshot := SessionStatusSnapshot{
@@ -791,17 +791,17 @@ func sessionSummaryOf(s session.Session) SessionSummary {
 }
 
 // SlugifySessionName converts a display name to the slug Hive uses for
-// tmux session names and directory paths. It wraps the vendored
+// tmux session names and directory paths. It wraps the shared
 // session.Slugify so that launch_session_executor.go — not itself an ACL
-// seam — never imports internal/hivecore directly; an upstream rename here
+// seam — never imports internal/core/session directly; a rename there
 // breaks this one file instead of spreading to a non-seam caller.
 func SlugifySessionName(name string) string {
 	return session.Slugify(name)
 }
 
 // ValidateSessionName validates name against Hive's session naming rules.
-// See SlugifySessionName for why this wraps the vendored session.ValidateName
-// instead of letting callers import internal/hivecore/core/session directly.
+// See SlugifySessionName for why this wraps session.ValidateName
+// instead of letting callers import internal/core/session directly.
 func ValidateSessionName(name string) error {
 	return session.ValidateName(name)
 }

@@ -6,7 +6,7 @@ import tailwindcss from "@tailwindcss/vite";
 import icons from "unplugin-icons/vite";
 
 // Per-node-type documentation lives with the Go schema that validates it
-// (internal/app/flow/docs/<type>.md) because the prompts service
+// (cmd/desktop/internal/app/flow/docs/<type>.md) because the prompts service
 // renders the same markdown into the flows authoring prompt. The node drawer
 // and palette import those files directly through this alias rather than
 // keeping a second copy under nodes/*/help.md — one file, two readers.

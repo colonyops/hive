@@ -310,7 +310,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.credentials = buildCredentialStore(cfg.MockMode, cfg.Paths.CredentialsIndexPath, cfg.CredentialKeyringService)
 
 	// One client template backs both the fetch layer and the connect flow, so a
-	// development instance pointed at cmd/devserver never splits its traffic
+	// development instance pointed at cmd/desktop/devserver never splits its traffic
 	// between the proxy and real GitHub. The API base is the ADR devserver-github-proxy dev
 	// override and is empty in shipped builds; the OAuth base is never
 	// redirected, so the device flow still reaches github.com.
@@ -666,11 +666,11 @@ func (a *App) MCPBaseURL(ctx context.Context) string {
 	return HTTPBaseURLAt(a.Webhooks.Host(), port)
 }
 
-// HiveConn exposes the connection to the vendored Hive action database
-// (sessions, messages) as a plain *sql.DB. hivecore types stop at this
+// HiveConn exposes the connection to the shared Hive action database
+// (sessions, messages) as a plain *sql.DB. Shared hive types stop at this
 // method — adapters that need raw access, such as the e2e harness's table
-// resets and read-only snapshots, take the stdlib type rather than the
-// vendored *coredb.DB.
+// resets and read-only snapshots, take the stdlib type rather than
+// *coredb.DB.
 func (a *App) HiveConn() *sql.DB {
 	if a.hiveDB == nil {
 		return nil
@@ -1237,10 +1237,9 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		cfg.Logger.Warn().Err(err).Msg("extract hive action scripts failed")
 	}
 
-	// coredb.Open takes no context: it is vendored, and its signature belongs
-	// to hive upstream. Landing a change there and re-vendoring is the only
-	// way to thread one.
-	//nolint:contextcheck // vendored signature, see internal/hivecore
+	// coredb.Open takes no context. Threading one means changing the shared
+	// internal/data/db package and its CLI callers.
+	//nolint:contextcheck // shared signature, see internal/data/db
 	database, err := coredb.Open(dataDir, coredb.OpenOptions{
 		MaxOpenConns: hiveCfg.Database.MaxOpenConns,
 		MaxIdleConns: hiveCfg.Database.MaxIdleConns,

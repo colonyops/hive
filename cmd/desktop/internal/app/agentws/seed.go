@@ -70,7 +70,7 @@ func SeedDefaultsIfMissing(root string) error {
 
 // seedFileIfMissing installs content at <root>/<name> only when nothing is
 // there, following actions.SeedDefaultsIfMissing
-// (internal/app/actions/seed.go:143-189): write a temp file, then hard-link it
+// (cmd/desktop/internal/app/actions/seed.go:143-189): write a temp file, then hard-link it
 // into place, so a concurrent writer that wins the race keeps its own bytes
 // intact.
 func seedFileIfMissing(root, name, content string) error {

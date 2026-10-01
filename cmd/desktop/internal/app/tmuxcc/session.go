@@ -84,7 +84,7 @@ func (m *Manager) NewCommandWindow(ctx context.Context, slug, dir, name, command
 // CapturePane returns the current screen of name's active pane. -p prints to
 // stdout and -J joins wrapped lines — the exact capture-pane invocation
 // hive's own status detection runs
-// (internal/hivecore/core/terminal/tmux.TmuxCapture.CapturePane), so
+// (internal/core/terminal/tmux.TmuxCapture.CapturePane), so
 // terminal.Detector sees the input it was tuned against.
 func (m *Manager) CapturePane(ctx context.Context, name string) (string, error) {
 	if err := m.Available(ctx); err != nil {

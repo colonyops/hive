@@ -73,7 +73,7 @@ func newController() *controller {
 // mark reports the generation a caller is about to take a snapshot at. A
 // reconcile of that snapshot passes it back so windows added during the round
 // trip -- after the mark, so the snapshot cannot hold them -- are not mistaken
-// for windows the snapshot legitimately omits because tmux closed them (#278).
+// for windows the snapshot legitimately omits because tmux closed them (hay-kot/hive-desktop#278).
 func (c *controller) mark() uint64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -175,7 +175,7 @@ func (c *controller) settleLocked(w Window, kind WindowEventKind) []Event {
 //
 // since is the value mark returned right before the snapshot's round trip
 // started. A window added afterward cannot be in the snapshot, so its absence
-// is not evidence tmux closed it -- the removal pass leaves it alone (#278).
+// is not evidence tmux closed it -- the removal pass leaves it alone (hay-kot/hive-desktop#278).
 func (c *controller) reconcile(next []Window, since uint64) []Event {
 	c.mu.Lock()
 	defer c.mu.Unlock()

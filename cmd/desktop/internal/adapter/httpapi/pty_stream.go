@@ -33,7 +33,7 @@ const (
 	// the two sockets carry different frames and change on their own schedules,
 	// and sharing the constant made a tmux-wire change refuse every pop-up
 	// handshake. It pins POPUP_WIRE_VERSION in
-	// desktop/frontend/src/lib/popupTerminalClient.ts; move the two together.
+	// cmd/desktop/frontend/src/lib/popupTerminalClient.ts; move the two together.
 	ptyWireVersion = "1"
 
 	popupFrameOutput byte = 0x00

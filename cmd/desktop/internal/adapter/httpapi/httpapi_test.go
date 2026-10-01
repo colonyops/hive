@@ -23,7 +23,7 @@ import (
 // liveness routes below. The agent-facing surface it used to carry — inbox,
 // feeds, profiles, actions, source refresh, flow dry runs — is the MCP
 // server's now, and its coverage moved with it to
-// internal/adapter/mcpsrv (ADR mcp-replaces-the-agent-facing-http-api).
+// cmd/desktop/internal/adapter/mcpsrv (ADR mcp-replaces-the-agent-facing-http-api).
 
 // TestServedOverWebhookListener exercises main.go's real path: MountAPI onto
 // the webhook listener, Start binds one loopback port, and the API answers

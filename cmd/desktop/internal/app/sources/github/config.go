@@ -10,7 +10,7 @@ import (
 
 // Provider is the credentials provider name every GitHub credential is filed
 // under. A ref is "github/<login>": the account half is the authenticated
-// user's login, which the vendored single-slot token store — pinned to one
+// user's login, which the single-slot token store it replaced — pinned to one
 // constant keychain account — had no room to express.
 const Provider = "github"
 

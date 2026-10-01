@@ -86,7 +86,7 @@ func (c *SourceConfig) UnmarshalJSON(data []byte) error {
 }
 
 // sourceNodeFactories is one registry entry per registered source connector.
-// This is what makes adding a connector a change to internal/app/sources
+// This is what makes adding a connector a change to cmd/desktop/internal/app/sources
 // alone: the node type, its config decoding, and its port counts all follow
 // from the descriptor, so nothing has to be added here.
 func sourceNodeFactories() map[string]nodeFactory {

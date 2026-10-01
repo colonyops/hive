@@ -359,7 +359,7 @@ function requestOpenSettings(page: 'application' | 'profile'): void {
 // App-global audit log. The titlebar's Activity icon replaces the old "polling
 // github" indicator; unseenActivity drives its dot.
 //
-// Activity is an overlay, not a route (#441) — the same shape as Tasks, so the
+// Activity is an overlay, not a route (hay-kot/hive-desktop#441) — the same shape as Tasks, so the
 // audit log opens over whatever you were reading instead of navigating away
 // from it. The icon toggles: clicking it while open closes it, matching the
 // tint that communicates open state.
@@ -911,7 +911,7 @@ function toggleSidebar(): void {
 // The right-panel toggle names whichever pane sits on that edge: the detail
 // preview in Inbox, the Chats canvas in Chats. One control per frame edge is
 // what keeps panel behaviour the same everywhere; the canvas used to carry its
-// own button in the pane status bar instead (#432).
+// own button in the pane status bar instead (hay-kot/hive-desktop#432).
 const agentsCanvasAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
 const previewToggleCollapsed = computed(() =>
   agentsCanvasAvailable.value ? !canvasRequested.value : previewCollapsed.value,

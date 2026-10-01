@@ -20,7 +20,7 @@ import (
 const pushTimeout = 10 * time.Second
 
 // secretHeader is the header the desktop's webhook listener authenticates on.
-// It must match internal/app/sources/webhook.SecretHeader; devserver
+// It must match cmd/desktop/internal/app/sources/webhook.SecretHeader; devserver
 // declares it rather than importing so this dev tool stays decoupled from the
 // app's internal packages.
 const secretHeader = "X-Hive-Secret"

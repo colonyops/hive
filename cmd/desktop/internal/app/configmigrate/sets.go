@@ -33,11 +33,11 @@ var (
 	}}
 	FlowSet    = Set{Name: "flow", Baseline: 1, Current: 1}
 	ActionsSet = Set{Name: "actions", Baseline: 1, Current: 1}
-	// MCPLibrarySet covers mcps.yaml (internal/app/agentws) and is inert at
+	// MCPLibrarySet covers mcps.yaml (cmd/desktop/internal/app/agentws) and is inert at
 	// Baseline == Current == 1: the shipped hive-desktop entry lives in the Go
 	// registry, so no user library needed rewriting for it.
 	MCPLibrarySet = Set{Name: "mcps", Baseline: 1, Current: 1}
-	// SkillLibrarySet covers skills.yml (internal/app/agentws), the skill
+	// SkillLibrarySet covers skills.yml (cmd/desktop/internal/app/agentws), the skill
 	// packages a workspace enables.
 	SkillLibrarySet = Set{Name: "skills", Baseline: 1, Current: 1}
 	// AgentWorkspaceSet covers agent-workspace.yaml. Version 2 renames the
@@ -195,7 +195,7 @@ func terminalFontSizeToPixels(doc map[string]any) error {
 
 // v2ShippedSkillSlugs is the full set of skills this build shipped when a
 // workspace's skills: list still enumerated slugs, hardcoded rather than read
-// from internal/app/prompts.
+// from cmd/desktop/internal/app/prompts.
 //
 // A migration has to be deterministic against old data and the shipped set
 // moves across releases, so consulting the live registry would make the

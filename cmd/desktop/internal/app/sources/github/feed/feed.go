@@ -1,7 +1,7 @@
 // Package feed is the desktop's GitHub fetch layer: the wire Item type and a
 // cached, coalesced LiveProvider the pipeline producer uses to turn a source
 // into event_log rows. The old profiles/feeds config machinery folded into
-// the flow graph (internal/app/flow); what remains here is the
+// the flow graph (cmd/desktop/internal/app/flow); what remains here is the
 // GitHub fetch core.
 package feed
 

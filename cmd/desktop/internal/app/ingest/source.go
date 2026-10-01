@@ -3,7 +3,7 @@
 // turns the current flow set into the connector instances it drives.
 //
 // Delivery — reading the log, routing it, committing a consumer's offset —
-// belongs to internal/app/runtime; this package only appends.
+// belongs to cmd/desktop/internal/app/runtime; this package only appends.
 package ingest
 
 import (

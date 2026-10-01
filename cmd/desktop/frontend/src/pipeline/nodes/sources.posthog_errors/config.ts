@@ -1,4 +1,4 @@
-// Runs on the backend (internal/app/sources/posthog); role 'source' means no runtime.ts here.
+// Runs on the backend (cmd/desktop/internal/app/sources/posthog); role 'source' means no runtime.ts here.
 
 import PostHogMark from '../../../components/marks/PostHogMark.vue'
 import { intervalError } from '../../lib/sourceInterval'

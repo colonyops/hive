@@ -322,7 +322,7 @@ func TestSessionsService_CreateSessionLaunchesAWorkspaceChat(t *testing.T) {
 }
 
 // CreateSession resolves an unstated agent through the same env override the
-// form preselects with (#438): the form and the launch it submits must agree
+// form preselects with (hay-kot/hive-desktop#438): the form and the launch it submits must agree
 // on which agent runs.
 func TestSessionsService_CreateSessionResolvesTheEnvironmentAgentWhenNoneIsRequested(t *testing.T) {
 	launcher := &fakeSessionLauncher{opts: dispatch.SessionLaunchOptions{Agents: []string{"claude", "codex"}}}

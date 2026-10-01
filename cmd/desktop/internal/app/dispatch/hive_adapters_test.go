@@ -70,7 +70,7 @@ func TestHiveMessagePublisherPersistsThroughCoreSQLiteReopen(t *testing.T) {
 	assert.Equal(t, topic, messages[0].Topic)
 }
 
-// newHiveSessions builds the real vendored session service over a temporary
+// newHiveSessions builds the real shared session service over a temporary
 // core database. It is what makes these tests worth having: the seam's job is
 // to hold against hive's actual implementation, so SessionManagement is
 // satisfied structurally here rather than by a fake shaped to fit it.
@@ -147,7 +147,7 @@ func (f *fakeSessionWindowSource) ListSessionWindows(_ context.Context, slugs []
 }
 
 // recordingExecutor stands in for the shell hive spawns tmux through, so the
-// seam can be checked against the real vendored spawner with no tmux server
+// seam can be checked against the real shared spawner with no tmux server
 // running. absent fails has-session, which is how tmux answers for a session it
 // does not hold.
 type recordingExecutor struct {
@@ -394,7 +394,7 @@ func TestHiveSessionManagerRiskIsEmptyForANonActiveSession(t *testing.T) {
 	assert.Equal(t, SessionRisk{RecycleDeletes: true}, risk)
 }
 
-// newHiveLauncher builds the launcher over the real vendored session service,
+// newHiveLauncher builds the launcher over the real shared session service,
 // for the same reason newHiveSessions does: a fake shaped to fit the seam would
 // report whatever the test wanted to hear.
 func newHiveLauncher(t *testing.T, cfg *config.Config) *HiveSessionLauncher {
@@ -459,8 +459,7 @@ func TestHiveSessionLauncherReportsTheFailedOperationAndItsCheckout(t *testing.T
 	assert.Contains(t, err.Error(), "clone repository", "the step travels in the surfaced error")
 }
 
-// git's own reason now survives hive's wrapping, which is the whole point of
-// the upstream change this vendors.
+// git's own reason survives hive's wrapping.
 func TestHiveSessionLauncherReportsWhyACloneWasRefused(t *testing.T) {
 	cfg := &config.Config{DataDir: t.TempDir()}
 	missing := filepath.Join(t.TempDir(), "no-such-repo")

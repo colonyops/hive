@@ -4,7 +4,7 @@ import type { Prompt } from '../../bindings/github.com/colonyops/hive/cmd/deskto
 
 // The frontend never builds prompt text. Every prompt — the settings catalog
 // and the context-scoped ones offered from an editor — is assembled by
-// internal/app/prompts from templates that compose shared fragments, so
+// cmd/desktop/internal/app/prompts from templates that compose shared fragments, so
 // wording is written once and each prompt names this install's real config
 // paths rather than a placeholder.
 //

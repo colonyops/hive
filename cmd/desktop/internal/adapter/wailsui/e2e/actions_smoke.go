@@ -62,8 +62,8 @@ type actionSmokeState struct {
 // smoke readers plus the /_e2e/reset harness — without changing the normal
 // asset handler or exposing any of them in production.
 //
-// core is the raw connection to the vendored Hive action database (sessions,
-// messages) — the caller passes app.App.HiveConn() rather than the vendored
+// core is the raw connection to the shared Hive action database (sessions,
+// messages) — the caller passes app.App.HiveConn() rather than the
 // *coredb.DB itself.
 func SmokeMiddleware(pipeline *queries.DB, st *stores.Stores, core *sql.DB, reset *StateReset, onAppended func(nextOffset int64)) application.Middleware {
 	mock := ""

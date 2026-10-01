@@ -13,7 +13,7 @@ import (
 
 // testSeed is a stand-in starter graph: one source wired to one feed. Create
 // writes whatever graph its caller hands it, so the real starter graph — and
-// the assertions about what it contains — live in internal/app, which is the
+// the assertions about what it contains — live in cmd/desktop/internal/app, which is the
 // package allowed to name a connector.
 func testSeed() Seed {
 	return Seed{

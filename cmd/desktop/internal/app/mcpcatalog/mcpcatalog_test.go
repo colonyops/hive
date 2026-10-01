@@ -11,7 +11,7 @@ import (
 // TestRegistryDocsBijection is the coupling that lets the catalogue document
 // itself: every registered type must carry a docs/<type>.md, and no orphan
 // doc may linger for a type that was removed. Mirrors
-// internal/app/actions/docs_test.go's TestActionDocsCoverEveryRegisteredType.
+// cmd/desktop/internal/app/actions/docs_test.go's TestActionDocsCoverEveryRegisteredType.
 func TestRegistryDocsBijection(t *testing.T) {
 	for _, mcpType := range Types() {
 		doc, err := Doc(mcpType)

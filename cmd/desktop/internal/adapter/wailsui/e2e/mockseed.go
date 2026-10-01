@@ -15,7 +15,7 @@ import (
 )
 
 // MockFlowID, MockSourceNodeID, and MockFeedNodeID identify the fixture graph
-// in desktop/e2e/fixtures/flows/frontend-triage.yaml. Tests assert these IDs
+// in cmd/desktop/e2e/fixtures/flows/frontend-triage.yaml. Tests assert these IDs
 // against the fixture so its graph configuration cannot drift unnoticed.
 const (
 	MockFlowID       = "frontend-triage"

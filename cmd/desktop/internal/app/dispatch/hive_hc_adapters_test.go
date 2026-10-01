@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// newHiveHoneycombTasks builds the real vendored hc service over a temporary
+// newHiveHoneycombTasks builds the real shared hc service over a temporary
 // core database, so HoneycombManagement is satisfied structurally against
 // hive's actual implementation rather than a fake shaped to fit it. svc is
 // returned alongside the adapter so tests can seed and verify state through

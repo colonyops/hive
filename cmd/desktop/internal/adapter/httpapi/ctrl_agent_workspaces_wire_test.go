@@ -95,7 +95,7 @@ func TestAgentSkillPackagesServeTheSeededHivePackage(t *testing.T) {
 	}
 
 	// The name-space rides along so the editor can say what an enabled name
-	// that is not a package actually is (#307).
+	// that is not a package actually is (hay-kot/hive-desktop#307).
 	require.NotEmpty(t, body.Skills)
 	for _, name := range body.Skills {
 		assert.Equal(t, []string{"hive"}, name.SelectedBy, "the seeded package selects every shipped skill")

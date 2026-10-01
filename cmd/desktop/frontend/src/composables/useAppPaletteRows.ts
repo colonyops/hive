@@ -90,7 +90,7 @@ export function useAppPaletteRows(deps: AppPaletteDeps): void {
   const hintFor = (id: string): string => formatCombo(combosFor(id)[0] ?? '')
 
   // The app is usable — past onboarding, the shell resolved — regardless of
-  // which mode is on screen. This is the gate the #306 fix widens the hub's
+  // which mode is on screen. This is the gate the hay-kot/hive-desktop#306 fix widens the hub's
   // own Go-to rows to: their run()s already land in the hub from anywhere.
   const appReady = computed(() => shellLoaded.value && !onboardingActive.value)
 
@@ -197,7 +197,7 @@ export function useAppPaletteRows(deps: AppPaletteDeps): void {
       if (mode.value !== 'terminal') modeRow('mode:terminal', 'view.go-code')
       if (mode.value !== 'agents') modeRow('mode:agents', 'view.go-chats')
 
-      // Profiles, feeds and Trash, and themes reach across every mode (#306):
+      // Profiles, feeds and Trash, and themes reach across every mode (hay-kot/hive-desktop#306):
       // requestSelectProfile, navigateSidebar and setTheme all push a route
       // that lands in the hub, so there is nothing hub-specific left in them.
       for (const p of profiles.value) {

@@ -43,7 +43,7 @@ type nodeFactory func() NodeConfig
 // config type itself).
 //
 // Source types are not listed: they are derived from the connector registry,
-// so adding a source connector is a change to internal/app/sources alone.
+// so adding a source connector is a change to cmd/desktop/internal/app/sources alone.
 var registry = buildRegistry(map[string]nodeFactory{
 	"github-filter": func() NodeConfig { return &GithubFilterConfig{} },
 	"function":      func() NodeConfig { return &FunctionConfig{} },

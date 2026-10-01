@@ -1,4 +1,4 @@
-// Runs on the backend (internal/app/sources/rss); role 'source' means no runtime.ts here.
+// Runs on the backend (cmd/desktop/internal/app/sources/rss); role 'source' means no runtime.ts here.
 
 import IconRss from '~icons/lucide/rss'
 import { intervalError } from '../../lib/sourceInterval'
@@ -7,7 +7,7 @@ export const type = 'sources.rss'
 export const role = 'source' as const
 export const sourceKind = 'rss'
 
-/** Mirrors Go's defaultLimit and maxLimit (internal/app/sources/rss/config.go). */
+/** Mirrors Go's defaultLimit and maxLimit (cmd/desktop/internal/app/sources/rss/config.go). */
 export const DEFAULT_LIMIT = 50
 export const MAX_LIMIT = 500
 

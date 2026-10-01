@@ -143,7 +143,8 @@ func TestItemSessions_SurviveAnItemRowBeingRebuilt(t *testing.T) {
 	assert.Equal(t, "sess-a", links[0].SessionID)
 }
 
-// InboxItemStore.ResolveScoped rewrites a pre-#63 row's source_scope in
+// InboxItemStore.ResolveScoped rewrites the source_scope of a row from before
+// hay-kot/hive-desktop#63 in
 // place, and the links are keyed on that scope -- so they have to move with
 // it.
 func TestItemSessions_FollowALegacyRowOntoItsHealedScope(t *testing.T) {

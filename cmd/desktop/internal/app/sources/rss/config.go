@@ -35,7 +35,7 @@ type Config struct {
 	// shared feed icon set. Purely cosmetic; empty means the default.
 	Icon string `json:"icon,omitempty" yaml:"icon,omitempty" jsonschema:"title=Item icon,description=The glyph feed rows render for this node's items. Empty uses the default feed glyph."`
 	// Image, when set, is the content hash of an uploaded image shown as this
-	// node's feed mark instead of Icon (see internal/app/sourcemark). Empty or
+	// node's feed mark instead of Icon (see cmd/desktop/internal/app/sourcemark). Empty or
 	// a missing file falls back to Icon.
 	Image string `json:"image,omitempty" yaml:"image,omitempty" jsonschema:"title=Image,description=Content hash of an uploaded image shown as this source's feed mark instead of the icon. Set through the node editor's image picker; empty falls back to the icon."`
 }

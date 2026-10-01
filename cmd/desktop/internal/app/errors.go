@@ -1,7 +1,7 @@
 // Package app is the headless core's facade: the App value driving adapters
 // hold, the error vocabulary they translate, and the per-domain services that
 // own orchestration. The domain packages it composes live in
-// internal/app/<domain>/.
+// cmd/desktop/internal/app/<domain>/.
 package app
 
 import (

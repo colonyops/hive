@@ -1,7 +1,7 @@
 // Package observe is the OpenTelemetry API surface the rest of the app calls.
 // It holds no SDK and abstracts nothing: Tracer and Meter return the real API
 // types, resolved against the global provider, which is the no-op provider
-// until internal/app/telemetry registers a real one. Only the scope-name
+// until cmd/desktop/internal/app/telemetry registers a real one. Only the scope-name
 // convention is centralized here
 // (https://opentelemetry.io/blog/2026/dont-wrap-opentelemetry/).
 package observe

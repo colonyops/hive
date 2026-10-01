@@ -4,7 +4,7 @@ import "sort"
 
 // ShippedSkill is one skill this build ships, as the catalogue needs it. The
 // shipped half arrives as data rather than being read here: the bodies are
-// rendered per install by the prompt engine, and internal/app/prompts imports
+// rendered per install by the prompt engine, and cmd/desktop/internal/app/prompts imports
 // this package, so the dependency cannot run the other way.
 type ShippedSkill struct {
 	Slug        string

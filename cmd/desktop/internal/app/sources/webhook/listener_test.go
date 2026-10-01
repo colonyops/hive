@@ -256,7 +256,7 @@ func TestWebhookListenerFansOutToMatchingNodes(t *testing.T) {
 // Disabled flows and disabled nodes are not tested here any more: the
 // listener is handed the instances that already exist, and deciding which
 // nodes are live is the resolver's job — see
-// TestResolverSkipsDisabledFlowsAndNodes in internal/app/ingest.
+// TestResolverSkipsDisabledFlowsAndNodes in cmd/desktop/internal/app/ingest.
 func TestWebhookListenerRejections(t *testing.T) {
 	listener, _, _ := newWebhookTestListener(t, fakeInstances(webhookInstance(t, "triage", "hook", "ci", "")))
 	handler := listener.Handler()

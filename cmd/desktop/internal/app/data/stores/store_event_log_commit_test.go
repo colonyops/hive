@@ -36,10 +36,11 @@ func TestCommit_FeedOutput_ClaimsResolvedInboxItem(t *testing.T) {
 	assert.Equal(t, 1, claims)
 }
 
-// A pre-#63 row carries an empty source_scope. A post-#63 feed output keys on the
+// A row from before hay-kot/hive-desktop#63 carries an empty source_scope. A later
+// feed output keys on the
 // account scope, so the direct lookup misses; the commit must heal the row
 // onto that scope, claim membership, and leave exactly one row — not wedge and
-// not fork a duplicate. See issue #95.
+// not fork a duplicate. See issue hay-kot/hive-desktop#95.
 func TestCommit_FeedOutput_HealsLegacyEmptyScopeItem(t *testing.T) {
 	st, db := openTestStores(t)
 	ctx := t.Context()
@@ -176,7 +177,7 @@ func TestCommit_FeedOutput_MintedItemWithoutATimeIsStampedNow(t *testing.T) {
 }
 
 // A feed output with no key has no identity to mint under (the omitempty
-// snapshot-boundary row of issue #95). It is skipped, not fatal: the offset has
+// snapshot-boundary row of issue hay-kot/hive-desktop#95). It is skipped, not fatal: the offset has
 // to advance so the consumer cannot be wedged at one such row forever.
 func TestCommit_FeedOutput_SkipsKeylessItem(t *testing.T) {
 	st, db := openTestStores(t)

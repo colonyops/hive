@@ -130,7 +130,7 @@ class FakeSocket {
   close(): void {}
 }
 
-// Mirrors the window-event frame in internal/adapter/httpapi/terminal_stream.go.
+// Mirrors the window-event frame in cmd/desktop/internal/adapter/httpapi/terminal_stream.go.
 function windowFrame(state: Record<string, unknown>): ArrayBuffer {
   const body = new TextEncoder().encode(JSON.stringify(state))
   const bytes = new Uint8Array(1 + body.length)

@@ -77,7 +77,7 @@ func TestCatalogueFlagsACommandNotOnPATH(t *testing.T) {
 // The check has to ask the PATH a session launches with, not this process's:
 // a desktop launch inherits launchd's /usr/bin:/bin:/usr/sbin:/sbin, where
 // none of npx, mise or uvx live, and validating against it warns on every
-// stdio entry including the shipped ones (#266).
+// stdio entry including the shipped ones (hay-kot/hive-desktop#266).
 func TestCatalogueResolvesAgainstTheInjectedLookPath(t *testing.T) {
 	t.Parallel()
 

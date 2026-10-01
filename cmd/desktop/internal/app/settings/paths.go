@@ -1,6 +1,6 @@
 // Package settings resolves the desktop app's typed settings and on-disk
 // locations. Desktop-owned overrides use the HIVE_DESKTOP_ prefix; XDG and
-// vendored Hive inputs remain external boundaries.
+// shared Hive inputs remain external boundaries.
 package settings
 
 import (

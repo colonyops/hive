@@ -7,7 +7,7 @@ import (
 )
 
 // docsFS holds one markdown file per registered action type, named
-// docs/<type>.md. internal/app/prompts renders these into the actions.yml
+// docs/<type>.md. cmd/desktop/internal/app/prompts renders these into the actions.yml
 // authoring prompt, so an action type documents itself next to the config
 // struct and validation rules it describes.
 //
@@ -39,7 +39,7 @@ func LauncherDoc() string { return launcherDoc }
 //
 // It has exactly one home because it has two jobs that must never disagree.
 // TestExampleYAMLIsValid parses and validates these bytes, and
-// internal/app/prompts embeds them in the actions authoring prompt as the
+// cmd/desktop/internal/app/prompts embeds them in the actions authoring prompt as the
 // concrete example an agent works from — so a prompt example that no longer
 // parses fails the build rather than misleading an agent.
 func ExampleYAML() string {
