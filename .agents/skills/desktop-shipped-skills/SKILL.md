@@ -1,5 +1,5 @@
 ---
-name: shipped-skills
+name: desktop-shipped-skills
 description: Change the agent skills Hive Desktop ships into an agent workspace — the hive-flows, hive-actions, hive-settings, hive-webhook-sources, hive-mcp, hive-agent-workspaces SKILL.md files. Use when editing what one of those says or adding a new one.
 compatibility: Requires Go and mise. Editing a template changes generated output — never edit a rendered SKILL.md inside a workspace directory.
 ---
@@ -58,7 +58,7 @@ and the appended target sentence must fit inside.
 ## Validate
 
 ```bash
-go test ./internal/app/...       # prompts, the SKILL.md renderer, and SkillsService
+go test ./cmd/desktop/internal/app/...   # prompts, the SKILL.md renderer, and SkillsService
 mise run check                   # the pre-push gate: generate, tidy, lint, test
 ```
 

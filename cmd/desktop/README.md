@@ -607,6 +607,6 @@ a Vite dev build always has it.
 
 Recording UI spans to `perf.jsonl` is the `usePerf` hook, on in `dev` via
 `launch.env` and off in a shipped build (ADR
-ui-performance-spans-are-recorded-to-jsonl). The **ui-perf** agent skill carries
+ui-performance-spans-are-recorded-to-jsonl). The **desktop-ui-perf** agent skill carries
 the full loop: the naming rules and the jq recipes for percentiles, outliers,
 and grouping by attribute.

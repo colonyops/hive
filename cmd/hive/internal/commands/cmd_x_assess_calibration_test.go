@@ -16,12 +16,12 @@ import (
 
 // calibrationSequencesDir holds the committed calibration corpus: paired
 // <name>.jsonl frame recordings and <name>.expected.json published-status
-// sidecars. See test/calibration/sequences and the autocalibrate skill
-// (.claude/skills/autocalibrate/SKILL.md) for how this corpus is grown.
+// sidecars. See test/calibration/sequences and the cli-autocalibrate skill
+// (.agents/skills/cli-autocalibrate/SKILL.md) for how this corpus is grown.
 const calibrationSequencesDir = "../../../../test/calibration/sequences"
 
 // TestCalibrationCorpus_ReplayMatchesExpected is the automated guardrail the
-// autocalibrate skill's hard rule ("no regression trading") depends on: it
+// cli-autocalibrate skill's hard rule ("no regression trading") depends on: it
 // replays every committed sequence through a fresh Engine+Tracker on a
 // virtual clock — status.DefaultOptions(), never an ambient config file, so
 // the result depends only on the shipped debounce defaults and the

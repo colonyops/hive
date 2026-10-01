@@ -1,5 +1,5 @@
 ---
-name: devserver
+name: desktop-devserver
 description: Drive the local devserver at http://127.0.0.1:7777 to simulate GitHub lifecycle events and webhook deliveries against a running Hive Desktop instance. Use when asked to run a scenario, simulate a PR/issue event (review requested, approved, merged, CI, comment, mention), exercise the feed through the dev proxy, or reproduce a lifecycle bug end to end.
 compatibility: Requires a running devserver (`mise run desktop:devserver`) and a desktop instance pointed at it (the default in every prepared worktree). curl and jq.
 ---

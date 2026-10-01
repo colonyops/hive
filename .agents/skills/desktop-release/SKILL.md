@@ -1,6 +1,6 @@
 ---
-name: release
-description: Cut the next Hive Desktop dev, beta, or stable release. Use when asked to release or publish the desktop app, or when explicitly invoked with a release channel such as `/release dev`.
+name: desktop-release
+description: Cut the next Hive Desktop dev, beta, or stable release. Use when asked to release or publish the desktop app, or when explicitly invoked with a release channel such as `/desktop-release dev`.
 compatibility: Requires git, Go, mise, GitHub CLI authentication, a running Docker (Linux binaries build in a container), and the release secrets in the repo-root `.env`.
 disable-model-invocation: true
 ---
@@ -11,13 +11,13 @@ Cut a release through the local publisher. `mise` loads release credentials
 automatically; never read `.env`, inspect secret values, or invoke the release
 CLI's `publish` command outside `mise`. Publishing is local-only — every
 platform (macOS plus both Linux architectures) is built on one machine, so the
-release needs macOS and a running Docker together (decision 0028). There is no
+release needs macOS and a running Docker together (ADR linux-tarball-distribution). There is no
 CI publishing workflow.
 
 Publishing records the release on GitHub as its final step: it pushes the
 `desktop-v<version>` tag and creates a GitHub Release whose body is the
 version's committed release notes (dev and beta marked prerelease). Downloads
-still come from R2 (decision 0003); the release attaches no artifacts. That step
+still come from R2 (ADR r2-manifest-distribution); the release attaches no artifacts. That step
 is idempotent — `go run ./cmd/tools/release github <version>` re-records a release
 whose GitHub step failed after the upload.
 
@@ -72,9 +72,9 @@ Reject missing or unknown channels instead of guessing.
    entry, naming the file it wants. **This is not recoverable inside the release
    run**: the entry has to be committed on `main` before publishing, and step 3
    requires a clean tree identical to `origin/main`, so it cannot be written
-   here. Stop and tell the operator to run `/release-prep <version>`.
+   here. Stop and tell the operator to run `/desktop-release-prep <version>`.
 
-   The `release-prep` skill promotes the accumulated fragments, curates the
+   The `desktop-release-prep` skill promotes the accumulated fragments, curates the
    stable entry, validates it, and runs the repository command that creates the
    branch, commit, push, and pull request. Never create those by hand. Restart
    this procedure from step 2 after the pull request merges.

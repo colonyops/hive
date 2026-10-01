@@ -266,7 +266,7 @@ type scenarioReport struct {
 // the right state only after some noise), and that noise is exactly what
 // the flap count exists to surface — folding it into Pass would let a
 // tuning change silently trade a passing-but-flappy result for a different
-// passing-but-flappy result. Callers (the report reader, the autocalibrate
+// passing-but-flappy result. Callers (the report reader, the cli-autocalibrate
 // loop) treat FlapCount as a separate, ideally-zero signal.
 func scoreScenario(spec *scenarioSpec, log []scenarioPoll) scenarioReport {
 	report := scenarioReport{Scenario: spec.Name, TotalPolls: len(log), Pass: true}

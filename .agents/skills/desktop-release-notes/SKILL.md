@@ -1,5 +1,5 @@
 ---
-name: release-notes
+name: desktop-release-notes
 description: Write the release-notes line a branch owes to cmd/desktop/releasenotes/changelog/unreleased/. Use when asked to update the changelog or release notes, or to check whether the work on this branch earns an entry before the PR goes up.
 ---
 
@@ -116,7 +116,7 @@ whole release, which no single change can write, so promotion writes it.
 ## 5. Verify
 
 ```bash
-go test ./internal/app/releasenotes/...
+go test ./cmd/desktop/releasenotes/...
 ```
 
 `TestChangelogParses` and `TestCommittedFragmentsParse` read the embedded

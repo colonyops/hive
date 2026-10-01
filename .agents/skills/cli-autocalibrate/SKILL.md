@@ -1,5 +1,5 @@
 ---
-name: autocalibrate
+name: cli-autocalibrate
 description: Tune the terminal status assessment engine (Stage 1 rules) and status.Tracker (Stage 2 debounce) against the committed calibration corpus. Use when a status is misdetected or flapping, when adding/adjusting assess rules, or when asked to "calibrate", "tune the debounce", or "fix status flapping".
 compatibility: claude
 ---
@@ -12,7 +12,7 @@ Hive detects agent status in two stages: `internal/core/terminal/assess` (Stage 
 
 - `internal/core/terminal/assess/testdata/<tool>/<scenario>.txt` — single-frame fixtures for Stage 1 rule classification. Table in `internal/core/terminal/assess/fixtures_test.go`.
 - `test/calibration/sequences/<name>.jsonl` + `<name>.expected.json` — multi-frame recordings (the `{ts, content, title, inMode}` shape `hive x assess watch --record` produces) plus a sidecar of the published-status sequence `hive x assess replay` must reproduce exactly. Covers Stage 2 debounce timing (idle-confirmation delay, churn-as-working, approval immediacy, ...) that a single-frame fixture can't.
-- `test/calibration/scenarios/<name>.yaml` — step/expectation scripts for live, in-container runs against a real pane (`hive x assess scenario`). Not wired into `mise run integration`; run by hand.
+- `test/calibration/scenarios/<name>.yaml` — step/expectation scripts for live, in-container runs against a real pane (`hive x assess scenario`). Not wired into `mise run cli:integration`; run by hand.
 
 ## The Tuning Loop
 
@@ -52,10 +52,10 @@ Hive detects agent status in two stages: `internal/core/terminal/assess` (Stage 
 
 ## Optional Live Tier (Container-Only)
 
-Everything above is offline (fixture files, recorded frames) and safe anywhere, including this host. The live tier's mutating commands are **only safe inside `mise container`**; `watch`, including `watch --record`, remains pane-read-only and may run on the host when its local capture file is handled as sensitive data:
+Everything above is offline (fixture files, recorded frames) and safe anywhere, including this host. The live tier's mutating commands are **only safe inside `mise run cli:container`**; `watch`, including `watch --record`, remains pane-read-only and may run on the host when its local capture file is handled as sensitive data:
 
 ```bash
-mise container
+mise run cli:container
 # inside the container:
 hive x assess drive test/calibration/sequences/claude-turn-lifecycle.jsonl --target <pane>
 hive x assess scenario test/calibration/scenarios/claude-permission-flow.yaml --target <pane>
@@ -68,7 +68,7 @@ hive x assess watch <pane> --tool claude --record new-sequence.jsonl
 
 ## Hard Rules
 
-- **Anything that mutates a pane runs only inside `mise container`.** `drive` kills and replaces the pane process with `respawn-pane -k`; `scenario` sends real keys. Running either against the host's tmux server has crashed dev environments before (see the repo's `CLAUDE.md` "Integration Tests" rule, which this inherits). Both commands require Docker's marker plus the isolation marker set by the repository's `mise container` task; an arbitrary Docker container fails closed by default, regardless of the tmux socket's name, unless you pass `--allow-host`.
+- **Anything that mutates a pane runs only inside `mise run cli:container`.** `drive` kills and replaces the pane process with `respawn-pane -k`; `scenario` sends real keys. Running either against the host's tmux server has crashed dev environments before (see the repo's `CLAUDE.md` "Integration Tests" rule, which this inherits). Both commands require Docker's marker plus the isolation marker set by the repository's `mise run cli:container` task; an arbitrary Docker container fails closed by default, regardless of the tmux socket's name, unless you pass `--allow-host`.
 - **`--allow-host` is a deliberate, eyes-open exception only.** A named socket does not prove isolation, so verify the target yourself before overriding the container gate.
 - **`hive x assess watch` is pane-read-only and host-safe** — with or without `--record`, it only calls `capture-pane`/`display-message` and never sends input. Recording writes the captured pane bytes to a private local file, which can contain source, output, paths, and secrets. `hive x assess file` and `hive x assess replay` are pure offline file processing and always host-safe.
 - **No regression trading** (repeated from step 4 because it's the rule most tempting to skip under time pressure): a green corpus after your change must be a strict superset of the green corpus before it, plus your fix.

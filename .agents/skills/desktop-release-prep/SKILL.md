@@ -1,6 +1,6 @@
 ---
-name: release-prep
-description: Curate Hive Desktop's accumulated changelog fragments into the next stable release entry, then create the release-notes pull request. Use when explicitly asked to prepare stable release notes or invoked as `/release-prep [version]`.
+name: desktop-release-prep
+description: Curate Hive Desktop's accumulated changelog fragments into the next stable release entry, then create the release-notes pull request. Use when explicitly asked to prepare stable release notes or invoked as `/desktop-release-prep [version]`.
 compatibility: Requires git, Go, mise, GitHub CLI authentication, and access to the live release manifests used for version selection.
 argument-hint: "[stable|version]"
 disable-model-invocation: true
@@ -27,7 +27,7 @@ arguments.
 Resolve the repository root with `git rev-parse --show-toplevel`, change to it,
 and run every command from there. Read these files before editing:
 
-- [`../release-notes/SKILL.md`](../release-notes/SKILL.md) for product-copy rules;
+- [`../desktop-release-notes/SKILL.md`](../desktop-release-notes/SKILL.md) for product-copy rules;
 - `docs/distribution.md` for the current release contract.
 
 The repository command `mise run desktop:changelog:pr` is the authority on the branch,
@@ -97,7 +97,7 @@ current product.
 Run the focused parser tests and the release tool's dry run:
 
 ```bash
-go test ./internal/app/releasenotes/...
+go test ./cmd/desktop/releasenotes/...
 mise run desktop:changelog:pr -- --dry-run
 ```
 

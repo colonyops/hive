@@ -1,5 +1,5 @@
 ---
-name: ui-perf
+name: desktop-ui-perf
 description: Measure a slow UI interaction by instrumenting the frontend with usePerf and analyzing the spans it writes to perf.jsonl. Use when asked why something in the app feels slow, to time a click/render/fetch path, to find which interaction is costing the most, or to confirm a performance fix actually moved the number.
 compatibility: Requires a desktop instance from this worktree with development.perf.enabled on (the default in every prepared worktree via launch.env). jq.
 ---

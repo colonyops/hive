@@ -1,6 +1,6 @@
 ---
 name: docs-audit
-description: Check the work on this branch (or a PR) for anything a user would need to read about and is not documented, then add or update the page on hivedesktop.com. Use when asked to audit the docs, to decide whether a change needs a docs page, or as a pre-PR pass over a feature that added a setting, a node, an action type, a surface, or a failure mode.
+description: Check the work on this branch (or a PR) for anything a user would need to read about and is not documented, then add or update the page on hivedesktop.com, for Hive Desktop or the hive CLI. Use when asked to audit the docs, to decide whether a change needs a docs page, or as a pre-PR pass over a feature that added a setting, a node, an action type, a CLI command or flag, a TUI keybinding, a surface, or a failure mode.
 ---
 
 # Audit the docs
@@ -10,15 +10,16 @@ silent: a setting ships, a node type lands, a surface is renamed, and the page
 that described it keeps describing the old one. Nothing fails a build over it.
 This audit is the check.
 
-It covers `docs/docs/desktop/` only. `docs/architecture.md`, ADRs, and the shipped
-agent skills are other surfaces with their own skills; step 3 says which
-change belongs where.
+It covers both products: `docs/docs/desktop/` and `docs/docs/cli/`.
+`docs/architecture.md`, ADRs, and the shipped agent skills are other surfaces
+with their own skills; step 3 says which change belongs where.
 
 ## 1. Scope the change
 
 ```bash
 git diff main...HEAD --stat
-git diff main...HEAD -- cmd/desktop/internal/app cmd/desktop/frontend/src
+git diff main...HEAD -- cmd/desktop/internal/app cmd/desktop/frontend/src   # desktop
+git diff main...HEAD -- cmd/hive internal/core/config                         # CLI
 ```
 
 For a PR that is not checked out, `gh pr diff <number>`.
@@ -39,6 +40,9 @@ Read the diff for these and write them down before deciding anything:
   a launcher rule;
 - **an agent-facing thing**: a shipped skill, an MCP catalogue entry, a
   workspace manifest field;
+- **a CLI or TUI change**: a new `hive` command or flag, a config field in
+  `internal/core/config`, a default in `defaultViewsConfig` or
+  `defaultUserCommands`, a template variable, a status indicator;
 - **a failure a user meets**: a new error message, a new precondition (a
   binary on PATH, a permission, a version floor), a removed fallback.
 
@@ -49,9 +53,11 @@ is a valid outcome and is reported as one.
 ## 3. Decide where each one belongs
 
 **A user-facing fact goes on the docs site**, on the page that already owns
-its subject. The site's structure mirrors the app: the sidebar groups of the
-Getting Started tab are the app's areas (Inbox, Code, Chats), each with its
-own directory under `docs/docs/desktop/`, and the Configuration tab is the reference.
+its subject. The site has one tab per product. The Desktop tab mirrors the
+app: its sidebar groups are the app's areas (Inbox, Code, Chats), each with
+its own directory under `docs/docs/desktop/`, and Configuration is the
+reference. The CLI tab under `docs/docs/cli/` has Getting Started,
+Configuration, and Recipes.
 
 | Subject | Page |
 | --- | --- |
@@ -69,11 +75,20 @@ own directory under `docs/docs/desktop/`, and the Configuration tab is the refer
 | installing a release | `docs/docs/desktop/getting-started/index.md`, the `## Install` section |
 | sign-in, notification permission, the starter feeds | `docs/docs/desktop/getting-started/sign-in.md`, `notifications.md`, `first-feed.md` |
 | building the app | `docs/docs/desktop/getting-started/build-from-source.md` |
+| CLI: installing, the first session | `docs/docs/cli/getting-started/index.md` |
+| CLI: sessions, clone strategies, lifecycle, status indicators | `docs/docs/cli/getting-started/sessions.md` |
+| CLI: messaging, task tracking (`hc`), todos, context and review | `docs/docs/cli/getting-started/<topic>.md` |
+| CLI: a config field, an environment override | `docs/docs/cli/configuration/index.md` |
+| CLI: a TUI keybinding or palette command | `docs/docs/cli/configuration/keybindings.md` |
+| CLI: user commands, built-in actions | `docs/docs/cli/configuration/commands.md` |
+| CLI: rules, templates, template functions | `docs/docs/cli/configuration/rules.md` |
+| CLI: plugins, sources, themes | `docs/docs/cli/configuration/<topic>.md` |
+| CLI: the Claude Code plugin | `docs/docs/cli/getting-started/claude-plugin.md` |
 
 A new page is rare. It is right when a subject has no owner in that table and
 would not fit as a section of one, not when a feature is big. It goes in the
 directory and sidebar group of the area it belongs to; a new area is a new
-directory and a new group. Adding a page is the `web-docs` skill's
+directory and a new group. Adding a page is the `docs-page` skill's
 procedure: the file, its frontmatter, and its line in the nav in
 `docs/zensical.toml`. A page left out of the nav builds without a warning and
 is reachable by URL only, which is the same as not existing.
@@ -87,18 +102,21 @@ is reachable by URL only, which is the same as not existing.
   shipped skills under `cmd/desktop/internal/app/prompts/templates/` and the per-type docs
   they splice in (`flow/docs/*.md`, `actions/docs/*.md`, `mcpcatalog/docs/*.md`)
   are the agent's reference. A field documented on the site but not there
-  means the Hive workspace writes it wrong. That is the `shipped-skills`
+  means the Hive workspace writes it wrong. That is the `desktop-shipped-skills`
   skill's procedure; run it beside this one.
-- **A user-visible change owes a release-notes fragment** in
+- **A user-visible desktop change owes a release-notes fragment** in
   `cmd/desktop/releasenotes/changelog/unreleased/`. That is the
-  `release-notes` skill.
+  `desktop-release-notes` skill.
 - **Developer-only facts** (mock modes, `launch.env`, the devserver) belong
   on the build page only to the extent a person building the app must know
   them. The rest is `docs/development.md` and `cmd/desktop/AGENTS.md`.
+- **A CLI change can also owe the Claude plugin skills** under
+  `claude-plugin/hive/skills/` (`hc`, `config`, the messaging skills) when it
+  changes a command those skills teach. Update them in the same PR.
 
 ## 4. Write it
 
-The `web-docs` skill covers the mechanics: frontmatter, the nav, the build.
+The `docs-page` skill covers the mechanics: frontmatter, the nav, the build.
 The conventions that keep the pages consistent:
 
 - **Write the minimum useful page.** Keep instructions, requirements, safety

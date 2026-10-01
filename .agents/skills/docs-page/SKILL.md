@@ -1,5 +1,5 @@
 ---
-name: web-docs
+name: docs-page
 description: Add, edit, or restructure a page on the public documentation site at hivedesktop.com, the Zensical site under docs/ whose pages live in docs/docs/ and whose nav lives in docs/zensical.toml. Use only for user-facing product docs; docs/architecture.md, ADRs, and in-app copy are not this site.
 compatibility: Requires mise. The root mise.toml pins Python and uv; run `mise run docs:install` once in a fresh worktree (docs/.venv is gitignored). PR CI builds the site in the `site` job, so a broken link fails the PR.
 ---
