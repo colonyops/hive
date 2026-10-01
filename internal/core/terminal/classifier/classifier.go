@@ -125,8 +125,8 @@ func (c *Classifier) classify(ctx context.Context, input PaneInput, allowContent
 	}
 	if allowContent {
 		target := input.Target
-		if target.Pane == "" {
-			target.Pane = input.PaneID
+		if input.PaneID != "" {
+			target = multiplexer.Target{Pane: input.PaneID}
 		}
 		if tool, ok := c.classifyContent(ctx, target); ok {
 			return Result{IsAgent: true, Tool: tool, Confidence: ConfidenceMedium, Tier: tierContent, ClassifiedAt: classifiedAt}

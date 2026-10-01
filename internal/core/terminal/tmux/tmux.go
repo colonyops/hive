@@ -11,6 +11,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/assess"
@@ -700,7 +701,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		content = prevContent
 	default:
 		var err error
-		content, err = t.capture.CapturePane(ctx, pane.input.Target)
+		content, err = t.capture.CapturePane(ctx, multiplexer.Target{Pane: pane.input.PaneID})
 		if err != nil {
 			return terminal.StatusMissing, err
 		}

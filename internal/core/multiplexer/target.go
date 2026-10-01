@@ -6,7 +6,8 @@ import (
 	"strings"
 )
 
-// Target identifies a session, window, or pane.
+// Target identifies a session, window, or pane. A pane target can contain only
+// Pane when the multiplexer supplied a stable native pane identifier.
 type Target struct {
 	Session string
 	Window  string
@@ -38,8 +39,11 @@ func (t Target) ValidateWindow() error {
 	return nil
 }
 
-// ValidatePane validates a qualified pane target.
+// ValidatePane validates a qualified or stable native pane target.
 func (t Target) ValidatePane() error {
+	if t.Session == "" && t.Window == "" {
+		return validatePart("pane", t.Pane)
+	}
 	if err := validatePart("session", t.Session); err != nil {
 		return err
 	}

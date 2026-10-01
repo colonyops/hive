@@ -26,6 +26,9 @@ func renderPaneTarget(target multiplexer.Target) (string, error) {
 	if err := target.ValidatePane(); err != nil {
 		return "", err
 	}
+	if target.Session == "" && target.Window == "" {
+		return target.Pane, nil
+	}
 	return target.Session + ":" + target.Window + "." + target.Pane, nil
 }
 

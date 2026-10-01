@@ -7,6 +7,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal/assess"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
@@ -112,7 +113,7 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 }
 
 func assessDetectedAgentPane(ctx context.Context, pane classifier.PaneInput, tool string, capture classifier.ContentCapture, engine *assess.Engine) (string, string) {
-	content, err := capture.CapturePane(ctx, pane.Target)
+	content, err := capture.CapturePane(ctx, multiplexer.Target{Pane: pane.PaneID})
 	if err != nil {
 		return "", ""
 	}

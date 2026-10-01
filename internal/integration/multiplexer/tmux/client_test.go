@@ -201,6 +201,15 @@ func TestCapturePaneOptions(t *testing.T) {
 	assert.Equal(t, []string{"capture-pane", "-p", "-t", "s:2.1", "-J", "-S", "-20", "-E", "4"}, runner.calls[0].args)
 }
 
+func TestCapturePaneUsesStableNativeTarget(t *testing.T) {
+	runner := &fakeRunner{results: []runnerResult{{stdout: "captured"}}}
+	client := New(runner, zerolog.Nop())
+
+	_, err := client.CapturePane(context.Background(), multiplexer.Target{Pane: "%7"}, multiplexer.CaptureOptions{JoinWrappedLines: true})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"capture-pane", "-p", "-t", "%7", "-J"}, runner.calls[0].args)
+}
+
 func TestResolveTargetReturnsQualifiedPane(t *testing.T) {
 	runner := &fakeRunner{results: []runnerResult{{stdout: "work|||3|||2|||agent|||/repo|||42|||%7|||123|||title|||work|||0\n"}}}
 	client := New(runner, zerolog.Nop())

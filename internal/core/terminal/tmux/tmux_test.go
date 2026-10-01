@@ -220,7 +220,7 @@ func TestRefreshCache_ReclassifiesContentBasedPositive(t *testing.T) {
 	// clearing the limiter), changed content causes reclassification.
 	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "bash"}}
 	lister := &fakePaneSource{panes: []classifier.PaneInput{
-		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+		{Target: multiplexer.Target{Session: "sess", Window: "0", Pane: "1"}, SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
 	}}
 	capture := &fakeCapture{content: "agent content"}
 	scorer := &fakeScorer{scores: map[string]fakeScore{
@@ -244,6 +244,7 @@ func TestRefreshCache_ReclassifiesContentBasedPositive(t *testing.T) {
 	require.NotNil(t, pane)
 	assert.False(t, pane.result.IsAgent)
 	assert.Equal(t, 2, capture.calls)
+	assert.Equal(t, []multiplexer.Target{{Pane: "%1"}, {Pane: "%1"}}, capture.targets)
 }
 
 func TestRefreshCache_ContentLimiterSkipsTier3(t *testing.T) {
@@ -1098,10 +1099,12 @@ func (b *blockingStatusCapture) CapturePane(context.Context, multiplexer.Target)
 type fakeCapture struct {
 	content string
 	calls   int
+	targets []multiplexer.Target
 }
 
-func (f *fakeCapture) CapturePane(context.Context, multiplexer.Target) (string, error) {
+func (f *fakeCapture) CapturePane(_ context.Context, target multiplexer.Target) (string, error) {
 	f.calls++
+	f.targets = append(f.targets, target)
 	return f.content, nil
 }
 

@@ -31,7 +31,7 @@ func TestAssessDetectedAgentPane(t *testing.T) {
 	state, ruleID := assessDetectedAgentPane(context.Background(), pane, "codex", capture, assess.NewEngine())
 	assert.Equal(t, "idle", state)
 	assert.Equal(t, "codex/bare-prompt", ruleID)
-	assert.Equal(t, []multiplexer.Target{target}, capture.targets, "capture must use the already-resolved pane target")
+	assert.Equal(t, []multiplexer.Target{{Pane: "%1"}}, capture.targets, "capture must use the stable native pane target")
 }
 
 func TestAssessDetectedAgentPaneCaptureFailureAndEmptyToolFallback(t *testing.T) {
