@@ -48,6 +48,7 @@ jobs:
               - 'cmd/desktop/scripts/**'
               - 'docs/decisions/**'
               - 'mise.toml'
+              - 'mise.lock'
               - 'cmd/desktop/tasks.toml'
               - '.github/workflows/**'
               - '.github/actions/**'
@@ -61,11 +62,13 @@ jobs:
               - '.dockerignore'
               - 'test/integration/**'
               - 'mise.toml'
+              - 'mise.lock'
               - '.github/workflows/ci.yml'
               - '.github/actions/**'
             site:
               - 'docs/**'
               - 'mise.toml'
+              - 'mise.lock'
               - '.github/workflows/ci.yml'
             desktop-frontend:
               - 'cmd/desktop/frontend/**'
@@ -129,7 +132,7 @@ jobs:
         run: mise run lint:workflows
 
       - name: Check goreleaser config
-        run: mise run check:goreleaser
+        run: mise run cli:check:goreleaser
 
       # Neither is in `mise run check`: deadcode builds the program's SSA and
       # govulncheck needs the network, so both are past what a pre-push hook
@@ -150,7 +153,7 @@ jobs:
       - uses: ./.github/actions/setup-go-env
 
       - name: Run integration tests
-        run: mise run integration
+        run: mise run cli:integration
 
   # The vue-tsc typecheck and the vitest suite are independent; one job made
   # the shorter wait on the longer.

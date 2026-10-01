@@ -6,7 +6,7 @@ how to run the hive CLI and Hive Desktop.
 ## Before you open a pull request
 
 Run `mise run check`. If you changed config behavior, also run
-`mise run validate`. A change to the desktop app owes what `cmd/desktop/AGENTS.md`
+`mise run cli:validate`. A change to the desktop app owes what `cmd/desktop/AGENTS.md`
 asks for: a release-notes fragment and, for a Wails service change,
 regenerated bindings.
 

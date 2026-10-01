@@ -40,7 +40,7 @@ func TestRunAssessDriveCmd_RefusesWithoutAllowHost(t *testing.T) {
 	var buf bytes.Buffer
 	err := runAssessDriveCmd(context.Background(), &buf, "/nonexistent/frames.jsonl", "mypane:0.0", false, resolve, notIsolated)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "mise container")
+	assert.Contains(t, err.Error(), "mise run cli:container")
 	assert.Contains(t, err.Error(), "--allow-host")
 }
 

@@ -9,7 +9,7 @@
 #
 # Container-only: run via
 #   hive x assess scenario test/calibration/scenarios/claude-turn-lifecycle.yaml --target <pane>
-# inside `mise container`. See .claude/skills/autocalibrate/SKILL.md.
+# inside `mise run cli:container`. See .agents/skills/cli-autocalibrate/SKILL.md.
 scenario: claude-turn-lifecycle
 tool: claude
 steps:

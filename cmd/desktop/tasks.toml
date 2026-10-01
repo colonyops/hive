@@ -22,7 +22,7 @@ description = "Pre-build the container image that compiles Linux binaries (ARCH=
 run = './cmd/desktop/scripts/build/build-linux-docker.sh --image-only ${ARCH:+--arch=$ARCH}'
 
 ["desktop:dev"]
-description = "Run Wails directly using launch.env and this worktree's isolated .hive-desktop instance"
+description = "Run Hive Desktop in Wails dev mode against this worktree's isolated instance (launch.env)"
 dir = "{{config_root}}/cmd/desktop"
 # launch.env is generated; optional overrides.env is developer-authored and
 # wins because mise loads it second. An included task file resolves `_.file`

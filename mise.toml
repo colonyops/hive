@@ -1,10 +1,12 @@
-# One root config for the whole repository. The hive CLI, the root program,
-# holds the bare task names (`dev`, `build`, `test`, `check`). The other
-# projects' tasks are included from task files beside them and carry a prefix:
-# `desktop:*` from cmd/desktop/tasks.toml and `docs:*` from docs/tasks.toml.
+# One root config for the whole repository. The bare task names are the
+# repo-wide ones: code generation and the quality gates, which cover every
+# program in the module (`generate`, `test`, `lint`, `check`, `ci`). Each
+# program's own tasks live in a task file beside it and carry its prefix:
+# `cli:*` from cmd/hive/tasks.toml, `desktop:*` from cmd/desktop/tasks.toml,
+# and `docs:*` from docs/tasks.toml.
 
 [task_config]
-includes = ["cmd/desktop/tasks.toml", "docs/tasks.toml"]
+includes = ["cmd/hive/tasks.toml", "cmd/desktop/tasks.toml", "docs/tasks.toml"]
 
 [tools]
 # Go Tools
@@ -28,10 +30,6 @@ uv = "0.12.13"
 
 # GitHub Tools
 actionlint = "1.7.12"
-
-[env]
-HIVE_LOG_LEVEL = "debug"
-HIVE_LOG_FILE = "./dev.log"
 
 # A tool install wires the git hooks and prepares this worktree's isolated
 # desktop instance. The enter hook only fills a missing launch.env.
@@ -87,59 +85,10 @@ sources = ["internal/core/eventbus/events.go"]
 outputs = ["internal/core/eventbus/eventbus.gen.go"]
 run = "go generate ./..."
 
-# ── The hive CLI ─────────────────────────────────────────────────────────────
-
-[tasks.start]
-alias = "default"
-description = "Run hive with global config (supports CLI args)"
-depends = ["generate"]
-run = "go run ./cmd/hive"
-
-[tasks.dev]
-description = "Run hive with dev config (supports CLI args)"
-depends = ["generate"]
-env = { HIVE_LOG_LEVEL = "debug", HIVE_LOG_FILE = "./dev.log", HIVE_CONFIG = "./cmd/hive/dev/config.dev.yaml", HIVE_DATA_DIR = "./.data" }
-run = "go run ./cmd/hive"
-
-[tasks.build]
-description = "Build the hive CLI with goreleaser"
-depends = ["generate"]
-run = "goreleaser build --snapshot --clean --config cmd/hive/.goreleaser.yml"
-
-[tasks.validate]
-description = "Run doctor with dev config"
-env = { HIVE_CONFIG = "./cmd/hive/dev/config.dev.yaml" }
-run = "go run ./cmd/hive doctor"
-
-[tasks."validate:invalid"]
-description = "Run doctor with intentionally invalid config"
-env = { HIVE_CONFIG = "./cmd/hive/dev/config.invalid.yaml" }
-run = "go run ./cmd/hive doctor || true"
-
-[tasks.integration]
-description = "Run the CLI's Docker-based integration tests"
-depends = ["build"]
-run = "docker build -f cmd/hive/Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
-
-[tasks."build:container"]
-description = "Build only the linux binary for the host arch (used by container images)"
-depends = ["generate"]
-run = "GOOS=linux goreleaser build --snapshot --clean --single-target --config cmd/hive/.goreleaser.yml"
-
-[tasks."container"]
-description = "Build Docker image and run ephemeral container"
-depends = ["build:container"]
-run = "docker run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q -f cmd/hive/Dockerfile .)"
-
-[tasks."container:rootless"]
-description = "Build image and run ephemeral container with rootless podman"
-depends = ["build:container"]
-run = "podman run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(podman build -q -f cmd/hive/Dockerfile .)"
-
 # ── Quality gates ────────────────────────────────────────────────────────────
 
 [tasks.test]
-description = "Run all go tests"
+description = "Run every Go test in the module: the CLI, the desktop, and the shared packages"
 run = "go test ./..."
 
 [tasks."test:race"]
@@ -161,6 +110,7 @@ run = "golangci-lint fmt ./..."
 
 [tasks."fmt:staged"]
 description = "Run golangci-lint fmt on the given Go files (pre-commit hook target)"
+hide = true
 run = "golangci-lint fmt"
 
 [tasks.tidy]
@@ -190,10 +140,6 @@ git diff --exit-code -- '*_enum.go' '*.gen.go' 'internal/data/db/*.go' 'cmd/desk
   exit 1
 }
 """
-
-[tasks."check:goreleaser"]
-description = "Validate the goreleaser config"
-run = "goreleaser check --config cmd/hive/.goreleaser.yml"
 
 [tasks."check:adr"]
 description = "Verify ADR ids, metadata, citations, and the generated index"
@@ -231,26 +177,27 @@ run = "govulncheck ./..."
 description = "The Go gate: generated code, ADRs, migrations, tidy, lint, tests, goreleaser config. Needs no Python, Node, or Docker"
 run = [
   { tasks = ["check:generate"] },
-  { tasks = ["check:adr", "desktop:check:migrations", "check:tidy", "lint", "test", "check:goreleaser"] },
-]
-
-# Everything CI runs, in one command. e2e is here and nowhere else: it was
-# dropped from CI for being too slow, so local is the only place it runs.
-[tasks.ci]
-description = "Run every gate locally: Go, the desktop bindings and frontend, the site, the CLI integration tests, and the e2e suite CI does not run"
-run = [
-  { tasks = ["check:generate"] },
-  { tasks = ["desktop:check:bindings", "check:adr", "desktop:check:migrations", "check:tidy"] },
-  { tasks = ["lint", "test", "check:deadcode", "check:vuln", "check:goreleaser", "docs:build"] },
-  { tasks = ["desktop:frontend:install"] },
-  { tasks = ["desktop:frontend:build", "desktop:frontend:test"] },
-  { tasks = ["integration"] },
-  { tasks = ["desktop:e2e"] },
+  { tasks = ["check:adr", "desktop:check:migrations", "check:tidy", "lint", "test", "cli:check:goreleaser"] },
 ]
 
 [tasks."lint:workflows"]
 description = "Lint GitHub workflows and local actions"
 run = "actionlint"
+
+# Everything CI runs, in one command. e2e is here and nowhere else: it was
+# dropped from CI for being too slow, so local is the only place it runs.
+# Needs Docker, Node, Python, and the network.
+[tasks.ci]
+description = "Run every gate locally: Go, the desktop bindings and frontend, the site, the CLI integration tests, and the e2e suite CI does not run"
+run = [
+  { tasks = ["check:generate"] },
+  { tasks = ["desktop:check:bindings", "check:adr", "desktop:check:migrations", "check:tidy"] },
+  { tasks = ["lint", "lint:workflows", "test", "check:deadcode", "check:vuln", "cli:check:goreleaser", "docs:build"] },
+  { tasks = ["desktop:frontend:install"] },
+  { tasks = ["desktop:frontend:build", "desktop:frontend:test"] },
+  { tasks = ["cli:integration"] },
+  { tasks = ["desktop:e2e"] },
+]
 
 # ── Repository tooling ───────────────────────────────────────────────────────
 

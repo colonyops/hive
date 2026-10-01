@@ -18,7 +18,7 @@ type isolationDetector func() bool
 
 const assessIsolationMarkerEnv = "HIVE_ASSESS_ISOLATED"
 
-// runningInContainer recognizes the repository's supported `mise container`
+// runningInContainer recognizes the repository's supported `mise run cli:container`
 // invocation, not arbitrary Docker environments that may mount host sockets.
 func runningInContainer() bool {
 	_, err := os.Stat("/.dockerenv")
@@ -42,7 +42,7 @@ func resolveTmuxSocketPath(ctx context.Context, target string) (string, error) {
 // ensureContainerSafe is the interlock `drive` and `scenario` both call
 // before mutating a tmux pane. Socket names do not prove isolation: a host
 // server may use any name, so the command fails closed unless it is running
-// in the Docker environment created by `mise container`. allowHost is the
+// in the Docker environment created by `mise run cli:container`. allowHost is the
 // deliberate, eyes-open escape hatch (--allow-host).
 func ensureContainerSafe(ctx context.Context, target string, allowHost bool, resolve socketPathResolver, isolated isolationDetector) error {
 	if allowHost {
@@ -55,7 +55,7 @@ func ensureContainerSafe(ctx context.Context, target string, allowHost bool, res
 	path, err := resolve(ctx, target)
 	if err != nil {
 		return fmt.Errorf(
-			"refusing to mutate %s because hive cannot prove it is running inside `mise container`; "+
+			"refusing to mutate %s because hive cannot prove it is running inside `mise run cli:container`; "+
 				"socket resolution also failed: %w. Pass --allow-host only for a deliberate host override",
 			target, err,
 		)
@@ -63,7 +63,7 @@ func ensureContainerSafe(ctx context.Context, target string, allowHost bool, res
 	if path == "" {
 		err = errors.New("tmux returned an empty socket path")
 		return fmt.Errorf(
-			"refusing to mutate %s because hive cannot prove it is running inside `mise container`: %w. "+
+			"refusing to mutate %s because hive cannot prove it is running inside `mise run cli:container`: %w. "+
 				"Pass --allow-host only for a deliberate host override",
 			target, err,
 		)
@@ -71,7 +71,7 @@ func ensureContainerSafe(ctx context.Context, target string, allowHost bool, res
 
 	return fmt.Errorf(
 		"refusing to mutate %s through tmux socket %s because socket names do not prove isolation; "+
-			"run inside `mise container` or pass --allow-host for a deliberate host override",
+			"run inside `mise run cli:container` or pass --allow-host for a deliberate host override",
 		target, path,
 	)
 }

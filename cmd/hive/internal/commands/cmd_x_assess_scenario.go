@@ -57,7 +57,7 @@ func (realTmuxSender) SendKey(ctx context.Context, target, key string) error {
 // scores the resulting observation log and prints a JSON report.
 //
 // Sends real input (send-keys) — see ensureContainerSafe: this fails closed
-// outside `mise container` unless --allow-host is passed.
+// outside `mise run cli:container` unless --allow-host is passed.
 func (cmd *ExperimentalCmd) assessScenarioCmd() *cli.Command {
 	var (
 		flagTarget    string
@@ -100,7 +100,7 @@ func (cmd *ExperimentalCmd) assessScenarioCmd() *cli.Command {
 // runAssessScenarioCmd is assessScenarioCmd's Action, minus the cli.Command
 // plumbing. The safety dependencies are injected so refusal paths remain
 // testable without a real tmux server; real tmux interaction is exercised
-// only by hand inside `mise container`.
+// only by hand inside `mise run cli:container`.
 func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target string, allowHost, intervalSet bool, interval time.Duration, app *hive.App, resolve socketPathResolver, isolated isolationDetector) error {
 	if err := ensureContainerSafe(ctx, target, allowHost, resolve, isolated); err != nil {
 		return err

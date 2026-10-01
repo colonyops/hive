@@ -1,0 +1,64 @@
+# The hive CLI/TUI. Included by the root mise.toml, so these run from anywhere
+# in the repo as `mise run cli:<task>`. Every task runs from the repo root,
+# where the module, the root main.go, and the Dockerfiles' build context live.
+
+# ── Run ──────────────────────────────────────────────────────────────────────
+
+["cli:dev"]
+description = "Run the hive TUI against the dev config and ./.data (args pass through: mise run cli:dev -- new)"
+depends = ["generate"]
+env = { HIVE_LOG_LEVEL = "debug", HIVE_LOG_FILE = "./dev.log", HIVE_CONFIG = "./cmd/hive/dev/config.dev.yaml", HIVE_DATA_DIR = "./.data" }
+run = "go run ./cmd/hive"
+
+["cli:start"]
+description = "Run the hive TUI against your own global config and sessions (args pass through)"
+depends = ["generate"]
+run = "go run ./cmd/hive"
+
+["cli:validate"]
+description = "Run hive doctor against the dev config"
+env = { HIVE_CONFIG = "./cmd/hive/dev/config.dev.yaml" }
+run = "go run ./cmd/hive doctor"
+
+["cli:validate:invalid"]
+description = "Run hive doctor against an intentionally invalid config"
+env = { HIVE_CONFIG = "./cmd/hive/dev/config.invalid.yaml" }
+run = "go run ./cmd/hive doctor || true"
+
+# ── Build ────────────────────────────────────────────────────────────────────
+
+["cli:build"]
+description = "Build the hive CLI with goreleaser"
+depends = ["generate"]
+run = "goreleaser build --snapshot --clean --config cmd/hive/.goreleaser.yml"
+
+["cli:build:container"]
+description = "Build only the linux binary for the host arch (used by the container images)"
+hide = true
+depends = ["generate"]
+run = "GOOS=linux goreleaser build --snapshot --clean --single-target --config cmd/hive/.goreleaser.yml"
+
+# ── Isolated environments ────────────────────────────────────────────────────
+
+# The only safe place for anything that drives real tmux sessions: integration
+# tests and pane-mutating `hive x assess` commands have crashed host tmux.
+["cli:container"]
+description = "Build this branch into a Docker image and open an ephemeral container with hive and tmux"
+depends = ["cli:build:container"]
+run = "docker run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q -f cmd/hive/Dockerfile .)"
+
+["cli:container:rootless"]
+description = "cli:container with rootless podman"
+depends = ["cli:build:container"]
+run = "podman run --rm -it -e HIVE_ASSESS_ISOLATED=1 -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(podman build -q -f cmd/hive/Dockerfile .)"
+
+["cli:integration"]
+description = "Run the CLI integration tests inside Docker (never on the host)"
+depends = ["cli:build"]
+run = "docker build -f cmd/hive/Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
+
+# ── Gates ────────────────────────────────────────────────────────────────────
+
+["cli:check:goreleaser"]
+description = "Validate the CLI's goreleaser config"
+run = "goreleaser check --config cmd/hive/.goreleaser.yml"

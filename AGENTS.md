@@ -44,15 +44,37 @@ decision and the constraint that forced it, not every alternative considered.
   fails on a citation that does not resolve.
 - Distribution facts for the desktop (bucket, domains, manifest schema,
   runbooks) live in `docs/distribution.md`.
-- User-facing product docs are the site under `docs/docs/`; the `web-docs`
+- User-facing product docs are the site under `docs/docs/`; the `docs-page`
   and `docs-audit` skills govern them.
+
+## Agent skills
+
+The repository's own agent skills live in `.agents/skills/`
+(`.claude/skills` is a symlink to it). A skill for one program carries that
+program's prefix: `cli-`, `desktop-`, or `docs-`. A skill for code both
+programs share (`go-enum`, `sqlc`) has no prefix. The skills Hive Desktop
+ships into agent workspaces are not these; see `desktop-shipped-skills`.
 
 ## Quality gates
 
-Every gate is a mise task (`mise tasks`). The hive CLI holds the bare task
-names; the desktop's are `desktop:*` (`cmd/desktop/tasks.toml`) and the
-site's are `docs:*` (`docs/tasks.toml`). lefthook runs the relevant gates as
-git hooks; `mise install` wires them up (`postinstall` → `scripts/hooks/install.sh`).
+Every task is a mise task (`mise tasks`). The bare names are repo-wide:
+code generation and the gates, which cover every program in the module
+(`generate`, `test`, `lint`, `check`, `ci`). Each program's own tasks carry
+its prefix: `cli:*` (`cmd/hive/tasks.toml`), `desktop:*`
+(`cmd/desktop/tasks.toml`), and `docs:*` (`docs/tasks.toml`).
+
+| | hive CLI/TUI | Hive Desktop | Site |
+| --- | --- | --- | --- |
+| Run | `mise run cli:dev` | `mise run desktop:dev` | `mise run docs:serve` |
+| Build | `mise run cli:build` | `mise run desktop:build` | `mise run docs:build` |
+| Test | `mise run test`, `mise run cli:integration` | `mise run desktop:test`, `mise run desktop:e2e` | `mise run docs:build` |
+
+To verify a change, run `mise run check` (the Go gate, seconds) and then
+`mise run ci` (every gate, minutes; needs Docker, Node, Python, and the
+network).
+
+lefthook runs the relevant gates as git hooks; `mise install` wires them up
+(`postinstall` → `scripts/hooks/install.sh`).
 
 - **pre-commit** (~0.1s): formats staged Go files and re-stages them; when a
   generator input is staged, regenerates and blocks if the committed output
@@ -61,9 +83,9 @@ git hooks; `mise install` wires them up (`postinstall` → `scripts/hooks/instal
   tidy, lint, Go tests, goreleaser config), plus the frontend unit tests when
   the push touches `cmd/desktop/frontend/`. `check` needs no Python, Node, or
   Docker.
-- **CI-only**: `check:deadcode`, `check:vuln`, `desktop:check:bindings`, the
-  frontend build and tests, the site build, and the CLI's Docker integration
-  tests.
+- **CI-only**: `check:deadcode`, `check:vuln`, `lint:workflows`,
+  `desktop:check:bindings`, the frontend build and tests, the site build, and
+  the CLI's Docker integration tests.
 
 **`mise run ci` runs every gate, including the desktop e2e suite that GitHub
 CI does not run.** Prefer it over pushing to find out.
@@ -147,25 +169,26 @@ UI code goes below `cmd/hive/internal/`.
 #### Commands
 
 ```bash
-mise run start            # Run with global config (supports CLI args)
-mise run dev              # Run with dev config (supports CLI args)
-mise run dev -- new       # Example: run 'hive new' with dev config
-mise run build            # Build with goreleaser
-mise run test             # Run every Go test in the module (CLI, shared, desktop)
-mise run lint             # Run golangci-lint
-mise run check            # The Go gate; read-only
-mise run ci               # Every gate, including the site, the frontend, and e2e
-mise run tidy             # go mod tidy (the counterpart of check:tidy that changes files)
-mise run coverage         # Generate coverage report
-mise container            # Build and launch an ephemeral Docker container with hive pre-installed
+mise run cli:dev              # Run the TUI with the dev config (supports CLI args)
+mise run cli:dev -- new       # Example: run 'hive new' with dev config
+mise run cli:start            # Run the TUI with your global config (supports CLI args)
+mise run cli:build            # Build with goreleaser
+mise run cli:container        # Build and launch an ephemeral Docker container with hive pre-installed
+mise run cli:integration      # Docker-based integration tests
+mise run test                 # Run every Go test in the module (CLI, shared, desktop)
+mise run lint                 # Run golangci-lint
+mise run check                # The Go gate; read-only
+mise run ci                   # Every gate, including the site, the frontend, and e2e
+mise run tidy                 # go mod tidy (the counterpart of check:tidy that changes files)
+mise run coverage             # Generate coverage report
 ```
 
 #### Manual Testing
 
-Use `mise container` to manually test hive end-to-end. It builds the current branch and drops you into an isolated Docker container with hive installed and tmux available — no need to install a local binary or worry about polluting your dev environment.
+Use `mise run cli:container` to manually test hive end-to-end. It builds the current branch and drops you into an isolated Docker container with hive installed and tmux available — no need to install a local binary or worry about polluting your dev environment.
 
 ```bash
-mise container
+mise run cli:container
 # Inside the container (hive is aliased to 'hv'):
 hv new --remote <url> "my-session"
 hv ls
@@ -231,10 +254,10 @@ Integration tests live in `test/integration/` and require a compiled binary. The
 Always run integration tests via the Docker-based task instead:
 
 ```bash
-mise run integration    # builds the project and runs integration tests inside Docker
+mise run cli:integration    # builds the project and runs integration tests inside Docker
 ```
 
-Use `mise container` for interactive manual testing in the same isolated environment (see "Manual Testing" above).
+Use `mise run cli:container` for interactive manual testing in the same isolated environment (see "Manual Testing" above).
 
 **Key rules:**
 - Every test calls `NewHarness(t)` which creates isolated `dataDir` and `homeDir` per test — no shared state between tests.
@@ -254,8 +277,8 @@ What belongs in integration tests vs unit tests:
 Standard Model/Update/View pattern. Key messages:
 
 - `sessionsLoadedMsg` - Sessions fetched from store
-- `gitStatusBatchCompleteMsg` - Git status for all sessions
-- `terminalPollTickMsg` - Terminal status polling tick
+- `sessions.GitStatusBatchCompleteMsg` - Git status for all sessions
+- `sessions.TerminalPollTickMsg` - Terminal status polling tick
 - `actionCompleteMsg` - Keybinding action finished
 
 #### Configuration

@@ -8,7 +8,7 @@ work is reviewed against it.
 
 | Component                     | Path                                                                          | Notes                                                                                    |
 | ----------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| hive CLI/TUI                  | `cmd/hive/` (+ the root `main.go`)                                            | The root program; `mise run dev`, `mise run build`. See the root `AGENTS.md`.            |
+| hive CLI/TUI                  | `cmd/hive/` (+ the root `main.go`)                                            | The root program; `mise run cli:dev`, `mise run cli:build`. See the root `AGENTS.md`.            |
 | Desktop app (Wails v3, Vue 3) | `cmd/desktop/` with `internal/app/` and `internal/adapter/` beneath it         | The Wails shell and its native behaviour are in `cmd/desktop/README.md`                  |
 | Shared packages               | `internal/`                                                                   | Config, sessions, git, `hive.db`, hc, messaging; both programs depend on them            |
 | Landing page and public docs  | `docs/` (pages under `docs/docs/`)                                            | Zensical on GitHub Pages → [hivedesktop.com](https://hivedesktop.com); `mise run docs:build` |
@@ -38,11 +38,11 @@ Installing the hooks sets this clone's `core.hooksPath` to its own `.git/hooks`,
 The hive CLI:
 
 ```sh
-mise run dev                # hive with the dev config: mise run dev -- new, mise run dev -- doctor
-mise run start              # hive with your global config
+mise run cli:dev                # hive with the dev config: mise run cli:dev -- new, mise run cli:dev -- doctor
+mise run cli:start              # hive with your global config
 ```
 
-`mise run dev` reads `cmd/hive/dev/config.dev.yaml` and keeps its data in
+`mise run cli:dev` reads `cmd/hive/dev/config.dev.yaml` and keeps its data in
 `./.data` and its log in `./dev.log`, so it never touches your own sessions
 under `~/.config/hive` and `~/.local/share/hive`.
 

@@ -57,7 +57,7 @@ func TestEnsureContainerSafe_RefusesAllHostSockets(t *testing.T) {
 			err := ensureContainerSafe(context.Background(), "mypane:0.0", false, resolve, notIsolated)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "socket names do not prove isolation")
-			assert.Contains(t, err.Error(), "mise container")
+			assert.Contains(t, err.Error(), "mise run cli:container")
 			assert.Contains(t, err.Error(), "--allow-host")
 		})
 	}

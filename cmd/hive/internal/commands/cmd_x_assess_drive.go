@@ -117,7 +117,7 @@ func ctxSleep(ctx context.Context, d time.Duration) {
 // credentials.
 //
 // Mutates the target via `tmux respawn-pane -k`/`select-pane` — see
-// ensureContainerSafe: this fails closed outside `mise container` unless
+// ensureContainerSafe: this fails closed outside `mise run cli:container` unless
 // --allow-host is passed.
 func (cmd *ExperimentalCmd) assessDriveCmd() *cli.Command {
 	var (
@@ -156,7 +156,7 @@ func (cmd *ExperimentalCmd) assessDriveCmd() *cli.Command {
 // plumbing: resolve is injected so the safety interlock is testable without
 // a real tmux server. The tmux interaction inside driveFrames is not
 // exercised by this repo's own tests — it is exercised only by hand, inside
-// `mise container`.
+// `mise run cli:container`.
 func runAssessDriveCmd(ctx context.Context, w io.Writer, framesPath, target string, allowHost bool, resolve socketPathResolver, isolated isolationDetector) error {
 	if err := ensureContainerSafe(ctx, target, allowHost, resolve, isolated); err != nil {
 		return err
