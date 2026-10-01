@@ -25,8 +25,9 @@ run = './cmd/desktop/scripts/build/build-linux-docker.sh --image-only ${ARCH:+--
 description = "Run Wails directly using launch.env and this worktree's isolated .hive-desktop instance"
 dir = "{{config_root}}/cmd/desktop"
 # launch.env is generated; optional overrides.env is developer-authored and
-# wins because mise loads it second.
-env = { _.file = ["launch.env", "overrides.env"], VITE_HIVE_DEV_BRANCH = "{{ exec(command='git branch --show-current') }}" }
+# wins because mise loads it second. An included task file resolves `_.file`
+# paths against its own directory, so the repo-root files are two levels up.
+env = { _.file = ["../../launch.env", "../../overrides.env"], VITE_HIVE_DEV_BRANCH = "{{ exec(command='git branch --show-current') }}" }
 # The runner goes through `devtools run` rather than being exec'd directly: it
 # leaves the app running when the terminal closes, and it only ever SIGKILLs
 # the app. See cmd/desktop/devtools/devsession.go and ADR shutdown-is-signalled-and-bounded.
@@ -56,7 +57,7 @@ run = [
 ["desktop:dev:onboarding:launch"]
 hide = true
 dir = "{{config_root}}/cmd/desktop"
-env = { _.file = ["launch.onboarding.env"], VITE_HIVE_DEV_BRANCH = "{{ exec(command='git branch --show-current') }}", HIVE_DESKTOP_DEVELOPMENT_MOCKS_MODE = "" }
+env = { _.file = ["../../launch.onboarding.env"], VITE_HIVE_DEV_BRANCH = "{{ exec(command='git branch --show-current') }}", HIVE_DESKTOP_DEVELOPMENT_MOCKS_MODE = "" }
 run = "unset HIVE_DEFAULT_AGENT; go run ./devtools run -- wails3 dev -config ./build/config.yml"
 
 ["desktop:dev:reset"]
@@ -166,10 +167,10 @@ description = "Interactively select a channel and version increment, validate, c
 interactive = true
 # 1Password exposes its local environment as a FIFO, so loading it globally
 # races any aggregate task whose children start concurrently.
-env = { _.file = { path = ".env", redact = true } }
+env = { _.file = { path = "../../.env", redact = true } }
 run = "go run ./cmd/tools/release run"
 
 ["desktop:release:publish"]
 description = "Low-level desktop publisher (args: <version> [flags]); prefer `mise run desktop:release` for a public release"
-env = { _.file = { path = ".env", redact = true } }
+env = { _.file = { path = "../../.env", redact = true } }
 run = "go run ./cmd/tools/release publish"
