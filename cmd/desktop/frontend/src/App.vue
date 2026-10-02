@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Window } from '@wailsio/runtime'
-import { useStorage } from '@vueuse/core'
+import { useEventListener, useStorage } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import TitleBar from './components/TitleBar.vue'
 import ProfileRail from './components/ProfileRail.vue'
@@ -1645,21 +1645,11 @@ function onGlobalMouseUp(e: MouseEvent): void {
   else router.forward()
 }
 
-onMounted(() => {
-  window.addEventListener('keydown', onGlobalKeydown)
-  window.addEventListener('focusin', onWindowFocusIn)
-  window.addEventListener('mousedown', preventNativeMouseHistory)
-  window.addEventListener('mouseup', onGlobalMouseUp)
-  window.addEventListener('auxclick', preventNativeMouseHistory)
-})
-onUnmounted(() => {
-  window.removeEventListener('keydown', onGlobalKeydown)
-  window.removeEventListener('focusin', onWindowFocusIn)
-  window.removeEventListener('mousedown', preventNativeMouseHistory)
-  window.removeEventListener('mouseup', onGlobalMouseUp)
-  window.removeEventListener('auxclick', preventNativeMouseHistory)
-  cancelSequenceTimer()
-})
+useEventListener(window, 'keydown', onGlobalKeydown)
+useEventListener(window, 'focusin', onWindowFocusIn)
+useEventListener(window, ['mousedown', 'auxclick'], preventNativeMouseHistory)
+useEventListener(window, 'mouseup', onGlobalMouseUp)
+onUnmounted(cancelSequenceTimer)
 </script>
 
 <template>

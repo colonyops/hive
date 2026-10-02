@@ -18,7 +18,7 @@
 // the editor) is an emitted event; only tree state, the chat row menus, and
 // the chat delete confirmation live here.
 import { computed, nextTick, ref, shallowRef, watch, type Component } from 'vue'
-import { useStorage } from '@vueuse/core'
+import { useResizeObserver, useStorage } from '@vueuse/core'
 import IconCalendarClock from '~icons/lucide/calendar-clock'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
@@ -591,12 +591,7 @@ watch(
 
 // Rows also move without a selection change — a workspace refilling after a
 // reload, an error line appearing — and a content resize is every one of those.
-watch(treeContent, (el, _previous, onCleanup) => {
-  if (!el || typeof ResizeObserver === 'undefined') return
-  const observer = new ResizeObserver(() => measureRail())
-  observer.observe(el)
-  onCleanup(() => observer.disconnect())
-})
+useResizeObserver(treeContent, () => measureRail())
 
 defineExpose({
   focus: () => rootEl.value?.focus(),

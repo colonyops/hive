@@ -1,4 +1,5 @@
-import { onScopeDispose, ref, shallowRef } from 'vue'
+import { useIntervalFn } from '@vueuse/core'
+import { ref, shallowRef } from 'vue'
 import { Stats } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/observabilityservice'
 import type { RuntimeStats } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
@@ -15,9 +16,7 @@ export function useRuntimeStats(intervalMs = DEFAULT_INTERVAL_MS) {
   const stats = shallowRef<RuntimeStats | null>(null)
   const rssHistory = ref<number[]>([])
   const cpuHistory = ref<number[]>([])
-  const polling = ref(false)
   const error = ref('')
-  let timer: ReturnType<typeof setInterval> | undefined
 
   async function refresh(): Promise<void> {
     try {
@@ -31,20 +30,15 @@ export function useRuntimeStats(intervalMs = DEFAULT_INTERVAL_MS) {
     }
   }
 
+  const {
+    isActive: polling,
+    pause: stop,
+    resume,
+  } = useIntervalFn(() => void refresh(), intervalMs, { immediate: false, immediateCallback: true })
+
   function start(): void {
-    if (polling.value) return
-    polling.value = true
-    void refresh()
-    timer = setInterval(() => void refresh(), intervalMs)
+    if (!polling.value) resume()
   }
-
-  function stop(): void {
-    polling.value = false
-    if (timer !== undefined) clearInterval(timer)
-    timer = undefined
-  }
-
-  onScopeDispose(stop)
 
   return { stats, rssHistory, cpuHistory, polling, error, refresh, start, stop }
 }

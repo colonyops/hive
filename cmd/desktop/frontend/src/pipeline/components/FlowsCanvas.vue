@@ -39,7 +39,8 @@
 // creation uses), and emits add-node-at for FlowsView to hand to
 // usePipelineEditor's addNode(type, pos). isDragOver just drives a highlight
 // while a compatible drag is over the canvas.
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useEventListener } from '@vueuse/core'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { byType } from '../registry'
 import { NODE_TYPE_MIME } from '../lib/dragTypes'
 import { canConnect, hasInputPort, outputPortCount } from '../lib/ports'
@@ -606,12 +607,9 @@ function onKeyDown(e: KeyboardEvent) {
   selectedNodeId.value = null
 }
 
-onMounted(() => {
-  window.addEventListener('keydown', onKeyDown)
-})
+useEventListener(window, 'keydown', onKeyDown)
 
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', onKeyDown)
   stopPanTracking?.()
 })
 </script>

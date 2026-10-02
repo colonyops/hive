@@ -12,7 +12,7 @@
 // framed exactly like a hive one, just not discovered through hive.
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useDocumentVisibility } from '@vueuse/core'
+import { useDocumentVisibility, useResizeObserver } from '@vueuse/core'
 import { Browser } from '@wailsio/runtime'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -131,8 +131,9 @@ const paneScrolledUp = ref(false)
 
 let socket: WebSocket | null = null
 let fit: FitAddon | null = null
-let observer: ResizeObserver | null = null
 let resizeTimer: ReturnType<typeof setTimeout> | undefined
+const observedPaneHost = shallowRef<HTMLElement | null>(null)
+useResizeObserver(observedPaneHost, scheduleSizeVote)
 let rendered = false
 const disposers: IDisposable[] = []
 // The tmux wire is windowed (ADR agent-workspace-sessions-are-tmux-sessions): every frame in and out of the pane's
@@ -706,8 +707,7 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
   }
   socket = opened
 
-  observer = new ResizeObserver(() => scheduleSizeVote())
-  observer.observe(paneHost.value)
+  observedPaneHost.value = paneHost.value
 }
 
 function send(data: string): void {
@@ -768,8 +768,7 @@ function teardownStream(): void {
 function teardownPane(): void {
   teardownStream()
   clearTimeout(resizeTimer)
-  observer?.disconnect()
-  observer = null
+  observedPaneHost.value = null
   for (const disposer of disposers.splice(0)) disposer.dispose()
   term.value?.dispose()
   term.value = null

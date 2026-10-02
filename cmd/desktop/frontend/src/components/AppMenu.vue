@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { onClickOutside } from '@vueuse/core'
+import { onMounted, ref, watch } from 'vue'
+import { onClickOutside, useEventListener } from '@vueuse/core'
 import IconCheck from '~icons/lucide/check'
 import AppIcon from './AppIcon.vue'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
@@ -66,17 +66,11 @@ watch(
   () => measure(),
 )
 
-onMounted(() => {
-  if (!props.anchor) return
-  measure()
-  // Capture phase: scrolling any ancestor moves the anchor, not just window.
-  window.addEventListener('scroll', measure, true)
-  window.addEventListener('resize', measure)
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('scroll', measure, true)
-  window.removeEventListener('resize', measure)
-})
+onMounted(measure)
+const anchoredWindow = () => (props.anchor ? window : null)
+// Capture phase: scrolling any ancestor moves the anchor, not just window.
+useEventListener(anchoredWindow, 'scroll', measure, { capture: true })
+useEventListener(anchoredWindow, 'resize', measure)
 </script>
 
 <template>

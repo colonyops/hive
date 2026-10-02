@@ -1,4 +1,5 @@
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useEventListener } from '@vueuse/core'
+import { computed, ref } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 
 // A popover teleported to <body> and positioned from its anchor's bounding
@@ -59,18 +60,10 @@ export function useAnchoredPopover(
     ...(placement.value.flip ? { bottom: `${placement.value.bottom}px` } : { top: `${placement.value.top}px` }),
   }))
 
-  function bind(): void {
-    // Capture phase: scrolling any ancestor moves the anchor, not just window.
-    window.addEventListener('scroll', measure, true)
-    window.addEventListener('resize', measure)
-  }
-  function unbind(): void {
-    window.removeEventListener('scroll', measure, true)
-    window.removeEventListener('resize', measure)
-  }
-
-  watch(open, (isOpen) => (isOpen ? bind() : unbind()))
-  onBeforeUnmount(unbind)
+  const openWindow = () => (open.value ? window : null)
+  // Capture phase: scrolling any ancestor moves the anchor, not just window.
+  useEventListener(openWindow, 'scroll', measure, { capture: true })
+  useEventListener(openWindow, 'resize', measure)
 
   return { style, measure }
 }

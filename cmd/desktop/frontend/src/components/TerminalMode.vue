@@ -12,7 +12,7 @@ import {
   type Component,
 } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useStorage } from '@vueuse/core'
+import { useResizeObserver, useStorage } from '@vueuse/core'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconChevronDown from '~icons/lucide/chevron-down'
@@ -1447,12 +1447,7 @@ function settleRails(): void {
 // expand/collapse, a session arriving, a window subtree filling in — and it
 // fires per frame while a height animates. Selection can also change without
 // moving anything, which is what the watch below covers.
-watch(treeContent, (content, _previous, onCleanup) => {
-  if (!content || typeof ResizeObserver === 'undefined') return
-  const observer = new ResizeObserver(() => settleRails())
-  observer.observe(content)
-  onCleanup(() => observer.disconnect())
-})
+useResizeObserver(treeContent, () => settleRails())
 
 watch(
   () => [activeSlug.value, current.value?.activeWindowId.value, props.sidebarCollapsed] as const,

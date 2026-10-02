@@ -132,6 +132,32 @@ standard: when something is a store, how to write one, the building blocks
 The lint enforces the split; the composables that predate it sit in
 `eslint-suppressions.json` until each one migrates (#536).
 
+## Frontend DOM, timers, and storage
+
+Reach for `@vueuse/core` first: `useEventListener`, `onKeyStroke`,
+`onClickOutside`, `useResizeObserver`, `useWindowSize`, `useIntervalFn`,
+`useStorage`. Each one ends with the component's scope, so there is no
+`onUnmounted` to forget. To attach a listener or observer only while
+something holds, pass a getter target (`() => (open.value ? window : null)`)
+rather than adding and removing it by hand. The lint rejects raw
+`addEventListener`, `new ResizeObserver`, `setInterval`, and `localStorage`
+in `.vue` files.
+
+Raw browser APIs stay where VueUse has no scope to bind to or does not fit:
+module singletons (`useFrameStats`, `useSessionStatuses`, `usePerf`), helpers
+that hand back a disposer for an xterm host (`lib/terminal*.ts`,
+`useTerminalWindows`), a drag started from a pointer handler (`startDrag`),
+and storage read once with validation (`useTheme`, `useFeedState`).
+
+The app's own focus and overlay composables have no VueUse equivalent and
+stay: `useFocusTrap` (VueUse's needs `focus-trap`, and ours deliberately
+leaves teleported popovers out), `useReturnFocus`, `useAutofocus` (it also
+focuses components that expose `focus()`), `useAnchoredPopover`,
+`useResizablePanel`, and `useEscapeToClose` (a thin `onKeyStroke` wrapper
+with an `enabled` gate). `useClipboard` goes through the Wails clipboard
+because `navigator.clipboard` no-ops in WKWebView when the document is not
+focused.
+
 ## Mock modes
 
 `HIVE_DESKTOP_DEVELOPMENT_MOCKS_MODE`: `feed` / `pipeline` / `action-smoke`

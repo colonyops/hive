@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue'
+import { useIntervalFn } from '@vueuse/core'
+import { computed, ref } from 'vue'
 import IconBell from '~icons/lucide/bell'
 import { Notify as NotifyNative } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/notificationservice'
 import { useNotificationSettings } from '../composables/useNotificationSettings'
@@ -68,7 +69,6 @@ const remaining = ref(0)
 const result = ref<TestResult | null>(null)
 const pending = computed(() => remaining.value > 0)
 
-let ticker: ReturnType<typeof setInterval> | undefined
 let sequence = 0
 
 const { showToast } = useToasts()
@@ -174,9 +174,23 @@ async function dispatchTest(selectedChannel: NotificationTestChannel, selectedSe
   result.value = outcome
 }
 
+let scheduledSend: (() => void) | null = null
+const ticker = useIntervalFn(
+  () => {
+    remaining.value -= 1
+    if (remaining.value > 0) return
+    const send = scheduledSend
+    stopCountdown()
+    send?.()
+  },
+  1000,
+  { immediate: false },
+)
+
 function stopCountdown(): void {
-  if (ticker !== undefined) clearInterval(ticker)
-  ticker = undefined
+  scheduledSend = null
+
+  ticker.pause()
   remaining.value = 0
 }
 
@@ -200,15 +214,9 @@ function sendTest(): void {
   // is the time actually left rather than a second clock beside it.
   result.value = null
   remaining.value = delaySeconds
-  ticker = setInterval(() => {
-    remaining.value -= 1
-    if (remaining.value > 0) return
-    stopCountdown()
-    void dispatchTest(selectedChannel, selectedSeverity)
-  }, 1000)
+  scheduledSend = () => void dispatchTest(selectedChannel, selectedSeverity)
+  ticker.resume()
 }
-
-onUnmounted(stopCountdown)
 
 const { report: latency, measuring, error: latencyError, measure } = useWailsLatency()
 

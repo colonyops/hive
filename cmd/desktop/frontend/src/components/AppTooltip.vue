@@ -5,6 +5,7 @@
 // Teleported and fixed: callers sit inside containers that clip (the status
 // bar's slot is `overflow-hidden`), which would cut an absolute bubble off.
 // Not useAnchoredPopover — it sizes to the anchor's width with a 320px cap.
+import { useEventListener } from '@vueuse/core'
 import { onBeforeUnmount, ref } from 'vue'
 
 const props = withDefaults(
@@ -46,8 +47,6 @@ function show(): void {
   place()
   // The first place() had no bubble to measure; this one does.
   requestAnimationFrame(place)
-  window.addEventListener('scroll', hide, true)
-  window.addEventListener('resize', hide)
 }
 
 function schedule(): void {
@@ -64,9 +63,11 @@ function showNow(): void {
 function hide(): void {
   clearTimeout(timer)
   open.value = false
-  window.removeEventListener('scroll', hide, true)
-  window.removeEventListener('resize', hide)
 }
+
+const openWindow = () => (open.value ? window : null)
+useEventListener(openWindow, 'scroll', hide, { capture: true })
+useEventListener(openWindow, 'resize', hide)
 
 onBeforeUnmount(hide)
 </script>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { useResizeObserver, useWindowSize } from '@vueuse/core'
 import { Browser } from '@wailsio/runtime'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -53,8 +54,11 @@ const endedReason = ref('')
 
 let socket: WebSocket | null = null
 let fit: FitAddon | null = null
-let observer: ResizeObserver | null = null
 let resizeTimer: ReturnType<typeof setTimeout> | undefined
+// The observer keeps the grid on the box as the window changes; it is not
+// what establishes it, so it is armed after the launch rather than before.
+const observedHost = shallowRef<HTMLElement | null>(null)
+useResizeObserver(observedHost, scheduleFit)
 // An atlas renderer is live on the pane. False after a claim that did not
 // survive, which is what makes the next reveal retry it (ADR terminal-renderer-claimed-on-activation).
 let rendered = false
@@ -77,16 +81,16 @@ const paneLaidOut = computed(() => status.value === 'opening' || term.value !== 
 // The window's own size, tracked so the panel follows it. The box is derived
 // from the viewport and nothing else: it cannot be dragged or resized, so there
 // is no remembered geometry to go stale against a window that changed since.
-const viewport = ref({ width: window.innerWidth, height: window.innerHeight })
+const viewport = useWindowSize()
 
 const panelStyle = computed(() => {
-  const width = Math.max(MIN_WIDTH, Math.round(viewport.value.width * DEFAULT_SIZE_FRACTION))
-  const height = Math.max(MIN_HEIGHT, Math.round(viewport.value.height * DEFAULT_SIZE_FRACTION))
+  const width = Math.max(MIN_WIDTH, Math.round(viewport.width.value * DEFAULT_SIZE_FRACTION))
+  const height = Math.max(MIN_HEIGHT, Math.round(viewport.height.value * DEFAULT_SIZE_FRACTION))
   return {
     width: `${width}px`,
     height: `${height}px`,
-    left: `${Math.max(8, Math.round((viewport.value.width - width) / 2))}px`,
-    top: `${Math.max(40, Math.round((viewport.value.height - height) / 2))}px`,
+    left: `${Math.max(8, Math.round((viewport.width.value - width) / 2))}px`,
+    top: `${Math.max(40, Math.round((viewport.height.value - height) / 2))}px`,
   }
 })
 
@@ -220,10 +224,7 @@ function attachStream(created: Terminal, state: PopupTerminalState): void {
     if (status.value === 'live') fail('The terminal connection closed.')
   }
 
-  // The observer keeps the grid on the box as the window changes; it is not
-  // what establishes it, so it is armed after the launch rather than before.
-  observer = new ResizeObserver(() => scheduleFit())
-  observer.observe(host.value)
+  observedHost.value = host.value
 }
 
 function send(data: string): void {
@@ -284,8 +285,7 @@ function teardownStream(): void {
 function teardown(): void {
   teardownStream()
   clearTimeout(resizeTimer)
-  observer?.disconnect()
-  observer = null
+  observedHost.value = null
   for (const disposer of disposers.splice(0)) disposer.dispose()
   term.value?.dispose()
   term.value = null
@@ -381,20 +381,12 @@ function restoreFocus(): void {
   if (target?.isConnected) target.focus()
 }
 
-function onWindowResize(): void {
-  viewport.value = { width: window.innerWidth, height: window.innerHeight }
-}
-
 onMounted(() => {
-  window.addEventListener('resize', onWindowResize)
   // The panel is mounted lazily by the same action that shows it, so it comes up
   // with `visible` already true and the watcher above has nothing to react to.
   if (visible.value) void reveal()
 })
-onBeforeUnmount(() => {
-  window.removeEventListener('resize', onWindowResize)
-  teardown()
-})
+onBeforeUnmount(teardown)
 </script>
 
 <template>

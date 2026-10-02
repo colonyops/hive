@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onClickOutside } from '@vueuse/core'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onClickOutside, useEventListener } from '@vueuse/core'
+import { computed, nextTick, ref, watch } from 'vue'
 import AppMenu from './AppMenu.vue'
 import FeedListItem from './FeedListItem.vue'
 import IconCheck from '~icons/lucide/check'
@@ -173,8 +173,7 @@ function onDocumentKeydown(event: KeyboardEvent): void {
 onClickOutside(viewMenu, () => {
   if (viewMenuOpen.value) closeViewMenu()
 })
-onMounted(() => document.addEventListener('keydown', onDocumentKeydown))
-onBeforeUnmount(() => document.removeEventListener('keydown', onDocumentKeydown))
+useEventListener(document, 'keydown', onDocumentKeydown)
 
 // Selected, not just focused: view.focus-search means "start a new search"
 // far more often than "edit the old one" — same call TerminalMode's own

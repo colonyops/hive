@@ -29,6 +29,16 @@ const rawWailsSubscription = {
   selector: 'MemberExpression[object.name="Events"][property.name="On"]',
   message: 'Subscribe through useWailsEvent so the subscription ends with its scope.',
 }
+// A component reaches the DOM, timers, and storage through VueUse, which ties
+// each one to the component's lifetime (cmd/desktop/AGENTS.md).
+const rawBrowserApisInComponents = [
+  {
+    selector: 'CallExpression[callee.property.name="addEventListener"]',
+    message: 'Use useEventListener (or onKeyStroke, onClickOutside) from @vueuse/core.',
+  },
+  { selector: 'NewExpression[callee.name="ResizeObserver"]', message: 'Use useResizeObserver from @vueuse/core.' },
+  { selector: 'CallExpression[callee.name="setInterval"]', message: 'Use useIntervalFn from @vueuse/core.' },
+]
 
 export default defineConfig(
   globalIgnores(['bindings/', 'dist/']),
@@ -86,6 +96,17 @@ export default defineConfig(
   {
     files: ['src/**/*.{ts,vue}'],
     rules: { 'no-restricted-syntax': ['error', rawWailsSubscription] },
+  },
+  {
+    files: ['src/**/*.vue'],
+    rules: {
+      'no-restricted-syntax': ['error', rawWailsSubscription, ...rawBrowserApisInComponents],
+      'no-restricted-globals': ['error', { name: 'localStorage', message: 'Use useStorage from @vueuse/core.' }],
+      'no-restricted-properties': [
+        'error',
+        { object: 'window', property: 'localStorage', message: 'Use useStorage from @vueuse/core.' },
+      ],
+    },
   },
   {
     files: ['src/**/*.ts'],

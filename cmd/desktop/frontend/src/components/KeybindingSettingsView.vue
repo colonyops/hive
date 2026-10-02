@@ -11,6 +11,7 @@ export const RECORDER_COMMIT_MS = 1000
 // sequence (Esc discards it; a pause or clicking the capture chip commits it),
 // and suppresses each keystroke from the global dispatcher (belt:
 // kb.recording; suspenders: stopPropagation).
+import { useEventListener } from '@vueuse/core'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import IconPlus from '~icons/lucide/plus'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
@@ -95,7 +96,6 @@ function startCapture(id: string): void {
   capturingId.value = id
   pendingSteps.value = []
   kb.recording.value = true
-  window.addEventListener('keydown', onCaptureKeydown, true) // capture phase
 }
 
 function stopCapturing(): void {
@@ -103,7 +103,6 @@ function stopCapturing(): void {
   capturingId.value = null
   pendingSteps.value = []
   kb.recording.value = false
-  window.removeEventListener('keydown', onCaptureKeydown, true)
 }
 
 /** Pause elapsed, chip clicked, or capture ended some other way: save what's pending. */
@@ -144,6 +143,8 @@ function reset(id: string): void {
   if (capturingId.value === id) cancelCapture()
   kb.resetToDefault(id)
 }
+
+useEventListener(() => (capturingId.value ? window : null), 'keydown', onCaptureKeydown, { capture: true })
 
 onUnmounted(commitCapture)
 </script>
