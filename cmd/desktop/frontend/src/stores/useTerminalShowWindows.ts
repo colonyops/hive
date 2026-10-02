@@ -12,7 +12,7 @@ export const useTerminalShowWindows = defineStore('terminalShowWindows', () => {
   const showWindows = usePersistedSetting({
     initial: true,
     read: async () => (await GetAppearanceSettings()).terminalShowWindows,
-    write: PersistTerminalShowWindows,
+    write: (next) => PersistTerminalShowWindows(next),
     label: 'the terminal window listing setting',
   })
 

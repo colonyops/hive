@@ -501,11 +501,6 @@
       "count": 5
     }
   },
-  "src/composables/useTerminalStatusBar.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/composables/useTerminalWindowListings.ts": {
     "no-restricted-syntax": {
       "count": 2

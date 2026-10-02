@@ -31,7 +31,7 @@ import {
 import { TERMINAL_FONT } from '../lib/terminalFaces'
 import { loadInstalledFonts, useInstalledFonts } from '../composables/useInstalledFonts'
 import { terminalPoolSizes, useTerminalPoolSize } from '../stores/useTerminalPoolSize'
-import { setTerminalShowStatusBar, useTerminalStatusBar } from '../composables/useTerminalStatusBar'
+import { useTerminalStatusBar } from '../stores/useTerminalStatusBar'
 import { useTerminalShowWindows } from '../stores/useTerminalShowWindows'
 
 // Async so xterm and its addons stay on the terminal chunk rather than joining
@@ -48,7 +48,7 @@ const {
 } = useTerminalFont()
 const { monospace: fontFamilies } = useInstalledFonts()
 const { showWindows, setShowWindows } = useTerminalShowWindows()
-const { showStatusBar } = useTerminalStatusBar()
+const { showStatusBar, setShowStatusBar } = useTerminalStatusBar()
 const { poolSize, setPoolSize } = useTerminalPoolSize()
 
 // The bundled face leads the list whether or not it is also installed
@@ -206,7 +206,7 @@ onMounted(() => {
           :model-value="showStatusBar"
           aria-label="Session status bar"
           testid="settings-terminal-show-status-bar"
-          @update:model-value="setTerminalShowStatusBar"
+          @update:model-value="setShowStatusBar"
         />
       </SettingsRow>
       <SettingsRow

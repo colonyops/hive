@@ -79,7 +79,7 @@ import { useEditorSettings } from '../composables/useEditorSettings'
 import { useSessionActions } from '../composables/useSessionActions'
 import { useSessionStatus } from '../composables/useSessionStatus'
 import { useSessionStatuses } from '../composables/useSessionStatuses'
-import { useTerminalStatusBar } from '../composables/useTerminalStatusBar'
+import { useTerminalStatusBar } from '../stores/useTerminalStatusBar'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import {
   createTerminalClient,

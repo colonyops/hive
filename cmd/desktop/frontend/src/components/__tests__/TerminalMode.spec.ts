@@ -8,7 +8,7 @@ import { resetTerminalFontForTests } from '../../composables/useTerminalFont'
 import { resetTerminalSessionsForTests, useTerminalSessions } from '../../composables/useTerminalSessions'
 import { resetSessionStatusesForTests, useSessionStatuses } from '../../composables/useSessionStatuses'
 import { useTerminalShowWindows } from '../../stores/useTerminalShowWindows'
-import { setTerminalShowStatusBar } from '../../composables/useTerminalStatusBar'
+import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
 import { resetTerminalWindowListingsForTests } from '../../composables/useTerminalWindowListings'
 import { resetTerminalPinnedChatsForTests, useTerminalPinnedChats } from '../../composables/useTerminalPinnedChats'
 import {
@@ -301,9 +301,8 @@ describe('TerminalMode', () => {
     resetAgentSessionsAllForTests()
     resetTerminalPinnedChatsForTests()
     resetAttachedTerminalWindowsForTests()
-    // The bar's setting is a module singleton, so a test that turns it on would
-    // otherwise leave it on for the rest of the file.
-    setTerminalShowStatusBar(false)
+    // The bar ships on; the pane's tests start with it off and turn it on by name.
+    useTerminalStatusBar().setShowStatusBar(false)
     paneMayAutoFocus.value = true
     // The Agents area answers unavailable by default, which is what a build with
     // the experimental gate off looks like: no chats to pin, no Chats section.
@@ -3430,7 +3429,7 @@ describe('TerminalMode', () => {
 
   describe('session status bar', () => {
     async function mountWithStatusBar(session = fakeSession()) {
-      setTerminalShowStatusBar(true)
+      useTerminalStatusBar().setShowStatusBar(true)
       const mounted = await mountAvailable(session)
       await mounted.wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"]').trigger('click')
       await flushPromises()
@@ -3739,7 +3738,7 @@ describe('TerminalMode', () => {
     })
 
     it('gives the scratch terminal no bar, because it has no checkout', async () => {
-      setTerminalShowStatusBar(true)
+      useTerminalStatusBar().setShowStatusBar(true)
       const { wrapper } = await mountAvailable()
       await wrapper.get('[data-testid="terminal-scratch-heading"]').trigger('click')
       await flushPromises()

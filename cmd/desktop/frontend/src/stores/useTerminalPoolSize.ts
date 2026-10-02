@@ -21,7 +21,7 @@ export const useTerminalPoolSize = defineStore('terminalPoolSize', () => {
   const poolSize = usePersistedSetting({
     initial: DEFAULT_POOL_SIZE,
     read: async () => resolveTerminalPoolSize((await GetAppearanceSettings()).terminalPoolSize),
-    write: PersistTerminalPoolSize,
+    write: (next) => PersistTerminalPoolSize(next),
     label: 'the terminal pool size',
   })
 

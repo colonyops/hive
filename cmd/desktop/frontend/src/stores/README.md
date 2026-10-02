@@ -125,6 +125,12 @@ failed persist. `usePersistedSetting(read, write)` will own that pattern and
 arrives with the settings migration (colonyops/hive#536, step 3). Until then a
 settings store follows `useTerminalFont`'s shape inside a `defineStore` setup.
 
+Pass bindings to `read` and `write` inside arrow functions, as above. A
+binding named as a value is read when the store starts, and a spec that
+mounts a component using the store would then have to mock every binding the
+store could ever call. Inside an arrow it is read on first use, so a spec
+mocks only what its test reaches.
+
 ### Error text
 
 `errorText(err, fallback)` in `src/lib/appError.ts` is the one way to turn a
