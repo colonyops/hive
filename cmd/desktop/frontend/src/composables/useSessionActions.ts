@@ -131,7 +131,9 @@ export function useSessionActions(options: SessionActionOptions = {}) {
       confirmLabel: operation === 'delete' ? 'Delete' : 'Recycle',
       onConfirm: async () => {
         await (operation === 'delete' ? DeleteSession(session.id) : RecycleSession(session.id))
-        showToast(operation === 'delete' ? `Deleting ${session.name}…` : `Recycling ${session.name}…`, { severity: 'info' })
+        showToast(operation === 'delete' ? `Deleting ${session.name}…` : `Recycling ${session.name}…`, {
+          severity: 'info',
+        })
       },
     })
   }
@@ -148,9 +150,10 @@ export function useSessionActions(options: SessionActionOptions = {}) {
   function requestPrune(count: number): void {
     confirmation.request({
       title: 'Prune sessions?',
-      description: count === 1
-        ? 'The one recycled or corrupted session is deleted, along with its directory.'
-        : `All ${count} recycled and corrupted sessions are deleted, along with their directories.`,
+      description:
+        count === 1
+          ? 'The one recycled or corrupted session is deleted, along with its directory.'
+          : `All ${count} recycled and corrupted sessions are deleted, along with their directories.`,
       confirmLabel: 'Prune',
       onConfirm: async () => {
         await PruneSessions()

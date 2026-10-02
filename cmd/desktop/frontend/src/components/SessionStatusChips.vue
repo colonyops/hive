@@ -13,7 +13,10 @@ import IconUpload from '~icons/lucide/upload'
 import AppTooltip from './AppTooltip.vue'
 import { useClipboard } from '../composables/useClipboard'
 import { markdownPullRequestLink } from '../lib/prLink'
-import type { SessionGitStatus, SessionPullRequest } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type {
+  SessionGitStatus,
+  SessionPullRequest,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 
 const props = defineProps<{
   git: SessionGitStatus | null
@@ -64,9 +67,12 @@ const prTone = computed(() => {
 
 const checksTone = computed(() => {
   switch (pr.value?.checks) {
-    case 'passing': return 'text-severity-success'
-    case 'failing': return 'text-severity-error'
-    default: return 'text-severity-warning'
+    case 'passing':
+      return 'text-severity-success'
+    case 'failing':
+      return 'text-severity-error'
+    default:
+      return 'text-severity-warning'
   }
 })
 
@@ -117,7 +123,8 @@ async function copyLink(): Promise<void> {
           role="img"
           aria-label="Uncommitted changes in this checkout"
           data-testid="session-status-dirty"
-        ><IconFileDiff class="size-3.5" /></span>
+          ><IconFileDiff class="size-3.5"
+        /></span>
       </AppTooltip>
 
       <AppTooltip v-if="git.resolved && git.unpushed" text="Commits on this branch that the remote does not have">
@@ -126,7 +133,8 @@ async function copyLink(): Promise<void> {
           role="img"
           aria-label="Commits on this branch that the remote does not have"
           data-testid="session-status-unpushed"
-        ><IconUpload class="size-3.5" /></span>
+          ><IconUpload class="size-3.5"
+        /></span>
       </AppTooltip>
 
       <!-- Saying the read failed beats silently reporting a clean branch the
@@ -135,7 +143,8 @@ async function copyLink(): Promise<void> {
         <span
           class="flex h-6 shrink-0 items-center gap-1 px-1.5 text-severity-error"
           data-testid="session-status-git-error"
-        ><IconTriangleAlert class="size-3" aria-hidden="true" />git failed</span>
+          ><IconTriangleAlert class="size-3" aria-hidden="true" />git failed</span
+        >
       </AppTooltip>
     </div>
 
@@ -147,45 +156,47 @@ async function copyLink(): Promise<void> {
         <span v-if="showGitGroup" class="mx-2 h-3.5 w-px shrink-0 bg-border" aria-hidden="true" />
 
         <div class="flex shrink-0 items-center gap-1">
-        <!-- h-6/rounded-[7px] is PaneStatusBar's button metric; these share a
+          <!-- h-6/rounded-[7px] is PaneStatusBar's button metric; these share a
              row with its editor and Finder buttons. -->
-        <button
-          v-if="pr"
-          type="button"
-          class="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-[7px] px-1.5 hover:bg-chip"
-          :class="prTone"
-          data-testid="session-status-pr"
-          @click="openPullRequest"
-        >
-          <IconGitPullRequest class="size-3" aria-hidden="true" />
-          <span class="font-mono">{{ prLabel }}</span>
-          <span v-if="pr.checks" :class="checksTone" data-testid="session-status-checks">{{ pr.checks }}</span>
-        </button>
+          <button
+            v-if="pr"
+            type="button"
+            class="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-[7px] px-1.5 hover:bg-chip"
+            :class="prTone"
+            data-testid="session-status-pr"
+            @click="openPullRequest"
+          >
+            <IconGitPullRequest class="size-3" aria-hidden="true" />
+            <span class="font-mono">{{ prLabel }}</span>
+            <span v-if="pr.checks" :class="checksTone" data-testid="session-status-checks">{{ pr.checks }}</span>
+          </button>
 
-      <AppTooltip v-if="pr" :text="copied ? 'Copied' : 'Copy link to this pull request'">
-        <button
-          type="button"
-          class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[7px] text-text-4 hover:bg-chip hover:text-text"
-          :class="{ 'text-severity-success': copied }"
-          aria-label="Copy link to this pull request"
-          data-testid="session-status-copy"
-          @click="copyLink"
-        >
-          <IconCheck v-if="copied" class="size-3.5" />
-          <IconCopy v-else class="size-3.5" />
-        </button>
-      </AppTooltip>
+          <AppTooltip v-if="pr" :text="copied ? 'Copied' : 'Copy link to this pull request'">
+            <button
+              type="button"
+              class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[7px] text-text-4 hover:bg-chip hover:text-text"
+              :class="{ 'text-severity-success': copied }"
+              aria-label="Copy link to this pull request"
+              data-testid="session-status-copy"
+              @click="copyLink"
+            >
+              <IconCheck v-if="copied" class="size-3.5" />
+              <IconCopy v-else class="size-3.5" />
+            </button>
+          </AppTooltip>
 
-      <!-- A failed lookup, never rendered as "no pull request": the branch may
+          <!-- A failed lookup, never rendered as "no pull request": the branch may
            well have one, and claiming otherwise is a fact this cannot support. -->
-      <AppTooltip v-else-if="pullRequestError" :text="`${pullRequestError} — click to retry`">
-        <button
-          type="button"
-          class="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-[7px] px-1.5 text-severity-error hover:bg-chip"
-          data-testid="session-status-pr-error"
-          @click="emit('refresh-pull-request')"
-        ><IconTriangleAlert class="size-3" aria-hidden="true" />PR failed</button>
-      </AppTooltip>
+          <AppTooltip v-else-if="pullRequestError" :text="`${pullRequestError} — click to retry`">
+            <button
+              type="button"
+              class="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-[7px] px-1.5 text-severity-error hover:bg-chip"
+              data-testid="session-status-pr-error"
+              @click="emit('refresh-pull-request')"
+            >
+              <IconTriangleAlert class="size-3" aria-hidden="true" />PR failed
+            </button>
+          </AppTooltip>
         </div>
       </div>
     </Transition>
@@ -196,7 +207,9 @@ async function copyLink(): Promise<void> {
 /* Short and small: the row is chrome, and anything longer pulls the eye off
    whatever the terminal below is doing. */
 .pr-arrive-enter-active {
-  transition: opacity 180ms ease-out, transform 180ms ease-out;
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out;
 }
 
 .pr-arrive-enter-from {

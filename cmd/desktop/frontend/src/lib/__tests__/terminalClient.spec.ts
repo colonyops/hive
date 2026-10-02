@@ -58,27 +58,102 @@ describe('terminal frame codec', () => {
   })
 
   it('decodes window events with their stable string kinds', () => {
-    const layout = { split: 'leftright', x: 0, y: 0, width: 213, height: 55, cells: [
-      { paneId: '%3', x: 0, y: 0, width: 106, height: 55 },
-      { paneId: '%4', x: 107, y: 0, width: 106, height: 55 },
-    ] }
-    expect(decodeFrame(jsonFrame(0x01, { kind: 'renamed', windowId: '@2', name: 'shell', active: false, activePane: '%4', width: 213, height: 55, zoomed: false, layout })))
-      .toEqual({ type: 'window', kind: 'renamed', state: { windowId: '@2', name: 'shell', active: false, activePane: '%4', width: 213, height: 55, zoomed: false, layout } })
+    const layout = {
+      split: 'leftright',
+      x: 0,
+      y: 0,
+      width: 213,
+      height: 55,
+      cells: [
+        { paneId: '%3', x: 0, y: 0, width: 106, height: 55 },
+        { paneId: '%4', x: 107, y: 0, width: 106, height: 55 },
+      ],
+    }
+    expect(
+      decodeFrame(
+        jsonFrame(0x01, {
+          kind: 'renamed',
+          windowId: '@2',
+          name: 'shell',
+          active: false,
+          activePane: '%4',
+          width: 213,
+          height: 55,
+          zoomed: false,
+          layout,
+        }),
+      ),
+    ).toEqual({
+      type: 'window',
+      kind: 'renamed',
+      state: {
+        windowId: '@2',
+        name: 'shell',
+        active: false,
+        activePane: '%4',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout,
+      },
+    })
   })
 
   it('decodes a layout change as tmux reporting the grid the window must render at', () => {
-    expect(decodeFrame(jsonFrame(0x01, { kind: 'layout-changed', windowId: '@2', name: 'shell', active: true, activePane: '%2', width: 80, height: 24, zoomed: true, layout: { paneId: '%2', x: 0, y: 0, width: 80, height: 24 } })))
-      .toEqual({ type: 'window', kind: 'layout-changed', state: { windowId: '@2', name: 'shell', active: true, activePane: '%2', width: 80, height: 24, zoomed: true, layout: { paneId: '%2', x: 0, y: 0, width: 80, height: 24 } } })
+    expect(
+      decodeFrame(
+        jsonFrame(0x01, {
+          kind: 'layout-changed',
+          windowId: '@2',
+          name: 'shell',
+          active: true,
+          activePane: '%2',
+          width: 80,
+          height: 24,
+          zoomed: true,
+          layout: { paneId: '%2', x: 0, y: 0, width: 80, height: 24 },
+        }),
+      ),
+    ).toEqual({
+      type: 'window',
+      kind: 'layout-changed',
+      state: {
+        windowId: '@2',
+        name: 'shell',
+        active: true,
+        activePane: '%2',
+        width: 80,
+        height: 24,
+        zoomed: true,
+        layout: { paneId: '%2', x: 0, y: 0, width: 80, height: 24 },
+      },
+    })
   })
 
   it('reads an unreported size and layout as 0 and null rather than inventing them', () => {
-    expect(decodeFrame(jsonFrame(0x01, { kind: 'added', windowId: '@3' })))
-      .toEqual({ type: 'window', kind: 'added', state: { windowId: '@3', name: '', active: false, activePane: '', width: 0, height: 0, zoomed: false, layout: null } })
+    expect(decodeFrame(jsonFrame(0x01, { kind: 'added', windowId: '@3' }))).toEqual({
+      type: 'window',
+      kind: 'added',
+      state: {
+        windowId: '@3',
+        name: '',
+        active: false,
+        activePane: '',
+        width: 0,
+        height: 0,
+        zoomed: false,
+        layout: null,
+      },
+    })
   })
 
   it('decodes lifecycle events', () => {
-    expect(decodeFrame(jsonFrame(0x02, { kind: 'exited', windowId: '', message: 'overflow' })))
-      .toEqual({ type: 'lifecycle', kind: 'exited', windowId: '', message: 'overflow' })
+    expect(decodeFrame(jsonFrame(0x02, { kind: 'exited', windowId: '', message: 'overflow' }))).toEqual({
+      type: 'lifecycle',
+      kind: 'exited',
+      windowId: '',
+      message: 'overflow',
+    })
   })
 
   it('rejects empty, truncated and unknown frames', () => {
@@ -148,14 +223,27 @@ describe('createTerminalClient', () => {
   })
 
   it('attaches with the bearer token and returns the window set', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(200, {
-      windows: [{ windowId: '@1', name: 'agent', active: true, width: 213, height: 55 }],
-    }))
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, {
+        windows: [{ windowId: '@1', name: 'agent', active: true, width: 213, height: 55 }],
+      }),
+    )
 
     const result = await createTerminalClient(endpoint).attach('hive-abc', 120, 40)
 
     // The cols/rows posted are a vote; the sizes that come back are tmux's.
-    expect(result.windows).toEqual([{ windowId: '@1', name: 'agent', active: true, activePane: '', width: 213, height: 55, zoomed: false, layout: null }])
+    expect(result.windows).toEqual([
+      {
+        windowId: '@1',
+        name: 'agent',
+        active: true,
+        activePane: '',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+      },
+    ])
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('http://127.0.0.1:58006/api/terminal/attach')
     expect(init.headers.Authorization).toBe('Bearer tok-123')
@@ -163,13 +251,28 @@ describe('createTerminalClient', () => {
   })
 
   it('lists every session’s windows without attaching, in one call', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(200, {
-      sessions: { 'hive-abc': [{ windowId: '@2', name: 'shell', active: false, width: 120, height: 40 }] },
-    }))
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, {
+        sessions: { 'hive-abc': [{ windowId: '@2', name: 'shell', active: false, width: 120, height: 40 }] },
+      }),
+    )
 
     const result = await createTerminalClient(endpoint).listWindows(['hive-abc', 'hive-never-spawned'])
 
-    expect(result).toEqual({ 'hive-abc': [{ windowId: '@2', name: 'shell', active: false, activePane: '', width: 120, height: 40, zoomed: false, layout: null }] })
+    expect(result).toEqual({
+      'hive-abc': [
+        {
+          windowId: '@2',
+          name: 'shell',
+          active: false,
+          activePane: '',
+          width: 120,
+          height: 40,
+          zoomed: false,
+          layout: null,
+        },
+      ],
+    })
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toBe('http://127.0.0.1:58006/api/terminal/windows/list')
     expect(JSON.parse(init.body)).toEqual({ slugs: ['hive-abc', 'hive-never-spawned'] })
@@ -194,12 +297,14 @@ describe('createTerminalClient', () => {
   })
 
   it('moves a window to a position and answers with the order tmux settled on', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(200, {
-      windows: [
-        { windowId: '@2', name: 'shell', active: false, width: 120, height: 40 },
-        { windowId: '@1', name: 'agent', active: true, width: 120, height: 40 },
-      ],
-    }))
+    fetchMock.mockResolvedValue(
+      jsonResponse(200, {
+        windows: [
+          { windowId: '@2', name: 'shell', active: false, width: 120, height: 40 },
+          { windowId: '@1', name: 'agent', active: true, width: 120, height: 40 },
+        ],
+      }),
+    )
 
     const result = await createTerminalClient(endpoint).moveWindow('hive-abc', '@1', 1)
 
@@ -246,8 +351,10 @@ describe('createTerminalClient', () => {
   it('reads a window with no verdict as running rather than idle', async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, {}))
 
-    await expect(createTerminalClient(endpoint).windowForeground('hive-abc', '@1'))
-      .resolves.toEqual({ running: true, command: '' })
+    await expect(createTerminalClient(endpoint).windowForeground('hive-abc', '@1')).resolves.toEqual({
+      running: true,
+      command: '',
+    })
   })
 
   it('splits a pane and answers the id of the pane it made', async () => {
@@ -264,8 +371,9 @@ describe('createTerminalClient', () => {
   it('reads a split that named no pane as an empty id', async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, {}))
 
-    await expect(createTerminalClient(endpoint).splitPane('hive-abc', '%1', 'horizontal'))
-      .resolves.toEqual({ paneId: '' })
+    await expect(createTerminalClient(endpoint).splitPane('hive-abc', '%1', 'horizontal')).resolves.toEqual({
+      paneId: '',
+    })
   })
 
   // The server requires explicit fields: an empty direction means the target
@@ -282,7 +390,12 @@ describe('createTerminalClient', () => {
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ slug: 'hive-abc', paneId: '%1', direction: '' })
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({ slug: 'hive-abc', paneId: '%1', direction: 'left' })
     expect(fetchMock.mock.calls[2][0]).toBe('http://127.0.0.1:58006/api/terminal/panes/resize')
-    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({ slug: 'hive-abc', paneId: '%1', width: 50, height: 0 })
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body)).toEqual({
+      slug: 'hive-abc',
+      paneId: '%1',
+      width: 50,
+      height: 0,
+    })
   })
 
   it('closes and zooms a pane by its id alone', async () => {
@@ -314,24 +427,32 @@ describe('createTerminalClient', () => {
   it('reads a pane with no verdict as running rather than idle', async () => {
     fetchMock.mockResolvedValue(jsonResponse(200, {}))
 
-    await expect(createTerminalClient(endpoint).paneForeground('hive-abc', '%1'))
-      .resolves.toEqual({ running: true, command: '' })
+    await expect(createTerminalClient(endpoint).paneForeground('hive-abc', '%1')).resolves.toEqual({
+      running: true,
+      command: '',
+    })
   })
 
   it('surfaces the core error message and its kind from a failed control action', async () => {
-    fetchMock.mockResolvedValue(jsonResponse(404, { kind: 'not_found', message: 'no terminal is attached for that slug' }))
+    fetchMock.mockResolvedValue(
+      jsonResponse(404, { kind: 'not_found', message: 'no terminal is attached for that slug' }),
+    )
 
     // The kind is what tells a session that is not running apart from tmux
     // being unusable; the view branches on it rather than on the message.
-    await expect(createTerminalClient(endpoint).detach('gone'))
-      .rejects.toMatchObject({ message: 'no terminal is attached for that slug', kind: 'not_found' })
+    await expect(createTerminalClient(endpoint).detach('gone')).rejects.toMatchObject({
+      message: 'no terminal is attached for that slug',
+      kind: 'not_found',
+    })
   })
 
   it('opens the stream on the versioned URL with the token in the query', () => {
     const created: string[] = []
     class FakeSocket {
       binaryType = 'blob'
-      constructor(url: string) { created.push(url) }
+      constructor(url: string) {
+        created.push(url)
+      }
     }
     globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket
 

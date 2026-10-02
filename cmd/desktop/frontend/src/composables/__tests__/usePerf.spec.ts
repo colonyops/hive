@@ -134,7 +134,11 @@ describe('usePerf', () => {
 
   it('keeps buffering while the gate is still resolving', async () => {
     let resolveInfo: (info: unknown) => void = () => {}
-    mocks.Info.mockReturnValue(new Promise((resolve) => { resolveInfo = resolve }))
+    mocks.Info.mockReturnValue(
+      new Promise((resolve) => {
+        resolveInfo = resolve
+      }),
+    )
     const perf = usePerf('feed')
 
     perf.record('startup', 5)

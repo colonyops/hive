@@ -26,7 +26,12 @@ describe('useWindowFocus', () => {
 
   it('seeds the optimistic focus state from the native service', async () => {
     let resolveFocused!: (focused: boolean) => void
-    mocks.Focused.mockImplementation(() => new Promise<boolean>((resolve) => { resolveFocused = resolve }))
+    mocks.Focused.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveFocused = resolve
+        }),
+    )
     const windowFocus = await loadComposable()
 
     expect(windowFocus.focused.value).toBe(true)
@@ -49,7 +54,12 @@ describe('useWindowFocus', () => {
 
   it('does not let an older seed overwrite a newer focus event', async () => {
     let resolveFocused!: (focused: boolean) => void
-    mocks.Focused.mockImplementation(() => new Promise<boolean>((resolve) => { resolveFocused = resolve }))
+    mocks.Focused.mockImplementation(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveFocused = resolve
+        }),
+    )
     const windowFocus = await loadComposable()
 
     mocks.On.mock.calls[1][1]()

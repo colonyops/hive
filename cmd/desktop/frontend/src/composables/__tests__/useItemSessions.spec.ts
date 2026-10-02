@@ -1,12 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ ItemSessions: vi.fn() }))
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({ ItemSessions: mocks.ItemSessions }))
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
+  ItemSessions: mocks.ItemSessions,
+}))
 
 import { resetItemSessionsForTests, useItemSessions } from '../useItemSessions'
 
 const session = (id: string) => ({
-  id, name: id, slug: id, repo: 'acme/site', state: 'active', running: false, createdAt: new Date(0).toISOString(),
+  id,
+  name: id,
+  slug: id,
+  repo: 'acme/site',
+  state: 'active',
+  running: false,
+  createdAt: new Date(0).toISOString(),
 })
 
 beforeEach(() => {
@@ -55,7 +63,11 @@ describe('useItemSessions', () => {
   // item the user is actually looking at.
   it('drops an answer for an item that is no longer selected', async () => {
     let releaseSlow: (value: unknown) => void = () => {}
-    mocks.ItemSessions.mockReturnValueOnce(new Promise((resolve) => { releaseSlow = resolve }))
+    mocks.ItemSessions.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseSlow = resolve
+      }),
+    )
     const s = useItemSessions()
     const slow = s.load(7)
 

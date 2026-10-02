@@ -52,13 +52,30 @@ const ACTIVITY_POLL_MS = 2000
 const props = defineProps<{ active?: boolean; sidebarCollapsed?: boolean }>()
 
 const {
-  checking, available, reason,
-  workspaces, root, editor, missingMCPs, missingPackages,
-  client, ready,
-  openWorkspaceInEditor, revealWorkspace,
-  reloadWorkspaces, openWorkspace, regenerateWorkspace, deleteWorkspace,
-  createWorkspace, updateWorkspace,
-  startSession, resumeSession, closeSession, renameSession, deleteSession, resetOpenWorkspace,
+  checking,
+  available,
+  reason,
+  workspaces,
+  root,
+  editor,
+  missingMCPs,
+  missingPackages,
+  client,
+  ready,
+  openWorkspaceInEditor,
+  revealWorkspace,
+  reloadWorkspaces,
+  openWorkspace,
+  regenerateWorkspace,
+  deleteWorkspace,
+  createWorkspace,
+  updateWorkspace,
+  startSession,
+  resumeSession,
+  closeSession,
+  renameSession,
+  deleteSession,
+  resetOpenWorkspace,
 } = useAgentWorkspaces()
 const { recents, reloadRecents } = useAgentSessionsAll()
 
@@ -68,7 +85,9 @@ const { recents, reloadRecents } = useAgentSessionsAll()
 // first has a fix on screen — a package that already selects that skill — so
 // the two are reported as separate lines (hay-kot/hive-desktop#307).
 const missingSkillNames = computed(() => missingPackages.value.filter((entry) => entry.skill))
-const unknownPackageNames = computed(() => missingPackages.value.filter((entry) => !entry.skill).map((entry) => entry.name))
+const unknownPackageNames = computed(() =>
+  missingPackages.value.filter((entry) => !entry.skill).map((entry) => entry.name),
+)
 
 const missingSkillsNotice = computed(() => {
   const entries = missingSkillNames.value
@@ -79,12 +98,18 @@ const missingSkillsNotice = computed(() => {
   if (!packages.length) {
     return `${names} ${subject}, and no package selects ${entries.length === 1 ? 'it' : 'them'} — define one in skills.yml, then enable it here.`
   }
-  const carrier = packages.length === 1 ? `the ${packages[0]} package selects` : `the ${packages.join(' and ')} packages select`
+  const carrier =
+    packages.length === 1 ? `the ${packages[0]} package selects` : `the ${packages.join(' and ')} packages select`
   return `${names} ${subject} — ${carrier} ${entries.length === 1 ? 'it' : 'them'}. Enable that instead in the workspace editor.`
 })
 
 const {
-  px: fontSizePx, family: fontFamily, weight: fontWeight, weightBold: fontWeightBold, lineHeight, letterSpacing,
+  px: fontSizePx,
+  family: fontFamily,
+  weight: fontWeight,
+  weightBold: fontWeightBold,
+  lineHeight,
+  letterSpacing,
 } = useTerminalFont()
 const { theme } = useTheme()
 
@@ -116,23 +141,18 @@ let paneWindowId = ''
 let panePaneId = ''
 
 const paneLaidOut = computed(() => paneStatus.value === 'opening' || term.value !== null)
-const paneWorkspaceName = computed(() =>
-  workspaces.value.find((ws) => ws.dir === paneWorkspaceDir.value)?.name || paneWorkspaceDir.value)
+const paneWorkspaceName = computed(
+  () => workspaces.value.find((ws) => ws.dir === paneWorkspaceDir.value)?.name || paneWorkspaceDir.value,
+)
 
 // ── Route-driven workspace selection ────────────────────────────────────────
 const route = useRoute()
 const router = useRouter()
-const {
-  routeChatId,
-  canvasRequested,
-  canvasVisible,
-  canvasName,
-  syncCanvasQuery,
-  noteCanvasWrite,
-  clearCanvasUnseen,
-} = useAgentCanvasRoute()
+const { routeChatId, canvasRequested, canvasVisible, canvasName, syncCanvasQuery, noteCanvasWrite, clearCanvasUnseen } =
+  useAgentCanvasRoute()
 const selectedWorkspace = computed(() =>
-  (route.name === 'agents' && typeof route.params.workspace === 'string' ? route.params.workspace : ''))
+  route.name === 'agents' && typeof route.params.workspace === 'string' ? route.params.workspace : '',
+)
 
 function selectWorkspace(dir: string): void {
   if (dir === selectedWorkspace.value) return
@@ -145,10 +165,14 @@ function selectWorkspace(dir: string): void {
   void router.push({ name: 'agents', params: { workspace: dir }, query: route.query })
 }
 
-watch(() => props.active, (active) => {
-  if (!active) return
-  void loadWorkspaces()
-}, { immediate: true })
+watch(
+  () => props.active,
+  (active) => {
+    if (!active) return
+    void loadWorkspaces()
+  },
+  { immediate: true },
+)
 
 async function loadWorkspaces(): Promise<void> {
   await ready()
@@ -160,12 +184,16 @@ async function loadWorkspaces(): Promise<void> {
 // not belong to the focused workspace. The sidebar only ever moves the focus,
 // so the empty case here comes from the route or from deleting the workspace
 // that held it.
-watch(selectedWorkspace, async (dir, previous) => {
-  if (dir === previous) return
-  resetOpenWorkspace()
-  if (!dir) return
-  await openWorkspace(dir)
-}, { immediate: true })
+watch(
+  selectedWorkspace,
+  async (dir, previous) => {
+    if (dir === previous) return
+    resetOpenWorkspace()
+    if (!dir) return
+    await openWorkspace(dir)
+  },
+  { immediate: true },
+)
 
 // ── Activity indicators (hc-ou4o02zx) ────────────────────────────────────────
 // Polled while the area is active, across every workspace — the sidebar shows
@@ -187,7 +215,9 @@ async function pollActivity(generation: number): Promise<void> {
     }
   }
   if (generation !== activityGeneration) return
-  activityTimer = setTimeout(() => { void pollActivity(generation) }, ACTIVITY_POLL_MS)
+  activityTimer = setTimeout(() => {
+    void pollActivity(generation)
+  }, ACTIVITY_POLL_MS)
 }
 
 function haltActivityPolling(): void {
@@ -205,17 +235,21 @@ function stopActivityPolling(): void {
 // stay up for the moment the window shows again.
 const visibility = useDocumentVisibility()
 
-watch([() => props.active, visibility], ([active, state]) => {
-  if (!active) {
-    stopActivityPolling()
-    return
-  }
-  haltActivityPolling()
-  if (state === 'visible') {
-    const generation = ++activityGeneration
-    void pollActivity(generation)
-  }
-}, { immediate: true })
+watch(
+  [() => props.active, visibility],
+  ([active, state]) => {
+    if (!active) {
+      stopActivityPolling()
+      return
+    }
+    haltActivityPolling()
+    if (state === 'visible') {
+      const generation = ++activityGeneration
+      void pollActivity(generation)
+    }
+  },
+  { immediate: true },
+)
 
 // ── New chat ─────────────────────────────────────────────────────────────────
 // The sidebar's + and the idle pane's button both open the same dialog,
@@ -225,7 +259,9 @@ watch([() => props.active, visibility], ([active, state]) => {
 const newSessionOpen = ref(false)
 const startingSession = ref(false)
 
-const defaultWorkspaceDir = computed(() => selectedWorkspace.value || recents.value[0]?.workspace || workspaces.value[0]?.dir || '')
+const defaultWorkspaceDir = computed(
+  () => selectedWorkspace.value || recents.value[0]?.workspace || workspaces.value[0]?.dir || '',
+)
 
 const DEFAULT_CHAT_NAME = 'New Chat'
 
@@ -290,11 +326,15 @@ watch([paneStatus, openSessionId], ([status, id]) => {
 // A route naming a chat other than the open one is a request to switch. A
 // reload with a stale ?chat is the same shape. Only an in-flight launch is left
 // alone, so two attaches never race for the pane.
-watch([routeChatId, () => props.active], ([id, active]) => {
-  if (id === null || !active) return
-  if (openSessionId.value === id || paneStatus.value === 'opening') return
-  void resumeChatFromRoute(id)
-}, { immediate: true })
+watch(
+  [routeChatId, () => props.active],
+  ([id, active]) => {
+    if (id === null || !active) return
+    if (openSessionId.value === id || paneStatus.value === 'opening') return
+    void resumeChatFromRoute(id)
+  },
+  { immediate: true },
+)
 
 // ── The canvas pane rides the route too (?canvas[=name]) ────────────────────
 // The query itself is owned by useAgentCanvasRoute, shared with the title bar's
@@ -508,7 +548,10 @@ async function revealPaneWorkspace(): Promise<void> {
 // (cmd/desktop/internal/adapter/httpapi/pty_stream.go); only the launch call and the
 // control-plane base differ, per the shared client this composable resolves.
 
-async function launchIntoPane(workspace: string, action: (size: { cols?: number; rows?: number }) => Promise<AgentSession>): Promise<void> {
+async function launchIntoPane(
+  workspace: string,
+  action: (size: { cols?: number; rows?: number }) => Promise<AgentSession>,
+): Promise<void> {
   if (!client.value || paneStatus.value === 'opening') return
   teardownPane()
   openSessionId.value = null
@@ -567,17 +610,19 @@ async function launchIntoPane(workspace: string, action: (size: { cols?: number;
 
 function buildPane(): Terminal | null {
   if (!paneHost.value) return null
-  const created = markRaw(new Terminal({
-    fontFamily: terminalFontStack(fontFamily.value),
-    fontSize: fontSizePx.value,
-    fontWeight: fontWeight.value,
-    fontWeightBold: fontWeightBold.value,
-    lineHeight: lineHeight.value,
-    letterSpacing: letterSpacing.value,
-    scrollback: 5000,
-    theme: xtermTheme(),
-    linkHandler,
-  }))
+  const created = markRaw(
+    new Terminal({
+      fontFamily: terminalFontStack(fontFamily.value),
+      fontSize: fontSizePx.value,
+      fontWeight: fontWeight.value,
+      fontWeightBold: fontWeightBold.value,
+      lineHeight: lineHeight.value,
+      letterSpacing: letterSpacing.value,
+      scrollback: 5000,
+      theme: xtermTheme(),
+      linkHandler,
+    }),
+  )
   const fitAddon = markRaw(new FitAddon())
   created.loadAddon(fitAddon)
   created.loadAddon(markRaw(new WebLinksAddon((_event, uri) => openLink(uri))))
@@ -606,19 +651,29 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
   panePaneId = paneId
   disposers.push(silenceDeviceReports(created))
   disposers.push(created.onData((data) => send(data)))
-  disposers.push({ dispose: installTerminalImages(paneHost.value, {
-    pasteText: sendPaste,
-    capture: () => {
-      const capturedSocket = socket
-      const capturedPane = panePaneId
-      return {
-        current: () => socket === capturedSocket && capturedSocket?.readyState === WebSocket.OPEN && panePaneId === capturedPane && props.active !== false,
-        paste: (text, signal) => pasteTerminalImage(terminalId, capturedPane, text, signal),
-        focus: () => created.focus(),
-      }
-    },
-  }) })
-  disposers.push(watchTailPin(created, paneHost.value, (scrolledUp) => { paneScrolledUp.value = scrolledUp }))
+  disposers.push({
+    dispose: installTerminalImages(paneHost.value, {
+      pasteText: sendPaste,
+      capture: () => {
+        const capturedSocket = socket
+        const capturedPane = panePaneId
+        return {
+          current: () =>
+            socket === capturedSocket &&
+            capturedSocket?.readyState === WebSocket.OPEN &&
+            panePaneId === capturedPane &&
+            props.active !== false,
+          paste: (text, signal) => pasteTerminalImage(terminalId, capturedPane, text, signal),
+          focus: () => created.focus(),
+        }
+      },
+    }),
+  })
+  disposers.push(
+    watchTailPin(created, paneHost.value, (scrolledUp) => {
+      paneScrolledUp.value = scrolledUp
+    }),
+  )
 
   const opened = client.value.openStream(terminalId)
   opened.onmessage = (event: MessageEvent<ArrayBuffer>) => {
@@ -644,7 +699,9 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
     else if (frame.kind === 'exited' || frame.kind === 'error') exited()
   }
   opened.onerror = () => fail('The session connection dropped.')
-  opened.onclose = () => { if (paneStatus.value === 'live') fail('The session connection closed.') }
+  opened.onclose = () => {
+    if (paneStatus.value === 'live') fail('The session connection closed.')
+  }
   socket = opened
 
   observer = new ResizeObserver(() => scheduleSizeVote())
@@ -734,10 +791,18 @@ function openLink(uri: string): void {
 const linkHandler: ILinkHandler = { activate: (_event, uri) => openLink(uri) }
 
 function loadRenderer(target: Terminal): void {
-  claimAtlasRenderer(target, (addon) => disposers.push(addon), (claimed) => { rendered = claimed })
+  claimAtlasRenderer(
+    target,
+    (addon) => disposers.push(addon),
+    (claimed) => {
+      rendered = claimed
+    },
+  )
 }
 
-watch(theme, () => { if (term.value) term.value.options.theme = xtermTheme() })
+watch(theme, () => {
+  if (term.value) term.value.options.theme = xtermTheme()
+})
 watch(
   [fontSizePx, fontFamily, fontWeight, fontWeightBold, lineHeight, letterSpacing],
   async ([px, family, weight, weightBold, height, spacing]) => {
@@ -789,7 +854,9 @@ onBeforeUnmount(() => {
         class="mt-1 cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
         data-testid="agents-retry"
         @click="loadWorkspaces"
-      >Try again</button>
+      >
+        Try again
+      </button>
     </div>
 
     <div v-else class="flex min-h-0 min-w-0 flex-1">
@@ -822,19 +889,25 @@ onBeforeUnmount(() => {
           v-if="selectedWorkspace && missingMCPs.length"
           class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-[11px] text-severity-warning"
           data-testid="agents-missing-mcps"
-        >Missing MCP servers: {{ missingMCPs.join(', ') }}</div>
+        >
+          Missing MCP servers: {{ missingMCPs.join(', ') }}
+        </div>
 
         <div
           v-if="selectedWorkspace && missingSkillsNotice"
           class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-[11px] text-severity-warning"
           data-testid="agents-missing-skills"
-        >{{ missingSkillsNotice }}</div>
+        >
+          {{ missingSkillsNotice }}
+        </div>
 
         <div
           v-if="selectedWorkspace && unknownPackageNames.length"
           class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-[11px] text-severity-warning"
           data-testid="agents-missing-packages"
-        >Missing skill packages: {{ unknownPackageNames.join(', ') }}</div>
+        >
+          Missing skill packages: {{ unknownPackageNames.join(', ') }}
+        </div>
 
         <PaneStatusBar
           v-if="paneStatus !== 'idle'"
@@ -874,7 +947,9 @@ onBeforeUnmount(() => {
               class="absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-[11.5px] text-text-2 shadow-lg hover:text-text"
               data-testid="agents-scroll-to-bottom"
               @click="scrollPaneToBottom"
-            ><IconArrowDown class="size-3" />Scroll to bottom</button>
+            >
+              <IconArrowDown class="size-3" />Scroll to bottom
+            </button>
           </Transition>
 
           <!-- Covers the whole launch, not just the beat before xterm exists:
@@ -902,19 +977,22 @@ onBeforeUnmount(() => {
                 <IconMessagesSquare class="size-6 text-text-4" />
                 <h2 class="text-[13.5px] font-semibold text-text">No chat open</h2>
                 <p class="text-xs leading-relaxed text-text-3">
-                  A chat is an agent attached to a workspace's directory. It launches with the
-                  workspace's command and MCP servers.
+                  A chat is an agent attached to a workspace's directory. It launches with the workspace's command and
+                  MCP servers.
                 </p>
                 <p v-if="!workspaces.length" class="text-xs leading-relaxed text-text-3">
                   No workspaces yet. Author one under {{ root }}.
                 </p>
-                <p v-if="paneError" class="text-xs leading-relaxed text-severity-error" data-testid="agents-pane-error">{{ paneError }}</p>
+                <p v-if="paneError" class="text-xs leading-relaxed text-severity-error" data-testid="agents-pane-error">
+                  {{ paneError }}
+                </p>
                 <BaseButton
                   size="sm"
                   :disabled="!workspaces.length"
                   data-testid="agents-new-session-open"
                   @click="handleNewSessionRequest"
-                >New chat</BaseButton>
+                  >New chat</BaseButton
+                >
               </div>
             </div>
           </div>

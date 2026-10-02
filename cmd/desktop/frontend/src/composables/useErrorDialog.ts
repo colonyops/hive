@@ -23,8 +23,12 @@ const current = ref<ErrorDetails | null>(null)
 export function useErrorDialog() {
   return {
     current,
-    showError: (details: ErrorDetails) => { current.value = details },
-    dismissError: () => { current.value = null },
+    showError: (details: ErrorDetails) => {
+      current.value = details
+    },
+    dismissError: () => {
+      current.value = null
+    },
   }
 }
 

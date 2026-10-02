@@ -59,7 +59,7 @@ export function canonicalPayload(item: InboxItem): CanonicalPayload {
     return { kind: '', repo: '', num: 0, author: '', body: '', url: item.url, labels: [], state: '' }
   }
   const value = item.payload as Record<string, unknown>
-  const string = (key: string): string => (typeof value[key] === 'string' ? value[key] as string : '')
+  const string = (key: string): string => (typeof value[key] === 'string' ? (value[key] as string) : '')
   return {
     kind: string('kind'),
     repo: string('repo'),
@@ -67,7 +67,9 @@ export function canonicalPayload(item: InboxItem): CanonicalPayload {
     author: string('author'),
     body: string('body'),
     url: string('url') || item.url,
-    labels: Array.isArray(value.labels) ? value.labels.filter((label): label is string => typeof label === 'string') : [],
+    labels: Array.isArray(value.labels)
+      ? value.labels.filter((label): label is string => typeof label === 'string')
+      : [],
     state: string('state'),
   }
 }
@@ -77,8 +79,12 @@ export function pullRequestMetadata(item: InboxItem): PullRequestMetadata | null
   const value = item.payload as Record<string, unknown>
   const ciStates = new Set<PullRequestCI>(['none', 'passing', 'pending', 'failing'])
   const reviewStates = new Set<PullRequestReview>(['open', 'draft', 'approved', 'changes_requested', 'review_required'])
-  const ci = typeof value.ci === 'string' && ciStates.has(value.ci as PullRequestCI) ? value.ci as PullRequestCI : null
-  const review = typeof value.review === 'string' && reviewStates.has(value.review as PullRequestReview) ? value.review as PullRequestReview : null
+  const ci =
+    typeof value.ci === 'string' && ciStates.has(value.ci as PullRequestCI) ? (value.ci as PullRequestCI) : null
+  const review =
+    typeof value.review === 'string' && reviewStates.has(value.review as PullRequestReview)
+      ? (value.review as PullRequestReview)
+      : null
   const count = (key: string): number | null => {
     const entry = value[key]
     return typeof entry === 'number' && Number.isFinite(entry) && entry >= 0 ? entry : null
@@ -184,8 +190,14 @@ export function snippet(item: InboxItem): string {
 /** Haystack matchesSearch filters the feed against: title, container line,
  *  byline, kind label, source label, and the body snippet. */
 export function searchText(item: InboxItem): string {
-  return [item.title, containerLine(item), byline(item), kindLabel(item), presentationFor(item.sourceKind).sourceLabel, snippet(item)]
-    .join(' ')
+  return [
+    item.title,
+    containerLine(item),
+    byline(item),
+    kindLabel(item),
+    presentationFor(item.sourceKind).sourceLabel,
+    snippet(item),
+  ].join(' ')
 }
 
 /** Clipboard text for an inbox item's "Copy contents" action: a compact
@@ -194,7 +206,9 @@ export function searchText(item: InboxItem): string {
  *  without the reader needing the app open. */
 export function clipboardText(item: InboxItem): string {
   const payload = canonicalPayload(item)
-  const reference = [payload.repo && payload.num ? `${payload.repo} #${payload.num}` : '', item.url].filter(Boolean).join(' · ')
+  const reference = [payload.repo && payload.num ? `${payload.repo} #${payload.num}` : '', item.url]
+    .filter(Boolean)
+    .join(' · ')
   const header = [item.title, reference].filter(Boolean).join('\n')
   const trimmedBody = payload.body.trim()
   return trimmedBody ? `${header}\n\n${trimmedBody}` : header

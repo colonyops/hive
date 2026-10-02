@@ -15,6 +15,12 @@ defineProps<{
   <div>
     <label v-if="label" class="mb-1.5 block text-[12.5px] text-text-2" :for="testid">{{ label }}</label>
     <slot />
-    <p v-if="hint" class="mt-1.5 text-xs leading-relaxed text-text-4" :data-testid="testid ? `${testid}-hint` : undefined">{{ hint }}</p>
+    <p
+      v-if="hint"
+      class="mt-1.5 text-xs leading-relaxed text-text-4"
+      :data-testid="testid ? `${testid}-hint` : undefined"
+    >
+      {{ hint }}
+    </p>
   </div>
 </template>

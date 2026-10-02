@@ -5,7 +5,12 @@ import HiveSetupForm from '../HiveSetupForm.vue'
 
 const AGENTS = [
   { name: 'claude', label: 'Claude Code', skipPermissionFlags: ['--dangerously-skip-permissions'], installed: true },
-  { name: 'opencode', label: 'OpenCode', skipPermissionFlags: ['--agent', 'free-permissions-runner'], installed: false },
+  {
+    name: 'opencode',
+    label: 'OpenCode',
+    skipPermissionFlags: ['--agent', 'free-permissions-runner'],
+    installed: false,
+  },
 ]
 
 function mountForm(props: Record<string, unknown> = {}) {
@@ -86,7 +91,7 @@ describe('HiveSetupForm', () => {
   })
 
   it('says so when none of the agents were found on PATH', () => {
-    const none = mountForm({ agents: AGENTS.map(a => ({ ...a, installed: false })) })
+    const none = mountForm({ agents: AGENTS.map((a) => ({ ...a, installed: false })) })
     expect(none.find('[data-testid="hive-no-agents-installed"]').exists()).toBe(true)
 
     const some = mountForm()

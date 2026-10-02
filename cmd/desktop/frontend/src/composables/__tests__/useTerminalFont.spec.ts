@@ -39,9 +39,8 @@ describe('useTerminalFont', () => {
   })
 
   it('steps by two and holds at both ends', async () => {
-    const {
-      maxTerminalFontSizePx, minTerminalFontSizePx, stepTerminalFontSize, useTerminalFont,
-    } = await import('../useTerminalFont')
+    const { maxTerminalFontSizePx, minTerminalFontSizePx, stepTerminalFontSize, useTerminalFont } =
+      await import('../useTerminalFont')
     const { px } = useTerminalFont()
     await settle()
     const start = px.value
@@ -69,9 +68,8 @@ describe('useTerminalFont', () => {
   })
 
   it('resets to the default size', async () => {
-    const {
-      defaultTerminalFontSizePx, resetTerminalFontSize, setTerminalFontSize, useTerminalFont,
-    } = await import('../useTerminalFont')
+    const { defaultTerminalFontSizePx, resetTerminalFontSize, setTerminalFontSize, useTerminalFont } =
+      await import('../useTerminalFont')
     const { px } = useTerminalFont()
     await settle()
 
@@ -117,7 +115,11 @@ describe('useTerminalFont', () => {
 
   it('does not let a slow settings read clobber a size chosen meanwhile', async () => {
     let resolveRead: (value: { terminalFontSizePx: number }) => void = () => {}
-    mocks.AppearanceSettings.mockReturnValue(new Promise((resolve) => { resolveRead = resolve }))
+    mocks.AppearanceSettings.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
     const { setTerminalFontSize, useTerminalFont } = await import('../useTerminalFont')
     const { px } = useTerminalFont()
 

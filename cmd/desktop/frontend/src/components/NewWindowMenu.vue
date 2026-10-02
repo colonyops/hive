@@ -29,7 +29,13 @@ function agentIcon(agent: string): Component | undefined {
 }
 
 const entries = computed<MenuEntry[]>(() => [
-  { kind: 'action', id: 'terminal', label: props.running ? 'New terminal' : 'Start session', icon: IconTerminal, testid: 'new-window-terminal' },
+  {
+    kind: 'action',
+    id: 'terminal',
+    label: props.running ? 'New terminal' : 'Start session',
+    icon: IconTerminal,
+    testid: 'new-window-terminal',
+  },
   { kind: 'separator' },
   ...(!props.running ? [{ kind: 'label' as const, text: 'Start the session to add an agent' }] : []),
   ...(props.loading
@@ -37,7 +43,14 @@ const entries = computed<MenuEntry[]>(() => [
     : props.failed
       ? [{ kind: 'action' as const, id: 'retry', label: 'Could not load agents. Retry', testid: 'new-window-retry' }]
       : props.agents.length
-        ? props.agents.map((agent) => ({ kind: 'action' as const, id: `agent:${agent}`, label: agent === props.defaultAgent ? `${agent} (default)` : agent, icon: agentIcon(agent), disabled: !props.running, testid: `new-window-agent-${agent}` }))
+        ? props.agents.map((agent) => ({
+            kind: 'action' as const,
+            id: `agent:${agent}`,
+            label: agent === props.defaultAgent ? `${agent} (default)` : agent,
+            icon: agentIcon(agent),
+            disabled: !props.running,
+            testid: `new-window-agent-${agent}`,
+          }))
         : [{ kind: 'label' as const, text: 'No agents configured' }]),
 ])
 
@@ -53,5 +66,13 @@ function select(id: string): void {
 </script>
 
 <template>
-  <AppMenu :entries="entries" :flip="flip" :ignore="ignore" width="min(200px, 100%)" testid="new-window-menu" @select="select" @close="emit('close')" />
+  <AppMenu
+    :entries="entries"
+    :flip="flip"
+    :ignore="ignore"
+    width="min(200px, 100%)"
+    testid="new-window-menu"
+    @select="select"
+    @close="emit('close')"
+  />
 </template>

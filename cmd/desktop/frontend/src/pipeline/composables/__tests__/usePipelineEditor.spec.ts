@@ -151,7 +151,10 @@ describe('usePipelineEditor', () => {
     state.updateNode({ id: 'feed', type: 'feed', name: 'Renamed', config: { feed: 'inbox' } })
 
     expect(state.activeFlow.value!.nodes.find((n) => n.id === 'feed')).toEqual({
-      id: 'feed', type: 'feed', name: 'Renamed', config: { feed: 'inbox' },
+      id: 'feed',
+      type: 'feed',
+      name: 'Renamed',
+      config: { feed: 'inbox' },
     })
     expect(state.dirty.value).toBe(true)
 
@@ -159,7 +162,9 @@ describe('usePipelineEditor', () => {
   })
 
   it('deleteNode removes the node, any of its wires, and its layout entry', async () => {
-    const client = fakeClient({ getLayout: vi.fn().mockResolvedValue({ nodes: { src: { x: 1, y: 1 }, feed: { x: 2, y: 2 } } }) })
+    const client = fakeClient({
+      getLayout: vi.fn().mockResolvedValue({ nodes: { src: { x: 1, y: 1 }, feed: { x: 2, y: 2 } } }),
+    })
     const { state, wrapper } = await mountLoadedEditor(client)
     await state.selectFlow('flow-1')
 
@@ -267,9 +272,39 @@ describe('usePipelineEditor', () => {
 
   it('derives the latest node_run per node from a newest-first list, ignoring later (older) duplicates', async () => {
     const runs: NodeRunRecord[] = [
-      { flowId: 'flow-1', nodeId: 'a', ok: true, inCount: 2, outCount: 2, dropCount: 0, err: '', durMs: 5, endedAt: 300 },
-      { flowId: 'flow-1', nodeId: 'b', ok: false, inCount: 1, outCount: 0, dropCount: 1, err: 'boom', durMs: 1, endedAt: 200 },
-      { flowId: 'flow-1', nodeId: 'a', ok: true, inCount: 1, outCount: 1, dropCount: 0, err: '', durMs: 3, endedAt: 100 },
+      {
+        flowId: 'flow-1',
+        nodeId: 'a',
+        ok: true,
+        inCount: 2,
+        outCount: 2,
+        dropCount: 0,
+        err: '',
+        durMs: 5,
+        endedAt: 300,
+      },
+      {
+        flowId: 'flow-1',
+        nodeId: 'b',
+        ok: false,
+        inCount: 1,
+        outCount: 0,
+        dropCount: 1,
+        err: 'boom',
+        durMs: 1,
+        endedAt: 200,
+      },
+      {
+        flowId: 'flow-1',
+        nodeId: 'a',
+        ok: true,
+        inCount: 1,
+        outCount: 1,
+        dropCount: 0,
+        err: '',
+        durMs: 3,
+        endedAt: 100,
+      },
     ]
     const client = fakeClient({ nodeRuns: vi.fn().mockResolvedValue(runs) })
     const { state, wrapper } = await mountLoadedEditor(client)

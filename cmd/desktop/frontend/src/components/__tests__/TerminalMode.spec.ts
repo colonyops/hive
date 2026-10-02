@@ -11,11 +11,22 @@ import { setTerminalShowWindows } from '../../composables/useTerminalShowWindows
 import { setTerminalShowStatusBar } from '../../composables/useTerminalStatusBar'
 import { resetTerminalWindowListingsForTests } from '../../composables/useTerminalWindowListings'
 import { resetTerminalPinnedChatsForTests, useTerminalPinnedChats } from '../../composables/useTerminalPinnedChats'
-import { resetAttachedTerminalWindowsForTests, useAttachedTerminalWindows } from '../../composables/useAttachedTerminalWindows'
+import {
+  resetAttachedTerminalWindowsForTests,
+  useAttachedTerminalWindows,
+} from '../../composables/useAttachedTerminalWindows'
 import { useCommandPalette } from '../../composables/useCommands'
 import { resetAgentSessionsAllForTests } from '../../composables/useAgentSessionsAll'
 import { resetAgentWorkspacesForTests } from '../../composables/useAgentWorkspaces'
-import { closeTerminalPane, closeTerminalWindow, focusTerminalFilter, newTerminalWindow, paneMayAutoFocus, selectTerminalWindow, stepTerminalWindow } from '../../lib/terminalTree'
+import {
+  closeTerminalPane,
+  closeTerminalWindow,
+  focusTerminalFilter,
+  newTerminalWindow,
+  paneMayAutoFocus,
+  selectTerminalWindow,
+  stepTerminalWindow,
+} from '../../lib/terminalTree'
 import { createAppRouter } from '../../router'
 import { tooltipFor } from '../../test-utils/tooltip'
 
@@ -65,7 +76,12 @@ vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => {
     ...actual,
     createAgentWorkspacesClient: () => ({
       workspaces: vi.fn().mockResolvedValue({
-        root: '', agents: [], editor: { command: '', title: '' }, presets: [], rootProblem: '', workspaces: [],
+        root: '',
+        agents: [],
+        editor: { command: '', title: '' },
+        presets: [],
+        rootProblem: '',
+        workspaces: [],
       }),
       allSessions: mocks.allSessions,
       resumeSession: mocks.resumeSession,
@@ -127,8 +143,9 @@ vi.mock('@wailsio/runtime', () => ({
 // keyed by slug. A slug with no tmux session behind it is simply absent.
 type FakeWindow = { windowId: string; name: string; active: boolean; width: number; height: number }
 function fakeListWindows(bySlug: Record<string, FakeWindow[]> = {}) {
-  return vi.fn(async (slugs: string[]) => Object.fromEntries(
-    slugs.filter((slug) => bySlug[slug]).map((slug) => [slug, bySlug[slug]])))
+  return vi.fn(async (slugs: string[]) =>
+    Object.fromEntries(slugs.filter((slug) => bySlug[slug]).map((slug) => [slug, bySlug[slug]])),
+  )
 }
 
 /** The same window set for whichever sessions the sweep asks about. */
@@ -141,8 +158,30 @@ type FakePane = { uid: number; paneId: string; term: object; scrolledUp: boolean
 function fakeSession() {
   return {
     tabs: ref([
-      { uid: 1, windowId: '@1', name: 'agent', active: true, activePane: '%1', width: 213, height: 55, zoomed: false, layout: null, panes: [] as FakePane[] },
-      { uid: 2, windowId: '@2', name: 'shell', active: false, activePane: '%2', width: 213, height: 55, zoomed: false, layout: null, panes: [] as FakePane[] },
+      {
+        uid: 1,
+        windowId: '@1',
+        name: 'agent',
+        active: true,
+        activePane: '%1',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [] as FakePane[],
+      },
+      {
+        uid: 2,
+        windowId: '@2',
+        name: 'shell',
+        active: false,
+        activePane: '%2',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [] as FakePane[],
+      },
     ]),
     activeWindowId: ref('@1'),
     status: ref<'connecting' | 'live' | 'ended'>('live'),
@@ -150,7 +189,9 @@ function fakeSession() {
     endReason: ref<string | null>(null),
     error: ref<string | null>(null),
     actionError: ref<string | null>(null),
-    sizeConstraint: ref<{ voted: { cols: number; rows: number }; granted: { cols: number; rows: number } } | null>(null),
+    sizeConstraint: ref<{ voted: { cols: number; rows: number }; granted: { cols: number; rows: number } } | null>(
+      null,
+    ),
     dismissSizeConstraint: vi.fn(),
     outputDropped: ref(false),
     dismissOutputDropped: vi.fn(),
@@ -197,12 +238,18 @@ function onePaneSession() {
 // taking whatever the tree lists first.
 const SCRATCH_SLUG = 'Scratch'
 function sessionRows(wrapper: { findAll: (s: string) => DOMWrapper<Element>[] }): DOMWrapper<Element>[] {
-  return wrapper.findAll('[data-testid="terminal-session-row"]')
+  return wrapper
+    .findAll('[data-testid="terminal-session-row"]')
     .filter((row) => row.attributes('data-slug') !== SCRATCH_SLUG)
 }
 
-function openRowMenu(wrapper: { get: (s: string) => Pick<DOMWrapper<Element>, 'trigger'> }, slug: string): Promise<void> {
-  return wrapper.get(`[data-testid="terminal-session-row"][data-slug="${slug}"] [data-testid="terminal-session-menu-toggle"]`).trigger('click')
+function openRowMenu(
+  wrapper: { get: (s: string) => Pick<DOMWrapper<Element>, 'trigger'> },
+  slug: string,
+): Promise<void> {
+  return wrapper
+    .get(`[data-testid="terminal-session-row"][data-slug="${slug}"] [data-testid="terminal-session-menu-toggle"]`)
+    .trigger('click')
 }
 
 // What is actually on screen: every pooled session's panes stay mounted, and
@@ -210,7 +257,8 @@ function openRowMenu(wrapper: { get: (s: string) => Pick<DOMWrapper<Element>, 't
 // inline style — isVisible() resolves through getComputedStyle, which happy-dom
 // does not derive from it, so it answers true for a hidden pane.
 function shownWindow(wrapper: { findAll: (s: string) => DOMWrapper<Element>[] }): string | undefined {
-  return wrapper.findAll('[data-testid="terminal-pane"]')
+  return wrapper
+    .findAll('[data-testid="terminal-pane"]')
     .find((pane) => (pane.element as HTMLElement).style.display !== 'none')
     ?.attributes('data-window-id')
 }
@@ -223,7 +271,9 @@ async function mountAt(path = '/terminal') {
   const router = createAppRouter(createMemoryHistory())
   await router.push(path)
   await router.isReady()
-  const wrapper = mount(TerminalMode, { global: { plugins: [router], stubs: { transition: true, 'transition-group': true } } })
+  const wrapper = mount(TerminalMode, {
+    global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
+  })
   await flushPromises()
   return { wrapper, router }
 }
@@ -262,10 +312,16 @@ describe('TerminalMode', () => {
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
     mocks.Scratch.mockResolvedValue({ slug: 'Scratch', name: 'Terminals' })
     mocks.SessionLaunchOptions.mockResolvedValue({ agents: ['claude', 'codex'], defaultAgent: 'claude' })
-    mocks.getTerminalEndpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://127.0.0.1:1/s', token: 't' })
+    mocks.getTerminalEndpoint.mockResolvedValue({
+      httpBaseURL: 'http://127.0.0.1:1',
+      wsURL: 'ws://127.0.0.1:1/s',
+      token: 't',
+    })
     // Every close asks what the tab is running first; idle is the answer that
     // keeps the rest of these tests closing on the click.
-    mocks.createTerminalClient.mockReturnValue({ windowForeground: vi.fn().mockResolvedValue({ running: false, command: '' }) })
+    mocks.createTerminalClient.mockReturnValue({
+      windowForeground: vi.fn().mockResolvedValue({ running: false, command: '' }),
+    })
     mocks.ListSessions.mockResolvedValue([
       { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
       { id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' },
@@ -284,12 +340,25 @@ describe('TerminalMode', () => {
     // The bar ships on, but the fixture keeps it off so tests that do not care
     // about it see a bare terminal; a test that wants it turns it on.
     mocks.AppearanceSettings.mockResolvedValue({
-      theme: '', terminalFontSizePx: 13, terminalShowWindows: true, terminalShowStatusBar: false, terminalPoolSize: 3,
+      theme: '',
+      terminalFontSizePx: 13,
+      terminalShowWindows: true,
+      terminalShowStatusBar: false,
+      terminalPoolSize: 3,
     })
     mocks.EditorSettings.mockResolvedValue({ command: 'zed', title: 'Zed', choices: [] })
     mocks.SessionGitStatus.mockResolvedValue({
-      path: '/tmp/fix-parser', branch: 'feat/parser', dirty: false, unpushed: false,
-      additions: 0, deletions: 0, host: 'github.com', owner: 'hay-kot', repo: 'hive', resolved: true, error: '',
+      path: '/tmp/fix-parser',
+      branch: 'feat/parser',
+      dirty: false,
+      unpushed: false,
+      additions: 0,
+      deletions: 0,
+      host: 'github.com',
+      owner: 'hay-kot',
+      repo: 'hive',
+      resolved: true,
+      error: '',
     })
     mocks.SessionPullRequest.mockResolvedValue({ status: 'none' })
   })
@@ -306,12 +375,16 @@ describe('TerminalMode', () => {
   })
 
   it('treats an endpoint failure as unavailable and can retry', async () => {
-    mocks.getTerminalEndpoint.mockRejectedValueOnce(Object.assign(new Error('call failed'), {
-      cause: { kind: 'unavailable', message: 'The local HTTP server is not running.' },
-    }))
+    mocks.getTerminalEndpoint.mockRejectedValueOnce(
+      Object.assign(new Error('call failed'), {
+        cause: { kind: 'unavailable', message: 'The local HTTP server is not running.' },
+      }),
+    )
 
     const { wrapper } = await mountAt()
-    expect(wrapper.get('[data-testid="terminal-unavailable-reason"]').text()).toBe('The local HTTP server is not running.')
+    expect(wrapper.get('[data-testid="terminal-unavailable-reason"]').text()).toBe(
+      'The local HTTP server is not running.',
+    )
 
     mocks.useTerminalWindows.mockReturnValue(fakeSession())
     await wrapper.get('[data-testid="terminal-retry"]').trigger('click')
@@ -367,10 +440,54 @@ describe('TerminalMode', () => {
     })
     const liveSession = fakeSession()
     liveSession.tabs.value = [
-      { uid: 1, windowId: '@1', name: 'working', active: true, activePane: '%1', width: 213, height: 55, zoomed: false, layout: null, panes: [] },
-      { uid: 2, windowId: '@2', name: 'approval', active: false, activePane: '%2', width: 213, height: 55, zoomed: false, layout: null, panes: [] },
-      { uid: 3, windowId: '@3', name: 'ready', active: false, activePane: '%3', width: 213, height: 55, zoomed: false, layout: null, panes: [] },
-      { uid: 4, windowId: '@4', name: 'unknown', active: false, activePane: '%4', width: 213, height: 55, zoomed: false, layout: null, panes: [] },
+      {
+        uid: 1,
+        windowId: '@1',
+        name: 'working',
+        active: true,
+        activePane: '%1',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [],
+      },
+      {
+        uid: 2,
+        windowId: '@2',
+        name: 'approval',
+        active: false,
+        activePane: '%2',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [],
+      },
+      {
+        uid: 3,
+        windowId: '@3',
+        name: 'ready',
+        active: false,
+        activePane: '%3',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [],
+      },
+      {
+        uid: 4,
+        windowId: '@4',
+        name: 'unknown',
+        active: false,
+        activePane: '%4',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [],
+      },
     ]
     mocks.useTerminalWindows.mockReturnValue(liveSession)
     mocks.SessionStatuses.mockResolvedValue({
@@ -395,22 +512,31 @@ describe('TerminalMode', () => {
     const liveness = wrapper.findAll('[data-testid="terminal-session-liveness"]')
     expect(liveness).toHaveLength(1)
     expect(liveness[0].attributes('title')).toBe('Terminal running')
-    expect(liveness[0].get('span[aria-hidden="true"]').classes()).toEqual(expect.arrayContaining(['size-2.5', 'rounded-full', 'bg-current']))
+    expect(liveness[0].get('span[aria-hidden="true"]').classes()).toEqual(
+      expect.arrayContaining(['size-2.5', 'rounded-full', 'bg-current']),
+    )
     const idleRow = wrapper.get('[data-testid="terminal-session-row"][data-slug="stopped"]')
     expect(idleRow.find('[data-testid="terminal-session-liveness"]').exists()).toBe(false)
     expect(idleRow.get('span').classes()).toContain('text-text-3')
     const liveRow = wrapper.get('[data-testid="terminal-session-row"][data-slug="live"]')
     expect(liveRow.get('span').classes()).not.toContain('text-text-3')
-    expect(liveRow.get('[data-testid="terminal-session-liveness"]').element.parentElement)
-      .toBe(liveRow.get('[data-testid="terminal-session-menu-toggle"]').element.parentElement)
+    expect(liveRow.get('[data-testid="terminal-session-liveness"]').element.parentElement).toBe(
+      liveRow.get('[data-testid="terminal-session-menu-toggle"]').element.parentElement,
+    )
 
     const activity = wrapper.findAll('[data-testid="terminal-window-status"]')
     expect(activity).toHaveLength(4)
     expect(activity.every((indicator) => indicator.find('svg').exists())).toBe(true)
     expect(activity.every((indicator) => indicator.classes().includes('window-status'))).toBe(true)
-    expect(wrapper.get('[data-testid="terminal-window-status"][data-status="active"]').attributes('title')).toBe('pi is working')
-    expect(wrapper.get('[data-testid="terminal-window-status"][data-status="active"] svg').classes()).toContain('animate-spin')
-    expect(wrapper.get('[data-testid="terminal-window-status"][data-status="approval"]').attributes('title')).toBe('claude needs approval')
+    expect(wrapper.get('[data-testid="terminal-window-status"][data-status="active"]').attributes('title')).toBe(
+      'pi is working',
+    )
+    expect(wrapper.get('[data-testid="terminal-window-status"][data-status="active"] svg').classes()).toContain(
+      'animate-spin',
+    )
+    expect(wrapper.get('[data-testid="terminal-window-status"][data-status="approval"]').attributes('title')).toBe(
+      'claude needs approval',
+    )
     expect(wrapper.text()).not.toContain('[●]')
 
     await wrapper.get('[data-testid="terminal-session-row"][data-slug="live"]').trigger('click')
@@ -624,7 +750,20 @@ describe('TerminalMode', () => {
   it('keeps the outgoing attach warm and snaps back to it without re-attaching', async () => {
     const first = fakeSession()
     const second = fakeSession()
-    second.tabs.value = [{ uid: 9, windowId: '@9', name: 'other', active: true, activePane: '%9', width: 213, height: 55, zoomed: false, layout: null, panes: [] }]
+    second.tabs.value = [
+      {
+        uid: 9,
+        windowId: '@9',
+        name: 'other',
+        active: true,
+        activePane: '%9',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [],
+      },
+    ]
     second.activeWindowId.value = '@9'
     mocks.useTerminalWindows.mockReturnValueOnce(first).mockReturnValueOnce(second)
     const { wrapper } = await mountAt()
@@ -695,11 +834,26 @@ describe('TerminalMode', () => {
     await flushPromises()
 
     // The sidebar reflects the selection at once; the pane does not blank.
-    expect(wrapper.find('[data-testid="terminal-session-row"][data-attached="true"]').attributes('data-slug')).toBe('hive-fix-parser')
+    expect(wrapper.find('[data-testid="terminal-session-row"][data-attached="true"]').attributes('data-slug')).toBe(
+      'hive-fix-parser',
+    )
     expect(shownWindow(wrapper)).toBe('@1')
 
     // First paint is the swap signal.
-    second.tabs.value = [{ uid: 9, windowId: '@9', name: 'other', active: true, activePane: '%9', width: 213, height: 55, zoomed: false, layout: null, panes: [] }]
+    second.tabs.value = [
+      {
+        uid: 9,
+        windowId: '@9',
+        name: 'other',
+        active: true,
+        activePane: '%9',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [],
+      },
+    ]
     second.activeWindowId.value = '@9'
     second.status.value = 'live'
     second.painted.value = true
@@ -769,8 +923,11 @@ describe('TerminalMode', () => {
         { windowId: '@2', name: 'shell', active: false, width: 0, height: 0 },
       ],
     }
-    mocks.createTerminalClient.mockReturnValue({ listWindows: vi.fn(async (slugs: string[]) => Object.fromEntries(
-      slugs.filter((slug) => tmux[slug]).map((slug) => [slug, tmux[slug]]))) })
+    mocks.createTerminalClient.mockReturnValue({
+      listWindows: vi.fn(async (slugs: string[]) =>
+        Object.fromEntries(slugs.filter((slug) => tmux[slug]).map((slug) => [slug, tmux[slug]])),
+      ),
+    })
     const sessions = [fakeSession(), fakeSession(), fakeSession(), fakeSession()]
     for (const session of sessions) mocks.useTerminalWindows.mockReturnValueOnce(session)
     const { wrapper } = await mountAt()
@@ -788,7 +945,8 @@ describe('TerminalMode', () => {
     }
     expect(sessions[0].dispose).toHaveBeenCalledTimes(1)
 
-    const listed = wrapper.findAll('[data-testid="terminal-listed-window-row"]')
+    const listed = wrapper
+      .findAll('[data-testid="terminal-listed-window-row"]')
       .filter((row) => row.attributes('data-tree-key')?.startsWith('w:1:'))
     expect(listed.map((row) => row.text())).toEqual(['agent'])
   })
@@ -839,8 +997,30 @@ describe('TerminalMode', () => {
     mocks.createTerminalClient.mockReturnValue({ listWindows })
     const session = fakeSession()
     session.tabs.value = [
-      { uid: 7, windowId: '@7', name: 'agent', active: true, activePane: '%7', width: 213, height: 55, zoomed: false, layout: null, panes: [] },
-      { uid: 8, windowId: '@8', name: 'shell', active: false, activePane: '%8', width: 213, height: 55, zoomed: false, layout: null, panes: [] },
+      {
+        uid: 7,
+        windowId: '@7',
+        name: 'agent',
+        active: true,
+        activePane: '%7',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [],
+      },
+      {
+        uid: 8,
+        windowId: '@8',
+        name: 'shell',
+        active: false,
+        activePane: '%8',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [],
+      },
     ]
     session.activeWindowId.value = '@7'
     const { wrapper, router } = await mountAvailable(session)
@@ -865,9 +1045,7 @@ describe('TerminalMode', () => {
   })
 
   it('empties the tree of listed windows when the setting is turned off', async () => {
-    const listWindows = fakeListWindowsEach([
-      { windowId: '@7', name: 'agent', active: true, width: 0, height: 0 },
-    ])
+    const listWindows = fakeListWindowsEach([{ windowId: '@7', name: 'agent', active: true, width: 0, height: 0 }])
     mocks.createTerminalClient.mockReturnValue({ listWindows })
     const { wrapper } = await mountAvailable()
     // One per session and one for the scratch terminal: the sweep answers for
@@ -888,9 +1066,7 @@ describe('TerminalMode', () => {
   })
 
   it('re-enters from the caches and resumes without waiting on the probe', async () => {
-    const listWindows = fakeListWindowsEach([
-      { windowId: '@7', name: 'agent', active: true, width: 0, height: 0 },
-    ])
+    const listWindows = fakeListWindowsEach([{ windowId: '@7', name: 'agent', active: true, width: 0, height: 0 }])
     mocks.createTerminalClient.mockReturnValue({ listWindows })
     const { wrapper } = await mountAvailable()
     expect(wrapper.findAll('[data-testid="terminal-listed-window-row"]')).toHaveLength(3)
@@ -934,8 +1110,30 @@ describe('TerminalMode', () => {
 
     // The live tab set replaces the stand-ins in place.
     session.tabs.value = [
-      { uid: 7, windowId: '@7', name: 'agent', active: true, activePane: '%7', width: 213, height: 55, zoomed: false, layout: null, panes: [] },
-      { uid: 8, windowId: '@8', name: 'shell', active: false, activePane: '%8', width: 213, height: 55, zoomed: false, layout: null, panes: [] },
+      {
+        uid: 7,
+        windowId: '@7',
+        name: 'agent',
+        active: true,
+        activePane: '%7',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [],
+      },
+      {
+        uid: 8,
+        windowId: '@8',
+        name: 'shell',
+        active: false,
+        activePane: '%8',
+        width: 213,
+        height: 55,
+        zoomed: false,
+        layout: null,
+        panes: [],
+      },
     ]
     session.status.value = 'live'
     await flushPromises()
@@ -1032,7 +1230,9 @@ describe('TerminalMode', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="terminal-session-ended"]').text()).toContain('Terminal stream lost')
-    expect(wrapper.get('[data-testid="terminal-session-ended-reason"]').text()).toBe('The terminal stream disconnected.')
+    expect(wrapper.get('[data-testid="terminal-session-ended-reason"]').text()).toBe(
+      'The terminal stream disconnected.',
+    )
 
     session.endReason.value = 'exited'
     session.error.value = 'overflow'
@@ -1106,7 +1306,9 @@ describe('TerminalMode', () => {
 
     // The attached session's row adds a window through its own client, which is
     // what makes the new one active.
-    await wrapper.get('[data-testid="terminal-session-row"][data-attached="true"] [data-testid="terminal-new-window"]').trigger('click')
+    await wrapper
+      .get('[data-testid="terminal-session-row"][data-attached="true"] [data-testid="terminal-new-window"]')
+      .trigger('click')
     await wrapper.get('[data-testid="new-window-terminal"]').trigger('click')
     expect(session.newWindow).toHaveBeenCalled()
 
@@ -1137,7 +1339,9 @@ describe('TerminalMode', () => {
     // Read at the moment of the close, for the window the close would kill.
     expect(windowForeground).toHaveBeenCalledWith('hive-bump-deps', '@1')
     expect(session.closeWindow).not.toHaveBeenCalled()
-    expect(document.querySelector('[data-testid="session-confirmation"]')?.textContent).toContain('claude is still running in agent')
+    expect(document.querySelector('[data-testid="session-confirmation"]')?.textContent).toContain(
+      'claude is still running in agent',
+    )
 
     document.querySelector<HTMLButtonElement>('[data-testid="session-confirmation-confirm"]')?.click()
     await flushPromises()
@@ -1145,7 +1349,9 @@ describe('TerminalMode', () => {
   })
 
   it('leaves the tab and its process alone when the confirmation is cancelled', async () => {
-    mocks.createTerminalClient.mockReturnValue({ windowForeground: vi.fn().mockResolvedValue({ running: true, command: 'claude' }) })
+    mocks.createTerminalClient.mockReturnValue({
+      windowForeground: vi.fn().mockResolvedValue({ running: true, command: 'claude' }),
+    })
     const { wrapper, session } = await mountAvailable()
     await sessionRows(wrapper)[0].trigger('click')
     await flushPromises()
@@ -1181,7 +1387,9 @@ describe('TerminalMode', () => {
   // A check that failed is not evidence the tab is idle, and killing a process
   // to find out is what the confirmation exists to prevent.
   it('confirms when what the tab is running could not be read', async () => {
-    mocks.createTerminalClient.mockReturnValue({ windowForeground: vi.fn().mockRejectedValue(new Error('tmux went away')) })
+    mocks.createTerminalClient.mockReturnValue({
+      windowForeground: vi.fn().mockRejectedValue(new Error('tmux went away')),
+    })
     const { wrapper, session } = await mountAvailable()
     await sessionRows(wrapper)[0].trigger('click')
     await flushPromises()
@@ -1190,7 +1398,9 @@ describe('TerminalMode', () => {
     await flushPromises()
 
     expect(session.closeWindow).not.toHaveBeenCalled()
-    expect(document.querySelector('[data-testid="session-confirmation"]')?.textContent).toContain('Something is still running in agent')
+    expect(document.querySelector('[data-testid="session-confirmation"]')?.textContent).toContain(
+      'Something is still running in agent',
+    )
     document.querySelector<HTMLButtonElement>('[data-testid="session-confirmation-cancel"]')?.click()
   })
 
@@ -1218,7 +1428,9 @@ describe('TerminalMode', () => {
   })
 
   it('leaves the pane and its process alone when the confirmation is cancelled', async () => {
-    mocks.createTerminalClient.mockReturnValue({ paneForeground: vi.fn().mockResolvedValue({ running: true, command: 'claude' }) })
+    mocks.createTerminalClient.mockReturnValue({
+      paneForeground: vi.fn().mockResolvedValue({ running: true, command: 'claude' }),
+    })
     const { wrapper, session } = await mountAvailable(onePaneSession())
     await sessionRows(wrapper)[0].trigger('click')
     await flushPromises()
@@ -1233,7 +1445,9 @@ describe('TerminalMode', () => {
   })
 
   it('confirms when what the pane is running could not be read', async () => {
-    mocks.createTerminalClient.mockReturnValue({ paneForeground: vi.fn().mockRejectedValue(new Error('tmux went away')) })
+    mocks.createTerminalClient.mockReturnValue({
+      paneForeground: vi.fn().mockRejectedValue(new Error('tmux went away')),
+    })
     const { wrapper, session } = await mountAvailable(onePaneSession())
     await sessionRows(wrapper)[0].trigger('click')
     await flushPromises()
@@ -1242,7 +1456,9 @@ describe('TerminalMode', () => {
     await flushPromises()
 
     expect(session.closePane).not.toHaveBeenCalled()
-    expect(document.querySelector('[data-testid="session-confirmation"]')?.textContent).toContain('Something is still running in agent')
+    expect(document.querySelector('[data-testid="session-confirmation"]')?.textContent).toContain(
+      'Something is still running in agent',
+    )
     document.querySelector<HTMLButtonElement>('[data-testid="session-confirmation-cancel"]')?.click()
   })
 
@@ -1272,8 +1488,9 @@ describe('TerminalMode', () => {
     let listing: Record<string, FakeWindow[]> = {
       'hive-fix-parser': [{ windowId: '@1', name: 'zsh', active: true, width: 80, height: 24 }],
     }
-    const listWindows = vi.fn(async (slugs: string[]) => Object.fromEntries(
-      slugs.filter((slug) => listing[slug]).map((slug) => [slug, listing[slug]])))
+    const listWindows = vi.fn(async (slugs: string[]) =>
+      Object.fromEntries(slugs.filter((slug) => listing[slug]).map((slug) => [slug, listing[slug]])),
+    )
     mocks.createTerminalClient.mockReturnValue({ listWindows })
     const { wrapper, session } = await mountAvailable()
 
@@ -1369,7 +1586,10 @@ describe('TerminalMode', () => {
   })
 
   it('shows a peer launch failure even before any terminal is selected', async () => {
-    mocks.createTerminalClient.mockReturnValue({ listWindows: fakeListWindows(), newAgentWindow: vi.fn().mockRejectedValue(new Error('session stopped')) })
+    mocks.createTerminalClient.mockReturnValue({
+      listWindows: fakeListWindows(),
+      newAgentWindow: vi.fn().mockRejectedValue(new Error('session stopped')),
+    })
     const { wrapper } = await mountAt()
     await wrapper.get('[data-slug="hive-bump-deps"] [data-testid="terminal-new-window"]').trigger('click')
     await flushPromises()
@@ -1379,7 +1599,13 @@ describe('TerminalMode', () => {
   })
 
   it('disables peer agents when the session is stopped', async () => {
-    mocks.SessionStatuses.mockResolvedValue({ items: [{ sessionId: '1', running: true, windows: [] }, { sessionId: '2', running: false, windows: [] }], pollIntervalMs: 60_000 })
+    mocks.SessionStatuses.mockResolvedValue({
+      items: [
+        { sessionId: '1', running: true, windows: [] },
+        { sessionId: '2', running: false, windows: [] },
+      ],
+      pollIntervalMs: 60_000,
+    })
     const { wrapper } = await mountAvailable()
     await wrapper.get('[data-slug="hive-bump-deps"] [data-testid="terminal-new-window"]').trigger('click')
     await flushPromises()
@@ -1393,7 +1619,9 @@ describe('TerminalMode', () => {
     mocks.createTerminalClient.mockReturnValue({ listWindows: fakeListWindows(), start, newWindow })
     const { wrapper, router } = await mountAt()
 
-    await wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-bump-deps"] [data-testid="terminal-new-window"]').trigger('click')
+    await wrapper
+      .get('[data-testid="terminal-session-row"][data-slug="hive-bump-deps"] [data-testid="terminal-new-window"]')
+      .trigger('click')
     await wrapper.get('[data-testid="new-window-terminal"]').trigger('click')
     await flushPromises()
 
@@ -1417,7 +1645,9 @@ describe('TerminalMode', () => {
     })
     const { wrapper, router } = await mountAt()
 
-    await wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-bump-deps"] [data-testid="terminal-new-window"]').trigger('click')
+    await wrapper
+      .get('[data-testid="terminal-session-row"][data-slug="hive-bump-deps"] [data-testid="terminal-new-window"]')
+      .trigger('click')
     await wrapper.get('[data-testid="new-window-terminal"]').trigger('click')
     await flushPromises()
 
@@ -1442,7 +1672,9 @@ describe('TerminalMode', () => {
     })
     const { wrapper, router } = await mountAt()
 
-    await wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-bump-deps"] [data-testid="terminal-new-window"]').trigger('click')
+    await wrapper
+      .get('[data-testid="terminal-session-row"][data-slug="hive-bump-deps"] [data-testid="terminal-new-window"]')
+      .trigger('click')
     await wrapper.get('[data-testid="new-window-terminal"]').trigger('click')
     await flushPromises()
 
@@ -1516,9 +1748,17 @@ describe('TerminalMode', () => {
 
   it('reads a session on demand from its row menu', async () => {
     mocks.SessionDetail.mockResolvedValue({
-      id: '2', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active',
-      path: '/tmp/hive-fix-parser', cloneStrategy: 'full', worktreeBranch: '', tags: null,
-      createdAt: '2026-07-01T00:00:00Z', updatedAt: '2026-07-02T00:00:00Z',
+      id: '2',
+      name: 'fix the parser',
+      slug: 'hive-fix-parser',
+      repo: 'hay-kot/hive',
+      state: 'active',
+      path: '/tmp/hive-fix-parser',
+      cloneStrategy: 'full',
+      worktreeBranch: '',
+      tags: null,
+      createdAt: '2026-07-01T00:00:00Z',
+      updatedAt: '2026-07-02T00:00:00Z',
     })
     const { wrapper } = await mountAvailable()
 
@@ -1655,7 +1895,13 @@ describe('TerminalMode', () => {
   })
 
   it('re-attaches under the new slug when the attached session is renamed', async () => {
-    mocks.RenameSession.mockResolvedValue({ id: '1', name: 'parse it', slug: 'parse-it', repo: 'hay-kot/hive', state: 'active' })
+    mocks.RenameSession.mockResolvedValue({
+      id: '1',
+      name: 'parse it',
+      slug: 'parse-it',
+      repo: 'hay-kot/hive',
+      state: 'active',
+    })
     const { wrapper, router } = await mountAvailable()
     await wrapper.find('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"]').trigger('click')
     await flushPromises()
@@ -1697,7 +1943,9 @@ describe('TerminalMode', () => {
     await prune.trigger('click')
     await flushPromises()
 
-    expect(document.querySelector('[data-testid="session-confirmation"]')?.textContent).toContain('All 2 recycled and corrupted sessions')
+    expect(document.querySelector('[data-testid="session-confirmation"]')?.textContent).toContain(
+      'All 2 recycled and corrupted sessions',
+    )
     document.querySelector<HTMLButtonElement>('[data-testid="session-confirmation-confirm"]')!.click()
     await flushPromises()
     expect(mocks.PruneSessions).toHaveBeenCalled()
@@ -1706,10 +1954,13 @@ describe('TerminalMode', () => {
 
   it.each([
     ['deleted', [{ id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' }]],
-    ['recycled', [
-      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'recycled' },
-      { id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' },
-    ]],
+    [
+      'recycled',
+      [
+        { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'recycled' },
+        { id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' },
+      ],
+    ],
   ])('closes the attach when the attached session is %s', async (_case, listing) => {
     const { wrapper, router, session } = await mountAvailable()
     await wrapper.find('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"]').trigger('click')
@@ -1740,7 +1991,7 @@ describe('TerminalMode', () => {
     // happy-dom lays nothing out, so the drop edge has to be stated: a row 28px
     // tall at top, and a pointer somewhere in it.
     function box(slot: DOMWrapper<Element>, top: number): void {
-      (slot.element as HTMLElement).getBoundingClientRect = () =>
+      ;(slot.element as HTMLElement).getBoundingClientRect = () =>
         ({ left: 0, width: 220, right: 220, top, bottom: top + 28, height: 28, x: 0, y: top }) as DOMRect
     }
 
@@ -1847,8 +2098,10 @@ describe('TerminalMode', () => {
       const { wrapper } = await mountAvailable()
 
       const sections = wrapper.findAll('[data-testid="terminal-scratch-heading"], [data-testid="terminal-repo-group"]')
-      expect(sections.map((section) => section.attributes('data-testid')))
-        .toEqual(['terminal-scratch-heading', 'terminal-repo-group'])
+      expect(sections.map((section) => section.attributes('data-testid'))).toEqual([
+        'terminal-scratch-heading',
+        'terminal-repo-group',
+      ])
       expect(sections[0].text()).toContain('Terminals')
       // The session behind it is a tmux name, not a row: nothing in the tree
       // says Scratch.
@@ -1861,7 +2114,9 @@ describe('TerminalMode', () => {
     // controls — rather than hanging two levels in under a row of their own.
     it('lists its tabs where a repository lists its sessions', async () => {
       mocks.createTerminalClient.mockReturnValue({
-        listWindows: fakeListWindows({ [SCRATCH_SLUG]: [oneTab, { windowId: '@2', name: 'nvim', active: false, width: 0, height: 0 }] }),
+        listWindows: fakeListWindows({
+          [SCRATCH_SLUG]: [oneTab, { windowId: '@2', name: 'nvim', active: false, width: 0, height: 0 }],
+        }),
       })
       const { wrapper } = await mountAvailable()
 
@@ -2039,9 +2294,18 @@ describe('TerminalMode', () => {
   describe('pinned agent chats', () => {
     const CHAT_SLUG = 'agentws-7'
     const chat = {
-      id: 7, workspace: 'demo', name: 'api-refactor', agent: 'claude', lastOpenedAt: 0,
-      slug: CHAT_SLUG, terminalId: CHAT_SLUG, windowId: '@1', cols: 80, rows: 24,
-      resumeAttempted: true, notice: '',
+      id: 7,
+      workspace: 'demo',
+      name: 'api-refactor',
+      agent: 'claude',
+      lastOpenedAt: 0,
+      slug: CHAT_SLUG,
+      terminalId: CHAT_SLUG,
+      windowId: '@1',
+      cols: 80,
+      rows: 24,
+      resumeAttempted: true,
+      notice: '',
     }
 
     // The listing has to have landed before a pin resolves to a row, so every
@@ -2064,9 +2328,13 @@ describe('TerminalMode', () => {
       const { wrapper } = await mountWithPinnedChat()
 
       const sections = wrapper.findAll(
-        '[data-testid="terminal-chats-group"], [data-testid="terminal-scratch-heading"], [data-testid="terminal-repo-group"]')
-      expect(sections.map((section) => section.attributes('data-testid')))
-        .toEqual(['terminal-chats-group', 'terminal-scratch-heading', 'terminal-repo-group'])
+        '[data-testid="terminal-chats-group"], [data-testid="terminal-scratch-heading"], [data-testid="terminal-repo-group"]',
+      )
+      expect(sections.map((section) => section.attributes('data-testid'))).toEqual([
+        'terminal-chats-group',
+        'terminal-scratch-heading',
+        'terminal-repo-group',
+      ])
       expect(sections[0].text()).toContain('Chats')
       expect(chatRows(wrapper).map((row) => row.text())).toContain('api-refactor')
       wrapper.unmount()
@@ -2099,7 +2367,9 @@ describe('TerminalMode', () => {
     // than something to navigate between.
     it('lists no windows under a chat', async () => {
       mocks.createTerminalClient.mockReturnValue({
-        listWindows: fakeListWindows({ [CHAT_SLUG]: [{ windowId: '@1', name: 'claude', active: true, width: 0, height: 0 }] }),
+        listWindows: fakeListWindows({
+          [CHAT_SLUG]: [{ windowId: '@1', name: 'claude', active: true, width: 0, height: 0 }],
+        }),
       })
       const { wrapper } = await mountWithPinnedChat()
 
@@ -2112,7 +2382,9 @@ describe('TerminalMode', () => {
     // scratch terminal: hive's status projection has no row for either.
     it('reads its liveness off the window sweep rather than hive’s statuses', async () => {
       mocks.createTerminalClient.mockReturnValue({
-        listWindows: fakeListWindows({ [CHAT_SLUG]: [{ windowId: '@1', name: 'claude', active: true, width: 0, height: 0 }] }),
+        listWindows: fakeListWindows({
+          [CHAT_SLUG]: [{ windowId: '@1', name: 'claude', active: true, width: 0, height: 0 }],
+        }),
       })
       const { wrapper } = await mountWithPinnedChat()
 
@@ -2123,7 +2395,9 @@ describe('TerminalMode', () => {
     it('unpins from its own row menu, which drops the row', async () => {
       const { wrapper } = await mountWithPinnedChat()
 
-      await wrapper.get(`[data-testid="terminal-chat-row"][data-slug="${CHAT_SLUG}"] [data-testid="terminal-chat-menu-toggle"]`).trigger('click')
+      await wrapper
+        .get(`[data-testid="terminal-chat-row"][data-slug="${CHAT_SLUG}"] [data-testid="terminal-chat-menu-toggle"]`)
+        .trigger('click')
       await wrapper.get('[data-testid="terminal-chat-unpin"]').trigger('click')
       await flushPromises()
 
@@ -2137,7 +2411,9 @@ describe('TerminalMode', () => {
     it('offers only the pin’s own two entries in its menu', async () => {
       const { wrapper } = await mountWithPinnedChat()
 
-      await wrapper.get(`[data-testid="terminal-chat-row"][data-slug="${CHAT_SLUG}"] [data-testid="terminal-chat-menu-toggle"]`).trigger('click')
+      await wrapper
+        .get(`[data-testid="terminal-chat-row"][data-slug="${CHAT_SLUG}"] [data-testid="terminal-chat-menu-toggle"]`)
+        .trigger('click')
 
       expect(wrapper.find('[data-testid="terminal-chat-open-in-agents"]').exists()).toBe(true)
       expect(wrapper.find('[data-testid="terminal-chat-unpin"]').exists()).toBe(true)
@@ -2150,7 +2426,9 @@ describe('TerminalMode', () => {
     it('routes back to the Agents area with the chat open', async () => {
       const { wrapper, router } = await mountWithPinnedChat()
 
-      await wrapper.get(`[data-testid="terminal-chat-row"][data-slug="${CHAT_SLUG}"] [data-testid="terminal-chat-menu-toggle"]`).trigger('click')
+      await wrapper
+        .get(`[data-testid="terminal-chat-row"][data-slug="${CHAT_SLUG}"] [data-testid="terminal-chat-menu-toggle"]`)
+        .trigger('click')
       await wrapper.get('[data-testid="terminal-chat-open-in-agents"]').trigger('click')
       await flushPromises()
 
@@ -2171,7 +2449,13 @@ describe('TerminalMode', () => {
       session.tabs.value = []
       session.status.value = 'ended'
       session.endReason.value = 'not-started'
-      const { wrapper } = await mountWithPinnedChat(session, { ...chat, terminalId: '', windowId: '', cols: 0, rows: 0 })
+      const { wrapper } = await mountWithPinnedChat(session, {
+        ...chat,
+        terminalId: '',
+        windowId: '',
+        cols: 0,
+        rows: 0,
+      })
 
       await chatRows(wrapper)[0].trigger('click')
       await flushPromises()
@@ -2191,8 +2475,20 @@ describe('TerminalMode', () => {
   })
 
   describe('configured terminal actions', () => {
-    const openInZed = { id: 'open-in-zed', label: 'Open in Zed', type: 'shell', showInDetail: false, requiresSessionInput: false }
-    const interrupt = { id: 'interrupt', label: 'Interrupt', type: 'shell', showInDetail: false, requiresSessionInput: false }
+    const openInZed = {
+      id: 'open-in-zed',
+      label: 'Open in Zed',
+      type: 'shell',
+      showInDetail: false,
+      requiresSessionInput: false,
+    }
+    const interrupt = {
+      id: 'interrupt',
+      label: 'Interrupt',
+      type: 'shell',
+      showInDetail: false,
+      requiresSessionInput: false,
+    }
 
     function offer(session: unknown[], window: unknown[] = []) {
       mocks.TerminalActionViews.mockImplementation(async (target: string) => (target === 'session' ? session : window))
@@ -2202,11 +2498,19 @@ describe('TerminalMode', () => {
       offer([openInZed])
       const { wrapper } = await mountAvailable()
 
-      await wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"] [data-testid="terminal-session-menu-toggle"]').trigger('click')
+      await wrapper
+        .get(
+          '[data-testid="terminal-session-row"][data-slug="hive-fix-parser"] [data-testid="terminal-session-menu-toggle"]',
+        )
+        .trigger('click')
       await wrapper.get('[data-testid="terminal-action-open-in-zed"]').trigger('click')
       await flushPromises()
 
-      expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith('open-in-zed', { slug: 'hive-fix-parser', windowId: '' }, {})
+      expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith(
+        'open-in-zed',
+        { slug: 'hive-fix-parser', windowId: '' },
+        {},
+      )
       wrapper.unmount()
     })
 
@@ -2221,7 +2525,11 @@ describe('TerminalMode', () => {
       await window.get('[data-testid="terminal-action-interrupt"]').trigger('click')
       await flushPromises()
 
-      expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith('interrupt', { slug: 'hive-fix-parser', windowId: '@2' }, {})
+      expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith(
+        'interrupt',
+        { slug: 'hive-fix-parser', windowId: '@2' },
+        {},
+      )
       wrapper.unmount()
     })
 
@@ -2238,10 +2546,29 @@ describe('TerminalMode', () => {
     })
 
     it('collects declared inputs before running', async () => {
-      offer([{ ...openInZed, inputs: [{ name: 'branch', label: 'Branch', type: 'text', required: true, default: '', placeholder: '', options: [] }] }])
+      offer([
+        {
+          ...openInZed,
+          inputs: [
+            {
+              name: 'branch',
+              label: 'Branch',
+              type: 'text',
+              required: true,
+              default: '',
+              placeholder: '',
+              options: [],
+            },
+          ],
+        },
+      ])
       const { wrapper } = await mountAvailable()
 
-      await wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"] [data-testid="terminal-session-menu-toggle"]').trigger('click')
+      await wrapper
+        .get(
+          '[data-testid="terminal-session-row"][data-slug="hive-fix-parser"] [data-testid="terminal-session-menu-toggle"]',
+        )
+        .trigger('click')
       await wrapper.get('[data-testid="terminal-action-open-in-zed"]').trigger('click')
       await flushPromises()
       expect(mocks.InvokeTerminalAction).not.toHaveBeenCalled()
@@ -2253,22 +2580,36 @@ describe('TerminalMode', () => {
       document.querySelector<HTMLButtonElement>('[data-testid="action-inputs-submit"]')!.click()
       await flushPromises()
 
-      expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith('open-in-zed', { slug: 'hive-fix-parser', windowId: '' }, { branch: 'main' })
+      expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith(
+        'open-in-zed',
+        { slug: 'hive-fix-parser', windowId: '' },
+        { branch: 'main' },
+      )
       wrapper.unmount()
     })
 
     // Text is not a side effect: a clipboard action renders and copies rather
     // than starting a job, the same split the detail pane makes.
     it('copies a clipboard action instead of running it', async () => {
-      offer([{ id: 'copy-path', label: 'Copy path', type: 'clipboard', showInDetail: false, requiresSessionInput: false }])
+      offer([
+        { id: 'copy-path', label: 'Copy path', type: 'clipboard', showInDetail: false, requiresSessionInput: false },
+      ])
       mocks.RenderTerminalClipboardAction.mockResolvedValue('/work/hive-fix-parser')
       const { wrapper } = await mountAvailable()
 
-      await wrapper.get('[data-testid="terminal-session-row"][data-slug="hive-fix-parser"] [data-testid="terminal-session-menu-toggle"]').trigger('click')
+      await wrapper
+        .get(
+          '[data-testid="terminal-session-row"][data-slug="hive-fix-parser"] [data-testid="terminal-session-menu-toggle"]',
+        )
+        .trigger('click')
       await wrapper.get('[data-testid="terminal-action-copy-path"]').trigger('click')
       await flushPromises()
 
-      expect(mocks.RenderTerminalClipboardAction).toHaveBeenCalledWith('copy-path', { slug: 'hive-fix-parser', windowId: '' }, {})
+      expect(mocks.RenderTerminalClipboardAction).toHaveBeenCalledWith(
+        'copy-path',
+        { slug: 'hive-fix-parser', windowId: '' },
+        {},
+      )
       expect(mocks.SetClipboardText).toHaveBeenCalledWith('/work/hive-fix-parser')
       expect(mocks.InvokeTerminalAction).not.toHaveBeenCalled()
       wrapper.unmount()
@@ -2441,7 +2782,10 @@ describe('TerminalMode', () => {
       expect(slugs(wrapper)).toEqual(['hive-fix-parser'])
 
       await wrapper.get('[data-testid="terminal-sessions-running-clear"]').trigger('click')
-      expect(repos(wrapper).map((group) => group.attributes('data-repo'))).toEqual(['hay-kot/haykot.dev', 'hay-kot/hive'])
+      expect(repos(wrapper).map((group) => group.attributes('data-repo'))).toEqual([
+        'hay-kot/haykot.dev',
+        'hay-kot/hive',
+      ])
       wrapper.unmount()
     })
 
@@ -2485,7 +2829,9 @@ describe('TerminalMode', () => {
       expect(wrapper.find('[data-testid="terminal-sessions-running-note"]').exists()).toBe(false)
 
       await pick(wrapper, 'terminal-sessions-running-only')
-      expect(wrapper.get('[data-testid="terminal-sessions-running-note"]').text()).toContain('Running sessions only · 1 hidden')
+      expect(wrapper.get('[data-testid="terminal-sessions-running-note"]').text()).toContain(
+        'Running sessions only · 1 hidden',
+      )
 
       await wrapper.get('[data-testid="terminal-sessions-running-clear"]').trigger('click')
       expect(wrapper.find('[data-testid="terminal-sessions-running-note"]').exists()).toBe(false)
@@ -2528,7 +2874,8 @@ describe('TerminalMode', () => {
     }
 
     function tabStop(wrapper: { findAll: (s: string) => DOMWrapper<Element>[] }): string | undefined {
-      return wrapper.findAll('[data-tree-key]')
+      return wrapper
+        .findAll('[data-tree-key]')
         .find((row) => row.attributes('tabindex') === '0')
         ?.attributes('data-tree-key')
     }
@@ -2614,7 +2961,8 @@ describe('TerminalMode', () => {
       await press(wrapper, 'ArrowDown')
       expect(tabStop(wrapper)).toBe('w:2:@1')
 
-      const walked = wrapper.findAll('[data-tree-key][tabindex]')
+      const walked = wrapper
+        .findAll('[data-tree-key][tabindex]')
         .filter((row) => row.attributes('tabindex') === '0')
         .map((row) => row.attributes('data-tree-key'))
       expect(walked).not.toContain('s:2')
@@ -2642,8 +2990,9 @@ describe('TerminalMode', () => {
 
       await press(wrapper, 'ArrowUp')
 
-      expect(wrapper.findAll('[data-tree-key]').map((row) => row.attributes('data-tree-key')))
-        .not.toContain('g:hay-kot/hive')
+      expect(wrapper.findAll('[data-tree-key]').map((row) => row.attributes('data-tree-key'))).not.toContain(
+        'g:hay-kot/hive',
+      )
       wrapper.unmount()
     })
 
@@ -2702,7 +3051,8 @@ describe('TerminalMode', () => {
     it('leaves modified arrows to the keymap', async () => {
       const { wrapper, router } = await mountAvailable()
 
-      await wrapper.get('[data-testid="terminal-session-sidebar"]')
+      await wrapper
+        .get('[data-testid="terminal-session-sidebar"]')
         .trigger('keydown', { key: 'ArrowDown', metaKey: true })
       await flushPromises()
 
@@ -2949,14 +3299,20 @@ describe('TerminalMode', () => {
 
     // Window and attach rows register at App level (useAppPaletteRows), so
     // this component's own library is only the attached session's operations.
-    it('lists the attached session\'s operations, under the session\'s own name', async () => {
+    it("lists the attached session's operations, under the session's own name", async () => {
       const session = fakeSession()
       mocks.useTerminalWindows.mockReturnValue(session)
       const { wrapper } = await mountAt('/terminal/hive-fix-parser')
       const results = paletteResults()
 
       const byId = new Map(results.value.map((cmd) => [cmd.id, cmd]))
-      for (const id of ['terminal:session:kill', 'terminal:session:detail', 'terminal:session:rename', 'terminal:session:recycle', 'terminal:session:delete']) {
+      for (const id of [
+        'terminal:session:kill',
+        'terminal:session:detail',
+        'terminal:session:rename',
+        'terminal:session:recycle',
+        'terminal:session:delete',
+      ]) {
         expect(byId.has(id), id).toBe(true)
         expect(byId.get(id)?.group).toBe('fix the parser')
         expect(byId.get(id)?.scope).toBe('actions')
@@ -2995,7 +3351,10 @@ describe('TerminalMode', () => {
       await flushPromises()
       expect(session.newAgentWindow).toHaveBeenCalledWith('codex')
 
-      mocks.SessionStatuses.mockResolvedValue({ items: [{ sessionId: '1', running: false, windows: [] }], pollIntervalMs: 60_000 })
+      mocks.SessionStatuses.mockResolvedValue({
+        items: [{ sessionId: '1', running: false, windows: [] }],
+        pollIntervalMs: 60_000,
+      })
       await useSessionStatuses().reload()
       await flushPromises()
       expect(results.value.some((candidate) => candidate.id.startsWith('terminal:session:agent:'))).toBe(false)
@@ -3004,9 +3363,9 @@ describe('TerminalMode', () => {
     })
 
     it('runs a configured session action against the attached session', async () => {
-      mocks.TerminalActionViews.mockImplementation(async (surface: string) => (
-        surface === 'session' ? [{ id: 'standup', label: 'Post standup', type: 'shell', inputs: [] }] : []
-      ))
+      mocks.TerminalActionViews.mockImplementation(async (surface: string) =>
+        surface === 'session' ? [{ id: 'standup', label: 'Post standup', type: 'shell', inputs: [] }] : [],
+      )
       mocks.InvokeTerminalAction.mockResolvedValue(undefined)
       const session = fakeSession()
       mocks.useTerminalWindows.mockReturnValue(session)
@@ -3026,9 +3385,9 @@ describe('TerminalMode', () => {
 
     // A window action needs a window, and the palette's is the one on screen.
     it('runs a configured window action against the active window', async () => {
-      mocks.TerminalActionViews.mockImplementation(async (surface: string) => (
-        surface === 'window' ? [{ id: 'tail-log', label: 'Tail log', type: 'shell', inputs: [] }] : []
-      ))
+      mocks.TerminalActionViews.mockImplementation(async (surface: string) =>
+        surface === 'window' ? [{ id: 'tail-log', label: 'Tail log', type: 'shell', inputs: [] }] : [],
+      )
       mocks.InvokeTerminalAction.mockResolvedValue(undefined)
       const session = fakeSession()
       mocks.useTerminalWindows.mockReturnValue(session)
@@ -3043,7 +3402,11 @@ describe('TerminalMode', () => {
 
       await cmd!.run()
       await flushPromises()
-      expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith('tail-log', { slug: 'hive-fix-parser', windowId: '@1' }, {})
+      expect(mocks.InvokeTerminalAction).toHaveBeenCalledWith(
+        'tail-log',
+        { slug: 'hive-fix-parser', windowId: '@1' },
+        {},
+      )
 
       wrapper.unmount()
     })
@@ -3097,12 +3460,27 @@ describe('TerminalMode', () => {
 
     it('reports the branch, diff and pull request without renaming the session', async () => {
       mocks.SessionGitStatus.mockResolvedValue({
-        path: '/tmp/fix-parser', branch: 'feat/parser', dirty: true, unpushed: true,
-        additions: 42, deletions: 7, host: 'github.com', owner: 'hay-kot', repo: 'hive', resolved: true, error: '',
+        path: '/tmp/fix-parser',
+        branch: 'feat/parser',
+        dirty: true,
+        unpushed: true,
+        additions: 42,
+        deletions: 7,
+        host: 'github.com',
+        owner: 'hay-kot',
+        repo: 'hive',
+        resolved: true,
+        error: '',
       })
       mocks.SessionPullRequest.mockResolvedValue({
-        status: 'found', number: 311, title: 'Fix the parser', state: 'OPEN', isDraft: false,
-        url: 'https://github.com/hay-kot/hive/pull/311', reviewDecision: 'APPROVED', checks: 'passing',
+        status: 'found',
+        number: 311,
+        title: 'Fix the parser',
+        state: 'OPEN',
+        isDraft: false,
+        url: 'https://github.com/hay-kot/hive/pull/311',
+        reviewDecision: 'APPROVED',
+        checks: 'passing',
       })
 
       const { wrapper } = await mountWithStatusBar()
@@ -3114,11 +3492,16 @@ describe('TerminalMode', () => {
       // Icon-only, so the tooltip is the whole explanation and has to exist —
       // an aria-label renders none, which is what left the arrow a mystery.
       expect(tooltipFor(wrapper, 'session-status-dirty')).toBe('Uncommitted changes in this checkout')
-      expect(tooltipFor(wrapper, 'session-status-unpushed')).toBe('Commits on this branch that the remote does not have')
+      expect(tooltipFor(wrapper, 'session-status-unpushed')).toBe(
+        'Commits on this branch that the remote does not have',
+      )
       expect(wrapper.get('[data-testid="session-status-pr"]').text()).toContain('#311')
       expect(wrapper.get('[data-testid="session-status-checks"]').text()).toBe('passing')
       // The lookup is keyed by what git resolved, not by anything read twice.
-      expect(mocks.SessionPullRequest).toHaveBeenCalledWith({ host: 'github.com', owner: 'hay-kot', repo: 'hive', branch: 'feat/parser' }, false)
+      expect(mocks.SessionPullRequest).toHaveBeenCalledWith(
+        { host: 'github.com', owner: 'hay-kot', repo: 'hive', branch: 'feat/parser' },
+        false,
+      )
 
       wrapper.unmount()
     })
@@ -3127,8 +3510,17 @@ describe('TerminalMode', () => {
     // Tasks to the attached session's repo from any entry point.
     it('reports the attached session’s resolved owner/repo as it settles', async () => {
       mocks.SessionGitStatus.mockResolvedValue({
-        path: '/tmp/fix-parser', branch: 'feat/parser', dirty: false, unpushed: false,
-        additions: 0, deletions: 0, host: 'github.com', owner: 'hay-kot', repo: 'hive', resolved: true, error: '',
+        path: '/tmp/fix-parser',
+        branch: 'feat/parser',
+        dirty: false,
+        unpushed: false,
+        additions: 0,
+        deletions: 0,
+        host: 'github.com',
+        owner: 'hay-kot',
+        repo: 'hive',
+        resolved: true,
+        error: '',
       })
 
       const { wrapper } = await mountWithStatusBar()
@@ -3142,8 +3534,17 @@ describe('TerminalMode', () => {
     // pending read never carries a stale guess forward.
     it('reports an empty repo key for a resolved hostless remote', async () => {
       mocks.SessionGitStatus.mockResolvedValue({
-        path: '/tmp/fix-parser', branch: 'main', dirty: false, unpushed: false,
-        additions: 0, deletions: 0, host: '', owner: '', repo: '', resolved: true, error: '',
+        path: '/tmp/fix-parser',
+        branch: 'main',
+        dirty: false,
+        unpushed: false,
+        additions: 0,
+        deletions: 0,
+        host: '',
+        owner: '',
+        repo: '',
+        resolved: true,
+        error: '',
       })
 
       const { wrapper } = await mountWithStatusBar()
@@ -3156,8 +3557,14 @@ describe('TerminalMode', () => {
 
     it('opens the pull request in a browser when its chip is clicked', async () => {
       mocks.SessionPullRequest.mockResolvedValue({
-        status: 'found', number: 311, title: 'Fix the parser', state: 'OPEN', isDraft: false,
-        url: 'https://github.com/hay-kot/hive/pull/311', reviewDecision: '', checks: '',
+        status: 'found',
+        number: 311,
+        title: 'Fix the parser',
+        state: 'OPEN',
+        isDraft: false,
+        url: 'https://github.com/hay-kot/hive/pull/311',
+        reviewDecision: '',
+        checks: '',
       })
 
       const { wrapper } = await mountWithStatusBar()
@@ -3170,9 +3577,16 @@ describe('TerminalMode', () => {
 
     it('copies the pull request as a Markdown link', async () => {
       mocks.SessionPullRequest.mockResolvedValue({
-        status: 'found', number: 311, title: 'Fix the parser', state: 'OPEN', isDraft: false,
-        url: 'https://github.com/hay-kot/hive/pull/311', reviewDecision: '', checks: '',
-        additions: 420, deletions: 37,
+        status: 'found',
+        number: 311,
+        title: 'Fix the parser',
+        state: 'OPEN',
+        isDraft: false,
+        url: 'https://github.com/hay-kot/hive/pull/311',
+        reviewDecision: '',
+        checks: '',
+        additions: 420,
+        deletions: 37,
       })
 
       const { wrapper } = await mountWithStatusBar()
@@ -3190,13 +3604,29 @@ describe('TerminalMode', () => {
     // everything else must survive a narrow pane whole.
     it('lets only the branch give up width when the row overflows', async () => {
       mocks.SessionGitStatus.mockResolvedValue({
-        path: '/tmp/fix-parser', branch: 'feat/parser', dirty: true, unpushed: true,
-        additions: 420, deletions: 37, host: 'github.com', owner: 'hay-kot', repo: 'hive', resolved: true, error: '',
+        path: '/tmp/fix-parser',
+        branch: 'feat/parser',
+        dirty: true,
+        unpushed: true,
+        additions: 420,
+        deletions: 37,
+        host: 'github.com',
+        owner: 'hay-kot',
+        repo: 'hive',
+        resolved: true,
+        error: '',
       })
       mocks.SessionPullRequest.mockResolvedValue({
-        status: 'found', number: 311, title: 'Fix the parser', state: 'OPEN', isDraft: false,
-        url: 'https://github.com/hay-kot/hive/pull/311', reviewDecision: '', checks: 'passing',
-        additions: 420, deletions: 37,
+        status: 'found',
+        number: 311,
+        title: 'Fix the parser',
+        state: 'OPEN',
+        isDraft: false,
+        url: 'https://github.com/hay-kot/hive/pull/311',
+        reviewDecision: '',
+        checks: 'passing',
+        additions: 420,
+        deletions: 37,
       })
 
       const { wrapper } = await mountWithStatusBar()
@@ -3220,9 +3650,16 @@ describe('TerminalMode', () => {
     // the bar painted. Only a read that actually went to the network eases in.
     it('eases the pull request in only when it just arrived', async () => {
       const found = {
-        status: 'found', number: 311, title: 'Fix the parser', state: 'OPEN', isDraft: false,
-        url: 'https://github.com/hay-kot/hive/pull/311', reviewDecision: '', checks: '',
-        additions: 420, deletions: 37,
+        status: 'found',
+        number: 311,
+        title: 'Fix the parser',
+        state: 'OPEN',
+        isDraft: false,
+        url: 'https://github.com/hay-kot/hive/pull/311',
+        reviewDecision: '',
+        checks: '',
+        additions: 420,
+        deletions: 37,
       }
       mocks.SessionPullRequest.mockResolvedValue({ ...found, cached: false })
 
@@ -3290,8 +3727,17 @@ describe('TerminalMode', () => {
 
     it('surfaces a failed git read instead of showing a clean branch it never saw', async () => {
       mocks.SessionGitStatus.mockResolvedValue({
-        path: '/tmp/fix-parser', branch: 'feat/parser', dirty: false, unpushed: false,
-        additions: 0, deletions: 0, host: '', owner: '', repo: '', resolved: true, error: 'git status: exit 128',
+        path: '/tmp/fix-parser',
+        branch: 'feat/parser',
+        dirty: false,
+        unpushed: false,
+        additions: 0,
+        deletions: 0,
+        host: '',
+        owner: '',
+        repo: '',
+        resolved: true,
+        error: 'git status: exit 128',
       })
 
       const { wrapper } = await mountWithStatusBar()
@@ -3321,7 +3767,9 @@ describe('TerminalMode', () => {
 
       await wrapper.get('[data-testid="terminal-pane-statusbar-open-editor"]').trigger('click')
       await flushPromises()
-      expect(wrapper.get('[data-testid="terminal-pane-statusbar-error"]').text()).toBe('editor "zed" was not found on PATH')
+      expect(wrapper.get('[data-testid="terminal-pane-statusbar-error"]').text()).toBe(
+        'editor "zed" was not found on PATH',
+      )
 
       await wrapper.get('[data-testid="terminal-pane-statusbar-open-editor"]').trigger('click')
       await flushPromises()

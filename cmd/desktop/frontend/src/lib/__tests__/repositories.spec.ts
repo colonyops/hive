@@ -16,10 +16,12 @@ describe('repoDisplayName', () => {
 
 describe('toChoices', () => {
   it('labels by owner/name and keeps a name only when it adds something', () => {
-    expect(toChoices([
-      { name: 'hive-desktop', repository: 'https://github.com/hay-kot/hive-desktop.git' },
-      { name: 'fix-crash', repository: 'https://github.com/acme/site.git' },
-    ])).toEqual([
+    expect(
+      toChoices([
+        { name: 'hive-desktop', repository: 'https://github.com/hay-kot/hive-desktop.git' },
+        { name: 'fix-crash', repository: 'https://github.com/acme/site.git' },
+      ]),
+    ).toEqual([
       { remote: 'https://github.com/hay-kot/hive-desktop.git', label: 'hay-kot/hive-desktop', hint: '' },
       { remote: 'https://github.com/acme/site.git', label: 'acme/site', hint: 'fix-crash' },
     ])
@@ -64,12 +66,19 @@ describe('rankRepositories', () => {
   ])
 
   it('keeps backend order for an empty query', () => {
-    expect(rankRepositories(choices, '').map((r) => r.label)).toEqual(['acme/site', 'hay-kot/hive-desktop', 'hay-kot/hive'])
+    expect(rankRepositories(choices, '').map((r) => r.label)).toEqual([
+      'acme/site',
+      'hay-kot/hive-desktop',
+      'hay-kot/hive',
+    ])
   })
 
   it('lifts the selected repository to the top of an unfiltered list', () => {
-    expect(rankRepositories(choices, '', 'https://github.com/hay-kot/hive.git').map((r) => r.label))
-      .toEqual(['hay-kot/hive', 'acme/site', 'hay-kot/hive-desktop'])
+    expect(rankRepositories(choices, '', 'https://github.com/hay-kot/hive.git').map((r) => r.label)).toEqual([
+      'hay-kot/hive',
+      'acme/site',
+      'hay-kot/hive-desktop',
+    ])
   })
 
   it('ranks a fuzzy query and drops non-matches', () => {

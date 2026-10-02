@@ -2,20 +2,27 @@ import { describe, expect, it } from 'vitest'
 import { mount, type DOMWrapper } from '@vue/test-utils'
 import ProfileRail from '../ProfileRail.vue'
 
-const profiles = [{
-  id: 'personal',
-  letter: 'P',
-  name: 'Personal',
-  enabled: true,
-  nodes: 0,
-  sourceSummary: '2 sources',
-  totalCount: 3,
-  unreadCount: 1,
-  feeds: [],
-}]
+const profiles = [
+  {
+    id: 'personal',
+    letter: 'P',
+    name: 'Personal',
+    enabled: true,
+    nodes: 0,
+    sourceSummary: '2 sources',
+    totalCount: 3,
+    unreadCount: 1,
+    feeds: [],
+  },
+]
 
 // A rail of three, in the alphabetical order the backend serves unconfigured.
-const rail = ['hive', 'personal', 'recipinned'].map((id) => ({ ...profiles[0], id, name: id, letter: id[0].toUpperCase() }))
+const rail = ['hive', 'personal', 'recipinned'].map((id) => ({
+  ...profiles[0],
+  id,
+  name: id,
+  letter: id[0].toUpperCase(),
+}))
 
 // Drop onto the top or bottom half of a tile: the edge decides whether the
 // dragged tile lands before or after it.

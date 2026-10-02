@@ -39,7 +39,11 @@ describe('useTheme', () => {
   it('applies the cached theme synchronously, before the settings read resolves', async () => {
     localStorage.setItem('hive.theme', 'midnight')
     let resolveRead: (value: { theme: string }) => void = () => {}
-    mocks.AppearanceSettings.mockReturnValue(new Promise((resolve) => { resolveRead = resolve }))
+    mocks.AppearanceSettings.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
     const { initializeTheme } = await import('../useTheme')
 
     initializeTheme()
@@ -135,7 +139,11 @@ describe('useTheme', () => {
   it('does not let a slow settings read clobber a theme picked meanwhile', async () => {
     localStorage.setItem('hive.theme', 'dark')
     let resolveRead: (value: { theme: string }) => void = () => {}
-    mocks.AppearanceSettings.mockReturnValue(new Promise((resolve) => { resolveRead = resolve }))
+    mocks.AppearanceSettings.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
     const { initializeTheme, setTheme } = await import('../useTheme')
 
     initializeTheme()
@@ -178,10 +186,6 @@ describe('useTheme', () => {
     setTheme('gruvbox')
     await settle()
 
-    expect(mocks.SetTheme.mock.calls.map(([arg]) => arg)).toEqual([
-      'light',
-      'midnight',
-      'gruvbox',
-    ])
+    expect(mocks.SetTheme.mock.calls.map(([arg]) => arg)).toEqual(['light', 'midnight', 'gruvbox'])
   })
 })

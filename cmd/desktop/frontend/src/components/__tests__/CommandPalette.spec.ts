@@ -236,9 +236,14 @@ describe('CommandPalette', () => {
         components: { CommandPalette },
         template: '<CommandPalette />',
         setup() {
-          useCommands(() => present.value
-            ? [{ id: 'a', title: 'Alpha', run: vi.fn() }, { id: 'b', title: 'Bravo', run: vi.fn() }]
-            : [{ id: 'a', title: 'Alpha', run: vi.fn() }])
+          useCommands(() =>
+            present.value
+              ? [
+                  { id: 'a', title: 'Alpha', run: vi.fn() },
+                  { id: 'b', title: 'Bravo', run: vi.fn() },
+                ]
+              : [{ id: 'a', title: 'Alpha', run: vi.fn() }],
+          )
           return {}
         },
       },
@@ -282,7 +287,13 @@ describe('CommandPalette', () => {
     // The two prefix hits highlight as one run each ('Open'); the scattered
     // hit on 'Switch to personal' highlights its four matched characters
     // individually ('o', 'pe', 'n' — 'p' and 'e' land adjacent).
-    expect(wrapper!.findAll('.palette-title-match').map((node) => node.text())).toEqual(['Open', 'Open', 'o', 'pe', 'n'])
+    expect(wrapper!.findAll('.palette-title-match').map((node) => node.text())).toEqual([
+      'Open',
+      'Open',
+      'o',
+      'pe',
+      'n',
+    ])
     expect(selectedRows().map((row) => rowTitle(row))).toEqual(['Open desktop feed'])
   })
 
@@ -316,8 +327,11 @@ describe('CommandPalette', () => {
     await wrapper!.find('[data-testid="command-palette-input"]').setValue('open')
 
     expect(wrapper!.findAll('.palette-group-header')).toHaveLength(0)
-    expect(wrapper!.findAll('[data-testid="command-palette-command-scope"]').map((node) => node.text()))
-      .toEqual(['Feeds ›', 'Feeds ›', 'Profiles ›'])
+    expect(wrapper!.findAll('[data-testid="command-palette-command-scope"]').map((node) => node.text())).toEqual([
+      'Feeds ›',
+      'Feeds ›',
+      'Profiles ›',
+    ])
   })
 
   function tabs() {
@@ -328,8 +342,11 @@ describe('CommandPalette', () => {
     await openPalette()
 
     expect(tabs().map((tab) => tab.attributes('data-scope'))).toEqual(['all', 'goto', 'actions', 'shell'])
-    expect(tabs().filter((tab) => tab.classes().includes('palette-tab-active')).map((tab) => tab.attributes('data-scope')))
-      .toEqual(['all'])
+    expect(
+      tabs()
+        .filter((tab) => tab.classes().includes('palette-tab-active'))
+        .map((tab) => tab.attributes('data-scope')),
+    ).toEqual(['all'])
   })
 
   it('clicking a tab switches scope and refocuses the input', async () => {
@@ -348,10 +365,12 @@ describe('CommandPalette', () => {
   // that's already active (e.g. typing "@" again while on Go to): no reactive
   // change, so nothing would re-render the input back to the empty query
   // without the component forcing it.
-  it('resyncs the input to the query when typing the active scope\'s own sigil on an empty query', async () => {
+  it("resyncs the input to the query when typing the active scope's own sigil on an empty query", async () => {
     const palette = useCommandPalette()
     await openPalette()
-    await tabs().find((tab) => tab.attributes('data-scope') === 'goto')!.trigger('click')
+    await tabs()
+      .find((tab) => tab.attributes('data-scope') === 'goto')!
+      .trigger('click')
     expect(palette.query.value).toBe('')
 
     const input = wrapper!.find('[data-testid="command-palette-input"]')

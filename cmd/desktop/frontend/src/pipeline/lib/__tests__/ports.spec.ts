@@ -33,7 +33,7 @@ const defs: Record<string, NodeTypeDefinition> = {
 const defForType = (type: string) => defs[type]
 
 describe('canConnect', () => {
-  it('allows a processor output to wire into another node\'s input', () => {
+  it("allows a processor output to wire into another node's input", () => {
     const from = node({ id: 'a', type: 'processor' })
     const to = node({ id: 'b', type: 'processor' })
     expect(canConnect(from, 0, to, [], defForType)).toBe(true)
@@ -63,7 +63,7 @@ describe('canConnect', () => {
     expect(canConnect(from, -1, to, [], defForType)).toBe(false)
   })
 
-  it('allows a port index within a multi-output node\'s range', () => {
+  it("allows a port index within a multi-output node's range", () => {
     const from = node({ id: 'a', type: 'two-out' })
     const to = node({ id: 'b', type: 'processor' })
     expect(canConnect(from, 0, to, [], defForType)).toBe(true)

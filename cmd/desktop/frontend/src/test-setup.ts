@@ -52,7 +52,9 @@ afterAll(() => {
 function memoryStorage(): Storage {
   const values = new Map<string, string>()
   return {
-    get length() { return values.size },
+    get length() {
+      return values.size
+    },
     clear: () => values.clear(),
     getItem: (key: string) => values.get(key) ?? null,
     key: (index: number) => [...values.keys()][index] ?? null,
@@ -76,10 +78,13 @@ Object.defineProperty(globalThis, 'localStorage', {
 // with no socket involved. Specs that need a different fetch can still stub
 // their own (the property stays writable).
 Object.defineProperty(globalThis, 'fetch', {
-  value: () => Promise.resolve(new Response('{"error":"network disabled in unit tests"}', {
-    status: 503,
-    headers: { 'Content-Type': 'application/json' },
-  })),
+  value: () =>
+    Promise.resolve(
+      new Response('{"error":"network disabled in unit tests"}', {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    ),
   writable: true,
   configurable: true,
 })

@@ -33,12 +33,15 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ close: []; 'open-url': [url: string]; pick: [name: string] }>()
 
-const { canvas, metas, shown, loading, error, show, wake } =
-  useAgentCanvas(toRef(props, 'client'))
+const { canvas, metas, shown, loading, error, show, wake } = useAgentCanvas(toRef(props, 'client'))
 
-watch(() => [props.workspace, props.name, props.session] as const, ([dir, name, session]) => {
-  show(dir, name, session)
-}, { immediate: true })
+watch(
+  () => [props.workspace, props.name, props.session] as const,
+  ([dir, name, session]) => {
+    show(dir, name, session)
+  },
+  { immediate: true },
+)
 
 // The header title opens an in-pane browse list over the content (the
 // Grafana-assistant pattern) rather than a dropdown: rows are the
@@ -101,8 +104,9 @@ async function downloadCanvas(): Promise<void> {
 const filteredMetas = computed(() => {
   const query = search.value.trim().toLowerCase()
   if (!query) return metas.value
-  return metas.value.filter((meta) =>
-    meta.name.toLowerCase().includes(query) || meta.title.toLowerCase().includes(query))
+  return metas.value.filter(
+    (meta) => meta.name.toLowerCase().includes(query) || meta.title.toLowerCase().includes(query),
+  )
 })
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -162,7 +166,11 @@ function openLinkBlock(block: CanvasBlock): void {
   if (/^(https?:|mailto:)/i.test(block.url)) emit('open-url', block.url)
 }
 
-const { size: paneWidth, startResize: startPaneResize, step: stepPane } = useResizablePanel({
+const {
+  size: paneWidth,
+  startResize: startPaneResize,
+  step: stepPane,
+} = useResizablePanel({
   storageKey: 'hive.panel.agents.canvas',
   defaultSize: 380,
   min: 300,
@@ -205,7 +213,9 @@ const { size: paneWidth, startResize: startPaneResize, step: stepPane } = useRes
         :aria-label="copyStatus === 'success' ? 'Copied' : 'Copy as Markdown'"
         data-testid="agent-canvas-copy"
         @click="copyCanvas"
-      ><component :is="copyStatus === 'success' ? IconCheck : IconCopy" class="size-3.5" /></button>
+      >
+        <component :is="copyStatus === 'success' ? IconCheck : IconCopy" class="size-3.5" />
+      </button>
       <button
         v-if="shown"
         type="button"
@@ -215,7 +225,9 @@ const { size: paneWidth, startResize: startPaneResize, step: stepPane } = useRes
         :aria-label="saveStatus === 'success' ? 'Saved' : 'Save as Markdown…'"
         data-testid="agent-canvas-download"
         @click="downloadCanvas"
-      ><component :is="saveStatus === 'success' ? IconCheck : IconDownload" class="size-3.5" /></button>
+      >
+        <component :is="saveStatus === 'success' ? IconCheck : IconDownload" class="size-3.5" />
+      </button>
       <button
         type="button"
         class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text"
@@ -223,7 +235,9 @@ const { size: paneWidth, startResize: startPaneResize, step: stepPane } = useRes
         aria-label="Close canvas"
         data-testid="agent-canvas-close"
         @click="emit('close')"
-      ><IconX class="size-3.5" /></button>
+      >
+        <IconX class="size-3.5" />
+      </button>
     </div>
 
     <div v-if="browsing" class="flex min-h-0 flex-1 flex-col" data-testid="agent-canvas-browse">
@@ -243,11 +257,13 @@ const { size: paneWidth, startResize: startPaneResize, step: stepPane } = useRes
           spellcheck="false"
           data-testid="agent-canvas-search"
           @keydown.esc.prevent="escapeSearch"
-        >
+        />
       </div>
       <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-2 pt-1">
         <template v-for="group in groupedMetas" :key="group.label">
-          <p class="px-3 pb-1 pt-2.5 text-[10.5px] font-medium uppercase tracking-wide text-text-4">{{ group.label }}</p>
+          <p class="px-3 pb-1 pt-2.5 text-[10.5px] font-medium uppercase tracking-wide text-text-4">
+            {{ group.label }}
+          </p>
           <div class="divide-y divide-border">
             <button
               v-for="meta in group.metas"
@@ -258,8 +274,16 @@ const { size: paneWidth, startResize: startPaneResize, step: stepPane } = useRes
               :data-testid="'agent-canvas-browse-' + meta.name"
               @click="pick(meta.name)"
             >
-              <IconFileText class="size-3.5 shrink-0" :class="meta.name === shown ? 'text-accent' : 'text-text-4'" aria-hidden="true" />
-              <span class="min-w-0 flex-1 truncate text-[12.5px]" :class="meta.name === shown ? 'text-text' : 'text-text-2'">{{ meta.title || meta.name }}</span>
+              <IconFileText
+                class="size-3.5 shrink-0"
+                :class="meta.name === shown ? 'text-accent' : 'text-text-4'"
+                aria-hidden="true"
+              />
+              <span
+                class="min-w-0 flex-1 truncate text-[12.5px]"
+                :class="meta.name === shown ? 'text-text' : 'text-text-2'"
+                >{{ meta.title || meta.name }}</span
+              >
               <span class="shrink-0 font-mono text-[10.5px] text-text-4">{{ relativeAge(meta.updatedAt) }}</span>
             </button>
           </div>
@@ -300,7 +324,9 @@ const { size: paneWidth, startResize: startPaneResize, step: stepPane } = useRes
           </button>
         </article>
       </template>
-      <p v-else-if="error" class="text-xs leading-relaxed text-severity-error" data-testid="agent-canvas-error">{{ error }}</p>
+      <p v-else-if="error" class="text-xs leading-relaxed text-severity-error" data-testid="agent-canvas-error">
+        {{ error }}
+      </p>
       <p v-else-if="!loading" class="text-xs leading-relaxed text-text-4" data-testid="agent-canvas-empty">
         The agent hasn't put anything here yet.
       </p>
@@ -309,26 +335,68 @@ const { size: paneWidth, startResize: startPaneResize, step: stepPane } = useRes
 </template>
 
 <style scoped>
-.canvas-reader { font-size: var(--hv-font-size); line-height: var(--hv-line-height); }
-.canvas-block { padding: 12px 0; }
-.canvas-block + .canvas-block { border-top: 1px solid var(--color-border); }
-.canvas-block:first-child { padding-top: 0; }
-.canvas-block-title, .canvas-link-title { font-size: 1em; line-height: var(--hv-line-height); }
-.canvas-reading-body { font-size: var(--hv-font-size); line-height: var(--hv-line-height); }
+.canvas-reader {
+  font-size: var(--hv-font-size);
+  line-height: var(--hv-line-height);
+}
+.canvas-block {
+  padding: 12px 0;
+}
+.canvas-block + .canvas-block {
+  border-top: 1px solid var(--color-border);
+}
+.canvas-block:first-child {
+  padding-top: 0;
+}
+.canvas-block-title,
+.canvas-link-title {
+  font-size: 1em;
+  line-height: var(--hv-line-height);
+}
+.canvas-reading-body {
+  font-size: var(--hv-font-size);
+  line-height: var(--hv-line-height);
+}
 .canvas-reading-body.markdown-body :deep(h1),
 .canvas-reading-body.markdown-body :deep(h2),
 .canvas-reading-body.markdown-body :deep(h3),
 .canvas-reading-body.markdown-body :deep(h4),
 .canvas-reading-body.markdown-body :deep(h5),
-.canvas-reading-body.markdown-body :deep(h6) { line-height: calc(var(--hv-line-height) * 0.79); }
-.canvas-reading-body.markdown-body :deep(h1) { font-size: 1.407em; }
-.canvas-reading-body.markdown-body :deep(h2) { font-size: 1.222em; }
-.canvas-reading-body.markdown-body :deep(h3) { font-size: 1.111em; }
+.canvas-reading-body.markdown-body :deep(h6) {
+  line-height: calc(var(--hv-line-height) * 0.79);
+}
+.canvas-reading-body.markdown-body :deep(h1) {
+  font-size: 1.407em;
+}
+.canvas-reading-body.markdown-body :deep(h2) {
+  font-size: 1.222em;
+}
+.canvas-reading-body.markdown-body :deep(h3) {
+  font-size: 1.111em;
+}
 .canvas-reading-body.markdown-body :deep(h4),
 .canvas-reading-body.markdown-body :deep(h5),
-.canvas-reading-body.markdown-body :deep(h6) { font-size: 1.037em; }
-.canvas-reading-body.markdown-body :deep(pre) { line-height: calc(var(--hv-line-height) * 0.91); }
-.canvas-link { display: flex; width: 100%; min-width: 0; cursor: pointer; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; }
-.canvas-link:hover span:first-child { text-decoration-thickness: 2px; }
-.canvas-link-url { font-size: 0.778em; line-height: var(--hv-line-height); }
+.canvas-reading-body.markdown-body :deep(h6) {
+  font-size: 1.037em;
+}
+.canvas-reading-body.markdown-body :deep(pre) {
+  line-height: calc(var(--hv-line-height) * 0.91);
+}
+.canvas-link {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  cursor: pointer;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+.canvas-link:hover span:first-child {
+  text-decoration-thickness: 2px;
+}
+.canvas-link-url {
+  font-size: 0.778em;
+  line-height: var(--hv-line-height);
+}
 </style>

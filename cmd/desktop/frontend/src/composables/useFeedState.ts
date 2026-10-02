@@ -1,20 +1,66 @@
 import { computed, onMounted, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Browser, Window } from '@wailsio/runtime'
-import { ClearProfileImage, CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, MarkImages, RenameFlow, SaveSidebar, SeedStarterFlow, SetFlowEnabled, SetFlowOrder, SetProfileImage } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/flowsservice'
-import { ActionRun, ActionViews, Events, FeedCounts, InvokeAction, ListArchivedByFeed, ListByFeed, ListTrash, MarkRead, RenderClipboardAction, SetUnread, ToggleArchived, ToggleIgnored } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
+import {
+  ClearProfileImage,
+  CreateFlow,
+  DeleteFlow,
+  GetFlow,
+  GetSidebar,
+  ListFlows,
+  MarkImages,
+  RenameFlow,
+  SaveSidebar,
+  SeedStarterFlow,
+  SetFlowEnabled,
+  SetFlowOrder,
+  SetProfileImage,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/flowsservice'
+import {
+  ActionRun,
+  ActionViews,
+  Events,
+  FeedCounts,
+  InvokeAction,
+  ListArchivedByFeed,
+  ListByFeed,
+  ListTrash,
+  MarkRead,
+  RenderClipboardAction,
+  SetUnread,
+  ToggleArchived,
+  ToggleIgnored,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
 import { SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { Refresh as RefreshSources } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sourcesservice'
-import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type {
+  ActionRunView,
+  SessionLaunchOptions as SessionLaunchOptionsView,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { appErrorKind, appErrorMessage, errorText } from '../lib/appError'
-import { canonicalPayload, clipboardText, searchText, sourceKindForNodeType, sourceSummary } from '../lib/itemPresentation'
+import {
+  canonicalPayload,
+  clipboardText,
+  searchText,
+  sourceKindForNodeType,
+  sourceSummary,
+} from '../lib/itemPresentation'
 import { useClipboard } from './useClipboard'
 import { useNotify } from './useNotify'
 import { useToasts } from './useToasts'
 import { useWailsEvent } from './useWailsEvent'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
-import type { FeedInboxCount, FeedSort, InboxEvent, InboxItem, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
+import type {
+  FeedInboxCount,
+  FeedSort,
+  InboxEvent,
+  InboxItem,
+  FeedSummary,
+  FeedTree,
+  Profile,
+  SidebarSelection,
+} from '../types/feed'
 
 // A profile IS a flow: the profiles list comes from FlowsService.ListFlows, a
 // profile's sidebar feeds are flow feed nodes, while inbox items are shared
@@ -59,8 +105,11 @@ export function useFeedState() {
     }
   }
   function writeLastSelection(profileID: string, sel: SidebarSelection): void {
-    try { localStorage.setItem(lastSelectionStorageKey, JSON.stringify({ ...readLastSelections(), [profileID]: sel })) }
-    catch (error) { console.warn('Unable to persist sidebar selection', error) }
+    try {
+      localStorage.setItem(lastSelectionStorageKey, JSON.stringify({ ...readLastSelections(), [profileID]: sel }))
+    } catch (error) {
+      console.warn('Unable to persist sidebar selection', error)
+    }
   }
   // Search is a pure view filter over the loaded list (like unreadOnly). It
   // lives here — not in FeedList — so keyboard navigation moves over exactly
@@ -90,8 +139,14 @@ export function useFeedState() {
   const actionRunsByItem = ref<Record<number, Record<string, ActionRunView>>>({})
   const actionRunGenerations = new Map<string, number>()
   const actionRunIDs = loadActionRunIDs()
-  const pendingAction = computed(() => selectedId.value ? Object.keys(pendingActionKeys.value).find((key) => key.startsWith(`${selectedId.value}\u0000`))?.split('\u0000')[1] ?? null : null)
-  const actionRuns = computed(() => selectedId.value ? actionRunsByItem.value[selectedId.value] ?? {} : {})
+  const pendingAction = computed(() =>
+    selectedId.value
+      ? (Object.keys(pendingActionKeys.value)
+          .find((key) => key.startsWith(`${selectedId.value}\u0000`))
+          ?.split('\u0000')[1] ?? null)
+      : null,
+  )
+  const actionRuns = computed(() => (selectedId.value ? (actionRunsByItem.value[selectedId.value] ?? {}) : {}))
   const sessionLaunchAction = ref<ActionView | null>(null)
   const sessionLaunchItem = ref<InboxItem | null>(null)
   const sessionLaunchOptions = ref<SessionLaunchOptionsView | null>(null)
@@ -101,7 +156,12 @@ export function useFeedState() {
   const actionInputsItems = ref<InboxItem[]>([])
   const actionInputsBusy = ref(false)
   const actionInputsError = ref<string | null>(null)
-  const actionRerunConfirmation = ref<{ actionID: string; label: string; item: InboxItem; input: Record<string, unknown> } | null>(null)
+  const actionRerunConfirmation = ref<{
+    actionID: string
+    label: string
+    item: InboxItem
+    input: Record<string, unknown>
+  } | null>(null)
   const actionRerunBusy = ref(false)
   const actionRerunError = ref<string | null>(null)
   const { toasts, showToast, dismissToast, clearToasts } = useToasts()
@@ -123,7 +183,9 @@ export function useFeedState() {
   let selectionActionsSeq = 0
   let actionLoadSeq = 0
 
-  function actionKey(itemID: number, actionID: string): string { return `${itemID}\u0000${actionID}` }
+  function actionKey(itemID: number, actionID: string): string {
+    return `${itemID}\u0000${actionID}`
+  }
   function loadActionRunIDs(): Record<string, Record<string, number>> {
     try {
       const stored: unknown = JSON.parse(localStorage.getItem('hive.action-run-ids') ?? '{}')
@@ -145,25 +207,35 @@ export function useFeedState() {
     }
   }
   function persistActionRunIDs(): void {
-    try { localStorage.setItem('hive.action-run-ids', JSON.stringify(actionRunIDs)) }
-    catch (error) { console.warn('Unable to persist action run IDs', error) }
+    try {
+      localStorage.setItem('hive.action-run-ids', JSON.stringify(actionRunIDs))
+    } catch (error) {
+      console.warn('Unable to persist action run IDs', error)
+    }
   }
   function nextActionRunGeneration(itemID: number, actionID: string): void {
     const key = actionKey(itemID, actionID)
     actionRunGenerations.set(key, (actionRunGenerations.get(key) ?? 0) + 1)
   }
   function isCurrentActionRun(itemID: number, actionID: string, commandID: number, generation: number): boolean {
-    return actionRunIDs[itemID]?.[actionID] === commandID && (actionRunGenerations.get(actionKey(itemID, actionID)) ?? 0) === generation
+    return (
+      actionRunIDs[itemID]?.[actionID] === commandID &&
+      (actionRunGenerations.get(actionKey(itemID, actionID)) ?? 0) === generation
+    )
   }
   function setActionRun(itemID: number, actionID: string, run: ActionRunView): void {
-    actionRunsByItem.value = { ...actionRunsByItem.value, [itemID]: { ...(actionRunsByItem.value[itemID] ?? {}), [actionID]: run } }
+    actionRunsByItem.value = {
+      ...actionRunsByItem.value,
+      [itemID]: { ...(actionRunsByItem.value[itemID] ?? {}), [actionID]: run },
+    }
     actionRunIDs[itemID] = { ...(actionRunIDs[itemID] ?? {}), [actionID]: run.commandId }
     nextActionRunGeneration(itemID, actionID)
     persistActionRunIDs()
   }
   function removeActionRunID(itemID: number, actionID: string): void {
     if (!actionRunIDs[itemID]?.[actionID]) return
-    const itemRuns = { ...actionRunIDs[itemID] }; delete itemRuns[actionID]
+    const itemRuns = { ...actionRunIDs[itemID] }
+    delete itemRuns[actionID]
     if (Object.keys(itemRuns).length) actionRunIDs[itemID] = itemRuns
     else delete actionRunIDs[itemID]
     nextActionRunGeneration(itemID, actionID)
@@ -171,10 +243,11 @@ export function useFeedState() {
   }
 
   const activeProfile = computed(() => profiles.value.find((p) => p.id === activeProfileId.value) ?? null)
-  const selectedItem = computed(() =>
-    items.value.find((item) => item.id === selectedId.value)
-      ?? archivedItems.value.find((item) => item.id === selectedId.value)
-      ?? null,
+  const selectedItem = computed(
+    () =>
+      items.value.find((item) => item.id === selectedId.value) ??
+      archivedItems.value.find((item) => item.id === selectedId.value) ??
+      null,
   )
   const title = computed(() => {
     const sel = selection.value
@@ -196,9 +269,13 @@ export function useFeedState() {
   // The Unread badge counts the whole loaded list, independent of search.
   const unreadCount = computed(() => items.value.filter((item) => item.unread).length)
 
-  const authors = computed(() => [...new Set(
-    [...items.value, ...archivedItems.value].map((item) => canonicalPayload(item).author.trim()).filter(Boolean),
-  )].sort((a, b) => a.localeCompare(b)))
+  const authors = computed(() =>
+    [
+      ...new Set(
+        [...items.value, ...archivedItems.value].map((item) => canonicalPayload(item).author.trim()).filter(Boolean),
+      ),
+    ].sort((a, b) => a.localeCompare(b)),
+  )
 
   function matchesAuthor(item: InboxItem): boolean {
     return !authorFilter.value || canonicalPayload(item).author.trim() === authorFilter.value
@@ -219,7 +296,10 @@ export function useFeedState() {
   const visibleItems = computed(() =>
     [...items.value]
       .sort(compareItems)
-      .filter((item) => (!unreadOnly.value || item.unread) && matchesSearch(item) && matchesAuthor(item) && matchesTrashFilter(item)),
+      .filter(
+        (item) =>
+          (!unreadOnly.value || item.unread) && matchesSearch(item) && matchesAuthor(item) && matchesTrashFilter(item),
+      ),
   )
 
   const visibleArchivedItems = computed(() =>
@@ -228,7 +308,10 @@ export function useFeedState() {
 
   const selectedItems = computed(() => {
     const chosen = new Set(selectedItemIDs.value)
-    return [...items.value].sort(compareItems).concat(archivedItems.value).filter((item) => chosen.has(item.id))
+    return [...items.value]
+      .sort(compareItems)
+      .concat(archivedItems.value)
+      .filter((item) => chosen.has(item.id))
   })
 
   async function loadSelectionActions(): Promise<void> {
@@ -239,7 +322,11 @@ export function useFeedState() {
     try {
       const actionsByItem = await Promise.all(itemIDs.map(async (itemID) => (await ActionViews(itemID)) ?? []))
       const [first = [], ...rest] = actionsByItem
-      const common = first.filter((action) => action.type === 'clipboard' && rest.every((itemActions) => itemActions.some((candidate) => candidate.id === action.id)))
+      const common = first.filter(
+        (action) =>
+          action.type === 'clipboard' &&
+          rest.every((itemActions) => itemActions.some((candidate) => candidate.id === action.id)),
+      )
       if (seq === selectionActionsSeq) selectionActions.value = common
     } catch (error) {
       if (seq !== selectionActionsSeq) return
@@ -297,9 +384,26 @@ export function useFeedState() {
   // the profile is selected (the rail only needs the letter/name). An
   // undefined tree is therefore "feeds not read yet", which is distinct from
   // a profile whose flow genuinely has no feed nodes.
-  function toProfileStub(flow: { id: string; name: string; enabled: boolean; image?: string; nodes?: number }): Profile {
+  function toProfileStub(flow: {
+    id: string
+    name: string
+    enabled: boolean
+    image?: string
+    nodes?: number
+  }): Profile {
     const name = flow.name || flow.id
-    return { id: flow.id, letter: letter(name), image: flow.image || undefined, name, enabled: flow.enabled, nodes: flow.nodes ?? 0, sourceSummary: '', totalCount: 0, unreadCount: 0, feeds: [] }
+    return {
+      id: flow.id,
+      letter: letter(name),
+      image: flow.image || undefined,
+      name,
+      enabled: flow.enabled,
+      nodes: flow.nodes ?? 0,
+      sourceSummary: '',
+      totalCount: 0,
+      unreadCount: 0,
+      feeds: [],
+    }
   }
 
   async function loadProfiles() {
@@ -364,13 +468,28 @@ export function useFeedState() {
       // a feed node's config fields (icon/description) sit at the top level of
       // the node object alongside id/type/name, not under a `config` key.
       if (seq !== feedsSeq) return null
-      const nodes = (flow.nodes ?? []) as Array<{ id: string; type: string; name?: string; icon?: string; image?: string; description?: string }>
+      const nodes = (flow.nodes ?? []) as Array<{
+        id: string
+        type: string
+        name?: string
+        icon?: string
+        image?: string
+        description?: string
+      }>
       const feeds: FeedSummary[] = nodes
         .filter((n) => n.type === 'feed')
         .map((n) => {
           const feedId = `${flowId}/${n.id}`
           const c = countByFeed.get(feedId)
-          return { id: feedId, name: n.name || n.id, count: c?.total ?? 0, newCount: c?.unread ?? 0, archivedCount: c?.archived ?? 0, icon: n.icon, description: n.description }
+          return {
+            id: feedId,
+            name: n.name || n.id,
+            count: c?.total ?? 0,
+            newCount: c?.unread ?? 0,
+            archivedCount: c?.archived ?? 0,
+            icon: n.icon,
+            description: n.description,
+          }
         })
       const icons: Record<string, string> = {}
       const imageHashByNode: Record<string, string> = {}
@@ -435,7 +554,9 @@ export function useFeedState() {
       console.warn('Unable to save sidebar layout', error)
       await notify({
         title: 'Sidebar layout save failed',
-        body: profile?.name ? `Could not save the sidebar layout for profile ${profile.name}.` : 'Could not save the sidebar layout.',
+        body: profile?.name
+          ? `Could not save the sidebar layout for profile ${profile.name}.`
+          : 'Could not save the sidebar layout.',
         severity: 'error',
         category: 'config',
       })
@@ -482,7 +603,8 @@ export function useFeedState() {
       return created.id
     } catch (error) {
       console.warn('Unable to create flow', error)
-      createProfileError.value = error instanceof Error && error.message ? error.message : 'Could not create the profile.'
+      createProfileError.value =
+        error instanceof Error && error.message ? error.message : 'Could not create the profile.'
       return null
     } finally {
       creatingProfile.value = false
@@ -522,7 +644,8 @@ export function useFeedState() {
       return true
     } catch (error) {
       console.warn('Unable to rename flow', error)
-      renameProfileError.value = error instanceof Error && error.message ? error.message : 'Could not rename the profile.'
+      renameProfileError.value =
+        error instanceof Error && error.message ? error.message : 'Could not rename the profile.'
       return false
     } finally {
       renamingProfile.value = false
@@ -540,11 +663,17 @@ export function useFeedState() {
       const updated = await SetFlowEnabled(profileID, enabled)
       const profile = profiles.value.find((candidate) => candidate.id === profileID)
       if (profile) profile.enabled = updated.enabled
-      await notify({ title: enabled ? 'Profile enabled' : 'Profile disabled', body: updated.name, severity: 'success', category: 'config' })
+      await notify({
+        title: enabled ? 'Profile enabled' : 'Profile disabled',
+        body: updated.name,
+        severity: 'success',
+        category: 'config',
+      })
       return true
     } catch (error) {
       console.warn('Unable to update flow enablement', error)
-      toggleProfileError.value = error instanceof Error && error.message ? error.message : 'Could not update the profile.'
+      toggleProfileError.value =
+        error instanceof Error && error.message ? error.message : 'Could not update the profile.'
       return false
     } finally {
       togglingProfileId.value = null
@@ -594,7 +723,8 @@ export function useFeedState() {
       return true
     } catch (error) {
       console.warn('Unable to set profile image', error)
-      profileImageError.value = appErrorMessage(error) || (error instanceof Error ? error.message : '') || 'Could not update the profile image.'
+      profileImageError.value =
+        appErrorMessage(error) || (error instanceof Error ? error.message : '') || 'Could not update the profile image.'
       return false
     } finally {
       settingProfileImage.value = false
@@ -611,7 +741,8 @@ export function useFeedState() {
       return true
     } catch (error) {
       console.warn('Unable to clear profile image', error)
-      profileImageError.value = appErrorMessage(error) || (error instanceof Error ? error.message : '') || 'Could not remove the profile image.'
+      profileImageError.value =
+        appErrorMessage(error) || (error instanceof Error ? error.message : '') || 'Could not remove the profile image.'
       return false
     } finally {
       settingProfileImage.value = false
@@ -621,7 +752,13 @@ export function useFeedState() {
   // ── Items (inbox_item) ───────────────────────────────────────────────────────
 
   function asInboxItem(view: InboxItem): InboxItem {
-    return { ...view, archivedAt: view.archivedAt ?? null, archivedActor: view.archivedActor ?? null, archivedReason: view.archivedReason ?? null, sourceState: view.sourceState ?? null }
+    return {
+      ...view,
+      archivedAt: view.archivedAt ?? null,
+      archivedActor: view.archivedActor ?? null,
+      archivedReason: view.archivedReason ?? null,
+      sourceState: view.sourceState ?? null,
+    }
   }
 
   async function loadTrashItems() {
@@ -638,7 +775,9 @@ export function useFeedState() {
       if (selectedId.value && items.value.some((item) => item.id === selectedId.value)) return
       selectedId.value = first?.id ?? null
       await loadActions(first)
-    } catch (error) { handleLoadError(seq, error) }
+    } catch (error) {
+      handleLoadError(seq, error)
+    }
   }
 
   async function loadFeedItems(feedID: string) {
@@ -650,19 +789,24 @@ export function useFeedState() {
       // Reload them while selecting so pruning distinguishes moved rows from
       // rows that no longer exist.
       const loadArchived = archivedExpanded.value || itemSelectionActive.value
-      const archivedLoaded = loadArchived
-        ? (await ListArchivedByFeed(activeProfileId.value, feedID, 500)) ?? []
-        : []
+      const archivedLoaded = loadArchived ? ((await ListArchivedByFeed(activeProfileId.value, feedID, 500)) ?? []) : []
       if (seq !== loadSeq) return
       loadError.value = null
       items.value = loaded.map(asInboxItem)
       if (loadArchived) archivedItems.value = archivedLoaded.map(asInboxItem)
       pruneItemSelection()
       const first = (unreadOnly.value ? items.value.find((item) => item.unread) : items.value[0]) ?? null
-      if (selectedId.value && (items.value.some((item) => item.id === selectedId.value) || archivedItems.value.some((item) => item.id === selectedId.value))) return
+      if (
+        selectedId.value &&
+        (items.value.some((item) => item.id === selectedId.value) ||
+          archivedItems.value.some((item) => item.id === selectedId.value))
+      )
+        return
       selectedId.value = first?.id ?? null
       await loadActions(first)
-    } catch (error) { handleLoadError(seq, error) }
+    } catch (error) {
+      handleLoadError(seq, error)
+    }
   }
 
   async function toggleArchivedSection(): Promise<void> {
@@ -676,41 +820,50 @@ export function useFeedState() {
     if (seq !== loadSeq) return
     console.warn('Unable to load inbox items', error)
     loadError.value = "Can't load inbox items right now."
-    items.value = []; archivedItems.value = []; selectedId.value = null; actions.value = []
+    items.value = []
+    archivedItems.value = []
+    selectedId.value = null
+    actions.value = []
     pruneItemSelection()
   }
 
   async function loadEvents(itemID: number): Promise<InboxEvent[]> {
     // The storage query returns newest-first for efficient recent-event reads;
     // the observed timeline is deliberately chronological for human reading.
-    return ((await Events(itemID, 100) ?? [])
+    return ((await Events(itemID, 100)) ?? [])
       .map((event) => ({ ...event, summary: event.summary ?? null, detail: event.detail ?? null }))
-      .reverse())
+      .reverse()
   }
 
   async function loadActions(item: InboxItem | null) {
     const token = ++actionLoadSeq
-    if (!item) { actions.value = []; return }
+    if (!item) {
+      actions.value = []
+      return
+    }
     try {
       const available = (await ActionViews(item.id)) ?? []
       if (token !== actionLoadSeq || selectedId.value !== item.id) return
       actions.value = available
-      await Promise.all(available.map(async (action) => {
-        const commandID = actionRunIDs[item.id]?.[action.id]
-        if (!commandID) return
-        const generation = actionRunGenerations.get(actionKey(item.id, action.id)) ?? 0
-        try {
-          const run = await ActionRun(commandID)
-          if (isCurrentActionRun(item.id, action.id, commandID, generation)) setActionRun(item.id, action.id, run)
-        } catch (error) {
-          console.warn('Unable to restore action run', error)
-          // A run row deleted underneath us is not a failure: drop the stale
-          // id so the card disappears. Anything else is left alone, because
-          // forgetting a run id on a transient fault loses the user's link to
-          // work that is still running.
-          if (appErrorKind(error) === 'not_found' && isCurrentActionRun(item.id, action.id, commandID, generation)) removeActionRunID(item.id, action.id)
-        }
-      }))
+      await Promise.all(
+        available.map(async (action) => {
+          const commandID = actionRunIDs[item.id]?.[action.id]
+          if (!commandID) return
+          const generation = actionRunGenerations.get(actionKey(item.id, action.id)) ?? 0
+          try {
+            const run = await ActionRun(commandID)
+            if (isCurrentActionRun(item.id, action.id, commandID, generation)) setActionRun(item.id, action.id, run)
+          } catch (error) {
+            console.warn('Unable to restore action run', error)
+            // A run row deleted underneath us is not a failure: drop the stale
+            // id so the card disappears. Anything else is left alone, because
+            // forgetting a run id on a transient fault loses the user's link to
+            // work that is still running.
+            if (appErrorKind(error) === 'not_found' && isCurrentActionRun(item.id, action.id, commandID, generation))
+              removeActionRunID(item.id, action.id)
+          }
+        }),
+      )
     } catch (error) {
       if (token !== actionLoadSeq) return
       console.warn('Unable to load actions', error)
@@ -782,7 +935,10 @@ export function useFeedState() {
     markingAllRead.value = true
     try {
       const marked = await MarkRead(activeProfileId.value, feedID ?? '')
-      showToast(marked > 0 ? `Marked ${marked} ${marked === 1 ? 'item' : 'items'} as read` : 'Nothing to mark as read', { severity: 'success' })
+      showToast(
+        marked > 0 ? `Marked ${marked} ${marked === 1 ? 'item' : 'items'} as read` : 'Nothing to mark as read',
+        { severity: 'success' },
+      )
     } catch (error) {
       console.warn('Unable to mark inbox items as read', error)
       showToast('Could not mark items as read', { severity: 'error' })
@@ -831,7 +987,8 @@ export function useFeedState() {
   async function moveSelection(delta: 1 | -1) {
     // Keyboard navigation continues into the archived section when expanded.
     const all = archivedExpanded.value ? [...items.value, ...archivedItems.value] : items.value
-    const passes = (item: InboxItem) => (!unreadOnly.value || item.unread) && matchesSearch(item) && matchesAuthor(item) && matchesTrashFilter(item)
+    const passes = (item: InboxItem) =>
+      (!unreadOnly.value || item.unread) && matchesSearch(item) && matchesAuthor(item) && matchesTrashFilter(item)
     const currentIndex = all.findIndex((item) => item.id === selectedId.value)
     if (currentIndex === -1) {
       const visible = all.filter(passes)
@@ -874,8 +1031,11 @@ export function useFeedState() {
   }
 
   async function selectSidebar(nextSelection: SidebarSelection, options: { persist?: boolean } = {}) {
-    const destinationChanged = selection.value.type !== nextSelection.type
-      || (selection.value.type === 'feed' && nextSelection.type === 'feed' && selection.value.feedId !== nextSelection.feedId)
+    const destinationChanged =
+      selection.value.type !== nextSelection.type ||
+      (selection.value.type === 'feed' &&
+        nextSelection.type === 'feed' &&
+        selection.value.feedId !== nextSelection.feedId)
     if (destinationChanged) cancelItemSelection()
     unreadOnly.value = false
     search.value = '' // a switched feed starts unfiltered
@@ -976,8 +1136,18 @@ export function useFeedState() {
         return false
       }
       const label = actions.value.find((action) => action.id === actionID)?.label ?? actionID
-      if (run.result?.session) await notify({ title: `Created session ${run.result.session.name} (${run.result.session.id})`, severity: 'success', category: 'session' })
-      else if (run.result?.message) await notify({ title: `Published message to ${run.result.message.topic} as ${run.result.message.sender}`, severity: 'success', category: 'action' })
+      if (run.result?.session)
+        await notify({
+          title: `Created session ${run.result.session.name} (${run.result.session.id})`,
+          severity: 'success',
+          category: 'session',
+        })
+      else if (run.result?.message)
+        await notify({
+          title: `Published message to ${run.result.message.topic} as ${run.result.message.sender}`,
+          severity: 'success',
+          category: 'action',
+        })
       else await notify({ title: `${label} completed`, severity: 'success', category: 'action' })
       return true
     } catch (error) {
@@ -986,7 +1156,9 @@ export function useFeedState() {
       await notify({ title: actionError.value, severity: 'error', category: 'action' })
       return false
     } finally {
-      const next = { ...pendingActionKeys.value }; delete next[key]; pendingActionKeys.value = next
+      const next = { ...pendingActionKeys.value }
+      delete next[key]
+      pendingActionKeys.value = next
     }
   }
 
@@ -1051,7 +1223,9 @@ export function useFeedState() {
       actionError.value = message
       showToast(message, { severity: 'error' })
     } finally {
-      const next = { ...pendingActionKeys.value }; delete next[key]; pendingActionKeys.value = next
+      const next = { ...pendingActionKeys.value }
+      delete next[key]
+      pendingActionKeys.value = next
     }
   }
 
@@ -1063,7 +1237,13 @@ export function useFeedState() {
     sessionLaunchError.value = null
   }
 
-  async function submitSessionLaunch(input: { name: string; repository?: string; workspace?: string; agent?: string; inputs: Record<string, string> }) {
+  async function submitSessionLaunch(input: {
+    name: string
+    repository?: string
+    workspace?: string
+    agent?: string
+    inputs: Record<string, string>
+  }) {
     const action = sessionLaunchAction.value
     const item = sessionLaunchItem.value
     if (!action || !item || sessionLaunchBusy.value) return
@@ -1073,7 +1253,8 @@ export function useFeedState() {
     const succeeded = await runAction(action.id, { session, inputs }, item)
     sessionLaunchBusy.value = false
     if (succeeded) cancelSessionLaunch()
-    else if (!actionRerunConfirmation.value) sessionLaunchError.value = actionError.value ?? 'Could not create the session.'
+    else if (!actionRerunConfirmation.value)
+      sessionLaunchError.value = actionError.value ?? 'Could not create the session.'
   }
 
   function cancelActionInputs() {
@@ -1092,9 +1273,10 @@ export function useFeedState() {
     if (!action || !item || actionInputsBusy.value) return
     actionInputsBusy.value = true
     actionInputsError.value = null
-    const succeeded = action.type === 'clipboard'
-      ? await copyActionToClipboard(action.id, targetItems, values)
-      : await runAction(action.id, { inputs: values }, item)
+    const succeeded =
+      action.type === 'clipboard'
+        ? await copyActionToClipboard(action.id, targetItems, values)
+        : await runAction(action.id, { inputs: values }, item)
     actionInputsBusy.value = false
     if (succeeded) cancelActionInputs()
     else if (!actionRerunConfirmation.value) actionInputsError.value = actionError.value ?? 'Could not run the action.'
@@ -1149,7 +1331,10 @@ export function useFeedState() {
   async function copySelectedItemContents(): Promise<void> {
     const targetItems = selectedItems.value
     if (targetItems.length === 0) return
-    await copyToClipboard(targetItems.map(clipboardText).join('\n\n'), `${targetItems.length} item${targetItems.length === 1 ? '' : 's'} copied`)
+    await copyToClipboard(
+      targetItems.map(clipboardText).join('\n\n'),
+      `${targetItems.length} item${targetItems.length === 1 ? '' : 's'} copied`,
+    )
   }
 
   async function invokeSelectionAction(actionID: string): Promise<void> {
@@ -1165,7 +1350,11 @@ export function useFeedState() {
     await copyActionToClipboard(actionID, targetItems)
   }
 
-  async function copyActionToClipboard(actionID: string, targetItems: InboxItem[], inputs: Record<string, string> = {}): Promise<boolean> {
+  async function copyActionToClipboard(
+    actionID: string,
+    targetItems: InboxItem[],
+    inputs: Record<string, string> = {},
+  ): Promise<boolean> {
     const itemIDs = targetItems.map((item) => item.id)
     if (itemIDs.length === 0) return false
     const key = actionKey(itemIDs[0]!, actionID)
@@ -1185,7 +1374,9 @@ export function useFeedState() {
       showToast(message, { severity: 'error' })
       return false
     } finally {
-      const next = { ...pendingActionKeys.value }; delete next[key]; pendingActionKeys.value = next
+      const next = { ...pendingActionKeys.value }
+      delete next[key]
+      pendingActionKeys.value = next
     }
   }
 
@@ -1215,7 +1406,9 @@ export function useFeedState() {
 
   onMounted(() => {
     // A flows/*.yaml change (create/delete/edit) reshapes the profiles list.
-    useWailsEvent('flows:updated', () => { void reloadProfilesQuietly() })
+    useWailsEvent('flows:updated', () => {
+      void reloadProfilesQuietly()
+    })
     useWailsEvent('actions:updated', () => {
       void loadActions(selectedItem.value)
       void loadSelectionActions()

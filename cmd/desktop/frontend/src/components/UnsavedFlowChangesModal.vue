@@ -44,20 +44,20 @@ useAutofocus(deployRef)
             :busy="busy"
             data-testid="unsaved-flow-deploy"
             @click="emit('deploy')"
-          >{{ busy ? 'Deploying…' : 'Deploy' }}</BaseButton>
+            >{{ busy ? 'Deploying…' : 'Deploy' }}</BaseButton
+          >
           <button
             class="flex-1 cursor-pointer rounded-lg border border-severity-error/50 px-4 py-2.5 text-[13.5px] font-semibold text-severity-error hover:bg-severity-error-tint disabled:cursor-default disabled:opacity-50"
             :disabled="busy"
             data-testid="unsaved-flow-discard"
             @click="emit('discard')"
-          >Discard changes</button>
+          >
+            Discard changes
+          </button>
         </div>
-        <BaseButton
-          variant="ghost"
-          :busy="busy"
-          data-testid="unsaved-flow-cancel"
-          @click="emit('close')"
-        >Cancel</BaseButton>
+        <BaseButton variant="ghost" :busy="busy" data-testid="unsaved-flow-cancel" @click="emit('close')"
+          >Cancel</BaseButton
+        >
       </div>
     </template>
   </BaseModal>

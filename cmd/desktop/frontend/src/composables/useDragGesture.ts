@@ -6,7 +6,7 @@ export interface DragGestureOptions {
 
 /** Starts a window-tracked pointer drag and returns a function that stops it early. */
 export function startDrag(event: PointerEvent, options: DragGestureOptions): () => void {
-  const target = options.pointerCapture ? event.target as Element | null : null
+  const target = options.pointerCapture ? (event.target as Element | null) : null
   const pointerId = event.pointerId
   target?.setPointerCapture?.(pointerId)
 

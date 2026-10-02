@@ -33,7 +33,9 @@ const xterm = vi.hoisted(() => {
     write = vi.fn()
     focus = vi.fn()
     element?: HTMLElement
-    open = vi.fn((host: HTMLElement) => { this.element = host })
+    open = vi.fn((host: HTMLElement) => {
+      this.element = host
+    })
     loadAddon = vi.fn((addon: { activate?: (term: FakeTerminal) => void }) => addon.activate?.(this))
     dispose = vi.fn()
     resizeEffect?: (term: FakeTerminal) => void
@@ -70,12 +72,16 @@ const xterm = vi.hoisted(() => {
     registerMarker = vi.fn((cursorYOffset = 0) => {
       const marker = {
         line: this.buffer.active.baseY + this.buffer.active.cursorY + cursorYOffset,
-        dispose: vi.fn(() => { marker.line = -1 }),
+        dispose: vi.fn(() => {
+          marker.line = -1
+        }),
       }
       this.markers.push(marker)
       return marker
     })
-    scrollToLine = vi.fn((line: number) => { this.buffer.active.viewportY = Math.min(line, this.buffer.active.baseY) })
+    scrollToLine = vi.fn((line: number) => {
+      this.buffer.active.viewportY = Math.min(line, this.buffer.active.baseY)
+    })
     scrollToBottom = vi.fn(() => {
       this.buffer.active.viewportY = this.buffer.active.baseY
       for (const handler of this.scrollHandlers) handler()
@@ -97,7 +103,11 @@ const xterm = vi.hoisted(() => {
 
     onData(handler: (data: string) => void) {
       this.handlers.push(handler)
-      return { dispose: () => { this.onDataDisposed = true } }
+      return {
+        dispose: () => {
+          this.onDataDisposed = true
+        },
+      }
     }
 
     onScroll(handler: () => void) {
@@ -130,7 +140,9 @@ const xterm = vi.hoisted(() => {
       })
     }
 
-    clearLines(): void { this.lines.clear() }
+    clearLines(): void {
+      this.lines.clear()
+    }
 
     switchBuffer(): void {
       for (const handler of this.bufferHandlers) handler()
@@ -195,7 +207,9 @@ const xterm = vi.hoisted(() => {
     static instances: FakeSearchAddon[] = []
     static results: { resultIndex: number; resultCount: number } = { resultIndex: 0, resultCount: 1 }
     dispose = vi.fn()
-    activate = vi.fn((term: FakeTerminal) => { this.proposedApi = term.options.allowProposedApi === true })
+    activate = vi.fn((term: FakeTerminal) => {
+      this.proposedApi = term.options.allowProposedApi === true
+    })
     clearDecorations = vi.fn()
     findNext = vi.fn((term: string, options?: ISearchOptions) => this.record('next', term, options))
     findPrevious = vi.fn((term: string, options?: ISearchOptions) => this.record('previous', term, options))
@@ -203,7 +217,9 @@ const xterm = vi.hoisted(() => {
     private proposedApi = false
     private resultHandlers: ((results: { resultIndex: number; resultCount: number }) => void)[] = []
 
-    constructor() { FakeSearchAddon.instances.push(this) }
+    constructor() {
+      FakeSearchAddon.instances.push(this)
+    }
 
     onDidChangeResults(handler: (results: { resultIndex: number; resultCount: number }) => void) {
       this.resultHandlers.push(handler)
@@ -245,8 +261,12 @@ class FakeSocket {
   onclose: (() => void) | null = null
   onerror: (() => void) | null = null
 
-  send(frame: Uint8Array): void { this.sent.push(frame) }
-  close(): void { this.closed = true }
+  send(frame: Uint8Array): void {
+    this.sent.push(frame)
+  }
+  close(): void {
+    this.closed = true
+  }
 }
 
 class FakeResizeObserver {
@@ -254,11 +274,19 @@ class FakeResizeObserver {
   observed: unknown[] = []
   disconnected = false
 
-  constructor(private readonly callback: () => void) { FakeResizeObserver.instances.push(this) }
+  constructor(private readonly callback: () => void) {
+    FakeResizeObserver.instances.push(this)
+  }
 
-  observe(target: unknown): void { this.observed.push(target) }
-  disconnect(): void { this.disconnected = true }
-  trigger(): void { this.callback() }
+  observe(target: unknown): void {
+    this.observed.push(target)
+  }
+  disconnect(): void {
+    this.disconnected = true
+  }
+  trigger(): void {
+    this.callback()
+  }
 }
 
 let sockets: FakeSocket[] = []
@@ -274,8 +302,26 @@ function fakeClient(): MockedClient {
   return {
     attach: vi.fn().mockResolvedValue({
       windows: [
-        { windowId: '@1', name: 'agent', active: true, activePane: '%1', width: 213, height: 55, zoomed: false, layout: leaf('%1', 213, 55) },
-        { windowId: '@2', name: 'shell', active: false, activePane: '%2', width: 213, height: 55, zoomed: false, layout: leaf('%2', 213, 55) },
+        {
+          windowId: '@1',
+          name: 'agent',
+          active: true,
+          activePane: '%1',
+          width: 213,
+          height: 55,
+          zoomed: false,
+          layout: leaf('%1', 213, 55),
+        },
+        {
+          windowId: '@2',
+          name: 'shell',
+          active: false,
+          activePane: '%2',
+          width: 213,
+          height: 55,
+          zoomed: false,
+          layout: leaf('%2', 213, 55),
+        },
       ],
     }),
     start: vi.fn().mockResolvedValue({ started: true }),
@@ -373,7 +419,15 @@ function jsonFrame(kind: number, payload: unknown): ArrayBuffer {
 function windowFrame(
   kind: string,
   windowId: string,
-  window: { name?: string; active?: boolean; activePane?: string; width?: number; height?: number; zoomed?: boolean; layout?: PaneLayout | null } = {},
+  window: {
+    name?: string
+    active?: boolean
+    activePane?: string
+    width?: number
+    height?: number
+    zoomed?: boolean
+    layout?: PaneLayout | null
+  } = {},
 ): ArrayBuffer {
   const width = window.width ?? 213
   const height = window.height ?? 55
@@ -471,8 +525,9 @@ describe('useTerminalWindows', () => {
     socket.onmessage?.({ data: outputFrame('@1', '%1', '\r\n\x1b[2K> prompt\x1b[?2026l') })
 
     expect(write).toHaveBeenCalledTimes(1)
-    expect(new TextDecoder().decode(write.mock.calls[0][0]))
-      .toBe('\x1b[?2026h\x1b[2Kworking\r\n\x1b[2K> prompt\x1b[?2026l')
+    expect(new TextDecoder().decode(write.mock.calls[0][0])).toBe(
+      '\x1b[?2026h\x1b[2Kworking\r\n\x1b[2K> prompt\x1b[?2026l',
+    )
     expect(term.resize).toHaveBeenCalledTimes(resizeCalls)
     expect(client.resize).not.toHaveBeenCalled()
   })
@@ -532,7 +587,9 @@ describe('useTerminalWindows', () => {
   it('opens both hyperlink kinds through the system browser', async () => {
     const { session } = await attached()
 
-    const handler = session.tabs.value[0].panes[0].term.options.linkHandler as { activate: (event: MouseEvent, uri: string) => void }
+    const handler = session.tabs.value[0].panes[0].term.options.linkHandler as {
+      activate: (event: MouseEvent, uri: string) => void
+    }
     handler.activate(new MouseEvent('click'), 'https://example.test/osc8')
     expect(wails.OpenURL).toHaveBeenCalledWith('https://example.test/osc8')
 
@@ -578,11 +635,12 @@ describe('useTerminalWindows', () => {
     }
     term.scrollToBottom.mockClear()
 
-    socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, width: 100, height: 30 }) })
+    socket.onmessage?.({
+      data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, width: 100, height: 30 }),
+    })
 
     expect(term.scrollToBottom).toHaveBeenCalledTimes(1)
-    expect(term.resize.mock.invocationCallOrder.at(-1))
-      .toBeLessThan(term.scrollToBottom.mock.invocationCallOrder[0])
+    expect(term.resize.mock.invocationCallOrder.at(-1)).toBeLessThan(term.scrollToBottom.mock.invocationCallOrder[0])
     expect(term.buffer.active.viewportY).toBe(180)
     expect(session.tabs.value[0].panes[0].scrolledUp).toBe(false)
   })
@@ -607,7 +665,9 @@ describe('useTerminalWindows', () => {
     }
     term.scrollToBottom.mockClear()
 
-    socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, width: 100, height: 30 }) })
+    socket.onmessage?.({
+      data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, width: 100, height: 30 }),
+    })
 
     expect(term.registerMarker).toHaveBeenCalledWith(-84)
     expect(term.scrollToLine).toHaveBeenCalledWith(52)
@@ -633,7 +693,9 @@ describe('useTerminalWindows', () => {
       term.markers[1].line = 0
     }
 
-    socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, width: 100, height: 30 }) })
+    socket.onmessage?.({
+      data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, width: 100, height: 30 }),
+    })
 
     expect(term.scrollToLine).toHaveBeenCalledWith(0)
     expect(session.tabs.value[0].panes[0].scrolledUp).toBe(true)
@@ -678,8 +740,7 @@ describe('useTerminalWindows', () => {
     expect(xterm.FakeWebglAddon.instances).toHaveLength(1)
     expect(xterm.FakeCanvasAddon.instances).toHaveLength(0)
     const loaded = term.loadAddon.mock.calls.findIndex((call) => call[0] instanceof xterm.FakeWebglAddon)
-    expect(term.open.mock.invocationCallOrder[0])
-      .toBeLessThan(term.loadAddon.mock.invocationCallOrder[loaded])
+    expect(term.open.mock.invocationCallOrder[0]).toBeLessThan(term.loadAddon.mock.invocationCallOrder[loaded])
   })
 
   it('falls back to the canvas renderer where WebGL2 is missing', async () => {
@@ -765,8 +826,7 @@ describe('useTerminalWindows', () => {
     const addon = xterm.FakeWebglAddon.instances[0]
     const term = xterm.FakeTerminal.instances[0]
     expect(addon.dispose).toHaveBeenCalledTimes(1)
-    expect(addon.dispose.mock.invocationCallOrder[0])
-      .toBeLessThan(term.dispose.mock.invocationCallOrder[0])
+    expect(addon.dispose.mock.invocationCallOrder[0]).toBeLessThan(term.dispose.mock.invocationCallOrder[0])
   })
 
   // An atlas renderer caches the glyphs it rasterised, so a face that arrives
@@ -788,9 +848,8 @@ describe('useTerminalWindows', () => {
       // text face and leave this one unfetched.
       `${defaultTerminalFontWeight} ${px}px '${SYMBOL_FONT}'`,
     ])
-    const load = (document.fonts.load as ReturnType<typeof vi.fn>)
-    expect(load.mock.invocationCallOrder.at(-1))
-      .toBeLessThan(client.attach.mock.invocationCallOrder[0])
+    const load = document.fonts.load as ReturnType<typeof vi.fn>
+    expect(load.mock.invocationCallOrder.at(-1)).toBeLessThan(client.attach.mock.invocationCallOrder[0])
   })
 
   it('opens every pane at the configured line height and letter spacing', async () => {
@@ -880,8 +939,26 @@ describe('useTerminalWindows', () => {
     const client = fakeClient()
     client.attach.mockResolvedValue({
       windows: [
-        { windowId: '@1', name: 'agent', active: false, activePane: '%1', width: 213, height: 55, zoomed: false, layout: leaf('%1', 213, 55) },
-        { windowId: '@2', name: 'shell', active: true, activePane: '%2', width: 213, height: 55, zoomed: false, layout: leaf('%2', 213, 55) },
+        {
+          windowId: '@1',
+          name: 'agent',
+          active: false,
+          activePane: '%1',
+          width: 213,
+          height: 55,
+          zoomed: false,
+          layout: leaf('%1', 213, 55),
+        },
+        {
+          windowId: '@2',
+          name: 'shell',
+          active: true,
+          activePane: '%2',
+          width: 213,
+          height: 55,
+          zoomed: false,
+          layout: leaf('%2', 213, 55),
+        },
       ],
     })
     const session = open(client)
@@ -1075,7 +1152,9 @@ describe('useTerminalWindows', () => {
     await vi.advanceTimersByTimeAsync(1100)
     expect(session.sizeConstraint.value).not.toBeNull()
 
-    sockets[0].onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, width: 300, height: 80 }) })
+    sockets[0].onmessage?.({
+      data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, width: 300, height: 80 }),
+    })
     await vi.advanceTimersByTimeAsync(1000)
 
     expect(session.sizeConstraint.value).toBeNull()
@@ -1331,22 +1410,29 @@ describe('useTerminalWindows', () => {
     expect(xterm.FakeTerminal.instances.at(-1)?.focus).toHaveBeenCalled()
   })
 
-  it.each(['before', 'after'])('activates a peer agent when tmux announces it %s the launch response', async (order) => {
-    const { client, session, socket } = await attached()
-    let resolveLaunch!: (value: { windowId: string }) => void
-    client.newAgentWindow.mockReturnValue(new Promise((resolve) => { resolveLaunch = resolve }))
-    const launch = session.newAgentWindow('codex')
-    if (order === 'before') socket.onmessage?.({ data: windowFrame('added', '@4', { name: 'codex' }) })
-    resolveLaunch({ windowId: '@4' })
-    await launch
-    if (order === 'after') socket.onmessage?.({ data: windowFrame('added', '@4', { name: 'codex' }) })
-    await flushPromises()
-    expect(client.newAgentWindow).toHaveBeenCalledExactlyOnceWith('hive-abc', 'codex')
-    expect(session.activeWindowId.value).toBe('@4')
-    expect(session.tabs.value.map((tab) => tab.windowId)).toEqual(['@1', '@2', '@4'])
-    expect(socket.sent).toHaveLength(0)
-    expect(xterm.FakeTerminal.instances.at(-1)?.focus).toHaveBeenCalled()
-  })
+  it.each(['before', 'after'])(
+    'activates a peer agent when tmux announces it %s the launch response',
+    async (order) => {
+      const { client, session, socket } = await attached()
+      let resolveLaunch!: (value: { windowId: string }) => void
+      client.newAgentWindow.mockReturnValue(
+        new Promise((resolve) => {
+          resolveLaunch = resolve
+        }),
+      )
+      const launch = session.newAgentWindow('codex')
+      if (order === 'before') socket.onmessage?.({ data: windowFrame('added', '@4', { name: 'codex' }) })
+      resolveLaunch({ windowId: '@4' })
+      await launch
+      if (order === 'after') socket.onmessage?.({ data: windowFrame('added', '@4', { name: 'codex' }) })
+      await flushPromises()
+      expect(client.newAgentWindow).toHaveBeenCalledExactlyOnceWith('hive-abc', 'codex')
+      expect(session.activeWindowId.value).toBe('@4')
+      expect(session.tabs.value.map((tab) => tab.windowId)).toEqual(['@1', '@2', '@4'])
+      expect(socket.sent).toHaveLength(0)
+      expect(xterm.FakeTerminal.instances.at(-1)?.focus).toHaveBeenCalled()
+    },
+  )
 
   it('reports a failed peer launch and keeps the existing terminal active', async () => {
     const { client, session } = await attached()
@@ -1363,7 +1449,9 @@ describe('useTerminalWindows', () => {
     const { socket, session } = await attached()
 
     await session.newWindow('make')
-    socket.onmessage?.({ data: windowFrame('added', '@3', { name: '', activePane: '', width: 0, height: 0, layout: null }) })
+    socket.onmessage?.({
+      data: windowFrame('added', '@3', { name: '', activePane: '', width: 0, height: 0, layout: null }),
+    })
     expect(socket.sent).toHaveLength(0)
 
     socket.onmessage?.({ data: windowFrame('layout-changed', '@3', { name: 'make', activePane: '%7' }) })
@@ -1454,7 +1542,11 @@ describe('useTerminalWindows', () => {
     it('reorders on the drop and settles on the order tmux answers with', async () => {
       const { client, session } = await attached()
       let resolve: (value: { windows: { windowId: string }[] }) => void = () => {}
-      client.moveWindow.mockReturnValue(new Promise((r) => { resolve = r }))
+      client.moveWindow.mockReturnValue(
+        new Promise((r) => {
+          resolve = r
+        }),
+      )
 
       const moving = session.moveWindow('@1', 1)
       expect(session.tabs.value.map((tab) => tab.windowId)).toEqual(['@2', '@1'])
@@ -1496,7 +1588,11 @@ describe('useTerminalWindows', () => {
     it('rolls back the order without dropping a window that arrived meanwhile', async () => {
       const { client, session, socket } = await attached()
       let reject: (reason: Error) => void = () => {}
-      client.moveWindow.mockReturnValue(new Promise((_, r) => { reject = r }))
+      client.moveWindow.mockReturnValue(
+        new Promise((_, r) => {
+          reject = r
+        }),
+      )
 
       const moving = session.moveWindow('@1', 1)
       socket.onmessage?.({ data: windowFrame('added', '@3', { name: 'logs' }) })
@@ -1693,15 +1789,21 @@ describe('useTerminalWindows', () => {
 
   describe('panes', () => {
     const split = (): PaneLayout => ({
-      split: 'leftright', x: 0, y: 0, width: 213, height: 55,
+      split: 'leftright',
+      x: 0,
+      y: 0,
+      width: 213,
+      height: 55,
       cells: [leaf('%1', 106, 55), leaf('%9', 106, 55, 107)],
     })
 
-    it('opens a terminal per pane at the pane\'s own grid when a window is split', async () => {
+    it("opens a terminal per pane at the pane's own grid when a window is split", async () => {
       const { session, socket } = await attached()
       mountWindow(session, '@1')
 
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }),
+      })
       await flushPromises()
 
       const tab = session.tabs.value[0]
@@ -1728,13 +1830,22 @@ describe('useTerminalWindows', () => {
       document.body.append(host)
       focused.focus()
 
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }),
+      })
       await flushPromises()
       const [left, , right] = xterm.FakeTerminal.instances
       // Opening the pane focused it; only the move counts from here.
       left.focus.mockClear()
 
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%1', layout: leaf('%1', 213, 55) }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', {
+          name: 'agent',
+          active: true,
+          activePane: '%1',
+          layout: leaf('%1', 213, 55),
+        }),
+      })
       await flushPromises()
 
       expect(right.dispose).toHaveBeenCalledTimes(1)
@@ -1752,7 +1863,9 @@ describe('useTerminalWindows', () => {
       document.body.append(elsewhere)
       elsewhere.focus()
 
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }),
+      })
       await flushPromises()
       const newPaneHost = paneHost()
       host.append(newPaneHost)
@@ -1769,10 +1882,20 @@ describe('useTerminalWindows', () => {
     it('draws a zoomed pane over the whole window and keeps the hidden one at its own size', async () => {
       const { session, socket } = await attached()
       mountWindow(session, '@1')
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }),
+      })
       await flushPromises()
 
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', zoomed: true, layout: split() }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', {
+          name: 'agent',
+          active: true,
+          activePane: '%9',
+          zoomed: true,
+          layout: split(),
+        }),
+      })
 
       const [left, right] = session.tabs.value[0].panes
       expect(session.tabs.value[0].zoomed).toBe(true)
@@ -1784,7 +1907,9 @@ describe('useTerminalWindows', () => {
     it('selects a clicked pane at once and tells tmux', async () => {
       const { client, session, socket } = await attached()
       mountWindow(session, '@1')
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }),
+      })
       await flushPromises()
       // Opening the pane focused it; only the click counts from here.
       xterm.FakeTerminal.instances[0].focus.mockClear()
@@ -1824,7 +1949,12 @@ describe('useTerminalWindows', () => {
     it('sends only the latest size of a divider drag while one is in flight', async () => {
       const { client, session } = await attached()
       let release: (() => void) | undefined
-      client.resizePane.mockImplementationOnce(() => new Promise<void>((resolve) => { release = resolve }))
+      client.resizePane.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve
+          }),
+      )
 
       const first = session.resizePane('%1', { width: 50 })
       void session.resizePane('%1', { width: 51 })
@@ -1850,7 +1980,9 @@ describe('useTerminalWindows', () => {
     it('re-runs the search against the pane tmux makes active', async () => {
       const { session, socket } = await attached()
       mountWindow(session, '@1')
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%1', layout: split() }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%1', layout: split() }),
+      })
       await flushPromises()
       session.openSearch()
       session.setSearchQuery('panic')
@@ -1858,7 +1990,9 @@ describe('useTerminalWindows', () => {
       left.clearDecorations.mockClear()
       expect(right.calls).toEqual([])
 
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%9', layout: split() }),
+      })
 
       expect(left.clearDecorations).toHaveBeenCalled()
       expect(right.calls.at(-1)).toMatchObject({ mode: 'next', term: 'panic' })
@@ -1867,7 +2001,9 @@ describe('useTerminalWindows', () => {
     it('re-runs the search against a clicked pane', async () => {
       const { session, socket } = await attached()
       mountWindow(session, '@1')
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%1', layout: split() }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%1', layout: split() }),
+      })
       await flushPromises()
       session.openSearch()
       session.setSearchQuery('panic')
@@ -1883,7 +2019,9 @@ describe('useTerminalWindows', () => {
     it('leaves a closed find bar alone when the active pane changes', async () => {
       const { session, socket } = await attached()
       mountWindow(session, '@1')
-      socket.onmessage?.({ data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%1', layout: split() }) })
+      socket.onmessage?.({
+        data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, activePane: '%1', layout: split() }),
+      })
       await flushPromises()
       const [left, , right] = xterm.FakeSearchAddon.instances
       left.clearDecorations.mockClear()

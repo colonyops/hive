@@ -115,7 +115,9 @@ describe('AboutSettingsView', () => {
   })
 
   it('checks for updates and shows an available result inline', async () => {
-    mocks.CheckNow.mockResolvedValue(updateInfo({ available: true, latestVersion: '1.5.0', notes: 'Faster feed rendering.' }))
+    mocks.CheckNow.mockResolvedValue(
+      updateInfo({ available: true, latestVersion: '1.5.0', notes: 'Faster feed rendering.' }),
+    )
     const wrapper = mount(AboutSettingsView)
     await flushPromises()
 

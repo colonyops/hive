@@ -31,7 +31,6 @@ describe('pull request links', () => {
   // A brand new pull request has no diff yet, and "(+0, -0)" is the honest
   // rendering of that rather than something to suppress.
   it('renders zero counts rather than dropping them', () => {
-    expect(markdownPullRequestLink(pullRequest({ additions: 0, deletions: 0 }), 'site'))
-      .toContain('`(+0, -0)`')
+    expect(markdownPullRequestLink(pullRequest({ additions: 0, deletions: 0 }), 'site')).toContain('`(+0, -0)`')
   })
 })

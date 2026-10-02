@@ -23,20 +23,23 @@ export interface AppSelectOption {
 /** `md` matches TextField's metrics (it sits beside one in every form); `sm` is for toolbars and sidebars. */
 export type AppSelectSize = 'sm' | 'md'
 
-const props = withDefaults(defineProps<{
-  modelValue: string
-  options: AppSelectOption[]
-  /** Shown when modelValue matches no option. An option with value '' is a real choice, not a placeholder. */
-  placeholder?: string
-  searchable?: boolean
-  searchPlaceholder?: string
-  /** Combobox mode: the trigger is a text input, so modelValue may be a value not in options (e.g. a custom git URL). */
-  editable?: boolean
-  disabled?: boolean
-  size?: AppSelectSize
-  testid?: string
-  ariaLabel?: string
-}>(), { size: 'md' })
+const props = withDefaults(
+  defineProps<{
+    modelValue: string
+    options: AppSelectOption[]
+    /** Shown when modelValue matches no option. An option with value '' is a real choice, not a placeholder. */
+    placeholder?: string
+    searchable?: boolean
+    searchPlaceholder?: string
+    /** Combobox mode: the trigger is a text input, so modelValue may be a value not in options (e.g. a custom git URL). */
+    editable?: boolean
+    disabled?: boolean
+    size?: AppSelectSize
+    testid?: string
+    ariaLabel?: string
+  }>(),
+  { size: 'md' },
+)
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 
@@ -56,7 +59,12 @@ const query = ref('')
 const text = ref(props.modelValue)
 const touched = ref(false)
 const active = ref(0)
-watch(() => props.modelValue, (value) => { text.value = value })
+watch(
+  () => props.modelValue,
+  (value) => {
+    text.value = value
+  },
+)
 
 function matches(option: AppSelectOption, query: string): boolean {
   return `${option.label} ${option.value} ${option.hint ?? ''}`.toLowerCase().includes(query)
@@ -74,10 +82,13 @@ const visible = computed(() => {
   return props.options.filter((option) => matches(option, q))
 })
 
-const triggerClass = computed(() => ({
-  sm: 'gap-1.5 rounded-md px-2 py-1.5 text-[11px]',
-  md: 'gap-2 rounded-lg px-3 py-2.5 text-[13.5px]',
-}[props.size]))
+const triggerClass = computed(
+  () =>
+    ({
+      sm: 'gap-1.5 rounded-md px-2 py-1.5 text-[11px]',
+      md: 'gap-2 rounded-lg px-3 py-2.5 text-[13.5px]',
+    })[props.size],
+)
 const optionText = computed(() => (props.size === 'sm' ? 'text-[12px]' : 'text-[13px]'))
 
 // Two independent signals, following AppMenu/CommandPalette: `bg-hover` is
@@ -95,12 +106,18 @@ function optionClass(option: AppSelectOption, index: number): string[] {
 }
 
 // Keep the active index in range as the filtered list shrinks/grows.
-watch(visible, (options) => { if (active.value >= options.length) active.value = Math.max(0, options.length - 1) })
+watch(visible, (options) => {
+  if (active.value >= options.length) active.value = Math.max(0, options.length - 1)
+})
 
 /** The list scrolls past its max height (the icon picker is 30+ rows), so keep the active row on screen. */
 function revealActive(): void {
   if (!open.value) return
-  void nextTick(() => (list.value?.children[active.value]?.firstElementChild as HTMLElement | undefined)?.scrollIntoView?.({ block: 'nearest' }))
+  void nextTick(() =>
+    (list.value?.children[active.value]?.firstElementChild as HTMLElement | undefined)?.scrollIntoView?.({
+      block: 'nearest',
+    }),
+  )
 }
 watch(active, revealActive)
 
@@ -121,7 +138,10 @@ function openList(): void {
   void nextTick(() => {
     measure() // now that the list has rendered and its natural width is known
     if (props.searchable) searchInput.value?.focus()
-    else if (props.editable) { editableInput.value?.focus(); editableInput.value?.select() }
+    else if (props.editable) {
+      editableInput.value?.focus()
+      editableInput.value?.select()
+    }
     // A mouse click does not focus a button in WebKit, so without this an
     // open plain listbox can have no focused element inside `root` and
     // onKeydown never fires — arrows and Escape then land in window-level
@@ -140,11 +160,16 @@ function close(): void {
   open.value = false
   if (reclaim) trigger.value?.focus()
 }
-function toggle(): void { open.value ? close() : openList() }
+function toggle(): void {
+  open.value ? close() : openList()
+}
 
 function choose(option: AppSelectOption): void {
   if (option.disabled) return
-  if (props.editable) { text.value = option.value; touched.value = false }
+  if (props.editable) {
+    text.value = option.value
+    touched.value = false
+  }
   if (option.value !== props.modelValue) emit('update:modelValue', option.value)
   close()
 }
@@ -171,7 +196,10 @@ function step(delta: number): void {
   let index = active.value
   for (let n = 0; n < options.length; n++) {
     index = (index + delta + options.length) % options.length
-    if (!options[index].disabled) { active.value = index; return }
+    if (!options[index].disabled) {
+      active.value = index
+      return
+    }
   }
 }
 
@@ -180,7 +208,10 @@ function jump(edge: 'start' | 'end'): void {
   const options = visible.value
   const delta = edge === 'start' ? 1 : -1
   for (let index = edge === 'start' ? 0 : options.length - 1; index >= 0 && index < options.length; index += delta) {
-    if (!options[index].disabled) { active.value = index; return }
+    if (!options[index].disabled) {
+      active.value = index
+      return
+    }
   }
 }
 
@@ -188,24 +219,40 @@ function jump(edge: 'start' | 'end'): void {
 function onKeydown(event: KeyboardEvent): void {
   if (!open.value) {
     if (props.editable) {
-      if (event.key === 'ArrowDown') { event.preventDefault(); openList() }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault()
+        openList()
+      }
       return // a closed combobox leaves Enter/Space to the form and the input
     }
-    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openList() }
+    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      openList()
+    }
     return
   }
-  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close() }
-  else if (event.key === 'ArrowDown') { event.preventDefault(); step(1) }
-  else if (event.key === 'ArrowUp') { event.preventDefault(); step(-1) }
-  else if (event.key === 'Home' && !props.editable) { event.preventDefault(); jump('start') }
-  else if (event.key === 'End' && !props.editable) { event.preventDefault(); jump('end') }
-  else if (event.key === 'Enter') {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    close()
+  } else if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    step(1)
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    step(-1)
+  } else if (event.key === 'Home' && !props.editable) {
+    event.preventDefault()
+    jump('start')
+  } else if (event.key === 'End' && !props.editable) {
+    event.preventDefault()
+    jump('end')
+  } else if (event.key === 'Enter') {
     event.preventDefault()
     const option = visible.value[active.value]
     if (option) choose(option)
     else if (props.editable) close() // accept the typed value
-  }
-  else if (event.key === ' ' && !props.searchable && !props.editable) {
+  } else if (event.key === ' ' && !props.searchable && !props.editable) {
     // Space types a character in the search/combobox input, so only Enter commits there.
     event.preventDefault()
     const option = visible.value[active.value]
@@ -221,9 +268,11 @@ function onKeydown(event: KeyboardEvent): void {
   // move the caret or type into an input, and the focused input is what
   // shields them from hotkey layers instead.
   else if (
-    !props.searchable && !props.editable
-    && (event.key === 'ArrowLeft' || event.key === 'ArrowRight'
-      || (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey))
+    !props.searchable &&
+    !props.editable &&
+    (event.key === 'ArrowLeft' ||
+      event.key === 'ArrowRight' ||
+      (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey))
   ) {
     event.preventDefault()
   }
@@ -233,7 +282,13 @@ const { style: popoverStyle, measure } = useAnchoredPopover(root, popover, open)
 
 // The popover lives outside `root` once teleported, so it has to be ignored
 // explicitly or clicking an option would count as a click outside.
-onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
+onClickOutside(
+  root,
+  () => {
+    if (open.value) close()
+  },
+  { ignore: [popover] },
+)
 </script>
 
 <template>
@@ -257,8 +312,15 @@ onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
         @input="onEditableInput"
         @click="open || openList()"
         @blur="close"
+      />
+      <button
+        type="button"
+        tabindex="-1"
+        aria-hidden="true"
+        class="absolute inset-y-0 right-0 flex items-center px-2.5 text-text-3"
+        :disabled="disabled"
+        @mousedown.prevent="toggle"
       >
-      <button type="button" tabindex="-1" aria-hidden="true" class="absolute inset-y-0 right-0 flex items-center px-2.5 text-text-3" :disabled="disabled" @mousedown.prevent="toggle">
         <IconChevronDown class="size-4 transition-transform" :class="open ? 'rotate-180' : ''" />
       </button>
     </template>
@@ -277,7 +339,9 @@ onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
       @click="toggle"
     >
       <component :is="selected.icon" v-if="selected?.icon" class="size-4 shrink-0 text-text-2" />
-      <span class="min-w-0 flex-1 truncate" :class="selected ? '' : 'text-text-4'">{{ selected ? selected.label : (placeholder ?? '') }}</span>
+      <span class="min-w-0 flex-1 truncate" :class="selected ? '' : 'text-text-4'">{{
+        selected ? selected.label : (placeholder ?? '')
+      }}</span>
       <IconChevronDown class="size-4 shrink-0 text-text-3 transition-transform" :class="open ? 'rotate-180' : ''" />
     </button>
 
@@ -300,7 +364,7 @@ onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
             class="w-0 min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-4"
             :data-testid="testid ? `${testid}-search` : undefined"
             @keydown="onKeydown"
-          >
+          />
         </div>
         <ul
           v-if="visible.length"
@@ -310,7 +374,12 @@ onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
           role="listbox"
           :aria-label="ariaLabel"
         >
-          <li v-for="(option, index) in visible" :key="option.value" role="option" :aria-selected="option.value === modelValue">
+          <li
+            v-for="(option, index) in visible"
+            :key="option.value"
+            role="option"
+            :aria-selected="option.value === modelValue"
+          >
             <button
               type="button"
               class="flex w-full gap-2 rounded-md px-[9px] py-[7px] text-left disabled:cursor-not-allowed disabled:opacity-40"
@@ -321,19 +390,35 @@ onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
               @click="choose(option)"
               @mousemove="active = index"
             >
-              <component :is="option.icon" v-if="option.icon" class="size-4 shrink-0 text-text-2" :class="option.hint ? 'mt-px' : ''" />
+              <component
+                :is="option.icon"
+                v-if="option.icon"
+                class="size-4 shrink-0 text-text-2"
+                :class="option.hint ? 'mt-px' : ''"
+              />
               <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span class="truncate">{{ option.label }}</span>
                 <!-- w-0 min-w-full: a percentage min-width contributes nothing to
                      intrinsic sizing, so a long hint truncates instead of stretching
                      the popover to the viewport. -->
-                <span v-if="option.hint" class="w-0 min-w-full truncate font-mono text-[10.5px] text-text-4">{{ option.hint }}</span>
+                <span v-if="option.hint" class="w-0 min-w-full truncate font-mono text-[10.5px] text-text-4">{{
+                  option.hint
+                }}</span>
               </span>
-              <IconCheck v-if="option.value === modelValue" class="size-3.5 shrink-0 text-accent" :class="option.hint ? 'mt-px' : ''" :stroke-width="3" />
+              <IconCheck
+                v-if="option.value === modelValue"
+                class="size-3.5 shrink-0 text-accent"
+                :class="option.hint ? 'mt-px' : ''"
+                :stroke-width="3"
+              />
             </button>
           </li>
         </ul>
-        <div v-else class="px-3 py-4 text-center text-[12.5px] text-text-4" :data-testid="testid ? `${testid}-empty` : undefined">
+        <div
+          v-else
+          class="px-3 py-4 text-center text-[12.5px] text-text-4"
+          :data-testid="testid ? `${testid}-empty` : undefined"
+        >
           {{ searchable && query.trim() ? 'No matches' : 'No options' }}
         </div>
       </div>

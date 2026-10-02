@@ -11,5 +11,5 @@ import giteaLogo from '../../assets/integrations/gitea.svg'
 </script>
 
 <template>
-  <img :src="giteaLogo" alt="" aria-hidden="true" class="object-contain">
+  <img :src="giteaLogo" alt="" aria-hidden="true" class="object-contain" />
 </template>

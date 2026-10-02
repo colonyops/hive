@@ -3,7 +3,10 @@ import {
   SessionGitStatus as ReadGitStatus,
   SessionPullRequest as ReadPullRequest,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
-import type { SessionGitStatus, SessionPullRequest } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type {
+  SessionGitStatus,
+  SessionPullRequest,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { useWindowFocus } from './useWindowFocus'
 
 // Git is four local subprocesses, so it can be polled. The pull request rides
@@ -84,7 +87,9 @@ export function useSessionStatus(sessionId: Ref<string>): {
 
   function schedule(): void {
     clearTimeout(timer)
-    timer = setTimeout(() => { void poll() }, POLL_INTERVAL_MS)
+    timer = setTimeout(() => {
+      void poll()
+    }, POLL_INTERVAL_MS)
   }
 
   async function poll(): Promise<void> {
@@ -92,18 +97,22 @@ export function useSessionStatus(sessionId: Ref<string>): {
     schedule()
   }
 
-  watch(sessionId, (id) => {
-    // Seeded from the last answer for *this* session, never carried over from
-    // the one being left: another session's branch for a frame would be a wrong
-    // fact rather than a missing one.
-    const remembered = id ? lastPullRequest.get(id) : undefined
-    git.value = (id ? lastGit.get(id) : undefined) ?? null
-    // Cached, so restoring it does not replay the arrival animation.
-    pullRequest.value = remembered ? { ...remembered, cached: true } : null
-    pullRequestError.value = ''
-    void refresh()
-    schedule()
-  }, { immediate: true })
+  watch(
+    sessionId,
+    (id) => {
+      // Seeded from the last answer for *this* session, never carried over from
+      // the one being left: another session's branch for a frame would be a wrong
+      // fact rather than a missing one.
+      const remembered = id ? lastPullRequest.get(id) : undefined
+      git.value = (id ? lastGit.get(id) : undefined) ?? null
+      // Cached, so restoring it does not replay the arrival animation.
+      pullRequest.value = remembered ? { ...remembered, cached: true } : null
+      pullRequestError.value = ''
+      void refresh()
+      schedule()
+    },
+    { immediate: true },
+  )
 
   // A blurred window's checkout keeps changing — an agent is committing in it —
   // so refocus is both the stalest moment and the one worth spending a request

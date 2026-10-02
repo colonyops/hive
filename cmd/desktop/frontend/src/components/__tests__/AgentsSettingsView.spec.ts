@@ -33,7 +33,10 @@ const settingsBindings = vi.hoisted(() => ({
   SetCanvasFontSize: vi.fn(),
   SetCanvasLineSpacing: vi.fn(),
 }))
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => settingsBindings)
+vi.mock(
+  '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice',
+  () => settingsBindings,
+)
 
 beforeEach(() => {
   vi.clearAllMocks()

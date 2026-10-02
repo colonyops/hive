@@ -67,7 +67,10 @@ function task(id: string, overrides: Partial<TaskOverrides> = {}) {
   }
 }
 
-function detailFrom(item: ReturnType<typeof task>, patch: Partial<{ desc: string; blockers: unknown[]; comments: unknown[] }> = {}) {
+function detailFrom(
+  item: ReturnType<typeof task>,
+  patch: Partial<{ desc: string; blockers: unknown[]; comments: unknown[] }> = {},
+) {
   return { ...item, desc: patch.desc ?? '', blockers: patch.blockers ?? [], comments: patch.comments ?? [] }
 }
 
@@ -172,7 +175,12 @@ describe('TasksView', () => {
 
   it('confirms an epic status cascade, naming the open descendant count', async () => {
     const epic = task('e1', { type: 'epic' })
-    mocks.ListTasks.mockResolvedValue([epic, task('c1', { parentId: 'e1', status: 'open' }), task('c2', { parentId: 'e1', status: 'in_progress' }), task('c3', { parentId: 'e1', status: 'done' })])
+    mocks.ListTasks.mockResolvedValue([
+      epic,
+      task('c1', { parentId: 'e1', status: 'open' }),
+      task('c2', { parentId: 'e1', status: 'in_progress' }),
+      task('c3', { parentId: 'e1', status: 'done' }),
+    ])
     mocks.ReadTaskDetail.mockResolvedValue(detailFrom(epic))
     const wrapper = mount(TasksView)
     await flushPromises()
@@ -232,7 +240,9 @@ describe('TasksView', () => {
   })
 
   it('surfaces a dry-run failure in a banner, since it never opens the confirm dialog', async () => {
-    mocks.PruneTasks.mockRejectedValueOnce(Object.assign(new Error('boom'), { cause: { kind: 'internal', message: 'hc store is locked' } }))
+    mocks.PruneTasks.mockRejectedValueOnce(
+      Object.assign(new Error('boom'), { cause: { kind: 'internal', message: 'hc store is locked' } }),
+    )
     const wrapper = mount(TasksView)
     await flushPromises()
 
@@ -244,7 +254,9 @@ describe('TasksView', () => {
   })
 
   it('surfaces a load failure in the error banner, never the error dialog', async () => {
-    mocks.ListTasks.mockRejectedValue(Object.assign(new Error('boom'), { cause: { kind: 'unavailable', message: 'hc store is not running' } }))
+    mocks.ListTasks.mockRejectedValue(
+      Object.assign(new Error('boom'), { cause: { kind: 'unavailable', message: 'hc store is not running' } }),
+    )
     const wrapper = mount(TasksView)
     await flushPromises()
 
@@ -269,10 +281,15 @@ describe('TasksView', () => {
 
   it('renders a vanished blocker by its bare id, and a checkpoint comment with its badge and stripped prefix', async () => {
     mocks.ListTasks.mockResolvedValue([task('t1')])
-    mocks.ReadTaskDetail.mockResolvedValue(detailFrom(task('t1'), {
-      blockers: [{ id: 'b1', title: 'Ship the API', status: 'open' }, { id: 'b2', title: '', status: '' }],
-      comments: [{ id: 'c1', message: 'CHECKPOINT: landed the migration', createdAt: '2026-01-01T00:00:00Z' }],
-    }))
+    mocks.ReadTaskDetail.mockResolvedValue(
+      detailFrom(task('t1'), {
+        blockers: [
+          { id: 'b1', title: 'Ship the API', status: 'open' },
+          { id: 'b2', title: '', status: '' },
+        ],
+        comments: [{ id: 'c1', message: 'CHECKPOINT: landed the migration', createdAt: '2026-01-01T00:00:00Z' }],
+      }),
+    )
     const wrapper = mount(TasksView)
     await flushPromises()
     await selectRow(wrapper, 't1')
@@ -449,7 +466,9 @@ describe('TasksView', () => {
   it('shows a failed direct status change inline, and clears it when the selection changes', async () => {
     mocks.ListTasks.mockResolvedValue([task('t1'), task('t2')])
     mocks.ReadTaskDetail.mockImplementation((id: string) => Promise.resolve(detailFrom(task(id))))
-    mocks.SetTaskStatus.mockRejectedValueOnce(Object.assign(new Error('boom'), { cause: { kind: 'internal', message: 'write failed' } }))
+    mocks.SetTaskStatus.mockRejectedValueOnce(
+      Object.assign(new Error('boom'), { cause: { kind: 'internal', message: 'write failed' } }),
+    )
     const wrapper = mount(TasksView)
     await flushPromises()
     await selectRow(wrapper, 't1')
@@ -468,7 +487,9 @@ describe('TasksView', () => {
   it('keeps the confirm dialog open carrying the failure when a confirmed status change fails', async () => {
     mocks.ListTasks.mockResolvedValue([task('t1')])
     mocks.ReadTaskDetail.mockResolvedValue(detailFrom(task('t1')))
-    mocks.SetTaskStatus.mockRejectedValueOnce(Object.assign(new Error('boom'), { cause: { kind: 'internal', message: 'write failed' } }))
+    mocks.SetTaskStatus.mockRejectedValueOnce(
+      Object.assign(new Error('boom'), { cause: { kind: 'internal', message: 'write failed' } }),
+    )
     const wrapper = mount(TasksView)
     await flushPromises()
     await selectRow(wrapper, 't1')
@@ -486,11 +507,15 @@ describe('TasksView', () => {
 
   it('jumps to a blocker when its chip is clicked, naming its status and the blocked cause', async () => {
     mocks.ListTasks.mockResolvedValue([task('t1', { blocked: true }), task('t2')])
-    mocks.ReadTaskDetail.mockImplementation((id: string) => Promise.resolve(
-      id === 't1'
-        ? detailFrom(task('t1', { blocked: true }), { blockers: [{ id: 't2', title: 'Task t2', status: 'in_progress' }] })
-        : detailFrom(task(id)),
-    ))
+    mocks.ReadTaskDetail.mockImplementation((id: string) =>
+      Promise.resolve(
+        id === 't1'
+          ? detailFrom(task('t1', { blocked: true }), {
+              blockers: [{ id: 't2', title: 'Task t2', status: 'in_progress' }],
+            })
+          : detailFrom(task(id)),
+      ),
+    )
     const wrapper = mount(TasksView)
     await flushPromises()
     await selectRow(wrapper, 't1')
@@ -508,7 +533,11 @@ describe('TasksView', () => {
 
   it('explains a blocked parent with no explicit blockers by its open subtasks', async () => {
     const parent = task('t1', { blocked: true })
-    mocks.ListTasks.mockResolvedValue([parent, task('c1', { parentId: 't1' }), task('c2', { parentId: 't1', status: 'done' })])
+    mocks.ListTasks.mockResolvedValue([
+      parent,
+      task('c1', { parentId: 't1' }),
+      task('c2', { parentId: 't1', status: 'done' }),
+    ])
     mocks.ReadTaskDetail.mockResolvedValue(detailFrom(parent))
     const wrapper = mount(TasksView)
     await flushPromises()

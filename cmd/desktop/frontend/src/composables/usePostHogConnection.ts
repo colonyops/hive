@@ -1,5 +1,9 @@
 import { ref } from 'vue'
-import { Connect, Disconnect, Projects } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/posthogservice'
+import {
+  Connect,
+  Disconnect,
+  Projects,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/posthogservice'
 import type { Project } from '../types/posthog'
 
 /**

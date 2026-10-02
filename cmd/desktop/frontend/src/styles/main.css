@@ -936,11 +936,15 @@
    is a plain shrink, because an affordance on its way out should not ask for
    attention. */
 .tail-pill-enter-active {
-  transition: opacity 0.12s ease, transform 0.18s cubic-bezier(0.2, 1.5, 0.4, 1);
+  transition:
+    opacity 0.12s ease,
+    transform 0.18s cubic-bezier(0.2, 1.5, 0.4, 1);
 }
 
 .tail-pill-leave-active {
-  transition: opacity 0.1s ease, transform 0.1s ease;
+  transition:
+    opacity 0.1s ease,
+    transform 0.1s ease;
 }
 
 .tail-pill-enter-from,

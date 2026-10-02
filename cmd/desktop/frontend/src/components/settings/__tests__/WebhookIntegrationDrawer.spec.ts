@@ -124,7 +124,9 @@ describe('WebhookIntegrationDrawer', () => {
     await wrapper.get('[data-testid="webhook-settings-save"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="webhook-settings-error"]').text()).toContain('port must be between 1024 and 65535')
+    expect(wrapper.get('[data-testid="webhook-settings-error"]').text()).toContain(
+      'port must be between 1024 and 65535',
+    )
     expect(wrapper.emitted('close')).toBeUndefined()
   })
 })

@@ -45,7 +45,9 @@ export function useIntegrations() {
   onMounted(async () => {
     // Any provider's change can add or remove an account here, so unlike
     // useGitHubConnection this listens across providers and does not filter.
-    useWailsEvent('connection:updated', () => { void reload() })
+    useWailsEvent('connection:updated', () => {
+      void reload()
+    })
     await reload()
   })
 

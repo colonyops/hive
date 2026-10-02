@@ -41,12 +41,15 @@ function nudge(delta: 1 | -1): void {
         aria-label="Decrease"
         :data-testid="testid ? `${testid}-decrease` : undefined"
         @click="nudge(-1)"
-      >−</button>
+      >
+        −
+      </button>
       <span
         class="min-w-[4.5rem] text-center text-[12.5px] text-text"
         aria-live="polite"
         :data-testid="testid ? `${testid}-value` : undefined"
-      >{{ display }}</span>
+        >{{ display }}</span
+      >
       <button
         type="button"
         class="cursor-pointer rounded-md px-2.5 py-1.5 text-[12.5px] text-text-3 transition-colors hover:text-text-2 disabled:cursor-default disabled:text-text-4/50"
@@ -54,7 +57,9 @@ function nudge(delta: 1 | -1): void {
         aria-label="Increase"
         :data-testid="testid ? `${testid}-increase` : undefined"
         @click="nudge(1)"
-      >+</button>
+      >
+        +
+      </button>
     </div>
   </SettingsField>
 </template>

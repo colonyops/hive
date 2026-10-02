@@ -7,7 +7,13 @@
 // editor: which flow is being edited, whether it is dirty, and writing it
 // back. See docs/architecture.md ▸ Execution model.
 import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
-import { GetFlow, GetLayout, ListFlows, SaveFlow, SaveLayout } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/flowsservice'
+import {
+  GetFlow,
+  GetLayout,
+  ListFlows,
+  SaveFlow,
+  SaveLayout,
+} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/flowsservice'
 import { NodeRuns } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
 import { errorText } from '../../lib/appError'
 import { usePipelineEditor, type PipelineEditorClient } from './usePipelineEditor'
@@ -38,12 +44,24 @@ export interface FlowsSessionDeps {
 
 function defaultEditorClient(): PipelineEditorClient {
   return {
-    async listFlows() { return await ListFlows() },
-    async getFlow(id) { return await GetFlow(id) },
-    async saveFlow(flow) { await SaveFlow(flow) },
-    async getLayout(id) { return await GetLayout(id) },
-    async saveLayout(id, layout) { await SaveLayout(id, layout) },
-    async nodeRuns(flowId, limit) { return await NodeRuns(flowId, limit) },
+    async listFlows() {
+      return await ListFlows()
+    },
+    async getFlow(id) {
+      return await GetFlow(id)
+    },
+    async saveFlow(flow) {
+      await SaveFlow(flow)
+    },
+    async getLayout(id) {
+      return await GetLayout(id)
+    },
+    async saveLayout(id, layout) {
+      await SaveLayout(id, layout)
+    },
+    async nodeRuns(flowId, limit) {
+      return await NodeRuns(flowId, limit)
+    },
   }
 }
 
@@ -60,7 +78,10 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
   let operationTail: Promise<void> = Promise.resolve()
   function serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = operationTail.then(operation, operation)
-    operationTail = result.then(() => undefined, () => undefined)
+    operationTail = result.then(
+      () => undefined,
+      () => undefined,
+    )
     return result
   }
 
@@ -75,7 +96,8 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
 
   let pendingEditorProfile: string | undefined
   async function selectBoundEditor(id: string): Promise<void> {
-    if (pendingEditorProfile !== id || selectedProfileId.value !== id || !flows.value.some((flow) => flow.id === id)) return
+    if (pendingEditorProfile !== id || selectedProfileId.value !== id || !flows.value.some((flow) => flow.id === id))
+      return
     try {
       // Profile navigation has already guarded dirty drafts in App.vue.
       await selectFlow(id)
@@ -96,16 +118,22 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     // deferred selectFlow/replaceDraft silently discards those edits (a renamed
     // node reverting, Deploy greying out) the moment it finally runs.
     if (!flows.value.some((flow) => flow.id === id)) editor.clearFlow()
-    void serialize(async () => { await selectBoundEditor(id) })
+    void serialize(async () => {
+      await selectBoundEditor(id)
+    })
   }
 
   // The editor's initial ListFlows is asynchronous. Complete a profile/editor
   // binding that happened while the list was still loading.
-  watch(flows, () => {
-    void serialize(async () => {
-      if (pendingEditorProfile) await selectBoundEditor(pendingEditorProfile)
-    })
-  }, { immediate: true })
+  watch(
+    flows,
+    () => {
+      void serialize(async () => {
+        if (pendingEditorProfile) await selectBoundEditor(pendingEditorProfile)
+      })
+    },
+    { immediate: true },
+  )
 
   async function discardDraft(): Promise<void> {
     const id = activeFlow.value?.id

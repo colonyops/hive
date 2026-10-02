@@ -10,11 +10,13 @@ import { type ActionInputValues, inputLabel } from '../lib/actionInputs'
 const props = defineProps<{ inputs: InputSpec[]; modelValue: ActionInputValues }>()
 const emit = defineEmits<{ 'update:modelValue': [values: ActionInputValues] }>()
 
-const labelled = computed(() => props.inputs.map((spec) => ({
-  spec,
-  label: inputLabel(spec) + (spec.required ? '' : ' (optional)'),
-  options: (spec.options ?? []).map((value) => ({ value, label: value })),
-})))
+const labelled = computed(() =>
+  props.inputs.map((spec) => ({
+    spec,
+    label: inputLabel(spec) + (spec.required ? '' : ' (optional)'),
+    options: (spec.options ?? []).map((value) => ({ value, label: value })),
+  })),
+)
 
 function set(name: string, value: string): void {
   emit('update:modelValue', { ...props.modelValue, [name]: value })

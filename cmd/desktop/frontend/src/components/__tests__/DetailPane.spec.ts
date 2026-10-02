@@ -6,10 +6,35 @@ import type { InboxItem } from '../../types/feed'
 import type { ItemSessionView } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 
 const item: InboxItem = {
-  id: 42, profileId: 'triage', sourceKind: 'github', sourceScope: 'colonyops/hive', externalId: 'pr-42', title: 'Add desktop shell', url: 'https://github.com/hay-kot/hive-desktop/pull/42',
-  payload: { id: 'pr-42', kind: 'PR', repo: 'colonyops/hive', num: 42, author: 'octocat', branch: 'feat/desktop-ui-shell', body: 'Body', ci: 'passing', review: 'approved', additions: 42, deletions: 7 }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: Date.now(),
+  id: 42,
+  profileId: 'triage',
+  sourceKind: 'github',
+  sourceScope: 'colonyops/hive',
+  externalId: 'pr-42',
+  title: 'Add desktop shell',
+  url: 'https://github.com/hay-kot/hive-desktop/pull/42',
+  payload: {
+    id: 'pr-42',
+    kind: 'PR',
+    repo: 'colonyops/hive',
+    num: 42,
+    author: 'octocat',
+    branch: 'feat/desktop-ui-shell',
+    body: 'Body',
+    ci: 'passing',
+    review: 'approved',
+    additions: 42,
+    deletions: 7,
+  },
+  revision: 1,
+  unread: true,
+  lifecycle: 'active',
+  firstSeenAt: 1,
+  lastEventAt: Date.now(),
 }
-const actions: ActionView[] = [{ id: 'summarize', label: 'Summarize', type: 'launch-session', showInDetail: true, requiresSessionInput: false }]
+const actions: ActionView[] = [
+  { id: 'summarize', label: 'Summarize', type: 'launch-session', showInDetail: true, requiresSessionInput: false },
+]
 const payload = (patch: Record<string, unknown>) => ({ ...(item.payload as Record<string, unknown>), ...patch })
 
 describe('DetailPane', () => {
@@ -30,21 +55,35 @@ describe('DetailPane', () => {
   })
 
   it('omits the PR metadata row when a notification payload has no enrichment', () => {
-    const notificationItem = { ...item, payload: payload({ ci: undefined, review: undefined, additions: undefined, deletions: undefined }) }
+    const notificationItem = {
+      ...item,
+      payload: payload({ ci: undefined, review: undefined, additions: undefined, deletions: undefined }),
+    }
     const wrapper = mount(DetailPane, { props: { item: notificationItem, actions } })
     expect(wrapper.find('[data-testid="pr-metadata"]').exists()).toBe(false)
   })
 
   it('renders GitHub-flavored markdown and routes body links through open-url', async () => {
-    const wrapper = mount(DetailPane, { props: { item: { ...item, payload: payload({ body: '## Steps\n\n- [ ] first\n\n[docs](https://example.com)' }) }, actions } })
+    const wrapper = mount(DetailPane, {
+      props: {
+        item: { ...item, payload: payload({ body: '## Steps\n\n- [ ] first\n\n[docs](https://example.com)' }) },
+        actions,
+      },
+    })
     expect(wrapper.get('[data-testid="detail-body"]').find('h2').exists()).toBe(true)
     await wrapper.get('[data-testid="detail-body"] a').trigger('click')
     expect(wrapper.emitted('open-url')).toEqual([['https://example.com']])
   })
 
   const session = (patch: Partial<ItemSessionView> = {}): ItemSessionView => ({
-    id: 's1', name: 'review-42', slug: 'review-42', repo: 'colonyops/hive',
-    state: 'active', running: true, createdAt: new Date().toISOString(), ...patch,
+    id: 's1',
+    name: 'review-42',
+    slug: 'review-42',
+    repo: 'colonyops/hive',
+    state: 'active',
+    running: true,
+    createdAt: new Date().toISOString(),
+    ...patch,
   })
 
   it('omits the sessions section for an item that spawned none', () => {
@@ -53,7 +92,10 @@ describe('DetailPane', () => {
   })
 
   it('lists linked sessions with their liveness and links through to the slug', async () => {
-    const sessions = [session(), session({ id: 's2', name: 'review-42-rerun', slug: 'review-42-rerun', running: false })]
+    const sessions = [
+      session(),
+      session({ id: 's2', name: 'review-42-rerun', slug: 'review-42-rerun', running: false }),
+    ]
     const wrapper = mount(DetailPane, { props: { item, actions, sessions } })
     const rows = wrapper.get('[data-testid="item-sessions"]')
     expect(rows.text()).toContain('review-42')
@@ -99,7 +141,15 @@ describe('DetailPane', () => {
   })
 
   it('keeps the type pill non-wrapping and renders each configured action', () => {
-    const wrapper = mount(DetailPane, { props: { item, actions: [...actions, { id: 'draft', label: 'Draft reply', type: 'shell', showInDetail: true, requiresSessionInput: false }] } })
+    const wrapper = mount(DetailPane, {
+      props: {
+        item,
+        actions: [
+          ...actions,
+          { id: 'draft', label: 'Draft reply', type: 'shell', showInDetail: true, requiresSessionInput: false },
+        ],
+      },
+    })
     expect(wrapper.get('.kind-pill').classes()).toEqual(expect.arrayContaining(['shrink-0', 'whitespace-nowrap']))
     expect(wrapper.findAll('[data-testid="action-card"]')).toHaveLength(2)
   })
@@ -114,7 +164,15 @@ describe('DetailPane', () => {
     await wrapper.get('[data-testid="item-actions-toggle"]').trigger('click')
     const menu = wrapper.get('[data-testid="item-actions-menu"]')
     expect(menu.findAll('button').map((entry) => entry.get('span.flex-1').text())).toEqual([
-      'Mark as read', 'Archive', 'Ignore', 'Open in browser', 'Copy link', 'Copy contents', 'Create Session', 'Create Chat', 'Summarize',
+      'Mark as read',
+      'Archive',
+      'Ignore',
+      'Open in browser',
+      'Copy link',
+      'Copy contents',
+      'Create Session',
+      'Create Chat',
+      'Summarize',
     ])
     await menu.get('[data-testid="menu-create-chat"]').trigger('click')
     expect(wrapper.emitted('create-session')).toEqual([['workspace']])
@@ -135,7 +193,13 @@ describe('DetailPane', () => {
   })
 
   it('labels non-GitHub items with the neutral kind pill instead of Issue', () => {
-    const webhookItem: InboxItem = { ...item, sourceKind: 'webhook', sourceScope: 'sources.webhook-1', url: '', payload: { id: 'run-1', status: 'failure' } }
+    const webhookItem: InboxItem = {
+      ...item,
+      sourceKind: 'webhook',
+      sourceScope: 'sources.webhook-1',
+      url: '',
+      payload: { id: 'run-1', status: 'failure' },
+    }
     const wrapper = mount(DetailPane, { props: { item: webhookItem, actions: [] } })
     expect(wrapper.get('[data-testid="kind-pill"]').text()).toBe('Item')
     expect(wrapper.get('[data-testid="kind-pill"]').classes()).toContain('kind-pill-neutral')
@@ -145,7 +209,13 @@ describe('DetailPane', () => {
   })
 
   it('omits the open-in-browser menu entry for webhook items without a URL, and the ACTIONS block when it has no applicable actions', async () => {
-    const webhookItem: InboxItem = { ...item, sourceKind: 'webhook', sourceScope: 'sources.webhook-1', url: '', payload: { id: 'run-1' } }
+    const webhookItem: InboxItem = {
+      ...item,
+      sourceKind: 'webhook',
+      sourceScope: 'sources.webhook-1',
+      url: '',
+      payload: { id: 'run-1' },
+    }
     const wrapper = mount(DetailPane, { props: { item: webhookItem, actions: [] } })
     await wrapper.get('[data-testid="item-actions-toggle"]').trigger('click')
     expect(wrapper.find('[data-testid="menu-open-browser"]').exists()).toBe(false)
@@ -154,7 +224,13 @@ describe('DetailPane', () => {
   })
 
   it('shows the ACTIONS block for a webhook item with applicable actions, without a branch footer', () => {
-    const webhookItem: InboxItem = { ...item, sourceKind: 'webhook', sourceScope: 'sources.webhook-1', url: '', payload: { id: 'run-1', kind: 'deploy' } }
+    const webhookItem: InboxItem = {
+      ...item,
+      sourceKind: 'webhook',
+      sourceScope: 'sources.webhook-1',
+      url: '',
+      payload: { id: 'run-1', kind: 'deploy' },
+    }
     const wrapper = mount(DetailPane, { props: { item: webhookItem, actions } })
     expect(wrapper.text()).toContain('ACTIONS')
     expect(wrapper.findAll('[data-testid="action-card"]')).toHaveLength(1)
@@ -168,22 +244,48 @@ describe('DetailPane', () => {
   })
 
   it('offers the open-in-browser menu entry for webhook items that carry a URL', async () => {
-    const webhookItem: InboxItem = { ...item, sourceKind: 'webhook', sourceScope: 'sources.webhook-1', payload: { id: 'run-1', url: 'https://ci.example.com/run/1' } }
+    const webhookItem: InboxItem = {
+      ...item,
+      sourceKind: 'webhook',
+      sourceScope: 'sources.webhook-1',
+      payload: { id: 'run-1', url: 'https://ci.example.com/run/1' },
+    }
     const wrapper = mount(DetailPane, { props: { item: webhookItem, actions: [] } })
     await wrapper.get('[data-testid="item-actions-toggle"]').trigger('click')
     expect(wrapper.find('[data-testid="menu-open-browser"]').exists()).toBe(true)
   })
 
   it('renders the Activity timeline in supplied chronological order', () => {
-    const wrapper = mount(DetailPane, { props: { item, actions, events: [
-      { id: 1, itemId: 42, kind: 'created', transition: 'created', attention: 'activity', summary: 'first observation', createdAt: 1 },
-      { id: 2, itemId: 42, kind: 'updated', transition: 'updated', attention: 'activity', summary: 'second observation', createdAt: 2 },
-    ] } })
+    const wrapper = mount(DetailPane, {
+      props: {
+        item,
+        actions,
+        events: [
+          {
+            id: 1,
+            itemId: 42,
+            kind: 'created',
+            transition: 'created',
+            attention: 'activity',
+            summary: 'first observation',
+            createdAt: 1,
+          },
+          {
+            id: 2,
+            itemId: 42,
+            kind: 'updated',
+            transition: 'updated',
+            attention: 'activity',
+            summary: 'second observation',
+            createdAt: 2,
+          },
+        ],
+      },
+    })
     const timeline = wrapper.get('[data-testid="observed-activity"]')
     expect(timeline.text()).toContain('ACTIVITY')
     expect(timeline.findAll('li')).toHaveLength(2)
     expect(timeline.findAll('li')[0]!.text()).toContain('first observation')
     expect(timeline.findAll('li')[1]!.text()).toContain('second observation')
   })
-
 })

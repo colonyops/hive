@@ -13,7 +13,9 @@ describe('ConfirmationDialog', () => {
   })
 
   it('shows backend errors and remains available for retry or cancel', () => {
-    const wrapper = mount(ConfirmationDialog, { props: { title: 'Delete', description: 'Delete it?', error: 'action is used by flow', busy: false } })
+    const wrapper = mount(ConfirmationDialog, {
+      props: { title: 'Delete', description: 'Delete it?', error: 'action is used by flow', busy: false },
+    })
     expect(document.querySelector('[data-testid="confirmation-dialog-error"]')?.textContent).toContain('used by flow')
     expect(document.querySelector('[data-testid="confirmation-dialog"]')).not.toBeNull()
     wrapper.unmount()

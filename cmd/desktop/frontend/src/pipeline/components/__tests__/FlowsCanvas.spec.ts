@@ -27,13 +27,15 @@ function layout(overrides: Partial<WireLayout['nodes']> = {}): WireLayout {
   return { nodes: { source: { x: 10, y: 20 }, filter: { x: 400, y: 20 }, ...overrides } }
 }
 
-function mountCanvas(props: {
-  flow?: EditorFlow
-  layout?: WireLayout
-  latestRunByNode?: Map<string, NodeRunRecord>
-  runningNodeIds?: Set<string>
-  focusNodeId?: string | null
-} = {}) {
+function mountCanvas(
+  props: {
+    flow?: EditorFlow
+    layout?: WireLayout
+    latestRunByNode?: Map<string, NodeRunRecord>
+    runningNodeIds?: Set<string>
+    focusNodeId?: string | null
+  } = {},
+) {
   return mount(FlowsCanvas, {
     props: {
       flow: props.flow ?? flow(),
@@ -47,7 +49,18 @@ function mountCanvas(props: {
 }
 
 function run(overrides: Partial<NodeRunRecord> = {}): NodeRunRecord {
-  return { flowId: 'flow-1', nodeId: 'source', ok: true, inCount: 3, outCount: 3, dropCount: 0, err: '', durMs: 5, endedAt: Date.now(), ...overrides }
+  return {
+    flowId: 'flow-1',
+    nodeId: 'source',
+    ok: true,
+    inCount: 3,
+    outCount: 3,
+    dropCount: 0,
+    err: '',
+    durMs: 5,
+    endedAt: Date.now(),
+    ...overrides,
+  }
 }
 
 async function clickNode(wrapper: ReturnType<typeof mountCanvas>, testid: string) {
@@ -116,8 +129,10 @@ describe('FlowsCanvas', () => {
     wrapper.unmount()
   })
 
-  it('prefers a node\'s own name over its type label', () => {
-    const wrapper = mountCanvas({ flow: flow({ nodes: [{ id: 'source', type: 'sources.github', name: 'My PRs', config: { source: 'my-prs' } }] }) })
+  it("prefers a node's own name over its type label", () => {
+    const wrapper = mountCanvas({
+      flow: flow({ nodes: [{ id: 'source', type: 'sources.github', name: 'My PRs', config: { source: 'my-prs' } }] }),
+    })
 
     expect(wrapper.get('[data-testid="flow-node-source"] [data-testid="flow-node-title"]').text()).toBe('My PRs')
 
@@ -147,7 +162,13 @@ describe('FlowsCanvas', () => {
   // the same point the wire anchors to.
   it('gives each output port a 20px grab target straddling the card edge, clamped so stacked ports do not overlap', () => {
     const wrapper = mountCanvas({
-      flow: flow({ nodes: [{ id: 'one', type: 'sources.github', config: {} }, { id: 'two', type: 'github-filter', config: {} }], wires: [] }),
+      flow: flow({
+        nodes: [
+          { id: 'one', type: 'sources.github', config: {} },
+          { id: 'two', type: 'github-filter', config: {} },
+        ],
+        wires: [],
+      }),
     })
 
     // A lone port sits at the card's vertical centre (26), so a 20px box spans 16–36.
@@ -357,7 +378,9 @@ describe('FlowsCanvas', () => {
 
     await wrapper.get('[data-testid="node-editor-save"]').trigger('click')
 
-    expect(wrapper.emitted('update-node')).toEqual([[{ id: 'feed', type: 'feed', disabled: false, config: { feed: 'inbox' } }]])
+    expect(wrapper.emitted('update-node')).toEqual([
+      [{ id: 'feed', type: 'feed', disabled: false, config: { feed: 'inbox' } }],
+    ])
     expect(wrapper.find('[data-testid="node-editor"]').exists()).toBe(false)
 
     wrapper.unmount()
@@ -473,7 +496,7 @@ describe('FlowsCanvas', () => {
     wrapper.unmount()
   })
 
-  it('focusNodeId selects the node and center-pans on it (reusing fit()\'s bbox/scale/pan mechanism)', async () => {
+  it("focusNodeId selects the node and center-pans on it (reusing fit()'s bbox/scale/pan mechanism)", async () => {
     const wrapper = mountCanvas()
     let card = wrapper.get('[data-testid="flow-node-filter"] > div')
     expect(card.attributes('style')).not.toContain('var(--color-accent)')

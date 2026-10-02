@@ -96,7 +96,10 @@ export type TerminalFrame =
  * unusable (`unavailable`) without reading the message.
  */
 export class TerminalRequestError extends Error {
-  constructor(message: string, readonly kind: string) {
+  constructor(
+    message: string,
+    readonly kind: string,
+  ) {
     super(message)
     this.name = 'TerminalRequestError'
   }
@@ -213,14 +216,18 @@ export function createTerminalClient(endpoint: TerminalEndpoint): TerminalClient
     },
     async listWindows(slugs) {
       const body = await post<{ sessions: Record<string, Partial<WindowState>[] | null> | null }>(
-        '/api/terminal/windows/list', { slugs })
+        '/api/terminal/windows/list',
+        { slugs },
+      )
       const listings: Record<string, WindowState[]> = {}
       for (const [slug, windows] of Object.entries(body?.sessions ?? {})) {
         listings[slug] = (windows ?? []).map(toWindowState)
       }
       return listings
     },
-    async resize(slug, cols, rows) { await post('/api/terminal/resize', { slug, cols, rows }) },
+    async resize(slug, cols, rows) {
+      await post('/api/terminal/resize', { slug, cols, rows })
+    },
     async newWindow(slug) {
       const body = await post<{ windowId: string }>('/api/terminal/windows/new', { slug })
       return { windowId: body?.windowId ?? '' }
@@ -229,19 +236,29 @@ export function createTerminalClient(endpoint: TerminalEndpoint): TerminalClient
       const body = await post<{ windowId: string }>('/api/terminal/windows/agent', { slug, agent })
       return { windowId: body?.windowId ?? '' }
     },
-    async closeWindow(slug, windowId) { await post('/api/terminal/windows/close', { slug, windowId }) },
+    async closeWindow(slug, windowId) {
+      await post('/api/terminal/windows/close', { slug, windowId })
+    },
     async windowForeground(slug, windowId) {
       const body = await post<Partial<WindowForeground>>('/api/terminal/windows/foreground', { slug, windowId })
       // An answer that carries no verdict is an unknown, and an unknown is
       // something running: the caller kills the window on the strength of it.
       return { running: body?.running ?? true, command: body?.command ?? '' }
     },
-    async renameWindow(slug, windowId, name) { await post('/api/terminal/windows/rename', { slug, windowId, name }) },
+    async renameWindow(slug, windowId, name) {
+      await post('/api/terminal/windows/rename', { slug, windowId, name })
+    },
     async moveWindow(slug, windowId, position) {
-      const body = await post<{ windows: Partial<WindowState>[] | null }>('/api/terminal/windows/move', { slug, windowId, position })
+      const body = await post<{ windows: Partial<WindowState>[] | null }>('/api/terminal/windows/move', {
+        slug,
+        windowId,
+        position,
+      })
       return { windows: (body?.windows ?? []).map(toWindowState) }
     },
-    async selectWindow(slug, windowId) { await post('/api/terminal/windows/select', { slug, windowId }) },
+    async selectWindow(slug, windowId) {
+      await post('/api/terminal/windows/select', { slug, windowId })
+    },
     async splitPane(slug, paneId, direction) {
       const body = await post<{ paneId: string }>('/api/terminal/panes/split', { slug, paneId, direction })
       return { paneId: body?.paneId ?? '' }
@@ -249,7 +266,9 @@ export function createTerminalClient(endpoint: TerminalEndpoint): TerminalClient
     async selectPane(slug, paneId, direction) {
       await post('/api/terminal/panes/select', { slug, paneId, direction: direction ?? '' })
     },
-    async closePane(slug, paneId) { await post('/api/terminal/panes/close', { slug, paneId }) },
+    async closePane(slug, paneId) {
+      await post('/api/terminal/panes/close', { slug, paneId })
+    },
     async paneForeground(slug, paneId) {
       const body = await post<Partial<WindowForeground>>('/api/terminal/panes/foreground', { slug, paneId })
       return { running: body?.running ?? true, command: body?.command ?? '' }
@@ -257,8 +276,12 @@ export function createTerminalClient(endpoint: TerminalEndpoint): TerminalClient
     async resizePane(slug, paneId, size) {
       await post('/api/terminal/panes/resize', { slug, paneId, width: size.width ?? 0, height: size.height ?? 0 })
     },
-    async zoomPane(slug, paneId) { await post('/api/terminal/panes/zoom', { slug, paneId }) },
-    async detach(slug) { await post('/api/terminal/detach', { slug }) },
+    async zoomPane(slug, paneId) {
+      await post('/api/terminal/panes/zoom', { slug, paneId })
+    },
+    async detach(slug) {
+      await post('/api/terminal/detach', { slug })
+    },
     openStream(slug) {
       const socket = new WebSocket(streamURL(endpoint, slug))
       socket.binaryType = 'arraybuffer'
@@ -387,7 +410,7 @@ function readJSON<T>(bytes: Uint8Array): T | null {
 
 async function failure(response: Response): Promise<TerminalRequestError> {
   try {
-    const body = await response.json() as { message?: string; kind?: string }
+    const body = (await response.json()) as { message?: string; kind?: string }
     if (body?.message) return new TerminalRequestError(body.message, body.kind ?? '')
   } catch {
     // fall through to the status line

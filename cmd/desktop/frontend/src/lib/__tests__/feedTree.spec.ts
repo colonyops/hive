@@ -37,10 +37,7 @@ describe('buildFeedTree', () => {
 
   it('honors saved order and folders', () => {
     const layout: SidebarLayout = {
-      items: [
-        { feed: 'c' },
-        { folder: { id: 'work', name: 'Work', feeds: ['a', 'b'] } },
-      ],
+      items: [{ feed: 'c' }, { folder: { id: 'work', name: 'Work', feeds: ['a', 'b'] } }],
     }
     expect(shape(buildFeedTree(feeds, layout, FLOW))).toEqual(['c', 'work[a,b]'])
   })
@@ -52,10 +49,7 @@ describe('buildFeedTree', () => {
 
   it('drops layout references to feeds that no longer exist', () => {
     const layout: SidebarLayout = {
-      items: [
-        { feed: 'gone' },
-        { folder: { id: 'work', name: 'Work', feeds: ['a', 'ghost'] } },
-      ],
+      items: [{ feed: 'gone' }, { folder: { id: 'work', name: 'Work', feeds: ['a', 'ghost'] } }],
     }
     expect(shape(buildFeedTree(feeds, layout, FLOW))).toEqual(['work[a]', 'b', 'c'])
   })
@@ -69,20 +63,14 @@ describe('buildFeedTree', () => {
 
   it('dedupes a feed referenced twice, first placement wins', () => {
     const layout: SidebarLayout = {
-      items: [
-        { folder: { id: 'work', name: 'Work', feeds: ['a'] } },
-        { feed: 'a' },
-      ],
+      items: [{ folder: { id: 'work', name: 'Work', feeds: ['a'] } }, { feed: 'a' }],
     }
     expect(shape(buildFeedTree(feeds, layout, FLOW))).toEqual(['work[a]', 'b', 'c'])
   })
 
   it('round-trips through treeToLayout', () => {
     const layout: SidebarLayout = {
-      items: [
-        { feed: 'c' },
-        { folder: { id: 'work', name: 'Work', feeds: ['a', 'b'] } },
-      ],
+      items: [{ feed: 'c' }, { folder: { id: 'work', name: 'Work', feeds: ['a', 'b'] } }],
     }
     const tree = buildFeedTree(feeds, layout, FLOW)
     expect(treeToLayout(tree, FLOW)).toEqual(layout)
@@ -92,16 +80,16 @@ describe('buildFeedTree', () => {
 describe('applyMove', () => {
   const feeds = [feed('a'), feed('b'), feed('c'), feed('d')]
   const withFolder: SidebarLayout = {
-    items: [
-      { feed: 'a' },
-      { folder: { id: 'work', name: 'Work', feeds: ['b', 'c'] } },
-      { feed: 'd' },
-    ],
+    items: [{ feed: 'a' }, { folder: { id: 'work', name: 'Work', feeds: ['b', 'c'] } }, { feed: 'd' }],
   }
   const tree = () => buildFeedTree(feeds, withFolder, FLOW)
 
   it('reorders a top-level feed before another', () => {
-    const out = applyMove(tree(), { kind: 'feed', id: `${FLOW}/d` }, { kind: 'before', ref: { kind: 'feed', id: `${FLOW}/a` } })
+    const out = applyMove(
+      tree(),
+      { kind: 'feed', id: `${FLOW}/d` },
+      { kind: 'before', ref: { kind: 'feed', id: `${FLOW}/a` } },
+    )
     expect(shape(out)).toEqual(['d', 'a', 'work[b,c]'])
   })
 
@@ -111,17 +99,29 @@ describe('applyMove', () => {
   })
 
   it('moves a feed out of a folder to the top level', () => {
-    const out = applyMove(tree(), { kind: 'feed', id: `${FLOW}/b` }, { kind: 'after', ref: { kind: 'feed', id: `${FLOW}/d` } })
+    const out = applyMove(
+      tree(),
+      { kind: 'feed', id: `${FLOW}/b` },
+      { kind: 'after', ref: { kind: 'feed', id: `${FLOW}/d` } },
+    )
     expect(shape(out)).toEqual(['a', 'work[c]', 'd', 'b'])
   })
 
   it('reorders feeds within a folder', () => {
-    const out = applyMove(tree(), { kind: 'feed', id: `${FLOW}/c` }, { kind: 'before', ref: { kind: 'feed', id: `${FLOW}/b` } })
+    const out = applyMove(
+      tree(),
+      { kind: 'feed', id: `${FLOW}/c` },
+      { kind: 'before', ref: { kind: 'feed', id: `${FLOW}/b` } },
+    )
     expect(shape(out)).toEqual(['a', 'work[c,b]', 'd'])
   })
 
   it('reorders folders among top-level items', () => {
-    const out = applyMove(tree(), { kind: 'folder', id: 'work' }, { kind: 'before', ref: { kind: 'feed', id: `${FLOW}/a` } })
+    const out = applyMove(
+      tree(),
+      { kind: 'folder', id: 'work' },
+      { kind: 'before', ref: { kind: 'feed', id: `${FLOW}/a` } },
+    )
     expect(shape(out)).toEqual(['work[b,c]', 'a', 'd'])
   })
 
@@ -136,7 +136,11 @@ describe('applyMove', () => {
   })
 
   it('is a no-op when dropped onto itself', () => {
-    const out = applyMove(tree(), { kind: 'feed', id: `${FLOW}/a` }, { kind: 'before', ref: { kind: 'feed', id: `${FLOW}/a` } })
+    const out = applyMove(
+      tree(),
+      { kind: 'feed', id: `${FLOW}/a` },
+      { kind: 'before', ref: { kind: 'feed', id: `${FLOW}/a` } },
+    )
     expect(shape(out)).toEqual(['a', 'work[b,c]', 'd'])
   })
 

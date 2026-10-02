@@ -1,5 +1,8 @@
 import { ref } from 'vue'
-import { Catalog, Render } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/promptsservice'
+import {
+  Catalog,
+  Render,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/promptsservice'
 import type { Prompt } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/prompts/models'
 
 // The frontend never builds prompt text. Every prompt — the settings catalog

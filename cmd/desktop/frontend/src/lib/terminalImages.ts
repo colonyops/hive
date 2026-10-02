@@ -36,22 +36,25 @@ export function installTerminalImages(host: HTMLElement, options: ImageInputOpti
     const controller = new AbortController()
     requests.add(controller)
     const current = () => visible() && !controller.signal.aborted && target.current()
-    queue = queue.then(async () => {
-      if (!current()) return
-      const toast = showToast('Preparing image…', { duration: 0 })
-      try {
-        const pastes = await prepareTerminalImages(input, controller.signal)
-        for (const text of pastes) {
-          if (!current()) return
-          await target.paste(text, controller.signal)
+    queue = queue
+      .then(async () => {
+        if (!current()) return
+        const toast = showToast('Preparing image…', { duration: 0 })
+        try {
+          const pastes = await prepareTerminalImages(input, controller.signal)
+          for (const text of pastes) {
+            if (!current()) return
+            await target.paste(text, controller.signal)
+          }
+          if (current()) target.focus()
+        } catch (error) {
+          if (current())
+            showToast(error instanceof Error ? error.message : 'Could not insert the image.', { severity: 'error' })
+        } finally {
+          dismissToast(toast)
         }
-        if (current()) target.focus()
-      } catch (error) {
-        if (current()) showToast(error instanceof Error ? error.message : 'Could not insert the image.', { severity: 'error' })
-      } finally {
-        dismissToast(toast)
-      }
-    }).finally(() => requests.delete(controller))
+      })
+      .finally(() => requests.delete(controller))
   }
 
   targets.set(id, receive)
@@ -64,7 +67,8 @@ export function installTerminalImages(host: HTMLElement, options: ImageInputOpti
 
   // Native Wails owns OS drops. Browser File drops are used by the headless
   // surface; handling both in Wails would insert the same image twice.
-  const native = (window as Window & { _wails?: { flags?: { enableFileDrop?: boolean } } })._wails?.flags?.enableFileDrop === true
+  const native =
+    (window as Window & { _wails?: { flags?: { enableFileDrop?: boolean } } })._wails?.flags?.enableFileDrop === true
   const releasePaste = interceptPaste(host, options.pasteText, receive)
   const dragOver = (event: DragEvent) => {
     if (!native && event.dataTransfer?.types.includes('Files')) {
@@ -90,7 +94,10 @@ export function installTerminalImages(host: HTMLElement, options: ImageInputOpti
     disposed = true
     for (const request of requests) request.abort()
     targets.delete(id)
-    if (targets.size === 0) { releaseDrops?.(); releaseDrops = undefined }
+    if (targets.size === 0) {
+      releaseDrops?.()
+      releaseDrops = undefined
+    }
     releasePaste()
     visibility.disconnect()
     host.removeEventListener('dragover', dragOver)

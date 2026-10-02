@@ -48,9 +48,7 @@ export interface PopupTerminalRequest {
   rows?: number
 }
 
-export type PopupTerminalFrame =
-  | { type: 'output'; data: Uint8Array }
-  | { type: 'exit'; reason: string }
+export type PopupTerminalFrame = { type: 'output'; data: Uint8Array } | { type: 'exit'; reason: string }
 
 /**
  * A control-plane failure carrying the core's own classification, so a caller
@@ -58,7 +56,10 @@ export type PopupTerminalFrame =
  * (`unavailable`) without reading the message.
  */
 export class PopupTerminalRequestError extends Error {
-  constructor(message: string, readonly kind: string) {
+  constructor(
+    message: string,
+    readonly kind: string,
+  ) {
     super(message)
     this.name = 'PopupTerminalRequestError'
   }
@@ -105,7 +106,9 @@ export function createPopupTerminalClient(endpoint: PopupTerminalEndpoint): Popu
       const body = await post<{ terminals: Partial<PopupTerminalState>[] | null }>('/list', {})
       return (body?.terminals ?? []).map(toTerminalState)
     },
-    async resize(id, cols, rows) { await post('/resize', { id, cols, rows }) },
+    async resize(id, cols, rows) {
+      await post('/resize', { id, cols, rows })
+    },
     openStream(id) {
       const socket = new WebSocket(streamURL(endpoint, id))
       socket.binaryType = 'arraybuffer'
@@ -180,7 +183,7 @@ function toTerminalState(term: Partial<PopupTerminalState>): PopupTerminalState 
 
 async function failure(response: Response): Promise<PopupTerminalRequestError> {
   try {
-    const body = await response.json() as { message?: string; kind?: string }
+    const body = (await response.json()) as { message?: string; kind?: string }
     if (body?.message) return new PopupTerminalRequestError(body.message, body.kind ?? '')
   } catch {
     // fall through to the status line

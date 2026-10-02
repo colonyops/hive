@@ -6,16 +6,27 @@ import { chooseOption } from '../../../../test-utils/select'
 
 const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
 
-vi.mock('../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice', () => ({
-  List: mocks.List,
-}))
+vi.mock(
+  '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice',
+  () => ({
+    List: mocks.List,
+  }),
+)
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
 }))
 
 function connectedAccounts(...accounts: string[]) {
   mocks.List.mockResolvedValue([
-    { type: 'sources.github', title: 'GitHub source', stability: 'stable', mode: 'pull', provider: 'github', accounts, envOverride: false },
+    {
+      type: 'sources.github',
+      title: 'GitHub source',
+      stability: 'stable',
+      mode: 'pull',
+      provider: 'github',
+      accounts,
+      envOverride: false,
+    },
   ])
 }
 
@@ -30,7 +41,9 @@ describe('sources.github editor', () => {
     const config: Config = { credential: 'github/octocat', kind: 'search', query: 'is:open is:pr' }
     const wrapper = mount(Editor, { props: { config } })
     expect(wrapper.get('[data-testid="sources.github-editor-kind"]').text()).toContain('Search')
-    expect(wrapper.get<HTMLInputElement>('[data-testid="sources.github-editor-query"]').element.value).toBe('is:open is:pr')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="sources.github-editor-query"]').element.value).toBe(
+      'is:open is:pr',
+    )
   })
 
   it('emits an immutable update:config on query edit, without mutating the config prop', async () => {
@@ -43,7 +56,9 @@ describe('sources.github editor', () => {
     await wrapper.vm.$nextTick()
 
     expect(config.query).toBe('') // prop untouched
-    expect(wrapper.emitted('update:config')).toEqual([[{ credential: 'github/octocat', kind: 'search', query: 'is:open' }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [{ credential: 'github/octocat', kind: 'search', query: 'is:open' }],
+    ])
   })
 
   // The field used to be a free-text box the user had to type a ref into.
@@ -95,14 +110,18 @@ describe('sources.github editor', () => {
 
     await chooseOption(wrapper, 'sources.github-editor-kind', 'notifications')
 
-    expect(wrapper.emitted('update:config')).toEqual([[{ credential: 'github/octocat', kind: 'notifications', query: '' }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [{ credential: 'github/octocat', kind: 'notifications', query: '' }],
+    ])
     wrapper.unmount()
   })
 })
 
 describe('sources.github validate', () => {
   it('requires a query for search sources', () => {
-    expect(validate({ credential: 'github/octocat', kind: 'search', query: '  ' })).toEqual(['a search source requires a query'])
+    expect(validate({ credential: 'github/octocat', kind: 'search', query: '  ' })).toEqual([
+      'a search source requires a query',
+    ])
     expect(validate({ credential: 'github/octocat', kind: 'search', query: 'is:open' })).toEqual([])
   })
 
@@ -117,17 +136,27 @@ describe('sources.github validate', () => {
   })
 
   it('rejects a credential that is not a github ref', () => {
-    expect(validate({ credential: 'octocat', kind: 'notifications' })).toEqual(['credential must look like "github/<login>"'])
-    expect(validate({ credential: 'grafana/prod', kind: 'notifications' })).toEqual(['credential must look like "github/<login>"'])
+    expect(validate({ credential: 'octocat', kind: 'notifications' })).toEqual([
+      'credential must look like "github/<login>"',
+    ])
+    expect(validate({ credential: 'grafana/prod', kind: 'notifications' })).toEqual([
+      'credential must look like "github/<login>"',
+    ])
   })
 
   it('rejects a query on notifications sources', () => {
     expect(validate({ credential: 'github/octocat', kind: 'notifications' })).toEqual([])
-    expect(validate({ credential: 'github/octocat', kind: 'notifications', query: 'is:open' })).toEqual(['a notifications source takes no query'])
+    expect(validate({ credential: 'github/octocat', kind: 'notifications', query: 'is:open' })).toEqual([
+      'a notifications source takes no query',
+    ])
   })
 
   it('enforces per-kind limit caps', () => {
-    expect(validate({ credential: 'github/octocat', kind: 'search', query: 'x', limit: 101 })).toEqual(['search limit caps at 100'])
-    expect(validate({ credential: 'github/octocat', kind: 'notifications', limit: 51 })).toEqual(['notifications limit caps at 50'])
+    expect(validate({ credential: 'github/octocat', kind: 'search', query: 'x', limit: 101 })).toEqual([
+      'search limit caps at 100',
+    ])
+    expect(validate({ credential: 'github/octocat', kind: 'notifications', limit: 51 })).toEqual([
+      'notifications limit caps at 50',
+    ])
   })
 })

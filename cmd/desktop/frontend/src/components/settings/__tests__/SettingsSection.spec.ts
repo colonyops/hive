@@ -9,7 +9,9 @@ describe('SettingsSection', () => {
     })
 
     expect(wrapper.get('h2').text()).toBe('Actions')
-    expect(wrapper.get('h2').classes()).toEqual(expect.arrayContaining(['text-xs', 'font-semibold', 'uppercase', 'text-text-2']))
+    expect(wrapper.get('h2').classes()).toEqual(
+      expect.arrayContaining(['text-xs', 'font-semibold', 'uppercase', 'text-text-2']),
+    )
     expect(wrapper.get('p').text()).toBe('Configure actions.')
     expect(wrapper.get('p').classes()).toEqual(expect.arrayContaining(['text-xs', 'leading-relaxed', 'text-text-3']))
   })

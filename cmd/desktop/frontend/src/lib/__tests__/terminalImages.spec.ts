@@ -8,10 +8,14 @@ const mocks = vi.hoisted(() => ({
   drop: undefined as undefined | ((event: { data: { target: string; paths: string[] } }) => void),
   unsubscribe: vi.fn(),
 }))
-vi.mock('@wailsio/runtime', () => ({ Events: { On: (_: string, handler: typeof mocks.drop) => {
-  mocks.drop = handler
-  return mocks.unsubscribe
-} } }))
+vi.mock('@wailsio/runtime', () => ({
+  Events: {
+    On: (_: string, handler: typeof mocks.drop) => {
+      mocks.drop = handler
+      return mocks.unsubscribe
+    },
+  },
+}))
 vi.mock('../terminalImagesClient', () => ({ prepareTerminalImages: mocks.prepare }))
 
 const disposers: (() => void)[] = []
@@ -40,7 +44,18 @@ function pane() {
     capture: () => ({ current: () => current, paste, focus }),
   })
   disposers.push(dispose)
-  return { parent, host, textarea, paste, text, focus, stale: () => { current = false }, dispose }
+  return {
+    parent,
+    host,
+    textarea,
+    paste,
+    text,
+    focus,
+    stale: () => {
+      current = false
+    },
+    dispose,
+  }
 }
 
 function drop(host: HTMLElement, paths = ['/one.png']) {
@@ -102,7 +117,11 @@ describe('terminal image input', () => {
 
   it('does not paste after switching chats during upload', async () => {
     let finish!: (pastes: string[]) => void
-    mocks.prepare.mockReturnValue(new Promise<string[]>((resolve) => { finish = resolve }))
+    mocks.prepare.mockReturnValue(
+      new Promise<string[]>((resolve) => {
+        finish = resolve
+      }),
+    )
     const p = pane()
     drop(p.host)
     await flushPromises()
@@ -115,7 +134,11 @@ describe('terminal image input', () => {
 
   it('cancels an upload when a pooled pane is hidden, even if it is shown again', async () => {
     let finish!: (pastes: string[]) => void
-    mocks.prepare.mockReturnValue(new Promise<string[]>((resolve) => { finish = resolve }))
+    mocks.prepare.mockReturnValue(
+      new Promise<string[]>((resolve) => {
+        finish = resolve
+      }),
+    )
     const p = pane()
     drop(p.host)
     await flushPromises()
@@ -132,7 +155,11 @@ describe('terminal image input', () => {
     mocks.prepare.mockResolvedValue(['/one.png '])
     const p = pane()
     let reject!: (error: Error) => void
-    p.paste.mockReturnValueOnce(new Promise<void>((_, fail) => { reject = fail }))
+    p.paste.mockReturnValueOnce(
+      new Promise<void>((_, fail) => {
+        reject = fail
+      }),
+    )
     drop(p.host)
     drop(p.host)
     await flushPromises()

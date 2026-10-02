@@ -27,8 +27,24 @@ import FlowsCanvas from './FlowsCanvas.vue'
 import PanelResizeHandle from '../../components/PanelResizeHandle.vue'
 
 const {
-  flows, activeFlow, layout, dirty, latestRunByNode, saving, error, flowFocusNodeId,
-  refreshFlows, refreshNodeRuns, selectFlow, addNode, updateNode, deleteNode, addWire, removeWire, moveNode, deploy,
+  flows,
+  activeFlow,
+  layout,
+  dirty,
+  latestRunByNode,
+  saving,
+  error,
+  flowFocusNodeId,
+  refreshFlows,
+  refreshNodeRuns,
+  selectFlow,
+  addNode,
+  updateNode,
+  deleteNode,
+  addWire,
+  removeWire,
+  moveNode,
+  deploy,
   flowLoadError,
 } = useFlowsSession()
 
@@ -36,8 +52,11 @@ const {
 // below may independently choose another draft. This view only renders editor
 // state; what is deployed is whatever is on disk, which the Go engine reloads.
 
-const { size: paletteWidth, startResize: startPaletteResize, step: stepPalette } =
-  useResizablePanel({ storageKey: 'hive.panel.palette', defaultSize: 214, min: 170, max: 380, edge: 'right' })
+const {
+  size: paletteWidth,
+  startResize: startPaletteResize,
+  step: stepPalette,
+} = useResizablePanel({ storageKey: 'hive.panel.palette', defaultSize: 214, min: 170, max: 380, edge: 'right' })
 
 // An external flows/*.yaml edit (another window, git) still needs a nudge
 // while the canvas is open, so the same "flows:updated" refresh this view
@@ -96,13 +115,20 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
 
 <template>
   <div class="flex h-full min-h-0 flex-1" data-testid="flows-view">
-    <aside class="relative shrink-0 border-r border-row bg-pane" :style="{ width: paletteWidth + 'px' }" data-testid="flows-palette-rail">
+    <aside
+      class="relative shrink-0 border-r border-row bg-pane"
+      :style="{ width: paletteWidth + 'px' }"
+      data-testid="flows-palette-rail"
+    >
       <NodePalette />
       <PanelResizeHandle edge="right" name="palette" :start="startPaletteResize" :step="stepPalette" />
     </aside>
 
     <section class="flex min-w-0 flex-1 flex-col">
-      <div class="flex h-11 shrink-0 items-center gap-2.5 border-b border-row bg-canvas-toolbar px-3.5" data-testid="canvas-toolbar">
+      <div
+        class="flex h-11 shrink-0 items-center gap-2.5 border-b border-row bg-canvas-toolbar px-3.5"
+        data-testid="canvas-toolbar"
+      >
         <div class="relative">
           <button
             type="button"
@@ -130,23 +156,50 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
                 :data-testid="`flow-selector-option-${f.id}`"
                 @click="pickFlow(f.id)"
               >
-                <span class="size-1.5 shrink-0 rounded-full" :class="!f.valid ? 'bg-severity-error' : f.enabled ? 'bg-severity-success' : 'bg-text-4'" />
+                <span
+                  class="size-1.5 shrink-0 rounded-full"
+                  :class="!f.valid ? 'bg-severity-error' : f.enabled ? 'bg-severity-success' : 'bg-text-4'"
+                />
                 <span class="min-w-0 flex-1 truncate text-[12.5px] text-text">{{ f.name || f.id }}</span>
               </button>
             </div>
           </div>
         </div>
 
-        <span class="whitespace-nowrap font-mono text-[11px] text-text-3" data-testid="canvas-node-wire-count">{{ nodeCount }} nodes · {{ wireCount }} wires</span>
+        <span class="whitespace-nowrap font-mono text-[11px] text-text-3" data-testid="canvas-node-wire-count"
+          >{{ nodeCount }} nodes · {{ wireCount }} wires</span
+        >
 
         <div class="flex-1" />
 
-        <div class="flex h-[30px] items-center overflow-hidden rounded-lg border border-strong bg-chip font-mono text-[12px] text-text-2">
-          <button class="flex h-full cursor-pointer items-center px-2.5 hover:bg-hover hover:text-text" data-testid="canvas-zoom-out" @click="canvasRef?.zoomOut()"><IconMinus class="size-3.5" /></button>
-          <span class="flex h-full items-center px-1 text-text" data-testid="canvas-zoom-level">{{ zoomPercent }}%</span>
-          <button class="flex h-full cursor-pointer items-center px-2.5 hover:bg-hover hover:text-text" data-testid="canvas-zoom-in" @click="canvasRef?.zoomIn()"><IconPlus class="size-3.5" /></button>
+        <div
+          class="flex h-[30px] items-center overflow-hidden rounded-lg border border-strong bg-chip font-mono text-[12px] text-text-2"
+        >
+          <button
+            class="flex h-full cursor-pointer items-center px-2.5 hover:bg-hover hover:text-text"
+            data-testid="canvas-zoom-out"
+            @click="canvasRef?.zoomOut()"
+          >
+            <IconMinus class="size-3.5" />
+          </button>
+          <span class="flex h-full items-center px-1 text-text" data-testid="canvas-zoom-level"
+            >{{ zoomPercent }}%</span
+          >
+          <button
+            class="flex h-full cursor-pointer items-center px-2.5 hover:bg-hover hover:text-text"
+            data-testid="canvas-zoom-in"
+            @click="canvasRef?.zoomIn()"
+          >
+            <IconPlus class="size-3.5" />
+          </button>
         </div>
-        <button class="flex h-[30px] cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-strong bg-chip px-2.5 text-[12px] text-text-2 hover:border-card hover:text-text" data-testid="canvas-fit" @click="canvasRef?.fit()"><IconMaximize2 class="size-3.5" />Fit</button>
+        <button
+          class="flex h-[30px] cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-strong bg-chip px-2.5 text-[12px] text-text-2 hover:border-card hover:text-text"
+          data-testid="canvas-fit"
+          @click="canvasRef?.fit()"
+        >
+          <IconMaximize2 class="size-3.5" />Fit
+        </button>
 
         <div class="mx-0.5 h-5 w-px bg-row" />
 
@@ -176,25 +229,45 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
           @remove-wire="removeWire"
           @add-node-at="onAddNodeAt"
         />
-        <div v-else class="flex flex-1 items-center justify-center px-8 text-center text-[13px] text-text-4" data-testid="flows-view-empty">
+        <div
+          v-else
+          class="flex flex-1 items-center justify-center px-8 text-center text-[13px] text-text-4"
+          data-testid="flows-view-empty"
+        >
           Select a flow to start editing.
         </div>
       </div>
 
-      <div class="flex h-[30px] shrink-0 items-center gap-3.5 border-t border-row bg-canvas-toolbar px-3.5 font-mono text-[10.5px] text-text-3" data-testid="canvas-status-strip">
+      <div
+        class="flex h-[30px] shrink-0 items-center gap-3.5 border-t border-row bg-canvas-toolbar px-3.5 font-mono text-[10.5px] text-text-3"
+        data-testid="canvas-status-strip"
+      >
         <span v-if="dirty" class="flex items-center gap-1.5" data-testid="flow-dirty-indicator">
-          <span class="size-1.5 shrink-0 rounded-full bg-accent" />unsaved changes — deploy to write <span class="text-text-2">{{ filePath }}</span>
+          <span class="size-1.5 shrink-0 rounded-full bg-accent" />unsaved changes — deploy to write
+          <span class="text-text-2">{{ filePath }}</span>
         </span>
         <span v-else-if="activeFlow" data-testid="flow-saved-indicator">{{ filePath }}</span>
-        <span v-if="error" class="max-w-[240px] truncate text-severity-error" data-testid="flow-editor-error">{{ error }}</span>
-        <span v-if="flowLoadError" class="max-w-[200px] truncate text-severity-error" data-testid="flow-load-error">{{ flowLoadError }}</span>
+        <span v-if="error" class="max-w-[240px] truncate text-severity-error" data-testid="flow-editor-error">{{
+          error
+        }}</span>
+        <span v-if="flowLoadError" class="max-w-[200px] truncate text-severity-error" data-testid="flow-load-error">{{
+          flowLoadError
+        }}</span>
 
         <div class="flex-1" />
 
-        <span v-if="activeFlow" class="text-severity-success" data-testid="status-count-ok">● {{ statusCounts.ok }} ok</span>
-        <span v-if="activeFlow" class="text-severity-running" data-testid="status-count-running">● {{ statusCounts.running }} running</span>
-        <span v-if="activeFlow" class="text-text-4" data-testid="status-count-idle">● {{ statusCounts.idle }} idle</span>
-        <span v-if="activeFlow" class="text-severity-error" data-testid="status-count-error">● {{ statusCounts.error }} error</span>
+        <span v-if="activeFlow" class="text-severity-success" data-testid="status-count-ok"
+          >● {{ statusCounts.ok }} ok</span
+        >
+        <span v-if="activeFlow" class="text-severity-running" data-testid="status-count-running"
+          >● {{ statusCounts.running }} running</span
+        >
+        <span v-if="activeFlow" class="text-text-4" data-testid="status-count-idle"
+          >● {{ statusCounts.idle }} idle</span
+        >
+        <span v-if="activeFlow" class="text-severity-error" data-testid="status-count-error"
+          >● {{ statusCounts.error }} error</span
+        >
       </div>
     </section>
   </div>

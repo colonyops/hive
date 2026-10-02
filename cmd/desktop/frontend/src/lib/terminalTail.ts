@@ -31,11 +31,7 @@ export function scrolledOffTail(term: Terminal): boolean {
  * and xterm registers its own listener inside it, so this one runs second and
  * reads a buffer already synced.
  */
-export function watchTailPin(
-  term: Terminal,
-  host: HTMLElement,
-  report: (scrolledUp: boolean) => void,
-): IDisposable {
+export function watchTailPin(term: Terminal, host: HTMLElement, report: (scrolledUp: boolean) => void): IDisposable {
   let last: boolean | undefined
   const refresh = (): void => {
     const scrolledUp = scrolledOffTail(term)

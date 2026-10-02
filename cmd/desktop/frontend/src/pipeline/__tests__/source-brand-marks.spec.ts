@@ -27,7 +27,10 @@ describe('source brand marks', () => {
     for (const def of sourceTypes) {
       const kind = sourceKindForNodeType(def.type)
       expect(kind, `${def.type} has no sourceKind`).toBeTruthy()
-      expect(kind! in BRANDS || generic.includes(def.type), `${def.type} is neither branded nor a declared generic`).toBe(true)
+      expect(
+        kind! in BRANDS || generic.includes(def.type),
+        `${def.type} is neither branded nor a declared generic`,
+      ).toBe(true)
     }
   })
 

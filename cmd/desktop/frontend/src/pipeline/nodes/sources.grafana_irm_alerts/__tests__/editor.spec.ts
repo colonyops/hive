@@ -6,16 +6,27 @@ import { chooseOption } from '../../../../test-utils/select'
 
 const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
 
-vi.mock('../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice', () => ({
-  List: mocks.List,
-}))
+vi.mock(
+  '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice',
+  () => ({
+    List: mocks.List,
+  }),
+)
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
 }))
 
 function connectedStacks(...accounts: string[]) {
   mocks.List.mockResolvedValue([
-    { key: 'grafana', title: 'Grafana', stability: 'stable', provider: 'grafana', types: ['sources.grafana_alerts', 'sources.grafana_irm_alerts', 'sources.grafana_metrics'], accounts, envOverride: false },
+    {
+      key: 'grafana',
+      title: 'Grafana',
+      stability: 'stable',
+      provider: 'grafana',
+      types: ['sources.grafana_alerts', 'sources.grafana_irm_alerts', 'sources.grafana_metrics'],
+      accounts,
+      envOverride: false,
+    },
   ])
 }
 
@@ -55,11 +66,15 @@ describe('sources.grafana_irm_alerts editor', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="sources.grafana_irm_alerts-editor-integration"]').setValue('CFRPV98RPR1U8')
-    expect(wrapper.emitted('update:config')).toEqual([[{
-      credential: 'grafana/host-1',
-      integration: 'CFRPV98RPR1U8',
-      team: 'T1',
-    }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [
+        {
+          credential: 'grafana/host-1',
+          integration: 'CFRPV98RPR1U8',
+          team: 'T1',
+        },
+      ],
+    ])
     wrapper.unmount()
   })
 })
@@ -70,7 +85,9 @@ describe('sources.grafana_irm_alerts validate', () => {
   })
 
   it('rejects a credential that is not a grafana ref', () => {
-    expect(validate(config({ credential: 'github/octocat' }))).toEqual(['credential must look like "grafana/<account>"'])
+    expect(validate(config({ credential: 'github/octocat' }))).toEqual([
+      'credential must look like "grafana/<account>"',
+    ])
   })
 
   // Scope is optional: an unscoped node is a valid whole-stack on-call feed.

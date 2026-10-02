@@ -46,7 +46,10 @@ watch(requestedEditorFilter, applyRequestedFilter)
 
 const rows = keymapRows
 
-interface Group { group: string; rows: KeymapRow[] }
+interface Group {
+  group: string
+  rows: KeymapRow[]
+}
 
 const groups = computed<Group[]>(() => {
   const query = filter.value.trim().toLowerCase()
@@ -152,7 +155,9 @@ onUnmounted(commitCapture)
       description="Rebind commands to your own keys. Bindings apply across the app; feed navigation keys work while the feed is open."
     >
       <template #actions>
-        <label class="flex w-[220px] items-center gap-2 rounded-[7px] border border-card bg-app px-3 py-1.5 focus-within:border-accent">
+        <label
+          class="flex w-[220px] items-center gap-2 rounded-[7px] border border-card bg-app px-3 py-1.5 focus-within:border-accent"
+        >
           <IconSearch class="size-[14px] shrink-0 text-text-3" />
           <input
             v-model="filter"
@@ -160,7 +165,7 @@ onUnmounted(commitCapture)
             class="min-w-0 flex-1 border-none bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-4"
             placeholder="Filter shortcuts…"
             data-testid="keybinding-filter"
-          >
+          />
         </label>
       </template>
     </SettingsHeading>
@@ -188,7 +193,11 @@ onUnmounted(commitCapture)
               :key="combo"
               class="combo"
               :class="conflictTitles(row.id, combo).length ? 'combo-conflict' : ''"
-              :title="conflictTitles(row.id, combo).length ? `Also bound to ${conflictTitles(row.id, combo).join(', ')}` : undefined"
+              :title="
+                conflictTitles(row.id, combo).length
+                  ? `Also bound to ${conflictTitles(row.id, combo).join(', ')}`
+                  : undefined
+              "
               data-testid="keybinding-combo"
             >
               <IconTriangleAlert v-if="conflictTitles(row.id, combo).length" class="size-3 shrink-0 text-accent" />
@@ -199,7 +208,9 @@ onUnmounted(commitCapture)
                 aria-label="Remove shortcut"
                 data-testid="keybinding-remove"
                 @click="removeCombo(row.id, combo)"
-              ><IconX class="size-3" /></button>
+              >
+                <IconX class="size-3" />
+              </button>
             </span>
 
             <span v-if="!row.combos.length && capturingId !== row.id" class="text-[11px] text-text-4">Blank</span>
@@ -210,7 +221,9 @@ onUnmounted(commitCapture)
               data-testid="keybinding-capture"
               @click="commitCapture"
             >
-              <kbd v-for="(step, i) in pendingSteps" :key="i" class="keycap capture-keycap">{{ formatCombo(step) }}</kbd>
+              <kbd v-for="(step, i) in pendingSteps" :key="i" class="keycap capture-keycap">{{
+                formatCombo(step)
+              }}</kbd>
               <span v-if="pendingSteps.length">click or pause to save,&nbsp;</span>
               <span v-else>Press a key…&nbsp;</span>
               <span class="text-text-4">Esc to cancel</span>
@@ -223,7 +236,9 @@ onUnmounted(commitCapture)
               aria-label="Add shortcut"
               data-testid="keybinding-add"
               @click="startCapture(row.id)"
-            ><IconPlus class="size-3.5" /></button>
+            >
+              <IconPlus class="size-3.5" />
+            </button>
 
             <button
               v-if="row.overridden"
@@ -233,7 +248,9 @@ onUnmounted(commitCapture)
               title="Reset to default"
               data-testid="keybinding-reset"
               @click="reset(row.id)"
-            ><IconRotateCcw class="size-3.5" /></button>
+            >
+              <IconRotateCcw class="size-3.5" />
+            </button>
           </div>
         </div>
       </div>
@@ -242,7 +259,11 @@ onUnmounted(commitCapture)
 </template>
 
 <style scoped>
-.combo { display: inline-flex; align-items: center; gap: 3px; }
+.combo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
 /* A readable key cap: bright, mono, with a subtle physical-key bottom edge. */
 .keycap {
   display: inline-flex;
@@ -261,7 +282,10 @@ onUnmounted(commitCapture)
   line-height: 1;
   color: var(--color-text);
 }
-.combo-conflict .keycap { border-color: var(--color-accent); color: var(--color-accent); }
+.combo-conflict .keycap {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
 /* The remove affordance is demoted so the key reads first; it lifts on hover. */
 .combo-remove {
   display: inline-flex;
@@ -273,10 +297,18 @@ onUnmounted(commitCapture)
   border-radius: 5px;
   color: var(--color-text-4);
   opacity: 0.4;
-  transition: opacity 0.12s, color 0.12s, background 0.12s;
+  transition:
+    opacity 0.12s,
+    color 0.12s,
+    background 0.12s;
 }
-.combo:hover .combo-remove { opacity: 1; }
-.combo-remove:hover { color: var(--color-text); background: var(--color-hover); }
+.combo:hover .combo-remove {
+  opacity: 1;
+}
+.combo-remove:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
 .capture-chip {
   display: inline-flex;
   align-items: center;
@@ -291,7 +323,9 @@ onUnmounted(commitCapture)
   font-size: 12px;
   color: var(--color-text);
 }
-.capture-keycap { border-color: var(--color-accent); }
+.capture-keycap {
+  border-color: var(--color-accent);
+}
 .icon-btn {
   display: inline-flex;
   align-items: center;
@@ -303,5 +337,8 @@ onUnmounted(commitCapture)
   border-radius: 7px;
   color: var(--color-text-2);
 }
-.icon-btn:hover { color: var(--color-text); border-color: var(--color-accent); }
+.icon-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-accent);
+}
 </style>

@@ -115,12 +115,7 @@ describe('useCommands', () => {
       command({ id: 'session-attach', title: 'Attach session', group: 'Sessions', order: -1 }),
     ])
 
-    expect(sorted.map((cmd) => cmd.id)).toEqual([
-      'session-attach',
-      'feed-desktop',
-      'profile-work',
-      'profile-personal',
-    ])
+    expect(sorted.map((cmd) => cmd.id)).toEqual(['session-attach', 'feed-desktop', 'profile-work', 'profile-personal'])
   })
 
   it('keeps a group contiguous when its registrars disagree on order', () => {
@@ -219,10 +214,12 @@ describe('useCommands', () => {
     const palette = useCommandPalette()
     const lines: string[] = []
 
-    scope.run(() => useShellEscape((line) => {
-      lines.push(line)
-      return []
-    }))
+    scope.run(() =>
+      useShellEscape((line) => {
+        lines.push(line)
+        return []
+      }),
+    )
 
     palette.setQuery('!')
     expect(palette.scope.value).toBe('shell')
@@ -254,10 +251,12 @@ describe('useCommands', () => {
   it('filters results to the active scope, defaulting an unmarked row to actions', () => {
     const palette = useCommandPalette()
 
-    scope.run(() => useCommands([
-      command({ id: 'goto-a', title: 'Goto A', scope: 'goto' }),
-      command({ id: 'act-a', title: 'Actions A' }),
-    ]))
+    scope.run(() =>
+      useCommands([
+        command({ id: 'goto-a', title: 'Goto A', scope: 'goto' }),
+        command({ id: 'act-a', title: 'Actions A' }),
+      ]),
+    )
 
     palette.scope.value = 'goto'
     expect(palette.results.value.map((cmd) => cmd.id)).toEqual(['goto-a'])
@@ -365,7 +364,9 @@ describe('useCommands', () => {
     const palette = useCommandPalette()
     const handler = vi.fn()
 
-    scope.run(() => useCommands([command({ id: 'legend:goto', title: 'Jump to a place', keepOpen: true, run: handler })]))
+    scope.run(() =>
+      useCommands([command({ id: 'legend:goto', title: 'Jump to a place', keepOpen: true, run: handler })]),
+    )
     palette.open.value = true
     palette.query.value = 'jump'
 
@@ -381,9 +382,18 @@ describe('useCommands', () => {
   it('lets a keepOpen row switch scope without the palette closing or resetting it', () => {
     const palette = useCommandPalette()
 
-    scope.run(() => useCommands([
-      command({ id: 'legend:actions', title: 'Run a command', keepOpen: true, run: () => { palette.setScope('actions') } }),
-    ]))
+    scope.run(() =>
+      useCommands([
+        command({
+          id: 'legend:actions',
+          title: 'Run a command',
+          keepOpen: true,
+          run: () => {
+            palette.setScope('actions')
+          },
+        }),
+      ]),
+    )
     palette.open.value = true
     palette.query.value = 'run'
 
@@ -397,7 +407,12 @@ describe('useCommands', () => {
     const palette = useCommandPalette()
     const available = ref(true)
 
-    scope.run(() => useShellEscape((line) => [command({ id: 'shell:run', title: line })], () => available.value))
+    scope.run(() =>
+      useShellEscape(
+        (line) => [command({ id: 'shell:run', title: line })],
+        () => available.value,
+      ),
+    )
 
     palette.open.value = true
     palette.setQuery('!ls')
@@ -423,10 +438,12 @@ describe('useCommands', () => {
 
   it('records a run made from the Go to and Actions scopes, most recent first', () => {
     const palette = useCommandPalette()
-    scope.run(() => useCommands([
-      command({ id: 'goto-a', title: 'Goto A', scope: 'goto' }),
-      command({ id: 'act-a', title: 'Actions A' }),
-    ]))
+    scope.run(() =>
+      useCommands([
+        command({ id: 'goto-a', title: 'Goto A', scope: 'goto' }),
+        command({ id: 'act-a', title: 'Actions A' }),
+      ]),
+    )
 
     palette.scope.value = 'goto'
     palette.run(palette.results.value[0])

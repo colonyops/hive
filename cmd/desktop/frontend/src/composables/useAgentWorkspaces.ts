@@ -118,7 +118,8 @@ async function regenerateWorkspace(dir: string): Promise<AgentWorkspaceOpenResul
   try {
     const result = await client.value.openWorkspace(dir)
     const idx = workspaces.value.findIndex((w) => w.dir === dir)
-    if (idx >= 0) workspaces.value = [...workspaces.value.slice(0, idx), result.workspace, ...workspaces.value.slice(idx + 1)]
+    if (idx >= 0)
+      workspaces.value = [...workspaces.value.slice(0, idx), result.workspace, ...workspaces.value.slice(idx + 1)]
     return result
   } catch {
     // Keep the last-good rows, matching the reload functions above.
@@ -148,9 +149,10 @@ async function updateWorkspace(request: WorkspaceEditRequest): Promise<AgentWork
   if (!client.value) throw new Error('The Agents area is unavailable.')
   const view = await client.value.updateWorkspace(request)
   const idx = workspaces.value.findIndex((w) => w.dir === view.dir)
-  workspaces.value = idx >= 0
-    ? [...workspaces.value.slice(0, idx), view, ...workspaces.value.slice(idx + 1)]
-    : [...workspaces.value, view]
+  workspaces.value =
+    idx >= 0
+      ? [...workspaces.value.slice(0, idx), view, ...workspaces.value.slice(idx + 1)]
+      : [...workspaces.value, view]
   return view
 }
 
@@ -299,17 +301,46 @@ export function useAgentWorkspaces(): {
   resetOpenWorkspace: () => void
 } {
   return {
-    checking, available, reason, client,
-    workspaces, workspacesLoading, workspacesLoaded, workspacesError,
-    root, rootProblem, editor, presets, mcpCatalogue,
-    skillPackages, skillNames, skillPackagesProblem, missingMCPs, missingPackages,
+    checking,
+    available,
+    reason,
+    client,
+    workspaces,
+    workspacesLoading,
+    workspacesLoaded,
+    workspacesError,
+    root,
+    rootProblem,
+    editor,
+    presets,
+    mcpCatalogue,
+    skillPackages,
+    skillNames,
+    skillPackagesProblem,
+    missingMCPs,
+    missingPackages,
     ready: ensureProbed,
-    reloadWorkspaces, openWorkspace, regenerateWorkspace,
-    createWorkspace, updateWorkspace, deleteWorkspace,
-    reloadMCPCatalogue, importMCPServers, removeMCPServer,
-    reloadSkillPackages, revealSkillPackages, revealSharedSkills,
-    openWorkspaceInEditor, revealWorkspace,
-    startSession, startFirstRunChat, resumeSession, closeSession, renameSession, deleteSession, resetOpenWorkspace,
+    reloadWorkspaces,
+    openWorkspace,
+    regenerateWorkspace,
+    createWorkspace,
+    updateWorkspace,
+    deleteWorkspace,
+    reloadMCPCatalogue,
+    importMCPServers,
+    removeMCPServer,
+    reloadSkillPackages,
+    revealSkillPackages,
+    revealSharedSkills,
+    openWorkspaceInEditor,
+    revealWorkspace,
+    startSession,
+    startFirstRunChat,
+    resumeSession,
+    closeSession,
+    renameSession,
+    deleteSession,
+    resetOpenWorkspace,
   }
 }
 

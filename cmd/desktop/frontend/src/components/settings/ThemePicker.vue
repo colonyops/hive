@@ -13,7 +13,11 @@ const emit = defineEmits<{ 'update:modelValue': [value: Theme] }>()
 </script>
 
 <template>
-  <div class="grid grid-cols-2 gap-2.5 @[440px]/pane:grid-cols-3 @[680px]/pane:grid-cols-4" role="radiogroup" aria-label="Theme">
+  <div
+    class="grid grid-cols-2 gap-2.5 @[440px]/pane:grid-cols-3 @[680px]/pane:grid-cols-4"
+    role="radiogroup"
+    aria-label="Theme"
+  >
     <button
       v-for="theme in themes"
       :key="theme"
@@ -40,7 +44,9 @@ const emit = defineEmits<{ 'update:modelValue': [value: Theme] }>()
           </span>
         </span>
       </span>
-      <span class="truncate text-[12px]" :class="modelValue === theme ? 'font-medium text-text' : 'text-text-2'">{{ themeLabels[theme] }}</span>
+      <span class="truncate text-[12px]" :class="modelValue === theme ? 'font-medium text-text' : 'text-text-2'">{{
+        themeLabels[theme]
+      }}</span>
     </button>
   </div>
 </template>

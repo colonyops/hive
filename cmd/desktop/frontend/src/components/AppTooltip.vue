@@ -7,11 +7,14 @@
 // Not useAnchoredPopover — it sizes to the anchor's width with a 320px cap.
 import { onBeforeUnmount, ref } from 'vue'
 
-const props = withDefaults(defineProps<{
-  /** Empty renders the trigger alone, with no tooltip at all. */
-  text: string
-  delay?: number
-}>(), { delay: 300 })
+const props = withDefaults(
+  defineProps<{
+    /** Empty renders the trigger alone, with no tooltip at all. */
+    text: string
+    delay?: number
+  }>(),
+  { delay: 300 },
+)
 
 const GAP = 6
 const EDGE = 8
@@ -79,14 +82,9 @@ onBeforeUnmount(hide)
   >
     <slot />
     <Teleport to="body">
-      <div
-        v-if="open"
-        ref="bubble"
-        class="app-tooltip"
-        :style="style"
-        role="tooltip"
-        data-testid="app-tooltip"
-      >{{ text }}</div>
+      <div v-if="open" ref="bubble" class="app-tooltip" :style="style" role="tooltip" data-testid="app-tooltip">
+        {{ text }}
+      </div>
     </Teleport>
   </span>
 </template>
@@ -109,6 +107,6 @@ onBeforeUnmount(hide)
   /* pre-line so a caller can put a second line in while long text still wraps
      at max-width. */
   white-space: pre-line;
-  box-shadow: 0 10px 28px -10px rgb(0 0 0 / .55);
+  box-shadow: 0 10px 28px -10px rgb(0 0 0 / 0.55);
 }
 </style>

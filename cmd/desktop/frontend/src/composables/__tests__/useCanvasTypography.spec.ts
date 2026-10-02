@@ -64,7 +64,11 @@ describe('useCanvasTypography', () => {
 
   it('keeps a selection made while hydration is in flight', async () => {
     let resolveRead: (value: { canvasFontSize: string; canvasLineSpacing: string }) => void = () => {}
-    mocks.AppearanceSettings.mockReturnValue(new Promise((resolve) => { resolveRead = resolve }))
+    mocks.AppearanceSettings.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
     const { setCanvasFontSize, useCanvasTypography } = await import('../useCanvasTypography')
     const typography = useCanvasTypography()
 

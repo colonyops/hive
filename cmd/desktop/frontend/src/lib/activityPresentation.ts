@@ -34,14 +34,15 @@ export function activityLinks(event: ActivityEvent): ActivityLinks {
   const externalId = metadata?.['link.item.externalId'] ?? ''
   return {
     url: metadata?.['link.url'] ?? '',
-    item: profileId && externalId
-      ? {
-          profileId,
-          sourceKind: metadata?.['link.item.sourceKind'] ?? '',
-          sourceScope: metadata?.['link.item.sourceScope'] ?? '',
-          externalId,
-        }
-      : null,
+    item:
+      profileId && externalId
+        ? {
+            profileId,
+            sourceKind: metadata?.['link.item.sourceKind'] ?? '',
+            sourceScope: metadata?.['link.item.sourceScope'] ?? '',
+            externalId,
+          }
+        : null,
   }
 }
 
@@ -142,7 +143,12 @@ export function groupEventsByDay(events: ActivityEvent[], now: Date = new Date()
 
 // timeLabel is the right-aligned HH:MM:SS stamp on each row.
 export function timeLabel(createdAt: number): string {
-  return new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+  return new Date(createdAt).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
 }
 
 function dayLabel(key: string, date: Date, today: string, yesterday: string): string {

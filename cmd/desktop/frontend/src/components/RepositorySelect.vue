@@ -48,11 +48,17 @@ const rowCount = computed(() => ranked.value.length + (custom.value ? 1 : 0))
 
 const selectedLabel = computed(() => repoDisplayName(props.modelValue) || props.modelValue)
 
-watch(rowCount, (count) => { if (active.value >= count) active.value = Math.max(0, count - 1) })
+watch(rowCount, (count) => {
+  if (active.value >= count) active.value = Math.max(0, count - 1)
+})
 
 function revealActive(): void {
   if (!open.value) return
-  void nextTick(() => (list.value?.children[active.value]?.firstElementChild as HTMLElement | undefined)?.scrollIntoView?.({ block: 'nearest' }))
+  void nextTick(() =>
+    (list.value?.children[active.value]?.firstElementChild as HTMLElement | undefined)?.scrollIntoView?.({
+      block: 'nearest',
+    }),
+  )
 }
 watch(active, revealActive)
 
@@ -77,7 +83,9 @@ function close(): void {
   open.value = false
   if (reclaim) trigger.value?.focus()
 }
-function toggle(): void { open.value ? close() : openList() }
+function toggle(): void {
+  open.value ? close() : openList()
+}
 
 function choose(remote: string): void {
   if (remote !== props.modelValue) emit('update:modelValue', remote)
@@ -86,7 +94,10 @@ function choose(remote: string): void {
 
 function commitActive(): void {
   const row = ranked.value[active.value]
-  if (row) { choose(row.remote); return }
+  if (row) {
+    choose(row.remote)
+    return
+  }
   if (custom.value) choose(custom.value)
 }
 
@@ -98,24 +109,50 @@ function step(delta: number): void {
 
 function onKeydown(event: KeyboardEvent): void {
   if (!open.value) {
-    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openList() }
+    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      openList()
+    }
     return
   }
-  if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close() }
-  else if (event.key === 'ArrowDown') { event.preventDefault(); step(1) }
-  else if (event.key === 'ArrowUp') { event.preventDefault(); step(-1) }
-  else if (event.key === 'Home') { event.preventDefault(); active.value = 0 }
-  else if (event.key === 'End') { event.preventDefault(); active.value = Math.max(0, rowCount.value - 1) }
-  else if (event.key === 'Enter') { event.preventDefault(); commitActive() }
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    event.stopPropagation()
+    close()
+  } else if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    step(1)
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    step(-1)
+  } else if (event.key === 'Home') {
+    event.preventDefault()
+    active.value = 0
+  } else if (event.key === 'End') {
+    event.preventDefault()
+    active.value = Math.max(0, rowCount.value - 1)
+  } else if (event.key === 'Enter') {
+    event.preventDefault()
+    commitActive()
+  }
   // Not prevented: close() puts focus back on the trigger first, so the default
   // Tab carries on from there into the next field.
   else if (event.key === 'Tab') close()
 }
 
 // Typing re-ranks, so the previous active row is meaningless; the best match is.
-watch(query, () => { active.value = 0; measure() })
+watch(query, () => {
+  active.value = 0
+  measure()
+})
 
-onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
+onClickOutside(
+  root,
+  () => {
+    if (open.value) close()
+  },
+  { ignore: [popover] },
+)
 </script>
 
 <template>
@@ -138,7 +175,9 @@ onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
       @keydown="onKeydown"
     >
       <IconGitBranch class="size-4 shrink-0 text-text-3" />
-      <span class="min-w-0 flex-1 truncate" :class="modelValue ? '' : 'text-text-4'">{{ modelValue ? selectedLabel : 'Choose a repository' }}</span>
+      <span class="min-w-0 flex-1 truncate" :class="modelValue ? '' : 'text-text-4'">{{
+        modelValue ? selectedLabel : 'Choose a repository'
+      }}</span>
       <IconChevronDown class="size-4 shrink-0 text-text-3 transition-transform" :class="open ? 'rotate-180' : ''" />
     </button>
 
@@ -161,7 +200,7 @@ onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
             class="w-0 min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-4"
             :data-testid="testid ? `${testid}-search` : undefined"
             @keydown="onKeydown"
-          >
+          />
         </div>
         <ul
           v-if="rowCount"
@@ -171,11 +210,18 @@ onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
           role="listbox"
           aria-label="Repository"
         >
-          <li v-for="(repo, index) in ranked" :key="repo.remote" role="option" :aria-selected="repo.remote === modelValue">
+          <li
+            v-for="(repo, index) in ranked"
+            :key="repo.remote"
+            role="option"
+            :aria-selected="repo.remote === modelValue"
+          >
             <button
               type="button"
               class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left text-[13px]"
-              :class="index === active ? 'bg-hover text-text' : (repo.remote === modelValue ? 'text-text' : 'text-text-2')"
+              :class="
+                index === active ? 'bg-hover text-text' : repo.remote === modelValue ? 'text-text' : 'text-text-2'
+              "
               :data-testid="testid ? `${testid}-option` : undefined"
               :title="repo.remote"
               @mousedown.prevent
@@ -183,7 +229,12 @@ onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
               @mousemove="active = index"
             >
               <span class="min-w-0 flex-1 truncate">
-                <span v-for="(segment, part) in highlightSegments(repo.label, repo.indices)" :key="part" :class="segment.matched ? 'font-semibold text-accent' : ''">{{ segment.text }}</span>
+                <span
+                  v-for="(segment, part) in highlightSegments(repo.label, repo.indices)"
+                  :key="part"
+                  :class="segment.matched ? 'font-semibold text-accent' : ''"
+                  >{{ segment.text }}</span
+                >
               </span>
               <span v-if="repo.hint" class="shrink-0 truncate text-[11.5px] text-text-4">{{ repo.hint }}</span>
               <IconCheck v-if="repo.remote === modelValue" class="size-3.5 shrink-0 text-accent" :stroke-width="3" />
@@ -204,7 +255,11 @@ onClickOutside(root, () => { if (open.value) close() }, { ignore: [popover] })
             </button>
           </li>
         </ul>
-        <div v-else class="px-3 py-4 text-center text-[12.5px] text-text-4" :data-testid="testid ? `${testid}-empty` : undefined">
+        <div
+          v-else
+          class="px-3 py-4 text-center text-[12.5px] text-text-4"
+          :data-testid="testid ? `${testid}-empty` : undefined"
+        >
           <template v-if="query.trim()">No matching repository</template>
           <template v-else>
             No repositories configured

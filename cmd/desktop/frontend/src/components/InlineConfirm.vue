@@ -16,22 +16,25 @@ import BaseButton from './BaseButton.vue'
 import { useAutofocus } from '../composables/useAutofocus'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 
-const props = withDefaults(defineProps<{
-  title: string
-  description?: string
-  confirmLabel?: string
-  cancelLabel?: string
-  busy?: boolean
-  error?: string | null
-  testid?: string
-}>(), {
-  description: '',
-  confirmLabel: 'Delete',
-  cancelLabel: 'Keep',
-  busy: false,
-  error: null,
-  testid: 'inline-confirm',
-})
+const props = withDefaults(
+  defineProps<{
+    title: string
+    description?: string
+    confirmLabel?: string
+    cancelLabel?: string
+    busy?: boolean
+    error?: string | null
+    testid?: string
+  }>(),
+  {
+    description: '',
+    confirmLabel: 'Delete',
+    cancelLabel: 'Keep',
+    busy: false,
+    error: null,
+    testid: 'inline-confirm',
+  },
+)
 
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
 const cancelRef = ref<{ focus: () => void } | null>(null)
@@ -60,12 +63,12 @@ useEscapeToClose(cancel)
         v-if="description"
         class="mt-0.5 text-[11.5px] leading-snug text-text-2"
         :data-testid="`${testid}-description`"
-      >{{ description }}</p>
-      <p
-        v-if="error"
-        class="mt-1 text-[11.5px] font-medium text-severity-error"
-        :data-testid="`${testid}-error`"
-      >{{ error }}</p>
+      >
+        {{ description }}
+      </p>
+      <p v-if="error" class="mt-1 text-[11.5px] font-medium text-severity-error" :data-testid="`${testid}-error`">
+        {{ error }}
+      </p>
     </div>
     <BaseButton
       ref="cancelRef"
@@ -75,7 +78,8 @@ useEscapeToClose(cancel)
       :busy="busy"
       :data-testid="`${testid}-cancel`"
       @click="cancel"
-    >{{ cancelLabel }}</BaseButton>
+      >{{ cancelLabel }}</BaseButton
+    >
     <BaseButton
       variant="danger-outline"
       size="sm"
@@ -83,6 +87,7 @@ useEscapeToClose(cancel)
       :busy="busy"
       :data-testid="`${testid}-confirm`"
       @click="emit('confirm')"
-    >{{ busy ? 'Working…' : confirmLabel }}</BaseButton>
+      >{{ busy ? 'Working…' : confirmLabel }}</BaseButton
+    >
   </div>
 </template>

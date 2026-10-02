@@ -74,7 +74,10 @@ export function validate(config: Config): string[] {
   if (config.severity && !severities.includes(config.severity as (typeof severities)[number])) {
     errors.push(`Severity "${config.severity}" is not supported.`)
   }
-  if (config.cooldownSeconds !== undefined && (config.cooldownSeconds < 0 || !Number.isInteger(config.cooldownSeconds))) {
+  if (
+    config.cooldownSeconds !== undefined &&
+    (config.cooldownSeconds < 0 || !Number.isInteger(config.cooldownSeconds))
+  ) {
     errors.push('Cooldown must be a whole, non-negative number of seconds.')
   }
   return errors

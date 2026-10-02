@@ -36,9 +36,7 @@ const sansOptions = computed(() => [
 const monoOptions = computed(() => [
   { value: '', label: `${BUNDLED_MONO} · bundled` },
   { value: SYSTEM_MONO, label: 'System' },
-  ...monoFamilies.value
-    .filter((family) => family !== BUNDLED_MONO)
-    .map((family) => ({ value: family, label: family })),
+  ...monoFamilies.value.filter((family) => family !== BUNDLED_MONO).map((family) => ({ value: family, label: family })),
 ])
 
 function onThemeChange(value: string): void {
@@ -52,10 +50,7 @@ onMounted(loadInstalledFonts)
 
 <template>
   <SettingsPage testid="settings-appearance">
-    <SettingsSection
-      title="Theme"
-      description="Applies immediately across the whole app."
-    >
+    <SettingsSection title="Theme" description="Applies immediately across the whole app.">
       <ThemePicker :model-value="theme" @update:model-value="onThemeChange" />
     </SettingsSection>
 

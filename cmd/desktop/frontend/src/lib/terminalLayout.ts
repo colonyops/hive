@@ -59,7 +59,9 @@ export function windowPanes(state: Pick<WindowState, 'layout' | 'activePane'>): 
  * keeps its screen at that size. Without a layout, the active pane uses the
  * window grid.
  */
-export function paneGrids(state: Pick<WindowState, 'layout' | 'activePane' | 'zoomed' | 'width' | 'height'>): Map<string, { cols: number; rows: number }> {
+export function paneGrids(
+  state: Pick<WindowState, 'layout' | 'activePane' | 'zoomed' | 'width' | 'height'>,
+): Map<string, { cols: number; rows: number }> {
   const grids = new Map<string, { cols: number; rows: number }>()
   const leaves = layoutLeaves(state.layout)
   if (!leaves.length) {
@@ -68,9 +70,10 @@ export function paneGrids(state: Pick<WindowState, 'layout' | 'activePane' | 'zo
   }
   for (const leaf of leaves) {
     const zoomedIn = state.zoomed && leaf.paneId === state.activePane
-    grids.set(leaf.paneId as string, zoomedIn
-      ? { cols: state.width, rows: state.height }
-      : { cols: leaf.width, rows: leaf.height })
+    grids.set(
+      leaf.paneId as string,
+      zoomedIn ? { cols: state.width, rows: state.height } : { cols: leaf.width, rows: leaf.height },
+    )
   }
   return grids
 }
@@ -79,7 +82,9 @@ export function paneGrids(state: Pick<WindowState, 'layout' | 'activePane' | 'zo
  * Where each pane on screen is drawn, in cells from the window's top left.
  * Under zoom only the active pane is on screen, over the whole window.
  */
-export function visiblePaneRects(state: Pick<WindowState, 'layout' | 'activePane' | 'zoomed' | 'width' | 'height'>): PaneRect[] {
+export function visiblePaneRects(
+  state: Pick<WindowState, 'layout' | 'activePane' | 'zoomed' | 'width' | 'height'>,
+): PaneRect[] {
   const leaves = layoutLeaves(state.layout)
   if (!leaves.length) {
     return state.activePane ? [{ paneId: state.activePane, x: 0, y: 0, width: state.width, height: state.height }] : []
@@ -89,7 +94,13 @@ export function visiblePaneRects(state: Pick<WindowState, 'layout' | 'activePane
       ? [{ paneId: state.activePane, x: 0, y: 0, width: state.width, height: state.height }]
       : []
   }
-  return leaves.map((leaf) => ({ paneId: leaf.paneId as string, x: leaf.x, y: leaf.y, width: leaf.width, height: leaf.height }))
+  return leaves.map((leaf) => ({
+    paneId: leaf.paneId as string,
+    x: leaf.x,
+    y: leaf.y,
+    width: leaf.width,
+    height: leaf.height,
+  }))
 }
 
 /** The dividers of an unzoomed layout; a zoomed window has none on screen. */

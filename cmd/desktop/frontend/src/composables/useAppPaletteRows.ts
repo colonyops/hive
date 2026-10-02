@@ -10,7 +10,12 @@ import IconSearch from '~icons/lucide/search'
 import IconSquarePlus from '~icons/lucide/square-plus'
 import IconTerminal from '~icons/lucide/terminal'
 import IconWorkflow from '~icons/lucide/workflow'
-import { commandById, commands as bindableCommands, terminalWindowCommandID, type CommandContext } from '../keybindings/catalog'
+import {
+  commandById,
+  commands as bindableCommands,
+  terminalWindowCommandID,
+  type CommandContext,
+} from '../keybindings/catalog'
 import { keymapRows, requestedEditorFilter } from '../keybindings/keymapRows'
 import { paletteScopes, type PaletteScopeId } from '../palette/scopes'
 import { formatCombo, useKeybindings } from './useKeybindings'
@@ -41,7 +46,10 @@ function contextLabel(context: CommandContext): string {
   if (context === 'terminal') return 'Code'
   if (context === 'terminal-session') return 'Code session'
   if (context === 'any-terminal') return 'Terminal'
-  return context.split('-').map((word) => word[0]!.toUpperCase() + word.slice(1)).join(' ')
+  return context
+    .split('-')
+    .map((word) => word[0]!.toUpperCase() + word.slice(1))
+    .join(' ')
 }
 
 export interface AppPaletteDeps {
@@ -80,9 +88,27 @@ export interface AppPaletteDeps {
  */
 export function useAppPaletteRows(deps: AppPaletteDeps): void {
   const {
-    runCommand, contextActive, mode, shellLoaded, onboardingActive, hubActive,
-    devToolsEnabled, router, profiles, activeProfile, requestSelectProfile, navigateSidebar, selectedItem,
-    selectedItemIDs, openSelectedItemsSession, actions, invokeAction, flowsActive, openFlows, requestExitFlows, openNewProfile,
+    runCommand,
+    contextActive,
+    mode,
+    shellLoaded,
+    onboardingActive,
+    hubActive,
+    devToolsEnabled,
+    router,
+    profiles,
+    activeProfile,
+    requestSelectProfile,
+    navigateSidebar,
+    selectedItem,
+    selectedItemIDs,
+    openSelectedItemsSession,
+    actions,
+    invokeAction,
+    flowsActive,
+    openFlows,
+    requestExitFlows,
+    openNewProfile,
     onScreenSessionSlug,
   } = deps
 
@@ -97,11 +123,17 @@ export function useAppPaletteRows(deps: AppPaletteDeps): void {
   // Session and window rows read the same module singletons the sidebar tree
   // itself reads, so they are global rather than tied to TerminalMode ever
   // having mounted.
-  const { sessions: terminalSessionRows, scratch: terminalScratchRow, reload: reloadTerminalSessions } = useTerminalSessions()
+  const {
+    sessions: terminalSessionRows,
+    scratch: terminalScratchRow,
+    reload: reloadTerminalSessions,
+  } = useTerminalSessions()
   const { rows: pinnedChatRows } = useTerminalPinnedChats()
   const { attached: attachedTerminal } = useAttachedTerminalWindows()
   const activeTerminalSessions = computed(() => terminalSessionRows.value.filter((row) => row.state === 'active'))
-  const terminalGroups = computed(() => terminalSessionGroups(activeTerminalSessions.value, terminalScratchRow.value, pinnedChatRows.value))
+  const terminalGroups = computed(() =>
+    terminalSessionGroups(activeTerminalSessions.value, terminalScratchRow.value, pinnedChatRows.value),
+  )
 
   // Chat rows read the same recents listing the Code view's pinned-chats
   // section and the Agents area's own sidebar do. session.workspace is the
@@ -115,303 +147,312 @@ export function useAppPaletteRows(deps: AppPaletteDeps): void {
     return map
   })
 
-  useCommands(computed(() => {
-    const cmds: Command[] = []
+  useCommands(
+    computed(() => {
+      const cmds: Command[] = []
 
-    for (const command of bindableCommands.value) {
-      if (command.paletteHidden || !contextActive(command.context)) continue
-      cmds.push({
-        id: command.id,
-        title: command.title,
-        group: command.group,
-        keywords: command.keywords,
-        icon: command.icon,
-        scope: command.scope,
-        hint: hintFor(command.id),
-        run: () => runCommand(command.id),
-      })
-    }
-
-    // view.focus-search is palette-hidden because one command answers `/` in
-    // three unrelated surfaces, and a single row for it would no-op wherever
-    // another surface is on screen. These named rows stand in per surface,
-    // gated the same way the surface's own commands are, sharing its hint.
-    const focusSearchHint = hintFor('view.focus-search')
-    if (contextActive('feed')) {
-      cmds.push({
-        id: 'view.focus-search:feed',
-        title: 'Search items…',
-        group: 'Feeds',
-        scope: 'actions',
-        keywords: ['find', 'filter', 'search'],
-        icon: IconSearch,
-        hint: focusSearchHint,
-        run: () => runCommand('view.focus-search'),
-      })
-    }
-    if (contextActive('terminal')) {
-      cmds.push({
-        id: 'view.focus-search:terminal',
-        title: 'Filter sessions',
-        group: 'Code',
-        scope: 'actions',
-        keywords: ['terminal', 'filter', 'search', 'find', 'session'],
-        icon: IconSearch,
-        hint: focusSearchHint,
-        run: () => runCommand('view.focus-search'),
-      })
-    }
-    if (contextActive('agents')) {
-      cmds.push({
-        id: 'view.focus-search:agents',
-        title: 'Filter workspaces',
-        group: 'Chats',
-        scope: 'actions',
-        keywords: ['chats', 'agents', 'filter', 'search', 'find', 'workspace'],
-        icon: IconSearch,
-        hint: focusSearchHint,
-        run: () => runCommand('view.focus-search'),
-      })
-    }
-
-    // A row per mode this one is not: with the other modes' objects hidden,
-    // these keep a mode change reachable without the title bar. Title, icon
-    // and keywords are the paired view.go-* command's — App.vue's runMap is
-    // the one implementation both the keymap and this row dispatch through.
-    if (appReady.value) {
-      const modeRow = (id: 'mode:hub' | 'mode:terminal' | 'mode:agents', catalogID: string): void => {
-        const catalog = commandById.value.get(catalogID)
-        if (!catalog) return // a stale mode row is worse than a missing one
+      for (const command of bindableCommands.value) {
+        if (command.paletteHidden || !contextActive(command.context)) continue
         cmds.push({
-          id,
-          title: catalog.title,
-          group: 'View',
-          scope: 'goto',
-          keywords: catalog.keywords,
-          icon: catalog.icon,
-          hint: hintFor(catalogID),
-          run: () => runCommand(catalogID),
-        })
-      }
-      if (mode.value !== 'hub') modeRow('mode:hub', 'view.go-inbox')
-      if (mode.value !== 'terminal') modeRow('mode:terminal', 'view.go-code')
-      if (mode.value !== 'agents') modeRow('mode:agents', 'view.go-chats')
-
-      // Profiles, feeds and Trash, and themes reach across every mode (hay-kot/hive-desktop#306):
-      // requestSelectProfile, navigateSidebar and setTheme all push a route
-      // that lands in the hub, so there is nothing hub-specific left in them.
-      for (const p of profiles.value) {
-        cmds.push({
-          id: `profile:${p.id}`,
-          title: p.name,
-          group: 'Profiles',
-          scope: 'goto',
-          kind: 'profile',
-          keywords: ['profile', 'switch', 'workspace'],
-          icon: IconLayoutGrid,
-          run: () => requestSelectProfile(p.id),
+          id: command.id,
+          title: command.title,
+          group: command.group,
+          keywords: command.keywords,
+          icon: command.icon,
+          scope: command.scope,
+          hint: hintFor(command.id),
+          run: () => runCommand(command.id),
         })
       }
 
-      // Trash and the feed rows below sit under the active profile's own
-      // name, so they carry its group's order (-1) rather than the default —
-      // sorting them together as one block, roughly where the old flat
-      // 'Feeds' group sat, ahead of Flow/Profiles/Settings/Theme/View.
-      const feedGroup = activeProfile.value?.name ?? 'Feeds'
-
-      cmds.push({
-        id: 'view:trash',
-        title: 'Trash',
-        group: feedGroup,
-        order: -1,
-        scope: 'goto',
-        kind: 'view',
-        keywords: ['trash', 'open'],
-        icon: IconList,
-        run: () => navigateSidebar({ type: 'trash' }),
-      })
-
-      for (const f of activeProfile.value?.feeds ?? []) {
+      // view.focus-search is palette-hidden because one command answers `/` in
+      // three unrelated surfaces, and a single row for it would no-op wherever
+      // another surface is on screen. These named rows stand in per surface,
+      // gated the same way the surface's own commands are, sharing its hint.
+      const focusSearchHint = hintFor('view.focus-search')
+      if (contextActive('feed')) {
         cmds.push({
-          id: `feed:${f.id}`,
-          title: f.name,
+          id: 'view.focus-search:feed',
+          title: 'Search items…',
+          group: 'Feeds',
+          scope: 'actions',
+          keywords: ['find', 'filter', 'search'],
+          icon: IconSearch,
+          hint: focusSearchHint,
+          run: () => runCommand('view.focus-search'),
+        })
+      }
+      if (contextActive('terminal')) {
+        cmds.push({
+          id: 'view.focus-search:terminal',
+          title: 'Filter sessions',
+          group: 'Code',
+          scope: 'actions',
+          keywords: ['terminal', 'filter', 'search', 'find', 'session'],
+          icon: IconSearch,
+          hint: focusSearchHint,
+          run: () => runCommand('view.focus-search'),
+        })
+      }
+      if (contextActive('agents')) {
+        cmds.push({
+          id: 'view.focus-search:agents',
+          title: 'Filter workspaces',
+          group: 'Chats',
+          scope: 'actions',
+          keywords: ['chats', 'agents', 'filter', 'search', 'find', 'workspace'],
+          icon: IconSearch,
+          hint: focusSearchHint,
+          run: () => runCommand('view.focus-search'),
+        })
+      }
+
+      // A row per mode this one is not: with the other modes' objects hidden,
+      // these keep a mode change reachable without the title bar. Title, icon
+      // and keywords are the paired view.go-* command's — App.vue's runMap is
+      // the one implementation both the keymap and this row dispatch through.
+      if (appReady.value) {
+        const modeRow = (id: 'mode:hub' | 'mode:terminal' | 'mode:agents', catalogID: string): void => {
+          const catalog = commandById.value.get(catalogID)
+          if (!catalog) return // a stale mode row is worse than a missing one
+          cmds.push({
+            id,
+            title: catalog.title,
+            group: 'View',
+            scope: 'goto',
+            keywords: catalog.keywords,
+            icon: catalog.icon,
+            hint: hintFor(catalogID),
+            run: () => runCommand(catalogID),
+          })
+        }
+        if (mode.value !== 'hub') modeRow('mode:hub', 'view.go-inbox')
+        if (mode.value !== 'terminal') modeRow('mode:terminal', 'view.go-code')
+        if (mode.value !== 'agents') modeRow('mode:agents', 'view.go-chats')
+
+        // Profiles, feeds and Trash, and themes reach across every mode (hay-kot/hive-desktop#306):
+        // requestSelectProfile, navigateSidebar and setTheme all push a route
+        // that lands in the hub, so there is nothing hub-specific left in them.
+        for (const p of profiles.value) {
+          cmds.push({
+            id: `profile:${p.id}`,
+            title: p.name,
+            group: 'Profiles',
+            scope: 'goto',
+            kind: 'profile',
+            keywords: ['profile', 'switch', 'workspace'],
+            icon: IconLayoutGrid,
+            run: () => requestSelectProfile(p.id),
+          })
+        }
+
+        // Trash and the feed rows below sit under the active profile's own
+        // name, so they carry its group's order (-1) rather than the default —
+        // sorting them together as one block, roughly where the old flat
+        // 'Feeds' group sat, ahead of Flow/Profiles/Settings/Theme/View.
+        const feedGroup = activeProfile.value?.name ?? 'Feeds'
+
+        cmds.push({
+          id: 'view:trash',
+          title: 'Trash',
           group: feedGroup,
           order: -1,
           scope: 'goto',
-          kind: 'feed',
-          keywords: ['feed', 'select'],
-          icon: IconRss,
-          run: () => navigateSidebar({ type: 'feed', feedId: f.id }),
+          kind: 'view',
+          keywords: ['trash', 'open'],
+          icon: IconList,
+          run: () => navigateSidebar({ type: 'trash' }),
         })
-      }
 
-      for (const t of themes) {
-        cmds.push({
-          id: `theme:${t}`,
-          title: `Theme: ${themeLabels[t]}`,
-          group: 'Theme',
-          scope: 'actions',
-          keywords: ['theme', 'appearance', t],
-          icon: IconPalette,
-          run: () => setTheme(t),
-        })
-      }
-
-      // One row per application settings section — titled the way the nav
-      // panel itself labels them, so the palette and Settings agree.
-      for (const section of applicationSettingsSections) {
-        const meta = applicationSettingsSectionMeta[section]
-        cmds.push({
-          id: `settings:${section}`,
-          title: meta.label,
-          group: 'Settings',
-          scope: 'goto',
-          kind: 'settings',
-          keywords: ['settings'],
-          icon: meta.icon,
-          run: () => void router.push({ name: 'application-settings', params: { section } }),
-        })
-      }
-    }
-
-    if (hubActive.value) {
-      // The selected item's configured actions, under its own reference — the
-      // same set the detail pane draws as cards. Running one from here goes
-      // through invokeAction, so an action that declares inputs opens its form
-      // and an interactive launch-session opens the session dialog, exactly as
-      // a card click does.
-      if (contextActive('feed') && selectedItem.value) {
-        const itemGroup = containerLine(selectedItem.value) || 'Item'
-        for (const action of actions.value) {
-          const meta = actionTypeMeta(action.type)
+        for (const f of activeProfile.value?.feeds ?? []) {
           cmds.push({
-            id: `item:action:${action.id}`,
-            title: action.label,
-            group: itemGroup,
-            order: -3,
+            id: `feed:${f.id}`,
+            title: f.name,
+            group: feedGroup,
+            order: -1,
+            scope: 'goto',
+            kind: 'feed',
+            keywords: ['feed', 'select'],
+            icon: IconRss,
+            run: () => navigateSidebar({ type: 'feed', feedId: f.id }),
+          })
+        }
+
+        for (const t of themes) {
+          cmds.push({
+            id: `theme:${t}`,
+            title: `Theme: ${themeLabels[t]}`,
+            group: 'Theme',
             scope: 'actions',
-            keywords: ['action', 'item', action.type],
-            iconName: meta.icon,
-            iconColor: meta.color,
-            run: () => void invokeAction(action.id),
+            keywords: ['theme', 'appearance', t],
+            icon: IconPalette,
+            run: () => setTheme(t),
+          })
+        }
+
+        // One row per application settings section — titled the way the nav
+        // panel itself labels them, so the palette and Settings agree.
+        for (const section of applicationSettingsSections) {
+          const meta = applicationSettingsSectionMeta[section]
+          cmds.push({
+            id: `settings:${section}`,
+            title: meta.label,
+            group: 'Settings',
+            scope: 'goto',
+            kind: 'settings',
+            keywords: ['settings'],
+            icon: meta.icon,
+            run: () => void router.push({ name: 'application-settings', params: { section } }),
           })
         }
       }
 
-      if (contextActive('feed') && selectedItemIDs.value.length > 0) {
+      if (hubActive.value) {
+        // The selected item's configured actions, under its own reference — the
+        // same set the detail pane draws as cards. Running one from here goes
+        // through invokeAction, so an action that declares inputs opens its form
+        // and an interactive launch-session opens the session dialog, exactly as
+        // a card click does.
+        if (contextActive('feed') && selectedItem.value) {
+          const itemGroup = containerLine(selectedItem.value) || 'Item'
+          for (const action of actions.value) {
+            const meta = actionTypeMeta(action.type)
+            cmds.push({
+              id: `item:action:${action.id}`,
+              title: action.label,
+              group: itemGroup,
+              order: -3,
+              scope: 'actions',
+              keywords: ['action', 'item', action.type],
+              iconName: meta.icon,
+              iconColor: meta.color,
+              run: () => void invokeAction(action.id),
+            })
+          }
+        }
+
+        if (contextActive('feed') && selectedItemIDs.value.length > 0) {
+          cmds.push({
+            id: 'feed:create-session-from-selection',
+            title: 'Create session from selected items…',
+            group: 'Feeds',
+            scope: 'actions',
+            keywords: ['session', 'multiple', 'bulk', 'selected'],
+            icon: IconSquarePlus,
+            run: () => void openSelectedItemsSession(),
+          })
+        }
+
         cmds.push({
-          id: 'feed:create-session-from-selection',
-          title: 'Create session from selected items…',
-          group: 'Feeds',
+          id: 'profile:new',
+          title: 'New profile…',
+          group: 'Profiles',
           scope: 'actions',
-          keywords: ['session', 'multiple', 'bulk', 'selected'],
-          icon: IconSquarePlus,
-          run: () => void openSelectedItemsSession(),
+          keywords: ['workspace', 'create'],
+          run: openNewProfile,
+        })
+
+        // View — enter/exit the flows canvas for the active profile. The canvas
+        // is profile-bound, so this and the node rows below stay hub-gated.
+        cmds.push({
+          id: 'flow:edit',
+          title: flowsActive.value ? 'Back to feed' : 'Edit flow…',
+          group: 'View',
+          scope: 'actions',
+          keywords: ['flows', 'pipeline', 'nodes', 'canvas', 'editor'],
+          icon: IconWorkflow,
+          run: () => {
+            flowsActive.value ? requestExitFlows() : openFlows()
+          },
         })
       }
 
-      cmds.push({
-        id: 'profile:new',
-        title: 'New profile…',
-        group: 'Profiles',
-        scope: 'actions',
-        keywords: ['workspace', 'create'],
-        run: openNewProfile,
-      })
-
-      // View — enter/exit the flows canvas for the active profile. The canvas
-      // is profile-bound, so this and the node rows below stay hub-gated.
-      cmds.push({
-        id: 'flow:edit',
-        title: flowsActive.value ? 'Back to feed' : 'Edit flow…',
-        group: 'View',
-        scope: 'actions',
-        keywords: ['flows', 'pipeline', 'nodes', 'canvas', 'editor'],
-        icon: IconWorkflow,
-        run: () => { flowsActive.value ? requestExitFlows() : openFlows() },
-      })
-
-    }
-
-    // The palette is the only way in outside a Vite build, where the dev strip
-    // carries the link.
-    if (devToolsEnabled.value) {
-      cmds.push({
-        id: 'dev:open',
-        title: 'Open developer tools',
-        group: 'View',
-        scope: 'goto',
-        keywords: ['runtime', 'performance', 'memory', 'cpu', 'diagnostics'],
-        icon: IconGauge,
-        run: () => { void router.push({ name: 'dev' }) },
-      })
-    }
-
-    // Session attach rows, grouped the way the sidebar tree groups them
-    // (pinned chats, scratch, then one per repo). The route is the attach
-    // state in and out of Code alike, so the row on screen already skips
-    // itself.
-    for (const group of terminalGroups.value) {
-      for (const row of group.sessions) {
-        if (row.slug === onScreenSessionSlug.value) continue
+      // The palette is the only way in outside a Vite build, where the dev strip
+      // carries the link.
+      if (devToolsEnabled.value) {
         cmds.push({
-          id: `terminal:attach:${row.slug}`,
-          title: row.name,
-          group: group.name,
+          id: 'dev:open',
+          title: 'Open developer tools',
+          group: 'View',
           scope: 'goto',
-          kind: 'session',
-          keywords: [row.slug, group.name, 'session', 'attach', 'switch', 'open'],
-          icon: IconTerminal,
-          run: () => void router.push({ name: 'terminal', params: { slug: row.slug } }),
+          keywords: ['runtime', 'performance', 'memory', 'cpu', 'diagnostics'],
+          icon: IconGauge,
+          run: () => {
+            void router.push({ name: 'dev' })
+          },
         })
       }
-    }
 
-    // Window rows for whichever session is attached (the module projection
-    // TerminalMode writes, since the live tab list is otherwise
-    // component-local). Hints carry the numbered jump chords the keymap
-    // already binds to each position in the strip.
-    if (attachedTerminal.value) {
-      const { slug, name, windows } = attachedTerminal.value
-      windows.forEach((win, index) => {
-        cmds.push({
-          id: `terminal:window:${win.windowId}`,
-          title: win.name,
-          group: name,
-          scope: 'goto',
-          kind: 'window',
-          keywords: ['window', 'tab', 'jump', 'switch'],
-          icon: IconTerminal,
-          hint: hintFor(terminalWindowCommandID(index + 1)),
-          run: () => void router.push({ name: 'terminal', params: { slug }, query: { window: win.windowId } }),
+      // Session attach rows, grouped the way the sidebar tree groups them
+      // (pinned chats, scratch, then one per repo). The route is the attach
+      // state in and out of Code alike, so the row on screen already skips
+      // itself.
+      for (const group of terminalGroups.value) {
+        for (const row of group.sessions) {
+          if (row.slug === onScreenSessionSlug.value) continue
+          cmds.push({
+            id: `terminal:attach:${row.slug}`,
+            title: row.name,
+            group: group.name,
+            scope: 'goto',
+            kind: 'session',
+            keywords: [row.slug, group.name, 'session', 'attach', 'switch', 'open'],
+            icon: IconTerminal,
+            run: () => void router.push({ name: 'terminal', params: { slug: row.slug } }),
+          })
+        }
+      }
+
+      // Window rows for whichever session is attached (the module projection
+      // TerminalMode writes, since the live tab list is otherwise
+      // component-local). Hints carry the numbered jump chords the keymap
+      // already binds to each position in the strip.
+      if (attachedTerminal.value) {
+        const { slug, name, windows } = attachedTerminal.value
+        windows.forEach((win, index) => {
+          cmds.push({
+            id: `terminal:window:${win.windowId}`,
+            title: win.name,
+            group: name,
+            scope: 'goto',
+            kind: 'window',
+            keywords: ['window', 'tab', 'jump', 'switch'],
+            icon: IconTerminal,
+            hint: hintFor(terminalWindowCommandID(index + 1)),
+            run: () => void router.push({ name: 'terminal', params: { slug }, query: { window: win.windowId } }),
+          })
         })
-      })
-    }
+      }
 
-    // Chat rows — every recent session across every workspace; empty and
-    // absent wherever the Agents area itself is unavailable. Grouped by
-    // workspace, at the order the old flat 'Chats' group held (ahead of the
-    // profile's Feeds/Trash group and everything below it).
-    for (const session of chatRecents.value) {
-      cmds.push({
-        id: `chat:${session.id}`,
-        title: session.name,
-        group: workspaceNameByDir.value.get(session.workspace) || session.workspace,
-        order: -2,
-        scope: 'goto',
-        kind: 'chat',
-        keywords: ['chat'],
-        icon: IconMessagesSquare,
-        run: async () => {
-          await router.push({ name: 'agents', params: { workspace: session.workspace }, query: { chat: String(session.id) } })
-          await nextTick()
-          runCommand('agents.focus-pane')
-        },
-      })
-    }
+      // Chat rows — every recent session across every workspace; empty and
+      // absent wherever the Agents area itself is unavailable. Grouped by
+      // workspace, at the order the old flat 'Chats' group held (ahead of the
+      // profile's Feeds/Trash group and everything below it).
+      for (const session of chatRecents.value) {
+        cmds.push({
+          id: `chat:${session.id}`,
+          title: session.name,
+          group: workspaceNameByDir.value.get(session.workspace) || session.workspace,
+          order: -2,
+          scope: 'goto',
+          kind: 'chat',
+          keywords: ['chat'],
+          icon: IconMessagesSquare,
+          run: async () => {
+            await router.push({
+              name: 'agents',
+              params: { workspace: session.workspace },
+              query: { chat: String(session.id) },
+            })
+            await nextTick()
+            runCommand('agents.focus-pane')
+          },
+        })
+      }
 
-    return cmds
-  }))
+      return cmds
+    }),
+  )
 
   const { open: paletteOpen, setScope, visibleScopes } = useCommandPalette()
 

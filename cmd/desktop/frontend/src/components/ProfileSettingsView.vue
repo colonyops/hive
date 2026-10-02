@@ -11,23 +11,26 @@ import { fileToImageBase64, ImageUploadError, imageUploadAccept } from '../lib/i
 import type { Profile } from '../types/feed'
 import type { ProfileSettingsSection } from '../router'
 
-const props = withDefaults(defineProps<{
-  profile: Profile
-  activeSection: ProfileSettingsSection
-  renaming?: boolean
-  renameError?: string | null
-  toggling?: boolean
-  toggleError?: string | null
-  settingImage?: boolean
-  imageError?: string | null
-}>(), {
-  renaming: false,
-  renameError: null,
-  toggling: false,
-  toggleError: null,
-  settingImage: false,
-  imageError: null,
-})
+const props = withDefaults(
+  defineProps<{
+    profile: Profile
+    activeSection: ProfileSettingsSection
+    renaming?: boolean
+    renameError?: string | null
+    toggling?: boolean
+    toggleError?: string | null
+    settingImage?: boolean
+    imageError?: string | null
+  }>(),
+  {
+    renaming: false,
+    renameError: null,
+    toggling: false,
+    toggleError: null,
+    settingImage: false,
+    imageError: null,
+  },
+)
 const emit = defineEmits<{
   close: []
   delete: []
@@ -40,9 +43,12 @@ const emit = defineEmits<{
 
 const name = ref(props.profile.name)
 
-watch(() => [props.profile.id, props.profile.name], () => {
-  name.value = props.profile.name
-})
+watch(
+  () => [props.profile.id, props.profile.name],
+  () => {
+    name.value = props.profile.name
+  },
+)
 
 function submitRename(): void {
   const trimmed = name.value.trim()
@@ -58,7 +64,12 @@ const displayImageError = computed(() => localImageError.value ?? props.imageErr
 
 // Re-picking is cleared per selection so an old local error never lingers over
 // a fresh attempt.
-watch(() => props.profile.id, () => { localImageError.value = null })
+watch(
+  () => props.profile.id,
+  () => {
+    localImageError.value = null
+  },
+)
 
 function pickImage(): void {
   if (props.settingImage) return
@@ -103,42 +114,64 @@ async function onImageChange(event: Event): Promise<void> {
       />
     </template>
     <template #header-title>
-      <span class="text-[13px] font-semibold text-text">{{ props.activeSection === 'general' ? 'General' : 'Danger zone' }}</span>
+      <span class="text-[13px] font-semibold text-text">{{
+        props.activeSection === 'general' ? 'General' : 'Danger zone'
+      }}</span>
     </template>
 
     <SettingsPage>
       <template v-if="props.activeSection === 'general'">
-          <div class="rounded-lg border border-border bg-raised p-4">
-            <div class="text-[13px] font-medium text-text">Profile image</div>
-            <p class="mt-1 text-xs leading-relaxed text-text-3">Shown in the sidebar rail. Square images look best — larger images are cropped to a square and downscaled.</p>
-            <div class="mt-3 flex items-center gap-4">
-              <div class="flex size-[52px] shrink-0 items-center justify-center overflow-hidden rounded-[12px] border border-card bg-chip font-mono text-lg font-semibold text-text-2" data-testid="profile-settings-image-preview">
-                <img v-if="props.profile.image" :src="props.profile.image" alt="" class="size-full object-cover">
-                <template v-else>{{ props.profile.letter }}</template>
-              </div>
-              <div class="flex flex-wrap items-center gap-2">
-                <input ref="fileInput" type="file" :accept="imageUploadAccept" class="hidden" data-testid="profile-settings-image-input" @change="onImageChange">
-                <BaseButton
-                  variant="secondary"
-                  size="sm"
-                  :busy="props.settingImage"
-                  data-testid="profile-settings-image-upload"
-                  @click="pickImage"
-                >{{ props.profile.image ? 'Replace image' : 'Upload image' }}</BaseButton>
-                <BaseButton
-                  v-if="props.profile.image"
-                  variant="ghost"
-                  size="sm"
-                  :disabled="props.settingImage"
-                  data-testid="profile-settings-image-remove"
-                  @click="emit('clear-image')"
-                >Remove</BaseButton>
-              </div>
+        <div class="rounded-lg border border-border bg-raised p-4">
+          <div class="text-[13px] font-medium text-text">Profile image</div>
+          <p class="mt-1 text-xs leading-relaxed text-text-3">
+            Shown in the sidebar rail. Square images look best — larger images are cropped to a square and downscaled.
+          </p>
+          <div class="mt-3 flex items-center gap-4">
+            <div
+              class="flex size-[52px] shrink-0 items-center justify-center overflow-hidden rounded-[12px] border border-card bg-chip font-mono text-lg font-semibold text-text-2"
+              data-testid="profile-settings-image-preview"
+            >
+              <img v-if="props.profile.image" :src="props.profile.image" alt="" class="size-full object-cover" />
+              <template v-else>{{ props.profile.letter }}</template>
             </div>
-            <p v-if="displayImageError" class="mt-2 text-xs text-severity-error" data-testid="profile-settings-image-error">{{ displayImageError }}</p>
+            <div class="flex flex-wrap items-center gap-2">
+              <input
+                ref="fileInput"
+                type="file"
+                :accept="imageUploadAccept"
+                class="hidden"
+                data-testid="profile-settings-image-input"
+                @change="onImageChange"
+              />
+              <BaseButton
+                variant="secondary"
+                size="sm"
+                :busy="props.settingImage"
+                data-testid="profile-settings-image-upload"
+                @click="pickImage"
+                >{{ props.profile.image ? 'Replace image' : 'Upload image' }}</BaseButton
+              >
+              <BaseButton
+                v-if="props.profile.image"
+                variant="ghost"
+                size="sm"
+                :disabled="props.settingImage"
+                data-testid="profile-settings-image-remove"
+                @click="emit('clear-image')"
+                >Remove</BaseButton
+              >
+            </div>
           </div>
+          <p
+            v-if="displayImageError"
+            class="mt-2 text-xs text-severity-error"
+            data-testid="profile-settings-image-error"
+          >
+            {{ displayImageError }}
+          </p>
+        </div>
 
-          <form class="rounded-lg border border-border bg-raised p-4" @submit.prevent="submitRename">
+        <form class="rounded-lg border border-border bg-raised p-4" @submit.prevent="submitRename">
           <label for="profile-settings-name" class="text-[12.5px] text-text-3">Profile name</label>
           <div class="mt-2 flex items-center gap-2.5">
             <input
@@ -148,21 +181,32 @@ async function onImageChange(event: Event): Promise<void> {
               class="min-w-0 flex-1 rounded-lg border border-strong bg-app px-3 py-2 text-[13.5px] text-text outline-none focus:border-accent disabled:opacity-60"
               :disabled="props.renaming"
               data-testid="profile-settings-name"
-            >
+            />
             <BaseButton
               type="submit"
               size="sm"
               :busy="props.renaming"
               :disabled="!name.trim() || name.trim() === props.profile.name"
               data-testid="profile-settings-save-name"
-            >{{ props.renaming ? 'Saving…' : 'Save' }}</BaseButton>
+              >{{ props.renaming ? 'Saving…' : 'Save' }}</BaseButton
+            >
           </div>
-          <p v-if="props.renameError" class="mt-2 text-xs text-severity-error" data-testid="profile-settings-rename-error">{{ props.renameError }}</p>
-          <div class="mt-3 border-t border-border pt-3 text-xs text-text-3" data-testid="profile-settings-sources">{{ props.profile.sourceSummary }}</div>
+          <p
+            v-if="props.renameError"
+            class="mt-2 text-xs text-severity-error"
+            data-testid="profile-settings-rename-error"
+          >
+            {{ props.renameError }}
+          </p>
+          <div class="mt-3 border-t border-border pt-3 text-xs text-text-3" data-testid="profile-settings-sources">
+            {{ props.profile.sourceSummary }}
+          </div>
           <div class="mt-4 flex items-start justify-between gap-5 border-t border-border pt-4">
             <div>
               <div class="text-[13px] font-medium text-text">Profile polling</div>
-              <p class="mt-1 text-xs leading-relaxed text-text-3">Disabled profiles keep their existing feed items but stop polling and running their flow.</p>
+              <p class="mt-1 text-xs leading-relaxed text-text-3">
+                Disabled profiles keep their existing feed items but stop polling and running their flow.
+              </p>
             </div>
             <AppSwitch
               :model-value="props.profile.enabled"
@@ -173,22 +217,29 @@ async function onImageChange(event: Event): Promise<void> {
               @update:model-value="emit('toggle-enabled', $event)"
             />
           </div>
-          <p v-if="props.toggleError" class="mt-2 text-xs text-severity-error" data-testid="profile-settings-toggle-error">{{ props.toggleError }}</p>
-          </form>
+          <p
+            v-if="props.toggleError"
+            class="mt-2 text-xs text-severity-error"
+            data-testid="profile-settings-toggle-error"
+          >
+            {{ props.toggleError }}
+          </p>
+        </form>
       </template>
 
       <div v-else class="rounded-[11px] border border-severity-error/35 bg-raised p-4">
-          <div class="text-[14px] font-semibold text-text">Delete profile</div>
-          <p class="mt-1.5 text-xs leading-relaxed text-text-3">
-            Permanently remove this profile, its flow file, inbox items, and membership claims.
-          </p>
-          <BaseButton
-            variant="danger"
-            size="sm"
-            class="mt-4"
-            data-testid="profile-settings-delete"
-            @click="emit('delete')"
-          ><template #icon><IconTrash2 class="size-3.5" /></template>Delete profile</BaseButton>
+        <div class="text-[14px] font-semibold text-text">Delete profile</div>
+        <p class="mt-1.5 text-xs leading-relaxed text-text-3">
+          Permanently remove this profile, its flow file, inbox items, and membership claims.
+        </p>
+        <BaseButton
+          variant="danger"
+          size="sm"
+          class="mt-4"
+          data-testid="profile-settings-delete"
+          @click="emit('delete')"
+          ><template #icon><IconTrash2 class="size-3.5" /></template>Delete profile</BaseButton
+        >
       </div>
     </SettingsPage>
   </SettingsLayout>

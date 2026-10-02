@@ -327,7 +327,13 @@ function nodeAt(worldX: number, worldY: number, margin = 0): FlowNode | null {
   for (const node of props.flow.nodes) {
     const pos = positions.value.get(node.id)
     if (!pos) continue
-    if (worldX >= pos.x - margin && worldX <= pos.x + CARD_WIDTH + margin && worldY >= pos.y - margin && worldY <= pos.y + CARD_HEIGHT + margin) return node
+    if (
+      worldX >= pos.x - margin &&
+      worldX <= pos.x + CARD_WIDTH + margin &&
+      worldY >= pos.y - margin &&
+      worldY <= pos.y + CARD_HEIGHT + margin
+    )
+      return node
   }
   return null
 }
@@ -496,7 +502,12 @@ function zoomOut() {
   zoom.value = Math.max(0.2, Math.round((zoom.value - 0.1) * 100) / 100)
 }
 
-interface BBox { minX: number; minY: number; maxX: number; maxY: number }
+interface BBox {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
 
 function bboxOf(ids: string[]): BBox | null {
   let minX = Infinity
@@ -546,9 +557,13 @@ function centerOnNode(id: string) {
   fitToBBox(bbox)
 }
 
-watch(() => props.focusNodeId, (id) => {
-  if (id) centerOnNode(id)
-}, { immediate: true })
+watch(
+  () => props.focusNodeId,
+  (id) => {
+    if (id) centerOnNode(id)
+  },
+  { immediate: true },
+)
 
 defineExpose({ zoom, zoomIn, zoomOut, fit })
 
@@ -620,11 +635,19 @@ onBeforeUnmount(() => {
     @dragleave="onDragLeave"
     @drop.prevent="onDrop"
   >
-    <div v-if="flow.nodes.length === 0" class="pointer-events-none flex h-full items-center justify-center px-8 text-center text-[13px] text-text-4" data-testid="canvas-empty">
+    <div
+      v-if="flow.nodes.length === 0"
+      class="pointer-events-none flex h-full items-center justify-center px-8 text-center text-[13px] text-text-4"
+      data-testid="canvas-empty"
+    >
       Add a node from the palette to get started. Drag from an output port to an input port to wire nodes together.
     </div>
 
-    <div class="absolute left-0 top-0 origin-top-left" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }" data-testid="canvas-content">
+    <div
+      class="absolute left-0 top-0 origin-top-left"
+      :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }"
+      data-testid="canvas-content"
+    >
       <svg class="pointer-events-none absolute left-0 top-0 h-0 w-0 overflow-visible">
         <g v-for="(wire, i) in flow.wires" :key="i" class="wire-group">
           <path
@@ -636,13 +659,7 @@ onBeforeUnmount(() => {
             stroke-linejoin="round"
             data-testid="flow-wire"
           />
-          <path
-            :d="wirePath(wire)"
-            fill="none"
-            stroke="transparent"
-            stroke-width="22"
-            class="wire-hitbox"
-          />
+          <path :d="wirePath(wire)" fill="none" stroke="transparent" stroke-width="22" class="wire-hitbox" />
           <g
             :transform="`translate(${wireMidpoint(wire).x}, ${wireMidpoint(wire).y})`"
             class="wire-delete"
@@ -676,7 +693,10 @@ onBeforeUnmount(() => {
         @pointerdown="onNodePointerDown($event, node)"
         @dblclick="onNodeDblClick(node)"
       >
-        <div class="relative flex h-[52px] overflow-hidden rounded-[2px] bg-action-card active:cursor-grabbing" :style="{ boxShadow: cardShadow(node) }">
+        <div
+          class="relative flex h-[52px] overflow-hidden rounded-[2px] bg-action-card active:cursor-grabbing"
+          :style="{ boxShadow: cardShadow(node) }"
+        >
           <div class="w-1.5 shrink-0" :style="{ background: capColor(node) }" />
           <div class="flex min-w-0 flex-1 items-center gap-2.5 px-[11px]">
             <span
@@ -688,7 +708,9 @@ onBeforeUnmount(() => {
               <component :is="defFor(node)?.glyph" :class="isLogoMark(node) ? 'size-full' : 'size-3.5'" />
             </span>
             <div class="min-w-0 flex-1">
-              <div class="truncate text-[12.5px] font-semibold text-text" data-testid="flow-node-title">{{ titleFor(node) }}</div>
+              <div class="truncate text-[12.5px] font-semibold text-text" data-testid="flow-node-title">
+                {{ titleFor(node) }}
+              </div>
               <div class="truncate font-mono text-[10.5px] text-text-3">{{ node.type }}</div>
             </div>
           </div>
@@ -718,11 +740,22 @@ onBeforeUnmount(() => {
           @pointerdown.stop.prevent="onOutputPortPointerDown($event, node, p)"
         />
 
-        <div v-if="wireDraft && hoverTargetId === node.id" class="drop-hint" data-testid="wire-drop-hint">drop to connect</div>
+        <div v-if="wireDraft && hoverTargetId === node.id" class="drop-hint" data-testid="wire-drop-hint">
+          drop to connect
+        </div>
 
         <div class="mt-1.5 flex items-center gap-1.5 pl-[3px]">
-          <span class="size-2 shrink-0 rounded-full" :class="{ 'hive-pulse': statusDotPulses(node) }" :style="{ background: statusDotColor(node) }" />
-          <span class="truncate font-mono text-[10.5px]" :style="{ color: statusTextColor(node) }" data-testid="flow-node-status">{{ statusText(node) }}</span>
+          <span
+            class="size-2 shrink-0 rounded-full"
+            :class="{ 'hive-pulse': statusDotPulses(node) }"
+            :style="{ background: statusDotColor(node) }"
+          />
+          <span
+            class="truncate font-mono text-[10.5px]"
+            :style="{ color: statusTextColor(node) }"
+            data-testid="flow-node-status"
+            >{{ statusText(node) }}</span
+          >
         </div>
       </div>
     </div>

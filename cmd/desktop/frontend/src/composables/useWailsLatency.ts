@@ -1,5 +1,8 @@
 import { ref } from 'vue'
-import { Echo, Ping } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/devtoolsservice'
+import {
+  Echo,
+  Ping,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/devtoolsservice'
 
 /** Calls thrown away before timing starts, so a cold first call is not measured. */
 const WARMUP = 5

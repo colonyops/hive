@@ -215,8 +215,11 @@ let nextUID = 1
 
 function rememberedVote(metrics: string): TerminalSize | null {
   try {
-    const stored = JSON.parse(localStorage.getItem(VOTE_KEY) ?? 'null') as
-      { cols?: number; rows?: number; metrics?: string } | null
+    const stored = JSON.parse(localStorage.getItem(VOTE_KEY) ?? 'null') as {
+      cols?: number
+      rows?: number
+      metrics?: string
+    } | null
     if (!stored || stored.metrics !== metrics) return null
     if (!validDimension(stored.cols) || !validDimension(stored.rows)) return null
     return { cols: stored.cols, rows: stored.rows }
@@ -331,7 +334,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
 
   function activePaneId(): string {
     const tab = findTab(activeWindowId.value)
-    return tab ? activePaneOf(tab)?.paneId ?? '' : ''
+    return tab ? (activePaneOf(tab)?.paneId ?? '') : ''
   }
 
   function createTab(state: WindowState): TerminalWindowTab {
@@ -352,27 +355,34 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   }
 
   function createPane(windowId: string, paneId: string, grid: TerminalSize | undefined): TerminalPane {
-    const term = markRaw(new Terminal({
-      fontFamily: terminalFontStack(fontFamily.value),
-      fontSize: fontSizePx.value,
-      fontWeight: fontWeight.value,
-      fontWeightBold: fontWeightBold.value,
-      lineHeight: lineHeight.value,
-      letterSpacing: letterSpacing.value,
-      linkHandler,
-      scrollback: 5000,
-      theme: xtermTheme(),
-      // registerDecoration is still proposed API, and every find highlights
-      // through it — without this the first findNext throws and search is dead.
-      allowProposedApi: true,
-    }))
+    const term = markRaw(
+      new Terminal({
+        fontFamily: terminalFontStack(fontFamily.value),
+        fontSize: fontSizePx.value,
+        fontWeight: fontWeight.value,
+        fontWeightBold: fontWeightBold.value,
+        lineHeight: lineHeight.value,
+        letterSpacing: letterSpacing.value,
+        linkHandler,
+        scrollback: 5000,
+        theme: xtermTheme(),
+        // registerDecoration is still proposed API, and every find highlights
+        // through it — without this the first findNext throws and search is dead.
+        allowProposedApi: true,
+      }),
+    )
     term.loadAddon(markRaw(new WebLinksAddon((_event, uri) => openLink(uri))))
     const finder = markRaw(new SearchAddon())
     term.loadAddon(finder)
-    const output = markRaw(new TerminalOutputWriter((data) => {
-      if (painted.value) term.write(data)
-      else term.write(data, () => { painted.value = true })
-    }))
+    const output = markRaw(
+      new TerminalOutputWriter((data) => {
+        if (painted.value) term.write(data)
+        else
+          term.write(data, () => {
+            painted.value = true
+          })
+      }),
+    )
     // Before any output reaches it: xterm re-wraps its buffer on resize, so a
     // grid sized after the first paint mangles the snapshot it just drew.
     term.resize(grid?.cols || unreportedSize().cols, grid?.rows || unreportedSize().rows)
@@ -506,8 +516,12 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     runSearch('incremental')
   }
 
-  function findNext(): void { runSearch('next') }
-  function findPrevious(): void { runSearch('previous') }
+  function findNext(): void {
+    runSearch('next')
+  }
+  function findPrevious(): void {
+    runSearch('previous')
+  }
 
   // 'incremental' keeps the viewport on the match it is already showing while
   // the query is still being typed; the other two are the user stepping.
@@ -569,9 +583,13 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       capture: () => {
         const capturedSocket = socket
         return {
-          current: () => socket === capturedSocket && capturedSocket?.readyState === WebSocket.OPEN && panes.get(paneId) === state,
+          current: () =>
+            socket === capturedSocket && capturedSocket?.readyState === WebSocket.OPEN && panes.get(paneId) === state,
           paste: (text, signal) => pasteTerminalImage(slug, paneId, text, signal),
-          focus: () => { void selectPane(paneId); state.term.focus() },
+          focus: () => {
+            void selectPane(paneId)
+            state.term.focus()
+          },
         }
       },
     })
@@ -585,7 +603,11 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       // the keyboard is already in that window — the pane a split just made,
       // which tmux has made active. One that opens under a keyboard elsewhere
       // leaves it there.
-      if (found.tab.activePane === paneId && paneMayAutoFocus.value && (found.tab.panes.length === 1 || focusIsInside(found.tab.windowId))) {
+      if (
+        found.tab.activePane === paneId &&
+        paneMayAutoFocus.value &&
+        (found.tab.panes.length === 1 || focusIsInside(found.tab.windowId))
+      ) {
         state.term.focus()
       }
     }
@@ -638,9 +660,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       if (state.windowId !== activeWindowId.value) return 2
       return state.rendered ? 0 : 1
     }
-    return [...panes.values()]
-      .filter((state) => state.host)
-      .sort((a, b) => rank(a) - rank(b))
+    return [...panes.values()].filter((state) => state.host).sort((a, b) => rank(a) - rank(b))
   }
 
   // A pane inside a display:none subtree measures nothing, and that is
@@ -648,7 +668,9 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   function warnUnmeasuredCell(state: PaneRuntime): void {
     if (warnedUnmeasuredCell || !state.term.element || !state.host?.clientWidth) return
     warnedUnmeasuredCell = true
-    console.warn('terminalGrid.ts: an opened terminal reports no cell; xterm may have moved _core._renderService.dimensions')
+    console.warn(
+      'terminalGrid.ts: an opened terminal reports no cell; xterm may have moved _core._renderService.dimensions',
+    )
   }
 
   // Vote the whole window box against shared cell metrics; tmux remains
@@ -697,9 +719,8 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       return
     }
     const granted = { cols: tab.width, rows: tab.height }
-    sizeConstraint.value = granted.cols === vote.cols && granted.rows === vote.rows
-      ? null
-      : { voted: { ...vote }, granted }
+    sizeConstraint.value =
+      granted.cols === vote.cols && granted.rows === vote.rows ? null : { voted: { ...vote }, granted }
   }
 
   // Dismissal lasts as long as this attach: the constraint is a property of the
@@ -835,7 +856,9 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   function openSocket(): void {
     socket = client.openStream(slug)
     socket.binaryType = 'arraybuffer'
-    socket.onopen = () => { if (!disposed) status.value = 'live' }
+    socket.onopen = () => {
+      if (!disposed) status.value = 'live'
+    }
     socket.onmessage = (event: MessageEvent) => handleFrame(event.data)
     socket.onclose = () => dropped()
     socket.onerror = () => dropped()
@@ -1057,12 +1080,18 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     try {
       const { windows: ordered } = await client.moveWindow(slug, windowId, position)
       if (disposed) return
-      tabs.value = applyOrder(tabs.value, ordered.map((window) => window.windowId))
+      tabs.value = applyOrder(
+        tabs.value,
+        ordered.map((window) => window.windowId),
+      )
     } catch (e) {
       if (disposed) return
       // The order goes back, not the tab set: a window opened or closed while
       // the move was in flight is tmux's news, and the refusal is not about it.
-      tabs.value = applyOrder(tabs.value, before.map((tab) => tab.windowId))
+      tabs.value = applyOrder(
+        tabs.value,
+        before.map((tab) => tab.windowId),
+      )
       actionError.value = message(e, 'Could not move that window.')
     }
   }
@@ -1149,12 +1178,44 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   }
 
   return {
-    tabs, activeWindowId, status, painted, endReason, error, actionError, sizeConstraint, dismissSizeConstraint,
-    outputDropped, dismissOutputDropped, cell,
-    search, openSearch, closeSearch, setSearchQuery, findNext, findPrevious,
-    start, reconnect, select, newWindow, newAgentWindow, closeWindow, rename, moveWindow, attachTab, attachPane, disposeTab,
-    selectPane, splitPane, closePane, zoomPane, focusPane, resizePane,
-    focusActive, scrollToBottom, dispose,
+    tabs,
+    activeWindowId,
+    status,
+    painted,
+    endReason,
+    error,
+    actionError,
+    sizeConstraint,
+    dismissSizeConstraint,
+    outputDropped,
+    dismissOutputDropped,
+    cell,
+    search,
+    openSearch,
+    closeSearch,
+    setSearchQuery,
+    findNext,
+    findPrevious,
+    start,
+    reconnect,
+    select,
+    newWindow,
+    newAgentWindow,
+    closeWindow,
+    rename,
+    moveWindow,
+    attachTab,
+    attachPane,
+    disposeTab,
+    selectPane,
+    splitPane,
+    closePane,
+    zoomPane,
+    focusPane,
+    resizePane,
+    focusActive,
+    scrollToBottom,
+    dispose,
   }
 }
 
@@ -1179,8 +1240,9 @@ function reorderTabs<T extends { windowId: string }>(tabs: T[], windowId: string
  */
 function applyOrder<T extends { windowId: string }>(tabs: T[], order: string[]): T[] {
   const rank = new Map(order.map((windowId, index) => [windowId, index]))
-  return [...tabs].sort((a, b) =>
-    (rank.get(a.windowId) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.windowId) ?? Number.MAX_SAFE_INTEGER))
+  return [...tabs].sort(
+    (a, b) => (rank.get(a.windowId) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.windowId) ?? Number.MAX_SAFE_INTEGER),
+  )
 }
 
 // The commands App.vue runs over a focused pane on the escape chord — the
@@ -1220,7 +1282,9 @@ function loadRenderer(state: PaneRuntime): void {
   claimAtlasRenderer(
     state.term,
     (addon) => state.disposers.push(addon),
-    (rendered) => { state.rendered = rendered },
+    (rendered) => {
+      state.rendered = rendered
+    },
   )
 }
 

@@ -22,7 +22,10 @@ const choices = [
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.Limits.mockResolvedValue({ maxFeeds: 3, defaultItemLimit: 3, maxItemLimit: 10 })
-  mocks.Pins.mockResolvedValue([{ feed: 'work/reviews', limit: 5 }, { feed: 'oss/issues', limit: 3 }])
+  mocks.Pins.mockResolvedValue([
+    { feed: 'work/reviews', limit: 5 },
+    { feed: 'oss/issues', limit: 3 },
+  ])
   mocks.FeedChoices.mockResolvedValue(choices)
   mocks.SetPins.mockResolvedValue(undefined)
 })
@@ -68,11 +71,17 @@ describe('MenuBarSettingsView', () => {
 
     await wrapper.get('[data-testid="menubar-pin-1-up"]').trigger('click')
     await flushPromises()
-    expect(mocks.SetPins).toHaveBeenLastCalledWith([{ feed: 'oss/issues', limit: 3 }, { feed: 'work/reviews', limit: 5 }])
+    expect(mocks.SetPins).toHaveBeenLastCalledWith([
+      { feed: 'oss/issues', limit: 3 },
+      { feed: 'work/reviews', limit: 5 },
+    ])
 
     selectIn(wrapper, 'menubar-pin-0-limit').vm.$emit('update:modelValue', '8')
     await flushPromises()
-    expect(mocks.SetPins).toHaveBeenLastCalledWith([{ feed: 'oss/issues', limit: 8 }, { feed: 'work/reviews', limit: 5 }])
+    expect(mocks.SetPins).toHaveBeenLastCalledWith([
+      { feed: 'oss/issues', limit: 8 },
+      { feed: 'work/reviews', limit: 5 },
+    ])
 
     await wrapper.get('[data-testid="menubar-pin-0-remove"]').trigger('click')
     await flushPromises()

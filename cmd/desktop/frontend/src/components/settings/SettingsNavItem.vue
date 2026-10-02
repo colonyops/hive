@@ -1,22 +1,23 @@
 <script setup lang="ts">
 import { computed, type Component } from 'vue'
 
-const props = withDefaults(defineProps<{
-  active: boolean
-  icon?: Component
-  label: string
-  tone?: 'default' | 'danger'
-  testid?: string
-}>(), {
-  tone: 'default',
-})
+const props = withDefaults(
+  defineProps<{
+    active: boolean
+    icon?: Component
+    label: string
+    tone?: 'default' | 'danger'
+    testid?: string
+  }>(),
+  {
+    tone: 'default',
+  },
+)
 const emit = defineEmits<{ select: [] }>()
 
 const stateClasses = computed(() => {
   if (!props.active) return 'text-text-2 hover:bg-chip hover:text-text'
-  return props.tone === 'danger'
-    ? 'bg-hover font-medium text-severity-error'
-    : 'bg-hover font-medium text-accent'
+  return props.tone === 'danger' ? 'bg-hover font-medium text-severity-error' : 'bg-hover font-medium text-accent'
 })
 </script>
 
@@ -29,5 +30,10 @@ const stateClasses = computed(() => {
     :title="props.label"
     :data-testid="props.testid"
     @click="emit('select')"
-  ><component :is="props.icon" v-if="props.icon" class="size-3.5 shrink-0" /><span :class="[props.icon ? 'hidden' : '', '@[700px]/settings:inline']">{{ props.label }}</span></button>
+  >
+    <component :is="props.icon" v-if="props.icon" class="size-3.5 shrink-0" /><span
+      :class="[props.icon ? 'hidden' : '', '@[700px]/settings:inline']"
+      >{{ props.label }}</span
+    >
+  </button>
 </template>

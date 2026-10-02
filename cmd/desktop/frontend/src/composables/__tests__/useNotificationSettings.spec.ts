@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  resetNotificationSettingsForTests,
-  useNotificationSettings,
-} from '../useNotificationSettings'
+import { resetNotificationSettingsForTests, useNotificationSettings } from '../useNotificationSettings'
 
 const mocks = vi.hoisted(() => ({
   NotificationSettings: vi.fn(),
@@ -76,9 +73,12 @@ describe('useNotificationSettings', () => {
 
   it('does not let an initial refresh overwrite a newer optimistic toggle', async () => {
     let resolveSettings: (settings: typeof enabledSettings) => void
-    mocks.NotificationSettings.mockImplementationOnce(() => new Promise(resolve => {
-      resolveSettings = resolve
-    }))
+    mocks.NotificationSettings.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSettings = resolve
+        }),
+    )
 
     const settings = useNotificationSettings()
     await settings.setNotificationsEnabled(false)
@@ -95,7 +95,9 @@ describe('useNotificationSettings', () => {
 
     const settings = useNotificationSettings()
 
-    await vi.waitFor(() => { expect(settings.delivery.value).toBe('auto') })
+    await vi.waitFor(() => {
+      expect(settings.delivery.value).toBe('auto')
+    })
   })
 
   it('persists the delivery mode', async () => {

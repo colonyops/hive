@@ -23,9 +23,7 @@ const emit = defineEmits<{ close: [] }>()
     @close="emit('close')"
   >
     <div class="flex flex-col gap-6 px-5 py-4">
-      <p v-if="props.entries.length === 0" class="text-[13.5px] text-text-2">
-        Hive updated to {{ props.version }}.
-      </p>
+      <p v-if="props.entries.length === 0" class="text-[13.5px] text-text-2">Hive updated to {{ props.version }}.</p>
 
       <section v-for="entry in props.entries" :key="entry.draft ? 'draft' : entry.version" class="flex flex-col gap-2">
         <!-- The version heading is suppressed for a single-release update: the

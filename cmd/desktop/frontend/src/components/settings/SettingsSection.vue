@@ -14,16 +14,19 @@
 // already carry their own padding.
 import SettingsHeading from './SettingsHeading.vue'
 
-withDefaults(defineProps<{
-  title: string
-  description?: string
-  boxed?: boolean
-  padded?: boolean
-  testid?: string
-}>(), {
-  boxed: false,
-  padded: false,
-})
+withDefaults(
+  defineProps<{
+    title: string
+    description?: string
+    boxed?: boolean
+    padded?: boolean
+    testid?: string
+  }>(),
+  {
+    boxed: false,
+    padded: false,
+  },
+)
 </script>
 
 <template>

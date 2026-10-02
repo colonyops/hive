@@ -67,10 +67,15 @@ function onTimeoutInput(text: string) {
         class="rounded-md border border-row bg-app px-2 py-1 text-text-2 hover:border-accent"
         :data-testid="`function-editor-recipe-${recipe.id}`"
         @click="set('on_message', recipe.code)"
-      >{{ recipe.label }}</button>
+      >
+        {{ recipe.label }}
+      </button>
     </div>
 
-    <div class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-text-3" data-testid="function-editor-footer-chips">
+    <div
+      class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-text-3"
+      data-testid="function-editor-footer-chips"
+    >
       <label class="inline-flex items-center gap-1.5 rounded-md border border-row bg-app px-2 py-1">
         Outputs
         <input
@@ -81,7 +86,7 @@ function onTimeoutInput(text: string) {
           class="w-7 bg-transparent text-text-2 outline-none"
           data-testid="function-editor-outputs"
           @input="onOutputsInput"
-        >
+        />
       </label>
       <label class="inline-flex items-center gap-1.5 rounded-md border border-row bg-app px-2 py-1">
         Timeout
@@ -92,13 +97,18 @@ function onTimeoutInput(text: string) {
           class="w-10 bg-transparent text-text-2 outline-none"
           data-testid="function-editor-timeout"
           @input="(e) => onTimeoutInput((e.target as HTMLInputElement).value)"
-        >
+        />
       </label>
       <span
         class="ml-1 inline-flex items-center gap-1"
         :class="onMessageErrors.length === 0 ? 'text-severity-success' : 'text-severity-error'"
         data-testid="function-editor-syntax-status"
-      >{{ onMessageErrors.length === 0 ? '✓ no syntax errors' : `✕ ${onMessageErrors.length} syntax error${onMessageErrors.length === 1 ? '' : 's'}` }}</span>
+        >{{
+          onMessageErrors.length === 0
+            ? '✓ no syntax errors'
+            : `✕ ${onMessageErrors.length} syntax error${onMessageErrors.length === 1 ? '' : 's'}`
+        }}</span
+      >
     </div>
   </div>
 </template>

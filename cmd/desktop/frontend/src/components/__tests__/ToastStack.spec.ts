@@ -51,7 +51,12 @@ describe('ToastStack', () => {
     const wrapper = mount(ToastStack, { props: { toasts } })
 
     const els = toastEls(wrapper)
-    expect(els.map((el) => el.attributes('data-toast-severity'))).toEqual(['auto-action', 'warning', 'error', 'success'])
+    expect(els.map((el) => el.attributes('data-toast-severity'))).toEqual([
+      'auto-action',
+      'warning',
+      'error',
+      'success',
+    ])
 
     const autoToast = els[0]
     expect(autoToast.find('[data-testid="toast-auto-badge"]').text()).toBe('AUTO')
@@ -88,7 +93,16 @@ describe('ToastStack', () => {
 
   it('runs a toast action and dismisses the toast', async () => {
     let ran = false
-    const t = toast({ actions: [{ label: 'Retry now', onClick: () => { ran = true } }] })
+    const t = toast({
+      actions: [
+        {
+          label: 'Retry now',
+          onClick: () => {
+            ran = true
+          },
+        },
+      ],
+    })
     const wrapper = mount(ToastStack, { props: { toasts: [t] } })
 
     await toastEls(wrapper)[0].find('[data-testid="toast-action"]').trigger('click')

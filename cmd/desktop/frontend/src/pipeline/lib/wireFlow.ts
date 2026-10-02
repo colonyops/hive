@@ -12,7 +12,10 @@
 // imports these particular generated types — mirrors types.ts's posture for
 // the engine's own wire types (Msg/CommitBatch/...): one file owns the
 // import, everything else goes through the names declared here.
-import type { Layout as WireLayoutModel, NodePosition } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/flow/models'
+import type {
+  Layout as WireLayoutModel,
+  NodePosition,
+} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/flow/models'
 import type { FlowSummary } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { NodeRunRecord } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/data/stores/models'
 import type { Flow, FlowNode, Wire } from '../types'

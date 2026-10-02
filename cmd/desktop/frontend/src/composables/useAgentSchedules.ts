@@ -1,9 +1,5 @@
 import { useAgentWorkspaces } from './useAgentWorkspaces'
-import type {
-  AgentSchedulePreview,
-  AgentScheduleRun,
-  SchedulePreviewRequest,
-} from '../lib/agentWorkspacesClient'
+import type { AgentSchedulePreview, AgentScheduleRun, SchedulePreviewRequest } from '../lib/agentWorkspacesClient'
 
 // The schedule calls that are not part of saving a workspace, resolved against
 // the same client every other Chats list uses. There is no shared state here:

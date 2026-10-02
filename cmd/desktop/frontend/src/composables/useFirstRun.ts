@@ -1,5 +1,8 @@
 import { ref } from 'vue'
-import { OnboardingSettings, SetOnboardingCompleted } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
+import {
+  OnboardingSettings,
+  SetOnboardingCompleted,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
 
 /**
  * A separate marker is required because profiles always exist and no other

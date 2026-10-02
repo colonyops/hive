@@ -36,8 +36,7 @@ describe('sources.webhook generators', () => {
 
 describe('sources.webhook validate', () => {
   const ok = (config: Config) => expect(validate(config)).toEqual([])
-  const bad = (config: Config, fragment: string) =>
-    expect(validate(config).join('\n')).toContain(fragment)
+  const bad = (config: Config, fragment: string) => expect(validate(config).join('\n')).toContain(fragment)
 
   it('accepts slug paths, nested paths, and printable secrets', () => {
     ok({ path: 'ci-alerts' })

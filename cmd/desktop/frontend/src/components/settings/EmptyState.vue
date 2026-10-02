@@ -1,10 +1,13 @@
 <script setup lang="ts">
-withDefaults(defineProps<{
-  message?: string
-  boxed?: boolean
-}>(), {
-  boxed: false,
-})
+withDefaults(
+  defineProps<{
+    message?: string
+    boxed?: boolean
+  }>(),
+  {
+    boxed: false,
+  },
+)
 </script>
 
 <template>

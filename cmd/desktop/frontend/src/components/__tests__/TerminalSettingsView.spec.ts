@@ -22,7 +22,15 @@ const mocks = vi.hoisted(() => ({
   Fonts: vi.fn().mockResolvedValue({ all: ['Fira Code', 'Menlo'], monospace: ['Fira Code', 'Menlo'] }),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
-  AppearanceSettings: vi.fn().mockResolvedValue({ theme: '', terminalFontSizePx: 13, terminalFontFamily: '', terminalFontWeight: 0, terminalFontWeightBold: 0, terminalShowWindows: true, terminalPoolSize: 3 }),
+  AppearanceSettings: vi.fn().mockResolvedValue({
+    theme: '',
+    terminalFontSizePx: 13,
+    terminalFontFamily: '',
+    terminalFontWeight: 0,
+    terminalFontWeightBold: 0,
+    terminalShowWindows: true,
+    terminalPoolSize: 3,
+  }),
   Fonts: mocks.Fonts,
   SetTheme: vi.fn(),
   SetTerminalFontSize: vi.fn(),
@@ -64,8 +72,11 @@ describe('TerminalSettingsView', () => {
   it('reflects and changes the terminal font weight', async () => {
     const wrapper = mount(TerminalSettingsView)
 
-    expect(wrapper.find(`[data-testid="settings-terminal-font-weight-${defaultTerminalFontWeight}"]`)
-      .attributes('aria-selected')).toBe('true')
+    expect(
+      wrapper
+        .find(`[data-testid="settings-terminal-font-weight-${defaultTerminalFontWeight}"]`)
+        .attributes('aria-selected'),
+    ).toBe('true')
 
     await wrapper.find('[data-testid="settings-terminal-font-weight-400"]').trigger('click')
     await flushPromises()
@@ -102,11 +113,7 @@ describe('TerminalSettingsView', () => {
     // The families can only have come from the binding — the scan is what the
     // webview cannot do for itself, and its result is cached for the process.
     const labels = Array.from(document.querySelectorAll('[role="option"]'))
-    expect(labels.map((el) => el.textContent?.trim())).toEqual([
-      `${TERMINAL_FONT} · bundled`,
-      'Fira Code',
-      'Menlo',
-    ])
+    expect(labels.map((el) => el.textContent?.trim())).toEqual([`${TERMINAL_FONT} · bundled`, 'Fira Code', 'Menlo'])
     wrapper.unmount()
   })
 

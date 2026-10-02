@@ -69,8 +69,9 @@ describe('AppearanceSettingsView', () => {
 
     await wrapper.get('[data-testid="settings-appearance-font-family-select"]').trigger('click')
     await flushPromises()
-    const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"] button'))
-      .find((el) => el.textContent?.trim() === 'Helvetica Neue')!
+    const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"] button')).find(
+      (el) => el.textContent?.trim() === 'Helvetica Neue',
+    )!
     option.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flushPromises()
 
@@ -92,9 +93,6 @@ describe('AppearanceSettingsView', () => {
   it('keeps the bundled and system options when the scan fails', async () => {
     mocks.Fonts.mockRejectedValue(new Error('no font directory'))
 
-    expect(await optionLabels('settings-appearance-font-family-select')).toEqual([
-      'Inter · bundled',
-      'System',
-    ])
+    expect(await optionLabels('settings-appearance-font-family-select')).toEqual(['Inter · bundled', 'System'])
   })
 })

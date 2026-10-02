@@ -99,8 +99,15 @@ const isMac = navigator.userAgent.includes('Mac')
 const jobsRoot = ref<HTMLElement | null>(null)
 const jobsOpen = ref(false)
 
-onClickOutside(jobsRoot, () => { jobsOpen.value = false })
-watch(() => props.jobsActive, (active) => { if (!active) jobsOpen.value = false })
+onClickOutside(jobsRoot, () => {
+  jobsOpen.value = false
+})
+watch(
+  () => props.jobsActive,
+  (active) => {
+    if (!active) jobsOpen.value = false
+  },
+)
 
 // Double-clicking the draggable title bar zooms the window, matching the native
 // macOS title-bar gesture (we draw our own chrome, so we implement it). Clicks
@@ -130,8 +137,15 @@ function onTitlebarDblclick(event: MouseEvent): void {
         :title="sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'"
         data-testid="titlebar-toggle-sidebar"
         @click="emit('toggle-sidebar')"
-      ><component :is="sidebarCollapsed ? IconPanelLeftOpen : IconPanelLeftClose" class="size-3.5" /></button>
-      <nav v-if="profileName" class="ml-1 flex shrink-0 items-center gap-0.5" aria-label="Page history" style="--wails-draggable: no-drag">
+      >
+        <component :is="sidebarCollapsed ? IconPanelLeftOpen : IconPanelLeftClose" class="size-3.5" />
+      </button>
+      <nav
+        v-if="profileName"
+        class="ml-1 flex shrink-0 items-center gap-0.5"
+        aria-label="Page history"
+        style="--wails-draggable: no-drag"
+      >
         <button
           type="button"
           class="flex size-7 items-center justify-center rounded-[7px] text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:opacity-30"
@@ -139,7 +153,9 @@ function onTitlebarDblclick(event: MouseEvent): void {
           aria-label="Go back"
           data-testid="titlebar-back"
           @click="emit('back')"
-        ><IconArrowLeft class="size-3.5" /></button>
+        >
+          <IconArrowLeft class="size-3.5" />
+        </button>
         <button
           type="button"
           class="flex size-7 items-center justify-center rounded-[7px] text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:opacity-30"
@@ -147,7 +163,9 @@ function onTitlebarDblclick(event: MouseEvent): void {
           aria-label="Go forward"
           data-testid="titlebar-forward"
           @click="emit('forward')"
-        ><IconArrowRight class="size-3.5" /></button>
+        >
+          <IconArrowRight class="size-3.5" />
+        </button>
       </nav>
       <div
         v-if="profileName"
@@ -171,7 +189,9 @@ function onTitlebarDblclick(event: MouseEvent): void {
           title="Inbox"
           data-testid="titlebar-mode-hub"
           @click="emit('set-mode', 'hub')"
-        ><IconInbox class="size-3.5 shrink-0" /><span class="hidden min-[860px]:inline">Inbox</span></button>
+        >
+          <IconInbox class="size-3.5 shrink-0" /><span class="hidden min-[860px]:inline">Inbox</span>
+        </button>
         <button
           type="button"
           class="flex h-full cursor-pointer items-center gap-1.5 rounded-[5px] px-2.5 text-[11.5px] transition-colors"
@@ -181,7 +201,9 @@ function onTitlebarDblclick(event: MouseEvent): void {
           title="Code"
           data-testid="titlebar-mode-terminal"
           @click="emit('set-mode', 'terminal')"
-        ><IconCode class="size-3.5 shrink-0" /><span class="hidden min-[860px]:inline">Code</span></button>
+        >
+          <IconCode class="size-3.5 shrink-0" /><span class="hidden min-[860px]:inline">Code</span>
+        </button>
         <button
           type="button"
           class="flex h-full cursor-pointer items-center gap-1.5 rounded-[5px] px-2.5 text-[11.5px] transition-colors"
@@ -191,7 +213,9 @@ function onTitlebarDblclick(event: MouseEvent): void {
           title="Chats"
           data-testid="titlebar-mode-agents"
           @click="emit('set-mode', 'agents')"
-        ><IconMessagesSquare class="size-3.5 shrink-0" /><span class="hidden min-[860px]:inline">Chats</span></button>
+        >
+          <IconMessagesSquare class="size-3.5 shrink-0" /><span class="hidden min-[860px]:inline">Chats</span>
+        </button>
       </div>
     </div>
 
@@ -203,13 +227,17 @@ function onTitlebarDblclick(event: MouseEvent): void {
         style="--wails-draggable: no-drag"
         data-testid="titlebar-update-chip"
         :disabled="updateInstalling"
-        :title="updateInstalling ? 'Installing update…' : latestVersion ? `Update to ${latestVersion}` : 'Update available'"
+        :title="
+          updateInstalling ? 'Installing update…' : latestVersion ? `Update to ${latestVersion}` : 'Update available'
+        "
         @click="emit('open-update')"
       >
         <IconLoader v-if="updateInstalling" class="size-3 animate-spin" />
         <IconArrowUpCircle v-else class="size-3" />
         <template v-if="updateInstalling">Installing…</template>
-        <template v-else>Update<template v-if="latestVersion">&nbsp;{{ latestVersion }}</template></template>
+        <template v-else
+          >Update<template v-if="latestVersion">&nbsp;{{ latestVersion }}</template></template
+        >
       </button>
       <button
         v-if="errorCount && errorCount > 0"
@@ -217,7 +245,9 @@ function onTitlebarDblclick(event: MouseEvent): void {
         style="--wails-draggable: no-drag"
         data-testid="titlebar-error-chip"
         @click="emit('open-error-node')"
-      ><IconTriangleAlert class="size-3" />{{ errorCount }} error<template v-if="errorCount !== 1">s</template></button>
+      >
+        <IconTriangleAlert class="size-3" />{{ errorCount }} error<template v-if="errorCount !== 1">s</template>
+      </button>
       <div v-if="profileName && jobsActive" ref="jobsRoot" class="relative shrink-0" style="--wails-draggable: no-drag">
         <button
           type="button"
@@ -233,7 +263,12 @@ function onTitlebarDblclick(event: MouseEvent): void {
         <JobsPopover
           v-if="jobsOpen"
           :jobs="activeJobs ?? []"
-          @open-run="(commandId) => { jobsOpen = false; emit('open-job-run', commandId) }"
+          @open-run="
+            (commandId) => {
+              jobsOpen = false
+              emit('open-job-run', commandId)
+            }
+          "
         />
       </div>
       <button
@@ -247,7 +282,10 @@ function onTitlebarDblclick(event: MouseEvent): void {
       >
         <IconSearch class="size-3.5 shrink-0" />
         <span class="min-w-0 flex-1 truncate text-left text-[12.5px]">Search…</span>
-        <kbd class="hidden shrink-0 rounded border border-card px-1.5 py-0.5 font-mono text-[10.5px] leading-none text-text-3 min-[700px]:block">{{ isMac ? '⌘' : 'Ctrl ' }}K</kbd>
+        <kbd
+          class="hidden shrink-0 rounded border border-card px-1.5 py-0.5 font-mono text-[10.5px] leading-none text-text-3 min-[700px]:block"
+          >{{ isMac ? '⌘' : 'Ctrl ' }}K</kbd
+        >
       </button>
       <!-- Activity: a 28px icon between the palette and the frame. An amber dot
            flags activity recorded since the page was last opened; amber fill

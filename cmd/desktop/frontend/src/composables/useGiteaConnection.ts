@@ -1,5 +1,8 @@
 import { ref } from 'vue'
-import { Connect, Disconnect } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/giteaservice'
+import {
+  Connect,
+  Disconnect,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/giteaservice'
 import type { Instance } from '../types/gitea'
 
 /**

@@ -50,14 +50,16 @@ describe('riskDetails', () => {
   })
 
   it('keeps a clean check on the list as an ok line rather than dropping it', () => {
-    expect(riskDetails(noRisk).map(d => d.tone)).toEqual(['ok', 'ok'])
+    expect(riskDetails(noRisk).map((d) => d.tone)).toEqual(['ok', 'ok'])
   })
 
   it('mixes tones when only one check holds work', () => {
-    expect(riskDetails({ uncommittedChanges: true, unpushedCommits: false, recycleDeletes: false }).map(d => d.tone))
-      .toEqual(['danger', 'ok'])
-    expect(riskDetails({ uncommittedChanges: false, unpushedCommits: true, recycleDeletes: false }).map(d => d.tone))
-      .toEqual(['ok', 'danger'])
+    expect(
+      riskDetails({ uncommittedChanges: true, unpushedCommits: false, recycleDeletes: false }).map((d) => d.tone),
+    ).toEqual(['danger', 'ok'])
+    expect(
+      riskDetails({ uncommittedChanges: false, unpushedCommits: true, recycleDeletes: false }).map((d) => d.tone),
+    ).toEqual(['ok', 'danger'])
   })
 })
 
@@ -70,9 +72,10 @@ describe('useSessionActions destructive operations', () => {
 
     expect(mocks.SessionRisk).toHaveBeenCalledWith('s1')
     expect(actions.confirmation.open.value).toBe(true)
-    expect(actions.confirmation.options.value?.details).toContainEqual(
-      { tone: 'danger', text: expect.stringContaining('Uncommitted changes') },
-    )
+    expect(actions.confirmation.options.value?.details).toContainEqual({
+      tone: 'danger',
+      text: expect.stringContaining('Uncommitted changes'),
+    })
     expect(mocks.DeleteSession).not.toHaveBeenCalled()
 
     await actions.confirmation.confirm()

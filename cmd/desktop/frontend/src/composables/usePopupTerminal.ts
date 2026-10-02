@@ -72,10 +72,7 @@ function toggle(next: PopupTerminalRequest = {}): void {
 }
 
 function sameLaunch(a: PopupTerminalRequest, b: PopupTerminalRequest): boolean {
-  return a.launcher === b.launcher
-    && a.sessionSlug === b.sessionSlug
-    && a.dir === b.dir
-    && a.command === b.command
+  return a.launcher === b.launcher && a.sessionSlug === b.sessionSlug && a.dir === b.dir && a.command === b.command
 }
 
 // The availability answer and the transport are resolved once per run: neither

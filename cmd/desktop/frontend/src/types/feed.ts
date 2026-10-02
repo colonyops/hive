@@ -51,7 +51,11 @@ export interface FeedSummary {
   description?: string
 }
 
-export interface FeedFolder { id: string; name: string; feeds: FeedSummary[] }
+export interface FeedFolder {
+  id: string
+  name: string
+  feeds: FeedSummary[]
+}
 export type SidebarNode = { kind: 'feed'; feed: FeedSummary } | { kind: 'folder'; folder: FeedFolder }
 export type FeedTree = SidebarNode[]
 
@@ -75,6 +79,4 @@ export interface Profile {
 
 // Feeds are the only primary destinations; Trash is a de-emphasized utility
 // surface for unrouted and ignored items. There is no aggregate inbox view.
-export type SidebarSelection =
-  | { type: 'feed'; feedId: string }
-  | { type: 'trash' }
+export type SidebarSelection = { type: 'feed'; feedId: string } | { type: 'trash' }

@@ -7,7 +7,10 @@
 // access goes through the `client` prop (defaulting to the generated Wails
 // bindings) so tests inject fakes instead of mocking module imports.
 import { computed, onMounted, ref } from 'vue'
-import { Capture, Info } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/webhookservice'
+import {
+  Capture,
+  Info,
+} from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/webhookservice'
 import BaseButton from '../../../components/BaseButton.vue'
 import { useClipboard } from '../../../composables/useClipboard'
 import { defaultWebhookSourceIcon, feedIconComponent, feedIconOptions } from '../../../lib/feedIcons'
@@ -51,8 +54,12 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:config': [config: Config] }>()
 
 const client: WebhookBackendClient = props.client ?? {
-  async info() { return await Info() },
-  async capture(flowId, nodeId) { return await Capture(flowId, nodeId) },
+  async info() {
+    return await Info()
+  },
+  async capture(flowId, nodeId) {
+    return await Capture(flowId, nodeId)
+  },
 }
 
 const info = ref<WebhookInfoView | null>(null)
@@ -61,11 +68,15 @@ const capture = ref<WebhookCaptureView | null>(null)
 onMounted(async () => {
   try {
     info.value = await client.info()
-  } catch { /* endpoint URL row simply stays hidden */ }
+  } catch {
+    /* endpoint URL row simply stays hidden */
+  }
   if (!props.flowId || !props.nodeId) return
   try {
     capture.value = await client.capture(props.flowId, props.nodeId)
-  } catch { /* capture section falls back to "none yet" */ }
+  } catch {
+    /* capture section falls back to "none yet" */
+  }
 })
 
 function updatePath(path: string) {
@@ -106,7 +117,7 @@ const endpointUrl = computed(() => {
 })
 
 const hasCapture = computed(() => (capture.value?.receivedAt ?? 0) > 0)
-const capturedAt = computed(() => hasCapture.value ? new Date(capture.value!.receivedAt).toLocaleString() : '')
+const capturedAt = computed(() => (hasCapture.value ? new Date(capture.value!.receivedAt).toLocaleString() : ''))
 const missingFields = computed(() => capture.value?.missingFields ?? [])
 
 const capturePreview = computed(() => {
@@ -156,7 +167,9 @@ async function onCopyPrompt(): Promise<void> {
           aria-label="Generate a new path"
           data-testid="sources.webhook-editor-path-generate"
           @click="regeneratePath"
-        ><IconRefresh class="size-[14px]" /></button>
+        >
+          <IconRefresh class="size-[14px]" />
+        </button>
       </template>
     </TextField>
     <TextField
@@ -176,7 +189,9 @@ async function onCopyPrompt(): Promise<void> {
           aria-label="Generate a new secret"
           data-testid="sources.webhook-editor-secret-generate"
           @click="regenerateSecret"
-        ><IconRefresh class="size-[14px]" /></button>
+        >
+          <IconRefresh class="size-[14px]" />
+        </button>
       </template>
     </TextField>
     <SelectField
@@ -204,8 +219,15 @@ async function onCopyPrompt(): Promise<void> {
         <code
           class="min-w-0 flex-1 truncate rounded-lg border border-strong bg-app px-3 py-2 font-mono text-[12px] text-text-2"
           data-testid="sources.webhook-editor-url"
-        >{{ endpointUrl }}</code>
-        <BaseButton variant="secondary" size="sm" class="whitespace-nowrap" data-testid="sources.webhook-editor-copy-url" @click="copyUrl(endpointUrl)">
+          >{{ endpointUrl }}</code
+        >
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          class="whitespace-nowrap"
+          data-testid="sources.webhook-editor-copy-url"
+          @click="copyUrl(endpointUrl)"
+        >
           {{ urlCopied ? 'Copied' : 'Copy' }}
         </BaseButton>
       </div>
@@ -217,21 +239,24 @@ async function onCopyPrompt(): Promise<void> {
     <div>
       <div class="mb-1.5 text-[12px] text-text-2">Last delivery</div>
       <template v-if="hasCapture">
-        <div class="mb-1.5 font-mono text-[11px] text-text-4" data-testid="sources.webhook-editor-captured-at">{{ capturedAt }}</div>
+        <div class="mb-1.5 font-mono text-[11px] text-text-4" data-testid="sources.webhook-editor-captured-at">
+          {{ capturedAt }}
+        </div>
         <div
           v-if="missingFields.length > 0"
           class="mb-2 rounded-lg border border-strong bg-selection px-3 py-2.5 text-[12px] leading-relaxed text-text-2"
           data-testid="sources.webhook-editor-shape-warning"
         >
-          Missing canonical item fields: <span class="font-mono">{{ missingFields.join(', ') }}</span> — the item
-          still ingests, but renders minimally in feeds (see ADR canonical-item-contract). Add a <span class="font-mono">function</span>
+          Missing canonical item fields: <span class="font-mono">{{ missingFields.join(', ') }}</span> — the item still
+          ingests, but renders minimally in feeds (see ADR canonical-item-contract). Add a
+          <span class="font-mono">function</span>
           node to reshape it, or copy the LLM prompt below to have one written for you. Adding
           <span class="font-mono">state</span> also enables auto-archive.
         </div>
         <pre
           class="max-h-48 overflow-auto rounded-lg border border-row bg-app px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-text-2"
           data-testid="sources.webhook-editor-capture"
-        >{{ capturePreview }}</pre>
+          >{{ capturePreview }}</pre>
       </template>
       <p v-else class="text-[12px] text-text-4" data-testid="sources.webhook-editor-no-capture">
         Nothing captured yet — POST JSON to the endpoint and reopen this editor to see the payload here.
@@ -239,7 +264,13 @@ async function onCopyPrompt(): Promise<void> {
     </div>
 
     <div class="flex items-center gap-2.5">
-      <BaseButton variant="secondary" size="sm" class="whitespace-nowrap" data-testid="sources.webhook-editor-copy-prompt" @click="onCopyPrompt">
+      <BaseButton
+        variant="secondary"
+        size="sm"
+        class="whitespace-nowrap"
+        data-testid="sources.webhook-editor-copy-prompt"
+        @click="onCopyPrompt"
+      >
         Copy LLM prompt
       </BaseButton>
       <span v-if="promptCopied" class="text-[11.5px] text-text-4">Copied — paste into your coding agent</span>

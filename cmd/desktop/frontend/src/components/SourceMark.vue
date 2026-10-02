@@ -7,7 +7,12 @@ import type { Component } from 'vue'
 const props = defineProps<{ icon: Component; image?: string }>()
 
 const failed = ref(false)
-watch(() => props.image, () => { failed.value = false })
+watch(
+  () => props.image,
+  () => {
+    failed.value = false
+  },
+)
 </script>
 
 <template>
@@ -15,6 +20,6 @@ watch(() => props.image, () => { failed.value = false })
        caller's `size-4` in the utility layer, so an image mark filled the badge
        edge to edge while a glyph mark sat inset, and a failed image snapped
        between the two. Both branches take the caller's size. -->
-  <img v-if="image && !failed" :src="image" alt="" class="object-contain" @error="failed = true">
+  <img v-if="image && !failed" :src="image" alt="" class="object-contain" @error="failed = true" />
   <component :is="icon" v-else aria-hidden="true" />
 </template>

@@ -68,8 +68,12 @@ function onKeydown(e: KeyboardEvent): void {
   width: 6px;
   cursor: col-resize;
 }
-.panel-resize-handle-left { left: -3px; }
-.panel-resize-handle-right { right: -3px; }
+.panel-resize-handle-left {
+  left: -3px;
+}
+.panel-resize-handle-right {
+  right: -3px;
+}
 
 /* Top/bottom handles: a full-width horizontal bar dragged vertically. */
 .panel-resize-handle-top,
@@ -79,8 +83,12 @@ function onKeydown(e: KeyboardEvent): void {
   height: 6px;
   cursor: row-resize;
 }
-.panel-resize-handle-top { top: -3px; }
-.panel-resize-handle-bottom { bottom: -3px; }
+.panel-resize-handle-top {
+  top: -3px;
+}
+.panel-resize-handle-bottom {
+  bottom: -3px;
+}
 
 .panel-resize-handle:hover,
 .panel-resize-handle:active {

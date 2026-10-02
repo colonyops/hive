@@ -49,7 +49,11 @@ describe('useAppFont', () => {
   it('applies the cached choice synchronously, before the settings read resolves', async () => {
     localStorage.setItem('hive.font.sans', 'Iosevka')
     let resolveRead: (value: { fontFamily: string; monoFontFamily: string }) => void = () => {}
-    mocks.AppearanceSettings.mockReturnValue(new Promise((resolve) => { resolveRead = resolve }))
+    mocks.AppearanceSettings.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
     const { initializeAppFont } = await import('../useAppFont')
 
     initializeAppFont()
@@ -138,7 +142,11 @@ describe('useAppFont', () => {
 
   it('does not let a slow settings read clobber a choice made meanwhile', async () => {
     let resolveRead: (value: { fontFamily: string; monoFontFamily: string }) => void = () => {}
-    mocks.AppearanceSettings.mockReturnValue(new Promise((resolve) => { resolveRead = resolve }))
+    mocks.AppearanceSettings.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
     const { initializeAppFont, setAppFontFamily, useAppFont } = await import('../useAppFont')
 
     initializeAppFont()

@@ -8,7 +8,7 @@ function fire(el: Element, type: string) {
 }
 
 describe('function editor', () => {
-  it('shows on_message and nothing else — it is the node\'s whole lifecycle', () => {
+  it("shows on_message and nothing else — it is the node's whole lifecycle", () => {
     const wrapper = mount(Editor, { props: { config: defaults } })
     expect(wrapper.find('[data-testid="function-editor-on-message"]').exists()).toBe(true)
     expect(wrapper.findAll('[role="tab"]')).toHaveLength(0)

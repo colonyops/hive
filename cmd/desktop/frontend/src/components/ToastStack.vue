@@ -21,23 +21,36 @@ const overflowCount = computed(() => Math.max(0, props.toasts.length - MAX_VISIB
        to body after this stack in DOM order): a toast is ephemeral feedback
        and must stay visible when fired from inside an overlay, e.g. the Tasks
        overlay's yank. -->
-  <div v-if="toasts.length" class="fixed bottom-[22px] right-[22px] z-50 flex w-[376px] flex-col gap-3" data-testid="toast-stack">
+  <div
+    v-if="toasts.length"
+    class="fixed bottom-[22px] right-[22px] z-50 flex w-[376px] flex-col gap-3"
+    data-testid="toast-stack"
+  >
     <TransitionGroup name="toast">
-      <ToastCard
-        v-for="toast in visible"
-        :key="toast.id"
-        :toast="toast"
-        @dismiss="emit('dismiss', toast.id)"
-      />
+      <ToastCard v-for="toast in visible" :key="toast.id" :toast="toast" @dismiss="emit('dismiss', toast.id)" />
     </TransitionGroup>
     <div v-if="overflowCount > 0" class="text-center font-mono text-[11.5px] text-text-3" data-testid="toast-overflow">
-      {{ overflowCount }} more · <button class="cursor-pointer hover:text-text" data-testid="toast-clear-all" @click="emit('clear-all')">Clear all</button>
+      {{ overflowCount }} more ·
+      <button class="cursor-pointer hover:text-text" data-testid="toast-clear-all" @click="emit('clear-all')">
+        Clear all
+      </button>
     </div>
   </div>
 </template>
 
 <style scoped>
-.toast-enter-active, .toast-leave-active { transition: opacity .16s ease, transform .16s ease; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(5px); }
-.toast-leave-active { position: absolute; }
+.toast-enter-active,
+.toast-leave-active {
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease;
+}
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateY(5px);
+}
+.toast-leave-active {
+  position: absolute;
+}
 </style>

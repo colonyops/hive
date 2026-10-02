@@ -46,7 +46,9 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
         :title="opt.title"
         :data-testid="testid ? `${testid}-${opt.value}` : undefined"
         @click="emit('update:modelValue', opt.value)"
-      >{{ opt.label }}</button>
+      >
+        {{ opt.label }}
+      </button>
     </div>
   </SettingsField>
 </template>

@@ -12,19 +12,46 @@ type GlobKey = 'repos' | 'exclude_repos' | 'authors' | 'exclude_authors' | 'labe
 
 const globGroups: Array<{ key: GlobKey; label: string; placeholder: string; testid: string }> = [
   { key: 'repos', label: 'Repos', placeholder: 'colonyops/*', testid: 'github-filter-editor-repos' },
-  { key: 'exclude_repos', label: 'Exclude repos', placeholder: 'colonyops/sandbox', testid: 'github-filter-editor-exclude-repos' },
+  {
+    key: 'exclude_repos',
+    label: 'Exclude repos',
+    placeholder: 'colonyops/sandbox',
+    testid: 'github-filter-editor-exclude-repos',
+  },
   { key: 'authors', label: 'Authors', placeholder: 'octocat', testid: 'github-filter-editor-authors' },
-  { key: 'exclude_authors', label: 'Exclude authors', placeholder: '*[bot]', testid: 'github-filter-editor-exclude-authors' },
+  {
+    key: 'exclude_authors',
+    label: 'Exclude authors',
+    placeholder: '*[bot]',
+    testid: 'github-filter-editor-exclude-authors',
+  },
   { key: 'labels', label: 'Labels', placeholder: 'area/*', testid: 'github-filter-editor-labels' },
-  { key: 'exclude_labels', label: 'Exclude labels', placeholder: 'wontfix', testid: 'github-filter-editor-exclude-labels' },
+  {
+    key: 'exclude_labels',
+    label: 'Exclude labels',
+    placeholder: 'wontfix',
+    testid: 'github-filter-editor-exclude-labels',
+  },
 ]
 
 const allCIStates = ['passing', 'pending', 'failing', 'none']
 const allReviewStates = ['open', 'draft', 'approved', 'changes_requested', 'review_required']
 const allReasons = [
-  'approval_requested', 'assign', 'author', 'ci_activity', 'comment', 'invitation', 'manual',
-  'member_feature_requested', 'mention', 'review_requested', 'security_advisory_credit',
-  'security_alert', 'state_change', 'subscribed', 'team_mention',
+  'approval_requested',
+  'assign',
+  'author',
+  'ci_activity',
+  'comment',
+  'invitation',
+  'manual',
+  'member_feature_requested',
+  'mention',
+  'review_requested',
+  'security_advisory_credit',
+  'security_alert',
+  'state_change',
+  'subscribed',
+  'team_mention',
 ]
 
 function setGlobGroup(key: GlobKey, value: string[]) {
@@ -134,14 +161,18 @@ function toggleReason(value: string, checked: boolean) {
     <div>
       <div class="mb-2 text-[12.5px] text-text-2">Notification reasons</div>
       <div class="grid grid-cols-3 gap-x-3 gap-y-1.5" data-testid="github-filter-editor-reasons">
-        <label v-for="reason in allReasons" :key="reason" class="flex cursor-pointer items-center gap-2 font-mono text-[11.5px] text-text-2">
+        <label
+          v-for="reason in allReasons"
+          :key="reason"
+          class="flex cursor-pointer items-center gap-2 font-mono text-[11.5px] text-text-2"
+        >
           <input
             type="checkbox"
             :checked="reasonChecked(reason)"
             class="accent-accent"
             :data-testid="`github-filter-editor-reason-${reason}`"
             @change="(e) => toggleReason(reason, (e.target as HTMLInputElement).checked)"
-          >{{ reason }}
+          />{{ reason }}
         </label>
       </div>
     </div>

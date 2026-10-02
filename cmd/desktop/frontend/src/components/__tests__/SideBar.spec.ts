@@ -83,7 +83,6 @@ describe('SideBar', () => {
     expect(wrapper.emitted('select')).toEqual([[{ type: 'feed', feedId: 'backend' }]])
   })
 
-
   it('does not render per-feed option menus', () => {
     const wrapper = mountSideBar()
     expect(wrapper.find('[data-testid="sidebar-feed-menu-toggle"]').exists()).toBe(false)
@@ -158,7 +157,9 @@ function lastReorder(wrapper: ReturnType<typeof mountGrouped>): FeedTree {
 }
 
 function folderNamed(tree: FeedTree, id: string) {
-  const node = tree.find((n): n is Extract<SidebarNode, { kind: 'folder' }> => n.kind === 'folder' && n.folder.id === id)
+  const node = tree.find(
+    (n): n is Extract<SidebarNode, { kind: 'folder' }> => n.kind === 'folder' && n.folder.id === id,
+  )
   return node?.folder
 }
 
@@ -171,7 +172,7 @@ describe('SideBar folders', () => {
     expect(wrapper.find('[data-testid="sidebar-feed"][data-id="backend"]').exists()).toBe(true)
   })
 
-  it('hides a folder\'s feeds when its collapsed state is set in localStorage', () => {
+  it("hides a folder's feeds when its collapsed state is set in localStorage", () => {
     // Collapse is view state persisted in localStorage (keyed by flow then
     // folder id), not part of the tree/layout.
     localStorage.setItem('hive.sidebar.collapsed', JSON.stringify({ personal: ['work'] }))

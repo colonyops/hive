@@ -33,7 +33,8 @@ const continuations = computed(() => {
         :key="i"
         class="rounded border border-card bg-card px-1.5 py-0.5 text-text-2"
         data-testid="sequence-hint-step"
-      >{{ step }}</kbd>
+        >{{ step }}</kbd
+      >
     </span>
     <span
       v-for="continuation in continuations"
@@ -44,7 +45,8 @@ const continuations = computed(() => {
       <kbd
         class="rounded border border-card bg-card px-1.5 py-0.5 text-text-2"
         data-testid="sequence-hint-continuation-key"
-      >{{ continuation.label }}</kbd>
+        >{{ continuation.label }}</kbd
+      >
       <span data-testid="sequence-hint-continuation-title">{{ continuation.title }}</span>
     </span>
   </div>

@@ -15,5 +15,7 @@ defineProps<{
   <p
     class="rounded-md border border-severity-error-border bg-severity-error-tint px-3 py-2 text-xs leading-relaxed text-severity-error"
     :data-testid="testid"
-  ><slot>{{ message }}</slot></p>
+  >
+    <slot>{{ message }}</slot>
+  </p>
 </template>

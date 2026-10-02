@@ -36,8 +36,15 @@ describe('TitleBar', () => {
 
   it('shows live jobs, opens the popover, and emits the selected command', async () => {
     const job = {
-      id: 7, createdAt: 1, updatedAt: 2, status: 'done', label: 'Review PR',
-      step: 'Completed', actionId: 'review', target: 'pr-1', commandId: 42,
+      id: 7,
+      createdAt: 1,
+      updatedAt: 2,
+      status: 'done',
+      label: 'Review PR',
+      step: 'Completed',
+      actionId: 'review',
+      target: 'pr-1',
+      commandId: 42,
     }
     const wrapper = mount(TitleBar, { props: { profileName: 'Triage', jobsActive: true, activeJobs: [job] } })
     const chip = wrapper.find('[data-testid="titlebar-jobs"]')
@@ -91,7 +98,9 @@ describe('TitleBar', () => {
     await toggle.trigger('click')
     expect(expanded.emitted('toggle-sidebar')).toHaveLength(1)
 
-    const collapsed = mount(TitleBar, { props: { profileName: 'Triage', canToggleSidebar: true, sidebarCollapsed: true } })
+    const collapsed = mount(TitleBar, {
+      props: { profileName: 'Triage', canToggleSidebar: true, sidebarCollapsed: true },
+    })
     expect(collapsed.find('[data-testid="titlebar-toggle-sidebar"]').attributes('aria-label')).toBe('Show sidebar')
   })
 
@@ -109,7 +118,9 @@ describe('TitleBar', () => {
     await toggle.trigger('click')
     expect(expanded.emitted('toggle-preview')).toHaveLength(1)
 
-    const collapsed = mount(TitleBar, { props: { profileName: 'Triage', canTogglePreview: true, previewCollapsed: true } })
+    const collapsed = mount(TitleBar, {
+      props: { profileName: 'Triage', canTogglePreview: true, previewCollapsed: true },
+    })
     expect(collapsed.find('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Show preview')
   })
 
@@ -137,7 +148,9 @@ describe('TitleBar', () => {
   })
 
   it('shows install progress and disables repeated update clicks', async () => {
-    const wrapper = mount(TitleBar, { props: { updateAvailable: true, updateInstalling: true, latestVersion: '1.5.0' } })
+    const wrapper = mount(TitleBar, {
+      props: { updateAvailable: true, updateInstalling: true, latestVersion: '1.5.0' },
+    })
     const chip = wrapper.get('[data-testid="titlebar-update-chip"]')
 
     expect(chip.attributes('disabled')).toBeDefined()

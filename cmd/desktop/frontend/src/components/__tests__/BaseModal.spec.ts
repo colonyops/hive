@@ -43,10 +43,7 @@ describe('BaseModal', () => {
     wrapper.unmount()
   })
 
-  it.each([
-    { busy: true },
-    { closeOnBackdrop: false },
-  ])('does not close from the backdrop when %o', (props) => {
+  it.each([{ busy: true }, { closeOnBackdrop: false }])('does not close from the backdrop when %o', (props) => {
     const wrapper = mountModal(props)
 
     el('demo-modal-backdrop').click()

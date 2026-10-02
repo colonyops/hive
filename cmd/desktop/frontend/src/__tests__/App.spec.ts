@@ -16,7 +16,10 @@ import { formatCombo, SEQUENCE_TIMEOUT_MS, useKeybindings } from '../composables
 import { resetTerminalAvailabilityForTests } from '../composables/useTerminalAvailability'
 import { defaultTerminalFontSizePx, resetTerminalFontForTests, useTerminalFont } from '../composables/useTerminalFont'
 import { resetTerminalSessionsForTests, useTerminalSessions } from '../composables/useTerminalSessions'
-import { resetAttachedTerminalWindowsForTests, setAttachedTerminalWindows } from '../composables/useAttachedTerminalWindows'
+import {
+  resetAttachedTerminalWindowsForTests,
+  setAttachedTerminalWindows,
+} from '../composables/useAttachedTerminalWindows'
 import { resetTerminalPinnedChatsForTests } from '../composables/useTerminalPinnedChats'
 import { resetAgentSessionsAllForTests, useAgentSessionsAll } from '../composables/useAgentSessionsAll'
 import { resetAgentWorkspacesForTests, useAgentWorkspaces } from '../composables/useAgentWorkspaces'
@@ -185,7 +188,15 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   SetNotificationSettings: mocks.SetNotificationSettings,
   OnboardingSettings: mocks.OnboardingSettings,
   SetOnboardingCompleted: mocks.SetOnboardingCompleted,
-  AppearanceSettings: vi.fn().mockResolvedValue({ theme: '', terminalFontSizePx: 13, terminalFontFamily: '', terminalFontWeight: 0, terminalFontWeightBold: 0, terminalShowWindows: true, terminalPoolSize: 3 }),
+  AppearanceSettings: vi.fn().mockResolvedValue({
+    theme: '',
+    terminalFontSizePx: 13,
+    terminalFontFamily: '',
+    terminalFontWeight: 0,
+    terminalFontWeightBold: 0,
+    terminalShowWindows: true,
+    terminalPoolSize: 3,
+  }),
   Fonts: vi.fn().mockResolvedValue({ all: [], monospace: [] }),
   SetTheme: vi.fn(),
   SetTerminalFontSize: vi.fn(),
@@ -201,7 +212,9 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   Notify: mocks.Notify,
 }))
 
-vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({ Focused: mocks.Focused }))
+vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
+  Focused: mocks.Focused,
+}))
 
 vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/hiveconfigservice', () => ({
   Setup: mocks.HiveSetup,
@@ -216,7 +229,16 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
 // tests exercise settings routes without measuring their render cost.
 vi.mock('../composables/useFrameStats', async () => {
   const { shallowRef } = await vi.importActual<typeof import('vue')>('vue')
-  const stats = shallowRef({ fps: 0, frameMs: 0, worstFrameMs: 0, dropped: 0, windowMs: 10_000, lagMs: 0, worstLagMs: 0, buckets: [] })
+  const stats = shallowRef({
+    fps: 0,
+    frameMs: 0,
+    worstFrameMs: 0,
+    dropped: 0,
+    windowMs: 10_000,
+    lagMs: 0,
+    worstLagMs: 0,
+    buckets: [],
+  })
   return {
     startFrameStats: vi.fn(),
     stopFrameStats: vi.fn(),
@@ -271,9 +293,19 @@ const flow = {
 
 function inboxItems() {
   return [1, 2].map((n) => ({
-    id: n, profileId: 'personal', sourceKind: 'github', sourceScope: '', externalId: `pr-${n}`,
-    title: n === 1 ? 'First' : 'Second', url: '', payload: { kind: 'PR', repo: 'acme/app', num: n, author: 'hay' },
-    revision: 1, unread: false, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 2,
+    id: n,
+    profileId: 'personal',
+    sourceKind: 'github',
+    sourceScope: '',
+    externalId: `pr-${n}`,
+    title: n === 1 ? 'First' : 'Second',
+    url: '',
+    payload: { kind: 'PR', repo: 'acme/app', num: n, author: 'hay' },
+    revision: 1,
+    unread: false,
+    lifecycle: 'active',
+    firstSeenAt: 1,
+    lastEventAt: 2,
   }))
 }
 
@@ -311,9 +343,17 @@ function agentsOnScreen(wrapper: VueWrapper): boolean {
 // handle still shows up.
 function stubTerminalTree(overrides: Partial<TerminalTreeHandles> = {}): TerminalTreeHandles {
   const handles: TerminalTreeHandles = {
-    focusTree: vi.fn(), focusPane: vi.fn(), focusFilter: vi.fn(),
-    selectWindow: vi.fn(), newWindow: vi.fn(), closeWindow: vi.fn(), stepWindow: vi.fn(),
-    splitPane: vi.fn(), closePane: vi.fn(), zoomPane: vi.fn(), focusPaneDirection: vi.fn(),
+    focusTree: vi.fn(),
+    focusPane: vi.fn(),
+    focusFilter: vi.fn(),
+    selectWindow: vi.fn(),
+    newWindow: vi.fn(),
+    closeWindow: vi.fn(),
+    stepWindow: vi.fn(),
+    splitPane: vi.fn(),
+    closePane: vi.fn(),
+    zoomPane: vi.fn(),
+    focusPaneDirection: vi.fn(),
     ...overrides,
   }
   setTerminalTreeHandles(handles)
@@ -342,8 +382,18 @@ describe('App', () => {
         workspaces: [{ path: '/home/dev/code', exists: true, repos: 4 }],
       },
       agents: [
-        { name: 'claude', label: 'Claude Code', skipPermissionFlags: ['--dangerously-skip-permissions'], installed: true },
-        { name: 'opencode', label: 'OpenCode', skipPermissionFlags: ['--agent', 'free-permissions-runner'], installed: false },
+        {
+          name: 'claude',
+          label: 'Claude Code',
+          skipPermissionFlags: ['--dangerously-skip-permissions'],
+          installed: true,
+        },
+        {
+          name: 'opencode',
+          label: 'OpenCode',
+          skipPermissionFlags: ['--agent', 'free-permissions-runner'],
+          installed: false,
+        },
       ],
       defaultAgentOverride: '',
     }
@@ -385,7 +435,13 @@ describe('App', () => {
     // Panel collapse / width state persists via useStorage; clear it so one
     // test's collapsed sidebar can't leak into the next.
     localStorage.clear()
-    mocks.Status.mockResolvedValue({ state: 'connected', login: 'octocat', name: 'Octocat', avatarUrl: '', message: '' })
+    mocks.Status.mockResolvedValue({
+      state: 'connected',
+      login: 'octocat',
+      name: 'Octocat',
+      avatarUrl: '',
+      message: '',
+    })
     mocks.ListFlows.mockResolvedValue([{ id: 'personal', name: 'Personal', enabled: true, valid: true }])
     mocks.GetFlow.mockResolvedValue(flow)
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
@@ -399,20 +455,40 @@ describe('App', () => {
     mocks.FeedCounts.mockResolvedValue([{ feedId: 'personal/desktop', total: 1, unread: 0, archived: 0 }])
     mocks.Events.mockResolvedValue([])
     mocks.ActionRun.mockResolvedValue({ commandId: 1, status: 'done' })
-    mocks.SessionLaunchOptions.mockResolvedValue({ repositories: [], defaultRepository: '', agents: [], defaultAgent: '' })
+    mocks.SessionLaunchOptions.mockResolvedValue({
+      repositories: [],
+      defaultRepository: '',
+      agents: [],
+      defaultAgent: '',
+    })
     mocks.ActionViews.mockResolvedValue([])
     mocks.InvokeAction.mockResolvedValue(undefined)
     mocks.ListActions.mockResolvedValue({ actions: [], error: '' })
     mocks.NodeRuns.mockResolvedValue([])
     mocks.RenameFlow.mockResolvedValue({ id: 'personal', name: 'Team', enabled: true, valid: true })
-    mocks.SetFlowEnabled.mockImplementation(async (id: string, enabled: boolean) => ({ id, name: 'Personal', enabled, valid: true }))
+    mocks.SetFlowEnabled.mockImplementation(async (id: string, enabled: boolean) => ({
+      id,
+      name: 'Personal',
+      enabled,
+      valid: true,
+    }))
     mocks.DeleteFlow.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
     mocks.FailedSessionDraft.mockResolvedValue({ repository: '', name: '', prompt: '' })
     mocks.DismissFailedSession.mockResolvedValue(undefined)
-    mocks.UpdaterStatus.mockResolvedValue({ enabled: true, available: false, currentVersion: 'dev', latestVersion: '', notes: '' })
+    mocks.UpdaterStatus.mockResolvedValue({
+      enabled: true,
+      available: false,
+      currentVersion: 'dev',
+      latestVersion: '',
+      notes: '',
+    })
     mocks.InstallUpdate.mockResolvedValue(undefined)
-    mocks.NotificationSettings.mockResolvedValue({ notificationsEnabled: true, systemNotificationsEnabled: true, notificationSound: true })
+    mocks.NotificationSettings.mockResolvedValue({
+      notificationsEnabled: true,
+      systemNotificationsEnabled: true,
+      notificationSound: true,
+    })
     mocks.SetNotificationSettings.mockResolvedValue(undefined)
     mocks.PermissionStatus.mockResolvedValue('not-requested')
     mocks.RequestNotificationPermission.mockResolvedValue(true)
@@ -426,9 +502,17 @@ describe('App', () => {
     mocks.PopupEndpoint.mockResolvedValue({ httpBaseURL: '', wsURL: '', token: '' })
     mocks.PopupLaunchers.mockResolvedValue([])
     mocks.TerminalAvailable.mockResolvedValue({ available: false, reason: 'tmux is not installed.' })
-    mocks.TerminalEndpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://127.0.0.1:1/s', token: 'test' })
+    mocks.TerminalEndpoint.mockResolvedValue({
+      httpBaseURL: 'http://127.0.0.1:1',
+      wsURL: 'ws://127.0.0.1:1/s',
+      token: 'test',
+    })
     mocks.AgentsAvailable.mockResolvedValue({ available: false, reason: 'no ptyterm on this build.' })
-    mocks.AgentsEndpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://127.0.0.1:1/s', token: 'test' })
+    mocks.AgentsEndpoint.mockResolvedValue({
+      httpBaseURL: 'http://127.0.0.1:1',
+      wsURL: 'ws://127.0.0.1:1/s',
+      token: 'test',
+    })
     mocks.HiveSetup.mockResolvedValue(usableHiveSetup())
     mocks.SaveHiveSetup.mockImplementation(async () => usableHiveSetup())
     mocks.InspectWorkspace.mockResolvedValue({ path: '/home/dev/code', exists: true, repos: 4 })
@@ -446,8 +530,15 @@ describe('App', () => {
 
   // Device-flow grants arrive through connection:updated, not a call result.
   async function connectGitHub() {
-    mocks.Status.mockResolvedValue({ state: 'connected', login: 'octocat', name: 'Octocat', avatarUrl: '', message: '' })
-    const connection = mocks.On.mock.calls.find(([event]) => event === 'connection:updated')?.[1] as ((ev: { data: string }) => void) | undefined
+    mocks.Status.mockResolvedValue({
+      state: 'connected',
+      login: 'octocat',
+      name: 'Octocat',
+      avatarUrl: '',
+      message: '',
+    })
+    const connection = mocks.On.mock.calls.find(([event]) => event === 'connection:updated')?.[1] as
+      ((ev: { data: string }) => void) | undefined
     expect(connection).toBeDefined()
     connection?.({ data: 'github' })
     await flushPromises()
@@ -489,10 +580,12 @@ describe('App', () => {
     await wrapper.get('[data-testid="onboarding-hive-submit"]').trigger('click')
     await flushPromises()
 
-    expect(mocks.SaveHiveSetup).toHaveBeenCalledWith(expect.objectContaining({
-      defaultAgent: 'claude',
-      workspaces: ['/home/dev/code'],
-    }))
+    expect(mocks.SaveHiveSetup).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultAgent: 'claude',
+        workspaces: ['/home/dev/code'],
+      }),
+    )
     expect(wrapper.find('[data-testid="onboarding-connect"]').exists()).toBe(true)
 
     wrapper.unmount()
@@ -693,7 +786,25 @@ describe('App', () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input)
       if (url.endsWith('/api/terminal/agents/sessions/first-run')) {
-        return new Response(JSON.stringify({ id: 7, workspace: 'hive', name: 'Getting started', agent: 'claude', lastOpenedAt: 0, slug: 'agentws-7', terminalId: '', windowId: '', paneId: '', cols: 0, rows: 0, resumeAttempted: true, notice: '', scheduleId: '' }), { status: 200 })
+        return new Response(
+          JSON.stringify({
+            id: 7,
+            workspace: 'hive',
+            name: 'Getting started',
+            agent: 'claude',
+            lastOpenedAt: 0,
+            slug: 'agentws-7',
+            terminalId: '',
+            windowId: '',
+            paneId: '',
+            cols: 0,
+            rows: 0,
+            resumeAttempted: true,
+            notice: '',
+            scheduleId: '',
+          }),
+          { status: 200 },
+        )
       }
       return new Response('{}', { status: 200 })
     })
@@ -777,7 +888,8 @@ describe('App', () => {
     expect(wrapper.find('[data-testid="onboarding"]').exists()).toBe(false)
 
     mocks.Status.mockResolvedValue({ state: 'disconnected', login: '', name: '', avatarUrl: '', message: '' })
-    const connection = mocks.On.mock.calls.find(([event]) => event === 'connection:updated')?.[1] as ((ev: { data: string }) => void) | undefined
+    const connection = mocks.On.mock.calls.find(([event]) => event === 'connection:updated')?.[1] as
+      ((ev: { data: string }) => void) | undefined
     connection?.({ data: 'github' })
     await flushPromises()
 
@@ -788,21 +900,31 @@ describe('App', () => {
   })
 
   it('confirms updates in-app and shows install failures', async () => {
-    mocks.UpdaterStatus.mockResolvedValue({ enabled: true, available: true, currentVersion: '1.2.0', latestVersion: '1.3.0', notes: '' })
+    mocks.UpdaterStatus.mockResolvedValue({
+      enabled: true,
+      available: true,
+      currentVersion: '1.2.0',
+      latestVersion: '1.3.0',
+      notes: '',
+    })
     mocks.InstallUpdate.mockRejectedValue(new Error('checksum mismatch'))
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const wrapper = await mountApp()
 
     try {
       await wrapper.get('[data-testid="titlebar-update-chip"]').trigger('click')
-      expect(document.querySelector('[data-testid="update-confirmation"]')?.textContent).toContain('Download Hive 1.3.0')
+      expect(document.querySelector('[data-testid="update-confirmation"]')?.textContent).toContain(
+        'Download Hive 1.3.0',
+      )
       expect(mocks.InstallUpdate).not.toHaveBeenCalled()
 
       document.querySelector<HTMLButtonElement>('[data-testid="update-confirmation-confirm"]')?.click()
       await flushPromises()
 
       expect(mocks.InstallUpdate).toHaveBeenCalledOnce()
-      expect(document.querySelector('[data-testid="update-confirmation-error"]')?.textContent).toContain('checksum mismatch')
+      expect(document.querySelector('[data-testid="update-confirmation-error"]')?.textContent).toContain(
+        'checksum mismatch',
+      )
       expect(wrapper.get('[data-testid="toast-title"]').text()).toBe('Could not install the update')
       expect(wrapper.get('[data-testid="toast-body"]').text()).toContain('checksum mismatch')
       expect(wrapper.get('[data-testid="titlebar-update-chip"]').attributes('disabled')).toBeUndefined()
@@ -832,7 +954,8 @@ describe('App', () => {
     const wrapper = await mountApp()
 
     try {
-      const failed = mocks.On.mock.calls.find(([event]) => event === 'sessions:create-failed')?.[1] as ((ev: { data: string }) => void) | undefined
+      const failed = mocks.On.mock.calls.find(([event]) => event === 'sessions:create-failed')?.[1] as
+        ((ev: { data: string }) => void) | undefined
       expect(failed).toBeDefined()
       failed?.({ data: 'fix-crash' })
       await flushPromises()
@@ -849,7 +972,9 @@ describe('App', () => {
       const dialog = document.querySelector('[data-testid="new-session-dialog"]')
       expect(dialog).not.toBeNull()
       expect(document.querySelector<HTMLInputElement>('[data-testid="new-session-name"]')?.value).toBe('fix-crash')
-      expect(document.querySelector('[data-testid="new-session-failure-reason"]')?.textContent).toContain('exit status 1')
+      expect(document.querySelector('[data-testid="new-session-failure-reason"]')?.textContent).toContain(
+        'exit status 1',
+      )
     } finally {
       wrapper.unmount()
     }
@@ -875,7 +1000,11 @@ describe('App', () => {
 
   it('exposes item selection as a command and selected-item creation as a palette action', async () => {
     mocks.ListByFeed.mockResolvedValue(inboxItems())
-    mocks.NewSessionDraft.mockResolvedValue({ repository: '', name: 'inbox-selection-a1b2c3d4', prompt: 'Combined context' })
+    mocks.NewSessionDraft.mockResolvedValue({
+      repository: '',
+      name: 'inbox-selection-a1b2c3d4',
+      prompt: 'Combined context',
+    })
     const wrapper = await mountApp()
     const palette = useCommandPalette()
     palette.query.value = ''
@@ -909,9 +1038,7 @@ describe('App', () => {
   // menu, but never from the palette. It is grouped under the item it acts on,
   // the way Code groups a session's operations under the session.
   it('offers the selected item\u2019s configured actions, under the item\u2019s own reference', async () => {
-    mocks.ActionViews.mockResolvedValue([
-      { id: 'review', label: 'Review PR', type: 'shell', inputs: [] },
-    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review PR', type: 'shell', inputs: [] }])
     mocks.InvokeAction.mockResolvedValue({ commandId: 7, status: 'completed', stdout: '', stderr: '' })
     mocks.ListByFeed.mockResolvedValue(inboxItems())
     const wrapper = await mountApp()
@@ -935,7 +1062,9 @@ describe('App', () => {
   // A launcher is a line of actions.yml that has to become both a palette row
   // and a chord of its own — this is where those two meet the app.
   it('offers a configured launcher in the palette and opens it on the session it is attached to', async () => {
-    mocks.PopupLaunchers.mockResolvedValue([{ id: 'lazygit', label: 'lazygit', icon: 'git-branch', requiresSession: true }])
+    mocks.PopupLaunchers.mockResolvedValue([
+      { id: 'lazygit', label: 'lazygit', icon: 'git-branch', requiresSession: true },
+    ])
     const { wrapper, router } = await mountAppWithRouter()
     await router.push('/terminal/hive-fix-parser')
     await flushPromises()
@@ -964,7 +1093,9 @@ describe('App', () => {
   // cwd-less launcher needs is a pane to read, not a checkout (ADR
   // a-new-tab-and-a-launcher-open-where-the-terminal-s-active-pane-is).
   it('opens a session-scoped launcher on the scratch terminal', async () => {
-    mocks.PopupLaunchers.mockResolvedValue([{ id: 'lazygit', label: 'lazygit', icon: 'git-branch', requiresSession: true }])
+    mocks.PopupLaunchers.mockResolvedValue([
+      { id: 'lazygit', label: 'lazygit', icon: 'git-branch', requiresSession: true },
+    ])
     const { wrapper, router } = await mountAppWithRouter()
     await router.push('/terminal/Scratch')
     await flushPromises()
@@ -988,7 +1119,9 @@ describe('App', () => {
   // terminal is is not offered where there is no terminal, and its chord is not
   // dispatched there either (ADR quick-terminal-launchers-are-session-scoped).
   it('withholds a session-scoped launcher with no terminal attached, from the palette and from its chord', async () => {
-    mocks.PopupLaunchers.mockResolvedValue([{ id: 'lazygit', label: 'lazygit', icon: 'git-branch', requiresSession: true }])
+    mocks.PopupLaunchers.mockResolvedValue([
+      { id: 'lazygit', label: 'lazygit', icon: 'git-branch', requiresSession: true },
+    ])
     const { wrapper, router } = await mountAppWithRouter()
     useKeybindings().addBinding('launcher.lazygit', 'alt+g')
 
@@ -1624,11 +1757,24 @@ describe('App', () => {
     // back to the raw dir key rather than a display name.
     it('lists a chat row, pushes its agents route, and focuses the chat pane', async () => {
       const { wrapper, router } = await mountAppWithRouter()
-      useAgentSessionsAll().recents.value = [{
-        id: 42, workspace: 'my-workspace', name: 'Chat about the bug', agent: 'claude',
-        lastOpenedAt: 0, slug: 'chat-42', terminalId: '', windowId: '', paneId: '', cols: 0, rows: 0,
-        resumeAttempted: false, notice: '', scheduleId: '',
-      }]
+      useAgentSessionsAll().recents.value = [
+        {
+          id: 42,
+          workspace: 'my-workspace',
+          name: 'Chat about the bug',
+          agent: 'claude',
+          lastOpenedAt: 0,
+          slug: 'chat-42',
+          terminalId: '',
+          windowId: '',
+          paneId: '',
+          cols: 0,
+          rows: 0,
+          resumeAttempted: false,
+          notice: '',
+          scheduleId: '',
+        },
+      ]
 
       // Mount the Chats mode once, then replace its handles while it is hidden.
       // Returning through the palette reuses that mounted pane.
@@ -1664,13 +1810,36 @@ describe('App', () => {
     it('groups a chat row under the workspace display name once the workspaces list has a matching dir', async () => {
       const { wrapper } = await mountAppWithRouter()
       useAgentWorkspaces().workspaces.value = [
-        { dir: 'my-workspace', name: 'Travel', command: 'claude', danger: false, mcps: [], skills: [], schedules: [], problem: '', notice: '' },
+        {
+          dir: 'my-workspace',
+          name: 'Travel',
+          command: 'claude',
+          danger: false,
+          mcps: [],
+          skills: [],
+          schedules: [],
+          problem: '',
+          notice: '',
+        },
       ]
-      useAgentSessionsAll().recents.value = [{
-        id: 42, workspace: 'my-workspace', name: 'Chat about the bug', agent: 'claude',
-        lastOpenedAt: 0, slug: 'chat-42', terminalId: '', windowId: '', paneId: '', cols: 0, rows: 0,
-        resumeAttempted: false, notice: '', scheduleId: '',
-      }]
+      useAgentSessionsAll().recents.value = [
+        {
+          id: 42,
+          workspace: 'my-workspace',
+          name: 'Chat about the bug',
+          agent: 'claude',
+          lastOpenedAt: 0,
+          slug: 'chat-42',
+          terminalId: '',
+          windowId: '',
+          paneId: '',
+          cols: 0,
+          rows: 0,
+          resumeAttempted: false,
+          notice: '',
+          scheduleId: '',
+        },
+      ]
 
       const { results, query } = useCommandPalette()
       query.value = ''
@@ -1775,7 +1944,9 @@ describe('App', () => {
   // catalog, so it stays reachable from anywhere — the scope rule is about the
   // ones that resolve their directory from the session.
   it('keeps a launcher with its own working directory reachable off a session', async () => {
-    mocks.PopupLaunchers.mockResolvedValue([{ id: 'dotfiles', label: 'Edit dotfiles', icon: 'folder', requiresSession: false }])
+    mocks.PopupLaunchers.mockResolvedValue([
+      { id: 'dotfiles', label: 'Edit dotfiles', icon: 'folder', requiresSession: false },
+    ])
     const wrapper = await mountApp()
 
     const { results, query } = useCommandPalette()
@@ -1918,8 +2089,11 @@ describe('App', () => {
 
   it('leaves the collapsed preview shut for row controls and the list header menus', async () => {
     mocks.ListByFeed.mockResolvedValue(inboxItems())
-    mocks.SetUnread.mockImplementation(async (id: number, revision: number, unread: boolean) =>
-      ({ ...inboxItems().find((item) => item.id === id)!, revision: revision + 1, unread }))
+    mocks.SetUnread.mockImplementation(async (id: number, revision: number, unread: boolean) => ({
+      ...inboxItems().find((item) => item.id === id)!,
+      revision: revision + 1,
+      unread,
+    }))
     const wrapper = await mountApp()
 
     await wrapper.get('[data-testid="titlebar-toggle-preview"]').trigger('click')
@@ -2141,7 +2315,9 @@ describe('App', () => {
     const wrapper = mount(App, {
       global: {
         plugins: [router],
-        stubs: { DetailPane: { template: '<button data-testid="detail-edit" @click="$emit(\'edit\')" />', emits: ['edit'] } },
+        stubs: {
+          DetailPane: { template: '<button data-testid="detail-edit" @click="$emit(\'edit\')" />', emits: ['edit'] },
+        },
       },
     })
     await flushPromises()
@@ -2175,13 +2351,16 @@ describe('App', () => {
 
   it('opens the feed a menu bar heading names', async () => {
     const { wrapper, router } = await mountAppWithRouter()
-    const open = mocks.On.mock.calls.find(([event]) => event === 'menubar:open')?.[1] as ((ev: { data: unknown }) => void) | undefined
+    const open = mocks.On.mock.calls.find(([event]) => event === 'menubar:open')?.[1] as
+      ((ev: { data: unknown }) => void) | undefined
 
     open?.({ data: { profileId: 'personal', feedId: 'personal/desktop', itemId: 0, settings: false } })
     await flushPromises()
 
     expect(router.currentRoute.value.query.feed).toBe('personal/desktop')
-    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"]').classes()).toContain('sidebar-entry-selected')
+    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"]').classes()).toContain(
+      'sidebar-entry-selected',
+    )
     wrapper.unmount()
   })
 
@@ -2191,7 +2370,9 @@ describe('App', () => {
     await wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.feed).toBe('personal/desktop')
-    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"]').classes()).toContain('sidebar-entry-selected')
+    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"]').classes()).toContain(
+      'sidebar-entry-selected',
+    )
 
     await wrapper.find('[data-testid="filter-unread"]').trigger('click')
     await flushPromises()
@@ -2206,7 +2387,9 @@ describe('App', () => {
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({})
     // A bare feed route selects the profile default: the last-selected feed.
-    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"]').classes()).toContain('sidebar-entry-selected')
+    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"]').classes()).toContain(
+      'sidebar-entry-selected',
+    )
 
     router.forward()
     await flushPromises()
@@ -2228,15 +2411,58 @@ describe('App', () => {
 
   it('clears stale observed activity while the selected item timeline loads or fails', async () => {
     const items = [
-      { id: 1, profileId: 'personal', sourceKind: 'github', sourceScope: '', externalId: 'pr-1', title: 'First', url: '', payload: { kind: 'PR', repo: 'acme/app', num: 1, author: 'hay' }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 2 },
-      { id: 2, profileId: 'personal', sourceKind: 'github', sourceScope: '', externalId: 'pr-2', title: 'Second', url: '', payload: { kind: 'PR', repo: 'acme/app', num: 2, author: 'hay' }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 2 },
+      {
+        id: 1,
+        profileId: 'personal',
+        sourceKind: 'github',
+        sourceScope: '',
+        externalId: 'pr-1',
+        title: 'First',
+        url: '',
+        payload: { kind: 'PR', repo: 'acme/app', num: 1, author: 'hay' },
+        revision: 1,
+        unread: true,
+        lifecycle: 'active',
+        firstSeenAt: 1,
+        lastEventAt: 2,
+      },
+      {
+        id: 2,
+        profileId: 'personal',
+        sourceKind: 'github',
+        sourceScope: '',
+        externalId: 'pr-2',
+        title: 'Second',
+        url: '',
+        payload: { kind: 'PR', repo: 'acme/app', num: 2, author: 'hay' },
+        revision: 1,
+        unread: true,
+        lifecycle: 'active',
+        firstSeenAt: 1,
+        lastEventAt: 2,
+      },
     ]
     let rejectSecond!: (error: Error) => void
-    const secondEvents = new Promise<never>((_, reject) => { rejectSecond = reject })
+    const secondEvents = new Promise<never>((_, reject) => {
+      rejectSecond = reject
+    })
     mocks.ListByFeed.mockResolvedValue(items)
-    mocks.Events.mockImplementation((id: number) => id === 1
-      ? Promise.resolve([{ id: 1, itemId: 1, kind: 'observed', transition: 'none', attention: 'activity', summary: 'first event', detail: {}, createdAt: 1 }])
-      : secondEvents)
+    mocks.Events.mockImplementation((id: number) =>
+      id === 1
+        ? Promise.resolve([
+            {
+              id: 1,
+              itemId: 1,
+              kind: 'observed',
+              transition: 'none',
+              attention: 'activity',
+              summary: 'first event',
+              detail: {},
+              createdAt: 1,
+            },
+          ])
+        : secondEvents,
+    )
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const wrapper = await mountApp()
     expect(wrapper.get('[data-testid="observed-activity"]').text()).toContain('first event')
@@ -2325,7 +2551,17 @@ describe('App', () => {
 
   it('the titlebar error chip deep-links to the first failing node, even with the canvas closed', async () => {
     mocks.NodeRuns.mockResolvedValue([
-      { flowId: 'personal', nodeId: 'src', ok: false, inCount: 0, outCount: 0, dropCount: 0, err: 'boom', durMs: 1, endedAt: 0 },
+      {
+        flowId: 'personal',
+        nodeId: 'src',
+        ok: false,
+        inCount: 0,
+        outCount: 0,
+        dropCount: 0,
+        err: 'boom',
+        durMs: 1,
+        endedAt: 0,
+      },
     ])
 
     const wrapper = await mountApp()
@@ -2544,7 +2780,8 @@ describe('App', () => {
     const wrapper = await mountApp()
 
     mocks.FeedCounts.mockClear()
-    const inboxHandler = mocks.On.mock.calls.find(([event]) => event === 'inbox:updated')?.[1] as (() => void) | undefined
+    const inboxHandler = mocks.On.mock.calls.find(([event]) => event === 'inbox:updated')?.[1] as
+      (() => void) | undefined
     expect(inboxHandler).toBeDefined()
 
     inboxHandler?.()
@@ -2594,80 +2831,86 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it.each(['metaKey', 'ctrlKey'] as const)('toggles the active sidebar from the title bar, keyboard, and palette (%s)', async (modifier) => {
-    Object.defineProperty(navigator, 'userAgent', { configurable: true, value: modifier === 'metaKey' ? 'Macintosh' : 'Windows' })
-    localStorage.setItem('hive.panel.sidebar.collapsed', 'false')
-    localStorage.setItem('hive.panel.terminal.sidebar.collapsed', 'true')
-    mocks.TerminalAvailable.mockResolvedValue({ available: true, reason: '' })
-    const { wrapper } = await mountAppWithRouter()
+  it.each(['metaKey', 'ctrlKey'] as const)(
+    'toggles the active sidebar from the title bar, keyboard, and palette (%s)',
+    async (modifier) => {
+      Object.defineProperty(navigator, 'userAgent', {
+        configurable: true,
+        value: modifier === 'metaKey' ? 'Macintosh' : 'Windows',
+      })
+      localStorage.setItem('hive.panel.sidebar.collapsed', 'false')
+      localStorage.setItem('hive.panel.terminal.sidebar.collapsed', 'true')
+      mocks.TerminalAvailable.mockResolvedValue({ available: true, reason: '' })
+      const { wrapper } = await mountAppWithRouter()
 
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', [modifier]: true }))
-    await flushPromises()
-    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(false)
-    expect(localStorage.getItem('hive.panel.sidebar.collapsed')).toBe('true')
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', [modifier]: true }))
-    await flushPromises()
-    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
-
-    await wrapper.get('[data-testid="titlebar-mode-terminal"]').trigger('click')
-    await vi.waitFor(() => expect(terminalOnScreen(wrapper)).toBe(true))
-    await flushPromises()
-
-    const toggle = wrapper.get('[data-testid="titlebar-toggle-sidebar"]')
-    expect(toggle.attributes('disabled')).toBeUndefined()
-    expect(toggle.attributes('aria-label')).toBe('Show sidebar')
-    expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
-
-    await toggle.trigger('click')
-    await flushPromises()
-    expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
-    expect(localStorage.getItem('hive.panel.terminal.sidebar.collapsed')).toBe('false')
-
-    await toggle.trigger('click')
-    await flushPromises()
-    expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
-    expect(localStorage.getItem('hive.panel.terminal.sidebar.collapsed')).toBe('true')
-
-    const pane = focusedPane()
-    if (modifier === 'metaKey') {
-      const prefix = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true })
-      pane.dispatchEvent(prefix)
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', [modifier]: true }))
       await flushPromises()
-      expect(prefix.defaultPrevented).toBe(false)
+      expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(false)
+      expect(localStorage.getItem('hive.panel.sidebar.collapsed')).toBe('true')
+
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', [modifier]: true }))
+      await flushPromises()
+      expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+
+      await wrapper.get('[data-testid="titlebar-mode-terminal"]').trigger('click')
+      await vi.waitFor(() => expect(terminalOnScreen(wrapper)).toBe(true))
+      await flushPromises()
+
+      const toggle = wrapper.get('[data-testid="titlebar-toggle-sidebar"]')
+      expect(toggle.attributes('disabled')).toBeUndefined()
+      expect(toggle.attributes('aria-label')).toBe('Show sidebar')
       expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
-    }
-    const shortcut = new KeyboardEvent('keydown', { key: 'b', [modifier]: true, bubbles: true, cancelable: true })
-    pane.dispatchEvent(shortcut)
-    await flushPromises()
-    expect(shortcut.defaultPrevented).toBe(true)
-    expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
 
-    const { results } = useCommandPalette()
-    results.value.find((command) => command.id === 'terminal.toggle-sidebar')!.run()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
+      await toggle.trigger('click')
+      await flushPromises()
+      expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
+      expect(localStorage.getItem('hive.panel.terminal.sidebar.collapsed')).toBe('false')
 
-    const kb = useKeybindings()
-    kb.removeBinding('terminal.toggle-sidebar', 'mod+b')
-    kb.addBinding('terminal.toggle-sidebar', 'mod+j')
-    pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', [modifier]: true, bubbles: true }))
-    await flushPromises()
-    expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
-    pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', [modifier]: true, bubbles: true }))
-    await flushPromises()
-    expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
-    pane.remove()
+      await toggle.trigger('click')
+      await flushPromises()
+      expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
+      expect(localStorage.getItem('hive.panel.terminal.sidebar.collapsed')).toBe('true')
 
-    await wrapper.get('[data-testid="titlebar-mode-hub"]').trigger('click')
-    await flushPromises()
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', [modifier]: true }))
-    await flushPromises()
-    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(false)
-    expect(localStorage.getItem('hive.panel.sidebar.collapsed')).toBe('true')
+      const pane = focusedPane()
+      if (modifier === 'metaKey') {
+        const prefix = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true, bubbles: true, cancelable: true })
+        pane.dispatchEvent(prefix)
+        await flushPromises()
+        expect(prefix.defaultPrevented).toBe(false)
+        expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
+      }
+      const shortcut = new KeyboardEvent('keydown', { key: 'b', [modifier]: true, bubbles: true, cancelable: true })
+      pane.dispatchEvent(shortcut)
+      await flushPromises()
+      expect(shortcut.defaultPrevented).toBe(true)
+      expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
 
-    wrapper.unmount()
-  })
+      const { results } = useCommandPalette()
+      results.value.find((command) => command.id === 'terminal.toggle-sidebar')!.run()
+      await flushPromises()
+      expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
+
+      const kb = useKeybindings()
+      kb.removeBinding('terminal.toggle-sidebar', 'mod+b')
+      kb.addBinding('terminal.toggle-sidebar', 'mod+j')
+      pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'b', [modifier]: true, bubbles: true }))
+      await flushPromises()
+      expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
+      pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', [modifier]: true, bubbles: true }))
+      await flushPromises()
+      expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
+      pane.remove()
+
+      await wrapper.get('[data-testid="titlebar-mode-hub"]').trigger('click')
+      await flushPromises()
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', [modifier]: true }))
+      await flushPromises()
+      expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(false)
+      expect(localStorage.getItem('hive.panel.sidebar.collapsed')).toBe('true')
+
+      wrapper.unmount()
+    },
+  )
 
   // #432: the canvas is the right-hand pane in Chats, so the title bar's
   // right-panel toggle drives it — the same slot the detail preview uses in
@@ -2807,19 +3050,21 @@ describe('App', () => {
       sourceScope: 'acme/app',
       url: 'https://github.com/acme/app/pull/1',
     }
-    mocks.ActivityList.mockResolvedValue([{
-      id: 10,
-      createdAt: Date.now(),
-      category: 'auto_action',
-      severity: 'auto',
-      title: 'Auto-action · My PR approved',
-      metadata: {
-        'link.item.profileId': 'personal',
-        'link.item.sourceKind': 'github',
-        'link.item.sourceScope': 'acme/app',
-        'link.item.externalId': 'acme/app#1',
+    mocks.ActivityList.mockResolvedValue([
+      {
+        id: 10,
+        createdAt: Date.now(),
+        category: 'auto_action',
+        severity: 'auto',
+        title: 'Auto-action · My PR approved',
+        metadata: {
+          'link.item.profileId': 'personal',
+          'link.item.sourceKind': 'github',
+          'link.item.sourceScope': 'acme/app',
+          'link.item.externalId': 'acme/app#1',
+        },
       },
-    }])
+    ])
     mocks.FindItems.mockResolvedValue([linkedItem])
     mocks.Feed.mockResolvedValue('personal/desktop')
     mocks.ListByFeed.mockResolvedValue([linkedItem])
@@ -2910,9 +3155,18 @@ describe('App', () => {
 
   it('suppresses the tasks toggle while a different overlay is open, and while a confirm dialog is stacked inside it', async () => {
     const taskItem = {
-      id: 't1', repoKey: 'acme/site', epicId: '', parentId: '', sessionId: '',
-      title: 'Task t1', type: 'task', status: 'open', blocked: false, depth: 0,
-      createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+      id: 't1',
+      repoKey: 'acme/site',
+      epicId: '',
+      parentId: '',
+      sessionId: '',
+      title: 'Task t1',
+      type: 'task',
+      status: 'open',
+      blocked: false,
+      depth: 0,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
     }
     mocks.ListTasks.mockResolvedValue([taskItem])
     mocks.TaskDetail.mockResolvedValue({ ...taskItem, desc: '', blockers: [], comments: [] })
@@ -3349,5 +3603,4 @@ describe('App', () => {
     pane.remove()
     wrapper.unmount()
   })
-
 })

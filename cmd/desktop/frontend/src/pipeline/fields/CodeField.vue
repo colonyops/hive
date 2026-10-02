@@ -76,12 +76,24 @@ function onKeydown(e: KeyboardEvent) {
 <template>
   <div>
     <div v-if="label" class="mb-1.5 text-[12.5px] text-text-2">{{ label }}</div>
-    <div class="hv-code-shell flex overflow-hidden rounded-[9px] border border-row bg-app" :style="{ height: `${shellHeight}px` }">
-      <div ref="gutterRef" class="hv-code-gutter shrink-0 select-none overflow-hidden text-right text-text-4" :data-testid="testid ? `${testid}-gutter` : undefined">
+    <div
+      class="hv-code-shell flex overflow-hidden rounded-[9px] border border-row bg-app"
+      :style="{ height: `${shellHeight}px` }"
+    >
+      <div
+        ref="gutterRef"
+        class="hv-code-gutter shrink-0 select-none overflow-hidden text-right text-text-4"
+        :data-testid="testid ? `${testid}-gutter` : undefined"
+      >
         <div v-for="n in lineNumbers" :key="n" class="hv-code-line">{{ n }}</div>
       </div>
       <div class="relative min-w-0 flex-1">
-        <pre ref="preRef" class="hv-code-pre hv-code-layer pointer-events-none m-0 overflow-hidden text-text-2" :data-testid="testid ? `${testid}-pre` : undefined" v-html="highlightedHtml" />
+        <pre
+          ref="preRef"
+          class="hv-code-pre hv-code-layer pointer-events-none m-0 overflow-hidden text-text-2"
+          :data-testid="testid ? `${testid}-pre` : undefined"
+          v-html="highlightedHtml"
+        />
         <textarea
           :value="modelValue"
           :placeholder="placeholder"
@@ -94,8 +106,20 @@ function onKeydown(e: KeyboardEvent) {
         />
       </div>
     </div>
-    <p v-if="error" class="mt-1.5 text-xs leading-relaxed text-kind-issue" :data-testid="testid ? `${testid}-error` : undefined">{{ error }}</p>
-    <p v-else-if="hint" class="mt-1.5 text-xs leading-relaxed text-text-4" :data-testid="testid ? `${testid}-hint` : undefined">{{ hint }}</p>
+    <p
+      v-if="error"
+      class="mt-1.5 text-xs leading-relaxed text-kind-issue"
+      :data-testid="testid ? `${testid}-error` : undefined"
+    >
+      {{ error }}
+    </p>
+    <p
+      v-else-if="hint"
+      class="mt-1.5 text-xs leading-relaxed text-text-4"
+      :data-testid="testid ? `${testid}-hint` : undefined"
+    >
+      {{ hint }}
+    </p>
   </div>
 </template>
 

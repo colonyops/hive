@@ -29,6 +29,10 @@ onMounted(() => {
 <style scoped>
 /* xterm's canvas covers its viewport scrollbar. Keep it hidden; wheel input
    and the scrolled-up control still expose scrollback. */
-.terminal-pane :deep(.xterm-viewport) { scrollbar-width: none; }
-.terminal-pane :deep(.xterm-viewport::-webkit-scrollbar) { display: none; }
+.terminal-pane :deep(.xterm-viewport) {
+  scrollbar-width: none;
+}
+.terminal-pane :deep(.xterm-viewport::-webkit-scrollbar) {
+  display: none;
+}
 </style>

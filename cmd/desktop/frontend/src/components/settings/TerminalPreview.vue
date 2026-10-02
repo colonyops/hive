@@ -64,25 +64,31 @@ onMounted(async () => {
   await loadTerminalFaces(fontFamily.value, fontSizePx.value, fontWeight.value, fontWeightBold.value)
   if (disposed || !host.value) return
 
-  const created = markRaw(new Terminal({
-    fontFamily: terminalFontStack(fontFamily.value),
-    fontSize: fontSizePx.value,
-    fontWeight: fontWeight.value,
-    fontWeightBold: fontWeightBold.value,
-    lineHeight: lineHeight.value,
-    letterSpacing: letterSpacing.value,
-    theme: xtermTheme(),
-    disableStdin: true,
-    cursorInactiveStyle: 'none',
-    // Nothing scrolls: the sample is exactly the grid it is written for.
-    scrollback: 0,
-  }))
+  const created = markRaw(
+    new Terminal({
+      fontFamily: terminalFontStack(fontFamily.value),
+      fontSize: fontSizePx.value,
+      fontWeight: fontWeight.value,
+      fontWeightBold: fontWeightBold.value,
+      lineHeight: lineHeight.value,
+      letterSpacing: letterSpacing.value,
+      theme: xtermTheme(),
+      disableStdin: true,
+      cursorInactiveStyle: 'none',
+      // Nothing scrolls: the sample is exactly the grid it is written for.
+      scrollback: 0,
+    }),
+  )
   created.resize(COLS, ROWS)
   created.open(host.value)
   // Nothing retries a preview — it has no reveal path to retry on — and a claim
   // that failed here failed for the real panes too, so what it shows is still
   // what the user is going to get.
-  claimAtlasRenderer(created, (addon) => disposers.push(addon), () => {})
+  claimAtlasRenderer(
+    created,
+    (addon) => disposers.push(addon),
+    () => {},
+  )
   created.write(SAMPLE.join('\r\n'))
 
   // xterm's input textarea is focusable even with stdin disabled, and a preview
@@ -91,7 +97,9 @@ onMounted(async () => {
   term.value = created
 })
 
-watch(theme, () => { if (term.value) term.value.options.theme = xtermTheme() })
+watch(theme, () => {
+  if (term.value) term.value.options.theme = xtermTheme()
+})
 
 watch(
   [fontSizePx, fontFamily, fontWeight, fontWeightBold, lineHeight, letterSpacing],

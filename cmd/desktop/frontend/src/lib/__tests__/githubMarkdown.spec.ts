@@ -68,7 +68,8 @@ describe('renderGithubMarkdown', () => {
   })
 
   it('removes GitHub HTML comments without hiding surrounding content', () => {
-    const src = 'You can ask for more help in #proj-renovate-self-hosted.\n<!--renovate-debug:eyJ2ZXIiOiI0My4yNjYuMCJ9-->'
+    const src =
+      'You can ask for more help in #proj-renovate-self-hosted.\n<!--renovate-debug:eyJ2ZXIiOiI0My4yNjYuMCJ9-->'
     const html = renderGithubMarkdown(src)
     expect(html).toContain('You can ask for more help in #proj-renovate-self-hosted.')
     expect(html).not.toContain('renovate-debug')

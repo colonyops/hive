@@ -47,7 +47,9 @@ describe('TextField', () => {
 
 describe('TextareaField', () => {
   it('renders its label and forwards testid, rows, and monospace styling to the textarea', () => {
-    const wrapper = mount(TextareaField, { props: { modelValue: 'hello', label: 'Template', testid: 'ta', rows: 5, monospace: true } })
+    const wrapper = mount(TextareaField, {
+      props: { modelValue: 'hello', label: 'Template', testid: 'ta', rows: 5, monospace: true },
+    })
     const textarea = wrapper.get('[data-testid="ta"]').element as HTMLTextAreaElement
 
     expect(wrapper.text()).toContain('Template')
@@ -68,7 +70,10 @@ describe('TextareaField', () => {
 })
 
 describe('SelectField', () => {
-  const options = [{ value: 'a', label: 'Alpha' }, { value: 'b', label: 'Beta' }]
+  const options = [
+    { value: 'a', label: 'Alpha' },
+    { value: 'b', label: 'Beta' },
+  ]
 
   it('round-trips modelValue and emits the chosen option', async () => {
     const wrapper = mount(SelectField, { props: { modelValue: 'a', options, testid: 'sf' } })
@@ -80,12 +85,16 @@ describe('SelectField', () => {
   })
 
   it('shows the placeholder when nothing is selected', () => {
-    const wrapper = mount(SelectField, { props: { modelValue: '', options: [], placeholder: 'Choose one', testid: 'sf' } })
+    const wrapper = mount(SelectField, {
+      props: { modelValue: '', options: [], placeholder: 'Choose one', testid: 'sf' },
+    })
     expect(wrapper.get('[data-testid="sf"]').text()).toContain('Choose one')
   })
 
   it('wraps the control in FieldRow chrome and labels it', () => {
-    const wrapper = mount(SelectField, { props: { modelValue: 'a', options, label: 'Kind', hint: 'pick one', testid: 'sf' } })
+    const wrapper = mount(SelectField, {
+      props: { modelValue: 'a', options, label: 'Kind', hint: 'pick one', testid: 'sf' },
+    })
     expect(wrapper.text()).toContain('Kind')
     expect(wrapper.get('[data-testid="sf-hint"]').text()).toBe('pick one')
     expect(wrapper.get('[data-testid="sf"]').attributes('aria-label')).toBe('Kind')

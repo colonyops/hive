@@ -12,7 +12,21 @@ function at(month: number, day: number, hour: number, minute = 0, year = 2026): 
 }
 
 function item(id: number, lastEventAt: number): InboxItem {
-  return { id, profileId: 'triage', sourceKind: 'github', sourceScope: 'acme/app', externalId: `pr-${id}`, title: `Item ${id}`, url: '', payload: {}, revision: 1, unread: false, lifecycle: 'active', firstSeenAt: 0, lastEventAt }
+  return {
+    id,
+    profileId: 'triage',
+    sourceKind: 'github',
+    sourceScope: 'acme/app',
+    externalId: `pr-${id}`,
+    title: `Item ${id}`,
+    url: '',
+    payload: {},
+    revision: 1,
+    unread: false,
+    lifecycle: 'active',
+    firstSeenAt: 0,
+    lastEventAt,
+  }
 }
 
 describe('dayKey', () => {
@@ -87,7 +101,15 @@ describe('groupItemsByDate', () => {
       item(0, at(2, 3, 10)),
     ]
     const groups = groupItemsByDate(items, now)
-    expect(groups.map((g) => g.label)).toEqual(['Today', 'Yesterday', 'This week', 'Last week', 'This month', 'Last month', 'Older'])
+    expect(groups.map((g) => g.label)).toEqual([
+      'Today',
+      'Yesterday',
+      'This week',
+      'Last week',
+      'This month',
+      'Last month',
+      'Older',
+    ])
     expect(groups.map((g) => g.items.map((i) => i.id))).toEqual([[7, 6], [5], [4], [3], [2], [1], [0]])
   })
 

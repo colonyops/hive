@@ -23,7 +23,9 @@ describe('BaseBadge', () => {
   it('renders an optional leading status dot and its label slot', () => {
     const wrapper = mount(BaseBadge, { props: { tone: 'success', dot: true }, slots: { default: 'Connected' } })
 
-    expect(wrapper.find('[aria-hidden="true"]').classes()).toEqual(expect.arrayContaining(['size-1.5', 'bg-severity-success']))
+    expect(wrapper.find('[aria-hidden="true"]').classes()).toEqual(
+      expect.arrayContaining(['size-1.5', 'bg-severity-success']),
+    )
     expect(wrapper.text()).toBe('Connected')
   })
 

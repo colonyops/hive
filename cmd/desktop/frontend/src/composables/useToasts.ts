@@ -12,9 +12,16 @@ function showToast(message: string, options: ToastOptions = {}): number {
   const severity = options.severity ?? 'info'
   const id = nextToastId++
   const duration = options.duration ?? defaultToastDuration
-  toasts.value = [...toasts.value, { id, message, body: options.body, severity, actions: options.actions ?? [], duration }]
+  toasts.value = [
+    ...toasts.value,
+    { id, message, body: options.body, severity, actions: options.actions ?? [], duration },
+  ]
   // duration 0 is a toast that waits for the user.
-  if (duration > 0) toastTimers.set(id, setTimeout(() => dismissToast(id), duration))
+  if (duration > 0)
+    toastTimers.set(
+      id,
+      setTimeout(() => dismissToast(id), duration),
+    )
   return id
 }
 

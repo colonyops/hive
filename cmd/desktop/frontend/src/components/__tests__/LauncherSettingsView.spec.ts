@@ -5,16 +5,26 @@ import type { Launcher } from '../../composables/useActionsSettings'
 
 const mocks = vi.hoisted(() => ({
   ListActions: vi.fn(),
-  CreateAction: vi.fn(), UpdateAction: vi.fn(), DeleteAction: vi.fn(), ReorderActions: vi.fn(),
-  CreateLauncher: vi.fn(), UpdateLauncher: vi.fn(), DeleteLauncher: vi.fn(),
-  KeybindingSettings: vi.fn(), SetKeybindingSettings: vi.fn(),
+  CreateAction: vi.fn(),
+  UpdateAction: vi.fn(),
+  DeleteAction: vi.fn(),
+  ReorderActions: vi.fn(),
+  CreateLauncher: vi.fn(),
+  UpdateLauncher: vi.fn(),
+  DeleteLauncher: vi.fn(),
+  KeybindingSettings: vi.fn(),
+  SetKeybindingSettings: vi.fn(),
   On: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/actionsservice', () => ({
   ListActions: mocks.ListActions,
-  CreateAction: mocks.CreateAction, UpdateAction: mocks.UpdateAction,
-  DeleteAction: mocks.DeleteAction, ReorderActions: mocks.ReorderActions,
-  CreateLauncher: mocks.CreateLauncher, UpdateLauncher: mocks.UpdateLauncher, DeleteLauncher: mocks.DeleteLauncher,
+  CreateAction: mocks.CreateAction,
+  UpdateAction: mocks.UpdateAction,
+  DeleteAction: mocks.DeleteAction,
+  ReorderActions: mocks.ReorderActions,
+  CreateLauncher: mocks.CreateLauncher,
+  UpdateLauncher: mocks.UpdateLauncher,
+  DeleteLauncher: mocks.DeleteLauncher,
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   KeybindingSettings: mocks.KeybindingSettings,
@@ -29,7 +39,9 @@ function mountSettings(launchers: Launcher[] = [lazygit]) {
   mocks.On.mockReturnValue(() => {})
   return mount(LauncherSettingsView, { attachTo: document.body })
 }
-function el<T extends HTMLElement>(id: string): T { return document.querySelector<T>(`[data-testid="${id}"]`)! }
+function el<T extends HTMLElement>(id: string): T {
+  return document.querySelector<T>(`[data-testid="${id}"]`)!
+}
 async function setValue(element: HTMLInputElement, value: string): Promise<void> {
   element.value = value
   element.dispatchEvent(new Event('input', { bubbles: true }))
@@ -91,11 +103,15 @@ describe('LauncherSettingsView', () => {
     mocks.KeybindingSettings.mockResolvedValue({ overrides: { 'launcher.lazygit': ['alt+g'] } })
     const { initializeKeybindings } = await import('../../composables/useKeybindings')
     const { setLauncherCommands } = await import('../../keybindings/catalog')
-    setLauncherCommands([{ id: 'launcher.lazygit', title: 'lazygit', group: 'Quick terminals', defaultCombos: [], context: 'global' }])
+    setLauncherCommands([
+      { id: 'launcher.lazygit', title: 'lazygit', group: 'Quick terminals', defaultCombos: [], context: 'global' },
+    ])
     initializeKeybindings()
 
     const wrapper = mountSettings()
-    await vi.waitFor(() => expect(wrapper.get('[data-testid="launcher-shortcut-lazygit"]').text()).not.toContain('Unbound'))
+    await vi.waitFor(() =>
+      expect(wrapper.get('[data-testid="launcher-shortcut-lazygit"]').text()).not.toContain('Unbound'),
+    )
     setLauncherCommands([])
     wrapper.unmount()
   })

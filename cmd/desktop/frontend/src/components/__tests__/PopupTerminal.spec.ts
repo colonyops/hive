@@ -70,7 +70,10 @@ const xterm = vi.hoisted(() => {
 
 vi.mock('@xterm/xterm', () => ({ Terminal: xterm.FakeTerminal }))
 vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: xterm.FakeAddon }))
-vi.mock('@wailsio/runtime', () => ({ Browser: { OpenURL: vi.fn().mockResolvedValue(undefined) }, Events: { On: vi.fn(() => vi.fn()) } }))
+vi.mock('@wailsio/runtime', () => ({
+  Browser: { OpenURL: vi.fn().mockResolvedValue(undefined) },
+  Events: { On: vi.fn(() => vi.fn()) },
+}))
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: xterm.FakeAddon }))
 vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: xterm.FakeAddon }))
 vi.mock('@xterm/addon-canvas', () => ({ CanvasAddon: xterm.FakeAddon }))
@@ -82,11 +85,22 @@ const mocks = vi.hoisted(() => ({
   loadTerminalFaces: vi.fn(),
 }))
 
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/popupterminalservice', () => ({
-  Available: mocks.Available,
-}))
+vi.mock(
+  '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/popupterminalservice',
+  () => ({
+    Available: mocks.Available,
+  }),
+)
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
-  AppearanceSettings: vi.fn().mockResolvedValue({ theme: '', terminalFontSizePx: 13, terminalFontFamily: '', terminalFontWeight: 0, terminalFontWeightBold: 0, terminalShowWindows: true, terminalPoolSize: 3 }),
+  AppearanceSettings: vi.fn().mockResolvedValue({
+    theme: '',
+    terminalFontSizePx: 13,
+    terminalFontFamily: '',
+    terminalFontWeight: 0,
+    terminalFontWeightBold: 0,
+    terminalShowWindows: true,
+    terminalPoolSize: 3,
+  }),
   Fonts: vi.fn().mockResolvedValue({ all: [], monospace: [] }),
   SetTheme: vi.fn(),
   SetTerminalFontSize: vi.fn(),
@@ -114,9 +128,15 @@ class FakeSocket {
   onclose: (() => void) | null = null
   onerror: (() => void) | null = null
 
-  constructor() { FakeSocket.instances.push(this) }
-  send(frame: Uint8Array): void { this.sent.push(frame) }
-  close(): void { this.closed = true }
+  constructor() {
+    FakeSocket.instances.push(this)
+  }
+  send(frame: Uint8Array): void {
+    this.sent.push(frame)
+  }
+  close(): void {
+    this.closed = true
+  }
 }
 
 class FakeResizeObserver {
@@ -273,7 +293,11 @@ describe('PopupTerminal', () => {
   // ahead of the face renders tofu for the rest of its life.
   it('waits for the terminal face before building the pane', async () => {
     let releaseFaces = (): void => {}
-    mocks.loadTerminalFaces.mockReturnValue(new Promise<void>((resolve) => { releaseFaces = resolve }))
+    mocks.loadTerminalFaces.mockReturnValue(
+      new Promise<void>((resolve) => {
+        releaseFaces = resolve
+      }),
+    )
 
     await mountPanel()
     usePopupTerminal().show()
@@ -307,7 +331,12 @@ describe('PopupTerminal', () => {
     expect(opened.options.fontWeightBold).toBe(defaultTerminalFontWeightBold)
     // The faces have to be resident before the Terminal is constructed: xterm
     // measures its cell on open and never re-measures (ADR terminal-atlas-renderer).
-    expect(mocks.loadTerminalFaces).toHaveBeenCalledWith('Menlo', expect.any(Number), 400, defaultTerminalFontWeightBold)
+    expect(mocks.loadTerminalFaces).toHaveBeenCalledWith(
+      'Menlo',
+      expect.any(Number),
+      400,
+      defaultTerminalFontWeightBold,
+    )
 
     setTerminalFontFamily(TERMINAL_FONT)
     setTerminalFontWeight(defaultTerminalFontWeight)

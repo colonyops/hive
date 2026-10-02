@@ -22,9 +22,7 @@ export type DragRef = { kind: 'feed'; id: string } | { kind: 'folder'; id: strin
 //  - into a folder (append), or
 //  - at the end of the top level.
 export type DropTarget =
-  | { kind: 'before' | 'after'; ref: DragRef }
-  | { kind: 'into'; folderId: string }
-  | { kind: 'top-end' }
+  { kind: 'before' | 'after'; ref: DragRef } | { kind: 'into'; folderId: string } | { kind: 'top-end' }
 
 // feedNodeId strips the "<flowId>/" prefix off a flow-qualified feed id to get
 // the flow-relative node id used in the persisted layout. A feed id without

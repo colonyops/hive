@@ -53,7 +53,9 @@ describe('createPopupTerminalClient', () => {
     const created: string[] = []
     class FakeSocket {
       binaryType = 'blob'
-      constructor(url: string) { created.push(url) }
+      constructor(url: string) {
+        created.push(url)
+      }
     }
     globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket
 

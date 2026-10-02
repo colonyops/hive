@@ -6,7 +6,11 @@ import {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/hiveconfigservice'
 import { ChooseDirectory } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/systemservice'
 import type { HiveSetup } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
-import type { AgentOption, Profile, Workspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf/models'
+import type {
+  AgentOption,
+  Profile,
+  Workspace,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf/models'
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -77,7 +81,7 @@ export function useHiveSetup() {
   const unreadable = computed(() => setup.value?.config.unreadable ?? '')
   const defaultAgentOverride = computed(() => setup.value?.defaultAgentOverride ?? '')
 
-  const selectedAgents = computed(() => new Set(profiles.value.map(p => p.name)))
+  const selectedAgents = computed(() => new Set(profiles.value.map((p) => p.name)))
 
   /**
    * Profiles in the draft that the agent picker has no row for: a
@@ -85,18 +89,19 @@ export function useHiveSetup() {
    * build does not. They are listed so a user can see what a save will keep.
    */
   const customProfiles = computed(() => {
-    const known = new Set(agents.value.map(a => a.name))
-    return profiles.value.filter(p => !known.has(p.name))
+    const known = new Set(agents.value.map((a) => a.name))
+    return profiles.value.filter((p) => !known.has(p.name))
   })
 
   // A file that did not parse is the user's to fix in an editor: the backend
   // refuses to rewrite it, so offering a save would offer a save that fails.
-  const canSave = computed(() =>
-    !unreadable.value
-    && inspecting.value === 0
-    && profiles.value.length > 0
-    && workspaces.value.length > 0
-    && profiles.value.some(p => p.name === defaultAgent.value),
+  const canSave = computed(
+    () =>
+      !unreadable.value &&
+      inspecting.value === 0 &&
+      profiles.value.length > 0 &&
+      workspaces.value.length > 0 &&
+      profiles.value.some((p) => p.name === defaultAgent.value),
   )
 
   async function load(): Promise<void> {
@@ -113,7 +118,7 @@ export function useHiveSetup() {
   }
 
   function resetDraft(next: HiveSetup): void {
-    profiles.value = (next.config.profiles ?? []).map(p => ({ ...p, flags: p.flags ? [...p.flags] : null }))
+    profiles.value = (next.config.profiles ?? []).map((p) => ({ ...p, flags: p.flags ? [...p.flags] : null }))
     workspaces.value = (next.config.workspaces ?? []).map(toDraftWorkspace)
     defaultAgent.value = next.config.defaultAgent || profiles.value[0]?.name || ''
     // Reflect what the file already says rather than defaulting the toggle
@@ -123,7 +128,7 @@ export function useHiveSetup() {
     // Only the agent's own skip flags count. A profile carrying other flags
     // (`--model opus`) says nothing about this toggle, and letting them light
     // the box up would arm a control that then deletes them on the way off.
-    const catalog = new Map((next.agents ?? []).map(a => [a.name, a]))
+    const catalog = new Map((next.agents ?? []).map((a) => [a.name, a]))
     skipPermissions.value = profiles.value.some((p) => {
       const agent = catalog.get(p.name)
       return !!agent && hasFlagRun(p.flags, agent.skipPermissionFlags ?? [])
@@ -136,7 +141,7 @@ export function useHiveSetup() {
   // starts on nothing and the user picks — guessing an agent that is not here
   // would be worse than asking.
   function seedFromInstalledAgent(next: HiveSetup): void {
-    const installed = (next.agents ?? []).find(a => a.installed)
+    const installed = (next.agents ?? []).find((a) => a.installed)
     if (!installed) return
     toggleAgent(installed, true)
     defaultAgent.value = installed.name
@@ -162,7 +167,7 @@ export function useHiveSetup() {
       if (!defaultAgent.value) defaultAgent.value = agent.name
       return
     }
-    profiles.value = profiles.value.filter(p => p.name !== agent.name)
+    profiles.value = profiles.value.filter((p) => p.name !== agent.name)
     // Removing the default would save a config hive refuses to load, so the
     // next remaining profile takes over rather than leaving it dangling.
     if (defaultAgent.value === agent.name) defaultAgent.value = profiles.value[0]?.name ?? ''
@@ -176,7 +181,7 @@ export function useHiveSetup() {
   // presets this app offers.
   function setSkipPermissions(on: boolean): void {
     skipPermissions.value = on
-    const catalog = new Map(agents.value.map(a => [a.name, a]))
+    const catalog = new Map(agents.value.map((a) => [a.name, a]))
     profiles.value = profiles.value.map((p) => {
       const agent = catalog.get(p.name)
       return agent ? { ...p, flags: flagsFor(agent, p.flags) } : p
@@ -199,7 +204,7 @@ export function useHiveSetup() {
   async function addWorkspacePath(path: string): Promise<void> {
     const trimmed = path.trim()
     if (!trimmed) return
-    if (workspaces.value.some(w => w.path === trimmed)) return
+    if (workspaces.value.some((w) => w.path === trimmed)) return
     error.value = ''
     inspecting.value++
     try {
@@ -213,7 +218,7 @@ export function useHiveSetup() {
   }
 
   function removeWorkspace(path: string): void {
-    workspaces.value = workspaces.value.filter(w => w.path !== path)
+    workspaces.value = workspaces.value.filter((w) => w.path !== path)
   }
 
   /**
@@ -229,7 +234,7 @@ export function useHiveSetup() {
       const next = await Save({
         defaultAgent: defaultAgent.value,
         profiles: profiles.value,
-        workspaces: workspaces.value.map(w => w.path),
+        workspaces: workspaces.value.map((w) => w.path),
       })
       setup.value = next
       resetDraft(next)

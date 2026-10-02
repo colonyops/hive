@@ -3,7 +3,11 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import AgentWorkspaceEditor from '../AgentWorkspaceEditor.vue'
 import { resetAgentWorkspacesForTests, useAgentWorkspaces } from '../../composables/useAgentWorkspaces'
 import type {
-  AgentSchedule, AgentScheduleRun, AgentWorkspace, MCPCatalogueEntry, SkillPackage,
+  AgentSchedule,
+  AgentScheduleRun,
+  AgentWorkspace,
+  MCPCatalogueEntry,
+  SkillPackage,
 } from '../../lib/agentWorkspacesClient'
 
 // The schedule half of the form talks to the control plane for three things
@@ -29,19 +33,37 @@ vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => ({
 }))
 
 const demo: AgentWorkspace = {
-  dir: 'demo', name: 'Demo', command: 'claude', danger: false, mcps: [], skills: [], schedules: [], problem: '', notice: '',
+  dir: 'demo',
+  name: 'Demo',
+  command: 'claude',
+  danger: false,
+  mcps: [],
+  skills: [],
+  schedules: [],
+  problem: '',
+  notice: '',
 }
 
 const playwright: MCPCatalogueEntry = {
-  id: 'playwright', title: 'Playwright', description: 'Browser automation', shipped: true,
-  stability: 'stable', shadows: '', transport: 'stdio', command: 'npx -y @playwright/mcp@latest', problem: '',
+  id: 'playwright',
+  title: 'Playwright',
+  description: 'Browser automation',
+  shipped: true,
+  stability: 'stable',
+  shadows: '',
+  transport: 'stdio',
+  command: 'npx -y @playwright/mcp@latest',
+  problem: '',
 }
 
 const hivePackage: SkillPackage = {
   name: 'hive',
   title: 'Hive',
   description: 'Configure Hive Desktop itself.',
-  members: [{ slug: 'hive-mcp', shipped: true }, { slug: 'hive-flows', shipped: true }],
+  members: [
+    { slug: 'hive-mcp', shipped: true },
+    { slug: 'hive-flows', shipped: true },
+  ],
 }
 
 const infraPackage: SkillPackage = {
@@ -65,9 +87,15 @@ function mountEditor(workspace: AgentWorkspace | null = demo) {
 
 function schedule(overrides: Partial<AgentSchedule> = {}): AgentSchedule {
   return {
-    id: 'weekly-summary', name: 'Weekly summary', cron: '0 9 * * 5',
-    prompt: 'Summarize the week.', disabled: false, onMissed: 'run',
-    nextRunAt: null, lastRun: null, ...overrides,
+    id: 'weekly-summary',
+    name: 'Weekly summary',
+    cron: '0 9 * * 5',
+    prompt: 'Summarize the week.',
+    disabled: false,
+    onMissed: 'run',
+    nextRunAt: null,
+    lastRun: null,
+    ...overrides,
   }
 }
 
@@ -96,7 +124,8 @@ function typeInto(testid: string, value: string): void {
 async function chooseOption(wrapper: VueWrapper, testid: string, value: string): Promise<void> {
   el<HTMLButtonElement>(testid)!.click()
   await flushPromises()
-  document.querySelector<HTMLElement>(`[data-testid="${testid}-option-${value}"]`)!
+  document
+    .querySelector<HTMLElement>(`[data-testid="${testid}-option-${value}"]`)!
     .dispatchEvent(new MouseEvent('click', { bubbles: true }))
   await wrapper.vm.$nextTick()
 }
@@ -120,7 +149,11 @@ beforeEach(() => {
   resetAgentWorkspacesForTests()
   mocks.client = null
   mocks.Available.mockResolvedValue({ available: true, reason: '' })
-  mocks.getAgentsEndpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://127.0.0.1:1/s', token: 'test' })
+  mocks.getAgentsEndpoint.mockResolvedValue({
+    httpBaseURL: 'http://127.0.0.1:1',
+    wsURL: 'ws://127.0.0.1:1/s',
+    token: 'test',
+  })
 })
 
 describe('AgentWorkspaceEditor', () => {
@@ -290,21 +323,45 @@ describe('AgentWorkspaceEditor', () => {
   it('picking a suggestion sets the command, with no template box in the way', async () => {
     const { presets } = useAgentWorkspaces()
     presets.value = [
-      { id: 'claude-ask', agent: 'claude', label: 'Ask', command: 'claude --session-id x', danger: false, source: 'builtin' },
-      { id: 'claude-full', agent: 'claude', label: 'Full', command: 'claude --dangerously-skip-permissions', danger: true, source: 'builtin' },
+      {
+        id: 'claude-ask',
+        agent: 'claude',
+        label: 'Ask',
+        command: 'claude --session-id x',
+        danger: false,
+        source: 'builtin',
+      },
+      {
+        id: 'claude-full',
+        agent: 'claude',
+        label: 'Full',
+        command: 'claude --dangerously-skip-permissions',
+        danger: true,
+        source: 'builtin',
+      },
     ]
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
 
     await chooseCommand(wrapper, 'claude-full')
     expect(el('agent-workspace-editor-command-input')).toBeNull()
-    expect(el<HTMLElement>('agent-workspace-editor-command-preview')!.textContent)
-      .toBe('claude --dangerously-skip-permissions')
+    expect(el<HTMLElement>('agent-workspace-editor-command-preview')!.textContent).toBe(
+      'claude --dangerously-skip-permissions',
+    )
 
     el<HTMLButtonElement>('agent-workspace-editor-save')!.click()
-    expect(wrapper.emitted('save')).toEqual([[
-      { dir: 'demo', name: 'Demo', command: 'claude --dangerously-skip-permissions', mcps: [], skills: [], schedules: [] },
-    ]])
+    expect(wrapper.emitted('save')).toEqual([
+      [
+        {
+          dir: 'demo',
+          name: 'Demo',
+          command: 'claude --dangerously-skip-permissions',
+          mcps: [],
+          skills: [],
+          schedules: [],
+        },
+      ],
+    ])
     wrapper.unmount()
   })
 
@@ -313,7 +370,14 @@ describe('AgentWorkspaceEditor', () => {
   it('a suggestion carries its agent mark, sized to the row', async () => {
     const { presets } = useAgentWorkspaces()
     presets.value = [
-      { id: 'hive-fable', agent: 'claude', label: 'fable', command: 'claude --model fable', danger: false, source: 'hive' },
+      {
+        id: 'hive-fable',
+        agent: 'claude',
+        label: 'fable',
+        command: 'claude --model fable',
+        danger: false,
+        source: 'hive',
+      },
     ]
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
@@ -332,7 +396,14 @@ describe('AgentWorkspaceEditor', () => {
   it('custom reveals the template box, seeded with the command already chosen', async () => {
     const { presets } = useAgentWorkspaces()
     presets.value = [
-      { id: 'claude-ask', agent: 'claude', label: 'Ask', command: 'claude --session-id x', danger: false, source: 'builtin' },
+      {
+        id: 'claude-ask',
+        agent: 'claude',
+        label: 'Ask',
+        command: 'claude --session-id x',
+        danger: false,
+        source: 'builtin',
+      },
     ]
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
@@ -349,16 +420,32 @@ describe('AgentWorkspaceEditor', () => {
     input.dispatchEvent(new Event('input'))
     await wrapper.vm.$nextTick()
     el<HTMLButtonElement>('agent-workspace-editor-save')!.click()
-    expect(wrapper.emitted('save')).toEqual([[
-      { dir: 'demo', name: 'Demo', command: 'claude --session-id x --model opus', mcps: [], skills: [], schedules: [] },
-    ]])
+    expect(wrapper.emitted('save')).toEqual([
+      [
+        {
+          dir: 'demo',
+          name: 'Demo',
+          command: 'claude --session-id x --model opus',
+          mcps: [],
+          skills: [],
+          schedules: [],
+        },
+      ],
+    ])
     wrapper.unmount()
   })
 
   it('a hand-written command opens the editor on custom', async () => {
     const { presets } = useAgentWorkspaces()
     presets.value = [
-      { id: 'claude-ask', agent: 'claude', label: 'Ask', command: 'claude --session-id x', danger: false, source: 'builtin' },
+      {
+        id: 'claude-ask',
+        agent: 'claude',
+        label: 'Ask',
+        command: 'claude --session-id x',
+        danger: false,
+        source: 'builtin',
+      },
     ]
     const wrapper = mountEditor({ ...demo, command: 'pi --some-flag' })
     await wrapper.vm.$nextTick()
@@ -399,9 +486,9 @@ describe('AgentWorkspaceEditor', () => {
     await wrapper.vm.$nextTick()
 
     el<HTMLButtonElement>('agent-workspace-editor-save')!.click()
-    expect(wrapper.emitted('save')).toEqual([[
-      { dir: 'demo', name: 'Demo', command: 'pi --some-flag', mcps: [], skills: [], schedules: [] },
-    ]])
+    expect(wrapper.emitted('save')).toEqual([
+      [{ dir: 'demo', name: 'Demo', command: 'pi --some-flag', mcps: [], skills: [], schedules: [] }],
+    ])
     wrapper.unmount()
   })
 
@@ -415,9 +502,9 @@ describe('AgentWorkspaceEditor', () => {
     await wrapper.vm.$nextTick()
     el<HTMLButtonElement>('agent-workspace-editor-save')!.click()
 
-    expect(wrapper.emitted('save')).toEqual([[
-      { dir: 'demo', name: 'Demo', command: 'claude', mcps: ['playwright'], skills: [], schedules: [] },
-    ]])
+    expect(wrapper.emitted('save')).toEqual([
+      [{ dir: 'demo', name: 'Demo', command: 'claude', mcps: ['playwright'], skills: [], schedules: [] }],
+    ])
     wrapper.unmount()
   })
 
@@ -433,9 +520,9 @@ describe('AgentWorkspaceEditor', () => {
     await wrapper.vm.$nextTick()
     el<HTMLButtonElement>('agent-workspace-editor-save')!.click()
 
-    expect(wrapper.emitted('save')).toEqual([[
-      { dir: 'demo', name: 'Demo', command: 'claude', mcps: [], skills: ['hive', 'infra'], schedules: [] },
-    ]])
+    expect(wrapper.emitted('save')).toEqual([
+      [{ dir: 'demo', name: 'Demo', command: 'claude', mcps: [], skills: ['hive', 'infra'], schedules: [] }],
+    ])
     wrapper.unmount()
   })
 
@@ -558,7 +645,9 @@ describe('AgentWorkspaceEditor', () => {
 
     expect(el('agent-workspace-editor-schedule-0-summary')!.textContent).toBe('Every Friday at 09:00')
     expect(el('agent-workspace-editor-schedule-0-next')!.textContent).toBe('not scheduled')
-    expect(el('agent-workspace-editor-schedule-0-last-run')!.textContent).toContain('Last run failed just now · catch-up')
+    expect(el('agent-workspace-editor-schedule-0-last-run')!.textContent).toContain(
+      'Last run failed just now · catch-up',
+    )
     expect(el('agent-workspace-editor-schedule-0')!.textContent).toContain('the agent exited')
     expect(el('agent-workspace-editor-schedule-page')).toBeNull()
     wrapper.unmount()
@@ -583,10 +672,16 @@ describe('AgentWorkspaceEditor', () => {
     expect(el('agent-workspace-editor-schedule-0-next')).toBeNull()
 
     el<HTMLButtonElement>('agent-workspace-editor-save')!.click()
-    expect(savedSchedules(wrapper)).toEqual([{
-      id: 'weekly-summary', name: 'Weekly summary', cron: '0 9 * * 5',
-      prompt: 'Summarize the week.', disabled: false, onMissed: 'run',
-    }])
+    expect(savedSchedules(wrapper)).toEqual([
+      {
+        id: 'weekly-summary',
+        name: 'Weekly summary',
+        cron: '0 9 * * 5',
+        prompt: 'Summarize the week.',
+        disabled: false,
+        onMissed: 'run',
+      },
+    ])
     wrapper.unmount()
   })
 
@@ -608,8 +703,9 @@ describe('AgentWorkspaceEditor', () => {
 
     typeInto('agent-workspace-editor-schedule-name', 'Weekly Summary')
     await wrapper.vm.$nextTick()
-    expect(el('agent-workspace-editor-schedule-problem')!.textContent)
-      .toContain('Another schedule already uses the id "weekly-summary"')
+    expect(el('agent-workspace-editor-schedule-problem')!.textContent).toContain(
+      'Another schedule already uses the id "weekly-summary"',
+    )
 
     typeInto('agent-workspace-editor-schedule-name', 'Nightly digest')
     await wrapper.vm.$nextTick()
@@ -676,12 +772,20 @@ describe('AgentWorkspaceEditor', () => {
     el<HTMLButtonElement>('agent-workspace-editor-save')!.click()
     expect(savedSchedules(wrapper)).toEqual([
       {
-        id: 'weekly-summary', name: 'Monday digest', cron: '0 9 * * 5',
-        prompt: 'Summarize the week.', disabled: true, onMissed: 'skip',
+        id: 'weekly-summary',
+        name: 'Monday digest',
+        cron: '0 9 * * 5',
+        prompt: 'Summarize the week.',
+        disabled: true,
+        onMissed: 'skip',
       },
       {
-        id: 'nightly', name: '', cron: '0 9 * * 5',
-        prompt: 'Summarize the week.', disabled: false, onMissed: 'run',
+        id: 'nightly',
+        name: '',
+        cron: '0 9 * * 5',
+        prompt: 'Summarize the week.',
+        disabled: false,
+        onMissed: 'run',
       },
     ])
     wrapper.unmount()
@@ -742,7 +846,11 @@ describe('AgentWorkspaceEditor', () => {
     el<HTMLButtonElement>('agent-workspace-editor-schedule-0-edit')!.click()
     await settlePreview()
     await flushPromises()
-    expect(client.previewSchedule).toHaveBeenCalledWith({ workspace: 'demo', cron: '0 9 * * 5', prompt: 'Summarize the week.' })
+    expect(client.previewSchedule).toHaveBeenCalledWith({
+      workspace: 'demo',
+      cron: '0 9 * * 5',
+      prompt: 'Summarize the week.',
+    })
 
     el<HTMLButtonElement>('agent-workspace-editor-schedule-keep')!.click()
     await wrapper.vm.$nextTick()
@@ -764,7 +872,9 @@ describe('AgentWorkspaceEditor', () => {
     await flushPromises()
 
     expect(client.runSchedule).toHaveBeenCalledWith('demo', 'weekly-summary')
-    expect(el('agent-workspace-editor-schedule-0-last-run')!.textContent).toContain('Last run launched just now · by hand')
+    expect(el('agent-workspace-editor-schedule-0-last-run')!.textContent).toContain(
+      'Last run launched just now · by hand',
+    )
     wrapper.unmount()
   })
 
@@ -783,7 +893,7 @@ describe('AgentWorkspaceEditor', () => {
     wrapper.unmount()
   })
 
-  it('removes a schedule only after the page\'s inline confirm is answered', async () => {
+  it("removes a schedule only after the page's inline confirm is answered", async () => {
     const wrapper = mountEditor({ ...demo, schedules: [schedule()] })
     el<HTMLButtonElement>('agent-workspace-editor-schedule-0-edit')!.click()
     await wrapper.vm.$nextTick()

@@ -17,7 +17,9 @@ describe('sources.rss editor', () => {
   it('renders the current url and interval', () => {
     const wrapper = mount(Editor, { props: { config: config() } })
 
-    expect(wrapper.get<HTMLInputElement>('[data-testid="sources.rss-editor-url"]').element.value).toBe('https://example.com/feed.xml')
+    expect(wrapper.get<HTMLInputElement>('[data-testid="sources.rss-editor-url"]').element.value).toBe(
+      'https://example.com/feed.xml',
+    )
     expect(wrapper.get<HTMLInputElement>('[data-testid="sources.rss-editor-interval"]').element.value).toBe('30m')
   })
 
@@ -48,7 +50,9 @@ describe('sources.rss editor', () => {
     typeInto(wrapper, 'sources.rss-editor-limit', '')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.emitted('update:config')).toEqual([[{ url: 'https://example.com/feed.xml', interval: '30m', limit: undefined }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [{ url: 'https://example.com/feed.xml', interval: '30m', limit: undefined }],
+    ])
   })
 
   it('drops an emptied interval rather than writing an empty string', async () => {
@@ -68,9 +72,15 @@ describe('sources.rss validate', () => {
 
   // The three shapes a pasted feed URL takes when it is wrong.
   it('rejects a url a fetch could not use', () => {
-    expect(validate(config({ url: 'example.com/feed.xml' }))).toEqual(['the feed URL must start with http:// or https://'])
-    expect(validate(config({ url: 'file:///etc/feed.xml' }))).toEqual(['the feed URL must start with http:// or https://'])
-    expect(validate(config({ url: 'https://user:pass@example.com/feed' }))).toEqual(['the feed URL must not contain a username or password'])
+    expect(validate(config({ url: 'example.com/feed.xml' }))).toEqual([
+      'the feed URL must start with http:// or https://',
+    ])
+    expect(validate(config({ url: 'file:///etc/feed.xml' }))).toEqual([
+      'the feed URL must start with http:// or https://',
+    ])
+    expect(validate(config({ url: 'https://user:pass@example.com/feed' }))).toEqual([
+      'the feed URL must not contain a username or password',
+    ])
   })
 
   it('rejects a limit outside the range Go enforces', () => {

@@ -1,5 +1,11 @@
 import { computed, onMounted, ref } from 'vue'
-import { CancelDeviceFlow, Disconnect, SetToken, StartDeviceFlow, Status } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/githubservice'
+import {
+  CancelDeviceFlow,
+  Disconnect,
+  SetToken,
+  StartDeviceFlow,
+  Status,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/githubservice'
 import type { ConnectionStatus, DeviceFlowInfo } from '../types/github'
 import { useWailsEvent } from './useWailsEvent'
 

@@ -9,7 +9,9 @@ function mountConfirm(props: Record<string, unknown> = {}) {
   })
 }
 
-beforeEach(() => { document.body.innerHTML = '' })
+beforeEach(() => {
+  document.body.innerHTML = ''
+})
 
 describe('InlineConfirm', () => {
   it('states the consequence and answers confirm and cancel', async () => {

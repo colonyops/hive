@@ -8,7 +8,16 @@
 // no search syntax — its endpoint takes discrete parameters — so the fields
 // here are the whole vocabulary a search has.
 import { computed } from 'vue'
-import { FieldRow, GlobListField, IntervalField, NumberField, SelectField, TextField, ToggleField, type SelectOption } from '../../fields'
+import {
+  FieldRow,
+  GlobListField,
+  IntervalField,
+  NumberField,
+  SelectField,
+  TextField,
+  ToggleField,
+  type SelectOption,
+} from '../../fields'
 import { useIntegrations } from '../../../composables/useIntegrations'
 import { INVOLVING, ITEMS, STATES, type Config, type Involving, type Items, type Kind, type State } from './config'
 

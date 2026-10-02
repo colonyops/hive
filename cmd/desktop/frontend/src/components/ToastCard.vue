@@ -21,12 +21,45 @@ const icons: Record<ToastSeverity, unknown> = {
 
 // design spec "6a Toasts": one border/icon/accent/progress-bar color per
 // severity, plus the primary inline action (first entry) inheriting it.
-const severityStyles: Record<ToastSeverity, { border: string; iconBg: string; iconColor: string; accent: string; bar: string }> = {
-  info: { border: 'border-border', iconBg: 'bg-severity-info-tint', iconColor: 'text-severity-info', accent: 'text-severity-info', bar: 'bg-severity-info' },
-  success: { border: 'border-severity-success-border', iconBg: 'bg-severity-success-tint', iconColor: 'text-severity-success', accent: 'text-severity-success', bar: 'bg-severity-success' },
-  warning: { border: 'border-severity-warning-border', iconBg: 'bg-severity-warning-tint', iconColor: 'text-severity-warning', accent: 'text-severity-warning', bar: 'bg-severity-warning' },
-  error: { border: 'border-severity-error-border', iconBg: 'bg-severity-error-tint', iconColor: 'text-severity-error', accent: 'text-severity-error', bar: 'bg-severity-error' },
-  'auto-action': { border: 'border-severity-auto-border', iconBg: 'bg-severity-auto-tint', iconColor: 'text-accent', accent: 'text-accent', bar: 'bg-accent' },
+const severityStyles: Record<
+  ToastSeverity,
+  { border: string; iconBg: string; iconColor: string; accent: string; bar: string }
+> = {
+  info: {
+    border: 'border-border',
+    iconBg: 'bg-severity-info-tint',
+    iconColor: 'text-severity-info',
+    accent: 'text-severity-info',
+    bar: 'bg-severity-info',
+  },
+  success: {
+    border: 'border-severity-success-border',
+    iconBg: 'bg-severity-success-tint',
+    iconColor: 'text-severity-success',
+    accent: 'text-severity-success',
+    bar: 'bg-severity-success',
+  },
+  warning: {
+    border: 'border-severity-warning-border',
+    iconBg: 'bg-severity-warning-tint',
+    iconColor: 'text-severity-warning',
+    accent: 'text-severity-warning',
+    bar: 'bg-severity-warning',
+  },
+  error: {
+    border: 'border-severity-error-border',
+    iconBg: 'bg-severity-error-tint',
+    iconColor: 'text-severity-error',
+    accent: 'text-severity-error',
+    bar: 'bg-severity-error',
+  },
+  'auto-action': {
+    border: 'border-severity-auto-border',
+    iconBg: 'bg-severity-auto-tint',
+    iconColor: 'text-accent',
+    accent: 'text-accent',
+    bar: 'bg-accent',
+  },
 }
 
 const icon = computed(() => icons[props.toast.severity])
@@ -38,7 +71,9 @@ const style = computed(() => severityStyles[props.toast.severity])
 // full-width state before animating away from it.
 const progressStarted = ref(false)
 onMounted(() => {
-  requestAnimationFrame(() => { progressStarted.value = true })
+  requestAnimationFrame(() => {
+    progressStarted.value = true
+  })
 })
 
 function runAction(action: ToastActionDef) {
@@ -65,9 +100,12 @@ function runAction(action: ToastActionDef) {
             v-if="toast.severity === 'auto-action'"
             class="rounded-[4px] border border-accent/30 bg-accent/13 px-[5px] py-px font-mono text-[9.5px] tracking-[.06em] text-accent"
             data-testid="toast-auto-badge"
-          >AUTO</span>
+            >AUTO</span
+          >
         </div>
-        <p v-if="toast.body" class="mt-0.5 text-[12.5px] leading-[1.45] text-text-2" data-testid="toast-body">{{ toast.body }}</p>
+        <p v-if="toast.body" class="mt-0.5 text-[12.5px] leading-[1.45] text-text-2" data-testid="toast-body">
+          {{ toast.body }}
+        </p>
         <div v-if="toast.actions.length" class="mt-[9px] flex gap-3.5">
           <button
             v-for="(action, i) in toast.actions"
@@ -76,10 +114,17 @@ function runAction(action: ToastActionDef) {
             :class="i === 0 ? [style.accent, 'font-semibold hover:brightness-125'] : 'text-text-3 hover:text-text'"
             data-testid="toast-action"
             @click="runAction(action)"
-          >{{ action.label }}</button>
+          >
+            {{ action.label }}
+          </button>
         </div>
       </div>
-      <button class="shrink-0 cursor-pointer self-start leading-none text-text-3 hover:text-text" aria-label="Dismiss" data-testid="toast-dismiss" @click="emit('dismiss')">
+      <button
+        class="shrink-0 cursor-pointer self-start leading-none text-text-3 hover:text-text"
+        aria-label="Dismiss"
+        data-testid="toast-dismiss"
+        @click="emit('dismiss')"
+      >
         <IconX class="size-[15px]" />
       </button>
     </div>

@@ -33,6 +33,6 @@ function onInput(e: Event) {
       class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
       :data-testid="testid"
       @input="onInput"
-    >
+    />
   </FieldRow>
 </template>

@@ -27,11 +27,13 @@ function start(): void {
   // Subscribe before reading the native state. If an event arrives while the
   // RPC is pending, its newer state must win over this initial snapshot.
   const seedVersion = stateVersion
-  void Focused().then((isFocused) => {
-    if (stateVersion === seedVersion) focused.value = isFocused
-  }).catch((error: unknown) => {
-    console.error('load window focus state failed', error)
-  })
+  void Focused()
+    .then((isFocused) => {
+      if (stateVersion === seedVersion) focused.value = isFocused
+    })
+    .catch((error: unknown) => {
+      console.error('load window focus state failed', error)
+    })
 }
 
 export function useWindowFocus(): { focused: Readonly<Ref<boolean>> } {

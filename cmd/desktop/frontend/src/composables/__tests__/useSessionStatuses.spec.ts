@@ -58,7 +58,9 @@ describe('useSessionStatuses', () => {
 
   it('does not let an older overlapping response replace a newer one', async () => {
     let resolveFirst!: (value: unknown) => void
-    const first = new Promise((resolve) => { resolveFirst = resolve })
+    const first = new Promise((resolve) => {
+      resolveFirst = resolve
+    })
     mocks.SessionStatuses.mockReturnValueOnce(first).mockResolvedValueOnce({
       items: [{ sessionId: 's1', running: true, windows: [{ windowId: '@1', status: 'approval', tool: 'claude' }] }],
       pollIntervalMs: 1500,
@@ -77,18 +79,42 @@ describe('useSessionStatuses', () => {
   })
 
   it('cancels an in-flight poll and ignores its result when polling stops', async () => {
-    let resolvePending!: (value: { items: Array<{ sessionId: string; running: boolean; windows: Array<{ windowId: string; status: string; tool: string }> }>; pollIntervalMs: number }) => void
-    const pending = Object.assign(new Promise<{ items: Array<{ sessionId: string; running: boolean; windows: Array<{ windowId: string; status: string; tool: string }> }>; pollIntervalMs: number }>((resolve) => { resolvePending = resolve }), { cancel: vi.fn() })
+    let resolvePending!: (value: {
+      items: Array<{
+        sessionId: string
+        running: boolean
+        windows: Array<{ windowId: string; status: string; tool: string }>
+      }>
+      pollIntervalMs: number
+    }) => void
+    const pending = Object.assign(
+      new Promise<{
+        items: Array<{
+          sessionId: string
+          running: boolean
+          windows: Array<{ windowId: string; status: string; tool: string }>
+        }>
+        pollIntervalMs: number
+      }>((resolve) => {
+        resolvePending = resolve
+      }),
+      { cancel: vi.fn() },
+    )
     mocks.SessionStatuses.mockReturnValue(pending)
     const { statuses, startPolling, stopPolling } = useSessionStatuses()
-    statuses.value = { s1: { sessionId: 's1', running: true, windows: [{ windowId: '@1', status: 'ready', tool: 'pi' }] } }
+    statuses.value = {
+      s1: { sessionId: 's1', running: true, windows: [{ windowId: '@1', status: 'ready', tool: 'pi' }] },
+    }
 
     startPolling()
     expect(mocks.SessionStatuses).toHaveBeenCalledTimes(1)
     stopPolling()
     expect(pending.cancel).toHaveBeenCalledTimes(1)
 
-    resolvePending({ items: [{ sessionId: 's1', running: true, windows: [{ windowId: '@1', status: 'approval', tool: 'pi' }] }], pollIntervalMs: 25 })
+    resolvePending({
+      items: [{ sessionId: 's1', running: true, windows: [{ windowId: '@1', status: 'approval', tool: 'pi' }] }],
+      pollIntervalMs: 25,
+    })
     await pending
     await Promise.resolve()
 

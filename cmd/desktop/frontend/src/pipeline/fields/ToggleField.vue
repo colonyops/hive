@@ -6,5 +6,11 @@ const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 </script>
 
 <template>
-  <AppCheckbox :model-value="modelValue" :label="label" :hint="hint" :testid="testid" @update:model-value="(value) => emit('update:modelValue', value)" />
+  <AppCheckbox
+    :model-value="modelValue"
+    :label="label"
+    :hint="hint"
+    :testid="testid"
+    @update:model-value="(value) => emit('update:modelValue', value)"
+  />
 </template>

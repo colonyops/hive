@@ -17,35 +17,82 @@ import {
 import type { InboxItem } from '../../types/feed'
 
 const baseItem: InboxItem = {
-  id: 42, profileId: 'triage', sourceKind: 'github', sourceScope: 'colonyops/hive', externalId: 'pr-42', title: 'Add desktop shell', url: 'https://github.com/hay-kot/hive-desktop/pull/42',
-  payload: { id: 'pr-42', kind: 'PR', repo: 'colonyops/hive', num: 42, author: 'octocat', branch: 'feat/desktop-ui-shell', body: 'First line\n\nSecond line' }, revision: 3, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 2,
+  id: 42,
+  profileId: 'triage',
+  sourceKind: 'github',
+  sourceScope: 'colonyops/hive',
+  externalId: 'pr-42',
+  title: 'Add desktop shell',
+  url: 'https://github.com/hay-kot/hive-desktop/pull/42',
+  payload: {
+    id: 'pr-42',
+    kind: 'PR',
+    repo: 'colonyops/hive',
+    num: 42,
+    author: 'octocat',
+    branch: 'feat/desktop-ui-shell',
+    body: 'First line\n\nSecond line',
+  },
+  revision: 3,
+  unread: true,
+  lifecycle: 'active',
+  firstSeenAt: 1,
+  lastEventAt: 2,
 }
 
 describe('canonicalPayload', () => {
   it('decodes the canonical fields from an object payload', () => {
     expect(canonicalPayload(baseItem)).toEqual({
-      kind: 'PR', repo: 'colonyops/hive', num: 42, author: 'octocat', body: 'First line\n\nSecond line',
-      url: baseItem.url, labels: [], state: '',
+      kind: 'PR',
+      repo: 'colonyops/hive',
+      num: 42,
+      author: 'octocat',
+      body: 'First line\n\nSecond line',
+      url: baseItem.url,
+      labels: [],
+      state: '',
     })
   })
 
   it('degrades a non-object payload to empty fields', () => {
     for (const payload of [null, undefined, 'a string', 42, true]) {
-      expect(canonicalPayload({ ...baseItem, payload })).toEqual({ kind: '', repo: '', num: 0, author: '', body: '', url: baseItem.url, labels: [], state: '' })
+      expect(canonicalPayload({ ...baseItem, payload })).toEqual({
+        kind: '',
+        repo: '',
+        num: 0,
+        author: '',
+        body: '',
+        url: baseItem.url,
+        labels: [],
+        state: '',
+      })
     }
   })
 
   it('degrades an array payload to empty fields', () => {
-    expect(canonicalPayload({ ...baseItem, payload: ['not', 'an', 'object'] })).toEqual({ kind: '', repo: '', num: 0, author: '', body: '', url: baseItem.url, labels: [], state: '' })
+    expect(canonicalPayload({ ...baseItem, payload: ['not', 'an', 'object'] })).toEqual({
+      kind: '',
+      repo: '',
+      num: 0,
+      author: '',
+      body: '',
+      url: baseItem.url,
+      labels: [],
+      state: '',
+    })
   })
 
   it('degrades a mistyped num to 0 rather than throwing', () => {
-    expect(canonicalPayload({ ...baseItem, payload: { ...baseItem.payload as object, num: '42' } }).num).toBe(0)
+    expect(canonicalPayload({ ...baseItem, payload: { ...(baseItem.payload as object), num: '42' } }).num).toBe(0)
   })
 
   it('degrades labels that are not a string array to an empty array', () => {
-    expect(canonicalPayload({ ...baseItem, payload: { ...baseItem.payload as object, labels: 'not-an-array' } }).labels).toEqual([])
-    expect(canonicalPayload({ ...baseItem, payload: { ...baseItem.payload as object, labels: ['a', 2, 'b'] } }).labels).toEqual(['a', 'b'])
+    expect(
+      canonicalPayload({ ...baseItem, payload: { ...(baseItem.payload as object), labels: 'not-an-array' } }).labels,
+    ).toEqual([])
+    expect(
+      canonicalPayload({ ...baseItem, payload: { ...(baseItem.payload as object), labels: ['a', 2, 'b'] } }).labels,
+    ).toEqual(['a', 'b'])
   })
 
   it('falls back to the item url column when the payload carries none', () => {
@@ -59,13 +106,13 @@ describe('kind / kindLabel / kindStyle', () => {
     expect(kindLabel(baseItem)).toBe('Pull Request')
     expect(kindStyle(baseItem)).toBe('pr')
 
-    const issue = { ...baseItem, payload: { ...baseItem.payload as object, kind: 'Issue' } }
+    const issue = { ...baseItem, payload: { ...(baseItem.payload as object), kind: 'Issue' } }
     expect(kindLabel(issue)).toBe('Issue')
     expect(kindStyle(issue)).toBe('issue')
   })
 
   it('falls back to the raw kind and neutral style for provider-defined kinds', () => {
-    const alert = { ...baseItem, payload: { ...baseItem.payload as object, kind: 'Alert' } }
+    const alert = { ...baseItem, payload: { ...(baseItem.payload as object), kind: 'Alert' } }
     expect(kindLabel(alert)).toBe('Alert')
     expect(kindStyle(alert)).toBe('neutral')
   })
@@ -94,7 +141,7 @@ describe('container / containerLine', () => {
   })
 
   it('omits the ordinal when num is absent or non-positive', () => {
-    expect(containerLine({ ...baseItem, payload: { ...baseItem.payload as object, num: 0 } })).toBe('colonyops/hive')
+    expect(containerLine({ ...baseItem, payload: { ...(baseItem.payload as object), num: 0 } })).toBe('colonyops/hive')
   })
 })
 
@@ -132,7 +179,9 @@ describe('clipboardText', () => {
 
   it('drops the body block when the item has none', () => {
     const item = { ...baseItem, payload: { ...(baseItem.payload as object), body: '  ' } }
-    expect(clipboardText(item)).toBe('Add desktop shell\ncolonyops/hive #42 · https://github.com/hay-kot/hive-desktop/pull/42')
+    expect(clipboardText(item)).toBe(
+      'Add desktop shell\ncolonyops/hive #42 · https://github.com/hay-kot/hive-desktop/pull/42',
+    )
   })
 
   it('degrades to title and url for a payload without metadata', () => {
@@ -203,7 +252,14 @@ describe('sourceSummary', () => {
     expect(sourceSummary(new Map([['github', 1]]))).toBe('1 source')
     expect(sourceSummary(new Map([['github', 3]]))).toBe('3 sources')
     expect(sourceSummary(new Map([['webhook', 2]]))).toBe('2 sources')
-    expect(sourceSummary(new Map([['github', 2], ['webhook', 1]]))).toBe('3 sources')
+    expect(
+      sourceSummary(
+        new Map([
+          ['github', 2],
+          ['webhook', 1],
+        ]),
+      ),
+    ).toBe('3 sources')
   })
 
   it('reports no sources when the map is empty or all-zero', () => {

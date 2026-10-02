@@ -9,17 +9,20 @@
 //
 // Titles are passed in natural case; the caps are styling, so a label stays
 // readable to a screen reader and searchable in source.
-withDefaults(defineProps<{
-  title: string
-  /** Inline prose at section level; a right-aligned note at group level. */
-  description?: string
-  level?: 'section' | 'group'
-  /** Group level only: the hairline that carries the eye to the note. */
-  rule?: boolean
-}>(), {
-  level: 'section',
-  rule: true,
-})
+withDefaults(
+  defineProps<{
+    title: string
+    /** Inline prose at section level; a right-aligned note at group level. */
+    description?: string
+    level?: 'section' | 'group'
+    /** Group level only: the hairline that carries the eye to the note. */
+    rule?: boolean
+  }>(),
+  {
+    level: 'section',
+    rule: true,
+  },
+)
 </script>
 
 <template>

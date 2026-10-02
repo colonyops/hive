@@ -61,26 +61,68 @@ function kbdFor(commandId: string): string | undefined {
 const entries = computed<MenuEntry[]>(() => {
   const item = props.item
   const list: MenuEntry[] = [
-    { kind: 'action', id: 'toggle-read', label: item.unread ? 'Mark as read' : 'Mark as unread', icon: IconMail, kbd: item.unread ? undefined : kbdFor('feed.mark-unread'), testid: 'menu-toggle-read' },
-    { kind: 'action', id: 'toggle-archive', label: item.archivedAt ? 'Move to inbox' : 'Archive', icon: IconArchive, kbd: kbdFor('feed.toggle-archive'), testid: 'menu-toggle-archive' },
-    { kind: 'action', id: 'toggle-ignored', label: item.ignoredAt ? 'Stop ignoring' : 'Ignore', icon: IconEyeOff, testid: 'menu-toggle-ignored' },
+    {
+      kind: 'action',
+      id: 'toggle-read',
+      label: item.unread ? 'Mark as read' : 'Mark as unread',
+      icon: IconMail,
+      kbd: item.unread ? undefined : kbdFor('feed.mark-unread'),
+      testid: 'menu-toggle-read',
+    },
+    {
+      kind: 'action',
+      id: 'toggle-archive',
+      label: item.archivedAt ? 'Move to inbox' : 'Archive',
+      icon: IconArchive,
+      kbd: kbdFor('feed.toggle-archive'),
+      testid: 'menu-toggle-archive',
+    },
+    {
+      kind: 'action',
+      id: 'toggle-ignored',
+      label: item.ignoredAt ? 'Stop ignoring' : 'Ignore',
+      icon: IconEyeOff,
+      testid: 'menu-toggle-ignored',
+    },
     { kind: 'separator' },
     // Link entries only when the item carries a URL — webhook payloads
     // without one have nothing to open or copy.
-    ...(item.url ? [
-      { kind: 'action', id: 'open-browser', label: 'Open in browser', icon: IconExternalLink, kbd: kbdFor('feed.open-in-browser'), testid: 'menu-open-browser' },
-      { kind: 'action', id: 'copy-link', label: 'Copy link', icon: IconLink, testid: 'menu-copy-link' },
-    ] satisfies MenuEntry[] : []),
+    ...(item.url
+      ? ([
+          {
+            kind: 'action',
+            id: 'open-browser',
+            label: 'Open in browser',
+            icon: IconExternalLink,
+            kbd: kbdFor('feed.open-in-browser'),
+            testid: 'menu-open-browser',
+          },
+          { kind: 'action', id: 'copy-link', label: 'Copy link', icon: IconLink, testid: 'menu-copy-link' },
+        ] satisfies MenuEntry[])
+      : []),
     { kind: 'action', id: 'copy-contents', label: 'Copy contents', icon: IconCopy, testid: 'menu-copy-contents' },
     { kind: 'separator' },
-    { kind: 'action', id: 'create-session', label: 'Create Session', icon: IconSquarePlus, testid: 'menu-create-session' },
+    {
+      kind: 'action',
+      id: 'create-session',
+      label: 'Create Session',
+      icon: IconSquarePlus,
+      testid: 'menu-create-session',
+    },
     { kind: 'action', id: 'create-chat', label: 'Create Chat', icon: IconMessagesSquare, testid: 'menu-create-chat' },
   ]
   if (menuActions.value.length) {
     list.push({ kind: 'separator' }, { kind: 'label', text: 'Actions' })
     for (const action of menuActions.value) {
       const meta = actionTypeMeta(action.type)
-      list.push({ kind: 'action', id: `action:${action.id}`, label: action.label, iconName: meta.icon, iconColor: meta.color, testid: `menu-action-${action.id}` })
+      list.push({
+        kind: 'action',
+        id: `action:${action.id}`,
+        label: action.label,
+        iconName: meta.icon,
+        iconColor: meta.color,
+        testid: `menu-action-${action.id}`,
+      })
     }
   }
   return list
@@ -101,5 +143,12 @@ function onSelect(id: string): void {
 </script>
 
 <template>
-  <AppMenu :entries="entries" :flip="flip" :ignore="ignore" :testid="testid" @select="onSelect" @close="emit('close')" />
+  <AppMenu
+    :entries="entries"
+    :flip="flip"
+    :ignore="ignore"
+    :testid="testid"
+    @select="onSelect"
+    @close="emit('close')"
+  />
 </template>

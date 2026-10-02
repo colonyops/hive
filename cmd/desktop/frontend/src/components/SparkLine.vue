@@ -17,18 +17,24 @@ import { computed, ref, watch } from 'vue'
 
 // The caller owns the height — this sets none, so a bare `class="h-14"` lands
 // rather than losing to an `h-full` here.
-const props = withDefaults(defineProps<{
-  values: number[]
-  /** Slots on the x axis. Samples fill it from the right. */
-  capacity?: number
-}>(), { capacity: 40 })
+const props = withDefaults(
+  defineProps<{
+    values: number[]
+    /** Slots on the x axis. Samples fill it from the right. */
+    capacity?: number
+  }>(),
+  { capacity: 40 },
+)
 
 const WIDTH = 100
 const HEIGHT = 32
 /** Below this share of the band, the data has shrunk enough to warrant a tighter one. */
 const REBAND_BELOW = 0.35
 
-interface Band { lo: number, hi: number }
+interface Band {
+  lo: number
+  hi: number
+}
 
 const band = ref<Band | null>(null)
 
@@ -43,19 +49,23 @@ function quantise(min: number, max: number): Band {
   return { lo: Math.floor(min / step) * step, hi: Math.ceil(max / step) * step }
 }
 
-watch(() => props.values, (values) => {
-  if (values.length === 0) {
-    band.value = null
-    return
-  }
-  const min = Math.min(...values)
-  const max = Math.max(...values)
-  const current = band.value
-  const fits = current && min >= current.lo && max <= current.hi
-  const fills = current && (max - min) >= (current.hi - current.lo) * REBAND_BELOW
-  if (fits && (fills || max === min)) return
-  band.value = quantise(min, max)
-}, { immediate: true, deep: true })
+watch(
+  () => props.values,
+  (values) => {
+    if (values.length === 0) {
+      band.value = null
+      return
+    }
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    const current = band.value
+    const fits = current && min >= current.lo && max <= current.hi
+    const fills = current && max - min >= (current.hi - current.lo) * REBAND_BELOW
+    if (fits && (fills || max === min)) return
+    band.value = quantise(min, max)
+  },
+  { immediate: true, deep: true },
+)
 
 const points = computed(() => {
   const values = props.values
@@ -66,21 +76,18 @@ const points = computed(() => {
   const step = WIDTH / Math.max(1, props.capacity - 1)
   // Right-aligned: the newest sample is always at the right edge.
   const offset = WIDTH - (values.length - 1) * step
-  return values.map((value, index) => {
-    const x = Math.max(0, offset + index * step)
-    const y = HEIGHT - ((value - current.lo) / span) * HEIGHT
-    return `${x.toFixed(1)},${Math.min(HEIGHT, Math.max(0, y)).toFixed(1)}`
-  }).join(' ')
+  return values
+    .map((value, index) => {
+      const x = Math.max(0, offset + index * step)
+      const y = HEIGHT - ((value - current.lo) / span) * HEIGHT
+      return `${x.toFixed(1)},${Math.min(HEIGHT, Math.max(0, y)).toFixed(1)}`
+    })
+    .join(' ')
 })
 </script>
 
 <template>
-  <svg
-    :viewBox="`0 0 ${WIDTH} ${HEIGHT}`"
-    preserveAspectRatio="none"
-    aria-hidden="true"
-    class="block w-full"
-  >
+  <svg :viewBox="`0 0 ${WIDTH} ${HEIGHT}`" preserveAspectRatio="none" aria-hidden="true" class="block w-full">
     <polyline
       v-if="points"
       :points="points"

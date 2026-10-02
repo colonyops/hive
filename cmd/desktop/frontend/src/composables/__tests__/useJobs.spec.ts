@@ -13,8 +13,15 @@ vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On } }))
 
 function job(status: string, id = 1) {
   return {
-    id, createdAt: 1, updatedAt: 1, status, label: 'Review', step: status,
-    actionId: 'review', target: 'item-1', commandId: 12,
+    id,
+    createdAt: 1,
+    updatedAt: 1,
+    status,
+    label: 'Review',
+    step: status,
+    actionId: 'review',
+    target: 'item-1',
+    commandId: 12,
   }
 }
 
@@ -49,9 +56,17 @@ describe('useJobs', () => {
   it('drops a stale earlier read', async () => {
     let resolveFirst!: (rows: ReturnType<typeof job>[]) => void
     let resolveSecond!: (rows: ReturnType<typeof job>[]) => void
-    mocks.ListActive
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve }))
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve }))
+    mocks.ListActive.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve
+        }),
+    ).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveSecond = resolve
+        }),
+    )
 
     const jobs = await loadComposable()
     mocks.On.mock.calls[0][1]()
@@ -65,8 +80,7 @@ describe('useJobs', () => {
 
   it('retries a failed trailing read while terminal rows remain', async () => {
     vi.useFakeTimers()
-    mocks.ListActive
-      .mockResolvedValueOnce([job('done')])
+    mocks.ListActive.mockResolvedValueOnce([job('done')])
       .mockRejectedValueOnce(new Error('temporary failure'))
       .mockResolvedValueOnce([])
 
@@ -84,9 +98,7 @@ describe('useJobs', () => {
 
   it('keeps polling terminal rows until the backend drops them', async () => {
     vi.useFakeTimers()
-    mocks.ListActive
-      .mockResolvedValueOnce([job('done')])
-      .mockResolvedValueOnce([])
+    mocks.ListActive.mockResolvedValueOnce([job('done')]).mockResolvedValueOnce([])
 
     const jobs = await loadComposable()
     await flushPromises()

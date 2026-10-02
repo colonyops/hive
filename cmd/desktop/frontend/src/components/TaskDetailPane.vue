@@ -78,7 +78,9 @@ const blockedReason = computed(() => {
   const parts: string[] = []
   const explicit = (current.blockers ?? []).length
   if (explicit > 0) parts.push(`${explicit} blocking task${explicit === 1 ? '' : 's'}`)
-  const openChildren = items.value.filter((item) => item.parentId === current.id && matchesTaskFilter(item, 'open')).length
+  const openChildren = items.value.filter(
+    (item) => item.parentId === current.id && matchesTaskFilter(item, 'open'),
+  ).length
   if (openChildren > 0) parts.push(`${openChildren} open subtask${openChildren === 1 ? '' : 's'}`)
   return parts.length ? `Blocked by ${parts.join(' and ')}` : 'Blocked'
 })
@@ -103,9 +105,8 @@ const statusError = ref<string | null>(null)
 function requestStatusChange(next: string): void {
   const current = detail.value
   if (!current) return
-  const cascade = current.type === 'epic' && (next === 'done' || next === 'cancelled')
-    ? cascadeCount(items.value, current.id)
-    : 0
+  const cascade =
+    current.type === 'epic' && (next === 'done' || next === 'cancelled') ? cascadeCount(items.value, current.id) : 0
   if (cascade > 0) {
     pendingStatus.value = next
     cascadeConfirmCount.value = cascade
@@ -193,7 +194,11 @@ async function confirmDelete(): Promise<void> {
 
 // DetailPane.vue's precedent: docked right, handle on the left edge, width
 // persisted separately from the tree pane it sits beside.
-const { size: paneWidth, startResize, step } = useResizablePanel({
+const {
+  size: paneWidth,
+  startResize,
+  step,
+} = useResizablePanel({
   storageKey: 'hive.panel.taskdetail',
   defaultSize: 560,
   min: 320,
@@ -203,13 +208,22 @@ const { size: paneWidth, startResize, step } = useResizablePanel({
 </script>
 
 <template>
-  <aside class="hive-scroll relative flex shrink-0 flex-col overflow-y-auto bg-pane" :style="{ width: paneWidth + 'px' }" data-testid="task-detail-pane">
+  <aside
+    class="hive-scroll relative flex shrink-0 flex-col overflow-y-auto bg-pane"
+    :style="{ width: paneWidth + 'px' }"
+    data-testid="task-detail-pane"
+  >
     <PanelResizeHandle edge="left" name="taskdetail" :start="startResize" :step="step" />
 
     <template v-if="detail">
       <div class="border-b border-border px-5 pb-4 pt-[18px]">
         <div class="flex items-start justify-between gap-3">
-          <h1 class="min-w-0 flex-1 text-[16.5px] font-semibold leading-[1.3] tracking-[-.01em]" data-testid="task-detail-title">{{ detail.title }}</h1>
+          <h1
+            class="min-w-0 flex-1 text-[16.5px] font-semibold leading-[1.3] tracking-[-.01em]"
+            data-testid="task-detail-title"
+          >
+            {{ detail.title }}
+          </h1>
           <button
             type="button"
             class="flex shrink-0 items-center gap-1.5 rounded border border-card px-2 py-1 font-mono text-[10.5px] text-text-3 hover:border-strong hover:text-text"
@@ -221,7 +235,10 @@ const { size: paneWidth, startResize, step } = useResizablePanel({
           </button>
         </div>
 
-        <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-text-3" data-testid="task-detail-meta">
+        <div
+          class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-text-3"
+          data-testid="task-detail-meta"
+        >
           <span>{{ detail.repoKey }}</span>
           <span>·</span>
           <span>{{ typeLabel }}</span>
@@ -235,7 +252,11 @@ const { size: paneWidth, startResize, step } = useResizablePanel({
           <span :title="absoluteTime(detail.updatedAt)">Updated {{ agoLabel(Date.parse(detail.updatedAt)) }}</span>
         </div>
 
-        <div v-if="detail.blocked" class="mt-2 flex items-center gap-1.5 text-[11.5px] font-medium text-severity-error" data-testid="task-detail-blocked">
+        <div
+          v-if="detail.blocked"
+          class="mt-2 flex items-center gap-1.5 text-[11.5px] font-medium text-severity-error"
+          data-testid="task-detail-blocked"
+        >
           <IconBan class="size-3 shrink-0" aria-hidden="true" />{{ blockedReason }}
         </div>
 
@@ -248,10 +269,22 @@ const { size: paneWidth, startResize, step } = useResizablePanel({
             testid="task-status-select"
             @update:model-value="requestStatusChange"
           />
-          <p v-if="statusError && !cascadeConfirmOpen && !cancelConfirmOpen" class="mt-1.5 text-[11.5px] text-severity-error" data-testid="task-status-error">{{ statusError }}</p>
+          <p
+            v-if="statusError && !cascadeConfirmOpen && !cancelConfirmOpen"
+            class="mt-1.5 text-[11.5px] text-severity-error"
+            data-testid="task-status-error"
+          >
+            {{ statusError }}
+          </p>
         </div>
 
-        <div v-if="bodyHtml" class="markdown-body mt-3.5 text-[13.5px] leading-[1.65] text-text-2" data-testid="task-detail-body" @click="onBodyClick" v-html="bodyHtml" />
+        <div
+          v-if="bodyHtml"
+          class="markdown-body mt-3.5 text-[13.5px] leading-[1.65] text-text-2"
+          data-testid="task-detail-body"
+          @click="onBodyClick"
+          v-html="bodyHtml"
+        />
       </div>
 
       <div class="px-5 pb-5 pt-4">
@@ -271,28 +304,49 @@ const { size: paneWidth, startResize, step } = useResizablePanel({
                 @click="select(blocker.id)"
               >
                 <IconLink2 class="size-3 shrink-0 text-text-4" />{{ blocker.title }}
-                <span class="rounded-[4px] px-1 py-px text-[9.5px] font-medium" :class="statusMeta(blocker.status).classes" data-testid="task-blocker-status">{{ statusMeta(blocker.status).label }}</span>
+                <span
+                  class="rounded-[4px] px-1 py-px text-[9.5px] font-medium"
+                  :class="statusMeta(blocker.status).classes"
+                  data-testid="task-blocker-status"
+                  >{{ statusMeta(blocker.status).label }}</span
+                >
               </button>
               <span
                 v-else
                 class="inline-flex items-center gap-1.5 rounded-[5px] border border-card px-2 py-1 text-[11.5px] italic text-text-4"
                 data-testid="task-blocker-chip"
-              ><IconLink2 class="size-3 shrink-0 text-text-4" />{{ blocker.id }}</span>
+                ><IconLink2 class="size-3 shrink-0 text-text-4" />{{ blocker.id }}</span
+              >
             </template>
           </div>
         </section>
 
-        <section v-if="(detail.comments ?? []).length" class="mt-5 border-t border-border pt-4" data-testid="task-comments">
+        <section
+          v-if="(detail.comments ?? []).length"
+          class="mt-5 border-t border-border pt-4"
+          data-testid="task-comments"
+        >
           <h2 class="mb-3 font-mono text-[10.5px] tracking-[.12em] text-text-3">COMMENTS</h2>
           <div class="flex flex-col gap-3.5">
             <div v-for="comment in detail.comments ?? []" :key="comment.id" data-testid="task-comment">
               <div class="mb-1 flex items-center gap-2">
-                <BaseBadge v-if="isCheckpoint(comment)" tone="accent" class="px-2 py-0.5 text-[10px] font-semibold" data-testid="task-comment-checkpoint">
+                <BaseBadge
+                  v-if="isCheckpoint(comment)"
+                  tone="accent"
+                  class="px-2 py-0.5 text-[10px] font-semibold"
+                  data-testid="task-comment-checkpoint"
+                >
                   <IconBookmarkCheck class="size-3" />CHECKPOINT
                 </BaseBadge>
-                <span class="font-mono text-[10.5px] text-text-4" :title="absoluteTime(comment.createdAt)">{{ agoLabel(Date.parse(comment.createdAt)) }}</span>
+                <span class="font-mono text-[10.5px] text-text-4" :title="absoluteTime(comment.createdAt)">{{
+                  agoLabel(Date.parse(comment.createdAt))
+                }}</span>
               </div>
-              <div class="markdown-body text-[13px] leading-[1.6] text-text-2" @click="onBodyClick" v-html="commentHtml(comment)" />
+              <div
+                class="markdown-body text-[13px] leading-[1.6] text-text-2"
+                @click="onBodyClick"
+                v-html="commentHtml(comment)"
+              />
             </div>
           </div>
         </section>
@@ -303,11 +357,15 @@ const { size: paneWidth, startResize, step } = useResizablePanel({
             class="flex items-center gap-1.5 rounded-lg border border-severity-error/40 px-3 py-1.5 text-[12px] font-medium text-severity-error hover:bg-severity-error-tint"
             data-testid="task-delete"
             @click="openDeleteConfirm"
-          ><IconTrash2 class="size-3.5" />Delete</button>
+          >
+            <IconTrash2 class="size-3.5" />Delete
+          </button>
         </div>
       </div>
     </template>
-    <div v-else class="m-auto font-mono text-xs text-text-4" data-testid="task-detail-empty">Select a task to inspect</div>
+    <div v-else class="m-auto font-mono text-xs text-text-4" data-testid="task-detail-empty">
+      Select a task to inspect
+    </div>
 
     <ConfirmationDialog
       v-if="cascadeConfirmOpen"

@@ -100,10 +100,7 @@ export function buildTaskTree(items: TaskItem[], filter: TaskFilterId, search = 
   }
 
   function buildNode(item: TaskItem): TaskTreeNode {
-    const children = (childrenByParent.get(item.id) ?? [])
-      .slice()
-      .sort(byCreatedAtAsc)
-      .map(buildNode)
+    const children = (childrenByParent.get(item.id) ?? []).slice().sort(byCreatedAtAsc).map(buildNode)
 
     const counts = children.reduce(
       (acc, child) => ({
@@ -113,7 +110,8 @@ export function buildTaskTree(items: TaskItem[], filter: TaskFilterId, search = 
       { total: 0, done: 0 },
     )
 
-    const visible = (matchesTaskFilter(item, filter) && matchesQuery(item, query)) || children.some((child) => child.visible)
+    const visible =
+      (matchesTaskFilter(item, filter) && matchesQuery(item, query)) || children.some((child) => child.visible)
 
     return { item, children, visible, counts }
   }

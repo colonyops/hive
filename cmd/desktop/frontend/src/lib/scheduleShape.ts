@@ -86,9 +86,7 @@ export function describe(shape: ScheduleShape): string {
     // four-field expression the Go side rejects, so the summary says what is
     // missing rather than reading as a schedule with the days dropped.
     case 'weekly':
-      return shape.days.length
-        ? `${weekdayPhrase(shape.days)} at ${clock(shape.hour, shape.minute)}`
-        : 'No days picked'
+      return shape.days.length ? `${weekdayPhrase(shape.days)} at ${clock(shape.hour, shape.minute)}` : 'No days picked'
     case 'monthly':
       return `Monthly on the ${ordinal(shape.day)} at ${clock(shape.hour, shape.minute)}`
     case 'custom':
@@ -105,7 +103,9 @@ function weekdayPhrase(days: number[]): string {
   if (set.size === 7) return 'Every day'
   if (set.size === WEEKDAYS.length && WEEKDAYS.every((day) => set.has(day))) return 'Weekdays'
   if (set.size === 1) return `Every ${dayName(days[0])}`
-  return WEEK_ORDER.filter((day) => set.has(day)).map(dayAbbreviation).join(', ')
+  return WEEK_ORDER.filter((day) => set.has(day))
+    .map(dayAbbreviation)
+    .join(', ')
 }
 
 // Weekday lists are the one field a simple shape reads as more than a number:
@@ -148,9 +148,13 @@ function ordinal(day: number): string {
   const teen = day % 100
   if (teen >= 11 && teen <= 13) return `${day}th`
   switch (day % 10) {
-    case 1: return `${day}st`
-    case 2: return `${day}nd`
-    case 3: return `${day}rd`
-    default: return `${day}th`
+    case 1:
+      return `${day}st`
+    case 2:
+      return `${day}nd`
+    case 3:
+      return `${day}rd`
+    default:
+      return `${day}th`
   }
 }

@@ -7,7 +7,10 @@ const mocks = vi.hoisted(() => ({
   SetGithubSettings: vi.fn(),
 }))
 
-vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => mocks)
+vi.mock(
+  '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice',
+  () => mocks,
+)
 
 function mountDrawer() {
   return mount(GithubIntegrationDrawer, { global: { stubs: { Teleport: true } } })
@@ -33,7 +36,9 @@ describe('GithubIntegrationDrawer', () => {
     await flushPromises()
     await wrapper.get('[data-testid="github-poll-interval-input"]').setValue('30')
 
-    expect(wrapper.get('[data-testid="github-poll-interval-hint"]').text()).toBe("Minimum 60s — GitHub's polling contract")
+    expect(wrapper.get('[data-testid="github-poll-interval-hint"]').text()).toBe(
+      "Minimum 60s — GitHub's polling contract",
+    )
     expect(wrapper.get('[data-testid="github-settings-save"]').attributes('disabled')).toBeDefined()
   })
 

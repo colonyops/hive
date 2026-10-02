@@ -3,7 +3,11 @@ import type { RecordInput } from '../../bindings/github.com/colonyops/hive/cmd/d
 import type { NotifyInput } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { Notify as NotifyNative } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/notificationservice'
 import { useActivity } from './useActivity'
-import { useNotificationSettings, type NotificationDelivery, type NotificationPermission } from './useNotificationSettings'
+import {
+  useNotificationSettings,
+  type NotificationDelivery,
+  type NotificationPermission,
+} from './useNotificationSettings'
 import { useToasts } from './useToasts'
 import { useWindowFocus } from './useWindowFocus'
 import type { ToastOptions, ToastSeverity } from '../types/toast'
@@ -85,7 +89,14 @@ export function useNotify(overrides: Partial<NotifyDeps> = {}) {
     const body = event.body ?? ''
     const source = event.source ?? ''
     const mapping = notifySeverityMapping[severity]
-    const recorded = await deps.record({ title: event.title, body, severity: mapping.activity, category, source, metadata: null })
+    const recorded = await deps.record({
+      title: event.title,
+      body,
+      severity: mapping.activity,
+      category,
+      source,
+      metadata: null,
+    })
     if (!recorded) console.warn('[notify] activity record failed; surfacing anyway', event)
 
     if (!deps.settings.notificationsEnabled.value) return

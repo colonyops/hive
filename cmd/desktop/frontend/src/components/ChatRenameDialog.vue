@@ -53,17 +53,23 @@ onMounted(async () => {
         class="w-full rounded-lg border border-strong bg-raised px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
         data-testid="chat-rename-input"
         @keydown.enter="submit"
-      >
+      />
       <p
         v-if="error"
         class="mt-1 rounded border border-severity-error bg-severity-error-tint px-3 py-2 text-xs text-severity-error"
         data-testid="chat-rename-error"
-      >{{ error }}</p>
+      >
+        {{ error }}
+      </p>
     </div>
     <template #footer>
       <div class="flex-1" />
-      <BaseButton variant="secondary" :busy="busy" data-testid="chat-rename-cancel" @click="emit('close')">Cancel</BaseButton>
-      <BaseButton :busy="busy" :disabled="!draft.trim()" data-testid="chat-rename-save" @click="submit">Rename ↵</BaseButton>
+      <BaseButton variant="secondary" :busy="busy" data-testid="chat-rename-cancel" @click="emit('close')"
+        >Cancel</BaseButton
+      >
+      <BaseButton :busy="busy" :disabled="!draft.trim()" data-testid="chat-rename-save" @click="submit"
+        >Rename ↵</BaseButton
+      >
     </template>
   </BaseModal>
 </template>

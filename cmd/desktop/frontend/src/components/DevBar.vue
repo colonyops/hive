@@ -24,6 +24,7 @@ const label = computed(() => `Dev tools · ${branch}${port ? ` :${port}` : ''}`)
       :title="label"
       data-testid="devbar-link"
       class="cursor-pointer rounded px-2 py-1 text-[11px] font-bold hover:bg-black/15"
-    >{{ label }}</RouterLink>
+      >{{ label }}</RouterLink
+    >
   </footer>
 </template>

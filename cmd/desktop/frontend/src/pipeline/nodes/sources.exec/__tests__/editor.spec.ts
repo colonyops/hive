@@ -9,7 +9,7 @@ import type { MarkImageClient } from '../../../fields'
 const mocks = vi.hoisted(() => ({ fileToImageBase64: vi.fn() }))
 
 vi.mock('../../../../lib/imageUpload', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../../../../lib/imageUpload')>(),
+  ...(await importOriginal<typeof import('../../../../lib/imageUpload')>()),
   fileToImageBase64: mocks.fileToImageBase64,
 }))
 
@@ -50,7 +50,9 @@ describe('sources.exec editor', () => {
   it('renders the current command and timeout', () => {
     const wrapper = mount(Editor, { props: { config: config() } })
 
-    expect(wrapper.get<HTMLTextAreaElement>('[data-testid="sources.exec-editor-command"]').element.value).toBe('gcx alerts list -o json')
+    expect(wrapper.get<HTMLTextAreaElement>('[data-testid="sources.exec-editor-command"]').element.value).toBe(
+      'gcx alerts list -o json',
+    )
     expect(wrapper.get<HTMLInputElement>('[data-testid="sources.exec-editor-timeout"]').element.value).toBe('30s')
   })
 
@@ -79,7 +81,9 @@ describe('sources.exec editor', () => {
     typeInto(wrapper, 'sources.exec-editor-cwd', '')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.emitted('update:config')).toEqual([[{ command: 'gcx alerts list -o json', timeout: '30s', cwd: undefined }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [{ command: 'gcx alerts list -o json', timeout: '30s', cwd: undefined }],
+    ])
   })
 
   it('edits environment variables as name/value rows', async () => {
@@ -88,7 +92,9 @@ describe('sources.exec editor', () => {
     typeInto(wrapper, 'sources.exec-editor-env-value-0', 'xyz')
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.emitted('update:config')).toEqual([[{ command: 'gcx alerts list -o json', timeout: '30s', env: { TOKEN: 'xyz' } }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [{ command: 'gcx alerts list -o json', timeout: '30s', env: { TOKEN: 'xyz' } }],
+    ])
   })
 
   it('removes the last environment variable by unsetting the map', async () => {
@@ -96,7 +102,9 @@ describe('sources.exec editor', () => {
 
     await wrapper.get('[data-testid="sources.exec-editor-env-remove-0"]').trigger('click')
 
-    expect(wrapper.emitted('update:config')).toEqual([[{ command: 'gcx alerts list -o json', timeout: '30s', env: undefined }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [{ command: 'gcx alerts list -o json', timeout: '30s', env: undefined }],
+    ])
   })
 
   it('uploads a picked mark image and emits its hash into the config', async () => {
@@ -112,20 +120,32 @@ describe('sources.exec editor', () => {
 
     const emitted = wrapper.emitted('update:config') as [[Config]]
     expect(emitted.at(-1)![0].image).toBe('a'.repeat(32))
-    expect(wrapper.get('[data-testid="sources.exec-editor-mark-preview"] img').attributes('src')).toContain('data:image/png;base64,')
+    expect(wrapper.get('[data-testid="sources.exec-editor-mark-preview"] img').attributes('src')).toContain(
+      'data:image/png;base64,',
+    )
     expect(props.config.image).toBeUndefined()
   })
 
   it('previews an already-configured image by resolving its hash', async () => {
-    const client = fakeClient({ async markImage() { return 'data:image/png;base64,STORED' } })
+    const client = fakeClient({
+      async markImage() {
+        return 'data:image/png;base64,STORED'
+      },
+    })
     const wrapper = mount(Editor, { props: { config: config({ image: 'b'.repeat(32) }), client } })
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="sources.exec-editor-mark-preview"] img').attributes('src')).toBe('data:image/png;base64,STORED')
+    expect(wrapper.get('[data-testid="sources.exec-editor-mark-preview"] img').attributes('src')).toBe(
+      'data:image/png;base64,STORED',
+    )
   })
 
   it('removes the mark image, emitting a config with no image', async () => {
-    const client = fakeClient({ async markImage() { return 'data:image/png;base64,STORED' } })
+    const client = fakeClient({
+      async markImage() {
+        return 'data:image/png;base64,STORED'
+      },
+    })
     const wrapper = mount(Editor, { props: { config: config({ image: 'b'.repeat(32) }), client } })
     await flushPromises()
 
@@ -140,7 +160,10 @@ describe('sources.exec editor', () => {
 describe('sources.exec validate', () => {
   it('reports the unset required fields', () => {
     expect(validate(defaults)).toEqual(['a command is required'])
-    expect(validate({ ...defaults, timeout: '' })).toEqual(['a command is required', 'a timeout is required, like "30s"'])
+    expect(validate({ ...defaults, timeout: '' })).toEqual([
+      'a command is required',
+      'a timeout is required, like "30s"',
+    ])
   })
 
   // Go reads a bare number as nanoseconds and rejects it; the editor must not

@@ -28,9 +28,18 @@ vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On } }))
 
 function task(id: string, overrides: Partial<{ status: string; repoKey: string; parentId: string }> = {}) {
   return {
-    id, repoKey: overrides.repoKey ?? 'acme/site', epicId: '', parentId: overrides.parentId ?? '',
-    sessionId: '', title: `Task ${id}`, type: 'task', status: overrides.status ?? 'open',
-    blocked: false, depth: 0, createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+    id,
+    repoKey: overrides.repoKey ?? 'acme/site',
+    epicId: '',
+    parentId: overrides.parentId ?? '',
+    sessionId: '',
+    title: `Task ${id}`,
+    type: 'task',
+    status: overrides.status ?? 'open',
+    blocked: false,
+    depth: 0,
+    createdAt: '2026-01-01T00:00:00Z',
+    updatedAt: '2026-01-01T00:00:00Z',
   }
 }
 
@@ -113,9 +122,7 @@ describe('useTasks', () => {
 
   it('keeps last-seen items, sets error, and keeps polling on a poll failure', async () => {
     vi.useFakeTimers()
-    mocks.ListTasks
-      .mockResolvedValueOnce([task('t1')])
-      .mockRejectedValueOnce(appError('internal', 'temporary failure'))
+    mocks.ListTasks.mockResolvedValueOnce([task('t1')]).mockRejectedValueOnce(appError('internal', 'temporary failure'))
     const tasks = await loadComposable()
 
     tasks.startPolling()

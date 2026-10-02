@@ -10,8 +10,14 @@ const bundleOpen = ref(false)
 export function useReportDialog() {
   return {
     open: bundleOpen,
-    openBundleDialog: () => { bundleOpen.value = true },
-    close: () => { bundleOpen.value = false },
-    reportProblem: async () => { await Browser.OpenURL(await IssueURL()) },
+    openBundleDialog: () => {
+      bundleOpen.value = true
+    },
+    close: () => {
+      bundleOpen.value = false
+    },
+    reportProblem: async () => {
+      await Browser.OpenURL(await IssueURL())
+    },
   }
 }

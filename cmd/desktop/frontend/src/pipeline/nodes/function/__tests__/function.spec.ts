@@ -21,7 +21,7 @@ describe('function node: the drawer syntax check', () => {
     expect(errors[0]).toEqual(expect.any(String))
   })
 
-  it('says nothing about code that is only wrong at run time — that is the engine\'s to report', () => {
+  it("says nothing about code that is only wrong at run time — that is the engine's to report", () => {
     expect(checkSyntax('throw new Error("boom")')).toEqual([])
     expect(checkSyntax('return undefinedGlobal.field')).toEqual([])
   })

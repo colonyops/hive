@@ -12,13 +12,25 @@ vi.mock('../useWindowFocus', () => ({ useWindowFocus: () => ({ focused: ref(true
 
 function gitStatus(branch: string) {
   return {
-    path: `/tmp/${branch}`, branch, dirty: false, unpushed: false, additions: 0, deletions: 0,
-    host: 'github.com', owner: 'acme', repo: 'site', resolved: true, error: '',
+    path: `/tmp/${branch}`,
+    branch,
+    dirty: false,
+    unpushed: false,
+    additions: 0,
+    deletions: 0,
+    host: 'github.com',
+    owner: 'acme',
+    repo: 'site',
+    resolved: true,
+    error: '',
   }
 }
 
 /** Runs body inside a scope so the composable's onScopeDispose timer is cleaned up. */
-async function withStatus(sessionId: ReturnType<typeof ref<string>>, body: (status: ReturnType<typeof useSessionStatus>) => Promise<void>) {
+async function withStatus(
+  sessionId: ReturnType<typeof ref<string>>,
+  body: (status: ReturnType<typeof useSessionStatus>) => Promise<void>,
+) {
   const scope = effectScope()
   const status = scope.run(() => useSessionStatus(sessionId as never))!
   try {

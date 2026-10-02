@@ -1,5 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { groupTerminalSessions, resetTerminalSessionsForTests, sessionRepository, terminalSessionGroups, useTerminalSessions, type TerminalSessionRow } from '../useTerminalSessions'
+import {
+  groupTerminalSessions,
+  resetTerminalSessionsForTests,
+  sessionRepository,
+  terminalSessionGroups,
+  useTerminalSessions,
+  type TerminalSessionRow,
+} from '../useTerminalSessions'
 
 const mocks = vi.hoisted(() => ({ ListSessions: vi.fn(), Scratch: vi.fn() }))
 
@@ -93,7 +100,13 @@ describe('sessionRepository', () => {
 
   it('resolves the remote of the session at a slug', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'https://github.com/hay-kot/hive.git', state: 'active' },
+      {
+        id: '1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'https://github.com/hay-kot/hive.git',
+        state: 'active',
+      },
     ])
     await useTerminalSessions().reload()
 
@@ -101,9 +114,7 @@ describe('sessionRepository', () => {
   })
 
   it('is empty for an unknown slug, no slug, and a session without a remote', async () => {
-    mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'scratch', slug: 'scratch', repo: '', state: 'active' },
-    ])
+    mocks.ListSessions.mockResolvedValue([{ id: '1', name: 'scratch', slug: 'scratch', repo: '', state: 'active' }])
     await useTerminalSessions().reload()
 
     expect(sessionRepository('scratch')).toBe('')
@@ -161,7 +172,9 @@ describe('terminalSessionGroups', () => {
 
   it('leads with the pinned chats, above the scratch terminal', () => {
     const chat = row('api-refactor', '')
-    const groups = terminalSessionGroups([row('zeta', 'git@github.com:colonyops/hive.git')], row('Terminals', ''), [chat])
+    const groups = terminalSessionGroups([row('zeta', 'git@github.com:colonyops/hive.git')], row('Terminals', ''), [
+      chat,
+    ])
 
     expect(groups.map((group) => group.kind)).toEqual(['chats', 'scratch', 'repo'])
     expect(groups[0].name).toBe('Chats')

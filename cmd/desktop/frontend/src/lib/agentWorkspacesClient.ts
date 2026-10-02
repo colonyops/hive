@@ -314,7 +314,10 @@ export interface ResumeSessionRequest {
  * "unavailable" without reading the message.
  */
 export class AgentRequestError extends Error {
-  constructor(message: string, readonly kind: string) {
+  constructor(
+    message: string,
+    readonly kind: string,
+  ) {
     super(message)
     this.name = 'AgentRequestError'
   }
@@ -395,7 +398,16 @@ export function createAgentWorkspacesClient(endpoint: AgentsEndpoint): AgentWork
   return {
     async workspaces() {
       const body = await post<AgentWorkspacesPayload>('/workspaces', {})
-      if (!body) return { root: '', rootProblem: '', available: false, error: '', workspaces: [], presets: [], editor: { command: '', title: '' } }
+      if (!body)
+        return {
+          root: '',
+          rootProblem: '',
+          available: false,
+          error: '',
+          workspaces: [],
+          presets: [],
+          editor: { command: '', title: '' },
+        }
       return {
         ...body,
         workspaces: (body.workspaces ?? []).map(normalizeWorkspace),
@@ -445,7 +457,10 @@ export function createAgentWorkspacesClient(endpoint: AgentsEndpoint): AgentWork
       return body?.servers ?? []
     },
     async skillPackages() {
-      const body = await post<{ packages: SkillPackage[] | null, skills: SkillName[] | null, problem: string }>('/skills', {})
+      const body = await post<{ packages: SkillPackage[] | null; skills: SkillName[] | null; problem: string }>(
+        '/skills',
+        {},
+      )
       return { packages: body?.packages ?? [], skills: body?.skills ?? [], problem: body?.problem ?? '' }
     },
     async revealSkillPackages() {
@@ -543,7 +558,7 @@ function normalizeWorkspace(w: AgentWorkspace): AgentWorkspace {
 
 async function failure(response: Response): Promise<AgentRequestError> {
   try {
-    const body = await response.json() as { message?: string; kind?: string }
+    const body = (await response.json()) as { message?: string; kind?: string }
     if (body?.message) return new AgentRequestError(body.message, body.kind ?? '')
   } catch {
     // fall through to the status line

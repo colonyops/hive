@@ -33,7 +33,11 @@ export function silenceDeviceReports(term: Terminal): IDisposable {
     term.parser.registerDcsHandler({ intermediates: '$', final: 'q' }, () => true), // DECRQSS
     ...OSC_COLORS.map((ident) => term.parser.registerOscHandler(ident, isColorQuery)),
   ]
-  return { dispose: () => { for (const handler of handlers) handler.dispose() } }
+  return {
+    dispose: () => {
+      for (const handler of handlers) handler.dispose()
+    },
+  }
 }
 
 // A '?' where a colour would go. This swallows the whole payload, so a request

@@ -7,7 +7,10 @@ import IconFolder from '~icons/lucide/folder'
 import IconFolderPlus from '~icons/lucide/folder-plus'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
-import type { AgentOption, Profile } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf/models'
+import type {
+  AgentOption,
+  Profile,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf/models'
 import type { DraftWorkspace } from '../composables/useHiveSetup'
 import AppCheckbox from './AppCheckbox.vue'
 import AppSelect from './AppSelect.vue'
@@ -49,15 +52,20 @@ function submitTyped(): void {
 // The input clears once the folder shows up in the list, not on submit: the
 // parent checks the path asynchronously, and a typo should stay in the field
 // beside its error rather than have to be typed again.
-watch(() => props.workspaces, (workspaces) => {
-  if (workspaces.some(w => w.path === typed.value.trim())) typed.value = ''
-})
+watch(
+  () => props.workspaces,
+  (workspaces) => {
+    if (workspaces.some((w) => w.path === typed.value.trim())) typed.value = ''
+  },
+)
 
-const defaultAgentOptions = computed(() => [...props.selectedAgents].map(name => ({
-  value: name,
-  label: props.agents.find(a => a.name === name)?.label ?? name,
-  hint: name,
-})))
+const defaultAgentOptions = computed(() =>
+  [...props.selectedAgents].map((name) => ({
+    value: name,
+    label: props.agents.find((a) => a.name === name)?.label ?? name,
+    hint: name,
+  })),
+)
 
 function repoLabel(count: number): string {
   if (count === 1) return '1 repository'
@@ -71,7 +79,8 @@ function repoLabel(count: number): string {
       <div>
         <h3 class="text-[13.5px] font-semibold text-text">Coding agent</h3>
         <p class="mt-1 text-[12.5px] leading-relaxed text-text-3">
-          Pick the agents Hive can start a session with. Installed ones are marked; you can choose one you have not installed yet.
+          Pick the agents Hive can start a session with. Installed ones are marked; you can choose one you have not
+          installed yet.
         </p>
       </div>
 
@@ -81,9 +90,11 @@ function repoLabel(count: number): string {
           :key="agent.name"
           type="button"
           class="flex items-center gap-2.5 rounded-[9px] border px-3 py-2.5 text-left transition-colors"
-          :class="selectedAgents.has(agent.name)
-            ? 'border-accent bg-accent-tint text-text'
-            : 'border-strong bg-chip text-text-2 hover:border-accent/50'"
+          :class="
+            selectedAgents.has(agent.name)
+              ? 'border-accent bg-accent-tint text-text'
+              : 'border-strong bg-chip text-text-2 hover:border-accent/50'
+          "
           :disabled="busy"
           :aria-pressed="selectedAgents.has(agent.name)"
           :data-testid="`hive-agent-${agent.name}`"
@@ -93,7 +104,8 @@ function repoLabel(count: number): string {
             aria-hidden="true"
             class="flex size-4 shrink-0 items-center justify-center rounded-[5px] border"
             :class="selectedAgents.has(agent.name) ? 'border-accent bg-accent text-accent-contrast' : 'border-strong'"
-          ><IconCheck v-if="selectedAgents.has(agent.name)" class="size-3" /></span>
+            ><IconCheck v-if="selectedAgents.has(agent.name)" class="size-3"
+          /></span>
           <span class="min-w-0 flex-1">
             <span class="block truncate text-[13px] font-medium">{{ agent.label }}</span>
             <span class="block truncate font-mono text-[11px] text-text-4">{{ agent.name }}</span>
@@ -102,11 +114,16 @@ function repoLabel(count: number): string {
             v-if="agent.installed"
             class="shrink-0 rounded-full bg-severity-success-tint px-1.5 py-0.5 text-[10px] font-medium text-severity-success"
             :data-testid="`hive-agent-installed-${agent.name}`"
-          >installed</span>
+            >installed</span
+          >
         </button>
       </div>
 
-      <p v-if="!agents.some(a => a.installed)" class="text-[12px] leading-relaxed text-text-4" data-testid="hive-no-agents-installed">
+      <p
+        v-if="!agents.some((a) => a.installed)"
+        class="text-[12px] leading-relaxed text-text-4"
+        data-testid="hive-no-agents-installed"
+      >
         None of these were found on your PATH. Pick the one you plan to use — Hive will find it once it is installed.
       </p>
 
@@ -130,7 +147,8 @@ function repoLabel(count: number): string {
         <IconTriangleAlert class="mt-px size-3.5 shrink-0 text-severity-info" />
         <span>
           <span class="font-mono text-text">HIVE_DEFAULT_AGENT</span> is set to
-          <span class="font-mono text-text">{{ defaultAgentOverride }}</span> in your shell, and it wins over the choice here. Unset it if you want this setting to take effect.
+          <span class="font-mono text-text">{{ defaultAgentOverride }}</span> in your shell, and it wins over the choice
+          here. Unset it if you want this setting to take effect.
         </span>
       </p>
 
@@ -148,7 +166,9 @@ function repoLabel(count: number): string {
       <div>
         <h3 class="text-[13.5px] font-semibold text-text">Where your repositories are</h3>
         <p class="mt-1 text-[12.5px] leading-relaxed text-text-3">
-          Add the folders that <em>contain</em> your repositories — <span class="font-mono text-text-2">~/code</span>, not <span class="font-mono text-text-2">~/code/my-app</span>. Everything under them shows up in the new session picker. You can add more than one.
+          Add the folders that <em>contain</em> your repositories — <span class="font-mono text-text-2">~/code</span>,
+          not <span class="font-mono text-text-2">~/code/my-app</span>. Everything under them shows up in the new
+          session picker. You can add more than one.
         </p>
       </div>
 
@@ -162,10 +182,9 @@ function repoLabel(count: number): string {
           <IconFolder class="size-4 shrink-0 text-text-3" />
           <span class="min-w-0 flex-1">
             <span class="block truncate font-mono text-[12.5px] text-text">{{ workspace.path }}</span>
-            <span
-              class="block text-[11px]"
-              :class="workspace.exists ? 'text-text-4' : 'text-kind-issue'"
-            >{{ workspace.exists ? repoLabel(workspace.repos) : 'not found on this machine' }}</span>
+            <span class="block text-[11px]" :class="workspace.exists ? 'text-text-4' : 'text-kind-issue'">{{
+              workspace.exists ? repoLabel(workspace.repos) : 'not found on this machine'
+            }}</span>
           </span>
           <button
             type="button"
@@ -174,7 +193,9 @@ function repoLabel(count: number): string {
             :aria-label="`Remove ${workspace.path}`"
             :data-testid="`hive-workspace-remove-${workspace.path}`"
             @click="emit('removeWorkspace', workspace.path)"
-          ><IconX class="size-3.5" /></button>
+          >
+            <IconX class="size-3.5" />
+          </button>
         </li>
       </ul>
 
@@ -201,25 +222,23 @@ function repoLabel(count: number): string {
           class="min-w-0 flex-1 rounded-lg border border-strong bg-app px-3 py-2 font-mono text-[12.5px] text-text outline-none placeholder:font-sans placeholder:text-text-4 focus:border-accent disabled:opacity-55"
           data-testid="hive-workspace-path"
           @keydown.enter.prevent="submitTyped"
-        >
+        />
         <button
           type="button"
           class="shrink-0 cursor-pointer rounded-[7px] border border-strong px-3 py-2 text-[12.5px] font-medium text-text-2 hover:border-accent hover:text-accent disabled:opacity-55"
           :disabled="busy || !typed.trim()"
           data-testid="hive-workspace-path-add"
           @click="submitTyped"
-        >Add</button>
+        >
+          Add
+        </button>
       </div>
     </section>
 
-    <p
-      v-if="customProfiles.length"
-      class="text-[12px] leading-relaxed text-text-4"
-      data-testid="hive-custom-profiles"
-    >
+    <p v-if="customProfiles.length" class="text-[12px] leading-relaxed text-text-4" data-testid="hive-custom-profiles">
       Your config also defines
-      <span class="font-mono text-text-3">{{ customProfiles.map(p => p.name).join(', ') }}</span>.
-      {{ customProfiles.length === 1 ? 'It is' : 'They are' }} kept as written.
+      <span class="font-mono text-text-3">{{ customProfiles.map((p) => p.name).join(', ') }}</span
+      >. {{ customProfiles.length === 1 ? 'It is' : 'They are' }} kept as written.
     </p>
   </div>
 </template>

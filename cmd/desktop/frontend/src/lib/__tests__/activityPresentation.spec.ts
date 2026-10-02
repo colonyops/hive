@@ -22,16 +22,20 @@ function event(partial: Partial<ActivityEvent> & { id: number }): ActivityEvent 
 
 describe('activityLinks', () => {
   it('decodes external and internal destinations from the generic metadata namespace', () => {
-    expect(activityLinks(event({
-      id: 1,
-      metadata: {
-        'link.url': 'https://github.com/acme/api/pull/12',
-        'link.item.profileId': 'triage',
-        'link.item.sourceKind': 'github',
-        'link.item.sourceScope': 'acme/api',
-        'link.item.externalId': 'acme/api#12',
-      },
-    }))).toEqual({
+    expect(
+      activityLinks(
+        event({
+          id: 1,
+          metadata: {
+            'link.url': 'https://github.com/acme/api/pull/12',
+            'link.item.profileId': 'triage',
+            'link.item.sourceKind': 'github',
+            'link.item.sourceScope': 'acme/api',
+            'link.item.externalId': 'acme/api#12',
+          },
+        }),
+      ),
+    ).toEqual({
       url: 'https://github.com/acme/api/pull/12',
       item: { profileId: 'triage', sourceKind: 'github', sourceScope: 'acme/api', externalId: 'acme/api#12' },
     })

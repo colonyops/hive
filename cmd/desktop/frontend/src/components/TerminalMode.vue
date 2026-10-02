@@ -1,5 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, shallowRef, watch, watchEffect, type Component } from 'vue'
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  shallowReactive,
+  shallowRef,
+  watch,
+  watchEffect,
+  type Component,
+} from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useStorage } from '@vueuse/core'
 import IconArrowDown from '~icons/lucide/arrow-down'
@@ -46,7 +57,13 @@ import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { useCommands, useShellEscape, type Command } from '../composables/useCommands'
 import { useTerminalActions } from '../composables/useTerminalActions'
 import { useTerminalAvailability } from '../composables/useTerminalAvailability'
-import { sessionRepository, terminalSessionGroups, useTerminalSessions, type TerminalSessionGroup, type TerminalSessionRow } from '../composables/useTerminalSessions'
+import {
+  sessionRepository,
+  terminalSessionGroups,
+  useTerminalSessions,
+  type TerminalSessionGroup,
+  type TerminalSessionRow,
+} from '../composables/useTerminalSessions'
 import { useTerminalPinnedChats } from '../composables/useTerminalPinnedChats'
 import { useAgentSessionsAll } from '../composables/useAgentSessionsAll'
 import { setAttachedTerminalWindows } from '../composables/useAttachedTerminalWindows'
@@ -64,23 +81,38 @@ import { useSessionStatus } from '../composables/useSessionStatus'
 import { useSessionStatuses } from '../composables/useSessionStatuses'
 import { useTerminalStatusBar } from '../composables/useTerminalStatusBar'
 import { useWailsEvent } from '../composables/useWailsEvent'
-import { createTerminalClient, getTerminalEndpoint, type WindowForeground, type WindowState } from '../lib/terminalClient'
+import {
+  createTerminalClient,
+  getTerminalEndpoint,
+  type WindowForeground,
+  type WindowState,
+} from '../lib/terminalClient'
 import { appErrorMessage, errorText } from '../lib/appError'
 import { isEditableTarget } from '../lib/isEditableTarget'
 import { paneMayAutoFocus, setTerminalTreeHandles, terminalTreeFocused } from '../lib/terminalTree'
 import { Available } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/terminalservice'
-import { OpenSessionInEditor, RevealSession, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
-import type { SessionStatus, SessionWindowStatus } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import {
+  OpenSessionInEditor,
+  RevealSession,
+  SessionLaunchOptions,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
+import type {
+  SessionStatus,
+  SessionWindowStatus,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import type { MenuEntry } from '../types/menu'
 import '@xterm/xterm/css/xterm.css'
 
 // `active` is whether this mode is the surface on screen. The component is
 // mounted once and hidden on a trip to the hub (App.vue), so it is the signal
 // that replaces mount/unmount for anything that must not run off-screen.
-const props = withDefaults(defineProps<{
-  sidebarCollapsed?: boolean
-  active?: boolean
-}>(), { active: true })
+const props = withDefaults(
+  defineProps<{
+    sidebarCollapsed?: boolean
+    active?: boolean
+  }>(),
+  { active: true },
+)
 
 const emit = defineEmits<{ 'open-tasks': []; 'session-repo-key': [repoKey: string] }>()
 
@@ -102,7 +134,7 @@ const activeSlug = ref('')
 // left alone by the route-driven detach, and cleared only when dropSession
 // lets that session's pool entry go.
 const lastAttachedSlug = ref('')
-const current = computed(() => (activeSlug.value ? pool.get(activeSlug.value) ?? null : null))
+const current = computed(() => (activeSlug.value ? (pool.get(activeSlug.value) ?? null) : null))
 // What the main area shows. It lags the selection during a cold attach: the
 // outgoing session holds the pane until the incoming one has painted — or
 // ended, or the hold cap fired — so a switch never shows a blank grid.
@@ -124,18 +156,22 @@ const HOLD_MS = 300
 const revealed = new WeakSet<UseTerminalWindows>()
 let holdTimer: ReturnType<typeof setTimeout> | undefined
 
-watch([current, () => current.value?.painted.value, () => current.value?.status.value], () => {
-  clearTimeout(holdTimer)
-  const incoming = current.value
-  if (!incoming || incoming === displayed.value) return
-  if (!displayed.value || revealed.has(incoming) || incoming.painted.value || incoming.status.value === 'ended') {
-    reveal(incoming)
-    return
-  }
-  holdTimer = setTimeout(() => {
-    if (current.value === incoming) reveal(incoming)
-  }, HOLD_MS)
-}, { immediate: true })
+watch(
+  [current, () => current.value?.painted.value, () => current.value?.status.value],
+  () => {
+    clearTimeout(holdTimer)
+    const incoming = current.value
+    if (!incoming || incoming === displayed.value) return
+    if (!displayed.value || revealed.has(incoming) || incoming.painted.value || incoming.status.value === 'ended') {
+      reveal(incoming)
+      return
+    }
+    holdTimer = setTimeout(() => {
+      if (current.value === incoming) reveal(incoming)
+    }, HOLD_MS)
+  },
+  { immediate: true },
+)
 
 function reveal(incoming: UseTerminalWindows): void {
   revealed.add(incoming)
@@ -194,7 +230,9 @@ const router = useRouter()
 // The URL is the attach state: /terminal/:slug is the attached session,
 // ?window its active window. Sidebar clicks push (history traverses session
 // switches); window changes replace (tab flips must not pile up entries).
-const routeSlug = computed(() => (route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : ''))
+const routeSlug = computed(() =>
+  route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : '',
+)
 const routeWindow = computed(() => (typeof route.query.window === 'string' ? route.query.window : ''))
 
 // Shared by the attach path (openSession, on a fresh or already-pooled slug)
@@ -212,7 +250,12 @@ function selectIfWanted(session: UseTerminalWindows, windowId: string): void {
 const restore = useStorage('hive.terminal.restore', { slug: '', window: '' })
 
 const {
-  sessions: sessionRows, scratch: scratchRow, loading: sessionsLoading, loaded: sessionsLoaded, error: sessionsError, reload: reloadSessions,
+  sessions: sessionRows,
+  scratch: scratchRow,
+  loading: sessionsLoading,
+  loaded: sessionsLoaded,
+  error: sessionsError,
+  reload: reloadSessions,
 } = useTerminalSessions()
 const { openBlank: openNewSession, prefetch: prefetchNewSession } = useNewSession()
 // The tree is the attach surface, so only an active session belongs in it — a
@@ -362,16 +405,19 @@ const filteredGroups = computed<TerminalSessionGroup[]>(() => {
       groups.push(group)
       continue
     }
-    const sessions = group.sessions.filter((row) =>
-      row.name.toLowerCase().includes(query) || row.slug.toLowerCase().includes(query))
+    const sessions = group.sessions.filter(
+      (row) => row.name.toLowerCase().includes(query) || row.slug.toLowerCase().includes(query),
+    )
     if (sessions.length) groups.push({ ...group, sessions })
   }
   return groups
 })
 
 const {
-  statuses: sessionStatuses, loaded: statusesLoaded,
-  startPolling: startStatusPolling, stopPolling: stopStatusPolling,
+  statuses: sessionStatuses,
+  loaded: statusesLoaded,
+  startPolling: startStatusPolling,
+  stopPolling: stopStatusPolling,
 } = useSessionStatuses()
 interface StatusIndicator {
   icon: Component
@@ -381,9 +427,9 @@ interface StatusIndicator {
 }
 // Idle is carried by the row's own name rather than a glyph — undefined until
 // the first status poll lands, so a row is not greyed before its state is known.
-const sessionIdle = computed<Record<string, boolean>>(() => Object.fromEntries(
-  Object.entries(sessionStatuses.value).map(([id, status]) => [id, !status.running]),
-))
+const sessionIdle = computed<Record<string, boolean>>(() =>
+  Object.fromEntries(Object.entries(sessionStatuses.value).map(([id, status]) => [id, !status.running])),
+)
 
 function windowActivityIndicator(status: SessionWindowStatus): StatusIndicator {
   const tool = status.tool || 'Agent'
@@ -420,7 +466,9 @@ const {
   cancelInputs: cancelActionInputs,
   submitInputs: submitActionInputs,
 } = useTerminalActions()
-useWailsEvent('actions:updated', () => { void loadTerminalActions() })
+useWailsEvent('actions:updated', () => {
+  void loadTerminalActions()
+})
 
 const openRowMenu = ref('')
 const openNewWindowMenu = ref('')
@@ -452,9 +500,13 @@ function loadAgentProfiles(): Promise<void> {
   return agentProfilesRequest
 }
 
-watch(() => props.active, (active) => {
-  if (active) void loadAgentProfiles()
-}, { immediate: true })
+watch(
+  () => props.active,
+  (active) => {
+    if (active) void loadAgentProfiles()
+  },
+  { immediate: true },
+)
 const rowMenuFlip = ref(false)
 const rowMenuToggles = new Map<string, HTMLElement>()
 const openWindowMenu = ref('')
@@ -471,8 +523,20 @@ const sidebarMenuEntries = computed<MenuEntry[]>(() => [
     testid: 'terminal-sessions-running-only',
   },
   { kind: 'separator' },
-  { kind: 'action', id: 'collapse-all', label: 'Collapse all', icon: IconChevronsDownUp, testid: 'terminal-sessions-collapse-all' },
-  { kind: 'action', id: 'expand-all', label: 'Expand all', icon: IconChevronsUpDown, testid: 'terminal-sessions-expand-all' },
+  {
+    kind: 'action',
+    id: 'collapse-all',
+    label: 'Collapse all',
+    icon: IconChevronsDownUp,
+    testid: 'terminal-sessions-collapse-all',
+  },
+  {
+    kind: 'action',
+    id: 'expand-all',
+    label: 'Expand all',
+    icon: IconChevronsUpDown,
+    testid: 'terminal-sessions-expand-all',
+  },
   { kind: 'separator' },
   {
     kind: 'action',
@@ -488,12 +552,27 @@ const {
   detail: sessionDetail,
   openDetail: openSessionDetail,
   closeDetail: closeSessionDetail,
-  renaming, renameBusy, renameError,
-  requestRename, cancelRename, submitRename, requestDelete, requestRecycle, requestPrune,
-} = useSessionActions({ onChanged: () => { void reloadSessions() } })
+  renaming,
+  renameBusy,
+  renameError,
+  requestRename,
+  cancelRename,
+  submitRename,
+  requestDelete,
+  requestRecycle,
+  requestPrune,
+} = useSessionActions({
+  onChanged: () => {
+    void reloadSessions()
+  },
+})
 const {
-  open: confirmOpen, options: confirmOptions, busy: confirmBusy, error: confirmError,
-  cancel: cancelConfirm, confirm: runConfirm,
+  open: confirmOpen,
+  options: confirmOptions,
+  busy: confirmBusy,
+  error: confirmError,
+  cancel: cancelConfirm,
+  confirm: runConfirm,
 } = confirmation
 
 function setRowMenuToggle(id: string, el: unknown): void {
@@ -520,7 +599,9 @@ function toggleRowMenu(row: TerminalSessionRow, event?: MouseEvent): void {
     return
   }
   openWindowMenu.value = ''
-  rowMenuFlip.value = menuFlipsUp(event?.currentTarget instanceof HTMLElement ? event.currentTarget : rowMenuToggles.get(row.id))
+  rowMenuFlip.value = menuFlipsUp(
+    event?.currentTarget instanceof HTMLElement ? event.currentTarget : rowMenuToggles.get(row.id),
+  )
   openRowMenu.value = row.id
 }
 
@@ -545,7 +626,9 @@ function toggleWindowMenu(row: TerminalSessionRow, windowId: string, event?: Mou
     return
   }
   openRowMenu.value = ''
-  windowMenuFlip.value = menuFlipsUp(event?.currentTarget instanceof HTMLElement ? event.currentTarget : windowMenuToggles.get(key))
+  windowMenuFlip.value = menuFlipsUp(
+    event?.currentTarget instanceof HTMLElement ? event.currentTarget : windowMenuToggles.get(key),
+  )
   openWindowMenu.value = key
 }
 
@@ -569,7 +652,13 @@ function onSidebarMenuSelect(id: string): void {
 // owns its record; what this menu offers is the two things only the pin created:
 // the way back to that area, and the way to undo it.
 const chatMenuEntries: MenuEntry[] = [
-  { kind: 'action', id: 'open-in-agents', label: 'Open in Chats', icon: IconMessagesSquare, testid: 'terminal-chat-open-in-agents' },
+  {
+    kind: 'action',
+    id: 'open-in-agents',
+    label: 'Open in Chats',
+    icon: IconMessagesSquare,
+    testid: 'terminal-chat-open-in-agents',
+  },
   { kind: 'separator' },
   { kind: 'action', id: 'unpin', label: 'Unpin from Code', icon: IconPinOff, testid: 'terminal-chat-unpin' },
 ]
@@ -657,13 +746,25 @@ watch([showAllWindows, attachable, client, sessionsLoaded, () => props.active], 
 // The chat rows come from the Agents area's own listing, which nothing else in
 // this mode reads: without this a pinned chat's name and liveness would be
 // whatever they were when the Agents area was last on screen.
-watch(() => props.active, (active) => { if (active) void reloadRecents() }, { immediate: true })
+watch(
+  () => props.active,
+  (active) => {
+    if (active) void reloadRecents()
+  },
+  { immediate: true },
+)
 
 // Only a hive session gets a status bar: the scratch terminal and the pinned
 // chats are tmux sessions with no checkout behind them.
 const { showStatusBar } = useTerminalStatusBar()
 const { title: editorTitle, refresh: reloadEditor } = useEditorSettings()
-watch(() => props.active, (active) => { if (active) void reloadEditor() }, { immediate: true })
+watch(
+  () => props.active,
+  (active) => {
+    if (active) void reloadEditor()
+  },
+  { immediate: true },
+)
 
 const statusBarRow = computed(() => {
   if (!showStatusBar.value || !visibleSlug.value) return null
@@ -671,7 +772,9 @@ const statusBarRow = computed(() => {
 })
 const statusBarSessionId = computed(() => statusBarRow.value?.id ?? '')
 const {
-  git: sessionGit, pullRequest: sessionPullRequest, pullRequestError: sessionPullRequestError,
+  git: sessionGit,
+  pullRequest: sessionPullRequest,
+  pullRequestError: sessionPullRequestError,
   refresh: refreshSessionStatus,
 } = useSessionStatus(statusBarSessionId)
 // Separate from actionError, which belongs to the terminal actions menu.
@@ -704,10 +807,12 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
 // live tab set that was standing in front of the listing. The subtree would
 // fall back to a cached listing of windows tmux no longer holds, so an end is
 // a trigger of its own.
-const endedSlugs = computed(() => [...pool.entries()]
-  .filter(([, session]) => session.status.value === 'ended')
-  .map(([slug]) => slug)
-  .join(' '))
+const endedSlugs = computed(() =>
+  [...pool.entries()]
+    .filter(([, session]) => session.status.value === 'ended')
+    .map(([slug]) => slug)
+    .join(' '),
+)
 watch(endedSlugs, sweepListings)
 
 // The tree used to paint the moment the session list landed, then paint again
@@ -738,13 +843,21 @@ watchEffect(() => {
 // rails measure per frame and would force layout through all of it. The
 // transitions exist to make a *change* legible, and the first fill is not one.
 const treeSettled = ref(false)
-watch(treeReady, (ready) => {
-  if (!ready) return
-  void nextTick(() => requestAnimationFrame(() => requestAnimationFrame(() => {
-    treeSettled.value = true
-    settleRails()
-  })))
-}, { immediate: true })
+watch(
+  treeReady,
+  (ready) => {
+    if (!ready) return
+    void nextTick(() =>
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          treeSettled.value = true
+          settleRails()
+        }),
+      ),
+    )
+  },
+  { immediate: true },
+)
 
 // The scratch section is exempt from "always show windows": that setting is about
 // how much of every session to list, and the scratch terminal's tabs are the
@@ -1063,25 +1176,28 @@ useCommands(() => {
           })
         }
       }
-      cmds.push({
-        id: 'terminal:session:detail',
-        title: 'Session details…',
-        group,
-        order: -3,
-        scope: 'actions',
-        keywords: ['session', 'info'],
-        icon: IconInfo,
-        run: () => void openSessionDetail(attached),
-      }, {
-        id: 'terminal:session:rename',
-        title: 'Rename session…',
-        group,
-        order: -3,
-        scope: 'actions',
-        keywords: ['session'],
-        icon: IconPencil,
-        run: () => requestRename(attached),
-      })
+      cmds.push(
+        {
+          id: 'terminal:session:detail',
+          title: 'Session details…',
+          group,
+          order: -3,
+          scope: 'actions',
+          keywords: ['session', 'info'],
+          icon: IconInfo,
+          run: () => void openSessionDetail(attached),
+        },
+        {
+          id: 'terminal:session:rename',
+          title: 'Rename session…',
+          group,
+          order: -3,
+          scope: 'actions',
+          keywords: ['session'],
+          icon: IconPencil,
+          run: () => requestRename(attached),
+        },
+      )
       if (attached.state === 'active') {
         cmds.push({
           id: 'terminal:session:recycle',
@@ -1142,25 +1258,28 @@ useCommands(() => {
       }
     }
     if (isChat(attached)) {
-      cmds.push({
-        id: 'terminal:chat:open-in-agents',
-        title: 'Open in Chats',
-        group,
-        order: -3,
-        scope: 'goto',
-        keywords: ['chat', 'chats', 'agents'],
-        icon: IconMessagesSquare,
-        run: () => openChatInAgents(attached),
-      }, {
-        id: 'terminal:chat:unpin',
-        title: 'Unpin from Code',
-        group,
-        order: -3,
-        scope: 'actions',
-        keywords: ['chat', 'pin'],
-        icon: IconPinOff,
-        run: () => unpinSlug(attached.slug),
-      })
+      cmds.push(
+        {
+          id: 'terminal:chat:open-in-agents',
+          title: 'Open in Chats',
+          group,
+          order: -3,
+          scope: 'goto',
+          keywords: ['chat', 'chats', 'agents'],
+          icon: IconMessagesSquare,
+          run: () => openChatInAgents(attached),
+        },
+        {
+          id: 'terminal:chat:unpin',
+          title: 'Unpin from Code',
+          group,
+          order: -3,
+          scope: 'actions',
+          keywords: ['chat', 'pin'],
+          icon: IconPinOff,
+          run: () => unpinSlug(attached.slug),
+        },
+      )
     }
   }
 
@@ -1199,72 +1318,79 @@ onBeforeUnmount(() => setAttachedTerminalWindows(null))
 // the line — a shell in that checkout, in the strip beside the others, which
 // outlives the command the way a window does. It needs a session to open in, so
 // the picker offers nothing; the hint names the one it found.
-useShellEscape((line) => {
-  if (!props.active) return []
-  const attached = attachedRow.value
-  if (!attached) return []
-  return [{
-    id: 'shell:run',
-    title: `Run: ${line}`,
-    keywords: ['shell', 'terminal', 'window', 'run'],
-    icon: IconTerminal,
-    hint: `new window in ${attached.name}`,
-    run: () => void current.value?.newWindow(line),
-  }]
-}, () => props.active)
+useShellEscape(
+  (line) => {
+    if (!props.active) return []
+    const attached = attachedRow.value
+    if (!attached) return []
+    return [
+      {
+        id: 'shell:run',
+        title: `Run: ${line}`,
+        keywords: ['shell', 'terminal', 'window', 'run'],
+        icon: IconTerminal,
+        hint: `new window in ${attached.name}`,
+        run: () => void current.value?.newWindow(line),
+      },
+    ]
+  },
+  () => props.active,
+)
 
-onMounted(() => setTerminalTreeHandles({
-  focusTree: focusTreeCursor,
-  // Selected, not just focused: `/` on a field that already has a query means
-  // a new search far more often than an edit of the old one.
-  focusFilter: (): void => {
-    void nextTick(() => filterInput.value?.select())
-  },
-  focusPane: (): void => current.value?.focusActive(),
-  // Counted along the strip rather than clamped to it: ⌘3 means the third
-  // window, so a session with two ignores it instead of standing the last one
-  // in for a window the user did not ask for.
-  selectWindow: (position: number): void => goToWindow(current.value?.tabs.value[position - 1]),
-  stepWindow: (delta: number): void => goToWindow(relativeWindow(delta)),
-  newWindow: (): void => {
-    const row = attachedRow.value
-    if (!row) return
-    paneMayAutoFocus.value = true
-    // tmux names the window, so there is no key to point the cursor at yet.
-    // Dropping the request lets it fall back to the attached session's active
-    // window, which is the new one as soon as the event lands.
-    cursorRequest.value = ''
-    void newWindowIn(row)
-  },
-  closeWindow: (): void => {
-    const session = current.value
-    const windowId = session?.activeWindowId.value
-    if (!session || !windowId) return
-    const name = session.tabs.value.find((tab) => tab.windowId === windowId)?.name ?? ''
-    void requestCloseWindow(activeSlug.value, windowId, name)
-  },
-  // Split, zoom, and directional focus keep typing focus when tmux reports the
-  // active pane.
-  splitPane: (direction): void => {
-    paneMayAutoFocus.value = true
-    void current.value?.splitPane(direction)
-  },
-  closePane: (): void => {
-    const session = current.value
-    const tab = session?.tabs.value.find((candidate) => candidate.windowId === session.activeWindowId.value)
-    const pane = tab && activePaneOf(tab)
-    if (!session || !tab || !pane) return
-    void requestClosePane(activeSlug.value, pane.paneId, tab.name)
-  },
-  zoomPane: (): void => {
-    paneMayAutoFocus.value = true
-    void current.value?.zoomPane()
-  },
-  focusPaneDirection: (direction): void => {
-    paneMayAutoFocus.value = true
-    void current.value?.focusPane(direction)
-  },
-}))
+onMounted(() =>
+  setTerminalTreeHandles({
+    focusTree: focusTreeCursor,
+    // Selected, not just focused: `/` on a field that already has a query means
+    // a new search far more often than an edit of the old one.
+    focusFilter: (): void => {
+      void nextTick(() => filterInput.value?.select())
+    },
+    focusPane: (): void => current.value?.focusActive(),
+    // Counted along the strip rather than clamped to it: ⌘3 means the third
+    // window, so a session with two ignores it instead of standing the last one
+    // in for a window the user did not ask for.
+    selectWindow: (position: number): void => goToWindow(current.value?.tabs.value[position - 1]),
+    stepWindow: (delta: number): void => goToWindow(relativeWindow(delta)),
+    newWindow: (): void => {
+      const row = attachedRow.value
+      if (!row) return
+      paneMayAutoFocus.value = true
+      // tmux names the window, so there is no key to point the cursor at yet.
+      // Dropping the request lets it fall back to the attached session's active
+      // window, which is the new one as soon as the event lands.
+      cursorRequest.value = ''
+      void newWindowIn(row)
+    },
+    closeWindow: (): void => {
+      const session = current.value
+      const windowId = session?.activeWindowId.value
+      if (!session || !windowId) return
+      const name = session.tabs.value.find((tab) => tab.windowId === windowId)?.name ?? ''
+      void requestCloseWindow(activeSlug.value, windowId, name)
+    },
+    // Split, zoom, and directional focus keep typing focus when tmux reports the
+    // active pane.
+    splitPane: (direction): void => {
+      paneMayAutoFocus.value = true
+      void current.value?.splitPane(direction)
+    },
+    closePane: (): void => {
+      const session = current.value
+      const tab = session?.tabs.value.find((candidate) => candidate.windowId === session.activeWindowId.value)
+      const pane = tab && activePaneOf(tab)
+      if (!session || !tab || !pane) return
+      void requestClosePane(activeSlug.value, pane.paneId, tab.name)
+    },
+    zoomPane: (): void => {
+      paneMayAutoFocus.value = true
+      void current.value?.zoomPane()
+    },
+    focusPaneDirection: (direction): void => {
+      paneMayAutoFocus.value = true
+      void current.value?.focusPane(direction)
+    },
+  }),
+)
 onBeforeUnmount(() => setTerminalTreeHandles(null))
 
 // The selection markers are two elements that travel, not a border each row
@@ -1275,7 +1401,11 @@ onBeforeUnmount(() => setTerminalTreeHandles(null))
 // group's own height animates, and a collapsed group contributes nothing — so
 // there is no arithmetic over the list that stays true.
 const treeContent = ref<HTMLElement | null>(null)
-interface SelectionRail { y: number; height: number; shown: boolean }
+interface SelectionRail {
+  y: number
+  height: number
+  shown: boolean
+}
 const sessionRail = ref<SelectionRail>({ y: 0, height: 0, shown: false })
 const windowRail = ref<SelectionRail>({ y: 0, height: 0, shown: false })
 
@@ -1356,7 +1486,7 @@ function expandEnter(el: Element): void {
 // Clears the pinned height so an open panel resizes with its content — on the
 // way in, and on an enter cut short by a collapse before it finished.
 function expandSettle(el: Element): void {
-  (el as HTMLElement).style.height = ''
+  ;(el as HTMLElement).style.height = ''
 }
 
 function expandLeave(el: Element): void {
@@ -1370,18 +1500,30 @@ function openWindow(row: TerminalSessionRow, windowId: string): void {
   void router.push({ name: 'terminal', params: { slug: row.slug }, query: { window: windowId } })
 }
 
-const { size: sidebarWidth, startResize, step } = useResizablePanel({
-  storageKey: 'hive.panel.terminal.sidebar', defaultSize: 250, min: 180, max: 400, edge: 'right',
+const {
+  size: sidebarWidth,
+  startResize,
+  step,
+} = useResizablePanel({
+  storageKey: 'hive.panel.terminal.sidebar',
+  defaultSize: 250,
+  min: 180,
+  max: 400,
+  edge: 'right',
 })
 
 // A launched session lands in the sidebar without a manual refresh: session
 // creation runs as a job, and jobs:updated is the wake-up that fires when one
 // finishes. Extra reloads are harmless — the list is small.
-useWailsEvent('jobs:updated', () => { void reloadSessions() })
+useWailsEvent('jobs:updated', () => {
+  void reloadSessions()
+})
 
 const tabs = computed<TerminalWindowTab[]>(() => visible.value?.tabs.value ?? [])
 const activeWindowId = computed(() => visible.value?.activeWindowId.value ?? '')
-const activeScrolledUp = computed(() => tabs.value.some((tab) => tab.windowId === activeWindowId.value && activePaneOf(tab)?.scrolledUp))
+const activeScrolledUp = computed(() =>
+  tabs.value.some((tab) => tab.windowId === activeWindowId.value && activePaneOf(tab)?.scrolledUp),
+)
 const status = computed(() => visible.value?.status.value ?? 'connecting')
 const endReason = computed(() => visible.value?.endReason.value ?? null)
 // Not a failure: tmux is running nothing under this slug, and starting it runs
@@ -1404,11 +1546,14 @@ const searchInput = ref<HTMLInputElement | null>(null)
 
 // The find bar opens from inside the pane (the terminal owns its keys), so the
 // focus move is driven by the state rather than by the handler that set it.
-watch(() => search.value.open, async (open) => {
-  if (!open) return
-  await nextTick()
-  searchInput.value?.select()
-})
+watch(
+  () => search.value.open,
+  async (open) => {
+    if (!open) return
+    await nextTick()
+    searchInput.value?.select()
+  },
+)
 
 function searchLabel(): string {
   if (!search.value.query) return ''
@@ -1420,12 +1565,14 @@ function searchLabel(): string {
 // Every pooled session's panes stay mounted: a Terminal binds to one element
 // for its lifetime, and an incoming session's first paint has to land while
 // its panes are still hidden behind the held one.
-const paneSessions = computed(() => [...pool.entries()].map(([slug, entry]) => ({
-  slug,
-  entry,
-  tabs: entry.tabs.value,
-  activeWindowId: entry.activeWindowId.value,
-})))
+const paneSessions = computed(() =>
+  [...pool.entries()].map(([slug, entry]) => ({
+    slug,
+    entry,
+    tabs: entry.tabs.value,
+    activeWindowId: entry.activeWindowId.value,
+  })),
+)
 
 // The toggle into this mode is always live, so the gate is a panel here
 // rather than a disabled button in the title bar. The gate only shows on the
@@ -1481,11 +1628,15 @@ function restoreLastSession(): void {
 // watcher is the single path into openSession, so back/forward re-attach
 // exactly like a click. Immediate because the cached client can already be
 // live at mount, in which case a deep-linked slug fires no change at all.
-watch([client, routeSlug], ([ready, slug]) => {
-  if (!ready) return
-  if (slug) openSession(slug)
-  else detachSession()
-}, { immediate: true })
+watch(
+  [client, routeSlug],
+  ([ready, slug]) => {
+    if (!ready) return
+    if (slug) openSession(slug)
+    else detachSession()
+  },
+  { immediate: true },
+)
 
 // `?window` is a route input in its own right, not only something read at
 // attach time: a same-slug push that changes only the window (the App-level
@@ -1899,14 +2050,18 @@ function showDropAfter(slug: string, windowId: string): boolean {
 // display flip plus a revalidation — the hub is where a session gets created,
 // renamed or deleted, and the tree has to catch up. The attach itself is what
 // used to be paid here, and no longer is.
-watch(() => props.active, (active) => {
-  if (!active) {
-    stopStatusPolling()
-    return
-  }
-  void probe()
-  startStatusPolling()
-}, { immediate: true })
+watch(
+  () => props.active,
+  (active) => {
+    if (!active) {
+      stopStatusPolling()
+      return
+    }
+    void probe()
+    startStatusPolling()
+  },
+  { immediate: true },
+)
 
 onMounted(() => {
   prefetchNewSession()
@@ -1921,7 +2076,9 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-app" data-testid="terminal-mode">
-    <div v-if="checking" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">Checking tmux…</div>
+    <div v-if="checking" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">
+      Checking tmux…
+    </div>
 
     <div
       v-else-if="!available"
@@ -1938,7 +2095,9 @@ onBeforeUnmount(() => {
         class="mt-1 cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
         data-testid="terminal-retry"
         @click="probe"
-      >Try again</button>
+      >
+        Try again
+      </button>
     </div>
 
     <div v-else class="flex min-h-0 min-w-0 flex-1">
@@ -1976,7 +2135,7 @@ onBeforeUnmount(() => {
             @keydown.esc.prevent="escapeFilter"
             @keydown.down.prevent="focusTreeCursor"
             @keydown.enter.prevent="focusTreeCursor"
-          >
+          />
           <!-- The refresh control doubles as the staleness indicator: the
                cached tree renders instantly, and the spin is what says a
                revalidation is still in flight. -->
@@ -1988,7 +2147,9 @@ onBeforeUnmount(() => {
             :aria-busy="sessionsLoading"
             :disabled="sessionsLoading"
             @click="reloadSessions"
-          ><IconRotateCw class="size-3.5" :class="{ 'animate-spin': sessionsLoading }" /></button>
+          >
+            <IconRotateCw class="size-3.5" :class="{ 'animate-spin': sessionsLoading }" />
+          </button>
           <button
             type="button"
             class="flex size-6 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text"
@@ -1996,7 +2157,9 @@ onBeforeUnmount(() => {
             aria-label="New session"
             title="New session"
             @click="openNewSession(sessionRepository(activeSlug))"
-          ><IconPlus class="size-3.5" /></button>
+          >
+            <IconPlus class="size-3.5" />
+          </button>
           <!-- List-wide operations; a session's own live on its row. -->
           <div class="relative flex">
             <button
@@ -2008,7 +2171,9 @@ onBeforeUnmount(() => {
               aria-haspopup="menu"
               :aria-expanded="sidebarMenuOpen"
               @click="sidebarMenuOpen = !sidebarMenuOpen"
-            ><IconEllipsisVertical class="size-3.5" /></button>
+            >
+              <IconEllipsisVertical class="size-3.5" />
+            </button>
             <AppMenu
               v-if="sidebarMenuOpen"
               :entries="sidebarMenuEntries"
@@ -2031,11 +2196,21 @@ onBeforeUnmount(() => {
             class="shrink-0 cursor-pointer text-[11.5px] text-text-3 hover:text-text"
             data-testid="terminal-sessions-running-clear"
             @click="runningOnly = false"
-          >Show all</button>
+          >
+            Show all
+          </button>
         </div>
         <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-4">
-          <p v-if="sessionsError" class="px-3 py-2 text-xs text-severity-error" data-testid="terminal-sessions-error">{{ sessionsError }}</p>
-          <p v-else-if="!treeReady" class="px-3 py-2 font-mono text-xs text-text-4" data-testid="terminal-sessions-loading">Loading…</p>
+          <p v-if="sessionsError" class="px-3 py-2 text-xs text-severity-error" data-testid="terminal-sessions-error">
+            {{ sessionsError }}
+          </p>
+          <p
+            v-else-if="!treeReady"
+            class="px-3 py-2 font-mono text-xs text-text-4"
+            data-testid="terminal-sessions-loading"
+          >
+            Loading…
+          </p>
           <!-- One repository reads as one block: the header keeps the sidebar's
                own surface and its sessions sit in a recessed panel under it, so
                a long run of sessions cannot bleed into the next repo's. The
@@ -2063,7 +2238,11 @@ onBeforeUnmount(() => {
                      session in the repository you are pointing at is worth more
                      than the count is while you are pointing at it. -->
                 <div class="group-trailing" @click.stop>
-                  <span class="group-count font-mono text-[11.5px]" :class="groupAttached(group) ? 'text-accent' : 'text-text-4'">{{ group.sessions.length }}</span>
+                  <span
+                    class="group-count font-mono text-[11.5px]"
+                    :class="groupAttached(group) ? 'text-accent' : 'text-text-4'"
+                    >{{ group.sessions.length }}</span
+                  >
                   <button
                     v-if="group.kind === 'repo' && group.key"
                     type="button"
@@ -2072,9 +2251,14 @@ onBeforeUnmount(() => {
                     :aria-label="`New session in ${group.name}`"
                     data-testid="terminal-repo-new-session"
                     @click="openNewSession(group.key)"
-                  ><IconPlus class="size-3" /></button>
+                  >
+                    <IconPlus class="size-3" />
+                  </button>
                 </div>
-                <component :is="groupExpanded(group) ? IconChevronDown : IconChevronRight" class="size-3 shrink-0 text-text-4" />
+                <component
+                  :is="groupExpanded(group) ? IconChevronDown : IconChevronRight"
+                  class="size-3 shrink-0 text-text-4"
+                />
               </div>
               <!-- The scratch section is one repository's worth of chrome for a
                    session that is not one: the same header, and its tabs where a
@@ -2083,69 +2267,86 @@ onBeforeUnmount(() => {
                    is also why this is a div — the header a repository gets is a
                    button, and a button cannot hold one. -->
               <template v-else>
-              <div
-                v-for="row in group.sessions"
-                :key="row.id"
-                class="group-row"
-                :class="{ 'menu-open': openRowMenu === row.id }"
-                role="button"
-                tabindex="-1"
-                data-testid="terminal-scratch-heading"
-                :data-slug="row.slug"
-                :aria-expanded="groupExpanded(group)"
-                :title="row.slug"
-                @click="toggleGroup(group)"
-                @keydown.enter.self.prevent="toggleGroup(group)"
-                @keydown.space.self.prevent="toggleGroup(group)"
-                @contextmenu.prevent="toggleRowMenu(row, $event)"
-              >
-                <span class="min-w-0 truncate text-[13.5px] text-text">{{ group.name }}</span>
-                <component :is="groupExpanded(group) ? IconChevronDown : IconChevronRight" class="ml-auto size-3 shrink-0 text-text-4" />
-                <div class="row-trailing" data-testid="terminal-session-trailing" @click.stop>
-                  <button
-                    type="button"
-                    class="row-action row-lead"
-                    title="New tab"
-                    aria-label="New tab"
-                    data-testid="terminal-new-window"
-                    @click="newWindowIn(row)"
-                  ><IconPlus class="size-3" /></button>
-                  <span
-                    v-if="rowRunning(row)"
-                    class="row-status text-severity-success"
-                    title="Terminal running"
-                    data-testid="terminal-session-liveness"
-                  >
-                    <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />
-                    <span class="sr-only">Terminal running</span>
-                  </span>
-                  <button
-                    :ref="(el) => setRowMenuToggle(row.id, el)"
-                    type="button"
-                    class="row-action row-swap"
-                    title="Terminal actions"
-                    aria-label="Terminal actions"
-                    aria-haspopup="menu"
-                    :aria-expanded="openRowMenu === row.id"
-                    data-testid="terminal-session-menu-toggle"
-                    @click="toggleRowMenu(row)"
-                  ><IconEllipsisVertical class="size-3" /></button>
-                  <SessionRowMenu
-                    v-if="openRowMenu === row.id"
-                    :session="row"
-                    scratch
-                    :flip="rowMenuFlip"
-                    :ignore="[rowMenuToggles.get(row.id) ?? null]"
-                    @close="openRowMenu = ''"
-                    @start="startSession(row.slug)"
-                    @kill="requestKill(row)"
+                <div
+                  v-for="row in group.sessions"
+                  :key="row.id"
+                  class="group-row"
+                  :class="{ 'menu-open': openRowMenu === row.id }"
+                  role="button"
+                  tabindex="-1"
+                  data-testid="terminal-scratch-heading"
+                  :data-slug="row.slug"
+                  :aria-expanded="groupExpanded(group)"
+                  :title="row.slug"
+                  @click="toggleGroup(group)"
+                  @keydown.enter.self.prevent="toggleGroup(group)"
+                  @keydown.space.self.prevent="toggleGroup(group)"
+                  @contextmenu.prevent="toggleRowMenu(row, $event)"
+                >
+                  <span class="min-w-0 truncate text-[13.5px] text-text">{{ group.name }}</span>
+                  <component
+                    :is="groupExpanded(group) ? IconChevronDown : IconChevronRight"
+                    class="ml-auto size-3 shrink-0 text-text-4"
                   />
+                  <div class="row-trailing" data-testid="terminal-session-trailing" @click.stop>
+                    <button
+                      type="button"
+                      class="row-action row-lead"
+                      title="New tab"
+                      aria-label="New tab"
+                      data-testid="terminal-new-window"
+                      @click="newWindowIn(row)"
+                    >
+                      <IconPlus class="size-3" />
+                    </button>
+                    <span
+                      v-if="rowRunning(row)"
+                      class="row-status text-severity-success"
+                      title="Terminal running"
+                      data-testid="terminal-session-liveness"
+                    >
+                      <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />
+                      <span class="sr-only">Terminal running</span>
+                    </span>
+                    <button
+                      :ref="(el) => setRowMenuToggle(row.id, el)"
+                      type="button"
+                      class="row-action row-swap"
+                      title="Terminal actions"
+                      aria-label="Terminal actions"
+                      aria-haspopup="menu"
+                      :aria-expanded="openRowMenu === row.id"
+                      data-testid="terminal-session-menu-toggle"
+                      @click="toggleRowMenu(row)"
+                    >
+                      <IconEllipsisVertical class="size-3" />
+                    </button>
+                    <SessionRowMenu
+                      v-if="openRowMenu === row.id"
+                      :session="row"
+                      scratch
+                      :flip="rowMenuFlip"
+                      :ignore="[rowMenuToggles.get(row.id) ?? null]"
+                      @close="openRowMenu = ''"
+                      @start="startSession(row.slug)"
+                      @kill="requestKill(row)"
+                    />
+                  </div>
                 </div>
-              </div>
               </template>
-              <Transition name="tree-expand" @enter="expandEnter" @after-enter="expandSettle" @enter-cancelled="expandSettle" @leave="expandLeave">
+              <Transition
+                name="tree-expand"
+                @enter="expandEnter"
+                @after-enter="expandSettle"
+                @enter-cancelled="expandSettle"
+                @leave="expandLeave"
+              >
                 <div v-if="groupExpanded(group)">
-                  <TransitionGroup name="tree" tag="div" class="relative flex flex-col border-t border-border bg-app py-1">
+                  <TransitionGroup
+                    name="tree"
+                    tag="div"
+                    class="relative flex flex-col border-t border-border bg-app py-1"
+                  >
                     <div v-for="row in group.sessions" :key="row.id">
                       <!-- Not a <button>: the row's menu toggle is a real button, and
                            nesting one inside another is invalid. The scratch
@@ -2154,7 +2355,10 @@ onBeforeUnmount(() => {
                       <div
                         v-if="group.kind !== 'scratch'"
                         class="session-row"
-                        :class="{ 'session-row-attached': row.slug === activeSlug, 'menu-open': openRowMenu === row.id || openNewWindowMenu === row.id }"
+                        :class="{
+                          'session-row-attached': row.slug === activeSlug,
+                          'menu-open': openRowMenu === row.id || openNewWindowMenu === row.id,
+                        }"
                         role="button"
                         :tabindex="tabStopKey === `s:${row.id}` ? 0 : -1"
                         :data-testid="group.kind === 'chats' ? 'terminal-chat-row' : 'terminal-session-row'"
@@ -2167,7 +2371,9 @@ onBeforeUnmount(() => {
                         @keydown.space.self.prevent="enterSessionRow(row)"
                         @contextmenu.prevent="toggleRowMenu(row, $event)"
                       >
-                        <span class="min-w-0 flex-1 truncate text-[13.5px]" :class="{ 'text-text-3': rowIdle(row) }">{{ row.name }}</span>
+                        <span class="min-w-0 flex-1 truncate text-[13.5px]" :class="{ 'text-text-3': rowIdle(row) }">{{
+                          row.name
+                        }}</span>
                         <!-- AppMenu must anchor to the positioned row so its panel
                              spans the row. Grid overlap avoids making this slot a
                              positioning ancestor while keeping its width fixed.
@@ -2186,7 +2392,9 @@ onBeforeUnmount(() => {
                             :disabled="agentWindowBusy"
                             data-testid="terminal-new-window"
                             @click="toggleNewWindowMenu(row, $event)"
-                          ><IconPlus class="size-3" /></button>
+                          >
+                            <IconPlus class="size-3" />
+                          </button>
                           <NewWindowMenu
                             v-if="openNewWindowMenu === row.id"
                             :running="rowRunning(row)"
@@ -2208,7 +2416,9 @@ onBeforeUnmount(() => {
                             data-testid="terminal-session-liveness"
                           >
                             <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />
-                            <span class="sr-only">{{ group.kind === 'chats' ? 'Agent running' : 'Terminal running' }}</span>
+                            <span class="sr-only">{{
+                              group.kind === 'chats' ? 'Agent running' : 'Terminal running'
+                            }}</span>
                           </span>
                           <button
                             :ref="(el) => setRowMenuToggle(row.id, el)"
@@ -2218,9 +2428,13 @@ onBeforeUnmount(() => {
                             :aria-label="group.kind === 'chats' ? 'Chat actions' : 'Session actions'"
                             aria-haspopup="menu"
                             :aria-expanded="openRowMenu === row.id"
-                            :data-testid="group.kind === 'chats' ? 'terminal-chat-menu-toggle' : 'terminal-session-menu-toggle'"
+                            :data-testid="
+                              group.kind === 'chats' ? 'terminal-chat-menu-toggle' : 'terminal-session-menu-toggle'
+                            "
                             @click="toggleRowMenu(row)"
-                          ><IconEllipsisVertical class="size-3" /></button>
+                          >
+                            <IconEllipsisVertical class="size-3" />
+                          </button>
                           <AppMenu
                             v-if="openRowMenu === row.id && group.kind === 'chats'"
                             :entries="chatMenuEntries"
@@ -2248,7 +2462,13 @@ onBeforeUnmount(() => {
                           />
                         </div>
                       </div>
-                      <Transition name="tree-expand" @enter="expandEnter" @after-enter="expandSettle" @enter-cancelled="expandSettle" @leave="expandLeave">
+                      <Transition
+                        name="tree-expand"
+                        @enter="expandEnter"
+                        @after-enter="expandSettle"
+                        @enter-cancelled="expandSettle"
+                        @leave="expandLeave"
+                      >
                         <div v-if="windowRowsFor(row).length && groupExpanded(group)">
                           <TransitionGroup name="tree" tag="div" class="relative flex flex-col pb-1">
                             <!-- The slot carries the drag and its insertion
@@ -2309,8 +2529,10 @@ onBeforeUnmount(() => {
                                   @keydown.enter="commitRename"
                                   @keydown.esc="renamingId = ''"
                                   @blur="commitRename"
-                                >
-                                <span v-else class="min-w-0 flex-1 truncate font-mono text-[12.5px]">{{ win.name }}</span>
+                                />
+                                <span v-else class="min-w-0 flex-1 truncate font-mono text-[12.5px]">{{
+                                  win.name
+                                }}</span>
                                 <div class="window-trailing" data-testid="terminal-window-trailing" @click.stop>
                                   <button
                                     v-if="win.live"
@@ -2320,16 +2542,27 @@ onBeforeUnmount(() => {
                                     :aria-label="`Close ${win.name}`"
                                     data-testid="terminal-close-window"
                                     @click="requestCloseWindow(row.slug, win.windowId, win.name)"
-                                  ><IconX class="size-3" /></button>
+                                  >
+                                    <IconX class="size-3" />
+                                  </button>
                                   <span
                                     v-if="win.indicator"
                                     class="window-status"
                                     :class="win.indicator.color"
                                     :title="win.indicator.label"
                                     data-testid="terminal-window-status"
-                                    :data-status="sessionStatuses[row.id]?.windows?.find((status) => status.windowId === win.windowId)?.status"
+                                    :data-status="
+                                      sessionStatuses[row.id]?.windows?.find(
+                                        (status) => status.windowId === win.windowId,
+                                      )?.status
+                                    "
                                   >
-                                    <component :is="win.indicator.icon" class="size-3" :class="{ 'animate-spin': win.indicator.animated }" aria-hidden="true" />
+                                    <component
+                                      :is="win.indicator.icon"
+                                      class="size-3"
+                                      :class="{ 'animate-spin': win.indicator.animated }"
+                                      aria-hidden="true"
+                                    />
                                     <span class="sr-only">{{ win.indicator.label }}</span>
                                   </span>
                                   <!-- A window row has no operations of its own,
@@ -2346,7 +2579,9 @@ onBeforeUnmount(() => {
                                     :aria-expanded="openWindowMenu === windowMenuKey(row, win.windowId)"
                                     data-testid="terminal-window-menu-toggle"
                                     @click="toggleWindowMenu(row, win.windowId)"
-                                  ><IconEllipsisVertical class="size-3" /></button>
+                                  >
+                                    <IconEllipsisVertical class="size-3" />
+                                  </button>
                                   <AppMenu
                                     v-if="openWindowMenu === windowMenuKey(row, win.windowId)"
                                     :entries="windowActionEntries"
@@ -2406,7 +2641,11 @@ onBeforeUnmount(() => {
           <p v-if="treeNote === 'empty'" class="px-3 py-2 text-xs text-text-3" data-testid="terminal-sessions-empty">
             No active sessions. Start one from the hub and it will appear here.
           </p>
-          <p v-else-if="treeNote === 'no-matches'" class="px-3 py-2 text-xs text-text-3" data-testid="terminal-sessions-no-matches">
+          <p
+            v-else-if="treeNote === 'no-matches'"
+            class="px-3 py-2 text-xs text-text-3"
+            data-testid="terminal-sessions-no-matches"
+          >
             {{ noMatchesNote }}
           </p>
         </div>
@@ -2419,7 +2658,9 @@ onBeforeUnmount(() => {
           <span><span class="tree-hint-key">↵</span> enter</span>
           <!-- Whichever half of the focus pair leaves where focus is. The pane
                has nowhere to advertise its own way out, so the tree carries it. -->
-          <span v-if="focusHint"><span class="tree-hint-key">{{ focusHint.keys }}</span> {{ focusHint.label }}</span>
+          <span v-if="focusHint"
+            ><span class="tree-hint-key">{{ focusHint.keys }}</span> {{ focusHint.label }}</span
+          >
         </div>
         <PanelResizeHandle edge="right" name="terminal-sidebar" :start="startResize" :step="step" />
       </aside>
@@ -2463,12 +2704,20 @@ onBeforeUnmount(() => {
                 aria-label="Tasks"
                 data-testid="terminal-statusbar-tasks"
                 @click="emit('open-tasks')"
-              ><IconListTodo class="size-3.5" /></button>
+              >
+                <IconListTodo class="size-3.5" />
+              </button>
             </AppTooltip>
           </template>
         </PaneStatusBar>
 
-        <p v-if="actionError" class="shrink-0 border-b border-border px-3 py-1.5 text-[11.5px] text-severity-error" data-testid="terminal-action-error">{{ actionError }}</p>
+        <p
+          v-if="actionError"
+          class="shrink-0 border-b border-border px-3 py-1.5 text-[11.5px] text-severity-error"
+          data-testid="terminal-action-error"
+        >
+          {{ actionError }}
+        </p>
 
         <template v-if="visible && !notStarted">
           <!-- The gap has to be said out loud. Recovering the view without
@@ -2482,8 +2731,8 @@ onBeforeUnmount(() => {
             <IconInfo class="mt-px size-3.5 shrink-0 text-severity-warning" />
             <p class="min-w-0 flex-1 text-[11.5px] leading-relaxed text-text-3">
               Output arrived faster than this window could draw it, so some of it was dropped. These panes were
-              repainted from tmux — what they show now is current, and their scrollback is tmux's, not what
-              streamed here before the gap.
+              repainted from tmux — what they show now is current, and their scrollback is tmux's, not what streamed
+              here before the gap.
             </p>
             <button
               type="button"
@@ -2491,7 +2740,9 @@ onBeforeUnmount(() => {
               data-testid="terminal-output-dropped-dismiss"
               aria-label="Dismiss"
               @click="visible?.dismissOutputDropped()"
-            ><IconX class="size-3" /></button>
+            >
+              <IconX class="size-3" />
+            </button>
           </div>
 
           <!-- Names tmux's rule rather than reporting a fault: the grid is
@@ -2505,10 +2756,12 @@ onBeforeUnmount(() => {
             <IconInfo class="mt-px size-3.5 shrink-0 text-text-4" />
             <p class="min-w-0 flex-1 text-[11.5px] leading-relaxed text-text-3">
               tmux is drawing this window at
-              <span class="font-mono text-text-2">{{ sizeConstraint.granted.cols }}×{{ sizeConstraint.granted.rows }}</span>,
-              not the <span class="font-mono text-text-2">{{ sizeConstraint.voted.cols }}×{{ sizeConstraint.voted.rows }}</span>
-              this pane fits. Every client attached to a session shares one grid per window, so another attached
-              client is deciding the size. Detach it, or change tmux's
+              <span class="font-mono text-text-2"
+                >{{ sizeConstraint.granted.cols }}×{{ sizeConstraint.granted.rows }}</span
+              >, not the
+              <span class="font-mono text-text-2">{{ sizeConstraint.voted.cols }}×{{ sizeConstraint.voted.rows }}</span>
+              this pane fits. Every client attached to a session shares one grid per window, so another attached client
+              is deciding the size. Detach it, or change tmux's
               <span class="font-mono text-text-2">window-size</span> option, to use the whole pane.
             </p>
             <button
@@ -2517,9 +2770,10 @@ onBeforeUnmount(() => {
               data-testid="terminal-size-constraint-dismiss"
               aria-label="Dismiss"
               @click="visible?.dismissSizeConstraint()"
-            ><IconX class="size-3" /></button>
+            >
+              <IconX class="size-3" />
+            </button>
           </div>
-
         </template>
 
         <!-- Rendered outside the v-if and merely hidden without a session: a
@@ -2536,7 +2790,12 @@ onBeforeUnmount(() => {
             />
           </template>
           <template v-if="visible">
-            <div v-if="!tabs.length && status !== 'ended'" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">Attaching…</div>
+            <div
+              v-if="!tabs.length && status !== 'ended'"
+              class="flex flex-1 items-center justify-center font-mono text-xs text-text-4"
+            >
+              Attaching…
+            </div>
 
             <!-- Floated over the pane rather than placed above it: a bar in the
                  flex column would shrink the pane's box, and the box is what
@@ -2560,29 +2819,39 @@ onBeforeUnmount(() => {
                 @keydown.enter.exact.prevent="visible?.findNext()"
                 @keydown.enter.shift.prevent="visible?.findPrevious()"
                 @keydown.esc.prevent="visible?.closeSearch()"
+              />
+              <span
+                class="min-w-[54px] shrink-0 text-right font-mono text-[10.5px] text-text-4"
+                data-testid="terminal-search-count"
+                >{{ searchLabel() }}</span
               >
-              <span class="min-w-[54px] shrink-0 text-right font-mono text-[10.5px] text-text-4" data-testid="terminal-search-count">{{ searchLabel() }}</span>
               <button
                 type="button"
                 class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-text-4 hover:bg-chip hover:text-text"
                 aria-label="Previous match"
                 data-testid="terminal-search-prev"
                 @click="visible?.findPrevious()"
-              ><IconChevronUp class="size-3" /></button>
+              >
+                <IconChevronUp class="size-3" />
+              </button>
               <button
                 type="button"
                 class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-text-4 hover:bg-chip hover:text-text"
                 aria-label="Next match"
                 data-testid="terminal-search-next"
                 @click="visible?.findNext()"
-              ><IconChevronDown class="size-3" /></button>
+              >
+                <IconChevronDown class="size-3" />
+              </button>
               <button
                 type="button"
                 class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-text-4 hover:bg-chip hover:text-text"
                 aria-label="Close find"
                 data-testid="terminal-search-close"
                 @click="visible?.closeSearch()"
-              ><IconX class="size-3" /></button>
+              >
+                <IconX class="size-3" />
+              </button>
             </div>
 
             <!-- New output keeps landing below the fold while the viewport is
@@ -2594,7 +2863,9 @@ onBeforeUnmount(() => {
                 class="absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-[11.5px] text-text-2 shadow-lg hover:text-text"
                 data-testid="terminal-scroll-to-bottom"
                 @click="visible?.scrollToBottom()"
-              ><IconArrowDown class="size-3" />Scroll to bottom</button>
+              >
+                <IconArrowDown class="size-3" />Scroll to bottom
+              </button>
             </Transition>
 
             <!-- Selecting a session never starts it: starting runs the
@@ -2607,21 +2878,25 @@ onBeforeUnmount(() => {
             >
               <IconTerminal class="size-6 text-text-4" />
               <div class="text-[13.5px] font-semibold">
-                {{ chatAttached ? 'Chat not running' : scratchAttached ? 'Terminal not started' : 'Session not started' }}
+                {{
+                  chatAttached ? 'Chat not running' : scratchAttached ? 'Terminal not started' : 'Session not started'
+                }}
               </div>
               <p v-if="chatAttached" class="max-w-[420px] text-xs leading-relaxed text-text-3">
-                This chat is stopped. Resuming it launches the agent again in its workspace, picking the
-                conversation back up where the agent itself can.
+                This chat is stopped. Resuming it launches the agent again in its workspace, picking the conversation
+                back up where the agent itself can.
               </p>
               <p v-else-if="scratchAttached" class="max-w-[420px] text-xs leading-relaxed text-text-3">
-                The scratch terminal is not running. Starting it opens a shell in your home directory,
-                and every tab you add opens there too.
+                The scratch terminal is not running. Starting it opens a shell in your home directory, and every tab you
+                add opens there too.
               </p>
               <p v-else class="max-w-[420px] text-xs leading-relaxed text-text-3">
-                No terminal is running for <span class="font-mono text-text-2">{{ activeSlug }}</span> yet.
-                Starting it opens this session's configured windows and runs its agent command.
+                No terminal is running for <span class="font-mono text-text-2">{{ activeSlug }}</span> yet. Starting it
+                opens this session's configured windows and runs its agent command.
               </p>
-              <p v-if="startError" class="max-w-[420px] text-xs text-severity-error" data-testid="terminal-start-error">{{ startError }}</p>
+              <p v-if="startError" class="max-w-[420px] text-xs text-severity-error" data-testid="terminal-start-error">
+                {{ startError }}
+              </p>
               <div class="mt-1 flex items-center gap-2">
                 <BaseButton
                   size="sm"
@@ -2630,9 +2905,21 @@ onBeforeUnmount(() => {
                   @click="startSession(activeSlug)"
                 >
                   <template #icon><IconPlay class="size-3.5" /></template>
-                  {{ starting === activeSlug ? (chatAttached ? 'Resuming…' : 'Starting…') : chatAttached ? 'Resume chat' : scratchAttached ? 'Start terminal' : 'Start session' }}
+                  {{
+                    starting === activeSlug
+                      ? chatAttached
+                        ? 'Resuming…'
+                        : 'Starting…'
+                      : chatAttached
+                        ? 'Resume chat'
+                        : scratchAttached
+                          ? 'Start terminal'
+                          : 'Start session'
+                  }}
                 </BaseButton>
-                <BaseButton variant="secondary" size="sm" data-testid="terminal-close-session" @click="closeSession">Close</BaseButton>
+                <BaseButton variant="secondary" size="sm" data-testid="terminal-close-session" @click="closeSession"
+                  >Close</BaseButton
+                >
               </div>
             </div>
 
@@ -2653,13 +2940,17 @@ onBeforeUnmount(() => {
                   class="flex cursor-pointer items-center gap-1.5 rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
                   data-testid="terminal-reconnect"
                   @click="visible?.reconnect()"
-                ><IconRefreshCw class="size-3" />Reconnect</button>
+                >
+                  <IconRefreshCw class="size-3" />Reconnect
+                </button>
                 <button
                   type="button"
                   class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
                   data-testid="terminal-close-session"
                   @click="closeSession"
-                >Close session</button>
+                >
+                  Close session
+                </button>
               </div>
             </div>
           </template>
@@ -2704,50 +2995,147 @@ onBeforeUnmount(() => {
 /* Pinned under the tree rather than scrolling with it: a legend that scrolls
    away is one you cannot consult at the moment you need it. */
 .tree-hints {
-  display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
   padding: 8px 12px;
   border-top: 1px solid var(--color-border);
-  font-family: var(--font-mono); font-size: 11px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--color-text-4);
   user-select: none;
 }
-.tree-hint-key { color: var(--color-text-3); }
+.tree-hint-key {
+  color: var(--color-text-3);
+}
 
-.session-row { position: relative; display: flex; height: 30px; width: 100%; align-items: center; gap: 8px; padding-left: 20px; padding-right: 12px; text-align: left; color: var(--color-text); cursor: pointer; }
+.session-row {
+  position: relative;
+  display: flex;
+  height: 30px;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding-left: 20px;
+  padding-right: 12px;
+  text-align: left;
+  color: var(--color-text);
+  cursor: pointer;
+}
 /* A repository's heading. Like the pinned section's it holds a control, which a
    button cannot contain, so it is a div wearing a button's role. */
-.repo-group { display: flex; height: 36px; width: 100%; align-items: center; gap: 8px; padding-left: 12px; padding-right: 12px; text-align: left; cursor: pointer; }
-.repo-group:hover { background: var(--color-chip); }
-.repo-group:focus-visible { outline: none; }
+.repo-group {
+  display: flex;
+  height: 36px;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  padding-right: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.repo-group:hover {
+  background: var(--color-chip);
+}
+.repo-group:focus-visible {
+  outline: none;
+}
 /* One cell, two occupants: the count is what the row says at rest, the add
    button what it offers under the pointer. */
-.group-trailing { display: grid; margin-left: auto; min-width: 18px; height: 18px; flex: none; align-self: center; }
-.group-count, .group-add { grid-area: 1 / 1; }
-.group-count { display: flex; align-items: center; justify-content: center; pointer-events: none; }
-.repo-group:hover .group-count, .group-trailing:focus-within .group-count { opacity: 0; }
-.repo-group:hover .group-add, .group-add:focus-visible { opacity: 1; }
+.group-trailing {
+  display: grid;
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  flex: none;
+  align-self: center;
+}
+.group-count,
+.group-add {
+  grid-area: 1 / 1;
+}
+.group-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.repo-group:hover .group-count,
+.group-trailing:focus-within .group-count {
+  opacity: 0;
+}
+.repo-group:hover .group-add,
+.group-add:focus-visible {
+  opacity: 1;
+}
 /* The pinned section's heading. This one holds
    the terminal's own controls, which a button cannot contain, so it is a row
    wearing the same box. */
-.group-row { position: relative; display: flex; height: 36px; width: 100%; align-items: center; gap: 8px; padding-left: 12px; padding-right: 12px; text-align: left; cursor: pointer; }
-.group-row:hover, .group-row.menu-open { background: var(--color-chip); }
-.group-row:focus-visible { outline: none; }
-.session-row:hover, .session-row.menu-open { background: var(--color-chip); }
+.group-row {
+  position: relative;
+  display: flex;
+  height: 36px;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding-left: 12px;
+  padding-right: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.group-row:hover,
+.group-row.menu-open {
+  background: var(--color-chip);
+}
+.group-row:focus-visible {
+  outline: none;
+}
+.session-row:hover,
+.session-row.menu-open {
+  background: var(--color-chip);
+}
 /* No focus styling of its own: the walk activates the row it lands on, so the
    rail and the accent are already the mark that follows the cursor. The outline
    has to be set to none rather than merely dropped — the UA draws its own. */
-.session-row:focus-visible { outline: none; }
+.session-row:focus-visible {
+  outline: none;
+}
 /* No fill: the rail and the accent are enough to find the attached row, and
    leaving the surface alone also lets it keep its hover feedback. */
-.session-row-attached { font-weight: 500; color: var(--color-accent); }
+.session-row-attached {
+  font-weight: 500;
+  color: var(--color-accent);
+}
 /* The tree connector is drawn, not typed: a box-drawing glyph is only as tall as
    its font size, so stacked rows would show a gap where the TUI's cell grid
    shows an unbroken line. ::before is the vertical, stopped at the elbow on the
    last row; ::after is the tick into the name. */
-.window-row { position: relative; display: flex; height: 28px; width: 100%; align-items: center; gap: 8px; padding-left: 40px; padding-right: 12px; text-align: left; color: var(--color-text-2); cursor: pointer; }
-.window-row:hover, .window-row.menu-open { background: var(--color-chip); }
-.window-row:focus-visible { outline: none; }
-.window-row-active { font-weight: 500; color: var(--color-accent); }
+.window-row {
+  position: relative;
+  display: flex;
+  height: 28px;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding-left: 40px;
+  padding-right: 12px;
+  text-align: left;
+  color: var(--color-text-2);
+  cursor: pointer;
+}
+.window-row:hover,
+.window-row.menu-open {
+  background: var(--color-chip);
+}
+.window-row:focus-visible {
+  outline: none;
+}
+.window-row-active {
+  font-weight: 500;
+  color: var(--color-accent);
+}
 
 /* The travelling selection markers. Out of flow, so moving one costs no layout
    anywhere else, and its height is free to animate between the two row heights.
@@ -2757,49 +3145,112 @@ onBeforeUnmount(() => {
   /* Square ends, not rounded: the attached session's row and its active
      window's are usually adjacent, and two rounded bars stacked pinch the edge
      at the seam instead of reading as one continuous mark. */
-  position: absolute; left: 0; top: 0; z-index: 1; width: 3px;
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  width: 3px;
   background: var(--color-accent);
   opacity: 0;
   pointer-events: none;
-  transition: transform .2s cubic-bezier(.2, 0, 0, 1), height .2s cubic-bezier(.2, 0, 0, 1), opacity .12s ease;
+  transition:
+    transform 0.2s cubic-bezier(0.2, 0, 0, 1),
+    height 0.2s cubic-bezier(0.2, 0, 0, 1),
+    opacity 0.12s ease;
 }
-.tree-rail-shown { opacity: 1; }
-.window-row::before { content: ''; position: absolute; left: 26px; top: 0; bottom: 0; border-left: 1px solid var(--color-strong); }
-.window-row::after { content: ''; position: absolute; left: 26px; top: 50%; width: 9px; border-top: 1px solid var(--color-strong); }
-.window-row-last::before { bottom: 50%; }
+.tree-rail-shown {
+  opacity: 1;
+}
+.window-row::before {
+  content: '';
+  position: absolute;
+  left: 26px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--color-strong);
+}
+.window-row::after {
+  content: '';
+  position: absolute;
+  left: 26px;
+  top: 50%;
+  width: 9px;
+  border-top: 1px solid var(--color-strong);
+}
+.window-row-last::before {
+  bottom: 50%;
+}
 /* The pinned section lists its tabs where a repository lists its sessions, so
    they take that row's box and drop the connector — there is no row above them
    for one to hang from. */
-.window-row-flush { height: 30px; padding-left: 20px; }
-.window-row-flush::before, .window-row-flush::after { display: none; }
+.window-row-flush {
+  height: 30px;
+  padding-left: 20px;
+}
+.window-row-flush::before,
+.window-row-flush::after {
+  display: none;
+}
 
 /* The window well's insertion marker, on the slot because the row's own
    ::before and ::after are the tree connector. Inset like the hub sidebar's. */
-.window-slot { position: relative; }
-.window-slot.drop-before { box-shadow: inset 0 2px 0 0 var(--color-accent); }
-.window-slot.drop-after { box-shadow: inset 0 -2px 0 0 var(--color-accent); }
+.window-slot {
+  position: relative;
+}
+.window-slot.drop-before {
+  box-shadow: inset 0 2px 0 0 var(--color-accent);
+}
+.window-slot.drop-after {
+  box-shadow: inset 0 -2px 0 0 var(--color-accent);
+}
 
 /* Tree motion, fast enough to read as instant: rows fade/slide over 150ms, a
    leaving row drops out of flow so its neighbors glide up through .tree-move
    (FLIP) instead of snapping, and expand/collapse animates the measured height
    set by the expand* hooks. */
-.tree-enter-active, .tree-leave-active, .tree-move { transition: opacity .15s ease, transform .15s ease; }
-.tree-enter-from, .tree-leave-to { opacity: 0; transform: translateY(-4px); }
-.tree-leave-active { position: absolute; left: 0; right: 0; }
+.tree-enter-active,
+.tree-leave-active,
+.tree-move {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.tree-enter-from,
+.tree-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.tree-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
 /* Decelerating rather than `ease`: a disclosure that leaves at full speed and
    settles reads as instant, where ease-in-out spends its first frames barely
    moving and reads as lag. */
-.tree-expand-enter-active, .tree-expand-leave-active { overflow: hidden; transition: height .18s cubic-bezier(.2, 0, 0, 1); }
+.tree-expand-enter-active,
+.tree-expand-leave-active {
+  overflow: hidden;
+  transition: height 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
 
 /* The first fill is not a change to make legible: every row is entering, so the
    whole panel would animate in as one block and the rails would force layout
    per frame chasing it. Motion starts once the tree is on screen. */
-.tree-settling :is(.tree-enter-active, .tree-leave-active, .tree-move,
-  .tree-expand-enter-active, .tree-expand-leave-active) { transition: none; }
+.tree-settling
+  :is(.tree-enter-active, .tree-leave-active, .tree-move, .tree-expand-enter-active, .tree-expand-leave-active) {
+  transition: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .tree-enter-active, .tree-leave-active, .tree-move,
-  .tree-expand-enter-active, .tree-expand-leave-active, .tree-rail { transition: none; }
+  .tree-enter-active,
+  .tree-leave-active,
+  .tree-move,
+  .tree-expand-enter-active,
+  .tree-expand-leave-active,
+  .tree-rail {
+    transition: none;
+  }
 }
 
 /* Two fixed columns, so session and window names stay aligned whatever a row
@@ -2810,22 +3261,72 @@ onBeforeUnmount(() => {
    A row whose second cell has no other occupant keeps its status there, and its
    tooltip with it: that is a listed window, which has no live client to close.
    .has-swap is what says otherwise. */
-.row-trailing, .window-trailing { display: grid; grid-template-columns: 18px 18px; width: 36px; height: 18px; flex: none; align-self: center; }
-.row-lead { grid-area: 1 / 1; }
-.row-status, .window-status, .row-swap { grid-area: 1 / 2; }
-.row-status, .window-status { display: flex; width: 18px; height: 18px; flex: none; align-items: center; justify-content: center; }
-.row-status, .window-row.has-swap .window-status { pointer-events: none; }
-.row-action { display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; color: var(--color-text-4); cursor: pointer; opacity: 0; }
-.row-action:hover, .row-action[aria-expanded="true"] { background: var(--color-app); color: var(--color-text); }
+.row-trailing,
+.window-trailing {
+  display: grid;
+  grid-template-columns: 18px 18px;
+  width: 36px;
+  height: 18px;
+  flex: none;
+  align-self: center;
+}
+.row-lead {
+  grid-area: 1 / 1;
+}
+.row-status,
+.window-status,
+.row-swap {
+  grid-area: 1 / 2;
+}
+.row-status,
+.window-status {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+.row-status,
+.window-row.has-swap .window-status {
+  pointer-events: none;
+}
+.row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  color: var(--color-text-4);
+  cursor: pointer;
+  opacity: 0;
+}
+.row-action:hover,
+.row-action[aria-expanded='true'] {
+  background: var(--color-app);
+  color: var(--color-text);
+}
 /* The pinned section's heading carries a session's controls, so it reveals them
    on hover like a session row. It is a .group-row rather than a .session-row —
    its own row is the heading — and leaving it out of these left the scratch
    terminal's + and ⋮ at opacity 0 with no way to reach them by mouse. */
-.session-row:hover .row-action, .group-row:hover .row-action, .window-row:hover .row-action, .row-action:focus-visible,
-.session-row.menu-open .row-action, .group-row.menu-open .row-action, .window-row.menu-open .row-action { opacity: 1; }
-.session-row:hover .row-status, .group-row:hover .row-status,
-.session-row.menu-open .row-status, .group-row.menu-open .row-status,
-.row-trailing:focus-within .row-status { opacity: 0; }
+.session-row:hover .row-action,
+.group-row:hover .row-action,
+.window-row:hover .row-action,
+.row-action:focus-visible,
+.session-row.menu-open .row-action,
+.group-row.menu-open .row-action,
+.window-row.menu-open .row-action {
+  opacity: 1;
+}
+.session-row:hover .row-status,
+.group-row:hover .row-status,
+.session-row.menu-open .row-status,
+.group-row.menu-open .row-status,
+.row-trailing:focus-within .row-status {
+  opacity: 0;
+}
 .window-row.has-swap:hover .window-status,
-.window-row.has-swap .window-trailing:focus-within .window-status { opacity: 0; }
+.window-row.has-swap .window-trailing:focus-within .window-status {
+  opacity: 0;
+}
 </style>

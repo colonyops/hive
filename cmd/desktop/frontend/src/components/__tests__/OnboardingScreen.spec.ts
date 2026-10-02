@@ -173,7 +173,11 @@ describe('OnboardingScreen', () => {
     for (const card of ['idle', 'device', 'token'] as const) {
       expect(mountScreen({ card }).find('[data-testid="onboarding-skip"]').exists()).toBe(true)
     }
-    expect(mountScreen({ card: 'permissions', permission: 'not-requested' }).find('[data-testid="onboarding-skip"]').exists()).toBe(false)
+    expect(
+      mountScreen({ card: 'permissions', permission: 'not-requested' })
+        .find('[data-testid="onboarding-skip"]')
+        .exists(),
+    ).toBe(false)
     expect(mountScreen({ card: 'agent' }).find('[data-testid="onboarding-skip"]').exists()).toBe(false)
   })
 
@@ -186,7 +190,9 @@ describe('OnboardingScreen', () => {
 
   // Ask for notification permission here instead of interrupting later use.
   it('marks the notifications step active on the permissions card', () => {
-    const steps = mountScreen({ card: 'permissions', permission: 'not-requested' }).findAll('ol li').map((li) => li.text())
+    const steps = mountScreen({ card: 'permissions', permission: 'not-requested' })
+      .findAll('ol li')
+      .map((li) => li.text())
     expect(steps[0]).not.toContain('1')
     expect(steps[1]).not.toContain('2')
     expect(steps[2]).toContain('Turn on notifications')
@@ -298,13 +304,15 @@ describe('OnboardingScreen — Hive setup', () => {
   })
 
   it('shows an existing config to confirm instead of a form to fill in', async () => {
-    const hive = await loadedHive(hiveSetup({
-      exists: true,
-      usable: true,
-      defaultAgent: 'opencode',
-      profiles: [{ name: 'opencode', command: 'opencode', flags: [] }],
-      workspaces: [{ path: '/home/u/code', exists: true, repos: 9 }],
-    }))
+    const hive = await loadedHive(
+      hiveSetup({
+        exists: true,
+        usable: true,
+        defaultAgent: 'opencode',
+        profiles: [{ name: 'opencode', command: 'opencode', flags: [] }],
+        workspaces: [{ path: '/home/u/code', exists: true, repos: 9 }],
+      }),
+    )
     const wrapper = mountScreen({ card: 'hive', hive })
 
     expect(wrapper.text()).toContain('Using your Hive config')

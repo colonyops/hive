@@ -8,5 +8,5 @@ import grafanaLogo from '../../assets/integrations/grafana.svg'
 </script>
 
 <template>
-  <img :src="grafanaLogo" alt="" aria-hidden="true" class="object-contain">
+  <img :src="grafanaLogo" alt="" aria-hidden="true" class="object-contain" />
 </template>

@@ -19,14 +19,12 @@ function freshTerminal(): Terminal {
 
 function viewport(term: Terminal): string[] {
   const buffer = term.buffer.active
-  return Array.from({ length: ROWS }, (_, row) =>
-    buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '')
+  return Array.from({ length: ROWS }, (_, row) => buffer.getLine(buffer.baseY + row)?.translateToString(true) ?? '')
 }
 
 function scrollback(term: Terminal): string[] {
   const buffer = term.buffer.active
-  return Array.from({ length: buffer.baseY }, (_, row) =>
-    buffer.getLine(row)?.translateToString(true) ?? '')
+  return Array.from({ length: buffer.baseY }, (_, row) => buffer.getLine(row)?.translateToString(true) ?? '')
 }
 
 /** The Go snapshot's layout: history rows, exactly ROWS screen rows, private modes, cursor. */

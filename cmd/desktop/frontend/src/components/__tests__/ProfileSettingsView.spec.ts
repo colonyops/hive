@@ -88,7 +88,9 @@ describe('ProfileSettingsView', () => {
       props: { profile: { ...profile, image: 'data:image/png;base64,AAAA' }, activeSection: 'general' },
     })
     expect(withImage.get('[data-testid="profile-settings-image-upload"]').text()).toBe('Replace image')
-    expect(withImage.get('[data-testid="profile-settings-image-preview"] img').attributes('src')).toBe('data:image/png;base64,AAAA')
+    expect(withImage.get('[data-testid="profile-settings-image-preview"] img').attributes('src')).toBe(
+      'data:image/png;base64,AAAA',
+    )
     await withImage.get('[data-testid="profile-settings-image-remove"]').trigger('click')
     expect(withImage.emitted('clear-image')).toHaveLength(1)
   })

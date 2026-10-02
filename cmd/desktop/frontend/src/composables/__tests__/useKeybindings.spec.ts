@@ -206,7 +206,8 @@ describe('pane chords per platform', () => {
     fakePlatform(true)
     const { terminalEscapeCombo, useKeybindings } = await import('../useKeybindings')
     const kb = useKeybindings()
-    const fromPane = (init: Partial<KeyboardEvent>) => kb.resolve(terminalEscapeCombo(ev({ metaKey: true, ...init })) ?? '')
+    const fromPane = (init: Partial<KeyboardEvent>) =>
+      kb.resolve(terminalEscapeCombo(ev({ metaKey: true, ...init })) ?? '')
 
     expect(fromPane({ key: 'd' })).toBe('terminal.split-right')
     expect(fromPane({ key: 'D', shiftKey: true })).toBe('terminal.split-down')
@@ -256,7 +257,7 @@ describe('formatCombo', () => {
     expect(formatCombo('mod+k mod+s', false)).toBe('Ctrl+K Ctrl+S')
   })
 
-  it('returns \'\' for an invalid binding', async () => {
+  it("returns '' for an invalid binding", async () => {
     const { formatCombo } = await import('../useKeybindings')
     expect(formatCombo('shift')).toBe('')
     expect(formatCombo('g shift')).toBe('')
@@ -288,7 +289,7 @@ describe('canonicalizeBinding', () => {
     expect(canonicalizeBinding('ctrl+k   meta+shift+s')).toBe('mod+k mod+shift+s')
   })
 
-  it('returns \'\' when any step is invalid, or the binding is empty', async () => {
+  it("returns '' when any step is invalid, or the binding is empty", async () => {
     const { canonicalizeBinding } = await import('../useKeybindings')
     expect(canonicalizeBinding('g shift')).toBe('')
     expect(canonicalizeBinding('')).toBe('')
@@ -371,7 +372,13 @@ describe('sequences', () => {
     // a matched continuation can be shown extending despite it.
     { id: 'test.deep', title: 'Deep', group: 'Test', defaultCombos: ['z mod+shift+x y'], context: 'global' as const },
   ]
-  const BARE_LEADER_COMMAND = { id: 'test.bare-leader', title: 'Bare leader', group: 'Test', defaultCombos: ['z'], context: 'global' as const }
+  const BARE_LEADER_COMMAND = {
+    id: 'test.bare-leader',
+    title: 'Bare leader',
+    group: 'Test',
+    defaultCombos: ['z'],
+    context: 'global' as const,
+  }
 
   /** withBareLeader seeds a command bound to plain 'z' alongside the base fixture, for the deferred-command (Zed prefix) cases. */
   async function seedSequenceCommands({ withBareLeader = false } = {}) {
@@ -381,7 +388,7 @@ describe('sequences', () => {
     return keybindings
   }
 
-  it('does not resolve a sequence\'s first step on its own', async () => {
+  it("does not resolve a sequence's first step on its own", async () => {
     const { useKeybindings } = await seedSequenceCommands()
     const kb = useKeybindings()
     expect(kb.resolve('z')).toBeNull()
@@ -401,7 +408,7 @@ describe('sequences', () => {
     expect(transition.deferredCommandId).toBeNull()
   })
 
-  it('sets deferredCommandId when the pending steps are also a complete binding (Zed\'s prefix rule)', async () => {
+  it("sets deferredCommandId when the pending steps are also a complete binding (Zed's prefix rule)", async () => {
     const { stepSequence } = await seedSequenceCommands({ withBareLeader: true })
     const transition = stepSequence(null, 'z')
     if (transition.kind !== 'extend') throw new Error(`expected extend, got ${transition.kind}`)
@@ -494,10 +501,12 @@ describe('launcher commands', () => {
     await vi.waitFor(() => expect(settings.get).toHaveBeenCalled())
 
     useKeybindings().addBinding('feed.next', 'g')
-    await vi.waitFor(() => expect(lastPersisted()).toEqual({
-      'launcher.lazygit': ['alt+g'],
-      'feed.next': ['j', 'arrowdown', 'g'],
-    }))
+    await vi.waitFor(() =>
+      expect(lastPersisted()).toEqual({
+        'launcher.lazygit': ['alt+g'],
+        'feed.next': ['j', 'arrowdown', 'g'],
+      }),
+    )
   })
 
   // Catalog order is what resolves a shared combo, and launchers come last, so
@@ -557,7 +566,11 @@ describe('override storage sanitization', () => {
   // is newer than its result and must survive.
   it('does not let a late hydrate clobber a rebind made while it was in flight', async () => {
     let resolveRead: (value: { overrides: Record<string, string[]> }) => void = () => {}
-    settings.get.mockReturnValue(new Promise((resolve) => { resolveRead = resolve }))
+    settings.get.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
 
     const { useKeybindings, initializeKeybindings } = await import('../useKeybindings')
     initializeKeybindings()

@@ -36,7 +36,11 @@ export function useAgentCanvas(client: Ref<AgentWorkspacesClient | null>) {
   }
 
   async function reload(): Promise<void> {
-    if (running) { generation++; queued = true; return }
+    if (running) {
+      generation++
+      queued = true
+      return
+    }
     running = true
     const token = ++generation
     const dir = workspace.value
@@ -59,7 +63,10 @@ export function useAgentCanvas(client: Ref<AgentWorkspacesClient | null>) {
     } finally {
       if (token === generation) loading.value = false
       running = false
-      if (queued) { queued = false; void reload() }
+      if (queued) {
+        queued = false
+        void reload()
+      }
     }
   }
 

@@ -152,7 +152,9 @@ describe('DevView notification test card', () => {
     await send(wrapper)
 
     expect(mocks.showToast).toHaveBeenCalledOnce()
-    expect(result(wrapper)).toBe('Recorded in Activity. The system banner failed (notification permission not granted), so it fell back to an in-app toast.')
+    expect(result(wrapper)).toBe(
+      'Recorded in Activity. The system banner failed (notification permission not granted), so it fell back to an in-app toast.',
+    )
 
     wrapper.unmount()
   })
@@ -325,7 +327,9 @@ describe('DevView notification test card', () => {
     const channels = wrapper.get('[data-testid="dev-notification-channel"]')
     expect(channels.attributes('role')).toBe('radiogroup')
     expect(channels.text()).toContain('Follow app settings')
-    expect(channels.text()).toContain('Records in Activity, then follows your delivery preference, window focus and OS permission.')
+    expect(channels.text()).toContain(
+      'Records in Activity, then follows your delivery preference, window focus and OS permission.',
+    )
     expect(channels.text()).toContain('Force an in-app toast')
     expect(channels.text()).toContain('Force a system banner')
 

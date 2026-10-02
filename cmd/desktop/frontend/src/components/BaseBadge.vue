@@ -3,15 +3,18 @@ import { computed, useAttrs } from 'vue'
 
 defineOptions({ inheritAttrs: false })
 
-const props = withDefaults(defineProps<{
-  tone?: 'neutral' | 'success' | 'accent' | 'muted' | 'danger'
-  variant?: 'pill' | 'chip'
-  dot?: boolean
-}>(), {
-  tone: 'neutral',
-  variant: 'chip',
-  dot: false,
-})
+const props = withDefaults(
+  defineProps<{
+    tone?: 'neutral' | 'success' | 'accent' | 'muted' | 'danger'
+    variant?: 'pill' | 'chip'
+    dot?: boolean
+  }>(),
+  {
+    tone: 'neutral',
+    variant: 'chip',
+    dot: false,
+  },
+)
 
 const attrs = useAttrs()
 

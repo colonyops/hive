@@ -12,8 +12,16 @@ function points(wrapper: ReturnType<typeof mount>): Array<[number, number]> {
 
 describe('SparkLine', () => {
   it('has nothing to draw until there are two samples', () => {
-    expect(mount(SparkLine, { props: { values: [] } }).find('polyline').exists()).toBe(false)
-    expect(mount(SparkLine, { props: { values: [5] } }).find('polyline').exists()).toBe(false)
+    expect(
+      mount(SparkLine, { props: { values: [] } })
+        .find('polyline')
+        .exists(),
+    ).toBe(false)
+    expect(
+      mount(SparkLine, { props: { values: [5] } })
+        .find('polyline')
+        .exists(),
+    ).toBe(false)
   })
 
   // A poller appends a sample every couple of seconds. Spacing points across

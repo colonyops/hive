@@ -58,10 +58,7 @@ onMounted(() => {
       description="How canvas text is drawn. Changes apply to every open canvas immediately."
       boxed
     >
-      <SettingsRow
-        label="Font size"
-        hint="Applies to headings, body text, cards, and diagrams in every canvas."
-      >
+      <SettingsRow label="Font size" hint="Applies to headings, body text, cards, and diagrams in every canvas.">
         <SettingsSegmented
           :model-value="fontSize"
           :options="fontSizeOptions"

@@ -28,9 +28,22 @@ import { buildTaskTree, filterCounts, TASK_FILTERS, type TaskTreeNode } from '..
 const emit = defineEmits<{ close: [] }>()
 
 const {
-  repoKey, filter, items, repoKeys, selectedId, loading, loaded, error,
-  startPolling, stopPolling, refresh, select, isCollapsed, toggleCollapsed,
-  pruneDryRun, prune,
+  repoKey,
+  filter,
+  items,
+  repoKeys,
+  selectedId,
+  loading,
+  loaded,
+  error,
+  startPolling,
+  stopPolling,
+  refresh,
+  select,
+  isCollapsed,
+  toggleCollapsed,
+  pruneDryRun,
+  prune,
 } = useTasks()
 
 const counts = computed(() => filterCounts(items.value))
@@ -42,7 +55,10 @@ const search = ref('')
 const { sessions } = useTerminalSessions()
 const sessionNameById = computed(() => new Map(sessions.value.map((row) => [row.id, row.name])))
 
-interface FlatRow { node: TaskTreeNode; depth: number }
+interface FlatRow {
+  node: TaskTreeNode
+  depth: number
+}
 
 // buildTaskTree already decides per-node visibility (an ancestor of a match
 // always renders); this walk turns that tree into the flat, indent-annotated
@@ -65,9 +81,13 @@ const rows = computed(() => {
 // permanently empty on open. Re-fires whenever selection drops back to none
 // (a delete, a filter change) with rows still available — it never runs while
 // something is already selected, so it can't steal an existing choice.
-watch([loaded, rows], ([isLoaded, currentRows]) => {
-  if (isLoaded && selectedId.value === null && currentRows.length) select(currentRows[0].node.item.id)
-}, { immediate: true })
+watch(
+  [loaded, rows],
+  ([isLoaded, currentRows]) => {
+    if (isLoaded && selectedId.value === null && currentRows.length) select(currentRows[0].node.item.id)
+  },
+  { immediate: true },
+)
 
 const repoOptions = computed<AppSelectOption[]>(() => {
   const options: AppSelectOption[] = [
@@ -204,8 +224,12 @@ const pruneDescription = computed(() => {
 // it, since useEscapeToClose has no layering of its own.
 useEscapeToClose(() => emit('close'), { enabled: () => openModalCount.value === 0 })
 
-onMounted(() => { startPolling() })
-onUnmounted(() => { stopPolling() })
+onMounted(() => {
+  startPolling()
+})
+onUnmounted(() => {
+  stopPolling()
+})
 </script>
 
 <template>
@@ -213,7 +237,9 @@ onUnmounted(() => { stopPolling() })
     <ViewHeader>
       <template #title>
         <span class="text-[13px] font-semibold text-text">Tasks</span>
-        <span class="font-mono text-[11px] text-text-4">{{ items.length }} {{ items.length === 1 ? 'item' : 'items' }}</span>
+        <span class="font-mono text-[11px] text-text-4"
+          >{{ items.length }} {{ items.length === 1 ? 'item' : 'items' }}</span
+        >
         <div class="flex-1" />
         <button
           type="button"
@@ -221,7 +247,9 @@ onUnmounted(() => { stopPolling() })
           aria-label="Close"
           data-testid="tasks-close"
           @click="emit('close')"
-        ><IconX class="size-4" /></button>
+        >
+          <IconX class="size-4" />
+        </button>
       </template>
     </ViewHeader>
 
@@ -233,7 +261,11 @@ onUnmounted(() => { stopPolling() })
           :key="taskFilter.id"
           type="button"
           class="flex h-[26px] cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition-colors"
-          :class="filter === taskFilter.id ? 'bg-chip font-semibold text-text' : 'text-text-2 hover:bg-row-hover hover:text-text'"
+          :class="
+            filter === taskFilter.id
+              ? 'bg-chip font-semibold text-text'
+              : 'text-text-2 hover:bg-row-hover hover:text-text'
+          "
           :data-testid="`tasks-filter-${taskFilter.id}`"
           :aria-pressed="filter === taskFilter.id"
           @click="filter = taskFilter.id"
@@ -254,7 +286,9 @@ onUnmounted(() => { stopPolling() })
         />
       </div>
 
-      <label class="flex w-[230px] items-center gap-2 rounded-lg border border-strong bg-app px-2.5 py-1.5 focus-within:border-text-3">
+      <label
+        class="flex w-[230px] items-center gap-2 rounded-lg border border-strong bg-app px-2.5 py-1.5 focus-within:border-text-3"
+      >
         <IconSearch class="size-3.5 shrink-0 text-text-4" />
         <input
           v-model="search"
@@ -273,45 +307,83 @@ onUnmounted(() => { stopPolling() })
         :disabled="loading"
         data-testid="tasks-refresh"
         @click="refresh"
-      ><IconRefreshCw class="size-3.5" :class="loading ? 'animate-spin' : ''" />Refresh</button>
+      >
+        <IconRefreshCw class="size-3.5" :class="loading ? 'animate-spin' : ''" />Refresh
+      </button>
 
       <button
         type="button"
         class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text"
         data-testid="tasks-prune"
         @click="requestPrune"
-      ><IconEraser class="size-3.5" />Prune</button>
+      >
+        <IconEraser class="size-3.5" />Prune
+      </button>
     </div>
 
     <!-- A transient load failure keeps the last-seen items on screen (see
          useTasks.ts) rather than blanking the tree, so this is a banner, not
          a replacement for it. -->
-    <div v-if="error" class="shrink-0 border-b border-severity-error/30 bg-severity-error-tint px-5 py-2 text-xs text-severity-error" data-testid="tasks-error">
+    <div
+      v-if="error"
+      class="shrink-0 border-b border-severity-error/30 bg-severity-error-tint px-5 py-2 text-xs text-severity-error"
+      data-testid="tasks-error"
+    >
       Couldn't refresh tasks — {{ error }}
     </div>
     <!-- A dry-run failure never opens the confirm dialog (there's nothing to
          confirm), so its error has nowhere to show but here — the dialog only
          carries pruneError for a failure once it's already open. -->
-    <div v-if="pruneError && !pruneConfirmOpen" class="shrink-0 border-b border-severity-error/30 bg-severity-error-tint px-5 py-2 text-xs text-severity-error" data-testid="tasks-prune-error">
+    <div
+      v-if="pruneError && !pruneConfirmOpen"
+      class="shrink-0 border-b border-severity-error/30 bg-severity-error-tint px-5 py-2 text-xs text-severity-error"
+      data-testid="tasks-prune-error"
+    >
       Couldn't prune tasks — {{ pruneError }}
     </div>
 
     <!-- tree + detail split -->
     <div class="flex min-h-0 flex-1">
       <div ref="treeEl" class="hive-scroll min-h-0 flex-1 overflow-y-auto bg-app" data-testid="tasks-tree">
-        <div v-if="!loaded" class="flex h-full items-center justify-center font-mono text-xs text-text-4">Loading tasks…</div>
+        <div v-if="!loaded" class="flex h-full items-center justify-center font-mono text-xs text-text-4">
+          Loading tasks…
+        </div>
         <!-- A scoped-but-empty repo must say it is scoped: the generic copy
              would read as "there are no tasks anywhere" while another repo
              may hold plenty. -->
-        <div v-else-if="!items.length && repoKey" class="flex h-full flex-col items-center justify-center gap-3 px-10 text-center" data-testid="tasks-empty">
+        <div
+          v-else-if="!items.length && repoKey"
+          class="flex h-full flex-col items-center justify-center gap-3 px-10 text-center"
+          data-testid="tasks-empty"
+        >
           <div class="text-[13px] text-text-3">No tasks in {{ repoKey }}.</div>
-          <button type="button" class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text" data-testid="tasks-empty-show-all" @click="repoKey = ''">Show all repositories</button>
+          <button
+            type="button"
+            class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
+            data-testid="tasks-empty-show-all"
+            @click="repoKey = ''"
+          >
+            Show all repositories
+          </button>
         </div>
-        <div v-else-if="!items.length" class="flex h-full flex-col items-center justify-center gap-2 px-10 text-center" data-testid="tasks-empty">
+        <div
+          v-else-if="!items.length"
+          class="flex h-full flex-col items-center justify-center gap-2 px-10 text-center"
+          data-testid="tasks-empty"
+        >
           <div class="text-[13px] text-text-3">No tasks yet.</div>
-          <p class="text-xs text-text-4">Agents create tasks with <code class="rounded bg-chip px-1 py-0.5 font-mono text-[11px] text-text-3">hive hc create</code>.</p>
+          <p class="text-xs text-text-4">
+            Agents create tasks with
+            <code class="rounded bg-chip px-1 py-0.5 font-mono text-[11px] text-text-3">hive hc create</code>.
+          </p>
         </div>
-        <div v-else-if="!rows.length" class="flex h-full items-center justify-center font-mono text-xs text-text-4" data-testid="tasks-empty-filter">{{ search.trim() ? 'No tasks match this search.' : 'No tasks match this filter.' }}</div>
+        <div
+          v-else-if="!rows.length"
+          class="flex h-full items-center justify-center font-mono text-xs text-text-4"
+          data-testid="tasks-empty-filter"
+        >
+          {{ search.trim() ? 'No tasks match this search.' : 'No tasks match this filter.' }}
+        </div>
         <template v-else>
           <TaskTreeRow
             v-for="row in rows"

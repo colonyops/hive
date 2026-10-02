@@ -1,7 +1,14 @@
 import { ref } from 'vue'
-import { Preview, Save } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reportservice'
+import {
+  Preview,
+  Save,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reportservice'
 import { OpenPath } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/systemservice'
-import type { ReportInput, ReportPreview, ReportResult } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type {
+  ReportInput,
+  ReportPreview,
+  ReportResult,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)

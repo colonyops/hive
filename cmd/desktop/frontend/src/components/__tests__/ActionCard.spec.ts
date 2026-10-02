@@ -7,7 +7,8 @@ const baseAction: ActionView = {
   id: 'summarize',
   label: 'Summarize thread',
   type: 'launch-session',
-  showInDetail: true, requiresSessionInput: false,
+  showInDetail: true,
+  requiresSessionInput: false,
 }
 
 function mountAction(props: { action?: Partial<ActionView>; pending?: boolean } = {}) {
@@ -39,7 +40,13 @@ describe('ActionCard', () => {
     const wrapper = mount(ActionCard, {
       props: {
         action: baseAction,
-        run: { commandId: 42, status: 'failed', error: 'command exited 1', stdout: 'partial output', stderr: 'bad input' },
+        run: {
+          commandId: 42,
+          status: 'failed',
+          error: 'command exited 1',
+          stdout: 'partial output',
+          stderr: 'bad input',
+        },
       },
     })
 

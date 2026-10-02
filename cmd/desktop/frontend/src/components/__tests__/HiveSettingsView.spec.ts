@@ -47,15 +47,17 @@ function info(exists: boolean, overridden = false) {
   }
 }
 
-function setup(over: Partial<{
-  exists: boolean
-  usable: boolean
-  unreadable: string
-  defaultAgent: string
-  profiles: Array<{ name: string, command: string, flags: string[] | null }>
-  workspaces: Array<{ path: string, exists: boolean, repos: number }>
-  defaultAgentOverride: string
-}> = {}) {
+function setup(
+  over: Partial<{
+    exists: boolean
+    usable: boolean
+    unreadable: string
+    defaultAgent: string
+    profiles: Array<{ name: string; command: string; flags: string[] | null }>
+    workspaces: Array<{ path: string; exists: boolean; repos: number }>
+    defaultAgentOverride: string
+  }> = {},
+) {
   return {
     config: {
       path: CONFIG,
@@ -67,8 +69,18 @@ function setup(over: Partial<{
       workspaces: over.workspaces ?? [{ path: WORKSPACE, exists: true, repos: 12 }],
     },
     agents: [
-      { name: 'claude', label: 'Claude Code', skipPermissionFlags: ['--dangerously-skip-permissions'], installed: true },
-      { name: 'opencode', label: 'OpenCode', skipPermissionFlags: ['--agent', 'free-permissions-runner'], installed: false },
+      {
+        name: 'claude',
+        label: 'Claude Code',
+        skipPermissionFlags: ['--dangerously-skip-permissions'],
+        installed: true,
+      },
+      {
+        name: 'opencode',
+        label: 'OpenCode',
+        skipPermissionFlags: ['--agent', 'free-permissions-runner'],
+        installed: false,
+      },
       { name: 'copilot', label: 'GitHub Copilot', skipPermissionFlags: [], installed: false },
     ],
     defaultAgentOverride: over.defaultAgentOverride ?? '',
@@ -164,10 +176,9 @@ describe('HiveSettingsView', () => {
     const palette = useCommandPalette()
     palette.query.value = ''
     palette.scope.value = 'actions'
-    expect(palette.results.value.map((row) => row.id)).toEqual(expect.arrayContaining([
-      'hive:config:copy',
-      'hive:config:create',
-    ]))
+    expect(palette.results.value.map((row) => row.id)).toEqual(
+      expect.arrayContaining(['hive:config:copy', 'hive:config:create']),
+    )
     expect(palette.results.value.map((row) => row.id)).not.toContain('hive:config:open')
 
     await wrapper.get('[data-testid="hive-config-create"]').trigger('click')

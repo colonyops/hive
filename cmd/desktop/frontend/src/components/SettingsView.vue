@@ -43,10 +43,13 @@ import type { Integration } from '../types/integrations'
 import { applicationSettingsSections, type ApplicationSettingsSection } from '../router'
 import { applicationSettingsSectionMeta } from './settings/sectionMeta'
 
-const props = withDefaults(defineProps<{
-  activeCategory: ApplicationSettingsSection
-  knownFeedTypes?: string[]
-}>(), { knownFeedTypes: () => [] })
+const props = withDefaults(
+  defineProps<{
+    activeCategory: ApplicationSettingsSection
+    knownFeedTypes?: string[]
+  }>(),
+  { knownFeedTypes: () => [] },
+)
 const emit = defineEmits<{ close: []; 'select-category': [category: ApplicationSettingsSection] }>()
 // The nav mirrors the app's own mode switch — Inbox, Code, Chats — bookended
 // by what the whole app answers to and by the install itself, so the rail can
@@ -84,13 +87,19 @@ const webhookStatus = computed(() => {
   if (webhook.value.running) return { label: 'Running', tone: 'success' as const }
   return { label: 'Disabled', tone: 'neutral' as const }
 })
-const webhookDescription = computed(() => webhook.value
-  ? `Receive JSON from anything that can POST — ${webhook.value.baseUrl}`
-  : 'Receive JSON from anything that can POST to a local endpoint')
+const webhookDescription = computed(() =>
+  webhook.value
+    ? `Receive JSON from anything that can POST — ${webhook.value.baseUrl}`
+    : 'Receive JSON from anything that can POST to a local endpoint',
+)
 
-watch(() => props.activeCategory, (category) => {
-  if (category === 'integrations') void refreshWebhook()
-}, { immediate: true })
+watch(
+  () => props.activeCategory,
+  (category) => {
+    if (category === 'integrations') void refreshWebhook()
+  },
+  { immediate: true },
+)
 // Cards come from the Go connector registry, so adding a connector adds a
 // card. Only its presentation is here — a type the registry reports but this
 // map has not met still renders, with a generic icon and no blurb, rather
@@ -100,10 +109,10 @@ const { integrations, loaded: integrationsLoaded } = useIntegrations()
 // Keyed by the card's key: a credentialed connector's provider, or a
 // provider-less connector's type (webhook).
 const presentation: Record<string, { description: string }> = {
-  'github': { description: 'Issues, pull requests, and notifications' },
-  'grafana': { description: 'Metrics and alerts from a Grafana stack' },
-  'posthog': { description: 'Error tracking issues and insight alerts from a PostHog project' },
-  'gitea': { description: 'Issues, pull requests, and notifications from a Gitea or Forgejo instance' },
+  github: { description: 'Issues, pull requests, and notifications' },
+  grafana: { description: 'Metrics and alerts from a Grafana stack' },
+  posthog: { description: 'Error tracking issues and insight alerts from a PostHog project' },
+  gitea: { description: 'Issues, pull requests, and notifications from a Gitea or Forgejo instance' },
   'sources.webhook': { description: 'Receive JSON from anything that can POST' },
   'sources.rss': { description: 'Entries from an RSS, Atom, or JSON Feed URL' },
 }
@@ -111,11 +120,21 @@ const presentation: Record<string, { description: string }> = {
 // The drawer each card's gear opens. A connector with no drawer yet gets no
 // gear rather than a button that does nothing.
 const drawers: Record<string, () => void> = {
-  'github': () => { githubSettingsOpen.value = true },
-  'grafana': () => { grafanaSettingsOpen.value = true },
-  'posthog': () => { posthogSettingsOpen.value = true },
-  'gitea': () => { giteaSettingsOpen.value = true },
-  'sources.webhook': () => { webhookSettingsOpen.value = true },
+  github: () => {
+    githubSettingsOpen.value = true
+  },
+  grafana: () => {
+    grafanaSettingsOpen.value = true
+  },
+  posthog: () => {
+    posthogSettingsOpen.value = true
+  },
+  gitea: () => {
+    giteaSettingsOpen.value = true
+  },
+  'sources.webhook': () => {
+    webhookSettingsOpen.value = true
+  },
 }
 
 function subtitleFor(integration: Integration): string {
@@ -150,7 +169,6 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
     ? { label: 'Connected', tone: 'success' }
     : { label: 'Not connected', tone: 'neutral' }
 }
-
 </script>
 
 <template>
@@ -210,7 +228,9 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
         title="Data sources"
         description="Connections bring external events into Hive. Every connector the app knows about is listed here."
       >
-        <div v-if="!integrationsLoaded" class="font-mono text-xs text-text-4" data-testid="integrations-loading">Loading…</div>
+        <div v-if="!integrationsLoaded" class="font-mono text-xs text-text-4" data-testid="integrations-loading">
+          Loading…
+        </div>
         <div v-else class="flex flex-col gap-3">
           <BaseCard
             v-for="integration in integrations"
@@ -246,13 +266,15 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
                   variant="pill"
                   class="px-2 py-1 text-[10.5px] font-semibold uppercase"
                   :data-testid="`integration-${cardId(integration.key)}-stability`"
-                >{{ integration.stability }}</BaseBadge>
+                  >{{ integration.stability }}</BaseBadge
+                >
                 <BaseBadge
                   :tone="statusFor(integration).tone"
                   variant="pill"
                   class="px-2.5 py-1 text-[11px] font-semibold"
                   :data-testid="`integration-${cardId(integration.key)}-status`"
-                >{{ statusFor(integration).label }}</BaseBadge>
+                  >{{ statusFor(integration).label }}</BaseBadge
+                >
                 <button
                   v-if="drawers[integration.key]"
                   type="button"
@@ -260,7 +282,9 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
                   :aria-label="`Configure ${integration.title}`"
                   :data-testid="`integration-${cardId(integration.key)}-configure`"
                   @click="drawers[integration.key]()"
-                ><IconSettings class="size-3.5" /></button>
+                >
+                  <IconSettings class="size-3.5" />
+                </button>
               </div>
             </template>
           </BaseCard>

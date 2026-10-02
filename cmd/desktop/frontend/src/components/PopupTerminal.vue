@@ -145,17 +145,19 @@ async function openTerminal(): Promise<void> {
 function buildPane(): Terminal | null {
   if (!host.value) return null
 
-  const created = markRaw(new Terminal({
-    fontFamily: terminalFontStack(fontFamily.value),
-    fontSize: fontSizePx.value,
-    fontWeight: fontWeight.value,
-    fontWeightBold: fontWeightBold.value,
-    lineHeight: lineHeight.value,
-    letterSpacing: letterSpacing.value,
-    scrollback: 5000,
-    theme: xtermTheme(),
-    linkHandler,
-  }))
+  const created = markRaw(
+    new Terminal({
+      fontFamily: terminalFontStack(fontFamily.value),
+      fontSize: fontSizePx.value,
+      fontWeight: fontWeight.value,
+      fontWeightBold: fontWeightBold.value,
+      lineHeight: lineHeight.value,
+      letterSpacing: letterSpacing.value,
+      scrollback: 5000,
+      theme: xtermTheme(),
+      linkHandler,
+    }),
+  )
   const fitAddon = markRaw(new FitAddon())
   created.loadAddon(fitAddon)
   created.loadAddon(markRaw(new WebLinksAddon((_event, uri) => openLink(uri))))
@@ -183,20 +185,28 @@ function attachStream(created: Terminal, state: PopupTerminalState): void {
   disposers.push(created.onData((data) => send(data)))
   // The server applies whatever size it is told, so the grid xterm measured is
   // the grid the process is given — there is nothing to reconcile afterwards.
-  disposers.push(created.onResize(({ cols, rows }) => {
-    void client.value?.resize(state.id, cols, rows).catch(() => {})
-  }))
+  disposers.push(
+    created.onResize(({ cols, rows }) => {
+      void client.value?.resize(state.id, cols, rows).catch(() => {})
+    }),
+  )
 
   socket = client.value.openStream(state.id)
   const capturedSocket = socket
-  disposers.push({ dispose: installTerminalImages(host.value, {
-    pasteText: (text) => created.paste(text),
-    capture: () => ({
-      current: () => visible.value && socket === capturedSocket && capturedSocket.readyState === WebSocket.OPEN && terminal.value?.id === state.id,
-      paste: (text) => created.paste(text),
-      focus: () => created.focus(),
+  disposers.push({
+    dispose: installTerminalImages(host.value, {
+      pasteText: (text) => created.paste(text),
+      capture: () => ({
+        current: () =>
+          visible.value &&
+          socket === capturedSocket &&
+          capturedSocket.readyState === WebSocket.OPEN &&
+          terminal.value?.id === state.id,
+        paste: (text) => created.paste(text),
+        focus: () => created.focus(),
+      }),
     }),
-  }) })
+  })
   socket.onmessage = (event: MessageEvent<ArrayBuffer>) => {
     const frame = decodeFrame(event.data)
     if (!frame) return
@@ -204,7 +214,9 @@ function attachStream(created: Terminal, state: PopupTerminalState): void {
     else exited()
   }
   socket.onerror = () => fail('The terminal connection dropped.')
-  socket.onclose = () => { if (status.value === 'live') fail('The terminal connection closed.') }
+  socket.onclose = () => {
+    if (status.value === 'live') fail('The terminal connection closed.')
+  }
 
   // The observer keeps the grid on the box as the window changes; it is not
   // what establishes it, so it is armed after the launch rather than before.
@@ -293,7 +305,13 @@ const linkHandler: ILinkHandler = { activate: (_event, uri) => openLink(uri) }
 // A failed claim leaves `rendered` false, which is what makes the next reveal
 // retry it rather than leaving the pane on the DOM renderer (ADR terminal-renderer-claimed-on-activation).
 function loadRenderer(target: Terminal): void {
-  claimAtlasRenderer(target, (addon) => disposers.push(addon), (claimed) => { rendered = claimed })
+  claimAtlasRenderer(
+    target,
+    (addon) => disposers.push(addon),
+    (claimed) => {
+      rendered = claimed
+    },
+  )
 }
 
 // What being shown means: a terminal, focused, in the box the panel opens at.
@@ -326,7 +344,9 @@ watch([visible, launchSeq], ([open]) => {
   else restoreFocus()
 })
 
-watch(theme, () => { if (term.value) term.value.options.theme = xtermTheme() })
+watch(theme, () => {
+  if (term.value) term.value.options.theme = xtermTheme()
+})
 // The faces have to be resident before xterm re-measures its cell against them,
 // or it measures the outgoing font and the atlas caches glyphs at the wrong
 // metrics (ADR terminal-atlas-renderer).
@@ -403,14 +423,18 @@ onBeforeUnmount(() => {
             aria-label="End this terminal"
             data-testid="popup-terminal-end"
             @click="endTerminal"
-          ><IconPower class="size-3.5" /></button>
+          >
+            <IconPower class="size-3.5" />
+          </button>
           <button
             class="cursor-pointer rounded-[5px] p-1 text-text-4 hover:bg-chip hover:text-text"
             title="Hide — the shell keeps running"
             aria-label="Hide the terminal"
             data-testid="popup-terminal-hide"
             @click="hide"
-          ><IconX class="size-3.5" /></button>
+          >
+            <IconX class="size-3.5" />
+          </button>
         </div>
       </header>
 
@@ -426,26 +450,33 @@ onBeforeUnmount(() => {
           @click="term?.focus()"
         />
 
-        <div
-          v-if="!term"
-          class="flex h-full flex-col items-center justify-center gap-2 px-6 text-center"
-        >
+        <div v-if="!term" class="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
           <template v-if="checking">
             <p class="font-mono text-xs text-text-4">Checking…</p>
           </template>
           <template v-else-if="!available">
-            <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="popup-terminal-unavailable">{{ reason }}</p>
+            <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="popup-terminal-unavailable">
+              {{ reason }}
+            </p>
           </template>
           <template v-else-if="status === 'opening'">
             <p class="font-mono text-xs text-text-4">Opening a shell…</p>
           </template>
           <template v-else>
-            <p v-if="error" class="max-w-[420px] text-xs leading-relaxed text-severity-error" data-testid="popup-terminal-error">{{ error }}</p>
+            <p
+              v-if="error"
+              class="max-w-[420px] text-xs leading-relaxed text-severity-error"
+              data-testid="popup-terminal-error"
+            >
+              {{ error }}
+            </p>
             <button
               class="cursor-pointer rounded-[7px] bg-chip px-2.5 py-1 font-mono text-[11.5px] text-text hover:bg-strong"
               data-testid="popup-terminal-new"
               @click="openTerminal"
-            >Open a terminal</button>
+            >
+              Open a terminal
+            </button>
           </template>
         </div>
 
@@ -461,7 +492,9 @@ onBeforeUnmount(() => {
             class="ml-auto shrink-0 cursor-pointer rounded-[5px] bg-chip px-2 py-0.5 font-mono text-[11.5px] text-text hover:bg-strong"
             data-testid="popup-terminal-new"
             @click="openTerminal"
-          >New terminal</button>
+          >
+            New terminal
+          </button>
         </div>
       </div>
     </section>

@@ -15,24 +15,24 @@
  */
 
 @font-face {
-  font-family: 'JetBrains Mono';
-  src: url('./JetBrainsMono-Variable.woff2') format('woff2-variations');
+  font-family: "JetBrains Mono";
+  src: url("./JetBrainsMono-Variable.woff2") format("woff2-variations");
   font-weight: 100 800;
   font-style: normal;
   font-display: block;
 }
 
 @font-face {
-  font-family: 'JetBrains Mono';
-  src: url('./JetBrainsMono-Italic-Variable.woff2') format('woff2-variations');
+  font-family: "JetBrains Mono";
+  src: url("./JetBrainsMono-Italic-Variable.woff2") format("woff2-variations");
   font-weight: 100 800;
   font-style: italic;
   font-display: block;
 }
 
 @font-face {
-  font-family: 'Symbols Nerd Font Mono';
-  src: url('./SymbolsNerdFontMono.woff2') format('woff2');
+  font-family: "Symbols Nerd Font Mono";
+  src: url("./SymbolsNerdFontMono.woff2") format("woff2");
   font-weight: 100 800;
   font-style: normal;
   font-display: block;

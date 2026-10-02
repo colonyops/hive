@@ -9,21 +9,77 @@ import type { AgentSchedule, AgentSession, AgentWorkspace } from '../../lib/agen
 // wire responses AgentWorkspacesClient normally decodes. Demo B's chat is
 // live and Demo A's is not, which is also what the fold default keys on.
 const workspaceFixtures: AgentWorkspace[] = [
-  { dir: 'demo-a', name: 'Demo A', command: 'claude', danger: false, mcps: [], skills: [], schedules: [], problem: '', notice: '' },
-  { dir: 'demo-b', name: 'Demo B', command: 'codex --sandbox workspace-write', danger: false, mcps: [], skills: [], schedules: [], problem: '', notice: '' },
+  {
+    dir: 'demo-a',
+    name: 'Demo A',
+    command: 'claude',
+    danger: false,
+    mcps: [],
+    skills: [],
+    schedules: [],
+    problem: '',
+    notice: '',
+  },
+  {
+    dir: 'demo-b',
+    name: 'Demo B',
+    command: 'codex --sandbox workspace-write',
+    danger: false,
+    mcps: [],
+    skills: [],
+    schedules: [],
+    problem: '',
+    notice: '',
+  },
 ]
 
 function schedule(overrides: Partial<AgentSchedule> = {}): AgentSchedule {
   return {
-    id: 'weekly-summary', name: 'Weekly summary', cron: '0 9 * * 5',
-    prompt: 'Summarize the week.', disabled: false, onMissed: 'run',
-    nextRunAt: null, lastRun: null, ...overrides,
+    id: 'weekly-summary',
+    name: 'Weekly summary',
+    cron: '0 9 * * 5',
+    prompt: 'Summarize the week.',
+    disabled: false,
+    onMissed: 'run',
+    nextRunAt: null,
+    lastRun: null,
+    ...overrides,
   }
 }
 
 const recentFixtures: AgentSession[] = [
-  { id: 2, workspace: 'demo-b', name: 'b-session', agent: 'codex', lastOpenedAt: Date.now() - 1_000, slug: 'agentws-2', terminalId: 'agentws-2', windowId: '@2', paneId: '%1', cols: 80, rows: 24, resumeAttempted: true, notice: '', scheduleId: '' },
-  { id: 1, workspace: 'demo-a', name: 'a-session', agent: 'claude', lastOpenedAt: Date.now() - 100_000, slug: 'agentws-1', terminalId: '', windowId: '', paneId: '', cols: 0, rows: 0, resumeAttempted: true, notice: '', scheduleId: '' },
+  {
+    id: 2,
+    workspace: 'demo-b',
+    name: 'b-session',
+    agent: 'codex',
+    lastOpenedAt: Date.now() - 1_000,
+    slug: 'agentws-2',
+    terminalId: 'agentws-2',
+    windowId: '@2',
+    paneId: '%1',
+    cols: 80,
+    rows: 24,
+    resumeAttempted: true,
+    notice: '',
+    scheduleId: '',
+  },
+  {
+    id: 1,
+    workspace: 'demo-a',
+    name: 'a-session',
+    agent: 'claude',
+    lastOpenedAt: Date.now() - 100_000,
+    slug: 'agentws-1',
+    terminalId: '',
+    windowId: '',
+    paneId: '',
+    cols: 0,
+    rows: 0,
+    resumeAttempted: true,
+    notice: '',
+    scheduleId: '',
+  },
 ]
 
 const mocks = vi.hoisted(() => ({
@@ -34,7 +90,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/agentsservice', () => ({
   Available: mocks.Available,
-  Endpoint: vi.fn().mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://127.0.0.1:1/s', token: 'test' }),
+  Endpoint: vi
+    .fn()
+    .mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://127.0.0.1:1/s', token: 'test' }),
 }))
 
 vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => {
@@ -84,7 +142,13 @@ describe('AgentsSidebar', () => {
     resetAgentWorkspacesForTests()
     resetAgentSessionsAllForTests()
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
-    mocks.workspaces.mockResolvedValue({ root: '/root', rootProblem: '', available: true, error: '', workspaces: workspaceFixtures })
+    mocks.workspaces.mockResolvedValue({
+      root: '/root',
+      rootProblem: '',
+      available: true,
+      error: '',
+      workspaces: workspaceFixtures,
+    })
     mocks.allSessions.mockResolvedValue(recentFixtures)
   })
 
@@ -106,7 +170,7 @@ describe('AgentsSidebar', () => {
     expect(chatRows[1].text()).not.toContain('Demo B')
   })
 
-  it('focusing a workspace leaves every other workspace\'s chats on screen', async () => {
+  it("focusing a workspace leaves every other workspace's chats on screen", async () => {
     const wrapper = await mountSidebar({ selectedWorkspace: 'demo-b' })
     const chatRows = wrapper.findAll('[data-testid="agents-sidebar-session-row"]')
     expect(chatRows).toHaveLength(2)
@@ -121,8 +185,9 @@ describe('AgentsSidebar', () => {
     const workspaceRows = wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]')
     expect(workspaceRows[1].attributes('data-focused')).toBe('true')
     expect(workspaceRows[1].classes()).toEqual(workspaceRows[0].classes())
-    expect(workspaceRows[1].get('[data-testid="agents-sidebar-workspace-toggle"]').classes())
-      .toEqual(workspaceRows[0].get('[data-testid="agents-sidebar-workspace-toggle"]').classes())
+    expect(workspaceRows[1].get('[data-testid="agents-sidebar-workspace-toggle"]').classes()).toEqual(
+      workspaceRows[0].get('[data-testid="agents-sidebar-workspace-toggle"]').classes(),
+    )
 
     const chatRows = wrapper.findAll('[data-testid="agents-sidebar-session-row"]')
     expect(chatRows[1].classes()).toContain('sidebar-entry-selected')
@@ -245,7 +310,13 @@ describe('AgentsSidebar', () => {
   // A directory the listing no longer knows about has nothing to focus, so its
   // row is a fold control and nothing else.
   it('folds a workspace whose directory is gone without emitting a focus', async () => {
-    mocks.workspaces.mockResolvedValue({ root: '/root', rootProblem: '', available: true, error: '', workspaces: [workspaceFixtures[0]] })
+    mocks.workspaces.mockResolvedValue({
+      root: '/root',
+      rootProblem: '',
+      available: true,
+      error: '',
+      workspaces: [workspaceFixtures[0]],
+    })
     const wrapper = await mountSidebar()
     const row = () => wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]')[1]
     expect(row().attributes('data-expanded')).toBe('true')
@@ -262,7 +333,13 @@ describe('AgentsSidebar', () => {
   })
 
   it('keeps chats whose workspace directory is gone, on a row of their own', async () => {
-    mocks.workspaces.mockResolvedValue({ root: '/root', rootProblem: '', available: true, error: '', workspaces: [workspaceFixtures[0]] })
+    mocks.workspaces.mockResolvedValue({
+      root: '/root',
+      rootProblem: '',
+      available: true,
+      error: '',
+      workspaces: [workspaceFixtures[0]],
+    })
     const wrapper = await mountSidebar()
     const rows = wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]')
     expect(rows.map((row) => row.attributes('data-dir'))).toEqual(['demo-a', 'demo-b'])
@@ -380,7 +457,8 @@ describe('AgentsSidebar', () => {
 
   it('a second click on the toggle closes the menu it opened', async () => {
     const wrapper = await mountSidebar()
-    const toggle = wrapper.findAll('[data-testid="agents-sidebar-session-row"]')[0]
+    const toggle = wrapper
+      .findAll('[data-testid="agents-sidebar-session-row"]')[0]
       .get('[data-testid="agents-sidebar-session-menu"]')
     await toggle.trigger('click')
     expect(menuEntry('agents-sidebar-session-rename')).not.toBeNull()
@@ -430,7 +508,8 @@ describe('AgentsSidebar', () => {
 
   it('disables the start button while another chat is already launching', async () => {
     const wrapper = await mountSidebar({ startingSession: true })
-    const start = wrapper.findAll('[data-testid="agents-sidebar-session-row"]')[0]
+    const start = wrapper
+      .findAll('[data-testid="agents-sidebar-session-row"]')[0]
       .get('[data-testid="agents-sidebar-session-start"]')
     expect(start.attributes('disabled')).toBeDefined()
   })
@@ -442,7 +521,9 @@ describe('AgentsSidebar', () => {
     menuEntry('agents-sidebar-session-delete')!.click()
     await flushPromises()
 
-    const confirmButton = document.querySelector<HTMLButtonElement>('[data-testid="agents-sidebar-delete-session-confirmation-confirm"]')
+    const confirmButton = document.querySelector<HTMLButtonElement>(
+      '[data-testid="agents-sidebar-delete-session-confirmation-confirm"]',
+    )
     expect(confirmButton, 'the confirmation dialog is teleported to <body>').not.toBeNull()
     expect(wrapper.emitted('delete-session')).toBeUndefined()
 
@@ -543,7 +624,13 @@ describe('AgentsSidebar', () => {
   })
 
   it('a workspace the listing lost offers no + — there is no directory to start in', async () => {
-    mocks.workspaces.mockResolvedValue({ root: '/root', rootProblem: '', available: true, error: '', workspaces: [workspaceFixtures[0]] })
+    mocks.workspaces.mockResolvedValue({
+      root: '/root',
+      rootProblem: '',
+      available: true,
+      error: '',
+      workspaces: [workspaceFixtures[0]],
+    })
     const wrapper = await mountSidebar()
     const rows = wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]')
     expect(rows[0].find('[data-testid="agents-sidebar-workspace-new-session"]').exists()).toBe(true)
@@ -574,8 +661,8 @@ describe('AgentsSidebar', () => {
 
   it('folds and unfolds every workspace from the list menu, filtered-away ones included', async () => {
     const wrapper = await mountSidebar({}, {})
-    const expanded = () => wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]')
-      .map((row) => row.attributes('data-expanded'))
+    const expanded = () =>
+      wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]').map((row) => row.attributes('data-expanded'))
     expect(expanded()).toEqual(['false', 'true'])
 
     await wrapper.get('[data-testid="agents-sidebar-menu-toggle"]').trigger('click')
@@ -599,9 +686,13 @@ describe('AgentsSidebar', () => {
   it('re-reads both lists from the bar, and spins while either read is in flight', async () => {
     const wrapper = await mountSidebar()
     let land: (() => void) | undefined
-    mocks.workspaces.mockImplementation(() => new Promise((resolve) => {
-      land = () => resolve({ root: '/root', rootProblem: '', available: true, error: '', workspaces: workspaceFixtures })
-    }))
+    mocks.workspaces.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          land = () =>
+            resolve({ root: '/root', rootProblem: '', available: true, error: '', workspaces: workspaceFixtures })
+        }),
+    )
     mocks.allSessions.mockClear()
 
     const reload = () => wrapper.get('[data-testid="agents-sidebar-reload"]')
@@ -648,7 +739,7 @@ describe('AgentsSidebar', () => {
     expect(wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]')).toHaveLength(2)
   })
 
-  it('a workspace row\'s edit button and its context menu both emit edit-workspace', async () => {
+  it("a workspace row's edit button and its context menu both emit edit-workspace", async () => {
     const wrapper = await mountSidebar()
     const rows = wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]')
     await rows[1].get('[data-testid="agents-sidebar-workspace-edit"]').trigger('click')
@@ -681,7 +772,10 @@ describe('AgentsSidebar', () => {
   it("names the workspace's next schedule on the header tooltip, and nothing on the row", async () => {
     const at = new Date('2026-09-04T09:00:00').getTime()
     mocks.workspaces.mockResolvedValue({
-      root: '/root', rootProblem: '', available: true, error: '',
+      root: '/root',
+      rootProblem: '',
+      available: true,
+      error: '',
       workspaces: [
         workspaceFixtures[0],
         {
@@ -705,10 +799,7 @@ describe('AgentsSidebar', () => {
   // A chat nobody clicked for says so in the leading cell the tree already
   // reserves, rather than in a column of its own.
   it('wears the clock glyph on a chat a schedule started, and names it on the tooltip', async () => {
-    mocks.allSessions.mockResolvedValue([
-      { ...recentFixtures[0], scheduleId: 'weekly-summary' },
-      recentFixtures[1],
-    ])
+    mocks.allSessions.mockResolvedValue([{ ...recentFixtures[0], scheduleId: 'weekly-summary' }, recentFixtures[1]])
     const wrapper = await mountSidebar()
     const rows = wrapper.findAll('[data-testid="agents-sidebar-session-row"]')
 

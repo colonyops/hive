@@ -51,9 +51,7 @@ function captureViewportAnchor(term: Terminal): ViewportAnchor {
     logicalCellOffset: cellOffsetToLine(buffer, logicalStart, viewportY, term.cols),
     logicalCellLength: logicalLineCellCount(buffer, logicalStart, logicalEnd, term.cols),
     startMarker: term.registerMarker(logicalStart - cursorLine),
-    nextMarker: logicalEnd + 1 < buffer.length
-      ? term.registerMarker(logicalEnd + 1 - cursorLine)
-      : undefined,
+    nextMarker: logicalEnd + 1 < buffer.length ? term.registerMarker(logicalEnd + 1 - cursorLine) : undefined,
   }
 }
 

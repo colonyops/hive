@@ -51,12 +51,7 @@ const faceLoads = new Map<string, Promise<void>>()
  * the normal one, the italics of each with them, and the symbol face too: an
  * icon rasterised before it arrives is cached as tofu for the pane's life.
  */
-export function loadTerminalFaces(
-  family: string,
-  px: number,
-  weight: number,
-  weightBold: number,
-): Promise<void> {
+export function loadTerminalFaces(family: string, px: number, weight: number, weightBold: number): Promise<void> {
   const stack = terminalFontStack(family)
   const key = `${stack}|${px}|${weight}|${weightBold}`
   const loaded = faceLoads.get(key)

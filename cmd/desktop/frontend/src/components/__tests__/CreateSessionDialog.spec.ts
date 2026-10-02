@@ -11,7 +11,11 @@ const options = {
 }
 
 function mountDialog(overrides: Record<string, unknown> = {}) {
-  return mount(CreateSessionDialog, { attachTo: document.body, props: { actionLabel: 'Review', options, busy: false, error: null, ...overrides }, global: { stubs: { Teleport: true } } })
+  return mount(CreateSessionDialog, {
+    attachTo: document.body,
+    props: { actionLabel: 'Review', options, busy: false, error: null, ...overrides },
+    global: { stubs: { Teleport: true } },
+  })
 }
 
 describe('CreateSessionDialog', () => {
@@ -19,7 +23,9 @@ describe('CreateSessionDialog', () => {
     const wrapper = mountDialog()
     await wrapper.get('[data-testid="session-name"]').setValue('review-pr-12')
     await wrapper.get('[data-testid="create-session-submit"]').trigger('click')
-    expect(wrapper.emitted('submit')).toEqual([[{ name: 'review-pr-12', repository: options.defaultRepository, agent: 'claude', inputs: {} }]])
+    expect(wrapper.emitted('submit')).toEqual([
+      [{ name: 'review-pr-12', repository: options.defaultRepository, agent: 'claude', inputs: {} }],
+    ])
   })
 
   it('starts an agent workspace chat without repository or agent input', async () => {
@@ -51,7 +57,10 @@ describe('CreateSessionDialog', () => {
 
   it('picks a repository through the shared selector', async () => {
     const wrapper = mountDialog({
-      options: { ...options, repositories: [...options.repositories, { name: 'site', repository: 'https://github.com/acme/site.git' }] },
+      options: {
+        ...options,
+        repositories: [...options.repositories, { name: 'site', repository: 'https://github.com/acme/site.git' }],
+      },
     })
     await wrapper.get('[data-testid="session-repository"]').trigger('click')
     await wrapper.get('[data-testid="session-repository-search"]').setValue('acme')
@@ -59,7 +68,9 @@ describe('CreateSessionDialog', () => {
     await wrapper.get('[data-testid="session-name"]').setValue('review-pr-12')
     await wrapper.get('[data-testid="create-session-submit"]').trigger('click')
 
-    expect(wrapper.emitted('submit')).toEqual([[{ name: 'review-pr-12', repository: 'https://github.com/acme/site.git', agent: 'claude', inputs: {} }]])
+    expect(wrapper.emitted('submit')).toEqual([
+      [{ name: 'review-pr-12', repository: 'https://github.com/acme/site.git', agent: 'claude', inputs: {} }],
+    ])
   })
 
   it('keeps the dialog open and reports invalid input locally', async () => {

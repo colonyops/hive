@@ -14,7 +14,12 @@ beforeEach(() => {
 
 describe('useGrafanaConnection', () => {
   it('connects and records the resolved stack', async () => {
-    mocks.Connect.mockResolvedValue({ account: 'grafana.example.com-1', url: 'https://grafana.example.com', orgID: 1, orgName: 'Main' })
+    mocks.Connect.mockResolvedValue({
+      account: 'grafana.example.com-1',
+      url: 'https://grafana.example.com',
+      orgID: 1,
+      orgName: 'Main',
+    })
     const { connect, lastConnected, error, busy } = useGrafanaConnection()
 
     const ok = await connect('https://grafana.example.com', 'token')
@@ -48,7 +53,11 @@ describe('useGrafanaConnection', () => {
 
   it('ignores a concurrent connect while one is in flight', async () => {
     let resolve: (v: unknown) => void = () => {}
-    mocks.Connect.mockReturnValue(new Promise((r) => { resolve = r }))
+    mocks.Connect.mockReturnValue(
+      new Promise((r) => {
+        resolve = r
+      }),
+    )
     const { connect } = useGrafanaConnection()
 
     const first = connect('https://grafana.example.com', 'token')

@@ -17,7 +17,19 @@ defineProps<{
   <div>
     <div v-if="label" class="mb-1.5 text-[12.5px] text-text-2">{{ label }}</div>
     <slot />
-    <p v-if="error" class="mt-1.5 text-xs leading-relaxed text-kind-issue" :data-testid="testid ? `${testid}-error` : undefined">{{ error }}</p>
-    <p v-else-if="hint" class="mt-1.5 text-xs leading-relaxed text-text-4" :data-testid="testid ? `${testid}-hint` : undefined">{{ hint }}</p>
+    <p
+      v-if="error"
+      class="mt-1.5 text-xs leading-relaxed text-kind-issue"
+      :data-testid="testid ? `${testid}-error` : undefined"
+    >
+      {{ error }}
+    </p>
+    <p
+      v-else-if="hint"
+      class="mt-1.5 text-xs leading-relaxed text-text-4"
+      :data-testid="testid ? `${testid}-hint` : undefined"
+    >
+      {{ hint }}
+    </p>
   </div>
 </template>

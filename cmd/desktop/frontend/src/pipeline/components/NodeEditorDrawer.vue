@@ -51,14 +51,23 @@ function loadFrom(node: FlowNode) {
 // (flows:updated -> replaceDraft) hands down a fresh object for the node
 // already being edited, and reloading from it would drop what is half-typed
 // here -- Save would then write the pre-edit values back.
-watch(() => props.node.id, () => loadFrom(props.node), { immediate: true })
+watch(
+  () => props.node.id,
+  () => loadFrom(props.node),
+  { immediate: true },
+)
 
 function updateConfig(next: Record<string, any>) {
   draftConfig.value = next
 }
 
 const errors = computed(() => props.def.validate?.(draftConfig.value) ?? [])
-const enabled = computed({ get: () => !disabled.value, set: (value: boolean) => { disabled.value = !value } })
+const enabled = computed({
+  get: () => !disabled.value,
+  set: (value: boolean) => {
+    disabled.value = !value
+  },
+})
 
 // ── Header role subtitle ("source · emits 1 output" / "processor · 1 in →
 // 1 out") — resolved against the live draft config so a function node's
@@ -155,13 +164,20 @@ useAutofocus(nameRef)
       <div class="flex items-center gap-[11px]">
         <span
           class="flex size-[26px] shrink-0 items-center justify-center rounded-[7px]"
-          :style="{ background: def.tint ?? 'var(--color-accent-tint)', color: def.accentToken ?? 'var(--color-accent)' }"
+          :style="{
+            background: def.tint ?? 'var(--color-accent-tint)',
+            color: def.accentToken ?? 'var(--color-accent)',
+          }"
         >
           <component :is="def.glyph" class="size-3.5" />
         </span>
         <div class="min-w-0 flex-1">
-          <div class="truncate text-[14px] font-semibold tracking-[-.01em]" data-testid="node-editor-title">Edit node · {{ def.label }}</div>
-          <div class="truncate font-mono text-[11px] text-text-3" data-testid="node-editor-subtitle">{{ subtitle }}</div>
+          <div class="truncate text-[14px] font-semibold tracking-[-.01em]" data-testid="node-editor-title">
+            Edit node · {{ def.label }}
+          </div>
+          <div class="truncate font-mono text-[11px] text-text-3" data-testid="node-editor-subtitle">
+            {{ subtitle }}
+          </div>
         </div>
         <AppSwitch v-model="enabled" label="Enabled" class="shrink-0" testid="node-editor-enabled" />
       </div>
@@ -177,7 +193,7 @@ useAutofocus(nameRef)
         class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] text-[13px] text-text outline-none placeholder:text-text-4 focus:border-accent"
         data-testid="node-editor-name"
         @keydown.enter="submit"
-      >
+      />
     </div>
 
     <component
@@ -190,7 +206,11 @@ useAutofocus(nameRef)
       @update:config="updateConfig"
     />
 
-    <div v-if="errors.length > 0" class="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-selection px-3 py-2.5" data-testid="node-editor-errors">
+    <div
+      v-if="errors.length > 0"
+      class="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-selection px-3 py-2.5"
+      data-testid="node-editor-errors"
+    >
       <IconAlertTriangle class="mt-0.5 size-4 shrink-0 text-accent" />
       <ul class="text-xs leading-relaxed text-text-2">
         <li v-for="(err, i) in errors" :key="i">{{ err }}</li>
@@ -207,9 +227,16 @@ useAutofocus(nameRef)
         >
           <component :is="docsOpen ? IconChevronDown : IconChevronRight" class="size-3.5 text-text-3" />
           <span class="text-[12.5px] font-semibold text-text">Docs</span>
-          <span v-if="!docsOpen" class="truncate text-[11.5px] text-text-4" data-testid="node-editor-docs-summary">{{ helpSummary }}</span>
+          <span v-if="!docsOpen" class="truncate text-[11.5px] text-text-4" data-testid="node-editor-docs-summary">{{
+            helpSummary
+          }}</span>
         </button>
-        <div v-if="docsOpen" class="hive-doc mt-3 text-[13px] leading-relaxed text-text-2" data-testid="node-editor-docs" v-html="docsHtml" />
+        <div
+          v-if="docsOpen"
+          class="hive-doc mt-3 text-[13px] leading-relaxed text-text-2"
+          data-testid="node-editor-docs"
+          v-html="docsHtml"
+        />
       </div>
     </template>
 
@@ -223,7 +250,9 @@ useAutofocus(nameRef)
             data-testid="node-editor-delete"
             :aria-expanded="deleteConfirming"
             @click="requestDelete"
-          >Delete</button>
+          >
+            Delete
+          </button>
 
           <div
             v-if="deleteConfirming"
@@ -241,14 +270,16 @@ useAutofocus(nameRef)
                 class="whitespace-nowrap"
                 data-testid="node-editor-delete-cancel"
                 @click="cancelDelete"
-              >Cancel</BaseButton>
+                >Cancel</BaseButton
+              >
               <BaseButton
                 variant="danger"
                 size="sm"
                 class="whitespace-nowrap"
                 data-testid="node-editor-delete-confirm"
                 @click="confirmDelete"
-              >Delete node</BaseButton>
+                >Delete node</BaseButton
+              >
             </div>
           </div>
         </div>
@@ -259,13 +290,9 @@ useAutofocus(nameRef)
           class="whitespace-nowrap"
           data-testid="node-editor-cancel"
           @click="emit('close')"
-        >Cancel</BaseButton>
-        <BaseButton
-          size="sm"
-          class="whitespace-nowrap"
-          data-testid="node-editor-save"
-          @click="submit"
-        >Done</BaseButton>
+          >Cancel</BaseButton
+        >
+        <BaseButton size="sm" class="whitespace-nowrap" data-testid="node-editor-save" @click="submit">Done</BaseButton>
       </div>
     </template>
   </DrawerSheet>

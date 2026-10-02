@@ -40,10 +40,23 @@ import { useAgentWorkspaces } from '../composables/useAgentWorkspaces'
 import { timeLabel } from '../lib/activityPresentation'
 import { relativeAge, relativeTimeLabel } from '../lib/age'
 import {
-  buildCron, clock, dayAbbreviation, defaultShape, describe, pad, parseCron, WEEK_ORDER, type ScheduleShape,
+  buildCron,
+  clock,
+  dayAbbreviation,
+  defaultShape,
+  describe,
+  pad,
+  parseCron,
+  WEEK_ORDER,
+  type ScheduleShape,
 } from '../lib/scheduleShape'
 import type {
-  AgentSchedule, AgentScheduleRun, AgentWorkspace, ScheduleEdit, SkillPackageMember, WorkspaceEditRequest,
+  AgentSchedule,
+  AgentScheduleRun,
+  AgentWorkspace,
+  ScheduleEdit,
+  SkillPackageMember,
+  WorkspaceEditRequest,
 } from '../lib/agentWorkspacesClient'
 
 const props = defineProps<{
@@ -59,23 +72,36 @@ const emit = defineEmits<{
 }>()
 
 const {
-  root, editor, mcpCatalogue, skillPackages, skillNames, skillPackagesProblem, presets,
-  reloadMCPCatalogue, importMCPServers, removeMCPServer,
-  reloadSkillPackages, revealSkillPackages, revealSharedSkills,
-  openWorkspaceInEditor, revealWorkspace,
+  root,
+  editor,
+  mcpCatalogue,
+  skillPackages,
+  skillNames,
+  skillPackagesProblem,
+  presets,
+  reloadMCPCatalogue,
+  importMCPServers,
+  removeMCPServer,
+  reloadSkillPackages,
+  revealSkillPackages,
+  revealSharedSkills,
+  openWorkspaceInEditor,
+  revealWorkspace,
 } = useAgentWorkspaces()
 
 const creating = computed(() => !props.workspace)
 
 // The confirm strip names the folder it is about to delete, in full: the
 // directory name alone reads as a label in the app, not as a path on disk.
-const deletedPath = computed(() => (root.value ? `${root.value}/${props.workspace?.dir ?? ''}` : props.workspace?.dir ?? ''))
+const deletedPath = computed(() =>
+  root.value ? `${root.value}/${props.workspace?.dir ?? ''}` : (props.workspace?.dir ?? ''),
+)
 
 // A manifest the loader could not read leaves every list on this form empty,
 // and Save reconciles the file to what the form holds, so it would rewrite
 // mcps:, skills: and schedules: to nothing. The Go side refuses such an update
 // (KindInvalid); the form refuses it first, and says what to fix instead.
-const manifestProblem = computed(() => (creating.value ? '' : props.workspace?.problem ?? ''))
+const manifestProblem = computed(() => (creating.value ? '' : (props.workspace?.problem ?? '')))
 
 const dir = ref(props.workspace?.dir ?? '')
 const name = ref(props.workspace?.name ?? '')
@@ -90,7 +116,7 @@ const CUSTOM = '__custom__'
 const editingCommand = ref(false)
 
 const selection = computed<string>({
-  get: () => (editingCommand.value ? CUSTOM : presets.value.find((p) => p.command === command.value)?.id ?? CUSTOM),
+  get: () => (editingCommand.value ? CUSTOM : (presets.value.find((p) => p.command === command.value)?.id ?? CUSTOM)),
   set(id) {
     if (id === CUSTOM) {
       editingCommand.value = true
@@ -130,13 +156,17 @@ const presetOptions = computed<AppSelectOption[]>(() => [
 
 // A watch, not an initializer: presets arrive with the area's overview, which
 // can land after this sheet is mounted.
-watch(presets, (rows) => {
-  if (!creating.value || command.value || !rows.length) return
-  command.value = rows[0].command
-  // A default the form fills in for itself is not an edit the user has to be
-  // asked about on the way out.
-  baseline.value = formState()
-}, { immediate: true })
+watch(
+  presets,
+  (rows) => {
+    if (!creating.value || command.value || !rows.length) return
+    command.value = rows[0].command
+    // A default the form fills in for itself is not an edit the user has to be
+    // asked about on the way out.
+    baseline.value = formState()
+  },
+  { immediate: true },
+)
 
 // DANGEROUS_FLAGS mirrors agentws's own list. It is duplicated rather than
 // served because it only drives a warning: a flag missing here shows no
@@ -156,7 +186,10 @@ const TEMPLATE_FIELDS = [
   { field: '{{ .MCPConfig }}', means: 'the MCP config Hive generates for this workspace' },
   { field: '{{ .SessionID }}', means: 'the id Hive minted for this chat' },
   { field: '{{ .Resume }}', means: 'true when reopening a chat, false on a new one' },
-  { field: '{{ .Prompt }}', means: 'an optional opening message for a schedule or prompted launch; pass it through shq' },
+  {
+    field: '{{ .Prompt }}',
+    means: 'an optional opening message for a schedule or prompted launch; pass it through shq',
+  },
   { field: 'shq', means: 'quotes a value for the shell — pipe every path through it' },
 ]
 
@@ -165,9 +198,12 @@ const TEMPLATE_FIELDS = [
 // carries; the quiet icon button beside it; and the accent row a card ends
 // with, which the card's hairlines separate from the list above it.
 const listCardClass = 'divide-y divide-row overflow-hidden rounded-[11px] border border-card bg-raised'
-const inlineButtonClass = 'flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50'
-const iconButtonClass = 'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text disabled:cursor-not-allowed disabled:opacity-40'
-const footerButtonClass = 'flex w-full cursor-pointer items-center gap-2 px-4 py-3 text-left text-[13px] font-medium text-accent hover:bg-chip disabled:cursor-not-allowed disabled:opacity-50'
+const inlineButtonClass =
+  'flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50'
+const iconButtonClass =
+  'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text disabled:cursor-not-allowed disabled:opacity-40'
+const footerButtonClass =
+  'flex w-full cursor-pointer items-center gap-2 px-4 py-3 text-left text-[13px] font-medium text-accent hover:bg-chip disabled:cursor-not-allowed disabled:opacity-50'
 
 const confirming = ref(false)
 
@@ -188,12 +224,19 @@ interface MCPRow {
 
 const mcpRows = computed<MCPRow[]>(() => {
   const rows: MCPRow[] = mcpCatalogue.value.map((e) => ({
-    id: e.id, title: e.title || e.id, command: e.command, problem: e.problem,
-    shipped: e.shipped, stability: e.stability, shadows: e.shadows, missing: false,
+    id: e.id,
+    title: e.title || e.id,
+    command: e.command,
+    problem: e.problem,
+    shipped: e.shipped,
+    stability: e.stability,
+    shadows: e.shadows,
+    missing: false,
   }))
   const known = new Set(rows.map((r) => r.id))
   for (const id of selectedMCPs.value) {
-    if (!known.has(id)) rows.push({ id, title: id, command: '', problem: '', shipped: false, stability: '', shadows: '', missing: true })
+    if (!known.has(id))
+      rows.push({ id, title: id, command: '', problem: '', shipped: false, stability: '', shadows: '', missing: true })
   }
   return rows
 })
@@ -203,9 +246,7 @@ function mcpEnabled(id: string): boolean {
 }
 
 function toggleMCP(id: string): void {
-  selectedMCPs.value = mcpEnabled(id)
-    ? selectedMCPs.value.filter((x) => x !== id)
-    : [...selectedMCPs.value, id]
+  selectedMCPs.value = mcpEnabled(id) ? selectedMCPs.value.filter((x) => x !== id) : [...selectedMCPs.value, id]
 }
 
 const mcpError = ref('')
@@ -237,14 +278,25 @@ interface SkillPackageRow {
 
 const skillRows = computed<SkillPackageRow[]>(() => {
   const rows: SkillPackageRow[] = skillPackages.value.map((pkg) => ({
-    name: pkg.name, title: pkg.title || pkg.name, description: pkg.description,
-    members: pkg.members, missing: false, warning: '',
+    name: pkg.name,
+    title: pkg.title || pkg.name,
+    description: pkg.description,
+    members: pkg.members,
+    missing: false,
+    warning: '',
   }))
   const known = new Set(rows.map((r) => r.name))
   const bySlug = new Map(skillNames.value.map((skill) => [skill.slug, skill]))
   for (const name of selectedSkills.value) {
     if (known.has(name)) continue
-    rows.push({ name, title: name, description: '', members: [], missing: true, warning: missingSkillWarning(name, bySlug.get(name)?.selectedBy) })
+    rows.push({
+      name,
+      title: name,
+      description: '',
+      members: [],
+      missing: true,
+      warning: missingSkillWarning(name, bySlug.get(name)?.selectedBy),
+    })
   }
   return rows
 })
@@ -521,7 +573,10 @@ function closeScheduleDraft(): void {
 // optional to keep one: the id is the only thing that has to exist.
 function draftId(draft: ScheduleDraft): string {
   if (draft.saved) return draft.id
-  return draft.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return draft.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 const headerTitle = computed(() => {
@@ -580,10 +635,19 @@ function keepScheduleDraft(): void {
     const retimed = buildCron(draft.shape) !== buildCron(card.shape)
     Object.assign(card, fields, { edited: card.edited || (card.saved && retimed) })
   } else {
-    scheduleCards.value = [...scheduleCards.value, {
-      key: `card-${++cardSeq}`, ...fields, saved: false, edited: false,
-      nextRunAt: null, lastRun: null, running: false, actionError: '',
-    }]
+    scheduleCards.value = [
+      ...scheduleCards.value,
+      {
+        key: `card-${++cardSeq}`,
+        ...fields,
+        saved: false,
+        edited: false,
+        nextRunAt: null,
+        lastRun: null,
+        running: false,
+        actionError: '',
+      },
+    ]
   }
   closeScheduleDraft()
 }
@@ -611,12 +675,19 @@ function setRepeat(kind: string): void {
       draft.shape = { kind: 'hourly', minute }
       draft.minuteFree = !QUARTER_MINUTES.includes(minute)
       break
-    case 'daily': draft.shape = { kind: 'daily', hour, minute }; break
-    case 'weekly': draft.shape = { kind: 'weekly', days: [5], hour, minute }; break
-    case 'monthly': draft.shape = { kind: 'monthly', day: 1, hour, minute }; break
+    case 'daily':
+      draft.shape = { kind: 'daily', hour, minute }
+      break
+    case 'weekly':
+      draft.shape = { kind: 'weekly', days: [5], hour, minute }
+      break
+    case 'monthly':
+      draft.shape = { kind: 'monthly', day: 1, hour, minute }
+      break
     // Switching to Custom carries the compiled expression over, so the box
     // opens on what the picker was already saying rather than empty.
-    default: draft.shape = { kind: 'custom', cron: buildCron(draft.shape) }
+    default:
+      draft.shape = { kind: 'custom', cron: buildCron(draft.shape) }
   }
   queuePreview()
 }
@@ -709,7 +780,9 @@ function queuePreview(): void {
   // structured shapes compile to valid cron without asking.
   if (!props.workspace) return
   clearTimeout(previewTimer)
-  previewTimer = setTimeout(() => { void runPreview() }, PREVIEW_DEBOUNCE_MS)
+  previewTimer = setTimeout(() => {
+    void runPreview()
+  }, PREVIEW_DEBOUNCE_MS)
 }
 
 async function runPreview(): Promise<void> {
@@ -792,7 +865,12 @@ function nextRunLabel(card: ScheduleCard): string {
 
 function occurrence(at: number): string {
   return new Date(at).toLocaleString([], {
-    weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
   })
 }
 
@@ -888,8 +966,10 @@ async function reveal(): Promise<void> {
   }
 }
 
-const valid = computed(() =>
-  !!name.value.trim() && !!command.value.trim() && (!creating.value || !!dir.value.trim()) && !manifestProblem.value)
+const valid = computed(
+  () =>
+    !!name.value.trim() && !!command.value.trim() && (!creating.value || !!dir.value.trim()) && !manifestProblem.value,
+)
 
 function submit(): void {
   if (props.busy || confirming.value || scheduleDraft.value || !valid.value) return
@@ -953,13 +1033,25 @@ onMounted(async () => {
           aria-label="Back to the workspace"
           data-testid="agent-workspace-editor-schedule-back"
           @click="closeScheduleDraft"
-        ><IconArrowLeft class="size-[18px]" /></button>
-        <span v-else class="flex size-[38px] items-center justify-center rounded-[10px] bg-accent text-accent-contrast"><IconFolderCog class="size-[18px]" /></span>
+        >
+          <IconArrowLeft class="size-[18px]" />
+        </button>
+        <span v-else class="flex size-[38px] items-center justify-center rounded-[10px] bg-accent text-accent-contrast"
+          ><IconFolderCog class="size-[18px]"
+        /></span>
         <div class="min-w-0 flex-1">
           <div class="text-[15px] font-semibold tracking-[-.01em]">{{ headerTitle }}</div>
           <div class="truncate font-mono text-[12px] text-text-3">{{ headerSubtitle }}</div>
         </div>
-        <button class="text-text-3 hover:text-text disabled:opacity-50" aria-label="Close" data-testid="agent-workspace-editor-close" :disabled="busy || confirming || discarding" @click="closeSheet"><IconX class="size-4" /></button>
+        <button
+          class="text-text-3 hover:text-text disabled:opacity-50"
+          aria-label="Close"
+          data-testid="agent-workspace-editor-close"
+          :disabled="busy || confirming || discarding"
+          @click="closeSheet"
+        >
+          <IconX class="size-4" />
+        </button>
       </div>
     </template>
 
@@ -977,7 +1069,11 @@ onMounted(async () => {
         v-model="scheduleDraft.name"
         label="Name"
         :placeholder="scheduleDraft.saved ? scheduleDraft.id : 'Weekly product summary'"
-        :hint="scheduleDraft.saved ? 'Optional. The id is what the schedule is called when this is empty.' : 'The id in agent-workspace.yaml follows the name.'"
+        :hint="
+          scheduleDraft.saved
+            ? 'Optional. The id is what the schedule is called when this is empty.'
+            : 'The id in agent-workspace.yaml follows the name.'
+        "
         :disabled="busy"
         testid="agent-workspace-editor-schedule-name"
       />
@@ -1011,7 +1107,7 @@ onMounted(async () => {
             class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
             data-testid="agent-workspace-editor-schedule-minute-free"
             @input="onMinuteInput"
-          >
+          />
         </div>
         <div v-else-if="scheduleDraft.shape.kind !== 'custom'">
           <div class="mb-1.5 text-[12.5px] text-text-2">Time</div>
@@ -1024,7 +1120,7 @@ onMounted(async () => {
             class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
             data-testid="agent-workspace-editor-schedule-time"
             @input="onTimeInput"
-          >
+          />
         </div>
       </div>
 
@@ -1036,12 +1132,18 @@ onMounted(async () => {
             :key="day"
             type="button"
             class="cursor-pointer rounded-[7px] border px-2.5 py-1 text-[11.5px]"
-            :class="dayPicked(day) ? 'border-accent bg-accent text-accent-contrast' : 'border-card text-text-2 hover:text-text'"
+            :class="
+              dayPicked(day)
+                ? 'border-accent bg-accent text-accent-contrast'
+                : 'border-card text-text-2 hover:text-text'
+            "
             :aria-pressed="dayPicked(day)"
             :disabled="busy"
             :data-testid="`agent-workspace-editor-schedule-day-${day}`"
             @click="toggleDay(day)"
-          >{{ dayAbbreviation(day) }}</button>
+          >
+            {{ dayAbbreviation(day) }}
+          </button>
         </div>
       </div>
 
@@ -1072,7 +1174,13 @@ onMounted(async () => {
       <!-- Always on screen once a preview can answer: the answer lands 300ms
            after a keystroke, and a line that appears then pushes the fields
            below it around. -->
-      <p v-if="workspace" class="-mt-2 min-h-5 text-xs leading-relaxed text-text-4" data-testid="agent-workspace-editor-schedule-next-runs">{{ nextRunsLine }}</p>
+      <p
+        v-if="workspace"
+        class="-mt-2 min-h-5 text-xs leading-relaxed text-text-4"
+        data-testid="agent-workspace-editor-schedule-next-runs"
+      >
+        {{ nextRunsLine }}
+      </p>
 
       <SelectField
         v-model="scheduleDraft.onMissed"
@@ -1102,9 +1210,17 @@ onMounted(async () => {
         <p v-if="scheduleDraft.historyError" class="text-xs text-severity-error">{{ scheduleDraft.historyError }}</p>
         <p v-else-if="!scheduleDraft.historyLoaded" class="text-xs text-text-4">Loading…</p>
         <p v-else-if="!scheduleDraft.history.length" class="text-xs text-text-4">No runs yet.</p>
-        <div v-else class="flex flex-col divide-y divide-row rounded-lg border border-strong bg-raised" data-testid="agent-workspace-editor-schedule-history">
+        <div
+          v-else
+          class="flex flex-col divide-y divide-row rounded-lg border border-strong bg-raised"
+          data-testid="agent-workspace-editor-schedule-history"
+        >
           <div v-for="run in scheduleDraft.history" :key="run.id" class="flex items-start gap-2.5 px-3 py-2">
-            <span class="mt-px shrink-0 font-mono text-[10.5px] text-text-4" :title="new Date(run.startedAt).toLocaleString()">{{ runStamp(run.startedAt) }}</span>
+            <span
+              class="mt-px shrink-0 font-mono text-[10.5px] text-text-4"
+              :title="new Date(run.startedAt).toLocaleString()"
+              >{{ runStamp(run.startedAt) }}</span
+            >
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1.5 text-[11.5px] text-text-2">
                 <span class="size-1.5 shrink-0 rounded-full" :class="statusDot(run.status)" />
@@ -1120,7 +1236,11 @@ onMounted(async () => {
 
     <!-- While a delete is pending the form recedes: dimmed and inert, so the
          two states can't be misread for each other (FolderEditModal's rule). -->
-    <div v-else class="flex flex-col gap-7 transition-opacity" :class="{ 'pointer-events-none opacity-45': confirming || discarding }">
+    <div
+      v-else
+      class="flex flex-col gap-7 transition-opacity"
+      :class="{ 'pointer-events-none opacity-45': confirming || discarding }"
+    >
       <!-- Above the open/reveal actions on purpose: the fix is in the file,
            and those two buttons are what reach it. -->
       <div
@@ -1129,7 +1249,10 @@ onMounted(async () => {
         data-testid="agent-workspace-editor-problem"
       >
         <p>{{ manifestProblem }}</p>
-        <p>Fix agent-workspace.yaml before saving from here. This form could not read the file, so saving would rewrite its lists as empty. The buttons below open it.</p>
+        <p>
+          Fix agent-workspace.yaml before saving from here. This form could not read the file, so saving would rewrite
+          its lists as empty. The buttons below open it.
+        </p>
       </div>
 
       <div v-if="!creating" class="flex flex-col gap-1.5">
@@ -1141,21 +1264,33 @@ onMounted(async () => {
             :disabled="busy"
             data-testid="agent-workspace-editor-open-editor"
             @click="openInEditor"
-          ><IconExternalLink class="size-3.5" />Open in {{ editor.title }}</button>
+          >
+            <IconExternalLink class="size-3.5" />Open in {{ editor.title }}
+          </button>
           <button
             type="button"
             :class="inlineButtonClass"
             :disabled="busy"
             data-testid="agent-workspace-editor-reveal"
             @click="reveal"
-          ><IconFolderOpen class="size-3.5" />Show in Finder</button>
+          >
+            <IconFolderOpen class="size-3.5" />Show in Finder
+          </button>
         </div>
-        <span v-if="!editor.command" class="text-xs text-text-4">Pick a default editor in Settings › General to open this directory in it.</span>
-        <p v-if="actionError" class="text-xs text-severity-error" data-testid="agent-workspace-editor-action-error">{{ actionError }}</p>
+        <span v-if="!editor.command" class="text-xs text-text-4"
+          >Pick a default editor in Settings › General to open this directory in it.</span
+        >
+        <p v-if="actionError" class="text-xs text-severity-error" data-testid="agent-workspace-editor-action-error">
+          {{ actionError }}
+        </p>
       </div>
 
       <div class="flex flex-col gap-3">
-        <FieldRow v-if="creating" label="Directory name" hint="A new directory under the workspace root, seeded with an AGENTS.md to shape.">
+        <FieldRow
+          v-if="creating"
+          label="Directory name"
+          hint="A new directory under the workspace root, seeded with an AGENTS.md to shape."
+        >
           <input
             ref="dirInput"
             v-model="dir"
@@ -1169,7 +1304,7 @@ onMounted(async () => {
             class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 font-mono text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent disabled:opacity-60"
             data-testid="agent-workspace-editor-dir"
             @keydown.enter="submit"
-          >
+          />
         </FieldRow>
         <TextField
           ref="nameInput"
@@ -1201,7 +1336,9 @@ onMounted(async () => {
             class="truncate font-mono text-[11px] text-text-4"
             :title="command"
             data-testid="agent-workspace-editor-command-preview"
-          >{{ command }}</p>
+          >
+            {{ command }}
+          </p>
           <template v-else>
             <textarea
               v-model="command"
@@ -1213,8 +1350,13 @@ onMounted(async () => {
               :class="commandIsDangerous ? 'border-severity-warning' : 'border-strong'"
               data-testid="agent-workspace-editor-command-input"
             />
-            <div class="flex flex-col gap-1 rounded-lg border border-card px-3 py-2.5" data-testid="agent-workspace-editor-command-fields">
-              <p class="text-[11px] leading-relaxed text-text-3">Hive renders this as a Go template each time a chat starts, and fills in:</p>
+            <div
+              class="flex flex-col gap-1 rounded-lg border border-card px-3 py-2.5"
+              data-testid="agent-workspace-editor-command-fields"
+            >
+              <p class="text-[11px] leading-relaxed text-text-3">
+                Hive renders this as a Go template each time a chat starts, and fills in:
+              </p>
               <dl class="flex flex-col gap-1">
                 <div v-for="entry in TEMPLATE_FIELDS" :key="entry.field" class="flex flex-wrap items-baseline gap-x-2">
                   <dt class="shrink-0 font-mono text-[11px] text-text-2">{{ entry.field }}</dt>
@@ -1229,7 +1371,10 @@ onMounted(async () => {
             data-testid="agent-workspace-editor-command-danger"
           >
             <IconTriangleAlert class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-            <span>This command bypasses the agent's permission prompts. Unattended, it can take any action your user account can, including through every enabled MCP server.</span>
+            <span
+              >This command bypasses the agent's permission prompts. Unattended, it can take any action your user
+              account can, including through every enabled MCP server.</span
+            >
           </p>
         </div>
       </SettingsSection>
@@ -1240,11 +1385,7 @@ onMounted(async () => {
         testid="agent-workspace-editor-mcps"
       >
         <div :class="listCardClass">
-          <div
-            v-for="row in mcpRows"
-            :key="row.id"
-            class="flex items-start gap-3 px-4 py-3.5"
-          >
+          <div v-for="row in mcpRows" :key="row.id" class="flex items-start gap-3 px-4 py-3.5">
             <AppSwitch
               class="mt-0.5"
               :model-value="mcpEnabled(row.id)"
@@ -1255,17 +1396,26 @@ onMounted(async () => {
             />
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <span class="truncate text-[13.5px] font-semibold" :class="mcpEnabled(row.id) ? 'text-text' : 'text-text-2'">{{ row.title }}</span>
+                <span
+                  class="truncate text-[13.5px] font-semibold"
+                  :class="mcpEnabled(row.id) ? 'text-text' : 'text-text-2'"
+                  >{{ row.title }}</span
+                >
                 <BaseBadge
                   :tone="row.shipped ? 'neutral' : 'accent'"
                   variant="pill"
                   class="shrink-0 px-2 py-0.5 text-[10.5px] font-semibold uppercase"
-                >{{ row.shipped ? row.stability : 'custom' }}</BaseBadge>
+                  >{{ row.shipped ? row.stability : 'custom' }}</BaseBadge
+                >
                 <span v-if="row.shadows" class="shrink-0 text-[10.5px] text-severity-warning">replaces shipped</span>
               </div>
-              <div v-if="row.command" class="mt-1 truncate font-mono text-[11.5px] text-text-4" :title="row.command">{{ row.command }}</div>
+              <div v-if="row.command" class="mt-1 truncate font-mono text-[11.5px] text-text-4" :title="row.command">
+                {{ row.command }}
+              </div>
               <div v-if="row.problem" class="mt-1 text-[11.5px] text-severity-warning">{{ row.problem }}</div>
-              <div v-if="row.missing" class="mt-1 text-[11.5px] text-severity-warning">not in the catalogue — enabled ids without an entry are skipped at launch</div>
+              <div v-if="row.missing" class="mt-1 text-[11.5px] text-severity-warning">
+                not in the catalogue — enabled ids without an entry are skipped at launch
+              </div>
             </div>
             <button
               v-if="!row.shipped && !row.missing"
@@ -1276,9 +1426,13 @@ onMounted(async () => {
               :disabled="busy"
               :data-testid="`agent-workspace-editor-mcp-remove-${row.id}`"
               @click="removeServer(row.id)"
-            ><IconTrash2 class="size-[15px]" /></button>
+            >
+              <IconTrash2 class="size-[15px]" />
+            </button>
           </div>
-          <p v-if="!mcpRows.length" class="px-4 py-3.5 text-xs leading-relaxed text-text-3">No servers in mcps.yaml yet.</p>
+          <p v-if="!mcpRows.length" class="px-4 py-3.5 text-xs leading-relaxed text-text-3">
+            No servers in mcps.yaml yet.
+          </p>
           <div v-if="importOpen" class="flex flex-col gap-2 px-4 py-3.5">
             <CodeField
               v-model="importText"
@@ -1287,17 +1441,29 @@ onMounted(async () => {
               testid="agent-workspace-editor-mcp-import-text"
             />
             <div class="flex items-center gap-2">
-              <BaseButton size="sm" :busy="importBusy" :disabled="!importText.trim()" data-testid="agent-workspace-editor-mcp-import-submit" @click="submitImport">Add servers</BaseButton>
+              <BaseButton
+                size="sm"
+                :busy="importBusy"
+                :disabled="!importText.trim()"
+                data-testid="agent-workspace-editor-mcp-import-submit"
+                @click="submitImport"
+                >Add servers</BaseButton
+              >
               <BaseButton
                 variant="secondary"
                 size="sm"
                 :disabled="importBusy || !importText.trim()"
                 data-testid="agent-workspace-editor-mcp-import-format"
                 @click="formatImportJSON"
-              >Format JSON</BaseButton>
-              <BaseButton variant="secondary" size="sm" :disabled="importBusy" @click="importOpen = false">Cancel</BaseButton>
+                >Format JSON</BaseButton
+              >
+              <BaseButton variant="secondary" size="sm" :disabled="importBusy" @click="importOpen = false"
+                >Cancel</BaseButton
+              >
             </div>
-            <span class="text-xs text-text-4">Pasted servers land in mcps.yaml — the library every workspace picks from — and switch on here.</span>
+            <span class="text-xs text-text-4"
+              >Pasted servers land in mcps.yaml — the library every workspace picks from — and switch on here.</span
+            >
           </div>
           <button
             v-else
@@ -1306,9 +1472,13 @@ onMounted(async () => {
             :disabled="busy"
             data-testid="agent-workspace-editor-mcp-import"
             @click="importOpen = true"
-          ><IconPlus class="size-3.5" />Add servers from JSON…</button>
+          >
+            <IconPlus class="size-3.5" />Add servers from JSON…
+          </button>
         </div>
-        <p v-if="mcpError" class="text-xs text-severity-error" data-testid="agent-workspace-editor-mcp-error">{{ mcpError }}</p>
+        <p v-if="mcpError" class="text-xs text-severity-error" data-testid="agent-workspace-editor-mcp-error">
+          {{ mcpError }}
+        </p>
       </SettingsSection>
 
       <SettingsSection
@@ -1329,7 +1499,11 @@ onMounted(async () => {
               />
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-2">
-                  <span class="truncate text-[13.5px] font-semibold" :class="skillEnabled(row.name) ? 'text-text' : 'text-text-2'">{{ row.title }}</span>
+                  <span
+                    class="truncate text-[13.5px] font-semibold"
+                    :class="skillEnabled(row.name) ? 'text-text' : 'text-text-2'"
+                    >{{ row.title }}</span
+                  >
                   <button
                     v-if="!row.missing"
                     type="button"
@@ -1339,22 +1513,36 @@ onMounted(async () => {
                     @click="toggleSkillPackageExpanded(row.name)"
                   >
                     {{ row.members.length }} {{ row.members.length === 1 ? 'skill' : 'skills' }}
-                    <IconChevronDown class="size-3 transition-transform" :class="{ '-rotate-90': !skillPackageExpanded(row.name) }" />
+                    <IconChevronDown
+                      class="size-3 transition-transform"
+                      :class="{ '-rotate-90': !skillPackageExpanded(row.name) }"
+                    />
                   </button>
                 </div>
-                <div v-if="row.description" class="mt-1 text-[12px] leading-relaxed text-text-3">{{ row.description }}</div>
-                <div v-if="!row.missing && !row.members.length" class="mt-1 text-[11.5px] text-severity-warning">matches no skill — check its patterns in skills.yml</div>
+                <div v-if="row.description" class="mt-1 text-[12px] leading-relaxed text-text-3">
+                  {{ row.description }}
+                </div>
+                <div v-if="!row.missing && !row.members.length" class="mt-1 text-[11.5px] text-severity-warning">
+                  matches no skill — check its patterns in skills.yml
+                </div>
                 <div v-if="row.warning" class="mt-1 text-[11.5px] text-severity-warning">{{ row.warning }}</div>
               </div>
             </div>
-            <ul v-if="skillPackageExpanded(row.name) && row.members.length" class="flex flex-col gap-1 border-t border-row pb-3 pl-[58px] pr-4 pt-2.5">
+            <ul
+              v-if="skillPackageExpanded(row.name) && row.members.length"
+              class="flex flex-col gap-1 border-t border-row pb-3 pl-[58px] pr-4 pt-2.5"
+            >
               <li v-for="member in row.members" :key="member.slug" class="flex items-center gap-2">
                 <span class="truncate font-mono text-[11.5px] text-text-3">{{ member.slug }}</span>
-                <BaseBadge tone="muted" variant="pill" class="shrink-0 px-2 py-0.5 text-[10.5px] font-medium">{{ member.shipped ? 'shipped' : 'custom' }}</BaseBadge>
+                <BaseBadge tone="muted" variant="pill" class="shrink-0 px-2 py-0.5 text-[10.5px] font-medium">{{
+                  member.shipped ? 'shipped' : 'custom'
+                }}</BaseBadge>
               </li>
             </ul>
           </div>
-          <p v-if="!skillRows.length" class="px-4 py-3.5 text-xs leading-relaxed text-text-3">No packages are defined yet.</p>
+          <p v-if="!skillRows.length" class="px-4 py-3.5 text-xs leading-relaxed text-text-3">
+            No packages are defined yet.
+          </p>
           <div class="flex divide-x divide-row">
             <button
               type="button"
@@ -1362,18 +1550,30 @@ onMounted(async () => {
               :disabled="busy"
               data-testid="agent-workspace-editor-skills-packages"
               @click="openSkillPackages"
-            ><IconPencil class="size-3.5" />Edit skills.yml…</button>
+            >
+              <IconPencil class="size-3.5" />Edit skills.yml…
+            </button>
             <button
               type="button"
               :class="footerButtonClass"
               :disabled="busy"
               data-testid="agent-workspace-editor-skills-shared"
               @click="openSharedSkills"
-            ><IconFolderOpen class="size-3.5" />Open the skills folder…</button>
+            >
+              <IconFolderOpen class="size-3.5" />Open the skills folder…
+            </button>
           </div>
         </div>
-        <p v-if="skillPackagesProblem" class="text-xs text-severity-error" data-testid="agent-workspace-editor-skills-problem">{{ skillPackagesProblem }}</p>
-        <p v-if="skillError" class="text-xs text-severity-error" data-testid="agent-workspace-editor-skill-error">{{ skillError }}</p>
+        <p
+          v-if="skillPackagesProblem"
+          class="text-xs text-severity-error"
+          data-testid="agent-workspace-editor-skills-problem"
+        >
+          {{ skillPackagesProblem }}
+        </p>
+        <p v-if="skillError" class="text-xs text-severity-error" data-testid="agent-workspace-editor-skill-error">
+          {{ skillError }}
+        </p>
       </SettingsSection>
 
       <!-- Schedules are manifest state like the lists above, so they are part
@@ -1400,17 +1600,24 @@ onMounted(async () => {
             />
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2">
-                <span class="truncate text-[13.5px] font-semibold" :class="card.disabled ? 'text-text-2' : 'text-text'">{{ scheduleLabel(card) }}</span>
+                <span
+                  class="truncate text-[13.5px] font-semibold"
+                  :class="card.disabled ? 'text-text-2' : 'text-text'"
+                  >{{ scheduleLabel(card) }}</span
+                >
                 <BaseBadge
                   v-if="!card.saved || card.edited"
                   tone="muted"
                   variant="pill"
                   class="shrink-0 px-2 py-0.5 text-[10.5px] font-medium"
                   :data-testid="`agent-workspace-editor-schedule-${index}-unsaved`"
-                >unsaved</BaseBadge>
+                  >unsaved</BaseBadge
+                >
               </div>
               <div class="mt-1 truncate text-[12px] text-text-3">
-                <span :data-testid="`agent-workspace-editor-schedule-${index}-summary`">{{ describe(card.shape) }}</span>
+                <span :data-testid="`agent-workspace-editor-schedule-${index}-summary`">{{
+                  describe(card.shape)
+                }}</span>
                 <template v-if="nextRunLabel(card)">
                   <span aria-hidden="true"> · </span>
                   <span :data-testid="`agent-workspace-editor-schedule-${index}-next`">{{ nextRunLabel(card) }}</span>
@@ -1424,12 +1631,16 @@ onMounted(async () => {
                 <span class="size-1.5 shrink-0 rounded-full" :class="statusDot(card.lastRun.status)" />
                 <span class="truncate">{{ lastRunLabel(card.lastRun) }}</span>
               </div>
-              <p v-if="card.lastRun?.error" class="mt-1 text-[11.5px] leading-relaxed text-severity-warning">{{ card.lastRun.error }}</p>
+              <p v-if="card.lastRun?.error" class="mt-1 text-[11.5px] leading-relaxed text-severity-warning">
+                {{ card.lastRun.error }}
+              </p>
               <p
                 v-if="card.actionError"
                 class="mt-1 text-[11.5px] leading-relaxed text-severity-error"
                 :data-testid="`agent-workspace-editor-schedule-${index}-action-error`"
-              >{{ card.actionError }}</p>
+              >
+                {{ card.actionError }}
+              </p>
             </div>
             <div class="flex shrink-0 items-center gap-1">
               <button
@@ -1441,7 +1652,9 @@ onMounted(async () => {
                 :disabled="busy || card.running"
                 :data-testid="`agent-workspace-editor-schedule-${index}-run`"
                 @click="runScheduleNow(card)"
-              ><IconPlay class="size-[15px]" /></button>
+              >
+                <IconPlay class="size-[15px]" />
+              </button>
               <button
                 type="button"
                 :class="iconButtonClass"
@@ -1450,7 +1663,9 @@ onMounted(async () => {
                 :disabled="busy"
                 :data-testid="`agent-workspace-editor-schedule-${index}-edit`"
                 @click="openScheduleDraft(card, $event)"
-              ><IconChevronRight class="size-4" /></button>
+              >
+                <IconChevronRight class="size-4" />
+              </button>
             </div>
           </div>
           <p v-if="!scheduleCards.length" class="px-4 py-3.5 text-xs leading-relaxed text-text-3">No schedules yet.</p>
@@ -1460,14 +1675,15 @@ onMounted(async () => {
             :disabled="busy"
             data-testid="agent-workspace-editor-schedule-add"
             @click="openScheduleDraft(null, $event)"
-          ><IconPlus class="size-3.5" />Add schedule</button>
+          >
+            <IconPlus class="size-3.5" />Add schedule
+          </button>
         </div>
       </SettingsSection>
 
       <p v-if="!creating" class="border-t border-border pt-4 text-xs leading-relaxed text-text-4">
-        Saving rewrites these fields in agent-workspace.yaml and re-syncs the workspace's
-        generated files. Comments and anything else in the file stay as written — edit the
-        file for those.
+        Saving rewrites these fields in agent-workspace.yaml and re-syncs the workspace's generated files. Comments and
+        anything else in the file stay as written — edit the file for those.
       </p>
       <SettingsError v-if="error && !confirming" :message="error" testid="agent-workspace-editor-error" />
     </div>
@@ -1493,10 +1709,24 @@ onMounted(async () => {
           :disabled="busy"
           data-testid="agent-workspace-editor-schedule-remove"
           @click="scheduleDraft.removing = true"
-        >Remove schedule</button>
+        >
+          Remove schedule
+        </button>
         <div class="flex-1" />
-        <BaseButton variant="secondary" size="sm" :disabled="busy" data-testid="agent-workspace-editor-schedule-cancel" @click="closeScheduleDraft">Cancel</BaseButton>
-        <BaseButton size="sm" :disabled="busy" data-testid="agent-workspace-editor-schedule-keep" @click="keepScheduleDraft">
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :disabled="busy"
+          data-testid="agent-workspace-editor-schedule-cancel"
+          @click="closeScheduleDraft"
+          >Cancel</BaseButton
+        >
+        <BaseButton
+          size="sm"
+          :disabled="busy"
+          data-testid="agent-workspace-editor-schedule-keep"
+          @click="keepScheduleDraft"
+        >
           {{ scheduleDraft.key === null ? 'Add schedule' : 'Done' }}
         </BaseButton>
       </div>
@@ -1531,9 +1761,18 @@ onMounted(async () => {
           :disabled="busy"
           data-testid="agent-workspace-editor-delete"
           @click="confirming = true"
-        >Delete workspace</button>
+        >
+          Delete workspace
+        </button>
         <div class="flex-1" />
-        <BaseButton variant="secondary" size="sm" :busy="busy" data-testid="agent-workspace-editor-cancel" @click="cancel">Cancel</BaseButton>
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          :busy="busy"
+          data-testid="agent-workspace-editor-cancel"
+          @click="cancel"
+          >Cancel</BaseButton
+        >
         <BaseButton size="sm" :busy="busy" :disabled="!valid" data-testid="agent-workspace-editor-save" @click="submit">
           {{ creating ? 'Create workspace' : 'Save' }}
         </BaseButton>

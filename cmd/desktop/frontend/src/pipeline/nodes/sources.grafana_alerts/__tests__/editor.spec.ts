@@ -6,16 +6,27 @@ import { chooseOption } from '../../../../test-utils/select'
 
 const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
 
-vi.mock('../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice', () => ({
-  List: mocks.List,
-}))
+vi.mock(
+  '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice',
+  () => ({
+    List: mocks.List,
+  }),
+)
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
 }))
 
 function connectedStacks(...accounts: string[]) {
   mocks.List.mockResolvedValue([
-    { key: 'grafana', title: 'Grafana', stability: 'stable', provider: 'grafana', types: ['sources.grafana_alerts', 'sources.grafana_irm_alerts', 'sources.grafana_metrics'], accounts, envOverride: false },
+    {
+      key: 'grafana',
+      title: 'Grafana',
+      stability: 'stable',
+      provider: 'grafana',
+      types: ['sources.grafana_alerts', 'sources.grafana_irm_alerts', 'sources.grafana_metrics'],
+      accounts,
+      envOverride: false,
+    },
   ])
 }
 
@@ -59,10 +70,14 @@ describe('sources.grafana_alerts editor', () => {
     expect((field.element as HTMLTextAreaElement).value).toBe('squad=platform')
 
     await field.setValue('squad=platform\nseverity=~critical|warning')
-    expect(wrapper.emitted('update:config')).toEqual([[{
-      credential: 'grafana/host-1',
-      matchers: ['squad=platform', 'severity=~critical|warning'],
-    }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [
+        {
+          credential: 'grafana/host-1',
+          matchers: ['squad=platform', 'severity=~critical|warning'],
+        },
+      ],
+    ])
     wrapper.unmount()
   })
 })
@@ -73,7 +88,9 @@ describe('sources.grafana_alerts validate', () => {
   })
 
   it('rejects a credential that is not a grafana ref', () => {
-    expect(validate({ credential: 'github/octocat', matchers: [] })).toEqual(['credential must look like "grafana/<account>"'])
+    expect(validate({ credential: 'github/octocat', matchers: [] })).toEqual([
+      'credential must look like "grafana/<account>"',
+    ])
   })
 
   it('accepts a grafana ref', () => {
@@ -92,7 +109,11 @@ describe('sources.grafana_alerts validate', () => {
   })
 
   it('rejects a matcher with no operator or no label', () => {
-    expect(validate({ credential: 'grafana/host-1', matchers: ['squad'] })).toEqual(['matcher "squad" needs one of =, !=, =~, !~'])
-    expect(validate({ credential: 'grafana/host-1', matchers: ['=platform'] })).toEqual(['matcher "=platform" has no label name'])
+    expect(validate({ credential: 'grafana/host-1', matchers: ['squad'] })).toEqual([
+      'matcher "squad" needs one of =, !=, =~, !~',
+    ])
+    expect(validate({ credential: 'grafana/host-1', matchers: ['=platform'] })).toEqual([
+      'matcher "=platform" has no label name',
+    ])
   })
 })

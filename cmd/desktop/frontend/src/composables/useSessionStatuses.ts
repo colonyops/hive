@@ -46,7 +46,9 @@ async function reload(): Promise<void> {
 async function poll(generation: number): Promise<void> {
   await reload()
   if (generation !== pollGeneration || document.hidden) return
-  pollTimer = setTimeout(() => { void poll(generation) }, pollIntervalMs.value)
+  pollTimer = setTimeout(() => {
+    void poll(generation)
+  }, pollIntervalMs.value)
 }
 
 function restartPoll(): void {

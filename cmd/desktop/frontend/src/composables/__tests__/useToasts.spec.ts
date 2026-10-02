@@ -15,7 +15,9 @@ describe('useToasts', () => {
   it('appends to the shared queue', () => {
     const { toasts, showToast } = useToasts()
     const id = showToast('Saved', { severity: 'success', body: 'Profile updated' })
-    expect(toasts.value).toEqual([expect.objectContaining({ id, message: 'Saved', severity: 'success', body: 'Profile updated', duration: 4000 })])
+    expect(toasts.value).toEqual([
+      expect.objectContaining({ id, message: 'Saved', severity: 'success', body: 'Profile updated', duration: 4000 }),
+    ])
   })
 
   it('auto-dismisses toasts after their duration', () => {

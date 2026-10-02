@@ -27,9 +27,7 @@ describe('usePaletteRecents', () => {
     for (let i = 1; i <= RECENT_LIMIT + 2; i++) recordRun(`cmd-${i}`)
 
     expect(recentIds.value).toHaveLength(RECENT_LIMIT)
-    expect(recentIds.value).toEqual(
-      Array.from({ length: RECENT_LIMIT }, (_, i) => `cmd-${RECENT_LIMIT + 2 - i}`),
-    )
+    expect(recentIds.value).toEqual(Array.from({ length: RECENT_LIMIT }, (_, i) => `cmd-${RECENT_LIMIT + 2 - i}`))
   })
 
   it('round-trips recorded ids through localStorage for a fresh import', async () => {

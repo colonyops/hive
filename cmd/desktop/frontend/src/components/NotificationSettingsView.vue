@@ -23,21 +23,29 @@ const {
   requestPermission,
 } = useNotificationSettings()
 
-const permissionLabel = computed(() => ({
-  granted: 'Granted',
-  denied: 'Denied',
-  'not-requested': 'Not requested',
-}[permission.value]))
+const permissionLabel = computed(
+  () =>
+    ({
+      granted: 'Granted',
+      denied: 'Denied',
+      'not-requested': 'Not requested',
+    })[permission.value],
+)
 
-const permissionTone = computed(() => ({
-  granted: 'success' as const,
-  denied: 'danger' as const,
-  'not-requested': 'neutral' as const,
-}[permission.value]))
+const permissionTone = computed(
+  () =>
+    ({
+      granted: 'success' as const,
+      denied: 'danger' as const,
+      'not-requested': 'neutral' as const,
+    })[permission.value],
+)
 
-const permissionHint = computed(() => permission.value === 'granted'
-  ? 'Hive may show system banners.'
-  : 'Without it, a banner falls back to an in-app toast — nothing is lost, it just does not surface outside Hive.')
+const permissionHint = computed(() =>
+  permission.value === 'granted'
+    ? 'Hive may show system banners.'
+    : 'Without it, a banner falls back to an in-app toast — nothing is lost, it just does not surface outside Hive.',
+)
 
 const deliveryOptions: Array<{ value: NotificationDelivery; label: string }> = [
   { value: 'auto', label: 'Automatic' },
@@ -47,9 +55,11 @@ const deliveryOptions: Array<{ value: NotificationDelivery; label: string }> = [
 
 // Only "Automatic" is non-obvious from its label, so the row explains that one
 // rather than restating all three.
-const deliveryHint = computed(() => delivery.value === 'auto'
-  ? 'A system banner only while you are working in another app; an in-app toast when Hive is focused.'
-  : 'Automatic shows a system banner only while you are working in another app.')
+const deliveryHint = computed(() =>
+  delivery.value === 'auto'
+    ? 'A system banner only while you are working in another app; an in-app toast when Hive is focused.'
+    : 'Automatic shows a system banner only while you are working in another app.',
+)
 
 onMounted(() => {
   // Permission can change in OS settings while this window is open, so every
@@ -72,11 +82,7 @@ onMounted(() => {
   <SettingsPage testid="notification-settings">
     <SettingsError v-if="error" :message="error" testid="notification-settings-error" />
 
-    <SettingsSection
-      title="Notifications"
-      description="How Hive tells you about activity that needs attention."
-      boxed
-    >
+    <SettingsSection title="Notifications" description="How Hive tells you about activity that needs attention." boxed>
       <SettingsRow
         label="Enable notifications"
         hint="With this off, activity is still recorded and readable in Activity — you are just not interrupted for it."
@@ -88,10 +94,7 @@ onMounted(() => {
           @update:model-value="setNotificationsEnabled"
         />
       </SettingsRow>
-      <SettingsRow
-        label="Where they appear"
-        :hint="deliveryHint"
-      >
+      <SettingsRow label="Where they appear" :hint="deliveryHint">
         <AppSelect
           class="w-[210px]"
           :model-value="delivery"
@@ -116,15 +119,8 @@ onMounted(() => {
       </SettingsRow>
     </SettingsSection>
 
-    <SettingsSection
-      title="System permission"
-      description="macOS decides whether Hive may show banners at all."
-      boxed
-    >
-      <SettingsRow
-        label="OS notification permission"
-        :hint="permissionHint"
-      >
+    <SettingsSection title="System permission" description="macOS decides whether Hive may show banners at all." boxed>
+      <SettingsRow label="OS notification permission" :hint="permissionHint">
         <div class="flex items-center gap-2.5">
           <BaseBadge :tone="permissionTone" variant="pill" class="px-2.5 py-1 text-[11px] font-semibold">
             <span data-testid="notification-permission-status">{{ permissionLabel }}</span>
@@ -136,7 +132,9 @@ onMounted(() => {
             :disabled="requestingPermission"
             data-testid="notification-permission-request"
             @click="requestPermission"
-          >{{ requestingPermission ? 'Requesting…' : 'Allow' }}</button>
+          >
+            {{ requestingPermission ? 'Requesting…' : 'Allow' }}
+          </button>
         </div>
       </SettingsRow>
       <div
@@ -144,7 +142,8 @@ onMounted(() => {
         class="px-4 py-3.5 text-xs leading-relaxed text-text-3"
         data-testid="notification-permission-denied-guidance"
       >
-        Notifications are blocked. Enable them for Hive in your operating system's notification settings — until then, anything that would have been a banner falls back to an in-app toast.
+        Notifications are blocked. Enable them for Hive in your operating system's notification settings — until then,
+        anything that would have been a banner falls back to an in-app toast.
       </div>
     </SettingsSection>
   </SettingsPage>

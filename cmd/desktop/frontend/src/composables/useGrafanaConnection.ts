@@ -1,5 +1,8 @@
 import { ref } from 'vue'
-import { Connect, Disconnect } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/grafanaservice'
+import {
+  Connect,
+  Disconnect,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/grafanaservice'
 import type { Stack } from '../types/grafana'
 
 /**

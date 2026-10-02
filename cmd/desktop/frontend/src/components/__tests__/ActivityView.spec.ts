@@ -27,10 +27,38 @@ import ActivityView from '../ActivityView.vue'
 function seed(): ActivityEvent[] {
   const now = Date.now()
   return [
-    { id: 4, createdAt: now - 1000, category: 'refresh', severity: 'info', title: 'Refreshed github:hive/core', body: '12 items updated' },
-    { id: 3, createdAt: now - 2000, category: 'refresh', severity: 'error', title: 'Refresh failed for rpc:Sentry', body: 'exit 1' },
-    { id: 2, createdAt: now - 3000, category: 'session', severity: 'success', title: 'Created session review-pr-1', body: 'sonnet' },
-    { id: 1, createdAt: now - 4000, category: 'auto_action', severity: 'auto', title: 'Auto-action · Triage', body: 'rule triage.default' },
+    {
+      id: 4,
+      createdAt: now - 1000,
+      category: 'refresh',
+      severity: 'info',
+      title: 'Refreshed github:hive/core',
+      body: '12 items updated',
+    },
+    {
+      id: 3,
+      createdAt: now - 2000,
+      category: 'refresh',
+      severity: 'error',
+      title: 'Refresh failed for rpc:Sentry',
+      body: 'exit 1',
+    },
+    {
+      id: 2,
+      createdAt: now - 3000,
+      category: 'session',
+      severity: 'success',
+      title: 'Created session review-pr-1',
+      body: 'sonnet',
+    },
+    {
+      id: 1,
+      createdAt: now - 4000,
+      category: 'auto_action',
+      severity: 'auto',
+      title: 'Auto-action · Triage',
+      body: 'rule triage.default',
+    },
   ]
 }
 
@@ -184,13 +212,19 @@ describe('ActivityView', () => {
 
     await itemButton.trigger('click')
     await urlButton.trigger('click')
-    expect(wrapper.emitted('open-item')).toEqual([[{
-      profileId: 'triage',
-      sourceKind: 'github',
-      sourceScope: 'grafana/adaptive-telemetry-archive-replay',
-      externalId: 'grafana/adaptive-telemetry-archive-replay#227',
-    }]])
-    expect(wrapper.emitted('open-url')).toEqual([['https://github.com/grafana/adaptive-telemetry-archive-replay/pull/227']])
+    expect(wrapper.emitted('open-item')).toEqual([
+      [
+        {
+          profileId: 'triage',
+          sourceKind: 'github',
+          sourceScope: 'grafana/adaptive-telemetry-archive-replay',
+          externalId: 'grafana/adaptive-telemetry-archive-replay#227',
+        },
+      ],
+    ])
+    expect(wrapper.emitted('open-url')).toEqual([
+      ['https://github.com/grafana/adaptive-telemetry-archive-replay/pull/227'],
+    ])
   })
 
   it('does not render link controls for an event without link metadata', () => {

@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import FieldRow from './FieldRow.vue'
 
-const props = withDefaults(defineProps<{
-  label?: string
-  modelValue: string
-  placeholder?: string
-  hint?: string
-  error?: string
-  testid?: string
-  rows?: number
-  /** font-mono styling for template and structured text fields. */
-  monospace?: boolean
-}>(), {
-  rows: 3,
-})
+const props = withDefaults(
+  defineProps<{
+    label?: string
+    modelValue: string
+    placeholder?: string
+    hint?: string
+    error?: string
+    testid?: string
+    rows?: number
+    /** font-mono styling for template and structured text fields. */
+    monospace?: boolean
+  }>(),
+  {
+    rows: 3,
+  },
+)
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 

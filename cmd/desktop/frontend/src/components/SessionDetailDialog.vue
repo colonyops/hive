@@ -38,7 +38,13 @@ const rows = computed(() => {
 </script>
 
 <template>
-  <BaseModal :title="detail.name" :icon="IconTerminal" :width="480" testid="session-detail-dialog" @close="emit('close')">
+  <BaseModal
+    :title="detail.name"
+    :icon="IconTerminal"
+    :width="480"
+    testid="session-detail-dialog"
+    @close="emit('close')"
+  >
     <dl class="flex flex-col gap-2.5 px-5 py-4">
       <div v-for="row in rows" :key="row.testid" class="flex items-baseline gap-3">
         <dt class="w-[124px] shrink-0 text-xs text-text-3">{{ row.label }}</dt>
@@ -46,7 +52,9 @@ const rows = computed(() => {
           class="min-w-0 flex-1 break-all text-[13px] text-text-2"
           :class="row.mono && 'font-mono text-[12.5px]'"
           :data-testid="`session-detail-${row.testid}`"
-        >{{ row.value }}</dd>
+        >
+          {{ row.value }}
+        </dd>
       </div>
     </dl>
     <template #footer>

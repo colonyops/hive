@@ -4,7 +4,10 @@ import {
   History,
   Pending,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/releasenotesservice'
-import type { PendingReleaseNotes, ReleaseNote } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type {
+  PendingReleaseNotes,
+  ReleaseNote,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { useToasts } from './useToasts'
 
 // Module-scoped: the launch check, the toast's "What's new" action, and the

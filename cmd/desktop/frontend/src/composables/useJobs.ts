@@ -56,7 +56,9 @@ function start(): void {
   started = true
   // The singleton lives for the app lifetime, so this subscription is
   // intentionally never removed.
-  Events.On('jobs:updated', () => { void load() })
+  Events.On('jobs:updated', () => {
+    void load()
+  })
   void load()
 }
 

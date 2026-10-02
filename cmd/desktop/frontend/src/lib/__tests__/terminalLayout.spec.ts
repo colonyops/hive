@@ -13,11 +13,19 @@ import {
 // Recorded from tmux 3.7b: split-window -h, then -v on the right pane.
 //   95e4,120x40,0,0{60x40,0,0,0,59x40,61,0[59x20,61,0,1,59x19,61,21,2]}
 const nested: PaneLayout = {
-  split: 'leftright', x: 0, y: 0, width: 120, height: 40,
+  split: 'leftright',
+  x: 0,
+  y: 0,
+  width: 120,
+  height: 40,
   cells: [
     { paneId: '%0', x: 0, y: 0, width: 60, height: 40 },
     {
-      split: 'topbottom', x: 61, y: 0, width: 59, height: 40,
+      split: 'topbottom',
+      x: 61,
+      y: 0,
+      width: 59,
+      height: 40,
       cells: [
         { paneId: '%1', x: 61, y: 0, width: 59, height: 20 },
         { paneId: '%2', x: 61, y: 21, width: 59, height: 19 },
@@ -33,13 +41,25 @@ const single: PaneLayout = { paneId: '%7', x: 0, y: 0, width: 120, height: 40 }
 // leaf, which is what tells a divider's own panes apart from an ancestor's.
 //   524c,120x40,0,0{60x40,0,0[60x20,0,0{30x20,0,0,0,29x20,31,0,3},60x19,0,21,2],59x40,61,0,1}
 const threeLevel: PaneLayout = {
-  split: 'leftright', x: 0, y: 0, width: 120, height: 40,
+  split: 'leftright',
+  x: 0,
+  y: 0,
+  width: 120,
+  height: 40,
   cells: [
     {
-      split: 'topbottom', x: 0, y: 0, width: 60, height: 40,
+      split: 'topbottom',
+      x: 0,
+      y: 0,
+      width: 60,
+      height: 40,
       cells: [
         {
-          split: 'leftright', x: 0, y: 0, width: 60, height: 20,
+          split: 'leftright',
+          x: 0,
+          y: 0,
+          width: 60,
+          height: 20,
           cells: [
             { paneId: '%0', x: 0, y: 0, width: 30, height: 20 },
             { paneId: '%3', x: 31, y: 0, width: 29, height: 20 },
@@ -57,20 +77,36 @@ const threeLevel: PaneLayout = {
 // is the root: resize-pane cannot move the root border through any of them.
 //   ef26,120x40,0,0{60x40,0,0[60x20,0,0{30x20,0,0,0,29x20,31,0,3},60x19,0,21{30x19,0,21,2,29x19,31,21,4}],59x40,61,0,1}
 const unreachable: PaneLayout = {
-  split: 'leftright', x: 0, y: 0, width: 120, height: 40,
+  split: 'leftright',
+  x: 0,
+  y: 0,
+  width: 120,
+  height: 40,
   cells: [
     {
-      split: 'topbottom', x: 0, y: 0, width: 60, height: 40,
+      split: 'topbottom',
+      x: 0,
+      y: 0,
+      width: 60,
+      height: 40,
       cells: [
         {
-          split: 'leftright', x: 0, y: 0, width: 60, height: 20,
+          split: 'leftright',
+          x: 0,
+          y: 0,
+          width: 60,
+          height: 20,
           cells: [
             { paneId: '%0', x: 0, y: 0, width: 30, height: 20 },
             { paneId: '%3', x: 31, y: 0, width: 29, height: 20 },
           ],
         },
         {
-          split: 'leftright', x: 0, y: 21, width: 60, height: 19,
+          split: 'leftright',
+          x: 0,
+          y: 21,
+          width: 60,
+          height: 19,
           cells: [
             { paneId: '%2', x: 0, y: 21, width: 30, height: 19 },
             { paneId: '%4', x: 31, y: 21, width: 29, height: 19 },
@@ -125,8 +161,30 @@ describe('terminalLayout', () => {
   it('finds the border between every pair of siblings, addressed to the cell before it', () => {
     const dividers = paneDividers({ layout: nested, zoomed: false })
     expect(dividers).toEqual([
-      { axis: 'x', at: 60, from: 0, to: 40, before: '%0', beforePanes: ['%0'], afterPanes: ['%1', '%2'], origin: 0, extent: 60, limit: 118 },
-      { axis: 'y', at: 20, from: 61, to: 120, before: '%1', beforePanes: ['%1'], afterPanes: ['%2'], origin: 0, extent: 20, limit: 38 },
+      {
+        axis: 'x',
+        at: 60,
+        from: 0,
+        to: 40,
+        before: '%0',
+        beforePanes: ['%0'],
+        afterPanes: ['%1', '%2'],
+        origin: 0,
+        extent: 60,
+        limit: 118,
+      },
+      {
+        axis: 'y',
+        at: 20,
+        from: 61,
+        to: 120,
+        before: '%1',
+        beforePanes: ['%1'],
+        afterPanes: ['%2'],
+        origin: 0,
+        extent: 20,
+        limit: 38,
+      },
     ])
     expect(paneDividers({ layout: nested, zoomed: true })).toEqual([])
     expect(paneDividers({ layout: single, zoomed: false })).toEqual([])
@@ -138,14 +196,48 @@ describe('terminalLayout', () => {
   // a nested split on the same axis and would move that split's border.
   it('addresses a divider to a leaf whose nearest same-axis ancestor is the divider itself', () => {
     const [root, middle, inner] = paneDividers({ layout: threeLevel, zoomed: false })
-    expect(root).toMatchObject({ axis: 'x', at: 60, before: '%2', beforePanes: ['%0', '%3', '%2'], afterPanes: ['%1'], extent: 60, limit: 118 })
-    expect(middle).toMatchObject({ axis: 'y', at: 20, from: 0, to: 60, before: '%0', beforePanes: ['%0', '%3'], afterPanes: ['%2'], extent: 20, limit: 38 })
-    expect(inner).toMatchObject({ axis: 'x', at: 30, from: 0, to: 20, before: '%0', beforePanes: ['%0'], afterPanes: ['%3'], extent: 30, limit: 58 })
+    expect(root).toMatchObject({
+      axis: 'x',
+      at: 60,
+      before: '%2',
+      beforePanes: ['%0', '%3', '%2'],
+      afterPanes: ['%1'],
+      extent: 60,
+      limit: 118,
+    })
+    expect(middle).toMatchObject({
+      axis: 'y',
+      at: 20,
+      from: 0,
+      to: 60,
+      before: '%0',
+      beforePanes: ['%0', '%3'],
+      afterPanes: ['%2'],
+      extent: 20,
+      limit: 38,
+    })
+    expect(inner).toMatchObject({
+      axis: 'x',
+      at: 30,
+      from: 0,
+      to: 20,
+      before: '%0',
+      beforePanes: ['%0'],
+      afterPanes: ['%3'],
+      extent: 30,
+      limit: 58,
+    })
   })
 
   it('leaves a divider unaddressed when no pane can reach it', () => {
     const [root, middle, top, bottom] = paneDividers({ layout: unreachable, zoomed: false })
-    expect(root).toMatchObject({ axis: 'x', at: 60, before: '', beforePanes: ['%0', '%3', '%2', '%4'], afterPanes: ['%1'] })
+    expect(root).toMatchObject({
+      axis: 'x',
+      at: 60,
+      before: '',
+      beforePanes: ['%0', '%3', '%2', '%4'],
+      afterPanes: ['%1'],
+    })
     expect(middle).toMatchObject({ axis: 'y', at: 20, before: '%0' })
     expect(top).toMatchObject({ axis: 'x', at: 30, from: 0, to: 20, before: '%0' })
     expect(bottom).toMatchObject({ axis: 'x', at: 30, from: 21, to: 40, before: '%2' })

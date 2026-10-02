@@ -24,18 +24,28 @@ const saving = ref(false)
 
 // The drawer edits a draft; the persisted view seeds it on load and after a
 // save, so Cancel is simply "close without saving".
-watch(settings, (value) => {
-  if (!value) return
-  enabled.value = value.enabled
-  port.value = String(value.port)
-}, { immediate: true })
+watch(
+  settings,
+  (value) => {
+    if (!value) return
+    enabled.value = value.enabled
+    port.value = String(value.port)
+  },
+  { immediate: true },
+)
 
 const parsedPort = computed(() => Number(port.value))
-const portValid = computed(() => Number.isInteger(parsedPort.value) && (parsedPort.value === 0 || (parsedPort.value >= 1024 && parsedPort.value <= 65535)))
+const portValid = computed(
+  () =>
+    Number.isInteger(parsedPort.value) &&
+    (parsedPort.value === 0 || (parsedPort.value >= 1024 && parsedPort.value <= 65535)),
+)
 const overridden = computed(() => settings.value?.portOverridden === true)
-const portHint = computed(() => overridden.value
-  ? 'Fixed by HIVE_DESKTOP_HTTP_PORT for this session — edits here have no effect until the variable is unset.'
-  : `Use 0 to allocate a port when the listener is enabled, or choose a stable port. Generated candidates come from ${settings.value?.portMin ?? 20000}–${settings.value?.portMax ?? 32767}.`)
+const portHint = computed(() =>
+  overridden.value
+    ? 'Fixed by HIVE_DESKTOP_HTTP_PORT for this session — edits here have no effect until the variable is unset.'
+    : `Use 0 to allocate a port when the listener is enabled, or choose a stable port. Generated candidates come from ${settings.value?.portMin ?? 20000}–${settings.value?.portMax ?? 32767}.`,
+)
 
 const baseUrl = computed(() => settings.value?.baseUrl ?? '')
 const dirty = computed(() => {
@@ -50,16 +60,20 @@ const status = computed(() => {
   const value = settings.value
   if (!value) return { tone: 'neutral', label: 'Unknown', detail: '' }
   if (value.startError) return { tone: 'error', label: 'Failed to start', detail: value.startError }
-  if (value.running) return { tone: 'success', label: 'Running', detail: `Listening on ${value.host}:${value.boundPort}` }
+  if (value.running)
+    return { tone: 'success', label: 'Running', detail: `Listening on ${value.host}:${value.boundPort}` }
   if (!value.enabled) return { tone: 'neutral', label: 'Disabled', detail: 'No local port is bound.' }
   return { tone: 'neutral', label: 'Not running', detail: 'Enabled but not started in this session.' }
 })
 
-const statusToneClass = computed(() => ({
-  success: 'border-severity-success-border bg-severity-success-tint text-severity-success',
-  error: 'border-severity-error-border bg-severity-error-tint text-severity-error',
-  neutral: 'border-border bg-chip text-text-2',
-}[status.value.tone as 'success' | 'error' | 'neutral']))
+const statusToneClass = computed(
+  () =>
+    ({
+      success: 'border-severity-success-border bg-severity-success-tint text-severity-success',
+      error: 'border-severity-error-border bg-severity-error-tint text-severity-error',
+      neutral: 'border-border bg-chip text-text-2',
+    })[status.value.tone as 'success' | 'error' | 'neutral'],
+)
 
 const { copy: copyUrl, copied: urlCopied } = useClipboard()
 
@@ -93,7 +107,9 @@ onMounted(() => void refresh())
   >
     <template #header>
       <div class="flex items-center gap-2.5">
-        <span class="flex size-[26px] items-center justify-center rounded-[7px] bg-chip text-text-2"><IconWebhook class="size-3.5" /></span>
+        <span class="flex size-[26px] items-center justify-center rounded-[7px] bg-chip text-text-2"
+          ><IconWebhook class="size-3.5"
+        /></span>
         <div>
           <div class="text-[14px] font-semibold tracking-[-.01em]">Webhook settings</div>
           <div class="font-mono text-[11px] text-text-3">Local listener</div>
@@ -134,7 +150,7 @@ onMounted(() => void refresh())
             :class="!portValid ? 'border-severity-error' : ''"
             data-testid="webhook-settings-port-input"
             :disabled="loading || overridden"
-          >
+          />
           <button
             type="button"
             class="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-lg border border-card text-text-3 hover:border-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
@@ -143,18 +159,34 @@ onMounted(() => void refresh())
             data-testid="webhook-settings-port-generate"
             :disabled="loading || overridden"
             @click="onGeneratePort"
-          ><IconRefresh class="size-[14px]" /></button>
+          >
+            <IconRefresh class="size-[14px]" />
+          </button>
         </div>
       </SettingsField>
-      <p v-if="!portValid" class="-mt-3 text-xs text-severity-error" data-testid="webhook-settings-port-error">Enter 0 for automatic allocation or a whole number between 1024 and 65535.</p>
+      <p v-if="!portValid" class="-mt-3 text-xs text-severity-error" data-testid="webhook-settings-port-error">
+        Enter 0 for automatic allocation or a whole number between 1024 and 65535.
+      </p>
 
-      <SettingsField v-if="baseUrl" label="Base URL" hint="Each sources.webhook node appends its own path to this." testid="webhook-settings-base-url">
+      <SettingsField
+        v-if="baseUrl"
+        label="Base URL"
+        hint="Each sources.webhook node appends its own path to this."
+        testid="webhook-settings-base-url"
+      >
         <div class="flex items-center gap-2">
           <code
             class="min-w-0 flex-1 truncate rounded-lg border border-strong bg-app px-3 py-2 font-mono text-[12px] text-text-2"
             data-testid="webhook-settings-base-url-value"
-          >{{ baseUrl }}</code>
-          <BaseButton variant="secondary" size="sm" class="whitespace-nowrap" data-testid="webhook-settings-copy-url" @click="copyUrl(baseUrl)">
+            >{{ baseUrl }}</code
+          >
+          <BaseButton
+            variant="secondary"
+            size="sm"
+            class="whitespace-nowrap"
+            data-testid="webhook-settings-copy-url"
+            @click="copyUrl(baseUrl)"
+          >
             {{ urlCopied ? 'Copied' : 'Copy' }}
           </BaseButton>
         </div>
@@ -164,26 +196,26 @@ onMounted(() => void refresh())
         v-if="restartPending"
         class="rounded-lg border border-border bg-severity-info-tint px-3 py-2.5 text-[12px] leading-relaxed text-text-2"
         data-testid="webhook-settings-restart-note"
-      >Restart Hive to apply the listener's enabled state and port.</p>
+      >
+        Restart Hive to apply the listener's enabled state and port.
+      </p>
 
       <SettingsError v-if="error" :message="error" testid="webhook-settings-error" />
     </div>
 
     <template #footer>
       <div class="flex items-center justify-end gap-2.5">
-        <BaseButton
-          variant="secondary"
-          size="sm"
-          data-testid="webhook-settings-cancel"
-          @click="emit('close')"
-        >Cancel</BaseButton>
+        <BaseButton variant="secondary" size="sm" data-testid="webhook-settings-cancel" @click="emit('close')"
+          >Cancel</BaseButton
+        >
         <BaseButton
           size="sm"
           :busy="loading || saving"
           :disabled="!portValid"
           data-testid="webhook-settings-save"
           @click="onSave"
-        >Save</BaseButton>
+          >Save</BaseButton
+        >
       </div>
     </template>
   </DrawerSheet>

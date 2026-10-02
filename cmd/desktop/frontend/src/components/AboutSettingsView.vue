@@ -142,7 +142,13 @@ interface Link {
 const links: Link[] = [
   { key: 'docs', label: 'Documentation', hint: 'Guides and reference', external: true, open: openDocs },
   { key: 'updates', label: 'How updates work', hint: 'Channels and releases', external: true, open: openUpdatesDoc },
-  { key: 'report', label: 'Report a problem', hint: 'Open a GitHub issue', external: true, open: () => reportProblem() },
+  {
+    key: 'report',
+    label: 'Report a problem',
+    hint: 'Open a GitHub issue',
+    external: true,
+    open: () => reportProblem(),
+  },
 ]
 
 // The changelog ships inside the binary, so this list is complete offline. It
@@ -157,9 +163,7 @@ function keyOf(entry: ReleaseNote): string {
 }
 
 function toggle(key: string): void {
-  expanded.value = expanded.value.includes(key)
-    ? expanded.value.filter((k) => k !== key)
-    : [...expanded.value, key]
+  expanded.value = expanded.value.includes(key) ? expanded.value.filter((k) => k !== key) : [...expanded.value, key]
 }
 
 onMounted(async () => {
@@ -180,7 +184,9 @@ onMounted(async () => {
       data-testid="about-identity"
     >
       <div class="flex flex-col gap-3.5 p-4 @[560px]/pane:flex-row @[560px]/pane:items-center @[560px]/pane:gap-4">
-        <span class="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] border border-card bg-chip text-accent">
+        <span
+          class="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] border border-card bg-chip text-accent"
+        >
           <HiveMark class="size-[18px]" />
         </span>
         <div class="min-w-0 flex-1">
@@ -193,9 +199,12 @@ onMounted(async () => {
               dot
               class="px-2.5 py-0.5 text-[11px] font-medium"
               data-testid="about-update-status"
-            >{{ status.label }}</BaseBadge>
+              >{{ status.label }}</BaseBadge
+            >
           </div>
-          <p class="mt-1 text-[12.5px] leading-relaxed text-text-3" data-testid="about-update-checked">{{ checkedLabel }}</p>
+          <p class="mt-1 text-[12.5px] leading-relaxed text-text-3" data-testid="about-update-checked">
+            {{ checkedLabel }}
+          </p>
         </div>
         <button
           type="button"
@@ -215,8 +224,16 @@ onMounted(async () => {
         data-testid="about-update-available"
       >
         <div class="text-[13px] font-semibold text-text">{{ update.latestVersion }} is available</div>
-        <div class="mt-0.5 text-[11.5px] text-text-3">Install it from the update badge in the title bar — Hive relaunches into the new version.</div>
-        <p v-if="update.notes" class="mt-2 whitespace-pre-line text-[12px] text-text-2" data-testid="about-update-notes">{{ update.notes }}</p>
+        <div class="mt-0.5 text-[11.5px] text-text-3">
+          Install it from the update badge in the title bar — Hive relaunches into the new version.
+        </div>
+        <p
+          v-if="update.notes"
+          class="mt-2 whitespace-pre-line text-[12px] text-text-2"
+          data-testid="about-update-notes"
+        >
+          {{ update.notes }}
+        </p>
       </div>
     </section>
 
@@ -238,32 +255,32 @@ onMounted(async () => {
         </button>
       </template>
       <!-- Hairlines rather than gaps: four facets of one build, not four cards. -->
-      <div class="grid grid-cols-1 overflow-hidden rounded-[11px] border border-card bg-raised @[440px]/pane:grid-cols-2 @[800px]/pane:grid-cols-4">
+      <div
+        class="grid grid-cols-1 overflow-hidden rounded-[11px] border border-card bg-raised @[440px]/pane:grid-cols-2 @[800px]/pane:grid-cols-4"
+      >
         <div
           v-for="stat in stats"
           :key="stat.key"
           class="-ml-px -mt-px flex min-w-0 flex-col gap-1.5 border-l border-t border-border px-4 py-3.5"
           :data-testid="`about-stat-${stat.key}`"
         >
-          <span class="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[.12em] text-text-3">
+          <span
+            class="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[.12em] text-text-3"
+          >
             <component :is="stat.icon" class="size-3" />{{ stat.label }}
           </span>
-          <span class="truncate font-mono text-[16px] tabular-nums text-text" :data-testid="`about-build-${stat.key}`">{{ stat.value }}</span>
+          <span
+            class="truncate font-mono text-[16px] tabular-nums text-text"
+            :data-testid="`about-build-${stat.key}`"
+            >{{ stat.value }}</span
+          >
           <span class="truncate text-[11px] text-text-4">{{ stat.hint }}</span>
         </div>
       </div>
     </SettingsSection>
 
-    <SettingsSection
-      v-if="build"
-      title="Updates"
-      description="How Hive replaces itself with a newer build."
-      boxed
-    >
-      <SettingsRow
-        label="Automatic updates"
-        hint="Check for and install new versions in the background."
-      >
+    <SettingsSection v-if="build" title="Updates" description="How Hive replaces itself with a newer build." boxed>
+      <SettingsRow label="Automatic updates" hint="Check for and install new versions in the background.">
         <AppSwitch
           :model-value="autoUpdate"
           aria-label="Automatic updates"

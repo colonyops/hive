@@ -33,12 +33,14 @@ function connectionStatus(state: string, login = ''): ConnectionStatus {
 
 function withConnection() {
   let github!: ReturnType<typeof useGitHubConnection>
-  const wrapper = mount(defineComponent({
-    setup() {
-      github = useGitHubConnection()
-      return () => null
-    },
-  }))
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        github = useGitHubConnection()
+        return () => null
+      },
+    }),
+  )
   return { github, wrapper }
 }
 
@@ -66,7 +68,10 @@ describe('useGitHubConnection', () => {
   })
 
   it('starts the device flow and switches to the device card', async () => {
-    mocks.StartDeviceFlow.mockResolvedValue({ userCode: 'AAAA-BBBB', verificationUri: 'https://github.com/login/device' })
+    mocks.StartDeviceFlow.mockResolvedValue({
+      userCode: 'AAAA-BBBB',
+      verificationUri: 'https://github.com/login/device',
+    })
     const { github } = withConnection()
     await flushPromises()
 
@@ -109,7 +114,10 @@ describe('useGitHubConnection', () => {
   })
 
   it('cancels a pending device flow when switching to the token card', async () => {
-    mocks.StartDeviceFlow.mockResolvedValue({ userCode: 'AAAA-BBBB', verificationUri: 'https://github.com/login/device' })
+    mocks.StartDeviceFlow.mockResolvedValue({
+      userCode: 'AAAA-BBBB',
+      verificationUri: 'https://github.com/login/device',
+    })
     mocks.CancelDeviceFlow.mockResolvedValue(undefined)
     const { github } = withConnection()
     await flushPromises()
@@ -173,14 +181,23 @@ describe('useGitHubConnection', () => {
       if (event === 'connection:updated') handler = cb
       return () => {}
     })
-    mocks.StartDeviceFlow.mockResolvedValue({ userCode: 'AAAA-BBBB', verificationUri: 'https://github.com/login/device' })
+    mocks.StartDeviceFlow.mockResolvedValue({
+      userCode: 'AAAA-BBBB',
+      verificationUri: 'https://github.com/login/device',
+    })
     const { github } = withConnection()
     await flushPromises()
 
     await github.startDeviceFlow()
     expect(github.card.value).toBe('device')
 
-    mocks.Status.mockResolvedValue({ state: 'disconnected', message: 'github: device flow: authorization denied', login: '', name: '', avatarUrl: '' })
+    mocks.Status.mockResolvedValue({
+      state: 'disconnected',
+      message: 'github: device flow: authorization denied',
+      login: '',
+      name: '',
+      avatarUrl: '',
+    })
     handler?.({ data: 'github' })
     await flushPromises()
 
@@ -190,7 +207,13 @@ describe('useGitHubConnection', () => {
   })
 
   it('shows the stored-token failure message on the idle card', async () => {
-    mocks.Status.mockResolvedValue({ state: 'disconnected', message: 'Stored GitHub token is no longer valid.', login: '', name: '', avatarUrl: '' })
+    mocks.Status.mockResolvedValue({
+      state: 'disconnected',
+      message: 'Stored GitHub token is no longer valid.',
+      login: '',
+      name: '',
+      avatarUrl: '',
+    })
     const { github } = withConnection()
     await flushPromises()
 

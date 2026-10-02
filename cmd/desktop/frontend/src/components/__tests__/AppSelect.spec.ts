@@ -206,7 +206,9 @@ describe('AppSelect', () => {
 
   describe('searchable', () => {
     const mountSearchable = (props: Record<string, unknown> = {}) =>
-      mount(AppSelect, { props: { modelValue: 'git-branch', options: iconOptions, searchable: true, testid: 'icon', ...props } })
+      mount(AppSelect, {
+        props: { modelValue: 'git-branch', options: iconOptions, searchable: true, testid: 'icon', ...props },
+      })
 
     it('filters options by the search query', async () => {
       const wrapper = mountSearchable()
@@ -285,7 +287,9 @@ describe('AppSelect', () => {
       await input.setValue('she')
       expect(wrapper.emitted('update:modelValue')?.at(-1)).toEqual(['she'])
       const popover = document.querySelector('[data-testid="repo-popover"]')!
-      expect(Array.from(popover.querySelectorAll('[role="option"]')).map((o) => o.textContent?.trim())).toEqual(['Shell'])
+      expect(Array.from(popover.querySelectorAll('[role="option"]')).map((o) => o.textContent?.trim())).toEqual([
+        'Shell',
+      ])
       wrapper.unmount()
     })
 

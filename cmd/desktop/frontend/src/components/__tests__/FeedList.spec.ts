@@ -5,7 +5,21 @@ import type { ActionView } from '../../types/action'
 import type { InboxItem } from '../../types/feed'
 
 function item(id: number, title: string, unread = false): InboxItem {
-  return { id, profileId: 'triage', sourceKind: 'github', sourceScope: 'acme/app', externalId: `pr-${id}`, title, url: '', payload: { kind: 'PR', repo: 'acme/app', num: id, author: 'hay', body: 'Body' }, revision: 1, unread, lifecycle: 'active', firstSeenAt: 1, lastEventAt: Date.now() }
+  return {
+    id,
+    profileId: 'triage',
+    sourceKind: 'github',
+    sourceScope: 'acme/app',
+    externalId: `pr-${id}`,
+    title,
+    url: '',
+    payload: { kind: 'PR', repo: 'acme/app', num: id, author: 'hay', body: 'Body' },
+    revision: 1,
+    unread,
+    lifecycle: 'active',
+    firstSeenAt: 1,
+    lastEventAt: Date.now(),
+  }
 }
 
 // A year back so the tier is "Older" whatever the suite's wall clock says —
@@ -13,10 +27,55 @@ function item(id: number, title: string, unread = false): InboxItem {
 const day = 24 * 60 * 60 * 1000
 const longAgo = 400 * day
 const aged = (id: number, ageMs: number): InboxItem => ({ ...item(id, `Item ${id}`), lastEventAt: Date.now() - ageMs })
-const dividerLabels = (wrapper: VueWrapper) => wrapper.findAll('[data-testid="feed-date-label"]').map((label) => label.text())
+const dividerLabels = (wrapper: VueWrapper) =>
+  wrapper.findAll('[data-testid="feed-date-label"]').map((label) => label.text())
 
-function mountList(overrides: Partial<{ visibleItems: InboxItem[]; archivedItems: InboxItem[]; archivedCount: number; archivedExpanded: boolean; trash: boolean; trashFilter: 'all' | 'ignored'; selectedId: number | null; unreadOnly: boolean; unreadCount: number; search: string; authors: string[]; authorFilter: string; sort: 'newest' | 'oldest' | 'unread'; loadError: string | null; refreshing: boolean; selectionMode: boolean; selectedItemIds: number[]; selectionActions: ActionView[] }> = {}) {
-  return mount(FeedList, { props: { title: 'Feed', visibleItems: [item(1, 'Unread', true), item(2, 'Read')], archivedItems: [], archivedCount: 0, archivedExpanded: false, trash: false, trashFilter: 'all', selectedId: null, unreadOnly: false, unreadCount: 1, search: '', authors: [], authorFilter: '', sort: 'newest', loadError: null, refreshing: false, selectionMode: false, selectedItemIds: [], selectionActions: [], ...overrides } })
+function mountList(
+  overrides: Partial<{
+    visibleItems: InboxItem[]
+    archivedItems: InboxItem[]
+    archivedCount: number
+    archivedExpanded: boolean
+    trash: boolean
+    trashFilter: 'all' | 'ignored'
+    selectedId: number | null
+    unreadOnly: boolean
+    unreadCount: number
+    search: string
+    authors: string[]
+    authorFilter: string
+    sort: 'newest' | 'oldest' | 'unread'
+    loadError: string | null
+    refreshing: boolean
+    selectionMode: boolean
+    selectedItemIds: number[]
+    selectionActions: ActionView[]
+  }> = {},
+) {
+  return mount(FeedList, {
+    props: {
+      title: 'Feed',
+      visibleItems: [item(1, 'Unread', true), item(2, 'Read')],
+      archivedItems: [],
+      archivedCount: 0,
+      archivedExpanded: false,
+      trash: false,
+      trashFilter: 'all',
+      selectedId: null,
+      unreadOnly: false,
+      unreadCount: 1,
+      search: '',
+      authors: [],
+      authorFilter: '',
+      sort: 'newest',
+      loadError: null,
+      refreshing: false,
+      selectionMode: false,
+      selectedItemIds: [],
+      selectionActions: [],
+      ...overrides,
+    },
+  })
 }
 
 describe('FeedList', () => {
@@ -132,7 +191,15 @@ describe('FeedList', () => {
     const wrapper = mountList({
       selectionMode: true,
       selectedItemIds: [1, 2],
-      selectionActions: [{ id: 'copy-checkout', label: 'Copy checkout commands', type: 'clipboard', showInDetail: true, requiresSessionInput: false }],
+      selectionActions: [
+        {
+          id: 'copy-checkout',
+          label: 'Copy checkout commands',
+          type: 'clipboard',
+          showInDetail: true,
+          requiresSessionInput: false,
+        },
+      ],
     })
 
     await wrapper.get('[data-testid="selection-actions-toggle"]').trigger('click')
@@ -198,8 +265,12 @@ describe('FeedList', () => {
 
   it('shows distinct empty, unread-drained, search, and load-error states', () => {
     expect(mountList({ visibleItems: [] }).get('[data-testid="feed-empty"]').text()).toContain('No items yet')
-    expect(mountList({ visibleItems: [], unreadOnly: true }).get('[data-testid="feed-empty"]').text()).toContain("You're all caught up")
-    expect(mountList({ visibleItems: [], search: 'none' }).get('[data-testid="feed-empty"]').text()).toContain('No matches')
+    expect(mountList({ visibleItems: [], unreadOnly: true }).get('[data-testid="feed-empty"]').text()).toContain(
+      "You're all caught up",
+    )
+    expect(mountList({ visibleItems: [], search: 'none' }).get('[data-testid="feed-empty"]').text()).toContain(
+      'No matches',
+    )
     expect(mountList({ loadError: 'offline' }).get('[data-testid="feed-error"]').text()).toContain('offline')
   })
 

@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const service = vi.hoisted(() => ({ Launchers: vi.fn() }))
 
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/popupterminalservice', () => ({
-  Launchers: service.Launchers,
-}))
+vi.mock(
+  '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/popupterminalservice',
+  () => ({
+    Launchers: service.Launchers,
+  }),
+)
 
 beforeEach(() => {
   service.Launchers.mockReset()
@@ -45,12 +48,14 @@ describe('useLaunchers', () => {
 
     await useLaunchers().refresh()
 
-    expect(commands.value.filter((command) => command.group === 'Quick terminals')
-      .map((command) => [command.id, command.context]))
-      .toEqual([
-        ['launcher.lazygit', 'terminal-session'],
-        ['launcher.dotfiles', 'global'],
-      ])
+    expect(
+      commands.value
+        .filter((command) => command.group === 'Quick terminals')
+        .map((command) => [command.id, command.context]),
+    ).toEqual([
+      ['launcher.lazygit', 'terminal-session'],
+      ['launcher.dotfiles', 'global'],
+    ])
   })
 
   it('replaces the previous set rather than accumulating', async () => {
@@ -62,8 +67,9 @@ describe('useLaunchers', () => {
     service.Launchers.mockResolvedValue([{ id: 'btop', label: 'btop', icon: '' }])
     await useLaunchers().refresh()
 
-    expect(commands.value.filter((command) => command.group === 'Quick terminals').map((c) => c.id))
-      .toEqual(['launcher.btop'])
+    expect(commands.value.filter((command) => command.group === 'Quick terminals').map((c) => c.id)).toEqual([
+      'launcher.btop',
+    ])
   })
 
   // Losing every launcher shortcut over one failed read is worse than serving
@@ -79,8 +85,9 @@ describe('useLaunchers', () => {
     await useLaunchers().refresh()
 
     expect(warn).toHaveBeenCalled()
-    expect(commands.value.filter((command) => command.group === 'Quick terminals').map((c) => c.id))
-      .toEqual(['launcher.lazygit'])
+    expect(commands.value.filter((command) => command.group === 'Quick terminals').map((c) => c.id)).toEqual([
+      'launcher.lazygit',
+    ])
     warn.mockRestore()
   })
 

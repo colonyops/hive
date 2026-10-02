@@ -30,16 +30,19 @@ function topLine(term: Terminal): string {
 async function terminalWithWrappedHistory(): Promise<Terminal> {
   const term = new Terminal({ cols: 12, rows: 4, scrollback: 100 })
   term.open(document.createElement('div'))
-  await write(term, [
-    'before-00000',
-    'before-11111',
-    'AAAAAAAABBBBCCCCDDDDEEEE',
-    'after--00000',
-    'after--11111',
-    'after--22222',
-    'after--33333',
-    'after--44444',
-  ].join('\r\n'))
+  await write(
+    term,
+    [
+      'before-00000',
+      'before-11111',
+      'AAAAAAAABBBBCCCCDDDDEEEE',
+      'after--00000',
+      'after--11111',
+      'after--22222',
+      'after--33333',
+      'after--44444',
+    ].join('\r\n'),
+  )
   return term
 }
 
@@ -91,17 +94,20 @@ describe('resizeTerminalPreservingViewport', () => {
     const term = new Terminal({ cols: 10, rows: 4, scrollback: 10 })
     term.open(document.createElement('div'))
     const newerLongLine = 'L'.repeat(50)
-    await write(term, [
-      'before-000',
-      'before-111',
-      'TARGET',
-      'next-line',
-      newerLongLine,
-      'after-0000',
-      'after-1111',
-      'after-2222',
-      'after-3333',
-    ].join('\r\n'))
+    await write(
+      term,
+      [
+        'before-000',
+        'before-111',
+        'TARGET',
+        'next-line',
+        newerLongLine,
+        'after-0000',
+        'after-1111',
+        'after-2222',
+        'after-3333',
+      ].join('\r\n'),
+    )
     term.scrollToLine(findLine(term, 'TARGET'))
 
     resizeTerminalPreservingViewport(term, 5, 4)

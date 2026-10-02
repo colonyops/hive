@@ -17,19 +17,26 @@ const open = ref(false)
 const active = ref(0)
 
 const tags = computed(() => props.modelValue ?? [])
-const canonical = (value: string): string | undefined => props.knownTypes.find((type) => type.toLowerCase() === value.toLowerCase())
+const canonical = (value: string): string | undefined =>
+  props.knownTypes.find((type) => type.toLowerCase() === value.toLowerCase())
 const isKnown = (tag: string): boolean => !props.knownTypes.length || canonical(tag) !== undefined
 const hasUnknown = computed(() => props.knownTypes.length > 0 && tags.value.some((tag) => !isKnown(tag)))
 const suggestions = computed(() => {
   const selected = new Set(tags.value.map((tag) => tag.toLowerCase()))
   const query = draft.value.trim().toLowerCase()
-  return props.knownTypes.filter((type) => !selected.has(type.toLowerCase()) && (!query || type.toLowerCase().includes(query)))
+  return props.knownTypes.filter(
+    (type) => !selected.has(type.toLowerCase()) && (!query || type.toLowerCase().includes(query)),
+  )
 })
 function highlight(label: string): { pre: string; mid: string; post: string } {
   const query = draft.value.trim()
   const index = query ? label.toLowerCase().indexOf(query.toLowerCase()) : -1
   if (index < 0) return { pre: label, mid: '', post: '' }
-  return { pre: label.slice(0, index), mid: label.slice(index, index + query.length), post: label.slice(index + query.length) }
+  return {
+    pre: label.slice(0, index),
+    mid: label.slice(index, index + query.length),
+    post: label.slice(index + query.length),
+  }
 }
 
 function add(raw?: string): void {
@@ -38,18 +45,43 @@ function add(raw?: string): void {
   open.value = false
   if (!value) return
   const normalized = canonical(value) ?? value
-  if (!tags.value.some((tag) => tag.toLowerCase() === normalized.toLowerCase())) emit('update:modelValue', [...tags.value, normalized])
+  if (!tags.value.some((tag) => tag.toLowerCase() === normalized.toLowerCase()))
+    emit('update:modelValue', [...tags.value, normalized])
 }
-function remove(tag: string): void { emit('update:modelValue', tags.value.filter((item) => item !== tag)) }
-function onInput(): void { open.value = true; active.value = 0 }
+function remove(tag: string): void {
+  emit(
+    'update:modelValue',
+    tags.value.filter((item) => item !== tag),
+  )
+}
+function onInput(): void {
+  open.value = true
+  active.value = 0
+}
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'ArrowDown') { event.preventDefault(); open.value = true; active.value = Math.min(active.value + 1, suggestions.value.length - 1) }
-  else if (event.key === 'ArrowUp') { event.preventDefault(); active.value = Math.max(active.value - 1, 0) }
-  else if (event.key === 'Enter' || event.key === ',') { event.preventDefault(); const pick = open.value ? suggestions.value[active.value] : undefined; add(pick) }
-  else if (event.key === 'Escape' && open.value) { event.preventDefault(); event.stopPropagation(); open.value = false }
-  else if (event.key === 'Backspace' && !draft.value && tags.value.length) { remove(tags.value[tags.value.length - 1]) }
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    open.value = true
+    active.value = Math.min(active.value + 1, suggestions.value.length - 1)
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    active.value = Math.max(active.value - 1, 0)
+  } else if (event.key === 'Enter' || event.key === ',') {
+    event.preventDefault()
+    const pick = open.value ? suggestions.value[active.value] : undefined
+    add(pick)
+  } else if (event.key === 'Escape' && open.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    open.value = false
+  } else if (event.key === 'Backspace' && !draft.value && tags.value.length) {
+    remove(tags.value[tags.value.length - 1])
+  }
 }
-function onBlur(): void { open.value = false; add() }
+function onBlur(): void {
+  open.value = false
+  add()
+}
 
 // The drawer commits the pending draft when Save is pressed.
 defineExpose({ flush: () => add() })
@@ -69,11 +101,22 @@ defineExpose({ flush: () => add() })
           v-for="tag in tags"
           :key="tag"
           class="inline-flex items-center gap-1 rounded-md border py-0.5 pl-2 pr-1 font-mono text-[12px]"
-          :class="isKnown(tag) ? 'border-strong bg-chip text-text' : 'border-dashed border-accent/60 bg-accent-tint text-accent'"
+          :class="
+            isKnown(tag)
+              ? 'border-strong bg-chip text-text'
+              : 'border-dashed border-accent/60 bg-accent-tint text-accent'
+          "
           :title="isKnown(tag) ? undefined : 'Not a known feed-item type — it won\'t match any feed item'"
         >
           <span>{{ tag }}</span>
-          <button type="button" class="flex size-4 items-center justify-center rounded text-text-3 hover:text-severity-error" :aria-label="`Remove ${tag}`" @click.stop="remove(tag)"><IconX class="size-2.5" /></button>
+          <button
+            type="button"
+            class="flex size-4 items-center justify-center rounded text-text-3 hover:text-severity-error"
+            :aria-label="`Remove ${tag}`"
+            @click.stop="remove(tag)"
+          >
+            <IconX class="size-2.5" />
+          </button>
         </span>
         <input
           ref="input"
@@ -87,7 +130,7 @@ defineExpose({ flush: () => add() })
           @input="onInput"
           @keydown="onKeydown"
           @blur="onBlur"
-        >
+        />
       </div>
 
       <ul
@@ -105,7 +148,11 @@ defineExpose({ flush: () => add() })
             @mousedown.prevent="add(type)"
             @mousemove="active = index"
           >
-            <span class="font-mono text-[12.5px] text-text-2"><span>{{ highlight(type).pre }}</span><span class="text-accent">{{ highlight(type).mid }}</span><span>{{ highlight(type).post }}</span></span>
+            <span class="font-mono text-[12.5px] text-text-2"
+              ><span>{{ highlight(type).pre }}</span
+              ><span class="text-accent">{{ highlight(type).mid }}</span
+              ><span>{{ highlight(type).post }}</span></span
+            >
             <span class="flex-1" />
             <IconCornerDownLeft v-if="index === active" class="size-3 text-text-4" />
           </button>
@@ -113,6 +160,8 @@ defineExpose({ flush: () => add() })
       </ul>
     </div>
 
-    <p v-if="hasUnknown" class="mt-1.5 text-[11px] leading-relaxed text-accent">Highlighted types don't match any known feed item yet.</p>
+    <p v-if="hasUnknown" class="mt-1.5 text-[11px] leading-relaxed text-accent">
+      Highlighted types don't match any known feed item yet.
+    </p>
   </div>
 </template>

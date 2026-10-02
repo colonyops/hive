@@ -37,48 +37,55 @@ function lineText(state: StateBlock, line: number): string {
 // this rule admits only the exact, attribute-free tags plus GitHub's `open`
 // boolean attribute and lets markdown-it parse all inner content normally.
 function githubDetails(md: MarkdownIt) {
-  md.block.ruler.before('html_block', 'github_details', (state, startLine, endLine, silent) => {
-    const opening = lineText(state, startLine).match(/^<details(?:\s+(open))?\s*>$/i)
-    if (!opening) return false
+  md.block.ruler.before(
+    'html_block',
+    'github_details',
+    (state, startLine, endLine, silent) => {
+      const opening = lineText(state, startLine).match(/^<details(?:\s+(open))?\s*>$/i)
+      if (!opening) return false
 
-    let depth = 1
-    let closeLine = startLine + 1
-    for (; closeLine < endLine; closeLine++) {
-      const line = lineText(state, closeLine)
-      if (/^<details(?:\s+open)?\s*>$/i.test(line)) depth++
-      if (/^<\/details\s*>$/i.test(line) && --depth === 0) break
-    }
-    if (closeLine >= endLine) return false
-    if (silent) return true
+      let depth = 1
+      let closeLine = startLine + 1
+      for (; closeLine < endLine; closeLine++) {
+        const line = lineText(state, closeLine)
+        if (/^<details(?:\s+open)?\s*>$/i.test(line)) depth++
+        if (/^<\/details\s*>$/i.test(line) && --depth === 0) break
+      }
+      if (closeLine >= endLine) return false
+      if (silent) return true
 
-    const open = state.push('github_details_open', 'details', 1)
-    open.map = [startLine, closeLine + 1]
-    if (opening[1]) open.attrSet('open', '')
+      const open = state.push('github_details_open', 'details', 1)
+      open.map = [startLine, closeLine + 1]
+      if (opening[1]) open.attrSet('open', '')
 
-    let contentLine = startLine + 1
-    const summary = contentLine < closeLine
-      ? lineText(state, contentLine).match(/^<summary>(.*?)<\/summary\s*>$/i)
-      : null
-    if (summary) {
-      state.push('github_summary_open', 'summary', 1)
-      const inline = state.push('inline', '', 0)
-      inline.content = summary[1]
-      inline.children = []
-      state.push('github_summary_close', 'summary', -1)
-      contentLine++
-    }
+      let contentLine = startLine + 1
+      const summary =
+        contentLine < closeLine ? lineText(state, contentLine).match(/^<summary>(.*?)<\/summary\s*>$/i) : null
+      if (summary) {
+        state.push('github_summary_open', 'summary', 1)
+        const inline = state.push('inline', '', 0)
+        inline.content = summary[1]
+        inline.children = []
+        state.push('github_summary_close', 'summary', -1)
+        contentLine++
+      }
 
-    if (contentLine < closeLine) state.md.block.tokenize(state, contentLine, closeLine)
-    state.push('github_details_close', 'details', -1)
-    state.line = closeLine + 1
-    return true
-  }, { alt: ['paragraph', 'reference', 'blockquote', 'list'] })
+      if (contentLine < closeLine) state.md.block.tokenize(state, contentLine, closeLine)
+      state.push('github_details_close', 'details', -1)
+      state.line = closeLine + 1
+      return true
+    },
+    { alt: ['paragraph', 'reference', 'blockquote', 'list'] },
+  )
 }
 
 function removeHtmlComments(tokens: Token[]) {
   for (let index = tokens.length - 1; index >= 0; index--) {
     const token = tokens[index]
-    if ((token.type === 'html_block' || token.type === 'html_inline') && /^<!--[\s\S]*-->$/.test(token.content.trim())) {
+    if (
+      (token.type === 'html_block' || token.type === 'html_inline') &&
+      /^<!--[\s\S]*-->$/.test(token.content.trim())
+    ) {
       tokens.splice(index, 1)
       continue
     }
@@ -133,9 +140,7 @@ function githubExtensions(md: MarkdownIt) {
   })
 }
 
-const md = new MarkdownIt({ html: true, linkify: true, breaks: true })
-  .use(taskLists)
-  .use(githubExtensions)
+const md = new MarkdownIt({ html: true, linkify: true, breaks: true }).use(taskLists).use(githubExtensions)
 
 // Enabling HTML lets the parser distinguish comments from text. Keep the
 // output safe by escaping every remaining HTML token; whitelisted details
@@ -147,7 +152,8 @@ md.renderer.rules.html_inline = (tokens: Token[], index: number) => {
   const content = tokens[index].content
   // markdown-it-task-lists emits this fixed, disabled checkbox as an HTML
   // token. It contains no user-controlled values, so preserve it verbatim.
-  if (/^<input class="task-list-item-checkbox"(?: checked="")? disabled="" type="checkbox">$/.test(content)) return content
+  if (/^<input class="task-list-item-checkbox"(?: checked="")? disabled="" type="checkbox">$/.test(content))
+    return content
   return md.utils.escapeHtml(content)
 }
 

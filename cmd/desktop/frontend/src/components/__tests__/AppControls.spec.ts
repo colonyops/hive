@@ -5,7 +5,9 @@ import AppSwitch from '../AppSwitch.vue'
 
 describe('shared form controls', () => {
   it('updates checkbox v-model with its label and hint', async () => {
-    const wrapper = mount(AppCheckbox, { props: { modelValue: false, label: 'Visible', hint: 'Show this action', testid: 'visible' } })
+    const wrapper = mount(AppCheckbox, {
+      props: { modelValue: false, label: 'Visible', hint: 'Show this action', testid: 'visible' },
+    })
     await wrapper.get('[data-testid="visible"]').setValue(true)
     expect(wrapper.emitted('update:modelValue')).toEqual([[true]])
     expect(wrapper.text()).toContain('Show this action')

@@ -107,7 +107,9 @@ onMounted(() => {
     <ViewHeader>
       <template #title>
         <span class="text-[13px] font-semibold text-text">Activity</span>
-        <span class="font-mono text-[11px] text-text-4">{{ events.length }} {{ events.length === 1 ? 'event' : 'events' }}</span>
+        <span class="font-mono text-[11px] text-text-4"
+          >{{ events.length }} {{ events.length === 1 ? 'event' : 'events' }}</span
+        >
         <div class="flex-1" />
         <button
           type="button"
@@ -115,7 +117,9 @@ onMounted(() => {
           aria-label="Close"
           data-testid="activity-close"
           @click="emit('close')"
-        ><IconX class="size-4" /></button>
+        >
+          <IconX class="size-4" />
+        </button>
       </template>
     </ViewHeader>
 
@@ -127,9 +131,11 @@ onMounted(() => {
           :key="filter.id"
           type="button"
           class="flex h-[26px] cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition-colors"
-          :class="activeFilter === filter.id
-            ? 'bg-chip font-semibold text-text'
-            : 'text-text-2 hover:bg-row-hover hover:text-text'"
+          :class="
+            activeFilter === filter.id
+              ? 'bg-chip font-semibold text-text'
+              : 'text-text-2 hover:bg-row-hover hover:text-text'
+          "
           :data-testid="`activity-filter-${filter.id}`"
           :aria-pressed="activeFilter === filter.id"
           @click="activeFilter = filter.id"
@@ -139,7 +145,9 @@ onMounted(() => {
         </button>
       </div>
       <div class="flex-1" />
-      <label class="flex w-[230px] items-center gap-2 rounded-lg border border-strong bg-app px-2.5 py-1.5 focus-within:border-text-3">
+      <label
+        class="flex w-[230px] items-center gap-2 rounded-lg border border-strong bg-app px-2.5 py-1.5 focus-within:border-text-3"
+      >
         <IconSearch class="size-3.5 shrink-0 text-text-4" />
         <input
           v-model="search"
@@ -155,19 +163,38 @@ onMounted(() => {
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto bg-app" data-testid="activity-log">
       <div v-if="error" class="flex flex-col items-center gap-3 px-6 py-16 text-center font-mono text-xs text-text-4">
         <span data-testid="activity-error">Couldn't load activity — {{ error }}</span>
-        <button class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text" @click="load">Retry</button>
+        <button
+          class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text"
+          @click="load"
+        >
+          Retry
+        </button>
       </div>
-      <div v-else-if="!events.length && loading" class="px-6 py-16 text-center font-mono text-xs text-text-4">Loading activity…</div>
-      <div v-else-if="!groups.length" class="px-6 py-16 text-center font-mono text-xs text-text-4" data-testid="activity-empty">
-        {{ events.length ? 'No activity matches this filter.' : 'No activity yet. Refreshes, sessions, and actions will show up here.' }}
+      <div v-else-if="!events.length && loading" class="px-6 py-16 text-center font-mono text-xs text-text-4">
+        Loading activity…
+      </div>
+      <div
+        v-else-if="!groups.length"
+        class="px-6 py-16 text-center font-mono text-xs text-text-4"
+        data-testid="activity-empty"
+      >
+        {{
+          events.length
+            ? 'No activity matches this filter.'
+            : 'No activity yet. Refreshes, sessions, and actions will show up here.'
+        }}
       </div>
 
       <template v-for="group in ledger" v-else :key="group.key">
         <div class="sticky -top-px z-[1] flex items-center gap-3 border-b border-row bg-app px-5 py-2 pt-[9px]">
           <span class="font-mono text-[10.5px] uppercase tracking-[.14em] text-text-2">{{ group.label }}</span>
-          <span v-if="group.isRelative" class="font-mono text-[10.5px] uppercase tracking-[.06em] text-text-4">{{ group.dateLabel }}</span>
+          <span v-if="group.isRelative" class="font-mono text-[10.5px] uppercase tracking-[.06em] text-text-4">{{
+            group.dateLabel
+          }}</span>
           <div class="h-px flex-1 bg-row" />
-          <span class="font-mono text-[10.5px] text-text-4">{{ group.events.length }} {{ group.events.length === 1 ? 'event' : 'events' }}</span>
+          <span class="font-mono text-[10.5px] text-text-4"
+            >{{ group.events.length }} {{ group.events.length === 1 ? 'event' : 'events' }}</span
+          >
         </div>
         <div class="divide-y divide-row">
           <div
@@ -177,11 +204,18 @@ onMounted(() => {
             :class="style.rail || 'hover:bg-row-hover'"
             data-testid="activity-row"
           >
-            <span class="w-[72px] shrink-0 pt-px font-mono text-[11.5px] text-text-3">{{ timeLabel(event.createdAt) }}</span>
-            <span class="flex w-4 shrink-0 justify-center pt-[7px]"><span class="size-1.5 rounded-full" :class="style.dot" /></span>
+            <span class="w-[72px] shrink-0 pt-px font-mono text-[11.5px] text-text-3">{{
+              timeLabel(event.createdAt)
+            }}</span>
+            <span class="flex w-4 shrink-0 justify-center pt-[7px]"
+              ><span class="size-1.5 rounded-full" :class="style.dot"
+            /></span>
             <div class="min-w-0 flex-1 pl-3">
               <div class="text-[13px] leading-normal text-text">{{ event.title }}</div>
-              <div v-if="event.body || event.source" class="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[11.5px] text-text-3">
+              <div
+                v-if="event.body || event.source"
+                class="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[11.5px] text-text-3"
+              >
                 <span v-if="event.body">{{ event.body }}</span>
                 <span v-if="event.source" class="font-mono text-text-4">{{ event.source }}</span>
               </div>
@@ -193,7 +227,9 @@ onMounted(() => {
               :aria-label="`View item for ${event.title}`"
               :data-testid="`activity-open-item-${event.id}`"
               @click="emit('open-item', links.item)"
-            >View item</button>
+            >
+              View item
+            </button>
             <button
               v-if="links.url"
               type="button"
@@ -201,7 +237,9 @@ onMounted(() => {
               :aria-label="`Open link for ${event.title} in browser`"
               :data-testid="`activity-open-url-${event.id}`"
               @click="emit('open-url', links.url)"
-            ><IconExternalLink class="size-3.5" /></button>
+            >
+              <IconExternalLink class="size-3.5" />
+            </button>
             <button
               v-if="retryableSessionDraft(event)"
               type="button"
@@ -209,7 +247,9 @@ onMounted(() => {
               :aria-label="`Retry ${event.title}`"
               :data-testid="`activity-retry-${event.id}`"
               @click="retry(event.metadata ?? null)"
-            >Retry</button>
+            >
+              Retry
+            </button>
           </div>
         </div>
       </template>
@@ -221,7 +261,9 @@ onMounted(() => {
       class="flex h-[30px] shrink-0 items-center gap-3.5 border-t border-row bg-sidebar px-5 font-mono text-[11px] text-text-3"
       data-testid="activity-status"
     >
-      <span class="flex items-center gap-1.5"><span class="size-1.5 rounded-full bg-text-4" style="animation: hivePulse 2s infinite" />live</span>
+      <span class="flex items-center gap-1.5"
+        ><span class="size-1.5 rounded-full bg-text-4" style="animation: hivePulse 2s infinite" />live</span
+      >
       <span>{{ events.length }} {{ events.length === 1 ? 'event' : 'events' }} loaded</span>
     </div>
   </div>

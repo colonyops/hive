@@ -12,10 +12,18 @@ function row(slug: string): TerminalSessionRow {
 // triggers arrive.
 function heldClient() {
   const releases: (() => void)[] = []
-  const listWindows = vi.fn((slugs: string[]) => new Promise((resolve) => {
-    releases.push(() => resolve(Object.fromEntries(slugs.map((slug) =>
-      [slug, [{ windowId: `@${slug}`, name: slug, active: true, width: 80, height: 24 }]]))))
-  }))
+  const listWindows = vi.fn(
+    (slugs: string[]) =>
+      new Promise((resolve) => {
+        releases.push(() =>
+          resolve(
+            Object.fromEntries(
+              slugs.map((slug) => [slug, [{ windowId: `@${slug}`, name: slug, active: true, width: 80, height: 24 }]]),
+            ),
+          ),
+        )
+      }),
+  )
   return {
     listWindows,
     releaseAll: () => {
@@ -91,7 +99,9 @@ describe('useTerminalWindowListings', () => {
 
   // Otherwise the tree waits on a sweep that already failed and never paints.
   it('settles even when the sweep fails, keeping the last-known listings', async () => {
-    const listWindows = vi.fn(async () => { throw new Error('tmux is gone') })
+    const listWindows = vi.fn(async () => {
+      throw new Error('tmux is gone')
+    })
     const client = { listWindows } as unknown as TerminalClient
     const { listings, settled, refresh } = useTerminalWindowListings()
 

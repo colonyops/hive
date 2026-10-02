@@ -81,7 +81,12 @@ function percentile(values: number[], p: number): number {
  * Roll the raw samples up into what the panel shows. Pure and exported so the
  * arithmetic can be tested without a display attached.
  */
-export function summarize(frameSamples: Sample[], lagSamples: Sample[], now: number, displayPeriodMs: number): FrameStats {
+export function summarize(
+  frameSamples: Sample[],
+  lagSamples: Sample[],
+  now: number,
+  displayPeriodMs: number,
+): FrameStats {
   if (frameSamples.length === 0 && lagSamples.length === 0) return EMPTY
 
   const durations = frameSamples.map((sample) => sample.ms)

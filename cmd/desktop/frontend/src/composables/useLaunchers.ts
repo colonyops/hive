@@ -34,17 +34,19 @@ async function refresh(): Promise<void> {
     console.warn('Unable to read the configured launchers', error)
     return
   }
-  setLauncherCommands(launchers.value.map((launcher) => ({
-    id: launcherCommandID(launcher.id),
-    title: launcher.label || launcher.id,
-    group: 'Quick terminals',
-    keywords: ['launcher', 'terminal', 'popup', launcher.id],
-    icon: launcherIconComponent(launcher.icon),
-    // Unbound until the user says otherwise: a config file must not claim a
-    // chord the app never offered to give it.
-    defaultCombos: [],
-    context: launcher.requiresSession ? 'terminal-session' : 'global',
-  })))
+  setLauncherCommands(
+    launchers.value.map((launcher) => ({
+      id: launcherCommandID(launcher.id),
+      title: launcher.label || launcher.id,
+      group: 'Quick terminals',
+      keywords: ['launcher', 'terminal', 'popup', launcher.id],
+      icon: launcherIconComponent(launcher.icon),
+      // Unbound until the user says otherwise: a config file must not claim a
+      // chord the app never offered to give it.
+      defaultCombos: [],
+      context: launcher.requiresSession ? 'terminal-session' : 'global',
+    })),
+  )
 }
 
 export function resetLaunchersForTests(): void {

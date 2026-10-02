@@ -1,11 +1,27 @@
 import { ref } from 'vue'
-import { CreateSession, DismissFailedSession, FailedSessionDraft, SessionDraftFromActivity, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
+import {
+  CreateSession,
+  DismissFailedSession,
+  FailedSessionDraft,
+  SessionDraftFromActivity,
+  SessionLaunchOptions,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { NewSessionDraft } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
-import type { SessionCreateFailure, SessionDraft, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type {
+  SessionCreateFailure,
+  SessionDraft,
+  SessionLaunchOptions as SessionLaunchOptionsView,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import type { InboxItem } from '../types/feed'
 import { useToasts } from './useToasts'
 
-interface Draft { repository: string; workspace: string; name: string; prompt: string; agent: string }
+interface Draft {
+  repository: string
+  workspace: string
+  name: string
+  prompt: string
+  agent: string
+}
 export type SessionTarget = 'repository' | 'workspace'
 
 // An activity row's metadata as the bindings give it. Forwarded, never read.
@@ -46,7 +62,11 @@ async function fetchOptions(): Promise<SessionLaunchOptionsView> {
 
 function resolveOptions(): Promise<SessionLaunchOptionsView> {
   if (!cachedOptions) return fetchOptions()
-  void fetchOptions().then((opts) => { if (open.value) options.value = opts }).catch(() => {})
+  void fetchOptions()
+    .then((opts) => {
+      if (open.value) options.value = opts
+    })
+    .catch(() => {})
   return Promise.resolve(cachedOptions)
 }
 
@@ -94,7 +114,13 @@ export function useNewSession() {
     if (!cachedOptions) void fetchOptions().catch(() => {})
   }
 
-  function show(draft: Draft, opts: SessionLaunchOptionsView, items: number[], detail: SessionCreateFailure | null, target: SessionTarget = draft.workspace ? 'workspace' : 'repository'): void {
+  function show(
+    draft: Draft,
+    opts: SessionLaunchOptionsView,
+    items: number[],
+    detail: SessionCreateFailure | null,
+    target: SessionTarget = draft.workspace ? 'workspace' : 'repository',
+  ): void {
     options.value = opts
     initial.value = draft
     initialTarget.value = target
@@ -131,7 +157,19 @@ export function useNewSession() {
         show(restored(pending, opts), opts, draftItemIDs(pending), pending.failure)
         return
       }
-      show({ repository: preferred || opts.defaultRepository || '', workspace: '', name: '', prompt: '', agent: opts.defaultAgent }, opts, [], null, target)
+      show(
+        {
+          repository: preferred || opts.defaultRepository || '',
+          workspace: '',
+          name: '',
+          prompt: '',
+          agent: opts.defaultAgent,
+        },
+        opts,
+        [],
+        null,
+        target,
+      )
     } catch (e) {
       showToast(message(e, 'Could not load session options.'), { severity: 'error' })
     } finally {
@@ -221,8 +259,18 @@ export function useNewSession() {
       body: failureSummary(pending.failure),
       duration: 0,
       actions: [
-        { label: 'Retry', onClick: () => { void openFailure() } },
-        { label: 'Dismiss', onClick: () => { void dismissFailure() } },
+        {
+          label: 'Retry',
+          onClick: () => {
+            void openFailure()
+          },
+        },
+        {
+          label: 'Dismiss',
+          onClick: () => {
+            void dismissFailure()
+          },
+        },
       ],
     })
   }
@@ -235,7 +283,13 @@ export function useNewSession() {
     itemIDs.value = []
   }
 
-  async function submit(input: { repository?: string; workspace?: string; name: string; prompt: string; agent?: string }): Promise<void> {
+  async function submit(input: {
+    repository?: string
+    workspace?: string
+    name: string
+    prompt: string
+    agent?: string
+  }): Promise<void> {
     if (busy.value) return
     busy.value = true
     error.value = null
@@ -243,7 +297,14 @@ export function useNewSession() {
       // Creation (including any clone) runs as a background job. A failure
       // arrives later through sessions:create-failed, which is what hands the
       // form back; only validation errors reject here.
-      await CreateSession({ repository: input.repository ?? '', workspace: input.workspace ?? '', name: input.name, prompt: input.prompt, agent: input.agent ?? '', itemIds: [...itemIDs.value] })
+      await CreateSession({
+        repository: input.repository ?? '',
+        workspace: input.workspace ?? '',
+        name: input.name,
+        prompt: input.prompt,
+        agent: input.agent ?? '',
+        itemIds: [...itemIDs.value],
+      })
       showToast(`Creating session ${input.name}…`, { severity: 'info' })
       open.value = false
       options.value = null
@@ -257,7 +318,24 @@ export function useNewSession() {
   }
 
   return {
-    open, options, initial, initialTarget, busy, loading, error, failure, formKey,
-    prefetch, openBlank, openFromItem, openFromItems, openFailure, openFromActivity, dismissFailure, onCreateFailed, cancel, submit,
+    open,
+    options,
+    initial,
+    initialTarget,
+    busy,
+    loading,
+    error,
+    failure,
+    formKey,
+    prefetch,
+    openBlank,
+    openFromItem,
+    openFromItems,
+    openFailure,
+    openFromActivity,
+    dismissFailure,
+    onCreateFailed,
+    cancel,
+    submit,
   }
 }

@@ -31,7 +31,10 @@ describe('SourceMark', () => {
   // uploaded mark filled the badge edge to edge and a failed image snapped down
   // to the glyph's size.
   it('renders the image at the size the caller passes, like the glyph', async () => {
-    const wrapper = mount(SourceMark, { props: { icon: Glyph, image: 'data:image/png;base64,LOGO' }, attrs: { class: 'size-4' } })
+    const wrapper = mount(SourceMark, {
+      props: { icon: Glyph, image: 'data:image/png;base64,LOGO' },
+      attrs: { class: 'size-4' },
+    })
     expect(wrapper.find('img').classes()).toContain('size-4')
     expect(wrapper.find('img').classes()).not.toContain('size-full')
 

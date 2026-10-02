@@ -19,7 +19,8 @@ export function validateActionInputs(specs: InputSpec[], values: ActionInputValu
   for (const spec of specs) {
     const value = values[spec.name] ?? ''
     if (spec.required && !value.trim()) return `${inputLabel(spec)} is required.`
-    if (spec.type === 'select' && value && !(spec.options ?? []).includes(value)) return `${inputLabel(spec)} is not one of its options.`
+    if (spec.type === 'select' && value && !(spec.options ?? []).includes(value))
+      return `${inputLabel(spec)} is not one of its options.`
   }
   return null
 }

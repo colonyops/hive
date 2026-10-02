@@ -3,15 +3,18 @@ import { computed, useAttrs } from 'vue'
 
 defineOptions({ inheritAttrs: false })
 
-const props = withDefaults(defineProps<{
-  as?: 'article' | 'button'
-  interactive?: boolean
-  padded?: boolean
-}>(), {
-  as: 'article',
-  interactive: false,
-  padded: true,
-})
+const props = withDefaults(
+  defineProps<{
+    as?: 'article' | 'button'
+    interactive?: boolean
+    padded?: boolean
+  }>(),
+  {
+    as: 'article',
+    interactive: false,
+    padded: true,
+  },
+)
 
 const attrs = useAttrs()
 const classes = computed(() => [

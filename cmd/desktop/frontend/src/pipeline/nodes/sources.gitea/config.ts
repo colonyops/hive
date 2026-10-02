@@ -113,7 +113,8 @@ export function validate(config: Config): string[] {
   } else if (config.kind === 'notifications') {
     const set = SEARCH_ONLY.filter((field) => isSet(config[field]))
     if (set.length > 0) errors.push(`a notifications source takes no search filters (remove ${set.join(', ')})`)
-    if ((config.limit ?? 0) > MAX_NOTIFICATIONS_LIMIT) errors.push(`notifications limit caps at ${MAX_NOTIFICATIONS_LIMIT}`)
+    if ((config.limit ?? 0) > MAX_NOTIFICATIONS_LIMIT)
+      errors.push(`notifications limit caps at ${MAX_NOTIFICATIONS_LIMIT}`)
   } else {
     errors.push('kind must be "search" or "notifications"')
   }

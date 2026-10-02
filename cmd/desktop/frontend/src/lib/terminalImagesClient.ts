@@ -28,6 +28,11 @@ export async function prepareTerminalImages(input: File[] | string[], signal: Ab
   return (await response.json()).pastes
 }
 
-export async function pasteTerminalImage(slug: string, paneId: string, text: string, signal: AbortSignal): Promise<void> {
+export async function pasteTerminalImage(
+  slug: string,
+  paneId: string,
+  text: string,
+  signal: AbortSignal,
+): Promise<void> {
   await request('panes/paste', { slug, paneId, text }, signal)
 }

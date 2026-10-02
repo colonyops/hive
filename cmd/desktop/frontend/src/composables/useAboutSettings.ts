@@ -6,7 +6,10 @@ import {
   SetEnabled,
   Status,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/updaterservice'
-import type { BuildInfo, UpdateInfo } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type {
+  BuildInfo,
+  UpdateInfo,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const docsURL = 'https://hivedesktop.com/getting-started/'
 const updatesDocURL = 'https://hivedesktop.com/configuration/settings/#updates'

@@ -8,7 +8,10 @@ import {
   TaskDetail as ReadTaskDetail,
   TaskRepoKeys,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/tasksservice'
-import type { TaskDetail, TaskItem } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type {
+  TaskDetail,
+  TaskItem,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { appErrorKind, errorText } from '../lib/appError'
 import { DEFAULT_TASK_FILTER, type TaskFilterId } from '../lib/tasksPresentation'
 import { useWindowFocus } from './useWindowFocus'
@@ -122,7 +125,9 @@ async function tick(): Promise<void> {
 async function poll(generation: number): Promise<void> {
   await tick()
   if (generation !== pollGeneration) return
-  pollTimer = setTimeout(() => { void poll(generation) }, POLL_INTERVAL_MS)
+  pollTimer = setTimeout(() => {
+    void poll(generation)
+  }, POLL_INTERVAL_MS)
 }
 
 function startPolling(): void {
@@ -145,7 +150,9 @@ async function refresh(): Promise<void> {
 // A repo scope change is a server-side filter, not a client-side one (unlike
 // `filter`, which tasksPresentation applies over whatever is already
 // loaded) — so it needs its own round trip.
-watch(repoKey, () => { void refresh() })
+watch(repoKey, () => {
+  void refresh()
+})
 
 const { focused } = useWindowFocus()
 watch(focused, (isFocused) => {

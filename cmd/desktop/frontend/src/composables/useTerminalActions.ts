@@ -79,7 +79,11 @@ export function useTerminalActions() {
     return views.find((action) => action.id === id)
   }
 
-  async function run(action: ActionView, target: TerminalTarget, inputs: Record<string, string> = {}): Promise<boolean> {
+  async function run(
+    action: ActionView,
+    target: TerminalTarget,
+    inputs: Record<string, string> = {},
+  ): Promise<boolean> {
     try {
       if (action.type === 'clipboard') {
         const text = await RenderTerminalClipboardAction(action.id, target, inputs)

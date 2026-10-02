@@ -5,42 +5,46 @@ import { useFocusTrap } from '../composables/useFocusTrap'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import PanelResizeHandle from './PanelResizeHandle.vue'
 
-const props = withDefaults(defineProps<{
-  ariaLabel: string
-  testid?: string
-  backdropTestid?: string
-  /** Fixed width in px — opts out of the default resizable behavior. */
-  width?: number
-  /** Resize persistence key; defaults to `hive.panel.<testid>`. */
-  storageKey?: string
-  defaultSize?: number
-  min?: number
-  max?: number
-  closeOnEscape?: boolean
-  closeOnBackdrop?: boolean
-  trapFocus?: boolean
-  bodyClass?: string
-}>(), {
-  defaultSize: 440,
-  min: 360,
-  max: 760,
-  closeOnEscape: true,
-  closeOnBackdrop: true,
-  trapFocus: true,
-})
+const props = withDefaults(
+  defineProps<{
+    ariaLabel: string
+    testid?: string
+    backdropTestid?: string
+    /** Fixed width in px — opts out of the default resizable behavior. */
+    width?: number
+    /** Resize persistence key; defaults to `hive.panel.<testid>`. */
+    storageKey?: string
+    defaultSize?: number
+    min?: number
+    max?: number
+    closeOnEscape?: boolean
+    closeOnBackdrop?: boolean
+    trapFocus?: boolean
+    bodyClass?: string
+  }>(),
+  {
+    defaultSize: 440,
+    min: 360,
+    max: 760,
+    closeOnEscape: true,
+    closeOnBackdrop: true,
+    trapFocus: true,
+  },
+)
 
 const emit = defineEmits<{ close: [] }>()
 const sheetRef = ref<HTMLElement | null>(null)
 const bodyRef = ref<HTMLElement | null>(null)
-const resizePanel = props.width === undefined
-  ? useResizablePanel({
-      storageKey: props.storageKey ?? `hive.panel.${props.testid ?? 'drawer'}`,
-      defaultSize: props.defaultSize,
-      min: props.min,
-      max: props.max,
-      edge: 'left',
-    })
-  : null
+const resizePanel =
+  props.width === undefined
+    ? useResizablePanel({
+        storageKey: props.storageKey ?? `hive.panel.${props.testid ?? 'drawer'}`,
+        defaultSize: props.defaultSize,
+        min: props.min,
+        max: props.max,
+        edge: 'left',
+      })
+    : null
 const panelWidth = computed(() => resizePanel?.size.value ?? props.width)
 
 function close(): void {
@@ -69,7 +73,11 @@ defineExpose({ body: bodyRef })
 
 <template>
   <Teleport to="body">
-    <div class="fixed inset-0 z-40 bg-backdrop" :data-testid="backdropTestid ?? (testid ? `${testid}-backdrop` : undefined)" @click="onBackdropClick" />
+    <div
+      class="fixed inset-0 z-40 bg-backdrop"
+      :data-testid="backdropTestid ?? (testid ? `${testid}-backdrop` : undefined)"
+      @click="onBackdropClick"
+    />
     <aside
       ref="sheetRef"
       class="fixed inset-y-0 right-0 z-40 flex max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-[-30px_0_60px_-20px_rgba(0,0,0,.5)]"
@@ -80,7 +88,13 @@ defineExpose({ body: bodyRef })
       :data-testid="testid"
       @keydown="trapFocus"
     >
-      <PanelResizeHandle v-if="resizePanel" edge="left" :name="testid ?? 'drawer'" :start="startResize" :step="stepResize" />
+      <PanelResizeHandle
+        v-if="resizePanel"
+        edge="left"
+        :name="testid ?? 'drawer'"
+        :start="startResize"
+        :step="stepResize"
+      />
       <header v-if="$slots.header" class="shrink-0 border-b border-row bg-pane px-[18px] py-[15px]">
         <slot name="header" />
       </header>

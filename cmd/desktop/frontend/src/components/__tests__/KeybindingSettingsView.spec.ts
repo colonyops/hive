@@ -38,8 +38,9 @@ describe('KeybindingSettingsView', () => {
 
     expect((wrapper.get('[data-testid="keybinding-filter"]').element as HTMLInputElement).value).toBe('Next item')
     expect(requestedEditorFilter.value).toBeNull()
-    expect(wrapper.findAll('[data-testid="keybinding-row"]').map((r) => r.attributes('data-command-id')))
-      .toEqual(['feed.next'])
+    expect(wrapper.findAll('[data-testid="keybinding-row"]').map((r) => r.attributes('data-command-id'))).toEqual([
+      'feed.next',
+    ])
   })
 
   // A Keys-row run while already on Settings › Keyboard pushes the same route
@@ -54,8 +55,9 @@ describe('KeybindingSettingsView', () => {
 
     expect((wrapper.get('[data-testid="keybinding-filter"]').element as HTMLInputElement).value).toBe('Next item')
     expect(requestedEditorFilter.value).toBeNull()
-    expect(wrapper.findAll('[data-testid="keybinding-row"]').map((r) => r.attributes('data-command-id')))
-      .toEqual(['feed.next'])
+    expect(wrapper.findAll('[data-testid="keybinding-row"]').map((r) => r.attributes('data-command-id'))).toEqual([
+      'feed.next',
+    ])
   })
 
   it('filters the list by title, group, or key', async () => {

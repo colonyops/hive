@@ -49,7 +49,9 @@ onMounted(() => {
         class="shrink-0 cursor-pointer rounded-md border border-border px-2.5 py-1.5 text-[12px] font-medium text-text-2 hover:bg-chip hover:text-text"
         data-testid="system-quit"
         @click="quit"
-      >Quit Hive</button>
+      >
+        Quit Hive
+      </button>
     </div>
 
     <SettingsError v-if="error" :message="error" testid="system-error" />
@@ -67,7 +69,9 @@ onMounted(() => {
         <div class="text-[13.5px] font-semibold text-text">Report a problem</div>
         <div class="mt-0.5 text-[11.5px] text-text-3">Open a GitHub issue. Nothing from this machine is attached.</div>
       </div>
-      <IconChevronRight class="size-4 shrink-0 text-text-3 transition-transform group-hover:translate-x-0.5 group-hover:text-text-2" />
+      <IconChevronRight
+        class="size-4 shrink-0 text-text-3 transition-transform group-hover:translate-x-0.5 group-hover:text-text-2"
+      />
     </button>
 
     <button
@@ -81,9 +85,13 @@ onMounted(() => {
       </span>
       <div class="min-w-0 flex-1">
         <div class="text-[13.5px] font-semibold text-text">Save a diagnostic bundle</div>
-        <div class="mt-0.5 text-[11.5px] text-text-3">For when a maintainer asks for one. Send it privately, not on an issue.</div>
+        <div class="mt-0.5 text-[11.5px] text-text-3">
+          For when a maintainer asks for one. Send it privately, not on an issue.
+        </div>
       </div>
-      <IconChevronRight class="size-4 shrink-0 text-text-3 transition-transform group-hover:translate-x-0.5 group-hover:text-text-2" />
+      <IconChevronRight
+        class="size-4 shrink-0 text-text-3 transition-transform group-hover:translate-x-0.5 group-hover:text-text-2"
+      />
     </button>
 
     <SettingsSection

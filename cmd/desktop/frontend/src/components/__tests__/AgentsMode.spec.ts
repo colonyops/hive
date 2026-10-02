@@ -126,7 +126,9 @@ class FakeSocket {
   onclose: (() => void) | null = null
   onerror: (() => void) | null = null
   sent: Uint8Array[] = []
-  send(frame: Uint8Array): void { this.sent.push(frame) }
+  send(frame: Uint8Array): void {
+    this.sent.push(frame)
+  }
   close(): void {}
 }
 
@@ -159,39 +161,94 @@ class FakeResizeObserver {
 }
 
 const weeklySummary = {
-  id: 'weekly-summary', name: 'Weekly summary', cron: '0 9 * * 5',
-  prompt: 'Summarize the week.', disabled: false, onMissed: 'run' as const,
-  nextRunAt: null, lastRun: null,
+  id: 'weekly-summary',
+  name: 'Weekly summary',
+  cron: '0 9 * * 5',
+  prompt: 'Summarize the week.',
+  disabled: false,
+  onMissed: 'run' as const,
+  nextRunAt: null,
+  lastRun: null,
 }
 
 const workspaceRows = [
-  { dir: 'web-app', name: 'Web App', command: 'claude', danger: false, mcps: [], skills: [], schedules: [weeklySummary], problem: '', notice: '' },
-  { dir: 'api', name: 'API', command: 'claude', danger: false, mcps: [], skills: [], schedules: [], problem: '', notice: '' },
+  {
+    dir: 'web-app',
+    name: 'Web App',
+    command: 'claude',
+    danger: false,
+    mcps: [],
+    skills: [],
+    schedules: [weeklySummary],
+    problem: '',
+    notice: '',
+  },
+  {
+    dir: 'api',
+    name: 'API',
+    command: 'claude',
+    danger: false,
+    mcps: [],
+    skills: [],
+    schedules: [],
+    problem: '',
+    notice: '',
+  },
 ]
 
 // A chat row as the cross-workspace listing reports it: terminalId set means
 // the listing's tmux probe found the session alive.
 const chatRow = {
-  id: 7, workspace: 'web-app', name: 'New Chat', agent: 'claude', lastOpenedAt: 0,
-  terminalId: 'agentws-7', windowId: '', paneId: '', cols: 0, rows: 0, resumeAttempted: false, notice: '',
+  id: 7,
+  workspace: 'web-app',
+  name: 'New Chat',
+  agent: 'claude',
+  lastOpenedAt: 0,
+  terminalId: 'agentws-7',
+  windowId: '',
+  paneId: '',
+  cols: 0,
+  rows: 0,
+  resumeAttempted: false,
+  notice: '',
   scheduleId: '',
 }
 
 function fakeClient(editor = { command: 'zed', title: 'Zed' }) {
   return {
     workspaces: vi.fn().mockResolvedValue({
-      root: '/tmp/agents', rootProblem: '', available: true, error: '',
-      workspaces: workspaceRows, agents: ['claude'], presets: [], editor,
+      root: '/tmp/agents',
+      rootProblem: '',
+      available: true,
+      error: '',
+      workspaces: workspaceRows,
+      agents: ['claude'],
+      presets: [],
+      editor,
     }),
-    openWorkspace: vi.fn((dir: string) => Promise.resolve({
-      workspace: workspaceRows.find((ws) => ws.dir === dir) ?? workspaceRows[0],
-      sessions: [], missingMcps: [], missingPackages: [] as MissingSkillPackage[],
-    })),
+    openWorkspace: vi.fn((dir: string) =>
+      Promise.resolve({
+        workspace: workspaceRows.find((ws) => ws.dir === dir) ?? workspaceRows[0],
+        sessions: [],
+        missingMcps: [],
+        missingPackages: [] as MissingSkillPackage[],
+      }),
+    ),
     allSessions: vi.fn().mockResolvedValue([]),
     activity: vi.fn().mockResolvedValue([]),
     startSession: vi.fn().mockResolvedValue({
-      id: 7, workspace: 'web-app', name: 'New Chat', agent: 'claude', lastOpenedAt: 0,
-      terminalId: 't1', windowId: 'w1', paneId: '%1', cols: 80, rows: 24, resumeAttempted: false, notice: '',
+      id: 7,
+      workspace: 'web-app',
+      name: 'New Chat',
+      agent: 'claude',
+      lastOpenedAt: 0,
+      terminalId: 't1',
+      windowId: 'w1',
+      paneId: '%1',
+      cols: 80,
+      rows: 24,
+      resumeAttempted: false,
+      notice: '',
     }),
     resumeSession: vi.fn().mockResolvedValue({ ...chatRow, windowId: 'w1', cols: 80, rows: 24, resumeAttempted: true }),
     closeSession: vi.fn().mockResolvedValue({ closed: true }),
@@ -203,7 +260,15 @@ function fakeClient(editor = { command: 'zed', title: 'Zed' }) {
     skillPackages: vi.fn().mockResolvedValue({ packages: [], skills: [], problem: '' }),
     revealSkillPackages: vi.fn().mockResolvedValue(undefined),
     revealSharedSkills: vi.fn().mockResolvedValue(undefined),
-    canvas: vi.fn().mockResolvedValue({ workspace: 'web-app', name: 'plan', title: '', session: 7, createdAt: 0, updatedAt: 0, blocks: [] }),
+    canvas: vi.fn().mockResolvedValue({
+      workspace: 'web-app',
+      name: 'plan',
+      title: '',
+      session: 7,
+      createdAt: 0,
+      updatedAt: 0,
+      blocks: [],
+    }),
     canvases: vi.fn().mockResolvedValue([]),
     scheduleRuns: vi.fn().mockResolvedValue([]),
     runSchedule: vi.fn(),
@@ -261,7 +326,11 @@ describe('AgentsMode', () => {
     globalThis.ResizeObserver = FakeResizeObserver as unknown as typeof ResizeObserver
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
     mocks.Endpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://127.0.0.1:1/s', token: 'test' })
-    mocks.getAgentsEndpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://127.0.0.1:1/s', token: 'test' })
+    mocks.getAgentsEndpoint.mockResolvedValue({
+      httpBaseURL: 'http://127.0.0.1:1',
+      wsURL: 'ws://127.0.0.1:1/s',
+      token: 'test',
+    })
     mocks.createAgentWorkspacesClient.mockReturnValue(fakeClient())
     mocks.loadTerminalFaces.mockResolvedValue(undefined)
   })
@@ -273,15 +342,17 @@ describe('AgentsMode', () => {
   // it, and keep a genuine typo as its own separate report.
   it('separates an enabled name that is a skill from one that matches nothing', async () => {
     const client = fakeClient()
-    client.openWorkspace = vi.fn((_dir: string) => Promise.resolve({
-      workspace: workspaceRows[0],
-      sessions: [],
-      missingMcps: [],
-      missingPackages: [
-        { name: 'hive-flows', skill: true, selectedBy: ['hive'] },
-        { name: 'ghost', skill: false, selectedBy: [] },
-      ] as MissingSkillPackage[],
-    }))
+    client.openWorkspace = vi.fn((_dir: string) =>
+      Promise.resolve({
+        workspace: workspaceRows[0],
+        sessions: [],
+        missingMcps: [],
+        missingPackages: [
+          { name: 'hive-flows', skill: true, selectedBy: ['hive'] },
+          { name: 'ghost', skill: false, selectedBy: [] },
+        ] as MissingSkillPackage[],
+      }),
+    )
     mocks.createAgentWorkspacesClient.mockReturnValue(client)
     const { wrapper } = await mountAgentsMode('/workspaces/web-app')
 
@@ -348,12 +419,16 @@ describe('AgentsMode', () => {
   })
 
   it('reports the unavailable reason and offers a retry when ptyterm is unavailable', async () => {
-    mocks.Available.mockResolvedValue({ available: false, reason: 'agent workspaces need macOS or Linux and a desktop build.' })
+    mocks.Available.mockResolvedValue({
+      available: false,
+      reason: 'agent workspaces need macOS or Linux and a desktop build.',
+    })
     const { wrapper } = await mountAgentsMode()
 
     expect(wrapper.find('[data-testid="agents-unavailable"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="agents-unavailable-reason"]').text())
-      .toBe('agent workspaces need macOS or Linux and a desktop build.')
+    expect(wrapper.get('[data-testid="agents-unavailable-reason"]').text()).toBe(
+      'agent workspaces need macOS or Linux and a desktop build.',
+    )
     expect(wrapper.find('[data-testid="agents-workspace-sidebar"]').exists()).toBe(false)
   })
 
@@ -368,7 +443,7 @@ describe('AgentsMode', () => {
     expect(tooltipFor(wrapper, 'agents-pane-statusbar-open-editor')).toBe('Open in Zed')
   })
 
-  it('routes the bar actions at the open chat\'s workspace directory', async () => {
+  it("routes the bar actions at the open chat's workspace directory", async () => {
     const { wrapper, client } = await mountWithOpenChat()
 
     await wrapper.get('[data-testid="agents-pane-statusbar-open-editor"]').trigger('click')
@@ -380,7 +455,7 @@ describe('AgentsMode', () => {
 
   // The open chat need not belong to the focused workspace: moving the focus
   // filter must not repoint the bar (or its actions) at the newly focused one.
-  it('keeps naming the open chat\'s workspace when the focus filter moves', async () => {
+  it("keeps naming the open chat's workspace when the focus filter moves", async () => {
     const { wrapper, router } = await mountWithOpenChat()
 
     await router.push({ name: 'agents', params: { workspace: 'api' } })
@@ -491,7 +566,12 @@ describe('AgentsMode', () => {
     const client = fakeClient()
     const other = { ...chatRow, id: 9, name: 'Second', terminalId: 'agentws-9' }
     let resolveResume: ((session: typeof other) => void) | undefined
-    client.resumeSession.mockImplementation(() => new Promise((resolve) => { resolveResume = resolve }))
+    client.resumeSession.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveResume = resolve
+        }),
+    )
     const { wrapper } = await mountWithOpenChat(client)
 
     const field = document.createElement('input')
@@ -587,7 +667,9 @@ describe('AgentsMode', () => {
     const { client } = await mountWithOpenChat()
     const socket = openedSocket(client)
 
-    socket.onmessage?.({ data: windowFrame({ kind: 'active-changed', windowId: 'w1', activePane: '%5', width: 80, height: 24 }) })
+    socket.onmessage?.({
+      data: windowFrame({ kind: 'active-changed', windowId: 'w1', activePane: '%5', width: 80, height: 24 }),
+    })
     typeInPane('x')
 
     expect(Array.from(socket.sent.at(-1)!)).toEqual(inputFrame('%5', 'x'))
@@ -604,7 +686,9 @@ describe('AgentsMode', () => {
     typeInPane('x')
     expect(socket.sent).toEqual([])
 
-    socket.onmessage?.({ data: windowFrame({ kind: 'layout-changed', windowId: 'w1', activePane: '%3', width: 80, height: 24 }) })
+    socket.onmessage?.({
+      data: windowFrame({ kind: 'layout-changed', windowId: 'w1', activePane: '%3', width: 80, height: 24 }),
+    })
     typeInPane('x')
     expect(socket.sent.map((frame) => Array.from(frame))).toEqual([inputFrame('%3', 'x')])
   })
@@ -615,8 +699,18 @@ describe('AgentsMode', () => {
   it('still resumes the session on a retry click after a failed attach left it idle', async () => {
     const client = fakeClient()
     client.startSession.mockResolvedValue({
-      id: 7, workspace: 'web-app', name: 'New Chat', agent: 'claude', lastOpenedAt: 0,
-      terminalId: '', windowId: '', paneId: '', cols: 0, rows: 0, resumeAttempted: false, notice: 'boom',
+      id: 7,
+      workspace: 'web-app',
+      name: 'New Chat',
+      agent: 'claude',
+      lastOpenedAt: 0,
+      terminalId: '',
+      windowId: '',
+      paneId: '',
+      cols: 0,
+      rows: 0,
+      resumeAttempted: false,
+      notice: 'boom',
     })
     mocks.createAgentWorkspacesClient.mockReturnValue(client)
     const { wrapper } = await mountAgentsMode('/workspaces/web-app')
@@ -657,8 +751,17 @@ describe('AgentsMode', () => {
   it('reports the launch notice when a session exits before it can be attached', async () => {
     const client = fakeClient()
     client.startSession.mockResolvedValue({
-      id: 7, workspace: 'web-app', name: 'New Chat', agent: 'claude', lastOpenedAt: 0,
-      terminalId: '', windowId: '', paneId: '', cols: 0, rows: 0, resumeAttempted: true,
+      id: 7,
+      workspace: 'web-app',
+      name: 'New Chat',
+      agent: 'claude',
+      lastOpenedAt: 0,
+      terminalId: '',
+      windowId: '',
+      paneId: '',
+      cols: 0,
+      rows: 0,
+      resumeAttempted: true,
       notice: 'the session exited immediately; check that the agent CLI is installed and on PATH',
     })
     mocks.createAgentWorkspacesClient.mockReturnValue(client)
@@ -666,8 +769,9 @@ describe('AgentsMode', () => {
 
     await startChat(wrapper)
 
-    expect(wrapper.get('[data-testid="agents-pane-error"]').text())
-      .toBe('the session exited immediately; check that the agent CLI is installed and on PATH')
+    expect(wrapper.get('[data-testid="agents-pane-error"]').text()).toBe(
+      'the session exited immediately; check that the agent CLI is installed and on PATH',
+    )
   })
 
   // The idle pane is a zero state, not a form: it explains itself and hands

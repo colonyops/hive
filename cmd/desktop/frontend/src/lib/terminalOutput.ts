@@ -153,7 +153,10 @@ function matchingSuffixLength(data: Uint8Array, sequence: Uint8Array): number {
   return 0
 }
 
-function concatenate(chunks: Uint8Array[], size = chunks.reduce((total, chunk) => total + chunk.length, 0)): Uint8Array {
+function concatenate(
+  chunks: Uint8Array[],
+  size = chunks.reduce((total, chunk) => total + chunk.length, 0),
+): Uint8Array {
   const result = new Uint8Array(size)
   let offset = 0
   for (const chunk of chunks) {

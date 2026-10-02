@@ -3,7 +3,23 @@ import { byType, instantiate, palette } from '../registry'
 
 describe('byType', () => {
   it('discovers exactly the node types with app modules (index.ts)', () => {
-    expect(Object.keys(byType).sort()).toEqual(['action', 'feed', 'function', 'github-filter', 'notify', 'sources.exec', 'sources.gitea', 'sources.github', 'sources.grafana_alerts', 'sources.grafana_irm_alerts', 'sources.grafana_metrics', 'sources.posthog_alerts', 'sources.posthog_errors', 'sources.rss', 'sources.webhook'])
+    expect(Object.keys(byType).sort()).toEqual([
+      'action',
+      'feed',
+      'function',
+      'github-filter',
+      'notify',
+      'sources.exec',
+      'sources.gitea',
+      'sources.github',
+      'sources.grafana_alerts',
+      'sources.grafana_irm_alerts',
+      'sources.grafana_metrics',
+      'sources.posthog_alerts',
+      'sources.posthog_errors',
+      'sources.rss',
+      'sources.webhook',
+    ])
   })
 
   it('every entry carries a `type` matching its registry key and has a glyph/editor/help/defaults', () => {
@@ -28,7 +44,18 @@ describe('palette', () => {
     const grouped = [...palette.Sources, ...palette.Process, ...palette.Destinations]
     expect(grouped.map((def) => def.type).sort()).toEqual(Object.keys(byType).sort())
 
-    expect(palette.Sources.map((d) => d.type).sort()).toEqual(['sources.exec', 'sources.gitea', 'sources.github', 'sources.grafana_alerts', 'sources.grafana_irm_alerts', 'sources.grafana_metrics', 'sources.posthog_alerts', 'sources.posthog_errors', 'sources.rss', 'sources.webhook'])
+    expect(palette.Sources.map((d) => d.type).sort()).toEqual([
+      'sources.exec',
+      'sources.gitea',
+      'sources.github',
+      'sources.grafana_alerts',
+      'sources.grafana_irm_alerts',
+      'sources.grafana_metrics',
+      'sources.posthog_alerts',
+      'sources.posthog_errors',
+      'sources.rss',
+      'sources.webhook',
+    ])
     expect(palette.Process.map((d) => d.type).sort()).toEqual(['function', 'github-filter'])
     expect(palette.Destinations.map((d) => d.type).sort()).toEqual(['action', 'feed', 'notify'])
   })

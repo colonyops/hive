@@ -29,16 +29,18 @@ function setSound(sound: boolean) {
 }
 
 function setCooldown(cooldownSeconds: number) {
-  emit('update:config', { ...props.config, cooldownSeconds: cooldownSeconds === defaultCooldownSeconds ? undefined : cooldownSeconds })
+  emit('update:config', {
+    ...props.config,
+    cooldownSeconds: cooldownSeconds === defaultCooldownSeconds ? undefined : cooldownSeconds,
+  })
 }
 </script>
 
 <template>
   <div class="flex flex-col gap-4 text-[13px] leading-relaxed" data-testid="notify-node-editor">
     <p class="text-text-2">
-      Messages arriving here raise a system notification. Clicking it focuses
-      Hive on the item that triggered it. The app's notification settings
-      always win — a flow cannot notify while notifications are off.
+      Messages arriving here raise a system notification. Clicking it focuses Hive on the item that triggered it. The
+      app's notification settings always win — a flow cannot notify while notifications are off.
     </p>
 
     <TextField

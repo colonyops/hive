@@ -48,21 +48,48 @@ import { useTasks } from './composables/useTasks'
 import { sessionRepository } from './composables/useTerminalSessions'
 import { resetTerminalFontSize, stepTerminalFontSize } from './composables/useTerminalFont'
 import {
-  closeTerminalPane, closeTerminalWindow, focusTerminalFilter, focusTerminalPane, focusTerminalPaneDirection, focusTerminalTree,
-  newTerminalWindow, selectTerminalWindow, splitTerminalPane, stepTerminalWindow, zoomTerminalPane,
+  closeTerminalPane,
+  closeTerminalWindow,
+  focusTerminalFilter,
+  focusTerminalPane,
+  focusTerminalPaneDirection,
+  focusTerminalTree,
+  newTerminalWindow,
+  selectTerminalWindow,
+  splitTerminalPane,
+  stepTerminalWindow,
+  zoomTerminalPane,
 } from './lib/terminalTree'
 import { focusAgentsFilter, focusAgentsList, focusAgentsPane } from './lib/agentsTree'
 import { useLaunchers } from './composables/useLaunchers'
 import { useItemSessions } from './composables/useItemSessions'
 import { useWailsEvent } from './composables/useWailsEvent'
 import { comboFromEvent, SEQUENCE_TIMEOUT_MS, terminalEscapeCombo, useKeybindings } from './composables/useKeybindings'
-import { commandById, commandPiercesPane, launcherActionID, launcherCommandID, terminalWindowPosition, type CommandContext } from './keybindings/catalog'
+import {
+  commandById,
+  commandPiercesPane,
+  launcherActionID,
+  launcherCommandID,
+  terminalWindowPosition,
+  type CommandContext,
+} from './keybindings/catalog'
 import { useAppPaletteRows } from './composables/useAppPaletteRows'
 import { useFlowsSession } from './pipeline/composables/useFlowsSession'
 import { isEditableTarget, isTerminalTarget } from './lib/isEditableTarget'
-import { InstallUpdate, Status as UpdaterStatus } from '../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/updaterservice'
-import { Feed, FindItems } from '../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
-import type { MenuBarNavigation, NotificationActivation, NotificationToast, UpdateInfo } from '../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import {
+  InstallUpdate,
+  Status as UpdaterStatus,
+} from '../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/updaterservice'
+import {
+  Feed,
+  FindItems,
+} from '../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
+import type {
+  MenuBarNavigation,
+  NotificationActivation,
+  NotificationToast,
+  UpdateInfo,
+} from '../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import {
   isApplicationSettingsSection,
   isProfileSettingsSection,
@@ -95,48 +122,162 @@ const AgentsMode = defineAsyncComponent(() => import('./components/AgentsMode.vu
 const PopupTerminal = defineAsyncComponent(() => import('./components/PopupTerminal.vue'))
 
 const {
-  status: githubStatus, connected: githubConnected, deviceFlow, card: connectCard, error: connectError, busy: connectBusy,
-  startDeviceFlow, useTokenInstead, backToStart, submitToken,
+  status: githubStatus,
+  connected: githubConnected,
+  deviceFlow,
+  card: connectCard,
+  error: connectError,
+  busy: connectBusy,
+  startDeviceFlow,
+  useTokenInstead,
+  backToStart,
+  submitToken,
 } = useGitHubConnection()
 
 const {
-  permission: notificationPermission, requestingPermission, error: notificationError, requestPermission,
+  permission: notificationPermission,
+  requestingPermission,
+  error: notificationError,
+  requestPermission,
 } = useNotificationSettings()
 
 const {
-  profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, sourceIcons, sourceImages, visibleItems, unreadCount, search, authors, authorFilter, loadError,
-  itemSelectionActive, selectedItemIDs, selectedItems, selectionActions, enterItemSelection, toggleItemSelection, cancelItemSelection, copySelectedItemContents, invokeSelectionAction,
-  selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, actionInputsAction, actionInputsBusy, actionInputsError, actionRerunConfirmation, actionRerunBusy, actionRerunError, unreadOnly, feedSort, setFeedSort, title, toasts, showToast, dismissToast, clearToasts,
-  creatingProfile, createProfileError, renamingProfile, renameProfileError, togglingProfileId, toggleProfileError, deletingProfile, settingProfileImage, profileImageError, loadProfiles, createProfile, seedStarterFlow, renameProfile, setProfileEnabled, deleteProfile, setProfileImage, clearProfileImage,
-  visibleArchivedItems, archivedExpanded, archivedCount, toggleArchivedSection, trashFilter, setTrashFilter,
-  reorderFeeds, reorderProfiles, selectProfile, defaultSelection, selectSidebar, selectItem, openActionRun, selectNext, selectPrev,
-  toggleUnread, markItemUnread, markingAllRead, markAllRead, unreadInScope, toggleArchive, toggleIgnored, loadEvents, refresh, refreshSources, refreshingSources, invokeAction, cancelActionRerun, confirmActionRerun, cancelSessionLaunch, submitSessionLaunch, cancelActionInputs, submitActionInputs, notWired, openUrl, openItemInBrowser, openSelectedInBrowser, copyItemLink, copyItemContents, runItemAction, hideWindow,
+  profiles,
+  profilesLoaded,
+  profilesError,
+  activeProfile,
+  activeProfileId,
+  selection,
+  items,
+  sourceIcons,
+  sourceImages,
+  visibleItems,
+  unreadCount,
+  search,
+  authors,
+  authorFilter,
+  loadError,
+  itemSelectionActive,
+  selectedItemIDs,
+  selectedItems,
+  selectionActions,
+  enterItemSelection,
+  toggleItemSelection,
+  cancelItemSelection,
+  copySelectedItemContents,
+  invokeSelectionAction,
+  selectedId,
+  selectedItem,
+  actions,
+  pendingAction,
+  actionRuns,
+  sessionLaunchAction,
+  sessionLaunchOptions,
+  sessionLaunchBusy,
+  sessionLaunchError,
+  actionInputsAction,
+  actionInputsBusy,
+  actionInputsError,
+  actionRerunConfirmation,
+  actionRerunBusy,
+  actionRerunError,
+  unreadOnly,
+  feedSort,
+  setFeedSort,
+  title,
+  toasts,
+  showToast,
+  dismissToast,
+  clearToasts,
+  creatingProfile,
+  createProfileError,
+  renamingProfile,
+  renameProfileError,
+  togglingProfileId,
+  toggleProfileError,
+  deletingProfile,
+  settingProfileImage,
+  profileImageError,
+  loadProfiles,
+  createProfile,
+  seedStarterFlow,
+  renameProfile,
+  setProfileEnabled,
+  deleteProfile,
+  setProfileImage,
+  clearProfileImage,
+  visibleArchivedItems,
+  archivedExpanded,
+  archivedCount,
+  toggleArchivedSection,
+  trashFilter,
+  setTrashFilter,
+  reorderFeeds,
+  reorderProfiles,
+  selectProfile,
+  defaultSelection,
+  selectSidebar,
+  selectItem,
+  openActionRun,
+  selectNext,
+  selectPrev,
+  toggleUnread,
+  markItemUnread,
+  markingAllRead,
+  markAllRead,
+  unreadInScope,
+  toggleArchive,
+  toggleIgnored,
+  loadEvents,
+  refresh,
+  refreshSources,
+  refreshingSources,
+  invokeAction,
+  cancelActionRerun,
+  confirmActionRerun,
+  cancelSessionLaunch,
+  submitSessionLaunch,
+  cancelActionInputs,
+  submitActionInputs,
+  notWired,
+  openUrl,
+  openItemInBrowser,
+  openSelectedInBrowser,
+  copyItemLink,
+  copyItemContents,
+  runItemAction,
+  hideWindow,
 } = useFeedState()
 
 // The feed-item kinds currently in the system — what the actions editor
 // autocompletes and validates "applies to" against. kind() never returns
 // empty (untyped items report DEFAULT_ITEM_KIND), so untyped items are
 // offered as a target like any other kind.
-const knownFeedTypes = computed(() => [...new Set(items.value.map((item) => kind(item)))].sort((a, b) => a.localeCompare(b)))
-
+const knownFeedTypes = computed(() =>
+  [...new Set(items.value.map((item) => kind(item)))].sort((a, b) => a.localeCompare(b)),
+)
 
 const selectedEvents = ref([] as Awaited<ReturnType<typeof loadEvents>>)
 let selectedEventsSeq = 0
-watch(selectedItem, async (item) => {
-  const seq = ++selectedEventsSeq
-  selectedEvents.value = []
-  if (!item) return
-  try {
-    const events = await loadEvents(item.id)
-    // A slower request for the previously selected item must never replace the
-    // timeline for the item currently visible in the detail pane.
-    if (seq === selectedEventsSeq && selectedItem.value?.id === item.id) selectedEvents.value = events
-  } catch (error) {
-    if (seq === selectedEventsSeq && selectedItem.value?.id === item.id) {
-      console.warn('Unable to load inbox item events', error)
+watch(
+  selectedItem,
+  async (item) => {
+    const seq = ++selectedEventsSeq
+    selectedEvents.value = []
+    if (!item) return
+    try {
+      const events = await loadEvents(item.id)
+      // A slower request for the previously selected item must never replace the
+      // timeline for the item currently visible in the detail pane.
+      if (seq === selectedEventsSeq && selectedItem.value?.id === item.id) selectedEvents.value = events
+    } catch (error) {
+      if (seq === selectedEventsSeq && selectedItem.value?.id === item.id) {
+        console.warn('Unable to load inbox item events', error)
+      }
     }
-  }
-}, { immediate: true })
+  },
+  { immediate: true },
+)
 
 // ── Flows session (hc-8ft4yhm6) ──────────────────────────────────────────────
 // A profile IS a flow, so the flows canvas is a per-profile sub-view: it swaps
@@ -197,52 +338,61 @@ watch(activeProfileId, (id) => {
 })
 
 let feedRouteSync = 0
-watch([profilesLoaded, () => route.fullPath], async ([loaded]) => {
-  if (!loaded) return
-  const sync = ++feedRouteSync
-  const rawProfileId = route.params.profileId
-  if (typeof rawProfileId !== 'string') return
-  if (!profiles.value.some((profile) => profile.id === rawProfileId)) {
-    if (activeProfileId.value) void router.replace({ name: 'feed', params: { profileId: activeProfileId.value } })
-    return
-  }
-  if (rawProfileId !== activeProfileId.value) await selectProfile(rawProfileId)
-  if (sync !== feedRouteSync || route.name !== 'feed') return
-
-  const rawFeedId = route.query.feed
-  const feedId = typeof rawFeedId === 'string' && activeProfile.value?.feeds.some((feed) => feed.id === rawFeedId)
-    ? rawFeedId
-    : null
-  const wantsUnread = route.query.unread === '1'
-  if (feedId) await selectSidebar({ type: 'feed', feedId })
-  else if (route.query.view === 'trash') await selectSidebar({ type: 'trash' })
-  // A bare feed route means "the profile default": last-selected feed,
-  // else the first feed in sidebar order. Defaults are never persisted as
-  // the remembered selection.
-  else await selectSidebar(defaultSelection(rawProfileId), { persist: false })
-
-  // Unread narrows whichever feed the route selected.
-  // selectSidebar clears the flag, so apply it after loading that list.
-  if (wantsUnread && !unreadOnly.value) await toggleUnread()
-
-  // ?item reveals one row in whichever list the route just loaded. It is how
-  // a clicked notification lands on its item, so the destination is a normal
-  // route: back/forward traverse it like any other navigation.
-  const wantedItem = Number(route.query.item)
-  if (!Number.isSafeInteger(wantedItem) || wantedItem <= 0) return
-  // An archived row lives in the lazily loaded section below the list, so
-  // expand it before giving up on finding the item.
-  if (!items.value.some((item) => item.id === wantedItem) && !archivedExpanded.value) {
-    await toggleArchivedSection()
+watch(
+  [profilesLoaded, () => route.fullPath],
+  async ([loaded]) => {
+    if (!loaded) return
+    const sync = ++feedRouteSync
+    const rawProfileId = route.params.profileId
+    if (typeof rawProfileId !== 'string') return
+    if (!profiles.value.some((profile) => profile.id === rawProfileId)) {
+      if (activeProfileId.value) void router.replace({ name: 'feed', params: { profileId: activeProfileId.value } })
+      return
+    }
+    if (rawProfileId !== activeProfileId.value) await selectProfile(rawProfileId)
     if (sync !== feedRouteSync || route.name !== 'feed') return
-  }
-  await selectItem(wantedItem)
-}, { immediate: true })
 
-watch([() => route.name, () => route.query.node], ([name, rawNode]) => {
-  if (name === 'flows') session.openFlows(typeof rawNode === 'string' ? rawNode : undefined)
-  else session.exitFlows()
-}, { immediate: true })
+    const rawFeedId = route.query.feed
+    const feedId =
+      typeof rawFeedId === 'string' && activeProfile.value?.feeds.some((feed) => feed.id === rawFeedId)
+        ? rawFeedId
+        : null
+    const wantsUnread = route.query.unread === '1'
+    if (feedId) await selectSidebar({ type: 'feed', feedId })
+    else if (route.query.view === 'trash') await selectSidebar({ type: 'trash' })
+    // A bare feed route means "the profile default": last-selected feed,
+    // else the first feed in sidebar order. Defaults are never persisted as
+    // the remembered selection.
+    else await selectSidebar(defaultSelection(rawProfileId), { persist: false })
+
+    // Unread narrows whichever feed the route selected.
+    // selectSidebar clears the flag, so apply it after loading that list.
+    if (wantsUnread && !unreadOnly.value) await toggleUnread()
+
+    // ?item reveals one row in whichever list the route just loaded. It is how
+    // a clicked notification lands on its item, so the destination is a normal
+    // route: back/forward traverse it like any other navigation.
+    const wantedItem = Number(route.query.item)
+    if (!Number.isSafeInteger(wantedItem) || wantedItem <= 0) return
+    // An archived row lives in the lazily loaded section below the list, so
+    // expand it before giving up on finding the item.
+    if (!items.value.some((item) => item.id === wantedItem) && !archivedExpanded.value) {
+      await toggleArchivedSection()
+      if (sync !== feedRouteSync || route.name !== 'feed') return
+    }
+    await selectItem(wantedItem)
+  },
+  { immediate: true },
+)
+
+watch(
+  [() => route.name, () => route.query.node],
+  ([name, rawNode]) => {
+    if (name === 'flows') session.openFlows(typeof rawNode === 'string' ? rawNode : undefined)
+    else session.exitFlows()
+  },
+  { immediate: true },
+)
 
 // A router guard protects dirty flow drafts for every navigation source,
 // including native mouse/browser Back — not only the app's own buttons.
@@ -252,9 +402,8 @@ const unsavedChangesBusy = ref(false)
 let allowGuardedNavigation = false
 const removeNavigationGuard = router.beforeEach((to, from) => {
   const switchesProfile = typeof to.params.profileId === 'string' && to.params.profileId !== activeProfileId.value
-  const leavesDirtyFlow = from.name === 'flows' && (
-    to.name !== 'flows' || to.params.profileId !== from.params.profileId
-  )
+  const leavesDirtyFlow =
+    from.name === 'flows' && (to.name !== 'flows' || to.params.profileId !== from.params.profileId)
   if (!allowGuardedNavigation && (leavesDirtyFlow || switchesProfile) && session.dirty.value) {
     pendingNavigation.value = { to: to.fullPath }
     return false
@@ -302,9 +451,7 @@ function openFeed(profileId = activeProfileId.value): void {
 
 function navigateSidebar(nextSelection: SidebarSelection): void {
   if (!activeProfileId.value) return
-  const query = nextSelection.type === 'feed'
-    ? { feed: nextSelection.feedId }
-    : { view: 'trash' }
+  const query = nextSelection.type === 'feed' ? { feed: nextSelection.feedId } : { view: 'trash' }
   void router.push({ name: 'feed', params: { profileId: activeProfileId.value }, query })
 }
 
@@ -352,7 +499,8 @@ function requestOpenActionsSettings(): void {
 
 function requestOpenSettings(page: 'application' | 'profile'): void {
   if (page === 'application') void router.push({ name: 'application-settings' })
-  else if (activeProfileId.value) void router.push({ name: 'profile-settings', params: { profileId: activeProfileId.value } })
+  else if (activeProfileId.value)
+    void router.push({ name: 'profile-settings', params: { profileId: activeProfileId.value } })
 }
 
 // ── Activity (6d) ─────────────────────────────────────────────────────────────
@@ -539,13 +687,19 @@ async function openFromMenuBar(nav: MenuBarNavigation): Promise<void> {
     await revealInboxItem(nav.profileId, nav.itemId)
     return
   }
-  await router.push({ name: 'feed', params: { profileId: nav.profileId }, query: nav.feedId ? { feed: nav.feedId } : {} })
+  await router.push({
+    name: 'feed',
+    params: { profileId: nav.profileId },
+    query: nav.feedId ? { feed: nav.feedId } : {},
+  })
 }
 
 async function openActivityItem(link: ActivityItemLink): Promise<void> {
   try {
     const candidates = (await FindItems(link.profileId, link.externalId)) ?? []
-    const exact = candidates.find((item) => item.sourceKind === link.sourceKind && item.sourceScope === link.sourceScope)
+    const exact = candidates.find(
+      (item) => item.sourceKind === link.sourceKind && item.sourceScope === link.sourceScope,
+    )
     const item = exact ?? (candidates.length === 1 ? candidates[0] : undefined)
     if (!item) {
       showToast('Could not find the linked item', { severity: 'error' })
@@ -570,7 +724,7 @@ let unsubscribeMenuBar: (() => void) | undefined
 // being dropped — the message still matters.
 function toastSeverity(severity: string): 'info' | 'success' | 'warning' | 'error' {
   const known = ['info', 'success', 'warning', 'error'] as const
-  return known.includes(severity as (typeof known)[number]) ? severity as (typeof known)[number] : 'info'
+  return known.includes(severity as (typeof known)[number]) ? (severity as (typeof known)[number]) : 'info'
 }
 onMounted(() => {
   // /dev is a real route in every build, so a shipped one that was not asked to
@@ -581,24 +735,35 @@ onMounted(() => {
   // The Go flow engine commits before it announces, so this is the moment
   // membership claims and inbox items are readable — not log:appended, which
   // only says a source observed something that may route nowhere at all.
-  unsubscribeInbox = Events.On('inbox:updated', () => { void refresh() })
+  unsubscribeInbox = Events.On('inbox:updated', () => {
+    void refresh()
+  })
   // The app owns this subscription, rather than FlowsView, because the flow
   // listing feeds the sidebar whether or not the canvas is open. The session
   // keeps an unsaved editor draft private while refreshing the rest.
-  unsubscribeFlowsUpdated = Events.On('flows:updated', () => { void session.reloadFlows() })
+  unsubscribeFlowsUpdated = Events.On('flows:updated', () => {
+    void session.reloadFlows()
+  })
   // Seed the update chip from the last cached check, then react to background
   // checks. The event payload is the same UpdateInfo shape Status() returns.
-  void UpdaterStatus().then((status) => { updateInfo.value = status }).catch((error) => {
-    console.debug('Updater status unavailable', error)
-  })
+  void UpdaterStatus()
+    .then((status) => {
+      updateInfo.value = status
+    })
+    .catch((error) => {
+      console.debug('Updater status unavailable', error)
+    })
   unsubscribeUpdate = Events.On('update:available', (event: { data: UpdateInfo | UpdateInfo[] }) => {
     const payload = Array.isArray(event.data) ? event.data[0] : event.data
     if (payload) updateInfo.value = payload
   })
-  unsubscribeNotification = Events.On('notification:activated', (event: { data: NotificationActivation | NotificationActivation[] }) => {
-    const payload = Array.isArray(event.data) ? event.data[0] : event.data
-    if (payload) void revealNotification(payload)
-  })
+  unsubscribeNotification = Events.On(
+    'notification:activated',
+    (event: { data: NotificationActivation | NotificationActivation[] }) => {
+      const payload = Array.isArray(event.data) ? event.data[0] : event.data
+      if (payload) void revealNotification(payload)
+    },
+  )
   unsubscribeMenuBar = Events.On('menubar:open', (event: { data: MenuBarNavigation | MenuBarNavigation[] }) => {
     const payload = Array.isArray(event.data) ? event.data[0] : event.data
     if (payload) void openFromMenuBar(payload)
@@ -607,10 +772,13 @@ onMounted(() => {
   // banner (Settings -> Notifications -> Delivery). Go has already applied the
   // kill switch and picked this channel; the toast stack is the same one every
   // other in-app notification uses.
-  unsubscribeNotificationToast = Events.On('notification:toast', (event: { data: NotificationToast | NotificationToast[] }) => {
-    const payload = Array.isArray(event.data) ? event.data[0] : event.data
-    if (payload?.title) showToast(payload.title, { body: payload.body, severity: toastSeverity(payload.severity) })
-  })
+  unsubscribeNotificationToast = Events.On(
+    'notification:toast',
+    (event: { data: NotificationToast | NotificationToast[] }) => {
+      const payload = Array.isArray(event.data) ? event.data[0] : event.data
+      if (payload?.title) showToast(payload.title, { body: payload.body, severity: toastSeverity(payload.severity) })
+    },
+  )
 })
 onUnmounted(() => {
   unsubscribeInbox?.()
@@ -676,9 +844,12 @@ async function confirmDeleteProfile() {
 // nothing in the app is gated on being connected. This reload is about
 // identity, not availability: a different account must never be shown the
 // previous account's data.
-watch(() => (githubConnected.value ? githubStatus.value?.login ?? '' : null), (key) => {
-  if (key !== null) void loadProfiles()
-})
+watch(
+  () => (githubConnected.value ? (githubStatus.value?.login ?? '') : null),
+  (key) => {
+    if (key !== null) void loadProfiles()
+  },
+)
 
 // ── First run ────────────────────────────────────────────────────────────────
 // hive setup -> connect GitHub -> notifications -> meet the agent. Hive setup
@@ -706,8 +877,8 @@ const hiveStepDone = ref(false)
 // a reason to hold a first run in front of the whole app — Settings ▸ Hive
 // CLI shows the parse error. Whether the config is usable picks which body
 // the step renders, not whether it is up.
-const hiveStepActive = computed(() =>
-  firstRun.completed.value === false && !!hive.setup.value && !hive.unreadable.value && !hiveStepDone.value,
+const hiveStepActive = computed(
+  () => firstRun.completed.value === false && !!hive.setup.value && !hive.unreadable.value && !hiveStepDone.value,
 )
 const firstRunConnect = ref(false)
 // The OS notification grant. Requesting it here is the only place onboarding
@@ -717,18 +888,26 @@ const firstRunPermissions = ref(false)
 const firstRunAgent = ref(false)
 const firstRunAgentError = ref<string | null>(null)
 const startingFirstRunAgent = ref(false)
-const onboardingActive = computed(() => hiveStepActive.value || firstRunConnect.value || firstRunPermissions.value || firstRunAgent.value)
+const onboardingActive = computed(
+  () => hiveStepActive.value || firstRunConnect.value || firstRunPermissions.value || firstRunAgent.value,
+)
 
 // The walk starts once every read it branches on has landed: the marker, the
 // Hive config, and the GitHub status. Starting on a status that has not
 // arrived would put the connect card up for an account that is connected.
-const firstRunReady = computed(() => firstRun.completed.value !== null && hive.loaded.value && githubStatus.value !== null)
+const firstRunReady = computed(
+  () => firstRun.completed.value !== null && hive.loaded.value && githubStatus.value !== null,
+)
 let firstRunStarted = false
-watch(firstRunReady, (ready) => {
-  if (!ready || firstRunStarted || firstRun.completed.value !== false) return
-  firstRunStarted = true
-  if (!hiveStepActive.value) advanceToConnect()
-}, { immediate: true })
+watch(
+  firstRunReady,
+  (ready) => {
+    if (!ready || firstRunStarted || firstRun.completed.value !== false) return
+    firstRunStarted = true
+    if (!hiveStepActive.value) advanceToConnect()
+  },
+  { immediate: true },
+)
 
 function advanceToConnect(): void {
   firstRunConnect.value = !githubConnected.value
@@ -831,7 +1010,9 @@ const mode = computed<'hub' | 'terminal' | 'agents'>(() => {
 // Deliberately not gated on the GitHub status: nothing in the app waits on
 // being connected. The first-run chain waits for it itself before choosing
 // the connect card.
-const shellLoaded = computed(() => (profilesLoaded.value || !!profilesError.value) && hive.loaded.value && firstRun.completed.value !== null)
+const shellLoaded = computed(
+  () => (profilesLoaded.value || !!profilesError.value) && hive.loaded.value && firstRun.completed.value !== null,
+)
 const terminalActive = computed(() => mode.value === 'terminal' && shellLoaded.value && !onboardingActive.value)
 const agentsActive = computed(() => mode.value === 'agents' && shellLoaded.value && !onboardingActive.value)
 const hubActive = computed(() => mode.value === 'hub' && shellLoaded.value && !onboardingActive.value)
@@ -847,9 +1028,21 @@ const hubActive = computed(() => mode.value === 'hub' && shellLoaded.value && !o
 // a trip to the hub would end every running session's pane. Its `active` prop
 // — not mount — is what will drive phase 8's activity poll.
 const terminalMounted = ref(false)
-watch(terminalActive, (active) => { if (active) terminalMounted.value = true }, { immediate: true })
+watch(
+  terminalActive,
+  (active) => {
+    if (active) terminalMounted.value = true
+  },
+  { immediate: true },
+)
 const agentsMounted = ref(false)
-watch(agentsActive, (active) => { if (active) agentsMounted.value = true }, { immediate: true })
+watch(
+  agentsActive,
+  (active) => {
+    if (active) agentsMounted.value = true
+  },
+  { immediate: true },
+)
 
 // Where each mode's toggle lands: the route that mode was last on, so a round
 // trip is not a trip to the default feed — or, on the terminal/agents side, a
@@ -863,12 +1056,16 @@ let lastHubPath = ''
 let lastTerminalPath = ''
 const lastAgentsPath = useStorage('hive.mode.agents.path', '')
 if (!lastAgentsPath.value.startsWith('/workspaces')) lastAgentsPath.value = ''
-watch(() => route.fullPath, (path) => {
-  if (!route.name) return
-  if (route.name === 'terminal') lastTerminalPath = path
-  else if (route.name === 'agents') lastAgentsPath.value = path
-  else lastHubPath = path
-}, { immediate: true })
+watch(
+  () => route.fullPath,
+  (path) => {
+    if (!route.name) return
+    if (route.name === 'terminal') lastTerminalPath = path
+    else if (route.name === 'agents') lastAgentsPath.value = path
+    else lastHubPath = path
+  },
+  { immediate: true },
+)
 
 function setMode(next: 'hub' | 'terminal' | 'agents'): void {
   if (next === mode.value) return
@@ -884,11 +1081,16 @@ const feedSidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)
 const terminalSidebarCollapsed = useStorage('hive.panel.terminal.sidebar.collapsed', false)
 const agentsSidebarCollapsed = useStorage('hive.panel.agents.sidebar.collapsed', false)
 const previewCollapsed = useStorage('hive.panel.detailpane.collapsed', false)
-const feedViewActive = computed(() =>
-  !onboardingActive.value && !terminalActive.value && !agentsActive.value &&
-  !applicationSettingsActive.value && !profileSettingsActive.value &&
-  !flowsActive.value && !devActive.value &&
-  !!activeProfile.value,
+const feedViewActive = computed(
+  () =>
+    !onboardingActive.value &&
+    !terminalActive.value &&
+    !agentsActive.value &&
+    !applicationSettingsActive.value &&
+    !profileSettingsActive.value &&
+    !flowsActive.value &&
+    !devActive.value &&
+    !!activeProfile.value,
 )
 // The flag the title-bar toggle drives: whichever mode owns the panel on
 // screen, and null in a view that has no left panel at all (settings, flows),
@@ -963,7 +1165,9 @@ const {
   checkOnLaunch: checkReleaseNotes,
   dismiss: dismissWhatsNew,
 } = useReleaseNotes()
-onMounted(() => { void checkReleaseNotes() })
+onMounted(() => {
+  void checkReleaseNotes()
+})
 // The Hive config decides whether first run has a step at all, so it is read
 // alongside the profiles rather than when the step would render — the shell
 // holds its empty frame until profilesLoaded, and a step that resolved after
@@ -973,10 +1177,21 @@ onMounted(() => {
   void firstRun.load()
 })
 const {
-  open: newSessionOpen, options: newSessionOptions, initial: newSessionInitial, initialTarget: newSessionInitialTarget, busy: newSessionBusy, error: newSessionError,
-  failure: newSessionFailure, formKey: newSessionFormKey,
-  openBlank: openNewSession, openFromItem: openNewSessionFromItem, openFromItems: openNewSessionFromItems, cancel: cancelNewSession, submit: submitNewSession,
-  dismissFailure: dismissNewSessionFailure, onCreateFailed: onNewSessionFailed,
+  open: newSessionOpen,
+  options: newSessionOptions,
+  initial: newSessionInitial,
+  initialTarget: newSessionInitialTarget,
+  busy: newSessionBusy,
+  error: newSessionError,
+  failure: newSessionFailure,
+  formKey: newSessionFormKey,
+  openBlank: openNewSession,
+  openFromItem: openNewSessionFromItem,
+  openFromItems: openNewSessionFromItems,
+  cancel: cancelNewSession,
+  submit: submitNewSession,
+  dismissFailure: dismissNewSessionFailure,
+  onCreateFailed: onNewSessionFailed,
 } = useNewSession()
 const kb = useKeybindings()
 const creatingFromSelection = ref(false)
@@ -992,7 +1207,13 @@ function cancelNewSessionDialog(): void {
   cancelNewSession()
 }
 
-async function submitNewSessionAndClearSelection(input: { repository?: string; workspace?: string; name: string; prompt: string; agent?: string }): Promise<void> {
+async function submitNewSessionAndClearSelection(input: {
+  repository?: string
+  workspace?: string
+  name: string
+  prompt: string
+  agent?: string
+}): Promise<void> {
   await submitNewSession(input)
   if (!newSessionOpen.value && creatingFromSelection.value) {
     creatingFromSelection.value = false
@@ -1003,7 +1224,8 @@ async function submitNewSessionAndClearSelection(input: { repository?: string; w
 // The URL is the attach state, so it is also the answer to "which session is on
 // screen" — the pop-up terminal, the launchers, and a new session all follow it.
 const onScreenSessionSlug = computed(() =>
-  (route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : ''))
+  route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : '',
+)
 
 // The pop-up terminal opens where the terminal on screen is, and in the user's
 // home when none is (ADR ephemeral-popup-terminals). The panel is mounted on first
@@ -1033,17 +1255,31 @@ function toggleLauncher(actionID: string): void {
 // the palette and the keymap whether or not a pop-up has ever been opened, so
 // they have to be known before the first one is invoked.
 const launchers = useLaunchers()
-onMounted(() => { void launchers.refresh() })
-useWailsEvent('actions:updated', () => { void launchers.refresh() })
+onMounted(() => {
+  void launchers.refresh()
+})
+useWailsEvent('actions:updated', () => {
+  void launchers.refresh()
+})
 
 // Driven off the selection rather than off selectItem, so every path that
 // moves it — keyboard walk, a clicked notification, restoring a job's item —
 // loads the same list.
 const { sessions: itemSessions, load: loadItemSessions, refresh: refreshItemSessions } = useItemSessions()
-watch(() => selectedItem.value?.id ?? null, (itemID) => { void loadItemSessions(itemID) }, { immediate: true })
-useWailsEvent('jobs:updated', () => { void refreshItemSessions() })
+watch(
+  () => selectedItem.value?.id ?? null,
+  (itemID) => {
+    void loadItemSessions(itemID)
+  },
+  { immediate: true },
+)
+useWailsEvent('jobs:updated', () => {
+  void refreshItemSessions()
+})
 // The dialog closed on submit, so the failure has to come to the user.
-useWailsEvent('sessions:create-failed', () => { void onNewSessionFailed() })
+useWailsEvent('sessions:create-failed', () => {
+  void onNewSessionFailed()
+})
 
 // Attaching is terminal mode's job; the route is the attach state (ADR terminal-transport),
 // so linking through is a navigation and nothing here touches tmux.
@@ -1066,13 +1302,21 @@ const runMap: Record<string, () => void | Promise<void>> = {
   'feed.toggle-unread': navigateUnreadToggle,
   'feed.toggle-preview': togglePreview,
   'feed.refresh': refreshSources,
-  'feed.toggle-selection': () => { itemSelectionActive.value ? cancelItemSelection() : enterItemSelection() },
-  'feed.toggle-archive': async () => { if (selectedItem.value) await toggleArchive(selectedItem.value) },
-  'feed.mark-unread': async () => { if (selectedItem.value) await markItemUnread(selectedItem.value, true) },
+  'feed.toggle-selection': () => {
+    itemSelectionActive.value ? cancelItemSelection() : enterItemSelection()
+  },
+  'feed.toggle-archive': async () => {
+    if (selectedItem.value) await toggleArchive(selectedItem.value)
+  },
+  'feed.mark-unread': async () => {
+    if (selectedItem.value) await markItemUnread(selectedItem.value, true)
+  },
   'feed.mark-all-read': markSelectedFeedRead,
   'feed.mark-workspace-read': requestMarkWorkspaceRead,
   'palette.toggle': togglePalette,
-  'report.open': () => { void reportProblem() },
+  'report.open': () => {
+    void reportProblem()
+  },
   'report.bundle': openBundleDialog,
   'tasks.toggle': openTasks,
   'terminal.popup.toggle': togglePopupTerminal,
@@ -1150,24 +1394,31 @@ function runCommand(id: string): void {
 
 // The feed only accepts bare navigation keys when it is actually the on-screen
 // view (matches the condition under which <FeedList> renders below).
-const feedNavActive = computed(() =>
-  route.name === 'feed' && !onboardingActive.value && !terminalActive.value && !!activeProfile.value,
+const feedNavActive = computed(
+  () => route.name === 'feed' && !onboardingActive.value && !terminalActive.value && !!activeProfile.value,
 )
 
 function contextActive(context: CommandContext): boolean {
   switch (context) {
-    case 'feed': return feedNavActive.value
-    case 'terminal': return terminalActive.value
+    case 'feed':
+      return feedNavActive.value
+    case 'terminal':
+      return terminalActive.value
     // Terminal mode with nothing attached is the session picker, and a command
     // that runs where a terminal is has no more to work with there than it does
     // on the feed. Any attached slug qualifies, hive session or not.
-    case 'terminal-session': return terminalActive.value && !!onScreenSessionSlug.value
-    case 'agents': return agentsActive.value
-    case 'sidebar': return canToggleSidebar.value
+    case 'terminal-session':
+      return terminalActive.value && !!onScreenSessionSlug.value
+    case 'agents':
+      return agentsActive.value
+    case 'sidebar':
+      return canToggleSidebar.value
     // The Code half excludes the session picker for terminal-session's reason:
     // with no emulator drawn, the chord would change a size nobody can see.
-    case 'any-terminal': return (terminalActive.value && !!onScreenSessionSlug.value) || agentsActive.value || popupTerminal.visible.value
-    case 'global': return true
+    case 'any-terminal':
+      return (terminalActive.value && !!onScreenSessionSlug.value) || agentsActive.value || popupTerminal.visible.value
+    case 'global':
+      return true
   }
 }
 
@@ -1175,8 +1426,18 @@ function contextActive(context: CommandContext): boolean {
 // tasks.toggle close the tasks overlay specifically, while it still stays
 // suppressed under any of these (report, new-profile, a confirm, ...), same
 // as every other command.
-const otherOverlayOpen = computed(() =>
-  paletteOpen.value || reportDialogOpen.value || newProfileOpen.value || deleteProfileOpen.value || markWorkspaceReadOpen.value || newSessionOpen.value || activityOpen.value || !!sessionLaunchAction.value || !!actionInputsAction.value || !!pendingNavigation.value,
+const otherOverlayOpen = computed(
+  () =>
+    paletteOpen.value ||
+    reportDialogOpen.value ||
+    newProfileOpen.value ||
+    deleteProfileOpen.value ||
+    markWorkspaceReadOpen.value ||
+    newSessionOpen.value ||
+    activityOpen.value ||
+    !!sessionLaunchAction.value ||
+    !!actionInputsAction.value ||
+    !!pendingNavigation.value,
 )
 // While an overlay owns the screen, only the palette toggle stays live —
 // tasks.toggle gets its own narrower exception below.
@@ -1247,7 +1508,8 @@ function dispatchIfActive(id: string): boolean {
     // screen — that is what lets it close again — but only that overlay: a
     // different modal (report, new-profile, a confirm stacked inside Tasks
     // itself) still swallows it like any other command.
-    const closesTasksOverlay = id === 'tasks.toggle' && tasksOpen.value && !otherOverlayOpen.value && openModalCount.value === 0
+    const closesTasksOverlay =
+      id === 'tasks.toggle' && tasksOpen.value && !otherOverlayOpen.value && openModalCount.value === 0
     if (!closesTasksOverlay) return false
   }
   if (!contextActive(command.context)) return false
@@ -1266,7 +1528,9 @@ function armSequenceTimer(deferredCommandId: string): void {
 // A sequence started before the palette opened — by a chord, or by a mouse
 // click, which never reaches stepSequence at all — has nowhere to go once it
 // does; onGlobalKeydown's own swallow case gives Esc the same treatment.
-watch(paletteOpen, (open) => { if (open) resetSequence() })
+watch(paletteOpen, (open) => {
+  if (open) resetSequence()
+})
 
 function onGlobalKeydown(e: KeyboardEvent): void {
   // The exceptions to the rule below, which hands a focused terminal every key.
@@ -1420,7 +1684,7 @@ onUnmounted(() => {
   <main class="h-screen w-screen overflow-hidden bg-app text-text">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
       <TitleBar
-        :profile-name="onboardingActive ? undefined : activeProfile?.name ?? 'Loading'"
+        :profile-name="onboardingActive ? undefined : (activeProfile?.name ?? 'Loading')"
         :mode="mode"
         :activity-active="activityOpen"
         :error-count="errorCount"
@@ -1452,13 +1716,31 @@ onUnmounted(() => {
       <!-- Hold an empty frame until the profiles resolve so a returning user
            never sees onboarding flash by. A load failure falls through to the
            shell below, which renders the error with a retry. -->
-      <div v-if="!shellLoaded" class="flex min-h-0 flex-1 items-center justify-center font-mono text-xs text-text-4">Loading…</div>
+      <div v-if="!shellLoaded" class="flex min-h-0 flex-1 items-center justify-center font-mono text-xs text-text-4">
+        Loading…
+      </div>
       <OnboardingScreen
         v-else-if="onboardingActive"
         :card="hiveStepActive ? 'hive' : firstRunConnect ? connectCard : firstRunPermissions ? 'permissions' : 'agent'"
         :device-flow="deviceFlow"
-        :error="hiveStepActive ? hive.error.value : firstRunConnect ? connectError : firstRunPermissions ? notificationError : firstRunAgentError"
-        :busy="hiveStepActive ? hive.saving.value : firstRunConnect ? connectBusy : firstRunPermissions ? requestingPermission : startingFirstRunAgent"
+        :error="
+          hiveStepActive
+            ? hive.error.value
+            : firstRunConnect
+              ? connectError
+              : firstRunPermissions
+                ? notificationError
+                : firstRunAgentError
+        "
+        :busy="
+          hiveStepActive
+            ? hive.saving.value
+            : firstRunConnect
+              ? connectBusy
+              : firstRunPermissions
+                ? requestingPermission
+                : startingFirstRunAgent
+        "
         :github-connected="githubConnected"
         :permission="notificationPermission"
         :hive="hive"
@@ -1561,9 +1843,11 @@ onUnmounted(() => {
           >
             <div class="text-[13.5px] font-semibold">No sources yet</div>
             <p class="max-w-[400px] text-xs leading-relaxed text-text-3">
-              {{ githubConnected
-                ? 'This profile has no feeds. Open the flow editor to wire a source into one.'
-                : 'This profile has no feeds, and no account is connected to fetch as. Connect one under Integrations, then wire a source into a feed.' }}
+              {{
+                githubConnected
+                  ? 'This profile has no feeds. Open the flow editor to wire a source into one.'
+                  : 'This profile has no feeds, and no account is connected to fetch as. Connect one under Integrations, then wire a source into a feed.'
+              }}
             </p>
             <div class="mt-1 flex items-center gap-2">
               <button
@@ -1571,12 +1855,16 @@ onUnmounted(() => {
                 class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
                 data-testid="workspace-empty-integrations"
                 @click="selectApplicationSettingsSection('integrations')"
-              >Open Integrations</button>
+              >
+                Open Integrations
+              </button>
               <button
                 class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
                 data-testid="workspace-empty-flows"
                 @click="openFlows()"
-              >Edit flow</button>
+              >
+                Edit flow
+              </button>
             </div>
           </div>
           <section v-else-if="activeProfile" class="flex min-w-0 flex-1">
@@ -1628,12 +1916,38 @@ onUnmounted(() => {
               @item-create-session="openNewSessionFromItem"
               @item-run-action="runItemAction"
             />
-            <DetailPane v-if="!previewCollapsed" :item="selectedItem" :events="selectedEvents" :actions="actions" :sessions="itemSessions" :pending-action="pendingAction" :action-runs="actionRuns" :source-icons="sourceIcons" :source-images="sourceImages" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @set-unread="(value) => selectedItem && markItemUnread(selectedItem, value)" @toggle-archive="selectedItem && toggleArchive(selectedItem)" @toggle-ignored="selectedItem && toggleIgnored(selectedItem)" @copy-link="selectedItem && copyItemLink(selectedItem)" @copy-contents="selectedItem && copyItemContents(selectedItem)" @create-session="(target) => selectedItem && openNewSessionFromItem(selectedItem, target)" @open-session="openItemSession" @edit="requestOpenActionsSettings" />
+            <DetailPane
+              v-if="!previewCollapsed"
+              :item="selectedItem"
+              :events="selectedEvents"
+              :actions="actions"
+              :sessions="itemSessions"
+              :pending-action="pendingAction"
+              :action-runs="actionRuns"
+              :source-icons="sourceIcons"
+              :source-images="sourceImages"
+              @run-action="invokeAction"
+              @open-browser="openSelectedInBrowser"
+              @open-url="openUrl"
+              @set-unread="(value) => selectedItem && markItemUnread(selectedItem, value)"
+              @toggle-archive="selectedItem && toggleArchive(selectedItem)"
+              @toggle-ignored="selectedItem && toggleIgnored(selectedItem)"
+              @copy-link="selectedItem && copyItemLink(selectedItem)"
+              @copy-contents="selectedItem && copyItemContents(selectedItem)"
+              @create-session="(target) => selectedItem && openNewSessionFromItem(selectedItem, target)"
+              @open-session="openItemSession"
+              @edit="requestOpenActionsSettings"
+            />
           </section>
           <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
             <template v-if="profilesError">
               <span data-testid="profiles-error">{{ profilesError }}</span>
-              <button class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text" @click="loadProfiles">Retry</button>
+              <button
+                class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text"
+                @click="loadProfiles"
+              >
+                Retry
+              </button>
             </template>
             <span v-else>Loading feed…</span>
           </div>
@@ -1700,9 +2014,11 @@ onUnmounted(() => {
     <ConfirmationDialog
       v-if="markWorkspaceReadOpen"
       title="Mark all feeds as read?"
-      :description="workspaceUnreadCount === 1
-        ? `Clear the unread item in every feed of ${activeProfile?.name ?? 'this profile'}. This can't be undone.`
-        : `Clear all ${workspaceUnreadCount} unread items in every feed of ${activeProfile?.name ?? 'this profile'}. This can't be undone.`"
+      :description="
+        workspaceUnreadCount === 1
+          ? `Clear the unread item in every feed of ${activeProfile?.name ?? 'this profile'}. This can't be undone.`
+          : `Clear all ${workspaceUnreadCount} unread items in every feed of ${activeProfile?.name ?? 'this profile'}. This can't be undone.`
+      "
       confirm-label="Mark all as read"
       :busy="markingAllRead"
       testid="mark-workspace-read-confirmation"
@@ -1735,7 +2051,12 @@ onUnmounted(() => {
       @confirm="confirmDeleteProfile"
     />
     <TasksOverlay v-if="tasksOpen" @close="tasksOpen = false" />
-    <ActivityOverlay v-if="activityOpen" @close="activityOpen = false" @open-url="openUrl" @open-item="openActivityItem" />
+    <ActivityOverlay
+      v-if="activityOpen"
+      @close="activityOpen = false"
+      @open-url="openUrl"
+      @open-item="openActivityItem"
+    />
     <!-- Deploying from this modal can raise the error dialog. Only one is
          rendered at a time: BaseModal closes on any Escape, so stacked
          overlays would both take a single keypress and drop the guard along

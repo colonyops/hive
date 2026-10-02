@@ -9,15 +9,25 @@ function fire(el: Element, type: string) {
 
 describe('github-filter editor', () => {
   it('renders populated glob groups and checked toggles', () => {
-    const config: Config = { repos: ['acme/*'], types: ['pr'], reasons: ['mention'], ci: ['passing'], review: ['approved'] }
+    const config: Config = {
+      repos: ['acme/*'],
+      types: ['pr'],
+      reasons: ['mention'],
+      ci: ['passing'],
+      review: ['approved'],
+    }
     const wrapper = mount(Editor, { props: { config } })
 
     expect(wrapper.get<HTMLTextAreaElement>('[data-testid="github-filter-editor-repos"]').element.value).toBe('acme/*')
     expect(wrapper.get<HTMLInputElement>('[data-testid="github-filter-editor-type-pr"]').element.checked).toBe(true)
     expect(wrapper.get<HTMLInputElement>('[data-testid="github-filter-editor-type-issue"]').element.checked).toBe(false)
-    expect(wrapper.get<HTMLInputElement>('[data-testid="github-filter-editor-reason-mention"]').element.checked).toBe(true)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="github-filter-editor-reason-mention"]').element.checked).toBe(
+      true,
+    )
     expect(wrapper.get<HTMLInputElement>('[data-testid="github-filter-editor-ci-passing"]').element.checked).toBe(true)
-    expect(wrapper.get<HTMLInputElement>('[data-testid="github-filter-editor-review-approved"]').element.checked).toBe(true)
+    expect(wrapper.get<HTMLInputElement>('[data-testid="github-filter-editor-review-approved"]').element.checked).toBe(
+      true,
+    )
   })
 
   it('emits an immutable update:config from a glob group edit', async () => {
@@ -50,10 +60,7 @@ describe('github-filter editor', () => {
     await wrapper.get('[data-testid="github-filter-editor-ci-failing"]').setValue(true)
     await wrapper.get('[data-testid="github-filter-editor-review-approved"]').setValue(true)
 
-    expect(wrapper.emitted('update:config')).toEqual([
-      [{ ci: ['failing'] }],
-      [{ review: ['approved'] }],
-    ])
+    expect(wrapper.emitted('update:config')).toEqual([[{ ci: ['failing'] }], [{ review: ['approved'] }]])
   })
 
   it('emits an immutable update:config from a reason toggle, clearing the key once empty again', async () => {

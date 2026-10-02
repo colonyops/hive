@@ -18,7 +18,10 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
 
 function parseLines(text: string): string[] {
-  return text.split('\n').map((line) => line.trim()).filter((line) => line.length > 0)
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
 }
 
 const text = computed(() => (props.modelValue ?? []).join('\n'))

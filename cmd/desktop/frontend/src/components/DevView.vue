@@ -128,13 +128,19 @@ async function deliverAuto(selectedSeverity: NotifySeverity, body: string): Prom
     case 'toast':
       return bannerError === undefined
         ? { tone: 'ok', text: 'Recorded in Activity and shown as an in-app toast.' }
-        : { tone: 'warn', text: `Recorded in Activity. The system banner failed (${errorText(bannerError)}), so it fell back to an in-app toast.` }
+        : {
+            tone: 'warn',
+            text: `Recorded in Activity. The system banner failed (${errorText(bannerError)}), so it fell back to an in-app toast.`,
+          }
     default:
       return { tone: 'muted', text: 'Recorded in Activity only — notifications are switched off, so nothing surfaced.' }
   }
 }
 
-async function deliver(selectedChannel: NotificationTestChannel, selectedSeverity: NotifySeverity): Promise<TestResult> {
+async function deliver(
+  selectedChannel: NotificationTestChannel,
+  selectedSeverity: NotifySeverity,
+): Promise<TestResult> {
   const body = testBody(selectedChannel)
 
   if (selectedChannel === 'auto') return deliverAuto(selectedSeverity, body)
@@ -228,14 +234,24 @@ useEscapeToClose(() => emit('close'))
         >
           <div class="flex flex-col gap-3.5 rounded-[11px] border border-card bg-raised p-4">
             <div class="flex flex-col gap-3.5 @[420px]/pane:flex-row @[420px]/pane:items-center @[420px]/pane:gap-4">
-              <span class="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] border border-card bg-chip font-mono text-[13px] font-semibold text-accent">ms</span>
+              <span
+                class="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] border border-card bg-chip font-mono text-[13px] font-semibold text-accent"
+                >ms</span
+              >
               <div class="min-w-0 flex-1">
                 <div class="text-[13.5px] font-semibold text-text">Measure the boundary</div>
                 <div class="mt-0.5 text-xs leading-relaxed text-text-3">
-                  40 calls each, issued one at a time after a warm-up, through the same bound-method plumbing every service call uses.
+                  40 calls each, issued one at a time after a warm-up, through the same bound-method plumbing every
+                  service call uses.
                 </div>
               </div>
-              <BaseButton size="sm" class="shrink-0 self-start @[420px]/pane:self-auto" :busy="measuring" data-testid="dev-latency-measure" @click="measure">
+              <BaseButton
+                size="sm"
+                class="shrink-0 self-start @[420px]/pane:self-auto"
+                :busy="measuring"
+                data-testid="dev-latency-measure"
+                @click="measure"
+              >
                 {{ measuring ? 'Measuring…' : 'Measure' }}
               </BaseButton>
             </div>
@@ -246,12 +262,17 @@ useEscapeToClose(() => emit('close'))
               data-testid="dev-latency-results"
             >
               <div
-                v-for="leg in [{ key: 'empty', label: 'Empty call', value: latency.empty }, { key: 'payload', label: `${formatBytes(PAYLOAD_BYTES)} payload`, value: latency.payload }]"
+                v-for="leg in [
+                  { key: 'empty', label: 'Empty call', value: latency.empty },
+                  { key: 'payload', label: `${formatBytes(PAYLOAD_BYTES)} payload`, value: latency.payload },
+                ]"
                 :key="leg.key"
                 class="-ml-px flex flex-col gap-1.5 border-l border-border px-4 py-3"
                 :data-testid="`dev-latency-${leg.key}`"
               >
-                <div class="font-mono text-[10px] font-semibold uppercase tracking-[.12em] text-text-3">{{ leg.label }}</div>
+                <div class="font-mono text-[10px] font-semibold uppercase tracking-[.12em] text-text-3">
+                  {{ leg.label }}
+                </div>
                 <div class="font-mono text-[16px] tabular-nums text-text">
                   {{ leg.value.meanMs.toFixed(3) }}<span class="text-[11px] text-text-4">ms per call</span>
                 </div>
@@ -265,27 +286,39 @@ useEscapeToClose(() => emit('close'))
                  timing is 0 or 1 and nothing else, which is what the batching
                  exists to get around. -->
             <p v-if="latency" class="text-[11px] tabular-nums text-text-4" data-testid="dev-latency-resolution">
-              Timed in batches of 20 — this webview's clock resolves to {{ latency.resolutionMs.toFixed(3) }}ms, coarser than one call.
+              Timed in batches of 20 — this webview's clock resolves to {{ latency.resolutionMs.toFixed(3) }}ms, coarser
+              than one call.
             </p>
 
-            <p v-if="latencyError" class="text-xs text-severity-error" data-testid="dev-latency-error">{{ latencyError }}</p>
+            <p v-if="latencyError" class="text-xs text-severity-error" data-testid="dev-latency-error">
+              {{ latencyError }}
+            </p>
           </div>
         </SettingsSection>
 
-        <SettingsSection
-          title="Notifications"
-          description="Exercise notification delivery while developing Hive."
-        >
-          <BaseCard class="mt-4 items-start rounded-lg border border-border bg-raised" data-testid="dev-notification-test">
+        <SettingsSection title="Notifications" description="Exercise notification delivery while developing Hive.">
+          <BaseCard
+            class="mt-4 items-start rounded-lg border border-border bg-raised"
+            data-testid="dev-notification-test"
+          >
             <template #icon>
-              <span class="flex size-9 items-center justify-center rounded-lg bg-severity-info-tint text-severity-info"><IconBell class="size-4" /></span>
+              <span class="flex size-9 items-center justify-center rounded-lg bg-severity-info-tint text-severity-info"
+                ><IconBell class="size-4"
+              /></span>
             </template>
             <div class="@container/notify-test min-w-0 flex-1" data-testid="dev-notification-form">
               <div class="text-[13.5px] font-semibold text-text">Test notification</div>
               <div class="mt-0.5 text-xs text-text-3">Send one through a delivery path and see where it lands.</div>
 
-              <div class="mt-4 grid grid-cols-1 gap-4 @[420px]/notify-test:grid-cols-2" data-testid="dev-notification-fields">
-                <SettingsField label="Severity" hint="Sets the toast accent and the banner's severity." testid="dev-notification-severity-field">
+              <div
+                class="mt-4 grid grid-cols-1 gap-4 @[420px]/notify-test:grid-cols-2"
+                data-testid="dev-notification-fields"
+              >
+                <SettingsField
+                  label="Severity"
+                  hint="Sets the toast accent and the banner's severity."
+                  testid="dev-notification-severity-field"
+                >
                   <AppSelect
                     size="sm"
                     class="w-full font-medium"
@@ -316,7 +349,11 @@ useEscapeToClose(() => emit('close'))
                   aria-label="Delivery channel"
                   data-testid="dev-notification-channel"
                 >
-                  <label v-for="option in channelOptions" :key="option.value" class="flex cursor-pointer items-start gap-2.5">
+                  <label
+                    v-for="option in channelOptions"
+                    :key="option.value"
+                    class="flex cursor-pointer items-start gap-2.5"
+                  >
                     <input
                       type="radio"
                       class="mt-0.5 accent-accent"
@@ -325,7 +362,7 @@ useEscapeToClose(() => emit('close'))
                       :checked="channel === option.value"
                       :data-testid="`dev-notification-channel-${option.value}`"
                       @change="channel = option.value"
-                    >
+                    />
                     <span>
                       <span class="block text-[12.5px] text-text">{{ option.label }}</span>
                       <span class="block text-[12px] text-text-3">{{ option.hint }}</span>
@@ -334,19 +371,35 @@ useEscapeToClose(() => emit('close'))
                 </div>
               </div>
 
-              <div class="mt-4 flex flex-col items-stretch gap-2 @[420px]/notify-test:flex-row @[420px]/notify-test:items-center" data-testid="dev-notification-actions">
-                <BaseButton size="sm" data-testid="dev-notification-send" @click="sendTest">Send test notification</BaseButton>
+              <div
+                class="mt-4 flex flex-col items-stretch gap-2 @[420px]/notify-test:flex-row @[420px]/notify-test:items-center"
+                data-testid="dev-notification-actions"
+              >
+                <BaseButton size="sm" data-testid="dev-notification-send" @click="sendTest"
+                  >Send test notification</BaseButton
+                >
                 <div class="min-w-0 text-xs leading-relaxed" role="status" aria-live="polite">
-                  <span v-if="pending" class="flex items-center gap-2 text-text-2" data-testid="dev-notification-pending">
+                  <span
+                    v-if="pending"
+                    class="flex items-center gap-2 text-text-2"
+                    data-testid="dev-notification-pending"
+                  >
                     <span>Sending in {{ remaining }}s…</span>
                     <button
                       type="button"
                       class="cursor-pointer rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-text-2 hover:bg-chip hover:text-text"
                       data-testid="dev-notification-cancel"
                       @click="cancelPending"
-                    >Cancel</button>
+                    >
+                      Cancel
+                    </button>
                   </span>
-                  <span v-else-if="result" :class="resultToneClass[result.tone]" data-testid="dev-notification-result">{{ result.text }}</span>
+                  <span
+                    v-else-if="result"
+                    :class="resultToneClass[result.tone]"
+                    data-testid="dev-notification-result"
+                    >{{ result.text }}</span
+                  >
                 </div>
               </div>
             </div>

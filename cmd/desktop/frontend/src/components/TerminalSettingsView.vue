@@ -186,11 +186,7 @@ onMounted(() => {
       <div class="px-4 py-3.5"><TerminalPreview /></div>
     </SettingsSection>
 
-    <SettingsSection
-      title="Behaviour"
-      description="What the terminal keeps on hand while you work."
-      boxed
-    >
+    <SettingsSection title="Behaviour" description="What the terminal keeps on hand while you work." boxed>
       <SettingsRow
         label="Always show windows"
         hint="List every active session's windows in the session tree, not just the attached one's."

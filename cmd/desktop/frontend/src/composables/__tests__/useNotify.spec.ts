@@ -30,14 +30,24 @@ describe('useNotify', () => {
     ['success', 'success', 'success'],
     ['warning', 'warning', 'warning'],
     ['error', 'error', 'error'],
-  ] as Array<[NotifySeverity, string, string]>)('maps %s to activity %s and toast %s', async (severity, activity, toast) => {
-    const deps = makeDeps()
-    await useNotify(deps).notify({ title: 'Title', body: 'Body', severity })
-    expect(notifySeverityMapping[severity]).toEqual({ activity, toast })
-    expect(deps.record).toHaveBeenCalledWith({ title: 'Title', body: 'Body', severity: activity, category: 'system', source: '', metadata: null })
-    expect(deps.showToast).toHaveBeenCalledWith('Title', { body: 'Body', severity: toast })
-    expect(deps.osNotify).not.toHaveBeenCalled()
-  })
+  ] as Array<[NotifySeverity, string, string]>)(
+    'maps %s to activity %s and toast %s',
+    async (severity, activity, toast) => {
+      const deps = makeDeps()
+      await useNotify(deps).notify({ title: 'Title', body: 'Body', severity })
+      expect(notifySeverityMapping[severity]).toEqual({ activity, toast })
+      expect(deps.record).toHaveBeenCalledWith({
+        title: 'Title',
+        body: 'Body',
+        severity: activity,
+        category: 'system',
+        source: '',
+        metadata: null,
+      })
+      expect(deps.showToast).toHaveBeenCalledWith('Title', { body: 'Body', severity: toast })
+      expect(deps.osNotify).not.toHaveBeenCalled()
+    },
+  )
 
   it('uses a focused toast without OS delivery or sound', async () => {
     const deps = makeDeps({ settings: makeSettings({ notificationSound: ref(false) }) })
@@ -50,7 +60,14 @@ describe('useNotify', () => {
     const deps = makeDeps({ focused: ref(false), settings: makeSettings({ notificationSound: ref(false) }) })
     await useNotify(deps).notify({ title: 'Background', body: 'Body' })
     expect(deps.showToast).not.toHaveBeenCalled()
-    expect(deps.osNotify).toHaveBeenCalledWith({ title: 'Background', subtitle: '', body: 'Body', severity: 'info', sound: false, data: {} })
+    expect(deps.osNotify).toHaveBeenCalledWith({
+      title: 'Background',
+      subtitle: '',
+      body: 'Body',
+      severity: 'info',
+      sound: false,
+      data: {},
+    })
   })
 
   it('records only when master notifications are disabled', async () => {
@@ -74,15 +91,26 @@ describe('useNotify', () => {
     const deps = makeDeps({ focused: ref(true), settings: makeSettings({ delivery: ref('system') }) })
     await useNotify(deps).notify({ title: 'Always a banner' })
     expect(deps.showToast).not.toHaveBeenCalled()
-    expect(deps.osNotify).toHaveBeenCalledWith({ title: 'Always a banner', subtitle: '', body: '', severity: 'info', sound: true, data: {} })
+    expect(deps.osNotify).toHaveBeenCalledWith({
+      title: 'Always a banner',
+      subtitle: '',
+      body: '',
+      severity: 'info',
+      sound: true,
+      data: {},
+    })
   })
 
   it('carries click-routing data and lets an event silence itself', async () => {
     const deps = makeDeps({ focused: ref(false) })
     await useNotify(deps).notify({ title: 'Review requested', data: { profileId: 'work', itemId: 42 }, silent: true })
     expect(deps.osNotify).toHaveBeenCalledWith({
-      title: 'Review requested', subtitle: '', body: '', severity: 'info',
-      sound: false, data: { profileId: 'work', itemId: 42 },
+      title: 'Review requested',
+      subtitle: '',
+      body: '',
+      severity: 'info',
+      sound: false,
+      data: { profileId: 'work', itemId: 42 },
     })
   })
 

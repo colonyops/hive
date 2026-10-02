@@ -3,28 +3,68 @@ import { defineComponent, nextTick } from 'vue'
 import { mount, flushPromises } from '@vue/test-utils'
 
 const mocks = vi.hoisted(() => ({
-  ListActions: vi.fn(), CreateAction: vi.fn(), UpdateAction: vi.fn(), DeleteAction: vi.fn(), On: vi.fn(),
+  ListActions: vi.fn(),
+  CreateAction: vi.fn(),
+  UpdateAction: vi.fn(),
+  DeleteAction: vi.fn(),
+  On: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/actionsservice', () => ({
-  ListActions: mocks.ListActions, CreateAction: mocks.CreateAction, UpdateAction: mocks.UpdateAction, DeleteAction: mocks.DeleteAction,
+  ListActions: mocks.ListActions,
+  CreateAction: mocks.CreateAction,
+  UpdateAction: mocks.UpdateAction,
+  DeleteAction: mocks.DeleteAction,
 }))
 vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On } }))
 
 import { useActionsSettings } from '../useActionsSettings'
 
-const oldCatalog = { actions: [{ id: 'old', label: 'Old', type: 'shell', showInDetail: true, targets: ['item'], appliesTo: [], shell: { commandTemplate: 'true' } }], error: '' }
-const newCatalog = { actions: [{ id: 'new', label: 'New', type: 'launch-session', showInDetail: true, targets: ['item'], appliesTo: [], launch: { promptTemplate: 'go' } }], error: '' }
+const oldCatalog = {
+  actions: [
+    {
+      id: 'old',
+      label: 'Old',
+      type: 'shell',
+      showInDetail: true,
+      targets: ['item'],
+      appliesTo: [],
+      shell: { commandTemplate: 'true' },
+    },
+  ],
+  error: '',
+}
+const newCatalog = {
+  actions: [
+    {
+      id: 'new',
+      label: 'New',
+      type: 'launch-session',
+      showInDetail: true,
+      targets: ['item'],
+      appliesTo: [],
+      launch: { promptTemplate: 'go' },
+    },
+  ],
+  error: '',
+}
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((done) => { resolve = done })
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
   return { promise, resolve }
 }
 
 function mountHarness() {
   let state!: ReturnType<typeof useActionsSettings>
-  const Host = defineComponent({ setup: () => { state = useActionsSettings(); return () => null } })
+  const Host = defineComponent({
+    setup: () => {
+      state = useActionsSettings()
+      return () => null
+    },
+  })
   return { wrapper: mount(Host), state: () => state }
 }
 
@@ -36,7 +76,10 @@ describe('useActionsSettings', () => {
     const second = deferred<typeof newCatalog>()
     mocks.ListActions.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
     let wake!: () => void
-    mocks.On.mockImplementation((_topic: string, callback: () => void) => { wake = callback; return () => {} })
+    mocks.On.mockImplementation((_topic: string, callback: () => void) => {
+      wake = callback
+      return () => {}
+    })
     const { wrapper, state } = mountHarness()
     await nextTick()
 

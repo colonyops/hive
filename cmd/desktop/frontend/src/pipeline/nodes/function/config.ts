@@ -34,7 +34,12 @@ export function timeoutMs(config: Config): number {
   return config.timeout ?? DEFAULT_TIMEOUT_MS
 }
 
-export type CompiledFn = (msg: unknown, node: Record<string, any>, state: Record<string, any>, kv: Record<string, any>) => unknown
+export type CompiledFn = (
+  msg: unknown,
+  node: Record<string, any>,
+  state: Record<string, any>,
+  kv: Record<string, any>,
+) => unknown
 
 /**
  * Compiles a JS body so a syntax error surfaces while typing. Nothing calls

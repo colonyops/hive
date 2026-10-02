@@ -61,7 +61,10 @@ function measure(): void {
 // from whatever was there at mount, and an anchor that was null or detached
 // then measures as a zero rect: the panel takes `left: 0; width: 0` and draws
 // nothing.
-watch(() => props.anchor, () => measure())
+watch(
+  () => props.anchor,
+  () => measure(),
+)
 
 onMounted(() => {
   if (!props.anchor) return
@@ -82,7 +85,7 @@ onBeforeUnmount(() => {
       ref="root"
       class="app-menu"
       :class="{ flip: !anchor && flip }"
-      :style="anchor ? anchoredStyle : (width ? { width } : undefined)"
+      :style="anchor ? anchoredStyle : width ? { width } : undefined"
       role="menu"
       :data-testid="testid"
     >
@@ -98,8 +101,18 @@ onBeforeUnmount(() => {
           :data-testid="entry.testid"
           @click="emit('select', entry.id)"
         >
-          <component :is="entry.icon" v-if="entry.icon" class="size-3.5 shrink-0" :style="entry.iconColor ? { color: entry.iconColor } : undefined" />
-          <AppIcon v-else-if="entry.iconName" :name="entry.iconName" class="size-3.5 shrink-0" :style="entry.iconColor ? { color: entry.iconColor } : undefined" />
+          <component
+            :is="entry.icon"
+            v-if="entry.icon"
+            class="size-3.5 shrink-0"
+            :style="entry.iconColor ? { color: entry.iconColor } : undefined"
+          />
+          <AppIcon
+            v-else-if="entry.iconName"
+            :name="entry.iconName"
+            class="size-3.5 shrink-0"
+            :style="entry.iconColor ? { color: entry.iconColor } : undefined"
+          />
           <IconCheck v-else-if="entry.checked" class="size-3.5 shrink-0 text-accent" />
           <span v-else-if="entry.checked === false" class="size-3.5 shrink-0" aria-hidden="true" />
           <span class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
@@ -111,12 +124,61 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.app-menu { position: absolute; right: 0; top: calc(100% + 5px); z-index: 30; width: 230px; border: 1px solid var(--color-strong); border-radius: 8px; background: var(--color-pane); padding: 5px; box-shadow: 0 18px 45px -12px rgb(0 0 0 / .55); }
-.app-menu.flip { top: auto; bottom: calc(100% + 5px); }
-.app-menu-entry { display: flex; width: 100%; align-items: center; gap: 8px; cursor: pointer; border-radius: 6px; padding: 7px 9px; color: var(--color-text-2); font-size: 12px; text-align: left; }
-.app-menu-entry:hover:not(:disabled) { background: var(--color-hover); color: var(--color-text); }
-.app-menu-entry:disabled { cursor: default; color: var(--color-text-4); }
-.app-menu-kbd { margin-left: auto; padding-left: 8px; font-family: var(--font-mono); font-size: 10.5px; color: var(--color-text-4); }
-.app-menu-sep { height: 1px; margin: 5px 4px; background: var(--color-row); }
-.app-menu-label { padding: 6px 9px 3px; font-family: var(--font-mono); font-size: 9.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--color-text-4); }
+.app-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 5px);
+  z-index: 30;
+  width: 230px;
+  border: 1px solid var(--color-strong);
+  border-radius: 8px;
+  background: var(--color-pane);
+  padding: 5px;
+  box-shadow: 0 18px 45px -12px rgb(0 0 0 / 0.55);
+}
+.app-menu.flip {
+  top: auto;
+  bottom: calc(100% + 5px);
+}
+.app-menu-entry {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 7px 9px;
+  color: var(--color-text-2);
+  font-size: 12px;
+  text-align: left;
+}
+.app-menu-entry:hover:not(:disabled) {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+.app-menu-entry:disabled {
+  cursor: default;
+  color: var(--color-text-4);
+}
+.app-menu-kbd {
+  margin-left: auto;
+  padding-left: 8px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--color-text-4);
+}
+.app-menu-sep {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--color-row);
+}
+.app-menu-label {
+  padding: 6px 9px 3px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-4);
+}
 </style>

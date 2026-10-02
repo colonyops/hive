@@ -53,18 +53,24 @@ onMounted(async () => {
         class="w-full rounded-lg border border-strong bg-raised px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
         data-testid="session-rename-input"
         @keydown.enter="submit"
-      >
+      />
       <span class="text-xs text-text-4">Its terminal session is renamed too, so an open terminal reconnects.</span>
       <p
         v-if="error"
         class="mt-1 rounded border border-severity-error bg-severity-error-tint px-3 py-2 text-xs text-severity-error"
         data-testid="session-rename-error"
-      >{{ error }}</p>
+      >
+        {{ error }}
+      </p>
     </div>
     <template #footer>
       <div class="flex-1" />
-      <BaseButton variant="secondary" :busy="busy" data-testid="session-rename-cancel" @click="emit('close')">Cancel</BaseButton>
-      <BaseButton :busy="busy" :disabled="!draft.trim()" data-testid="session-rename-save" @click="submit">Rename ↵</BaseButton>
+      <BaseButton variant="secondary" :busy="busy" data-testid="session-rename-cancel" @click="emit('close')"
+        >Cancel</BaseButton
+      >
+      <BaseButton :busy="busy" :disabled="!draft.trim()" data-testid="session-rename-save" @click="submit"
+        >Rename ↵</BaseButton
+      >
     </template>
   </BaseModal>
 </template>

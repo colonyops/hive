@@ -8,9 +8,12 @@ const mocks = vi.hoisted(() => ({
   stopFrameStats: vi.fn(),
 }))
 
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/observabilityservice', () => ({
-  Stats: mocks.Stats,
-}))
+vi.mock(
+  '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/observabilityservice',
+  () => ({
+    Stats: mocks.Stats,
+  }),
+)
 
 vi.mock('../../composables/useFrameStats', async () => {
   const { shallowRef } = await vi.importActual<typeof import('vue')>('vue')
@@ -119,7 +122,9 @@ describe('RuntimeDashboard', () => {
     const wrapper = mount(RuntimeDashboard)
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="observability-runtime-processes"]').text()).toContain("webview's rendering helpers are not")
+    expect(wrapper.get('[data-testid="observability-runtime-processes"]').text()).toContain(
+      "webview's rendering helpers are not",
+    )
 
     wrapper.unmount()
   })

@@ -6,16 +6,27 @@ import { chooseOption } from '../../../../test-utils/select'
 
 const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
 
-vi.mock('../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice', () => ({
-  List: mocks.List,
-}))
+vi.mock(
+  '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice',
+  () => ({
+    List: mocks.List,
+  }),
+)
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
 }))
 
 function connectedAccounts(...accounts: string[]) {
   mocks.List.mockResolvedValue([
-    { type: 'sources.gitea', title: 'Gitea source', stability: 'stable', mode: 'pull', provider: 'gitea', accounts, envOverride: false },
+    {
+      type: 'sources.gitea',
+      title: 'Gitea source',
+      stability: 'stable',
+      mode: 'pull',
+      provider: 'gitea',
+      accounts,
+      envOverride: false,
+    },
   ])
 }
 
@@ -51,15 +62,34 @@ describe('sources.gitea editor', () => {
   // Go rejects a notifications source still carrying filters, so leaving them
   // set would produce a node that cannot be saved.
   it('clears the search filters when switching to notifications', async () => {
-    const config: Config = { credential: CREDENTIAL, kind: 'search', items: 'pulls', state: 'all', involving: ['assigned'], owner: 'acme', labels: ['bug'], text: 'x' }
+    const config: Config = {
+      credential: CREDENTIAL,
+      kind: 'search',
+      items: 'pulls',
+      state: 'all',
+      involving: ['assigned'],
+      owner: 'acme',
+      labels: ['bug'],
+      text: 'x',
+    }
     const wrapper = mount(Editor, { props: { config } })
 
     await chooseOption(wrapper, 'sources.gitea-editor-kind', 'notifications')
 
-    expect(wrapper.emitted('update:config')).toEqual([[{
-      credential: CREDENTIAL, kind: 'notifications',
-      items: undefined, state: undefined, involving: undefined, owner: undefined, labels: undefined, text: undefined,
-    }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [
+        {
+          credential: CREDENTIAL,
+          kind: 'notifications',
+          items: undefined,
+          state: undefined,
+          involving: undefined,
+          owner: undefined,
+          labels: undefined,
+          text: undefined,
+        },
+      ],
+    ])
     wrapper.unmount()
   })
 
@@ -82,9 +112,15 @@ describe('sources.gitea editor', () => {
 
     await wrapper.get('[data-testid="sources.gitea-editor-involving-created"]').setValue(true)
 
-    expect(wrapper.emitted('update:config')).toEqual([[{
-      credential: CREDENTIAL, kind: 'search', involving: ['created', 'assigned'],
-    }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [
+        {
+          credential: CREDENTIAL,
+          kind: 'search',
+          involving: ['created', 'assigned'],
+        },
+      ],
+    ])
   })
 
   it('drops an involvement when it is unticked', async () => {
@@ -93,9 +129,15 @@ describe('sources.gitea editor', () => {
 
     await wrapper.get('[data-testid="sources.gitea-editor-involving-created"]').setValue(false)
 
-    expect(wrapper.emitted('update:config')).toEqual([[{
-      credential: CREDENTIAL, kind: 'search', involving: ['assigned'],
-    }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [
+        {
+          credential: CREDENTIAL,
+          kind: 'search',
+          involving: ['assigned'],
+        },
+      ],
+    ])
   })
 
   // Gitea intersects its involvement parameters, so a union costs one request
@@ -115,7 +157,9 @@ describe('sources.gitea editor', () => {
 
     expect(wrapper.get('[data-testid="sources.gitea-editor-credential"]').text()).toContain(CREDENTIAL)
     await chooseOption(wrapper, 'sources.gitea-editor-credential', 'gitea/git.example.com-hubot')
-    expect(wrapper.emitted('update:config')).toEqual([[{ credential: 'gitea/git.example.com-hubot', kind: 'notifications' }]])
+    expect(wrapper.emitted('update:config')).toEqual([
+      [{ credential: 'gitea/git.example.com-hubot', kind: 'notifications' }],
+    ])
     wrapper.unmount()
   })
 
@@ -152,12 +196,15 @@ describe('sources.gitea validate', () => {
   })
 
   it('rejects a credential that is not a gitea ref', () => {
-    expect(validate({ credential: 'github/octocat', kind: 'search' })).toEqual(['credential must look like "gitea/<host>-<login>"'])
+    expect(validate({ credential: 'github/octocat', kind: 'search' })).toEqual([
+      'credential must look like "gitea/<host>-<login>"',
+    ])
   })
 
   it('rejects search filters on a notifications source', () => {
-    expect(validate({ credential: CREDENTIAL, kind: 'notifications', state: 'open', owner: 'acme' }))
-      .toEqual(['a notifications source takes no search filters (remove state, owner)'])
+    expect(validate({ credential: CREDENTIAL, kind: 'notifications', state: 'open', owner: 'acme' })).toEqual([
+      'a notifications source takes no search filters (remove state, owner)',
+    ])
   })
 
   // An empty involving list is what a freshly dropped node carries, and it
@@ -168,12 +215,18 @@ describe('sources.gitea validate', () => {
 
   it('enforces the per-kind limits', () => {
     expect(validate({ credential: CREDENTIAL, kind: 'search', limit: 101 })).toEqual(['search limit caps at 100'])
-    expect(validate({ credential: CREDENTIAL, kind: 'notifications', limit: 51 })).toEqual(['notifications limit caps at 50'])
+    expect(validate({ credential: CREDENTIAL, kind: 'notifications', limit: 51 })).toEqual([
+      'notifications limit caps at 50',
+    ])
     expect(validate({ credential: CREDENTIAL, kind: 'search', limit: -1 })).toEqual(['limit must not be negative'])
   })
 
   it('rejects values Gitea would silently ignore', () => {
-    expect(validate({ credential: CREDENTIAL, kind: 'search', items: 'prs' as never })).toEqual(['items must be one of all, issues, pulls'])
-    expect(validate({ credential: CREDENTIAL, kind: 'search', state: 'merged' as never })).toEqual(['state must be one of open, closed, all'])
+    expect(validate({ credential: CREDENTIAL, kind: 'search', items: 'prs' as never })).toEqual([
+      'items must be one of all, issues, pulls',
+    ])
+    expect(validate({ credential: CREDENTIAL, kind: 'search', state: 'merged' as never })).toEqual([
+      'state must be one of open, closed, all',
+    ])
   })
 })

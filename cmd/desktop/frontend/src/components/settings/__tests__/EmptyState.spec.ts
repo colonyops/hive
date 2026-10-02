@@ -27,7 +27,9 @@ describe('EmptyState', () => {
       props: { boxed: true, message: 'No matches.' },
     })
 
-    expect(wrapper.classes()).toEqual(expect.arrayContaining(['rounded-lg', 'border', 'border-border', 'bg-raised', 'px-4', 'text-text-3']))
+    expect(wrapper.classes()).toEqual(
+      expect.arrayContaining(['rounded-lg', 'border', 'border-border', 'bg-raised', 'px-4', 'text-text-3']),
+    )
     expect(wrapper.classes()).not.toContain('text-text-4')
   })
 })

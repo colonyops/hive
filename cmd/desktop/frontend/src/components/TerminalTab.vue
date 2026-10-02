@@ -64,7 +64,9 @@ function dividerKey(divider: PaneDivider): string {
 function dividerClass(divider: PaneDivider): string[] {
   return [
     divider.axis === 'x' ? 'flex-col' : '',
-    divider.before ? `terminal-divider-draggable ${divider.axis === 'x' ? 'cursor-col-resize' : 'cursor-row-resize'}` : '',
+    divider.before
+      ? `terminal-divider-draggable ${divider.axis === 'x' ? 'cursor-col-resize' : 'cursor-row-resize'}`
+      : '',
     dividerTouches(divider, props.tab.activePane) ? 'terminal-divider-active' : '',
   ]
 }
@@ -80,9 +82,8 @@ function startDividerDrag(divider: PaneDivider, event: PointerEvent): void {
   startDrag(event, {
     pointerCapture: true,
     onMove: (move) => {
-      const position = divider.axis === 'x'
-        ? (move.clientX - box.left) / size.width
-        : (move.clientY - box.top) / size.height
+      const position =
+        divider.axis === 'x' ? (move.clientX - box.left) / size.width : (move.clientY - box.top) / size.height
       const extent = draggedExtent(divider, position)
       if (extent === last) return
       last = extent
@@ -139,16 +140,26 @@ function startDividerDrag(divider: PaneDivider, event: PointerEvent): void {
         v-if="tab.zoomed && split"
         class="pointer-events-none absolute right-2 top-1 z-10 rounded border border-strong bg-raised/90 px-1.5 py-0.5 font-mono text-[10px] text-text-3"
         data-testid="terminal-pane-zoomed"
-      >zoomed</div>
+      >
+        zoomed
+      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 /* Persistent dividers use neutral borders; an accent would read as a permanent highlight. */
-.terminal-divider { touch-action: none; }
-.terminal-divider-line { background: var(--color-border); }
-.terminal-divider-active .terminal-divider-line { background: var(--color-strong); }
+.terminal-divider {
+  touch-action: none;
+}
+.terminal-divider-line {
+  background: var(--color-border);
+}
+.terminal-divider-active .terminal-divider-line {
+  background: var(--color-strong);
+}
 .terminal-divider-draggable:hover .terminal-divider-line,
-.terminal-divider-draggable:active .terminal-divider-line { background: var(--color-text-4); }
+.terminal-divider-draggable:active .terminal-divider-line {
+  background: var(--color-text-4);
+}
 </style>

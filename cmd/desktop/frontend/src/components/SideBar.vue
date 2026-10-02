@@ -35,9 +35,7 @@ const { size, startResize, step } = useResizablePanel({
 
 // The rendered tree. A profile with no saved sidebar layout falls back to a
 // flat list of its feeds, so nothing changes until the user groups/reorders.
-const tree = computed<FeedTree>(() =>
-  props.profile.tree ?? props.profile.feeds.map((f) => ({ kind: 'feed', feed: f })),
-)
+const tree = computed<FeedTree>(() => props.profile.tree ?? props.profile.feeds.map((f) => ({ kind: 'feed', feed: f })))
 
 function feedSelected(feedId: string): boolean {
   return props.selection.type === 'feed' && props.selection.feedId === feedId
@@ -173,9 +171,7 @@ function replaceFolder(folder: FeedFolder, patch: Partial<FeedFolder>): void {
   emit(
     'reorder',
     tree.value.map((n) =>
-      n.kind === 'folder' && n.folder.id === folder.id
-        ? { kind: 'folder', folder: { ...n.folder, ...patch } }
-        : n,
+      n.kind === 'folder' && n.folder.id === folder.id ? { kind: 'folder', folder: { ...n.folder, ...patch } } : n,
     ),
   )
 }
@@ -217,18 +213,31 @@ function deleteFolder(folder: FeedFolder): void {
 </script>
 
 <template>
-  <aside class="hive-scroll relative flex shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar" :style="{ width: size + 'px' }">
+  <aside
+    class="hive-scroll relative flex shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar"
+    :style="{ width: size + 'px' }"
+  >
     <!-- The height matches the feed list's search bar beside it, so the two
          panes divide on the same line. -->
-    <div class="flex h-[46px] shrink-0 items-center gap-2 border-b border-border px-4" data-testid="sidebar-profile-header">
-      <div class="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-.01em]" data-testid="sidebar-profile-name">{{ profile.name }}</div>
+    <div
+      class="flex h-[46px] shrink-0 items-center gap-2 border-b border-border px-4"
+      data-testid="sidebar-profile-header"
+    >
+      <div
+        class="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-.01em]"
+        data-testid="sidebar-profile-name"
+      >
+        {{ profile.name }}
+      </div>
       <button
         class="settings-button flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text"
         title="Profile settings"
         aria-label="Profile settings"
         data-testid="sidebar-open-settings"
         @click="emit('open-settings')"
-      ><IconSettings class="size-3.5" /></button>
+      >
+        <IconSettings class="size-3.5" />
+      </button>
     </div>
 
     <section class="px-2.5 pb-1.5 pt-3" data-testid="sidebar-feeds">
@@ -240,7 +249,9 @@ function deleteFolder(folder: FeedFolder): void {
           aria-label="New folder"
           data-testid="sidebar-new-folder"
           @click="addFolder"
-        ><IconFolderPlus class="size-3" /></button>
+        >
+          <IconFolderPlus class="size-3" />
+        </button>
       </div>
 
       <template v-for="node in tree" :key="node.kind === 'feed' ? node.feed.id : node.folder.id">
@@ -269,7 +280,11 @@ function deleteFolder(folder: FeedFolder): void {
           class="sb-folder"
           data-testid="sidebar-folder"
           :data-id="node.folder.id"
-          :class="{ 'drop-before': showBefore(folderDragRef(node.folder)), 'drop-after': showAfter(folderDragRef(node.folder)), 'drop-into': showInto(node.folder.id) }"
+          :class="{
+            'drop-before': showBefore(folderDragRef(node.folder)),
+            'drop-after': showAfter(folderDragRef(node.folder)),
+            'drop-into': showInto(node.folder.id),
+          }"
         >
           <div
             class="folder-header"
@@ -282,17 +297,26 @@ function deleteFolder(folder: FeedFolder): void {
           >
             <span class="nav-icon">
               <IconFolder class="folder-glyph size-3" />
-              <component :is="isCollapsed(node.folder.id) ? IconChevronRight : IconChevronDown" class="folder-chevron size-3" />
+              <component
+                :is="isCollapsed(node.folder.id) ? IconChevronRight : IconChevronDown"
+                class="folder-chevron size-3"
+              />
             </span>
-            <span class="min-w-0 flex-1 truncate text-left font-medium" data-testid="folder-name">{{ node.folder.name }}</span>
+            <span class="min-w-0 flex-1 truncate text-left font-medium" data-testid="folder-name">{{
+              node.folder.name
+            }}</span>
             <button
               class="folder-action flex size-5 shrink-0 items-center justify-center rounded-md text-text-4 hover:bg-chip hover:text-text"
               title="Edit folder"
               aria-label="Edit folder"
               data-testid="folder-edit"
               @click.stop="editingId = node.folder.id"
-            ><IconPencil class="size-3" /></button>
-            <span class="font-mono text-[11px]" :class="folderNew(node.folder) ? 'text-accent' : 'text-text-3'">{{ folderNew(node.folder) || folderTotal(node.folder) }}</span>
+            >
+              <IconPencil class="size-3" />
+            </button>
+            <span class="font-mono text-[11px]" :class="folderNew(node.folder) ? 'text-accent' : 'text-text-3'">{{
+              folderNew(node.folder) || folderTotal(node.folder)
+            }}</span>
           </div>
 
           <div v-if="!isCollapsed(node.folder.id)" class="folder-body">
@@ -349,7 +373,10 @@ function deleteFolder(folder: FeedFolder): void {
       data-testid="sidebar-edit-flow"
       @click="emit('open-flows')"
     >
-      <span class="flex size-[22px] shrink-0 items-center justify-center rounded-md border border-dashed border-card bg-app text-accent"><IconWorkflow class="size-3" /></span>
+      <span
+        class="flex size-[22px] shrink-0 items-center justify-center rounded-md border border-dashed border-card bg-app text-accent"
+        ><IconWorkflow class="size-3"
+      /></span>
       <span class="min-w-0 flex-1">
         <span class="block text-[12.5px] font-semibold text-text">Edit flow</span>
         <span class="block truncate font-mono text-[11px] text-text-3">Open editor</span>
@@ -358,7 +385,8 @@ function deleteFolder(folder: FeedFolder): void {
         v-if="flowsDirty"
         class="flex shrink-0 items-center gap-1.5 rounded-md border border-accent/35 bg-accent-tint px-1.5 py-0.5 text-[10.5px] font-semibold text-accent"
         data-testid="undeployed-badge"
-      ><span class="size-1.5 shrink-0 rounded-full bg-accent" />Un-deployed</span>
+        ><span class="size-1.5 shrink-0 rounded-full bg-accent" />Un-deployed</span
+      >
       <IconChevronRight class="size-3.5 shrink-0 text-text-4" />
     </button>
 
@@ -376,40 +404,149 @@ function deleteFolder(folder: FeedFolder): void {
 </template>
 
 <style scoped>
-.footer-entry { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px; border-top: 1px solid var(--color-border); color: var(--color-text-2); font-size: 12.5px; text-align: left; cursor: pointer; }
-.footer-entry:hover { background: var(--color-chip); color: var(--color-text); }
-.footer-entry-selected { color: var(--color-accent); font-weight: 500; }
-.footer-entry-selected .footer-icon { border-color: var(--color-accent-tint); color: var(--color-accent); }
-.footer-icon { display: flex; flex: none; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid var(--color-card); border-radius: 6px; background: var(--color-app); color: var(--color-text-3); }
-.nav-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--color-strong); border-radius: 5px; background: var(--color-app); color: var(--color-text-2); }
-.section-label { display: flex; align-items: center; gap: 7px; padding: 0 6px 8px; color: var(--color-text-4); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; }
-.folder-add { opacity: 0; }
-.section-label:hover .folder-add, .folder-add:focus-visible { opacity: 1; }
+.footer-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-2);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.footer-entry:hover {
+  background: var(--color-chip);
+  color: var(--color-text);
+}
+.footer-entry-selected {
+  color: var(--color-accent);
+  font-weight: 500;
+}
+.footer-entry-selected .footer-icon {
+  border-color: var(--color-accent-tint);
+  color: var(--color-accent);
+}
+.footer-icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--color-card);
+  border-radius: 6px;
+  background: var(--color-app);
+  color: var(--color-text-3);
+}
+.nav-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--color-strong);
+  border-radius: 5px;
+  background: var(--color-app);
+  color: var(--color-text-2);
+}
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px 8px;
+  color: var(--color-text-4);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+}
+.folder-add {
+  opacity: 0;
+}
+.section-label:hover .folder-add,
+.folder-add:focus-visible {
+  opacity: 1;
+}
 
 /* An item wrapper carries the drag handle + insertion indicator; the row/header
    inside it stays visually unchanged. */
-.sb-item { border-radius: 7px; }
-.sb-item.indented { padding-left: 12px; }
-.drop-before { box-shadow: inset 0 2px 0 0 var(--color-accent); }
-.drop-after { box-shadow: inset 0 -2px 0 0 var(--color-accent); }
+.sb-item {
+  border-radius: 7px;
+}
+.sb-item.indented {
+  padding-left: 12px;
+}
+.drop-before {
+  box-shadow: inset 0 2px 0 0 var(--color-accent);
+}
+.drop-after {
+  box-shadow: inset 0 -2px 0 0 var(--color-accent);
+}
 
-.folder-header { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border-radius: 7px; color: var(--color-text-2); font-size: 13px; cursor: pointer; }
-.folder-header:hover { background: var(--color-chip); color: var(--color-text); }
+.folder-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 7px;
+  color: var(--color-text-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+.folder-header:hover {
+  background: var(--color-chip);
+  color: var(--color-text);
+}
 /* The leading icon slot shows the folder glyph by default and swaps to a
    collapse/expand chevron on hover — no permanent chevron column, so the
    folder header aligns with the feed rows above it. */
-.folder-glyph { display: inline-flex; }
-.folder-chevron { display: none; }
-.folder-header:hover .folder-glyph { display: none; }
-.folder-header:hover .folder-chevron { display: inline-flex; }
-.folder-action { opacity: 0; }
-.folder-header:hover .folder-action, .folder-action:focus-visible { opacity: 1; }
-.folder-body { margin-top: 1px; }
-.folder-empty { padding: 6px 8px 6px 20px; font-size: 11.5px; color: var(--color-text-4); font-style: italic; }
-.sb-folder.drop-into { background: var(--color-accent-tint); border-radius: 7px; }
-.sb-folder.drop-before { box-shadow: inset 0 2px 0 0 var(--color-accent); }
-.sb-folder.drop-after { box-shadow: inset 0 -2px 0 0 var(--color-accent); }
+.folder-glyph {
+  display: inline-flex;
+}
+.folder-chevron {
+  display: none;
+}
+.folder-header:hover .folder-glyph {
+  display: none;
+}
+.folder-header:hover .folder-chevron {
+  display: inline-flex;
+}
+.folder-action {
+  opacity: 0;
+}
+.folder-header:hover .folder-action,
+.folder-action:focus-visible {
+  opacity: 1;
+}
+.folder-body {
+  margin-top: 1px;
+}
+.folder-empty {
+  padding: 6px 8px 6px 20px;
+  font-size: 11.5px;
+  color: var(--color-text-4);
+  font-style: italic;
+}
+.sb-folder.drop-into {
+  background: var(--color-accent-tint);
+  border-radius: 7px;
+}
+.sb-folder.drop-before {
+  box-shadow: inset 0 2px 0 0 var(--color-accent);
+}
+.sb-folder.drop-after {
+  box-shadow: inset 0 -2px 0 0 var(--color-accent);
+}
 
-.sb-end { height: 14px; border-radius: 5px; }
-.sb-end.drop-end { box-shadow: inset 0 2px 0 0 var(--color-accent); }
+.sb-end {
+  height: 14px;
+  border-radius: 5px;
+}
+.sb-end.drop-end {
+  box-shadow: inset 0 2px 0 0 var(--color-accent);
+}
 </style>

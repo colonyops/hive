@@ -7,9 +7,12 @@ const mocks = vi.hoisted(() => ({
   OpenURL: vi.fn(),
 }))
 
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/observabilityservice', () => ({
-  Settings: mocks.Settings,
-}))
+vi.mock(
+  '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/observabilityservice',
+  () => ({
+    Settings: mocks.Settings,
+  }),
+)
 
 vi.mock('@wailsio/runtime', () => ({ Browser: { OpenURL: mocks.OpenURL } }))
 
@@ -35,10 +38,12 @@ beforeEach(() => {
 
 describe('ObservabilitySettingsView', () => {
   it('shows enabled, configured, and running status for each exporter', async () => {
-    mocks.Settings.mockResolvedValue(view({
-      otlp: { enabled: true, configured: true, running: true, restartRequired: false },
-      profiles: { enabled: false, configured: true, running: false, restartRequired: false },
-    }))
+    mocks.Settings.mockResolvedValue(
+      view({
+        otlp: { enabled: true, configured: true, running: true, restartRequired: false },
+        profiles: { enabled: false, configured: true, running: false, restartRequired: false },
+      }),
+    )
 
     const wrapper = mountView()
     await flushPromises()
@@ -52,9 +57,11 @@ describe('ObservabilitySettingsView', () => {
   })
 
   it('marks a settings.yaml change that needs a restart', async () => {
-    mocks.Settings.mockResolvedValue(view({
-      otlp: { enabled: true, configured: true, running: false, restartRequired: true },
-    }))
+    mocks.Settings.mockResolvedValue(
+      view({
+        otlp: { enabled: true, configured: true, running: false, restartRequired: true },
+      }),
+    )
 
     const wrapper = mountView()
     await flushPromises()
@@ -64,16 +71,20 @@ describe('ObservabilitySettingsView', () => {
   })
 
   it('shows exporter startup errors without claiming the backend is unhealthy', async () => {
-    mocks.Settings.mockResolvedValue(view({
-      otlp: { enabled: true, configured: true, running: false, restartRequired: false },
-      startError: 'token reference could not be resolved',
-    }))
+    mocks.Settings.mockResolvedValue(
+      view({
+        otlp: { enabled: true, configured: true, running: false, restartRequired: false },
+        startError: 'token reference could not be resolved',
+      }),
+    )
 
     const wrapper = mountView()
     await flushPromises()
 
     expect(wrapper.get('[data-testid="observability-otlp-status"]').text()).toBe('Error')
-    expect(wrapper.get('[data-testid="observability-start-error"]').text()).toContain('token reference could not be resolved')
+    expect(wrapper.get('[data-testid="observability-start-error"]').text()).toContain(
+      'token reference could not be resolved',
+    )
   })
 
   it('opens the telemetry configuration guide', async () => {

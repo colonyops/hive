@@ -31,7 +31,4 @@ export interface MenuActionEntry {
   testid?: string
 }
 
-export type MenuEntry =
-  | MenuActionEntry
-  | { kind: 'separator' }
-  | { kind: 'label'; text: string }
+export type MenuEntry = MenuActionEntry | { kind: 'separator' } | { kind: 'label'; text: string }

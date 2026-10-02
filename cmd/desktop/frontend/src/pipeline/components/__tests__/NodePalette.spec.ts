@@ -9,7 +9,11 @@ describe('NodePalette', () => {
     const wrapper = mount(NodePalette)
 
     const labels = wrapper.findAll('[data-testid="palette-entry-label"]').map((w) => w.text())
-    expect(labels.sort()).toEqual(Object.values(byType).map((def) => def.label).sort())
+    expect(labels.sort()).toEqual(
+      Object.values(byType)
+        .map((def) => def.label)
+        .sort(),
+    )
 
     wrapper.unmount()
   })
@@ -82,7 +86,7 @@ describe('NodePalette', () => {
     wrapper.unmount()
   })
 
-  it('shows a hover summary (title attribute) drawn from the node type\'s help.md', () => {
+  it("shows a hover summary (title attribute) drawn from the node type's help.md", () => {
     const wrapper = mount(NodePalette)
 
     const feedEntry = wrapper.get('[data-type="feed"]')

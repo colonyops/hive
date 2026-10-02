@@ -3,7 +3,14 @@
 import { computed } from 'vue'
 import BaseButton from '../../../components/BaseButton.vue'
 import { defaultExecSourceIcon, feedIconComponent, feedIconOptions } from '../../../lib/feedIcons'
-import { IntervalField, MarkImageField, SelectField, TextField, TextareaField, type MarkImageClient } from '../../fields'
+import {
+  IntervalField,
+  MarkImageField,
+  SelectField,
+  TextField,
+  TextareaField,
+  type MarkImageClient,
+} from '../../fields'
 import IconTrash from '~icons/lucide/trash-2'
 import type { Config } from './config'
 
@@ -59,9 +66,12 @@ const iconGlyph = computed(() => feedIconComponent(props.config.icon || defaultE
 
 <template>
   <div class="flex flex-col gap-4">
-    <p class="rounded-lg border border-strong bg-app px-3 py-2.5 text-[11.5px] text-text-3" data-testid="sources.exec-editor-notice">
-      This node runs a command on your machine every poll, with your environment. Treat a flow file from
-      elsewhere the way you would treat a shell script from the same place.
+    <p
+      class="rounded-lg border border-strong bg-app px-3 py-2.5 text-[11.5px] text-text-3"
+      data-testid="sources.exec-editor-notice"
+    >
+      This node runs a command on your machine every poll, with your environment. Treat a flow file from elsewhere the
+      way you would treat a shell script from the same place.
     </p>
     <TextareaField
       label="Command"
@@ -110,7 +120,7 @@ const iconGlyph = computed(() => feedIconComponent(props.config.icon || defaultE
           class="w-2/5 rounded-lg border border-strong bg-app px-3 py-2 font-mono text-[12.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
           :data-testid="`sources.exec-editor-env-name-${index}`"
           @input="setEnvName(index, ($event.target as HTMLInputElement).value)"
-        >
+        />
         <input
           type="text"
           :value="entry[1]"
@@ -118,7 +128,7 @@ const iconGlyph = computed(() => feedIconComponent(props.config.icon || defaultE
           class="min-w-0 flex-1 rounded-lg border border-strong bg-app px-3 py-2 font-mono text-[12.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
           :data-testid="`sources.exec-editor-env-value-${index}`"
           @input="setEnvValue(index, ($event.target as HTMLInputElement).value)"
-        >
+        />
         <button
           type="button"
           class="field-action"
@@ -126,12 +136,16 @@ const iconGlyph = computed(() => feedIconComponent(props.config.icon || defaultE
           aria-label="Remove variable"
           :data-testid="`sources.exec-editor-env-remove-${index}`"
           @click="removeEnv(index)"
-        ><IconTrash class="size-[14px]" /></button>
+        >
+          <IconTrash class="size-[14px]" />
+        </button>
       </div>
       <BaseButton variant="secondary" size="sm" data-testid="sources.exec-editor-env-add" @click="addEnv">
         Add variable
       </BaseButton>
-      <p class="mt-1.5 text-[11.5px] text-text-4">Added to the environment the command inherits. Values are literal — nothing is expanded.</p>
+      <p class="mt-1.5 text-[11.5px] text-text-4">
+        Added to the environment the command inherits. Values are literal — nothing is expanded.
+      </p>
     </div>
 
     <SelectField

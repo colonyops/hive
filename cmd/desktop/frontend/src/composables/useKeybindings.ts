@@ -29,22 +29,53 @@ const MODIFIER_ORDER = ['mod', 'ctrl', 'alt', 'shift'] as const
 
 // event.key values that are modifiers or otherwise not real bindable keys.
 const IGNORED_KEYS = new Set([
-  'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'NumLock', 'ScrollLock',
-  'OS', 'AltGraph', 'Fn', 'FnLock', 'Hyper', 'Super', 'Symbol', 'SymbolLock',
-  'Dead', 'Unidentified',
+  'Shift',
+  'Control',
+  'Alt',
+  'Meta',
+  'CapsLock',
+  'NumLock',
+  'ScrollLock',
+  'OS',
+  'AltGraph',
+  'Fn',
+  'FnLock',
+  'Hyper',
+  'Super',
+  'Symbol',
+  'SymbolLock',
+  'Dead',
+  'Unidentified',
 ])
 
 const KEY_SYMBOLS: Record<string, string> = {
-  arrowdown: '↓', arrowup: '↑', arrowleft: '←', arrowright: '→',
-  enter: '↵', space: 'Space', escape: 'Esc', backspace: '⌫',
-  tab: 'Tab', delete: 'Del', plus: '+',
+  arrowdown: '↓',
+  arrowup: '↑',
+  arrowleft: '←',
+  arrowright: '→',
+  enter: '↵',
+  space: 'Space',
+  escape: 'Esc',
+  backspace: '⌫',
+  tab: 'Tab',
+  delete: 'Del',
+  plus: '+',
 }
 
 // The punctuation event.code names, mapped to the character the same physical
 // key produces unmodified — the spelling the rest of this module uses.
 const PUNCTUATION_CODES: Record<string, string> = {
-  Backquote: '`', Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']',
-  Backslash: '\\', Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/',
+  Backquote: '`',
+  Minus: '-',
+  Equal: '=',
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
 }
 
 const NAMED_CODES = /^(Arrow(Up|Down|Left|Right)|Enter|Escape|Tab|Backspace|Delete|Space|Home|End|PageUp|PageDown)$/
@@ -54,9 +85,16 @@ const NAMED_CODES = /^(Arrow(Up|Down|Left|Right)|Enter|Escape|Tab|Backspace|Dele
 /** Meta/Ctrl → `mod`, Alt/Option → `alt`; anything else is not a modifier. */
 function normalizeModifier(token: string): string | null {
   switch (token) {
-    case 'mod': case 'meta': case 'cmd': case 'command': case 'ctrl': case 'control':
+    case 'mod':
+    case 'meta':
+    case 'cmd':
+    case 'command':
+    case 'ctrl':
+    case 'control':
       return 'mod'
-    case 'alt': case 'option': case 'opt':
+    case 'alt':
+    case 'option':
+    case 'opt':
       return 'alt'
     case 'shift':
       return 'shift'
@@ -86,7 +124,10 @@ function shouldRecordShift(base: string): boolean {
  * whitespace — that spelling belongs to a sequence, not a single step.
  */
 export function canonicalizeCombo(combo: string): string {
-  const parts = combo.split('+').map((p) => p.trim().toLowerCase()).filter(Boolean)
+  const parts = combo
+    .split('+')
+    .map((p) => p.trim().toLowerCase())
+    .filter(Boolean)
   const mods = new Set<string>()
   let key = ''
   for (const part of parts) {
@@ -222,7 +263,12 @@ export function terminalEscapeCombo(e: KeyboardEvent): string | null {
   const combo = comboFromEvent(e)
   if (!combo) return null
   if (!e.ctrlKey) return combo
-  return canonicalizeCombo(combo.split('+').filter((token) => token !== 'shift').join('+'))
+  return canonicalizeCombo(
+    combo
+      .split('+')
+      .filter((token) => token !== 'shift')
+      .join('+'),
+  )
 }
 
 function detectMac(): boolean {
@@ -231,11 +277,16 @@ function detectMac(): boolean {
 
 function formatModifier(mod: string, isMac: boolean): string {
   switch (mod) {
-    case 'mod': return isMac ? '⌘' : 'Ctrl'
-    case 'alt': return isMac ? '⌥' : 'Alt'
-    case 'shift': return isMac ? '⇧' : 'Shift'
-    case 'ctrl': return 'Ctrl'
-    default: return mod
+    case 'mod':
+      return isMac ? '⌘' : 'Ctrl'
+    case 'alt':
+      return isMac ? '⌥' : 'Alt'
+    case 'shift':
+      return isMac ? '⇧' : 'Shift'
+    case 'ctrl':
+      return 'Ctrl'
+    default:
+      return mod
   }
 }
 
@@ -246,7 +297,10 @@ function formatModifier(mod: string, isMac: boolean): string {
 export function formatCombo(binding: string, isMac: boolean = detectMac()): string {
   const canon = canonicalizeBinding(binding)
   if (!canon) return ''
-  return canon.split(' ').map((step) => formatStep(step, isMac)).join(' ')
+  return canon
+    .split(' ')
+    .map((step) => formatStep(step, isMac))
+    .join(' ')
 }
 
 function formatStep(combo: string, isMac: boolean): string {
@@ -425,7 +479,10 @@ function addBinding(id: string, binding: string): void {
 
 function removeBinding(id: string, binding: string): void {
   const canon = canonicalizeBinding(binding)
-  setCombos(id, combosFor(id).filter((c) => c !== canon)) // [] = explicitly unbound
+  setCombos(
+    id,
+    combosFor(id).filter((c) => c !== canon),
+  ) // [] = explicitly unbound
 }
 
 function resetToDefault(id: string): void {

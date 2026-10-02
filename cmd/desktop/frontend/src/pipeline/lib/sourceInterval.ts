@@ -7,7 +7,8 @@ export const DURATION = /^\d+(\.\d+)?(ns|us|µs|ms|s|m|h)([\d.]+(ns|us|µs|ms|s|
 
 export const INTERVAL_LABEL = 'Minimum interval'
 export const INTERVAL_PLACEHOLDER = 'every poll'
-export const INTERVAL_HINT = 'Shortest time between fetches, for a source not worth polling every tick. Rounds up to the next tick; a manual refresh ignores it.'
+export const INTERVAL_HINT =
+  'Shortest time between fetches, for a source not worth polling every tick. Rounds up to the next tick; a manual refresh ignores it.'
 
 /** Returns the error for an unusable interval, or null when it is fine. */
 export function intervalError(interval: string | undefined): string | null {

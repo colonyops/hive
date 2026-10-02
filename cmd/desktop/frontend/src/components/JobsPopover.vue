@@ -29,8 +29,16 @@ function statusClasses(status: string): string {
       <div class="mt-0.5 text-[10.5px] text-text-3">Running and recently completed work</div>
     </header>
     <ul class="max-h-80 divide-y divide-border overflow-y-auto">
-      <li v-for="job in jobs" :key="job.id" class="flex items-start gap-2.5 px-3.5 py-3" :data-testid="`job-row-${job.id}`">
-        <span class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border" :class="statusClasses(job.status)">
+      <li
+        v-for="job in jobs"
+        :key="job.id"
+        class="flex items-start gap-2.5 px-3.5 py-3"
+        :data-testid="`job-row-${job.id}`"
+      >
+        <span
+          class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border"
+          :class="statusClasses(job.status)"
+        >
           <IconLoader v-if="job.status === 'running'" class="size-3.5 animate-spin" />
           <IconClock3 v-else-if="job.status === 'queued'" class="size-3.5" />
           <IconCheck v-else-if="job.status === 'done'" class="size-3.5" />
@@ -52,7 +60,9 @@ function statusClasses(status: string): string {
           title="Open action run"
           :data-testid="`job-open-run-${job.id}`"
           @click="emit('open-run', job.commandId)"
-        ><IconExternalLink class="size-3.5" /></button>
+        >
+          <IconExternalLink class="size-3.5" />
+        </button>
       </li>
     </ul>
   </section>

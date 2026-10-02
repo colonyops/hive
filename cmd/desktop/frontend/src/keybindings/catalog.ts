@@ -193,8 +193,22 @@ export const commandCatalog: BindableCommand[] = [
     defaultCombos: ['p'],
     context: 'feed',
   },
-  { id: 'feed.toggle-archive', title: 'Archive / unarchive item', group: 'Feeds', keywords: ['archive', 'done', 'complete', 'dismiss'], defaultCombos: ['e'], context: 'feed' },
-  { id: 'feed.mark-unread', title: 'Mark unread', group: 'Feeds', keywords: ['read', 'seen', 'unseen'], defaultCombos: ['shift+u'], context: 'feed' },
+  {
+    id: 'feed.toggle-archive',
+    title: 'Archive / unarchive item',
+    group: 'Feeds',
+    keywords: ['archive', 'done', 'complete', 'dismiss'],
+    defaultCombos: ['e'],
+    context: 'feed',
+  },
+  {
+    id: 'feed.mark-unread',
+    title: 'Mark unread',
+    group: 'Feeds',
+    keywords: ['read', 'seen', 'unseen'],
+    defaultCombos: ['shift+u'],
+    context: 'feed',
+  },
   // Scoped to the selected feed; a no-op in Trash, which carries no unread
   // semantics. The profile variant stays unbound by default: it clears every
   // feed at once and there is no undo, so it should be asked for by name.
@@ -662,7 +676,9 @@ export const commandCatalog: BindableCommand[] = [
 // focused pane through its own path, and nothing loaded from actions.yml gets
 // to claim the escape chord.
 const paneEscapes = new Set(commandCatalog.filter((command) => command.escapesPane).map((command) => command.id))
-const panePierces = new Map(commandCatalog.filter((command) => command.piercesPane).map((command) => [command.id, command.piercesPane]))
+const panePierces = new Map(
+  commandCatalog.filter((command) => command.piercesPane).map((command) => [command.id, command.piercesPane]),
+)
 
 /** Whether the command fires over a focused terminal pane on the escape chord. */
 export function commandEscapesPane(commandID: string): boolean {
@@ -670,7 +686,10 @@ export function commandEscapesPane(commandID: string): boolean {
 }
 
 /** Whether the command fires over a focused terminal pane on the binding alone. */
-export function commandPiercesPane(commandID: string, mac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent)): boolean {
+export function commandPiercesPane(
+  commandID: string,
+  mac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.userAgent),
+): boolean {
   const policy = panePierces.get(commandID)
   return policy === true || (policy === 'non-mac' && !mac)
 }
@@ -709,9 +728,7 @@ export function setLauncherCommands(next: BindableCommand[]): void {
  * to the built-in — a config file must not be able to take `mod+k` away from
  * the palette.
  */
-export const commands: ComputedRef<BindableCommand[]> = computed(
-  () => [...commandCatalog, ...launcherCommands.value],
-)
+export const commands: ComputedRef<BindableCommand[]> = computed(() => [...commandCatalog, ...launcherCommands.value])
 
 /**
  * Every bindable command by id, built from `commands` (not `commandCatalog`)

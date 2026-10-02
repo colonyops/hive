@@ -1,13 +1,8 @@
 import { defineComponent } from 'vue'
-import {
-  createRouter,
-  createWebHashHistory,
-  type RouteRecordRaw,
-  type Router,
-  type RouterHistory,
-} from 'vue-router'
+import { createRouter, createWebHashHistory, type RouteRecordRaw, type Router, type RouterHistory } from 'vue-router'
 
-export type AppRouteName = 'feed' | 'flows' | 'terminal' | 'agents' | 'application-settings' | 'profile-settings' | 'dev'
+export type AppRouteName =
+  'feed' | 'flows' | 'terminal' | 'agents' | 'application-settings' | 'profile-settings' | 'dev'
 
 // The one list of application settings sections. It builds the route's own
 // section matcher below and backs isApplicationSettingsSection, which App.vue

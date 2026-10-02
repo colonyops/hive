@@ -5,7 +5,6 @@
 import type { NodeCategory, NodeTypeDefinition } from './nodeType'
 import type { FlowNode } from './types'
 
-
 const nodeModules = import.meta.glob<{ default: NodeTypeDefinition }>('./nodes/*/index.ts', { eager: true })
 
 /** Every registered node type, keyed by its `type` string. */
@@ -44,7 +43,10 @@ let idCounter = 0
 // valid slug".
 export function genId(type: string): string {
   idCounter += 1
-  return `${type.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}-${idCounter}`
+  return `${type
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')}-${idCounter}`
 }
 
 /**

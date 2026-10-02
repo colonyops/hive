@@ -19,7 +19,12 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 
 const AGENTS = [
   { name: 'claude', label: 'Claude Code', skipPermissionFlags: ['--dangerously-skip-permissions'], installed: true },
-  { name: 'opencode', label: 'OpenCode', skipPermissionFlags: ['--agent', 'free-permissions-runner'], installed: false },
+  {
+    name: 'opencode',
+    label: 'OpenCode',
+    skipPermissionFlags: ['--agent', 'free-permissions-runner'],
+    installed: false,
+  },
   { name: 'copilot', label: 'GitHub Copilot', skipPermissionFlags: [], installed: false },
 ]
 
@@ -58,7 +63,10 @@ describe('useHiveSetup', () => {
     expect(seeded.defaultAgent.value).toBe('claude')
     expect([...seeded.selectedAgents.value]).toEqual(['claude'])
 
-    mocks.Setup.mockResolvedValue({ ...setup({ exists: false, usable: false, defaultAgent: '', profiles: [], workspaces: [] }), agents: AGENTS.map(a => ({ ...a, installed: false })) })
+    mocks.Setup.mockResolvedValue({
+      ...setup({ exists: false, usable: false, defaultAgent: '', profiles: [], workspaces: [] }),
+      agents: AGENTS.map((a) => ({ ...a, installed: false })),
+    })
     const empty = useHiveSetup()
     await empty.load()
     expect(empty.selectedAgents.value.size).toBe(0)
@@ -92,7 +100,7 @@ describe('useHiveSetup', () => {
         { name: 'claude', command: 'claude', flags: [] },
       ],
     })
-    expect(hive.customProfiles.value.map(p => p.name)).toEqual(['fable'])
+    expect(hive.customProfiles.value.map((p) => p.name)).toEqual(['fable'])
 
     hive.setSkipPermissions(true)
     await hive.save()
@@ -110,7 +118,9 @@ describe('useHiveSetup', () => {
   })
 
   it('reflects the flags already in the file rather than defaulting the toggle off', async () => {
-    const on = await loaded({ profiles: [{ name: 'claude', command: 'claude', flags: ['--dangerously-skip-permissions'] }] })
+    const on = await loaded({
+      profiles: [{ name: 'claude', command: 'claude', flags: ['--dangerously-skip-permissions'] }],
+    })
     expect(on.skipPermissions.value).toBe(true)
 
     const off = await loaded()
@@ -125,7 +135,9 @@ describe('useHiveSetup', () => {
   })
 
   it('drops the flags again when the toggle goes back off', async () => {
-    const hive = await loaded({ profiles: [{ name: 'claude', command: 'claude', flags: ['--dangerously-skip-permissions'] }] })
+    const hive = await loaded({
+      profiles: [{ name: 'claude', command: 'claude', flags: ['--dangerously-skip-permissions'] }],
+    })
 
     hive.setSkipPermissions(false)
 
@@ -147,7 +159,9 @@ describe('useHiveSetup', () => {
     // A two-token skip flag is one run: an unrelated --agent survives it.
     const two = await loaded({
       defaultAgent: 'opencode',
-      profiles: [{ name: 'opencode', command: 'opencode', flags: ['--agent', 'mine', '--agent', 'free-permissions-runner'] }],
+      profiles: [
+        { name: 'opencode', command: 'opencode', flags: ['--agent', 'mine', '--agent', 'free-permissions-runner'] },
+      ],
     })
     expect(two.skipPermissions.value).toBe(true)
     two.setSkipPermissions(false)
@@ -178,8 +192,12 @@ describe('useHiveSetup', () => {
 
   it('holds the save while a typed folder is still being checked', async () => {
     const hive = await loaded()
-    let settle: (w: { path: string, exists: boolean, repos: number }) => void = () => {}
-    mocks.InspectWorkspace.mockReturnValue(new Promise((resolve) => { settle = resolve }))
+    let settle: (w: { path: string; exists: boolean; repos: number }) => void = () => {}
+    mocks.InspectWorkspace.mockReturnValue(
+      new Promise((resolve) => {
+        settle = resolve
+      }),
+    )
 
     const adding = hive.addWorkspacePath('/home/u/more')
     expect(hive.canSave.value).toBe(false)
@@ -187,7 +205,7 @@ describe('useHiveSetup', () => {
     settle({ path: '/home/u/more', exists: true, repos: 1 })
     await adding
     expect(hive.canSave.value).toBe(true)
-    expect(hive.workspaces.value.map(w => w.path)).toEqual(['/home/u/code', '/home/u/more'])
+    expect(hive.workspaces.value.map((w) => w.path)).toEqual(['/home/u/code', '/home/u/more'])
   })
 
   // An agent with no known flag must not get an empty toggle that writes
@@ -198,7 +216,11 @@ describe('useHiveSetup', () => {
     hive.toggleAgent(AGENTS[2], true)
     hive.setSkipPermissions(true)
 
-    expect(hive.profiles.value.find(p => p.name === 'copilot')).toEqual({ name: 'copilot', command: 'copilot', flags: [] })
+    expect(hive.profiles.value.find((p) => p.name === 'copilot')).toEqual({
+      name: 'copilot',
+      command: 'copilot',
+      flags: [],
+    })
   })
 
   it('ignores a folder already in the list', async () => {

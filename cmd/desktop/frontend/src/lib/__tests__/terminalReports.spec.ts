@@ -9,7 +9,9 @@ import { silenceDeviceReports } from '../terminalReports'
 function harness(): { term: Terminal; replies: () => string } {
   const term = new Terminal({ cols: 20, rows: 5 })
   let sent = ''
-  term.onData((data) => { sent += data })
+  term.onData((data) => {
+    sent += data
+  })
   return { term, replies: () => sent }
 }
 
@@ -23,8 +25,8 @@ const QUERIES = {
   'cursor position report': '\x1b[6n',
   'operating status report': '\x1b[5n',
   'private cursor position report': '\x1b[?6n',
-  'DECRQM': '\x1b[?2026$p',
-  'DECRQSS': '\x1bP$q"q\x1b\\',
+  DECRQM: '\x1b[?2026$p',
+  DECRQSS: '\x1bP$q"q\x1b\\',
 }
 
 // Colour queries are answered off the theme service, which a terminal that was
@@ -61,7 +63,10 @@ describe('silenceDeviceReports', () => {
     const { term } = harness()
     const reached: string[] = []
     // Registered first, so the parser tries it *after* the suppressor.
-    term.parser.registerOscHandler(11, (data) => { reached.push(data); return true })
+    term.parser.registerOscHandler(11, (data) => {
+      reached.push(data)
+      return true
+    })
     silenceDeviceReports(term)
 
     await write(term, '\x1b]11;?\x07')

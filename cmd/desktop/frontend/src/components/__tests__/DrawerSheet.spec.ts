@@ -74,7 +74,9 @@ describe('DrawerSheet', () => {
       // Fixed width: the resize handle is focusable and would otherwise be
       // the trap's first tab stop, which is beside the point here.
       props: { ariaLabel: 'Focus drawer', testid: 'focus-drawer', width: 400 },
-      slots: { default: '<button data-testid="first-focus">First</button><button data-testid="last-focus">Last</button>' },
+      slots: {
+        default: '<button data-testid="first-focus">First</button><button data-testid="last-focus">Last</button>',
+      },
     })
     const first = el<HTMLButtonElement>('first-focus')
     const last = el<HTMLButtonElement>('last-focus')

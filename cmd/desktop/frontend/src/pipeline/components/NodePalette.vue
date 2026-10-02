@@ -51,7 +51,7 @@ function onDragStart(e: DragEvent, type: string) {
           placeholder="filter nodes…"
           class="w-full min-w-0 bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-4"
           data-testid="palette-search"
-        >
+        />
       </div>
     </div>
 
@@ -77,14 +77,21 @@ function onDragStart(e: DragEvent, type: string) {
             <span
               class="flex shrink-0 items-center justify-center rounded-md"
               :class="def.logoMark ? 'size-[25px] p-[2px]' : 'size-[22px]'"
-              :style="{ background: def.tint ?? 'var(--color-accent-tint)', color: def.accentToken ?? 'var(--color-accent)' }"
+              :style="{
+                background: def.tint ?? 'var(--color-accent-tint)',
+                color: def.accentToken ?? 'var(--color-accent)',
+              }"
               data-testid="palette-entry-mark"
             >
               <component :is="def.glyph" :class="def.logoMark ? 'size-full' : 'size-3.5'" />
             </span>
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-[12.5px] font-medium text-text" data-testid="palette-entry-label">{{ def.label }}</span>
-              <span class="block truncate text-[10.5px] text-text-4" data-testid="palette-entry-summary">{{ summarize(def.help) }}</span>
+              <span class="block truncate text-[12.5px] font-medium text-text" data-testid="palette-entry-label">{{
+                def.label
+              }}</span>
+              <span class="block truncate text-[10.5px] text-text-4" data-testid="palette-entry-summary">{{
+                summarize(def.help)
+              }}</span>
             </span>
             <span class="shrink-0 font-mono text-[12px] leading-none text-text-4" aria-hidden="true">⠿</span>
           </button>

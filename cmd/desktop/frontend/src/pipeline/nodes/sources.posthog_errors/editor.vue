@@ -23,7 +23,8 @@ const credentialOptions = computed<SelectOption[]>(() => {
 
 const credentialHint = computed(() => {
   if (!integrationsLoaded.value) return 'Loading connected projects…'
-  if (connectedRefs.value.length === 0) return 'No PostHog project is connected. Connect one in Settings ▸ Integrations.'
+  if (connectedRefs.value.length === 0)
+    return 'No PostHog project is connected. Connect one in Settings ▸ Integrations.'
   return 'The connected PostHog project to fetch as. Emits one item per issue.'
 })
 

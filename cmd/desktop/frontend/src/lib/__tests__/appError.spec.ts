@@ -36,8 +36,9 @@ describe('appErrorKind', () => {
 
 describe('appErrorMessage', () => {
   it('reads the core message', () => {
-    expect(appErrorMessage(bindingError({ kind: 'not_found', message: 'action run 7 not found' })))
-      .toBe('action run 7 not found')
+    expect(appErrorMessage(bindingError({ kind: 'not_found', message: 'action run 7 not found' }))).toBe(
+      'action run 7 not found',
+    )
   })
 
   it('is empty when there is no message to read', () => {
@@ -48,11 +49,12 @@ describe('appErrorMessage', () => {
 
 describe('errorText', () => {
   it('prefers the core message over the runtime one the binding threw', () => {
-    expect(errorText(bindingError({ kind: 'invalid', message: 'flow id must be a slug' }), 'fallback'))
-      .toBe('flow id must be a slug')
+    expect(errorText(bindingError({ kind: 'invalid', message: 'flow id must be a slug' }), 'fallback')).toBe(
+      'flow id must be a slug',
+    )
   })
 
-  it('falls back to the thrown message, then to the caller\'s wording', () => {
+  it("falls back to the thrown message, then to the caller's wording", () => {
     expect(errorText(new Error('fetch failed'), 'fallback')).toBe('fetch failed')
     expect(errorText(new Error(''), 'fallback')).toBe('fallback')
     expect(errorText('a string', 'fallback')).toBe('fallback')

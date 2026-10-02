@@ -18,7 +18,9 @@ function mountModal(folder: FeedFolder = work) {
   return mount(FolderEditModal, { props: { folder }, attachTo: document.body })
 }
 
-beforeEach(() => { document.body.innerHTML = '' })
+beforeEach(() => {
+  document.body.innerHTML = ''
+})
 
 describe('FolderEditModal', () => {
   it('opens with the name focused and selected, and saves the trimmed name', async () => {

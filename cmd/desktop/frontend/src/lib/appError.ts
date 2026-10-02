@@ -7,13 +7,7 @@
 // developer reading a log and changes freely; a Kind is a contract.
 
 /** The closed set of failure classifications the Go core assigns. */
-export type AppErrorKind =
-  | 'internal'
-  | 'invalid'
-  | 'not_found'
-  | 'conflict'
-  | 'unauthenticated'
-  | 'unavailable'
+export type AppErrorKind = 'internal' | 'invalid' | 'not_found' | 'conflict' | 'unauthenticated' | 'unavailable'
 
 export interface AppError {
   kind: AppErrorKind

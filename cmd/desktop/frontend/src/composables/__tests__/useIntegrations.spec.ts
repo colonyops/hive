@@ -32,12 +32,14 @@ function integration(overrides: Partial<Integration> = {}): Integration {
 
 function withIntegrations() {
   let api!: ReturnType<typeof useIntegrations>
-  const wrapper = mount(defineComponent({
-    setup() {
-      api = useIntegrations()
-      return () => null
-    },
-  }))
+  const wrapper = mount(
+    defineComponent({
+      setup() {
+        api = useIntegrations()
+        return () => null
+      },
+    }),
+  )
   return { api, wrapper }
 }
 

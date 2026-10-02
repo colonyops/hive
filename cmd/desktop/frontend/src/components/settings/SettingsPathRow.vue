@@ -66,9 +66,11 @@ const iconBtnClass =
       <BaseIconBadge
         :size="32"
         rounded="rounded-lg"
-        :class="props.tone === 'accent'
-          ? 'border border-accent/35 bg-accent-tint text-accent'
-          : 'border border-card bg-chip text-text-2'"
+        :class="
+          props.tone === 'accent'
+            ? 'border border-accent/35 bg-accent-tint text-accent'
+            : 'border border-card bg-chip text-text-2'
+        "
       >
         <component :is="typeIcon" class="size-4" />
       </BaseIconBadge>
@@ -81,18 +83,21 @@ const iconBtnClass =
             variant="pill"
             class="shrink-0 px-2 py-0.5 text-[10.5px] font-semibold"
             :data-testid="props.testid ? `${props.testid}-overridden` : undefined"
-          >{{ props.overriddenLabel }}</BaseBadge>
+            >{{ props.overriddenLabel }}</BaseBadge
+          >
           <BaseBadge
             v-if="!props.exists"
             tone="muted"
             variant="pill"
             class="shrink-0 px-2 py-0.5 text-[10.5px] font-medium"
-          >Not created yet</BaseBadge>
+            >Not created yet</BaseBadge
+          >
           <span
             class="min-w-0 max-w-full truncate font-mono text-xs text-text-2"
             :title="props.path"
             :data-testid="props.testid ? `${props.testid}-path` : undefined"
-          >{{ props.path }}</span>
+            >{{ props.path }}</span
+          >
         </div>
         <p v-if="props.hint" class="mt-0.5 text-[11.5px] text-text-3">{{ props.hint }}</p>
       </div>
@@ -106,7 +111,9 @@ const iconBtnClass =
         :aria-label="copyLabel"
         :data-testid="props.testid ? `${props.testid}-copy` : undefined"
         @click="copy(props.path)"
-      ><component :is="copyStatus === 'success' ? IconCheck : IconCopy" class="size-[15px]" /></button>
+      >
+        <component :is="copyStatus === 'success' ? IconCheck : IconCopy" class="size-[15px]" />
+      </button>
       <button
         v-if="props.canOpen"
         type="button"
@@ -115,7 +122,9 @@ const iconBtnClass =
         aria-label="Open"
         :data-testid="props.testid ? `${props.testid}-open` : undefined"
         @click="emit('open')"
-      ><IconExternalLink class="size-[15px]" /></button>
+      >
+        <IconExternalLink class="size-[15px]" />
+      </button>
       <button
         v-if="props.canReveal"
         type="button"
@@ -124,7 +133,9 @@ const iconBtnClass =
         aria-label="Reveal"
         :data-testid="props.testid ? `${props.testid}-reveal` : undefined"
         @click="emit('reveal')"
-      ><IconFolderOpen class="size-[15px]" /></button>
+      >
+        <IconFolderOpen class="size-[15px]" />
+      </button>
 
       <template v-if="props.editable">
         <button
@@ -135,13 +146,17 @@ const iconBtnClass =
           aria-label="Reset to default"
           :data-testid="props.testid ? `${props.testid}-reset` : undefined"
           @click="emit('reset')"
-        ><IconRotateCcw class="size-[15px]" /></button>
+        >
+          <IconRotateCcw class="size-[15px]" />
+        </button>
         <button
           type="button"
           class="ml-1 cursor-pointer rounded-[7px] border border-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text"
           :data-testid="props.testid ? `${props.testid}-change` : undefined"
           @click="emit('change')"
-        >Change…</button>
+        >
+          Change…
+        </button>
       </template>
     </div>
   </article>

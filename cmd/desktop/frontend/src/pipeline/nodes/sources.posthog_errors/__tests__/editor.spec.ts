@@ -6,16 +6,27 @@ import { chooseOption } from '../../../../test-utils/select'
 
 const mocks = vi.hoisted(() => ({ List: vi.fn(), On: vi.fn() }))
 
-vi.mock('../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice', () => ({
-  List: mocks.List,
-}))
+vi.mock(
+  '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/integrationsservice',
+  () => ({
+    List: mocks.List,
+  }),
+)
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
 }))
 
 function connectedProjects(...accounts: string[]) {
   mocks.List.mockResolvedValue([
-    { key: 'posthog', title: 'PostHog', stability: 'stable', provider: 'posthog', types: ['sources.posthog_errors', 'sources.posthog_alerts'], accounts, envOverride: false },
+    {
+      key: 'posthog',
+      title: 'PostHog',
+      stability: 'stable',
+      provider: 'posthog',
+      types: ['sources.posthog_errors', 'sources.posthog_alerts'],
+      accounts,
+      envOverride: false,
+    },
   ])
 }
 

@@ -1,4 +1,7 @@
-import { Info, Record as RecordSamples } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/perfservice'
+import {
+  Info,
+  Record as RecordSamples,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/perfservice'
 import type { PerfSample } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const FLUSH_INTERVAL_MS = 2000

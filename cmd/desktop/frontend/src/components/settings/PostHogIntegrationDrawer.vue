@@ -84,10 +84,20 @@ async function onDisconnect(account: string) {
 </script>
 
 <template>
-  <DrawerSheet ariaLabel="PostHog settings" testid="posthog-integration-drawer" backdrop-testid="posthog-integration-backdrop" :default-size="380" :min="320" :max="560" @close="emit('close')">
+  <DrawerSheet
+    ariaLabel="PostHog settings"
+    testid="posthog-integration-drawer"
+    backdrop-testid="posthog-integration-backdrop"
+    :default-size="380"
+    :min="320"
+    :max="560"
+    @close="emit('close')"
+  >
     <template #header>
       <div class="flex items-center gap-2.5">
-        <span class="flex size-[26px] items-center justify-center rounded-[7px] bg-chip text-text-2"><IconBug class="size-3.5" /></span>
+        <span class="flex size-[26px] items-center justify-center rounded-[7px] bg-chip text-text-2"
+          ><IconBug class="size-3.5"
+        /></span>
         <div>
           <div class="text-[14px] font-semibold tracking-[-.01em]">PostHog settings</div>
           <div class="font-mono text-[11px] text-text-3">Connected projects</div>
@@ -110,21 +120,51 @@ async function onDisconnect(account: string) {
             :busy="disconnecting === account"
             :data-testid="`posthog-disconnect-${account}`"
             @click="onDisconnect(account)"
-          >Disconnect</BaseButton>
+            >Disconnect</BaseButton
+          >
         </div>
       </div>
-      <div v-else class="rounded-lg border border-border bg-raised px-3 py-2.5 text-[13px] text-text-3" data-testid="posthog-connected-empty">
+      <div
+        v-else
+        class="rounded-lg border border-border bg-raised px-3 py-2.5 text-[13px] text-text-3"
+        data-testid="posthog-connected-empty"
+      >
         No project connected
       </div>
     </SettingsField>
 
     <div class="mt-5">
-      <SettingsField label="Connect a project" hint="The key is validated once and stored in your keychain; only the host and project id are written to disk." testid="posthog-connect">
-        <div class="mb-2.5 rounded-lg border border-border bg-app px-3 py-2.5 text-xs leading-relaxed text-text-3" data-testid="posthog-connect-help">
-          Create a <span class="text-text-2">personal API key</span> with the <span class="text-text-2">project:read</span>, <span class="text-text-2">error_tracking:read</span> and <span class="text-text-2">alert:read</span> scopes, then paste it below. One key can connect several projects — connect each one separately to route them to different feeds.
+      <SettingsField
+        label="Connect a project"
+        hint="The key is validated once and stored in your keychain; only the host and project id are written to disk."
+        testid="posthog-connect"
+      >
+        <div
+          class="mb-2.5 rounded-lg border border-border bg-app px-3 py-2.5 text-xs leading-relaxed text-text-3"
+          data-testid="posthog-connect-help"
+        >
+          Create a <span class="text-text-2">personal API key</span> with the
+          <span class="text-text-2">project:read</span>, <span class="text-text-2">error_tracking:read</span> and
+          <span class="text-text-2">alert:read</span> scopes, then paste it below. One key can connect several projects
+          — connect each one separately to route them to different feeds.
           <div class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-            <button type="button" class="cursor-pointer text-accent hover:underline" data-testid="posthog-connect-docs" @click="openDocs">PostHog docs ↗</button>
-            <button v-if="instanceKeysUrl" type="button" class="cursor-pointer text-accent hover:underline" data-testid="posthog-connect-instance-link" @click="openInstanceKeys">API keys on your instance ↗</button>
+            <button
+              type="button"
+              class="cursor-pointer text-accent hover:underline"
+              data-testid="posthog-connect-docs"
+              @click="openDocs"
+            >
+              PostHog docs ↗
+            </button>
+            <button
+              v-if="instanceKeysUrl"
+              type="button"
+              class="cursor-pointer text-accent hover:underline"
+              data-testid="posthog-connect-instance-link"
+              @click="openInstanceKeys"
+            >
+              API keys on your instance ↗
+            </button>
           </div>
         </div>
 
@@ -136,7 +176,7 @@ async function onDisconnect(account: string) {
             placeholder="https://us.posthog.com"
             class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] font-mono text-[13px] text-text outline-none focus:border-accent disabled:opacity-60"
             data-testid="posthog-connect-url"
-          >
+          />
           <input
             v-model="tokenInput"
             type="password"
@@ -144,7 +184,7 @@ async function onDisconnect(account: string) {
             placeholder="phx_…"
             class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] font-mono text-[13px] text-text outline-none focus:border-accent disabled:opacity-60"
             data-testid="posthog-connect-token"
-          >
+          />
 
           <!-- Step two. A personal API key spans projects, so the project is
                picked from what the key can actually see rather than typed. -->
@@ -157,12 +197,28 @@ async function onDisconnect(account: string) {
               @update:model-value="chooseProject"
             />
             <div class="flex gap-2">
-              <BaseButton size="sm" :busy="busy" :disabled="selectedProject === null" data-testid="posthog-connect-submit" @click="onConnect">Connect</BaseButton>
-              <BaseButton variant="secondary" size="sm" data-testid="posthog-connect-back" @click="onStartOver">Use another key</BaseButton>
+              <BaseButton
+                size="sm"
+                :busy="busy"
+                :disabled="selectedProject === null"
+                data-testid="posthog-connect-submit"
+                @click="onConnect"
+                >Connect</BaseButton
+              >
+              <BaseButton variant="secondary" size="sm" data-testid="posthog-connect-back" @click="onStartOver"
+                >Use another key</BaseButton
+              >
             </div>
           </template>
           <div v-else>
-            <BaseButton size="sm" :busy="busy" :disabled="!canLoad" data-testid="posthog-connect-load" @click="onLoadProjects">Find projects</BaseButton>
+            <BaseButton
+              size="sm"
+              :busy="busy"
+              :disabled="!canLoad"
+              data-testid="posthog-connect-load"
+              @click="onLoadProjects"
+              >Find projects</BaseButton
+            >
           </div>
         </div>
       </SettingsField>
@@ -171,7 +227,9 @@ async function onDisconnect(account: string) {
 
     <template #footer>
       <div class="flex items-center justify-end gap-2.5">
-        <BaseButton variant="secondary" size="sm" data-testid="posthog-settings-close" @click="emit('close')">Close</BaseButton>
+        <BaseButton variant="secondary" size="sm" data-testid="posthog-settings-close" @click="emit('close')"
+          >Close</BaseButton
+        >
       </div>
     </template>
   </DrawerSheet>

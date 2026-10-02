@@ -6,10 +6,13 @@ const PERIOD_60HZ = 1000 / 60
 function frames(now: number, durations: number[]) {
   // Laid back from `now`, newest last, as the sampler collects them.
   let at = now
-  return [...durations].reverse().map((ms) => {
-    at -= ms
-    return { at: at + ms, ms }
-  }).reverse()
+  return [...durations]
+    .reverse()
+    .map((ms) => {
+      at -= ms
+      return { at: at + ms, ms }
+    })
+    .reverse()
 }
 
 describe('summarize', () => {
@@ -31,7 +34,11 @@ describe('summarize', () => {
 
   it('buckets by probe tick and keeps each tick worst, so a stall survives the line', () => {
     const stats = summarize(
-      [{ at: 9_100, ms: 16 }, { at: 9_180, ms: 240 }, { at: 9_900, ms: 16 }],
+      [
+        { at: 9_100, ms: 16 },
+        { at: 9_180, ms: 240 },
+        { at: 9_900, ms: 16 },
+      ],
       [],
       10_000,
       PERIOD_60HZ,
@@ -44,12 +51,17 @@ describe('summarize', () => {
   })
 
   it('reports lag as a median with the worst alongside', () => {
-    const stats = summarize([], [
-      { at: 9_000, ms: 0 },
-      { at: 9_250, ms: 2 },
-      { at: 9_500, ms: 4 },
-      { at: 9_750, ms: 180 },
-    ], 10_000, PERIOD_60HZ)
+    const stats = summarize(
+      [],
+      [
+        { at: 9_000, ms: 0 },
+        { at: 9_250, ms: 2 },
+        { at: 9_500, ms: 4 },
+        { at: 9_750, ms: 180 },
+      ],
+      10_000,
+      PERIOD_60HZ,
+    )
 
     expect(stats.lagMs).toBe(2)
     expect(stats.worstLagMs).toBe(180)

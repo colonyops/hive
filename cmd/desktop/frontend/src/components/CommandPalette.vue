@@ -27,9 +27,21 @@ function selectScope(id: PaletteScopeId): void {
 // navList, and the watch(selectedIndex, ...) registered there evaluates that
 // getter immediately at setup — navList must already be initialized by then.
 
-interface TitleSegment { text: string; match: boolean }
-interface HeaderEntry { kind: 'header'; group: string }
-interface CmdEntry { kind: 'cmd'; cmd: Command; index: number; segments: TitleSegment[]; groupPrefix: string }
+interface TitleSegment {
+  text: string
+  match: boolean
+}
+interface HeaderEntry {
+  kind: 'header'
+  group: string
+}
+interface CmdEntry {
+  kind: 'cmd'
+  cmd: Command
+  index: number
+  segments: TitleSegment[]
+  groupPrefix: string
+}
 type DisplayEntry = HeaderEntry | CmdEntry
 
 /**
@@ -76,7 +88,13 @@ const displayList = computed<DisplayEntry[]>(() => {
   // prefix instead.
   if (q) {
     results.value.forEach((cmd) => {
-      entries.push({ kind: 'cmd', cmd, index: navIndex++, segments: titleSegments(cmd.title, q), groupPrefix: cmd.group ?? '' })
+      entries.push({
+        kind: 'cmd',
+        cmd,
+        index: navIndex++,
+        segments: titleSegments(cmd.title, q),
+        groupPrefix: cmd.group ?? '',
+      })
     })
     return entries
   }
@@ -94,7 +112,13 @@ const displayList = computed<DisplayEntry[]>(() => {
       entries.push({ kind: 'header', group: 'Recent' })
       for (const cmd of recentCommands) {
         recent.add(cmd.id)
-        entries.push({ kind: 'cmd', cmd, index: navIndex++, segments: titleSegments(cmd.title, q), groupPrefix: cmd.group ?? '' })
+        entries.push({
+          kind: 'cmd',
+          cmd,
+          index: navIndex++,
+          segments: titleSegments(cmd.title, q),
+          groupPrefix: cmd.group ?? '',
+        })
       }
     }
   }
@@ -179,10 +203,13 @@ watch(open, async (v) => {
 // poll in the Code view) is never evaluated for a scroll that has no row to
 // land on. Arrows, hover, and the open watch's own reset above all still
 // drive it normally once open.
-watch(() => (open.value ? selectedIndex.value : -1), (idx) => {
-  if (idx < 0) return
-  nextTick(() => rowElements.get(idx)?.scrollIntoView({ block: 'nearest' }))
-})
+watch(
+  () => (open.value ? selectedIndex.value : -1),
+  (idx) => {
+    if (idx < 0) return
+    nextTick(() => rowElements.get(idx)?.scrollIntoView({ block: 'nearest' }))
+  },
+)
 
 function setRowRef(el: Element | ComponentPublicInstance | null, index: number): void {
   if (el instanceof HTMLElement) rowElements.set(index, el)
@@ -314,17 +341,24 @@ function onKeydown(e: KeyboardEvent): void {
                   />
                   <component :is="entry.cmd.icon ?? IconZap" v-else />
                 </span>
-                <span v-if="entry.groupPrefix" class="palette-scope" data-testid="command-palette-command-scope">{{ entry.groupPrefix }} ›</span>
-                <span class="palette-title" data-testid="command-palette-command-title"><template v-for="(seg, si) in entry.segments" :key="si"><span v-if="seg.match" class="palette-title-match">{{ seg.text }}</span><template v-else>{{ seg.text }}</template></template></span>
-                <span v-if="entry.cmd.kind" class="palette-kind" data-testid="command-palette-command-kind">{{ entry.cmd.kind }}</span>
+                <span v-if="entry.groupPrefix" class="palette-scope" data-testid="command-palette-command-scope"
+                  >{{ entry.groupPrefix }} ›</span
+                >
+                <span class="palette-title" data-testid="command-palette-command-title"
+                  ><template v-for="(seg, si) in entry.segments" :key="si"
+                    ><span v-if="seg.match" class="palette-title-match">{{ seg.text }}</span
+                    ><template v-else>{{ seg.text }}</template></template
+                  ></span
+                >
+                <span v-if="entry.cmd.kind" class="palette-kind" data-testid="command-palette-command-kind">{{
+                  entry.cmd.kind
+                }}</span>
                 <span v-if="entry.cmd.hint" class="palette-hint">{{ entry.cmd.hint }}</span>
                 <span v-if="entry.index === selectedIndex" class="palette-enter-badge" aria-hidden="true">↵</span>
               </button>
             </template>
 
-            <div v-if="results.length === 0 && query" class="palette-empty">
-              No results for "{{ query }}"
-            </div>
+            <div v-if="results.length === 0 && query" class="palette-empty">No results for "{{ query }}"</div>
           </div>
 
           <!-- Footer key hints -->
@@ -600,7 +634,9 @@ function onKeydown(e: KeyboardEvent): void {
 /* Transition */
 .palette-enter-active,
 .palette-leave-active {
-  transition: opacity 0.12s ease, transform 0.12s ease;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
 }
 
 .palette-enter-from,

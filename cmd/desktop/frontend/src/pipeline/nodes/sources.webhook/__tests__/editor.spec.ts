@@ -7,17 +7,20 @@ import type { Config } from '../config'
 // only supplies the endpoint path and the last captured delivery.
 const mocks = vi.hoisted(() => ({ Render: vi.fn(), SetText: vi.fn(), fileToImageBase64: vi.fn() }))
 
-vi.mock('../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/promptsservice', () => ({
-  Catalog: vi.fn(),
-  Render: mocks.Render,
-}))
+vi.mock(
+  '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/promptsservice',
+  () => ({
+    Catalog: vi.fn(),
+    Render: mocks.Render,
+  }),
+)
 
 vi.mock('@wailsio/runtime', () => ({ Clipboard: { SetText: mocks.SetText } }))
 
 // The picker's FileReader read is stubbed: its callback is not a microtask, so
 // flushPromises would not await it. The bytes are the backend's concern anyway.
 vi.mock('../../../../lib/imageUpload', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../../../../lib/imageUpload')>(),
+  ...(await importOriginal<typeof import('../../../../lib/imageUpload')>()),
   fileToImageBase64: mocks.fileToImageBase64,
 }))
 
@@ -25,12 +28,21 @@ beforeEach(() => {
   mocks.Render.mockReset()
   mocks.SetText.mockReset()
   mocks.SetText.mockResolvedValue(undefined)
-  mocks.Render.mockResolvedValue({ id: 'webhook-transform', title: '', description: '', target: '', text: 'TRANSFORM PROMPT' })
+  mocks.Render.mockResolvedValue({
+    id: 'webhook-transform',
+    title: '',
+    description: '',
+    target: '',
+    text: 'TRANSFORM PROMPT',
+  })
   mocks.fileToImageBase64.mockReset()
   mocks.fileToImageBase64.mockResolvedValue('PICKED')
 })
 
-function fakeClient(capture?: Partial<WebhookCaptureView>, overrides: Partial<WebhookEditorClient> = {}): WebhookEditorClient {
+function fakeClient(
+  capture?: Partial<WebhookCaptureView>,
+  overrides: Partial<WebhookEditorClient> = {},
+): WebhookEditorClient {
   return {
     async info() {
       return { running: true, port: 4483, baseUrl: 'http://127.0.0.1:4483/hooks/' }
@@ -64,7 +76,9 @@ describe('sources.webhook editor', () => {
   it('renders the endpoint URL from the listener info and the configured path', async () => {
     const wrapper = mountEditor({ path: 'ci-alerts' })
     await flushPromises()
-    expect(wrapper.get('[data-testid="sources.webhook-editor-url"]').text()).toBe('http://127.0.0.1:4483/hooks/ci-alerts')
+    expect(wrapper.get('[data-testid="sources.webhook-editor-url"]').text()).toBe(
+      'http://127.0.0.1:4483/hooks/ci-alerts',
+    )
   })
 
   it('emits an immutable update:config on path edit', async () => {
@@ -110,12 +124,15 @@ describe('sources.webhook editor', () => {
   })
 
   it('shows the captured payload with the non-blocking shape warning', async () => {
-    const wrapper = mountEditor({ path: 'ci' }, {
-      receivedAt: 1750000000000,
-      body: '{"event":"deploy"}',
-      feedShaped: false,
-      missingFields: ['id', 'kind', 'repo', 'title', 'url'],
-    })
+    const wrapper = mountEditor(
+      { path: 'ci' },
+      {
+        receivedAt: 1750000000000,
+        body: '{"event":"deploy"}',
+        feedShaped: false,
+        missingFields: ['id', 'kind', 'repo', 'title', 'url'],
+      },
+    )
     await flushPromises()
     expect(wrapper.get('[data-testid="sources.webhook-editor-capture"]').text()).toContain('"event": "deploy"')
     const warning = wrapper.get('[data-testid="sources.webhook-editor-shape-warning"]').text()
@@ -127,12 +144,15 @@ describe('sources.webhook editor', () => {
   })
 
   it('hides the shape warning for feed-shaped captures', async () => {
-    const wrapper = mountEditor({ path: 'ci' }, {
-      receivedAt: 1750000000000,
-      body: '{"id":"1","kind":"PR","repo":"o/r","title":"t","url":"https://x"}',
-      feedShaped: true,
-      missingFields: null,
-    })
+    const wrapper = mountEditor(
+      { path: 'ci' },
+      {
+        receivedAt: 1750000000000,
+        body: '{"id":"1","kind":"PR","repo":"o/r","title":"t","url":"https://x"}',
+        feedShaped: true,
+        missingFields: null,
+      },
+    )
     await flushPromises()
     expect(wrapper.find('[data-testid="sources.webhook-editor-shape-warning"]').exists()).toBe(false)
   })
@@ -144,10 +164,13 @@ describe('sources.webhook editor', () => {
     await wrapper.get('[data-testid="sources.webhook-editor-copy-prompt"]').trigger('click')
     await flushPromises()
 
-    expect(mocks.Render).toHaveBeenCalledWith('webhook-transform', expect.objectContaining({
-      webhookPath: 'ci-alerts',
-      webhookSample: '{"event":"deploy"}',
-    }))
+    expect(mocks.Render).toHaveBeenCalledWith(
+      'webhook-transform',
+      expect.objectContaining({
+        webhookPath: 'ci-alerts',
+        webhookSample: '{"event":"deploy"}',
+      }),
+    )
     expect(mocks.SetText).toHaveBeenCalledWith('TRANSFORM PROMPT')
   })
 
@@ -175,24 +198,32 @@ describe('sources.webhook editor', () => {
     const emitted = wrapper.emitted('update:config') as [[Config]]
     expect(emitted.at(-1)![0].image).toBe('a'.repeat(32))
     // The stored PNG returned by the upload previews immediately.
-    expect(wrapper.get('[data-testid="sources.webhook-editor-mark-preview"] img').attributes('src')).toContain('data:image/png;base64,')
+    expect(wrapper.get('[data-testid="sources.webhook-editor-mark-preview"] img').attributes('src')).toContain(
+      'data:image/png;base64,',
+    )
     // The original config object is never mutated in place.
     expect(config.image).toBeUndefined()
   })
 
   it('previews an already-configured image by resolving its hash', async () => {
     const wrapper = mountEditor({ path: 'ci', image: 'b'.repeat(32) }, undefined, {
-      async markImage() { return 'data:image/png;base64,STORED' },
+      async markImage() {
+        return 'data:image/png;base64,STORED'
+      },
     })
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="sources.webhook-editor-mark-preview"] img').attributes('src')).toBe('data:image/png;base64,STORED')
+    expect(wrapper.get('[data-testid="sources.webhook-editor-mark-preview"] img').attributes('src')).toBe(
+      'data:image/png;base64,STORED',
+    )
   })
 
   it('removes the mark image, emitting a config with no image', async () => {
     const config: Config = { path: 'ci', image: 'b'.repeat(32) }
     const wrapper = mountEditor(config, undefined, {
-      async markImage() { return 'data:image/png;base64,STORED' },
+      async markImage() {
+        return 'data:image/png;base64,STORED'
+      },
     })
     await flushPromises()
 

@@ -15,14 +15,7 @@ import { useCommands, type Command } from '../composables/useCommands'
 import { useHiveSetup } from '../composables/useHiveSetup'
 import { useSystemSettings } from '../composables/useSystemSettings'
 
-const {
-  info,
-  error,
-  refresh,
-  openPath,
-  revealPath,
-  createOrOpenHiveConfig,
-} = useSystemSettings()
+const { info, error, refresh, openPath, revealPath, createOrOpenHiveConfig } = useSystemSettings()
 // Settings reports parse failures but does not write the config; first run is
 // the only writer.
 const hive = useHiveSetup()
@@ -38,14 +31,16 @@ useCommands(() => {
   const config = info.value?.hiveConfig
   if (!config) return []
 
-  const commands: Command[] = [{
-    id: 'hive:config:copy',
-    title: 'Copy config path',
-    group: 'Hive CLI config',
-    scope: 'actions',
-    icon: IconCopy,
-    run: () => void copy(config.path),
-  }]
+  const commands: Command[] = [
+    {
+      id: 'hive:config:copy',
+      title: 'Copy config path',
+      group: 'Hive CLI config',
+      scope: 'actions',
+      icon: IconCopy,
+      run: () => void copy(config.path),
+    },
+  ]
 
   if (!config.exists) {
     commands.push({
@@ -89,7 +84,11 @@ onMounted(() => {
 <template>
   <SettingsPage testid="settings-hive">
     <SettingsError v-if="error" :message="error" testid="hive-settings-error" />
-    <SettingsError v-if="hive.unreadable.value" :message="`This config could not be read: ${hive.unreadable.value}. Fix it in your editor, then restart Hive Desktop.`" testid="hive-unreadable" />
+    <SettingsError
+      v-if="hive.unreadable.value"
+      :message="`This config could not be read: ${hive.unreadable.value}. Fix it in your editor, then restart Hive Desktop.`"
+      testid="hive-unreadable"
+    />
 
     <SettingsSection title="Included Hive runtime" boxed padded>
       <template #actions>
@@ -104,17 +103,18 @@ onMounted(() => {
         </button>
       </template>
       <div class="flex flex-col gap-2 text-[12.5px] leading-5 text-text-2">
-        <p>Hive Desktop includes the Hive runtime it needs. It does not require or invoke a separately installed Hive CLI.</p>
-        <p>If you use the Hive CLI, Desktop shares this configuration file with it and leaves everything it does not ask about alone.</p>
+        <p>
+          Hive Desktop includes the Hive runtime it needs. It does not require or invoke a separately installed Hive
+          CLI.
+        </p>
+        <p>
+          If you use the Hive CLI, Desktop shares this configuration file with it and leaves everything it does not ask
+          about alone.
+        </p>
       </div>
     </SettingsSection>
 
-    <SettingsSection
-      v-if="info"
-      title="Configuration file"
-      description="The same file the hive CLI reads."
-      boxed
-    >
+    <SettingsSection v-if="info" title="Configuration file" description="The same file the hive CLI reads." boxed>
       <SettingsPathRow
         label="Hive CLI config"
         hint="Agent profiles, the default agent, workspaces, tmux, and other Hive behavior."
@@ -130,13 +130,11 @@ onMounted(() => {
         @open="openPath(info.hiveConfig.path)"
         @reveal="revealPath(info.hiveConfig.path)"
       />
-      <div
-        class="flex items-center gap-3 px-4 py-3.5"
-        data-testid="hive-restart-notice"
-      >
+      <div class="flex items-center gap-3 px-4 py-3.5" data-testid="hive-restart-notice">
         <IconInfo class="size-4 shrink-0 text-severity-info" />
         <div class="text-[12.5px] leading-relaxed text-text-2">
-          Edit this file in your own editor — the Hive CLI documentation above describes every key. Hive Desktop reads it at startup, so restart the app to apply a change.
+          Edit this file in your own editor — the Hive CLI documentation above describes every key. Hive Desktop reads
+          it at startup, so restart the app to apply a change.
         </div>
       </div>
       <div
@@ -152,7 +150,9 @@ onMounted(() => {
           class="shrink-0 cursor-pointer rounded-[7px] border border-accent/45 bg-accent-tint px-3 py-1.5 text-[12.5px] font-medium text-accent hover:border-accent"
           data-testid="hive-config-create"
           @click="createOrOpenHiveConfig"
-        >Create and open</button>
+        >
+          Create and open
+        </button>
       </div>
     </SettingsSection>
   </SettingsPage>

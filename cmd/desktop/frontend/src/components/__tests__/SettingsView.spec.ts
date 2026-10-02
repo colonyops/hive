@@ -9,9 +9,19 @@ import { applicationSettingsSections } from '../../router'
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   GithubSettings: vi.fn().mockResolvedValue({ pollIntervalSeconds: 60, minPollIntervalSeconds: 60 }),
   SetGithubSettings: vi.fn(),
-  NotificationSettings: vi.fn().mockResolvedValue({ notificationsEnabled: true, systemNotificationsEnabled: true, notificationSound: true }),
+  NotificationSettings: vi
+    .fn()
+    .mockResolvedValue({ notificationsEnabled: true, systemNotificationsEnabled: true, notificationSound: true }),
   SetNotificationSettings: vi.fn(),
-  AppearanceSettings: vi.fn().mockResolvedValue({ theme: '', terminalFontSizePx: 13, terminalFontFamily: '', terminalFontWeight: 0, terminalFontWeightBold: 0, terminalShowWindows: true, terminalPoolSize: 3 }),
+  AppearanceSettings: vi.fn().mockResolvedValue({
+    theme: '',
+    terminalFontSizePx: 13,
+    terminalFontFamily: '',
+    terminalFontWeight: 0,
+    terminalFontWeightBold: 0,
+    terminalShowWindows: true,
+    terminalPoolSize: 3,
+  }),
   Fonts: vi.fn().mockResolvedValue({ all: [], monospace: [] }),
   SetTheme: vi.fn(),
 }))
@@ -24,7 +34,9 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   List: listIntegrations,
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/githubservice', () => ({
-  Status: vi.fn().mockResolvedValue({ state: 'connected', login: 'octocat', name: 'Octocat', avatarUrl: '', message: '' }),
+  Status: vi
+    .fn()
+    .mockResolvedValue({ state: 'connected', login: 'octocat', name: 'Octocat', avatarUrl: '', message: '' }),
   StartDeviceFlow: vi.fn(),
   CancelDeviceFlow: vi.fn(),
   SetToken: vi.fn(),
@@ -51,8 +63,24 @@ beforeEach(() => {
   setTheme('dark')
   resetWebhookSettingsForTests()
   listIntegrations.mockResolvedValue([
-    { key: 'github', title: 'GitHub source', stability: 'stable', provider: 'github', types: ['sources.github'], accounts: ['octocat'], envOverride: false },
-    { key: 'sources.webhook', title: 'Webhook source', stability: 'stable', provider: '', types: ['sources.webhook'], accounts: [], envOverride: false },
+    {
+      key: 'github',
+      title: 'GitHub source',
+      stability: 'stable',
+      provider: 'github',
+      types: ['sources.github'],
+      accounts: ['octocat'],
+      envOverride: false,
+    },
+    {
+      key: 'sources.webhook',
+      title: 'Webhook source',
+      stability: 'stable',
+      provider: '',
+      types: ['sources.webhook'],
+      accounts: [],
+      envOverride: false,
+    },
   ])
   webhookSettings.mockResolvedValue({
     enabled: true,
@@ -77,7 +105,8 @@ describe('SettingsView', () => {
   it('puts every routable section in exactly one nav group', () => {
     const wrapper = mount(SettingsView, { props: { activeCategory: 'appearance' } })
 
-    const rendered = wrapper.findAll('[data-testid^="settings-category-"]')
+    const rendered = wrapper
+      .findAll('[data-testid^="settings-category-"]')
       .map((item) => item.attributes('data-testid')!.replace('settings-category-', ''))
 
     expect(rendered.slice(-3)).toEqual(['system', 'observability', 'about'])
@@ -160,7 +189,15 @@ describe('SettingsView', () => {
   // it fictional so the test stays about the unknown-connector path.
   it('renders a card for a connector type its presentation maps do not know', async () => {
     listIntegrations.mockResolvedValue([
-      { key: 'zzz-not-a-provider', title: 'Unmapped source', stability: 'experimental', provider: 'zzz-not-a-provider', types: ['sources.zzz'], accounts: [], envOverride: false },
+      {
+        key: 'zzz-not-a-provider',
+        title: 'Unmapped source',
+        stability: 'experimental',
+        provider: 'zzz-not-a-provider',
+        types: ['sources.zzz'],
+        accounts: [],
+        envOverride: false,
+      },
     ])
     const wrapper = mount(SettingsView, { props: { activeCategory: 'integrations' } })
     await flushPromises()
@@ -176,7 +213,15 @@ describe('SettingsView', () => {
 
   it('reports a connector connected by an environment override', async () => {
     listIntegrations.mockResolvedValue([
-      { key: 'github', title: 'GitHub source', stability: 'stable', provider: 'github', types: ['sources.github'], accounts: [], envOverride: true },
+      {
+        key: 'github',
+        title: 'GitHub source',
+        stability: 'stable',
+        provider: 'github',
+        types: ['sources.github'],
+        accounts: [],
+        envOverride: true,
+      },
     ])
     const wrapper = mount(SettingsView, { props: { activeCategory: 'integrations' } })
     await flushPromises()
@@ -187,7 +232,15 @@ describe('SettingsView', () => {
 
   it('reports a connector with no credential as not connected', async () => {
     listIntegrations.mockResolvedValue([
-      { key: 'github', title: 'GitHub source', stability: 'stable', provider: 'github', types: ['sources.github'], accounts: [], envOverride: false },
+      {
+        key: 'github',
+        title: 'GitHub source',
+        stability: 'stable',
+        provider: 'github',
+        types: ['sources.github'],
+        accounts: [],
+        envOverride: false,
+      },
     ])
     const wrapper = mount(SettingsView, { props: { activeCategory: 'integrations' } })
     await flushPromises()
@@ -209,7 +262,15 @@ describe('SettingsView', () => {
 
   it('opens Grafana integration settings from the cog', async () => {
     listIntegrations.mockResolvedValue([
-      { key: 'grafana', title: 'Grafana', stability: 'stable', provider: 'grafana', types: ['sources.grafana_alerts', 'sources.grafana_metrics'], accounts: [], envOverride: false },
+      {
+        key: 'grafana',
+        title: 'Grafana',
+        stability: 'stable',
+        provider: 'grafana',
+        types: ['sources.grafana_alerts', 'sources.grafana_metrics'],
+        accounts: [],
+        envOverride: false,
+      },
     ])
     const wrapper = mount(SettingsView, {
       props: { activeCategory: 'integrations' },

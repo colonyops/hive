@@ -31,21 +31,17 @@ useAutofocus(inputRef)
         class="w-full rounded-lg border border-strong bg-app px-3.5 py-2.5 text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
         data-testid="new-profile-input"
         @keydown.enter="submit"
-      >
+      />
       <p class="text-xs leading-relaxed text-text-4">
-        Saved as a flow in <span class="font-mono text-text-3">flows/</span> with the default feeds — your open PRs,
-        the notifications inbox, and cross-repo assignments.
+        Saved as a flow in <span class="font-mono text-text-3">flows/</span> with the default feeds — your open PRs, the
+        notifications inbox, and cross-repo assignments.
       </p>
       <p v-if="error" class="text-xs text-kind-issue" data-testid="new-profile-error">{{ error }}</p>
     </div>
     <template #footer>
-      <BaseButton
-        class="flex-1"
-        :busy="busy"
-        :disabled="!name.trim()"
-        data-testid="new-profile-submit"
-        @click="submit"
-      >Create profile ↵</BaseButton>
+      <BaseButton class="flex-1" :busy="busy" :disabled="!name.trim()" data-testid="new-profile-submit" @click="submit"
+        >Create profile ↵</BaseButton
+      >
       <BaseButton variant="secondary" @click="emit('close')">Cancel</BaseButton>
     </template>
   </BaseModal>

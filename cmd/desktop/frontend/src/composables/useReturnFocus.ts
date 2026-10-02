@@ -15,6 +15,8 @@ export function useReturnFocus(preferred?: () => HTMLElement | null | undefined)
   onUnmounted(() => {
     // The view behind the overlay re-renders as part of this teardown, so the
     // trigger may not be back in the document until the next tick.
-    void nextTick(() => { if (trigger?.isConnected) trigger.focus() })
+    void nextTick(() => {
+      if (trigger?.isConnected) trigger.focus()
+    })
   })
 }

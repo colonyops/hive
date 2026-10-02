@@ -41,7 +41,9 @@ export function useAgentCanvasRoute() {
   // whatever name the query already carried, falling back to '1' — "you pick".
   function syncCanvasQuery(open: boolean, name?: string): void {
     if (route.name !== 'agents') return
-    const next = open ? (name ?? (typeof route.query.canvas === 'string' && route.query.canvas !== '' ? route.query.canvas : '1')) : undefined
+    const next = open
+      ? (name ?? (typeof route.query.canvas === 'string' && route.query.canvas !== '' ? route.query.canvas : '1'))
+      : undefined
     if (route.query.canvas === next) return
     void router.replace({ name: 'agents', params: route.params, query: { ...route.query, canvas: next } })
   }

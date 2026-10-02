@@ -34,7 +34,7 @@ function toPermissionStatus(value: string): NotificationPermission {
 // An unrecognized mode from a settings.yaml written by a newer build heals to
 // the default rather than wedging delivery, matching Go's own tolerance.
 function toDelivery(value: string): NotificationDelivery {
-  return (notificationDeliveryModes as readonly string[]).includes(value) ? value as NotificationDelivery : 'auto'
+  return (notificationDeliveryModes as readonly string[]).includes(value) ? (value as NotificationDelivery) : 'auto'
 }
 
 // Notification preferences are application-lifetime state: useNotify will use
@@ -75,7 +75,10 @@ async function refresh(): Promise<void> {
   error.value = ''
   refreshInFlight = (async () => {
     try {
-      const [settingsResult, permissionResult] = await Promise.allSettled([GetNotificationSettings(), PermissionStatus()])
+      const [settingsResult, permissionResult] = await Promise.allSettled([
+        GetNotificationSettings(),
+        PermissionStatus(),
+      ])
       const errors: string[] = []
       if (settingsResult.status === 'fulfilled') {
         if (settingsVersion === settingsSnapshot) {

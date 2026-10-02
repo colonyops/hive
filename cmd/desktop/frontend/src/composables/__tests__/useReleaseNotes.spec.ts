@@ -47,7 +47,10 @@ describe('useReleaseNotes', () => {
 
   it('opens the dialog for a modal presentation and acknowledges only on dismiss', async () => {
     mocks.Pending.mockResolvedValue({
-      show: true, presentation: 'modal', version: '1.3.0', entries: [note('1.3.0')],
+      show: true,
+      presentation: 'modal',
+      version: '1.3.0',
+      entries: [note('1.3.0')],
     })
     const { notes, toasts } = await loadComposable()
 
@@ -85,7 +88,10 @@ describe('useReleaseNotes', () => {
 
   it("opens the dialog from the toast's action", async () => {
     mocks.Pending.mockResolvedValue({
-      show: true, presentation: 'toast', version: '1.3.0-dev.4', entries: [draft()],
+      show: true,
+      presentation: 'toast',
+      version: '1.3.0-dev.4',
+      entries: [draft()],
     })
     const { notes, toasts } = await loadComposable()
 

@@ -49,16 +49,29 @@ const indent = computed(() => props.depth * 18 + 10)
       class="flex size-4 shrink-0 items-center justify-center text-text-4 hover:text-text"
       data-testid="task-tree-toggle"
       @click.stop="emit('toggle', node.item.id)"
-    ><component :is="collapsed ? IconChevronRight : IconChevronDown" class="size-3" /></button>
+    >
+      <component :is="collapsed ? IconChevronRight : IconChevronDown" class="size-3" />
+    </button>
     <span v-else class="size-4 shrink-0" aria-hidden="true" />
 
-    <component :is="isEpic ? IconLayers : IconCircleDot" class="size-3.5 shrink-0" :class="isEpic ? 'text-accent' : 'text-text-4'" aria-hidden="true" />
+    <component
+      :is="isEpic ? IconLayers : IconCircleDot"
+      class="size-3.5 shrink-0"
+      :class="isEpic ? 'text-accent' : 'text-text-4'"
+      aria-hidden="true"
+    />
 
     <span class="min-w-0 flex-1 truncate">{{ node.item.title }}</span>
 
-    <span v-if="isEpic" class="shrink-0 font-mono text-[10.5px] text-text-4" data-testid="task-tree-counts">[{{ node.counts.done }}/{{ node.counts.total }}]</span>
+    <span v-if="isEpic" class="shrink-0 font-mono text-[10.5px] text-text-4" data-testid="task-tree-counts"
+      >[{{ node.counts.done }}/{{ node.counts.total }}]</span
+    >
 
-    <span v-if="node.item.blocked" class="flex shrink-0 items-center gap-1 rounded-[5px] bg-severity-error-tint px-1.5 py-0.5 text-[10px] font-medium text-severity-error" data-testid="task-tree-blocked">
+    <span
+      v-if="node.item.blocked"
+      class="flex shrink-0 items-center gap-1 rounded-[5px] bg-severity-error-tint px-1.5 py-0.5 text-[10px] font-medium text-severity-error"
+      data-testid="task-tree-blocked"
+    >
       <IconBan class="size-2.5" aria-hidden="true" />Blocked
     </span>
 
@@ -67,10 +80,21 @@ const indent = computed(() => props.depth * 18 + 10)
       class="flex shrink-0 items-center justify-center rounded-[5px] bg-chip px-1 py-0.5 text-text-3"
       :title="`Linked to session ${sessionName || node.item.sessionId}`"
       data-testid="task-tree-session"
-    ><IconTerminal class="size-2.5" aria-hidden="true" /></span>
+      ><IconTerminal class="size-2.5" aria-hidden="true"
+    /></span>
 
-    <span class="shrink-0 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium" :class="status.classes" data-testid="task-tree-status">{{ status.label }}</span>
+    <span
+      class="shrink-0 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium"
+      :class="status.classes"
+      data-testid="task-tree-status"
+      >{{ status.label }}</span
+    >
 
-    <span class="w-9 shrink-0 text-right font-mono text-[10.5px] text-text-4" :title="new Date(node.item.updatedAt).toLocaleString()" data-testid="task-tree-age">{{ relativeAge(Date.parse(node.item.updatedAt)) }}</span>
+    <span
+      class="w-9 shrink-0 text-right font-mono text-[10.5px] text-text-4"
+      :title="new Date(node.item.updatedAt).toLocaleString()"
+      data-testid="task-tree-age"
+      >{{ relativeAge(Date.parse(node.item.updatedAt)) }}</span
+    >
   </div>
 </template>

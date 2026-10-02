@@ -25,7 +25,9 @@ const xterm = vi.hoisted(() => {
     open = vi.fn()
     loadAddon = vi.fn()
     resize = vi.fn()
-    dispose = vi.fn(() => { FakeTerminal.disposals.push('terminal') })
+    dispose = vi.fn(() => {
+      FakeTerminal.disposals.push('terminal')
+    })
 
     constructor(options: Record<string, unknown> = {}) {
       this.options = { ...options }
@@ -35,10 +37,14 @@ const xterm = vi.hoisted(() => {
 
   class FakeAddon {
     static instances: FakeAddon[] = []
-    dispose = vi.fn(() => { FakeTerminal.disposals.push('addon') })
+    dispose = vi.fn(() => {
+      FakeTerminal.disposals.push('addon')
+    })
     activate = vi.fn()
     onContextLoss = vi.fn(() => ({ dispose: vi.fn() }))
-    constructor() { FakeAddon.instances.push(this) }
+    constructor() {
+      FakeAddon.instances.push(this)
+    }
   }
 
   return { FakeTerminal, FakeAddon }
@@ -117,8 +123,7 @@ describe('TerminalPreview', () => {
 
     const [term] = xterm.FakeTerminal.instances
     expect(xterm.FakeAddon.instances).toHaveLength(1)
-    expect(term.open.mock.invocationCallOrder[0])
-      .toBeLessThan(term.loadAddon.mock.invocationCallOrder[0])
+    expect(term.open.mock.invocationCallOrder[0]).toBeLessThan(term.loadAddon.mock.invocationCallOrder[0])
   })
 
   // xterm measures its cell on open() and never re-measures, and the atlas
@@ -128,10 +133,12 @@ describe('TerminalPreview', () => {
 
     const [term] = xterm.FakeTerminal.instances
     expect(mocks.loadTerminalFaces).toHaveBeenCalledWith(
-      '', defaultTerminalFontSizePx, defaultTerminalFontWeight, defaultTerminalFontWeightBold,
+      '',
+      defaultTerminalFontSizePx,
+      defaultTerminalFontWeight,
+      defaultTerminalFontWeightBold,
     )
-    expect(mocks.loadTerminalFaces.mock.invocationCallOrder[0])
-      .toBeLessThan(term.open.mock.invocationCallOrder[0])
+    expect(mocks.loadTerminalFaces.mock.invocationCallOrder[0]).toBeLessThan(term.open.mock.invocationCallOrder[0])
   })
 
   it('re-applies every typography setting without reopening', async () => {

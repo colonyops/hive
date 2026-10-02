@@ -44,7 +44,7 @@ defineExpose({ focus })
         :class="[{ 'font-mono': monospace }, $slots.trailing ? 'pr-10' : '']"
         :data-testid="testid"
         @input="onInput"
-      >
+      />
       <div v-if="$slots.trailing" class="absolute inset-y-0 right-0 flex items-center pr-1.5">
         <slot name="trailing" />
       </div>

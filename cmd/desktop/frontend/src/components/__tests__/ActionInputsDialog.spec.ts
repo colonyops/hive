@@ -4,11 +4,24 @@ import ActionInputsDialog from '../ActionInputsDialog.vue'
 import type { InputSpec } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/actions/models'
 
 function spec(overrides: Partial<InputSpec> = {}): InputSpec {
-  return { name: 'reason', label: 'Reason', type: 'text', required: true, default: '', placeholder: 'why', options: null, ...overrides }
+  return {
+    name: 'reason',
+    label: 'Reason',
+    type: 'text',
+    required: true,
+    default: '',
+    placeholder: 'why',
+    options: null,
+    ...overrides,
+  }
 }
 
 function mountDialog(inputs: InputSpec[]) {
-  return mount(ActionInputsDialog, { attachTo: document.body, props: { actionLabel: 'Silence alert', inputs, busy: false, error: null }, global: { stubs: { Teleport: true } } })
+  return mount(ActionInputsDialog, {
+    attachTo: document.body,
+    props: { actionLabel: 'Silence alert', inputs, busy: false, error: null },
+    global: { stubs: { Teleport: true } },
+  })
 }
 
 describe('ActionInputsDialog', () => {

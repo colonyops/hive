@@ -14,7 +14,9 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 function coarseClock(msPerCall: number) {
   let elapsed = 0
   return {
-    advanceOneCall: () => { elapsed += msPerCall },
+    advanceOneCall: () => {
+      elapsed += msPerCall
+    },
     now: () => Math.floor(elapsed),
   }
 }
@@ -31,8 +33,12 @@ describe('useWailsLatency', () => {
   it('recovers a sub-millisecond per-call cost from a clock that cannot resolve one', async () => {
     const clock = coarseClock(0.4)
     vi.spyOn(performance, 'now').mockImplementation(clock.now)
-    mocks.Ping.mockImplementation(async () => { clock.advanceOneCall() })
-    mocks.Echo.mockImplementation(async () => { clock.advanceOneCall() })
+    mocks.Ping.mockImplementation(async () => {
+      clock.advanceOneCall()
+    })
+    mocks.Echo.mockImplementation(async () => {
+      clock.advanceOneCall()
+    })
 
     const scope = effectScope()
     const { report, measure } = scope.run(() => useWailsLatency())!

@@ -14,7 +14,10 @@ import {
   Pins,
   SetPins,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/menubarservice'
-import type { MenuBarFeedChoice, MenuBarPin } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import type {
+  MenuBarFeedChoice,
+  MenuBarPin,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const pins = ref<MenuBarPin[]>([])
 const choices = ref<MenuBarFeedChoice[]>([])
@@ -61,9 +64,7 @@ async function save(next: MenuBarPin[]): Promise<void> {
 }
 
 function feedPath(choice: MenuBarFeedChoice, withName = true): string {
-  return [choice.profileName, choice.folder, withName ? choice.name : '']
-    .filter((part) => part !== '')
-    .join(' › ')
+  return [choice.profileName, choice.folder, withName ? choice.name : ''].filter((part) => part !== '').join(' › ')
 }
 
 const choiceByFeed = computed(() => new Map(choices.value.map((choice) => [choice.feed, choice])))
@@ -75,10 +76,12 @@ const addOptions = computed(() => {
     .map((choice) => ({ value: choice.feed, label: feedPath(choice) }))
 })
 
-const limitOptions = computed(() => Array.from({ length: maxItemLimit.value }, (_, index) => {
-  const count = index + 1
-  return { value: String(count), label: count === 1 ? '1 item' : `${count} items` }
-}))
+const limitOptions = computed(() =>
+  Array.from({ length: maxItemLimit.value }, (_, index) => {
+    const count = index + 1
+    return { value: String(count), label: count === 1 ? '1 item' : `${count} items` }
+  }),
+)
 
 function addPin(feed: string): void {
   if (!feed || pins.value.length >= maxFeeds.value) return
@@ -101,7 +104,9 @@ function setLimit(index: number, value: string): void {
   void save(pins.value.map((pin, i) => (i === index ? { ...pin, limit: Number(value) } : pin)))
 }
 
-onMounted(() => { void load() })
+onMounted(() => {
+  void load()
+})
 </script>
 
 <template>
@@ -120,7 +125,11 @@ onMounted(() => { void load() })
         v-for="(pin, index) in pins"
         :key="pin.feed"
         :label="choiceByFeed.get(pin.feed)?.name ?? pin.feed"
-        :hint="choiceByFeed.has(pin.feed) ? feedPath(choiceByFeed.get(pin.feed)!, false) : 'This feed no longer exists, so the menu bar skips it.'"
+        :hint="
+          choiceByFeed.has(pin.feed)
+            ? feedPath(choiceByFeed.get(pin.feed)!, false)
+            : 'This feed no longer exists, so the menu bar skips it.'
+        "
         :testid="`menubar-pin-${index}`"
       >
         <div class="flex items-center gap-1.5">
@@ -140,7 +149,9 @@ onMounted(() => { void load() })
             aria-label="Move up"
             :data-testid="`menubar-pin-${index}-up`"
             @click="movePin(index, -1)"
-          ><IconArrowUp class="size-3.5" /></button>
+          >
+            <IconArrowUp class="size-3.5" />
+          </button>
           <button
             type="button"
             class="cursor-pointer rounded-md p-1.5 text-text-3 hover:bg-chip hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
@@ -148,14 +159,18 @@ onMounted(() => { void load() })
             aria-label="Move down"
             :data-testid="`menubar-pin-${index}-down`"
             @click="movePin(index, 1)"
-          ><IconArrowDown class="size-3.5" /></button>
+          >
+            <IconArrowDown class="size-3.5" />
+          </button>
           <button
             type="button"
             class="cursor-pointer rounded-md p-1.5 text-text-3 hover:bg-chip hover:text-text"
             aria-label="Unpin"
             :data-testid="`menubar-pin-${index}-remove`"
             @click="removePin(index)"
-          ><IconX class="size-3.5" /></button>
+          >
+            <IconX class="size-3.5" />
+          </button>
         </div>
       </SettingsRow>
       <SettingsRow

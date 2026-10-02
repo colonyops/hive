@@ -1,6 +1,12 @@
 import { computed, onScopeDispose, ref, toValue, watch } from 'vue'
 import type { Component, ComputedRef, MaybeRefOrGetter, Ref } from 'vue'
-import { scopeForSigil, type CommandScope, type PaletteScopeId, type PaletteScopeSpec, paletteScopes } from '../palette/scopes'
+import {
+  scopeForSigil,
+  type CommandScope,
+  type PaletteScopeId,
+  type PaletteScopeSpec,
+  paletteScopes,
+} from '../palette/scopes'
 import { usePaletteRecents } from './usePaletteRecents'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -211,9 +217,7 @@ export function filterAndScore(query: string, cmds: Command[]): Command[] {
   if (!query) return sortCommands(cmds)
 
   const placement = groupPlacement(cmds)
-  const scored = cmds
-    .map((cmd) => ({ cmd, score: scoreCommand(query, cmd) }))
-    .filter(({ score }) => score >= 0)
+  const scored = cmds.map((cmd) => ({ cmd, score: scoreCommand(query, cmd) })).filter(({ score }) => score >= 0)
 
   scored.sort((a, b) => b.score - a.score || compareGroupPlacement(placement, a.cmd, b.cmd))
 
@@ -255,10 +259,7 @@ const shellEscapes = ref<ShellEscapeRegistration[]>([])
  * given line cannot run (e.g. no attached session) — an empty line is never
  * offered either.
  */
-export function useShellEscape(
-  source: (line: string) => Command[],
-  available: () => boolean = () => true,
-): void {
+export function useShellEscape(source: (line: string) => Command[], available: () => boolean = () => true): void {
   const key = Symbol()
   shellEscapes.value = [...shellEscapes.value, { key, source, available }]
 
@@ -347,11 +348,17 @@ export function useCommandPalette(): {
         return shellEscapes.value.flatMap((r) => r.source(line))
       }
       case 'keys':
-        return filterAndScore(query, keysScopes.value.flatMap((r) => r.source()))
+        return filterAndScore(
+          query,
+          keysScopes.value.flatMap((r) => r.source()),
+        )
       case 'goto':
       case 'actions': {
         const wanted = _scope.value
-        return filterAndScore(query, allCommands().filter((cmd) => (cmd.scope ?? 'actions') === wanted))
+        return filterAndScore(
+          query,
+          allCommands().filter((cmd) => (cmd.scope ?? 'actions') === wanted),
+        )
       }
       default:
         return filterAndScore(query, allCommands())
