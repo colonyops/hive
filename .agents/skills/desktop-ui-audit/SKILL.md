@@ -1,7 +1,7 @@
 ---
 name: desktop-ui-audit
 description: Drive and audit the real native Hive Desktop window through the Wails MCP server compiled into every dev build - query the DOM, click, type, read state back, and take pixel screenshots - and author views so an agent can drive them. Use when asked to verify a change in the real app rather than the headless build, smoke-test a workflow end to end, screenshot the native window, check what the UI shows after an event, or review a view's data-testid coverage before a PR.
-compatibility: macOS. A dev app from this worktree (`mise run desktop:dev`) whose launch.env carries WAILS_MCP_PORT and whose .mcp.json registers it as hive-desktop-ui (regenerate both with `mise run desktop:dev:prepare`). swiftc and Screen Recording permission for screenshots.
+compatibility: macOS. A dev app from this worktree (`mise run desktop:dev`) whose launch.env carries WAILS_MCP_PORT and whose .mcp.json registers it as hive-desktop-ui (regenerate both with `mise run desktop:dev:prepare`). swiftc and Screen Recording permission for screenshots; Accessibility permission to raise the window.
 ---
 
 # Drive the native app through its Wails MCP server
@@ -43,19 +43,49 @@ jq -r '.mcpServers["hive-desktop-ui"].url' .mcp.json
 - **A call cannot connect**: the app is not running. Ask the user to start
   `mise run desktop:dev`; it opens a window, so do not start it from a
   background shell they cannot see.
-- **`launch.env` has no `WAILS_MCP_PORT`**: it predates the server, and
-  `mise run desktop:dev:prepare` regenerates both files.
+- **`launch.env` has no `WAILS_MCP_PORT`**: it predates the server.
+  `mise run desktop:dev:prepare` regenerates a stale or missing file;
+  `desktop:dev:fresh` (the file header's advice) also reseeds the data.
 
 Each worktree gets its own port, so this never reaches the installed Hive.app
-or another worktree's app. Start with `app_info` for the window list, then a
-page check:
+or another worktree's app. The two look identical otherwise: same name, same
+bundle id, and the installed one is usually also running. The port is the
+only discriminator, and it also gives the dev app's pid:
+
+```bash
+lsof -nP -t -iTCP:$(jq -r '.mcpServers["hive-desktop-ui"].url' .mcp.json | sed -E 's#.*:([0-9]+)/mcp#\1#') -sTCP:LISTEN
+```
+
+### Preconditions on arrival
+
+Start with `app_info` for the window list (its `visible` and `focused` flags
+are unreliable; see the guardrails), then this page check:
 
 ```js
 // js_eval
 return {route: location.hash, title: document.title,
+        visibility: document.visibilityState, hasFocus: document.hasFocus(),
         testids: document.querySelectorAll('[data-testid]').length,
         focused: document.activeElement?.dataset.testid ?? null}
 ```
+
+- **`visibility` is `hidden`**: the window is covered, usually by the
+  installed Hive.app. A hidden WKWebView never fires `requestAnimationFrame`
+  and throttles timers, so every Vue transition stalls: a closed palette stays
+  in the DOM at full opacity, an opened one never paints. `window_control
+  focus` does not bring the window forward. This does, by the pid above:
+
+  ```bash
+  osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $PID) to true"
+  ```
+
+  Re-run the page check; `hasFocus` turns true and frames flow. If that is
+  refused (no Accessibility permission), ask the user to click the dev window.
+- **`route` is `#/feed/...` with hundreds of test ids**: the instance carries
+  a copy of the installed app's data and you are on the inbox. **Onboarding is
+  not a route**; it shows only while no profile exists, and the way back to it
+  is `mise run desktop:dev:reset` plus a restart, which is the user's call.
+  Read the state you are in rather than the state you expected.
 
 ## 2. Drive: discover, act, read back
 
@@ -65,57 +95,104 @@ what the source suggests, and ids are read off the live DOM, not guessed from
 a name.
 
 - `dom_query {selector, limit}` returns tag, text, value, bounds, `visible`,
-  and `disabled` per match. It is the assertion tool.
-- `dom_html {selector}` for markup; `screenshot_dom {max_depth}` for an
-  outline of the viewport.
-- The handles on screen, with the words an assertion needs:
+  and `disabled` per match, and a clean `count: 0` for no match. It is the
+  assertion tool.
+- `dom_html {selector}` for markup. `screenshot_dom {max_depth}` is geometry
+  only (tag, classes, bounds, no ids), so it cannot tell you what to click.
+- **`visible` means "has a layout box."** It is true for a hover-only control
+  at `opacity: 0` and for a row far below the fold. When that matters, check
+  `getComputedStyle(el).opacity !== '0'` and that the rect intersects the
+  viewport yourself.
+- The handles on screen, grouped so a populated inbox (500+ ids) stays under
+  the tool-result limit; the raw per-element array only fits a view with
+  under about 150 ids:
 
 ```js
-// js_eval: every data-testid in the DOM
-return [...document.querySelectorAll('[data-testid]')].map(e => {
+// js_eval: data-testids grouped by id, with a sample of the text an assertion needs
+const inViewport = false   // true: only ids with a box inside the viewport
+const groups = new Map()
+for (const e of document.querySelectorAll('[data-testid]')) {
   const r = e.getBoundingClientRect()
-  return {id: e.dataset.testid, tag: e.tagName.toLowerCase(),
-          visible: r.width > 0 && r.height > 0,
-          text: (e.innerText || e.getAttribute('aria-label') || e.value || '')
-                  .trim().replace(/\s+/g, ' ').slice(0, 60)}
-})
+  const shown = r.width > 0 && r.height > 0 && getComputedStyle(e).opacity !== '0'
+  const onScreen = r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth
+  if (inViewport && !(shown && onScreen)) continue
+  const g = groups.get(e.dataset.testid) ?? {id: e.dataset.testid, tag: e.tagName.toLowerCase(), count: 0, shown: 0, sample: ''}
+  g.count++; if (shown) g.shown++
+  g.sample ||= (e.innerText || e.getAttribute('aria-label') || e.value || '').trim().replace(/\s+/g, ' ').slice(0, 60)
+  groups.set(g.id, g)
+}
+return [...groups.values()]
 ```
 
-Act, then read back. A click's own return value describes the element as it
-was; the assertion is a fresh `dom_query` afterwards.
+Act, then read back. **The return value of a mouse or key tool is a hint, not
+a result**: it describes whatever the hit test found under the centre point
+after the event, often an `svg` or `path` child, sometimes a node the route
+change already unmounted (`0x0` bounds), and for a key press the element
+focus landed on. Never assert on it; the assertion is a fresh `dom_query`.
 
 - `mouse_click {selector}`; `mouse_move {selector, duration_ms}` to hover;
-  `mouse_drag {from_selector, to_selector}`; `mouse_scroll {selector, delta_y}`.
+  `mouse_drag {from_selector, to_selector}` (works for resize handles and
+  HTML5 drag sources); `mouse_scroll {selector, delta_y}` scrolls the nearest
+  scrollable ancestor and returns its `scrollTop`.
 - `keyboard_type {text}` types into the focused element; add `selector` to
   click a field first. The command palette's input already has focus when ⌘K
-  opens it, so type with no selector.
+  opens it, so type with no selector. There is no select-all: clear a field
+  with one `keyboard_press {key: "Backspace"}` per character, or in one call:
+
+  ```js
+  // js_eval: clear the focused field the way Vue sees it
+  const el = document.activeElement; el.value = ''
+  el.dispatchEvent(new Event('input', {bubbles: true})); return el.dataset.testid
+  ```
 - `keyboard_press {key, modifiers}`: `{key: "k", modifiers: ["meta"]}` is ⌘K,
-  then `{key: "Enter"}`, `{key: "Escape"}`.
+  then `{key: "ArrowDown"}`, `{key: "Enter"}`, `{key: "Escape"}`.
+- Calls sent in one batch run serially in the order sent, so an action and
+  its read-back can go in one round trip.
 
 **There is no server-side wait** apart from `wait_for_event {name}`. After an
 action that goes through Go (a refresh, a flow commit, a route change), wait
-inside the page instead of asserting at once:
+inside the page instead of asserting at once. Return the outcome rather than
+throwing: a thrown message does not survive the trip (see the guardrails).
 
 ```js
-// js_eval: a visible match, or a throw after 10s
+// js_eval: a visible match, or {timedOut: true} after 10s
 const sel = '[data-testid="detail-pane"]', deadline = Date.now() + 10000
 while (Date.now() < deadline) {
   const el = document.querySelector(sel)
-  if (el && el.getBoundingClientRect().width > 0) return {visible: true}
+  if (el && el.getBoundingClientRect().width > 0) return {visible: true, sel}
   await new Promise(r => setTimeout(r, 200))
 }
-throw new Error('timed out waiting for ' + sel)
+return {visible: false, timedOut: true, sel}
 ```
 
-A worked sequence, the command palette:
+```js
+// js_eval: gone, closing (a Vue leave transition in flight), or still there
+const sel = '[data-testid="command-palette"]', deadline = Date.now() + 10000
+while (Date.now() < deadline) {
+  const el = document.querySelector(sel)
+  if (!el) return {gone: true, sel}
+  if (/-leave-active/.test(el.parentElement?.className ?? '')) return {gone: false, closing: true, sel}
+  await new Promise(r => setTimeout(r, 200))
+}
+return {gone: false, timedOut: true, sel}
+```
+
+`closing` with a window that is `hidden` is the stalled transition from the
+preconditions; the element lingers with its key handlers attached, and
+another Escape toggles it back open. Raise the window first.
+
+A worked sequence, the command palette, **from the feed view** (its commands
+are scoped to the current view; elsewhere "unread" matches nothing and the
+page shows `No results for "unread"`, which carries no id):
 
 1. `keyboard_press {key: "k", modifiers: ["meta"]}`
-2. the wait above, for `[data-testid="command-palette-input"]`
+2. the visible-wait above, for `[data-testid="command-palette-input"]`
 3. `keyboard_type {text: "unread"}`
 4. `dom_query {selector: '[data-testid="command-palette-command-title"]'}`
-   lists the filtered commands
-5. `keyboard_press {key: "Enter"}`, then `dom_query` on
-   `[data-testid="command-palette"]`: a count of 0 means it closed
+   lists the filtered commands; `ArrowDown` moves the selection
+5. `keyboard_press {key: "Enter"}`, then the gone-wait above on
+   `[data-testid="command-palette"]`; read `location.hash` back if the
+   command navigates
 
 ## 3. Assert state, not pixels, where you can
 
@@ -126,8 +203,8 @@ emit) read Hive's own MCP server with the **desktop-api** skill.
 
 Pixels are for what the DOM cannot prove: layout, theming, the native
 titlebar, a rendered image. `scripts/screenshot.sh` finds the window by the
-process on the MCP port and captures it at native resolution; read the file
-back to look at it.
+process on the MCP port and captures it at native resolution, covered or not;
+read the file back to look at it. The animated cursor overlay is in the image.
 
 ```bash
 .agents/skills/desktop-ui-audit/scripts/screenshot.sh                  # cmd/desktop/e2e/screenshots/native-<time>.png (gitignored)
@@ -144,20 +221,29 @@ compiles `winid.swift` with the system `swiftc`.
   side effect replaces `window._wails.dispatchWailsEvent`; every frontend
   `Events.On` listener then stops firing, silently, until reload
   (wailsapp/wails#6136). Reach Go through the UI or through Hive's MCP server.
+- **A thrown error loses its message.** The page reports `error.stack`, and
+  WebKit's stack has no message line, so a `js_eval` throw arrives as
+  `javascript error: @wails://localhost:<port>/:776:16` and a `mouse_click`
+  on a selector with no match as a bare `resolveTarget@...` stack. Return
+  values from your own code, and `dom_query` a selector before clicking it so
+  "no match" is a readable `count: 0`.
 - **A native dialog blocks every evaluation.** An open file panel, a sheet, or
   a notification-permission prompt makes each call time out ("the window may
   be reloading, busy or showing a native dialog"). Avoid paths that open one,
   or ask the user to dismiss it. The panel itself is out of reach, as are the
   tray, the Dock, and notification banners.
+- **A hidden window stalls the UI.** See the preconditions: no frames, no
+  transitions, throttled timers. Raise it by pid before judging anything that
+  animates.
 - **Input is synthesized DOM events, not OS events.** `isTrusted` is false.
   Hive's handlers do not check it, so do not add one. Keyboard events go to the
   focused element and bubble to the window listeners that implement chords.
 - **The cursor overlay is in the DOM** as `#__wails-mcp-cursor` after the
-  first mouse tool runs. It has no `data-testid`; exclude it if a query by tag
-  catches it.
-- **`app_info` and `windows_list` report `visible:false`** for a window that
-  is on screen when the app was launched from a background process. Trust the
-  DOM and the screenshot, not that flag.
+  first mouse tool runs. It has no `data-testid`, so it only shows up in a
+  query by tag (`div`) or in `screenshot_dom`.
+- **`app_info` and `windows_list` report `visible:false` and
+  `focused:false`** for a window that is on screen. Trust the page check, the
+  DOM, and the screenshot, not those flags.
 - **One app per worktree.** The port comes from `launch.env` and `.mcp.json`;
   do not hard-code 9099, and do not point a client at a port you did not read
   from one of those files.
@@ -167,36 +253,41 @@ compiles `winid.swift` with the system `swiftc`.
 The `data-testid` is the agent API and the Playwright API at once: a flow
 proven here ports to `cmd/desktop/e2e/tests/*.spec.ts` with the same
 `getByTestId` selectors, and a renamed id breaks both. Before a PR that adds or
-changes a view, run the test-id listing above on it and check every step a
+changes a view, run the grouped listing above on it and check every step a
 smoke test would take has a handle.
 
 - **Every interactive element and every container an assertion reads gets
   one.** Buttons, inputs, rows, the pane that shows the result, the toast, the
-  error, the empty state. The Playwright suite asserts on `feed-item`,
-  `detail-pane`, `toast`, `feed-search`, `command-palette-input`,
-  `application-settings`; new surfaces follow suit. Read the id off the live
-  DOM rather than guessing it from a name: `palette-entry` is the flow
-  editor's node palette, and the command palette is `command-palette-*`.
+  error, the empty state ("No results for ..." included), the backdrop a
+  test clicks to dismiss, and the scroll container a test scrolls. The
+  Playwright suite asserts on `feed-item`, `detail-pane`, `toast`,
+  `feed-search`, `command-palette-input`, `application-settings`; new
+  surfaces follow suit. Read the id off the live DOM rather than guessing it
+  from a name: `palette-entry` is the flow editor's node palette, and the
+  command palette is `command-palette-*`.
 - **Name it `<surface>-<object>[-<verb>]`, kebab-case**, as the codebase does:
   `feed-item`, `sidebar-edit-flow`, `onboarding-hive-continue`,
-  `action-row-smoke-created`. A list row carries its identity:
-  `:data-testid="'item-session-' + session.id"`. A compound component takes a
-  `testid` prop and derives its parts (`${testid}-input`, `-confirm`,
-  `-cancel`, `-error`), so one prop names the whole widget.
+  `settings-category-keybindings`, `flow-node-<id>`. **A repeated row carries
+  its identity** (`:data-testid="'item-session-' + session.id"`); thirty rows
+  that all say `feed-item` can only be told apart by text. A compound
+  component takes a `testid` prop and derives its parts (`${testid}-input`,
+  `-confirm`, `-cancel`, `-error`), so one prop names the whole widget.
 - **Put state in attributes and text, not only in pixels.** `dom_query`
-  returns text, `value`, `disabled`, and bounds; `aria-selected`,
-  `aria-expanded`, `data-state`, and `disabled` are what an agent reads, a
-  colour is not. The words an assertion needs belong in the element's text or
+  returns text, `value`, `disabled`, and bounds; `aria-selected` on the
+  selected row, `aria-expanded`, `data-state`, and `disabled` are what an
+  agent reads. A selection that lives only in a class name is invisible to
+  it. The words an assertion needs belong in the element's text or
   `aria-label`.
 - **Icon-only buttons need `aria-label`.** The tool describes an element by
   its text; an icon with none is a nameless button in every listing.
 - **Keep ids stable through refactors.** They are not styling hooks; grep
   `cmd/desktop/e2e/tests` before renaming one.
-- **No id on decorative nodes.** The snapshot has a 2000-node budget and the
-  listing is read by a model; signal, not wallpaper.
+- **No id on decorative nodes.** The listing is read by a model; signal, not
+  wallpaper.
 - **Give every hover-only affordance a click or key path.** `mouse_move`
   fires hover events, but a workflow that depends on hover is fragile for an
-  agent and for a user with a keyboard.
+  agent and for a user with a keyboard, and an `opacity: 0` control reads as
+  `visible` to every tool.
 - **Do not gate behaviour on `event.isTrusted`**, and do not require a native
   dialog where a drop zone or a path field would do; the dialog is the one
   thing nothing here can drive.
