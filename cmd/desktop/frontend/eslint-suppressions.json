@@ -29,9 +29,6 @@
     },
     "no-console": {
       "count": 2
-    },
-    "no-restricted-syntax": {
-      "count": 6
     }
   },
   "src/__tests__/App.spec.ts": {
@@ -656,9 +653,6 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "no-restricted-syntax": {
       "count": 1
     }
   },

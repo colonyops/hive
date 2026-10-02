@@ -12,8 +12,7 @@
 // (rather than kept as one `session` object) so the template can use them
 // directly without a `.value` on every access — the same convention
 // useFeedState() + App.vue already use.
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Events } from '@wailsio/runtime'
+import { computed, ref } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconMaximize2 from '~icons/lucide/maximize-2'
 import IconMinus from '~icons/lucide/minus'
@@ -21,6 +20,7 @@ import IconPlus from '~icons/lucide/plus'
 import IconWorkflow from '~icons/lucide/workflow'
 import { useFlowsSession } from '../composables/useFlowsSession'
 import { useResizablePanel } from '../../composables/useResizablePanel'
+import { useWailsEvent } from '../../composables/useWailsEvent'
 import { classify } from '../lib/runStatus'
 import NodePalette from './NodePalette.vue'
 import FlowsCanvas from './FlowsCanvas.vue'
@@ -64,14 +64,10 @@ const {
 // own "flows:updated" listener, which refreshes the sidebar's `profiles`
 // list, an entirely different piece of state from the session's `flows`
 // (canvas selector) and `nodeRuns` (canvas node status).
-let unsubscribe: (() => void) | undefined
-onMounted(() => {
-  unsubscribe = Events.On('flows:updated', () => {
-    void refreshFlows()
-    void refreshNodeRuns()
-  })
+useWailsEvent('flows:updated', () => {
+  void refreshFlows()
+  void refreshNodeRuns()
 })
-onUnmounted(() => unsubscribe?.())
 
 const filePath = computed(() => (activeFlow.value ? `flows/${activeFlow.value.id}.yaml` : ''))
 const nodeCount = computed(() => activeFlow.value?.nodes.length ?? 0)

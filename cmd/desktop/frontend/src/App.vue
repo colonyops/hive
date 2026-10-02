@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Events, Window } from '@wailsio/runtime'
+import { Window } from '@wailsio/runtime'
 import { useStorage } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import TitleBar from './components/TitleBar.vue'
@@ -712,13 +712,6 @@ async function openActivityItem(link: ActivityItemLink): Promise<void> {
   }
 }
 
-let unsubscribeInbox: (() => void) | undefined
-let unsubscribeFlowsUpdated: (() => void) | undefined
-let unsubscribeUpdate: (() => void) | undefined
-let unsubscribeNotification: (() => void) | undefined
-let unsubscribeNotificationToast: (() => void) | undefined
-let unsubscribeMenuBar: (() => void) | undefined
-
 // Go speaks the notify vocabulary (info/success/warning/error); the toast
 // stack speaks its own. Anything unrecognized reads as info rather than
 // being dropped — the message still matters.
@@ -732,20 +725,9 @@ onMounted(() => {
   void resolveDevTools().then((allowed) => {
     if (!allowed && route.name === 'dev') void router.push({ name: 'feed' })
   })
-  // The Go flow engine commits before it announces, so this is the moment
-  // membership claims and inbox items are readable — not log:appended, which
-  // only says a source observed something that may route nowhere at all.
-  unsubscribeInbox = Events.On('inbox:updated', () => {
-    void refresh()
-  })
-  // The app owns this subscription, rather than FlowsView, because the flow
-  // listing feeds the sidebar whether or not the canvas is open. The session
-  // keeps an unsaved editor draft private while refreshing the rest.
-  unsubscribeFlowsUpdated = Events.On('flows:updated', () => {
-    void session.reloadFlows()
-  })
-  // Seed the update chip from the last cached check, then react to background
-  // checks. The event payload is the same UpdateInfo shape Status() returns.
+  // Seed the update chip from the last cached check; update:available below
+  // reacts to background checks. The event payload is the same UpdateInfo
+  // shape Status() returns.
   void UpdaterStatus()
     .then((status) => {
       updateInfo.value = status
@@ -753,40 +735,38 @@ onMounted(() => {
     .catch((error) => {
       console.debug('Updater status unavailable', error)
     })
-  unsubscribeUpdate = Events.On('update:available', (event: { data: UpdateInfo | UpdateInfo[] }) => {
-    const payload = Array.isArray(event.data) ? event.data[0] : event.data
-    if (payload) updateInfo.value = payload
-  })
-  unsubscribeNotification = Events.On(
-    'notification:activated',
-    (event: { data: NotificationActivation | NotificationActivation[] }) => {
-      const payload = Array.isArray(event.data) ? event.data[0] : event.data
-      if (payload) void revealNotification(payload)
-    },
-  )
-  unsubscribeMenuBar = Events.On('menubar:open', (event: { data: MenuBarNavigation | MenuBarNavigation[] }) => {
-    const payload = Array.isArray(event.data) ? event.data[0] : event.data
-    if (payload) void openFromMenuBar(payload)
-  })
-  // A flow notification the user chose to receive in-app rather than as an OS
-  // banner (Settings -> Notifications -> Delivery). Go has already applied the
-  // kill switch and picked this channel; the toast stack is the same one every
-  // other in-app notification uses.
-  unsubscribeNotificationToast = Events.On(
-    'notification:toast',
-    (event: { data: NotificationToast | NotificationToast[] }) => {
-      const payload = Array.isArray(event.data) ? event.data[0] : event.data
-      if (payload?.title) showToast(payload.title, { body: payload.body, severity: toastSeverity(payload.severity) })
-    },
-  )
 })
-onUnmounted(() => {
-  unsubscribeInbox?.()
-  unsubscribeFlowsUpdated?.()
-  unsubscribeUpdate?.()
-  unsubscribeNotification?.()
-  unsubscribeMenuBar?.()
-  unsubscribeNotificationToast?.()
+// The Go flow engine commits before it announces, so this is the moment
+// membership claims and inbox items are readable — not log:appended, which
+// only says a source observed something that may route nowhere at all.
+useWailsEvent('inbox:updated', () => {
+  void refresh()
+})
+// The app owns this subscription, rather than FlowsView, because the flow
+// listing feeds the sidebar whether or not the canvas is open. The session
+// keeps an unsaved editor draft private while refreshing the rest.
+useWailsEvent('flows:updated', () => {
+  void session.reloadFlows()
+})
+useWailsEvent('update:available', (event: { data: UpdateInfo | UpdateInfo[] }) => {
+  const payload = Array.isArray(event.data) ? event.data[0] : event.data
+  if (payload) updateInfo.value = payload
+})
+useWailsEvent('notification:activated', (event: { data: NotificationActivation | NotificationActivation[] }) => {
+  const payload = Array.isArray(event.data) ? event.data[0] : event.data
+  if (payload) void revealNotification(payload)
+})
+useWailsEvent('menubar:open', (event: { data: MenuBarNavigation | MenuBarNavigation[] }) => {
+  const payload = Array.isArray(event.data) ? event.data[0] : event.data
+  if (payload) void openFromMenuBar(payload)
+})
+// A flow notification the user chose to receive in-app rather than as an OS
+// banner (Settings -> Notifications -> Delivery). Go has already applied the
+// kill switch and picked this channel; the toast stack is the same one every
+// other in-app notification uses.
+useWailsEvent('notification:toast', (event: { data: NotificationToast | NotificationToast[] }) => {
+  const payload = Array.isArray(event.data) ? event.data[0] : event.data
+  if (payload?.title) showToast(payload.title, { body: payload.body, severity: toastSeverity(payload.severity) })
 })
 
 // ── Profile create / delete overlays ─────────────────────────────────────────
