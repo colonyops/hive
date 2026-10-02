@@ -7,12 +7,12 @@ permissions:
 # The maintainer's `release` run dispatches this after it has published the
 # desktop and pushed the release tag. It builds the CLI from that tag, creates
 # the one GitHub release for every program with the promoted release notes,
-# and deploys the site (ADR every-program-ships-under-one-date-based-version).
+# and deploys the site (ADR every-program-ships-under-one-shared-version).
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "The release tag, such as v0.20261001.0. It must already exist on main."
+        description: "The release tag, such as v0.60.0. It must already exist on main."
         required: true
         type: string
       dry_run:

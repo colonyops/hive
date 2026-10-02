@@ -7,9 +7,9 @@ disable-model-invocation: true
 
 # Release every program
 
-Every release ships the hive CLI and Hive Desktop together, under one version
-`0.YYYYMMDD.N` tagged `v0.YYYYMMDD.N` (ADR
-every-program-ships-under-one-date-based-version). The run starts on this
+Every release ships the hive CLI and Hive Desktop together, under one semver
+version tagged `v<version>` (ADR
+every-program-ships-under-one-shared-version). The run starts on this
 machine because the desktop's signing keys live here. `mise` loads release
 credentials automatically; never read `.env`, inspect secret values, or invoke
 the release CLI's `publish` command outside `mise`.
@@ -130,12 +130,11 @@ the version, and there is one release line.
 
 ## Version rules
 
-- A version is `0.YYYYMMDD.N`: the UTC date of the promotion and that day's
-  release count from 0. `go run ./cmd/tools/release next` prints the version a
-  promotion today would take.
-- The major version stays 0. Go needs a `/vN` module path for a major version
-  of 2 or more, so a year there would leave `go install …@latest` on the last
-  v0 release.
+- A version is semver `X.Y.Z`, bumped in lockstep for every program. Promotion
+  bumps the newest published version by minor unless asked for patch or major.
+  `go run ./cmd/tools/release next` prints the version it would take.
+- A major bump to 2 or more needs a `/vN` module path for the CLI's Go module.
+  Never bump past 1 without that change.
 - A release must advance every `v*` tag, every `desktop-v*` tag, and every live
   manifest. Including the manifests matters because the R2 history predates
   this repository.

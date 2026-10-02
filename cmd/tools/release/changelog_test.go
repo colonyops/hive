@@ -26,7 +26,7 @@ func TestValidateChangelogEntryRequiresAPromotedEntry(t *testing.T) {
 }
 
 func TestRenderReleaseNotesBody(t *testing.T) {
-	version := mustVersion(t, "0.20261001.0")
+	version := mustVersion(t, "0.60.0")
 	body := renderReleaseNotesBody(version, "https://dl.hivedesktop.com", []productNotes{
 		{product: cliProduct, entry: releasenotes.Entry{Summary: "No changes to the hive CLI."}},
 		{product: desktopProduct, entry: releasenotes.Entry{Summary: "A short line.", Body: "## Added\n\n- a thing"}},
@@ -49,7 +49,7 @@ func changelog(versions ...string) releasenotes.Entries {
 }
 
 func TestSelectPendingVersion(t *testing.T) {
-	published := []releaseVersion{mustParseVersion(t, "0.59.0"), mustParseVersion(t, "0.20261001.0")}
+	published := []releaseVersion{mustParseVersion(t, "0.59.0"), mustParseVersion(t, "0.60.0")}
 
 	tests := []struct {
 		name       string
@@ -59,17 +59,17 @@ func TestSelectPendingVersion(t *testing.T) {
 	}{
 		{
 			name:       "the newest entry every program has",
-			changelogs: []releasenotes.Entries{changelog("0.20261001.0", "0.20261002.0"), changelog("0.9.0", "0.20261001.0", "0.20261002.0")},
-			want:       "0.20261002.0",
+			changelogs: []releasenotes.Entries{changelog("0.60.0", "0.61.0"), changelog("0.9.0", "0.60.0", "0.61.0")},
+			want:       "0.61.0",
 		},
 		{
 			name:       "an entry one program lacks is not pending",
-			changelogs: []releasenotes.Entries{changelog("0.20261002.0", "0.20261003.0"), changelog("0.20261002.0")},
-			want:       "0.20261002.0",
+			changelogs: []releasenotes.Entries{changelog("0.61.0", "0.62.0"), changelog("0.61.0")},
+			want:       "0.61.0",
 		},
 		{
 			name:       "an entry that is already published is not pending",
-			changelogs: []releasenotes.Entries{changelog("0.20261001.0"), changelog("0.20261001.0")},
+			changelogs: []releasenotes.Entries{changelog("0.60.0"), changelog("0.60.0")},
 			wantErr:    "no promoted release notes",
 		},
 	}

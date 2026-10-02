@@ -6,7 +6,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // versionPattern reads every version this repository has published: the CLI's
@@ -18,7 +17,7 @@ var versionPattern = regexp.MustCompile(`^(?:desktop-)?v?([0-9]+)\.([0-9]+)\.([0
 // manifestChannels are the desktop update manifests every release writes.
 // There is one release line, but installs that follow the beta or dev
 // manifest still exist, and they converge only if those manifests carry the
-// same release (ADR every-program-ships-under-one-date-based-version).
+// same release (ADR every-program-ships-under-one-shared-version).
 var manifestChannels = []string{"stable", "beta", "dev"}
 
 type baseVersion struct {
@@ -122,31 +121,39 @@ func compareVersions(left, right releaseVersion) int {
 	}
 }
 
-// dateVersionLayout is the minor component of a release version.
-const dateVersionLayout = "20060102"
+type bumpLevel string
 
-// nextVersion is the version a release cut at now takes: 0.YYYYMMDD.N, with
-// the UTC date and N counting that day's releases from 0.
-//
-// The major version stays 0 on purpose. Go requires a /vN module path for a
-// major version of 2 or more, so a year in the major component would leave
-// `go install github.com/colonyops/hive@latest` on the last v0 release
-// forever (ADR every-program-ships-under-one-date-based-version).
-func nextVersion(now time.Time, published []releaseVersion) (releaseVersion, error) {
-	date, err := strconv.Atoi(now.UTC().Format(dateVersionLayout))
-	if err != nil {
-		return releaseVersion{}, err
+const (
+	bumpPatch bumpLevel = "patch"
+	bumpMinor bumpLevel = "minor"
+	bumpMajor bumpLevel = "major"
+)
+
+func parseBumpLevel(value string) (bumpLevel, error) {
+	switch level := bumpLevel(value); level {
+	case bumpPatch, bumpMinor, bumpMajor:
+		return level, nil
+	default:
+		return "", fmt.Errorf("unknown bump level %q: expected patch, minor, or major", value)
 	}
-	next := releaseVersion{base: baseVersion{minor: date}}
-	for _, version := range published {
-		if version.base.major == 0 && version.base.minor == date && version.base.patch >= next.base.patch {
-			next.base.patch = version.base.patch + 1
-		}
+}
+
+// nextVersion bumps the newest published version of any program. Every
+// program shares the version, so the CLI's v0.59.0 and the desktop's 0.9.x
+// both count, and the next release advances past all of them.
+func nextVersion(published []releaseVersion, level bumpLevel) releaseVersion {
+	newest, _ := newestVersion(published)
+	base := newest.base
+	switch level {
+	case bumpMajor:
+		return releaseVersion{base: baseVersion{major: base.major + 1}}
+	case bumpMinor:
+		return releaseVersion{base: baseVersion{major: base.major, minor: base.minor + 1}}
+	default:
+		// A prerelease base has not shipped as itself, but the release line
+		// has no prereleases now, so its next patch is still above it.
+		return releaseVersion{base: baseVersion{major: base.major, minor: base.minor, patch: base.patch + 1}}
 	}
-	if newest, ok := newestVersion(published); ok && compareVersions(next, newest) <= 0 {
-		return releaseVersion{}, fmt.Errorf("%s does not advance the newest published version %s; check the system clock", next, newest)
-	}
-	return next, nil
 }
 
 func newestVersion(versions []releaseVersion) (releaseVersion, bool) {

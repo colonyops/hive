@@ -97,21 +97,21 @@ func demoteHeadings(body string) string {
 	return strings.Join(lines, "\n")
 }
 
-// promoteTargetVersion resolves the promote command's optional argument. With
-// none it picks the next date version from the same sources planRelease uses,
+// promoteTargetVersion resolves the version promote writes. With no explicit
+// version it bumps the newest one from the same sources planRelease uses,
 // tags and the live manifests, because the R2 history predates this
 // repository.
-func promoteTargetVersion(ctx context.Context, arg string) (releaseVersion, error) {
+func promoteTargetVersion(ctx context.Context, explicit string, level bumpLevel) (releaseVersion, error) {
 	published, _, err := releaseVersions(ctx)
 	if err != nil {
 		return releaseVersion{}, err
 	}
-	if arg == "" {
-		return nextVersion(time.Now(), published)
+	if explicit == "" {
+		return nextVersion(published, level), nil
 	}
-	version, err := parsePublishVersion(arg)
+	version, err := parsePublishVersion(explicit)
 	if err != nil {
-		return releaseVersion{}, fmt.Errorf("invalid version %q: %w", arg, err)
+		return releaseVersion{}, fmt.Errorf("invalid version %q: %w", explicit, err)
 	}
 	if newest, ok := newestVersion(published); ok && compareVersions(version, newest) <= 0 {
 		return releaseVersion{}, fmt.Errorf("%s does not advance the newest published version %s", version, newest)
@@ -121,8 +121,8 @@ func promoteTargetVersion(ctx context.Context, arg string) (releaseVersion, erro
 
 // pendingVersion is the version the next release publishes: the newest one
 // that every program has an entry for and that no release has published. The
-// version is fixed at promotion rather than on the release day, so release
-// notes that land after midnight still release under their own version.
+// version is fixed at promotion, so the release cannot pick a version the
+// landed notes do not name.
 func pendingVersion(published []releaseVersion) (releaseVersion, error) {
 	changelogs := make([]releasenotes.Entries, 0, len(products))
 	for _, p := range products {

@@ -8,7 +8,7 @@ import (
 func TestRenderReleasePlan(t *testing.T) {
 	t.Parallel()
 
-	version, err := parsePublishVersion("0.20261001.0")
+	version, err := parsePublishVersion("0.60.0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,8 +22,8 @@ func TestRenderReleasePlan(t *testing.T) {
 	})
 	for _, want := range []string{
 		"Release candidate",
-		"0.20261001.0",
-		"v0.20261001.0",
+		"0.60.0",
+		"v0.60.0",
 		"abc123",
 		"Ship the release prompt",
 		"0.9.1-dev.25",

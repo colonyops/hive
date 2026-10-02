@@ -15,7 +15,7 @@ work is reviewed against it.
 | Development and release tools | `cmd/tools/`, `cmd/desktop/devtools/`, `cmd/desktop/devserver/`               | ADR tool, release publisher, dev GitHub proxy. None of it ships inside the app.          |
 
 - One Go module, `github.com/colonyops/hive`, holds every program.
-- Every release ships the CLI and the desktop together under one version, `0.YYYYMMDD.N`, from one `mise run release` on the maintainer's machine (`docs/distribution.md`).
+- Every release ships the CLI and the desktop together under one semver version, from one `mise run release` on the maintainer's machine (`docs/distribution.md`).
 - Desktop releases are signed, notarized, and uploaded to Cloudflare R2 behind a stable domain — versioned zips plus a `latest.json` manifest that drives the in-app updater and the landing-page download link. The GitHub release carries the CLI archives and every program's notes.
 
 ## Setup

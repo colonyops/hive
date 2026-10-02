@@ -27,7 +27,7 @@ func TestMigrationOrderScript(t *testing.T) {
 	testCommandOutput(t, dir, "git", "init", "--quiet")
 	testCommandOutput(t, dir, "git", "add", ".")
 	testCommandOutput(t, dir, "git", "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", "baseline")
-	testCommandOutput(t, dir, "git", "tag", "v0.20261001.0")
+	testCommandOutput(t, dir, "git", "tag", "v0.60.0")
 
 	output, err := testMigrationOrder(t, dir)
 	require.NoError(t, err, output)

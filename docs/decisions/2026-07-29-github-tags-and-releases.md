@@ -1,6 +1,6 @@
 # Publish GitHub tags and Releases as the source-side record of a desktop release
 
-- **Status:** superseded by [every-program-ships-under-one-date-based-version](2026-10-01-every-program-ships-under-one-date-based-version.md): one `v*` tag and one GitHub release, created by the publish workflow, record every program
+- **Status:** superseded by [every-program-ships-under-one-shared-version](2026-10-01-every-program-ships-under-one-shared-version.md): one `v*` tag and one GitHub release, created by the publish workflow, record every program
 - **Date:** 2026-07-29
 
 ## Context

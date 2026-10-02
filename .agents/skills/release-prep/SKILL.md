@@ -2,7 +2,7 @@
 name: release-prep
 description: Curate every program's accumulated changelog fragments into its entry for the next release, then create the release-notes pull request. Use when explicitly asked to prepare release notes or invoked as `/release-prep [version]`.
 compatibility: Requires git, Go, mise, GitHub CLI authentication, and access to the live release manifests used for version selection.
-argument-hint: "[version]"
+argument-hint: "[patch|minor|major|version]"
 disable-model-invocation: true
 ---
 
@@ -18,10 +18,10 @@ release` reads it from the entries.
 
 ## Arguments
 
-Accept no argument or one explicit version such as `0.20261001.0`. No argument
-asks the release tool for the next version: `0.YYYYMMDD.N` for today's UTC
-date, above every tag and live manifest. Reject a prerelease, a `v` prefix, and
-extra arguments.
+Accept no argument, one bump level (`patch`, `minor`, or `major`), or one
+explicit version such as `0.60.0`. No argument means `minor`. The release tool
+bumps the newest version across every tag and live manifest by that level.
+Reject a prerelease, a `v` prefix, and extra arguments.
 
 ## 1. Load the project rules
 
@@ -54,8 +54,8 @@ make the checks pass.
 
 Two worktree states are valid:
 
-1. **Clean:** run `mise run changelog:promote`, adding `-- <version>` only when
-   one was given.
+1. **Clean:** run `mise run changelog:promote`, adding `-- --bump <level>` for
+   a bump level or `-- <version>` for an explicit version.
 2. **Already promoted:** continue without promoting again when the only changes
    are one untracked `<version>.md` in each of `cmd/hive/releasenotes/changelog/`
    and `cmd/desktop/releasenotes/changelog/`, all for the same version, and

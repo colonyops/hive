@@ -1,6 +1,6 @@
 # Distribution Reference
 
-Concrete infrastructure and runbook for shipping the desktop app, and the one release run that ships it with the hive CLI. Decisions behind this: [r2-manifest-distribution](decisions/2026-07-23-r2-manifest-distribution.md) (R2 + manifests), [release-channels](decisions/2026-07-23-release-channels.md) (the manifest layout), [every-program-ships-under-one-date-based-version](decisions/2026-10-01-every-program-ships-under-one-date-based-version.md) (one version, one release run), [in-app-problem-reporting](decisions/2026-07-27-in-app-problem-reporting.md) (problem reporting).
+Concrete infrastructure and runbook for shipping the desktop app, and the one release run that ships it with the hive CLI. Decisions behind this: [r2-manifest-distribution](decisions/2026-07-23-r2-manifest-distribution.md) (R2 + manifests), [release-channels](decisions/2026-07-23-release-channels.md) (the manifest layout), [every-program-ships-under-one-shared-version](decisions/2026-10-01-every-program-ships-under-one-shared-version.md) (one version, one release run), [in-app-problem-reporting](decisions/2026-07-27-in-app-problem-reporting.md) (problem reporting).
 
 ## Infrastructure
 
@@ -125,7 +125,7 @@ wrangler secret delete REPORT_TOKEN --name hive-desktop-web
 
 ## Publish flow
 
-**One release run ships every program under one version** (ADR [every-program-ships-under-one-date-based-version](decisions/2026-10-01-every-program-ships-under-one-date-based-version.md)). The version is `0.YYYYMMDD.N`: the UTC date and that day's release count from 0, tagged `v0.YYYYMMDD.N`. The release notes name it: `mise run changelog:promote` writes every program's entry for the next version, and the release publishes the newest version that every program has an entry for and no release has published.
+**One release run ships every program under one version** (ADR [every-program-ships-under-one-shared-version](decisions/2026-10-01-every-program-ships-under-one-shared-version.md)). The version is semver, bumped in lockstep for every program and tagged `v<version>`; the first shared release is `v0.60.0`, after the CLI's v0.59.0. The release notes name it: `mise run changelog:promote` bumps the newest published version (by minor, or `--bump patch|major`) and writes every program's entry for it, and the release publishes the newest version that every program has an entry for and no release has published.
 
 The pipeline is the Go CLI in `cmd/tools/release`, run on the maintainer's machine because the signing keys live there. **The desktop publishes every platform at once, from that one machine** (decision [linux-tarball-distribution](decisions/2026-07-27-linux-tarball-distribution.md)). `publish`:
 

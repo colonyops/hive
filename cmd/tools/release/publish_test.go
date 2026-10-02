@@ -184,7 +184,7 @@ func TestPlatformManifestsPairUpdateAndInstaller(t *testing.T) {
 func TestValidateResumeManifestsAllowsAPartialWrite(t *testing.T) {
 	t.Parallel()
 
-	version := mustVersion(t, "0.20261001.0")
+	version := mustVersion(t, "0.60.0")
 	platforms := map[string]platformManifest{
 		"darwin-universal": {URL: "https://example.com/app.zip", SHA256: strings.Repeat("a", 64), Size: 10},
 	}
@@ -204,7 +204,7 @@ func TestValidateResumeManifestsAllowsAPartialWrite(t *testing.T) {
 func TestValidateResumeManifestsRejectsConflicts(t *testing.T) {
 	t.Parallel()
 
-	version := mustVersion(t, "0.20261001.0")
+	version := mustVersion(t, "0.60.0")
 	platforms := map[string]platformManifest{
 		"darwin-universal": {URL: "https://example.com/app.zip", SHA256: strings.Repeat("a", 64), Size: 10},
 	}
@@ -223,7 +223,7 @@ func TestValidateResumeManifestsRejectsConflicts(t *testing.T) {
 		{
 			name: "newer manifest",
 			manifest: channelManifest{
-				Channel: "dev", Version: "0.20261001.1", Platforms: maps.Clone(platforms),
+				Channel: "dev", Version: "0.60.1", Platforms: maps.Clone(platforms),
 			},
 			want: "older than",
 		},

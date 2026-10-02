@@ -37,7 +37,7 @@ func TestValidatePrepareSourceState(t *testing.T) {
 func TestValidatePublishSourceState(t *testing.T) {
 	t.Parallel()
 
-	const tag = "v0.20261001.0"
+	const tag = "v0.60.0"
 	valid := []releaseSourceState{
 		{branch: "main", head: "abc", originMain: "abc"},
 		{head: "abc", originMain: "abc", headOnOriginMain: true, tagsAtHead: []string{tag}},
@@ -57,7 +57,7 @@ func TestValidatePublishSourceState(t *testing.T) {
 		{name: "dirty", state: releaseSourceState{branch: "main", head: "abc", originMain: "abc", dirty: true}, want: "not clean"},
 		{name: "not current main", state: releaseSourceState{branch: "main", head: "abc", originMain: "def"}, want: "does not equal"},
 		{name: "feature branch", state: releaseSourceState{branch: "feat/release", head: "abc", originMain: "abc"}, want: "want main"},
-		{name: "wrong detached tag", state: releaseSourceState{head: "abc", originMain: "abc", headOnOriginMain: true, tagsAtHead: []string{"v0.20261001.1"}}, want: "not tagged"},
+		{name: "wrong detached tag", state: releaseSourceState{head: "abc", originMain: "abc", headOnOriginMain: true, tagsAtHead: []string{"v0.60.1"}}, want: "not tagged"},
 		{name: "tag not on main", state: releaseSourceState{head: "abc", originMain: "def", tagsAtHead: []string{tag}}, want: "not on origin/main"},
 	}
 	for _, test := range tests {

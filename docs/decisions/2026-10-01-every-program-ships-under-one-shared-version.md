@@ -1,4 +1,4 @@
-# Every program ships under one date-based version
+# Every program ships under one shared version
 
 - **Status:** accepted
 - **Date:** 2026-10-01
@@ -15,19 +15,20 @@ signing keys live there.
 
 The version has to stay valid semver: Go modules, GoReleaser, the CLI's update
 check, and the desktop updater all parse it. Go also requires a `/vN` module
-path suffix for a major version of 2 or more, so a version that starts with
-the year, such as `v2026.930.1`, would leave
+path suffix for a major version of 2 or more, which rules out a calendar
+version that starts with the year, such as `v2026.930.1`: it would leave
 `go install github.com/colonyops/hive@latest` on the last v0 release.
 
 ## Decision
 
-- **One version: `0.YYYYMMDD.N`**, tagged `v0.YYYYMMDD.N`. The date is UTC and
-  N counts that day's releases from 0. It sorts above every CLI `v0.*` and
-  desktop `0.*` version already published.
+- **One semver version, bumped in lockstep.** Every program takes the same
+  version, tagged `v<version>`. The next version bumps the newest one across
+  every `v*` and `desktop-v*` tag and every live desktop manifest, by minor
+  unless the release asks for patch or major. The CLI's line continues: the
+  first shared release is `v0.60.0`, and the desktop moves from 0.9 to it.
 - **Promotion picks the version.** `release changelog promote` names it, and
   `release run` publishes the newest version that every program has an entry
-  for and no release has published. Release notes that land after midnight
-  still release under the version they were promoted as.
+  for and no release has published.
 - **One release run.** `mise run release` on the maintainer's machine runs the
   gates, publishes the desktop to R2, pushes the `v*` tag, and dispatches
   `publish.yml`. The workflow builds the CLI with GoReleaser, creates the one
@@ -46,6 +47,7 @@ the year, such as `v2026.930.1`, would leave
   The `desktop-v*` tag of ADR github-tags-and-releases becomes `v*`.
 - The CLI's GitHub release body is the promoted notes, not a commit log
   (ADR every-program-keeps-its-own-release-notes-and-promotes-them-under-one-version).
+- A release bumps every program, including one it does not change.
 - The desktop's `updates.channel` setting still works, because every channel
   manifest carries the same release. Removing it from the app is follow-up
   work.

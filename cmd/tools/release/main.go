@@ -57,22 +57,23 @@ func newReleaseCommand() *cli.Command {
 			},
 			{
 				Name:  "next",
-				Usage: "print the version a release cut now would take",
-				Description: "Prints 0.YYYYMMDD.N for today's UTC date, where N counts the releases already published that day. It reads every v* and desktop-v* tag " +
-					"and the live desktop manifests. A missing live manifest (HTTP 404) is an empty channel.",
+				Usage: "print the version the next release would take",
+				Description: "Bumps the newest version across every v* and desktop-v* tag and the live desktop manifests. " +
+					"A missing live manifest (HTTP 404) is an empty channel.",
+				Flags: []cli.Flag{bumpFlag()},
 				Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 0 {
 						return cli.Exit("expected no arguments", 2)
+					}
+					level, err := parseBumpLevel(cmd.String("bump"))
+					if err != nil {
+						return cli.Exit(err.Error(), 2)
 					}
 					versions, _, err := releaseVersions(ctx)
 					if err != nil {
 						return err
 					}
-					version, err := nextVersion(time.Now(), versions)
-					if err != nil {
-						return err
-					}
-					fmt.Println(version)
+					fmt.Println(nextVersion(versions, level))
 					return nil
 				}),
 			},
@@ -145,15 +146,23 @@ func newReleaseCommand() *cli.Command {
 						Usage:     "turn every program's accumulated draft into its changelog entry for the next release",
 						ArgsUsage: "[version]",
 						Description: "Collapses each program's changelog/unreleased/ into its <version>.md, stamping the version and date, and " +
-							"deletes the fragments. The version defaults to `release next`, and it is the version the release publishes. Every program " +
+							"deletes the fragments. Without a version it bumps the newest published one by --bump, and it is the version the release publishes. Every program " +
 							"gets an entry, because every release ships every program. Edit the entries before committing them: each is the sum of " +
 							"every pull request since the last release, so consolidate near-duplicate bullets and write the summaries. Commit the " +
 							"result before releasing: the release ships the notes main holds, and `release publish` refuses a version with no entry.",
+						Flags: []cli.Flag{bumpFlag()},
 						Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
 							if cmd.NArg() > 1 {
 								return cli.Exit("expected an optional version", 2)
 							}
-							version, err := promoteTargetVersion(ctx, cmd.Args().First())
+							if cmd.NArg() == 1 && cmd.IsSet("bump") {
+								return cli.Exit("pass a version or --bump, not both", 2)
+							}
+							level, err := parseBumpLevel(cmd.String("bump"))
+							if err != nil {
+								return cli.Exit(err.Error(), 2)
+							}
+							version, err := promoteTargetVersion(ctx, cmd.Args().First(), level)
 							if err != nil {
 								return err
 							}
@@ -270,6 +279,14 @@ func newReleaseCommand() *cli.Command {
 				}),
 			},
 		},
+	}
+}
+
+func bumpFlag() cli.Flag {
+	return &cli.StringFlag{
+		Name:  "bump",
+		Usage: "how far to advance the newest published version: patch, minor, or major",
+		Value: string(bumpMinor),
 	}
 }
 

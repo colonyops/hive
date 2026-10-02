@@ -16,10 +16,10 @@ func mustVersion(t *testing.T, value string) releaseVersion {
 }
 
 func TestReleaseNotesHeader(t *testing.T) {
-	header := releaseNotesHeader(mustVersion(t, "0.20261001.0"), "https://dl.hivedesktop.com")
+	header := releaseNotesHeader(mustVersion(t, "0.60.0"), "https://dl.hivedesktop.com")
 	for _, want := range []string{
-		"https://dl.hivedesktop.com/desktop/releases/0.20261001.0/",
-		"https://dl.hivedesktop.com/desktop/releases/0.20261001.0/SHA256SUMS",
+		"https://dl.hivedesktop.com/desktop/releases/0.60.0/",
+		"https://dl.hivedesktop.com/desktop/releases/0.60.0/SHA256SUMS",
 	} {
 		if !strings.Contains(header, want) {
 			t.Fatalf("header missing %q:\n%s", want, header)

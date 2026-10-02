@@ -1,6 +1,6 @@
 # Release channels: stable, beta, dev
 
-- **Status:** accepted; channel routing and the cascade superseded by [every-program-ships-under-one-date-based-version](2026-10-01-every-program-ships-under-one-date-based-version.md), which keeps the manifest layout
+- **Status:** accepted; channel routing and the cascade superseded by [every-program-ships-under-one-shared-version](2026-10-01-every-program-ships-under-one-shared-version.md), which keeps the manifest layout
 - **Date:** 2026-07-23
 
 ## Context

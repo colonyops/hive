@@ -1,6 +1,6 @@
 # Desktop GitHub releases never take GitHub Latest
 
-- **Status:** superseded by [every-program-ships-under-one-date-based-version](2026-10-01-every-program-ships-under-one-date-based-version.md)
+- **Status:** superseded by [every-program-ships-under-one-shared-version](2026-10-01-every-program-ships-under-one-shared-version.md)
 - **Date:** 2026-09-29
 
 ## Context
