@@ -101,6 +101,31 @@ func TestLaunchSessionExecutor_RendersPromptAndRepoTemplates(t *testing.T) {
 	assert.Equal(t, "colonyops/hive", got.Repo)
 }
 
+func TestLaunchSessionExecutor_ItemRemoteRendersTheItemsCloneURL(t *testing.T) {
+	action := actions.Action{
+		ID: "spawn-review", Type: "launch-session",
+		Config: &actions.LaunchSessionConfig{PromptTemplate: "hi", RepoTemplate: "{{ .ItemRemote }}"},
+	}
+
+	t.Run("an item that names its repository", func(t *testing.T) {
+		launcher := &fakeSessionLauncher{}
+		raw := `{"repo":"colonyops/hive","url":"https://github.com/colonyops/hive/pull/7"}`
+		_, err := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{}).
+			Execute(t.Context(), action, OutputData{Key: "pr-7", Raw: json.RawMessage(raw)}, ActionInvocationInput{})
+		require.NoError(t, err)
+		require.Len(t, launcher.calls, 1)
+		assert.Equal(t, "https://github.com/colonyops/hive.git", launcher.calls[0].Repo)
+	})
+
+	t.Run("an item without one fails as rendered blank", func(t *testing.T) {
+		launcher := &fakeSessionLauncher{}
+		_, err := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{}).
+			Execute(t.Context(), action, OutputData{Key: "alert-1", Raw: json.RawMessage(`{"title":"down"}`)}, ActionInvocationInput{})
+		require.ErrorContains(t, err, "rendered blank")
+		assert.Empty(t, launcher.calls)
+	})
+}
+
 func TestLaunchSessionExecutor_RerunUsesUniqueSessionName(t *testing.T) {
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})

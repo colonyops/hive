@@ -53,7 +53,7 @@ A launch node starts work for each item that reaches it, once per item. A pull r
 ```yaml
   - id: review
     type: launch-session
-    repo: "https://github.com/{{ .Payload.repo }}.git"
+    repo: "{{ .ItemRemote }}"
     sessionName: "review-{{ .Payload.num }}"
     prompt: "Review pull request #{{ .Payload.num }}"
   - id: triage
@@ -62,7 +62,7 @@ A launch node starts work for each item that reaches it, once per item. A pull r
     prompt: "Triage {{ .Payload.title }}"
 ```
 
-`launch-session` takes `repo` and `prompt`, plus an optional `agent` and `sessionName`. `launch-chat` takes `workspace` and `prompt`. The templates see the same item fields as a `launch-session` action, so fence outside content as [Actions](actions.md) describes.
+`launch-session` takes `repo` and `prompt`, plus an optional `agent` and `sessionName`. Set `repo` to `{{ .ItemRemote }}` to work in the item's own repository, to a remote URL to work in one fixed repository, or to any template that renders a remote URL. An item whose repository renders blank fails its launch, and the failure shows in Activity. `launch-chat` takes `workspace` and `prompt`. The templates see the same item fields as a `launch-session` action, so fence outside content as [Actions](actions.md) describes.
 
 Use an **Action** node instead when the same launch also appears in the item menu. Then you define it once in `actions.yml`.
 

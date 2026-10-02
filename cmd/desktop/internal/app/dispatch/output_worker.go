@@ -57,6 +57,17 @@ type OutputData struct {
 	// payload, and zero when the command has no inbox item behind it.
 	Origin models.ItemRef
 }
+
+// ItemRemote is the clone URL of the item's repository, reachable from every
+// template as `{{ .ItemRemote }}`. It is derived from the payload's `repo` and
+// `url` the way the New Session form drafts one, and is "" when the item names
+// no repository, so a repo template built on it fails as rendered blank.
+func (d OutputData) ItemRemote() string {
+	repo, _ := d.Payload["repo"].(string)
+	itemURL, _ := d.Payload["url"].(string)
+	return draftRepository(repo, itemURL)
+}
+
 type Executor interface {
 	Execute(context.Context, actions.Action, OutputData, ActionInvocationInput) (ExecutionResult, error)
 }

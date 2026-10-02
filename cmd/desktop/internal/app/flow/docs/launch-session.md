@@ -8,9 +8,10 @@ launch is also offered from the item menu.
 
 ## Fields
 
-- `repo` (required) — the repository the session is created against, a Go
-  template. It may render a remote URL or the name of a configured
-  repository.
+- `repo` (required) — the remote URL of the repository the session is
+  created against, a Go template. `{{ .ItemRemote }}` is the item's own
+  repository, such as a pull request's; a plain URL launches every item in
+  one repository. A remote that matches a configured checkout reuses it.
 - `prompt` (required) — the session's initial prompt, a Go template.
 - `agent` — a Hive agent profile (e.g. `claude`, `aider`). Omit it for the
   default agent.
@@ -21,7 +22,7 @@ launch is also offered from the item menu.
 ```yaml
 - id: review-prs
   type: launch-session
-  repo: "https://github.com/{{ .Payload.repo }}.git"
+  repo: "{{ .ItemRemote }}"
   sessionName: "review-{{ .Payload.num }}"
   prompt: |
     Review pull request #{{ .Payload.num }} in {{ .Payload.repo }}.

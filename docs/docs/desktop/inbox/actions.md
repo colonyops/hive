@@ -58,7 +58,7 @@ syntax. `repo_template` and `workspace` cannot appear together.
 
 Template fields depend on where the action runs:
 
-- Item actions use `{{ .Payload.<field> }}` and `{{ .Key }}`.
+- Item actions use `{{ .Payload.<field> }}` and `{{ .Key }}`. `{{ .ItemRemote }}` is the clone URL of the item's repository, for `repo_template`.
 - Session actions use values such as `{{ .Session.Path }}` and `{{ .Session.Branch }}`.
 - Window actions can also use `{{ .Window.ID }}`.
 - Declared inputs use `{{ .Inputs.<name> }}`.

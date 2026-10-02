@@ -1,22 +1,85 @@
-import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+
+const mocks = vi.hoisted(() => ({ SessionLaunchOptions: vi.fn() }))
+vi.mock(
+  '../../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice',
+  () => ({
+    SessionLaunchOptions: mocks.SessionLaunchOptions,
+  }),
+)
+
 import Editor from '../editor.vue'
-import { defaults, validate } from '../config'
+import { ITEM_REMOTE, defaults, repoMode, validate } from '../config'
+
+beforeEach(() => {
+  mocks.SessionLaunchOptions.mockReset()
+  mocks.SessionLaunchOptions.mockResolvedValue({
+    repositories: [{ name: 'hive', repository: 'https://github.com/colonyops/hive.git' }],
+  })
+})
+
+const repoField = '[data-testid="launch-session-node-editor-repo"]'
 
 describe('launch-session editor', () => {
   it('renders every launch field', () => {
-    const wrapper = mount(Editor, { props: { config: defaults } })
-    for (const field of ['repo', 'agent', 'session-name', 'prompt']) {
+    const wrapper = mount(Editor, { props: { config: { ...defaults, repo: 'x/{{ .Key }}' } } })
+    for (const field of ['repo-mode', 'repo', 'agent', 'session-name', 'prompt']) {
       expect(wrapper.find(`[data-testid="launch-session-node-editor-${field}"]`).exists(), field).toBe(true)
     }
   })
 
-  it('emits the typed repo and prompt templates', async () => {
+  it("defaults to the item's own repository", () => {
+    expect(defaults.repo).toBe(ITEM_REMOTE)
     const wrapper = mount(Editor, { props: { config: defaults } })
-    await wrapper.get('[data-testid="launch-session-node-editor-repo"]').setValue('{{ .Payload.repo }}')
-    expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ repo: '{{ .Payload.repo }}', prompt: '' })
-    await wrapper.get('[data-testid="launch-session-node-editor-prompt"]').setValue('Review it')
-    expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ repo: '', prompt: 'Review it' })
+    expect(wrapper.find(repoField).exists()).toBe(false)
+    expect(wrapper.find('[data-testid="launch-session-node-editor-repo-hint"]').exists()).toBe(true)
+  })
+
+  it('reads the mode back from the stored repo', () => {
+    expect(repoMode(ITEM_REMOTE)).toBe('item')
+    expect(repoMode(` ${ITEM_REMOTE} `)).toBe('item')
+    expect(repoMode('https://github.com/{{ .Payload.repo }}.git')).toBe('template')
+    expect(repoMode('https://github.com/colonyops/hive.git')).toBe('configured')
+  })
+
+  it('picks a fixed repository from the known checkouts', async () => {
+    const config = { repo: 'https://github.com/colonyops/hive.git', prompt: 'p' }
+    const wrapper = mount(Editor, { props: { config }, attachTo: document.body })
+    await flushPromises()
+    expect(mocks.SessionLaunchOptions).toHaveBeenCalledOnce()
+    expect(wrapper.get(repoField).text()).toContain('colonyops/hive')
+    wrapper.unmount()
+  })
+
+  it('switching mode rewrites the repo for the item and fixed modes and keeps it for a template', async () => {
+    const config = { repo: ITEM_REMOTE, prompt: 'p' }
+    const wrapper = mount(Editor, { props: { config } })
+    const select = wrapper.getComponent({ name: 'SelectField' })
+
+    select.vm.$emit('update:modelValue', 'configured')
+    expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ ...config, repo: '' })
+
+    select.vm.$emit('update:modelValue', 'template')
+    await wrapper.vm.$nextTick()
+    await wrapper.get(repoField).setValue('https://github.com/{{ .Payload.repo }}.git')
+    expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({
+      ...config,
+      repo: 'https://github.com/{{ .Payload.repo }}.git',
+    })
+
+    select.vm.$emit('update:modelValue', 'item')
+    expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ ...config, repo: ITEM_REMOTE })
+  })
+
+  it('keeps the field usable when the repository list cannot load', async () => {
+    mocks.SessionLaunchOptions.mockRejectedValue(new Error('hive unavailable'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const wrapper = mount(Editor, { props: { config: { repo: 'https://example.com/a.git', prompt: 'p' } } })
+    await flushPromises()
+    expect(warn).toHaveBeenCalled()
+    expect(wrapper.find(repoField).exists()).toBe(true)
+    warn.mockRestore()
   })
 
   it('clears an emptied optional field back to undefined', async () => {
@@ -29,14 +92,15 @@ describe('launch-session editor', () => {
   })
 
   it('requires a repo and a prompt', () => {
-    expect(validate(defaults)).toEqual(['repo is required', 'prompt is required'])
+    expect(validate({ repo: '', prompt: '' })).toEqual(['repo is required', 'prompt is required'])
     expect(validate({ repo: 'r', prompt: 'p' })).toEqual([])
   })
 })
 
 describe('launch-session editor errors', () => {
   it('shows each validation message on the field it names', () => {
-    const wrapper = mount(Editor, { props: { config: defaults, errors: validate(defaults) } })
+    const config = { repo: '', prompt: '' }
+    const wrapper = mount(Editor, { props: { config, errors: validate(config) } })
     expect(wrapper.text()).toContain('repo is required')
     expect(wrapper.text()).toContain('prompt is required')
   })

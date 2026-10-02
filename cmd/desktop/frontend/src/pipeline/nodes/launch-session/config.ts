@@ -9,7 +9,7 @@ export const role = 'output' as const
 
 /** Mirrors Go's flow.LaunchSessionConfig. */
 export interface Config {
-  /** Go template rendering the repository; required. */
+  /** Go template rendering the repository's remote; required. */
   repo: string
   /** Go template rendering the initial prompt; required. */
   prompt: string
@@ -32,8 +32,23 @@ export const accentToken = 'var(--color-node-orange)'
 export const tint = 'var(--color-node-orange-tint)'
 export const outputs = 0
 
+/** The repo template that clones the repository the item belongs to. */
+export const ITEM_REMOTE = '{{ .ItemRemote }}'
+
+/**
+ * How the editor presents a stored repo. The flow file keeps one string, so
+ * the mode is read back from it: anything templated other than ITEM_REMOTE is
+ * a hand-written template, and a plain value is a fixed remote.
+ */
+export type RepoMode = 'item' | 'configured' | 'template'
+
+export function repoMode(repo: string): RepoMode {
+  if (repo.trim() === ITEM_REMOTE) return 'item'
+  return repo.includes('{{') ? 'template' : 'configured'
+}
+
 export const defaults: Config = {
-  repo: '',
+  repo: ITEM_REMOTE,
   prompt: '',
 }
 

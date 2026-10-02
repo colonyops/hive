@@ -1,11 +1,50 @@
 <script setup lang="ts">
 // Optional fields are stored only when set, so a flow file stays free of keys
 // the author never touched.
-import { TextField, TextareaField } from '../../fields'
-import type { Config } from './config'
+import { onMounted, ref, watch } from 'vue'
+import { SessionLaunchOptions } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
+import type { SessionLaunchRepository } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import RepositorySelect from '../../../components/RepositorySelect.vue'
+import { FieldRow, SelectField, TextField, TextareaField } from '../../fields'
+import { ITEM_REMOTE, repoMode, type Config, type RepoMode } from './config'
 
 const props = defineProps<{ config: Config; errors?: string[] }>()
 const emit = defineEmits<{ 'update:config': [config: Config] }>()
+
+const modeOptions: { value: RepoMode; label: string }[] = [
+  { value: 'item', label: "The item's repository" },
+  { value: 'configured', label: 'A fixed repository' },
+  { value: 'template', label: 'A template' },
+]
+
+// A blank repo reads as no mode at all, so the chosen mode is held here while
+// the author has yet to fill the field it opened.
+const mode = ref<RepoMode>('configured')
+watch(
+  () => props.config.repo,
+  (repo) => {
+    if (repo.trim()) mode.value = repoMode(repo)
+  },
+  { immediate: true },
+)
+
+// The picker still accepts a typed remote, so a failed read only loses the
+// suggestions.
+const repositories = ref<SessionLaunchRepository[]>([])
+onMounted(async () => {
+  try {
+    repositories.value = (await SessionLaunchOptions())?.repositories ?? []
+  } catch (err) {
+    console.warn('Unable to load repositories', err)
+  }
+})
+
+function setMode(next: string) {
+  const value = next as RepoMode
+  mode.value = value
+  if (value === 'item') set('repo', ITEM_REMOTE)
+  else if (value === 'configured') set('repo', '')
+}
 
 // validate() phrases each message from its field's key, so the message is
 // routed back to the field it names.
@@ -24,11 +63,38 @@ function set<K extends keyof Config>(key: K, value: Config[K]) {
       Each item arriving here starts a Hive coding session, once per item. The item's detail view links the session.
     </p>
 
-    <TextField
+    <SelectField
       label="Repository"
+      :model-value="mode"
+      :options="modeOptions"
+      testid="launch-session-node-editor-repo-mode"
+      @update:model-value="setMode"
+    />
+
+    <FieldRow
+      v-if="mode === 'item'"
+      hint="Clones the repository the item belongs to, such as the pull request's. An item that names no repository fails the launch."
+      :error="fieldError('repo')"
+      testid="launch-session-node-editor-repo"
+    />
+    <FieldRow
+      v-else-if="mode === 'configured'"
+      hint="Every item launches in this repository. Pick a known checkout or type a remote URL."
+      :error="fieldError('repo')"
+      testid="launch-session-node-editor-repo"
+    >
+      <RepositorySelect
+        :model-value="config.repo"
+        :repositories="repositories"
+        testid="launch-session-node-editor-repo"
+        @update:model-value="set('repo', $event)"
+      />
+    </FieldRow>
+    <TextField
+      v-else
       :model-value="config.repo"
       placeholder="https://github.com/{{ .Payload.repo }}.git"
-      hint="Go template rendered over the item. A remote URL or a configured repository."
+      hint="Go template rendered over the item, producing a remote URL. {{ .ItemRemote }} is the item's own repository."
       monospace
       :error="fieldError('repo')"
       testid="launch-session-node-editor-repo"
