@@ -17,13 +17,15 @@ const modeOptions: { value: RepoMode; label: string }[] = [
   { value: 'template', label: 'A template' },
 ]
 
-// A blank repo reads as no mode at all, so the chosen mode is held here while
-// the author has yet to fill the field it opened.
+// The mode is read back from the repo only when the repo arrives from outside.
+// Re-reading it from the author's own edits would flip a template being typed,
+// which has no `{{` yet, to the fixed mode and unmount the field mid-keystroke.
 const mode = ref<RepoMode>('configured')
+let emittedRepo: string | undefined
 watch(
   () => props.config.repo,
   (repo) => {
-    if (repo.trim()) mode.value = repoMode(repo)
+    if (repo !== emittedRepo && repo.trim()) mode.value = repoMode(repo)
   },
   { immediate: true },
 )
@@ -53,6 +55,7 @@ function fieldError(key: keyof Config): string | undefined {
 }
 
 function set<K extends keyof Config>(key: K, value: Config[K]) {
+  if (key === 'repo') emittedRepo = value
   emit('update:config', { ...props.config, [key]: value })
 }
 </script>

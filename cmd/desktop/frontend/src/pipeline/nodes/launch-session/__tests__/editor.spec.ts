@@ -72,6 +72,16 @@ describe('launch-session editor', () => {
     expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ ...config, repo: ITEM_REMOTE })
   })
 
+  it('stays in template mode while a template without braces is typed', async () => {
+    const wrapper = mount(Editor, { props: { config: { repo: '{{ .Key }}', prompt: 'p' } } })
+    await wrapper.get(repoField).setValue('h')
+    await wrapper.setProps({ config: wrapper.emitted('update:config')!.at(-1)![0] as typeof defaults })
+    expect(wrapper.get(repoField).element.tagName).toBe('INPUT')
+
+    await wrapper.setProps({ config: { repo: ITEM_REMOTE, prompt: 'p' } })
+    expect(wrapper.find(repoField).exists()).toBe(false)
+  })
+
   it('keeps the field usable when the repository list cannot load', async () => {
     mocks.SessionLaunchOptions.mockRejectedValue(new Error('hive unavailable'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

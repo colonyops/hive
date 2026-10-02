@@ -117,12 +117,21 @@ func TestLaunchSessionExecutor_ItemRemoteRendersTheItemsCloneURL(t *testing.T) {
 		assert.Equal(t, "https://github.com/colonyops/hive.git", launcher.calls[0].Repo)
 	})
 
-	t.Run("an item without one fails as rendered blank", func(t *testing.T) {
+	t.Run("an item without one fails naming the cause", func(t *testing.T) {
 		launcher := &fakeSessionLauncher{}
 		_, err := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{}).
 			Execute(t.Context(), action, OutputData{Key: "alert-1", Raw: json.RawMessage(`{"title":"down"}`)}, ActionInvocationInput{})
-		require.ErrorContains(t, err, "rendered blank")
+		require.EqualError(t, err, "launch-session: repo_template rendered blank: the item names no repository")
 		assert.Empty(t, launcher.calls)
+	})
+
+	t.Run("a flow node's failure names the node's own field", func(t *testing.T) {
+		node := actions.Action{ID: "launch:triage/review", Type: "launch-session", Config: &LaunchNodeActionConfig{
+			PromptTemplate: "hi", RepoTemplate: "{{ .ItemRemote }}",
+		}}
+		_, err := NewLaunchSessionExecutor(zerolog.Nop(), &fakeSessionLauncher{}, nil, hostEnvironment{}).
+			Execute(t.Context(), node, OutputData{Key: "alert-1", Raw: json.RawMessage(`{"title":"down"}`)}, ActionInvocationInput{})
+		require.EqualError(t, err, "launch-session: repo rendered blank: the item names no repository")
 	})
 }
 

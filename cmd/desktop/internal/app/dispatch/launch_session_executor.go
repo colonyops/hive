@@ -67,22 +67,26 @@ func NewLaunchSessionExecutor(logger zerolog.Logger, launcher SessionLauncher, w
 func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Action, data OutputData, input ActionInvocationInput) (ExecutionResult, error) {
 	var cfg *actions.LaunchSessionConfig
 	var nameTemplate string
+	// Errors name the field the author wrote: actions.yml keys for a catalog
+	// action, the node's own keys for a flow launch node.
+	promptField, repoField := "prompt_template", "repo_template"
 	switch c := action.Config.(type) {
 	case *actions.LaunchSessionConfig:
 		cfg = c
 	case *LaunchNodeActionConfig:
 		cfg, nameTemplate = &c.LaunchSessionConfig, c.NameTemplate
+		promptField, repoField = "prompt", "repo"
 	default:
 		return ExecutionResult{}, fmt.Errorf("launch-session executor: action %q has config type %T", action.ID, action.Config)
 	}
 
 	prompt, err := tmpl.New(tmpl.Config{}).Render(cfg.PromptTemplate, data)
 	if err != nil {
-		return ExecutionResult{}, fmt.Errorf("launch-session: prompt_template: %w", err)
+		return ExecutionResult{}, fmt.Errorf("launch-session: %s: %w", promptField, err)
 	}
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
-		return ExecutionResult{}, fmt.Errorf("launch-session: prompt_template rendered blank")
+		return ExecutionResult{}, fmt.Errorf("launch-session: %s rendered blank", promptField)
 	}
 
 	name, err := sessionName(action.ID, nameTemplate, data)
@@ -92,7 +96,7 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 
 	repo, err := renderRepoTemplate(cfg.RepoTemplate, data.Key, data.Raw, data.Inputs)
 	if err != nil {
-		return ExecutionResult{}, fmt.Errorf("launch-session: repo_template: %w", err)
+		return ExecutionResult{}, fmt.Errorf("launch-session: %s: %w", repoField, err)
 	}
 	workspace := strings.TrimSpace(cfg.Workspace)
 	agent := cfg.Agent
@@ -116,7 +120,10 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 			agent = input.Session.Agent
 		}
 	} else if repo == "" && workspace == "" {
-		return ExecutionResult{}, fmt.Errorf("launch-session: repo_template rendered blank")
+		if strings.Contains(cfg.RepoTemplate, ".ItemRemote") {
+			return ExecutionResult{}, fmt.Errorf("launch-session: %s rendered blank: the item names no repository", repoField)
+		}
+		return ExecutionResult{}, fmt.Errorf("launch-session: %s rendered blank", repoField)
 	}
 	if repo != "" && workspace != "" {
 		return ExecutionResult{}, fmt.Errorf("launch-session: repository and workspace targets are mutually exclusive")
