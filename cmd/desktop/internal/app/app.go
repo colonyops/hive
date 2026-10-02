@@ -277,6 +277,7 @@ type App struct {
 	flowsWatcher           *flow.FlowsWatcher
 	actionsWatcher         *actions.ActionsWatcher
 	agentWorkspacesWatcher *agentws.Watcher
+	sessionsWatcher        *sessionsWatcher
 	hiveBusCancel          context.CancelFunc
 }
 
@@ -356,6 +357,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		cancel()
 		return nil, err
 	}
+	a.sessionsWatcher = newSessionsWatcher(a.sessions, a.Events, sessionsWatchInterval, cfg.Logger)
 	a.popupTerminals = ptyterm.NewManager(ptyterm.ManagerOptions{Environ: a.execEnv.Environ})
 
 	a.openActions(cfg.Paths.ActionsPath, cfg.Logger)
@@ -612,6 +614,7 @@ func (a *App) Start(ctx context.Context) error {
 	if a.agentWorkspacesWatcher != nil {
 		a.agentWorkspacesWatcher.Start()
 	}
+	a.sessionsWatcher.Start(ctx)
 	// After the watcher, so the first pass evaluates the workspace set the
 	// watcher is already keeping current. That pass is the catch-up for
 	// everything that came due while the app was closed, so it runs in mock
@@ -768,6 +771,9 @@ func (a *App) Close() error {
 	}
 	if a.agentWorkspacesWatcher != nil {
 		a.agentWorkspacesWatcher.Close()
+	}
+	if a.sessionsWatcher != nil {
+		a.sessionsWatcher.Stop()
 	}
 	a.Events.Close()
 

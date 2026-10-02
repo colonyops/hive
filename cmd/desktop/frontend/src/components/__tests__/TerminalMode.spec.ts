@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   Available: vi.fn(),
   Scratch: vi.fn(),
   ListSessions: vi.fn(),
+  On: vi.fn().mockReturnValue(() => {}),
   SessionStatuses: vi.fn(),
   SessionLaunchOptions: vi.fn(),
   SessionDetail: vi.fn(),
@@ -130,7 +131,7 @@ vi.mock('../../composables/useNewSession', () => ({
   useNewSession: () => ({ openBlank: mocks.openBlank, prefetch: vi.fn() }),
 }))
 vi.mock('@wailsio/runtime', () => ({
-  Events: { On: vi.fn().mockReturnValue(() => {}) },
+  Events: { On: mocks.On },
   Clipboard: { SetText: mocks.SetClipboardText },
   Browser: { OpenURL: mocks.OpenURL },
 }))
@@ -1959,6 +1960,25 @@ describe('TerminalMode', () => {
     expect(wrapper.find('[data-testid="terminal-no-session"]').exists()).toBe(true)
     expect(router.currentRoute.value.params.slug ?? '').toBe('')
     expect(storedRestore()).toEqual({ slug: '', window: '' })
+  })
+
+  it('lists a session the CLI created on the sessions:updated wake-up', async () => {
+    const { wrapper } = await mountAvailable()
+    expect(wrapper.find('[data-testid="terminal-session-row"][data-slug="hive-task1"]').exists()).toBe(false)
+    const handler = mocks.On.mock.calls.find(([event]) => event === 'sessions:updated')?.[1] as (() => void) | undefined
+    expect(handler).toBeDefined()
+
+    // `hive batch` wrote hive.db from another process: no job of this app's
+    // ran, so the core's poll is the only thing that can wake the sidebar.
+    mocks.ListSessions.mockResolvedValue([
+      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
+      { id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' },
+      { id: '3', name: 'task1', slug: 'hive-task1', repo: 'hay-kot/hive', state: 'active' },
+    ])
+    handler!()
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="terminal-session-row"][data-slug="hive-task1"]').exists()).toBe(true)
   })
 
   // The window well is the only place windows are ordered — a window can only

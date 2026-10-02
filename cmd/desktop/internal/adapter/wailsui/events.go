@@ -43,6 +43,10 @@ func registerEvents() struct{} {
 	// restore the form. It exists because a create that fails minutes after
 	// the dialog closed has to arrive at the user, not wait in a list.
 	application.RegisterEvent[string]("sessions:create-failed")
+	// sessions:updated fires when the hive session set changed under this
+	// process — the CLI shares hive.db and created, renamed or removed a
+	// session. The terminal sidebar re-reads its session list on receipt.
+	application.RegisterEvent[string]("sessions:updated")
 	// window:focus and window:blur carry the current focus state. Consumers use
 	// them to update focus-sensitive UI without querying the native window.
 	application.RegisterEvent[bool]("window:focus")
@@ -119,6 +123,11 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		}),
 		events.Subscribe(ctx, bus, "wailsui.session-create-failed", events.Coalesce(), func(_ context.Context, e events.SessionCreateFailed) {
 			emitSessionCreateFailed(e.Name)
+		}),
+		events.Subscribe(ctx, bus, "wailsui.sessions", events.Coalesce(), func(context.Context, events.SessionsUpdated) {
+			// The core carries the changed ids; the frontend re-reads the
+			// whole list, which is the degradation the wake-up contract asks for.
+			emitSessionsUpdated()
 		}),
 		events.Subscribe(ctx, bus, "wailsui.actions", events.Coalesce(), func(context.Context, events.ActionsUpdated) {
 			emitActionsUpdated()
@@ -235,6 +244,14 @@ func emitJobsUpdated() {
 func emitSessionCreateFailed(name string) {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("sessions:create-failed", name)
+	}
+}
+
+// emitSessionsUpdated wakes the terminal sidebar after the hive session set
+// changed, whichever process changed it.
+func emitSessionsUpdated() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("sessions:updated", "changed")
 	}
 }
 

@@ -1507,6 +1507,12 @@ const {
 useWailsEvent('jobs:updated', () => {
   void reloadSessions()
 })
+// The CLI writes the same hive.db from another process, so no job of this
+// app's fires when `hive batch` creates a session or `hive rm` removes one.
+// The core polls the session set and sessions:updated is that wake-up.
+useWailsEvent('sessions:updated', () => {
+  void reloadSessions()
+})
 
 const tabs = computed<TerminalWindowTab[]>(() => visible.value?.tabs.value ?? [])
 const activeWindowId = computed(() => visible.value?.activeWindowId.value ?? '')

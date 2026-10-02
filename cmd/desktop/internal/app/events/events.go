@@ -34,6 +34,15 @@ type JobsUpdated struct {
 // re-reads, so the payload names the attempt rather than carrying the reason.
 type SessionCreateFailed struct{ Name string }
 
+// SessionsUpdated reports that the hive session set differs from the last
+// read: sessions appeared, changed name, slug, remote or state, or went away.
+// The CLI writes the same hive.db from another process, so this is the only
+// signal for a session it created or removed; the app's own session jobs
+// change the set too and land here one poll after their JobsUpdated. The
+// payload carries the ids by kind of change; the rows are state a reader
+// re-reads.
+type SessionsUpdated struct{ Added, Changed, Removed []string }
+
 // FlowsUpdated reports that the flow set was reloaded. Reason names what
 // caused it — an external edit, or the app's own save.
 type FlowsUpdated struct{ Reason string }
@@ -94,6 +103,7 @@ func (InboxUpdated) eventName() string           { return "inbox.updated" }
 func (ActivityAppended) eventName() string       { return "activity.appended" }
 func (JobsUpdated) eventName() string            { return "jobs.updated" }
 func (SessionCreateFailed) eventName() string    { return "session.create-failed" }
+func (SessionsUpdated) eventName() string        { return "sessions.updated" }
 func (FlowsUpdated) eventName() string           { return "flows.updated" }
 func (ActionsUpdated) eventName() string         { return "actions.updated" }
 func (MenuBarUpdated) eventName() string         { return "menu-bar.updated" }
