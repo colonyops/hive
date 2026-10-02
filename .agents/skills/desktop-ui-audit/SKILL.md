@@ -58,29 +58,45 @@ lsof -nP -t -iTCP:$(jq -r '.mcpServers["hive-desktop-ui"].url' .mcp.json | sed -
 
 ### Preconditions on arrival
 
-Start with `app_info` for the window list (its `visible` and `focused` flags
-are unreliable; see the guardrails), then this page check:
+Start with `app_info` for the window list. Its `visible` means "not
+occluded" and `focused` means "the key window", so `visible: false` on a
+window you expect on screen is the first sign of the covered window below.
+Then this page check:
 
 ```js
 // js_eval
+const a = document.activeElement
 return {route: location.hash, title: document.title,
         visibility: document.visibilityState, hasFocus: document.hasFocus(),
         testids: document.querySelectorAll('[data-testid]').length,
-        focused: document.activeElement?.dataset.testid ?? null}
+        focused: a?.dataset.testid ?? a?.tagName.toLowerCase() ?? null}
 ```
 
 - **`visibility` is `hidden`**: the window is covered, usually by the
   installed Hive.app. A hidden WKWebView never fires `requestAnimationFrame`
   and throttles timers, so every Vue transition stalls: a closed palette stays
   in the DOM at full opacity, an opened one never paints. `window_control
-  focus` does not bring the window forward. This does, by the pid above:
+  focus` alone does not bring the window forward. Raise it by the pid above,
+  then make it the key window:
 
   ```bash
   osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $PID) to true"
   ```
 
-  Re-run the page check; `hasFocus` turns true and frames flow. If that is
-  refused (no Accessibility permission), ask the user to click the dev window.
+  followed by `window_control {action: "focus"}`. The page check then reads
+  `visibility: "visible"` and `hasFocus: true`; what proves frames flow is
+  this probe:
+
+  ```js
+  // js_eval: does a frame arrive?
+  return await new Promise(r => {
+    const t = setTimeout(() => r({frame: false}), 1500)
+    requestAnimationFrame(() => { clearTimeout(t); r({frame: true}) })
+  })
+  ```
+
+  If the raise is refused (no Accessibility permission), ask the user to
+  click the dev window.
 - **`route` is `#/feed/...` with hundreds of test ids**: the instance carries
   a copy of the installed app's data and you are on the inbox. **Onboarding is
   not a route**; it shows only while no profile exists, and the way back to it
@@ -100,9 +116,10 @@ a name.
 - `dom_html {selector}` for markup. `screenshot_dom {max_depth}` is geometry
   only (tag, classes, bounds, no ids), so it cannot tell you what to click.
 - **`visible` means "has a layout box."** It is true for a hover-only control
-  at `opacity: 0` and for a row far below the fold. When that matters, check
-  `getComputedStyle(el).opacity !== '0'` and that the rect intersects the
-  viewport yourself.
+  at `opacity: 0`, for a button inside such a strip, and for a row far below
+  the fold. When that matters, walk `getComputedStyle(n).opacity` up the
+  ancestors and check that the rect intersects the viewport yourself; the
+  listing below does both.
 - The handles on screen, grouped so a populated inbox (500+ ids) stays under
   the tool-result limit; the raw per-element array only fits a view with
   under about 150 ids:
@@ -110,10 +127,11 @@ a name.
 ```js
 // js_eval: data-testids grouped by id, with a sample of the text an assertion needs
 const inViewport = false   // true: only ids with a box inside the viewport
+const faded = e => { for (let n = e; n; n = n.parentElement) if (getComputedStyle(n).opacity === '0') return true; return false }
 const groups = new Map()
 for (const e of document.querySelectorAll('[data-testid]')) {
   const r = e.getBoundingClientRect()
-  const shown = r.width > 0 && r.height > 0 && getComputedStyle(e).opacity !== '0'
+  const shown = r.width > 0 && r.height > 0 && !faded(e)   // a button inside a faded hover strip is not shown
   const onScreen = r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth
   if (inViewport && !(shown && onScreen)) continue
   const g = groups.get(e.dataset.testid) ?? {id: e.dataset.testid, tag: e.tagName.toLowerCase(), count: 0, shown: 0, sample: ''}
@@ -241,9 +259,11 @@ compiles `winid.swift` with the system `swiftc`.
 - **The cursor overlay is in the DOM** as `#__wails-mcp-cursor` after the
   first mouse tool runs. It has no `data-testid`, so it only shows up in a
   query by tag (`div`) or in `screenshot_dom`.
-- **`app_info` and `windows_list` report `visible:false` and
-  `focused:false`** for a window that is on screen. Trust the page check, the
-  DOM, and the screenshot, not those flags.
+- **`app_info` and `windows_list` report occlusion, not existence.**
+  `visible: false` means another window covers this one and `focused: false`
+  means it is not the key window; both are accurate and both are the early
+  signal for the preconditions. Neither says anything about what the page
+  shows; the DOM and the screenshot do.
 - **One app per worktree.** The port comes from `launch.env` and `.mcp.json`;
   do not hard-code 9099, and do not point a client at a port you did not read
   from one of those files.
