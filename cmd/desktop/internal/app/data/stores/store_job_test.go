@@ -111,3 +111,25 @@ func TestJobs_ActiveJobPersistsAcrossReopen(t *testing.T) {
 	require.NotNil(t, active[0].CommandID)
 	assert.Equal(t, int64(1), *active[0].CommandID)
 }
+
+func TestJobs_SetRunningWithoutCommandLeavesLinkNull(t *testing.T) {
+	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	st := New(db, Options{Now: newTestClock().Now})
+	ctx := t.Context()
+
+	job, err := st.Jobs.Insert(ctx, JobCreate{
+		Status: "queued", Label: "Create session", Step: "Queued", ActionID: "new-session", Target: "sess-1",
+	})
+	require.NoError(t, err)
+
+	running, err := st.Jobs.SetRunning(ctx, job.ID, "Running…", 0)
+	require.NoError(t, err)
+	assert.Equal(t, "running", running.Status)
+	assert.Nil(t, running.CommandID, "a zero command id marks the job running without a link")
+
+	_, found, err := st.Jobs.FindRunningByCommand(ctx, 0)
+	require.NoError(t, err)
+	assert.False(t, found, "an unlinked job is not resumable by command")
+}

@@ -15,15 +15,19 @@ const (
 	jobMaxListLimit     = 1000
 )
 
-// JobService persists jobs and implements jobs.Recorder for background work.
+// JobService lists jobs and records them. Its Recorder is the metered view of
+// the store-backed jobRecorder, so every job the app writes is counted whether
+// the output worker or Track began it.
 type JobService struct {
-	store  *stores.JobStore
-	events *events.Bus
-	log    zerolog.Logger
+	jobs.Recorder
+	store *stores.JobStore
 }
 
 func newJobService(store *stores.JobStore, bus *events.Bus, logger zerolog.Logger) *JobService {
-	return &JobService{store: store, events: bus, log: logger}
+	return &JobService{
+		Recorder: jobs.Metered(&jobRecorder{store: store, events: bus, log: logger}),
+		store:    store,
+	}
 }
 
 // List defaults limits outside 1..1000 to 200.
@@ -48,55 +52,6 @@ func (s *JobService) ListActive(ctx context.Context) ([]jobs.Job, error) {
 	return jobsFromStore(rows), nil
 }
 
-// Persistence failures are logged and return zero.
-func (s *JobService) Begin(ctx context.Context, label, actionID, target string) int64 {
-	job, err := s.store.Insert(ctx, stores.JobCreate{
-		Status: jobs.JobStatusQueued.String(), Label: label, Step: jobs.StepFor(jobs.JobStatusQueued),
-		ActionID: actionID, Target: target,
-	})
-	if err != nil {
-		s.log.Warn().Err(err).Str("label", label).Str("action_id", actionID).Msg("beginning job failed")
-		return 0
-	}
-	s.events.Publish(ctx, events.JobsUpdated{JobID: job.ID})
-	return job.ID
-}
-
-// Running links the job to its output command. A zero job ID is a no-op.
-func (s *JobService) Running(ctx context.Context, id int64, commandID int64) {
-	if id == 0 {
-		return
-	}
-	if _, err := s.store.SetRunning(ctx, id, jobs.StepFor(jobs.JobStatusRunning), commandID); err != nil {
-		s.log.Warn().Err(err).Int64("job_id", id).Int64("command_id", commandID).Msg("marking job running failed")
-		return
-	}
-	s.events.Publish(ctx, events.JobsUpdated{JobID: id})
-}
-
-// Missing jobs and lookup failures return zero; failures are logged.
-func (s *JobService) Resume(ctx context.Context, commandID int64) int64 {
-	job, found, err := s.store.FindRunningByCommand(ctx, commandID)
-	if err != nil {
-		s.log.Warn().Err(err).Int64("command_id", commandID).Msg("resuming job failed")
-		return 0
-	}
-	if !found {
-		return 0
-	}
-	return job.ID
-}
-
-// A zero ID is a no-op.
-func (s *JobService) Done(ctx context.Context, id int64) {
-	s.setStatus(ctx, id, jobs.JobStatusDone, "")
-}
-
-// A zero ID is a no-op.
-func (s *JobService) Fail(ctx context.Context, id int64, reason string) {
-	s.setStatus(ctx, id, jobs.JobStatusFailed, reason)
-}
-
 // Track starts fn asynchronously on a context detached from caller
 // cancellation. Persistence failures do not stop fn.
 //
@@ -106,7 +61,7 @@ func (s *JobService) Track(ctx context.Context, label, actionID, target string, 
 	id := s.Begin(ctx, label, actionID, target)
 	bg := context.WithoutCancel(ctx)
 	go func() {
-		s.setStatus(bg, id, jobs.JobStatusRunning, "")
+		s.Running(bg, id, 0)
 		if err := fn(bg); err != nil {
 			s.Fail(bg, id, err.Error())
 			return
@@ -116,15 +71,73 @@ func (s *JobService) Track(ctx context.Context, label, actionID, target string, 
 	return id
 }
 
-func (s *JobService) setStatus(ctx context.Context, id int64, status jobs.JobStatus, errText string) {
+// jobRecorder is the jobs.Recorder that writes the job table and publishes
+// each change. Persistence failures are logged and swallowed.
+type jobRecorder struct {
+	store  *stores.JobStore
+	events *events.Bus
+	log    zerolog.Logger
+}
+
+// A persistence failure returns zero.
+func (r *jobRecorder) Begin(ctx context.Context, label, actionID, target string) int64 {
+	job, err := r.store.Insert(ctx, stores.JobCreate{
+		Status: jobs.JobStatusQueued.String(), Label: label, Step: jobs.StepFor(jobs.JobStatusQueued),
+		ActionID: actionID, Target: target,
+	})
+	if err != nil {
+		r.log.Warn().Err(err).Str("label", label).Str("action_id", actionID).Msg("beginning job failed")
+		return 0
+	}
+	r.events.Publish(ctx, events.JobsUpdated{JobID: job.ID})
+	return job.ID
+}
+
+// A zero job ID is a no-op. A zero commandID marks the job running with no
+// output_command link, which is what a Track job is.
+func (r *jobRecorder) Running(ctx context.Context, id int64, commandID int64) {
 	if id == 0 {
 		return
 	}
-	if _, err := s.store.SetStatus(ctx, id, status.String(), jobs.StepFor(status), errText); err != nil {
-		s.log.Warn().Err(err).Int64("job_id", id).Str("status", status.String()).Msg("updating job status failed")
+	if _, err := r.store.SetRunning(ctx, id, jobs.StepFor(jobs.JobStatusRunning), commandID); err != nil {
+		r.log.Warn().Err(err).Int64("job_id", id).Int64("command_id", commandID).Msg("marking job running failed")
 		return
 	}
-	s.events.Publish(ctx, events.JobsUpdated{JobID: id})
+	r.events.Publish(ctx, events.JobsUpdated{JobID: id})
+}
+
+// Missing jobs and lookup failures return zero; failures are logged.
+func (r *jobRecorder) Resume(ctx context.Context, commandID int64) int64 {
+	job, found, err := r.store.FindRunningByCommand(ctx, commandID)
+	if err != nil {
+		r.log.Warn().Err(err).Int64("command_id", commandID).Msg("resuming job failed")
+		return 0
+	}
+	if !found {
+		return 0
+	}
+	return job.ID
+}
+
+// A zero ID is a no-op.
+func (r *jobRecorder) Done(ctx context.Context, id int64) {
+	r.setStatus(ctx, id, jobs.JobStatusDone, "")
+}
+
+// A zero ID is a no-op.
+func (r *jobRecorder) Fail(ctx context.Context, id int64, reason string) {
+	r.setStatus(ctx, id, jobs.JobStatusFailed, reason)
+}
+
+func (r *jobRecorder) setStatus(ctx context.Context, id int64, status jobs.JobStatus, errText string) {
+	if id == 0 {
+		return
+	}
+	if _, err := r.store.SetStatus(ctx, id, status.String(), jobs.StepFor(status), errText); err != nil {
+		r.log.Warn().Err(err).Int64("job_id", id).Str("status", status.String()).Msg("updating job status failed")
+		return
+	}
+	r.events.Publish(ctx, events.JobsUpdated{JobID: id})
 }
 
 func jobsFromStore(rows []stores.Job) []jobs.Job {

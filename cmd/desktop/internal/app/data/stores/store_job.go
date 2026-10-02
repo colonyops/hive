@@ -37,13 +37,15 @@ func (s *JobStore) Insert(ctx context.Context, in JobCreate) (Job, error) {
 	return s.mapper.Err(row, wrap(fmt.Sprintf("inserting job %q", in.Label), err))
 }
 
-// SetRunning is the only job update that writes CommandID.
+// SetRunning is the only job update that writes CommandID. A zero commandID
+// leaves it NULL: a background job tracked outside the output worker has no
+// command to link.
 func (s *JobStore) SetRunning(ctx context.Context, id int64, step string, commandID int64) (Job, error) {
 	row, err := s.q.Ctx(ctx).SetJobRunning(ctx, queries.SetJobRunningParams{
 		UpdatedAt: s.now().UnixMilli(),
 		Status:    "running",
 		Step:      step,
-		CommandID: sql.NullInt64{Int64: commandID, Valid: true},
+		CommandID: sql.NullInt64{Int64: commandID, Valid: commandID != 0},
 		ID:        id,
 	})
 	return s.mapper.Err(row, wrap(fmt.Sprintf("setting job %d running", id), err))

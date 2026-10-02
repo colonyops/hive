@@ -42,7 +42,7 @@ panel filters on both.
 | -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Runtime  | How heavy is the app and what it spawned?         | `process.*` gauges (`cmd/desktop/internal/app/procstats`), Go runtime metrics, `target_info`                                    |
 | Terminal | Is terminal output keeping up?                    | `tmux.stream.*` (`cmd/desktop/internal/app/tmuxcc`), `terminal.attach` spans                                                    |
-| Sources  | Why is my feed stale, and am I near a rate limit? | `ingest.tick` and `ingest.source <kind>` spans, `source.*` and otelhttp metrics (`cmd/desktop/internal/app/sources/...`)        |
+| Sources  | Why is my feed stale, am I near a rate limit, and did my actions run? | `ingest.tick` and `ingest.source <kind>` spans, `source.*` and otelhttp metrics (`cmd/desktop/internal/app/sources/...`), `job.*` (`cmd/desktop/internal/app/jobs`) |
 | Logs     | What went wrong?                                  | The zerolog bridge, as `service_name="hive-desktop"`                                                                |
 | Traces   | What triggered work, and how long did it take?    | Root spans, error spans, and HTTP spans with no trigger above them                                                  |
 | Profiles | Where do CPU and memory go in the code?           | Pyroscope CPU, heap-in-use, and allocation profiles                                                                 |
@@ -64,6 +64,8 @@ the unit as a suffix, and `_total` on counters:
 | `tmux.stream.lifecycle`            | `tmux_stream_lifecycle_total`                  | `state`: `paused`, `resumed`        |
 | `source.ratelimit.remaining`       | `source_ratelimit_remaining`                   | `source`                            |
 | `source.rss.fetch`                 | `source_rss_fetch_total`                       | `result`                            |
+| `job.transitions`                  | `job_transitions_total`                        | `status`: `queued`, `running`, `done`, `failed` |
+| `job.duration` (`s`)               | `job_duration_seconds_bucket`                  | `le`, `status`: `done`, `failed`    |
 | `http.client.request.duration`     | `http_client_request_duration_seconds_bucket`  | `source`, `http_response_status_code`, `error_type` |
 
 Every series also carries `job="hive-desktop"`, `service_version`,
@@ -74,8 +76,9 @@ the `host_id` label on profiles.
 
 Some behavior is easy to mistake for a broken panel:
 
-- A counter has no series until it first increments. Backlog pauses and RSS
-  fetches stay empty until a pause or an RSS poll happens.
+- A counter has no series until it first increments. Backlog pauses, RSS
+  fetches, and action runs stay empty until a pause, an RSS poll, or a run
+  happens.
 - TraceQL metrics cover at most 25 hours on Grafana Cloud. Trace-derived panels
   error on a longer range.
 - Grafana Cloud renames HTTP client spans such as `http.github GET` to the bare
