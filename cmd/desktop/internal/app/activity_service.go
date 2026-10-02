@@ -15,18 +15,29 @@ const (
 	activityMaxListLimit     = 1000
 )
 
-// ActivityService validates and persists activity events and implements the
-// fire-and-forget activity.Recorder port. Validation stays here because data
-// stores must not import activity's enums.
+// ActivityService validates and persists activity events. Its Recorder is the
+// metered view of the store-backed record, so every backend emitter that holds
+// the port is counted through one path. The frontend appends through Append,
+// which returns the row and its error, and is not counted. Validation stays
+// here because data stores must not import activity's enums.
 type ActivityService struct {
+	activity.Recorder
 	store  *stores.ActivityEventStore
 	events *events.Bus
 	log    zerolog.Logger
 }
 
 func newActivityService(store *stores.ActivityEventStore, bus *events.Bus, logger zerolog.Logger) *ActivityService {
-	return &ActivityService{store: store, events: bus, log: logger}
+	s := &ActivityService{store: store, events: bus, log: logger}
+	s.Recorder = activity.Metered(recorderFunc(s.record))
+	return s
 }
+
+// recorderFunc adapts a plain function to activity.Recorder, the same shape
+// http.HandlerFunc gives http.Handler.
+type recorderFunc func(ctx context.Context, e activity.Event)
+
+func (f recorderFunc) Record(ctx context.Context, e activity.Event) { f(ctx, e) }
 
 // List returns up to limit events with id < before, newest first. Pass
 // before <= 0 to start from the most recent event.
@@ -79,10 +90,10 @@ func (s *ActivityService) Append(ctx context.Context, e activity.Event) (activit
 	return activityEventFromStore(stored), nil
 }
 
-// Record implements activity.Recorder: an emit site should never fail or
-// block because the audit log couldn't be written, so a persistence failure
-// is logged and swallowed rather than returned.
-func (s *ActivityService) Record(ctx context.Context, e activity.Event) {
+// record is the activity.Recorder under the meter: an emit site should never
+// fail or block because the audit log couldn't be written, so a persistence
+// failure is logged and swallowed rather than returned.
+func (s *ActivityService) record(ctx context.Context, e activity.Event) {
 	if _, err := s.Append(ctx, e); err != nil {
 		s.log.Warn().Ctx(ctx).Err(err).Str("title", e.Title).Msg("recording activity event failed")
 	}

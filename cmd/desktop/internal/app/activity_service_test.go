@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/rs/zerolog"
 
@@ -100,4 +101,23 @@ func TestActivityService_RecordSwallowsErrors(t *testing.T) {
 	require.NotPanics(t, func() {
 		service.Record(t.Context(), activity.Event{}) // missing title would error from Append
 	})
+}
+
+// The service's Recorder is the metered one, so a Record through the port both
+// lands in the store and counts.
+func TestActivityService_RecordCountsTheEvent(t *testing.T) {
+	service, _ := newTestActivityService(t)
+	attrs := []attribute.KeyValue{
+		attribute.String("category", activity.CategoryConfig.String()),
+		attribute.String("severity", activity.SeverityInfo.String()),
+	}
+	before := counterValue(t, "activity.events", attrs...)
+
+	service.Record(t.Context(), activity.ConfigReloaded("actions.yml", 3))
+
+	require.GreaterOrEqual(t, counterValue(t, "activity.events", attrs...)-before, int64(1))
+	listed, err := service.List(t.Context(), 0, 10)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	require.Equal(t, "Reloaded actions.yml", listed[0].Title)
 }
