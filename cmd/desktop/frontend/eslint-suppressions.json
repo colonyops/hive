@@ -313,11 +313,6 @@
       "count": 2
     }
   },
-  "src/composables/__tests__/useWindowFocus.spec.ts": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
   "src/composables/useAgentCanvasRoute.ts": {
     "no-restricted-syntax": {
       "count": 1
@@ -537,11 +532,6 @@
     }
   },
   "src/composables/useWebhookSettings.ts": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
-  "src/composables/useWindowFocus.ts": {
     "no-restricted-syntax": {
       "count": 3
     }

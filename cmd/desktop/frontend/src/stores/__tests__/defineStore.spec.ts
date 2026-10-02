@@ -55,6 +55,27 @@ describe('defineStore', () => {
     expect(disposeInner).toHaveBeenCalledOnce()
   })
 
+  it('forgets every store even when one fails to stop, then reports the failure', () => {
+    const useBroken = defineStore('broken', () => {
+      onScopeDispose(() => {
+        throw new Error('cleanup failed')
+      })
+      return { ok: true }
+    })
+    const disposeHealthy = vi.fn()
+    const useHealthy = defineStore('healthy', () => {
+      onScopeDispose(disposeHealthy)
+      return { ok: true }
+    })
+    useBroken()
+    const healthy = useHealthy()
+
+    expect(() => resetStores()).toThrow('cleanup failed')
+    expect(disposeHealthy).toHaveBeenCalledOnce()
+    expect(() => resetStores()).not.toThrow()
+    expect(useHealthy()).not.toBe(healthy)
+  })
+
   it('refuses a store that uses itself during setup', () => {
     const useLoop = defineStore('loop', (): { ok: boolean } => useLoop())
 

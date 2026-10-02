@@ -26,4 +26,10 @@ describe('useWailsEvent', () => {
     scope.stop()
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
+
+  it('fails at subscription time when Events.On returns no unsubscribe', () => {
+    mocks.On.mockReturnValue(undefined)
+
+    expect(() => useWailsEvent('test:event', () => {})).toThrow('returned no unsubscribe function')
+  })
 })

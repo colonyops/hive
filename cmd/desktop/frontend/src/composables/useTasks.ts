@@ -14,7 +14,7 @@ import type {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { appErrorKind, errorText } from '../lib/appError'
 import { DEFAULT_TASK_FILTER, type TaskFilterId } from '../lib/tasksPresentation'
-import { useWindowFocus } from './useWindowFocus'
+import { useWindowFocus } from '../stores/useWindowFocus'
 
 // useTasks is a module singleton, mirroring useSessionStatuses.ts's polling
 // shape: a 2s self-rescheduling setTimeout (not setInterval, so a slow read

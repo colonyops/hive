@@ -8,7 +8,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SessionGitStatus: mocks.SessionGitStatus,
   SessionPullRequest: mocks.SessionPullRequest,
 }))
-vi.mock('../useWindowFocus', () => ({ useWindowFocus: () => ({ focused: ref(true) }) }))
+vi.mock('../../stores/useWindowFocus', () => ({ useWindowFocus: () => ({ focused: ref(true) }) }))
 
 function gitStatus(branch: string) {
   return {

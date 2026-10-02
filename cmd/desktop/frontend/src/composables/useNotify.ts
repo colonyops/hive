@@ -9,7 +9,7 @@ import {
   type NotificationPermission,
 } from './useNotificationSettings'
 import { useToasts } from './useToasts'
-import { useWindowFocus } from './useWindowFocus'
+import { useWindowFocus } from '../stores/useWindowFocus'
 import type { ToastOptions, ToastSeverity } from '../types/toast'
 
 export type NotifySeverity = 'info' | 'success' | 'warning' | 'error'

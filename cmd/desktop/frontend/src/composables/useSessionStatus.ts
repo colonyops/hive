@@ -7,7 +7,7 @@ import type {
   SessionGitStatus,
   SessionPullRequest,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
-import { useWindowFocus } from './useWindowFocus'
+import { useWindowFocus } from '../stores/useWindowFocus'
 
 // Git is four local subprocesses, so it can be polled. The pull request rides
 // along on each poll and is answered from the Go-side cache, so this interval

@@ -117,7 +117,7 @@ const mocks = vi.hoisted(() => ({
   OnboardingSettings: vi.fn(),
   SetOnboardingCompleted: vi.fn(),
   // runtime
-  On: vi.fn(),
+  On: vi.fn().mockReturnValue(() => {}),
   Hide: vi.fn(),
 }))
 

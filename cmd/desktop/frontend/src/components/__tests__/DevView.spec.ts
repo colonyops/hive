@@ -25,7 +25,7 @@ vi.mock('../../stores/useActivity', () => ({
 vi.mock('../../composables/useToasts', () => ({
   useToasts: () => ({ showToast: mocks.showToast }),
 }))
-vi.mock('../../composables/useWindowFocus', () => ({
+vi.mock('../../stores/useWindowFocus', () => ({
   useWindowFocus: () => ({ focused: mocks.focused }),
 }))
 vi.mock('../../composables/useNotificationSettings', () => ({

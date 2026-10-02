@@ -22,8 +22,9 @@ export function defineStore<T extends object>(name: string, setup: () => T): () 
 
   const handle: StoreHandle = {
     stop() {
-      current?.scope.stop()
+      const scope = current?.scope
       current = undefined
+      scope?.stop()
     },
   }
 
@@ -53,6 +54,18 @@ export function defineStore<T extends object>(name: string, setup: () => T): () 
  * runs `setup` again. The test setup calls this after every test.
  */
 export function resetStores(): void {
-  for (const store of started) store.stop()
+  let failure: unknown
+  let failed = false
+  for (const store of started) {
+    try {
+      store.stop()
+    } catch (error) {
+      if (!failed) {
+        failed = true
+        failure = error
+      }
+    }
+  }
   started.clear()
+  if (failed) throw failure
 }

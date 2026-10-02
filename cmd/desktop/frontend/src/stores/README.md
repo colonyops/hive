@@ -184,7 +184,11 @@ describe('useJobs', () => {
 ```
 
 - Mock `Events.On` to **return a function**. The store scope calls it as the
-  unsubscribe on reset; `vi.fn()` with no return value makes the reset throw.
+  unsubscribe on reset. `useWailsEvent` throws at subscription time when the
+  mock returns nothing, so a bare `vi.fn()` fails the first test that starts
+  the store. A store that a module calls at import time starts before any
+  `beforeEach`, so set the return value in `vi.hoisted`:
+  `On: vi.fn().mockReturnValue(() => {})`.
 - Mock the binding module the store fetches from, not the store.
 - To start over mid-test, call `resetStores()` yourself.
 - A component spec that mounts something using a store needs no setup beyond

@@ -1,5 +1,6 @@
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useWindowFocus } from '../useWindowFocus'
 
 const mocks = vi.hoisted(() => ({
   Focused: vi.fn(),
@@ -11,14 +12,12 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 }))
 vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On } }))
 
-async function loadComposable() {
-  const { useWindowFocus } = await import('../useWindowFocus')
-  return useWindowFocus()
+function handler(name: string): () => void {
+  return mocks.On.mock.calls.find(([event]) => event === name)?.[1] as () => void
 }
 
 describe('useWindowFocus', () => {
   beforeEach(() => {
-    vi.resetModules()
     vi.clearAllMocks()
     mocks.On.mockReturnValue(() => {})
     mocks.Focused.mockResolvedValue(false)
@@ -32,23 +31,23 @@ describe('useWindowFocus', () => {
           resolveFocused = resolve
         }),
     )
-    const windowFocus = await loadComposable()
+    const windowFocus = useWindowFocus()
 
     expect(windowFocus.focused.value).toBe(true)
     resolveFocused(false)
     await flushPromises()
     expect(windowFocus.focused.value).toBe(false)
-    expect(mocks.On.mock.calls.map(([name]) => name)).toEqual(['window:focus', 'window:blur'])
+    expect(mocks.On.mock.calls.map(([name]) => name as string)).toEqual(['window:focus', 'window:blur'])
   })
 
   it('updates focus state from native focus events', async () => {
-    const windowFocus = await loadComposable()
+    const windowFocus = useWindowFocus()
     await flushPromises()
     expect(windowFocus.focused.value).toBe(false)
 
-    mocks.On.mock.calls[0][1]()
+    handler('window:focus')()
     expect(windowFocus.focused.value).toBe(true)
-    mocks.On.mock.calls[1][1]()
+    handler('window:blur')()
     expect(windowFocus.focused.value).toBe(false)
   })
 
@@ -60,9 +59,9 @@ describe('useWindowFocus', () => {
           resolveFocused = resolve
         }),
     )
-    const windowFocus = await loadComposable()
+    const windowFocus = useWindowFocus()
 
-    mocks.On.mock.calls[1][1]()
+    handler('window:blur')()
     expect(windowFocus.focused.value).toBe(false)
     resolveFocused(true)
     await flushPromises()
