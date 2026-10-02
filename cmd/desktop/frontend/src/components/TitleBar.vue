@@ -65,7 +65,7 @@ const props = defineProps<{
   errorCount?: number
   unseenActivity?: number
   jobsActive?: boolean
-  activeJobs?: Job[]
+  activeJobs?: readonly Job[]
   updateAvailable?: boolean
   updateInstalling?: boolean
   latestVersion?: string

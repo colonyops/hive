@@ -117,6 +117,17 @@ in `frontend/`, because a stale entry fails the lint. Never add entries to it
 or `--suppress-all` new code; fix the code or disable the rule on that line
 with a reason.
 
+## Frontend shared state
+
+Shared state is a store under `frontend/src/stores/`, one `defineStore` per
+file. Composables under `frontend/src/composables/` hold no shared state: they
+are per-instance or stateless. `frontend/src/stores/README.md` is the
+standard: when something is a store, how to write one, the building blocks
+(`useResource` for anything fetched), the conventions (`reload`, errors as
+`string | null`, readonly state), and how to test one with `resetStores()`.
+The lint enforces the split; the composables that predate it sit in
+`eslint-suppressions.json` until each one migrates (#536).
+
 ## Mock modes
 
 `HIVE_DESKTOP_DEVELOPMENT_MOCKS_MODE`: `feed` / `pipeline` / `action-smoke`

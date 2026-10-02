@@ -6,7 +6,7 @@ import IconExternalLink from '~icons/lucide/external-link'
 import IconLoader from '~icons/lucide/loader'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
 
-defineProps<{ jobs: Job[] }>()
+defineProps<{ jobs: readonly Job[] }>()
 const emit = defineEmits<{ 'open-run': [commandId: number] }>()
 
 function statusClasses(status: string): string {

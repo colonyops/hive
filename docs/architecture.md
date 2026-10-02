@@ -273,6 +273,8 @@ cmd/desktop/                      # Wails app package — stays `main`, stays he
   devserver/                      # the dev GitHub proxy and event simulator
   releasenotes/                   # the desktop's embedded changelog
   build/  e2e/  frontend/  grafana/  scripts/
+    frontend/src/stores/          # shared frontend state, one defineStore per
+                                  #   file (frontend/src/stores/README.md)
     frontend/src/pipeline/
       nodes/*/                    # config.ts, editor.vue, index.ts — editor only.
                                   #   Help text is NOT here; it comes from the Go

@@ -5,6 +5,31 @@ import vue from 'eslint-plugin-vue'
 import { defineConfig, globalIgnores } from 'eslint/config'
 import tseslint from 'typescript-eslint'
 
+// Module-level reactive state is shared state, and shared state is a store
+// (src/stores/README.md). Only the initializer of a top-level declaration is
+// matched: a `ref` inside a function body is per-call and allowed.
+/** @param {string} message */
+function moduleStateSelectors(message) {
+  const call = 'CallExpression[callee.name=/^(ref|shallowRef|reactive|shallowReactive|useStorage)$/]'
+  return ['Program > VariableDeclaration', 'Program > ExportNamedDeclaration > VariableDeclaration'].flatMap(
+    (declaration) => [
+      { selector: `${declaration} > VariableDeclarator > ${call}`, message },
+      { selector: `${declaration} > VariableDeclarator > CallExpression > ${call}`, message },
+    ],
+  )
+}
+
+const stateOutsideStores = moduleStateSelectors(
+  'Module-level reactive state is shared state. Move it into a store under src/stores/ (src/stores/README.md).',
+)
+const stateOutsideSetup = moduleStateSelectors(
+  "Create a store's state inside its defineStore setup, so resetStores() can reset it.",
+)
+const rawWailsSubscription = {
+  selector: 'MemberExpression[object.name="Events"][property.name="On"]',
+  message: 'Subscribe through useWailsEvent so the subscription ends with its scope.',
+}
+
 export default defineConfig(
   globalIgnores(['bindings/', 'dist/']),
 
@@ -54,6 +79,27 @@ export default defineConfig(
       'vue/block-lang': ['error', { script: { lang: 'ts' } }],
       'vue/multi-word-component-names': 'off',
     },
+  },
+
+  // Flat config replaces a rule's options rather than merging them, so every
+  // file must get its whole no-restricted-syntax list from one config object.
+  {
+    files: ['src/**/*.{ts,vue}'],
+    rules: { 'no-restricted-syntax': ['error', rawWailsSubscription] },
+  },
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/stores/**', '**/*.spec.ts', 'src/test-utils/**', 'src/test-setup.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...stateOutsideStores, rawWailsSubscription] },
+  },
+  {
+    files: ['src/stores/**/*.ts'],
+    ignores: ['**/*.spec.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...stateOutsideSetup, rawWailsSubscription] },
+  },
+  {
+    files: ['src/composables/useWailsEvent.ts'],
+    rules: { 'no-restricted-syntax': ['error', ...stateOutsideStores] },
   },
 
   {

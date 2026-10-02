@@ -29,6 +29,9 @@
     },
     "no-console": {
       "count": 2
+    },
+    "no-restricted-syntax": {
+      "count": 6
     }
   },
   "src/__tests__/App.spec.ts": {
@@ -318,6 +321,31 @@
       "count": 1
     }
   },
+  "src/composables/useActivity.ts": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/composables/useAgentCanvasRoute.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/useAgentSessionsAll.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/composables/useAgentWorkspaces.ts": {
+    "no-restricted-syntax": {
+      "count": 18
+    }
+  },
+  "src/composables/useAppFont.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
   "src/composables/useAppPaletteRows.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
@@ -329,8 +357,31 @@
       "count": 1
     }
   },
+  "src/composables/useAttachedTerminalWindows.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/useCanvasTypography.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
   "src/composables/useCommands.ts": {
     "@typescript-eslint/unbound-method": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/composables/useDevTools.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/useErrorDialog.ts": {
+    "no-restricted-syntax": {
       "count": 1
     }
   },
@@ -354,10 +405,23 @@
   "src/composables/useFrameStats.ts": {
     "@typescript-eslint/no-unused-expressions": {
       "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 2
     }
   },
   "src/composables/useHiveSetup.ts": {
     "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "src/composables/useInstalledFonts.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/composables/useItemSessions.ts": {
+    "no-restricted-syntax": {
       "count": 1
     }
   },
@@ -367,6 +431,34 @@
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/composables/useLaunchers.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/useNewSession.ts": {
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "src/composables/useNotificationSettings.ts": {
+    "no-restricted-syntax": {
+      "count": 7
+    }
+  },
+  "src/composables/useOpenModalCount.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/usePaletteRecents.ts": {
+    "no-restricted-syntax": {
+      "count": 1
     }
   },
   "src/composables/usePerf.ts": {
@@ -374,8 +466,101 @@
       "count": 2
     }
   },
+  "src/composables/usePopupTerminal.ts": {
+    "no-restricted-syntax": {
+      "count": 7
+    }
+  },
   "src/composables/useReleaseNotes.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    },
     "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "src/composables/useReportDialog.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/useSessionStatuses.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/composables/useTasks.ts": {
+    "no-restricted-syntax": {
+      "count": 10
+    }
+  },
+  "src/composables/useTerminalAvailability.ts": {
+    "no-restricted-syntax": {
+      "count": 4
+    }
+  },
+  "src/composables/useTerminalFont.ts": {
+    "no-restricted-syntax": {
+      "count": 6
+    }
+  },
+  "src/composables/useTerminalPinnedChats.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/useTerminalPoolSize.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/useTerminalSessions.ts": {
+    "no-restricted-syntax": {
+      "count": 5
+    }
+  },
+  "src/composables/useTerminalShowWindows.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/composables/useTerminalStatusBar.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/useTerminalWindowListings.ts": {
+    "no-restricted-syntax": {
+      "count": 2
+    }
+  },
+  "src/composables/useTheme.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/useToasts.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/composables/useWebhookSettings.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/composables/useWindowFocus.ts": {
+    "no-restricted-syntax": {
+      "count": 3
+    }
+  },
+  "src/keybindings/catalog.ts": {
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/keybindings/keymapRows.ts": {
+    "no-restricted-syntax": {
       "count": 1
     }
   },
@@ -421,6 +606,9 @@
   "src/lib/terminalImages.ts": {
     "@typescript-eslint/unbound-method": {
       "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
     }
   },
   "src/lib/terminalImagesClient.ts": {
@@ -435,6 +623,11 @@
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
+    }
+  },
+  "src/lib/terminalTree.ts": {
+    "no-restricted-syntax": {
+      "count": 2
     }
   },
   "src/main.ts": {
@@ -463,6 +656,9 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
       "count": 1
     }
   },

@@ -1,9 +1,12 @@
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetStores } from '../defineStore'
+import { useJobs } from '../useJobs'
 
 const mocks = vi.hoisted(() => ({
   ListActive: vi.fn(),
   On: vi.fn(),
+  unsubscribe: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/jobservice', () => ({
@@ -25,56 +28,53 @@ function job(status: string, id = 1) {
   }
 }
 
-async function loadComposable() {
-  const { useJobs } = await import('../useJobs')
-  return useJobs()
+function fireJobsUpdated(): void {
+  const handler = mocks.On.mock.calls[0][1] as () => void
+  handler()
 }
 
 describe('useJobs', () => {
   beforeEach(() => {
-    vi.resetModules()
     vi.clearAllMocks()
-    mocks.On.mockReturnValue(() => {})
+    mocks.On.mockReturnValue(mocks.unsubscribe)
     mocks.ListActive.mockResolvedValue([])
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
-  afterEach(() => vi.useRealTimers())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
 
   it('subscribes once and reloads on jobs:updated', async () => {
-    const jobs = await loadComposable()
+    const jobs = useJobs()
     await flushPromises()
-    const again = await loadComposable()
-    expect(again.activeJobs).toBe(jobs.activeJobs)
+    expect(useJobs()).toBe(jobs)
     expect(mocks.On).toHaveBeenCalledTimes(1)
     expect(mocks.On.mock.calls[0][0]).toBe('jobs:updated')
 
     mocks.ListActive.mockResolvedValue([job('running')])
-    mocks.On.mock.calls[0][1]()
+    fireJobsUpdated()
     await vi.waitFor(() => expect(jobs.hasActive.value).toBe(true))
   })
 
-  it('drops a stale earlier read', async () => {
+  it('reads once more after a request that an update overlapped', async () => {
     let resolveFirst!: (rows: ReturnType<typeof job>[]) => void
-    let resolveSecond!: (rows: ReturnType<typeof job>[]) => void
     mocks.ListActive.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
           resolveFirst = resolve
         }),
-    ).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          resolveSecond = resolve
-        }),
-    )
+    ).mockResolvedValueOnce([job('running', 2)])
 
-    const jobs = await loadComposable()
-    mocks.On.mock.calls[0][1]()
-    resolveSecond([job('running', 2)])
-    await flushPromises()
+    const jobs = useJobs()
+    fireJobsUpdated()
+    expect(mocks.ListActive).toHaveBeenCalledTimes(1)
+
     resolveFirst([])
     await flushPromises()
 
+    expect(mocks.ListActive).toHaveBeenCalledTimes(2)
     expect(jobs.activeJobs.value.map((row) => row.id)).toEqual([2])
   })
 
@@ -84,11 +84,12 @@ describe('useJobs', () => {
       .mockRejectedValueOnce(new Error('temporary failure'))
       .mockResolvedValueOnce([])
 
-    const jobs = await loadComposable()
+    const jobs = useJobs()
     await flushPromises()
     await vi.advanceTimersByTimeAsync(500)
     await flushPromises()
     expect(jobs.hasActive.value).toBe(true)
+    expect(console.warn).toHaveBeenCalledWith('Unable to load active jobs:', 'temporary failure')
     await vi.advanceTimersByTimeAsync(500)
     await flushPromises()
 
@@ -100,7 +101,7 @@ describe('useJobs', () => {
     vi.useFakeTimers()
     mocks.ListActive.mockResolvedValueOnce([job('done')]).mockResolvedValueOnce([])
 
-    const jobs = await loadComposable()
+    const jobs = useJobs()
     await flushPromises()
     expect(jobs.hasActive.value).toBe(true)
     await vi.advanceTimersByTimeAsync(500)
@@ -108,5 +109,18 @@ describe('useJobs', () => {
 
     expect(mocks.ListActive).toHaveBeenCalledTimes(2)
     expect(jobs.hasActive.value).toBe(false)
+  })
+
+  it('unsubscribes and drops the trailing read when the store resets', async () => {
+    vi.useFakeTimers()
+    mocks.ListActive.mockResolvedValueOnce([job('done')])
+
+    useJobs()
+    await flushPromises()
+    resetStores()
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(mocks.unsubscribe).toHaveBeenCalledOnce()
+    expect(mocks.ListActive).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,5 +1,10 @@
 import { enableAutoUnmount } from '@vue/test-utils'
 import { afterAll, afterEach, beforeEach } from 'vitest'
+import { resetStores } from './stores/defineStore'
+
+// Registered before enableAutoUnmount so that, with Vitest's stack ordering of
+// after-hooks, every mounted wrapper is gone before the stores it used stop.
+afterEach(resetStores)
 
 // Every `mount` is torn down between tests. Leaked wrappers stay attached to
 // the document, and each carries its own Vue app whose `useId()` counter
