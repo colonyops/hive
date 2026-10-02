@@ -1,0 +1,3 @@
+bindings/
+dist/
+package-lock.json

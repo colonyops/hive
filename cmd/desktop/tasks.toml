@@ -139,6 +139,11 @@ description = "Install desktop frontend dependencies when they are missing"
 dir = "{{config_root}}/cmd/desktop/frontend"
 run = "test -d node_modules || npm ci"
 
+["desktop:frontend:format:check"]
+description = "Check desktop frontend formatting (Prettier)"
+dir = "{{config_root}}/cmd/desktop/frontend"
+run = "npm run format:check"
+
 ["desktop:frontend:test"]
 description = "Run desktop frontend unit tests (vitest)"
 dir = "{{config_root}}/cmd/desktop/frontend"

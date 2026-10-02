@@ -194,7 +194,7 @@ run = [
   { tasks = ["desktop:check:bindings", "check:adr", "desktop:check:migrations", "check:tidy"] },
   { tasks = ["lint", "lint:workflows", "test", "check:deadcode", "check:vuln", "cli:check:goreleaser", "docs:build"] },
   { tasks = ["desktop:frontend:install"] },
-  { tasks = ["desktop:frontend:build", "desktop:frontend:test"] },
+  { tasks = ["desktop:frontend:build", "desktop:frontend:test", "desktop:frontend:format:check"] },
   { tasks = ["cli:integration"] },
   { tasks = ["desktop:e2e"] },
 ]
