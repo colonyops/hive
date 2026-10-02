@@ -23,6 +23,11 @@ func TestProducer_SetInterval(t *testing.T) {
 			mu.Unlock()
 		}, zerolog.Nop())
 		producer.Start(t.Context())
+		synctest.Wait() // the startup tick settles before the cadence changes
+		mu.Lock()
+		atStart := wakes
+		mu.Unlock()
+
 		producer.SetInterval(10 * time.Millisecond)
 		time.Sleep(10 * time.Millisecond)
 		synctest.Wait()
@@ -30,6 +35,7 @@ func TestProducer_SetInterval(t *testing.T) {
 
 		mu.Lock()
 		defer mu.Unlock()
-		require.Equal(t, 1, wakes, "the reset ticker should tick at the new cadence")
+		require.Equal(t, 1, atStart, "Start should tick once before the ticker runs")
+		require.Equal(t, 2, wakes, "the reset ticker should tick at the new cadence")
 	})
 }

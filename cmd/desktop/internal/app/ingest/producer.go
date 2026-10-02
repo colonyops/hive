@@ -117,12 +117,16 @@ func NewProducer(d ProducerDeps) *Producer {
 	}
 }
 
-// Start runs the poll loop in a goroutine until Stop.
+// Start runs the poll loop in a goroutine until Stop. The first tick runs
+// at once: a launch that waited a whole interval before its first fetch
+// shows an empty feed for minutes, and nothing in the schedule survives a
+// restart anyway (see claimRun), so every source is due.
 func (pr *Producer) Start(ctx context.Context) {
 	pr.intervalMu.Lock()
 	interval := pr.interval
 	pr.intervalMu.Unlock()
 	go func() {
+		pr.Tick(ctx)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {

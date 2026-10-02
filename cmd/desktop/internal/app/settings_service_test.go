@@ -171,10 +171,12 @@ func TestSettingsServiceSetGithubSettingsPersistsAndApplies(t *testing.T) {
 		require.Equal(t, settings.MinPollInterval, got.MinPollInterval)
 
 		producer.Start(t.Context())
+		synctest.Wait()
+		require.Equal(t, 1, source.callCount(), "Start drains once before the first interval")
 		time.Sleep(2 * time.Minute)
 		synctest.Wait()
 		producer.Stop()
-		require.Equal(t, 1, source.callCount(), "saved settings reset the live producer cadence")
+		require.Equal(t, 2, source.callCount(), "saved settings reset the live producer cadence")
 	})
 }
 

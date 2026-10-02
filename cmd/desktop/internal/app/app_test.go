@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,9 +15,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/ingest"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 )
 
 // TestAppLifecycle is the cheapest proof that the wiring package main used to
@@ -231,4 +237,114 @@ func TestAgentWorkspacesUnavailableRootCreatesNothing(t *testing.T) {
 	require.NotNil(t, core.agentWorkspaceStore)
 	assert.Empty(t, core.agentWorkspaceStore.Statuses())
 	assert.Nil(t, core.agentWorkspacesWatcher, "no watcher may exist over a root that was never created")
+}
+
+// countingSources is the ingest seam with one pull source that counts how
+// often a tick drains it, and whether the provider's caches had already
+// dropped when it ran.
+type countingSources struct {
+	invalidated     atomic.Bool
+	pulls           atomic.Int32
+	pulledAfterDrop atomic.Bool
+}
+
+func (s *countingSources) PullInstances(context.Context) []connector.Instance {
+	return []connector.Instance{{
+		Type:     "sources.test",
+		Node:     connector.Node{FlowID: "flow", NodeID: "s1"},
+		Metadata: connector.Metadata{ProfileID: "flow", SourceKind: "generic", Policy: models.ResurfacePolicyStateChanges},
+		Pull:     s,
+	}}
+}
+
+func (s *countingSources) Prefetch(context.Context, []connector.Instance) error { return nil }
+
+func (s *countingSources) Produce(context.Context, func(models.Msg) error) error {
+	s.pulls.Add(1)
+	s.pulledAfterDrop.Store(s.invalidated.Load())
+	return nil
+}
+
+func newCountingProducer(t *testing.T) (*ingest.Producer, *countingSources) {
+	t.Helper()
+	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	st := stores.New(db, stores.Options{})
+	sources := &countingSources{}
+	producer := ingest.NewProducer(ingest.ProducerDeps{
+		Ingester:  st.InboxItems,
+		Snapshots: st.EventLog,
+		Heads:     st.SourceHeads,
+		Sources:   sources,
+		Interval:  time.Hour,
+		Logger:    zerolog.Nop(),
+	})
+	return producer, sources
+}
+
+var octocatRef = credentials.Ref{Provider: "github", Account: "octocat"}
+
+func credentialsWith(t *testing.T, refs ...credentials.Ref) credentials.Store {
+	t.Helper()
+	store := credentials.NewMemoryStore()
+	for _, ref := range refs {
+		require.NoError(t, store.Set(ref, "token"))
+	}
+	return store
+}
+
+// A connection that only invalidated and announced would leave the sources it
+// unlocked waiting for the next poll tick, which reads as a connect that did
+// nothing. The drain must not block the callback: a provider's auth flow calls
+// it, and a fetch there would stall the connect itself.
+func TestConnectionChangedInvalidatesAnnouncesAndDrains(t *testing.T) {
+	t.Parallel()
+	producer, sources := newCountingProducer(t)
+	bus := newTestBus(t)
+	announced := subscribeEvents[events.ConnectionUpdated](t, bus)
+	core := &App{ctx: t.Context(), Events: bus, logger: zerolog.Nop(), credentials: credentialsWith(t, octocatRef), Sources: newSourcesService(producer, nil, nil)}
+
+	core.connectionChanged("github", func() { sources.invalidated.Store(true) })
+
+	got := requireEvents(t, announced, 1)
+	assert.Equal(t, "github", got[0].Provider)
+	// LastTick advances only once every drain of the tick has completed, so
+	// waiting on it keeps the detached goroutine from outliving the database.
+	require.Eventually(t, func() bool { return !producer.LastTick().IsZero() }, eventWait, 10*time.Millisecond, "the connection change should drain the sources")
+	assert.Equal(t, int32(1), sources.pulls.Load())
+	assert.True(t, sources.pulledAfterDrop.Load(), "the provider's caches drop before the drain fetches through them")
+}
+
+// A disconnect or a failed device flow leaves the provider with no account,
+// and a drain then is a forced tick past every source's cadence floor for
+// nothing. The caches still drop and the change is still announced.
+func TestConnectionChangedWithoutAnAccountDoesNotDrain(t *testing.T) {
+	t.Parallel()
+	producer, sources := newCountingProducer(t)
+	bus := newTestBus(t)
+	announced := subscribeEvents[events.ConnectionUpdated](t, bus)
+	core := &App{ctx: t.Context(), Events: bus, logger: zerolog.Nop(), credentials: credentialsWith(t), Sources: newSourcesService(producer, nil, nil)}
+
+	core.connectionChanged("github", func() { sources.invalidated.Store(true) })
+
+	got := requireEvents(t, announced, 1)
+	assert.Equal(t, "github", got[0].Provider)
+	assert.True(t, sources.invalidated.Load())
+	assert.Never(t, func() bool { return !producer.LastTick().IsZero() }, 100*time.Millisecond, 10*time.Millisecond, "nothing should drain with no account to fetch as")
+	assert.Zero(t, sources.pulls.Load())
+}
+
+// Without a producer there is nothing to drain and nothing to wait for; the
+// callback must still invalidate and announce.
+func TestConnectionChangedWithoutAProducerStillAnnounces(t *testing.T) {
+	t.Parallel()
+	bus := newTestBus(t)
+	announced := subscribeEvents[events.ConnectionUpdated](t, bus)
+	core := &App{ctx: t.Context(), Events: bus, logger: zerolog.Nop(), credentials: credentialsWith(t, octocatRef), Sources: newSourcesService(nil, nil, nil)}
+
+	core.connectionChanged("github", func() {})
+
+	got := requireEvents(t, announced, 1)
+	assert.Equal(t, "github", got[0].Provider)
 }

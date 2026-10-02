@@ -89,9 +89,10 @@ measurement or compaction failures are logged and startup continues.
 
 ## Observation ingestion
 
-`pipeline.Producer` reloads enabled sources on each tick. A GitHub source uses
-`feed.LiveProvider.SourceItems` for cached and conditional GitHub requests,
-then passes each observation to `DB.IngestObservation`.
+`pipeline.Producer` reloads enabled sources on each tick. The first tick runs
+when the producer starts, before its first `polling.interval` elapses. A GitHub
+source uses `feed.LiveProvider.SourceItems` for cached and conditional GitHub
+requests, then passes each observation to `DB.IngestObservation`.
 
 An instance may declare a `MinInterval` — the exec source's `interval` field is
 the only one that does today — and the tick skips it until that floor expires.

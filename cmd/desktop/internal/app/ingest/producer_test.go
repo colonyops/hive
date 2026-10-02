@@ -553,7 +553,26 @@ func TestProducer_StartStop(t *testing.T) {
 		mu.Lock()
 		got := wakeCount
 		mu.Unlock()
-		assert.GreaterOrEqual(t, got, 1, "at least one tick should have run and appended")
+		assert.Greater(t, got, 1, "the ticker should have fired at least once after the startup tick")
+	})
+}
+
+// A launch that waited a whole polling interval before its first fetch shows
+// an empty feed for minutes with nothing to say why.
+func TestProducer_Start_TicksBeforeTheFirstInterval(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		db := openTestPipelineDB(t)
+		src := &fakeSource{}
+		producer := newTestProducer(db, sourcesOf(map[string]connector.PullSource{"flow/s1": src}), time.Hour, nil, zerolog.Nop())
+
+		producer.Start(t.Context())
+		synctest.Wait()
+		assert.Equal(t, 1, src.callCount(), "Start should drain every source without waiting for the interval")
+
+		time.Sleep(time.Hour)
+		synctest.Wait()
+		producer.Stop()
+		assert.Equal(t, 2, src.callCount(), "the ticker should count its first interval from the startup tick")
 	})
 }
 

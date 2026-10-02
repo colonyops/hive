@@ -15,9 +15,10 @@ import (
 //
 // They differ in what happens to the fetch caches. A user pressing refresh is
 // asserting that something upstream changed, so Refresh drops the caches and
-// pays for the refetch. A flow edit asserts nothing about upstream — an added
-// or retyped source node has nothing cached under its query anyway — so Run
-// keeps them and stays cheap enough to fire on every deploy.
+// pays for the refetch. A flow edit or a provider connect asserts nothing
+// Refresh would need to drop — an added or retyped source node has nothing
+// cached under its query, and a connect already dropped its own provider's
+// caches — so Run keeps them and stays cheap enough to fire on every deploy.
 type SourcesService struct {
 	producer *ingest.Producer
 	fetchers *ghsource.Fetchers

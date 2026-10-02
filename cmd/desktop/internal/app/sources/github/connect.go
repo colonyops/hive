@@ -82,8 +82,8 @@ type liveConnection struct {
 	creds    credentials.Store
 	clientID string
 	// onChange is called after every state transition (device flow grant or
-	// failure, token set, disconnect). app.New wires it to the fetch-cache
-	// drop and the ConnectionUpdated publish.
+	// failure, token set, disconnect), once the credential store reflects
+	// it. app.New wires it to connectionChanged.
 	onChange func()
 
 	mu         sync.Mutex

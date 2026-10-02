@@ -364,16 +364,11 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.actionStore.SetUsageChecker(newActionUsage(a.flowStore, a.Stores.OutputCommands))
 
 	a.gitHubConnection = buildGitHubConnection(cfg.MockMode, gitHubClient, a.credentials, func() {
-		// Every connection transition drops this provider's fetch caches
-		// before anything is notified: a different account must never be
-		// served items fetched with the previous token. Fetchers is already
-		// GitHub's alone, so invalidating all of them is exactly this
-		// provider's scope — and over-invalidating costs a refetch, where
-		// under-invalidating serves another account's items.
-		if a.fetchers != nil {
-			a.fetchers.InvalidateAll()
-		}
-		a.Events.Publish(a.ctx, events.ConnectionUpdated{Provider: ghsource.Provider})
+		a.connectionChanged(ghsource.Provider, func() {
+			if a.fetchers != nil {
+				a.fetchers.InvalidateAll()
+			}
+		})
 	})
 
 	// Grafana's client is built per tick from a stack URL and token, so unlike
@@ -383,9 +378,8 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.grafanaFetchers = grafana.NewFetchers(grafanaStacks, a.credentials, cfg.Logger)
 	a.grafanaAuth = grafana.NewAuthenticator(a.credentials, grafanaStacks, cfg.Logger, func(credentials.Ref) {
 		// Drop every stack's cooldown so a freshly connected account isn't held
-		// back by its predecessor's rate limit, then announce so Integrations re-reads.
-		a.grafanaFetchers.InvalidateAll()
-		a.Events.Publish(a.ctx, events.ConnectionUpdated{Provider: grafana.Provider})
+		// back by its predecessor's rate limit.
+		a.connectionChanged(grafana.Provider, a.grafanaFetchers.InvalidateAll)
 	})
 
 	// PostHog binds a host and project to the account at connect time, the same
@@ -394,8 +388,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	posthogProjects := posthog.NewProjectStore(filepath.Join(cfg.Paths.StateDir, "posthog-projects.json"))
 	a.posthogFetchers = posthog.NewFetchers(posthogProjects, a.credentials, cfg.Logger)
 	a.posthogAuth = posthog.NewAuthenticator(a.credentials, posthogProjects, cfg.Logger, func(credentials.Ref) {
-		a.posthogFetchers.InvalidateAll()
-		a.Events.Publish(a.ctx, events.ConnectionUpdated{Provider: posthog.Provider})
+		a.connectionChanged(posthog.Provider, a.posthogFetchers.InvalidateAll)
 	})
 
 	// Gitea binds a host to the account at connect time, the same shape again,
@@ -403,8 +396,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	giteaInstances := gitea.NewInstanceStore(filepath.Join(cfg.Paths.StateDir, "gitea-instances.json"))
 	a.giteaFetchers = gitea.NewFetchers(giteaInstances, a.credentials, cfg.Logger)
 	a.giteaAuth = gitea.NewAuthenticator(a.credentials, giteaInstances, cfg.Logger, func(credentials.Ref) {
-		a.giteaFetchers.InvalidateAll()
-		a.Events.Publish(a.ctx, events.ConnectionUpdated{Provider: gitea.Provider})
+		a.connectionChanged(gitea.Provider, a.giteaFetchers.InvalidateAll)
 	})
 
 	// Feeds need no account, so the client is wired unconditionally and has
@@ -957,19 +949,49 @@ func (a *App) PublishLogAppended(nextOffset int64) {
 func (a *App) PublishFlowsUpdated(reason string) {
 	a.engine.Reload()
 	a.Events.Publish(a.ctx, events.FlowsUpdated{Reason: reason})
-	a.runSourcesForFlowChange()
+	a.runSourcesDetached()
 }
 
-// runSourcesForFlowChange drains the sources detached from its caller. A tick
-// is network I/O, and PublishFlowsUpdated is called from the flows watcher's
-// goroutine and from a save RPC — neither may block on a fetch.
-func (a *App) runSourcesForFlowChange() {
+// connectionChanged is every provider's connection callback. The provider's
+// fetch caches drop before anything is notified: a different account must
+// never be served items fetched with the previous token. Then, while the
+// provider still has an account, the sources drain — the ones that account
+// unlocks would otherwise wait for the next poll tick, and the connect would
+// read as having done nothing. A disconnect or a failed device flow leaves
+// nothing to fetch as, and a drain then is a forced tick past every source's
+// cadence floor for no gain.
+//
+// The drain keeps the caches. The connect already dropped its own provider's,
+// and a Refresh would also drop GitHub's rate-limit cooldown and every feed's
+// validators, which another provider's connect has no business doing.
+func (a *App) connectionChanged(provider string, invalidate func()) {
+	invalidate()
+	a.Events.Publish(a.ctx, events.ConnectionUpdated{Provider: provider})
+	if a.providerHasAccount(provider) {
+		a.runSourcesDetached()
+	}
+}
+
+// providerHasAccount is read after a transition, which is sound because every
+// connector writes or deletes its credential before it notifies. A read
+// failure counts as an account: one spare tick costs less than a feed that
+// stays empty after a connect.
+func (a *App) providerHasAccount(provider string) bool {
+	refs, err := credentials.ListProvider(a.credentials, provider)
+	return err != nil || len(refs) > 0
+}
+
+// runSourcesDetached drains the sources without invalidating, detached from
+// its caller. A tick is network I/O, and the callers — the flows watcher's
+// goroutine, a save RPC, a provider's connection callback — must not block on
+// a fetch.
+func (a *App) runSourcesDetached() {
 	if a.Sources == nil {
 		return
 	}
 	go func() {
 		if _, err := a.Sources.Run(a.ctx); err != nil {
-			a.logger.Debug().Err(err).Msg("source run after flow change unavailable")
+			a.logger.Debug().Err(err).Msg("detached source run unavailable")
 		}
 	}()
 }

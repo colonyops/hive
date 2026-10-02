@@ -548,14 +548,18 @@ specified rather than left to grow. ADR source-connector-registry records why.
   connections the UI reads through. Prefetch still runs first and alone. One
   source's failure never cancels another's drain. Whatever a connector's
   instances share — a fetcher, a cache — must be safe for concurrent use.
-- **Two things outside the ticker drain the sources**, both through
-  `app.SourcesService` and both forced. A user pressing refresh calls `Refresh`,
-  which drops the fetch caches first: they asserted that something upstream
-  changed. A flow change calls `Run` from `PublishFlowsUpdated`, which keeps
-  them — an added or retyped source node has nothing cached under its query, and
-  a deploy must not cost a full refetch of everything else. Without the second
-  one an edited source produces nothing until the next tick, which is up to
-  `settings.MinPollInterval` away and reads as a broken canvas.
+- **The ticker is not the only thing that drains the sources.** `Producer.Start`
+  ticks once before its first interval, so a launch fetches now rather than
+  `settings.polling.interval` later. The rest go through `app.SourcesService`,
+  forced. A user pressing refresh calls `Refresh`, which drops the fetch caches
+  first: they asserted that something upstream changed. A flow change (from
+  `PublishFlowsUpdated`) and a connect that leaves a provider with an account
+  (from `connectionChanged`) call `Run`, which keeps them — an added or retyped source
+  node has nothing cached under its query, a connect already dropped its
+  provider's caches, and neither may punch through a live rate-limit cooldown
+  the way a human's refresh is allowed to. Without those an edited source or a
+  freshly connected account produces nothing until the next tick, which is up
+  to `settings.MinPollInterval` away and reads as a broken canvas.
 - **Config references credentials, never embeds them.** See below.
 - **Never mirror the upstream API's shape in connector config.** Provider
   vocabulary leaking into the flow schema is permanent.
