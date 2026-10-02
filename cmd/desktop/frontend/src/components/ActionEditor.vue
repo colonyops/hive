@@ -16,7 +16,6 @@ import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops
 
 const props = withDefaults(
   defineProps<{
-    action: EditableAction
     isNew: boolean
     busy?: boolean
     error?: string | null
@@ -26,6 +25,7 @@ const props = withDefaults(
   }>(),
   { knownTypes: () => [], workspaces: () => [] },
 )
+const action = defineModel<EditableAction>('action', { required: true })
 const emit = defineEmits<{ save: []; cancel: [] }>()
 const idRef = ref<{ focus: () => void } | null>(null)
 const labelRef = ref<{ focus: () => void } | null>(null)
@@ -33,7 +33,8 @@ const appliesField = ref<{ flush: () => void } | null>(null)
 const closeRef = ref<HTMLButtonElement | null>(null)
 const validationError = ref<string | null>(null)
 const launchTarget = ref<'interactive' | 'repository' | 'workspace'>(
-  props.action.launch?.workspace ? 'workspace' : props.action.launch?.repoTemplate ? 'repository' : 'interactive',
+  // eslint-disable-next-line vue/no-ref-object-reactivity-loss -- seeds the picker; the editor remounts for each action
+  action.value.launch?.workspace ? 'workspace' : action.value.launch?.repoTemplate ? 'repository' : 'interactive',
 )
 
 const typeOptions = [
@@ -64,64 +65,64 @@ const workspaceOptions = computed<AppSelectOption[]>(() =>
     disabled: !workspace.supportsPrompt,
   })),
 )
-const terminalTargetsAllowed = computed(() => props.action.type !== 'launch-session')
+const terminalTargetsAllowed = computed(() => action.value.type !== 'launch-session')
 function hasTarget(value: string): boolean {
-  return (props.action.targets ?? []).includes(value)
+  return (action.value.targets ?? []).includes(value)
 }
 function setTarget(value: string, on: boolean): void {
-  const next = (props.action.targets ?? []).filter((target) => target !== value)
+  const next = (action.value.targets ?? []).filter((target) => target !== value)
   if (on) next.push(value)
   // An action offered nowhere is unreachable rather than merely quiet, so the
   // item surface is what an emptied set falls back to.
-  props.action.targets = next.length
+  action.value.targets = next.length
     ? targetOptions.map((option) => option.value).filter((option) => next.includes(option))
     : ['item']
 }
 
 function setLaunchTarget(value: string): void {
-  if (!props.action.launch || !['interactive', 'repository', 'workspace'].includes(value)) return
+  if (!action.value.launch || !['interactive', 'repository', 'workspace'].includes(value)) return
   launchTarget.value = value as typeof launchTarget.value
-  props.action.launch.repoTemplate = ''
-  props.action.launch.workspace = ''
+  action.value.launch.repoTemplate = ''
+  action.value.launch.workspace = ''
   if (value === 'workspace') {
-    props.action.launch.agent = ''
-    props.action.launch.postHook = ''
-    props.action.launch.postHookTimeout = ''
+    action.value.launch.agent = ''
+    action.value.launch.postHook = ''
+    action.value.launch.postHookTimeout = ''
   }
 }
 
 function setType(value: string): void {
-  props.action.type = value
-  props.action.launch = undefined
-  props.action.shell = undefined
-  props.action.message = undefined
-  props.action.clipboard = undefined
+  action.value.type = value
+  action.value.launch = undefined
+  action.value.shell = undefined
+  action.value.message = undefined
+  action.value.clipboard = undefined
   if (value === 'launch-session') {
-    props.action.launch = { promptTemplate: '', repoTemplate: '', workspace: '' }
+    action.value.launch = { promptTemplate: '', repoTemplate: '', workspace: '' }
     launchTarget.value = 'interactive'
-    props.action.targets = ['item']
-  } else if (value === 'shell') props.action.shell = { commandTemplate: '' }
-  else if (value === 'publish-message') props.action.message = { topic: '', messageTemplate: '' }
-  else if (value === 'clipboard') props.action.clipboard = { textTemplate: '' }
+    action.value.targets = ['item']
+  } else if (value === 'shell') action.value.shell = { commandTemplate: '' }
+  else if (value === 'publish-message') action.value.message = { topic: '', messageTemplate: '' }
+  else if (value === 'clipboard') action.value.clipboard = { textTemplate: '' }
 }
 function envText(): string {
-  return Object.entries(props.action.shell?.env ?? {})
+  return Object.entries(action.value.shell?.env ?? {})
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, value]) => `${key}=${value ?? ''}`)
     .join('\n')
 }
 function setEnv(text: string): void {
-  if (!props.action.shell) return
+  if (!action.value.shell) return
   const env: Record<string, string> = {}
   for (const line of text.split('\n')) {
     const [key, ...value] = line.split('=')
     if (key.trim()) env[key.trim()] = value.join('=')
   }
-  props.action.shell.env = env
+  action.value.shell.env = env
 }
 function save(): void {
   appliesField.value?.flush()
-  if (!props.action.id.trim() || !props.action.label.trim()) {
+  if (!action.value.id.trim() || !action.value.label.trim()) {
     validationError.value = 'ID and label are required.'
     return
   }

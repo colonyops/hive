@@ -13,12 +13,12 @@ import { launcherCommandID } from '../keybindings/catalog'
 import type { Launcher } from '../composables/useActionsSettings'
 
 const props = defineProps<{
-  launcher: Launcher
   isNew: boolean
   busy?: boolean
   error?: string | null
   returnFocusTo?: HTMLElement | null
 }>()
+const launcher = defineModel<Launcher>('launcher', { required: true })
 const emit = defineEmits<{ save: []; cancel: [] }>()
 const idRef = ref<{ focus: () => void } | null>(null)
 const labelRef = ref<{ focus: () => void } | null>(null)
@@ -34,11 +34,11 @@ const iconOptions = [
 // The chord, if there is one. A launcher is unbound until someone binds it, so
 // this is the pointer to where that is done rather than a second place to do it.
 function shortcut(): string {
-  return formatCombo(kb.bindings.value[launcherCommandID(props.launcher.id)]?.[0] ?? '')
+  return formatCombo(kb.bindings.value[launcherCommandID(launcher.value.id)]?.[0] ?? '')
 }
 
 function save(): void {
-  if (!props.launcher.id.trim() || !props.launcher.label.trim() || !props.launcher.command.trim()) {
+  if (!launcher.value.id.trim() || !launcher.value.label.trim() || !launcher.value.command.trim()) {
     validationError.value = 'ID, label and command are required.'
     return
   }

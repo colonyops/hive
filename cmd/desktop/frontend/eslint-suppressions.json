@@ -42,19 +42,6 @@
       "count": 8
     }
   },
-  "src/components/ActionEditor.vue": {
-    "vue/no-mutating-props": {
-      "count": 34
-    },
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 1
-    }
-  },
-  "src/components/ActionInputsDialog.vue": {
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 2
-    }
-  },
   "src/components/AgentWorkspaceEditor.vue": {
     "@typescript-eslint/no-redundant-type-constituents": {
       "count": 1
@@ -67,9 +54,6 @@
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 5
-    },
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 7
     }
   },
   "src/components/AgentsMode.vue": {
@@ -97,21 +81,8 @@
       "count": 1
     }
   },
-  "src/components/AppMenu.vue": {
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 1
-    }
-  },
   "src/components/AppSelect.vue": {
     "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    },
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 1
-    }
-  },
-  "src/components/ChatRenameDialog.vue": {
-    "vue/no-setup-props-reactivity-loss": {
       "count": 1
     }
   },
@@ -123,37 +94,11 @@
   "src/components/CreateSessionDialog.vue": {
     "no-useless-escape": {
       "count": 1
-    },
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 6
-    }
-  },
-  "src/components/DrawerSheet.vue": {
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 2
-    }
-  },
-  "src/components/FolderEditModal.vue": {
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 1
-    }
-  },
-  "src/components/LauncherEditor.vue": {
-    "vue/no-mutating-props": {
-      "count": 5
-    }
-  },
-  "src/components/NewChatDialog.vue": {
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 1
     }
   },
   "src/components/NewSessionDialog.vue": {
     "no-useless-escape": {
       "count": 1
-    },
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 8
     }
   },
   "src/components/NewWindowMenu.vue": {
@@ -172,18 +117,8 @@
       "count": 1
     }
   },
-  "src/components/ProfileSettingsView.vue": {
-    "vue/no-setup-props-reactivity-loss": {
-      "count": 1
-    }
-  },
   "src/components/RepositorySelect.vue": {
     "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    }
-  },
-  "src/components/SessionRenameDialog.vue": {
-    "vue/no-setup-props-reactivity-loss": {
       "count": 1
     }
   },

@@ -145,7 +145,7 @@ function requestDelete(launcher: Launcher): void {
 
     <LauncherEditor
       v-if="editing"
-      :launcher="editing"
+      v-model:launcher="editing"
       :is-new="isNew"
       :busy="saving"
       :error="error"

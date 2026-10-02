@@ -225,7 +225,7 @@ function dropClass(id: string): Record<string, boolean> {
 
     <ActionEditor
       v-if="editing"
-      :action="editing"
+      v-model:action="editing"
       :is-new="isNew"
       :busy="saving"
       :error="error"
