@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Optional fields are stored only when set, so a flow file stays free of keys
 // the author never touched.
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { SessionLaunchOptions } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type { SessionLaunchRepository } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import RepositorySelect from '../../../components/RepositorySelect.vue'
@@ -30,15 +30,25 @@ watch(
   { immediate: true },
 )
 
-// The picker still accepts a typed remote, so a failed read only loses the
-// suggestions.
+// Both pickers still show and accept the stored value, so a failed read only
+// loses the suggestions.
 const repositories = ref<SessionLaunchRepository[]>([])
+const agents = ref<string[]>([])
 onMounted(async () => {
   try {
-    repositories.value = (await SessionLaunchOptions())?.repositories ?? []
+    const options = await SessionLaunchOptions()
+    repositories.value = options?.repositories ?? []
+    agents.value = options?.agents ?? []
   } catch (err) {
-    console.warn('Unable to load repositories', err)
+    console.warn('Unable to load session launch options', err)
   }
+})
+
+const agentOptions = computed(() => {
+  const rows = [{ value: '', label: 'Default agent' }, ...agents.value.map((key) => ({ value: key, label: key }))]
+  const stored = props.config.agent
+  if (stored && !agents.value.includes(stored)) rows.push({ value: stored, label: `${stored} (not found)` })
+  return rows
 })
 
 function setMode(next: string) {
@@ -104,12 +114,11 @@ function set<K extends keyof Config>(key: K, value: Config[K]) {
       @update:model-value="set('repo', $event)"
     />
 
-    <TextField
+    <SelectField
       label="Agent"
       :model-value="config.agent ?? ''"
-      placeholder="Default agent"
-      hint="A Hive agent profile, such as claude. Leave empty for the default."
-      monospace
+      :options="agentOptions"
+      hint="The Hive agent profile the session runs."
       testid="launch-session-node-editor-agent"
       @update:model-value="set('agent', $event || undefined)"
     />

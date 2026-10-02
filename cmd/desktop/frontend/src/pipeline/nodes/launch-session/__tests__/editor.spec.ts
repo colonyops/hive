@@ -16,10 +16,19 @@ beforeEach(() => {
   mocks.SessionLaunchOptions.mockReset()
   mocks.SessionLaunchOptions.mockResolvedValue({
     repositories: [{ name: 'hive', repository: 'https://github.com/colonyops/hive.git' }],
+    agents: ['claude', 'codex'],
   })
 })
 
 const repoField = '[data-testid="launch-session-node-editor-repo"]'
+
+function agentSelect(wrapper: ReturnType<typeof mount>) {
+  const select = wrapper
+    .findAllComponents({ name: 'SelectField' })
+    .find((c) => c.props('testid') === 'launch-session-node-editor-agent')
+  if (!select) throw new Error('agent select not rendered')
+  return select
+}
 
 describe('launch-session editor', () => {
   it('renders every launch field', () => {
@@ -92,10 +101,30 @@ describe('launch-session editor', () => {
     warn.mockRestore()
   })
 
+  it('offers the default agent and the configured agents', async () => {
+    const wrapper = mount(Editor, { props: { config: { repo: 'r', prompt: 'p' } } })
+    await flushPromises()
+    const select = agentSelect(wrapper)
+    expect(select.props('modelValue')).toBe('')
+    expect(select.props('options')).toEqual([
+      { value: '', label: 'Default agent' },
+      { value: 'claude', label: 'claude' },
+      { value: 'codex', label: 'codex' },
+    ])
+    select.vm.$emit('update:modelValue', 'codex')
+    expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ repo: 'r', prompt: 'p', agent: 'codex' })
+  })
+
+  it('keeps a stored agent the profile no longer offers', async () => {
+    const wrapper = mount(Editor, { props: { config: { repo: 'r', prompt: 'p', agent: 'aider' } } })
+    await flushPromises()
+    expect(agentSelect(wrapper).props('options')).toContainEqual({ value: 'aider', label: 'aider (not found)' })
+  })
+
   it('clears an emptied optional field back to undefined', async () => {
     const config = { repo: 'r', prompt: 'p', agent: 'claude', sessionName: 'x' }
     const wrapper = mount(Editor, { props: { config } })
-    await wrapper.get('[data-testid="launch-session-node-editor-agent"]').setValue('')
+    agentSelect(wrapper).vm.$emit('update:modelValue', '')
     expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ ...config, agent: undefined })
     await wrapper.get('[data-testid="launch-session-node-editor-session-name"]').setValue('')
     expect(wrapper.emitted('update:config')?.at(-1)?.[0]).toEqual({ ...config, sessionName: undefined })
