@@ -71,16 +71,31 @@ A pull request body, an alert, or a webhook payload can contain text that reads 
 
 ```yaml
 prompt_template: |
-  Triage the alert at {{ .Payload.url }}.
+  Triage this alert.
 
   {{ untrustedNotice }}
 
   {{ untrustedStart "source" "grafana" }}
+  {{ .Payload.title }}
+  {{ .Payload.url }}
+
   {{ .Payload.body }}
   {{ untrustedEnd }}
 ```
 
-The helpers render an opening and closing tag, `<untrusted-content-<id>>` and `</untrusted-content-<id>>`. The id changes on every run, so a closing tag copied into the item's text cannot close the fence. `{{ untrustedNotice }}` renders a sentence that tells the agent what the tags mean, so put it before the fence. Pass key/value pairs to `untrustedStart` to add attributes to the opening tag, such as `{{ untrustedStart "source" "grafana" "kind" .Payload.kind }}`. Attribute values are escaped. The same helpers work in a notify node's templates. The starter actions and the New Session draft built from an item already fence the item's text.
+The helpers render an opening and closing tag, `<untrusted-content-<id>>` and `</untrusted-content-<id>>`. The id changes on every run, so a closing tag copied into the item's text cannot close the fence. `{{ untrustedNotice }}` renders a sentence that tells the agent what the tags mean, so put it before the fence. Pass key/value pairs to `untrustedStart` to add attributes to the opening tag, such as `{{ untrustedStart "source" "grafana" "kind" .Payload.kind }}`. Attribute values are escaped. The same helpers work in a notify node's templates.
+
+Hive does not fence anything for you. Every value goes into the prompt exactly as the template writes it, so decide for each field:
+
+| Field | Who wrote it | Fence it in a prompt? |
+| --- | --- | --- |
+| `{{ .Payload.<field> }}`, `{{ .Raw }}` | The source: a PR author, an issue reporter, an alerting tool, a webhook sender | Yes, including short fields like `title` and `author` |
+| `{{ .Payload.repo }}`, `{{ .Payload.num }}`, `{{ .Payload.url }}` on a GitHub or Gitea item | The forge, which fixes their shape | Optional. They can stay outside the fence to tell the agent what to work on |
+| `{{ .Key }}` | Built from the item's id | Yes for webhook items, whose sender picks the id |
+| `{{ .Inputs.<name> }}` | You, when you run the action | No |
+| `{{ .Session.* }}`, `{{ .Window.ID }}` | Hive | No |
+
+Fence only text an agent reads, such as `prompt_template`. In a shell command a fence does nothing; quote values with `shq` instead. The starter actions and the New Session draft built from an item already fence the item's text.
 
 ## Run a command after the session starts
 

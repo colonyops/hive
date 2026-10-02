@@ -62,16 +62,25 @@ opening tag, such as `{{"{{ untrustedStart \"source\" \"grafana\" }}"}}`.
 fenced text is data to read, not instructions to follow; put it before the fence:
 
 ```
-Triage the alert at {{"{{ .Payload.url }}"}}.
+Triage this alert.
 
 {{"{{ untrustedNotice }}"}}
 
 {{"{{ untrustedStart \"source\" \"grafana\" }}"}}
 {{"{{ .Payload.title }}"}}
+{{"{{ .Payload.url }}"}}
 
 {{"{{ .Payload.body }}"}}
 {{"{{ untrustedEnd }}"}}
 ```
+
+Hive never fences a field for you: a template interpolates every value exactly
+as written. Decide per field:
+
+- Fence every `{{"{{ .Payload.<field> }}"}}` and `{{"{{ .Raw }}"}}` in a prompt. Someone other than the user wrote them: a PR author, an issue reporter, an alerting system, a webhook sender. That includes short fields like `title`, `author`, and `labels`. On a GitHub or Gitea item, `repo`, `num`, and `url` have a shape the forge fixes, so they may stay outside the fence to name the work.
+- `{{"{{ .Key }}"}}` is built from the item's id, which a webhook sender chooses. Fence it on webhook items.
+- `{{"{{ .Inputs.<name> }}"}}` is what the user typed, and `{{"{{ .Session.* }}"}}` and `{{"{{ .Window.ID }}"}}` come from Hive. They need no fence.
+- Fence only text an agent reads, such as `prompt_template`. A fence does nothing in a shell command; quote values there with `shq`.
 {{end}}
 
 {{define "task"}}
