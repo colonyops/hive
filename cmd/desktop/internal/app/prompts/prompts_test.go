@@ -266,7 +266,7 @@ func TestWebhookTransformFencesTheSample(t *testing.T) {
 	prompt, err := newTestService(t).Render("webhook-transform", testInput())
 	require.NoError(t, err)
 
-	fence := regexp.MustCompile(`(?s)<untrusted-content-(\w+)>\n(.*)\n</untrusted-content-(\w+)>`).FindStringSubmatch(prompt.Text)
+	fence := regexp.MustCompile(`(?ms)^<untrusted-content-(\w+) source="webhook" endpoint="ci-alerts">\n(.*)\n</untrusted-content-(\w+)>$`).FindStringSubmatch(prompt.Text)
 	require.NotNil(t, fence, prompt.Text)
 	assert.Equal(t, fence[1], fence[3])
 	assert.Contains(t, fence[2], testInput().WebhookSample)

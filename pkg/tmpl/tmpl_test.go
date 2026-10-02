@@ -249,3 +249,28 @@ func TestRenderer_UntrustedFence(t *testing.T) {
 
 	require.NoError(t, r.ValidateSyntax(tmpl))
 }
+
+func TestRenderer_UntrustedAttributesAndNotice(t *testing.T) {
+	r := New(Config{})
+	data := map[string]any{"Kind": `pr"><x`, "Num": 42.0}
+
+	out, err := r.Render(`{{ untrustedNotice }}|{{ untrustedStart "source" "github" "kind" .Kind "num" .Num }}|{{ untrustedEnd }}`, data)
+	require.NoError(t, err)
+	parts := strings.Split(out, "|")
+	require.Len(t, parts, 3)
+
+	tag := strings.TrimSuffix(strings.TrimPrefix(parts[2], "</"), ">")
+	assert.Equal(t, "<"+tag+` source="github" kind="pr&#34;&gt;&lt;x" num="42">`, parts[1])
+	assert.Contains(t, parts[0], "<"+tag+">")
+	assert.Contains(t, parts[0], "</"+tag+">")
+
+	for name, bad := range map[string]string{
+		"odd arguments":  `{{ untrustedStart "source" }}`,
+		"invalid name":   `{{ untrustedStart "a b" "x" }}`,
+		"non-string key": `{{ untrustedStart 1 "x" }}`,
+		"duplicate key":  `{{ untrustedStart "a" "x" "a" "y" }}`,
+	} {
+		_, err := r.Render(bad, nil)
+		assert.Errorf(t, err, name)
+	}
+}
