@@ -12,7 +12,7 @@
 #   mcp.sh query <selector> [limit]    elements: tag, text, value, bounds, visible
 #   mcp.sh snapshot [depth]            structural outline of the viewport
 #   mcp.sh click <selector>            animated click (left button, single)
-#   mcp.sh type <selector> <text>      click, then type with per-key events
+#   mcp.sh type <selector> <text>      click, then type with per-key events ("-": the focused element)
 #   mcp.sh press <key> [mod,mod]       e.g. Enter, Escape, k meta
 #   mcp.sh scroll <selector> [deltaY]  wheel event at the element (default 240)
 #   mcp.sh wait <selector> [seconds]   poll until a visible match exists (default 10s)
@@ -101,7 +101,8 @@ case $cmd in
   query)   [[ $# -ge 1 ]] || { usage; exit 2; }; call dom_query "$(sel_args "$1" "{\"limit\": ${2:-25}}")" ;;
   snapshot) call screenshot_dom "{\"max_depth\": ${1:-12}}" ;;
   click)   [[ $# -ge 1 ]] || { usage; exit 2; }; call mouse_click "$(sel_args "$1")" ;;
-  type)    [[ $# -eq 2 ]] || { usage; exit 2; }; call keyboard_type "$(jq -n --arg s "$1" --arg t "$2" '{selector: $s, text: $t}')" ;;
+  type)    [[ $# -eq 2 ]] || { usage; exit 2; }
+           call keyboard_type "$(jq -n --arg s "$1" --arg t "$2" 'if $s == "-" then {text: $t} else {selector: $s, text: $t} end')" ;;
   press)   [[ $# -ge 1 ]] || { usage; exit 2; }; call keyboard_press "$(jq -n --arg k "$1" --arg m "${2:-}" '{key: $k, modifiers: ($m | split(",") | map(select(. != "")))}')" ;;
   scroll)  [[ $# -ge 1 ]] || { usage; exit 2; }; call mouse_scroll "$(sel_args "$1" "{\"delta_y\": ${2:-240}}")" ;;
   wait)

@@ -81,8 +81,10 @@ $S/mcp.sh wait '[data-testid="detail-pane"]' 5
 $S/mcp.sh text '[data-testid="detail-pane"]'
 
 $S/mcp.sh type '[data-testid="feed-search"]' 'retry'   # clicks first, then per-key events
-$S/mcp.sh press Escape
 $S/mcp.sh press k meta                                 # a chord: key, then modifiers
+$S/mcp.sh type - 'unread'                              # "-": type into whatever has focus
+$S/mcp.sh press Enter
+$S/mcp.sh press Escape
 $S/mcp.sh scroll '[data-testid="feed-list"]' 600
 ```
 
@@ -157,8 +159,11 @@ would take has a handle.
 - **Every interactive element and every container an assertion reads gets
   one.** Buttons, inputs, rows, the pane that shows the result, the toast, the
   error, the empty state. The Playwright suite asserts on `feed-item`,
-  `detail-pane`, `toast`, `feed-search`, `palette-entry`,
-  `application-settings`; new surfaces follow suit.
+  `detail-pane`, `toast`, `feed-search`, `command-palette-input`,
+  `application-settings`; new surfaces follow suit. Read the id off the live
+  DOM with `testids` rather than guessing it from a name: `palette-entry` is
+  the flow editor's node palette, and the command palette is
+  `command-palette-*`.
 - **Name it `<surface>-<object>[-<verb>]`, kebab-case**, as the codebase does:
   `feed-item`, `sidebar-edit-flow`, `onboarding-hive-continue`,
   `action-row-smoke-created`. A list row carries its identity:
