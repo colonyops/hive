@@ -8,14 +8,12 @@ import { resetSessionStatusesForTests, useSessionStatuses } from '../../composab
 import { useTerminalShowWindows } from '../../stores/useTerminalShowWindows'
 import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
 import { resetTerminalWindowListingsForTests } from '../../composables/useTerminalWindowListings'
-import { resetTerminalPinnedChatsForTests, useTerminalPinnedChats } from '../../composables/useTerminalPinnedChats'
+import { useTerminalPinnedChats } from '../../stores/useTerminalPinnedChats'
 import {
   resetAttachedTerminalWindowsForTests,
   useAttachedTerminalWindows,
 } from '../../composables/useAttachedTerminalWindows'
 import { useCommandPalette } from '../../composables/useCommands'
-import { resetAgentSessionsAllForTests } from '../../composables/useAgentSessionsAll'
-import { resetAgentWorkspacesForTests } from '../../composables/useAgentWorkspaces'
 import {
   closeTerminalPane,
   closeTerminalWindow,
@@ -292,9 +290,6 @@ describe('TerminalMode', () => {
     localStorage.clear()
     resetSessionStatusesForTests()
     resetTerminalWindowListingsForTests()
-    resetAgentWorkspacesForTests()
-    resetAgentSessionsAllForTests()
-    resetTerminalPinnedChatsForTests()
     resetAttachedTerminalWindowsForTests()
     // The bar ships on; the pane's tests start with it off and turn it on by name.
     useTerminalStatusBar().setShowStatusBar(false)

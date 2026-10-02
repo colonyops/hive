@@ -1,4 +1,4 @@
-import { useAgentWorkspaces } from './useAgentWorkspaces'
+import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import type { AgentSchedulePreview, AgentScheduleRun, SchedulePreviewRequest } from '../lib/agentWorkspacesClient'
 
 // The schedule calls that are not part of saving a workspace, resolved against

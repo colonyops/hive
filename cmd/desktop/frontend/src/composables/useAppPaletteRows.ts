@@ -22,9 +22,9 @@ import { formatCombo, useKeybindings } from './useKeybindings'
 import { useCommands, useCommandPalette, useKeysScope, type Command } from './useCommands'
 import { setTheme, themeLabels, themes } from './useTheme'
 import { terminalSessionGroups, useTerminalSessions } from '../stores/useTerminalSessions'
-import { useTerminalPinnedChats } from './useTerminalPinnedChats'
-import { useAgentSessionsAll } from './useAgentSessionsAll'
-import { useAgentWorkspaces } from './useAgentWorkspaces'
+import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
+import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
+import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAttachedTerminalWindows } from './useAttachedTerminalWindows'
 import { applicationSettingsSections } from '../router'
 import { applicationSettingsSectionMeta } from '../components/settings/sectionMeta'
@@ -139,7 +139,7 @@ export function useAppPaletteRows(deps: AppPaletteDeps): void {
   // section and the Agents area's own sidebar do. session.workspace is the
   // workspace's directory key, not its display name, so the group label needs
   // the same dir → name join AgentsSidebar's own tree does.
-  const { recents: chatRecents, reloadRecents } = useAgentSessionsAll()
+  const { recents: chatRecents, reload: reloadRecents } = useAgentSessionsAll()
   const { workspaces: agentWorkspaces, reloadWorkspaces } = useAgentWorkspaces()
   const workspaceNameByDir = computed(() => {
     const map = new Map<string, string>()

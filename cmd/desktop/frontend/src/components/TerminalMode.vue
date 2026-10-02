@@ -63,10 +63,10 @@ import {
   type TerminalSessionGroup,
   type TerminalSessionRow,
 } from '../stores/useTerminalSessions'
-import { useTerminalPinnedChats } from '../composables/useTerminalPinnedChats'
-import { useAgentSessionsAll } from '../composables/useAgentSessionsAll'
+import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
+import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { setAttachedTerminalWindows } from '../composables/useAttachedTerminalWindows'
-import { useAgentWorkspaces } from '../composables/useAgentWorkspaces'
+import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useTerminalPoolSize } from '../stores/useTerminalPoolSize'
 import { useTerminalShowWindows } from '../stores/useTerminalShowWindows'
 import { useTerminalWindowListings } from '../composables/useTerminalWindowListings'
@@ -262,7 +262,7 @@ const activeSessions = computed(() => sessionRows.value.filter((row) => row.stat
 // hive session: nothing in hive's listing or status projection knows about it,
 // which is the axis `isHiveSession` below splits on.
 const { rows: chatRows, slugs: chatSlugs, unpinSlug } = useTerminalPinnedChats()
-const { recents, reloadRecents } = useAgentSessionsAll()
+const { recents, reload: reloadRecents } = useAgentSessionsAll()
 const { resumeSession: resumeChat } = useAgentWorkspaces()
 
 // The scratch terminal and the pinned chats are attachable like any session and

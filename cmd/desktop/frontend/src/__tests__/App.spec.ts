@@ -19,9 +19,9 @@ import {
   resetAttachedTerminalWindowsForTests,
   setAttachedTerminalWindows,
 } from '../composables/useAttachedTerminalWindows'
-import { resetTerminalPinnedChatsForTests } from '../composables/useTerminalPinnedChats'
-import { resetAgentSessionsAllForTests, useAgentSessionsAll } from '../composables/useAgentSessionsAll'
-import { resetAgentWorkspacesForTests, useAgentWorkspaces } from '../composables/useAgentWorkspaces'
+import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
+import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
+import type { AgentWorkspacesClient } from '../lib/agentWorkspacesClient'
 import { useTasks } from '../stores/useTasks'
 import { applicationSettingsSections, createAppRouter } from '../router'
 import TerminalMode from '../components/TerminalMode.vue'
@@ -118,6 +118,8 @@ const mocks = vi.hoisted(() => ({
   // runtime
   On: vi.fn().mockReturnValue(() => {}),
   Hide: vi.fn(),
+  // A test installs a fake Agents client here; null keeps the real one.
+  agentsClient: null as AgentWorkspacesClient | null,
 }))
 
 vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/flowsservice', () => ({
@@ -278,6 +280,14 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   Available: mocks.AgentsAvailable,
   Endpoint: mocks.AgentsEndpoint,
 }))
+vi.mock('../lib/agentWorkspacesClient', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/agentWorkspacesClient')>()
+  return {
+    ...actual,
+    createAgentWorkspacesClient: (endpoint: Parameters<typeof actual.createAgentWorkspacesClient>[0]) =>
+      mocks.agentsClient ?? actual.createAgentWorkspacesClient(endpoint),
+  }
+})
 
 const flow = {
   id: 'personal',
@@ -422,9 +432,6 @@ describe('App', () => {
     useKeybindings().clearPendingSequence()
     requestedEditorFilter.value = null
     resetAttachedTerminalWindowsForTests()
-    resetTerminalPinnedChatsForTests()
-    resetAgentSessionsAllForTests()
-    resetAgentWorkspacesForTests()
     vi.clearAllMocks()
     // Panel collapse / width state persists via useStorage; clear it so one
     // test's collapsed sidebar can't leak into the next.
@@ -501,6 +508,7 @@ describe('App', () => {
       wsURL: 'ws://127.0.0.1:1/s',
       token: 'test',
     })
+    mocks.agentsClient = null
     mocks.AgentsAvailable.mockResolvedValue({ available: false, reason: 'no ptyterm on this build.' })
     mocks.AgentsEndpoint.mockResolvedValue({
       httpBaseURL: 'http://127.0.0.1:1',
@@ -1751,25 +1759,29 @@ describe('App', () => {
     // empty — the dir → name join has nothing to match, and the group falls
     // back to the raw dir key rather than a display name.
     it('lists a chat row, pushes its agents route, and focuses the chat pane', async () => {
+      mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
+      mocks.agentsClient = {
+        allSessions: vi.fn().mockResolvedValue([
+          {
+            id: 42,
+            workspace: 'my-workspace',
+            name: 'Chat about the bug',
+            agent: 'claude',
+            lastOpenedAt: 0,
+            slug: 'chat-42',
+            terminalId: '',
+            windowId: '',
+            paneId: '',
+            cols: 0,
+            rows: 0,
+            resumeAttempted: false,
+            notice: '',
+            scheduleId: '',
+          },
+        ]),
+      } as unknown as AgentWorkspacesClient
       const { wrapper, router } = await mountAppWithRouter()
-      useAgentSessionsAll().recents.value = [
-        {
-          id: 42,
-          workspace: 'my-workspace',
-          name: 'Chat about the bug',
-          agent: 'claude',
-          lastOpenedAt: 0,
-          slug: 'chat-42',
-          terminalId: '',
-          windowId: '',
-          paneId: '',
-          cols: 0,
-          rows: 0,
-          resumeAttempted: false,
-          notice: '',
-          scheduleId: '',
-        },
-      ]
+      await useAgentSessionsAll().reload()
 
       // Mount the Chats mode once, then replace its handles while it is hidden.
       // Returning through the palette reuses that mounted pane.
@@ -1803,38 +1815,51 @@ describe('App', () => {
     // in useAppPaletteRows fixes: once useAgentWorkspaces().workspaces knows
     // the dir, the chat row's group resolves to the workspace's real name.
     it('groups a chat row under the workspace display name once the workspaces list has a matching dir', async () => {
+      mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
+      mocks.agentsClient = {
+        workspaces: vi.fn().mockResolvedValue({
+          root: '',
+          rootProblem: '',
+          available: true,
+          error: '',
+          editor: { command: '', title: '' },
+          presets: [],
+          workspaces: [
+            {
+              dir: 'my-workspace',
+              name: 'Travel',
+              command: 'claude',
+              danger: false,
+              mcps: [],
+              skills: [],
+              schedules: [],
+              problem: '',
+              notice: '',
+            },
+          ],
+        }),
+        allSessions: vi.fn().mockResolvedValue([
+          {
+            id: 42,
+            workspace: 'my-workspace',
+            name: 'Chat about the bug',
+            agent: 'claude',
+            lastOpenedAt: 0,
+            slug: 'chat-42',
+            terminalId: '',
+            windowId: '',
+            paneId: '',
+            cols: 0,
+            rows: 0,
+            resumeAttempted: false,
+            notice: '',
+            scheduleId: '',
+          },
+        ]),
+      } as unknown as AgentWorkspacesClient
       const { wrapper } = await mountAppWithRouter()
-      useAgentWorkspaces().workspaces.value = [
-        {
-          dir: 'my-workspace',
-          name: 'Travel',
-          command: 'claude',
-          danger: false,
-          mcps: [],
-          skills: [],
-          schedules: [],
-          problem: '',
-          notice: '',
-        },
-      ]
-      useAgentSessionsAll().recents.value = [
-        {
-          id: 42,
-          workspace: 'my-workspace',
-          name: 'Chat about the bug',
-          agent: 'claude',
-          lastOpenedAt: 0,
-          slug: 'chat-42',
-          terminalId: '',
-          windowId: '',
-          paneId: '',
-          cols: 0,
-          rows: 0,
-          resumeAttempted: false,
-          notice: '',
-          scheduleId: '',
-        },
-      ]
+      await useAgentWorkspaces().reloadWorkspaces()
+      await useAgentSessionsAll().reload()
 
       const { results, query } = useCommandPalette()
       query.value = ''

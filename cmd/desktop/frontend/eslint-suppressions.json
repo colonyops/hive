@@ -313,16 +313,6 @@
       "count": 1
     }
   },
-  "src/composables/useAgentSessionsAll.ts": {
-    "no-restricted-syntax": {
-      "count": 4
-    }
-  },
-  "src/composables/useAgentWorkspaces.ts": {
-    "no-restricted-syntax": {
-      "count": 18
-    }
-  },
   "src/composables/useAppFont.ts": {
     "no-restricted-syntax": {
       "count": 2
@@ -459,11 +449,6 @@
   "src/composables/useSessionStatuses.ts": {
     "no-restricted-syntax": {
       "count": 3
-    }
-  },
-  "src/composables/useTerminalPinnedChats.ts": {
-    "no-restricted-syntax": {
-      "count": 1
     }
   },
   "src/composables/useTerminalWindowListings.ts": {

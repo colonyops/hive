@@ -27,8 +27,8 @@ import BaseButton from './BaseButton.vue'
 import ChatRenameDialog from './ChatRenameDialog.vue'
 import NewChatDialog from './NewChatDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
-import { useAgentWorkspaces } from '../composables/useAgentWorkspaces'
-import { useAgentSessionsAll } from '../composables/useAgentSessionsAll'
+import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
+import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTheme } from '../composables/useTheme'
 import { useAgentCanvasRoute } from '../composables/useAgentCanvasRoute'
@@ -77,7 +77,7 @@ const {
   deleteSession,
   resetOpenWorkspace,
 } = useAgentWorkspaces()
-const { recents, reloadRecents } = useAgentSessionsAll()
+const { recents, reload: reloadRecents } = useAgentSessionsAll()
 
 // An enabled name skills.yml does not define has two causes that produce the
 // same bare warning: a manifest written before packages were the enablement

@@ -145,6 +145,11 @@ Do not write another `err instanceof Error ? err.message : ...`.
   readonly. A consumer never assigns to store state; it calls an action. When
   a consumer's prop or parameter is typed with a mutable array, change it to
   `readonly T[]`.
+- Rows whose type nests arrays or objects (a workspace with its `mcps`, a
+  session with its schedule) go out through **`shallowReadonly()`** instead.
+  The ref still cannot be assigned, but the rows keep their declared type, so
+  every helper typed over them need not change to `DeepReadonly`. A store
+  replaces such a list; it never mutates a row in place.
 - The reload action is always called **`reload`**. Not `refresh`, `load`, or
   `reloadThings`.
 - An action is a **function declaration**, not a method on the returned

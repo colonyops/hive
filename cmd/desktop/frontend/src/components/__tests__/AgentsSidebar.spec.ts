@@ -1,8 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentsSidebar from '../AgentsSidebar.vue'
-import { resetAgentWorkspacesForTests } from '../../composables/useAgentWorkspaces'
-import { resetAgentSessionsAllForTests } from '../../composables/useAgentSessionsAll'
 import type { AgentSchedule, AgentSession, AgentWorkspace } from '../../lib/agentWorkspacesClient'
 
 // Two workspaces and one session belonging to each, standing in for the
@@ -139,8 +137,6 @@ describe('AgentsSidebar', () => {
 
   beforeEach(() => {
     document.body.innerHTML = ''
-    resetAgentWorkspacesForTests()
-    resetAgentSessionsAllForTests()
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
     mocks.workspaces.mockResolvedValue({
       root: '/root',

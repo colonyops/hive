@@ -12,7 +12,7 @@ import type { AgentWorkspace } from '../lib/agentWorkspacesClient'
 import { seedRef } from '../lib/seedRef'
 
 const props = defineProps<{
-  workspaces: AgentWorkspace[]
+  workspaces: readonly AgentWorkspace[]
   /** The workspace the dialog opens on — the focused one, or the most recently used. */
   initialWorkspace: string
   root: string

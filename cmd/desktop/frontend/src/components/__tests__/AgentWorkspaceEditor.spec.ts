@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import AgentWorkspaceEditor from '../AgentWorkspaceEditor.vue'
-import { resetAgentWorkspacesForTests, useAgentWorkspaces } from '../../composables/useAgentWorkspaces'
+import { useAgentWorkspaces } from '../../stores/useAgentWorkspaces'
 import type {
+  AgentPreset,
   AgentSchedule,
   AgentScheduleRun,
   AgentWorkspace,
   MCPCatalogueEntry,
+  SkillName,
   SkillPackage,
 } from '../../lib/agentWorkspacesClient'
 
@@ -144,9 +146,45 @@ function chooseCommand(wrapper: VueWrapper, value: string): Promise<void> {
   return chooseOption(wrapper, 'agent-workspace-editor-command-preset', value)
 }
 
+// Seeds the store the way the backend would: a client whose workspaces()
+// payload carries the fields, read through the store's own reload. The client
+// answers nothing else, so the catalogue reloads the editor starts keep their
+// last-good (empty) rows.
+async function seedWorkspaces(fields: { root?: string; presets?: AgentPreset[] }): Promise<void> {
+  mocks.client = {
+    workspaces: vi.fn().mockResolvedValue({
+      root: fields.root ?? '',
+      rootProblem: '',
+      available: true,
+      error: '',
+      editor: { command: '', title: '' },
+      presets: fields.presets ?? [],
+      workspaces: [],
+    }),
+  }
+  await useAgentWorkspaces().reloadWorkspaces()
+}
+
+async function seedCatalogues(fields: {
+  mcps?: MCPCatalogueEntry[]
+  packages?: SkillPackage[]
+  skills?: SkillName[]
+}): Promise<void> {
+  mocks.client = {
+    mcpCatalogue: vi.fn().mockResolvedValue(fields.mcps ?? []),
+    skillPackages: vi.fn().mockResolvedValue({
+      packages: fields.packages ?? [],
+      skills: fields.skills ?? [],
+      problem: '',
+    }),
+  }
+  const store = useAgentWorkspaces()
+  await store.reloadMCPCatalogue()
+  await store.reloadSkillPackages()
+}
+
 beforeEach(() => {
   document.body.innerHTML = ''
-  resetAgentWorkspacesForTests()
   mocks.client = null
   mocks.Available.mockResolvedValue({ available: true, reason: '' })
   mocks.getAgentsEndpoint.mockResolvedValue({
@@ -283,8 +321,7 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('the delete confirm names the folder it removes from disk', async () => {
-    const { root } = useAgentWorkspaces()
-    root.value = '/Users/me/workspaces'
+    await seedWorkspaces({ root: '/Users/me/workspaces' })
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
 
@@ -321,25 +358,26 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('picking a suggestion sets the command, with no template box in the way', async () => {
-    const { presets } = useAgentWorkspaces()
-    presets.value = [
-      {
-        id: 'claude-ask',
-        agent: 'claude',
-        label: 'Ask',
-        command: 'claude --session-id x',
-        danger: false,
-        source: 'builtin',
-      },
-      {
-        id: 'claude-full',
-        agent: 'claude',
-        label: 'Full',
-        command: 'claude --dangerously-skip-permissions',
-        danger: true,
-        source: 'builtin',
-      },
-    ]
+    await seedWorkspaces({
+      presets: [
+        {
+          id: 'claude-ask',
+          agent: 'claude',
+          label: 'Ask',
+          command: 'claude --session-id x',
+          danger: false,
+          source: 'builtin',
+        },
+        {
+          id: 'claude-full',
+          agent: 'claude',
+          label: 'Full',
+          command: 'claude --dangerously-skip-permissions',
+          danger: true,
+          source: 'builtin',
+        },
+      ],
+    })
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
 
@@ -368,17 +406,18 @@ describe('AgentWorkspaceEditor', () => {
   // A hive "fable" profile is a claude row, so the mark is the only thing that
   // says which CLI it runs.
   it('a suggestion carries its agent mark, sized to the row', async () => {
-    const { presets } = useAgentWorkspaces()
-    presets.value = [
-      {
-        id: 'hive-fable',
-        agent: 'claude',
-        label: 'fable',
-        command: 'claude --model fable',
-        danger: false,
-        source: 'hive',
-      },
-    ]
+    await seedWorkspaces({
+      presets: [
+        {
+          id: 'hive-fable',
+          agent: 'claude',
+          label: 'fable',
+          command: 'claude --model fable',
+          danger: false,
+          source: 'hive',
+        },
+      ],
+    })
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
 
@@ -394,17 +433,18 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('custom reveals the template box, seeded with the command already chosen', async () => {
-    const { presets } = useAgentWorkspaces()
-    presets.value = [
-      {
-        id: 'claude-ask',
-        agent: 'claude',
-        label: 'Ask',
-        command: 'claude --session-id x',
-        danger: false,
-        source: 'builtin',
-      },
-    ]
+    await seedWorkspaces({
+      presets: [
+        {
+          id: 'claude-ask',
+          agent: 'claude',
+          label: 'Ask',
+          command: 'claude --session-id x',
+          danger: false,
+          source: 'builtin',
+        },
+      ],
+    })
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
 
@@ -436,17 +476,18 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('a hand-written command opens the editor on custom', async () => {
-    const { presets } = useAgentWorkspaces()
-    presets.value = [
-      {
-        id: 'claude-ask',
-        agent: 'claude',
-        label: 'Ask',
-        command: 'claude --session-id x',
-        danger: false,
-        source: 'builtin',
-      },
-    ]
+    await seedWorkspaces({
+      presets: [
+        {
+          id: 'claude-ask',
+          agent: 'claude',
+          label: 'Ask',
+          command: 'claude --session-id x',
+          danger: false,
+          source: 'builtin',
+        },
+      ],
+    })
     const wrapper = mountEditor({ ...demo, command: 'pi --some-flag' })
     await wrapper.vm.$nextTick()
 
@@ -475,8 +516,7 @@ describe('AgentWorkspaceEditor', () => {
   // The whole point of the schema change: an agent this build ships no preset
   // for is editable and saveable, not refused.
   it('saves a command for an agent with no preset', async () => {
-    const { presets } = useAgentWorkspaces()
-    presets.value = []
+    await seedWorkspaces({ presets: [] })
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
 
@@ -493,8 +533,7 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('save carries the toggled mcps list', async () => {
-    const { mcpCatalogue } = useAgentWorkspaces()
-    mcpCatalogue.value = [playwright]
+    await seedCatalogues({ mcps: [playwright] })
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
 
@@ -509,8 +548,7 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('save carries the toggled package list', async () => {
-    const { skillPackages } = useAgentWorkspaces()
-    skillPackages.value = [hivePackage, infraPackage]
+    await seedCatalogues({ packages: [hivePackage, infraPackage] })
     const wrapper = mountEditor({ ...demo, skills: ['hive'] })
     await wrapper.vm.$nextTick()
 
@@ -527,8 +565,7 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('a package expands to the skills its patterns select', async () => {
-    const { skillPackages } = useAgentWorkspaces()
-    skillPackages.value = [hivePackage]
+    await seedCatalogues({ packages: [hivePackage] })
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
 
@@ -547,8 +584,7 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('an enabled package skills.yml no longer defines still rows, marked missing', async () => {
-    const { skillPackages } = useAgentWorkspaces()
-    skillPackages.value = [hivePackage]
+    await seedCatalogues({ packages: [hivePackage] })
     const wrapper = mountEditor({ ...demo, skills: ['deleted-package'] })
     await wrapper.vm.$nextTick()
 
@@ -558,12 +594,13 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('names the fix when an enabled name is a skill rather than a package', async () => {
-    const { skillPackages, skillNames } = useAgentWorkspaces()
-    skillPackages.value = [hivePackage]
-    skillNames.value = [
-      { slug: 'hive-mcp', shipped: true, selectedBy: ['hive'] },
-      { slug: 'hive-flows', shipped: true, selectedBy: ['hive'] },
-    ]
+    await seedCatalogues({
+      packages: [hivePackage],
+      skills: [
+        { slug: 'hive-mcp', shipped: true, selectedBy: ['hive'] },
+        { slug: 'hive-flows', shipped: true, selectedBy: ['hive'] },
+      ],
+    })
     const wrapper = mountEditor({ ...demo, skills: ['hive-mcp'] })
     await wrapper.vm.$nextTick()
 
@@ -575,9 +612,7 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('a skill no package selects says to define one rather than pointing nowhere', async () => {
-    const { skillPackages, skillNames } = useAgentWorkspaces()
-    skillPackages.value = [hivePackage]
-    skillNames.value = [{ slug: 'orphan', shipped: false, selectedBy: [] }]
+    await seedCatalogues({ packages: [hivePackage], skills: [{ slug: 'orphan', shipped: false, selectedBy: [] }] })
     const wrapper = mountEditor({ ...demo, skills: ['orphan'] })
     await wrapper.vm.$nextTick()
 
@@ -586,8 +621,7 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('a package whose patterns match nothing says so', async () => {
-    const { skillPackages } = useAgentWorkspaces()
-    skillPackages.value = [{ name: 'typoed', title: 'typoed', description: '', members: [] }]
+    await seedCatalogues({ packages: [{ name: 'typoed', title: 'typoed', description: '', members: [] }] })
     const wrapper = mountEditor()
     await wrapper.vm.$nextTick()
 
@@ -596,8 +630,7 @@ describe('AgentWorkspaceEditor', () => {
   })
 
   it('a declared id the catalogue no longer resolves still rows, marked missing', async () => {
-    const { mcpCatalogue } = useAgentWorkspaces()
-    mcpCatalogue.value = [playwright]
+    await seedCatalogues({ mcps: [playwright] })
     const wrapper = mountEditor({ ...demo, mcps: ['ghost'] })
     await wrapper.vm.$nextTick()
 

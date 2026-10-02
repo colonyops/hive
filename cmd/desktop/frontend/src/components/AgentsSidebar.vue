@@ -42,10 +42,10 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import AppMenu from './AppMenu.vue'
 import ConfirmationDialog from './ConfirmationDialog.vue'
 import PanelResizeHandle from './PanelResizeHandle.vue'
-import { useAgentWorkspaces } from '../composables/useAgentWorkspaces'
-import { useAgentSessionsAll } from '../composables/useAgentSessionsAll'
+import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
+import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useResizablePanel } from '../composables/useResizablePanel'
-import { useTerminalPinnedChats } from '../composables/useTerminalPinnedChats'
+import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
 import { relativeAge } from '../lib/age'
 import type { AgentSession, AgentWorkspace } from '../lib/agentWorkspacesClient'
 import type { MenuEntry } from '../types/menu'
@@ -91,7 +91,7 @@ const emit = defineEmits<{
 
 const { workspaces, workspacesLoading, workspacesLoaded, workspacesError, rootProblem, reloadWorkspaces } =
   useAgentWorkspaces()
-const { recents, recentsLoading, recentsError, reloadRecents } = useAgentSessionsAll()
+const { recents, recentsLoading, recentsError, reload: reloadRecents } = useAgentSessionsAll()
 // Pinning is what puts a chat in the Code view's own sidebar; this row's menu is
 // where it is turned on and off, and the mark below is how a row says it is on.
 // It stays a Code-view arrangement rather than an ordering rule here — a pin
@@ -122,7 +122,7 @@ interface WorkspaceNode {
   name: string
   /** null for a directory the manifest listing no longer knows about. */
   workspace: AgentWorkspace | null
-  sessions: AgentSession[]
+  sessions: readonly AgentSession[]
   live: boolean
 }
 

@@ -4,8 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentsMode from '../AgentsMode.vue'
 import AgentsSidebar from '../AgentsSidebar.vue'
 import NewChatDialog from '../NewChatDialog.vue'
-import { resetAgentWorkspacesForTests } from '../../composables/useAgentWorkspaces'
-import { resetAgentSessionsAllForTests } from '../../composables/useAgentSessionsAll'
 import { createAppRouter } from '../../router'
 import { tooltipFor } from '../../test-utils/tooltip'
 import type { MissingSkillPackage } from '../../lib/agentWorkspacesClient'
@@ -319,8 +317,6 @@ function setHidden(hidden: boolean): void {
 
 describe('AgentsMode', () => {
   beforeEach(() => {
-    resetAgentWorkspacesForTests()
-    resetAgentSessionsAllForTests()
     xterm.FakeTerminal.instances = []
     wailsEvents.handlers = []
     globalThis.ResizeObserver = FakeResizeObserver as unknown as typeof ResizeObserver

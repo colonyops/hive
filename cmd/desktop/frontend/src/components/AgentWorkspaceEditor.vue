@@ -36,7 +36,7 @@ import SettingsError from './settings/SettingsError.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import { CodeField, FieldRow, SelectField, TextField, TextareaField, type SelectOption } from '../pipeline/fields'
 import { useAgentSchedules } from '../composables/useAgentSchedules'
-import { useAgentWorkspaces } from '../composables/useAgentWorkspaces'
+import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { timeLabel } from '../lib/activityPresentation'
 import { relativeAge, relativeTimeLabel } from '../lib/age'
 import {
