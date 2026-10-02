@@ -55,11 +55,6 @@
       "count": 2
     }
   },
-  "src/components/AgentCanvasPane.vue": {
-    "vue/no-v-html": {
-      "count": 1
-    }
-  },
   "src/components/AgentWorkspaceEditor.vue": {
     "@typescript-eslint/no-redundant-type-constituents": {
       "count": 1
@@ -133,11 +128,6 @@
       "count": 6
     }
   },
-  "src/components/DetailPane.vue": {
-    "vue/no-v-html": {
-      "count": 1
-    }
-  },
   "src/components/DrawerSheet.vue": {
     "vue/no-setup-props-reactivity-loss": {
       "count": 2
@@ -187,11 +177,6 @@
       "count": 1
     }
   },
-  "src/components/ReleaseNoteBody.vue": {
-    "vue/no-v-html": {
-      "count": 1
-    }
-  },
   "src/components/RepositorySelect.vue": {
     "@typescript-eslint/no-unused-expressions": {
       "count": 1
@@ -210,11 +195,6 @@
   "src/components/SettingsView.vue": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
-    }
-  },
-  "src/components/TaskDetailPane.vue": {
-    "vue/no-v-html": {
-      "count": 2
     }
   },
   "src/components/TasksView.vue": {
@@ -554,9 +534,6 @@
   "src/pipeline/components/NodeEditorDrawer.vue": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
-    },
-    "vue/no-v-html": {
-      "count": 1
     }
   },
   "src/pipeline/components/__tests__/FlowsView.spec.ts": {
@@ -582,11 +559,6 @@
   },
   "src/pipeline/composables/usePipelineEditor.ts": {
     "no-console": {
-      "count": 1
-    }
-  },
-  "src/pipeline/fields/CodeField.vue": {
-    "vue/no-v-html": {
       "count": 1
     }
   },

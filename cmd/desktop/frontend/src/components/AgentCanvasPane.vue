@@ -304,6 +304,7 @@ const {
         >
           <template v-if="block.kind === 'markdown' || block.kind === 'html'">
             <h2 v-if="block.title" class="canvas-block-title mb-2 font-semibold text-text">{{ block.title }}</h2>
+            <!-- eslint-disable vue/no-v-html -- markdown goes through renderGithubMarkdown; html blocks arrive sanitized by canvas.SanitizeHTML in Go -->
             <div
               class="canvas-reading-body text-text-2"
               :class="block.kind === 'html' ? 'hv-html' : 'markdown-body'"
@@ -311,6 +312,7 @@ const {
               @click="onBodyClick"
               v-html="renderBody(block)"
             />
+            <!-- eslint-enable vue/no-v-html -->
           </template>
           <button
             v-else-if="block.kind === 'link'"

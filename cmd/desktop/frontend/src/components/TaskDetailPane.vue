@@ -278,6 +278,7 @@ const {
           </p>
         </div>
 
+        <!-- eslint-disable vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
         <div
           v-if="bodyHtml"
           class="markdown-body mt-3.5 text-[13.5px] leading-[1.65] text-text-2"
@@ -285,6 +286,7 @@ const {
           @click="onBodyClick"
           v-html="bodyHtml"
         />
+        <!-- eslint-enable vue/no-v-html -->
       </div>
 
       <div class="px-5 pb-5 pt-4">
@@ -342,11 +344,13 @@ const {
                   agoLabel(Date.parse(comment.createdAt))
                 }}</span>
               </div>
+              <!-- eslint-disable vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
               <div
                 class="markdown-body text-[13px] leading-[1.6] text-text-2"
                 @click="onBodyClick"
                 v-html="commentHtml(comment)"
               />
+              <!-- eslint-enable vue/no-v-html -->
             </div>
           </div>
         </section>

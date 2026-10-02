@@ -88,12 +88,14 @@ function onKeydown(e: KeyboardEvent) {
         <div v-for="n in lineNumbers" :key="n" class="hv-code-line">{{ n }}</div>
       </div>
       <div class="relative min-w-0 flex-1">
+        <!-- eslint-disable vue/no-v-html -- highlightCode escapes every text segment before it adds markup -->
         <pre
           ref="preRef"
           class="hv-code-pre hv-code-layer pointer-events-none m-0 overflow-hidden text-text-2"
           :data-testid="testid ? `${testid}-pre` : undefined"
           v-html="highlightedHtml"
         />
+        <!-- eslint-enable vue/no-v-html -->
         <textarea
           :value="modelValue"
           :placeholder="placeholder"

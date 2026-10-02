@@ -11,6 +11,7 @@ const html = computed(() => renderGithubMarkdown(props.body))
 </script>
 
 <template>
+  <!-- eslint-disable-next-line vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
   <div v-if="html" class="release-notes text-[13.5px] leading-[1.65] text-text-2" v-html="html" />
 </template>
 

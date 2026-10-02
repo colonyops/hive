@@ -192,6 +192,7 @@ const {
           >{{ relativeAge(item.lastEventAt) === 'now' ? 'now' : `${relativeAge(item.lastEventAt)} ago` }}
         </p>
         <PullRequestMetadata :item="item" class="mt-3" />
+        <!-- eslint-disable vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
         <div
           v-if="bodyHtml"
           class="markdown-body hive-scroll mt-3 overflow-y-auto text-[14px] leading-[1.65] text-text-2"
@@ -200,6 +201,7 @@ const {
           @click="onBodyClick"
           v-html="bodyHtml"
         />
+        <!-- eslint-enable vue/no-v-html -->
         <!-- The border-b line below is draggable: it sets the description's
              reading-pane height (persisted), so long bodies never bury the actions. -->
         <PanelResizeHandle v-if="bodyHtml" edge="bottom" name="detailbody" :start="startBodyResize" :step="stepBody" />
