@@ -37,10 +37,24 @@ export const useTasks = defineStore('tasks', () => {
   const detail = ref<TaskDetail | null>(null)
   // A failed read keeps the last-seen items: a transient failure must not
   // blank a list the user was already looking at.
-  const list = useResource(async () => (await ListTasks(repoKey.value)) ?? [], {
+  const list = useResource(fetchList, {
     initial: [] as TaskItem[],
     errorFallback: 'Could not load tasks.',
   })
+
+  async function fetchList(): Promise<TaskItem[]> {
+    const key = repoKey.value
+    const items = (await ListTasks(key)) ?? []
+    // The repo watcher has already queued a read for the new key; this one
+    // must not flash the old repo's list in the meantime.
+    if (key !== repoKey.value) return list.data.value
+    // A selection outside the new list must not linger: the detail pane would
+    // act on an item the list-derived counts (the cascade confirm's) cannot
+    // see. It is dropped before the list lands so TasksView's auto-select sees
+    // no selection and the new rows in the same flush.
+    if (selectedId.value !== null && !items.some((item) => item.id === selectedId.value)) select(null)
+    return items
+  }
 
   let detailSequence = 0
   let repoKeysSequence = 0
@@ -69,16 +83,6 @@ export const useTasks = defineStore('tasks', () => {
     }
   }
 
-  async function reloadList(): Promise<void> {
-    await list.reload()
-    // A selection outside the freshly-loaded list (a repo-scope change moved
-    // the list out from under it) must not linger: the detail pane would keep
-    // operating on an item every list-derived computation — the cascade
-    // confirm's count above all — can no longer see.
-    if (list.error.value !== null || selectedId.value === null) return
-    if (!list.data.value.some((item) => item.id === selectedId.value)) select(null)
-  }
-
   async function loadDetail(id: string, sequence: number): Promise<void> {
     try {
       const result = await ReadTaskDetail(id)
@@ -104,7 +108,7 @@ export const useTasks = defineStore('tasks', () => {
   }
 
   async function tick(): Promise<void> {
-    await Promise.all([reloadList(), reloadDetailIfSelected()])
+    await Promise.all([list.reload(), reloadDetailIfSelected()])
   }
 
   async function poll(generation: number): Promise<void> {
@@ -129,7 +133,7 @@ export const useTasks = defineStore('tasks', () => {
   }
 
   async function reload(): Promise<void> {
-    await Promise.all([reloadList(), reloadDetailIfSelected(), loadRepoKeys()])
+    await Promise.all([list.reload(), reloadDetailIfSelected(), loadRepoKeys()])
   }
 
   // A repo scope change is a server-side filter, not a client-side one (unlike

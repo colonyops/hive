@@ -1,6 +1,6 @@
 import { flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { nextTick, watch } from 'vue'
 import { useTasks } from '../useTasks'
 
 const mocks = vi.hoisted(() => ({
@@ -155,6 +155,23 @@ describe('useTasks', () => {
 
     expect(tasks.selectedId.value).toBeNull()
     expect(tasks.detail.value).toBeNull()
+  })
+
+  it('drops a list response for a repo the user has already switched away from', async () => {
+    let resolveStale: (items: ReturnType<typeof task>[]) => void = () => {}
+    mocks.ListTasks.mockImplementationOnce(() => new Promise((resolve) => (resolveStale = resolve)))
+    const tasks = useTasks()
+    const seen: string[][] = []
+    watch(tasks.items, (items) => seen.push(items.map((item) => item.id)), { flush: 'sync' })
+
+    void tasks.reload()
+    mocks.ListTasks.mockResolvedValue([task('n1', { repoKey: 'acme/new' })])
+    tasks.setRepoKey('acme/new')
+    await nextTick()
+    resolveStale([task('o1')])
+    await flushPromises()
+
+    expect(seen).toEqual([['n1']])
   })
 
   it('loads detail on select and clears the selection when it is not found', async () => {

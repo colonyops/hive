@@ -327,6 +327,28 @@ describe('TasksView', () => {
     wrapper.unmount()
   })
 
+  it('selects the first row of the new list when a repo switch drops the selection', async () => {
+    mocks.TaskRepoKeys.mockResolvedValue(['acme/site', 'acme/other'])
+    mocks.ListTasks.mockImplementation((key: string) =>
+      Promise.resolve(
+        key === 'acme/other'
+          ? [task('x1', { repoKey: 'acme/other' }), task('x2', { repoKey: 'acme/other' })]
+          : [task('t1'), task('t2')],
+      ),
+    )
+    mocks.ReadTaskDetail.mockImplementation((id: string) => Promise.resolve(detailFrom(task(id))))
+    const wrapper = mount(TasksView)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="task-detail-title"]').text()).toBe('Task t1')
+
+    await chooseOption(wrapper, 'tasks-repo-select', 'acme/other')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="task-detail-title"]').text()).toBe('Task x1')
+
+    wrapper.unmount()
+  })
+
   it('moves the tree selection with j/k and the arrow keys, without wrapping past either end', async () => {
     mocks.ListTasks.mockResolvedValue([task('t1'), task('t2'), task('t3')])
     mocks.ReadTaskDetail.mockImplementation((id: string) => Promise.resolve(detailFrom(task(id))))
