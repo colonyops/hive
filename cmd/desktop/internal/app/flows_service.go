@@ -167,9 +167,8 @@ func (s *FlowsService) Create(ctx context.Context, name string) (flow.Flow, erro
 }
 
 // SeedStarter fills an empty profile with the starter graph, fetching as
-// the one connected GitHub account. First run calls it when the account it
-// offered to connect finally exists: the profile was created a step
-// earlier, before there was anything to seed it with.
+// the one connected GitHub account. Create cannot seed a profile while no
+// account exists; SeedStarter fills it in once one does.
 //
 // A profile that already has nodes is refused rather than appended to.
 // Appending a second starter graph onto a graph someone has since edited is

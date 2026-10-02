@@ -67,8 +67,8 @@ export interface Profile {
   image?: string
   name: string
   enabled: boolean
-  // nodes counts the flow's nodes; first run seeds the starter graph only
-  // into a profile that has none.
+  // nodes counts the flow's nodes; the starter graph is seeded only into a
+  // profile that has none.
   nodes: number
   sourceSummary: string
   totalCount: number

@@ -66,7 +66,7 @@ Start **Connect GitHub** again and approve the new code. You can also select **U
 
 ## The feed is empty after skipping GitHub
 
-Connecting GitHub after first run does not add the starter feeds automatically. Open the flow editor or ask the **Hive** workspace in Chats to create them.
+Connecting GitHub under **Settings ▸ Integrations** adds the starter feeds to the active profile when it has no nodes yet. If the profile still shows **No sources yet**, select **Add starter feeds** there, open the flow editor, or ask the **Hive** workspace in Chats to create them.
 
 See [Flows](../inbox/flows.md) for a minimal source-to-feed example.
 

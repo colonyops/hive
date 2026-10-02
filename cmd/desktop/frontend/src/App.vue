@@ -947,26 +947,65 @@ async function finishFirstRun(): Promise<void> {
   await firstRun.complete()
 }
 
-// Connecting during first run seeds the default profile. It was made empty
-// because a source node names the account it fetches as and there was none;
-// this is the moment there is one. Only an empty profile is seeded: a walk
-// replayed on an install whose profile already has feeds must not try to
-// append a second starter graph. The connect card stays up until the seed
-// lands, so the feed is never rendered sourceless on the way through.
-watch(githubConnected, async (connected) => {
-  if (!connected || !firstRunConnect.value) return
-  const profile = profiles.value.find((p) => p.id === activeProfileId.value)
+// Only an empty profile takes the starter graph: a walk replayed on an
+// install whose profile already has feeds must not try to append a second
+// one. A refusal is reported here, where the backend's reason (no account,
+// or more than one) is the most useful thing to show.
+const seedingStarter = ref(false)
+const canSeedStarter = computed(() => githubConnected.value && activeProfile.value?.nodes === 0)
+const emptyWorkspaceHint = computed(() => {
+  if (!githubConnected.value) {
+    return 'This profile has no feeds, and no account is connected to fetch as. Connect one under Integrations, then wire a source into a feed.'
+  }
+  if (canSeedStarter.value) {
+    return 'This profile has no feeds. Add the starter feeds, or open the flow editor to wire a source into one.'
+  }
+  return 'This profile has no feeds. Open the flow editor to wire a source into one.'
+})
+
+async function seedStarterIntoEmptyProfile(): Promise<boolean> {
+  const profile = activeProfile.value
+  if (!profile || profile.nodes !== 0 || seedingStarter.value) return false
+  seedingStarter.value = true
   try {
-    if (profile && profile.nodes === 0) await seedStarterFlow(profile.id)
+    await seedStarterFlow(profile.id)
+    return true
   } catch (error) {
     console.warn('Unable to seed the starter flow', error)
     showToast('Starter feeds were not added', {
-      body: 'This profile has no sources yet — add one in the flow editor.',
+      body:
+        error instanceof Error && error.message
+          ? error.message
+          : 'This profile has no sources yet — add one in the flow editor.',
       severity: 'error',
     })
+    return false
   } finally {
-    firstRunConnect.value = false
-    advanceToPermissions()
+    seedingStarter.value = false
+  }
+}
+
+// Connecting seeds the active profile. It was made empty because a source
+// node names the account it fetches as and there was none; this is the
+// moment there is one, whether the connect happens on the first-run card or
+// later under Integrations. Only a disconnected → connected transition
+// seeds: the status load at startup must not, or a profile someone emptied
+// on purpose would refill on every launch. During first run the connect card
+// stays up until the seed lands, so the feed is never rendered sourceless on
+// the way through.
+watch(githubStatus, async (status, previous) => {
+  if (previous?.state !== 'disconnected' || status?.state !== 'connected') return
+  const duringFirstRun = firstRunConnect.value
+  try {
+    const seeded = await seedStarterIntoEmptyProfile()
+    if (seeded && !duringFirstRun) {
+      showToast('Starter feeds added', { body: 'The active profile now has the starter GitHub feeds.' })
+    }
+  } finally {
+    if (duringFirstRun) {
+      firstRunConnect.value = false
+      advanceToPermissions()
+    }
   }
 })
 
@@ -1814,14 +1853,17 @@ onUnmounted(cancelSequenceTimer)
             data-testid="workspace-empty"
           >
             <div class="text-[13.5px] font-semibold">No sources yet</div>
-            <p class="max-w-[400px] text-xs leading-relaxed text-text-3">
-              {{
-                githubConnected
-                  ? 'This profile has no feeds. Open the flow editor to wire a source into one.'
-                  : 'This profile has no feeds, and no account is connected to fetch as. Connect one under Integrations, then wire a source into a feed.'
-              }}
-            </p>
+            <p class="max-w-[400px] text-xs leading-relaxed text-text-3">{{ emptyWorkspaceHint }}</p>
             <div class="mt-1 flex items-center gap-2">
+              <button
+                v-if="canSeedStarter"
+                class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text disabled:cursor-default disabled:opacity-60"
+                data-testid="workspace-empty-seed"
+                :disabled="seedingStarter"
+                @click="seedStarterIntoEmptyProfile()"
+              >
+                Add starter feeds
+              </button>
               <button
                 v-if="!githubConnected"
                 class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"

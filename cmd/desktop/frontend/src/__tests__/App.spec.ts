@@ -729,6 +729,9 @@ describe('App', () => {
 
     await connectGitHub()
     expect(mocks.SeedStarterFlow).toHaveBeenCalledWith('default')
+    // The connect card itself is the confirmation; the toast is for a connect
+    // made under Integrations, where the feed is not on screen.
+    expect(wrapper.find('[data-testid="toast-title"]').exists()).toBe(false)
 
     expect(wrapper.get('[data-testid="onboarding-permissions-allow"]').isVisible()).toBe(true)
     await wrapper.get('[data-testid="onboarding-permissions-skip"]').trigger('click')
@@ -881,6 +884,96 @@ describe('App', () => {
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('application-settings')
     expect(router.currentRoute.value.params.section).toBe('integrations')
+
+    wrapper.unmount()
+  })
+
+  function emptyDefaultProfile() {
+    mocks.ListFlows.mockResolvedValue([{ id: 'default', name: 'Default', enabled: true, valid: true, nodes: 0 }])
+    mocks.GetFlow.mockResolvedValue({ id: 'default', name: 'Default', enabled: true, nodes: [], wires: [] })
+    mocks.SeedStarterFlow.mockResolvedValue({ id: 'default', name: 'Default', enabled: true, valid: true, nodes: 9 })
+  }
+
+  // What the reload after a seed reads back.
+  function seededDefaultProfile() {
+    mocks.ListFlows.mockResolvedValue([{ id: 'default', name: 'Default', enabled: true, valid: true, nodes: 9 }])
+    mocks.GetFlow.mockResolvedValue({ ...flow, id: 'default', name: 'Default' })
+  }
+
+  // Connecting under Integrations after skipping the first-run card is the
+  // same moment as the first-run connect: the account the starter graph
+  // fetches as now exists. The grant lands as connection:updated wherever
+  // the connect was started.
+  it('connecting GitHub after first run seeds the empty profile', async () => {
+    mocks.Status.mockResolvedValue({ state: 'disconnected', login: '', name: '', avatarUrl: '', message: '' })
+    emptyDefaultProfile()
+    const wrapper = await mountApp()
+
+    expect(wrapper.find('[data-testid="onboarding"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="workspace-empty"]').text()).toContain('no account is connected')
+    expect(wrapper.find('[data-testid="workspace-empty-seed"]').exists()).toBe(false)
+
+    seededDefaultProfile()
+    await connectGitHub()
+
+    expect(mocks.SeedStarterFlow).toHaveBeenCalledWith('default')
+    expect(wrapper.get('[data-testid="toast-title"]').text()).toBe('Starter feeds added')
+    expect(wrapper.find('[data-testid="workspace-empty"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  // The status load at startup is not a connect: a profile someone emptied
+  // on purpose must not refill on every launch. The empty state offers the
+  // starter feeds instead.
+  it('offers the starter feeds from the empty state when an account is already connected', async () => {
+    emptyDefaultProfile()
+    const wrapper = await mountApp()
+
+    expect(mocks.SeedStarterFlow).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="workspace-empty"]').text()).toContain('Add the starter feeds')
+    expect(wrapper.find('[data-testid="workspace-empty-integrations"]').exists()).toBe(false)
+
+    seededDefaultProfile()
+    await wrapper.get('[data-testid="workspace-empty-seed"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.SeedStarterFlow).toHaveBeenCalledWith('default')
+    expect(wrapper.find('[data-testid="workspace-empty"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  // Only a profile with no nodes at all can take the starter graph; the
+  // backend refuses to append it to an edited one.
+  it('does not offer the starter feeds to a profile that has nodes but no feed', async () => {
+    mocks.ListFlows.mockResolvedValue([{ id: 'default', name: 'Default', enabled: true, valid: true, nodes: 1 }])
+    mocks.GetFlow.mockResolvedValue({
+      id: 'default',
+      name: 'Default',
+      enabled: true,
+      nodes: [{ id: 'src', type: 'sources.github' }],
+      wires: [],
+    })
+    const wrapper = await mountApp()
+
+    expect(wrapper.get('[data-testid="workspace-empty"]').text()).toContain('Open the flow editor')
+    expect(wrapper.find('[data-testid="workspace-empty-seed"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('reports the reason when the starter feeds are refused', async () => {
+    emptyDefaultProfile()
+    mocks.SeedStarterFlow.mockRejectedValue(new Error('Connect exactly one GitHub account to add the starter feeds.'))
+    const wrapper = await mountApp()
+
+    await wrapper.get('[data-testid="workspace-empty-seed"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="toast-title"]').text()).toBe('Starter feeds were not added')
+    expect(wrapper.get('[data-testid="toast-body"]').text()).toContain('exactly one GitHub account')
+    expect(wrapper.find('[data-testid="workspace-empty-seed"]').exists()).toBe(true)
 
     wrapper.unmount()
   })

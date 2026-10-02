@@ -195,8 +195,8 @@ export interface FlowSummary {
     "image"?: string;
 
     /**
-     * Nodes counts the flow's nodes. First run reads it to seed the starter
-     * graph only into a profile that has none.
+     * Nodes counts the flow's nodes; the starter graph is seeded only into a
+     * profile that has none.
      */
     "nodes": number;
     "error"?: string;

@@ -20,8 +20,8 @@ type FlowSummary struct {
 	// (the rail falls back to the letter chip). Encoding the small stored PNG
 	// inline keeps the rail a pure prop render with no second fetch.
 	Image string `json:"image,omitempty"`
-	// Nodes counts the flow's nodes. First run reads it to seed the starter
-	// graph only into a profile that has none.
+	// Nodes counts the flow's nodes; the starter graph is seeded only into a
+	// profile that has none.
 	Nodes    int      `json:"nodes"`
 	Error    string   `json:"error,omitempty"`
 	Warnings []string `json:"warnings,omitempty"`
@@ -61,8 +61,8 @@ func (s *FlowsService) CreateFlow(ctx context.Context, name string) (FlowSummary
 	return summarize(s.flows.Create(ctx, name))
 }
 
-// SeedStarterFlow fills an empty profile with the starter graph. First run
-// calls it once the GitHub account the graph fetches as has been connected.
+// SeedStarterFlow fills an empty profile with the starter graph, fetching as
+// the one connected GitHub account.
 func (s *FlowsService) SeedStarterFlow(ctx context.Context, id string) (FlowSummary, error) {
 	return summarize(s.flows.SeedStarter(ctx, id))
 }
