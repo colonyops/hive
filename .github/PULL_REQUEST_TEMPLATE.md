@@ -13,7 +13,7 @@ Append ! before the colon for a breaking change.
   scopes  cli tui sessions msg hc config workspaces plugins sources storage
           tmux doctor
           chats canvas terminal code feed flows tasks settings actions mcp
-          release skills telemetry tray web
+          release skills telemetry tray web frontend
           docs deps repo ci
 
 A change that genuinely spans the repo takes no scope: `refactor: ...`. If the
