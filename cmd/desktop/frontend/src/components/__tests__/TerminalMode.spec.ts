@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import TerminalMode from '../TerminalMode.vue'
-import { resetTerminalSessionsForTests, useTerminalSessions } from '../../composables/useTerminalSessions'
+import { useTerminalSessions } from '../../stores/useTerminalSessions'
 import { resetSessionStatusesForTests, useSessionStatuses } from '../../composables/useSessionStatuses'
 import { useTerminalShowWindows } from '../../stores/useTerminalShowWindows'
 import { useTerminalStatusBar } from '../../stores/useTerminalStatusBar'
@@ -290,7 +290,6 @@ describe('TerminalMode', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    resetTerminalSessionsForTests()
     resetSessionStatusesForTests()
     resetTerminalWindowListingsForTests()
     resetAgentWorkspacesForTests()

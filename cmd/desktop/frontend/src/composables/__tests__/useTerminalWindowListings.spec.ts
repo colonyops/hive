@@ -2,7 +2,7 @@ import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetTerminalWindowListingsForTests, useTerminalWindowListings } from '../useTerminalWindowListings'
 import type { TerminalClient } from '../../lib/terminalClient'
-import type { TerminalSessionRow } from '../useTerminalSessions'
+import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 
 function row(slug: string): TerminalSessionRow {
   return { id: slug, name: slug, slug, repo: 'owner/repo', state: 'active' }

@@ -58,12 +58,11 @@ import { useCommands, useShellEscape, type Command } from '../composables/useCom
 import { useTerminalActions } from '../composables/useTerminalActions'
 import { useTerminalAvailability } from '../stores/useTerminalAvailability'
 import {
-  sessionRepository,
   terminalSessionGroups,
   useTerminalSessions,
   type TerminalSessionGroup,
   type TerminalSessionRow,
-} from '../composables/useTerminalSessions'
+} from '../stores/useTerminalSessions'
 import { useTerminalPinnedChats } from '../composables/useTerminalPinnedChats'
 import { useAgentSessionsAll } from '../composables/useAgentSessionsAll'
 import { setAttachedTerminalWindows } from '../composables/useAttachedTerminalWindows'
@@ -250,6 +249,7 @@ const {
   loaded: sessionsLoaded,
   error: sessionsError,
   reload: reloadSessions,
+  sessionRepository,
 } = useTerminalSessions()
 const { openBlank: openNewSession, prefetch: prefetchNewSession } = useNewSession()
 // The tree is the attach surface, so only an active session belongs in it — a

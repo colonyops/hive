@@ -14,7 +14,7 @@ import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { resetLaunchersForTests } from '../composables/useLaunchers'
 import { formatCombo, SEQUENCE_TIMEOUT_MS, useKeybindings } from '../composables/useKeybindings'
 import { defaultTerminalFontSizePx, useTerminalFont } from '../stores/useTerminalFont'
-import { resetTerminalSessionsForTests, useTerminalSessions } from '../composables/useTerminalSessions'
+import { useTerminalSessions } from '../stores/useTerminalSessions'
 import {
   resetAttachedTerminalWindowsForTests,
   setAttachedTerminalWindows,
@@ -421,7 +421,6 @@ describe('App', () => {
     useKeybindings().clearAll()
     useKeybindings().clearPendingSequence()
     requestedEditorFilter.value = null
-    resetTerminalSessionsForTests()
     resetAttachedTerminalWindowsForTests()
     resetTerminalPinnedChatsForTests()
     resetAgentSessionsAllForTests()
@@ -1598,9 +1597,10 @@ describe('App', () => {
   describe('global Go-to rows (useAppPaletteRows)', () => {
     it('runs a session attach row by pushing /terminal/:slug', async () => {
       const { wrapper, router } = await mountAppWithRouter()
-      useTerminalSessions().sessions.value = [
+      vi.mocked(ListSessions).mockResolvedValueOnce([
         { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
-      ]
+      ])
+      await useTerminalSessions().reload()
 
       const { results, query } = useCommandPalette()
       query.value = ''

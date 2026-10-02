@@ -22,7 +22,7 @@ export interface Resource<T> {
    * so a change that lands mid-request is still read, and every caller's
    * promise settles after a request that started no earlier than its call.
    */
-  reload(): Promise<void>
+  reload: () => Promise<void>
 }
 
 /**

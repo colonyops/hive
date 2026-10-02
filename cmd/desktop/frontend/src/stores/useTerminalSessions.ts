@@ -1,7 +1,9 @@
-import { ref, type Ref } from 'vue'
+import { readonly, ref } from 'vue'
 import { ListSessions } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { Scratch } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/terminalservice'
 import { repoDisplayName } from '../lib/repositories'
+import { defineStore } from './defineStore'
+import { useResource } from './useResource'
 
 /**
  * One row of the terminal sidebar. Slug is the tmux target an attach uses; a
@@ -42,7 +44,7 @@ const SCRATCH_GROUP_KEY = 'scratch'
 
 // Mirrors the TUI's GroupSessionsByRepo: one group per remote, a "(no remote)"
 // group for sessions without one, groups and sessions alphabetical.
-export function groupTerminalSessions(rows: TerminalSessionRow[]): TerminalSessionGroup[] {
+export function groupTerminalSessions(rows: readonly TerminalSessionRow[]): TerminalSessionGroup[] {
   const groups = new Map<string, TerminalSessionGroup>()
   for (const row of rows) {
     let group = groups.get(row.repo)
@@ -75,7 +77,7 @@ function groupDisplayName(remote: string): string {
  * sidebar is unchanged for anyone not using it.
  */
 export function terminalSessionGroups(
-  rows: TerminalSessionRow[],
+  rows: readonly TerminalSessionRow[],
   scratch: TerminalSessionRow | null,
   chats: TerminalSessionRow[],
 ): TerminalSessionGroup[] {
@@ -85,79 +87,57 @@ export function terminalSessionGroups(
   return groups
 }
 
-// Module singletons: the rows are hive's session set, not one view's, and the
-// tree renders the last-known ones while reload() revalidates rather than
-// emptying and popping back in.
-const sessions = ref<TerminalSessionRow[]>([])
-const loading = ref(false)
-const error = ref<string | null>(null)
-// Whether a reload has ever finished. `loading` cannot answer that — it is
-// false both before the first one starts and after it lands — and the tree
-// needs the difference to tell an empty list from one it has not read yet.
-const loaded = ref(false)
+// The rows are hive's session set, not one view's, and the tree renders the
+// last-known ones while reload() revalidates rather than emptying and popping
+// back in. The store does not load itself: terminal mode revalidates on every
+// visit, and the first visit is the first read.
+export const useTerminalSessions = defineStore('terminalSessions', () => {
+  // The scratch terminal as a row of the same shape, so everything keyed on a
+  // session — the pool, the window listings, the keyboard walk — reaches it
+  // without learning a second kind of row. It carries no repo and its slug is
+  // its id, which no hive session id can collide with. Declared by the core
+  // rather than assumed here, because the slug is what an attach addresses.
+  const scratch = ref<TerminalSessionRow | null>(null)
 
-// The scratch terminal as a row of the same shape, so everything keyed on a
-// session — the pool, the window listings, the keyboard walk — reaches it
-// without learning a second kind of row. It carries no repo and its slug is its
-// id, which no hive session id can collide with. Declared by the core rather
-// than assumed here, because the slug is what an attach addresses.
-const scratch = ref<TerminalSessionRow | null>(null)
+  const rows = useResource(
+    async () => {
+      const [list] = await Promise.all([ListSessions(), loadScratch()])
+      return list ?? []
+    },
+    { initial: [] as TerminalSessionRow[], errorFallback: 'Could not list sessions.' },
+  )
 
-async function reload(): Promise<void> {
-  loading.value = true
-  error.value = null
-  try {
-    const [rows] = await Promise.all([ListSessions(), loadScratch()])
-    sessions.value = rows ?? []
-  } catch (e) {
-    // Keep the last-good rows: a failed revalidation reports itself without
-    // collapsing the tree it could not refresh.
-    error.value = e instanceof Error && e.message ? e.message : 'Could not list sessions.'
-  } finally {
-    loading.value = false
-    loaded.value = true
+  // Read once: it is a constant for the run. A failure leaves the tree without
+  // its scratch section rather than without its sessions.
+  async function loadScratch(): Promise<void> {
+    if (scratch.value) return
+    try {
+      const declared = await Scratch()
+      if (!declared?.slug) return
+      scratch.value = { id: declared.slug, name: declared.name, slug: declared.slug, repo: '', state: 'active' }
+    } catch {
+      // Terminal mode reports its own unavailability; a missing scratch row is
+      // not worth failing the session list over.
+    }
   }
-}
 
-// Read once: it is a constant for the run. A failure leaves the tree without its
-// scratch section rather than without its sessions.
-async function loadScratch(): Promise<void> {
-  if (scratch.value) return
-  try {
-    const declared = await Scratch()
-    if (!declared?.slug) return
-    scratch.value = { id: declared.slug, name: declared.name, slug: declared.slug, repo: '', state: 'active' }
-  } catch {
-    // Terminal mode reports its own unavailability; a missing scratch row is
-    // not worth failing the session list over.
+  /**
+   * The remote of the session at `slug`, or '' when there is no such session or
+   * it has none. This is what makes "new session" default to the repository you
+   * are already working in rather than to the first workspace on disk.
+   */
+  function sessionRepository(slug: string): string {
+    if (!slug) return ''
+    return rows.data.value.find((row) => row.slug === slug)?.repo ?? ''
   }
-}
 
-/**
- * The remote of the session at `slug`, or '' when there is no such session or
- * it has none. This is what makes "new session" default to the repository you
- * are already working in rather than to the first workspace on disk.
- */
-export function sessionRepository(slug: string): string {
-  if (!slug) return ''
-  return sessions.value.find((row) => row.slug === slug)?.repo ?? ''
-}
-
-export function useTerminalSessions(): {
-  sessions: Ref<TerminalSessionRow[]>
-  scratch: Ref<TerminalSessionRow | null>
-  loading: Ref<boolean>
-  loaded: Ref<boolean>
-  error: Ref<string | null>
-  reload: () => Promise<void>
-} {
-  return { sessions, scratch, loading, loaded, error, reload }
-}
-
-export function resetTerminalSessionsForTests(): void {
-  sessions.value = []
-  scratch.value = null
-  loading.value = false
-  loaded.value = false
-  error.value = null
-}
+  return {
+    sessions: readonly(rows.data),
+    scratch: readonly(scratch),
+    loading: rows.loading,
+    loaded: rows.loaded,
+    error: rows.error,
+    reload: rows.reload,
+    sessionRepository,
+  }
+})

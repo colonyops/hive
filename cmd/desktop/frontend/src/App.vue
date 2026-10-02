@@ -45,7 +45,7 @@ import { useReleaseNotes } from './composables/useReleaseNotes'
 import { useNewSession } from './composables/useNewSession'
 import { usePopupTerminal } from './stores/usePopupTerminal'
 import { useTasks } from './composables/useTasks'
-import { sessionRepository } from './composables/useTerminalSessions'
+import { useTerminalSessions } from './stores/useTerminalSessions'
 import { useTerminalFont } from './stores/useTerminalFont'
 import {
   closeTerminalPane,
@@ -514,6 +514,7 @@ function requestOpenSettings(page: 'application' | 'profile'): void {
 const { unseenCount: unseenActivity } = useActivity()
 const { activeJobs, hasActive: jobsActive } = useJobs()
 const { stepFontSize: stepTerminalFontSize, resetFontSize: resetTerminalFontSize } = useTerminalFont()
+const { sessionRepository } = useTerminalSessions()
 
 const activityOpen = ref(false)
 

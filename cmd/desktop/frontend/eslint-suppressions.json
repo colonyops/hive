@@ -476,11 +476,6 @@
       "count": 1
     }
   },
-  "src/composables/useTerminalSessions.ts": {
-    "no-restricted-syntax": {
-      "count": 5
-    }
-  },
   "src/composables/useTerminalWindowListings.ts": {
     "no-restricted-syntax": {
       "count": 2

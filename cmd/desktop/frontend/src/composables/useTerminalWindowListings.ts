@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue'
 import type { TerminalClient, WindowState } from '../lib/terminalClient'
-import type { TerminalSessionRow } from './useTerminalSessions'
+import type { TerminalSessionRow } from '../stores/useTerminalSessions'
 
 // The passive per-session window listings behind "Always show windows", keyed
 // by slug. A module singleton for the same reason as useTerminalSessions, and

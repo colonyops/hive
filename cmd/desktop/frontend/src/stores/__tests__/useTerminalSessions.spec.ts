@@ -1,8 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   groupTerminalSessions,
-  resetTerminalSessionsForTests,
-  sessionRepository,
   terminalSessionGroups,
   useTerminalSessions,
   type TerminalSessionRow,
@@ -20,7 +18,6 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 describe('useTerminalSessions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    resetTerminalSessionsForTests()
     mocks.Scratch.mockResolvedValue({ slug: 'Scratch', name: 'Terminals' })
   })
 
@@ -95,7 +92,6 @@ describe('useTerminalSessions', () => {
 describe('sessionRepository', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    resetTerminalSessionsForTests()
   })
 
   it('resolves the remote of the session at a slug', async () => {
@@ -108,14 +104,16 @@ describe('sessionRepository', () => {
         state: 'active',
       },
     ])
-    await useTerminalSessions().reload()
+    const { reload, sessionRepository } = useTerminalSessions()
+    await reload()
 
     expect(sessionRepository('hive-fix-parser')).toBe('https://github.com/hay-kot/hive.git')
   })
 
   it('is empty for an unknown slug, no slug, and a session without a remote', async () => {
     mocks.ListSessions.mockResolvedValue([{ id: '1', name: 'scratch', slug: 'scratch', repo: '', state: 'active' }])
-    await useTerminalSessions().reload()
+    const { reload, sessionRepository } = useTerminalSessions()
+    await reload()
 
     expect(sessionRepository('scratch')).toBe('')
     expect(sessionRepository('gone')).toBe('')

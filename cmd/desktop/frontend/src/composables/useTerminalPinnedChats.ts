@@ -1,7 +1,7 @@
 import { computed, watch, type ComputedRef, type Ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { useAgentSessionsAll } from './useAgentSessionsAll'
-import type { TerminalSessionRow } from './useTerminalSessions'
+import type { TerminalSessionRow } from '../stores/useTerminalSessions'
 
 // Which agent chats the Code view lists above its session tree. A pin is an
 // arrangement of that sidebar rather than a fact about the chat, so it is
