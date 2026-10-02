@@ -96,6 +96,25 @@ func TestWatcher(t *testing.T) {
 		waitForWorkspaceChange(t, changed)
 	})
 
+	t.Run("SkillLibraryWriteFires", func(t *testing.T) {
+		t.Parallel()
+
+		root := t.TempDir()
+		wsDir := filepath.Join(root, "ws")
+		require.NoError(t, os.MkdirAll(wsDir, 0o700))
+		require.NoError(t, os.WriteFile(filepath.Join(wsDir, manifestFileName), []byte(minimalManifest), 0o600))
+
+		changed := make(chan struct{}, 8)
+		w, err := NewWatcher(root, func() { changed <- struct{}{} }, zerolog.Nop())
+		require.NoError(t, err)
+		w.Start()
+		t.Cleanup(w.Close)
+
+		skills := filepath.Join(root, skillLibraryFileName)
+		require.NoError(t, os.WriteFile(skills, []byte("version: 1\npackages:\n  triage:\n    include: [\"*-triage\"]\n"), 0o600))
+		waitForWorkspaceChange(t, changed)
+	})
+
 	t.Run("AgentsMDEditFiresNothing", func(t *testing.T) {
 		t.Parallel()
 

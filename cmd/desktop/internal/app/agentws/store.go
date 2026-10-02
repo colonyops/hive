@@ -73,10 +73,10 @@ func NewStore(root string) *Store {
 // Root returns the workspace root this store was constructed over.
 func (s *Store) Root() string { return s.root }
 
-// Reload re-reads mcps.yaml and every workspace directory under the root. It
-// errors only when the root directory itself cannot be read (and a missing
-// root is not that: it just means nothing has been created yet, so this
-// reports an empty, valid snapshot). Per-file failures never make Reload
+// Reload re-reads mcps.yaml, skills.yml, and every workspace directory under
+// the root. It errors only when the root directory itself cannot be read (and
+// a missing root is not that: it just means nothing has been created yet, so
+// this reports an empty, valid snapshot). Per-file failures never make Reload
 // error; they land in Library()/Statuses() instead.
 func (s *Store) Reload() error {
 	s.mu.Lock()

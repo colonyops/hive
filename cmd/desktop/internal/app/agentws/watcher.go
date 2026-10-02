@@ -19,14 +19,15 @@ import (
 const workspaceWatchDebounce = 250 * time.Millisecond
 
 // Watcher invokes onChange when the workspace root changes on disk: mcps.yaml
-// at the root, or agent-workspace.yaml inside any workspace directory. Unlike
-// ActionsWatcher/FlowsWatcher, which each watch one flat directory, this tree
-// is nested and fsnotify is not recursive, so Watcher maintains two levels of
-// watch: one on root itself (which sees mcps.yaml and workspace directories
-// appearing or disappearing) and one per workspace directory (which sees its
-// agent-workspace.yaml). Nothing watches deeper — an agent writing into
-// docs/, or the generator rewriting CLAUDE.md/.mcp.json/.codex/ on open, is
-// invisible to it, which is the desired behaviour, not an omission.
+// or skills.yml at the root, or agent-workspace.yaml inside any workspace
+// directory. Unlike ActionsWatcher/FlowsWatcher, which each watch one flat
+// directory, this tree is nested and fsnotify is not recursive, so Watcher
+// maintains two levels of watch: one on root itself (which sees the two
+// library files and workspace directories appearing or disappearing) and one
+// per workspace directory (which sees its agent-workspace.yaml). Nothing
+// watches deeper — an agent writing into docs/, or the generator rewriting
+// CLAUDE.md/.mcp.json/.codex/ on open, is invisible to it, which is the
+// desired behaviour, not an omission.
 type Watcher struct {
 	root     string
 	onChange func()
@@ -129,13 +130,13 @@ func (w *Watcher) handle(event fsnotify.Event) bool {
 	return changed
 }
 
-// interesting reports whether a basename is worth a reload: mcps.yaml at the
-// root, or agent-workspace.yaml inside a watched workspace. AGENTS.md is not
-// — nothing consumes it between opens — and neither are the generator's own
-// outputs (CLAUDE.md, .mcp.json, .codex/, .claude/, .agents/, docs/), which
-// live at the same directory level as agent-workspace.yaml.
+// interesting reports whether a basename is worth a reload: mcps.yaml or
+// skills.yml at the root, or agent-workspace.yaml inside a watched workspace.
+// AGENTS.md is not — nothing consumes it between opens — and neither are the
+// generator's own outputs (CLAUDE.md, .mcp.json, .codex/, .claude/, .agents/,
+// docs/), which live at the same directory level as agent-workspace.yaml.
 func (w *Watcher) interesting(name string) bool {
-	return name == libraryFileName || name == manifestFileName
+	return name == libraryFileName || name == skillLibraryFileName || name == manifestFileName
 }
 
 // resync reconciles the per-workspace watches against the directories on
