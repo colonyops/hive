@@ -428,7 +428,7 @@ func (w *Worker) fail(
 			return
 		}
 		w.jobFail(ctx, jobID, execErr.Error())
-		logger.Debug().Err(execErr).Msg("output worker: job failed")
+		logger.Warn().Err(execErr).Int64("command_id", row.ID).Str("key", row.Key).Int64("attempts", row.Attempts+1).Msg("output worker: command failed permanently")
 		// Only the terminal failure reaches the Activity view; retries stay in
 		// the logs so a flaky action doesn't spam the feed.
 		label := row.ActionID
