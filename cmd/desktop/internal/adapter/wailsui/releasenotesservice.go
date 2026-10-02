@@ -36,9 +36,10 @@ type PendingReleaseNotes struct {
 // ReleaseNotesService exposes the embedded changelog: what to show once after
 // an update, and the full history the About pane lists.
 //
-// It takes no channel. Every entry a build carries is either a stable release
-// — which the publish cascade sends to every channel — or this build's own
-// draft, so there is nothing a user on one channel must be kept from seeing.
+// It takes no channel. Every release writes every channel manifest, so each
+// entry a build carries is either a release every channel received or this
+// build's own draft, and there is nothing a user on one channel must be kept
+// from seeing.
 type ReleaseNotesService struct {
 	core    *app.ReleaseNotesService
 	version string

@@ -14,13 +14,16 @@ import (
 // publishGitHubRelease records a published version on GitHub and ships the
 // CLI. It tags the release commit v<version>, pushes the tag, and dispatches
 // the publish workflow, which builds the CLI with GoReleaser, creates the one
-// GitHub release for every program, and deploys the site. It waits for the
-// run to finish.
+// GitHub release for every program, publishes the Homebrew cask, and deploys
+// the site. It waits for the run to finish.
 //
 // The desktop artifacts stay in R2 (decision 0003); the release attaches the
-// CLI's archives only. It is idempotent: an existing tag at the release commit
-// is reused and an existing release is left alone, so it can be re-run to
-// recover a release whose GitHub step failed after the irreversible R2 upload.
+// CLI's archives only. It can be re-run to recover a release whose GitHub
+// step failed after the irreversible R2 upload: an existing tag at the
+// release commit is reused, a run still in progress is watched, a run that
+// succeeded is reported, and a run that failed after GoReleaser created the
+// release is pointed at `gh run rerun --failed`, because a second run would
+// collide with the release's assets.
 //
 // The caller must have already validated that HEAD is the release commit
 // (validatePublishSource); the tag is created there.
@@ -36,15 +39,34 @@ func publishGitHubRelease(ctx context.Context, version releaseVersion) error {
 	if err := ensureOriginTag(ctx, tag, commit); err != nil {
 		return err
 	}
+
+	runs, err := listPublishRuns(ctx)
+	if err != nil {
+		return err
+	}
+	run, found := newestRunFor(runs, tag, time.Time{})
 	exists, err := gitHubReleaseExists(ctx, tag)
 	if err != nil {
 		return err
 	}
-	if exists {
-		fmt.Printf("==> GitHub release %s already exists; leaving it unchanged\n", tag)
+	switch decidePublishStep(run, found, exists) {
+	case stepWatch:
+		fmt.Printf("==> %s run %s for %s is %s\n", publishWorkflow, run.id(), tag, run.Status)
+		return watchWorkflowRun(ctx, run.id(), tag)
+	case stepDone:
+		if found {
+			fmt.Printf("==> %s run %s already published %s\n", publishWorkflow, run.id(), tag)
+		} else {
+			fmt.Printf("==> GitHub release %s already exists; leaving it unchanged\n", tag)
+		}
 		return nil
+	case stepRerun:
+		return fmt.Errorf(
+			"%s run %s for %s ended with %s after it created the GitHub release; fix the cause, then re-run its failed jobs with `gh run rerun %s --failed`",
+			publishWorkflow, run.id(), tag, run.Conclusion, run.id())
+	default:
+		return dispatchPublishWorkflow(ctx, tag, run.CreatedAt)
 	}
-	return dispatchPublishWorkflow(ctx, tag)
 }
 
 func ensureLocalTag(ctx context.Context, tag, commit string) error {
@@ -114,72 +136,133 @@ func gitHubReleaseExists(ctx context.Context, tag string) (bool, error) {
 	return false, fmt.Errorf("gh release view %s: %w", tag, err)
 }
 
-const publishWorkflow = "publish.yml"
+const (
+	publishWorkflow = "publish.yml"
+	// publishRunTitle is the run-name publish.yml sets, which is how a run is
+	// found by its tag.
+	publishRunTitle = "Publish "
+)
+
+type workflowRun struct {
+	ID         int64     `json:"databaseId"`
+	CreatedAt  time.Time `json:"createdAt"`
+	Status     string    `json:"status"`
+	Conclusion string    `json:"conclusion"`
+	Title      string    `json:"displayTitle"`
+}
+
+func (r workflowRun) id() string { return strconv.FormatInt(r.ID, 10) }
+
+type publishStep int
+
+const (
+	stepDispatch publishStep = iota
+	stepWatch
+	stepDone
+	stepRerun
+)
+
+// decidePublishStep picks what the GitHub step still has to do for a tag,
+// from the newest publish run for it (if any) and whether the GitHub release
+// exists. GoReleaser creates the release part-way through a run, before the
+// Homebrew cask and the site deploy, so a release that exists does not mean
+// the run finished, and a failed run that created the release cannot be
+// dispatched again.
+func decidePublishStep(run workflowRun, found, releaseExists bool) publishStep {
+	switch {
+	case found && run.Status != "completed":
+		return stepWatch
+	case found && run.Conclusion == "success":
+		return stepDone
+	case found && releaseExists:
+		return stepRerun
+	case releaseExists:
+		return stepDone
+	default:
+		return stepDispatch
+	}
+}
 
 // dispatchPublishWorkflow starts the publish workflow for tag and waits for
-// it. `gh workflow run` prints no run id, so the run is the newest dispatch of
-// the workflow created after the call.
-func dispatchPublishWorkflow(ctx context.Context, tag string) error {
-	started := time.Now().UTC().Add(-time.Minute)
+// it. previous is when the newest earlier run for the tag was created, or
+// zero, so the run to watch is the one created after it.
+func dispatchPublishWorkflow(ctx context.Context, tag string, previous time.Time) error {
 	fmt.Printf("==> dispatching %s for %s\n", publishWorkflow, tag)
 	if err := runCommand(ctx, "gh", "workflow", "run", publishWorkflow, "--ref", "main", "--field", "tag="+tag); err != nil {
 		return err
 	}
-
-	runID, err := awaitWorkflowRun(ctx, started)
+	run, err := awaitPublishRun(ctx, tag, previous)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("==> watching run %s\n", runID)
-	if err := runCommand(ctx, "gh", "run", "watch", runID, "--exit-status", "--interval", "30"); err != nil {
-		return fmt.Errorf("%w\nthe desktop release is live; after fixing the run, finish with `go run ./cmd/tools/release github %s`",
-			err, strings.TrimPrefix(tag, "v"))
+	return watchWorkflowRun(ctx, run.id(), tag)
+}
+
+func listPublishRuns(ctx context.Context) ([]workflowRun, error) {
+	output, err := commandOutput(ctx, "gh", "run", "list", "--workflow", publishWorkflow,
+		"--event", "workflow_dispatch", "--limit", "20", "--json", "databaseId,createdAt,status,conclusion,displayTitle")
+	if err != nil {
+		return nil, err
 	}
-	return nil
+	var runs []workflowRun
+	if err := json.Unmarshal([]byte(output), &runs); err != nil {
+		return nil, fmt.Errorf("parse gh run list: %w", err)
+	}
+	return runs, nil
 }
 
-type workflowRun struct {
-	ID        int64     `json:"databaseId"`
-	CreatedAt time.Time `json:"createdAt"`
-}
-
-func awaitWorkflowRun(ctx context.Context, after time.Time) (string, error) {
-	for range 20 {
-		output, err := commandOutput(ctx, "gh", "run", "list", "--workflow", publishWorkflow,
-			"--event", "workflow_dispatch", "--limit", "5", "--json", "databaseId,createdAt")
+// awaitPublishRun polls for the run a dispatch created. `gh workflow run`
+// prints no run id, and GitHub lists the run a few seconds after the call.
+func awaitPublishRun(ctx context.Context, tag string, previous time.Time) (workflowRun, error) {
+	// A minute covers a slow API without hiding a dispatch that never ran.
+	const attempts, interval = 20, 3 * time.Second
+	for range attempts {
+		runs, err := listPublishRuns(ctx)
 		if err != nil {
-			return "", err
+			return workflowRun{}, err
 		}
-		if id, ok := newestRunAfter(output, after); ok {
-			return id, nil
+		if run, ok := newestRunFor(runs, tag, previous); ok {
+			return run, nil
 		}
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
-		case <-time.After(3 * time.Second):
+			return workflowRun{}, ctx.Err()
+		case <-time.After(interval):
 		}
 	}
-	return "", fmt.Errorf("the %s run did not appear; find it with `gh run list --workflow %s`", publishWorkflow, publishWorkflow)
+	return workflowRun{}, fmt.Errorf(
+		"the %s run for %s did not appear; find it with `gh run list --workflow %s`, then run `go run ./cmd/tools/release github %s` to watch it",
+		publishWorkflow, tag, publishWorkflow, strings.TrimPrefix(tag, "v"))
 }
 
-func newestRunAfter(output string, after time.Time) (string, bool) {
-	var runs []workflowRun
-	if err := json.Unmarshal([]byte(output), &runs); err != nil {
-		return "", false
-	}
+// newestRunFor returns the newest run for tag created after `after`.
+func newestRunFor(runs []workflowRun, tag string, after time.Time) (workflowRun, bool) {
 	var newest *workflowRun
 	for i := range runs {
-		if runs[i].CreatedAt.Before(after) {
+		run := &runs[i]
+		if run.Title != publishRunTitle+tag || !run.CreatedAt.After(after) {
 			continue
 		}
-		if newest == nil || runs[i].CreatedAt.After(newest.CreatedAt) {
-			newest = &runs[i]
+		if newest == nil || run.CreatedAt.After(newest.CreatedAt) {
+			newest = run
 		}
 	}
 	if newest == nil {
-		return "", false
+		return workflowRun{}, false
 	}
-	return strconv.FormatInt(newest.ID, 10), true
+	return *newest, true
+}
+
+func watchWorkflowRun(ctx context.Context, runID, tag string) error {
+	fmt.Printf("==> watching run %s\n", runID)
+	// A run takes minutes; polling every 30 seconds stays well inside gh's
+	// API rate limit and delays the result by less than a build step.
+	if err := runCommand(ctx, "gh", "run", "watch", runID, "--exit-status", "--interval", "30"); err != nil {
+		return fmt.Errorf(
+			"%w\nthe desktop release is live; fix the cause, then re-run the failed jobs with `gh run rerun %s --failed`, or run `go run ./cmd/tools/release github %s` to watch the run or dispatch a new one",
+			err, runID, strings.TrimPrefix(tag, "v"))
+	}
+	return nil
 }
 
 // releaseNotesHeader opens the GitHub release body. It states plainly that the

@@ -106,7 +106,7 @@ updates:
   channel: beta
 ```
 
-Available channels are Stable, Beta, and Dev. An omitted channel follows the channel used for the current build.
+Available channels are Stable, Beta, and Dev. Every release is published to all three, so each channel currently carries the same version. An omitted channel follows the channel used for the current build.
 
 ## Telemetry
 

@@ -122,7 +122,9 @@ func newReleaseCommand() *cli.Command {
 				ArgsUsage: "<version>",
 				Description: "Pushes the lightweight v<version> tag and dispatches publish.yml, which builds the CLI with GoReleaser, creates the GitHub release " +
 					"with every program's notes, and deploys the site. It waits for the run. Desktop downloads still come from R2 (decision 0003). " +
-					"Idempotent: safe to re-run for a release whose GitHub step failed after the R2 upload. Requires an authenticated gh.",
+					"Safe to re-run for a release whose GitHub step failed after the R2 upload: it reuses the tag, watches a run still in progress, " +
+					"reports one that succeeded, and for a run that failed after it created the release names the `gh run rerun` to run instead. " +
+					"Requires an authenticated gh.",
 				Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 1 {
 						return cli.Exit("expected exactly one version", 2)
@@ -343,8 +345,8 @@ func planRelease(ctx context.Context, candidate string, validateSource bool) (re
 	if err != nil {
 		return releasePlan{}, err
 	}
-	if newest, ok := newestVersion(published); ok && compareVersions(version, newest) <= 0 {
-		return releasePlan{}, fmt.Errorf("candidate %s does not advance the newest published version %s", version, newest)
+	if err := requireAdvances(version, published, "published"); err != nil {
+		return releasePlan{}, fmt.Errorf("candidate %w", err)
 	}
 	if err := validateManifestAdvancement(version, manifests); err != nil {
 		return releasePlan{}, err

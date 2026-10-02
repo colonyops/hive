@@ -35,7 +35,7 @@ curl -fsSL https://hivedesktop.com/install.sh | bash
 
     The installer puts the binary under `~/.local/share/hive` and adds Hive to your application menu. Set `HIVE_HOME` to choose another binary directory. A manually extracted tarball does not add the application-menu entry.
 
-To inspect the installer first, omit `| bash`. Add `-s -- --channel dev` after `bash` to install the dev channel.
+To inspect the installer first, omit `| bash`.
 
 Hive updates itself. You can change the release channel under **Settings ▸ About**. See [Settings](../configuration/settings.md#updates).
 

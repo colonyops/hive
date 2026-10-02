@@ -1,4 +1,6 @@
 name: Build and Publish
+# The release tool finds the run for a tag by this title.
+run-name: Publish ${{ inputs.tag }}
 
 permissions:
   contents: write # for release
@@ -8,6 +10,11 @@ permissions:
 # desktop and pushed the release tag. It builds the CLI from that tag, creates
 # the one GitHub release for every program with the promoted release notes,
 # and deploys the site (ADR every-program-ships-under-one-shared-version).
+#
+# There is no CI job here on purpose. It would run on main, not on the tag,
+# and the desktop is already live when this runs, so an unrelated red main
+# must not hold back the CLI half of the release. The tagged commit passed CI
+# when it merged, and the release run gates it again before it publishes.
 on:
   workflow_dispatch:
     inputs:
@@ -20,18 +27,15 @@ on:
         type: boolean
         default: false
 
-jobs:
-  test:
-    name: "Test"
-    uses: ./.github/workflows/ci.yml
-    permissions:
-      contents: read
-      pull-requests: read
+# A second dispatch for one tag queues behind the first: two GoReleaser runs
+# would race to create the same release.
+concurrency:
+  group: publish-${{ inputs.tag }}
+  cancel-in-progress: false
 
+jobs:
   release:
     name: "Release"
-    needs:
-      - test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

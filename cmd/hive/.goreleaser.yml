@@ -50,10 +50,10 @@ snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
 # The release body is every program's promoted release notes, which the
-# publish workflow passes with --release-notes. A commit log of this
-# repository would also list every desktop commit.
-changelog:
-  disable: true
+# publish workflow passes with --release-notes. GoReleaser then builds no
+# commit log, which in this repository would also list every desktop commit.
+# `changelog.disable` is not the way to say that: it discards the file too and
+# publishes an empty body.
 
 homebrew_casks:
   - repository:

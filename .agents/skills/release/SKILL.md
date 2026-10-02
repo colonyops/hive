@@ -20,12 +20,12 @@ uploads to R2, and writes the stable, beta, and dev manifests. It then pushes
 the `v<version>` tag and dispatches `publish.yml`, which builds the CLI with
 GoReleaser, creates the one GitHub release with every program's notes,
 publishes the Homebrew cask, and deploys the site. The run waits for the
-workflow. That last step is idempotent -- `go run ./cmd/tools/release github
-<version>` re-runs it for a release whose GitHub step failed after the upload.
+workflow. Step 9 covers recovering that last step.
 
-**The release notes pick the version.** Each program's notes are embedded in
-its binary, so an entry written after the build would describe a release that
-cannot display it (ADR release-notes-ship-inside-the-binary). The release
+**The release notes pick the version.** The desktop embeds its notes, and the
+workflow renders the CLI's from the tagged commit, so an entry written after
+the build would describe a release that cannot display it (ADR
+release-notes-ship-inside-the-binary). The release
 publishes the newest version that every program has a promoted entry for and
 that no release has published. Step 4 covers what to do when there is none.
 
@@ -117,12 +117,19 @@ the version, and there is one release line.
 9. Publishing finishes by pushing the `v<version>` tag and dispatching
    `publish.yml`, then watching the run. Do not tag or push by hand. If only
    that step fails (a `gh` outage, a failed workflow run), the desktop release is
-   already live and verified. Fix the cause, then re-run just the idempotent
-   GitHub step:
+   already live and verified. Fix the cause, then run the GitHub step again:
 
    ```bash
    go run ./cmd/tools/release github <version>
    ```
+
+   It reuses the tag, watches a run that is still in progress, reports one
+   that succeeded, and dispatches a new run only when no run has created the
+   GitHub release yet. GoReleaser creates the release before the Homebrew cask
+   publish and the site deploy, so for a run that failed after that point the
+   command names what to run instead: `gh run rerun <run-id> --failed`. Run
+   exactly that; do not dispatch the workflow by hand, because a second run
+   would collide with the release's assets.
 
    Report the version, the pushed tag and its GitHub release URL, the workflow
    run URL, and the desktop artifact URL prefix

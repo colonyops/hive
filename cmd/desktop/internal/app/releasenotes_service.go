@@ -89,12 +89,13 @@ func (s *ReleaseNotesService) Pending(_ context.Context, version string) Pending
 	}
 }
 
-// presentationFor reserves the modal for a launch that crossed a stable
-// release. A prerelease bump carries only the draft, which is the same
-// in-progress list the previous one showed, and prereleases are cut close to
-// daily — a modal on nearly every launch is the nuisance the toast exists to
-// avoid. A range with nothing in it degrades to the toast for a different
-// reason: a modal with an empty body says less than the line "Updated to X".
+// presentationFor reserves the modal for a launch that crossed a release. A
+// launch whose range holds only the draft — an install from before the shared
+// version moving between prereleases, or an unreleased build — gets a toast:
+// the draft is the same in-progress list the previous build showed, and a
+// modal on every such launch is the nuisance the toast exists to avoid. A
+// range with nothing in it degrades to the toast for a different reason: a
+// modal with an empty body says less than the line "Updated to X".
 func presentationFor(entries releasenotes.Entries) string {
 	for _, entry := range entries {
 		if !entry.Draft {

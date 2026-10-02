@@ -78,8 +78,9 @@ func TestPendingIsSilentOnADowngrade(t *testing.T) {
 	assert.Equal(t, PendingNotes{}, service.Pending(t.Context(), "1.2.0"))
 }
 
-// A prerelease bump carries only the draft — the same in-progress list the
-// previous build showed — so it reports the bump in a toast rather than
+// A bump that carries only the draft — an install from before the shared
+// version moving between prereleases — shows the same in-progress list the
+// previous build showed, so it reports the bump in a toast rather than
 // reopening a modal over it.
 func TestPendingUsesAToastWhenOnlyTheDraftIsNew(t *testing.T) {
 	service := newTestReleaseNotes(t, releasenotes.Entries{testDraft()})
@@ -92,9 +93,9 @@ func TestPendingUsesAToastWhenOnlyTheDraftIsNew(t *testing.T) {
 	assert.True(t, pending.Entries[0].Draft, "the draft is still what the toast has to offer")
 }
 
-// Crossing a stable release is the one launch worth a modal, whichever channel
-// the build itself follows — a prerelease user reaching it has arrived at the
-// release they were testing.
+// Crossing a release is the one launch worth a modal, whichever channel the
+// build itself follows — an install still on a prerelease from before the
+// shared version has arrived at the release it was testing.
 func TestPendingUsesAModalWhenAReleaseIsCrossed(t *testing.T) {
 	service := newTestReleaseNotes(t, releasenotes.Entries{testDraft(), releasenotes.Entry{Version: "1.2.0", Body: "notes"}})
 	require.NoError(t, service.Acknowledge(t.Context(), "1.2.0-dev.9"))
@@ -127,8 +128,8 @@ func TestPendingCollectsEverySkippedRelease(t *testing.T) {
 	assert.Equal(t, "1.3.0", pending.Entries[1].Version)
 }
 
-// History is not scoped to a channel: every entry is either a stable release,
-// which the publish cascade sends everywhere, or this build's own draft.
+// History is not scoped to a channel: every entry is either a release, which
+// every channel manifest received, or this build's own draft.
 func TestHistoryIsEverythingTheBuildCarries(t *testing.T) {
 	entries := releasenotes.Entries{testDraft(), releasenotes.Entry{Version: "1.2.0", Body: "notes"}}
 	service := newTestReleaseNotes(t, entries)

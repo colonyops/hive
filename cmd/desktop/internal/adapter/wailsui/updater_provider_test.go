@@ -146,10 +146,11 @@ func TestManifestProviderCheckAcceptsPrefixedCurrent(t *testing.T) {
 	require.Equal(t, "1.4.0", rel.Version)
 }
 
-// TestManifestProviderPrereleaseOrdering exercises the channel cascade
-// semantics from docs/decisions/0004 on the dev channel: a newer dev build
-// updates a dev user, a cascaded beta manifest never downgrades a dev user of
-// the same base version, and a bare stable version converges everyone.
+// TestManifestProviderPrereleaseOrdering exercises the ordering of the
+// prerelease history (ADR release-channels), which installs from before the
+// shared version still follow on the dev channel: a newer dev build updates a
+// dev user, a beta manifest never downgrades a dev user of the same base
+// version, and a bare version converges everyone.
 func TestManifestProviderPrereleaseOrdering(t *testing.T) {
 	devManifest := func(version string) func(base string) string {
 		body := []byte("PK\x03\x04 fake zip")

@@ -8,20 +8,84 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	"github.com/colonyops/hive/internal/releasenotes"
 )
 
-// The gate that stands between the drafts and a release: every program's
-// entry has to be promoted, under the version's own name, before publishing.
-func TestValidateChangelogEntryRequiresAPromotedEntry(t *testing.T) {
-	err := validateChangelogEntry(mustVersion(t, "99.0.0"))
-	if err == nil {
-		t.Fatal("expected a release with no entry to be rejected")
+func embeddedProduct(name string, entries map[string]string) product {
+	fsys := fstest.MapFS{}
+	for file, contents := range entries {
+		fsys[file] = &fstest.MapFile{Data: []byte(contents)}
 	}
-	if !strings.Contains(err.Error(), "changelog:promote") {
-		t.Fatalf("error should name the promote command, got %q", err)
+	return product{name: name, title: name, changelog: fsys}
+}
+
+const (
+	entryWithSummary    = "---\nversion: 0.60.0\ndate: 2026-10-01\nsummary: A line.\n---\n\n- a thing\n"
+	entryWithoutSummary = "---\nversion: 0.60.0\ndate: 2026-10-01\nsummary: \"\"\n---\n\n- a thing\n"
+)
+
+// The gate that stands between the drafts and a release: every program's
+// entry has to be promoted, under the version's own name and with a summary,
+// before publishing.
+func TestReleaseEntry(t *testing.T) {
+	version := mustVersion(t, "0.60.0")
+
+	entry, err := releaseEntry(embeddedProduct("ok", map[string]string{"0.60.0.md": entryWithSummary}), version)
+	if err != nil || entry.Summary != "A line." || entry.Body != "- a thing" {
+		t.Fatalf("releaseEntry() = %+v, %v", entry, err)
+	}
+
+	_, err = releaseEntry(embeddedProduct("blank", map[string]string{"0.60.0.md": entryWithoutSummary}), version)
+	if err == nil || !strings.Contains(err.Error(), "has no summary") {
+		t.Fatalf("expected an entry without a summary to be refused, got %v", err)
+	}
+
+	_, err = releaseEntry(embeddedProduct("missing", nil), version)
+	if err == nil || !strings.Contains(err.Error(), "changelog:promote") {
+		t.Fatalf("expected a missing entry to name the promote command, got %v", err)
+	}
+}
+
+func TestValidateEntriesChecksEveryProduct(t *testing.T) {
+	version := mustVersion(t, "0.60.0")
+	products := []product{
+		embeddedProduct("first", map[string]string{"0.60.0.md": entryWithSummary}),
+		embeddedProduct("second", nil),
+	}
+
+	err := validateEntries(products, version)
+	if err == nil || !strings.Contains(err.Error(), "no second changelog entry") {
+		t.Fatalf("expected the second product's missing entry to be refused, got %v", err)
+	}
+	if err := validateEntries(products[:1], version); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRequireAdvances(t *testing.T) {
+	taken := []releaseVersion{mustParseVersion(t, "0.59.0"), mustParseVersion(t, "0.60.0")}
+	for _, version := range []string{"0.60.0", "0.59.1"} {
+		if err := requireAdvances(mustVersion(t, version), taken, "published"); err == nil {
+			t.Fatalf("expected %s to be refused", version)
+		}
+	}
+	if err := requireAdvances(mustVersion(t, "0.60.1"), taken, "published"); err != nil {
+		t.Fatal(err)
+	}
+	if err := requireAdvances(mustVersion(t, "0.1.0"), nil, "published"); err != nil {
+		t.Fatalf("anything advances nothing, got %v", err)
+	}
+}
+
+// A heading inside a code block is text, not a section.
+func TestDemoteHeadingsLeavesFencedCodeAlone(t *testing.T) {
+	body := "## Added\n\n- a thing\n\n```sh\n# a comment\n```\n\n## Fixed\n\n- another"
+	want := "### Added\n\n- a thing\n\n```sh\n# a comment\n```\n\n### Fixed\n\n- another"
+	if got := demoteHeadings(body); got != want {
+		t.Fatalf("demoteHeadings() = %q, want %q", got, want)
 	}
 }
 
@@ -71,6 +135,11 @@ func TestSelectPendingVersion(t *testing.T) {
 			name:       "an entry that is already published is not pending",
 			changelogs: []releasenotes.Entries{changelog("0.60.0"), changelog("0.60.0")},
 			wantErr:    "no promoted release notes",
+		},
+		{
+			name:       "the newest of several pending versions",
+			changelogs: []releasenotes.Entries{changelog("0.62.0", "0.61.0"), changelog("0.61.0", "0.62.0")},
+			want:       "0.62.0",
 		},
 	}
 	for _, test := range tests {

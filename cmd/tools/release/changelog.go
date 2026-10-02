@@ -7,17 +7,19 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/colonyops/hive/internal/releasenotes"
 )
 
-// releaseEntry returns p's entry for version, as p's binary embeds it.
+// releaseEntry returns p's entry for version, read through p's embed package:
+// the tree this tool was compiled from, which at the release commit is the
+// tree the binaries are built from.
 //
 // Every release has an entry per program, promoted from the drafts before the
-// release commit. Reading through the embed means the GitHub release body and
-// the update manifest say what the binary itself will say.
+// release commit.
 func releaseEntry(p product, version releaseVersion) (releasenotes.Entry, error) {
 	entries, err := p.embedded()
 	if err != nil {
@@ -41,9 +43,14 @@ func notesFor(version releaseVersion) (releasenotes.Entry, error) {
 }
 
 // validateChangelogEntry is the release gate. It runs with the other fail-fast
-// checks, before anything is built: notes are embedded in the binaries, so an
-// entry written after the build would describe a release that cannot show it.
+// checks, before anything is built: the desktop embeds its notes, and the
+// publish workflow renders the CLI's from the tagged commit, so an entry
+// written after the build would describe a release that cannot show it.
 func validateChangelogEntry(version releaseVersion) error {
+	return validateEntries(products, version)
+}
+
+func validateEntries(products []product, version releaseVersion) error {
 	for _, p := range products {
 		if _, err := releaseEntry(p, version); err != nil {
 			return err
@@ -86,11 +93,16 @@ func renderReleaseNotesBody(version releaseVersion, downloadBase string, notes [
 }
 
 // demoteHeadings moves an entry's sections one level down, under the
-// program's heading.
+// program's heading. A line inside a fenced code block is left alone.
 func demoteHeadings(body string) string {
 	lines := strings.Split(body, "\n")
+	fenced := false
 	for i, line := range lines {
-		if strings.HasPrefix(line, "#") {
+		if strings.HasPrefix(line, "```") {
+			fenced = !fenced
+			continue
+		}
+		if !fenced && strings.HasPrefix(line, "#") {
 			lines[i] = "#" + line
 		}
 	}
@@ -101,22 +113,62 @@ func demoteHeadings(body string) string {
 // version it bumps the newest one from the same sources planRelease uses,
 // tags and the live manifests, because the R2 history predates this
 // repository.
+//
+// An entry that is promoted but not yet released counts as well. The release
+// publishes the newest pending version, so an entry below it would never be
+// tagged, yet the binaries would show it as a release that happened.
 func promoteTargetVersion(ctx context.Context, explicit string, level bumpLevel) (releaseVersion, error) {
 	published, _, err := releaseVersions(ctx)
 	if err != nil {
 		return releaseVersion{}, err
 	}
+	promoted, err := promotedVersions(products)
+	if err != nil {
+		return releaseVersion{}, err
+	}
+	taken := slices.Concat(published, promoted)
 	if explicit == "" {
-		return nextVersion(published, level), nil
+		return nextVersion(taken, level), nil
 	}
 	version, err := parsePublishVersion(explicit)
 	if err != nil {
 		return releaseVersion{}, fmt.Errorf("invalid version %q: %w", explicit, err)
 	}
-	if newest, ok := newestVersion(published); ok && compareVersions(version, newest) <= 0 {
-		return releaseVersion{}, fmt.Errorf("%s does not advance the newest published version %s", version, newest)
+	if err := requireAdvances(version, taken, "published or promoted"); err != nil {
+		return releaseVersion{}, err
 	}
 	return version, nil
+}
+
+// promotedVersions reads every entry version in the worktree's changelogs.
+func promotedVersions(products []product) ([]releaseVersion, error) {
+	var versions []releaseVersion
+	for _, p := range products {
+		entries, err := p.load(p.onDisk())
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			if entry.Draft {
+				continue
+			}
+			version, err := parsePublishVersion(entry.Version)
+			if err != nil {
+				return nil, fmt.Errorf("%s changelog entry %s: %w", p.name, entry.Version, err)
+			}
+			versions = append(versions, version)
+		}
+	}
+	return versions, nil
+}
+
+// requireAdvances refuses a version that is not newer than every version in
+// taken. what names what taken holds, for the error.
+func requireAdvances(version releaseVersion, taken []releaseVersion, what string) error {
+	if newest, ok := newestVersion(taken); ok && compareVersions(version, newest) <= 0 {
+		return fmt.Errorf("%s does not advance the newest %s version %s", version, what, newest)
+	}
+	return nil
 }
 
 // pendingVersion is the version the next release publishes: the newest one
