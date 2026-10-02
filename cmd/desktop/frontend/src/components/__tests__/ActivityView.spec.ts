@@ -4,7 +4,7 @@ import { ref } from 'vue'
 import type { Event as ActivityEvent } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/activity/models'
 
 const markSeen = vi.fn()
-const load = vi.fn()
+const reload = vi.fn()
 const events = ref<ActivityEvent[]>([])
 
 const openFromActivity = vi.fn()
@@ -12,12 +12,12 @@ vi.mock('../../composables/useNewSession', () => ({
   useNewSession: () => ({ openFromActivity }),
 }))
 
-vi.mock('../../composables/useActivity', () => ({
+vi.mock('../../stores/useActivity', () => ({
   useActivity: () => ({
     events,
     loading: ref(false),
     error: ref<string | null>(null),
-    load,
+    reload,
     markSeen,
   }),
 }))

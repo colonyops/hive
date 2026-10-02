@@ -58,7 +58,7 @@ export const ACTIVITY_FILTERS: ActivityFilter[] = [
 
 // filterCounts is the per-filter badge shown in the segmented control: how many
 // of the currently-loaded events each filter would match (All = every event).
-export function filterCounts(events: ActivityEvent[]): Record<ActivityFilterId, number> {
+export function filterCounts(events: readonly ActivityEvent[]): Record<ActivityFilterId, number> {
   const counts: Record<ActivityFilterId, number> = { all: 0, session: 0, auto_action: 0, refresh: 0, error: 0 }
   for (const event of events) {
     for (const filter of ACTIVITY_FILTERS) {
@@ -116,7 +116,7 @@ export interface ActivityDayGroup {
 // groupEventsByDay buckets already-newest-first events into calendar days,
 // labeling the two most recent as Today/Yesterday. `now` is injectable so tests
 // don't depend on the wall clock.
-export function groupEventsByDay(events: ActivityEvent[], now: Date = new Date()): ActivityDayGroup[] {
+export function groupEventsByDay(events: readonly ActivityEvent[], now: Date = new Date()): ActivityDayGroup[] {
   const today = dayKey(now)
   const yesterday = dayKey(new Date(now.getTime() - 24 * 60 * 60 * 1000))
 

@@ -2,7 +2,7 @@ import type { Ref } from 'vue'
 import type { RecordInput } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/activity/models'
 import type { NotifyInput } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { Notify as NotifyNative } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/notificationservice'
-import { useActivity } from './useActivity'
+import { useActivity } from '../stores/useActivity'
 import {
   useNotificationSettings,
   type NotificationDelivery,

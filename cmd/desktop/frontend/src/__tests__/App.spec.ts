@@ -7,7 +7,7 @@ import { resetNewSessionForTests } from '../composables/useNewSession'
 import { resetToastsForTests } from '../composables/useToasts'
 import { requestedEditorFilter } from '../keybindings/keymapRows'
 import { useReportDialog } from '../composables/useReportDialog'
-import { useActivity } from '../composables/useActivity'
+import { useActivity } from '../stores/useActivity'
 import { resetFlowsSessionForTests, useFlowsSession } from '../pipeline/composables/useFlowsSession'
 import { resetNotificationSettingsForTests } from '../composables/useNotificationSettings'
 import { resetPopupTerminalForTests, usePopupTerminal } from '../composables/usePopupTerminal'
@@ -3068,7 +3068,7 @@ describe('App', () => {
     mocks.FindItems.mockResolvedValue([linkedItem])
     mocks.Feed.mockResolvedValue('personal/desktop')
     mocks.ListByFeed.mockResolvedValue([linkedItem])
-    await useActivity().load()
+    await useActivity().reload()
 
     const { wrapper, router } = await mountAppWithRouter()
     await wrapper.get('[data-testid="titlebar-activity"]').trigger('click')

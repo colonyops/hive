@@ -318,11 +318,6 @@
       "count": 1
     }
   },
-  "src/composables/useActivity.ts": {
-    "no-restricted-syntax": {
-      "count": 5
-    }
-  },
   "src/composables/useAgentCanvasRoute.ts": {
     "no-restricted-syntax": {
       "count": 1

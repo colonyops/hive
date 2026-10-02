@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   Echo: vi.fn(),
 }))
 
-vi.mock('../../composables/useActivity', () => ({
+vi.mock('../../stores/useActivity', () => ({
   useActivity: () => ({ record: mocks.record }),
 }))
 vi.mock('../../composables/useToasts', () => ({

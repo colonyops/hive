@@ -11,7 +11,7 @@ import { computed, onMounted, ref } from 'vue'
 import IconExternalLink from '~icons/lucide/external-link'
 import IconSearch from '~icons/lucide/search'
 import IconX from '~icons/lucide/x'
-import { useActivity } from '../composables/useActivity'
+import { useActivity } from '../stores/useActivity'
 import { useNewSession } from '../composables/useNewSession'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 import ViewHeader from './settings/ViewHeader.vue'
@@ -45,7 +45,7 @@ function retry(metadata: { [_ in string]?: string } | null): void {
   void retrySession(metadata)
 }
 
-const { events, loading, error, load, markSeen } = useActivity()
+const { events, loading, error, reload, markSeen } = useActivity()
 
 const activeFilter = ref<ActivityFilterId>('all')
 const search = ref('')
@@ -98,7 +98,7 @@ function countClass(filterId: ActivityFilterId): string {
 useEscapeToClose(() => emit('close'))
 
 onMounted(() => {
-  void load()
+  void reload()
 })
 </script>
 
@@ -165,7 +165,7 @@ onMounted(() => {
         <span data-testid="activity-error">Couldn't load activity — {{ error }}</span>
         <button
           class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text"
-          @click="load"
+          @click="reload"
         >
           Retry
         </button>
