@@ -1,0 +1,91 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+        "CreateInput": {
+            "type": "object",
+            "description": "CreateInput is one node of a bulk-create tree: the root epic or any item\nbeneath it. The tree is walked breadth first and ids are generated on\ncreation, so a node names nothing by id.",
+            "additionalProperties": false,
+            "properties": {
+                "blockers": {
+                    "type": "array",
+                    "description": "Refs of nodes in this tree that must complete before this one.",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "children": {
+                    "type": "array",
+                    "description": "Child items, created in the same call.",
+                    "items": {
+                        "$ref": "#/$defs/CreateInput"
+                    }
+                },
+                "desc": {
+                    "type": "string"
+                },
+                "ref": {
+                    "type": "string",
+                    "description": "Local label other nodes name in blockers; not stored.",
+                    "pattern": "^[a-z0-9][a-z0-9_-]*$"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 1
+                },
+                "type": {
+                    "enum": [
+                        "epic",
+                        "task"
+                    ]
+                }
+            },
+            "required": [
+                "title",
+                "type"
+            ]
+        }
+    },
+    "type": "object",
+    "description": "CreateInput is one node of a bulk-create tree: the root epic or any item\nbeneath it. The tree is walked breadth first and ids are generated on\ncreation, so a node names nothing by id.",
+    "additionalProperties": false,
+    "properties": {
+        "blockers": {
+            "type": "array",
+            "description": "Refs of nodes in this tree that must complete before this one.",
+            "items": {
+                "type": "string"
+            }
+        },
+        "children": {
+            "type": "array",
+            "description": "Child items, created in the same call.",
+            "items": {
+                "$ref": "#/$defs/CreateInput"
+            }
+        },
+        "desc": {
+            "type": "string"
+        },
+        "ref": {
+            "type": "string",
+            "description": "Local label other nodes name in blockers; not stored.",
+            "pattern": "^[a-z0-9][a-z0-9_-]*$"
+        },
+        "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1
+        },
+        "type": {
+            "enum": [
+                "epic",
+                "task"
+            ]
+        }
+    },
+    "required": [
+        "title",
+        "type"
+    ]
+}

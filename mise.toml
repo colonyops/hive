@@ -31,6 +31,10 @@ uv = "0.12.13"
 # GitHub Tools
 actionlint = "1.7.12"
 
+# Schemas (internal/schema). cue runs at generate time only: the binaries
+# embed the JSON Schema it exports and never link cue itself.
+cue = "0.17.1"
+
 # A tool install wires the git hooks and prepares this worktree's isolated
 # desktop instance. The enter hook only fills a missing launch.env.
 [hooks]
@@ -78,9 +82,15 @@ sources = [
 outputs = { auto = true }
 run = "sqlc generate"
 
+[tasks."generate:schemas"]
+description = "Export JSON Schema, Go types, the catalog, and the docs copies from internal/schema/*.cue"
+sources = ["internal/schema/**/*.cue", "cmd/tools/schemagen/*.go"]
+outputs = { auto = true }
+run = "go run ./cmd/tools/schemagen"
+
 [tasks.generate]
 description = "Run all code generators"
-depends = ["generate:enums", "generate:sqlc"]
+depends = ["generate:enums", "generate:sqlc", "generate:schemas"]
 sources = ["internal/core/eventbus/events.go"]
 outputs = ["internal/core/eventbus/eventbus.gen.go"]
 run = "go generate ./..."
@@ -127,15 +137,15 @@ go mod tidy -diff || {
 """
 
 [tasks."check:generate"]
-description = "Verify generated code (enums, sqlc, gobusgen) matches its sources"
+description = "Verify generated code (enums, sqlc, gobusgen, schemas) matches its sources"
 run = """
 mise run --force generate
 # -N registers files the generators created that the checkout lacks: plain
 # git diff cannot see an untracked file, so a brand-new enum or query output
 # would pass unnoticed. The diff is against the index, not HEAD, so it also
 # answers correctly as a pre-commit hook.
-git add -N internal cmd/desktop/internal
-git diff --exit-code -- '*_enum.go' '*.gen.go' 'internal/data/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' || {
+git add -N internal cmd/desktop/internal docs/docs/schemas
+git diff --exit-code -- '*_enum.go' '*.gen.go' 'internal/data/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' 'internal/schema/**/*.json' 'docs/docs/schemas/*.json' || {
   echo "Generated files are out of date. Run 'mise run generate' and commit the result." >&2
   exit 1
 }

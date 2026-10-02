@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/schema"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/timeutil"
 	"github.com/rs/zerolog/log"
@@ -100,8 +102,9 @@ func (cmd *HoneycombCmd) createCmd() *cli.Command {
 		flagType     string
 		flagDesc     string
 		flagParentID string
+		flagDryRun   bool
 	)
-	bulk := iojson.FileReader[hc.CreateInput]{}
+	bulk := iojson.FileReader[json.RawMessage]{}
 	return &cli.Command{
 		Name:      "create",
 		Aliases:   []string{"new", "add"},
@@ -143,14 +146,20 @@ To express blocker dependencies between items in a bulk create, use "ref" and "b
   }
 The "ref" field is a local label (not stored); "blockers" lists refs that must complete first.
 
+Bulk input is checked against the hc.tree JSON Schema and the tree rules (the
+root is an epic, refs are unique, every blocker names a ref, no cycles) before
+anything is created. --dry-run runs those checks and stops.
+
 Examples:
   hive hc create "Implement auth" --type task --parent hc-abc123
-  echo '{"title":"Auth System","type":"epic","children":[...]}' | hive hc create
-  hive hc create --file epic.json`,
+  echo '{"title":"Auth System","type":"epic","children":[{"title":"JWT middleware","type":"task"}]}' | hive hc create
+  hive hc create --file epic.json
+  hive hc create --file epic.json --dry-run`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: "item type (epic, task)", Value: "task", Destination: &flagType},
 			&cli.StringFlag{Name: "desc", Aliases: []string{"d"}, Usage: "item description", Destination: &flagDesc},
 			&cli.StringFlag{Name: "parent", Aliases: []string{"p"}, Usage: "parent item ID", Destination: &flagParentID},
+			&cli.BoolFlag{Name: "dry-run", Usage: "validate bulk JSON and report, without creating anything", Destination: &flagDryRun},
 			bulk.Flag(),
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
@@ -160,9 +169,16 @@ Examples:
 			}
 
 			if c.NArg() == 0 {
-				input, err := bulk.Read()
+				raw, err := bulk.Read()
 				if err != nil {
 					return fmt.Errorf("read input: %w", err)
+				}
+				input, err := decodeCreateInput(raw)
+				if err != nil {
+					return fmt.Errorf("invalid input: %w", err)
+				}
+				if flagDryRun {
+					return iojson.WriteLine(c.Root().Writer, dryRunResult{Valid: true, Items: input.Count()})
 				}
 				items, err := cmd.app.Honeycomb.CreateBulk(ctx, repoKey, input)
 				if err != nil {
@@ -198,6 +214,33 @@ Examples:
 			return iojson.WriteLine(c.Root().Writer, item)
 		},
 	}
+}
+
+// dryRunResult is what `hc create --dry-run` prints for input that passed.
+type dryRunResult struct {
+	Valid bool `json:"valid"`
+	Items int  `json:"items"`
+}
+
+// decodeCreateInput checks a bulk document against the hc.tree schema, then
+// decodes it and applies the tree rules, so an agent sees every shape error
+// with its path before any structural one.
+func decodeCreateInput(raw json.RawMessage) (hc.CreateInput, error) {
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return hc.CreateInput{}, err
+	}
+	if err := schema.Validate("hc.tree", doc); err != nil {
+		return hc.CreateInput{}, err
+	}
+	var input hc.CreateInput
+	if err := json.Unmarshal(raw, &input); err != nil {
+		return hc.CreateInput{}, err
+	}
+	if err := hive.ValidateCreateInput(input); err != nil {
+		return hc.CreateInput{}, err
+	}
+	return input, nil
 }
 
 func (cmd *HoneycombCmd) listCmd() *cli.Command {

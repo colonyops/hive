@@ -50,6 +50,8 @@ pre-commit:
         - "cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go"
         - "cmd/desktop/internal/app/agentws/workspace.go"
         - "cmd/desktop/internal/app/schedule/spec.go"
+        - "internal/schema/**/*.cue"
+        - "cmd/tools/schemagen/*.go"
       run: mise run check:generate
 
 # Push is the meaningful boundary for headless work — the wrap/PR step — so the

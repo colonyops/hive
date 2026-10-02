@@ -1,0 +1,8 @@
+[
+  {
+    "id": "hc.tree",
+    "title": "hc bulk-create tree",
+    "description": "The JSON `hive hc create` reads from stdin or --file: an epic and its children, with local refs and blockers.",
+    "doc": "/cli/getting-started/task-tracking/"
+  }
+]

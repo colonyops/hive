@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/hay-kot/criterio"
 	"github.com/rs/zerolog"
 )
 
@@ -107,41 +108,101 @@ func walkCreateInputWithEntry(input hc.CreateInput, repoKey, epicID, parentID st
 	}
 }
 
-// validateBatchBlockerRefs checks that all Blockers refs in the batch refer to known refs
-// and that no in-batch cycles exist. It also builds and returns the resolved edge list.
-func validateBatchBlockerRefs(entries []createInputEntry) ([][2]string, error) {
+// ValidateCreateInput applies every rule CreateBulk enforces before it touches
+// the store: the root is an epic, refs are unique, every blocker names a ref
+// in the tree, and the blocker graph has no cycle. Errors carry criterio paths
+// ("type", "children[2].ref", "children[1].blockers[0]") so a caller can show
+// an agent exactly where its document is wrong.
+func ValidateCreateInput(input hc.CreateInput) error {
+	var errs criterio.FieldErrorsBuilder
+	if input.Type != hc.ItemTypeEpic {
+		errs = errs.Append("type", fmt.Errorf("root item must be of type epic, got %q", input.Type))
+	}
+
+	declaredAt := make(map[string]string)
+	for path, node := range walkCreateInput(input, "") {
+		if node.Ref == "" {
+			continue
+		}
+		if prev, dup := declaredAt[node.Ref]; dup {
+			errs = errs.Append(fieldPath(path, "ref"), fmt.Errorf("duplicate ref %q (first declared at %s)", node.Ref, prev))
+			continue
+		}
+		declaredAt[node.Ref] = path
+	}
+
+	// A node without a ref cannot be named by anyone, so its path stands in as
+	// its identity in the edge list.
+	var edges [][2]string
+	for path, node := range walkCreateInput(input, "") {
+		self := node.Ref
+		if self == "" {
+			self = path
+		}
+		for i, blocker := range node.Blockers {
+			field := fieldPath(path, fmt.Sprintf("blockers[%d]", i))
+			if _, ok := declaredAt[blocker]; !ok {
+				errs = errs.Append(field, fmt.Errorf("unknown blocker ref %q", blocker))
+				continue
+			}
+			if hc.WouldCycle(edges, blocker, self) {
+				errs = errs.Append(field, fmt.Errorf("blocker %q would create a cycle", blocker))
+				continue
+			}
+			edges = append(edges, [2]string{blocker, self})
+		}
+	}
+	return errs.ToError()
+}
+
+// walkCreateInput yields every node with its criterio path, depth first: ""
+// for the root, then "children[0]", "children[0].children[1]", and so on.
+func walkCreateInput(input hc.CreateInput, path string) iter.Seq2[string, hc.CreateInput] {
+	return func(yield func(string, hc.CreateInput) bool) {
+		if !yield(path, input) {
+			return
+		}
+		for i, child := range input.Children {
+			childPath := fieldPath(path, fmt.Sprintf("children[%d]", i))
+			for p, n := range walkCreateInput(child, childPath) {
+				if !yield(p, n) {
+					return
+				}
+			}
+		}
+	}
+}
+
+func fieldPath(path, field string) string {
+	if path == "" {
+		return field
+	}
+	return path + "." + field
+}
+
+// blockerEdges maps each blocker ref to the generated id of the node that
+// declared it. ValidateCreateInput has already proven every ref resolves.
+func blockerEdges(entries []createInputEntry) [][2]string {
 	refToID := make(map[string]string, len(entries))
 	for _, e := range entries {
 		if e.input.Ref != "" {
 			refToID[e.input.Ref] = e.item.ID
 		}
 	}
-
 	var edges [][2]string
 	for _, e := range entries {
 		for _, blocker := range e.input.Blockers {
-			blockerID, ok := refToID[blocker]
-			if !ok {
-				return nil, fmt.Errorf("unknown blocker ref %q", blocker)
-			}
-			edges = append(edges, [2]string{blockerID, e.item.ID})
+			edges = append(edges, [2]string{refToID[blocker], e.item.ID})
 		}
 	}
-
-	// Check for in-batch cycles by testing each candidate edge against the full set.
-	for _, edge := range edges {
-		if hc.WouldCycle(edges, edge[0], edge[1]) {
-			return nil, fmt.Errorf("in-batch cycle detected involving ref edges")
-		}
-	}
-	return edges, nil
+	return edges
 }
 
-// CreateBulk walks a CreateInput tree (BFS) and persists all items in one
-// atomic call. The root node must be of type epic.
+// CreateBulk validates a CreateInput tree, walks it (BFS), and persists all
+// items in one atomic call.
 func (s *HoneycombService) CreateBulk(ctx context.Context, repoKey string, input hc.CreateInput) ([]hc.Item, error) {
-	if input.Type != hc.ItemTypeEpic {
-		return nil, fmt.Errorf("root item must be of type epic, got %q", input.Type)
+	if err := ValidateCreateInput(input); err != nil {
+		return nil, err
 	}
 
 	now := time.Now()
@@ -149,11 +210,7 @@ func (s *HoneycombService) CreateBulk(ctx context.Context, repoKey string, input
 	for entry := range walkCreateInputWithEntry(input, repoKey, "", "", 0, now) {
 		entries = append(entries, entry)
 	}
-
-	edges, err := validateBatchBlockerRefs(entries)
-	if err != nil {
-		return nil, fmt.Errorf("validate blocker refs: %w", err)
-	}
+	edges := blockerEdges(entries)
 
 	items := make([]hc.Item, len(entries))
 	for i, e := range entries {

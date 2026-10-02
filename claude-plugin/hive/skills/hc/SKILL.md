@@ -107,6 +107,27 @@ All items are output as JSON lines (one per line):
 ...
 ```
 
+To order sibling tasks, give a task a `ref` (a local label, not stored) and list the refs it waits on in `blockers`. `hive hc next` skips a task whose blockers are not done.
+
+```bash
+echo '{
+  "title": "Auth System",
+  "type": "epic",
+  "children": [
+    {"ref": "jwt", "title": "JWT middleware", "type": "task"},
+    {"ref": "db", "title": "User schema migration", "type": "task"},
+    {"title": "Login endpoint", "type": "task", "blockers": ["jwt", "db"]}
+  ]
+}' | hive hc create
+```
+
+Input is validated against the `hc.tree` JSON Schema and the tree rules before anything is created: unknown keys, a non-epic root, duplicate refs, unknown blockers, and cycles are all rejected with the path of the offending field. Add `--dry-run` to run only those checks:
+
+```bash
+hive hc create --file epic.json --dry-run
+# {"valid":true,"items":4}
+```
+
 ### Create a single item
 
 ```bash
@@ -138,6 +159,7 @@ Single-item mode (title as positional arg):
 
 Bulk mode (no positional arg, reads JSON from stdin or `--file`):
 - `--file <path>` — read JSON from file instead of stdin
+- `--dry-run` — validate the document and print `{"valid":true,"items":N}` without creating anything
 
 ### `hive hc list [epic-id]`
 
