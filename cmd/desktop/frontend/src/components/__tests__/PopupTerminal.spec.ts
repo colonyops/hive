@@ -18,6 +18,7 @@ const xterm = vi.hoisted(() => {
     options: Record<string, unknown> = {}
     write = vi.fn()
     paste = vi.fn((text: string) => this.type(text))
+    input = vi.fn((data: string) => this.type(data))
     // Focusing an element inside a display:none subtree silently does nothing,
     // so what matters is not that focus() was called but that the pane was on
     // screen when it was.
@@ -32,6 +33,7 @@ const xterm = vi.hoisted(() => {
     resize = vi.fn()
     private dataHandlers: ((data: string) => void)[] = []
     private resizeHandlers: ((size: { cols: number; rows: number }) => void)[] = []
+    private keyHandler: ((event: KeyboardEvent) => boolean) | null = null
 
     constructor(options: Record<string, unknown> = {}) {
       this.options = { ...options }
@@ -54,6 +56,14 @@ const xterm = vi.hoisted(() => {
 
     reflow(cols: number, rows: number): void {
       for (const handler of this.resizeHandlers) handler({ cols, rows })
+    }
+
+    attachCustomKeyEventHandler(handler: (event: KeyboardEvent) => boolean) {
+      this.keyHandler = handler
+    }
+
+    press(event: Partial<KeyboardEvent>): boolean {
+      return this.keyHandler?.({ type: 'keydown', preventDefault: () => {}, ...event } as KeyboardEvent) ?? true
     }
   }
 
@@ -373,6 +383,18 @@ describe('PopupTerminal', () => {
     xterm.FakeTerminal.instances[0].type('ls\n')
     expect(socket.sent[0][0]).toBe(0x10)
     expect(new TextDecoder().decode(socket.sent[0].subarray(1))).toBe('ls\n')
+  })
+
+  it('forwards Shift+Enter to the shell as a CSI u modified-enter', async () => {
+    await mountPanel()
+    usePopupTerminal().show()
+    await flushPromises()
+
+    const socket = FakeSocket.instances[0]
+    expect(xterm.FakeTerminal.instances[0].press({ key: 'Enter', shiftKey: true })).toBe(false)
+
+    expect(socket.sent[0][0]).toBe(0x10)
+    expect(new TextDecoder().decode(socket.sent[0].subarray(1))).toBe('\x1b[13;2u')
   })
 
   // Hiding is a view change: the shell has to survive it, or the shortcut that

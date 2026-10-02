@@ -41,6 +41,7 @@ import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { isEditableTarget } from '../lib/isEditableTarget'
 import { installTerminalImages } from '../lib/terminalImages'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
+import { claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { watchTailPin } from '../lib/terminalTail'
 import type { AgentSession, AgentWorkspace, WorkspaceEditRequest } from '../lib/agentWorkspacesClient'
@@ -626,6 +627,7 @@ function buildPane(): Terminal | null {
   const fitAddon = markRaw(new FitAddon())
   created.loadAddon(fitAddon)
   created.loadAddon(markRaw(new WebLinksAddon((_event, uri) => openLink(uri))))
+  created.attachCustomKeyEventHandler((event) => !claimsShiftEnter(created, event))
   created.open(paneHost.value)
   loadRenderer(created)
   term.value = created

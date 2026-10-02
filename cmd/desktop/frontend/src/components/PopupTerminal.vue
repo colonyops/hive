@@ -15,6 +15,7 @@ import { decodeFrame, encodeInputFrames, type PopupTerminalState } from '../lib/
 import { loadTerminalFaces, terminalFontStack } from '../lib/terminalFaces'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
 import { installTerminalImages } from '../lib/terminalImages'
+import { claimsShiftEnter } from '../lib/terminalKeys'
 import '@xterm/xterm/css/xterm.css'
 
 // The floating pop-up terminal: one PTY this process owns, rendered over
@@ -161,6 +162,7 @@ function buildPane(): Terminal | null {
   const fitAddon = markRaw(new FitAddon())
   created.loadAddon(fitAddon)
   created.loadAddon(markRaw(new WebLinksAddon((_event, uri) => openLink(uri))))
+  created.attachCustomKeyEventHandler((event) => !claimsShiftEnter(created, event))
   created.open(host.value)
   loadRenderer(created)
 

@@ -24,6 +24,7 @@ import { claimAtlasRenderer } from '../lib/terminalRenderer'
 import { TerminalOutputWriter } from '../lib/terminalOutput'
 import { installTerminalImages } from '../lib/terminalImages'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
+import { claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { scrolledOffTail } from '../lib/terminalTail'
 import { paneMayAutoFocus } from '../lib/terminalTree'
@@ -387,7 +388,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     // grid sized after the first paint mangles the snapshot it just drew.
     term.resize(grid?.cols || unreportedSize().cols, grid?.rows || unreportedSize().rows)
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
-      if (event.type !== 'keydown') return true
+      if (event.type !== 'keydown') return !claimsShiftEnter(term, event)
       if (isSearchCombo(event)) {
         openSearch()
         return false
@@ -399,7 +400,8 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       // Prevent pane-navigation chords from also reaching tmux as arrow escapes
       // or control characters.
       if (piercesPane(event)) return false
-      return true
+      // After the chords: a rebind can put a piercing command on shift+enter.
+      return !claimsShiftEnter(term, event)
     })
     panes.set(paneId, {
       windowId,

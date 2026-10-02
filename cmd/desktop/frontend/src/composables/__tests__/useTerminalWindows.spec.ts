@@ -45,6 +45,7 @@ const xterm = vi.hoisted(() => {
       this.resizeEffect?.(this)
     })
     onDataDisposed = false
+    input = vi.fn((data: string) => this.type(data))
     _core: { _renderService?: { dimensions: { css: { cell: { width: number; height: number } } } } } = {
       _renderService: { dimensions: { css: { cell: { width: 10, height: 25 } } } },
     }
@@ -120,7 +121,7 @@ const xterm = vi.hoisted(() => {
     }
 
     press(event: Partial<KeyboardEvent>): boolean {
-      return this.keyHandler?.({ type: 'keydown', ...event } as KeyboardEvent) ?? true
+      return this.keyHandler?.({ type: 'keydown', preventDefault: () => {}, ...event } as KeyboardEvent) ?? true
     }
 
     type(data: string): void {
@@ -1685,6 +1686,33 @@ describe('useTerminalWindows', () => {
 
     expect(term.press({ key: 'f', metaKey: true })).toBe(false)
     expect(session.search.value.open).toBe(true)
+    expect(socket.sent).toHaveLength(0)
+  })
+
+  // xterm writes the same CR for Shift+Enter as for Enter, and Pi binds its
+  // newline to the CSI u form the key has nowhere else (#538).
+  it('forwards Shift+Enter as a CSI u modified-enter rather than a carriage return', async () => {
+    const { socket } = await attached()
+    const term = xterm.FakeTerminal.instances[0]
+
+    expect(term.press({ key: 'Enter', shiftKey: true })).toBe(false)
+    expect(socket.sent.map((frame) => Array.from(frame))).toEqual([
+      [0x10, 2, 0x25, 0x31, 0x1b, 0x5b, 0x31, 0x33, 0x3b, 0x32, 0x75],
+    ])
+
+    // A bare Enter stays xterm's, which writes the CR itself.
+    expect(term.press({ key: 'Enter' })).toBe(true)
+    expect(socket.sent).toHaveLength(1)
+  })
+
+  // Once a rebind puts a pane-piercing command on shift+enter the chord is
+  // App.vue's, and the pane must write neither the CSI u nor the CR.
+  it('keeps Shift+Enter off the wire once a pane-piercing command is bound to it', async () => {
+    const { socket } = await attached()
+    const term = xterm.FakeTerminal.instances[0]
+
+    useKeybindings().addBinding('tasks.toggle', 'shift+enter')
+    expect(term.press({ key: 'Enter', shiftKey: true })).toBe(false)
     expect(socket.sent).toHaveLength(0)
   })
 
