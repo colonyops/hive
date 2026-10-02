@@ -46,7 +46,8 @@ renders blank fails the launch.
 ## One launch per item
 
 The node launches once per item, not once per update. An item that changes
-and reaches the node again with the same key does not open a second chat. A
+and reaches the node again with the same key does not open a second chat;
+an item that Hive deleted and that later returns counts as new. A
 failed launch retries a few times and then stays failed; its error is in
 Activity.
 

@@ -293,14 +293,28 @@ func (q *Queries) MarkOutputCommandFailed(ctx context.Context, arg MarkOutputCom
 const pruneTerminalOutputCommands = `-- name: PruneTerminalOutputCommands :exec
 DELETE FROM output_command
 WHERE id IN (
-    SELECT id FROM output_command
-    WHERE status IN ('done', 'failed')
-    ORDER BY id DESC
+    SELECT oc.id FROM output_command oc
+    WHERE oc.status IN ('done', 'failed')
+      AND NOT (
+          oc.action_id LIKE 'launch:%'
+          AND EXISTS (
+              SELECT 1 FROM inbox_item i
+              WHERE i.profile_id = oc.profile_id
+                AND i.source_kind = oc.source_kind
+                AND i.external_id = oc.external_id
+          )
+      )
+    ORDER BY oc.id DESC
     LIMIT -1 OFFSET ?
 )
 `
 
 // Never remove active commands: only terminal done/failed history is bounded.
+// A launch row (models.LaunchActionPrefix) is the once-per-item guard for a
+// flow launch node, so it survives while its item exists; pruning it would let
+// the item's next update start a second session or chat. The item match skips
+// source_scope because launchDedupKey does, and a rescope leaves the row's
+// scope behind.
 func (q *Queries) PruneTerminalOutputCommands(ctx context.Context, offset int64) error {
 	_, err := q.db.ExecContext(ctx, pruneTerminalOutputCommands, offset)
 	return err

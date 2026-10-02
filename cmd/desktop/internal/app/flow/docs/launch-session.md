@@ -55,7 +55,8 @@ starting an empty session.
 The node launches once per item, not once per update. A pull request that
 gets new commits, comments, or labels reaches the node again with the same
 key, and Hive does not start a second session for it. Two launch nodes in the
-same flow each launch once for the same item.
+same flow each launch once for the same item. An item that Hive deleted
+(an archived item past retention) and that later returns counts as new.
 
 A failed launch retries a few times and then stays failed; its error is in
 Activity.

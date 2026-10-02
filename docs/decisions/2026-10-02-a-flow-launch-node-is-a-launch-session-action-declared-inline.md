@@ -37,4 +37,5 @@ chat lives in the same database and its delete should take the link with it.
 A launch that only one flow performs needs no catalog entry, and the `action`
 node remains for a launch also offered from the item menu. An item that leaves
 and later re-enters a launch node does not launch again, since its key is
-already queued. The detail pane lists chats beside sessions.
+already queued. Retention keeps that queued row while the item exists, so the
+guard ends only when retention deletes the item itself. The detail pane lists chats beside sessions.

@@ -310,20 +310,22 @@ func TestSessionsService_CreateSessionLaunchesAWorkspaceChat(t *testing.T) {
 	workspaces := &fakeWorkspaceLauncher{}
 	runner := &fakeJobRunner{}
 	manager, _ := activeSession()
+	alert := models.ItemRef{ProfileID: "p", SourceKind: "github", ExternalID: "acme/site#81"}
+	items := &fakeItemSessionStore{refs: map[int64]models.ItemRef{42: alert}}
 	svc := newSessionsService(SessionsDeps{
 		Launcher: repositories, WorkspaceLauncher: workspaces,
-		Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner,
+		Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner, Items: items, Links: items,
 	})
 
 	jobID, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{
-		Workspace: " alerts ", Name: " incident ", Prompt: " cluster prod is down ", Agent: "ignored",
+		Workspace: " alerts ", Name: " incident ", Prompt: " cluster prod is down ", Agent: "ignored", ItemIDs: []int64{42},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, int64(7), jobID)
 	require.NoError(t, runner.err)
 	assert.Empty(t, repositories.calls)
 	assert.Equal(t, []dispatch.LaunchWorkspaceSessionRequest{{
-		Workspace: "alerts", Name: "incident", Prompt: "cluster prod is down",
+		Workspace: "alerts", Name: "incident", Prompt: "cluster prod is down", Origins: []models.ItemRef{alert},
 	}}, workspaces.calls)
 	assert.Zero(t, repositories.optsCalls, "a workspace command selects its own agent")
 }
@@ -839,9 +841,11 @@ func TestSessionsService_CreateSessionRecordsARetryableActivityRow(t *testing.T)
 func TestSessionsService_WorkspaceFailureRecordsARetryableDraft(t *testing.T) {
 	manager, _ := activeSession()
 	recorder := &fakeActivityRecorder{}
+	items := &fakeItemSessionStore{}
 	svc := newSessionsService(SessionsDeps{
 		Launcher: &fakeSessionLauncher{}, WorkspaceLauncher: &fakeWorkspaceLauncher{err: errors.New("agent exited")},
 		Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Recorder: recorder,
+		Items: items, Links: items,
 	})
 
 	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{

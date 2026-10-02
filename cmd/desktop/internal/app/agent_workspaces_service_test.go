@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
@@ -236,11 +238,16 @@ func TestLaunchWorkspaceSessionCarriesPromptIntoDetachedChat(t *testing.T) {
 	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agent+agentws.PromptTail, ""))
 	svc := newTestAgentWorkspacesService(t, root, map[string]string{"codex": agent})
 
+	origin := models.ItemRef{ProfileID: "default", SourceKind: "github", SourceScope: "acme/app", ExternalID: "pr:7"}
 	outcome, err := svc.LaunchWorkspaceSession(t.Context(), dispatch.LaunchWorkspaceSessionRequest{
-		Workspace: "demo", Name: "alert", Prompt: "cluster prod is down",
+		Workspace: "demo", Name: "alert", Prompt: "cluster prod is down", Origins: []models.ItemRef{origin},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "alert", outcome.Name)
+	chats, err := svc.itemLinks.ListChats(t.Context(), origin)
+	require.NoError(t, err)
+	require.Len(t, chats, 1, "the launch links its chat to the originating item")
+	assert.Equal(t, outcome.ID, strconv.FormatInt(chats[0].ChatID, 10))
 	assert.NotEmpty(t, outcome.ID)
 	assert.NotEmpty(t, outcome.Slug)
 	assert.Equal(t, 1, liveAgentSessionCount(t, svc))

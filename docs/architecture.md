@@ -1615,7 +1615,8 @@ It commits a `launch` output under the synthetic id `launch:<flow>/<node>`,
 which `dispatch.FlowActions` resolves from the live flow set the way it resolves
 a notify node, and the launch-session executor runs it. The output dedups on
 the item key rather than the occurrence key, so one item launches once per
-node however often it changes.
+node however often it changes. That command row is the only guard, so
+retention keeps a terminal `launch:` row while its item exists.
 
 **A repository `launch-session` action's `post_hook` runs after the session
 exists, and its failure is not the action's.** The hook is a shell command rendered over the

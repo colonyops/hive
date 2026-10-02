@@ -501,30 +501,28 @@ func (s *SessionsService) CreateSession(ctx context.Context, req dispatch.Create
 	// Items pruned between opening and submitting the form are omitted rather
 	// than blocking the one session the user asked for.
 	var origins []models.ItemRef
-	if repo != "" {
-		seenIDs := make(map[int64]struct{}, len(req.ItemIDs))
-		seenOrigins := make(map[models.ItemRef]struct{}, len(req.ItemIDs))
-		for _, itemID := range req.ItemIDs {
-			if itemID <= 0 {
-				continue
-			}
-			if _, exists := seenIDs[itemID]; exists {
-				continue
-			}
-			seenIDs[itemID] = struct{}{}
-			resolved, err := s.items.RefByID(ctx, itemID)
-			if err != nil {
-				if stores.IsNotFound(err) {
-					continue
-				}
-				return 0, Wrap(err, KindInternal, "reading inbox item %d", itemID)
-			}
-			if _, exists := seenOrigins[resolved]; exists {
-				continue
-			}
-			seenOrigins[resolved] = struct{}{}
-			origins = append(origins, resolved)
+	seenIDs := make(map[int64]struct{}, len(req.ItemIDs))
+	seenOrigins := make(map[models.ItemRef]struct{}, len(req.ItemIDs))
+	for _, itemID := range req.ItemIDs {
+		if itemID <= 0 {
+			continue
 		}
+		if _, exists := seenIDs[itemID]; exists {
+			continue
+		}
+		seenIDs[itemID] = struct{}{}
+		resolved, err := s.items.RefByID(ctx, itemID)
+		if err != nil {
+			if stores.IsNotFound(err) {
+				continue
+			}
+			return 0, Wrap(err, KindInternal, "reading inbox item %d", itemID)
+		}
+		if _, exists := seenOrigins[resolved]; exists {
+			continue
+		}
+		seenOrigins[resolved] = struct{}{}
+		origins = append(origins, resolved)
 	}
 
 	prompt := strings.TrimSpace(req.Prompt)

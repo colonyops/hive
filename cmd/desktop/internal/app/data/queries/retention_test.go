@@ -199,6 +199,39 @@ func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {
 	})
 }
 
+func TestPrune_KeepsLaunchCommandsWhileTheirItemExists(t *testing.T) {
+	database := openTestDB(t)
+	ctx := t.Context()
+	seedInboxItem(t, database, "flow", "live")
+
+	enqueue := func(actionID, key, external string) {
+		t.Helper()
+		require.NoError(t, database.EnqueueOutputCommand(ctx, EnqueueOutputCommandParams{
+			ActionID: actionID, Key: key, Payload: []byte(`{}`), CreatedAt: 1,
+			ProfileID: "flow", SourceKind: "github", SourceScope: "", ExternalID: external,
+		}))
+		_, err := database.Conn().ExecContext(ctx, `UPDATE output_command SET status = 'done' WHERE action_id = ? AND key = ?`, actionID, key)
+		require.NoError(t, err)
+	}
+	enqueue(models.LaunchActionID("flow/live-launch"), "live", "live")
+	enqueue(models.LaunchActionID("flow/gone-launch"), "gone", "gone")
+	enqueue("action", "newest", "")
+
+	require.NoError(t, database.Prune(ctx, RetentionPolicy{TerminalOutputCommandLimit: 1}))
+
+	var actionIDs []string
+	rows, err := database.Conn().QueryContext(ctx, `SELECT action_id FROM output_command ORDER BY id`)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, rows.Close()) }()
+	for rows.Next() {
+		var actionID string
+		require.NoError(t, rows.Scan(&actionID))
+		actionIDs = append(actionIDs, actionID)
+	}
+	require.NoError(t, rows.Err())
+	assert.Equal(t, []string{models.LaunchActionID("flow/live-launch"), "action"}, actionIDs)
+}
+
 func TestPrune_RejectsNegativeJobLimit(t *testing.T) {
 	database := openTestDB(t)
 	err := database.Prune(t.Context(), RetentionPolicy{JobLimit: -1})
