@@ -286,7 +286,7 @@ function streamURL(endpoint: TerminalEndpoint, slug: string): string {
  * keystrokes that follow a click into a pane go out while the select-pane it
  * caused is still in flight, and they must land where the user is typing.
  */
-export function encodeInputFrames(paneId: string, data: string | Uint8Array): Uint8Array[] {
+export function encodeInputFrames(paneId: string, data: string | Uint8Array): Uint8Array<ArrayBuffer>[] {
   return chunkFrames(FRAME_INPUT, paneId, typeof data === 'string' ? encoder.encode(data) : data)
 }
 
@@ -296,7 +296,7 @@ export function encodeInputFrames(paneId: string, data: string | Uint8Array): Ui
  * whether the pane's program asked for bracketed paste, so a multi-line paste
  * reaches an agent as one paste rather than one submission per line.
  */
-export function encodePasteFrames(paneId: string, text: string): Uint8Array[] {
+export function encodePasteFrames(paneId: string, text: string): Uint8Array<ArrayBuffer>[] {
   // tmux writes one \r per \n in the buffer, so a CRLF would arrive as two.
   const body = encoder.encode(text.replace(/\r\n?/g, '\n'))
   if (body.length === 0) return []
@@ -309,13 +309,13 @@ export function encodePasteFrames(paneId: string, text: string): Uint8Array[] {
   return [...chunkFrames(FRAME_PASTE_CHUNK, paneId, body), commit]
 }
 
-function chunkFrames(kind: number, paneId: string, body: Uint8Array): Uint8Array[] {
+function chunkFrames(kind: number, paneId: string, body: Uint8Array): Uint8Array<ArrayBuffer>[] {
   const id = encoder.encode(paneId)
   const header = 2 + id.length
   const budget = MAX_INPUT_FRAME_BYTES - header
   if (budget <= 0) throw new Error('terminal pane id is too long to frame')
 
-  const frames: Uint8Array[] = []
+  const frames: Uint8Array<ArrayBuffer>[] = []
   for (let offset = 0; offset < body.length; offset += budget) {
     const chunk = body.subarray(offset, offset + budget)
     const frame = new Uint8Array(header + chunk.length)

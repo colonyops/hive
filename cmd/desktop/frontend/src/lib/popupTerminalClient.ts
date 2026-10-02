@@ -131,11 +131,11 @@ function streamURL(endpoint: PopupTerminalEndpoint, id: string): string {
  * are reassembled in order on the far end, so a split inside a multi-byte
  * sequence is harmless.
  */
-export function encodeInputFrames(data: string | Uint8Array): Uint8Array[] {
+export function encodeInputFrames(data: string | Uint8Array): Uint8Array<ArrayBuffer>[] {
   const body = typeof data === 'string' ? encoder.encode(data) : data
   const budget = MAX_INPUT_FRAME_BYTES - 1
 
-  const frames: Uint8Array[] = []
+  const frames: Uint8Array<ArrayBuffer>[] = []
   for (let offset = 0; offset < body.length; offset += budget) {
     const chunk = body.subarray(offset, offset + budget)
     const frame = new Uint8Array(1 + chunk.length)
