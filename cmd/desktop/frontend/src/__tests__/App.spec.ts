@@ -1798,12 +1798,19 @@ describe('App', () => {
       expect(cmd?.title).toBe('Chat about the bug')
       expect(cmd?.group).toBe('my-workspace')
 
+      const push = vi.spyOn(router, 'push')
       await palette.run(cmd!)
       await flushPromises()
 
+      // Asserted on the push, not the settled route: this chat has no terminal,
+      // so the Chats view drops ?chat once its own resume check resolves.
+      expect(push).toHaveBeenCalledWith({
+        name: 'agents',
+        params: { workspace: 'my-workspace' },
+        query: { chat: '42' },
+      })
       expect(router.currentRoute.value.name).toBe('agents')
       expect(router.currentRoute.value.params.workspace).toBe('my-workspace')
-      expect(router.currentRoute.value.query.chat).toBe('42')
       expect(focusPane).toHaveBeenCalledTimes(1)
 
       setAgentsTreeHandles(null)
