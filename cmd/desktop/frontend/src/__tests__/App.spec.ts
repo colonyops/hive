@@ -22,7 +22,7 @@ import {
 import { resetTerminalPinnedChatsForTests } from '../composables/useTerminalPinnedChats'
 import { resetAgentSessionsAllForTests, useAgentSessionsAll } from '../composables/useAgentSessionsAll'
 import { resetAgentWorkspacesForTests, useAgentWorkspaces } from '../composables/useAgentWorkspaces'
-import { resetTasksForTests, useTasks } from '../composables/useTasks'
+import { useTasks } from '../stores/useTasks'
 import { applicationSettingsSections, createAppRouter } from '../router'
 import TerminalMode from '../components/TerminalMode.vue'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
@@ -425,7 +425,6 @@ describe('App', () => {
     resetTerminalPinnedChatsForTests()
     resetAgentSessionsAllForTests()
     resetAgentWorkspacesForTests()
-    resetTasksForTests()
     vi.clearAllMocks()
     // Panel collapse / width state persists via useStorage; clear it so one
     // test's collapsed sidebar can't leak into the next.
@@ -3229,7 +3228,7 @@ describe('App', () => {
 
     // The user re-scopes while the overlay is open; only an *opening* toggle
     // may re-resolve the scope, so closing must not clobber the choice.
-    useTasks().repoKey.value = 'acme/other'
+    useTasks().setRepoKey('acme/other')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
     expect(document.querySelector('[data-testid="tasks-overlay"]')).toBeNull()
@@ -3240,7 +3239,7 @@ describe('App', () => {
 
   it('leaves the persisted scope alone when the keybinding opens tasks from the hub', async () => {
     const { wrapper } = await mountAppWithRouter()
-    useTasks().repoKey.value = 'acme/existing'
+    useTasks().setRepoKey('acme/existing')
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 't', metaKey: true, shiftKey: true }))
     await flushPromises()
@@ -3271,7 +3270,7 @@ describe('App', () => {
     const { wrapper } = await mountAppWithRouter()
     await wrapper.get('[data-testid="titlebar-mode-terminal"]').trigger('click')
     await vi.waitFor(() => expect(terminalOnScreen(wrapper)).toBe(true))
-    useTasks().repoKey.value = 'acme/existing'
+    useTasks().setRepoKey('acme/existing')
     const terminal = wrapper.findComponent(TerminalMode)
     await terminal.vm.$emit('session-repo-key', '')
 

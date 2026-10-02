@@ -51,7 +51,7 @@ export function matchesTaskFilter(item: TaskItem, filter: TaskFilterId): boolean
 
 // filterCounts is the per-filter badge shown in the segmented control: how
 // many of the currently-loaded items each filter would match.
-export function filterCounts(items: TaskItem[]): Record<TaskFilterId, number> {
+export function filterCounts(items: readonly TaskItem[]): Record<TaskFilterId, number> {
   const counts: Record<TaskFilterId, number> = { open: 0, active: 0, done: 0, all: 0 }
   for (const item of items) {
     for (const filter of TASK_FILTERS) {
@@ -89,7 +89,7 @@ function matchesQuery(item: TaskItem, query: string): boolean {
 // and ASC for another (see module doc). search narrows visibility further to
 // title/id substring matches, riding the same ancestor-of-a-match propagation
 // the status filter uses.
-export function buildTaskTree(items: TaskItem[], filter: TaskFilterId, search = ''): TaskTreeNode[] {
+export function buildTaskTree(items: readonly TaskItem[], filter: TaskFilterId, search = ''): TaskTreeNode[] {
   const query = search.trim().toLowerCase()
   const ids = new Set(items.map((item) => item.id))
   const childrenByParent = new Map<string, TaskItem[]>()
@@ -144,7 +144,7 @@ export function checkpointBody(comment: TaskComment): string {
 // cascadeCount is how many non-terminal (open/in_progress) descendants an
 // epic has, across every depth — the "this will also close N open tasks"
 // confirm copy shown before a status change cascades.
-export function cascadeCount(items: TaskItem[], epicId: string): number {
+export function cascadeCount(items: readonly TaskItem[], epicId: string): number {
   const childrenByParent = new Map<string, TaskItem[]>()
   for (const item of items) {
     const siblings = childrenByParent.get(item.parentId)

@@ -44,7 +44,7 @@ import { useDevTools } from './composables/useDevTools'
 import { useReleaseNotes } from './composables/useReleaseNotes'
 import { useNewSession } from './composables/useNewSession'
 import { usePopupTerminal } from './stores/usePopupTerminal'
-import { useTasks } from './composables/useTasks'
+import { useTasks } from './stores/useTasks'
 import { useTerminalSessions } from './stores/useTerminalSessions'
 import { useTerminalFont } from './stores/useTerminalFont'
 import {
@@ -525,7 +525,7 @@ function openActivity(): void {
 // Tasks is an overlay, not a route, so the titlebar icon toggles it — clicking
 // it while open closes it, matching the icon's tint communicating open state.
 const tasksOpen = ref(false)
-const { repoKey: tasksRepoKey } = useTasks()
+const { setRepoKey: setTasksRepoKey } = useTasks()
 // The attached terminal session's resolved owner/repo, kept live by
 // TerminalMode's continuous report rather than read only on click, so every
 // way of opening Tasks — keybinding, palette, the status-bar button itself —
@@ -540,7 +540,7 @@ const terminalSessionRepoKey = ref('')
 function openTasks(): void {
   const opening = !tasksOpen.value
   if (opening && terminalActive.value && terminalSessionRepoKey.value) {
-    tasksRepoKey.value = terminalSessionRepoKey.value
+    setTasksRepoKey(terminalSessionRepoKey.value)
   }
   tasksOpen.value = !tasksOpen.value
 }

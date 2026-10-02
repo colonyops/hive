@@ -19,7 +19,7 @@ import { useClipboard } from '../composables/useClipboard'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { useToasts } from '../composables/useToasts'
 import { useOpenModalCount } from '../composables/useOpenModalCount'
-import { useTasks } from '../composables/useTasks'
+import { useTasks } from '../stores/useTasks'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import { errorText } from '../lib/appError'
 import { isEditableTarget } from '../lib/isEditableTarget'
@@ -38,8 +38,10 @@ const {
   error,
   startPolling,
   stopPolling,
-  refresh,
+  reload,
   select,
+  setRepoKey,
+  setFilter,
   isCollapsed,
   toggleCollapsed,
   pruneDryRun,
@@ -268,7 +270,7 @@ onUnmounted(() => {
           "
           :data-testid="`tasks-filter-${taskFilter.id}`"
           :aria-pressed="filter === taskFilter.id"
-          @click="filter = taskFilter.id"
+          @click="setFilter(taskFilter.id)"
         >
           {{ taskFilter.label }}
           <span class="font-mono text-[10.5px] text-text-4">{{ counts[taskFilter.id] }}</span>
@@ -282,7 +284,7 @@ onUnmounted(() => {
           size="sm"
           aria-label="Repository"
           testid="tasks-repo-select"
-          @update:model-value="repoKey = $event"
+          @update:model-value="setRepoKey($event)"
         />
       </div>
 
@@ -306,7 +308,7 @@ onUnmounted(() => {
         class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
         :disabled="loading"
         data-testid="tasks-refresh"
-        @click="refresh"
+        @click="reload"
       >
         <IconRefreshCw class="size-3.5" :class="loading ? 'animate-spin' : ''" />Refresh
       </button>
@@ -361,7 +363,7 @@ onUnmounted(() => {
             type="button"
             class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
             data-testid="tasks-empty-show-all"
-            @click="repoKey = ''"
+            @click="setRepoKey('')"
           >
             Show all repositories
           </button>

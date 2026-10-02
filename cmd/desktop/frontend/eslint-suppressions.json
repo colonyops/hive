@@ -293,11 +293,6 @@
       "count": 1
     }
   },
-  "src/composables/__tests__/useTasks.spec.ts": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    }
-  },
   "src/composables/__tests__/useTerminalWindowListings.spec.ts": {
     "@typescript-eslint/require-await": {
       "count": 1
@@ -464,11 +459,6 @@
   "src/composables/useSessionStatuses.ts": {
     "no-restricted-syntax": {
       "count": 3
-    }
-  },
-  "src/composables/useTasks.ts": {
-    "no-restricted-syntax": {
-      "count": 10
     }
   },
   "src/composables/useTerminalPinnedChats.ts": {

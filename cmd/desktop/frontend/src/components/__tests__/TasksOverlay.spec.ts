@@ -32,7 +32,6 @@ vi.mock('@wailsio/runtime', () => ({
 }))
 
 import TasksOverlay from '../TasksOverlay.vue'
-import { resetTasksForTests } from '../../composables/useTasks'
 
 function el<T extends HTMLElement>(testid: string): T {
   const element = document.querySelector<T>(`[data-testid="${testid}"]`)
@@ -43,7 +42,6 @@ function el<T extends HTMLElement>(testid: string): T {
 describe('TasksOverlay', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    resetTasksForTests()
     mocks.On.mockReturnValue(() => {})
     mocks.Focused.mockResolvedValue(true)
     mocks.ListTasks.mockResolvedValue([])

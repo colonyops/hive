@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { chooseOption, openSelect } from '../../test-utils/select'
 
 const mocks = vi.hoisted(() => ({
@@ -37,7 +37,7 @@ vi.mock('@wailsio/runtime', () => ({
 }))
 
 import TasksView from '../TasksView.vue'
-import { resetTasksForTests, useTasks } from '../../composables/useTasks'
+import { useTasks } from '../../stores/useTasks'
 import { resetToastsForTests, useToasts } from '../../composables/useToasts'
 
 interface TaskOverrides {
@@ -82,7 +82,6 @@ async function selectRow(wrapper: ReturnType<typeof mount>, id: string): Promise
 describe('TasksView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    resetTasksForTests()
     resetToastsForTests()
     mocks.On.mockReturnValue(() => {})
     mocks.Focused.mockResolvedValue(true)
@@ -92,10 +91,6 @@ describe('TasksView', () => {
     mocks.SetTaskStatus.mockResolvedValue(undefined)
     mocks.DeleteTask.mockResolvedValue(undefined)
     mocks.SetText.mockResolvedValue(undefined)
-  })
-
-  afterEach(() => {
-    resetTasksForTests()
   })
 
   it('renders the tree from mocked items, indenting a child under its epic', async () => {
@@ -596,7 +591,7 @@ describe('TasksView', () => {
 
   it('names the scoped repo in the empty state, keeps it selectable, and offers show-all', async () => {
     mocks.TaskRepoKeys.mockResolvedValue(['acme/site'])
-    useTasks().repoKey.value = 'acme/empty'
+    useTasks().setRepoKey('acme/empty')
     const wrapper = mount(TasksView)
     await flushPromises()
 
