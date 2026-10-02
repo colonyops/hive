@@ -10,7 +10,7 @@ import { useReportDialog } from '../composables/useReportDialog'
 import { useActivity } from '../stores/useActivity'
 import { resetFlowsSessionForTests, useFlowsSession } from '../pipeline/composables/useFlowsSession'
 import { resetNotificationSettingsForTests } from '../composables/useNotificationSettings'
-import { resetPopupTerminalForTests, usePopupTerminal } from '../composables/usePopupTerminal'
+import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { resetLaunchersForTests } from '../composables/useLaunchers'
 import { formatCombo, SEQUENCE_TIMEOUT_MS, useKeybindings } from '../composables/useKeybindings'
 import { resetTerminalAvailabilityForTests } from '../composables/useTerminalAvailability'
@@ -416,9 +416,8 @@ describe('App', () => {
     // useNotificationSettings is a module singleton too — reset it so a test's
     // resolved permission state cannot leak into the next test's first-run walk.
     resetNotificationSettingsForTests()
-    // The pop-up panel state and the launcher commands are module singletons
-    // too, and a launcher registered by one test would stay bindable in the next.
-    resetPopupTerminalForTests()
+    // The launcher commands are a module singleton too, and a launcher
+    // registered by one test would stay bindable in the next.
     resetLaunchersForTests()
     useKeybindings().clearAll()
     useKeybindings().clearPendingSequence()

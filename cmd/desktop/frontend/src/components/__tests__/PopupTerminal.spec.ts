@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PopupTerminal from '../PopupTerminal.vue'
-import { resetPopupTerminalForTests, usePopupTerminal } from '../../composables/usePopupTerminal'
+import { usePopupTerminal } from '../../stores/usePopupTerminal'
 import { defaultTerminalFontWeight, defaultTerminalFontWeightBold, useTerminalFont } from '../../stores/useTerminalFont'
 import { terminalFontStack } from '../../lib/terminalFaces'
 
@@ -195,7 +195,6 @@ describe('PopupTerminal', () => {
 
   beforeEach(() => {
     vi.useRealTimers()
-    resetPopupTerminalForTests()
     xterm.FakeTerminal.instances = []
     FakeSocket.instances = []
     localStorage.clear()

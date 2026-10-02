@@ -448,11 +448,6 @@
       "count": 2
     }
   },
-  "src/composables/usePopupTerminal.ts": {
-    "no-restricted-syntax": {
-      "count": 7
-    }
-  },
   "src/composables/useReleaseNotes.ts": {
     "no-restricted-syntax": {
       "count": 3
