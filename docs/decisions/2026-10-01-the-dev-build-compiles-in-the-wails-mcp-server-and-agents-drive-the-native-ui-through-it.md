@@ -65,8 +65,8 @@ HTTP on loopback. Without the tag none of it is compiled.
   reach. An open native panel blocks every evaluation until it closes.
 - Input is synthesized DOM events, not OS events. `isTrusted` is false, and a
   handler that requires a trusted event will not fire.
-- The helper scripts are macOS-only where they touch the window
-  (`screencapture`, `CGWindowListCopyWindowInfo`); the MCP calls are portable.
+- The screenshot script is macOS-only (`screencapture`,
+  `CGWindowListCopyWindowInfo`); the MCP calls are portable.
 - `.mcp.json` at the worktree root is generated and gitignored. The devtools
   own that path, so the repository cannot also commit one, and the blank
   onboarding instance writes none because two instances cannot share the

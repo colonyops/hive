@@ -544,10 +544,9 @@ into the worktree's gitignored `.mcp.json` as `hive-desktop-ui`, so a Claude
 Code session started in the worktree offers it without a per-user
 registration. The **desktop-ui-audit** agent skill
 carries the loop, the rules (no `call_bound_method`), the `data-testid`
-authoring guidance, and helper scripts under
-`.agents/skills/desktop-ui-audit/scripts/`, including a `screencapture`
-wrapper for pixel screenshots of the window. Set `WAILS_MCP=` in
-`overrides.env` to build without it.
+authoring guidance, and a `screencapture` wrapper under
+`.agents/skills/desktop-ui-audit/scripts/` for pixel screenshots of the
+window. Set `WAILS_MCP=` in `overrides.env` to build without it.
 
 Native shell behavior — the tray, the Dock, and close-hides-window — remains
 a manual verification concern.
