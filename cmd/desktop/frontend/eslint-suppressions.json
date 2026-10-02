@@ -496,11 +496,6 @@
       "count": 1
     }
   },
-  "src/composables/useTerminalPoolSize.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/composables/useTerminalSessions.ts": {
     "no-restricted-syntax": {
       "count": 5

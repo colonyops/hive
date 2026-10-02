@@ -11,7 +11,6 @@ import {
 } from '../../composables/useTerminalFont'
 import { TERMINAL_FONT } from '../../lib/terminalFaces'
 import { setTerminalShowWindows } from '../../composables/useTerminalShowWindows'
-import { setTerminalPoolSize } from '../../composables/useTerminalPoolSize'
 import { resetInstalledFontsForTests } from '../../composables/useInstalledFonts'
 
 const mocks = vi.hoisted(() => ({
@@ -143,8 +142,5 @@ describe('TerminalSettingsView', () => {
 
     expect(wrapper.find('[data-testid="settings-terminal-pool-size-5"]').attributes('aria-selected')).toBe('true')
     expect(mocks.SetTerminalPoolSize).toHaveBeenCalledWith(5)
-
-    // The setting is a module singleton; put the default back for later tests.
-    setTerminalPoolSize(3)
   })
 })

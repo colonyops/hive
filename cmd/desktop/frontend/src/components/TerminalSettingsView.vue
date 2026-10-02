@@ -30,7 +30,7 @@ import {
 } from '../composables/useTerminalFont'
 import { TERMINAL_FONT } from '../lib/terminalFaces'
 import { loadInstalledFonts, useInstalledFonts } from '../composables/useInstalledFonts'
-import { setTerminalPoolSize, terminalPoolSizes, useTerminalPoolSize } from '../composables/useTerminalPoolSize'
+import { terminalPoolSizes, useTerminalPoolSize } from '../stores/useTerminalPoolSize'
 import { setTerminalShowStatusBar, useTerminalStatusBar } from '../composables/useTerminalStatusBar'
 import { setTerminalShowWindows, useTerminalShowWindows } from '../composables/useTerminalShowWindows'
 
@@ -49,7 +49,7 @@ const {
 const { monospace: fontFamilies } = useInstalledFonts()
 const { showWindows } = useTerminalShowWindows()
 const { showStatusBar } = useTerminalStatusBar()
-const { poolSize } = useTerminalPoolSize()
+const { poolSize, setPoolSize } = useTerminalPoolSize()
 
 // The bundled face leads the list whether or not it is also installed
 // system-wide, so the shipped default is always the first thing offered.
@@ -90,7 +90,7 @@ function onLetterSpacingChange(value: string): void {
 }
 
 function onPoolSizeChange(value: string): void {
-  setTerminalPoolSize(Number(value))
+  setPoolSize(Number(value))
 }
 
 // Scanning every font on the machine is not worth doing until this pane is the

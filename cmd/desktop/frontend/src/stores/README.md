@@ -141,6 +141,9 @@ Do not write another `err instanceof Error ? err.message : ...`.
   `readonly T[]`.
 - The reload action is always called **`reload`**. Not `refresh`, `load`, or
   `reloadThings`.
+- An action is a **function declaration**, not a method on the returned
+  object. Consumers destructure actions, and the lint's `unbound-method` rule
+  rejects a destructured method.
 - An error is always **`string | null`**, with `null` meaning no error. Not
   `''`, not `unknown`, not a toast from inside the store. A store whose error
   no surface renders logs it with `console.warn` so it is not lost.
