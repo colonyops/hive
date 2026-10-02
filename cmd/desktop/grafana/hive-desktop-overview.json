@@ -977,7 +977,7 @@
                   "showLineNumbers": false,
                   "showMiniMap": false
                 },
-                "content": "Trigger spans are the roots: **`app.startup`**, **`ingest.tick`**, **`terminal.attach`**, and one per dispatched action type. Waits hang below them: `ingest.source <kind>`, `http.<source> <method>`, `db.CommitBatch`, `tmux.*`, and `dispatch.*`.\n\n**Open a trace:** click a **Trace ID** in the table for the span waterfall.\n\n**Go further, scoped to the current Channel/Build:**\n\n- [Traces Drilldown](/a/grafana-exploretraces-app/explore?var-ds=${traces}&var-filters=resource.service.name%7C%3D%7Chive-desktop&var-filters=resource.deployment.environment.name%7C%3D~%7C${environment:regex}&var-filters=resource.service.version%7C%3D~%7C${version:regex}) -- service-level breakdowns, no query needed\n- [Profiles Drilldown](/a/grafana-pyroscope-app/explore?explorationType=flame-graph&var-dataSource=${profiles}&var-serviceName=hive-desktop&var-profileMetricId=process_cpu:cpu:nanoseconds:cpu:nanoseconds) -- flame graphs for any window, diffable between builds\n- [Explore ▸ Tempo](/explore?left=%7B%22datasource%22:%22${traces}%22,%22queries%22:%5B%7B%22queryType%22:%22traceql%22,%22query%22:%22%7Bresource.service.name%3D%5C%22hive-desktop%5C%22%20%26%26%20resource.deployment.environment.name%3D~%5C%22${environment:regex}%5C%22%20%26%26%20resource.service.version%3D~%5C%22${version:regex}%5C%22%7D%22%7D%5D%7D) -- raw TraceQL against this service\n- [Explore ▸ Loki](/explore?left=%7B%22datasource%22:%22${logs}%22,%22queries%22:%5B%7B%22expr%22:%22%7Bservice_name%3D%5C%22hive-desktop%5C%22,%20deployment_environment_name%3D~%5C%22${environment:regex}%5C%22%7D%20%7C%20service_version%3D~%5C%22${version:regex}%5C%22%22%7D%5D%7D) -- the log stream beside it\n",
+                "content": "Trigger spans are the roots: **`app.startup`**, **`ingest.tick`**, **`runtime.drain`**, **`terminal.attach`**, and one per dispatched action type. Waits hang below them: `ingest.source <kind>`, `runtime.flow`, `http.<source> <method>`, `db.CommitBatch`, `tmux.*`, and `dispatch.*`.\n\n**Open a trace:** click a **Trace ID** in the table for the span waterfall.\n\n**Go further, scoped to the current Channel/Build:**\n\n- [Traces Drilldown](/a/grafana-exploretraces-app/explore?var-ds=${traces}&var-filters=resource.service.name%7C%3D%7Chive-desktop&var-filters=resource.deployment.environment.name%7C%3D~%7C${environment:regex}&var-filters=resource.service.version%7C%3D~%7C${version:regex}) -- service-level breakdowns, no query needed\n- [Profiles Drilldown](/a/grafana-pyroscope-app/explore?explorationType=flame-graph&var-dataSource=${profiles}&var-serviceName=hive-desktop&var-profileMetricId=process_cpu:cpu:nanoseconds:cpu:nanoseconds) -- flame graphs for any window, diffable between builds\n- [Explore ▸ Tempo](/explore?left=%7B%22datasource%22:%22${traces}%22,%22queries%22:%5B%7B%22queryType%22:%22traceql%22,%22query%22:%22%7Bresource.service.name%3D%5C%22hive-desktop%5C%22%20%26%26%20resource.deployment.environment.name%3D~%5C%22${environment:regex}%5C%22%20%26%26%20resource.service.version%3D~%5C%22${version:regex}%5C%22%7D%22%7D%5D%7D) -- raw TraceQL against this service\n- [Explore ▸ Loki](/explore?left=%7B%22datasource%22:%22${logs}%22,%22queries%22:%5B%7B%22expr%22:%22%7Bservice_name%3D%5C%22hive-desktop%5C%22,%20deployment_environment_name%3D~%5C%22${environment:regex}%5C%22%7D%20%7C%20service_version%3D~%5C%22${version:regex}%5C%22%22%7D%5D%7D) -- the log stream beside it\n",
                 "mode": "markdown"
               }
             },
@@ -3317,6 +3317,272 @@
           }
         }
       },
+      "panel-342": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${traces}"
+                      },
+                      "group": "tempo",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "metricsQueryType": "range",
+                        "query": "{resource.service.name=\"hive-desktop\" && resource.deployment.environment.name=~\"${environment:regex}\" && resource.service.version=~\"${version:regex}\" && name=\"runtime.drain\"} | quantile_over_time(duration, .5, .95)",
+                        "queryType": "traceql"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": []
+            }
+          },
+          "description": "runtime.drain spans: one pass of the flow engine over the event log, on a log axis. A row the poll appended is not in a feed until a drain commits it, so a slow drain is the other half of a stale feed. Trace metrics cover at most 25 hours.",
+          "id": 342,
+          "links": [],
+          "title": "Flow drain duration",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "points",
+                    "fillOpacity": 8,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 2,
+                    "pointSize": 6,
+                    "scaleDistribution": {
+                      "log": 10,
+                      "type": "log"
+                    },
+                    "showPoints": "always",
+                    "showValues": false,
+                    "spanNulls": true,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  },
+                  "unit": "s"
+                },
+                "overrides": [
+                  {
+                    "matcher": {
+                      "id": "byRegexp",
+                      "options": ".*0\\.5\"?}?$"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "p50"
+                      }
+                    ]
+                  },
+                  {
+                    "matcher": {
+                      "id": "byRegexp",
+                      "options": ".*0\\.95\"?}?$"
+                    },
+                    "properties": [
+                      {
+                        "id": "displayName",
+                        "value": "p95"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "13.3.0-32457798232"
+          }
+        }
+      },
+      "panel-343": {
+        "kind": "Panel",
+        "spec": {
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "hidden": false,
+                    "query": {
+                      "datasource": {
+                        "name": "${traces}"
+                      },
+                      "group": "tempo",
+                      "kind": "DataQuery",
+                      "spec": {
+                        "metricsQueryType": "range",
+                        "query": "{resource.service.name=\"hive-desktop\" && resource.deployment.environment.name=~\"${environment:regex}\" && resource.service.version=~\"${version:regex}\" && name=\"runtime.flow\"} | quantile_over_time(duration, .95) by (span.runtime.flow.id)",
+                        "queryType": "traceql"
+                      },
+                      "version": "v0"
+                    },
+                    "refId": "A"
+                  }
+                }
+              ],
+              "queryOptions": {},
+              "transformations": [
+                {
+                  "group": "renameByRegex",
+                  "kind": "Transformation",
+                  "spec": {
+                    "options": {
+                      "regex": ".*name=\"ingest\\.source ([^\"]+)\".*",
+                      "renamePattern": "$1"
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          "description": "runtime.flow spans, one per flow per drain, on a log axis. The slowest flow is what holds a drain open. Trace metrics cover at most 25 hours.",
+          "id": 343,
+          "links": [],
+          "title": "Flow run duration p95 by flow",
+          "vizConfig": {
+            "group": "timeseries",
+            "kind": "VizConfig",
+            "spec": {
+              "fieldConfig": {
+                "defaults": {
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "points",
+                    "fillOpacity": 8,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 2,
+                    "pointSize": 6,
+                    "scaleDistribution": {
+                      "log": 10,
+                      "type": "log"
+                    },
+                    "showPoints": "always",
+                    "showValues": false,
+                    "spanNulls": true,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "red",
+                        "value": 80
+                      }
+                    ]
+                  },
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "bottom",
+                  "showLegend": true
+                },
+                "tooltip": {
+                  "hideZeros": false,
+                  "mode": "multi",
+                  "sort": "desc"
+                }
+              }
+            },
+            "version": "13.3.0-32457798232"
+          }
+        }
+      },
       "panel-350": {
         "kind": "Panel",
         "spec": {
@@ -4496,12 +4762,38 @@
                       "spec": {
                         "element": {
                           "kind": "ElementReference",
+                          "name": "panel-342"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 0,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-343"
+                        },
+                        "height": 8,
+                        "width": 12,
+                        "x": 12,
+                        "y": 8
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "element": {
+                          "kind": "ElementReference",
                           "name": "panel-320"
                         },
                         "height": 8,
                         "width": 24,
                         "x": 0,
-                        "y": 8
+                        "y": 16
                       }
                     },
                     {
@@ -4514,7 +4806,7 @@
                         "height": 8,
                         "width": 12,
                         "x": 0,
-                        "y": 16
+                        "y": 24
                       }
                     },
                     {
@@ -4527,7 +4819,7 @@
                         "height": 8,
                         "width": 12,
                         "x": 12,
-                        "y": 16
+                        "y": 24
                       }
                     },
                     {
@@ -4540,7 +4832,7 @@
                         "height": 8,
                         "width": 12,
                         "x": 0,
-                        "y": 24
+                        "y": 32
                       }
                     },
                     {
@@ -4553,7 +4845,7 @@
                         "height": 8,
                         "width": 12,
                         "x": 12,
-                        "y": 24
+                        "y": 32
                       }
                     },
                     {
@@ -4566,7 +4858,7 @@
                         "height": 8,
                         "width": 24,
                         "x": 0,
-                        "y": 32
+                        "y": 40
                       }
                     }
                   ]

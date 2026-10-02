@@ -6,12 +6,15 @@ import (
 	"sync"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
 )
 
 type LogStore interface {
@@ -173,9 +176,9 @@ func (e *Engine) loop(ctx context.Context) {
 			return
 		case <-e.reload:
 			e.install(ctx)
-			e.drain(ctx)
+			e.drain(ctx, true)
 		case <-e.wake:
-			e.drain(ctx)
+			e.drain(ctx, false)
 		}
 	}
 }
@@ -309,48 +312,85 @@ func (e *Engine) replay(ctx context.Context, f flow.Flow, runner *Runner) error 
 
 // drain reads and commits pages for every installed flow until each has no
 // more work.
-func (e *Engine) drain(ctx context.Context) {
-	committed := false
+//
+// A trigger, so a root span: it is the parent the store's conditional
+// db.CommitBatch span fires under. A failed flow is the question its own span
+// answers; the pass only counts it, as a tick counts a failed source.
+func (e *Engine) drain(ctx context.Context, reload bool) {
+	ctx, span := tracer.Start(ctx, "runtime.drain", trace.WithAttributes(attribute.Bool(attrReload, reload)))
+	defer span.End()
+
+	var pages, messages, failed int
 	for id, runner := range e.runners {
-		for {
-			if ctx.Err() != nil {
-				return
-			}
-			did, err := e.pump(ctx, id, runner)
-			if err != nil {
-				e.opts.Logger.Warn().Err(err).Str("flow", id).Msg("flow run failed; it will retry on the next wake-up")
-				break
-			}
-			if !did {
-				break
-			}
-			committed = true
+		p, m, err := e.drainFlow(ctx, id, runner)
+		pages += p
+		messages += m
+		if err != nil {
+			failed++
 		}
 	}
-	if committed && e.opts.Events != nil {
+	span.SetAttributes(
+		attribute.Int(attrFlows, len(e.runners)),
+		attribute.Int(attrPages, pages),
+		attribute.Int(attrMessages, messages),
+		attribute.Int(attrFailed, failed),
+	)
+
+	if ctx.Err() != nil {
+		return
+	}
+	if pages > 0 && e.opts.Events != nil {
 		e.opts.Events.Publish(ctx, events.InboxUpdated{})
 	}
 }
 
-// pump reads one page for a flow, runs it, and commits. It reports whether
-// there was anything to do.
-func (e *Engine) pump(ctx context.Context, id string, runner *Runner) (bool, error) {
+// drainFlow pumps one flow until its log is exhausted or a page fails. It
+// reports the pages it committed and the messages they held.
+func (e *Engine) drainFlow(ctx context.Context, id string, runner *Runner) (pages, messages int, err error) {
+	ctx, span := tracer.Start(ctx, "runtime.flow", trace.WithAttributes(attribute.String(attrFlowID, id)))
+	defer func() {
+		if err != nil {
+			observe.RecordError(span, err)
+		}
+		span.SetAttributes(attribute.Int(attrPages, pages), attribute.Int(attrMessages, messages))
+		span.End()
+	}()
+
+	for ctx.Err() == nil {
+		var n int
+		n, err = e.pump(ctx, id, runner)
+		if err != nil {
+			e.opts.Logger.Warn().Ctx(ctx).Err(err).Str("flow", id).Msg("flow run failed; it will retry on the next wake-up")
+			return pages, messages, err
+		}
+		if n == 0 {
+			break
+		}
+		pages++
+		messages += n
+	}
+	return pages, messages, nil
+}
+
+// pump reads one page for a flow, runs it, and commits. It reports how many
+// messages the page held; zero means there was nothing to do.
+func (e *Engine) pump(ctx context.Context, id string, runner *Runner) (int, error) {
 	batch, err := e.opts.Log.ReadForConsumer(ctx, id, e.opts.PageSize)
 	if err != nil {
-		return false, fmt.Errorf("reading the log: %w", err)
+		return 0, fmt.Errorf("reading the log: %w", err)
 	}
 	if len(batch) == 0 {
-		return false, nil
+		return 0, nil
 	}
 
 	result, err := runner.Run(ctx, batch)
 	if err != nil {
-		return false, fmt.Errorf("running the flow: %w", err)
+		return 0, fmt.Errorf("running the flow: %w", err)
 	}
 	if err := e.opts.Commits.Commit(ctx, result); err != nil {
-		return false, fmt.Errorf("committing: %w", err)
+		return 0, fmt.Errorf("committing: %w", err)
 	}
-	return true, nil
+	return len(batch), nil
 }
 
 // flowTargets lists a flow's feed ids and the source topics it currently

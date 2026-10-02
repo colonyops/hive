@@ -3,12 +3,18 @@ package runtime_test
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
@@ -481,4 +487,64 @@ func TestEngineInstallReconcilesNodeKV(t *testing.T) {
 	_, found, err = testStores(db).NodeKV.Get(ctx, "triage", "ghost", "seen", 1)
 	require.NoError(t, err)
 	require.False(t, found, "a node id no longer in the flow loses its KV on install")
+}
+
+// The global tracer delegates to the first provider installed and never to a
+// later one, so the provider is installed once per binary and the recorder is
+// reset per run; otherwise `go test -count=2` fails on the second run.
+var (
+	spanRecorder        = tracetest.NewSpanRecorder()
+	installSpanRecorder = sync.OnceFunc(func() {
+		otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(spanRecorder)))
+	})
+)
+
+// The pass is a trigger span, so the store's conditional db.CommitBatch span
+// fires under it in production and not only when a test hands it a traced
+// context. Serial: it installs the process-wide tracer provider.
+func TestEngineDrainIsATraceWithTheCommitBelowIt(t *testing.T) {
+	installSpanRecorder()
+	spanRecorder.Reset()
+	recorder := spanRecorder
+
+	db := openTestStore(t)
+	flows := &flowSet{}
+	flows.set(triageFlow("traced", true))
+	engine := startEngine(t, db, flows, nil)
+
+	ingest(t, db, "traced", observation{"pr-1", "First"})
+	engine.Wake()
+
+	var spans []sdktrace.ReadOnlySpan
+	require.Eventually(t, func() bool {
+		spans = recorder.Ended()
+		return slices.ContainsFunc(spans, func(s sdktrace.ReadOnlySpan) bool { return s.Name() == "runtime.drain" })
+	}, 5*time.Second, 20*time.Millisecond, "the pass must end as a span")
+
+	byID := make(map[trace.SpanID]sdktrace.ReadOnlySpan, len(spans))
+	var commit sdktrace.ReadOnlySpan
+	for _, s := range spans {
+		byID[s.SpanContext().SpanID()] = s
+		if s.Name() == "db.CommitBatch" {
+			commit = s
+		}
+	}
+	require.NotNil(t, commit, "the commit is a wait and must appear once a trigger is above it")
+
+	flowSpan, ok := byID[commit.Parent().SpanID()]
+	require.True(t, ok, "db.CommitBatch must have a parent in this process")
+	require.Equal(t, "runtime.flow", flowSpan.Name())
+	require.Contains(t, flowSpan.Attributes(), attribute.String("runtime.flow.id", "traced"))
+
+	drain, ok := byID[flowSpan.Parent().SpanID()]
+	require.True(t, ok)
+	require.Equal(t, "runtime.drain", drain.Name())
+	require.False(t, drain.Parent().IsValid(), "a trigger span is a root")
+	require.Subset(t, drain.Attributes(), []attribute.KeyValue{
+		attribute.Bool("runtime.reload", false),
+		attribute.Int("runtime.flows", 1),
+		attribute.Int("runtime.pages", 1),
+		attribute.Int("runtime.messages", 1),
+		attribute.Int("runtime.failed", 0),
+	})
 }
