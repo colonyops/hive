@@ -51,6 +51,8 @@ Hive Desktop keeps these files under its config directory by default:
 
 Set `HIVE_DESKTOP_CONFIG_DIR` or `HIVE_DESKTOP_DATA_DIR` to move the config or data root. You can also move the flow, action, and workspace paths separately.
 
+A `settings.yaml` key this version does not know, for example one a newer version wrote into a synced config directory, does not stop the app. Startup logs a warning naming the key and ignores it, so the in-app updater stays available. Saving settings from that version drops the key.
+
 !!! tip "Ask the Hive workspace"
     The **Hive** workspace in **Chats** can update settings with the `hive-settings` skill. For example, ask it to change the polling interval or terminal font.
 

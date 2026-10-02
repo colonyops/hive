@@ -157,11 +157,13 @@ as a terminal.
 
 ## Desktop settings
 
-`settings.yaml` is strictly decoded into a nested typed schema. Resolution is
-safe defaults → strict YAML validation → typed `HIVE_DESKTOP_*` environment
-overrides → effective-value validation; unknown fields and invalid explicit
-values fail startup even when an environment value shadows them. Process
-overrides are reapplied after writes and are never persisted accidentally.
+`settings.yaml` is decoded into a nested typed schema. Resolution is
+safe defaults → YAML decode and validation → typed `HIVE_DESKTOP_*` environment
+overrides → effective-value validation; an invalid explicit value fails startup
+even when an environment value shadows it. A key the build does not declare
+is logged and ignored (ADR a-settings-yaml-key-the-build-does-not-declare-is-ignored-not-rejected).
+Process overrides are reapplied after writes and are never persisted
+accidentally.
 
 **Resolution happens once, at startup: assume every change needs a relaunch.**
 Editing `settings.yaml` while the app runs, or flipping a flag the running

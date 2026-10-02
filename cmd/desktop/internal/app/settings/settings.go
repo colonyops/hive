@@ -355,7 +355,8 @@ type Settings struct {
 	Onboarding      OnboardingSettings      `yaml:"onboarding,omitempty"`
 	Development     DevelopmentSettings     `yaml:"development"`
 
-	overrides map[string]bool
+	overrides   map[string]bool
+	unknownKeys error
 }
 
 func DefaultSettings() Settings {
@@ -381,6 +382,11 @@ func DefaultSettings() Settings {
 }
 
 func (s Settings) EnvironmentOverridden(name string) bool { return s.overrides[name] }
+
+// UnknownKeys reports the settings.yaml keys this build does not declare, one
+// line each, or nil. The load ignores them and a save drops them.
+func (s Settings) UnknownKeys() error { return s.unknownKeys }
+
 func (s Settings) MockMode() string {
 	if s.Development.Mocks.Mode == MockLive {
 		return ""

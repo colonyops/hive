@@ -76,6 +76,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	if err := cfg.UnknownKeys(); err != nil {
+		logger.Warn().Err(err).Msg("settings.yaml has keys this build ignores")
+	}
 	// Mock mode can select an isolated flows directory, so finalize the path
 	// snapshot only after settings and environment precedence are resolved.
 	initialLogPath := paths.LogFile

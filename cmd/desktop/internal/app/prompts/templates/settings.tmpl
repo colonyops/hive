@@ -106,7 +106,8 @@ development:
 
 ## Rules
 
-- Unknown keys, multiple YAML documents, invalid closed-set values, unsafe listener hosts, and invalid ports are rejected.
+- A key this version does not know is not rejected: startup logs a warning and ignores it, and the next settings save drops it. A misspelled key therefore does nothing. Check the spelling against the schema above.
+- Multiple YAML documents, invalid closed-set values, unsafe listener hosts, and invalid ports are rejected.
 - `version` is written and migrated by the app. Do not add or edit it.
 - `polling.interval` below 60s is rejected.
 - Durations are strings like `5m`; a bare number is not seconds.

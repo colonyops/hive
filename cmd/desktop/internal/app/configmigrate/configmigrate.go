@@ -1,9 +1,10 @@
 // Package configmigrate upgrades an older on-disk config document to the
 // version the running build expects, forward-only and one step per version.
 // It operates on the file's own top-level `version:` field, not a tracking
-// table, and it works on raw bytes BEFORE the strict (KnownFields) decoders in
-// settings/flow/actions run, since a renamed or removed key is a hard decode
-// error for them.
+// table, and it works on raw bytes BEFORE the typed decoders in
+// settings/flow/actions run. Flow and actions decode with KnownFields, so a
+// renamed or removed key is a hard decode error for them; settings ignores it
+// with a warning on every launch.
 //
 // A migration re-marshals the document from a generic map, so comments,
 // formatting, and key order are NOT preserved (ADR yaml-config-migration). The comment-preserving
@@ -50,8 +51,8 @@ var ErrVersionTooNew = errors.New("config version is newer than this build suppo
 //   - Empty input returns (nil, false, nil).
 //   - Non-empty bytes that fail the lax map[string]any decode return a wrapped
 //     decode error (distinct from the empty case). This is the corrupt/undecodable
-//     path: migration now runs BEFORE the strict decode, so a malformed file hits
-//     this lax decode first. Each loader handles it exactly as a decode failure.
+//     path: migration runs BEFORE the typed decode, so a malformed file hits this
+//     lax decode first. Each loader handles it exactly as a decode failure.
 //   - A version above Current returns ErrVersionTooNew and no bytes.
 //   - A migration step whose Migrate closure returns an error aborts: Apply
 //     returns that error and produces no bytes.

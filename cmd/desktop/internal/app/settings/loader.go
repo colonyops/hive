@@ -66,11 +66,13 @@ func loadSettingsAt(path string, withEnvironment bool) (Settings, error) {
 		return Settings{}, fmt.Errorf("migrate desktop settings: %w", err)
 	}
 	if len(bytes.TrimSpace(data)) > 0 {
-		decoder := yaml.NewDecoder(bytes.NewReader(data))
-		decoder.KnownFields(true)
-		if err := decoder.Decode(&cfg); err != nil {
+		// No KnownFields: a file from a newer build must not keep this build from
+		// reaching its updater
+		// (ADR a-settings-yaml-key-the-build-does-not-declare-is-ignored-not-rejected).
+		if err := yaml.NewDecoder(bytes.NewReader(data)).Decode(&cfg); err != nil {
 			return Settings{}, fmt.Errorf("parse desktop settings: %w", err)
 		}
+		cfg.unknownKeys = checkKnownFields(data)
 	}
 
 	// Persisted settings must be valid on their own. An environment override is
@@ -133,4 +135,13 @@ func saveSettingsAt(path string, cfg Settings) error {
 		return fmt.Errorf("replace desktop settings: %w", err)
 	}
 	return nil
+}
+
+// checkKnownFields runs after a lenient decode has succeeded, so every error
+// the strict decode still returns is a key this build does not declare.
+func checkKnownFields(data []byte) error {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	decoder.KnownFields(true)
+	var discard Settings
+	return decoder.Decode(&discard)
 }

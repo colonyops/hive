@@ -164,11 +164,33 @@ development:
 	assert.Equal(t, MockPipeline, persisted.Development.Mocks.Mode)
 }
 
-func TestLoadSettingsRejectsUnknownFields(t *testing.T) {
+func TestLoadSettingsReportsUnknownFields(t *testing.T) {
 	path := isolateSettings(t)
-	require.NoError(t, os.WriteFile(path, []byte("http:\n  enabled: false\n  typo: true\n"), 0o600))
+	contents := "http:\n  enabled: false\n  typo: true\nmenu_bar:\n  feeds:\n    - feed: flow/node\n      future: 1\ntelemetry_v2:\n  endpoint: x\n"
+	require.NoError(t, os.WriteFile(path, []byte(contents), 0o600))
+	cfg, err := LoadSettings()
+	require.NoError(t, err)
+	assert.False(t, cfg.HTTP.Enabled)
+	assert.Equal(t, "flow/node", cfg.MenuBar.Feeds[0].Feed)
+	require.Error(t, cfg.UnknownKeys())
+	for _, key := range []string{"field typo not found", "field future not found", "field telemetry_v2 not found"} {
+		assert.ErrorContains(t, cfg.UnknownKeys(), key)
+	}
+}
+
+func TestLoadSettingsReportsNoUnknownFieldsForAKnownFile(t *testing.T) {
+	path := isolateSettings(t)
+	require.NoError(t, os.WriteFile(path, []byte("http:\n  enabled: false\n"), 0o600))
+	cfg, err := LoadSettings()
+	require.NoError(t, err)
+	assert.NoError(t, cfg.UnknownKeys())
+}
+
+func TestLoadSettingsStillRejectsAWrongTypedValue(t *testing.T) {
+	path := isolateSettings(t)
+	require.NoError(t, os.WriteFile(path, []byte("http:\n  port: not-a-port\n  typo: true\n"), 0o600))
 	_, err := LoadSettings()
-	require.ErrorContains(t, err, "field typo not found")
+	require.ErrorContains(t, err, "parse desktop settings")
 }
 
 func TestLoadSettingsRejectsInvalidEnvironment(t *testing.T) {

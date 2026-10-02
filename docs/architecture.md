@@ -52,7 +52,7 @@ individual choices; this document describes the shape everything fits into.
 > Settings ▸ Integrations is a projection of the same registry (ADR credential-store).
 >
 > Desktop configuration is one nested typed schema: startup resolves safe
-> defaults, strict YAML and `HIVE_DESKTOP_*` overrides once, then injects the
+> defaults, YAML and `HIVE_DESKTOP_*` overrides once, then injects the
 > resulting settings and immutable path snapshot. Development state is local to
 > each worktree under `.hive-desktop/` (ADR desktop-configuration).
 >
@@ -790,13 +790,16 @@ picker (`pipeline/fields/MarkImageField.vue`) over one pair of RPCs on
 
 `settings.yaml` is a nested typed document with `polling`, `updates`,
 `notifications`, `appearance`, `http`, `telemetry`, `keybindings`, and
-`development` sections. Resolution is deterministic: safe compiled defaults, one strictly
+`development` sections. Resolution is deterministic: safe compiled defaults, one
 decoded and validated YAML document, then typed
 `HIVE_DESKTOP_<NAMESPACE>_<FIELD>` process overrides followed by effective-value
 validation. Missing config is safe: webhooks and pprof
 are disabled, listener hosts are loopback, automatic ports are `0`, mock mode
 is live, and debug pauses are zero. Environment overrides affect the effective
-value but are never written into YAML by an unrelated settings edit.
+value but are never written into YAML by an unrelated settings edit. A key the
+build does not declare is ignored and logged once at startup, so a file a
+newer build wrote still starts this build and its updater
+(ADR a-settings-yaml-key-the-build-does-not-declare-is-ignored-not-rejected).
 
 `settings.yaml`, `flows/*.yaml`, and `actions.yml` each carry a top-level
 `version:` and are migrated forward in place at startup by
