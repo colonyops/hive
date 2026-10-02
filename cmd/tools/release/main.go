@@ -139,7 +139,7 @@ func newReleaseCommand() *cli.Command {
 			},
 			{
 				Name:  "changelog",
-				Usage: "manage the release notes each program embeds",
+				Usage: "manage each program's release notes",
 				Commands: []*cli.Command{
 					{
 						Name:      "promote",
@@ -148,7 +148,7 @@ func newReleaseCommand() *cli.Command {
 						Description: "Collapses each program's changelog/unreleased/ into its <version>.md, stamping the version and date, and " +
 							"deletes the fragments. Every program gets an entry, because every release ships every program. Edit the entries " +
 							"before committing them: each is the sum of every pull request since the last release, so consolidate near-duplicate " +
-							"bullets and write the summaries. Commit the result before releasing: the notes are embedded in the binaries, and " +
+							"bullets and write the summaries. Commit the result before releasing: the release ships the notes main holds, and " +
 							"`release publish` refuses a stable version that has no entry. Prereleases need none — they publish the draft as it stands.",
 						Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
 							if cmd.NArg() != 1 {

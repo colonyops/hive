@@ -20,9 +20,10 @@ type product struct {
 	title string
 	// dir is the changelog directory, relative to the repository root.
 	dir string
-	// changelog is the same directory as the product's binary embeds it.
-	// What a release publishes is read through it, so a published version and
-	// the notes its binary shows cannot drift apart.
+	// changelog is the same directory, read through the product's embed
+	// package. What a release publishes is read through it: the desktop binary
+	// embeds the same tree and shows it, and the gate reads every product the
+	// same way.
 	changelog fs.FS
 }
 

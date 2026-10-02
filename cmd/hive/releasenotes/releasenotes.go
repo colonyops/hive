@@ -8,6 +8,9 @@ import (
 	"io/fs"
 )
 
+// all: keeps unreleased/.gitkeep, so the embed compiles while changelog/ has
+// no entry yet and holds the same tree as the worktree.
+//
 //go:embed all:changelog
 var embedded embed.FS
 

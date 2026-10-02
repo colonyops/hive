@@ -54,11 +54,6 @@ func parsePromotedStatus(status string) (promoted, error) {
 			if result.version != "" && result.version != version {
 				return promoted{}, fmt.Errorf("changelog entries for two versions (%s and %s); expected one", result.version, version)
 			}
-			for _, entry := range result.entries {
-				if entry.product.name == entryOf.name {
-					return promoted{}, fmt.Errorf("two new %s changelog entries (%s and %s); expected one", entryOf.name, entry.path, file)
-				}
-			}
 			result.version = version
 			result.entries = append(result.entries, promotedEntry{product: *entryOf, path: file})
 		case (code == " D" || code == "D ") && fragmentOf != nil:
@@ -217,8 +212,8 @@ func openReleaseNotesPR(ctx context.Context, dryRun bool) error {
 }
 
 // validatePromotedEntry is the gate on an entry a person edited. Promotion
-// writes an empty summary on purpose, and an empty one reaches the What's New
-// toast and the channel manifest as nothing at all, so it has to be filled in
+// writes an empty summary on purpose, and an empty one heads the program's
+// notes as nothing at all wherever they are shown, so it has to be filled in
 // before the entry can land. The body may stay empty: a product the release
 // does not change has nothing to list.
 func validatePromotedEntry(entry releasenotes.Entry, entryPath string) error {
@@ -261,7 +256,7 @@ type productSummary struct {
 func releaseNotesCommitBody(version releaseVersion, fragments int) string {
 	return fmt.Sprintf(
 		"%s collects %d changelog fragments into one entry per program\nand deletes them.\n\n"+
-			"Each program embeds its notes in the binary, so `release publish`\nrefuses a version that has no entry. This must land before the\nrelease runs.",
+			"The release ships the notes main holds, so `release publish`\nrefuses a version that has no entry. This must land before the\nrelease runs.",
 		version, fragments)
 }
 
@@ -270,6 +265,6 @@ func releaseNotesPRBody(summaries []productSummary) string {
 	for _, s := range summaries {
 		fmt.Fprintf(&b, "- **%s:** %s\n", s.product.title, s.summary)
 	}
-	b.WriteString("\nThese entries collect the changelog fragments that accumulated since the last release. Each program embeds its notes in the binary, so `release publish` refuses a version that has no entry on main. This must land before the release runs.")
+	b.WriteString("\nThese entries collect the changelog fragments that accumulated since the last release. The release ships the notes main holds, so `release publish` refuses a version that has no entry on main. This must land before the release runs.")
 	return b.String()
 }

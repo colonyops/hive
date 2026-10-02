@@ -91,11 +91,19 @@ func promoteTargetVersion(ctx context.Context, arg string) (releaseVersion, erro
 // promoteDrafts collapses every product's accumulated fragments into its
 // entry for version and deletes them, leaving each unreleased directory empty
 // for the next cycle. It returns the entries it wrote.
+func promoteDrafts(ctx context.Context, version releaseVersion) ([]string, error) {
+	if err := validatePromoteSource(ctx); err != nil {
+		return nil, err
+	}
+	return writePromotions(products, version, time.Now())
+}
+
+// writePromotions writes each product's entry for version from its draft.
 //
 // Every product gets an entry, including one with no fragments: the release
-// ships every product under this version, and each binary has to be able to
-// say what its version is. That entry starts with an empty body, and its
-// summary says the release changes nothing in that product.
+// ships every product under this version, and every product's changelog has
+// to name every version it shipped under. That entry starts with an empty
+// body, and its summary says the release changes nothing in that product.
 //
 // Each entry is the draft that builds have been showing, rendered the same
 // way. It is written with an empty summary and is meant to be edited before it
@@ -103,11 +111,7 @@ func promoteTargetVersion(ctx context.Context, arg string) (releaseVersion, erro
 // release, and a changelog reads as what the program now does. Consolidating
 // near-duplicate bullets and writing the one-line summary are this step's job
 // (ADR release-notes-accumulate-as-fragments).
-func promoteDrafts(ctx context.Context, version releaseVersion) ([]string, error) {
-	if err := validatePromoteSource(ctx); err != nil {
-		return nil, err
-	}
-
+func writePromotions(products []product, version releaseVersion, date time.Time) ([]string, error) {
 	type promotion struct {
 		product   product
 		body      string
@@ -136,7 +140,7 @@ func promoteDrafts(ctx context.Context, version releaseVersion) ([]string, error
 	}
 
 	header := fmt.Sprintf("---\nversion: %s\ndate: %s\nsummary: \"\"\n---\n\n",
-		version, time.Now().Format(time.DateOnly))
+		version, date.Format(time.DateOnly))
 	paths := make([]string, 0, len(promotions))
 	for _, promotion := range promotions {
 		path := promotion.product.entryPath(version.String())
@@ -174,8 +178,8 @@ func newFragment(p product, kind releasenotes.Kind, body string) (string, error)
 	name := releasenotes.FragmentName(time.Now().UTC().Format(releasenotes.FragmentStampFormat), slug)
 	dir := p.unreleasedDir()
 	path := filepath.Join(dir, name)
-	// go:embed drops a directory holding only .gitkeep, so a checkout that
-	// lost that file has no unreleased/ for the write to land in.
+	// git does not track an empty directory, so a checkout whose .gitkeep is
+	// gone has no unreleased/ for the write to land in.
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create %s: %w", dir, err)
 	}

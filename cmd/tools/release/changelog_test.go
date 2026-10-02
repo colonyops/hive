@@ -1,10 +1,14 @@
 package main
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/colonyops/hive/internal/releasenotes"
 )
@@ -138,33 +142,126 @@ func TestProductDirMatchesItsEmbed(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: load embed: %v", p.name, err)
 		}
-		if len(onDisk) != len(embedded) {
-			t.Errorf("%s: %s holds %d entries, the embed %d", p.name, p.dir, len(onDisk), len(embedded))
+		if !reflect.DeepEqual(onDisk, embedded) {
+			t.Errorf("%s: %s and the embed hold different entries:\n%+v\n%+v", p.name, p.dir, onDisk, embedded)
 		}
 	}
 }
 
-// Two notes that open the same way, written in the same second, build the same
-// name. The second must not replace the first.
-func TestNewFragmentRefusesToOverwrite(t *testing.T) {
-	p := product{name: "test", dir: t.TempDir()}
-	first, err := newFragment(p, releasenotes.KindAdded, "**The same note with seven words here.** first")
-	if err != nil {
-		t.Fatalf("first fragment: %v", err)
+func TestWriteNewFileRefusesToOverwrite(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "note.md")
+	if err := writeNewFile(path, []byte("first")); err != nil {
+		t.Fatal(err)
 	}
 
-	second, err := newFragment(p, releasenotes.KindFixed, "**The same note with seven words here.** second")
-	if err == nil {
-		if second != first {
-			return // the clock ticked between the two writes
+	err := writeNewFile(path, []byte("second"))
+	if !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("second write: got %v, want fs.ErrExist", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != "first" {
+		t.Fatalf("first write was replaced: %q", raw)
+	}
+}
+
+// Two notes that open the same way, written in the same second, build the same
+// name. The name holds the current second, so the test occupies the name for
+// this second and the next instead of racing the clock.
+func TestNewFragmentNamesTheFileItRefusedToReplace(t *testing.T) {
+	p := product{name: "test", dir: t.TempDir()}
+	if err := os.MkdirAll(p.unreleasedDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const note = "**The same note.** second"
+	now := time.Now().UTC()
+	for _, stamp := range []time.Time{now, now.Add(time.Second)} {
+		name := releasenotes.FragmentName(stamp.Format(releasenotes.FragmentStampFormat), fragmentSlug(note))
+		if err := os.WriteFile(filepath.Join(p.unreleasedDir(), name), []byte("first"), 0o644); err != nil {
+			t.Fatal(err)
 		}
-		t.Fatal("expected the second write to be refused")
 	}
-	raw, readErr := os.ReadFile(first)
-	if readErr != nil {
-		t.Fatal(readErr)
+
+	_, err := newFragment(p, releasenotes.KindFixed, note)
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("expected the second write to be refused by name, got %v", err)
 	}
-	if !strings.Contains(string(raw), "first") {
-		t.Fatalf("first fragment was overwritten: %s", raw)
+}
+
+func testProduct(t *testing.T, name string, fragments map[string]string) product {
+	t.Helper()
+	p := product{name: name, title: name, dir: t.TempDir()}
+	if err := os.MkdirAll(p.unreleasedDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for file, body := range fragments {
+		contents := "---\nkind: added\n---\n\n" + body + "\n"
+		if err := os.WriteFile(filepath.Join(p.unreleasedDir(), file), []byte(contents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return p
+}
+
+func TestWritePromotionsWritesOneEntryPerProduct(t *testing.T) {
+	version := mustVersion(t, "0.5.0")
+	changed := testProduct(t, "changed", map[string]string{"20260912T135002-a-thing.md": "**A thing.**"})
+	untouched := testProduct(t, "untouched", nil)
+
+	paths, err := writePromotions([]product{changed, untouched}, version, time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{changed.entryPath("0.5.0"), untouched.entryPath("0.5.0")}
+	if !reflect.DeepEqual(paths, want) {
+		t.Fatalf("paths = %v, want %v", paths, want)
+	}
+
+	for p, wantBody := range map[product]string{changed: "## Added\n\n- **A thing.**", untouched: ""} {
+		entries, err := releasenotes.Load(p.onDisk())
+		if err != nil {
+			t.Fatalf("%s: %v", p.name, err)
+		}
+		entry, ok := entries.Find("0.5.0")
+		if !ok {
+			t.Fatalf("%s: no entry for 0.5.0 in %+v", p.name, entries)
+		}
+		if entry.Summary != "" || entry.Body != wantBody || entry.Date.Format(time.DateOnly) != "2026-10-01" {
+			t.Fatalf("%s: entry = %+v", p.name, entry)
+		}
+		if _, ok := entries.Draft(); ok {
+			t.Fatalf("%s: the fragments were not deleted", p.name)
+		}
+	}
+}
+
+func TestWritePromotionsRefusesAnExistingEntryBeforeWritingAnything(t *testing.T) {
+	version := mustVersion(t, "0.5.0")
+	first := testProduct(t, "first", map[string]string{"20260912T135002-a-thing.md": "**A thing.**"})
+	second := testProduct(t, "second", map[string]string{"20260912T135003-another.md": "**Another.**"})
+	if err := os.WriteFile(second.entryPath("0.5.0"), []byte("---\nversion: 0.5.0\ndate: 2026-01-01\nsummary: Old.\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := writePromotions([]product{first, second}, version, time.Now())
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("expected the existing entry to be refused, got %v", err)
+	}
+	if _, err := os.Stat(first.entryPath("0.5.0")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("the first product's entry was written before the refusal: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(first.unreleasedDir(), "20260912T135002-a-thing.md")); err != nil {
+		t.Fatalf("the first product's fragment was deleted before the refusal: %v", err)
+	}
+}
+
+func TestWritePromotionsRefusesWhenNoProductHasFragments(t *testing.T) {
+	products := []product{testProduct(t, "a", nil), testProduct(t, "b", nil)}
+
+	_, err := writePromotions(products, mustVersion(t, "0.5.0"), time.Now())
+	if err == nil || !strings.Contains(err.Error(), "nothing to release") {
+		t.Fatalf("expected an empty promotion to be refused, got %v", err)
 	}
 }

@@ -11,6 +11,9 @@ import (
 	"github.com/colonyops/hive/internal/releasenotes"
 )
 
+// all: keeps unreleased/.gitkeep, so the embed holds the same tree as the
+// worktree and compiles while changelog/unreleased/ is empty.
+//
 //go:embed all:changelog
 var embedded embed.FS
 

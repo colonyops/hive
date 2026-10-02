@@ -25,12 +25,19 @@ parser and takes an `fs.FS`; it embeds nothing.
 - `release changelog promote <version>` promotes every program at once. Every
   program gets a `<version>.md`, including one with no fragments, whose body
   stays empty and whose summary says the release does not change it. Every
-  binary of a version can then say what that version is.
+  program's changelog then names every version it shipped under.
 - `release changelog pr` refuses a promotion that lacks an entry for any
   program, or that mixes versions.
 
-The release tool reads each changelog through the program's embed, not off
-disk, so a published version and its notes cannot drift apart.
+The desktop embeds its changelog and shows it in the app (ADR
+release-notes-ship-inside-the-binary). The CLI's notes ship on the GitHub
+release; the `hive` binary does not read them. Its embed package exists so the
+release tool reads both changelogs the same way, and a CLI surface for the
+notes is follow-up work.
+
+What a release publishes is read through the embed packages. `promote` and
+`pr` read the worktree instead, because the embed is fixed when the tool is
+compiled, and a stale build would promote a partial draft.
 
 ## Consequences
 

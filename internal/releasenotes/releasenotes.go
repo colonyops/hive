@@ -31,10 +31,10 @@ type Entry struct {
 	Version string
 	// Date is the release date, zero on the draft.
 	Date time.Time
-	// Summary is a one-line description: what the What's New toast shows,
-	// and what a channel manifest carries for a release the user has not
-	// installed yet, where a full body does not fit. The draft has none: a
-	// summary describes a whole release, so it is written at promotion.
+	// Summary is the one line that heads a release's notes wherever they are
+	// shown: the desktop's What's New toast and update manifest, and a
+	// program's section of the GitHub release. The draft has none: a summary
+	// describes a whole release, so it is written at promotion.
 	Summary string
 	// Body is the markdown detail, which may be empty for a release whose
 	// summary says everything.
@@ -92,8 +92,8 @@ func Load(fsys fs.FS) (Entries, error) {
 func Fragments(fsys fs.FS) ([]Fragment, error) {
 	files, err := fs.ReadDir(fsys, UnreleasedDir)
 	if errors.Is(err, fs.ErrNotExist) {
-		// go:embed drops a directory holding nothing but .gitkeep, which is
-		// what the tree looks like between a promotion and the next change.
+		// git does not track an empty directory, so a worktree whose .gitkeep
+		// is gone has no unreleased/ between a promotion and the next change.
 		return nil, nil
 	}
 	if err != nil {

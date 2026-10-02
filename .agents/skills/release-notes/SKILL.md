@@ -13,9 +13,10 @@ changes, **in the pull request that earns it**:
 | hive CLI/TUI (`cmd/hive`) | `cli` | `cmd/hive/releasenotes/changelog/` |
 | Hive Desktop (`cmd/desktop`) | `desktop` | `cmd/desktop/releasenotes/changelog/` |
 
-Each program embeds its own changelog, and every release ships both under one
-version. The fragments are the draft a build embeds and shows, so what you
-write here is the product's changelog, not a note to a future maintainer.
+Every release ships both programs under one version. The desktop embeds its
+changelog and shows the fragments as the draft in the app; the CLI's notes ship
+on the GitHub release. Either way, what you write here is the product's
+changelog, not a note to a future maintainer.
 
 A change to the shared `internal/` packages earns a note in each program
 whose users can notice it, and only there. One that changes both programs'
