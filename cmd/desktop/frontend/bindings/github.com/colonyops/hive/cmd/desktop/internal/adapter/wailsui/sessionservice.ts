@@ -61,6 +61,14 @@ export function InvokeTerminalAction(actionID: string, target: dispatch$0.Termin
 }
 
 /**
+ * ItemChats returns the agent workspace chats an inbox item opened, newest
+ * first.
+ */
+export function ItemChats(itemID: number): $CancellablePromise<dispatch$0.ItemChatView[] | null> {
+    return $Call.ByID(1387995223, itemID);
+}
+
+/**
  * ItemSessions returns the sessions an inbox item spawned, newest first, with
  * the state hive reports for each now. Slug is the attach target.
  */

@@ -11,6 +11,7 @@ export type {
     ClipboardExecutionOutcome,
     CreateSessionRequest,
     ExecutionOutcome,
+    ItemChatView,
     ItemSessionView,
     MessageExecutionOutcome,
     SessionCreateFailure,

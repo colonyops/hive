@@ -17,6 +17,8 @@ Open a workspace's flow editor to add nodes and connect them. Select **Deploy** 
 - **Feed** nodes add items to an Inbox list.
 - **Notify** nodes show a banner or toast.
 - **Action** nodes run a named action.
+- **Launch session** nodes start a coding session in a repository.
+- **Launch chat** nodes open a chat in an agent workspace.
 
 The editor and YAML file are two views of the same flow. Changes reload when the file is saved. If validation fails, Hive keeps the last valid version active and reports the error in Activity.
 
@@ -43,6 +45,26 @@ wires:
 Every node needs an `id` and `type`. Type-specific fields sit beside them. Wires name the source and destination node IDs.
 
 Add a filter between the source and feed when you need narrower routing. The GitHub filter can match CI states such as `passing` or `failing` and review states such as `approved` or `changes_requested`. Branch one output to several destinations when an item should enter a feed and raise a notification or action.
+
+## Start work from a flow
+
+A launch node starts work for each item that reaches it, once per item. A pull request that keeps changing does not start a new session on each update. The item's detail pane lists the session or chat it started.
+
+```yaml
+  - id: review
+    type: launch-session
+    repo: "https://github.com/{{ .Payload.repo }}.git"
+    sessionName: "review-{{ .Payload.num }}"
+    prompt: "Review pull request #{{ .Payload.num }}"
+  - id: triage
+    type: launch-chat
+    workspace: incident-triage
+    prompt: "Triage {{ .Payload.title }}"
+```
+
+`launch-session` takes `repo` and `prompt`, plus an optional `agent` and `sessionName`. `launch-chat` takes `workspace` and `prompt`. The templates see the same item fields as a `launch-session` action, so fence outside content as [Actions](actions.md) describes.
+
+Use an **Action** node instead when the same launch also appears in the item menu. Then you define it once in `actions.yml`.
 
 ## Flow files
 

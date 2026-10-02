@@ -8,6 +8,8 @@ describe('byType', () => {
       'feed',
       'function',
       'github-filter',
+      'launch-chat',
+      'launch-session',
       'notify',
       'sources.exec',
       'sources.gitea',
@@ -57,7 +59,13 @@ describe('palette', () => {
       'sources.webhook',
     ])
     expect(palette.Process.map((d) => d.type).sort()).toEqual(['function', 'github-filter'])
-    expect(palette.Destinations.map((d) => d.type).sort()).toEqual(['action', 'feed', 'notify'])
+    expect(palette.Destinations.map((d) => d.type).sort()).toEqual([
+      'action',
+      'feed',
+      'launch-chat',
+      'launch-session',
+      'notify',
+    ])
   })
 })
 

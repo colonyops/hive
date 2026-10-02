@@ -45,11 +45,13 @@ type nodeFactory func() NodeConfig
 // Source types are not listed: they are derived from the connector registry,
 // so adding a source connector is a change to cmd/desktop/internal/app/sources alone.
 var registry = buildRegistry(map[string]nodeFactory{
-	"github-filter": func() NodeConfig { return &GithubFilterConfig{} },
-	"function":      func() NodeConfig { return &FunctionConfig{} },
-	NodeTypeFeed:    func() NodeConfig { return &FeedConfig{} },
-	"action":        func() NodeConfig { return &ActionConfig{} },
-	"notify":        func() NodeConfig { return &NotifyConfig{} },
+	"github-filter":  func() NodeConfig { return &GithubFilterConfig{} },
+	"function":       func() NodeConfig { return &FunctionConfig{} },
+	NodeTypeFeed:     func() NodeConfig { return &FeedConfig{} },
+	"action":         func() NodeConfig { return &ActionConfig{} },
+	"notify":         func() NodeConfig { return &NotifyConfig{} },
+	"launch-session": func() NodeConfig { return &LaunchSessionConfig{} },
+	"launch-chat":    func() NodeConfig { return &LaunchChatConfig{} },
 })
 
 // NodeTypeFeed is the feed terminal's type discriminator. It is named because

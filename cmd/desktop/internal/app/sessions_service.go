@@ -88,6 +88,7 @@ type inboxItemRefReader interface {
 // to sessions Hive no longer has.
 type itemSessionStore interface {
 	List(ctx context.Context, ref models.ItemRef) ([]stores.ItemSession, error)
+	ListChats(ctx context.Context, ref models.ItemRef) ([]stores.ItemChat, error)
 	Unlink(ctx context.Context, sessionIDs []string) error
 }
 
@@ -296,6 +297,29 @@ func (s *SessionsService) SessionStatuses(ctx context.Context) (dispatch.Session
 		return dispatch.SessionStatusSnapshot{}, Wrap(err, KindInternal, "reading session status")
 	}
 	return statuses, nil
+}
+
+// ItemChats returns the agent workspace chats an inbox item opened, newest
+// first.
+func (s *SessionsService) ItemChats(ctx context.Context, itemID int64) ([]dispatch.ItemChatView, error) {
+	ref, err := s.items.RefByID(ctx, itemID)
+	if err != nil {
+		if stores.IsNotFound(err) {
+			return nil, Wrap(err, KindNotFound, "inbox item %d not found", itemID)
+		}
+		return nil, Wrap(err, KindInternal, "reading inbox item %d", itemID)
+	}
+	chats, err := s.links.ListChats(ctx, ref)
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "listing chats for item %d", itemID)
+	}
+	views := make([]dispatch.ItemChatView, 0, len(chats))
+	for _, chat := range chats {
+		views = append(views, dispatch.ItemChatView{
+			ID: chat.ChatID, Workspace: chat.Workspace, Name: chat.Name, CreatedAt: time.UnixMilli(chat.CreatedAt),
+		})
+	}
+	return views, nil
 }
 
 // ItemSessions returns the hive sessions an inbox item spawned, newest first,
@@ -529,7 +553,7 @@ func (s *SessionsService) CreateSession(ctx context.Context, req dispatch.Create
 		var err error
 		if workspace != "" {
 			_, err = s.workspaceLauncher.LaunchWorkspaceSession(bg, dispatch.LaunchWorkspaceSessionRequest{
-				Workspace: workspace, Name: name, Prompt: prompt,
+				Workspace: workspace, Name: name, Prompt: prompt, Origins: launch.Origins,
 			})
 		} else {
 			_, err = s.launcher.LaunchSession(bg, launch)

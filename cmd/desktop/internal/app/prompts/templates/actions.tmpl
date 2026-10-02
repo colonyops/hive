@@ -8,6 +8,11 @@ in the row menus of terminal mode's sessions and windows, and as the target of a
 flow `action` node, which fires it automatically for every message routed there.
 A **launcher** opens the pop-up terminal into a program and is documented under
 "Launchers" below.
+
+A flow that is the only place a session or chat starts does not need an action:
+its `launch-session` and `launch-chat` nodes carry the launch details inline.
+Write a `launch-session` action when the same launch is also offered from the
+item menu, and point a flow `action` node at it.
 {{template "yaml-strict" .}}
 ## Top-level schema
 

@@ -1,0 +1,54 @@
+{
+  "name": "launch nodes enqueue one launch per item and never fire from a snapshot",
+  "why": "A launch output carries the item key rather than the occurrence key, because the commit dedups a launch on the item: a pull request that keeps changing must not start a session per change. A snapshot re-states items already seen, so it is dropped before either launch terminal, the same rule that keeps a notify node quiet on every poll.",
+  "flow": {
+    "id": "auto",
+    "name": "Auto",
+    "enabled": true,
+    "nodes": [
+      { "id": "src", "type": "sources.github", "kind": "notifications" },
+      { "id": "s", "type": "launch-session", "repo": "{{ .Payload.repo }}", "prompt": "Review" },
+      { "id": "c", "type": "launch-chat", "workspace": "triage", "prompt": "Triage" }
+    ],
+    "wires": [
+      { "from": "src", "to": "s" },
+      { "from": "src", "to": "c" }
+    ]
+  },
+  "batch": [
+    {
+      "ID": "1", "Key": "k1", "Topic": "source:auto/src", "Ts": 1, "Snapshot": null,
+      "SourceKind": "github", "SourceScope": "notifications", "OccurrenceKey": "oc-1",
+      "Payload": { "repo": "acme/api" }
+    },
+    {
+      "ID": "2", "Key": "", "Topic": "source:auto/src", "Ts": 2,
+      "SourceKind": "github", "SourceScope": "notifications",
+      "Payload": [{ "key": "k1", "payload": { "repo": "acme/api" } }],
+      "Snapshot": [{ "key": "k1", "payload": { "repo": "acme/api" } }]
+    }
+  ],
+  "expected": {
+    "consumer": "auto",
+    "upToOffset": 2,
+    "outputs": [
+      {
+        "sink": { "kind": "launch", "targetId": "auto/s" },
+        "key": "k1", "payload": { "repo": "acme/api" }, "sourceKind": "github", "sourceScope": "notifications",
+        "sourceTopic": "source:auto/src"
+      },
+      {
+        "sink": { "kind": "launch", "targetId": "auto/c" },
+        "key": "k1", "payload": { "repo": "acme/api" }, "sourceKind": "github", "sourceScope": "notifications",
+        "sourceTopic": "source:auto/src"
+      }
+    ],
+    "feedSnapshots": [],
+    "discards": [{ "msgId": "2", "nodeId": "s" }, { "msgId": "2", "nodeId": "c" }],
+    "nodeRuns": [
+      { "flowId": "auto", "nodeId": "src", "ok": true, "inCount": 2, "outCount": 2, "dropCount": 0, "err": "", "durMs": 0 },
+      { "flowId": "auto", "nodeId": "s", "ok": true, "inCount": 2, "outCount": 1, "dropCount": 1, "err": "", "durMs": 0 },
+      { "flowId": "auto", "nodeId": "c", "ok": true, "inCount": 2, "outCount": 1, "dropCount": 1, "err": "", "durMs": 0 }
+    ]
+  }
+}

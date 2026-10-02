@@ -84,7 +84,14 @@ func DecodeActionItem(payload []byte, externalID string) (DecodedActionItem, err
 // they impose no repository requirement on the payload.
 func RenderRepoTarget(action actions.Action, key string, payload []byte, inputs map[string]string) (string, error) {
 	cfg, ok := action.Config.(*actions.LaunchSessionConfig)
-	if !ok || cfg.RepoTemplate == "" {
+	if !ok {
+		return "", nil
+	}
+	return renderRepoTemplate(cfg.RepoTemplate, key, payload, inputs)
+}
+
+func renderRepoTemplate(repoTemplate, key string, payload []byte, inputs map[string]string) (string, error) {
+	if repoTemplate == "" {
 		return "", nil
 	}
 
@@ -94,7 +101,7 @@ func RenderRepoTarget(action actions.Action, key string, payload []byte, inputs 
 	}
 
 	renderer := tmpl.New(tmpl.Config{})
-	rendered, err := renderer.Render(cfg.RepoTemplate, OutputData{
+	rendered, err := renderer.Render(repoTemplate, OutputData{
 		Key:     key,
 		Payload: decoded,
 		Raw:     json.RawMessage(payload),

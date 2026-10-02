@@ -124,6 +124,15 @@ type ItemSessionView struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// ItemChatView is one agent workspace chat an inbox item opened. ID and
+// Workspace are what the chat view is opened by.
+type ItemChatView struct {
+	ID        int64     `json:"id"`
+	Workspace string    `json:"workspace"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // SessionWindowStatus is one tmux window's detected agent activity.
 type SessionWindowStatus struct {
 	WindowID string `json:"windowId"`

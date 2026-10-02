@@ -20,6 +20,7 @@ import (
 type fakeItemSessionStore struct {
 	refs      map[int64]models.ItemRef
 	links     map[string][]stores.ItemSession
+	chats     map[string][]stores.ItemChat
 	unlinked  []string
 	unlinkErr error
 }
@@ -34,6 +35,10 @@ func (f *fakeItemSessionStore) RefByID(_ context.Context, itemID int64) (models.
 
 func (f *fakeItemSessionStore) List(_ context.Context, ref models.ItemRef) ([]stores.ItemSession, error) {
 	return f.links[ref.ExternalID], nil
+}
+
+func (f *fakeItemSessionStore) ListChats(_ context.Context, ref models.ItemRef) ([]stores.ItemChat, error) {
+	return f.chats[ref.ExternalID], nil
 }
 
 func (f *fakeItemSessionStore) Unlink(_ context.Context, sessionIDs []string) error {
@@ -190,4 +195,23 @@ func TestSessionsService_CreateSessionLaunchesUnlinkedWhenTheItemHasGone(t *test
 	require.NoError(t, err)
 	require.Len(t, launcher.calls, 1)
 	assert.Empty(t, launcher.calls[0].Origins)
+}
+
+func TestSessionsService_ItemChatsListsLinkedChats(t *testing.T) {
+	links := &fakeItemSessionStore{
+		refs: map[int64]models.ItemRef{7: {ProfileID: "p", SourceKind: "github", ExternalID: "acme/site#81"}},
+		chats: map[string][]stores.ItemChat{"acme/site#81": {
+			{ChatID: 9, Workspace: "triage", Name: "launch-p-triage-acme-site-81", CreatedAt: 200},
+		}},
+	}
+
+	views, err := itemSessionsService(&fakeSessionManager{}, links).ItemChats(t.Context(), 7)
+	require.NoError(t, err)
+	require.Len(t, views, 1)
+	assert.Equal(t, int64(9), views[0].ID)
+	assert.Equal(t, "triage", views[0].Workspace)
+	assert.Equal(t, int64(200), views[0].CreatedAt.UnixMilli())
+
+	_, err = itemSessionsService(&fakeSessionManager{}, links).ItemChats(t.Context(), 8)
+	assert.Equal(t, KindNotFound, KindOf(err))
 }

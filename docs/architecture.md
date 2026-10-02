@@ -1605,8 +1605,17 @@ headless, while neither opens the interactive target picker. Dispatch selects
 between the Hive session launcher and `AgentWorkspacesService` through
 consumer-defined ports. A workspace launch resolves the current workspace,
 regenerates its files, requires a command that carries `.Prompt` through
-`shq`, and starts a detached `agentws-*` chat. It has no Hive session record or
-`item_session` link.
+`shq`, and starts a detached `agentws-*` chat. It has no Hive session record;
+its item link is a row in `item_chat`, which cascades with the chat
+([ADR a-flow-launch-node-is-a-launch-session-action-declared-inline](decisions/2026-10-02-a-flow-launch-node-is-a-launch-session-action-declared-inline.md)).
+
+**A flow `launch-session` or `launch-chat` node is that action declared inline**
+([ADR a-flow-launch-node-is-a-launch-session-action-declared-inline](decisions/2026-10-02-a-flow-launch-node-is-a-launch-session-action-declared-inline.md)).
+It commits a `launch` output under the synthetic id `launch:<flow>/<node>`,
+which `dispatch.FlowActions` resolves from the live flow set the way it resolves
+a notify node, and the launch-session executor runs it. The output dedups on
+the item key rather than the occurrence key, so one item launches once per
+node however often it changes.
 
 **A repository `launch-session` action's `post_hook` runs after the session
 exists, and its failure is not the action's.** The hook is a shell command rendered over the
@@ -2427,6 +2436,8 @@ migration:
 - `item_session` — which hive sessions an item started. The session survives
   independently and carries no back-reference this app reads, so a dropped link
   cannot be rebuilt from either side.
+- `item_chat` — which agent workspace chats an item opened. The chat row
+  carries no item reference either.
 
 Everything else (`event_log`, `feed_membership_claim`, `node_run`,
 `source_head`, `consumer_offset`, `activity_event`, `job`) is derived or

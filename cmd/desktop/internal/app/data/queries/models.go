@@ -89,6 +89,15 @@ type InboxItem struct {
 	IgnoredAt      sql.NullInt64  `json:"ignored_at"`
 }
 
+type ItemChat struct {
+	ChatID      int64  `json:"chat_id"`
+	ProfileID   string `json:"profile_id"`
+	SourceKind  string `json:"source_kind"`
+	SourceScope string `json:"source_scope"`
+	ExternalID  string `json:"external_id"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
 type ItemSession struct {
 	SessionID   string `json:"session_id"`
 	ProfileID   string `json:"profile_id"`

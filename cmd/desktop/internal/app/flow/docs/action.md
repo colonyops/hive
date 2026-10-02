@@ -5,6 +5,10 @@ message creates a durable `output_command` for the selected global action.
 Commands deduplicate on `(action_id, msg.Key)`, so retries or duplicate graph
 invocations cannot repeat a side effect.
 
+To start a session or chat from a flow that is the only caller, use a
+`launch-session` or `launch-chat` node instead; it carries the launch details
+itself.
+
 ## Selecting an action
 
 The `action` field is an id from the global desktop `actions.yml` catalog. The

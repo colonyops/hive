@@ -275,6 +275,12 @@ func (s *EventLogStore) Commit(ctx context.Context, b models.CommitBatch) error 
 				if err := s.commands.Enqueue(ctx, models.NotifyActionID(out.Sink.TargetID), key, payload, now, models.ItemRef{}); err != nil {
 					return fmt.Errorf("enqueuing notify command %s/%s: %w", out.Sink.TargetID, key, err)
 				}
+			case models.SinkKindLaunch:
+				ref := models.ItemRef{ProfileID: b.Consumer, SourceKind: out.SourceKind, SourceScope: out.SourceScope, ExternalID: out.Key}
+				key := launchDedupKey(out)
+				if err := s.commands.Enqueue(ctx, models.LaunchActionID(out.Sink.TargetID), key, []byte(out.Payload), now, ref); err != nil {
+					return fmt.Errorf("enqueuing launch command %s/%s: %w", out.Sink.TargetID, key, err)
+				}
 			default:
 				return fmt.Errorf("commit batch: unknown sink kind %q", out.Sink.Kind)
 			}
@@ -343,6 +349,18 @@ func notifyDedupKey(out models.Output) string {
 	}
 	sum := sha256.Sum256(out.Payload)
 	return out.Key + "@" + hex.EncodeToString(sum[:8])
+}
+
+// launchDedupKey keys a launch on the item rather than on its occurrence: an
+// item that keeps changing, like a pull request taking new commits, must not
+// start a session per change. A keyless message falls back to a payload digest
+// as notifyDedupKey does.
+func launchDedupKey(out models.Output) string {
+	if out.Key != "" {
+		return out.Key
+	}
+	sum := sha256.Sum256(out.Payload)
+	return "@" + hex.EncodeToString(sum[:8])
 }
 
 // Activation updates offsets, memberships, and node KV atomically; failure

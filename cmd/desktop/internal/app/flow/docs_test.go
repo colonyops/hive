@@ -39,6 +39,8 @@ func TestCategoryOfDerivesFromPortCounts(t *testing.T) {
 		"feed":            CategoryDestinations,
 		"action":          CategoryDestinations,
 		"notify":          CategoryDestinations,
+		"launch-session":  CategoryDestinations,
+		"launch-chat":     CategoryDestinations,
 	} {
 		got, err := CategoryOf(nodeType)
 		require.NoErrorf(t, err, "node type %q", nodeType)

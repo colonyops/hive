@@ -62,6 +62,17 @@ export interface ExecutionOutcome {
 }
 
 /**
+ * ItemChatView is one agent workspace chat an inbox item opened. ID and
+ * Workspace are what the chat view is opened by.
+ */
+export interface ItemChatView {
+    "id": number;
+    "workspace": string;
+    "name": string;
+    "createdAt": string;
+}
+
+/**
  * ItemSessionView is one hive session an inbox item spawned. Only CreatedAt
  * comes from the link — everything else is read live from hive, so a session
  * renamed or recycled outside this app reports what it actually is.

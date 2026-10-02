@@ -210,3 +210,65 @@ func TestItemSessionStore_DeleteByProfile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, links, 1)
 }
+
+func createChat(t *testing.T, st *Stores, name string) AgentSession {
+	t.Helper()
+	chat, err := st.AgentSessions.Create(t.Context(), AgentSessionCreate{Workspace: "triage", Name: name, Agent: "claude"})
+	require.NoError(t, err)
+	return chat
+}
+
+func TestItemChats_LinksListsAndFollowsTheChat(t *testing.T) {
+	st, _ := openTestStores(t)
+	ctx := t.Context()
+	ref := itemRef()
+	chat := createChat(t, st, "first")
+
+	require.NoError(t, st.ItemSessions.LinkChat(ctx, chat.ID, ref))
+	require.NoError(t, st.ItemSessions.LinkChat(ctx, chat.ID, ref))
+	require.NoError(t, st.AgentSessions.Rename(ctx, chat.ID, "renamed"))
+
+	chats, err := st.ItemSessions.ListChats(ctx, ref)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+	assert.Equal(t, ItemChat{ChatID: chat.ID, Workspace: "triage", Name: "renamed", CreatedAt: chats[0].CreatedAt}, chats[0])
+
+	require.NoError(t, st.AgentSessions.Delete(ctx, chat.ID))
+	chats, err = st.ItemSessions.ListChats(ctx, ref)
+	require.NoError(t, err)
+	assert.Empty(t, chats)
+}
+
+func TestItemChats_IgnoresAnUnknownItem(t *testing.T) {
+	st, _ := openTestStores(t)
+	ctx := t.Context()
+	chat := createChat(t, st, "orphan")
+
+	require.NoError(t, st.ItemSessions.LinkChat(ctx, chat.ID, models.ItemRef{}))
+	chats, err := st.ItemSessions.ListChats(ctx, models.ItemRef{})
+	require.NoError(t, err)
+	assert.Empty(t, chats)
+}
+
+func TestItemChats_RescopeAndDeleteByProfile(t *testing.T) {
+	st, _ := openTestStores(t)
+	ctx := t.Context()
+	scoped := itemRef()
+	legacy := scoped
+	legacy.SourceScope = ""
+	chat := createChat(t, st, "legacy")
+
+	require.NoError(t, st.ItemSessions.LinkChat(ctx, chat.ID, legacy))
+	require.NoError(t, st.ItemSessions.Rescope(ctx, legacy.ProfileID, legacy.SourceKind, legacy.ExternalID, scoped.SourceScope))
+
+	chats, err := st.ItemSessions.ListChats(ctx, scoped)
+	require.NoError(t, err)
+	require.Len(t, chats, 1)
+
+	require.NoError(t, st.ItemSessions.DeleteByProfile(ctx, scoped.ProfileID))
+	chats, err = st.ItemSessions.ListChats(ctx, scoped)
+	require.NoError(t, err)
+	assert.Empty(t, chats)
+	_, err = st.AgentSessions.Get(ctx, chat.ID)
+	require.NoError(t, err, "deleting links must leave the chat itself")
+}

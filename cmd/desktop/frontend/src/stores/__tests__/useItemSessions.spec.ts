@@ -1,11 +1,14 @@
+import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ ItemSessions: vi.fn() }))
+const mocks = vi.hoisted(() => ({ ItemSessions: vi.fn(), ItemChats: vi.fn(), On: vi.fn() }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   ItemSessions: mocks.ItemSessions,
+  ItemChats: mocks.ItemChats,
 }))
+vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On } }))
 
-import { resetItemSessionsForTests, useItemSessions } from '../useItemSessions'
+import { useItemSessions } from '../useItemSessions'
 
 const session = (id: string) => ({
   id,
@@ -19,7 +22,8 @@ const session = (id: string) => ({
 
 beforeEach(() => {
   vi.clearAllMocks()
-  resetItemSessionsForTests()
+  mocks.On.mockReturnValue(() => {})
+  mocks.ItemChats.mockResolvedValue([])
 })
 
 describe('useItemSessions', () => {
@@ -49,12 +53,14 @@ describe('useItemSessions', () => {
     expect(s.sessions.value).toEqual([])
   })
 
-  it('refreshes the item currently on screen', async () => {
+  it('reloads the item currently on screen when a job settles', async () => {
     mocks.ItemSessions.mockResolvedValue([session('s1')])
     const s = useItemSessions()
     await s.load(7)
     mocks.ItemSessions.mockResolvedValue([session('s1'), session('s2')])
-    await s.refresh()
+    ;(mocks.On.mock.calls[0] as [string, () => void])[1]()
+    await flushPromises()
+    expect(mocks.On.mock.calls[0]?.[0]).toBe('jobs:updated')
     expect(mocks.ItemSessions).toHaveBeenLastCalledWith(7)
     expect(s.sessions.value).toHaveLength(2)
   })
@@ -77,5 +83,20 @@ describe('useItemSessions', () => {
     releaseSlow([session('stale')])
     await slow
     expect(s.sessions.value.map((entry) => entry.id)).toEqual(['current'])
+  })
+
+  it('loads the item’s chats alongside its sessions, each failing on its own', async () => {
+    mocks.ItemSessions.mockRejectedValue(new Error('hive.db locked'))
+    mocks.ItemChats.mockResolvedValue([
+      { id: 9, workspace: 'triage', name: 'chat', createdAt: new Date(0).toISOString() },
+    ])
+    const s = useItemSessions()
+    await s.load(7)
+    expect(mocks.ItemChats).toHaveBeenCalledWith(7)
+    expect(s.sessions.value).toEqual([])
+    expect(s.chats.value.map((chat) => chat.id)).toEqual([9])
+
+    await s.load(null)
+    expect(s.chats.value).toEqual([])
   })
 })

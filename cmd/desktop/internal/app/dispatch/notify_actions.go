@@ -13,7 +13,7 @@ import (
 // ActionTypeNotify is the action type the notify executor is registered
 // under. Unlike "shell" or "publish-message" it is never authored in
 // actions.yml: a notify node carries its config inline, and
-// FlowNotifyActions synthesizes the Action the dispatcher needs from the
+// FlowActions synthesizes the Action the dispatcher needs from the
 // live flow set.
 const ActionTypeNotify = "notify"
 
@@ -65,67 +65,84 @@ type FlowLister interface {
 	List() []flow.Flow
 }
 
-// FlowNotifyActions resolves synthetic notify IDs from live flows and
-// delegates other IDs to the authored action catalog. Resolution happens per
-// lookup so flow edits apply without a restart.
-type FlowNotifyActions struct {
+// FlowActions resolves the synthetic ids flow terminals enqueue under (notify
+// and launch nodes) from live flows, and delegates other IDs to the authored
+// action catalog. Resolution happens per lookup so flow edits apply without a
+// restart.
+type FlowActions struct {
 	flows   FlowLister
 	actions ActionLister
 }
 
-// NewFlowNotifyActions wraps an authored action store with notify-node
-// resolution over flows.
-func NewFlowNotifyActions(flows FlowLister, catalog ActionLister) *FlowNotifyActions {
-	return &FlowNotifyActions{flows: flows, actions: catalog}
+// NewFlowActions wraps an authored action store with flow-node resolution.
+func NewFlowActions(flows FlowLister, catalog ActionLister) *FlowActions {
+	return &FlowActions{flows: flows, actions: catalog}
 }
 
-// Get resolves id to an executable action. A notify id that no longer names
-// a node in any flow is reported as unknown, exactly like a deleted
-// actions.yml entry: its queued command fails rather than silently doing
-// nothing.
-func (l *FlowNotifyActions) Get(id string) (actions.Action, bool) {
-	target, ok := models.NotifyActionTarget(id)
-	if !ok {
-		if l.actions == nil {
+// Get resolves id to an executable action. A synthetic id that no longer
+// names a matching node in any flow is reported as unknown, exactly like a
+// deleted actions.yml entry: its queued command fails rather than silently
+// doing nothing.
+func (l *FlowActions) Get(id string) (actions.Action, bool) {
+	if target, ok := models.NotifyActionTarget(id); ok {
+		node, found := l.node(target)
+		if !found {
 			return actions.Action{}, false
 		}
-		return l.actions.Get(id)
+		return notifyNodeAction(id, node)
 	}
-	if l.flows == nil {
+	if target, ok := models.LaunchActionTarget(id); ok {
+		node, found := l.node(target)
+		if !found {
+			return actions.Action{}, false
+		}
+		return launchNodeAction(id, node)
+	}
+	if l.actions == nil {
 		return actions.Action{}, false
 	}
+	return l.actions.Get(id)
+}
 
+// node finds the node a flow-qualified "<flowId>/<nodeId>" target names.
+func (l *FlowActions) node(target string) (flow.Node, bool) {
+	if l.flows == nil {
+		return flow.Node{}, false
+	}
 	flowID, nodeID, found := strings.Cut(target, "/")
 	if !found {
-		return actions.Action{}, false
+		return flow.Node{}, false
 	}
 	for _, f := range l.flows.List() {
 		if f.ID != flowID {
 			continue
 		}
 		for _, node := range f.Nodes {
-			if node.ID != nodeID {
-				continue
+			if node.ID == nodeID {
+				return node, true
 			}
-			cfg, ok := notifyNodeConfig(node)
-			if !ok {
-				return actions.Action{}, false
-			}
-			return actions.Action{
-				ID:    id,
-				Label: notifyLabel(node),
-				Type:  ActionTypeNotify,
-				Config: &NotifyActionConfig{
-					Title:    cfg.Title,
-					Body:     cfg.Body,
-					Severity: cfg.SeverityOrDefault(),
-					Sound:    cfg.SoundOrDefault(),
-					Cooldown: cfg.CooldownOrDefault(),
-				},
-			}, true
 		}
 	}
-	return actions.Action{}, false
+	return flow.Node{}, false
+}
+
+func notifyNodeAction(id string, node flow.Node) (actions.Action, bool) {
+	cfg, ok := notifyNodeConfig(node)
+	if !ok {
+		return actions.Action{}, false
+	}
+	return actions.Action{
+		ID:    id,
+		Label: notifyLabel(node),
+		Type:  ActionTypeNotify,
+		Config: &NotifyActionConfig{
+			Title:    cfg.Title,
+			Body:     cfg.Body,
+			Severity: cfg.SeverityOrDefault(),
+			Sound:    cfg.SoundOrDefault(),
+			Cooldown: cfg.CooldownOrDefault(),
+		},
+	}, true
 }
 
 // notifyNodeConfig reads the notify content a node delivers through from

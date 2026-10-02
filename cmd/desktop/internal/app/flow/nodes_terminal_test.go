@@ -195,3 +195,49 @@ func TestNotifyConfig_OmitsEmptyFields(t *testing.T) {
 	assert.NotContains(t, string(data), "severity")
 	assert.NotContains(t, string(data), "sound")
 }
+
+func TestLaunchSessionConfig_Validate(t *testing.T) {
+	valid := LaunchSessionConfig{Repo: "{{ .Payload.repo }}", Prompt: "Review"}
+	require.NoError(t, valid.Validate(nil))
+
+	for name, cfg := range map[string]LaunchSessionConfig{
+		"repo":   {Prompt: "Review"},
+		"prompt": {Repo: "acme/api", Prompt: "  "},
+	} {
+		err := cfg.Validate(nil)
+		require.Errorf(t, err, "missing %s", name)
+		assert.Contains(t, err.Error(), name)
+	}
+}
+
+func TestLaunchChatConfig_Validate(t *testing.T) {
+	require.NoError(t, (&LaunchChatConfig{Workspace: "incident-triage", Prompt: "Triage"}).Validate(nil))
+
+	for _, workspace := range []string{"", ".", "..", "a/b", "/abs", " padded"} {
+		err := (&LaunchChatConfig{Workspace: workspace, Prompt: "Triage"}).Validate(nil)
+		require.Errorf(t, err, "workspace %q", workspace)
+		assert.Contains(t, err.Error(), "workspace")
+	}
+	require.Error(t, (&LaunchChatConfig{Workspace: "triage"}).Validate(nil))
+}
+
+// sessionName is the field, not name: name is the node's own label, and the
+// envelope strip would swallow it.
+func TestLaunchSessionNode_DecodesAlongsideItsLabel(t *testing.T) {
+	f, _, err := parseFlow("work", []byte(`version: 1
+nodes:
+  - { id: src, type: sources.github, credential: github/octocat, kind: notifications }
+  - id: review
+    type: launch-session
+    name: Review PRs
+    repo: "{{ .Payload.repo }}"
+    sessionName: "review-{{ .Payload.num }}"
+    prompt: Review it
+wires:
+  - { from: src, to: review }
+`), nil)
+	require.NoError(t, err)
+	node := f.Nodes[1]
+	assert.Equal(t, "Review PRs", node.Name)
+	assert.Equal(t, &LaunchSessionConfig{Repo: "{{ .Payload.repo }}", SessionName: "review-{{ .Payload.num }}", Prompt: "Review it"}, node.Config)
+}

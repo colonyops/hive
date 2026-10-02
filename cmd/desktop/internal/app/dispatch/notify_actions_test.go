@@ -39,8 +39,8 @@ func notifyFlows() flowListerTest {
 	}}}
 }
 
-func TestFlowNotifyActions_SynthesizesFromTheFlowNode(t *testing.T) {
-	lister := NewFlowNotifyActions(notifyFlows(), actionListerTest{})
+func TestFlowActions_SynthesizesFromTheFlowNode(t *testing.T) {
+	lister := NewFlowActions(notifyFlows(), actionListerTest{})
 
 	action, ok := lister.Get(models.NotifyActionID("triage/tell-me"))
 	require.True(t, ok)
@@ -57,8 +57,8 @@ func TestFlowNotifyActions_SynthesizesFromTheFlowNode(t *testing.T) {
 
 // A node with no author-given name still needs a label for the Activity view
 // and the jobs list, and its unset optional fields resolve to their defaults.
-func TestFlowNotifyActions_FillsDefaultsForABareNode(t *testing.T) {
-	lister := NewFlowNotifyActions(notifyFlows(), actionListerTest{})
+func TestFlowActions_FillsDefaultsForABareNode(t *testing.T) {
+	lister := NewFlowActions(notifyFlows(), actionListerTest{})
 
 	action, ok := lister.Get(models.NotifyActionID("triage/bare"))
 	require.True(t, ok)
@@ -68,22 +68,22 @@ func TestFlowNotifyActions_FillsDefaultsForABareNode(t *testing.T) {
 
 // The node's own cooldown — including an explicit 0 — is resolved into the
 // action config, so the executor never has to know the default.
-func TestFlowNotifyActions_ProjectsTheResolvedCooldown(t *testing.T) {
+func TestFlowActions_ProjectsTheResolvedCooldown(t *testing.T) {
 	disabled := 0
 	flows := flowListerTest{flows: []flow.Flow{{ID: "triage", Nodes: []flow.Node{
 		{ID: "eager", Type: "notify", Config: &flow.NotifyConfig{Title: "hi", CooldownSeconds: &disabled}},
 	}}}}
 
-	action, ok := NewFlowNotifyActions(flows, nil).Get(models.NotifyActionID("triage/eager"))
+	action, ok := NewFlowActions(flows, nil).Get(models.NotifyActionID("triage/eager"))
 	require.True(t, ok)
 	cfg, ok := action.Config.(*NotifyActionConfig)
 	require.True(t, ok)
 	assert.Equal(t, time.Duration(0), cfg.Cooldown)
 }
 
-func TestFlowNotifyActions_DelegatesAuthoredIDs(t *testing.T) {
+func TestFlowActions_DelegatesAuthoredIDs(t *testing.T) {
 	authored := actions.Action{ID: "review-pr", Type: "launch-session"}
-	lister := NewFlowNotifyActions(notifyFlows(), actionListerTest{actions: map[string]actions.Action{"review-pr": authored}})
+	lister := NewFlowActions(notifyFlows(), actionListerTest{actions: map[string]actions.Action{"review-pr": authored}})
 
 	action, ok := lister.Get("review-pr")
 	require.True(t, ok)
@@ -96,8 +96,8 @@ func TestFlowNotifyActions_DelegatesAuthoredIDs(t *testing.T) {
 // A notify id whose node is gone is unknown, exactly like a deleted
 // actions.yml entry: its queued command fails visibly instead of silently
 // doing nothing.
-func TestFlowNotifyActions_UnknownNotifyTargets(t *testing.T) {
-	lister := NewFlowNotifyActions(notifyFlows(), actionListerTest{})
+func TestFlowActions_UnknownNotifyTargets(t *testing.T) {
+	lister := NewFlowActions(notifyFlows(), actionListerTest{})
 
 	for _, id := range []string{
 		models.NotifyActionID("triage/deleted"),
@@ -138,11 +138,13 @@ func TestNotifyActionConfig_RequiresATitle(t *testing.T) {
 // fall through the assertion in notifyNodeConfig.
 func TestNotifyRaiserCoversExactlyNotify(t *testing.T) {
 	sample := map[string]flow.NodeConfig{
-		"feed":          &flow.FeedConfig{},
-		"action":        &flow.ActionConfig{},
-		"notify":        &flow.NotifyConfig{},
-		"function":      &flow.FunctionConfig{},
-		"github-filter": &flow.GithubFilterConfig{},
+		"feed":           &flow.FeedConfig{},
+		"action":         &flow.ActionConfig{},
+		"notify":         &flow.NotifyConfig{},
+		"function":       &flow.FunctionConfig{},
+		"github-filter":  &flow.GithubFilterConfig{},
+		"launch-session": &flow.LaunchSessionConfig{},
+		"launch-chat":    &flow.LaunchChatConfig{},
 	}
 	raises := map[string]bool{"notify": true}
 
@@ -173,11 +175,57 @@ func TestNotifyRaiserCoversExactlyNotify(t *testing.T) {
 
 // A feed never raises a notify output, so a notify id targeting one resolves
 // to nothing — exactly like any other node whose config is not a raiser.
-func TestFlowNotifyActions_AFeedIsNotANotifyTarget(t *testing.T) {
+func TestFlowActions_AFeedIsNotANotifyTarget(t *testing.T) {
 	flows := flowListerTest{flows: []flow.Flow{{ID: "triage", Nodes: []flow.Node{
 		{ID: "review-requests", Type: "feed", Name: "Review requests", Config: &flow.FeedConfig{Icon: "eye"}},
 	}}}}
 
-	_, ok := NewFlowNotifyActions(flows, nil).Get(models.NotifyActionID("triage/review-requests"))
+	_, ok := NewFlowActions(flows, nil).Get(models.NotifyActionID("triage/review-requests"))
 	assert.False(t, ok)
+}
+
+func launchFlows() flowListerTest {
+	return flowListerTest{flows: []flow.Flow{{
+		ID: "triage",
+		Nodes: []flow.Node{
+			{ID: "review", Type: "launch-session", Name: "Review PRs", Config: &flow.LaunchSessionConfig{
+				Repo: "{{ .Payload.repo }}", Agent: "claude", SessionName: "review-{{ .Payload.num }}", Prompt: "Review {{ .Payload.num }}",
+			}},
+			{ID: "chat", Type: "launch-chat", Config: &flow.LaunchChatConfig{Workspace: "incident-triage", Prompt: "Triage {{ .Payload.title }}"}},
+			{ID: "tell-me", Type: "notify", Config: &flow.NotifyConfig{Title: "hi"}},
+		},
+	}}}
+}
+
+func TestFlowActions_ProjectsALaunchSessionNode(t *testing.T) {
+	action, ok := NewFlowActions(launchFlows(), nil).Get(models.LaunchActionID("triage/review"))
+	require.True(t, ok)
+	assert.Equal(t, actions.Action{
+		ID: models.LaunchActionID("triage/review"), Label: "Review PRs", Type: ActionTypeLaunchSession,
+		Config: &LaunchNodeActionConfig{
+			PromptTemplate: "Review {{ .Payload.num }}", RepoTemplate: "{{ .Payload.repo }}", Agent: "claude",
+			NameTemplate: "review-{{ .Payload.num }}",
+		},
+	}, action)
+}
+
+func TestFlowActions_ProjectsALaunchChatNode(t *testing.T) {
+	action, ok := NewFlowActions(launchFlows(), nil).Get(models.LaunchActionID("triage/chat"))
+	require.True(t, ok)
+	assert.Equal(t, actions.Action{
+		ID: models.LaunchActionID("triage/chat"), Label: "Launch chat chat", Type: ActionTypeLaunchSession,
+		Config: &LaunchNodeActionConfig{PromptTemplate: "Triage {{ .Payload.title }}", Workspace: "incident-triage"},
+	}, action)
+}
+
+// A launch id whose node is gone, or was retyped, fails its queued command
+// rather than running something else.
+func TestFlowActions_UnknownLaunchTargets(t *testing.T) {
+	lister := NewFlowActions(launchFlows(), nil)
+	for _, target := range []string{"triage/missing", "other/review", "triage/tell-me", "no-slash"} {
+		_, ok := lister.Get(models.LaunchActionID(target))
+		assert.Falsef(t, ok, "target %q", target)
+	}
+	_, ok := lister.Get(models.NotifyActionID("triage/review"))
+	assert.False(t, ok, "a launch node is not a notify target")
 }

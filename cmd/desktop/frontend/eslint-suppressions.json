@@ -387,11 +387,6 @@
       "count": 2
     }
   },
-  "src/composables/useItemSessions.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/composables/useKeybindings.ts": {
     "@typescript-eslint/no-deprecated": {
       "count": 1

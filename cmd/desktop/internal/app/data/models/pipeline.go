@@ -53,10 +53,12 @@ const (
 	SinkKindFeed   = "feed"
 	SinkKindAction = "action"
 	SinkKindNotify = "notify"
+	SinkKindLaunch = "launch"
 )
 
 // Sink identifies where an Output is committed. Feed outputs claim immutable
-// inbox membership; action and notify outputs enqueue an output_command.
+// inbox membership; action, notify, and launch outputs enqueue an
+// output_command.
 type Sink struct {
 	Kind     string `json:"kind"`
 	TargetID string `json:"targetId"`
@@ -77,6 +79,21 @@ func NotifyActionID(target string) string { return NotifyActionPrefix + target }
 // node id an action id names, and whether the id is a notify action at all.
 func NotifyActionTarget(actionID string) (string, bool) {
 	target, ok := strings.CutPrefix(actionID, NotifyActionPrefix)
+	return target, ok && target != ""
+}
+
+// LaunchActionPrefix namespaces the synthetic action id a launch-session or
+// launch-chat node enqueues its output_command under, for the same reason
+// NotifyActionPrefix exists.
+const LaunchActionPrefix = "launch:"
+
+// LaunchActionID returns the synthetic action id for a launch node, whose
+// target is the flow-qualified node id "<flowId>/<nodeId>".
+func LaunchActionID(target string) string { return LaunchActionPrefix + target }
+
+// LaunchActionTarget inverts LaunchActionID.
+func LaunchActionTarget(actionID string) (string, bool) {
+	target, ok := strings.CutPrefix(actionID, LaunchActionPrefix)
 	return target, ok && target != ""
 }
 

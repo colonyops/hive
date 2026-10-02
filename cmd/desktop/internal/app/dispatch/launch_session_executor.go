@@ -42,6 +42,9 @@ type LaunchWorkspaceSessionRequest struct {
 	Workspace string
 	Name      string
 	Prompt    string
+	// Origins are the inbox items the chat is being opened for, as on
+	// LaunchSessionRequest.
+	Origins []models.ItemRef
 }
 
 type WorkspaceSessionLauncher interface {
@@ -62,8 +65,14 @@ func NewLaunchSessionExecutor(logger zerolog.Logger, launcher SessionLauncher, w
 }
 
 func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Action, data OutputData, input ActionInvocationInput) (ExecutionResult, error) {
-	cfg, ok := action.Config.(*actions.LaunchSessionConfig)
-	if !ok {
+	var cfg *actions.LaunchSessionConfig
+	var nameTemplate string
+	switch c := action.Config.(type) {
+	case *actions.LaunchSessionConfig:
+		cfg = c
+	case *LaunchNodeActionConfig:
+		cfg, nameTemplate = &c.LaunchSessionConfig, c.NameTemplate
+	default:
 		return ExecutionResult{}, fmt.Errorf("launch-session executor: action %q has config type %T", action.ID, action.Config)
 	}
 
@@ -76,12 +85,12 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 		return ExecutionResult{}, fmt.Errorf("launch-session: prompt_template rendered blank")
 	}
 
-	name := SlugifySessionName(action.ID + "-" + data.Key)
-	if err := ValidateSessionName(name); err != nil {
-		return ExecutionResult{}, fmt.Errorf("launch-session: derived session name: %w", err)
+	name, err := sessionName(action.ID, nameTemplate, data)
+	if err != nil {
+		return ExecutionResult{}, err
 	}
 
-	repo, err := RenderRepoTarget(action, data.Key, data.Raw, data.Inputs)
+	repo, err := renderRepoTemplate(cfg.RepoTemplate, data.Key, data.Raw, data.Inputs)
 	if err != nil {
 		return ExecutionResult{}, fmt.Errorf("launch-session: repo_template: %w", err)
 	}
@@ -119,14 +128,14 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 		}
 	}
 
+	var origins []models.ItemRef
+	if data.Origin.Known() {
+		origins = []models.ItemRef{data.Origin}
+	}
 	var outcome SessionExecutionOutcome
 	if workspace != "" {
-		outcome, err = e.launchWorkspace(ctx, LaunchWorkspaceSessionRequest{Workspace: workspace, Name: name, Prompt: prompt})
+		outcome, err = e.launchWorkspace(ctx, LaunchWorkspaceSessionRequest{Workspace: workspace, Name: name, Prompt: prompt, Origins: origins})
 	} else {
-		var origins []models.ItemRef
-		if data.Origin.Known() {
-			origins = []models.ItemRef{data.Origin}
-		}
 		outcome, err = e.launchRepository(ctx, LaunchSessionRequest{Name: name, Prompt: prompt, Agent: agent, Repo: repo, Origins: origins})
 	}
 	if err != nil {
@@ -137,6 +146,28 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 		result.Log = e.runPostHook(ctx, action, cfg, data, repo, outcome)
 	}
 	return result, nil
+}
+
+func sessionName(actionID, nameTemplate string, data OutputData) (string, error) {
+	if strings.TrimSpace(nameTemplate) == "" {
+		name := SlugifySessionName(actionID + "-" + data.Key)
+		if err := ValidateSessionName(name); err != nil {
+			return "", fmt.Errorf("launch-session: derived session name: %w", err)
+		}
+		return name, nil
+	}
+	rendered, err := tmpl.New(tmpl.Config{}).Render(nameTemplate, data)
+	if err != nil {
+		return "", fmt.Errorf("launch-session: session name: %w", err)
+	}
+	name := SlugifySessionName(rendered)
+	if name == "" {
+		return "", fmt.Errorf("launch-session: session name rendered blank")
+	}
+	if err := ValidateSessionName(name); err != nil {
+		return "", fmt.Errorf("launch-session: session name: %w", err)
+	}
+	return name, nil
 }
 
 func (e *LaunchSessionExecutor) launchRepository(ctx context.Context, req LaunchSessionRequest) (outcome SessionExecutionOutcome, err error) {

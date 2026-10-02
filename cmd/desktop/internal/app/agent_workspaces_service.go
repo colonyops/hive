@@ -66,6 +66,7 @@ type AgentWorkspacesService struct {
 	tx        transactionRunner
 	sessions  *stores.AgentSessionStore
 	schedules *stores.ScheduleStore
+	itemLinks *stores.ItemSessionStore
 	history   scheduleHistory
 	skills    *SkillsService
 	// This is a function so config reloads update editor presets. Launches do
@@ -164,6 +165,7 @@ func newAgentWorkspacesService(d AgentWorkspacesDeps) *AgentWorkspacesService {
 		tx:              d.Stores,
 		sessions:        d.Stores.AgentSessions,
 		schedules:       d.Stores.Schedules,
+		itemLinks:       d.Stores.ItemSessions,
 		history:         scheduleHistory{store: d.Stores.Schedules, sessions: d.Stores.AgentSessions, logger: d.Logger},
 		skills:          d.Skills,
 		profileCommands: d.ProfileCommands,
@@ -538,6 +540,13 @@ func (s *AgentWorkspacesService) LaunchWorkspaceSession(ctx context.Context, req
 	if view.ExitedEarly {
 		_ = s.sessions.Delete(ctx, view.ID)
 		return dispatch.SessionExecutionOutcome{}, Errorf(KindInternal, "%s", view.Notice)
+	}
+	// The chat exists either way, so a failed link is logged rather than
+	// returned: a failed launch would invite a retry that opens a second chat.
+	for _, origin := range req.Origins {
+		if err := s.itemLinks.LinkChat(ctx, view.ID, origin); err != nil {
+			s.logger.Warn().Ctx(ctx).Err(err).Int64("chat_id", view.ID).Str("external_id", origin.ExternalID).Msg("linking chat to an inbox item")
+		}
 	}
 	return dispatch.SessionExecutionOutcome{
 		ID: strconv.FormatInt(view.ID, 10), Name: view.Name, Slug: view.Slug,

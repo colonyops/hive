@@ -50,7 +50,7 @@ func TestNotifyTerminal_DeliversThroughTheWorker(t *testing.T) {
 	dispatcher := NewDispatcher(map[string]Executor{
 		ActionTypeNotify: NewNotifyExecutor(notifier, openGate(), stores.New(db, stores.Options{}).InboxItems, zerolog.Nop()),
 	})
-	worker := NewWorker(testOutputCommands(db), NewFlowNotifyActions(flows, actionListerTest{}), dispatcher, DefaultOutputWorkerInterval, zerolog.Nop())
+	worker := NewWorker(testOutputCommands(db), NewFlowActions(flows, actionListerTest{}), dispatcher, DefaultOutputWorkerInterval, zerolog.Nop())
 	activityRecorder := &notifyActivityRecorder{}
 	worker.SetRecorder(activityRecorder)
 
@@ -112,7 +112,7 @@ func TestNotifyTerminal_DeletedNodeFailsItsQueuedCommand(t *testing.T) {
 	dispatcher := NewDispatcher(map[string]Executor{
 		ActionTypeNotify: NewNotifyExecutor(notifier, openGate(), stores.New(db, stores.Options{}).InboxItems, zerolog.Nop()),
 	})
-	worker := NewWorker(testOutputCommands(db), NewFlowNotifyActions(flowListerTest{}, actionListerTest{}), dispatcher, DefaultOutputWorkerInterval, zerolog.Nop())
+	worker := NewWorker(testOutputCommands(db), NewFlowActions(flowListerTest{}, actionListerTest{}), dispatcher, DefaultOutputWorkerInterval, zerolog.Nop())
 
 	require.NoError(t, stores.New(db, stores.Options{}).EventLog.Commit(ctx, models.CommitBatch{
 		Consumer: "triage", UpToOffset: 1,

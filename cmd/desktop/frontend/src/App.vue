@@ -62,7 +62,7 @@ import {
 } from './lib/terminalTree'
 import { focusAgentsFilter, focusAgentsList, focusAgentsPane } from './lib/agentsTree'
 import { useLaunchers } from './composables/useLaunchers'
-import { useItemSessions } from './composables/useItemSessions'
+import { useItemSessions } from './stores/useItemSessions'
 import { useWailsEvent } from './composables/useWailsEvent'
 import { comboFromEvent, SEQUENCE_TIMEOUT_MS, terminalEscapeCombo, useKeybindings } from './composables/useKeybindings'
 import {
@@ -1247,7 +1247,7 @@ useWailsEvent('actions:updated', () => {
 // Driven off the selection rather than off selectItem, so every path that
 // moves it — keyboard walk, a clicked notification, restoring a job's item —
 // loads the same list.
-const { sessions: itemSessions, load: loadItemSessions, refresh: refreshItemSessions } = useItemSessions()
+const { sessions: itemSessions, chats: itemChats, load: loadItemSessions } = useItemSessions()
 watch(
   () => selectedItem.value?.id ?? null,
   (itemID) => {
@@ -1255,9 +1255,6 @@ watch(
   },
   { immediate: true },
 )
-useWailsEvent('jobs:updated', () => {
-  void refreshItemSessions()
-})
 // The dialog closed on submit, so the failure has to come to the user.
 useWailsEvent('sessions:create-failed', () => {
   void onNewSessionFailed()
@@ -1267,6 +1264,10 @@ useWailsEvent('sessions:create-failed', () => {
 // so linking through is a navigation and nothing here touches tmux.
 function openItemSession(slug: string): void {
   void router.push({ name: 'terminal', params: { slug } })
+}
+
+function openItemChat(workspace: string, id: number): void {
+  void router.push({ name: 'agents', params: { workspace }, query: { chat: String(id) } })
 }
 
 // So view.focus-search can reach the feed's search box the same way
@@ -1894,6 +1895,7 @@ onUnmounted(cancelSequenceTimer)
               :events="selectedEvents"
               :actions="actions"
               :sessions="itemSessions"
+              :chats="itemChats"
               :pending-action="pendingAction"
               :action-runs="actionRuns"
               :source-icons="sourceIcons"
@@ -1908,6 +1910,7 @@ onUnmounted(cancelSequenceTimer)
               @copy-contents="selectedItem && copyItemContents(selectedItem)"
               @create-session="(target) => selectedItem && openNewSessionFromItem(selectedItem, target)"
               @open-session="openItemSession"
+              @open-chat="openItemChat"
               @edit="requestOpenActionsSettings"
             />
           </section>

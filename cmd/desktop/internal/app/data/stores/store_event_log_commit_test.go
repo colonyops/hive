@@ -589,3 +589,47 @@ func TestCommit_KVMutations_SkippedByTheIdempotencyGuard(t *testing.T) {
 	require.True(t, found)
 	assert.JSONEq(t, `"first"`, value)
 }
+
+// A pull request that keeps changing reaches a launch node with a new
+// occurrence each time; it must still launch once.
+func TestCommit_LaunchOutput_DedupsOnTheItemAndCarriesItsRef(t *testing.T) {
+	st, db := openTestStores(t)
+	ctx := t.Context()
+
+	launchOutput := func(occurrence, payload string) models.Output {
+		return models.Output{
+			Sink:          models.Sink{Kind: models.SinkKindLaunch, TargetID: "flow-1/review"},
+			Key:           "acme/api#7",
+			OccurrenceKey: occurrence,
+			SourceKind:    "github",
+			SourceScope:   "source-a",
+			SourceTopic:   "source:flow-1/source-a",
+			Payload:       []byte(payload),
+		}
+	}
+
+	require.NoError(t, st.EventLog.Commit(ctx, models.CommitBatch{
+		Consumer: "flow-1", UpToOffset: 1, Outputs: []models.Output{launchOutput("occ-1", `{"num":7}`)},
+	}))
+	require.NoError(t, st.EventLog.Commit(ctx, models.CommitBatch{
+		Consumer: "flow-1", UpToOffset: 2, Outputs: []models.Output{launchOutput("occ-2", `{"num":7,"title":"edited"}`)},
+	}))
+	assert.Equal(t, 1, countOutputCommands(t, db, ctx))
+
+	var actionID, key, profileID, sourceKind, sourceScope, externalID string
+	var payload []byte
+	require.NoError(t, db.Conn().QueryRowContext(ctx,
+		`SELECT action_id, key, payload, profile_id, source_kind, source_scope, external_id FROM output_command`,
+	).Scan(&actionID, &key, &payload, &profileID, &sourceKind, &sourceScope, &externalID))
+	assert.Equal(t, models.LaunchActionID("flow-1/review"), actionID)
+	assert.Equal(t, "acme/api#7", key)
+	assert.JSONEq(t, `{"num":7}`, string(payload))
+	assert.Equal(t, []string{"flow-1", "github", "source-a", "acme/api#7"}, []string{profileID, sourceKind, sourceScope, externalID})
+
+	require.NoError(t, st.EventLog.Commit(ctx, models.CommitBatch{
+		Consumer: "flow-1", UpToOffset: 3, Outputs: []models.Output{{
+			Sink: models.Sink{Kind: models.SinkKindLaunch, TargetID: "flow-1/also-review"}, Key: "acme/api#7", Payload: []byte(`{}`),
+		}},
+	}))
+	assert.Equal(t, 2, countOutputCommands(t, db, ctx), "each launch node launches once for the item")
+}

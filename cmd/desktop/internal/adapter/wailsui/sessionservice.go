@@ -93,6 +93,12 @@ func (s *SessionService) ItemSessions(ctx context.Context, itemID int64) ([]disp
 	return s.sessions.ItemSessions(ctx, itemID)
 }
 
+// ItemChats returns the agent workspace chats an inbox item opened, newest
+// first.
+func (s *SessionService) ItemChats(ctx context.Context, itemID int64) ([]dispatch.ItemChatView, error) {
+	return s.sessions.ItemChats(ctx, itemID)
+}
+
 // SessionRisk reports the uncommitted or unpushed work a delete or recycle
 // would discard, for the confirmation that precedes one.
 func (s *SessionService) SessionRisk(ctx context.Context, id string) (dispatch.SessionRisk, error) {

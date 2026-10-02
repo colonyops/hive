@@ -15,7 +15,7 @@ import (
 // The map is not a mirror of the actions.yml catalog: dispatch.ActionTypeNotify
 // is the flow notify terminal's own action type. A notify node's config lives
 // in its flow, not in actions.yml, so it has no registry entry in package
-// actions and never will — FlowNotifyActions resolves it from the live flow
+// actions and never will — FlowActions resolves it from the live flow
 // set instead (see buildOutputWorker). The invariant the test holds is
 // therefore coverage of actions.Types(), not set equality with this map's
 // keys.

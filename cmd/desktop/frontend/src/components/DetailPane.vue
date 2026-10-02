@@ -26,6 +26,7 @@ import type { InboxEvent, InboxItem } from '../types/feed'
 import type { ActionView } from '../types/action'
 import type {
   ActionRunView,
+  ItemChatView,
   ItemSessionView,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 
@@ -34,6 +35,7 @@ const props = defineProps<{
   actions: ActionView[]
   events?: InboxEvent[]
   sessions?: ItemSessionView[]
+  chats?: ItemChatView[]
   pendingAction?: string | null
   actionRuns?: Record<string, ActionRunView>
   sourceIcons?: Record<string, string>
@@ -50,6 +52,7 @@ const emit = defineEmits<{
   'copy-contents': []
   'create-session': [target: 'repository' | 'workspace']
   'open-session': [slug: string]
+  'open-chat': [workspace: string, id: number]
   edit: []
 }>()
 
@@ -255,6 +258,27 @@ const {
                 <span v-if="session.repo" class="truncate">{{ session.repo }}</span>
                 <span v-if="session.repo">·</span>
                 <span>{{ relativeAge(new Date(session.createdAt).getTime()) }}</span>
+              </p>
+            </li>
+          </ul>
+        </section>
+        <section v-if="(chats ?? []).length" class="mt-6 border-t border-border pt-4" data-testid="item-chats">
+          <h2 class="mb-3 font-mono text-[10.5px] tracking-[.12em] text-accent">CHATS</h2>
+          <ul class="session-list">
+            <li v-for="chat in chats ?? []" :key="chat.id">
+              <button
+                type="button"
+                class="session-row session-row-linked"
+                :data-testid="'item-chat-' + chat.id"
+                @click="emit('open-chat', chat.workspace, chat.id)"
+              >
+                <span class="session-dot session-dot-idle" />
+                <span class="min-w-0 flex-1 truncate text-[13px] text-text">{{ chat.name }}</span>
+              </button>
+              <p class="session-meta">
+                <span class="truncate">{{ chat.workspace }}</span>
+                <span>·</span>
+                <span>{{ relativeAge(new Date(chat.createdAt).getTime()) }}</span>
               </p>
             </li>
           </ul>
