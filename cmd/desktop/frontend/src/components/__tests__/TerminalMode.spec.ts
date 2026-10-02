@@ -7,7 +7,7 @@ import { resetTerminalAvailabilityForTests } from '../../composables/useTerminal
 import { resetTerminalFontForTests } from '../../composables/useTerminalFont'
 import { resetTerminalSessionsForTests, useTerminalSessions } from '../../composables/useTerminalSessions'
 import { resetSessionStatusesForTests, useSessionStatuses } from '../../composables/useSessionStatuses'
-import { setTerminalShowWindows } from '../../composables/useTerminalShowWindows'
+import { useTerminalShowWindows } from '../../stores/useTerminalShowWindows'
 import { setTerminalShowStatusBar } from '../../composables/useTerminalStatusBar'
 import { resetTerminalWindowListingsForTests } from '../../composables/useTerminalWindowListings'
 import { resetTerminalPinnedChatsForTests, useTerminalPinnedChats } from '../../composables/useTerminalPinnedChats'
@@ -1052,17 +1052,11 @@ describe('TerminalMode', () => {
     // every slug it was asked about.
     expect(wrapper.findAll('[data-testid="terminal-listed-window-row"]')).toHaveLength(3)
 
-    // The setting is a module singleton; the default goes back whatever happens
-    // here, or every test after this one runs with it off.
-    try {
-      setTerminalShowWindows(false)
-      await flushPromises()
-      // All but the pinned section's, which is exempt: its tabs are the section.
-      expect(wrapper.findAll('[data-testid="terminal-listed-window-row"]')).toHaveLength(1)
-      expect(wrapper.get('[data-testid="terminal-listed-window-row"]').attributes('data-tree-key')).toBe('w:Scratch:@7')
-    } finally {
-      setTerminalShowWindows(true)
-    }
+    useTerminalShowWindows().setShowWindows(false)
+    await flushPromises()
+    // All but the pinned section's, which is exempt: its tabs are the section.
+    expect(wrapper.findAll('[data-testid="terminal-listed-window-row"]')).toHaveLength(1)
+    expect(wrapper.get('[data-testid="terminal-listed-window-row"]').attributes('data-tree-key')).toBe('w:Scratch:@7')
   })
 
   it('re-enters from the caches and resumes without waiting on the probe', async () => {
@@ -2161,17 +2155,13 @@ describe('TerminalMode', () => {
     it('lists its tabs with window listing off, and reads its liveness from them', async () => {
       const listWindows = fakeListWindows({ [SCRATCH_SLUG]: [oneTab] })
       mocks.createTerminalClient.mockReturnValue({ listWindows })
-      setTerminalShowWindows(false)
-      try {
-        const { wrapper } = await mountAvailable()
+      useTerminalShowWindows().setShowWindows(false)
+      const { wrapper } = await mountAvailable()
 
-        expect(listWindows).toHaveBeenCalledWith([SCRATCH_SLUG])
-        expect(wrapper.findAll('[data-testid="terminal-listed-window-row"]').map((tab) => tab.text())).toEqual(['zsh'])
-        expect(heading(wrapper).find('[data-testid="terminal-session-liveness"]').exists()).toBe(true)
-        wrapper.unmount()
-      } finally {
-        setTerminalShowWindows(true)
-      }
+      expect(listWindows).toHaveBeenCalledWith([SCRATCH_SLUG])
+      expect(wrapper.findAll('[data-testid="terminal-listed-window-row"]').map((tab) => tab.text())).toEqual(['zsh'])
+      expect(heading(wrapper).find('[data-testid="terminal-session-liveness"]').exists()).toBe(true)
+      wrapper.unmount()
     })
 
     // + is the whole affordance on the heading: with tmux holding nothing, the
@@ -2972,7 +2962,7 @@ describe('TerminalMode', () => {
     // The exception that keeps every session reachable: with window listing off,
     // an unattached session has no windows to stand in for its row.
     it('keeps the row of a running session that lists no windows', async () => {
-      setTerminalShowWindows(false)
+      useTerminalShowWindows().setShowWindows(false)
       const { wrapper, router } = await mountWalkable()
 
       // The attached session still contributes its own live windows, so the

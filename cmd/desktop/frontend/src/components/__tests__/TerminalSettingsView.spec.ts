@@ -10,7 +10,6 @@ import {
   setTerminalFontWeightBold,
 } from '../../composables/useTerminalFont'
 import { TERMINAL_FONT } from '../../lib/terminalFaces'
-import { setTerminalShowWindows } from '../../composables/useTerminalShowWindows'
 import { resetInstalledFontsForTests } from '../../composables/useInstalledFonts'
 
 const mocks = vi.hoisted(() => ({
@@ -127,9 +126,6 @@ describe('TerminalSettingsView', () => {
 
     expect(toggle.attributes('aria-checked')).toBe('false')
     expect(mocks.SetTerminalShowWindows).toHaveBeenCalledWith(false)
-
-    // The setting is a module singleton; put the default back for later tests.
-    setTerminalShowWindows(true)
   })
 
   it('reflects and changes the terminal warm-session count', async () => {

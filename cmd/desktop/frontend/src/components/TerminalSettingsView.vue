@@ -32,7 +32,7 @@ import { TERMINAL_FONT } from '../lib/terminalFaces'
 import { loadInstalledFonts, useInstalledFonts } from '../composables/useInstalledFonts'
 import { terminalPoolSizes, useTerminalPoolSize } from '../stores/useTerminalPoolSize'
 import { setTerminalShowStatusBar, useTerminalStatusBar } from '../composables/useTerminalStatusBar'
-import { setTerminalShowWindows, useTerminalShowWindows } from '../composables/useTerminalShowWindows'
+import { useTerminalShowWindows } from '../stores/useTerminalShowWindows'
 
 // Async so xterm and its addons stay on the terminal chunk rather than joining
 // the bundle everyone who opens any settings pane pays for.
@@ -47,7 +47,7 @@ const {
   letterSpacing,
 } = useTerminalFont()
 const { monospace: fontFamilies } = useInstalledFonts()
-const { showWindows } = useTerminalShowWindows()
+const { showWindows, setShowWindows } = useTerminalShowWindows()
 const { showStatusBar } = useTerminalStatusBar()
 const { poolSize, setPoolSize } = useTerminalPoolSize()
 
@@ -195,7 +195,7 @@ onMounted(() => {
           :model-value="showWindows"
           aria-label="Always show windows"
           testid="settings-terminal-show-windows"
-          @update:model-value="setTerminalShowWindows"
+          @update:model-value="setShowWindows"
         />
       </SettingsRow>
       <SettingsRow
