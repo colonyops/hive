@@ -27,6 +27,7 @@ declare module "@wailsio/runtime" {
             "schedules:updated": string;
             "sessions:create-failed": string;
             "sessions:updated": string;
+            "tasks:updated": string;
             "terminal:files-dropped": wailsui$0.TerminalFilesDropped;
             "update:available": wailsui$0.UpdateInfo;
             "window:blur": boolean;

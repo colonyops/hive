@@ -152,6 +152,36 @@ func (q *Queries) GetHCItem(ctx context.Context, id string) (HcItem, error) {
 	return i, err
 }
 
+const hCFingerprint = `-- name: HCFingerprint :one
+SELECT
+    (SELECT COUNT(*) FROM hc_items) AS item_count,
+    CAST((SELECT COALESCE(MAX(updated_at), 0) FROM hc_items) AS INTEGER) AS items_updated_at,
+    (SELECT COUNT(*) FROM hc_comments) AS comment_count,
+    CAST((SELECT COALESCE(MAX(created_at), 0) FROM hc_comments) AS INTEGER) AS comments_created_at,
+    (SELECT COUNT(*) FROM hc_task_blockers) AS blocker_count
+`
+
+type HCFingerprintRow struct {
+	ItemCount         int64 `json:"item_count"`
+	ItemsUpdatedAt    int64 `json:"items_updated_at"`
+	CommentCount      int64 `json:"comment_count"`
+	CommentsCreatedAt int64 `json:"comments_created_at"`
+	BlockerCount      int64 `json:"blocker_count"`
+}
+
+func (q *Queries) HCFingerprint(ctx context.Context) (HCFingerprintRow, error) {
+	row := q.db.QueryRowContext(ctx, hCFingerprint)
+	var i HCFingerprintRow
+	err := row.Scan(
+		&i.ItemCount,
+		&i.ItemsUpdatedAt,
+		&i.CommentCount,
+		&i.CommentsCreatedAt,
+		&i.BlockerCount,
+	)
+	return i, err
+}
+
 const insertHCComment = `-- name: InsertHCComment :one
 
 INSERT INTO hc_comments (id, item_id, message, created_at)

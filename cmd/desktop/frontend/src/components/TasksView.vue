@@ -36,8 +36,8 @@ const {
   loading,
   loaded,
   error,
-  startPolling,
-  stopPolling,
+  startLiveUpdates,
+  stopLiveUpdates,
   reload,
   select,
   setRepoKey,
@@ -227,10 +227,10 @@ const pruneDescription = computed(() => {
 useEscapeToClose(() => emit('close'), { enabled: () => openModalCount.value === 0 })
 
 onMounted(() => {
-  startPolling()
+  startLiveUpdates()
 })
 onUnmounted(() => {
-  stopPolling()
+  stopLiveUpdates()
 })
 </script>
 

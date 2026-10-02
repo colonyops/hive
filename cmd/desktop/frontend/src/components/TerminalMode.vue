@@ -1507,9 +1507,8 @@ const {
 useWailsEvent('jobs:updated', () => {
   void reloadSessions()
 })
-// The CLI writes the same hive.db from another process, so no job of this
-// app's fires when `hive batch` creates a session or `hive rm` removes one.
-// The core polls the session set and sessions:updated is that wake-up.
+// jobs:updated only covers this app's own session work; the CLI writes
+// hive.db from another process.
 useWailsEvent('sessions:updated', () => {
   void reloadSessions()
 })

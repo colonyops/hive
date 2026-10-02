@@ -343,6 +343,21 @@ func (s *HCStore) ListRepoKeys(ctx context.Context) ([]string, error) {
 	return keys, nil
 }
 
+// Fingerprint summarizes every hc table in one read.
+func (s *HCStore) Fingerprint(ctx context.Context) (hc.Fingerprint, error) {
+	row, err := s.db.Queries().HCFingerprint(ctx)
+	if err != nil {
+		return hc.Fingerprint{}, fmt.Errorf("read hc fingerprint: %w", err)
+	}
+	return hc.Fingerprint{
+		Items:          row.ItemCount,
+		ItemsUpdatedAt: row.ItemsUpdatedAt,
+		Comments:       row.CommentCount,
+		CommentsLastAt: row.CommentsCreatedAt,
+		Blockers:       row.BlockerCount,
+	}, nil
+}
+
 // Prune removes old done/cancelled items and their comments.
 func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 	allRows, err := s.db.Queries().ListAllHCItems(ctx)

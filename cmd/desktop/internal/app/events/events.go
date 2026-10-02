@@ -34,14 +34,14 @@ type JobsUpdated struct {
 // re-reads, so the payload names the attempt rather than carrying the reason.
 type SessionCreateFailed struct{ Name string }
 
-// SessionsUpdated reports that the hive session set differs from the last
-// read: sessions appeared, changed name, slug, remote or state, or went away.
-// The CLI writes the same hive.db from another process, so this is the only
-// signal for a session it created or removed; the app's own session jobs
-// change the set too and land here one poll after their JobsUpdated. The
-// payload carries the ids by kind of change; the rows are state a reader
-// re-reads.
+// SessionsUpdated reports the hive session ids that appeared, changed, or
+// went away since the last read, whichever process wrote them.
 type SessionsUpdated struct{ Added, Changed, Removed []string }
+
+// TasksUpdated reports that an hc item, comment, or blocker was written since
+// the last read, whichever process wrote it. The read is a fingerprint, so
+// there are no ids to carry.
+type TasksUpdated struct{}
 
 // FlowsUpdated reports that the flow set was reloaded. Reason names what
 // caused it — an external edit, or the app's own save.
@@ -104,6 +104,7 @@ func (ActivityAppended) eventName() string       { return "activity.appended" }
 func (JobsUpdated) eventName() string            { return "jobs.updated" }
 func (SessionCreateFailed) eventName() string    { return "session.create-failed" }
 func (SessionsUpdated) eventName() string        { return "sessions.updated" }
+func (TasksUpdated) eventName() string           { return "tasks.updated" }
 func (FlowsUpdated) eventName() string           { return "flows.updated" }
 func (ActionsUpdated) eventName() string         { return "actions.updated" }
 func (MenuBarUpdated) eventName() string         { return "menu-bar.updated" }

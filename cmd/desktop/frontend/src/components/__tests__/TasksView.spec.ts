@@ -13,7 +13,6 @@ const mocks = vi.hoisted(() => ({
   // instant the test file's imports are evaluated — before any beforeEach has
   // a chance to configure it. clearAllMocks() (unlike resetAllMocks()) keeps
   // this default resolved value across tests, so it only needs setting once.
-  Focused: vi.fn().mockResolvedValue(true),
   On: vi.fn(() => () => {}),
   SetText: vi.fn(),
   OpenURL: vi.fn(),
@@ -26,9 +25,6 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   DeleteTask: mocks.DeleteTask,
   PruneTasks: mocks.PruneTasks,
   TaskRepoKeys: mocks.TaskRepoKeys,
-}))
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
-  Focused: mocks.Focused,
 }))
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
@@ -84,7 +80,6 @@ describe('TasksView', () => {
     vi.clearAllMocks()
     resetToastsForTests()
     mocks.On.mockReturnValue(() => {})
-    mocks.Focused.mockResolvedValue(true)
     mocks.ListTasks.mockResolvedValue([])
     mocks.TaskRepoKeys.mockResolvedValue([])
     mocks.ReadTaskDetail.mockResolvedValue(detailFrom(task('t1')))

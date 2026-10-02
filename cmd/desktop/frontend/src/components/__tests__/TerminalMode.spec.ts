@@ -1968,8 +1968,6 @@ describe('TerminalMode', () => {
     const handler = mocks.On.mock.calls.find(([event]) => event === 'sessions:updated')?.[1] as (() => void) | undefined
     expect(handler).toBeDefined()
 
-    // `hive batch` wrote hive.db from another process: no job of this app's
-    // ran, so the core's poll is the only thing that can wake the sidebar.
     mocks.ListSessions.mockResolvedValue([
       { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
       { id: '2', name: 'bump deps', slug: 'hive-bump-deps', repo: 'hay-kot/hive', state: 'active' },

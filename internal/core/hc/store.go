@@ -54,6 +54,20 @@ type Store interface {
 	// epic to the specified status. Items already in a terminal status (done, cancelled)
 	// are not modified.
 	BulkUpdateStatus(ctx context.Context, epicID string, status Status) error
+	// Fingerprint summarizes every hc table in one cheap read.
+	Fingerprint(ctx context.Context) (Fingerprint, error)
+}
+
+// Fingerprint changes whenever an item, comment, or blocker is written or
+// removed, so a reader in another process can detect a change without
+// re-reading the items. Comments do not touch their item's UpdatedAt, which is
+// why they are counted separately.
+type Fingerprint struct {
+	Items          int64
+	ItemsUpdatedAt int64
+	Comments       int64
+	CommentsLastAt int64
+	Blockers       int64
 }
 
 // ItemUpdate carries partial updates to an Item. Nil pointer fields are not changed.

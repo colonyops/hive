@@ -43,6 +43,17 @@ type HoneycombManagement interface {
 	ListRepoKeys(ctx context.Context) ([]string, error)
 	DeleteItem(ctx context.Context, id string) error
 	Prune(ctx context.Context, opts hc.PruneOpts) (int, error)
+	Fingerprint(ctx context.Context) (hc.Fingerprint, error)
+}
+
+// TasksFingerprint is the seam-local hc.Fingerprint: equal values mean no hc
+// item, comment, or blocker was written between the two reads.
+type TasksFingerprint struct {
+	Items          int64
+	ItemsUpdatedAt int64
+	Comments       int64
+	CommentsLastAt int64
+	Blockers       int64
 }
 
 // TaskItem is one hc item as the desktop's tasks list sees it. Desc is
@@ -220,6 +231,15 @@ func (h *HiveHoneycomb) TaskRepoKeys(ctx context.Context) ([]string, error) {
 		return nil, fmt.Errorf("list hc repo keys: %w", err)
 	}
 	return keys, nil
+}
+
+// TasksFingerprint summarizes the whole hc store in one read.
+func (h *HiveHoneycomb) TasksFingerprint(ctx context.Context) (TasksFingerprint, error) {
+	fp, err := h.tasks.Fingerprint(ctx)
+	if err != nil {
+		return TasksFingerprint{}, fmt.Errorf("read hc fingerprint: %w", err)
+	}
+	return TasksFingerprint(fp), nil
 }
 
 func taskItemOf(item hc.Item) TaskItem {

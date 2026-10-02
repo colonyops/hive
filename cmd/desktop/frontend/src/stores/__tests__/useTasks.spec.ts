@@ -1,5 +1,5 @@
 import { flushPromises } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick, watch } from 'vue'
 import { useTasks } from '../useTasks'
 
@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
   DeleteTask: vi.fn(),
   PruneTasks: vi.fn(),
   TaskRepoKeys: vi.fn(),
-  Focused: vi.fn(),
   On: vi.fn(),
 }))
 
@@ -21,9 +20,6 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   DeleteTask: mocks.DeleteTask,
   PruneTasks: mocks.PruneTasks,
   TaskRepoKeys: mocks.TaskRepoKeys,
-}))
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
-  Focused: mocks.Focused,
 }))
 vi.mock('@wailsio/runtime', () => ({ Events: { On: mocks.On } }))
 
@@ -56,23 +52,14 @@ describe('useTasks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.On.mockReturnValue(() => {})
-    mocks.Focused.mockResolvedValue(true)
     mocks.ListTasks.mockResolvedValue([])
     mocks.TaskRepoKeys.mockResolvedValue([])
     mocks.ReadTaskDetail.mockResolvedValue(detail('t1'))
   })
 
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  // window:focus's real handler is registered by the (unmocked) useWindowFocus
-  // store; grabbing it lets tests drive it the same way the native runtime would.
-  function focusHandler(): () => void {
-    return mocks.On.mock.calls.find(([name]) => name === 'window:focus')?.[1] as () => void
-  }
-  function blurHandler(): () => void {
-    return mocks.On.mock.calls.find(([name]) => name === 'window:blur')?.[1] as () => void
+  function tasksUpdated(): void {
+    const handler = mocks.On.mock.calls.find(([name]) => name === 'tasks:updated')?.[1] as () => void
+    handler()
   }
 
   it('persists repo, filter and collapsed state under their storage keys', async () => {
@@ -93,45 +80,40 @@ describe('useTasks', () => {
     expect(tasks.isCollapsed('epic-1')).toBe(false)
   })
 
-  it('polls on a self-rescheduling 2s timer and picks up external writes', async () => {
-    vi.useFakeTimers()
+  it('reloads on tasks:updated while live, and not after it stops', async () => {
     mocks.ListTasks.mockResolvedValue([task('t1')])
     const tasks = useTasks()
 
-    tasks.startPolling()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(mocks.ListTasks).toHaveBeenCalledTimes(1)
+    tasks.startLiveUpdates()
+    await flushPromises()
     expect(tasks.items.value.map((i) => i.id)).toEqual(['t1'])
 
     mocks.ListTasks.mockResolvedValue([task('t1'), task('t2')])
-    await vi.advanceTimersByTimeAsync(1999)
-    expect(mocks.ListTasks).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(mocks.ListTasks).toHaveBeenCalledTimes(2)
+    tasksUpdated()
+    await flushPromises()
     expect(tasks.items.value.map((i) => i.id)).toEqual(['t1', 't2'])
 
-    tasks.stopPolling()
-    await vi.advanceTimersByTimeAsync(5000)
-    expect(mocks.ListTasks).toHaveBeenCalledTimes(2)
+    tasks.stopLiveUpdates()
+    mocks.ListTasks.mockClear()
+    tasksUpdated()
+    await flushPromises()
+    expect(mocks.ListTasks).not.toHaveBeenCalled()
   })
 
-  it('keeps last-seen items, sets error, and keeps polling on a poll failure', async () => {
-    vi.useFakeTimers()
+  it('keeps last-seen items and sets error when a reload fails', async () => {
     mocks.ListTasks.mockResolvedValueOnce([task('t1')]).mockRejectedValueOnce(appError('internal', 'temporary failure'))
     const tasks = useTasks()
 
-    tasks.startPolling()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(tasks.items.value.map((i) => i.id)).toEqual(['t1'])
-
-    await vi.advanceTimersByTimeAsync(2000)
-    expect(mocks.ListTasks).toHaveBeenCalledTimes(2)
+    tasks.startLiveUpdates()
+    await flushPromises()
+    tasksUpdated()
+    await flushPromises()
     expect(tasks.items.value.map((i) => i.id)).toEqual(['t1'])
     expect(tasks.error.value).toBe('temporary failure')
 
-    // The chain keeps running: the next tick's success clears the error.
     mocks.ListTasks.mockResolvedValue([task('t1'), task('t2')])
-    await vi.advanceTimersByTimeAsync(2000)
+    tasksUpdated()
+    await flushPromises()
     expect(tasks.error.value).toBeNull()
     expect(tasks.items.value.map((i) => i.id)).toEqual(['t1', 't2'])
   })
@@ -240,7 +222,7 @@ describe('useTasks', () => {
     mocks.TaskRepoKeys.mockResolvedValue(['acme/site'])
     const tasks = useTasks()
 
-    tasks.startPolling()
+    tasks.startLiveUpdates()
     await flushPromises()
     expect(tasks.repoKeys.value).toEqual(['acme/site'])
 
@@ -248,34 +230,6 @@ describe('useTasks', () => {
     await tasks.reload()
     expect(tasks.repoKeys.value).toEqual(['acme/site', 'acme/other'])
 
-    tasks.stopPolling()
-  })
-
-  it('reloads on window focus only while polling is requested', async () => {
-    vi.useFakeTimers()
-    mocks.ListTasks.mockResolvedValue([task('t1')])
-    const tasks = useTasks()
-
-    tasks.startPolling()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(mocks.ListTasks).toHaveBeenCalledTimes(1)
-
-    // blur and focus are awaited separately so Vue's batched watcher sees
-    // each transition rather than collapsing them into a same-tick no-op.
-    mocks.ListTasks.mockClear()
-    blurHandler()()
-    await nextTick()
-    focusHandler()()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(mocks.ListTasks).toHaveBeenCalledTimes(1)
-
-    // With no view open (stopPolling), refocusing must not fetch.
-    tasks.stopPolling()
-    mocks.ListTasks.mockClear()
-    blurHandler()()
-    await nextTick()
-    focusHandler()()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(mocks.ListTasks).not.toHaveBeenCalled()
+    tasks.stopLiveUpdates()
   })
 })

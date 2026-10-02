@@ -201,6 +201,10 @@ func (f *fakeHCStore) ListBlockerEdges(_ context.Context) ([][2]string, error) {
 	return nil, nil
 }
 
+func (f *fakeHCStore) Fingerprint(_ context.Context) (hc.Fingerprint, error) {
+	return hc.Fingerprint{}, nil
+}
+
 func newTestHoneycombService(store hc.Store) *HoneycombService {
 	return NewHoneycombService(store, zerolog.Nop())
 }

@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   DeleteTask: vi.fn(),
   PruneTasks: vi.fn(),
   TaskRepoKeys: vi.fn(),
-  Focused: vi.fn().mockResolvedValue(true),
   On: vi.fn(() => () => {}),
   SetText: vi.fn(),
   OpenURL: vi.fn(),
@@ -21,9 +20,6 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   DeleteTask: mocks.DeleteTask,
   PruneTasks: mocks.PruneTasks,
   TaskRepoKeys: mocks.TaskRepoKeys,
-}))
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
-  Focused: mocks.Focused,
 }))
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
@@ -43,7 +39,6 @@ describe('TasksOverlay', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.On.mockReturnValue(() => {})
-    mocks.Focused.mockResolvedValue(true)
     mocks.ListTasks.mockResolvedValue([])
     mocks.TaskRepoKeys.mockResolvedValue([])
   })

@@ -1,4 +1,4 @@
-import { onScopeDispose, readonly, ref, watch } from 'vue'
+import { readonly, ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import {
   DeleteTask,
@@ -12,18 +12,11 @@ import type {
   TaskDetail,
   TaskItem,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import { useWailsEvent } from '../composables/useWailsEvent'
 import { appErrorKind } from '../lib/appError'
 import { DEFAULT_TASK_FILTER, type TaskFilterId } from '../lib/tasksPresentation'
 import { defineStore } from './defineStore'
 import { useResource } from './useResource'
-import { useWindowFocus } from './useWindowFocus'
-
-// Polls on a 2s self-rescheduling setTimeout (not setInterval, so a slow read
-// cannot pile up overlapping requests) with a generation counter that lets
-// startPolling/stopPolling cut a running chain off cleanly. The hc store is a
-// CLI's too — the poll is what surfaces a `hive hc` write made outside the app
-// within one tick.
-const POLL_INTERVAL_MS = 2000
 
 export const useTasks = defineStore('tasks', () => {
   const repoKey = useStorage('hive.tasks.repo', '')
@@ -58,18 +51,7 @@ export const useTasks = defineStore('tasks', () => {
 
   let detailSequence = 0
   let repoKeysSequence = 0
-  let pollGeneration = 0
-  let pollTimer: ReturnType<typeof setTimeout> | undefined
-  // True whenever a view wants live updates (between startPolling and
-  // stopPolling), so the window-focus reload below only fires while a Tasks
-  // view is actually open.
-  let pollingRequested = false
-
-  function haltPollLoop(): void {
-    ++pollGeneration
-    clearTimeout(pollTimer)
-    pollTimer = undefined
-  }
+  let live = false
 
   async function loadRepoKeys(): Promise<void> {
     const sequence = ++repoKeysSequence
@@ -107,34 +89,22 @@ export const useTasks = defineStore('tasks', () => {
     await loadDetail(id, ++detailSequence)
   }
 
-  async function tick(): Promise<void> {
-    await Promise.all([list.reload(), reloadDetailIfSelected()])
-  }
-
-  async function poll(generation: number): Promise<void> {
-    await tick()
-    if (generation !== pollGeneration) return
-    pollTimer = setTimeout(() => {
-      void poll(generation)
-    }, POLL_INTERVAL_MS)
-  }
-
-  function startPolling(): void {
-    pollingRequested = true
-    clearTimeout(pollTimer)
-    const generation = ++pollGeneration
-    void loadRepoKeys()
-    void poll(generation)
-  }
-
-  function stopPolling(): void {
-    pollingRequested = false
-    haltPollLoop()
-  }
-
   async function reload(): Promise<void> {
     await Promise.all([list.reload(), reloadDetailIfSelected(), loadRepoKeys()])
   }
+
+  function startLiveUpdates(): void {
+    live = true
+    void reload()
+  }
+
+  function stopLiveUpdates(): void {
+    live = false
+  }
+
+  useWailsEvent('tasks:updated', () => {
+    if (live) void reload()
+  })
 
   // A repo scope change is a server-side filter, not a client-side one (unlike
   // `filter`, which tasksPresentation applies over whatever is already
@@ -142,13 +112,6 @@ export const useTasks = defineStore('tasks', () => {
   watch(repoKey, () => {
     void reload()
   })
-
-  const { focused } = useWindowFocus()
-  watch(focused, (isFocused) => {
-    if (isFocused && pollingRequested) void reload()
-  })
-
-  onScopeDispose(haltPollLoop)
 
   function setRepoKey(next: string): void {
     repoKey.value = next
@@ -211,8 +174,8 @@ export const useTasks = defineStore('tasks', () => {
     error: list.error,
     setRepoKey,
     setFilter,
-    startPolling,
-    stopPolling,
+    startLiveUpdates,
+    stopLiveUpdates,
     reload,
     select,
     setStatus,

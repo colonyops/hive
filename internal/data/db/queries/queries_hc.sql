@@ -170,3 +170,11 @@ SELECT DISTINCT b.blocked_id FROM hc_task_blockers b
 JOIN hc_items i ON i.id = b.blocker_id
 WHERE i.status IN ('open', 'in_progress')
   AND b.blocked_id IN (sqlc.slice('ids'));
+
+-- name: HCFingerprint :one
+SELECT
+    (SELECT COUNT(*) FROM hc_items) AS item_count,
+    CAST((SELECT COALESCE(MAX(updated_at), 0) FROM hc_items) AS INTEGER) AS items_updated_at,
+    (SELECT COUNT(*) FROM hc_comments) AS comment_count,
+    CAST((SELECT COALESCE(MAX(created_at), 0) FROM hc_comments) AS INTEGER) AS comments_created_at,
+    (SELECT COUNT(*) FROM hc_task_blockers) AS blocker_count;

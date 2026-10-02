@@ -318,6 +318,12 @@ func (s *HoneycombService) ListRepoKeys(ctx context.Context) ([]string, error) {
 	return s.store.ListRepoKeys(ctx)
 }
 
+// Fingerprint summarizes every hc table so a reader can detect a change
+// another process made without re-reading the items.
+func (s *HoneycombService) Fingerprint(ctx context.Context) (hc.Fingerprint, error) {
+	return s.store.Fingerprint(ctx)
+}
+
 // DeleteItem removes an item by ID.
 func (s *HoneycombService) DeleteItem(ctx context.Context, id string) error {
 	return s.store.DeleteItem(ctx, id)

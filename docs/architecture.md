@@ -332,6 +332,7 @@ cmd/desktop/internal/
         giteaclient/              #   the owned Gitea HTTP client
       webhook/                    #   Descriptor + Config + Factory; local ingress
     ingest/                       # producer loop, classification, absence, snapshots
+    hivewatch/                    # the poller for hive.db state another process writes
       resolver.go                 #   the flow set -> live connector instances
     dispatch/                     # output worker, Dispatcher, executors; also
                                   #   where SystemNotifier (the notify port) is
@@ -1565,12 +1566,11 @@ output command holds, and it has no business holding a delete. Delete, recycle a
 `jobs.Track` like `CreateSession` does — they do git and worktree work — so
 `jobs:updated` is what refreshes the list after the app's own work. The CLI
 writes the same `hive.db` from another process and has no way to signal this
-one, so `sessionsWatcher` re-reads the session set every two seconds and
-publishes `SessionsUpdated` (degraded to `sessions:updated`) when it differs;
-that is what lands a `hive batch` session in the sidebar. A poll rather than a
-watch on the database file: every table shares that file and its WAL, so a
-watch cannot tell a session write from a message or task write and would wake
-the sidebar for all of them. The frontend follows a session by **id** across
+one, so the sessions probe on `hivewatch.Watcher` re-reads the session set
+every two seconds and publishes `SessionsUpdated` (degraded to
+`sessions:updated`) when it differs; that is what lands a `hive batch` session
+in the sidebar. hc tasks follow the same path through a tasks probe and
+`tasks:updated` (ADR hive-desktop-observes-shared-hive-db-state-through-one-core-poller-with-registered-probes). The frontend follows a session by **id** across
 either reload so a rename is told apart from a deletion. Anything
 destructive is gated on `SessionRisk`, whose payload names the uncommitted or
 unpushed work at stake and whether recycling this session is really a delete (it
