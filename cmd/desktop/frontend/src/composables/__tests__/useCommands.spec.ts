@@ -370,7 +370,7 @@ describe('useCommands', () => {
     palette.open.value = true
     palette.query.value = 'jump'
 
-    palette.run(palette.results.value[0])
+    void palette.run(palette.results.value[0])
 
     expect(handler).toHaveBeenCalledTimes(1)
     expect(palette.open.value).toBe(true)
@@ -397,7 +397,7 @@ describe('useCommands', () => {
     palette.open.value = true
     palette.query.value = 'run'
 
-    palette.run(palette.results.value[0])
+    void palette.run(palette.results.value[0])
 
     expect(palette.open.value).toBe(true)
     expect(palette.scope.value).toBe('actions')
@@ -431,7 +431,7 @@ describe('useCommands', () => {
     scope.run(() => useCommands([command({ id: 'do-thing', title: 'Do thing' })]))
     palette.open.value = true
 
-    palette.run(palette.results.value[0])
+    void palette.run(palette.results.value[0])
 
     expect(usePaletteRecents().recentIds.value).toEqual(['do-thing'])
   })
@@ -446,9 +446,9 @@ describe('useCommands', () => {
     )
 
     palette.scope.value = 'goto'
-    palette.run(palette.results.value[0])
+    void palette.run(palette.results.value[0])
     palette.scope.value = 'actions'
-    palette.run(palette.results.value[0])
+    void palette.run(palette.results.value[0])
 
     expect(usePaletteRecents().recentIds.value).toEqual(['act-a', 'goto-a'])
   })
@@ -458,7 +458,7 @@ describe('useCommands', () => {
     scope.run(() => useShellEscape((line) => [command({ id: 'shell:run', title: `Run: ${line}` })]))
     palette.setQuery('!ls')
 
-    palette.run(palette.results.value[0])
+    void palette.run(palette.results.value[0])
 
     expect(usePaletteRecents().recentIds.value).toEqual([])
   })
@@ -468,7 +468,7 @@ describe('useCommands', () => {
     scope.run(() => useKeysScope(() => [command({ id: 'keys:feed.next', title: 'Next item' })]))
     palette.setQuery('?next')
 
-    palette.run(palette.results.value[0])
+    void palette.run(palette.results.value[0])
 
     expect(usePaletteRecents().recentIds.value).toEqual([])
   })
@@ -479,7 +479,7 @@ describe('useCommands', () => {
     palette.open.value = true
     palette.query.value = 'jump'
 
-    palette.run(palette.results.value[0])
+    void palette.run(palette.results.value[0])
 
     expect(usePaletteRecents().recentIds.value).toEqual([])
   })

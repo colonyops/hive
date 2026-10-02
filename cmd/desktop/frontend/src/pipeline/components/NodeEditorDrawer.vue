@@ -115,7 +115,7 @@ function requestDelete() {
 
 function cancelDelete() {
   deleteConfirming.value = false
-  nextTick(() => deleteTriggerRef.value?.focus())
+  void nextTick(() => deleteTriggerRef.value?.focus())
 }
 
 function confirmDelete() {
@@ -124,7 +124,7 @@ function confirmDelete() {
 }
 
 watch(deleteConfirming, (confirming) => {
-  if (confirming) nextTick(() => deleteCancelRef.value?.focus())
+  if (confirming) void nextTick(() => deleteCancelRef.value?.focus())
 })
 
 // ── Docs ─────────────────────────────────────────────────────────────────────

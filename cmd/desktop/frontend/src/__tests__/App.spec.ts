@@ -1013,7 +1013,7 @@ describe('App', () => {
     expect(toggle?.title).toBe('Toggle item selection')
     expect(palette.results.value.some((candidate) => candidate.id === 'feed:create-session-from-selection')).toBe(false)
 
-    toggle!.run()
+    void toggle!.run()
     await flushPromises()
     expect(wrapper.find('[data-testid="feed-selection-bar"]').exists()).toBe(true)
 
@@ -1024,7 +1024,7 @@ describe('App', () => {
 
     const create = palette.results.value.find((candidate) => candidate.id === 'feed:create-session-from-selection')
     expect(create?.title).toBe('Create session from selected items…')
-    create!.run()
+    void create!.run()
     await flushPromises()
 
     expect(mocks.NewSessionDraft).toHaveBeenCalledWith([1, 2])
@@ -1707,7 +1707,7 @@ describe('App', () => {
 
       // requestedEditorFilter is set synchronously, before the router push
       // (and any settings pane it mounts) has had a chance to consume it.
-      cmd!.run()
+      void cmd!.run()
       expect(requestedEditorFilter.value).toBe('Next item')
 
       await flushPromises()
@@ -2886,7 +2886,7 @@ describe('App', () => {
       expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
 
       const { results } = useCommandPalette()
-      results.value.find((command) => command.id === 'terminal.toggle-sidebar')!.run()
+      void results.value.find((command) => command.id === 'terminal.toggle-sidebar')!.run()
       await flushPromises()
       expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
 

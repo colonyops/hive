@@ -32,7 +32,6 @@ import SettingsSection from './settings/SettingsSection.vue'
 import { relativeTimeLabel } from '../lib/age'
 import { useAboutSettings } from '../composables/useAboutSettings'
 import { useClipboard } from '../composables/useClipboard'
-import { useReportDialog } from '../composables/useReportDialog'
 import { useReleaseNotes } from '../composables/useReleaseNotes'
 import type { ReleaseNote } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
@@ -48,10 +47,10 @@ const {
   checkForUpdates,
   openDocs,
   openUpdatesDoc,
+  reportProblem,
 } = useAboutSettings()
 
 const { copy, copied } = useClipboard()
-const { reportProblem } = useReportDialog()
 
 const osNames: Record<string, string> = { darwin: 'macOS', windows: 'Windows', linux: 'Linux' }
 
@@ -136,7 +135,7 @@ interface Link {
   label: string
   hint: string
   external: boolean
-  open: () => void
+  open: () => Promise<void>
 }
 
 const links: Link[] = [
@@ -147,7 +146,7 @@ const links: Link[] = [
     label: 'Report a problem',
     hint: 'Open a GitHub issue',
     external: true,
-    open: () => reportProblem(),
+    open: reportProblem,
   },
 ]
 

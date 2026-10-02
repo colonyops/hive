@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import { Build } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/systemservice'
+import { IssueURL } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reportservice'
 import {
   CheckNow,
   SetEnabled,
@@ -73,10 +74,10 @@ export function useAboutSettings() {
     }
   }
 
-  async function openExternal(url: string): Promise<void> {
+  async function openExternal(url: () => string | Promise<string>): Promise<void> {
     error.value = ''
     try {
-      await Browser.OpenURL(url)
+      await Browser.OpenURL(await url())
     } catch (err) {
       error.value = errText(err)
     }
@@ -92,7 +93,8 @@ export function useAboutSettings() {
     refresh,
     setAutoUpdate,
     checkForUpdates,
-    openDocs: () => openExternal(docsURL),
-    openUpdatesDoc: () => openExternal(updatesDocURL),
+    openDocs: () => openExternal(() => docsURL),
+    openUpdatesDoc: () => openExternal(() => updatesDocURL),
+    reportProblem: () => openExternal(IssueURL),
   }
 }

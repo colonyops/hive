@@ -1,5 +1,5 @@
 import { flushPromises } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { ISearchOptions } from '@xterm/addon-search'
 import { resetTerminalFacesForTests, useTerminalWindows } from '../useTerminalWindows'
 import {
@@ -296,7 +296,7 @@ function leaf(paneId: string, width: number, height: number, x = 0, y = 0): Pane
   return { paneId, x, y, width, height }
 }
 
-type MockedClient = { [K in keyof TerminalClient]: ReturnType<typeof vi.fn> }
+type MockedClient = { [K in keyof TerminalClient]: Mock<(...args: never[]) => unknown> }
 
 function fakeClient(): MockedClient {
   return {

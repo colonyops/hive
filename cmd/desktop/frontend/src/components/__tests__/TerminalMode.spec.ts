@@ -3270,7 +3270,7 @@ describe('TerminalMode', () => {
       expect(palette.results.value[0].title).toBe('Run: npm test')
       expect(palette.results.value[0].hint).toBe('new window in fix the parser')
 
-      palette.results.value[0].run()
+      void palette.results.value[0].run()
       expect(session.newWindow).toHaveBeenCalledWith('npm test')
 
       // A bare ! has nothing to run.

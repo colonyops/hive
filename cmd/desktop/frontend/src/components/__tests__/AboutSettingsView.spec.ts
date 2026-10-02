@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   CheckNow: vi.fn(),
   OpenURL: vi.fn(),
   SetText: vi.fn(),
+  IssueURL: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/systemservice', () => ({
   Build: mocks.Build,
@@ -17,6 +18,9 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Status: mocks.Status,
   SetEnabled: mocks.SetEnabled,
   CheckNow: mocks.CheckNow,
+}))
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/reportservice', () => ({
+  IssueURL: mocks.IssueURL,
 }))
 vi.mock('@wailsio/runtime', () => ({
   Browser: { OpenURL: mocks.OpenURL },
@@ -56,6 +60,7 @@ beforeEach(() => {
   mocks.CheckNow.mockResolvedValue(updateInfo())
   mocks.OpenURL.mockResolvedValue(undefined)
   mocks.SetText.mockResolvedValue(undefined)
+  mocks.IssueURL.mockResolvedValue('https://example.test/issues/new')
 })
 
 describe('AboutSettingsView', () => {
@@ -149,5 +154,17 @@ describe('AboutSettingsView', () => {
 
     expect(wrapper.find('[data-testid="about-auto-update"]').attributes('aria-checked')).toBe('true')
     expect(wrapper.find('[data-testid="about-error"]').text()).toContain('disk is read-only')
+  })
+
+  it('shows an error when the issue link cannot be built', async () => {
+    mocks.IssueURL.mockRejectedValue(new Error('no build info'))
+    const wrapper = mount(AboutSettingsView)
+    await flushPromises()
+
+    await wrapper.find('[data-testid="about-link-report"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.OpenURL).not.toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="about-error"]').text()).toContain('no build info')
   })
 })

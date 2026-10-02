@@ -207,7 +207,7 @@ watch(
   () => (open.value ? selectedIndex.value : -1),
   (idx) => {
     if (idx < 0) return
-    nextTick(() => rowElements.get(idx)?.scrollIntoView({ block: 'nearest' }))
+    void nextTick(() => rowElements.get(idx)?.scrollIntoView({ block: 'nearest' }))
   },
 )
 
@@ -255,7 +255,7 @@ function onKeydown(e: KeyboardEvent): void {
     // preventDefault so a focused row button doesn't also fire its click.
     e.preventDefault()
     const cmd = navList.value[selectedIndex.value]
-    if (cmd) run(cmd)
+    if (cmd) void run(cmd)
   } else if (e.key === 'Escape') {
     toggle()
   } else if (e.key === 'Backspace') {

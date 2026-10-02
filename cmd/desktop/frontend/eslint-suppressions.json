@@ -35,19 +35,11 @@
     "@typescript-eslint/no-base-to-string": {
       "count": 1
     },
-    "@typescript-eslint/no-floating-promises": {
-      "count": 4
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 12
     },
     "@typescript-eslint/require-await": {
       "count": 8
-    }
-  },
-  "src/components/AboutSettingsView.vue": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 3
     }
   },
   "src/components/ActionEditor.vue": {
@@ -129,9 +121,6 @@
     }
   },
   "src/components/CommandPalette.vue": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
-    },
     "@typescript-eslint/unbound-method": {
       "count": 6
     }
@@ -249,9 +238,6 @@
     }
   },
   "src/components/__tests__/ActionSettingsView.spec.ts": {
-    "@typescript-eslint/await-thenable": {
-      "count": 4
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
@@ -334,9 +320,6 @@
     }
   },
   "src/components/__tests__/TerminalMode.spec.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
     },
@@ -352,11 +335,6 @@
   "src/components/settings/__tests__/SettingsLayout.spec.ts": {
     "@typescript-eslint/require-await": {
       "count": 1
-    }
-  },
-  "src/composables/__tests__/useCommands.spec.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 8
     }
   },
   "src/composables/__tests__/useDragGesture.spec.ts": {
@@ -407,11 +385,6 @@
   },
   "src/composables/__tests__/useTerminalWindowListings.spec.ts": {
     "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
-  "src/composables/__tests__/useTerminalWindows.spec.ts": {
-    "@typescript-eslint/no-misused-promises": {
       "count": 1
     }
   },
@@ -580,9 +553,6 @@
   },
   "src/pipeline/components/NodeEditorDrawer.vue": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 2
-    },
-    "@typescript-eslint/no-floating-promises": {
       "count": 2
     },
     "vue/no-v-html": {
