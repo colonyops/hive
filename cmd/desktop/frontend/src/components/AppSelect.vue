@@ -10,6 +10,7 @@ import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconSearch from '~icons/lucide/search'
 import { useAnchoredPopover } from '../composables/useAnchoredPopover'
+import { seedRef } from '../lib/seedRef'
 
 export interface AppSelectOption {
   value: string
@@ -56,7 +57,7 @@ const query = ref('')
 // Editable mode: `text` is the input's own value (kept in sync with modelValue),
 // and `touched` gates filtering to after a keystroke so opening shows the whole
 // list — a prefilled value never hides the other options.
-const text = ref(props.modelValue)
+const text = seedRef(() => props.modelValue)
 const touched = ref(false)
 const active = ref(0)
 watch(

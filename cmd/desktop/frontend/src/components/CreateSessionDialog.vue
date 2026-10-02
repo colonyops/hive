@@ -12,6 +12,7 @@ import { useAutofocus } from '../composables/useAutofocus'
 import { formatCombo } from '../composables/useKeybindings'
 import { useSubmitShortcut } from '../composables/useSubmitShortcut'
 import { type ActionInputValues, initialActionInputs, validateActionInputs } from '../lib/actionInputs'
+import { seedRef } from '../lib/seedRef'
 
 // An interactive launch-session action can also declare inputs; the two
 // compose in one dialog rather than stacking two.
@@ -35,11 +36,11 @@ const emit = defineEmits<{
 const formId = useId()
 const submitHint = formatCombo('mod+enter')
 const target = ref<'repository' | 'workspace'>('repository')
-const repository = ref(props.options.defaultRepository)
-const workspace = ref(props.options.workspaces?.find((item) => item.supportsPrompt)?.dir || '')
+const repository = seedRef(() => props.options.defaultRepository)
+const workspace = seedRef(() => props.options.workspaces?.find((item) => item.supportsPrompt)?.dir || '')
 const name = ref('')
-const agent = ref(props.options.defaultAgent)
-const inputValues = ref<ActionInputValues>(initialActionInputs(props.inputs))
+const agent = seedRef(() => props.options.defaultAgent)
+const inputValues = seedRef<ActionInputValues>(() => initialActionInputs(props.inputs))
 const validationError = ref('')
 const nameInput = ref<HTMLInputElement | null>(null)
 const canSubmit = computed(() => {

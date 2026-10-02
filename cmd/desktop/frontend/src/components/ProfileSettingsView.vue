@@ -10,6 +10,7 @@ import SettingsNavItem from './settings/SettingsNavItem.vue'
 import { fileToImageBase64, ImageUploadError, imageUploadAccept } from '../lib/imageUpload'
 import type { Profile } from '../types/feed'
 import type { ProfileSettingsSection } from '../router'
+import { seedRef } from '../lib/seedRef'
 
 const props = withDefaults(
   defineProps<{
@@ -41,7 +42,7 @@ const emit = defineEmits<{
   'select-section': [section: ProfileSettingsSection]
 }>()
 
-const name = ref(props.profile.name)
+const name = seedRef(() => props.profile.name)
 
 watch(
   () => [props.profile.id, props.profile.name],

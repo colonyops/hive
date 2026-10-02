@@ -13,6 +13,7 @@ import { useReturnFocus } from '../composables/useReturnFocus'
 import { SelectField, TextareaField, TextField } from '../pipeline/fields'
 import type { EditableAction } from '../composables/useActionsSettings'
 import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import { seedRef } from '../lib/seedRef'
 
 const props = withDefaults(
   defineProps<{
@@ -32,8 +33,7 @@ const labelRef = ref<{ focus: () => void } | null>(null)
 const appliesField = ref<{ flush: () => void } | null>(null)
 const closeRef = ref<HTMLButtonElement | null>(null)
 const validationError = ref<string | null>(null)
-const launchTarget = ref<'interactive' | 'repository' | 'workspace'>(
-  // eslint-disable-next-line vue/no-ref-object-reactivity-loss -- seeds the picker; the editor remounts for each action
+const launchTarget = seedRef<'interactive' | 'repository' | 'workspace'>(() =>
   action.value.launch?.workspace ? 'workspace' : action.value.launch?.repoTemplate ? 'repository' : 'interactive',
 )
 

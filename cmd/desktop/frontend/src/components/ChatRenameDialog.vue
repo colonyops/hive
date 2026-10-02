@@ -6,6 +6,7 @@ import { nextTick, onMounted, ref } from 'vue'
 import IconPencil from '~icons/lucide/pencil'
 import BaseButton from './BaseButton.vue'
 import BaseModal from './BaseModal.vue'
+import { seedRef } from '../lib/seedRef'
 
 const props = defineProps<{
   name: string
@@ -14,7 +15,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ close: []; save: [name: string] }>()
 
-const draft = ref(props.name)
+const draft = seedRef(() => props.name)
 const inputRef = ref<HTMLInputElement | null>(null)
 
 function submit(): void {

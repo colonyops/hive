@@ -9,11 +9,12 @@ import BaseButton from './BaseButton.vue'
 import BaseModal from './BaseModal.vue'
 import InlineConfirm from './InlineConfirm.vue'
 import type { FeedFolder } from '../types/feed'
+import { seedRef } from '../lib/seedRef'
 
 const props = defineProps<{ folder: FeedFolder }>()
 const emit = defineEmits<{ close: []; save: [name: string]; delete: [] }>()
 
-const name = ref(props.folder.name)
+const name = seedRef(() => props.folder.name)
 const inputRef = ref<HTMLInputElement | null>(null)
 const confirming = ref(false)
 

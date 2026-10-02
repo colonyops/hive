@@ -16,6 +16,7 @@ import type {
 import { useAutofocus } from '../composables/useAutofocus'
 import { formatCombo } from '../composables/useKeybindings'
 import { useSubmitShortcut } from '../composables/useSubmitShortcut'
+import { seedRef } from '../lib/seedRef'
 
 const props = defineProps<{
   options: SessionLaunchOptions
@@ -40,17 +41,19 @@ const targetOptions = [
   { value: 'repository' as const, label: 'Code', icon: IconCode },
   { value: 'workspace' as const, label: 'Chats', icon: IconMessagesSquare },
 ]
-const target = ref<'repository' | 'workspace'>(
-  props.initialTarget ?? (props.initial.workspace ? 'workspace' : 'repository'),
+const target = seedRef<'repository' | 'workspace'>(
+  () => props.initialTarget ?? (props.initial.workspace ? 'workspace' : 'repository'),
 )
-const repository = ref(props.initial.repository || props.options.defaultRepository)
-const firstWorkspace = props.initial.prompt
-  ? props.options.workspaces?.find((item) => item.supportsPrompt)
-  : props.options.workspaces?.[0]
-const workspace = ref(props.initial.workspace || firstWorkspace?.dir || '')
-const name = ref(props.initial.name)
-const prompt = ref(props.initial.prompt)
-const agent = ref(props.initial.agent)
+const repository = seedRef(() => props.initial.repository || props.options.defaultRepository)
+const workspace = seedRef(() => {
+  const first = props.initial.prompt
+    ? props.options.workspaces?.find((item) => item.supportsPrompt)
+    : props.options.workspaces?.[0]
+  return props.initial.workspace || first?.dir || ''
+})
+const name = seedRef(() => props.initial.name)
+const prompt = seedRef(() => props.initial.prompt)
+const agent = seedRef(() => props.initial.agent)
 const validationError = ref('')
 const nameInput = ref<HTMLInputElement | null>(null)
 const canSubmit = computed(() => {

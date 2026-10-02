@@ -29,7 +29,7 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [id: string]; close: [] }>()
 
 const root = ref<HTMLElement | null>(null)
-onClickOutside(root, () => emit('close'), { ignore: props.ignore ?? [] })
+onClickOutside(root, () => emit('close'), { ignore: () => props.ignore ?? [] })
 useEscapeToClose(() => emit('close'))
 
 // ── Anchored (teleported) placement ──────────────────────────────────────

@@ -7,6 +7,7 @@ import BaseButton from './BaseButton.vue'
 import BaseModal from './BaseModal.vue'
 import type { InputSpec } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/actions/models'
 import { type ActionInputValues, initialActionInputs, validateActionInputs } from '../lib/actionInputs'
+import { seedRef } from '../lib/seedRef'
 
 const props = withDefaults(
   defineProps<{
@@ -20,7 +21,7 @@ const props = withDefaults(
 )
 const emit = defineEmits<{ close: []; submit: [values: ActionInputValues] }>()
 
-const values = ref<ActionInputValues>(initialActionInputs(props.inputs))
+const values = seedRef<ActionInputValues>(() => initialActionInputs(props.inputs))
 const validationError = ref('')
 
 function submit(): void {

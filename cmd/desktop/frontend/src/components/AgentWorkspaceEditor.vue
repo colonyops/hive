@@ -58,6 +58,7 @@ import type {
   SkillPackageMember,
   WorkspaceEditRequest,
 } from '../lib/agentWorkspacesClient'
+import { seedRef } from '../lib/seedRef'
 
 const props = defineProps<{
   /** The workspace being edited, or null to create one. */
@@ -103,11 +104,11 @@ const deletedPath = computed(() =>
 // (KindInvalid); the form refuses it first, and says what to fix instead.
 const manifestProblem = computed(() => (creating.value ? '' : (props.workspace?.problem ?? '')))
 
-const dir = ref(props.workspace?.dir ?? '')
-const name = ref(props.workspace?.name ?? '')
-const command = ref(props.workspace?.command ?? '')
-const selectedMCPs = ref<string[]>([...(props.workspace?.mcps ?? [])])
-const selectedSkills = ref<string[]>([...(props.workspace?.skills ?? [])])
+const dir = seedRef(() => props.workspace?.dir ?? '')
+const name = seedRef(() => props.workspace?.name ?? '')
+const command = seedRef(() => props.workspace?.command ?? '')
+const selectedMCPs = seedRef<string[]>(() => props.workspace?.mcps ?? [])
+const selectedSkills = seedRef<string[]>(() => props.workspace?.skills ?? [])
 
 const CUSTOM = '__custom__'
 
@@ -448,7 +449,7 @@ function cardFrom(schedule: AgentSchedule): ScheduleCard {
   }
 }
 
-const scheduleCards = ref<ScheduleCard[]>((props.workspace?.schedules ?? []).map(cardFrom))
+const scheduleCards = seedRef<ScheduleCard[]>(() => (props.workspace?.schedules ?? []).map(cardFrom))
 const scheduleDraft = ref<ScheduleDraft | null>(null)
 
 // ── Unsaved work ─────────────────────────────────────────────────────────────

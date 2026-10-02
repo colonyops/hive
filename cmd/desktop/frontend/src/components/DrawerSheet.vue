@@ -35,6 +35,9 @@ const props = withDefaults(
 const emit = defineEmits<{ close: [] }>()
 const sheetRef = ref<HTMLElement | null>(null)
 const bodyRef = ref<HTMLElement | null>(null)
+// A composable can only be created during setup, so the sheet picks fixed or
+// resizable once. No caller switches between the two on a mounted sheet.
+/* eslint-disable vue/no-setup-props-reactivity-loss */
 const resizePanel =
   props.width === undefined
     ? useResizablePanel({
@@ -45,6 +48,7 @@ const resizePanel =
         edge: 'left',
       })
     : null
+/* eslint-enable vue/no-setup-props-reactivity-loss */
 const panelWidth = computed(() => resizePanel?.size.value ?? props.width)
 
 function close(): void {

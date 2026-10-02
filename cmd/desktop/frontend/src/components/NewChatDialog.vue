@@ -9,6 +9,7 @@ import BaseButton from './BaseButton.vue'
 import BaseModal from './BaseModal.vue'
 import { useAutofocus } from '../composables/useAutofocus'
 import type { AgentWorkspace } from '../lib/agentWorkspacesClient'
+import { seedRef } from '../lib/seedRef'
 
 const props = defineProps<{
   workspaces: AgentWorkspace[]
@@ -21,7 +22,7 @@ const emit = defineEmits<{ close: []; submit: [input: { workspace: string; name:
 // The footer sits outside the form, so the submit button claims it by id —
 // which is also what makes Enter in the name field submit.
 const formId = useId()
-const workspace = ref(props.initialWorkspace)
+const workspace = seedRef(() => props.initialWorkspace)
 const name = ref('')
 const nameInput = ref<HTMLInputElement | null>(null)
 const options = computed<AppSelectOption[]>(() =>
