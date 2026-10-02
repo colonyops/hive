@@ -4,6 +4,7 @@ package tmpl
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"strings"
 	"text/template"
 )
@@ -88,7 +89,7 @@ func (r *Renderer) WithAgent(command, window, flags string) *Renderer {
 
 // Render executes a Go template string with the given data.
 func (r *Renderer) Render(tmpl string, data any) (string, error) {
-	t, err := template.New("").Funcs(r.funcs).Option("missingkey=error").Parse(tmpl)
+	t, err := template.New("").Funcs(r.renderFuncs()).Option("missingkey=error").Parse(tmpl)
 	if err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
 	}
@@ -107,8 +108,14 @@ func (r *Renderer) Render(tmpl string, data any) (string, error) {
 // with missingkey=error would reject valid templates referencing keys that
 // only exist at render time.
 func (r *Renderer) ValidateSyntax(tmpl string) error {
-	if _, err := template.New("").Funcs(r.funcs).Parse(tmpl); err != nil {
+	if _, err := template.New("").Funcs(r.renderFuncs()).Parse(tmpl); err != nil {
 		return fmt.Errorf("parse template: %w", err)
 	}
 	return nil
+}
+
+func (r *Renderer) renderFuncs() template.FuncMap {
+	funcs := maps.Clone(r.funcs)
+	maps.Copy(funcs, UntrustedFuncs())
+	return funcs
 }

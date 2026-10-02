@@ -28,9 +28,12 @@ package prompts
 import (
 	"embed"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"text/template"
+
+	hivetmpl "github.com/colonyops/hive/pkg/tmpl"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
@@ -270,8 +273,14 @@ func (s *Service) render(def definition, in Input) (Prompt, error) {
 	}
 	data["Env"] = s.env
 
+	tmpl, err := s.templates.Clone()
+	if err != nil {
+		return Prompt{}, fmt.Errorf("prompts: cloning templates: %w", err)
+	}
+	tmpl.Funcs(hivetmpl.UntrustedFuncs())
+
 	var buf strings.Builder
-	if err := s.templates.ExecuteTemplate(&buf, def.id+".tmpl", data); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, def.id+".tmpl", data); err != nil {
 		return Prompt{}, fmt.Errorf("prompts: rendering %q: %w", def.id, err)
 	}
 	return Prompt{
@@ -397,11 +406,13 @@ func webhookTransformData(_ Env, in Input) (map[string]any, error) {
 }
 
 func funcs() template.FuncMap {
-	return template.FuncMap{
+	funcs := template.FuncMap{
 		// section splices a type's own documentation into the prompt's outline
 		// at the given heading level.
 		"section": section,
 	}
+	maps.Copy(funcs, hivetmpl.UntrustedFuncs())
+	return funcs
 }
 
 // maxHeadingLevel is markdown's deepest ATX heading.

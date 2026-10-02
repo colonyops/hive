@@ -1,6 +1,7 @@
 package prompts
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -246,6 +247,8 @@ func TestCatalogListsOnlyContextFreePrompts(t *testing.T) {
 	assert.NotContains(t, ids, "webhook-transform")
 }
 
+// TestRenderIsDeterministic ignores untrusted-content tag ids, which are
+// random per render by design.
 func TestRenderIsDeterministic(t *testing.T) {
 	svc := newTestService(t)
 	for _, id := range IDs() {
@@ -253,8 +256,20 @@ func TestRenderIsDeterministic(t *testing.T) {
 		require.NoError(t, err)
 		second, err := svc.Render(id, testInput())
 		require.NoError(t, err)
-		assert.Equalf(t, first.Text, second.Text, "prompt %q is not deterministic", id)
+		assert.Equalf(t, untrustedTag.ReplaceAllString(first.Text, "untrusted-content-ID"), untrustedTag.ReplaceAllString(second.Text, "untrusted-content-ID"), "prompt %q is not deterministic", id)
 	}
+}
+
+var untrustedTag = regexp.MustCompile(`untrusted-content-[A-Z0-9]+`)
+
+func TestWebhookTransformFencesTheSample(t *testing.T) {
+	prompt, err := newTestService(t).Render("webhook-transform", testInput())
+	require.NoError(t, err)
+
+	fence := regexp.MustCompile(`(?s)<untrusted-content-(\w+)>\n(.*)\n</untrusted-content-(\w+)>`).FindStringSubmatch(prompt.Text)
+	require.NotNil(t, fence, prompt.Text)
+	assert.Equal(t, fence[1], fence[3])
+	assert.Contains(t, fence[2], testInput().WebhookSample)
 }
 
 // TestSettingsPromptSchemaParses feeds the settings prompt's own schema block to
