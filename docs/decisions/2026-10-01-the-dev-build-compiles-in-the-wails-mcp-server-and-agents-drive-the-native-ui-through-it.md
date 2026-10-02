@@ -38,8 +38,12 @@ HTTP on loopback. Without the tag none of it is compiled.
 3. **It is the agent surface for the native UI, and the `desktop-ui-audit`
    skill is how agents use it.** The skill pairs it with the app's own MCP
    server: Wails tools drive and read the page, Hive tools read and reload
-   state. Pixel screenshots come from `screencapture` against the window id,
-   because the Wails server has no pixel tool.
+   state. `prepare` renders both, plus the canvas server, into the worktree's
+   gitignored `.mcp.json` from the same ports, so a Claude Code session
+   started in the worktree sees `hive-desktop-ui`, `hive-desktop`, and
+   `hive-canvas` with no per-user registration. Pixel screenshots come from
+   `screencapture` against the window id, because the Wails server has no
+   pixel tool.
 
 4. **`call_bound_method` is off limits, and so is importing the runtime from
    `js_eval`.** Both load a second copy of `@wailsio/runtime`, whose module
@@ -64,3 +68,7 @@ HTTP on loopback. Without the tag none of it is compiled.
   handler that requires a trusted event will not fire.
 - The helper scripts are macOS-only where they touch the window
   (`screencapture`, `CGWindowListCopyWindowInfo`); the MCP calls are portable.
+- `.mcp.json` at the worktree root is generated and gitignored. The devtools
+  own that path, so the repository cannot also commit one, and the blank
+  onboarding instance writes none because two instances cannot share the
+  file.

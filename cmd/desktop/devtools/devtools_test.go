@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"net"
 	"os"
@@ -33,6 +34,26 @@ func testDevtools(t *testing.T) (*devtools, string, string) {
 	tools.stdout = &bytes.Buffer{}
 	tools.lookPath = func(string) (string, error) { return "", errors.New("not installed") }
 	return tools, filepath.Join(dataHome, "hive"), filepath.Join(configHome, "hive", "desktop")
+}
+
+// readMCPConfig returns the server name to URL map of a generated .mcp.json.
+func readMCPConfig(t *testing.T, path string) map[string]string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var config struct {
+		Servers map[string]struct {
+			Type string `json:"type"`
+			URL  string `json:"url"`
+		} `json:"mcpServers"`
+	}
+	require.NoError(t, json.Unmarshal(data, &config))
+	urls := make(map[string]string, len(config.Servers))
+	for name, server := range config.Servers {
+		assert.Equal(t, "http", server.Type, name)
+		urls[name] = server.URL
+	}
+	return urls
 }
 
 func TestPrepareReuseFreshAndReset(t *testing.T) {
@@ -73,6 +94,13 @@ func TestPrepareReuseFreshAndReset(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotZero(t, mcpPort)
 	assert.NotContains(t, []int{vite, wails, httpPort}, mcpPort)
+	// The same ports land in the project-scoped .mcp.json, so a Claude Code
+	// session started in the worktree finds every server without a per-user
+	// registration.
+	mcpURLs := readMCPConfig(t, tools.mcpPath)
+	assert.Equal(t, "http://127.0.0.1:"+strconv.Itoa(mcpPort)+"/mcp", mcpURLs["hive-desktop-ui"])
+	assert.Equal(t, "http://127.0.0.1:"+strconv.Itoa(httpPort)+"/mcp", mcpURLs["hive-desktop"])
+	assert.Equal(t, "http://127.0.0.1:"+strconv.Itoa(httpPort)+"/mcp/canvas", mcpURLs["hive-canvas"])
 	// hive.db is not seeded; dev points at the installed hive data dir instead.
 	assert.NoFileExists(t, filepath.Join(tools.instanceDir, "data", "hive.db"))
 	assert.Equal(t, sourceData, launch[settings.EnvHiveDataDir])
@@ -99,6 +127,20 @@ func TestPrepareReuseFreshAndReset(t *testing.T) {
 	require.NoError(t, tools.withLock(tools.reset))
 	assert.NoDirExists(t, tools.instanceDir)
 	assert.NoFileExists(t, tools.launchPath)
+	assert.NoFileExists(t, tools.mcpPath)
+}
+
+// A deleted .mcp.json comes back on the next prepare, from the ports the
+// reused launch.env already holds.
+func TestPrepareRewritesMissingMCPConfigOnReuse(t *testing.T) {
+	tools, _, _ := testDevtools(t)
+	require.NoError(t, tools.prepare(false))
+	launch, err := tools.readLaunchIfPresent()
+	require.NoError(t, err)
+	require.NoError(t, os.Remove(tools.mcpPath))
+
+	require.NoError(t, tools.prepare(false))
+	assert.Equal(t, "http://127.0.0.1:"+launch["WAILS_MCP_PORT"]+"/mcp", readMCPConfig(t, tools.mcpPath)["hive-desktop-ui"])
 }
 
 func TestPrepareOnboardingUsesBlankIsolatedState(t *testing.T) {
@@ -117,6 +159,11 @@ func TestPrepareOnboardingUsesBlankIsolatedState(t *testing.T) {
 	tools.stderr = &bytes.Buffer{}
 	tools.stdout = &bytes.Buffer{}
 	require.NoError(t, tools.withLock(func() error { return tools.prepare(true) }))
+
+	// The blank instance writes no .mcp.json; the regular instance's stays.
+	normalLaunch, err := normal.readLaunchIfPresent()
+	require.NoError(t, err)
+	assert.Equal(t, "http://127.0.0.1:"+normalLaunch["WAILS_MCP_PORT"]+"/mcp", readMCPConfig(t, normal.mcpPath)["hive-desktop-ui"])
 
 	launch, err := tools.readLaunchIfPresent()
 	require.NoError(t, err)

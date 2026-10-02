@@ -45,6 +45,7 @@ cmd/desktop/frontend/.bindings-tmp-*/
 launch.env
 launch.onboarding.env
 overrides.env
+.mcp.json
 .hive-desktop/
 .hive-desktop-onboarding/
 .hive-desktop.lock/

@@ -47,15 +47,19 @@ instance, point the scripts at its file: `HIVE_LAUNCH_ENV=launch.onboarding.env`
 
 ## 2. Connect
 
-Prefer a real MCP client so the tools appear as ordinary tools:
+`prepare` writes the worktree's `.mcp.json` beside `launch.env` with three
+servers: `hive-desktop-ui` (this one), `hive-desktop` (the app's state tools,
+see **desktop-api**), and `hive-canvas`. A Claude Code session started in the
+worktree offers them; approve once and the tools are ordinary tools. A client
+running elsewhere points at the URL in that file:
 
 ```bash
-claude mcp add --transport http hive-desktop-ui \
-  "http://127.0.0.1:$(sed -nE 's/^WAILS_MCP_PORT="?([0-9]+)"?$/\1/p' launch.env)/mcp"
+jq -r '.mcpServers["hive-desktop-ui"].url' .mcp.json
+claude mcp add --transport http hive-desktop-ui "$(jq -r '.mcpServers["hive-desktop-ui"].url' .mcp.json)"
 ```
 
 The server is stateless and answers plain JSON, so the scripts are plain curl
-and work without a client. `$S/mcp.sh tools` prints the table; the full
+and work without any client. `$S/mcp.sh tools` prints the table; the full
 reference is https://v3.wails.io/guides/mcp-service.
 
 ## 3. Drive: discover, act, read back

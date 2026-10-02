@@ -60,6 +60,7 @@ type devtools struct {
 	instanceDir string
 	markerPath  string
 	launchPath  string
+	mcpPath     string
 	lockPath    string
 	stdout      io.Writer
 	stderr      io.Writer
@@ -93,10 +94,15 @@ func newDevtoolsInstance(worktree string, logger zerolog.Logger, blank bool) *de
 		sum := sha256.Sum256([]byte(worktree))
 		keyring = fmt.Sprintf("sh.hive.desktop.development.onboarding.%x", sum[:8])
 	}
+	mcpPath := filepath.Join(worktree, ".mcp.json")
+	if blank {
+		mcpPath = ""
+	}
 	d := &devtools{
 		worktree:    worktree,
 		instanceDir: filepath.Join(worktree, instanceName),
 		launchPath:  filepath.Join(worktree, launchName),
+		mcpPath:     mcpPath,
 		lockPath:    filepath.Join(worktree, lockName),
 		stdout:      os.Stdout,
 		stderr:      os.Stderr,
@@ -152,7 +158,14 @@ func (d *devtools) validatePaths() error {
 	if d.instanceDir != wantInstance || d.launchPath != wantLaunch || d.lockPath != wantLock {
 		return errors.New("development paths escaped the worktree")
 	}
-	for _, path := range []string{d.instanceDir, d.launchPath, d.lockPath} {
+	paths := []string{d.instanceDir, d.launchPath, d.lockPath}
+	if d.mcpPath != "" {
+		if d.mcpPath != filepath.Join(root, ".mcp.json") {
+			return errors.New("development paths escaped the worktree")
+		}
+		paths = append(paths, d.mcpPath)
+	}
+	for _, path := range paths {
 		info, err := os.Lstat(path)
 		if err == nil && info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("refusing symlink at %s", path)
@@ -179,6 +192,9 @@ func (d *devtools) prepare(fresh bool) error {
 			// No launch.env to reuse: write one over the existing instance.
 		case err == nil:
 			if err := d.validateInstance(); err == nil {
+				if err := d.writeMCPConfig(launch); err != nil {
+					return err
+				}
 				d.logger.Info().Str("instance", d.instanceDir).Str("launch_env", d.launchPath).Msg("reusing desktop development environment")
 				return nil
 			}
@@ -281,6 +297,9 @@ func (d *devtools) prepare(fresh bool) error {
 	if err := writeDotenvAtomic(d.launchPath, env); err != nil {
 		return err
 	}
+	if err := d.writeMCPConfig(env); err != nil {
+		return err
+	}
 	verb := "reusing"
 	if created || fresh {
 		verb = "prepared"
@@ -324,6 +343,11 @@ func (d *devtools) teardown() error {
 	}
 	if err := d.removeInstance(); err != nil {
 		return err
+	}
+	if d.mcpPath != "" {
+		if err := removeRegularFile(d.mcpPath); err != nil {
+			return err
+		}
 	}
 	return removeRegularFile(d.launchPath)
 }
