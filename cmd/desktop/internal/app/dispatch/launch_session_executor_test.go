@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -187,6 +188,19 @@ func TestLaunchSessionExecutor_InteractiveTargetMustBeExclusive(t *testing.T) {
 			require.ErrorContains(t, err, "exactly one")
 		})
 	}
+}
+
+func TestLaunchSessionExecutor_RejectsOversizedPromptBeforeLaunch(t *testing.T) {
+	launcher := &fakeSessionLauncher{}
+	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
+	action := actions.Action{ID: "spawn-review", Type: "launch-session", Config: &actions.LaunchSessionConfig{
+		PromptTemplate: "{{ .Payload.body }}", RepoTemplate: "git@github.com:colonyops/hive.git",
+	}}
+	body := strings.Repeat("x", MaxPromptBytes)
+
+	_, err := exec.Execute(t.Context(), action, OutputData{Key: "item-1", Payload: map[string]any{"body": body}, Raw: json.RawMessage(`{}`)}, ActionInvocationInput{})
+	require.ErrorContains(t, err, fmt.Sprintf("prompt is %d bytes after shell quoting, over the %d-byte limit", MaxPromptBytes+2, MaxPromptBytes))
+	assert.Empty(t, launcher.calls, "the launcher never sees a prompt over the limit")
 }
 
 func TestLaunchSessionExecutor_PropagatesLaunchFailure(t *testing.T) {

@@ -75,6 +75,9 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 	if prompt == "" {
 		return ExecutionResult{}, fmt.Errorf("launch-session: prompt_template rendered blank")
 	}
+	if err := ValidatePromptSize(prompt); err != nil {
+		return ExecutionResult{}, fmt.Errorf("launch-session: prompt_template: %w; select fewer items or shorten the template", err)
+	}
 
 	name := SlugifySessionName(action.ID + "-" + data.Key)
 	if err := ValidateSessionName(name); err != nil {

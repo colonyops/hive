@@ -65,6 +65,8 @@ Template fields depend on where the action runs:
 
 Use the `shq` template function when inserting item or input data into a shell command.
 
+The rendered prompt reaches the agent inside one tmux command, and tmux refuses a command over 16 KiB. Hive therefore refuses a launch whose prompt is over 12 KiB once quoted for the shell, and the error names the size and the limit. Shorten `prompt_template` if a launch hits it.
+
 ## Run a command after the session starts
 
 A `launch-session` action can run a `post_hook` once the session exists. The command runs in the new checkout with your shell's `PATH`, so it can check the pull request out and open your editor on it:

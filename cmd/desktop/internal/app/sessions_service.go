@@ -504,6 +504,9 @@ func (s *SessionsService) CreateSession(ctx context.Context, req dispatch.Create
 	}
 
 	prompt := strings.TrimSpace(req.Prompt)
+	if err := dispatch.ValidatePromptSize(prompt); err != nil {
+		return 0, Errorf(KindInvalid, "%v", err)
+	}
 	agent := ""
 	if repo != "" {
 		agent = s.resolveLaunchAgent(ctx, req.Agent)

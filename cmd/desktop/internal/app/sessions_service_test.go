@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -274,6 +275,10 @@ func TestSessionsService_CreateSessionValidatesBeforeTracking(t *testing.T) {
 
 	_, err = svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "bad~name"})
 	assert.Equal(t, KindInvalid, KindOf(err), "name must be valid")
+
+	_, err = svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "review", Prompt: strings.Repeat("x", dispatch.MaxPromptBytes+1)})
+	assert.Equal(t, KindInvalid, KindOf(err), "prompt must fit the launch limit")
+	assert.Contains(t, err.Error(), "over the", "the message names the limit")
 
 	assert.False(t, runner.ran, "nothing is tracked until validation passes")
 	assert.Empty(t, launcher.calls)
