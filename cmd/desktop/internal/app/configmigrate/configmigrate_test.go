@@ -49,9 +49,8 @@ func TestValidate_RegisteredSets(t *testing.T) {
 	}
 }
 
-// The MCP cut-over (ADR mcp-replaces-the-agent-facing-http-api) retired the hive-http-api skill slug. A workspace
-// still declaring it fails to open outright — resolveSkills refuses a slug no
-// prompt id backs — so the rename has to happen before the manifest is loaded.
+// The MCP cut-over (ADR mcp-replaces-the-agent-facing-http-api) retired the
+// hive-http-api skill slug.
 func TestAgentWorkspace_RenamesTheRetiredHTTPAPISkill(t *testing.T) {
 	t.Parallel()
 
@@ -290,9 +289,9 @@ func TestApply_IsIdempotent(t *testing.T) {
 	assert.False(t, changedAgain, "re-applying to an already-migrated document must be a no-op")
 }
 
-// The settings decoder is strict, so the retired installer's `skills` section
-// (ADR skills-are-declared-by-a-workspace) has to be dropped before decode or
-// every user who ever opened Settings ▸ Skills fails startup on upgrade.
+// The retired installer's `skills` section (ADR skills-are-declared-by-a-workspace)
+// is dropped so a file that carried it does not warn about an unknown key on
+// every launch.
 func TestSettings_DropsTheRetiredSkillsSection(t *testing.T) {
 	t.Parallel()
 
@@ -411,6 +410,20 @@ func TestAgentWorkspace_CollapsesTheExactShippedSetOntoTheHivePackage(t *testing
 	migrated, changed, err := AgentWorkspaceSet.Apply(raw)
 	require.NoError(t, err)
 	require.True(t, changed)
+
+	assert.Equal(t, []any{"hive"}, decodeDoc(t, migrated)["skills"])
+}
+
+// Version 2's rename is what lets a version 1 manifest that still lists
+// hive-http-api match the shipped set at version 3.
+func TestAgentWorkspace_CollapsesAVersion1ShippedSetThroughTheRename(t *testing.T) {
+	t.Parallel()
+
+	raw := []byte("version: 1\nname: Hive\nagent: claude\nautonomy: ask\nskills:\n" +
+		"  - hive-actions\n  - hive-agent-workspaces\n  - hive-flows\n  - hive-http-api\n  - hive-settings\n  - hive-webhook-sources\n")
+
+	migrated, _, err := AgentWorkspaceSet.Apply(raw)
+	require.NoError(t, err)
 
 	assert.Equal(t, []any{"hive"}, decodeDoc(t, migrated)["skills"])
 }

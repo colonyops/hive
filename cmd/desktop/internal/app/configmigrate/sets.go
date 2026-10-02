@@ -89,13 +89,13 @@ func dropExperimentalSection(doc map[string]any) error {
 	return nil
 }
 
-// renameHTTPAPISkill rewrites the retired hive-http-api skill slug to hive-mcp.
+// renameHTTPAPISkill rewrites the retired hive-http-api skill slug to hive-mcp
+// (ADR mcp-replaces-the-agent-facing-http-api).
 //
-// The prompt behind it became the MCP prompt when the agent-facing HTTP API was
-// deleted (ADR mcp-replaces-the-agent-facing-http-api), and a workspace's skills: list carries the installed slug.
-// Without this, opening a workspace that declared the old one fails outright —
-// resolveSkills refuses a slug no prompt id backs, so one stale entry takes the
-// whole workspace down rather than degrading.
+// Version 3 collapses a skills: list that is exactly the shipped set, which
+// names hive-mcp, onto the hive package. Without the rename, a workspace that
+// still lists hive-http-api misses that collapse and loses every hive skill,
+// not only the renamed one.
 func renameHTTPAPISkill(doc map[string]any) error {
 	const (
 		old = "hive-http-api"

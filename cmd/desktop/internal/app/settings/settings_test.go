@@ -38,9 +38,9 @@ func TestDefaultSettingsAreSafe(t *testing.T) {
 	assert.True(t, cfg.Appearance.TerminalShowStatusBar, "the session status bar ships on")
 }
 
-// The graduated features' gate is gone from the struct, and the decoder is
-// strict — so a settings.yaml written while it existed only stays loadable
-// because the migration drops the section (ADR terminal-agents-grafana-and-commands-graduate-out-of-experimental).
+// The graduated features' gate is gone from the struct; the migration drops
+// the section so the file does not warn about an unknown key
+// (ADR terminal-agents-grafana-and-commands-graduate-out-of-experimental).
 func TestRetiredExperimentalSectionIsMigratedAway(t *testing.T) {
 	path := isolateSettings(t)
 	require.NoError(t, os.WriteFile(path, []byte("experimental:\n  terminal: true\n  agents: true\n"), 0o600))
@@ -48,6 +48,7 @@ func TestRetiredExperimentalSectionIsMigratedAway(t *testing.T) {
 	cfg, err := LoadSettings()
 	require.NoError(t, err)
 	assert.Equal(t, configmigrate.SettingsSet.Current, cfg.Version)
+	assert.NoError(t, cfg.UnknownKeys())
 }
 
 // Every save wrote an explicit false while the bar shipped off, so the flip to
@@ -115,7 +116,7 @@ func TestPathsTmuxYAMLThenEnvironment(t *testing.T) {
 	assert.True(t, cfg.EnvironmentOverridden("HIVE_DESKTOP_PATHS_TMUX"))
 }
 
-func TestLoadSettingsStrictNestedYAMLThenEnvironment(t *testing.T) {
+func TestLoadSettingsNestedYAMLThenEnvironment(t *testing.T) {
 	path := isolateSettings(t)
 	require.NoError(t, os.WriteFile(path, []byte(`
 polling:
