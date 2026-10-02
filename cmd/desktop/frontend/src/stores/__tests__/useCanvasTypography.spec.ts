@@ -1,5 +1,6 @@
+import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { useCanvasTypography } from '../useCanvasTypography'
 
 const mocks = vi.hoisted(() => ({
   AppearanceSettings: vi.fn(),
@@ -9,27 +10,21 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => mocks)
 
-beforeEach(() => {
-  vi.resetModules()
-  vi.clearAllMocks()
-  mocks.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' })
-  mocks.SetCanvasFontSize.mockResolvedValue(undefined)
-  mocks.SetCanvasLineSpacing.mockResolvedValue(undefined)
-})
-
-async function settle(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
-  await nextTick()
-}
-
 describe('useCanvasTypography', () => {
-  it('hydrates the stored presets and exposes their CSS values', async () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' })
+    mocks.SetCanvasFontSize.mockResolvedValue(undefined)
+    mocks.SetCanvasLineSpacing.mockResolvedValue(undefined)
+  })
+
+  it('hydrates both presets from one read and exposes their CSS values', async () => {
     mocks.AppearanceSettings.mockResolvedValue({ canvasFontSize: 'xl', canvasLineSpacing: 'relaxed' })
-    const { useCanvasTypography } = await import('../useCanvasTypography')
 
     const typography = useCanvasTypography()
-    await settle()
+    await flushPromises()
 
+    expect(mocks.AppearanceSettings).toHaveBeenCalledTimes(1)
     expect(typography.fontSize.value).toBe('xl')
     expect(typography.fontSizePx.value).toBe(18)
     expect(typography.lineSpacing.value).toBe('relaxed')
@@ -37,26 +32,24 @@ describe('useCanvasTypography', () => {
   })
 
   it('persists selections while applying them immediately', async () => {
-    const { setCanvasFontSize, setCanvasLineSpacing, useCanvasTypography } = await import('../useCanvasTypography')
     const typography = useCanvasTypography()
-    await settle()
+    await flushPromises()
 
-    setCanvasFontSize('large')
-    setCanvasLineSpacing('compact')
-    await settle()
-
+    typography.setFontSize('large')
+    typography.setLineSpacing('compact')
     expect(typography.fontSizePx.value).toBe(15.5)
     expect(typography.lineHeight.value).toBe(1.45)
+    await flushPromises()
+
     expect(mocks.SetCanvasFontSize).toHaveBeenCalledWith('large')
     expect(mocks.SetCanvasLineSpacing).toHaveBeenCalledWith('compact')
   })
 
   it('falls back from unknown stored values', async () => {
     mocks.AppearanceSettings.mockResolvedValue({ canvasFontSize: 'giant', canvasLineSpacing: 'wide' })
-    const { useCanvasTypography } = await import('../useCanvasTypography')
 
     const typography = useCanvasTypography()
-    await settle()
+    await flushPromises()
 
     expect(typography.fontSize.value).toBe('medium')
     expect(typography.lineSpacing.value).toBe('standard')
@@ -69,12 +62,11 @@ describe('useCanvasTypography', () => {
         resolveRead = resolve
       }),
     )
-    const { setCanvasFontSize, useCanvasTypography } = await import('../useCanvasTypography')
     const typography = useCanvasTypography()
 
-    setCanvasFontSize('large')
+    typography.setFontSize('large')
     resolveRead({ canvasFontSize: 'small', canvasLineSpacing: 'compact' })
-    await settle()
+    await flushPromises()
 
     expect(typography.fontSize.value).toBe('large')
     expect(typography.lineSpacing.value).toBe('compact')

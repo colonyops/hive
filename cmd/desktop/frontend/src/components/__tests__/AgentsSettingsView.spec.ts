@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import AgentsSettingsView from '../AgentsSettingsView.vue'
-import { resetCanvasTypographyForTests } from '../../composables/useCanvasTypography'
 
 const WORKSPACES = '/home/u/.config/hive/desktop/workspaces'
 
@@ -40,7 +39,6 @@ vi.mock(
 
 beforeEach(() => {
   vi.clearAllMocks()
-  resetCanvasTypographyForTests()
   settingsBindings.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' })
   settingsBindings.SetCanvasFontSize.mockResolvedValue(undefined)
   settingsBindings.SetCanvasLineSpacing.mockResolvedValue(undefined)

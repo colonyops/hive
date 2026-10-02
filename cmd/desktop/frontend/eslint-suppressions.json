@@ -349,11 +349,6 @@
       "count": 1
     }
   },
-  "src/composables/useCanvasTypography.ts": {
-    "no-restricted-syntax": {
-      "count": 2
-    }
-  },
   "src/composables/useCommands.ts": {
     "@typescript-eslint/unbound-method": {
       "count": 1

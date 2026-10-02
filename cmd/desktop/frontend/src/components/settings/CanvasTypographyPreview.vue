@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useCanvasTypography } from '../../composables/useCanvasTypography'
+import { useCanvasTypography } from '../../stores/useCanvasTypography'
 
 const { fontSizePx, lineHeight } = useCanvasTypography()
 const previewStyle = computed(() => ({

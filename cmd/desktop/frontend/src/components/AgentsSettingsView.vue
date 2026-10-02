@@ -15,16 +15,14 @@ import {
   canvasFontSizes,
   canvasLineSpacingLabels,
   canvasLineSpacings,
-  setCanvasFontSize,
-  setCanvasLineSpacing,
   useCanvasTypography,
   type CanvasFontSize,
   type CanvasLineSpacing,
-} from '../composables/useCanvasTypography'
+} from '../stores/useCanvasTypography'
 import { useSystemSettings } from '../composables/useSystemSettings'
 
 const { info, error: locationsError, refresh: refreshLocations, openPath, revealPath } = useSystemSettings()
-const { fontSize, lineSpacing } = useCanvasTypography()
+const { fontSize, lineSpacing, setFontSize, setLineSpacing } = useCanvasTypography()
 
 const fontSizeOptions = canvasFontSizes.map((value) => ({
   value,
@@ -37,11 +35,11 @@ const lineSpacingOptions = canvasLineSpacings.map((value) => ({
 }))
 
 function onFontSizeChange(value: string): void {
-  setCanvasFontSize(value as CanvasFontSize)
+  setFontSize(value as CanvasFontSize)
 }
 
 function onLineSpacingChange(value: string): void {
-  setCanvasLineSpacing(value as CanvasLineSpacing)
+  setLineSpacing(value as CanvasLineSpacing)
 }
 
 onMounted(() => {

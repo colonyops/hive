@@ -1,7 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentCanvasPane from '../AgentCanvasPane.vue'
-import { resetCanvasTypographyForTests } from '../../composables/useCanvasTypography'
 import type { AgentWorkspacesClient, CanvasBlock, WorkspaceCanvasMeta } from '../../lib/agentWorkspacesClient'
 
 const wailsEvents = vi.hoisted(() => ({
@@ -79,7 +78,6 @@ describe('AgentCanvasPane', () => {
   beforeEach(() => {
     wailsEvents.handlers = []
     localStorage.clear()
-    resetCanvasTypographyForTests()
     settingsBindings.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' })
     settingsBindings.SetCanvasFontSize.mockResolvedValue(undefined)
     settingsBindings.SetCanvasLineSpacing.mockResolvedValue(undefined)
