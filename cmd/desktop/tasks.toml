@@ -143,22 +143,3 @@ run = "test -d node_modules || npm ci"
 description = "Run desktop frontend unit tests (vitest)"
 dir = "{{config_root}}/cmd/desktop/frontend"
 run = "npm test"
-
-# ── Releases ─────────────────────────────────────────────────────────────────
-
-["desktop:release:diff"]
-description = "List commits since the latest desktop release"
-run = "git log $(git describe --tags --abbrev=0 --match 'desktop-v*')..HEAD --pretty=format:'- %s (%h)'"
-
-["desktop:release"]
-description = "Interactively select a channel and version increment, validate, confirm, and publish a desktop release (args: [--dry-run] [dev|beta|stable] [version])"
-interactive = true
-# 1Password exposes its local environment as a FIFO, so loading it globally
-# races any aggregate task whose children start concurrently.
-env = { _.file = { path = "../../.env", redact = true } }
-run = "go run ./cmd/tools/release run"
-
-["desktop:release:publish"]
-description = "Low-level desktop publisher (args: <version> [flags]); prefer `mise run desktop:release` for a public release"
-env = { _.file = { path = "../../.env", redact = true } }
-run = "go run ./cmd/tools/release publish"

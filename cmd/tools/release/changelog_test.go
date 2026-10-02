@@ -13,67 +13,82 @@ import (
 	"github.com/colonyops/hive/internal/releasenotes"
 )
 
-// A prerelease publishes whatever the draft says and is never gated on an
-// entry of its own — that is what makes cutting one cost no changelog work.
-func TestNotesForAPrereleaseUsesTheDraft(t *testing.T) {
-	entries, err := desktopProduct.embedded()
-	if err != nil {
-		t.Fatalf("load changelog: %v", err)
-	}
-	draft, ok := entries.Draft()
-	if !ok {
-		t.Skip("no draft committed; nothing to compare against")
-	}
-
-	entry, err := notesFor(mustVersion(t, "99.0.0-dev.1"))
-	if err != nil {
-		t.Fatalf("notesFor: %v", err)
-	}
-	if entry.Body != draft.Body || entry.Summary != draft.Summary {
-		t.Fatalf("prerelease notes = %+v, want the draft %+v", entry, draft)
-	}
-}
-
-// The gate that stands between an unreleased draft and a stable release: the
-// draft has to be promoted, under the version's own name, before publishing.
-func TestNotesForAStableReleaseRequiresAPromotedEntry(t *testing.T) {
-	_, err := notesFor(mustVersion(t, "99.0.0"))
+// The gate that stands between the drafts and a release: every program's
+// entry has to be promoted, under the version's own name, before publishing.
+func TestValidateChangelogEntryRequiresAPromotedEntry(t *testing.T) {
+	err := validateChangelogEntry(mustVersion(t, "99.0.0"))
 	if err == nil {
-		t.Fatal("expected a stable release with no entry to be rejected")
+		t.Fatal("expected a release with no entry to be rejected")
 	}
 	if !strings.Contains(err.Error(), "changelog:promote") {
 		t.Fatalf("error should name the promote command, got %q", err)
 	}
 }
 
-func TestReleaseNotesBody(t *testing.T) {
-	body := releaseNotesBody(
-		mustVersion(t, "1.4.0-dev.2"),
-		releasenotes.Entry{Version: "1.4.0-dev.2", Summary: "A short line.", Body: "## Added\n\n- a thing"},
-		"https://dl.hivedesktop.com",
-	)
+func TestRenderReleaseNotesBody(t *testing.T) {
+	version := mustVersion(t, "0.20261001.0")
+	body := renderReleaseNotesBody(version, "https://dl.hivedesktop.com", []productNotes{
+		{product: cliProduct, entry: releasenotes.Entry{Summary: "No changes to the hive CLI."}},
+		{product: desktopProduct, entry: releasenotes.Entry{Summary: "A short line.", Body: "## Added\n\n- a thing"}},
+	})
 
-	for _, want := range []string{
-		"https://dl.hivedesktop.com/desktop/releases/1.4.0-dev.2/SHA256SUMS",
-		"A short line.",
-		"## Added\n\n- a thing",
-	} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("body missing %q:\n%s", want, body)
-		}
+	want := releaseNotesHeader(version, "https://dl.hivedesktop.com") +
+		"\n## hive CLI\n\nNo changes to the hive CLI.\n" +
+		"\n## Hive Desktop\n\nA short line.\n\n### Added\n\n- a thing\n"
+	if body != want {
+		t.Fatalf("body = %q, want %q", body, want)
 	}
 }
 
-// An entry whose summary says nothing must not leave a stray blank stanza
-// between the header and the notes.
-func TestReleaseNotesBodyOmitsAnAbsentSummary(t *testing.T) {
-	version := mustVersion(t, "1.4.0")
-	entry := releasenotes.Entry{Version: "1.4.0", Body: "## Fixed\n\n- a thing"}
+func changelog(versions ...string) releasenotes.Entries {
+	entries := releasenotes.Entries{{Draft: true}}
+	for _, version := range versions {
+		entries = append(entries, releasenotes.Entry{Version: version})
+	}
+	return entries
+}
 
-	body := releaseNotesBody(version, entry, "https://dl.hivedesktop.com")
-	want := releaseNotesHeader(version, "https://dl.hivedesktop.com") + "\n## Fixed\n\n- a thing\n"
-	if body != want {
-		t.Fatalf("body = %q, want %q", body, want)
+func TestSelectPendingVersion(t *testing.T) {
+	published := []releaseVersion{mustParseVersion(t, "0.59.0"), mustParseVersion(t, "0.20261001.0")}
+
+	tests := []struct {
+		name       string
+		changelogs []releasenotes.Entries
+		want       string
+		wantErr    string
+	}{
+		{
+			name:       "the newest entry every program has",
+			changelogs: []releasenotes.Entries{changelog("0.20261001.0", "0.20261002.0"), changelog("0.9.0", "0.20261001.0", "0.20261002.0")},
+			want:       "0.20261002.0",
+		},
+		{
+			name:       "an entry one program lacks is not pending",
+			changelogs: []releasenotes.Entries{changelog("0.20261002.0", "0.20261003.0"), changelog("0.20261002.0")},
+			want:       "0.20261002.0",
+		},
+		{
+			name:       "an entry that is already published is not pending",
+			changelogs: []releasenotes.Entries{changelog("0.20261001.0"), changelog("0.20261001.0")},
+			wantErr:    "no promoted release notes",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := selectPendingVersion(test.changelogs, published)
+			if test.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+					t.Fatalf("selectPendingVersion() error = %v, want %q", err, test.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.String() != test.want {
+				t.Fatalf("selectPendingVersion() = %s, want %s", got, test.want)
+			}
+		})
 	}
 }
 

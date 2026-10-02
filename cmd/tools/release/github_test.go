@@ -1,9 +1,9 @@
 package main
 
 import (
-	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func mustVersion(t *testing.T, value string) releaseVersion {
@@ -16,11 +16,10 @@ func mustVersion(t *testing.T, value string) releaseVersion {
 }
 
 func TestReleaseNotesHeader(t *testing.T) {
-	header := releaseNotesHeader(mustVersion(t, "1.4.0-dev.2"), "https://dl.hivedesktop.com")
+	header := releaseNotesHeader(mustVersion(t, "0.20261001.0"), "https://dl.hivedesktop.com")
 	for _, want := range []string{
-		"dev channel",
-		"https://dl.hivedesktop.com/desktop/releases/1.4.0-dev.2/",
-		"https://dl.hivedesktop.com/desktop/releases/1.4.0-dev.2/SHA256SUMS",
+		"https://dl.hivedesktop.com/desktop/releases/0.20261001.0/",
+		"https://dl.hivedesktop.com/desktop/releases/0.20261001.0/SHA256SUMS",
 	} {
 		if !strings.Contains(header, want) {
 			t.Fatalf("header missing %q:\n%s", want, header)
@@ -28,41 +27,21 @@ func TestReleaseNotesHeader(t *testing.T) {
 	}
 }
 
-func TestReleaseTitle(t *testing.T) {
-	if got := releaseTitle(mustVersion(t, "1.4.0-beta.1")); got != "Hive Desktop 1.4.0-beta.1" {
-		t.Fatalf("title = %q", got)
+// gh lists recent runs, some from before this dispatch. The run to watch is
+// the newest one created after it.
+func TestNewestRunAfter(t *testing.T) {
+	dispatched := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	output := `[
+		{"databaseId": 1, "createdAt": "2026-10-01T11:00:00Z"},
+		{"databaseId": 3, "createdAt": "2026-10-01T12:00:09Z"},
+		{"databaseId": 2, "createdAt": "2026-10-01T12:00:04Z"}
+	]`
+
+	id, ok := newestRunAfter(output, dispatched)
+	if !ok || id != "3" {
+		t.Fatalf("newestRunAfter() = %q, %t; want 3", id, ok)
 	}
-}
-
-func TestGitHubReleaseCreateArgs(t *testing.T) {
-	tests := []struct {
-		version    string
-		prerelease bool
-	}{
-		{version: "1.4.0", prerelease: false},
-		{version: "1.4.0-beta.1", prerelease: true},
-		{version: "1.4.0-dev.2", prerelease: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.version, func(t *testing.T) {
-			tag := "desktop-v" + tt.version
-			args := gitHubReleaseCreateArgs(mustVersion(t, tt.version), tag, "notes body")
-
-			if want := []string{"release", "create", tag}; !slices.Equal(args[:3], want) {
-				t.Fatalf("args start with %q, want %q", args[:3], want)
-			}
-			for _, flag := range []string{"--verify-tag", "--latest=false"} {
-				if !slices.Contains(args, flag) {
-					t.Fatalf("args missing %s: %q", flag, args)
-				}
-			}
-			if got := slices.Contains(args, "--prerelease"); got != tt.prerelease {
-				t.Fatalf("--prerelease present = %t, want %t: %q", got, tt.prerelease, args)
-			}
-			if i := slices.Index(args, "--notes"); i < 0 || args[i+1] != "notes body" {
-				t.Fatalf("--notes not followed by the body: %q", args)
-			}
-		})
+	if _, ok := newestRunAfter(`[{"databaseId": 1, "createdAt": "2026-10-01T11:00:00Z"}]`, dispatched); ok {
+		t.Fatal("a run from before the dispatch must not match")
 	}
 }

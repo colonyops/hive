@@ -201,12 +201,29 @@ run = [
 
 # ── Repository tooling ───────────────────────────────────────────────────────
 
+[tasks.release]
+description = "Publish the next release of every program: the version comes from the promoted release notes (args: [--dry-run])"
+interactive = true
+# 1Password exposes its local environment as a FIFO, so loading it globally
+# races any aggregate task whose children start concurrently.
+env = { _.file = { path = ".env", redact = true } }
+run = "go run ./cmd/tools/release run"
+
+[tasks."release:publish"]
+description = "Low-level publisher (args: <version> [flags]); prefer `mise run release` for a public release"
+env = { _.file = { path = ".env", redact = true } }
+run = "go run ./cmd/tools/release publish"
+
+[tasks."release:diff"]
+description = "List commits since the latest release"
+run = "git log $(git describe --tags --abbrev=0 --match 'v[0-9]*' --match 'desktop-v*')..HEAD --pretty=format:'- %s (%h)'"
+
 [tasks."changelog:new"]
 description = 'Add one release note to a changelog draft: mise run changelog:new -- --product <cli|desktop> --kind <added|changed|fixed> "The note"'
 run = "go run ./cmd/tools/release changelog new"
 
 [tasks."changelog:promote"]
-description = "Promote every program's changelog draft into its entry for one stable release: mise run changelog:promote -- <stable|version>"
+description = "Promote every program's changelog draft into its entry for the next release (args: [version])"
 run = "go run ./cmd/tools/release changelog promote"
 
 [tasks."changelog:pr"]

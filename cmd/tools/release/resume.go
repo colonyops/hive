@@ -99,7 +99,7 @@ func (p *publisher) loadReleaseArtifacts(ctx context.Context) ([]releaseArtifact
 }
 
 func validateResumeManifests(version releaseVersion, manifests map[string]channelManifest, summary, notes string, platforms map[string]platformManifest) error {
-	for _, channel := range version.affectedChannels() {
+	for _, channel := range manifestChannels {
 		manifest, ok := manifests[channel]
 		if !ok {
 			continue
@@ -108,7 +108,7 @@ func validateResumeManifests(version releaseVersion, manifests map[string]channe
 		if err != nil {
 			return fmt.Errorf("%s manifest version %q: %w", channel, manifest.Version, err)
 		}
-		switch compareChannelRelease(version, current) {
+		switch compareVersions(version, current) {
 		case 1:
 			continue
 		case -1:

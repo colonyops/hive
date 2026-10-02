@@ -2427,9 +2427,9 @@ Everything else (`event_log`, `feed_membership_claim`, `node_run`,
 `source_head`, `consumer_offset`, `activity_event`, `job`) is derived or
 replayable. Migrations are not squashed, because a squashed `0001` would not
 match existing `schema_migrations` rows. Once a migration appears in a
-`desktop-v*` release, its filename and contents are immutable; later migrations
-append contiguous versions above it. `cmd/desktop/scripts/check-migration-order.sh` compares
-the tree with the latest reachable desktop release tag, and both the normal
+release, its filename and contents are immutable; later migrations append
+contiguous versions above it. `cmd/desktop/scripts/check-migration-order.sh` compares
+the tree with the latest reachable `v*` or `desktop-v*` release tag, and both the normal
 quality gate and the release CLI run it.
 
 ## Open questions

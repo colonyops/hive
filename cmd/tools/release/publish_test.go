@@ -12,7 +12,7 @@ import (
 func TestParsePublishOptionsRequiresUploadSkipWithNotarySkip(t *testing.T) {
 	t.Parallel()
 
-	_, err := parsePublishOptions([]string{"1.2.3-dev.1", "--skip-notarize"})
+	_, err := parsePublishOptions([]string{"1.2.3", "--skip-notarize"})
 	if err == nil || !strings.Contains(err.Error(), "requires --skip-upload") {
 		t.Fatalf("parsePublishOptions() error = %v", err)
 	}
@@ -25,7 +25,7 @@ func TestParsePublishOptionsResumeNeedsNoSigningSecrets(t *testing.T) {
 	t.Setenv("R2_ACCESS_KEY_ID", "test")
 	t.Setenv("R2_SECRET_ACCESS_KEY", "test")
 
-	options, err := parsePublishOptions([]string{"1.2.3-dev.1", "--resume"})
+	options, err := parsePublishOptions([]string{"1.2.3", "--resume"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestParsePublishOptionsResumeNeedsNoSigningSecrets(t *testing.T) {
 func TestParsePublishOptionsRejectsUnsafeResumeCombinations(t *testing.T) {
 	for _, flag := range []string{"--force", "--skip-upload", "--skip-notarize"} {
 		t.Run(flag, func(t *testing.T) {
-			_, err := parsePublishOptions([]string{"1.2.3-dev.1", "--resume", flag})
+			_, err := parsePublishOptions([]string{"1.2.3", "--resume", flag})
 			if err == nil || !strings.Contains(err.Error(), "--resume cannot be combined") {
 				t.Fatalf("parsePublishOptions() error = %v", err)
 			}
@@ -49,7 +49,7 @@ func TestParsePublishOptionsResumeStillRequiresR2Credentials(t *testing.T) {
 	t.Setenv("R2_ACCESS_KEY_ID", "")
 	t.Setenv("R2_SECRET_ACCESS_KEY", "")
 
-	_, err := parsePublishOptions([]string{"1.2.3-dev.1", "--resume"})
+	_, err := parsePublishOptions([]string{"1.2.3", "--resume"})
 	if err == nil || !strings.Contains(err.Error(), "R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY") {
 		t.Fatalf("parsePublishOptions() error = %v", err)
 	}
@@ -106,7 +106,7 @@ func TestParsePublishOptionsAllowsLocalUnnotarizedBuild(t *testing.T) {
 		t.Setenv(name, "test")
 	}
 
-	options, err := parsePublishOptions([]string{"1.2.3-dev.1", "--skip-notarize", "--skip-upload"})
+	options, err := parsePublishOptions([]string{"1.2.3", "--skip-notarize", "--skip-upload"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,19 +179,21 @@ func TestPlatformManifestsPairUpdateAndInstaller(t *testing.T) {
 	}
 }
 
-func TestValidateResumeManifestsAllowsPartialCascade(t *testing.T) {
+// An interrupted publish can leave some manifests on the new version and the
+// rest behind it. Resume finishes the rest.
+func TestValidateResumeManifestsAllowsAPartialWrite(t *testing.T) {
 	t.Parallel()
 
-	version := mustVersion(t, "1.2.3-beta.2")
+	version := mustVersion(t, "0.20261001.0")
 	platforms := map[string]platformManifest{
 		"darwin-universal": {URL: "https://example.com/app.zip", SHA256: strings.Repeat("a", 64), Size: 10},
 	}
 	manifests := map[string]channelManifest{
-		"beta": {
-			Channel: "beta", Version: version.String(), Summary: "Summary", Notes: "Notes", Platforms: maps.Clone(platforms),
+		"stable": {
+			Channel: "stable", Version: version.String(), Summary: "Summary", Notes: "Notes", Platforms: maps.Clone(platforms),
 		},
 		"dev": {
-			Channel: "dev", Version: "1.2.3-dev.8", Platforms: maps.Clone(platforms),
+			Channel: "dev", Version: "0.9.1-dev.8", Platforms: maps.Clone(platforms),
 		},
 	}
 	if err := validateResumeManifests(version, manifests, "Summary", "Notes", platforms); err != nil {
@@ -202,7 +204,7 @@ func TestValidateResumeManifestsAllowsPartialCascade(t *testing.T) {
 func TestValidateResumeManifestsRejectsConflicts(t *testing.T) {
 	t.Parallel()
 
-	version := mustVersion(t, "1.2.3-dev.7")
+	version := mustVersion(t, "0.20261001.0")
 	platforms := map[string]platformManifest{
 		"darwin-universal": {URL: "https://example.com/app.zip", SHA256: strings.Repeat("a", 64), Size: 10},
 	}
@@ -221,7 +223,7 @@ func TestValidateResumeManifestsRejectsConflicts(t *testing.T) {
 		{
 			name: "newer manifest",
 			manifest: channelManifest{
-				Channel: "dev", Version: "1.2.3-dev.8", Platforms: maps.Clone(platforms),
+				Channel: "dev", Version: "0.20261001.1", Platforms: maps.Clone(platforms),
 			},
 			want: "older than",
 		},

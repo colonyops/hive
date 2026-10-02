@@ -6,8 +6,10 @@ import (
 	"strings"
 )
 
-// versionRE matches the closed set of publishable versions cmd/tools/release
-// enforces: X.Y.Z with an optional -dev.N / -beta.N identifier.
+// versionRE matches every version a release has published: X.Y.Z, and the
+// -dev.N and -beta.N prereleases the desktop channels carried before every
+// program shared one version. The acknowledged version of an install that
+// predates the change is still one of those.
 var versionRE = regexp.MustCompile(`^([0-9]+)\.([0-9]+)\.([0-9]+)(?:-(dev|beta)\.([0-9]+))?$`)
 
 // version is a published version decomposed for ordering.

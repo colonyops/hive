@@ -8,10 +8,9 @@
 // the install script, so a failed fetch, a blocked request, or no JavaScript
 // leaves a page that still tells a visitor how to install.
 (function () {
-  // Which channel the site offers. Until a stable release exists there is
-  // nothing to link, so the site asks for the newest channel that publishes
-  // builds.
-  var CHANNEL = "dev";
+  // Every release writes the stable manifest, and the site deploys only
+  // after a release has.
+  var CHANNEL = "stable";
 
   // Artifacts are only ever linked from the release bucket. The manifest is
   // ours, but a download button is the one place a bad URL would matter.

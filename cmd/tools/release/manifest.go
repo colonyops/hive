@@ -170,7 +170,7 @@ func readManifests(ctx context.Context) (map[string]channelManifest, error) {
 }
 
 func validateManifestAdvancement(candidate releaseVersion, manifests map[string]channelManifest) error {
-	for _, channel := range candidate.affectedChannels() {
+	for _, channel := range manifestChannels {
 		manifest, ok := manifests[channel]
 		if !ok {
 			continue
@@ -179,28 +179,28 @@ func validateManifestAdvancement(candidate releaseVersion, manifests map[string]
 		if err != nil {
 			return fmt.Errorf("%s manifest version %q: %w", channel, manifest.Version, err)
 		}
-		if compareChannelRelease(candidate, current) <= 0 {
-			return fmt.Errorf("candidate %s does not advance the affected %s manifest at %s", candidate, channel, manifest.Version)
+		if compareVersions(candidate, current) <= 0 {
+			return fmt.Errorf("candidate %s does not advance the %s manifest at %s", candidate, channel, manifest.Version)
 		}
 	}
 	return nil
 }
 
+// releaseTagVersions reads every release tag: the shared v* tags and the
+// desktop-v* tags the desktop used before it shared a version with the CLI.
+// A tag the pattern matches but that is not a version, such as
+// v2-experiment, is not a release and is skipped.
 func releaseTagVersions(ctx context.Context) ([]releaseVersion, error) {
-	output, err := exec.CommandContext(ctx, "git", "tag", "--list", "desktop-v*").Output()
+	output, err := exec.CommandContext(ctx, "git", "tag", "--list", "v[0-9]*", "desktop-v*").Output()
 	if err != nil {
-		return nil, fmt.Errorf("list desktop release tags: %w", err)
+		return nil, fmt.Errorf("list release tags: %w", err)
 	}
 
 	var versions []releaseVersion
 	for tag := range strings.Lines(string(output)) {
-		tag = strings.TrimSpace(tag)
-		if tag == "" {
-			continue
-		}
-		version, err := parseVersion(tag)
+		version, err := parseVersion(strings.TrimSpace(tag))
 		if err != nil {
-			return nil, fmt.Errorf("tag %q: %w", tag, err)
+			continue
 		}
 		versions = append(versions, version)
 	}
@@ -229,7 +229,7 @@ func releaseVersions(ctx context.Context) ([]releaseVersion, map[string]channelM
 func verifyLive(ctx context.Context, version releaseVersion) error {
 	client := &http.Client{Timeout: 5 * time.Minute}
 	var platforms map[string]platformManifest
-	for _, channel := range version.affectedChannels() {
+	for _, channel := range manifestChannels {
 		manifestURL := manifestBaseURL() + "/" + channel + "/latest.json"
 		manifest, err := fetchManifest(ctx, client, manifestURL)
 		if err != nil {

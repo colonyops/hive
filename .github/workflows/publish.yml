@@ -4,20 +4,19 @@ permissions:
   contents: write # for release
   packages: write
 
+# The maintainer's `release` run dispatches this after it has published the
+# desktop and pushed the release tag. It builds the CLI from that tag, creates
+# the one GitHub release for every program with the promoted release notes,
+# and deploys the site (ADR every-program-ships-under-one-date-based-version).
 on:
   workflow_dispatch:
     inputs:
-      semverbump:
-        description: "Which version to bump by"
+      tag:
+        description: "The release tag, such as v0.20261001.0. It must already exist on main."
         required: true
-        default: "patch"
-        type: choice
-        options:
-          - patch
-          - minor
-          - major
+        type: string
       dry_run:
-        description: "Build the release, but push no tag, publish nothing, and deploy nothing"
+        description: "Build the release, but publish nothing and deploy nothing"
         type: boolean
         default: false
 
@@ -35,24 +34,22 @@ jobs:
       - test
     runs-on: ubuntu-latest
     steps:
-      # fetch-depth 0 gets the full history and the tags, which the tag
-      # step and the GoReleaser changelog read.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.tag }}
           fetch-depth: 0
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: "go.mod"
           cache: true
-      - name: Select the release tag
-        id: tag
+      - name: Check the tag and write the release notes
         env:
-          RELEASE_BUMP: ${{ inputs.semverbump }}
-          RELEASE_DRY_RUN: ${{ inputs.dry_run }}
+          TAG: ${{ inputs.tag }}
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          go run ./cmd/tools/release cli tag
+          [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::$TAG is not a release tag"; exit 1; }
+          [[ $(git rev-parse "refs/tags/$TAG^{commit}") == $(git rev-parse HEAD) ]] || { echo "::error::checkout is not at $TAG"; exit 1; }
+          git merge-base --is-ancestor HEAD origin/main || { echo "::error::$TAG is not on main"; exit 1; }
+          go run ./cmd/tools/release changelog notes "${TAG#v}" > "$RUNNER_TEMP/release-notes.md"
       - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
@@ -62,12 +59,11 @@ jobs:
         with:
           distribution: goreleaser
           version: latest
-          args: release --clean --config cmd/hive/.goreleaser.yml ${{ inputs.dry_run && '--skip=publish,announce,validate' || '' }}
+          args: release --clean --config cmd/hive/.goreleaser.yml --release-notes ${{ runner.temp }}/release-notes.md ${{ inputs.dry_run && '--skip=publish,announce,validate' || '' }}
         env:
-          # GoReleaser does not look for tags itself when these are set. The
-          # repository holds tags of other programs, which it must not use.
-          GORELEASER_CURRENT_TAG: ${{ steps.tag.outputs.current }}
-          GORELEASER_PREVIOUS_TAG: ${{ steps.tag.outputs.previous }}
+          # GoReleaser does not look for the tag itself when this is set. The
+          # repository still holds the desktop-v* tags, which it must not use.
+          GORELEASER_CURRENT_TAG: ${{ inputs.tag }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 

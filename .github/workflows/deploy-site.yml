@@ -2,7 +2,7 @@ name: Deploy hivedesktop.com
 
 # GitHub Pages serves the site; the custom domain is set in the repository's
 # Pages settings and named again by docs/docs/CNAME. The publish workflow
-# calls this after a CLI release, so a docs change goes live with the next
+# calls this after a release, so a docs change goes live with the next
 # release. Dispatch it by hand to deploy the site without a release.
 
 on:

@@ -1,6 +1,6 @@
-// Command release holds the release steps of the programs in this repository:
-// the Hive Desktop publisher and changelog commands, and the hive CLI's tag
-// selection under `release cli`.
+// Command release cuts one release of every program in this repository: it
+// manages the release notes, publishes Hive Desktop, tags the shared version,
+// and dispatches the workflow that ships the hive CLI.
 package main
 
 import (
@@ -13,18 +13,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colonyops/hive/internal/releasenotes"
 	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 
-	"github.com/colonyops/hive/cmd/tools/release/internal/commands"
+	"github.com/colonyops/hive/internal/releasenotes"
 )
 
 func main() {
 	logger := newReleaseLogger(os.Stderr)
 	ctx := logger.WithContext(context.Background())
-	command := commands.NewCLICmd().Register(newReleaseCommand())
-	if err := command.Run(ctx, os.Args); err != nil {
+	if err := newReleaseCommand().Run(ctx, os.Args); err != nil {
 		logger.Error().Err(err).Msg("release failed")
 		os.Exit(1)
 	}
@@ -39,64 +37,65 @@ func newReleaseCommand() *cli.Command {
 	return &cli.Command{
 		Name:  "release",
 		Usage: "release steps for the programs in this repository",
-		Description: "Selects and validates versions against both Git tags and live channel manifests, " +
-			"then builds, signs, notarizes, uploads, and verifies desktop releases.",
+		Description: "Selects and validates the shared version against Git tags, live desktop manifests, and the promoted release notes, " +
+			"then builds, signs, notarizes, uploads, and verifies the desktop, and dispatches the CLI's publish workflow.",
 		Commands: []*cli.Command{
 			{
-				Name:      "run",
-				Usage:     "interactively prepare and publish a release",
-				ArgsUsage: "[dev|beta|stable] [version]",
-				Description: "Selects a channel and patch, minor, or major increment when omitted, refreshes and validates the release source, presents the candidate for explicit confirmation, " +
-					"runs the release gates, revalidates the confirmed commit, then publishes. Run through `mise run desktop:release` so mise loads credentials.",
+				Name:  "run",
+				Usage: "interactively prepare and publish a release",
+				Description: "Refreshes and validates the release source, takes the version from the newest promoted release notes, presents it for explicit confirmation, " +
+					"runs the release gates, revalidates the confirmed commit, then publishes. Run through `mise run release` so mise loads credentials.",
 				Flags: []cli.Flag{
-					&cli.BoolFlag{Name: "dry-run", Usage: "exercise candidate selection and confirmation without gates, builds, uploads, tags, or a GitHub release"},
+					&cli.BoolFlag{Name: "dry-run", Usage: "exercise candidate selection and confirmation without gates, builds, uploads, tags, or a workflow dispatch"},
 				},
 				Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
-					channel, candidate, err := parseInteractiveReleaseArgs(cmd.Args().Slice())
-					if err != nil {
-						return cli.Exit(err.Error(), 2)
+					if cmd.NArg() != 0 {
+						return cli.Exit("expected no arguments: the version comes from the promoted release notes", 2)
 					}
-					return runInteractiveRelease(ctx, channel, candidate, cmd.Bool("dry-run"))
+					return runInteractiveRelease(ctx, cmd.Bool("dry-run"))
 				}),
 			},
 			{
-				Name:      "next",
-				Usage:     "print the next version for a release channel",
-				ArgsUsage: "<dev|beta|stable>",
-				Description: "Selects the next version from all local desktop-v* tags and the live stable, " +
-					"beta, and dev manifests. A missing live manifest (HTTP 404) is an empty channel.",
+				Name:  "next",
+				Usage: "print the version a release cut now would take",
+				Description: "Prints 0.YYYYMMDD.N for today's UTC date, where N counts the releases already published that day. It reads every v* and desktop-v* tag " +
+					"and the live desktop manifests. A missing live manifest (HTTP 404) is an empty channel.",
 				Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() != 1 || !validChannel(cmd.Args().First()) {
-						return cli.Exit("expected exactly one channel: dev, beta, or stable", 2)
+					if cmd.NArg() != 0 {
+						return cli.Exit("expected no arguments", 2)
 					}
 					versions, _, err := releaseVersions(ctx)
 					if err != nil {
 						return err
 					}
-					fmt.Println(nextVersion(cmd.Args().First(), versions))
+					version, err := nextVersion(time.Now(), versions)
+					if err != nil {
+						return err
+					}
+					fmt.Println(version)
 					return nil
 				}),
 			},
 			{
 				Name:      "prepare",
 				Usage:     "select and validate a release candidate",
-				ArgsUsage: "<dev|beta|stable> [version]",
-				Description: "Requires a clean current main, selects the next version when version is omitted, validates advancement " +
-					"across every affected live manifest, rejects existing local or origin tags, and prints the commit and manifest cascade.",
+				ArgsUsage: "[version]",
+				Description: "Requires a clean current main, takes the version from the newest promoted release notes when version is omitted, validates that it advances " +
+					"every tag and live manifest, requires an entry with a summary for every program, rejects an existing local or origin tag, and prints the plan.",
 				Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
-					if cmd.NArg() < 1 || cmd.NArg() > 2 || !validChannel(cmd.Args().First()) {
-						return cli.Exit("expected a channel (dev, beta, or stable) and optional version", 2)
+					if cmd.NArg() > 1 {
+						return cli.Exit("expected an optional version", 2)
 					}
-					return prepare(ctx, cmd.Args().First(), cmd.Args().Get(1))
+					return prepare(ctx, cmd.Args().First())
 				}),
 			},
 			{
 				Name:      "publish",
 				Usage:     "build, sign, notarize, and publish a release",
 				ArgsUsage: "<version>",
-				Description: "Public publishing requires a clean current main or a matching CI tag on main; the command builds the universal macOS app, signs it, " +
-					"notarizes and staples it, packages and verifies it, uploads immutable artifacts to R2, updates the channel cascade, and verifies the public artifact. " +
-					"For local publishing, run this through `mise run desktop:release:publish -- <version>` so mise loads credentials.",
+				Description: "Public publishing requires a clean current main or a matching release tag on main; the command builds the universal macOS app, signs it, " +
+					"notarizes and staples it, packages and verifies it, uploads immutable artifacts to R2, writes every desktop manifest, verifies the public artifact, " +
+					"then tags the release and dispatches the CLI's publish workflow. Run this through `mise run release:publish -- <version>` so mise loads credentials.",
 				Flags: []cli.Flag{
 					&cli.BoolFlag{Name: "skip-notarize", Usage: "skip notarization and stapling (requires --skip-upload)"},
 					&cli.BoolFlag{Name: "skip-upload", Usage: "build and package without publishing"},
@@ -118,11 +117,11 @@ func newReleaseCommand() *cli.Command {
 			},
 			{
 				Name:      "github",
-				Usage:     "push the release tag and create the GitHub release",
+				Usage:     "push the release tag and dispatch the publish workflow",
 				ArgsUsage: "<version>",
-				Description: "Records a published version on GitHub: pushes the lightweight desktop-v<version> tag and creates a GitHub Release whose body is " +
-					"the version's committed changelog entry (dev and beta are marked prerelease). Downloads still come from R2 (decision 0003); " +
-					"this attaches no artifacts. Idempotent — safe to re-run to record a release whose GitHub step failed after the R2 upload. Requires an authenticated gh.",
+				Description: "Pushes the lightweight v<version> tag and dispatches publish.yml, which builds the CLI with GoReleaser, creates the GitHub release " +
+					"with every program's notes, and deploys the site. It waits for the run. Desktop downloads still come from R2 (decision 0003). " +
+					"Idempotent: safe to re-run for a release whose GitHub step failed after the R2 upload. Requires an authenticated gh.",
 				Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
 					if cmd.NArg() != 1 {
 						return cli.Exit("expected exactly one version", 2)
@@ -143,16 +142,16 @@ func newReleaseCommand() *cli.Command {
 				Commands: []*cli.Command{
 					{
 						Name:      "promote",
-						Usage:     "turn every program's accumulated draft into its changelog entry for one stable release",
-						ArgsUsage: "<stable|version>",
+						Usage:     "turn every program's accumulated draft into its changelog entry for the next release",
+						ArgsUsage: "[version]",
 						Description: "Collapses each program's changelog/unreleased/ into its <version>.md, stamping the version and date, and " +
-							"deletes the fragments. Every program gets an entry, because every release ships every program. Edit the entries " +
-							"before committing them: each is the sum of every pull request since the last release, so consolidate near-duplicate " +
-							"bullets and write the summaries. Commit the result before releasing: the release ships the notes main holds, and " +
-							"`release publish` refuses a stable version that has no entry. Prereleases need none — they publish the draft as it stands.",
+							"deletes the fragments. The version defaults to `release next`, and it is the version the release publishes. Every program " +
+							"gets an entry, because every release ships every program. Edit the entries before committing them: each is the sum of " +
+							"every pull request since the last release, so consolidate near-duplicate bullets and write the summaries. Commit the " +
+							"result before releasing: the release ships the notes main holds, and `release publish` refuses a version with no entry.",
 						Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
-							if cmd.NArg() != 1 {
-								return cli.Exit("expected \"stable\" or an explicit stable version", 2)
+							if cmd.NArg() > 1 {
+								return cli.Exit("expected an optional version", 2)
 							}
 							version, err := promoteTargetVersion(ctx, cmd.Args().First())
 							if err != nil {
@@ -184,6 +183,28 @@ func newReleaseCommand() *cli.Command {
 						},
 						Action: withRepoRoot(func(ctx context.Context, cmd *cli.Command) error {
 							return openReleaseNotesPR(ctx, cmd.Bool("dry-run"))
+						}),
+					},
+					{
+						Name:      "notes",
+						Usage:     "print the GitHub release body for a version",
+						ArgsUsage: "<version>",
+						Description: "Prints the desktop download header and every program's entry for the version, each under its own heading. " +
+							"The publish workflow passes it to GoReleaser as the release notes.",
+						Action: withRepoRoot(func(_ context.Context, cmd *cli.Command) error {
+							if cmd.NArg() != 1 {
+								return cli.Exit("expected exactly one version", 2)
+							}
+							version, err := parsePublishVersion(cmd.Args().First())
+							if err != nil {
+								return fmt.Errorf("invalid version %q: %w", cmd.Args().First(), err)
+							}
+							body, err := releaseNotesBody(version, downloadBaseURL())
+							if err != nil {
+								return err
+							}
+							fmt.Print(body)
+							return nil
 						}),
 					},
 					{
@@ -267,14 +288,13 @@ func withRepoRoot(action cli.ActionFunc) cli.ActionFunc {
 
 type releasePlan struct {
 	version          releaseVersion
-	channel          string
 	commit           string
 	subject          string
 	currentManifests map[string]string
 }
 
-func prepare(ctx context.Context, channel, candidate string) error {
-	plan, err := prepareReleasePlan(ctx, channel, candidate)
+func prepare(ctx context.Context, candidate string) error {
+	plan, err := planRelease(ctx, candidate, true)
 	if err != nil {
 		return err
 	}
@@ -282,15 +302,9 @@ func prepare(ctx context.Context, channel, candidate string) error {
 	return nil
 }
 
-func prepareReleasePlan(ctx context.Context, channel, candidate string) (releasePlan, error) {
-	return planRelease(ctx, channel, candidate, true)
-}
-
-func previewReleasePlan(ctx context.Context, channel, candidate string) (releasePlan, error) {
-	return planRelease(ctx, channel, candidate, false)
-}
-
-func planRelease(ctx context.Context, channel, candidate string, validateSource bool) (releasePlan, error) {
+// planRelease selects and validates the version to publish. With no
+// candidate it is the pending version: the promoted release notes name it.
+func planRelease(ctx context.Context, candidate string, validateSource bool) (releasePlan, error) {
 	if validateSource {
 		if err := validatePrepareSource(ctx); err != nil {
 			return releasePlan{}, err
@@ -299,19 +313,21 @@ func planRelease(ctx context.Context, channel, candidate string, validateSource 
 	if err := verifyMigrationOrder(ctx); err != nil {
 		return releasePlan{}, err
 	}
-	versions, manifests, err := releaseVersions(ctx)
+	published, manifests, err := releaseVersions(ctx)
 	if err != nil {
 		return releasePlan{}, err
 	}
+	var version releaseVersion
 	if candidate == "" {
-		candidate = nextVersion(channel, versions)
+		version, err = pendingVersion(published)
+	} else {
+		version, err = parsePublishVersion(candidate)
 	}
-	version, err := parsePublishVersion(candidate)
 	if err != nil {
-		return releasePlan{}, fmt.Errorf("invalid candidate %q: %w", candidate, err)
+		return releasePlan{}, err
 	}
-	if version.channel() != channel {
-		return releasePlan{}, fmt.Errorf("candidate %s belongs to %s, not %s", candidate, version.channel(), channel)
+	if newest, ok := newestVersion(published); ok && compareVersions(version, newest) <= 0 {
+		return releasePlan{}, fmt.Errorf("candidate %s does not advance the newest published version %s", version, newest)
 	}
 	if err := validateManifestAdvancement(version, manifests); err != nil {
 		return releasePlan{}, err
@@ -320,17 +336,15 @@ func planRelease(ctx context.Context, channel, candidate string, validateSource 
 		return releasePlan{}, err
 	}
 
-	tag := "desktop-v" + version.String()
+	tag := version.tag()
 	if exists, err := localTagExists(ctx, tag); err != nil {
 		return releasePlan{}, err
 	} else if exists {
 		return releasePlan{}, fmt.Errorf("tag %s already exists locally", tag)
 	}
-	remote, err := commandOutput(ctx, "git", "ls-remote", "--tags", "origin", "refs/tags/"+tag)
-	if err != nil {
-		return releasePlan{}, fmt.Errorf("check origin tag %s: %w", tag, err)
-	}
-	if strings.TrimSpace(remote) != "" {
+	if sha, err := originTagCommit(ctx, tag); err != nil {
+		return releasePlan{}, err
+	} else if sha != "" {
 		return releasePlan{}, fmt.Errorf("tag %s already exists on origin", tag)
 	}
 
@@ -341,7 +355,6 @@ func planRelease(ctx context.Context, channel, candidate string, validateSource 
 	lines := strings.SplitN(strings.TrimSpace(commit), "\n", 2)
 	plan := releasePlan{
 		version:          version,
-		channel:          channel,
 		commit:           lines[0],
 		currentManifests: make(map[string]string, len(manifests)),
 	}
@@ -356,13 +369,13 @@ func planRelease(ctx context.Context, channel, candidate string, validateSource 
 
 func printReleasePlan(plan releasePlan) {
 	fmt.Printf("candidate: %s\n", plan.version.String())
-	fmt.Printf("channel: %s\n", plan.channel)
+	fmt.Printf("tag: %s\n", plan.version.tag())
 	fmt.Printf("commit: %s\n", plan.commit)
 	if plan.subject != "" {
 		fmt.Printf("subject: %s\n", plan.subject)
 	}
-	fmt.Printf("manifests: %s\n", strings.Join(plan.version.affectedChannels(), "+"))
-	for _, channel := range []string{"stable", "beta", "dev"} {
+	fmt.Printf("manifests: %s\n", strings.Join(manifestChannels, "+"))
+	for _, channel := range manifestChannels {
 		if version, ok := plan.currentManifests[channel]; ok {
 			fmt.Printf("current-%s: %s\n", channel, version)
 		} else {

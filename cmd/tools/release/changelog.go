@@ -13,79 +13,156 @@ import (
 	"github.com/colonyops/hive/internal/releasenotes"
 )
 
-// notesFor returns the release notes to publish with version.
+// releaseEntry returns p's entry for version, as p's binary embeds it.
 //
-// A stable release has an entry of its own, promoted from the draft before the
-// release commit. A prerelease has none and carries the draft instead, which
-// is exactly what its binary embeds — so the GitHub release body and the
-// channel manifest say what the app itself will say.
-func notesFor(version releaseVersion) (releasenotes.Entry, error) {
-	entries, err := desktopProduct.embedded()
+// Every release has an entry per program, promoted from the drafts before the
+// release commit. Reading through the embed means the GitHub release body and
+// the update manifest say what the binary itself will say.
+func releaseEntry(p product, version releaseVersion) (releasenotes.Entry, error) {
+	entries, err := p.embedded()
 	if err != nil {
 		return releasenotes.Entry{}, err
 	}
-	if entry, ok := entries.Find(version.String()); ok {
-		if version.channel() == "stable" && entry.Summary == "" {
-			return releasenotes.Entry{}, fmt.Errorf(
-				"changelog entry for %s has no summary: it is what the What's New toast and the channel manifest show", version)
-		}
-		return entry, nil
-	}
-	if version.channel() == "stable" {
+	entry, ok := entries.Find(version.String())
+	if !ok {
 		return releasenotes.Entry{}, fmt.Errorf(
-			"no changelog entry for %s: promote the drafts with `mise run changelog:promote -- %s` and commit it before releasing",
-			version, version)
+			"no %s changelog entry for %s: promote the drafts with `mise run changelog:promote` and land them before releasing",
+			p.name, version)
 	}
-	entry, _ := entries.Draft()
+	if entry.Summary == "" {
+		return releasenotes.Entry{}, fmt.Errorf("%s changelog entry for %s has no summary", p.name, version)
+	}
 	return entry, nil
 }
 
+// notesFor returns the desktop notes the update manifests carry.
+func notesFor(version releaseVersion) (releasenotes.Entry, error) {
+	return releaseEntry(desktopProduct, version)
+}
+
 // validateChangelogEntry is the release gate. It runs with the other fail-fast
-// checks, before anything is built: notes are embedded in the binary, so an
+// checks, before anything is built: notes are embedded in the binaries, so an
 // entry written after the build would describe a release that cannot show it.
-//
-// Only a stable release is gated. A prerelease publishes whatever the draft
-// says, including nothing — which is the point, since cutting one is meant to
-// cost no changelog work at all.
 func validateChangelogEntry(version releaseVersion) error {
-	_, err := notesFor(version)
-	return err
-}
-
-// releaseNotesBody assembles the GitHub release body: the R2 download header
-// followed by the release notes. downloadBase is a parameter rather than a
-// call to downloadBaseURL so the assembled body can be asserted against a
-// literal, the same seam releaseNotesHeader has.
-func releaseNotesBody(version releaseVersion, entry releasenotes.Entry, downloadBase string) string {
-	body := releaseNotesHeader(version, downloadBase)
-	if entry.Summary != "" {
-		body += "\n" + entry.Summary + "\n"
+	for _, p := range products {
+		if _, err := releaseEntry(p, version); err != nil {
+			return err
+		}
 	}
-	return body + "\n" + entry.Body + "\n"
+	return nil
 }
 
-// promoteTargetVersion resolves the promote command's argument. "stable" picks
-// the next stable version from the same sources planRelease uses — tags *and*
-// the live manifests — because the R2 history predates this repository, and a
-// promotion named off tags alone would write an entry the release then refuses
-// to find.
-func promoteTargetVersion(ctx context.Context, arg string) (releaseVersion, error) {
-	if arg != "stable" {
-		version, err := parsePublishVersion(arg)
+// releaseNotesBody assembles the GitHub release body for version from every
+// program's embedded entry.
+func releaseNotesBody(version releaseVersion, downloadBase string) (string, error) {
+	notes := make([]productNotes, 0, len(products))
+	for _, p := range products {
+		entry, err := releaseEntry(p, version)
 		if err != nil {
-			return releaseVersion{}, fmt.Errorf("invalid version %q: %w", arg, err)
+			return "", err
 		}
-		if version.channel() != "stable" {
-			return releaseVersion{}, fmt.Errorf(
-				"%s is a prerelease: only a stable release gets an entry of its own, and a prerelease publishes the draft as it stands", version)
-		}
-		return version, nil
+		notes = append(notes, productNotes{product: p, entry: entry})
 	}
-	versions, _, err := releaseVersions(ctx)
+	return renderReleaseNotesBody(version, downloadBase, notes), nil
+}
+
+type productNotes struct {
+	product product
+	entry   releasenotes.Entry
+}
+
+// renderReleaseNotesBody writes the R2 download header, then each program's
+// notes under its own heading.
+func renderReleaseNotesBody(version releaseVersion, downloadBase string, notes []productNotes) string {
+	var b strings.Builder
+	b.WriteString(releaseNotesHeader(version, downloadBase))
+	for _, n := range notes {
+		fmt.Fprintf(&b, "\n## %s\n\n%s\n", n.product.title, n.entry.Summary)
+		if n.entry.Body != "" {
+			fmt.Fprintf(&b, "\n%s\n", demoteHeadings(n.entry.Body))
+		}
+	}
+	return b.String()
+}
+
+// demoteHeadings moves an entry's sections one level down, under the
+// program's heading.
+func demoteHeadings(body string) string {
+	lines := strings.Split(body, "\n")
+	for i, line := range lines {
+		if strings.HasPrefix(line, "#") {
+			lines[i] = "#" + line
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+// promoteTargetVersion resolves the promote command's optional argument. With
+// none it picks the next date version from the same sources planRelease uses,
+// tags and the live manifests, because the R2 history predates this
+// repository.
+func promoteTargetVersion(ctx context.Context, arg string) (releaseVersion, error) {
+	published, _, err := releaseVersions(ctx)
 	if err != nil {
 		return releaseVersion{}, err
 	}
-	return parsePublishVersion(nextVersion("stable", versions))
+	if arg == "" {
+		return nextVersion(time.Now(), published)
+	}
+	version, err := parsePublishVersion(arg)
+	if err != nil {
+		return releaseVersion{}, fmt.Errorf("invalid version %q: %w", arg, err)
+	}
+	if newest, ok := newestVersion(published); ok && compareVersions(version, newest) <= 0 {
+		return releaseVersion{}, fmt.Errorf("%s does not advance the newest published version %s", version, newest)
+	}
+	return version, nil
+}
+
+// pendingVersion is the version the next release publishes: the newest one
+// that every program has an entry for and that no release has published. The
+// version is fixed at promotion rather than on the release day, so release
+// notes that land after midnight still release under their own version.
+func pendingVersion(published []releaseVersion) (releaseVersion, error) {
+	changelogs := make([]releasenotes.Entries, 0, len(products))
+	for _, p := range products {
+		entries, err := p.embedded()
+		if err != nil {
+			return releaseVersion{}, err
+		}
+		changelogs = append(changelogs, entries)
+	}
+	return selectPendingVersion(changelogs, published)
+}
+
+func selectPendingVersion(changelogs []releasenotes.Entries, published []releaseVersion) (releaseVersion, error) {
+	counts := make(map[string]int)
+	for _, entries := range changelogs {
+		for _, entry := range entries {
+			if !entry.Draft {
+				counts[entry.Version]++
+			}
+		}
+	}
+
+	newestPublished, hasPublished := newestVersion(published)
+	var pending []releaseVersion
+	for raw, count := range counts {
+		version, err := parsePublishVersion(raw)
+		if err != nil || count != len(changelogs) {
+			continue
+		}
+		if hasPublished && compareVersions(version, newestPublished) <= 0 {
+			continue
+		}
+		pending = append(pending, version)
+	}
+	version, ok := newestVersion(pending)
+	if !ok {
+		return releaseVersion{}, errors.New(
+			"no promoted release notes are newer than the last release: run `/release-prep`, or `mise run changelog:promote` and `mise run changelog:pr`, and land the pull request")
+	}
+	return version, nil
 }
 
 // promoteDrafts collapses every product's accumulated fragments into its

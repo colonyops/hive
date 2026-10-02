@@ -1,6 +1,6 @@
 # Publish GitHub tags and Releases as the source-side record of a desktop release
 
-- **Status:** accepted; the "stable is Latest" rule superseded by [ADR desktop-github-releases-never-take-github-latest](2026-09-29-desktop-github-releases-never-take-github-latest.md)
+- **Status:** superseded by [every-program-ships-under-one-date-based-version](2026-10-01-every-program-ships-under-one-date-based-version.md): one `v*` tag and one GitHub release, created by the publish workflow, record every program
 - **Date:** 2026-07-29
 
 ## Context

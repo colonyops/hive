@@ -83,7 +83,9 @@ func TestValidatePlatformManifestInstallerMetadata(t *testing.T) {
 	}
 }
 
-func TestValidateManifestAdvancementChecksCascade(t *testing.T) {
+// Every release writes every manifest, so it has to advance each of them,
+// including a dev manifest a prerelease left ahead of stable.
+func TestValidateManifestAdvancementChecksEveryManifest(t *testing.T) {
 	t.Parallel()
 
 	candidate := mustParseVersion(t, "1.2.3")
@@ -164,14 +166,14 @@ func TestValidateManifestAcceptsLegacyAndMultiPlatform(t *testing.T) {
 	}
 }
 
-// Every affected channel of one release must advertise the same platform set;
+// Every manifest of one release must advertise the same platform set;
 // a channel missing a platform would break updates for those clients only.
 func TestVerifyLiveRejectsDivergentChannelManifests(t *testing.T) {
 	const digest = "0000000000000000000000000000000000000000000000000000000000000000"
 	manifest := func(channel string, platforms map[string]platformManifest) channelManifest {
 		return channelManifest{
 			Channel:   channel,
-			Version:   "1.2.3-beta.1",
+			Version:   "1.2.3",
 			PubDate:   "2026-07-24T00:00:00Z",
 			Platforms: platforms,
 		}
@@ -180,8 +182,9 @@ func TestVerifyLiveRejectsDivergentChannelManifests(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/beta/latest.json":
-			_ = json.NewEncoder(w).Encode(manifest("beta", map[string]platformManifest{
+		case "/stable/latest.json", "/beta/latest.json":
+			channel := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/"), "/latest.json")
+			_ = json.NewEncoder(w).Encode(manifest(channel, map[string]platformManifest{
 				"darwin-universal": good,
 				"linux-amd64":      good,
 				"linux-arm64":      good,
@@ -198,7 +201,7 @@ func TestVerifyLiveRejectsDivergentChannelManifests(t *testing.T) {
 	defer server.Close()
 	t.Setenv("HIVE_DESKTOP_MANIFEST_BASE", server.URL)
 
-	version, err := parseVersion("1.2.3-beta.1")
+	version, err := parseVersion("1.2.3")
 	if err != nil {
 		t.Fatal(err)
 	}

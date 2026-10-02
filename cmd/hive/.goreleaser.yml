@@ -49,25 +49,11 @@ checksum:
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
+# The release body is every program's promoted release notes, which the
+# publish workflow passes with --release-notes. A commit log of this
+# repository would also list every desktop commit.
 changelog:
-  sort: asc
-  groups:
-    - title: Features
-      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
-      order: 0
-    - title: Bug Fixes
-      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
-      order: 1
-    - title: Documentation
-      regexp: '^.*?docs(\([[:word:]]+\))??!?:.+$'
-      order: 2
-    - title: Other
-      order: 999
-  filters:
-    exclude:
-      - "^test:"
-      - "^chore:"
-      - "^ci:"
+  disable: true
 
 homebrew_casks:
   - repository:

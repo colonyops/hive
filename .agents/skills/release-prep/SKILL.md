@@ -1,27 +1,27 @@
 ---
 name: release-prep
-description: Curate every program's accumulated changelog fragments into its entry for the next stable release, then create the release-notes pull request. Use when explicitly asked to prepare stable release notes or invoked as `/release-prep [version]`.
+description: Curate every program's accumulated changelog fragments into its entry for the next release, then create the release-notes pull request. Use when explicitly asked to prepare release notes or invoked as `/release-prep [version]`.
 compatibility: Requires git, Go, mise, GitHub CLI authentication, and access to the live release manifests used for version selection.
-argument-hint: "[stable|version]"
+argument-hint: "[version]"
 disable-model-invocation: true
 ---
 
-# Prepare stable release notes
+# Prepare release notes
 
-Prepare the changelog entries that must land before a stable release. Every
+Prepare the changelog entries that must land before a release. Every
 release ships the hive CLI and Hive Desktop under one version, so promotion
 writes one entry per program. This command edits product copy, then delegates
 the branch, commit, push, and pull request to the repository's release tooling.
 
-Do not use this for dev or beta releases. They publish the accumulated draft as
-it stands and need no release-notes pull request.
+The version this promotes is the version the release publishes: `mise run
+release` reads it from the entries.
 
 ## Arguments
 
-Accept either no argument, `stable`, or one explicit stable version such as
-`0.5.3`. No argument means `stable`, which asks the release tool to select the
-next version from tags and live manifests. Reject prerelease versions and extra
-arguments.
+Accept no argument or one explicit version such as `0.20261001.0`. No argument
+asks the release tool for the next version: `0.YYYYMMDD.N` for today's UTC
+date, above every tag and live manifest. Reject a prerelease, a `v` prefix, and
+extra arguments.
 
 ## 1. Load the project rules
 
@@ -54,7 +54,8 @@ make the checks pass.
 
 Two worktree states are valid:
 
-1. **Clean:** run `mise run changelog:promote -- <stable|version>`.
+1. **Clean:** run `mise run changelog:promote`, adding `-- <version>` only when
+   one was given.
 2. **Already promoted:** continue without promoting again when the only changes
    are one untracked `<version>.md` in each of `cmd/hive/releasenotes/changelog/`
    and `cmd/desktop/releasenotes/changelog/`, all for the same version, and
@@ -72,7 +73,7 @@ an entry, with an empty body. Never create or rename a versioned entry by hand.
 Curate each program's entry on its own: its readers are that program's users.
 Read the promoted entry, its deleted source fragments from `HEAD`, and recent
 committed entries for voice and structure. Read the commit history since the
-last stable release when a note needs verification. Inspect a focused diff only
+last release when a note needs verification. Inspect a focused diff only
 when the history does not establish the user-visible behavior.
 
 Edit each promoted entry as one release, not as a list of pull requests:
@@ -89,7 +90,7 @@ Edit each promoted entry as one release, not as a list of pull requests:
 - do not invent claims that the fragments or repository history do not support.
 
 Follow the release-notes skill's product-copy rules. The summary and each bullet
-must describe what the user gets in the stable release. Do not write a work log
+must describe what the user gets in the release. Do not write a work log
 or a release-process summary.
 
 An entry with an empty body still needs a `summary`. Say in one sentence that

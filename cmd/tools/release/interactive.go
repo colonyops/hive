@@ -15,38 +15,8 @@ import (
 
 var errReleaseCancelled = errors.New("release cancelled")
 
-type releaseDecision string
-
-type releaseBump string
-
-const (
-	decisionPublish releaseDecision = "publish"
-	decisionVersion releaseDecision = "version"
-	decisionCancel  releaseDecision = "cancel"
-
-	bumpPatch releaseBump = "patch"
-	bumpMinor releaseBump = "minor"
-	bumpMajor releaseBump = "major"
-)
-
-func parseInteractiveReleaseArgs(args []string) (string, string, error) {
-	if len(args) > 2 {
-		return "", "", errors.New("expected an optional channel (dev, beta, or stable) and optional version")
-	}
-	if len(args) == 0 {
-		return "", "", nil
-	}
-	if !validChannel(args[0]) {
-		return "", "", errors.New("expected a channel: dev, beta, or stable")
-	}
-	if len(args) == 1 {
-		return args[0], "", nil
-	}
-	return args[0], args[1], nil
-}
-
-func runInteractiveRelease(ctx context.Context, channel, candidate string, dryRun bool) error {
-	err := executeInteractiveRelease(ctx, channel, candidate, dryRun)
+func runInteractiveRelease(ctx context.Context, dryRun bool) error {
+	err := executeInteractiveRelease(ctx, dryRun)
 	if errors.Is(err, errReleaseCancelled) || errors.Is(err, huh.ErrUserAborted) {
 		zerolog.Ctx(ctx).Info().Msg("release cancelled")
 		return nil
@@ -54,16 +24,9 @@ func runInteractiveRelease(ctx context.Context, channel, candidate string, dryRu
 	return err
 }
 
-func executeInteractiveRelease(ctx context.Context, channel, candidate string, dryRun bool) error {
+func executeInteractiveRelease(ctx context.Context, dryRun bool) error {
 	if dryRun {
 		zerolog.Ctx(ctx).Info().Bool("dry_run", true).Msg("starting release preview; nothing will be published")
-	}
-	if channel == "" {
-		selected, err := promptReleaseChannel()
-		if err != nil {
-			return err
-		}
-		channel = selected
 	}
 
 	zerolog.Ctx(ctx).Info().Msg("refreshing release refs")
@@ -72,64 +35,33 @@ func executeInteractiveRelease(ctx context.Context, channel, candidate string, d
 	}
 	if !dryRun {
 		if err := quietCommand(ctx, "gh", "auth", "status"); err != nil {
-			return fmt.Errorf("gh must be authenticated to record the GitHub release: %w", err)
+			return fmt.Errorf("gh must be authenticated to tag the release and dispatch the publish workflow: %w", err)
 		}
 	}
 
-	preparePlan := prepareReleasePlan
-	if dryRun {
-		preparePlan = previewReleasePlan
-	}
-	plan, err := preparePlan(ctx, channel, candidate)
+	plan, err := planRelease(ctx, "", !dryRun)
 	if err != nil {
 		return err
 	}
-	if candidate == "" {
-		version, err := promptReleaseBump(plan.version)
-		if err != nil {
-			return err
-		}
-		if version.String() != plan.version.String() {
-			plan, err = preparePlan(ctx, channel, version.String())
-			if err != nil {
-				return err
-			}
-		}
+	printReleasePlanCard(plan)
+	confirmed, err := confirmRelease(plan, dryRun)
+	if err != nil {
+		return err
 	}
-	for {
-		printReleasePlanCard(plan)
-		decision, err := promptReleaseDecision(plan, dryRun)
-		if err != nil {
-			return err
-		}
-		switch decision {
-		case decisionCancel:
-			return errReleaseCancelled
-		case decisionVersion:
-			candidate, err := promptReleaseVersion(plan)
-			if err != nil {
-				return err
-			}
-			plan, err = preparePlan(ctx, channel, candidate)
-			if err != nil {
-				return err
-			}
-		case decisionPublish:
-			if dryRun {
-				zerolog.Ctx(ctx).Info().Str("version", plan.version.String()).Msg("dry run complete; nothing was published")
-				return nil
-			}
-			if err := runReleaseGates(ctx); err != nil {
-				return err
-			}
-			if err := validateConfirmedReleasePlan(ctx, plan); err != nil {
-				return err
-			}
-			return publish(ctx, []string{plan.version.String()})
-		default:
-			return fmt.Errorf("unknown release decision %q", decision)
-		}
+	if !confirmed {
+		return errReleaseCancelled
 	}
+	if dryRun {
+		zerolog.Ctx(ctx).Info().Str("version", plan.version.String()).Msg("dry run complete; nothing was published")
+		return nil
+	}
+	if err := runReleaseGates(ctx); err != nil {
+		return err
+	}
+	if err := validateConfirmedReleasePlan(ctx, plan); err != nil {
+		return err
+	}
+	return publish(ctx, []string{plan.version.String()})
 }
 
 func printReleasePlanCard(plan releasePlan) {
@@ -154,8 +86,7 @@ func renderReleasePlan(plan releasePlan) string {
 		lipgloss.NewStyle().Bold(true).Foreground(accent).Render("Release candidate"),
 		"",
 		row("Version", plan.version.String(), versionStyle),
-		row("Channel", plan.channel, valueStyle),
-		row("Publishes to", strings.Join(plan.version.affectedChannels(), " + "), valueStyle),
+		row("Tag", plan.version.tag(), valueStyle),
 		row("Commit", plan.commit, valueStyle),
 		row("Subject", plan.subject, valueStyle),
 		"",
@@ -170,116 +101,26 @@ func renderReleasePlan(plan releasePlan) string {
 		Render(content)
 }
 
-func promptReleaseChannel() (string, error) {
-	channel := "dev"
-	err := huh.NewSelect[string]().
-		Title("Release channel").
-		Description("Select which channel to publish. More stable releases also update the less-stable manifests.").
-		Options(
-			huh.NewOption("dev — update dev", "dev"),
-			huh.NewOption("beta — update beta + dev", "beta"),
-			huh.NewOption("stable — update stable + beta + dev", "stable"),
-		).
-		Value(&channel).
-		Run()
-	if err != nil {
-		return "", fmt.Errorf("select release channel: %w", err)
-	}
-	return channel, nil
-}
-
-func promptReleaseBump(candidate releaseVersion) (releaseVersion, error) {
-	bump := bumpPatch
-	err := huh.NewSelect[releaseBump]().
-		Title("Version increment").
-		Description("Patch follows the normal channel progression; minor and major start a new base version.").
-		Options(
-			huh.NewOption("Patch — "+releaseVersionForBump(candidate, bumpPatch).String(), bumpPatch),
-			huh.NewOption("Minor — "+releaseVersionForBump(candidate, bumpMinor).String(), bumpMinor),
-			huh.NewOption("Major — "+releaseVersionForBump(candidate, bumpMajor).String(), bumpMajor),
-		).
-		Value(&bump).
-		Run()
-	if err != nil {
-		return releaseVersion{}, fmt.Errorf("select release version increment: %w", err)
-	}
-	return releaseVersionForBump(candidate, bump), nil
-}
-
-func releaseVersionForBump(candidate releaseVersion, bump releaseBump) releaseVersion {
-	if bump == bumpPatch {
-		return candidate
-	}
-	version := releaseVersion{base: candidate.base}
-	switch bump {
-	case bumpMinor:
-		version.base.minor++
-		version.base.patch = 0
-	case bumpMajor:
-		version.base.major++
-		version.base.minor = 0
-		version.base.patch = 0
-	default:
-		return candidate
-	}
-	if candidate.channel() != "stable" {
-		version.prerelease = candidate.channel()
-		version.number = 1
-	}
-	return version
-}
-
-func promptReleaseDecision(plan releasePlan, dryRun bool) (releaseDecision, error) {
-	title := "Publish this public release?"
-	description := "The local workflow will run release gates, build every platform, sign and notarize macOS, upload public artifacts, push the tag, and create a GitHub release."
-	publishLabel := "Publish " + plan.version.String()
+func confirmRelease(plan releasePlan, dryRun bool) (bool, error) {
+	title := "Publish " + plan.version.String() + "?"
+	description := "The local workflow will run the release gates, build every desktop platform, sign and notarize macOS, upload the desktop artifacts, " +
+		"push the tag, and dispatch the publish workflow that ships the CLI and creates the GitHub release."
 	if dryRun {
-		title = "Complete this dry run?"
-		description = "This stops after confirmation. It will not run gates, build artifacts, upload anything, push a tag, or create a GitHub release."
-		publishLabel = "Finish dry run for " + plan.version.String()
+		title = "Complete this dry run for " + plan.version.String() + "?"
+		description = "This stops after confirmation. It will not run gates, build artifacts, upload anything, push a tag, or dispatch a workflow."
 	}
-	decision := decisionCancel
-	err := huh.NewSelect[releaseDecision]().
+	confirmed := false
+	err := huh.NewConfirm().
 		Title(title).
 		Description(description).
-		Options(
-			huh.NewOption(publishLabel, decisionPublish),
-			huh.NewOption("Choose another version", decisionVersion),
-			huh.NewOption("Cancel", decisionCancel),
-		).
-		Value(&decision).
+		Affirmative("Publish").
+		Negative("Cancel").
+		Value(&confirmed).
 		Run()
 	if err != nil {
-		return "", fmt.Errorf("confirm release: %w", err)
+		return false, fmt.Errorf("confirm release: %w", err)
 	}
-	return decision, nil
-}
-
-func promptReleaseVersion(plan releasePlan) (string, error) {
-	candidate := plan.version.String()
-	err := huh.NewInput().
-		Title("Release version").
-		Description("Enter a version for the " + plan.channel + " channel. It will be revalidated against live manifests and tags.").
-		Value(&candidate).
-		Validate(func(value string) error {
-			return validateInteractiveReleaseVersion(plan.channel, value)
-		}).
-		Run()
-	if err != nil {
-		return "", fmt.Errorf("choose release version: %w", err)
-	}
-	return strings.TrimSpace(candidate), nil
-}
-
-func validateInteractiveReleaseVersion(channel, value string) error {
-	version, err := parsePublishVersion(strings.TrimSpace(value))
-	if err != nil {
-		return err
-	}
-	if version.channel() != channel {
-		return fmt.Errorf("version belongs to %s, not %s", version.channel(), channel)
-	}
-	return nil
+	return confirmed, nil
 }
 
 func runReleaseGates(ctx context.Context) error {

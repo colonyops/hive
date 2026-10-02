@@ -1,6 +1,6 @@
 # Distribution Reference
 
-Concrete infrastructure and runbook for shipping the desktop app. Decisions behind this: [r2-manifest-distribution](decisions/2026-07-23-r2-manifest-distribution.md) (R2 + manifests), [release-channels](decisions/2026-07-23-release-channels.md) (channels), [in-app-problem-reporting](decisions/2026-07-27-in-app-problem-reporting.md) (problem reporting).
+Concrete infrastructure and runbook for shipping the desktop app, and the one release run that ships it with the hive CLI. Decisions behind this: [r2-manifest-distribution](decisions/2026-07-23-r2-manifest-distribution.md) (R2 + manifests), [release-channels](decisions/2026-07-23-release-channels.md) (the manifest layout), [every-program-ships-under-one-date-based-version](decisions/2026-10-01-every-program-ships-under-one-date-based-version.md) (one version, one release run), [in-app-problem-reporting](decisions/2026-07-27-in-app-problem-reporting.md) (problem reporting).
 
 ## Infrastructure
 
@@ -23,7 +23,7 @@ desktop/
 │   ├── Hive-<ver>-linux-amd64.tar.gz
 │   ├── Hive-<ver>-linux-arm64.tar.gz
 │   └── SHA256SUMS
-└── channels/{stable,beta,dev}/latest.json   # mutable channel pointers
+└── channels/{stable,beta,dev}/latest.json   # mutable pointers; every release writes all three
 ```
 
 One `SHA256SUMS` lists every artifact in the release. A logical publish writes each object under the prefix once. Recovery may fill objects a failed attempt did not reach, but reuses an existing object only after proving its bytes match, so nothing under the prefix is rewritten. That matters because those objects carry a one-year immutable `Cache-Control`.
@@ -75,7 +75,7 @@ The Linux tarballs contain **exactly one entry, and that entry is the binary**. 
 
 Platform keys come from `platformKey` in `cmd/desktop/internal/adapter/wailsui/updater_provider.go`: macOS ships one universal build so both arches resolve to `darwin-universal`; everything else is `<os>-<arch>`.
 
-`summary` and `notes` carry the version's release notes — a stable release's own changelog entry, or the accumulated draft for a prerelease. They are the *only* place a pending release's notes exist, since the app's own copy is embedded in the build it describes and that build is not installed yet (ADR release-notes-ship-inside-the-binary). Both are optional — manifests published before the changelog existed still parse. The updater reads them into `UpdateInfo.Notes`, but **no surface renders that field yet**: an update-available prompt that wants to say what the update contains is still to be built, and should read `summary` and `notes` separately rather than the flattened `UpdateInfo.Notes`.
+`summary` and `notes` carry the version's desktop release notes: its changelog entry. They are the *only* place a pending release's notes exist, since the app's own copy is embedded in the build it describes and that build is not installed yet (ADR release-notes-ship-inside-the-binary). Both are optional — manifests published before the changelog existed still parse. The updater reads them into `UpdateInfo.Notes`, but **no surface renders that field yet**: an update-available prompt that wants to say what the update contains is still to be built, and should read `summary` and `notes` separately rather than the flattened `UpdateInfo.Notes`.
 
 `url`/`sha256`/`size` are the artifact the **updater** downloads. The `installer_*` fields are the artifact a **human** downloads, and appear only where the two differ — today, macOS. They are optional and must be read as a set: a consumer either has all three or treats the platform as having no separate installer, because a URL without its checksum would mean installing unverified bytes. Consumers written against the pre-installer schema keep working; the updater ignores unknown fields.
 
@@ -83,9 +83,9 @@ Platform keys come from `platformKey` in `cmd/desktop/internal/adapter/wailsui/u
 
 The download buttons on hivedesktop.com resolve through a channel manifest at runtime, so shipping a release does not require redeploying the site. The page fetches `channels/<channel>/latest.json` from `dl.hivedesktop.com` directly. The bucket must allow cross-origin reads from `https://hivedesktop.com`; without that rule the fetch fails and the buttons keep their fallback links.
 
-Two surfaces consume it (`docs/docs/javascripts/download.js`): the landing page's hero and CTA buttons, which offer the visitor's own platform, and the `## Install` section of Getting Started, which lists every platform in the manifest with its file size and SHA-256. Both read `installer_url`, `installer_sha256`, and `installer_size` as a set when present and fall back to `url` otherwise: on macOS the zip is the updater's artifact, and handing it to a first-time visitor is the problem the DMG exists to solve. The page reads the manifest's own `channel` field to label a prerelease.
+Two surfaces consume it (`docs/docs/javascripts/download.js`): the landing page's hero and CTA buttons, which offer the visitor's own platform, and the `## Install` section of Getting Started, which lists every platform in the manifest with its file size and SHA-256. Both read `installer_url`, `installer_sha256`, and `installer_size` as a set when present and fall back to `url` otherwise: on macOS the zip is the updater's artifact, and handing it to a first-time visitor is the problem the DMG exists to solve. The page reads the manifest's own `channel` field and labels anything but `stable`.
 
-Both surfaces are an upgrade over markup that already works — the buttons start as links to the `## Install` section and the panel starts as a pointer at the install script — so a failed fetch or a platform with no build leaves a page that still tells a visitor how to install. **`download.js` asks for `dev`** because no stable manifest exists; that constant is what changes when one does.
+Both surfaces are an upgrade over markup that already works — the buttons start as links to the `## Install` section and the panel starts as a pointer at the install script — so a failed fetch or a platform with no build leaves a page that still tells a visitor how to install. `download.js` asks for `stable`. The site deploys from the publish workflow, after the release has written that manifest.
 
 ## Install script
 
@@ -97,7 +97,6 @@ curl -fsSL https://hivedesktop.com/install.sh | bash
 
 It detects OS+arch, resolves the channel's latest build from the **same manifest the updater reads** (`channels/<channel>/latest.json`), and verifies the artifact's sha256 from the manifest before installing. On macOS it unzips `Hive.app` into `/Applications` (falling back to `~/Applications`). On Linux it installs under `~/.local/share/hive`, checks the binary's linked runtime libraries, and writes the icon and `.desktop` entry under `XDG_DATA_HOME` (defaulting to `~/.local/share`). The channel defaults to stable; pass another with `… | bash -s -- --channel dev` or the `HIVE_CHANNEL` env var. It always installs the channel's latest — no version pin — and re-running upgrades in place. It leaves `PATH` unchanged because the `hive` command belongs to the separate CLI product.
 
-- **No stable or beta manifest exists yet** — only `dev`. Until one is published the default `curl … | bash` fails on the missing stable manifest, and the site's download buttons ask for `dev` explicitly.
 - The script and its page are public and crawlable: `docs/docs/install.sh` and the `## Install` section of `docs/docs/desktop/getting-started/index.md`, both in the generated sitemap. They sat behind a path token before the URL became public (ADR [install-script](decisions/2026-07-27-install-script.md)). The URL is published in the README and the docs, so treat it as stable.
 
 ## Problem reporting
@@ -126,15 +125,17 @@ wrangler secret delete REPORT_TOKEN --name hive-desktop-web
 
 ## Publish flow
 
-The pipeline is the Go CLI in `cmd/tools/release`. **A release publishes every platform at once, from one machine** — there is no CI publishing workflow (decision [linux-tarball-distribution](decisions/2026-07-27-linux-tarball-distribution.md)). `publish`:
+**One release run ships every program under one version** (ADR [every-program-ships-under-one-date-based-version](decisions/2026-10-01-every-program-ships-under-one-date-based-version.md)). The version is `0.YYYYMMDD.N`: the UTC date and that day's release count from 0, tagged `v0.YYYYMMDD.N`. The release notes name it: `mise run changelog:promote` writes every program's entry for the next version, and the release publishes the newest version that every program has an entry for and no release has published.
+
+The pipeline is the Go CLI in `cmd/tools/release`, run on the maintainer's machine because the signing keys live there. **The desktop publishes every platform at once, from that one machine** (decision [linux-tarball-distribution](decisions/2026-07-27-linux-tarball-distribution.md)). `publish`:
 
 1. builds the universal .app, Developer ID signs it with an ephemeral keychain, notarizes + staples it, packages without macOS AppleDouble metadata, and verifies the extracted archive's signature and stapled ticket;
 2. builds the installer `.dmg` from that stapled app, signs it, notarizes and staples **the image** (a second Apple round trip), then mounts it and asserts the layout the user will see;
 3. builds `linux-amd64` and `linux-arm64` in a container, asserting each binary carries the version stamp and each tarball still satisfies the updater's single-entry rule;
-4. writes one `SHA256SUMS` covering all four, uploads them to `releases/<semver>/`, writes one channel manifest naming all of them, and verifies every published artifact — installer included — against the manifest it just wrote;
-5. records the release on GitHub ([github-tags-and-releases](decisions/2026-07-29-github-tags-and-releases.md)) — pushes the lightweight `desktop-v<semver>` tag and creates a GitHub Release whose body is the version's committed release notes: a stable release's own changelog entry, or the draft for a prerelease. dev and beta are marked prerelease, and no desktop release takes GitHub's Latest flag ([desktop-github-releases-never-take-github-latest](decisions/2026-09-29-desktop-github-releases-never-take-github-latest.md)). It attaches no artifacts — downloads stay in R2 (decision 0003) — and is idempotent, so `release github <version>` re-records a release whose GitHub step failed after the upload.
+4. writes one `SHA256SUMS` covering all four, uploads them to `releases/<semver>/`, writes the stable, beta, and dev manifests naming all of them, and verifies every published artifact — installer included — against the manifests it just wrote;
+5. pushes the lightweight `v<semver>` tag at the release commit and dispatches `.github/workflows/publish.yml` for it, then waits for the run. The workflow builds the CLI with GoReleaser, creates the version's one GitHub release, publishes the Homebrew cask, and deploys the site. The release body is `release changelog notes <version>`: a header pointing at the desktop's R2 downloads, then every program's entry under its own heading. The release attaches only the CLI archives — desktop downloads stay in R2 (decision 0003) — and takes GitHub's Latest flag, which the CLI's update check reads. The step is idempotent, so `release github <version>` re-runs it for a release whose GitHub step failed after the upload.
 
-Publishing everything in one process is what keeps the manifest-advancement rule (below) usable: a second publish topping up another platform would be rejected for not advancing the version the first just set. It also means a release needs macOS, a running Docker, **and** an authenticated `gh` on the same machine. `next`, `prepare`, and `verify` handle version selection, preflight validation, and standalone diagnostics without separate scripts. Channel routing and cascade follow the rules below.
+Publishing every desktop platform in one process is what keeps the manifest-advancement rule (below) usable: a second publish topping up another platform would be rejected for not advancing the version the first just set. It also means a release needs macOS, a running Docker, **and** an authenticated `gh` on the same machine. `next`, `prepare`, and `verify` handle version selection, preflight validation, and standalone diagnostics without separate scripts.
 
 ### Building Linux from macOS
 
@@ -147,36 +148,34 @@ mise run desktop:build:linux                    # binary only → cmd/desktop/bi
 
 Building the non-host architecture (amd64 on Apple Silicon) works but runs the image build *and* the compile under emulation — budget considerably more time. The Go module cache is mounted **read-only** from the host and `GOPROXY=off` is set, so the container resolves every module from that cache and never fetches one itself, and the third-party npm code it runs (with lifecycle scripts disabled) cannot poison the cache the host's own builds trust; `node_modules` lives in a per-arch named volume so the host's macOS-native copy is never mounted in.
 
-**Local release** (the normal path; secrets from the gitignored repo-root `.env`, loaded by mise):
+**Local release** (the normal path; secrets from the gitignored repo-root `.env`, loaded by mise). Land the release notes first: run `/release-prep`, or `mise run changelog:promote` and `mise run changelog:pr`, and merge the pull request. Then:
 
 ```bash
-mise run desktop:release                    # select the channel and patch/minor/major increment
-mise run desktop:release -- dev             # preselect the channel, then select the increment
-mise run desktop:release -- dev 1.4.0-dev.1 # preselect the channel and exact version
-mise run desktop:release -- --dry-run       # exercise the prompts without publishing
+mise run release              # publish the version the promoted notes name
+mise run release -- --dry-run # exercise the prompts without publishing
 ```
 
-The interactive command refreshes release tags, checks the source and GitHub authentication, and computes the normal patch-oriented candidate from live manifests. It shows the exact resulting version for patch, minor, and major choices; patch preserves normal channel progression (for example, the next dev prerelease or a dev-to-beta promotion), while minor and major start a new base version at prerelease `.1` where applicable. Publishing requires an explicit confirmation that defaults to cancel. It then runs `mi check` and `mi desktop:frontend:test`, verifies that the confirmed commit is still current and clean, and publishes.
+The interactive command refreshes release tags, checks the source and GitHub authentication, takes the version from the promoted release notes, and validates it against every tag and live manifest. Publishing requires an explicit confirmation. It then runs `mi check` and `mi desktop:frontend:test`, verifies that the confirmed commit is still current and clean, and publishes.
 
-`--dry-run` is a prompt preview that also works from a dirty feature worktree. It reads live manifests and tags and validates the selected version, but skips the clean-main and GitHub-authentication requirements and stops after confirmation without running gates, building artifacts, uploading, tagging, or creating a GitHub release.
+`--dry-run` is a prompt preview that also works from a dirty feature worktree. It reads live manifests and tags and validates the version, but skips the clean-main and GitHub-authentication requirements and stops after confirmation without running gates, building artifacts, uploading, tagging, or dispatching the workflow.
 
-`mise run desktop:release:publish -- <version>` is the low-level publisher used for local build diagnostics and recovery (`--skip-upload`, `--skip-notarize` with `--skip-upload`, `--force`, `--resume`); do not use it to bypass the interactive confirmation for a normal public release. `publish` verifies every affected live manifest and downloads the public artifact to verify its size and SHA-256, then pushes the `desktop-v1.4.0-dev.1` tag and creates its GitHub Release — do not tag by hand. A local build (`--skip-upload`) records nothing on GitHub. `verify` remains available for later diagnostics without rebuilding, and `release github <version>` re-records the GitHub side alone.
+`mise run release:publish -- <version>` is the low-level publisher used for local build diagnostics and recovery (`--skip-upload`, `--skip-notarize` with `--skip-upload`, `--force`, `--resume`); do not use it to bypass the interactive confirmation for a normal public release. `publish` verifies every live manifest and downloads the public artifact to verify its size and SHA-256, then pushes the `v<semver>` tag and dispatches the publish workflow — do not tag by hand. A local build (`--skip-upload`) records nothing on GitHub. `verify` remains available for later diagnostics without rebuilding, and `release github <version>` re-runs the GitHub side alone.
 
 Rules enforced by the publisher:
 1. Release preparation requires a clean, current `main`. Publishing requires the same state. Source state is checked again immediately before upload.
-2. A **stable** version must have a changelog entry at `cmd/desktop/releasenotes/changelog/<version>.md`. It is checked before anything is built, because the notes are embedded in the binary and an entry written afterwards would describe a release that cannot display it (ADR release-notes-ship-inside-the-binary). Create it with two commands: `mise run changelog:promote -- <stable|version>` collapses every program's `changelog/unreleased/` into its entry for the version and deletes the fragments, and `mise run changelog:pr` commits the entries on their own branch and opens the pull request. Edit the entries between the two: it is the sum of every PR since the last release, so consolidate near-duplicate bullets and write the `summary`, which `changelog:pr` and the release gate both refuse when empty (ADR release-notes-accumulate-as-fragments). A prerelease is not gated: it publishes the draft as it stands, including nothing.
-3. SQLite migrations must be contiguous, and every migration present in the latest reachable `desktop-v*` tag must remain at the same path with the same contents. Both `prepare` and `publish` run `cmd/desktop/scripts/check-migration-order.sh` before release work begins.
-4. The first prerelease identifier routes the channel (`-dev.N` → dev, `-beta.N` → beta, none → stable; any other identifier is rejected).
-5. `latest.json` is written for the target channel **and cascades to less-stable channels** (stable → stable+beta+dev; beta → beta+dev; dev → dev only).
+2. Every program must have an entry for the version, with a summary: `cmd/hive/releasenotes/changelog/<version>.md` and `cmd/desktop/releasenotes/changelog/<version>.md`. It is checked before anything is built, because the notes are embedded in the binaries and an entry written afterwards would describe a release that cannot display it (ADR release-notes-ship-inside-the-binary). Create them with two commands: `mise run changelog:promote` collapses every program's `changelog/unreleased/` into its entry for the next version and deletes the fragments, and `mise run changelog:pr` commits the entries on their own branch and opens the pull request. Edit the entries between the two: each is the sum of every PR since the last release, so consolidate near-duplicate bullets and write the `summary`, which `changelog:pr` and the release gate both refuse when empty (ADRs release-notes-accumulate-as-fragments, every-program-keeps-its-own-release-notes-and-promotes-them-under-one-version).
+3. SQLite migrations must be contiguous, and every migration present in the latest reachable `v*` or `desktop-v*` tag must remain at the same path with the same contents. Both `prepare` and `publish` run `cmd/desktop/scripts/check-migration-order.sh` before release work begins.
+4. A version is a bare `X.Y.Z` that advances every tag and every live manifest; a prerelease is rejected.
+5. `latest.json` is written for **every channel** (stable, beta, and dev), so installs that follow any of them converge on the release.
 6. `releases/<semver>/` is immutable. A normal re-publish rejects any existing object. Resume reuses one only after downloading it and proving it is byte-identical to the verified local artifact; `--force` remains a separate manual override and cannot be combined with `--resume`.
-7. After the artifacts are live and verified, the `desktop-v<semver>` tag is pushed and its GitHub Release created; an existing tag or release pointing at another commit is a conflict, and one already at the release commit is left untouched.
+7. After the artifacts are live and verified, the `v<semver>` tag is pushed and the publish workflow dispatched; an existing tag pointing at another commit is a conflict, a tag already at the release commit is reused, and an existing GitHub release is left untouched.
 
 ### Recovering an interrupted publish
 
 R2 HEAD, GET, and PUT calls retry bounded transient curl failures, including connection, TLS, and partial-transfer errors. If those retries are exhausted after the build finished, keep `cmd/desktop/bin` intact and resume the same version:
 
 ```bash
-mise run desktop:release:publish -- <version> --resume
+mise run release:publish -- <version> --resume
 ```
 
 Resume does not rebuild, sign, or submit anything to Apple. It loads the four versioned artifacts already in `cmd/desktop/bin`, verifies both macOS signatures and stapled tickets, checks both Linux archive shapes, confirms every binary carries the current release commit, and reconstructs `SHA256SUMS`. It downloads every object already present under the release prefix and reuses it only when its bytes match the local artifact, uploads missing objects, and completes any channel manifests not already written. A manifest already on the version must have identical notes and artifact metadata; a conflicting or newer manifest stops recovery.
@@ -213,7 +212,7 @@ The terminal installer creates `hive-desktop.desktop` and installs the app icon 
 
 ## Auto-update
 
-The in-app updater (`cmd/desktop/internal/adapter/wailsui/updater_provider.go`) polls `https://dl.hivedesktop.com/desktop/channels/<channel>/latest.json`, compares semver against the running version, and downloads the manifest's artifact URL with the manifest's sha256 verified by the Wails updater. A published build follows its own channel — the version's prerelease identifier a release was built with also selects the channel it tracks — and `updates.channel: stable|beta|dev` in the desktop `settings.yaml` overrides that default. Source builds (version `dev`) never self-update.
+The in-app updater (`cmd/desktop/internal/adapter/wailsui/updater_provider.go`) polls `https://dl.hivedesktop.com/desktop/channels/<channel>/latest.json`, compares semver against the running version, and downloads the manifest's artifact URL with the manifest's sha256 verified by the Wails updater. A published build follows the stable manifest (a build from before the single version follows the channel its prerelease identifier named), and `updates.channel: stable|beta|dev` in the desktop `settings.yaml` overrides that. Every release writes all three manifests, so each of them leads to the same release. Source builds (version `dev`) never self-update.
 
 On both platforms the update is an in-place swap: the framework downloads and verifies the artifact, unpacks it, and a detached helper waits for the app to exit before renaming the new payload over the old one and relaunching.
 
@@ -228,7 +227,7 @@ Rewrite the channel's `latest.json` to point at a prior `releases/<semver>/` dir
 
 ## Retention
 
-Dev builds are pruned by a scheduled job (delete `-dev.` versions older than N days). R2 lifecycle rules are prefix-only and cannot match `-dev.` mid-key.
+Releases are no longer cut as `-dev.` prereleases. The ones already in the bucket can be pruned by a scheduled job (delete `-dev.` versions older than N days); R2 lifecycle rules are prefix-only and cannot match `-dev.` mid-key.
 
 ## Credentials
 

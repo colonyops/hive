@@ -31,7 +31,7 @@ func validatePublishSource(ctx context.Context, version releaseVersion) error {
 	if err != nil {
 		return err
 	}
-	return validatePublishSourceState(state, "desktop-v"+version.String())
+	return validatePublishSourceState(state, version.tag())
 }
 
 func loadReleaseSourceState(ctx context.Context) (releaseSourceState, error) {
@@ -50,7 +50,7 @@ func loadReleaseSourceState(ctx context.Context) (releaseSourceState, error) {
 	if err != nil {
 		return releaseSourceState{}, fmt.Errorf("resolve origin/main (run git fetch origin main): %w", err)
 	}
-	tags, err := commandOutput(ctx, "git", "tag", "--points-at", "HEAD", "--list", "desktop-v*")
+	tags, err := commandOutput(ctx, "git", "tag", "--points-at", "HEAD", "--list", "v[0-9]*")
 	if err != nil {
 		return releaseSourceState{}, fmt.Errorf("list release tags at HEAD: %w", err)
 	}

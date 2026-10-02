@@ -8,7 +8,7 @@ One repository, one Go module, four things in it:
 | `cmd/desktop/` | **Hive Desktop**, the Wails v3 app: an inbox that collects work into feeds, a Code area on the CLI's session engine, and agent chat workspaces. | [`cmd/desktop/AGENTS.md`](cmd/desktop/AGENTS.md) |
 | `internal/` | The packages both programs share: config, sessions, git, the `hive.db` stores, messaging, hc, terminal status, HTTP plumbing. | [`docs/architecture.md`](docs/architecture.md) |
 | `docs/` | hivedesktop.com: the landing page and the product docs for both programs (Zensical; pages under `docs/docs/`). The contributor docs sit beside it: `docs/architecture.md`, `docs/decisions/`, `docs/distribution.md`. | [`docs/AGENTS.md`](docs/AGENTS.md) |
-| `cmd/tools/` | Development and release binaries that never ship: `adr` (decision records) and `release` (the desktop publisher and changelog commands, plus `release cli tag` for the CLI's publish workflow). | |
+| `cmd/tools/` | Development and release binaries that never ship: `adr` (decision records) and `release` (the one release run for every program: the changelog commands, the desktop publisher, and the tag and workflow dispatch that ship the CLI). | |
 
 ## Before building a feature
 

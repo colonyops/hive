@@ -255,7 +255,7 @@ func (p *publisher) run(ctx context.Context) error {
 		return p.resumePublish(ctx)
 	}
 
-	fmt.Printf("==> releasing %s (channel: %s -> manifests: %s)\n", p.options.version, p.options.version.channel(), strings.Join(p.options.version.affectedChannels(), " "))
+	fmt.Printf("==> releasing %s (manifests: %s)\n", p.options.version, strings.Join(manifestChannels, " "))
 	if err := p.build(ctx); err != nil {
 		return err
 	}
@@ -722,7 +722,7 @@ func (p *publisher) upload(ctx context.Context, artifacts []releaseArtifact, cur
 	}
 
 	pubDate := time.Now().UTC().Format(time.RFC3339)
-	for _, channel := range p.options.version.affectedChannels() {
+	for _, channel := range manifestChannels {
 		if p.options.resume && manifestAlreadyPublished(p.options.version, channel, currentManifests) {
 			fmt.Printf("==> channel manifest already published: %s\n", channel)
 			continue
@@ -748,11 +748,11 @@ func (p *publisher) upload(ctx context.Context, artifacts []releaseArtifact, cur
 			return err
 		}
 	}
-	fmt.Printf("Release %s published to the %s channel.\n", p.options.version, p.options.version.channel())
+	fmt.Printf("Release %s published.\n", p.options.version)
 	for _, artifact := range artifacts {
 		fmt.Printf("  %s (%s): %s/%s/%s\n", artifact.platformKey, artifact.role, p.options.downloadBase, releasePrefix, artifact.name)
 	}
-	fmt.Printf("  manifests updated: %s\n", strings.Join(p.options.version.affectedChannels(), " "))
+	fmt.Printf("  manifests updated: %s\n", strings.Join(manifestChannels, " "))
 	return nil
 }
 

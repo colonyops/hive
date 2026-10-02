@@ -125,9 +125,9 @@ with `mise run changelog:new -- --product desktop --kind <added|changed|fixed> "
 (the `release-notes` skill). One file
 per change is what keeps concurrent branches from conflicting over the
 changelog (ADR release-notes-accumulate-as-fragments). The fragments render as
-the draft; prereleases publish it as it stands, and a stable release promotes
-it to `changelog/<version>.md` -- which is also where it is consolidated and
-given its summary. The release gate refuses a stable version with no entry
+the draft, and a release promotes every program's draft to its
+`changelog/<version>.md` -- which is also where it is consolidated and
+given its summary. The release gate refuses a version with no entry
 (ADR release-notes-ship-inside-the-binary).
 
 ## Settings and environment
