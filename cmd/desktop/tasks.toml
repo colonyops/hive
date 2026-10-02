@@ -144,6 +144,13 @@ description = "Check desktop frontend formatting (Prettier)"
 dir = "{{config_root}}/cmd/desktop/frontend"
 run = "npm run format:check"
 
+# No --cache: the type-aware rules depend on other files, which ESLint's cache
+# does not track.
+["desktop:frontend:lint"]
+description = "Lint the desktop frontend (ESLint, type-aware)"
+dir = "{{config_root}}/cmd/desktop/frontend"
+run = "npm run lint"
+
 ["desktop:frontend:test"]
 description = "Run desktop frontend unit tests (vitest)"
 dir = "{{config_root}}/cmd/desktop/frontend"

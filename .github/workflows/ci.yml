@@ -155,7 +155,7 @@ jobs:
       - name: Run integration tests
         run: mise run cli:integration
 
-  # The static checks (format, vue-tsc, build) and the vitest suite are independent; one job made
+  # The static checks (format, lint, vue-tsc, build) and the vitest suite are independent; one job made
   # the shorter wait on the longer.
   desktop-frontend-build:
     needs: changes
@@ -178,6 +178,9 @@ jobs:
 
       - name: Check formatting
         run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
 
       - name: Build frontend
         run: npm run build

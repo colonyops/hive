@@ -1,0 +1,906 @@
+{
+  "src/App.vue": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 2
+    },
+    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 2
+    }
+  },
+  "src/__tests__/App.spec.ts": {
+    "@typescript-eslint/no-base-to-string": {
+      "count": 1
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 12
+    },
+    "@typescript-eslint/require-await": {
+      "count": 8
+    }
+  },
+  "src/components/AboutSettingsView.vue": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    }
+  },
+  "src/components/ActionEditor.vue": {
+    "vue/no-mutating-props": {
+      "count": 34
+    },
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 1
+    }
+  },
+  "src/components/ActionInputsDialog.vue": {
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 2
+    }
+  },
+  "src/components/AgentCanvasPane.vue": {
+    "vue/no-v-html": {
+      "count": 1
+    }
+  },
+  "src/components/AgentWorkspaceEditor.vue": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 5
+    },
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 7
+    }
+  },
+  "src/components/AgentsMode.vue": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/components/AppCheckbox.vue": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/AppMenu.vue": {
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 1
+    }
+  },
+  "src/components/AppSelect.vue": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    },
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 1
+    }
+  },
+  "src/components/ChatRenameDialog.vue": {
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 1
+    }
+  },
+  "src/components/CommandPalette.vue": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 6
+    }
+  },
+  "src/components/CreateSessionDialog.vue": {
+    "no-useless-escape": {
+      "count": 1
+    },
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 6
+    }
+  },
+  "src/components/DetailPane.vue": {
+    "vue/no-v-html": {
+      "count": 1
+    }
+  },
+  "src/components/DrawerSheet.vue": {
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 2
+    }
+  },
+  "src/components/FolderEditModal.vue": {
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 1
+    }
+  },
+  "src/components/LauncherEditor.vue": {
+    "vue/no-mutating-props": {
+      "count": 5
+    }
+  },
+  "src/components/NewChatDialog.vue": {
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 1
+    }
+  },
+  "src/components/NewSessionDialog.vue": {
+    "no-useless-escape": {
+      "count": 1
+    },
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 8
+    }
+  },
+  "src/components/NewWindowMenu.vue": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    }
+  },
+  "src/components/OnboardingScreen.vue": {
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/components/ProfileSettingsView.vue": {
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 1
+    }
+  },
+  "src/components/ReleaseNoteBody.vue": {
+    "vue/no-v-html": {
+      "count": 1
+    }
+  },
+  "src/components/RepositorySelect.vue": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    }
+  },
+  "src/components/SessionRenameDialog.vue": {
+    "vue/no-setup-props-reactivity-loss": {
+      "count": 1
+    }
+  },
+  "src/components/SessionStatusChips.vue": {
+    "@typescript-eslint/no-unsafe-enum-comparison": {
+      "count": 2
+    }
+  },
+  "src/components/SettingsView.vue": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/TaskDetailPane.vue": {
+    "vue/no-v-html": {
+      "count": 2
+    }
+  },
+  "src/components/TasksView.vue": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "src/components/TerminalMode.vue": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/TerminalSettingsView.vue": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/components/UnsavedFlowChangesModal.vue": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/ActionSettingsView.spec.ts": {
+    "@typescript-eslint/await-thenable": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/components/__tests__/ActivityView.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/AgentWorkspaceEditor.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    }
+  },
+  "src/components/__tests__/CommandPalette.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/ConfirmationDialog.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/DetailPane.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/DevView.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/components/__tests__/DrawerSheet.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/FeedList.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    }
+  },
+  "src/components/__tests__/HiveSettingsView.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/HiveSetupForm.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/ProfileSettingsView.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/components/__tests__/RepositorySelect.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/SettingsView.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/components/__tests__/TerminalMode.spec.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 10
+    }
+  },
+  "src/components/__tests__/TerminalTab.spec.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "src/components/settings/__tests__/SettingsLayout.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/composables/__tests__/useCommands.spec.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 8
+    }
+  },
+  "src/composables/__tests__/useDragGesture.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/composables/__tests__/useFeedState.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 12
+    },
+    "@typescript-eslint/require-await": {
+      "count": 5
+    }
+  },
+  "src/composables/__tests__/useHiveSetup.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/composables/__tests__/useKeybindings.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/composables/__tests__/usePerf.spec.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/composables/__tests__/useResizablePanel.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "src/composables/__tests__/useSessionStatus.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/composables/__tests__/useTasks.spec.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 2
+    }
+  },
+  "src/composables/__tests__/useTerminalWindowListings.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/composables/__tests__/useTerminalWindows.spec.ts": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "src/composables/__tests__/useTheme.spec.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "src/composables/__tests__/useWailsLatency.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/composables/__tests__/useWindowFocus.spec.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "src/composables/useAppPaletteRows.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    }
+  },
+  "src/composables/useCommands.ts": {
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    }
+  },
+  "src/composables/useFeedState.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/composables/useFrameStats.ts": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    }
+  },
+  "src/composables/useHiveSetup.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "src/composables/useKeybindings.ts": {
+    "@typescript-eslint/no-deprecated": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/composables/usePerf.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "src/composables/useReleaseNotes.ts": {
+    "no-useless-assignment": {
+      "count": 1
+    }
+  },
+  "src/lib/__tests__/terminalFaces.spec.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "src/lib/__tests__/terminalImages.spec.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "src/lib/__tests__/terminalReports.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/lib/activityPresentation.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/lib/agentWorkspacesClient.ts": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    }
+  },
+  "src/lib/itemPresentation.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 3
+    }
+  },
+  "src/lib/terminalImages.ts": {
+    "@typescript-eslint/unbound-method": {
+      "count": 1
+    }
+  },
+  "src/lib/terminalImagesClient.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "src/main.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    }
+  },
+  "src/pipeline/__tests__/app-registry.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 6
+    }
+  },
+  "src/pipeline/__tests__/source-brand-marks.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/pipeline/components/FlowsView.vue": {
+    "@typescript-eslint/no-redundant-type-constituents": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    }
+  },
+  "src/pipeline/components/NodeEditorDrawer.vue": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 2
+    },
+    "vue/no-v-html": {
+      "count": 1
+    }
+  },
+  "src/pipeline/components/__tests__/FlowsView.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/pipeline/components/__tests__/NodeEditorDrawer.spec.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/pipeline/composables/__tests__/usePipelineEditor.spec.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pipeline/composables/usePipelineEditor.ts": {
+    "no-console": {
+      "count": 1
+    }
+  },
+  "src/pipeline/fields/CodeField.vue": {
+    "vue/no-v-html": {
+      "count": 1
+    }
+  },
+  "src/pipeline/fields/NumberField.vue": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pipeline/fields/TextField.vue": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pipeline/fields/TextareaField.vue": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/pipeline/lib/markdown.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    }
+  },
+  "src/pipeline/lib/wireFlow.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodeType.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/pipeline/nodes/action/editor.vue": {
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/action/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/feed/editor.vue": {
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/feed/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/function/config.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-implied-eval": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/function/editor.vue": {
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/function/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/github-filter/editor.vue": {
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/github-filter/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/notify/editor.vue": {
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/notify/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.exec/__tests__/editor.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 4
+    }
+  },
+  "src/pipeline/nodes/sources.exec/editor.vue": {
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.exec/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.gitea/__tests__/editor.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.gitea/config.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.gitea/editor.vue": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.gitea/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    }
+  },
+  "src/pipeline/nodes/sources.github/config.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.github/editor.vue": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.github/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    }
+  },
+  "src/pipeline/nodes/sources.grafana_alerts/config.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.grafana_alerts/editor.vue": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.grafana_alerts/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    }
+  },
+  "src/pipeline/nodes/sources.grafana_irm_alerts/config.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.grafana_irm_alerts/editor.vue": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.grafana_irm_alerts/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    }
+  },
+  "src/pipeline/nodes/sources.grafana_metrics/config.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.grafana_metrics/editor.vue": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.grafana_metrics/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    }
+  },
+  "src/pipeline/nodes/sources.posthog_alerts/config.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.posthog_alerts/editor.vue": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.posthog_alerts/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    }
+  },
+  "src/pipeline/nodes/sources.posthog_errors/config.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.posthog_errors/editor.vue": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.posthog_errors/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    }
+  },
+  "src/pipeline/nodes/sources.rss/editor.vue": {
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.rss/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.webhook/__tests__/editor.spec.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 6
+    }
+  },
+  "src/pipeline/nodes/sources.webhook/editor.vue": {
+    "vue/no-unused-properties": {
+      "count": 1
+    }
+  },
+  "src/pipeline/nodes/sources.webhook/index.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    }
+  },
+  "src/pipeline/types.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/test-utils/select.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    }
+  },
+  "src/test-utils/tooltip.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  }
+}

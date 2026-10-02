@@ -84,3 +84,12 @@ pre-push:
           exit 0
         fi
         mise run desktop:frontend:format:check
+
+    - name: frontend-lint
+      glob: "cmd/desktop/frontend/*"
+      run: |
+        if [ ! -d cmd/desktop/frontend/node_modules ]; then
+          echo "SKIP frontend lint: cmd/desktop/frontend/node_modules is missing (run 'mise run desktop:frontend:install')." >&2
+          exit 0
+        fi
+        mise run desktop:frontend:lint

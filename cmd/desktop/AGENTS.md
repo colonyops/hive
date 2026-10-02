@@ -28,6 +28,7 @@ a credential.
 mise run desktop:dev           # Wails with this worktree's launch.env
 mise run desktop:serve         # headless HTTP build on :8080 — the agent UI loop
 mise run desktop:test          # frontend vitest + the desktop's Go packages
+mise run desktop:frontend:lint # ESLint (type-aware); see "Frontend lint and format"
 mise run desktop:bindings      # regenerate TS bindings after a Wails service change
 mise run desktop:e2e           # Docker-only Playwright gate
 mise run desktop:devserver     # the shared GitHub proxy `dev` routes through
@@ -48,8 +49,8 @@ instance. `solo up` brings up devserver + app together from `.solo.yml`.
 - **Never add `init()`.** `gochecknoinits` is on; use package-variable
   initialization (`var _ = registerEvents()`).
 - **Never put flow-node execution in the frontend.** Execution is Go's
-  (`cmd/desktop/internal/app/runtime`); `pipeline/__tests__/import-hygiene.spec.ts` fails if
-  a `nodes/*/runtime.ts` reappears.
+  (`cmd/desktop/internal/app/runtime`); the frontend lint fails if a
+  `nodes/*/runtime.ts` reappears or a node module imports one.
 - **Never call an `emit*` helper from the core.** They are unexported and
   `forbidigo` fails the build.
 - **Never import Wails or `cmd/desktop/internal/adapter` from `cmd/desktop/internal/app`.** `depguard`
@@ -105,6 +106,16 @@ use real SQLite.
 Engine behaviour changes — routing, sink tagging, node-run accounting — belong
 in a fixture under `cmd/desktop/internal/app/runtime/testdata/parity/*.json`: a flow, a
 batch of messages, and the exact `CommitBatch` they are worth.
+
+## Frontend lint and format
+
+`mise run desktop:frontend:lint` and `mise run desktop:frontend:format:check`
+gate the frontend; `npm run format` fixes formatting. Every lint rule is an
+error. `frontend/eslint-suppressions.json` holds the violations that existed
+when the lint landed: fix one, then run `npx eslint --prune-suppressions .`
+in `frontend/`, because a stale entry fails the lint. Never add entries to it
+or `--suppress-all` new code; fix the code or disable the rule on that line
+with a reason.
 
 ## Mock modes
 
