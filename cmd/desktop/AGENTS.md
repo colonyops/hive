@@ -41,9 +41,13 @@ instance. `solo up` brings up devserver + app together from `.solo.yml`.
 
 - **Never run Playwright or the e2e harness on the host.** `mise run desktop:e2e` is
   Docker-only and there is no host fallback.
-- **Never verify UI with a local GUI build.** Use `mise run desktop:serve` and drive it
-  with browser tooling. Assets are `//go:embed`ded, so a frontend edit needs a
-  re-run; use `desktop:dev` for a Vite HMR loop instead.
+- **Never verify UI by hand in a GUI build.** The headless `mise run desktop:serve`
+  build driven with browser tooling is the default loop. When the question is
+  about the real app (the native window, the WKWebView, shell integration),
+  drive `mise run desktop:dev` through its Wails MCP server with the
+  `desktop-ui-audit` skill, never by clicking or by swapping a hand-built
+  binary. Assets are `//go:embed`ded, so a frontend edit needs a re-run of
+  `serve`; `desktop:dev` is the Vite HMR loop.
 - **Never edit generated files** — `frontend/bindings/`, `data/queries/models.go`,
   `data/queries/*.sql.go`, `*_enum.go`.
 - **Never add `init()`.** `gochecknoinits` is on; use package-variable

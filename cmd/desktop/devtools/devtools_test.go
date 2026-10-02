@@ -65,6 +65,14 @@ func TestPrepareReuseFreshAndReset(t *testing.T) {
 	assert.NotZero(t, httpPort)
 	assert.NotEqual(t, vite, httpPort)
 	assert.NotEqual(t, wails, httpPort)
+	// The Wails MCP server is compiled in and gets a port of its own, so two
+	// worktrees never share the upstream default (ADR the-dev-build-compiles-in-the-wails-mcp-server-and-agents-drive-the-native-ui-through-it).
+	assert.Equal(t, "1", launch["WAILS_MCP"])
+	assert.Equal(t, "127.0.0.1", launch["WAILS_MCP_HOST"])
+	mcpPort, err := strconv.Atoi(launch["WAILS_MCP_PORT"])
+	require.NoError(t, err)
+	assert.NotZero(t, mcpPort)
+	assert.NotContains(t, []int{vite, wails, httpPort}, mcpPort)
 	// hive.db is not seeded; dev points at the installed hive data dir instead.
 	assert.NoFileExists(t, filepath.Join(tools.instanceDir, "data", "hive.db"))
 	assert.Equal(t, sourceData, launch[settings.EnvHiveDataDir])
@@ -181,6 +189,7 @@ func TestFreshAndResetRefuseActiveLaunch(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, listener.Close()) })
 	launch, err := tools.readLaunchIfPresent()
 	require.NoError(t, err)
+	allocatedWailsPort := launch["WAILS_SERVER_PORT"]
 	launch["WAILS_SERVER_HOST"] = "127.0.0.1"
 	addr, ok := listener.Addr().(*net.TCPAddr)
 	require.True(t, ok, "listener address should be *net.TCPAddr")
@@ -193,6 +202,14 @@ func TestFreshAndResetRefuseActiveLaunch(t *testing.T) {
 	require.ErrorContains(t, err, "Wails development server is active")
 	assert.DirExists(t, tools.instanceDir)
 	assert.FileExists(t, tools.launchPath)
+
+	// A running native dev app is only visible through its MCP port.
+	launch["WAILS_SERVER_PORT"] = allocatedWailsPort
+	launch["WAILS_MCP_PORT"] = strconv.Itoa(addr.Port)
+	require.NoError(t, writeDotenvAtomic(tools.launchPath, launch))
+	err = tools.withLock(tools.reset)
+	require.ErrorContains(t, err, "Wails MCP development server is active")
+	assert.DirExists(t, tools.instanceDir)
 }
 
 func TestInstanceSafetyRejectsWrongMarkerAndSymlink(t *testing.T) {
@@ -295,6 +312,24 @@ func TestPrepareRegeneratesStaleLaunchEnv(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "true", launch[settings.EnvHTTPEnabled])
 	assert.Equal(t, filepath.Join(tools.instanceDir, "config", "workspaces"), launch[settings.EnvAgentWorkspacesDir])
+	assert.NotEmpty(t, launch["WAILS_MCP_PORT"])
+}
+
+// An instance whose launch.env is gone (deleted, or never written after an
+// interrupted prepare) gets one back without its data being reseeded.
+func TestPrepareRewritesMissingLaunchEnvOverExistingInstance(t *testing.T) {
+	tools, _, _ := testDevtools(t)
+	require.NoError(t, tools.prepare(false))
+	sentinel := filepath.Join(tools.instanceDir, "data", "keep")
+	require.NoError(t, os.WriteFile(sentinel, []byte("keep"), 0o600))
+	require.NoError(t, os.Remove(tools.launchPath))
+
+	require.NoError(t, tools.prepare(false))
+	launch, err := tools.readLaunchIfPresent()
+	require.NoError(t, err)
+	require.NotNil(t, launch, "prepare must write launch.env rather than reuse a missing one")
+	assert.Equal(t, tools.launchPath, launch[launchMarkerEnv])
+	assert.FileExists(t, sentinel)
 }
 
 // Development is proxied by default (ADR devserver-github-proxy): prepare must write the API base

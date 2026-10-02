@@ -459,7 +459,7 @@ distinct free ports and atomically writes the gitignored, non-secret
 `launch.env`; the `desktop:dev` mise task loads it, then loads the optional,
 gitignored developer-authored `overrides.env` so explicit overrides win without
 special handling in devtools. The generated values bridge to framework-owned
-`WAILS_VITE_*` and `WAILS_SERVER_*` variables. Override those framework names
+`WAILS_VITE_*`, `WAILS_SERVER_*`, and `WAILS_MCP_*` variables. Override those framework names
 for framework addresses; use `HIVE_DESKTOP_*` names for application settings.
 Setup and a missing-file-only enter hook prepare `launch.env`; mise derives
 `VITE_HIVE_DEV_BRANCH` from Git for each launch rather than persisting it, then
@@ -532,6 +532,18 @@ Run `mise run desktop:e2e` as the Docker-only regression gate. Its harness
 builds the server and starts private feed, onboarding, pipeline, and action
 smoke instances inside the pinned Playwright image; no local browser install
 or host Playwright invocation is supported.
+
+The native app has its own loop. A dev build carries the Wails MCP server
+(ADR the-dev-build-compiles-in-the-wails-mcp-server-and-agents-drive-the-native-ui-through-it):
+`launch.env` sets `WAILS_MCP=1` and a per-worktree `WAILS_MCP_PORT`, and
+`mise run desktop:dev` then serves DOM queries, JavaScript evaluation,
+synthesized mouse and keyboard input, and window control at
+`http://127.0.0.1:$WAILS_MCP_PORT/mcp`. The **desktop-ui-audit** agent skill
+carries the loop, the rules (no `call_bound_method`), the `data-testid`
+authoring guidance, and helper scripts under
+`.agents/skills/desktop-ui-audit/scripts/`, including a `screencapture`
+wrapper for pixel screenshots of the window. Set `WAILS_MCP=` in
+`overrides.env` to build without it.
 
 Native shell behavior — the tray, the Dock, and close-hides-window — remains
 a manual verification concern.

@@ -43,6 +43,9 @@ var launchKeys = []string{
 	"WAILS_VITE_PORT",
 	"WAILS_SERVER_HOST",
 	"WAILS_SERVER_PORT",
+	"WAILS_MCP",
+	"WAILS_MCP_HOST",
+	"WAILS_MCP_PORT",
 	launchMarkerEnv,
 }
 
@@ -170,8 +173,10 @@ func (d *devtools) prepare(fresh bool) error {
 			return err
 		}
 	} else {
-		_, err := d.readLaunchIfPresent()
+		launch, err := d.readLaunchIfPresent()
 		switch {
+		case err == nil && launch == nil:
+			// No launch.env to reuse: write one over the existing instance.
 		case err == nil:
 			if err := d.validateInstance(); err == nil {
 				d.logger.Info().Str("instance", d.instanceDir).Str("launch_env", d.launchPath).Msg("reusing desktop development environment")
@@ -237,6 +242,12 @@ func (d *devtools) prepare(fresh bool) error {
 	if err != nil {
 		return fmt.Errorf("resolve webhook port: %w", err)
 	}
+	// The Wails MCP server defaults to 9099, which two worktrees' dev apps
+	// would fight over (ADR the-dev-build-compiles-in-the-wails-mcp-server-and-agents-drive-the-native-ui-through-it).
+	mcpPort, err := freePort(vitePort, wailsPort, webhookPort)
+	if err != nil {
+		return fmt.Errorf("resolve Wails MCP port: %w", err)
+	}
 	// Development runs through the shared proxy by default (ADR devserver-github-proxy): the
 	// address comes from the checked-in devserver config, so changing the port
 	// there reaches every worktree without editing this. Opting out is setting
@@ -262,6 +273,9 @@ func (d *devtools) prepare(fresh bool) error {
 		"WAILS_VITE_PORT":              strconv.Itoa(vitePort),
 		"WAILS_SERVER_HOST":            cfg.Development.Wails.Host,
 		"WAILS_SERVER_PORT":            strconv.Itoa(wailsPort),
+		"WAILS_MCP":                    "1",
+		"WAILS_MCP_HOST":               "127.0.0.1",
+		"WAILS_MCP_PORT":               strconv.Itoa(mcpPort),
 		launchMarkerEnv:                d.launchPath,
 	}
 	if err := writeDotenvAtomic(d.launchPath, env); err != nil {
@@ -278,6 +292,7 @@ func (d *devtools) prepare(fresh bool) error {
 		Str("vite", net.JoinHostPort(cfg.Development.Vite.Host, strconv.Itoa(vitePort))).
 		Str("wails", net.JoinHostPort(cfg.Development.Wails.Host, strconv.Itoa(wailsPort))).
 		Str("webhook", net.JoinHostPort("127.0.0.1", strconv.Itoa(webhookPort))).
+		Str("mcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(mcpPort))).
 		Msg("desktop development environment ready")
 	return nil
 }
@@ -332,9 +347,9 @@ func (d *devtools) removeOnboardingCredentials() error {
 }
 
 // ensureLaunchInactive keeps fresh/reset from deleting files beneath a Wails
-// process launched with launch.env. A different process occupying either port
-// is treated conservatively as active; regenerate only after it releases the
-// configured address.
+// process launched with launch.env. A different process occupying any of the
+// ports is treated conservatively as active; regenerate only after it releases
+// the configured address.
 func (d *devtools) ensureLaunchInactive(launch map[string]string) error {
 	if launch == nil {
 		return nil
@@ -344,6 +359,7 @@ func (d *devtools) ensureLaunchInactive(launch map[string]string) error {
 	}{
 		{name: "Vite", hostKey: "WAILS_VITE_HOST", portKey: "WAILS_VITE_PORT"},
 		{name: "Wails", hostKey: "WAILS_SERVER_HOST", portKey: "WAILS_SERVER_PORT"},
+		{name: "Wails MCP", hostKey: "WAILS_MCP_HOST", portKey: "WAILS_MCP_PORT"},
 	} {
 		address := net.JoinHostPort(launch[server.hostKey], launch[server.portKey])
 		connection, err := net.DialTimeout("tcp", address, 200*time.Millisecond)
