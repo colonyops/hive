@@ -3,7 +3,6 @@ import { nextTick } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import SettingsView from '../SettingsView.vue'
 import { setTheme } from '../../composables/useTheme'
-import { resetWebhookSettingsForTests } from '../../composables/useWebhookSettings'
 import { applicationSettingsSections } from '../../router'
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
@@ -61,7 +60,6 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 beforeEach(() => {
   localStorage.clear()
   setTheme('dark')
-  resetWebhookSettingsForTests()
   listIntegrations.mockResolvedValue([
     {
       key: 'github',

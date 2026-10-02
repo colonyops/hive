@@ -37,7 +37,7 @@ import GithubMark from './marks/GithubMark.vue'
 import GrafanaMark from './marks/GrafanaMark.vue'
 import PostHogMark from './marks/PostHogMark.vue'
 import GiteaMark from './marks/GiteaMark.vue'
-import { useWebhookSettings } from '../composables/useWebhookSettings'
+import { useWebhookSettings } from '../stores/useWebhookSettings'
 import { isConnected, takesCredential, useIntegrations } from '../composables/useIntegrations'
 import type { Integration } from '../types/integrations'
 import { applicationSettingsSections, type ApplicationSettingsSection } from '../router'
@@ -77,7 +77,7 @@ const webhookSettingsOpen = ref(false)
 
 // The webhook card's badge reflects the same state the drawer edits, so a save
 // there is reflected here without a second fetch.
-const { settings: webhook, refresh: refreshWebhook } = useWebhookSettings()
+const { settings: webhook, reload: refreshWebhook } = useWebhookSettings()
 const webhookStatus = computed(() => {
   if (!webhook.value) return { label: 'Local', tone: 'neutral' as const }
   // A saved change the listener has not picked up yet outranks what it is

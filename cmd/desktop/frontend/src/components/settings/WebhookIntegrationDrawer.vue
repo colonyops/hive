@@ -12,11 +12,11 @@ import BaseButton from '../BaseButton.vue'
 import DrawerSheet from '../DrawerSheet.vue'
 import SettingsField from './SettingsField.vue'
 import { useClipboard } from '../../composables/useClipboard'
-import { useWebhookSettings } from '../../composables/useWebhookSettings'
+import { useWebhookSettings } from '../../stores/useWebhookSettings'
 
 const emit = defineEmits<{ close: [] }>()
 
-const { settings, loading, error, refresh, save, generatePort } = useWebhookSettings()
+const { settings, loading, error, reload, save, generatePort } = useWebhookSettings()
 
 const enabled = ref(true)
 const port = ref('')
@@ -92,7 +92,7 @@ async function onSave() {
   }
 }
 
-onMounted(() => void refresh())
+onMounted(() => void reload())
 </script>
 
 <template>

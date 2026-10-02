@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import WebhookIntegrationDrawer from '../WebhookIntegrationDrawer.vue'
-import { resetWebhookSettingsForTests } from '../../../composables/useWebhookSettings'
 
 const getSettings = vi.hoisted(() => vi.fn())
 const setSettings = vi.hoisted(() => vi.fn())
@@ -38,7 +37,6 @@ async function open(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  resetWebhookSettingsForTests()
   vi.clearAllMocks()
   setSettings.mockResolvedValue(undefined)
 })

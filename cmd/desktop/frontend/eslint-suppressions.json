@@ -506,11 +506,6 @@
       "count": 1
     }
   },
-  "src/composables/useWebhookSettings.ts": {
-    "no-restricted-syntax": {
-      "count": 3
-    }
-  },
   "src/keybindings/catalog.ts": {
     "no-restricted-syntax": {
       "count": 1
