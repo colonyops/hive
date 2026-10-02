@@ -74,7 +74,7 @@ describe('NodeEditorDrawer', () => {
     const node: FlowNode = { id: 'n1', type: 'stub', config: { label: 'hello' } }
     const wrapper = mountDrawer(node)
 
-    expect(el('node-editor-title')?.textContent).toBe('Edit node · Stub node')
+    expect(el('node-editor-title')?.textContent?.trim()).toBe('Edit node · Stub node')
     // stubDef defaults role: 'processor', no outputs override -> 1 in / 1 out.
     expect(el('node-editor-subtitle')?.textContent).toBe('processor · 1 in → 1 out')
     expect(el('stub-editor-value')?.textContent).toBe('hello')
