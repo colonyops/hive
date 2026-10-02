@@ -46,7 +46,7 @@ import { useNewSession } from './composables/useNewSession'
 import { usePopupTerminal } from './composables/usePopupTerminal'
 import { useTasks } from './composables/useTasks'
 import { sessionRepository } from './composables/useTerminalSessions'
-import { resetTerminalFontSize, stepTerminalFontSize } from './composables/useTerminalFont'
+import { useTerminalFont } from './stores/useTerminalFont'
 import {
   closeTerminalPane,
   closeTerminalWindow,
@@ -513,6 +513,7 @@ function requestOpenSettings(page: 'application' | 'profile'): void {
 // tint that communicates open state.
 const { unseenCount: unseenActivity } = useActivity()
 const { activeJobs, hasActive: jobsActive } = useJobs()
+const { stepFontSize: stepTerminalFontSize, resetFontSize: resetTerminalFontSize } = useTerminalFont()
 
 const activityOpen = ref(false)
 

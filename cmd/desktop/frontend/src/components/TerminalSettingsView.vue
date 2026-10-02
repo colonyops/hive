@@ -12,12 +12,6 @@ import SettingsStepper from './settings/SettingsStepper.vue'
 import {
   maxTerminalFontSizePx,
   minTerminalFontSizePx,
-  setTerminalFontFamily,
-  setTerminalFontSize,
-  setTerminalFontWeight,
-  setTerminalFontWeightBold,
-  setTerminalLetterSpacing,
-  setTerminalLineHeight,
   terminalFontSizeStepPx,
   terminalFontWeightLabels,
   terminalFontWeights,
@@ -27,7 +21,7 @@ import {
   type TerminalFontWeight,
   type TerminalLetterSpacing,
   type TerminalLineHeight,
-} from '../composables/useTerminalFont'
+} from '../stores/useTerminalFont'
 import { TERMINAL_FONT } from '../lib/terminalFaces'
 import { loadInstalledFonts, useInstalledFonts } from '../composables/useInstalledFonts'
 import { terminalPoolSizes, useTerminalPoolSize } from '../stores/useTerminalPoolSize'
@@ -45,6 +39,12 @@ const {
   weightBold: fontWeightBold,
   lineHeight,
   letterSpacing,
+  setFontFamily,
+  setFontSize,
+  setFontWeight,
+  setFontWeightBold,
+  setLineHeight,
+  setLetterSpacing,
 } = useTerminalFont()
 const { monospace: fontFamilies } = useInstalledFonts()
 const { showWindows, setShowWindows } = useTerminalShowWindows()
@@ -74,19 +74,19 @@ const letterSpacingOptions = terminalLetterSpacings.map((value) => ({
 const poolSizeOptions = terminalPoolSizes.map((value) => ({ value: String(value), label: String(value) }))
 
 function onFontWeightChange(value: string): void {
-  setTerminalFontWeight(Number(value) as TerminalFontWeight)
+  setFontWeight(Number(value) as TerminalFontWeight)
 }
 
 function onFontWeightBoldChange(value: string): void {
-  setTerminalFontWeightBold(Number(value) as TerminalFontWeight)
+  setFontWeightBold(Number(value) as TerminalFontWeight)
 }
 
 function onLineHeightChange(value: string): void {
-  setTerminalLineHeight(Number(value) as TerminalLineHeight)
+  setLineHeight(Number(value) as TerminalLineHeight)
 }
 
 function onLetterSpacingChange(value: string): void {
-  setTerminalLetterSpacing(Number(value) as TerminalLetterSpacing)
+  setLetterSpacing(Number(value) as TerminalLetterSpacing)
 }
 
 function onPoolSizeChange(value: string): void {
@@ -120,7 +120,7 @@ onMounted(() => {
           search-placeholder="Search fonts"
           aria-label="Terminal font"
           testid="settings-terminal-font-family-select"
-          @update:model-value="setTerminalFontFamily"
+          @update:model-value="setFontFamily"
         />
       </SettingsRow>
       <SettingsRow
@@ -135,7 +135,7 @@ onMounted(() => {
           :step="terminalFontSizeStepPx"
           aria-label="Font size"
           testid="settings-terminal-font-size"
-          @update:model-value="setTerminalFontSize"
+          @update:model-value="setFontSize"
         />
       </SettingsRow>
       <SettingsRow

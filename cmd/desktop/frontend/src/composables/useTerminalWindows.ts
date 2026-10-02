@@ -31,7 +31,7 @@ import { commandEscapesPane, commandPiercesPane } from '../keybindings/catalog'
 import { comboFromEvent, terminalEscapeCombo, useKeybindings } from './useKeybindings'
 import { searchHighlightColors, xtermTheme } from '../lib/terminalTheme'
 import { resizeTerminalPreservingViewport } from '../lib/terminalViewport'
-import { terminalCellMetrics, useTerminalFont } from './useTerminalFont'
+import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTheme } from './useTheme'
 
 // The keymap is a module singleton with no lifecycle of its own, so the pane's
@@ -267,13 +267,14 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     weightBold: fontWeightBold,
     lineHeight,
     letterSpacing,
+    cellMetrics,
   } = useTerminalFont()
 
   // The last size this client voted for: a request, never the size anything
   // renders at. It opens at the last measured vote, and null — nothing measured
   // and nothing remembered — is a real state rather than a placeholder, because
   // tmux obeys the attach vote and would resize the session to it.
-  let vote: TerminalSize | null = rememberedVote(terminalCellMetrics())
+  let vote: TerminalSize | null = rememberedVote(cellMetrics())
   let resizeTimer: ReturnType<typeof setTimeout> | undefined
   let constraintTimer: ReturnType<typeof setTimeout> | undefined
   let constraintDismissed = false
@@ -691,7 +692,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     scheduleConstraintCheck()
     if (vote && proposed.cols === vote.cols && proposed.rows === vote.rows) return
     vote = { cols: proposed.cols, rows: proposed.rows }
-    rememberVote(vote, terminalCellMetrics())
+    rememberVote(vote, cellMetrics())
     void client.resize(slug, vote.cols, vote.rows).catch((e: unknown) => {
       actionError.value = message(e, 'Could not resize the terminal.')
     })

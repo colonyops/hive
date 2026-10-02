@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { markRaw, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { Terminal, type IDisposable } from '@xterm/xterm'
-import { useTerminalFont } from '../../composables/useTerminalFont'
+import { useTerminalFont } from '../../stores/useTerminalFont'
 import { useTheme } from '../../composables/useTheme'
 import { loadTerminalFaces, terminalFontStack } from '../../lib/terminalFaces'
 import { claimAtlasRenderer } from '../../lib/terminalRenderer'

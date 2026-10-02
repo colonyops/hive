@@ -1,17 +1,14 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import TerminalPreview from '../settings/TerminalPreview.vue'
 import {
   defaultTerminalFontWeight,
   defaultTerminalFontWeightBold,
   defaultTerminalLetterSpacing,
   defaultTerminalLineHeight,
-  resetTerminalFontForTests,
-  setTerminalFontSize,
-  setTerminalLetterSpacing,
-  setTerminalLineHeight,
   defaultTerminalFontSizePx,
-} from '../../composables/useTerminalFont'
+  useTerminalFont,
+} from '../../stores/useTerminalFont'
 import { terminalFontStack } from '../../lib/terminalFaces'
 
 const xterm = vi.hoisted(() => {
@@ -94,11 +91,6 @@ describe('TerminalPreview', () => {
     xterm.FakeAddon.instances = []
     mocks.loadTerminalFaces.mockClear()
     mocks.loadTerminalFaces.mockResolvedValue(undefined)
-    resetTerminalFontForTests()
-  })
-
-  afterEach(() => {
-    resetTerminalFontForTests()
   })
 
   it('opens on the same typography the panes render with', async () => {
@@ -144,9 +136,10 @@ describe('TerminalPreview', () => {
   it('re-applies every typography setting without reopening', async () => {
     await preview()
 
-    setTerminalLineHeight(1.5)
-    setTerminalLetterSpacing(2)
-    setTerminalFontSize(16)
+    const font = useTerminalFont()
+    font.setLineHeight(1.5)
+    font.setLetterSpacing(2)
+    font.setFontSize(16)
     await flushPromises()
 
     expect(xterm.FakeTerminal.instances).toHaveLength(1)

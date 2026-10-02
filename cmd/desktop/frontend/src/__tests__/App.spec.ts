@@ -14,7 +14,7 @@ import { resetPopupTerminalForTests, usePopupTerminal } from '../composables/use
 import { resetLaunchersForTests } from '../composables/useLaunchers'
 import { formatCombo, SEQUENCE_TIMEOUT_MS, useKeybindings } from '../composables/useKeybindings'
 import { resetTerminalAvailabilityForTests } from '../composables/useTerminalAvailability'
-import { defaultTerminalFontSizePx, resetTerminalFontForTests, useTerminalFont } from '../composables/useTerminalFont'
+import { defaultTerminalFontSizePx, useTerminalFont } from '../stores/useTerminalFont'
 import { resetTerminalSessionsForTests, useTerminalSessions } from '../composables/useTerminalSessions'
 import {
   resetAttachedTerminalWindowsForTests,
@@ -424,7 +424,6 @@ describe('App', () => {
     useKeybindings().clearPendingSequence()
     requestedEditorFilter.value = null
     resetTerminalAvailabilityForTests()
-    resetTerminalFontForTests()
     resetTerminalSessionsForTests()
     resetAttachedTerminalWindowsForTests()
     resetTerminalPinnedChatsForTests()

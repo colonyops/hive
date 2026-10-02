@@ -3,18 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import type { ISearchOptions } from '@xterm/addon-search'
 import { resetTerminalFacesForTests, useTerminalWindows } from '../useTerminalWindows'
 import {
+  defaultTerminalFontSizePx,
   defaultTerminalFontWeight,
   defaultTerminalFontWeightBold,
   defaultTerminalLetterSpacing,
   defaultTerminalLineHeight,
-  setTerminalFontFamily,
-  setTerminalFontSize,
-  setTerminalFontWeight,
-  setTerminalLetterSpacing,
-  setTerminalLineHeight,
-  terminalCellMetrics,
-  defaultTerminalFontSizePx,
-} from '../useTerminalFont'
+  useTerminalFont,
+} from '../../stores/useTerminalFont'
 import { SYMBOL_FONT, TERMINAL_FONT, terminalFontStack } from '../../lib/terminalFaces'
 import { TerminalRequestError, type PaneLayout, type TerminalClient } from '../../lib/terminalClient'
 import { paneMayAutoFocus } from '../../lib/terminalTree'
@@ -247,6 +242,16 @@ vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: xterm.FakeWebglAddon }))
 vi.mock('@xterm/addon-canvas', () => ({ CanvasAddon: xterm.FakeCanvasAddon }))
 vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: xterm.FakeWebLinksAddon }))
 vi.mock('@wailsio/runtime', () => ({ Browser: { OpenURL: wails.OpenURL }, Events: { On: vi.fn(() => vi.fn()) } }))
+// The font store hydrates from settings.yaml on first use; an empty answer keeps
+// every default, and the setters the tests call persist without a binding error.
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
+  AppearanceSettings: vi.fn(() => Promise.resolve({})),
+  SetTerminalFontFamily: vi.fn(() => Promise.resolve()),
+  SetTerminalFontSize: vi.fn(() => Promise.resolve()),
+  SetTerminalFontWeights: vi.fn(() => Promise.resolve()),
+  SetTerminalLetterSpacing: vi.fn(() => Promise.resolve()),
+  SetTerminalLineHeight: vi.fn(() => Promise.resolve()),
+}))
 
 const encoder = new TextEncoder()
 
@@ -864,8 +869,8 @@ describe('useTerminalWindows', () => {
   it('re-applies line height and letter spacing to open panes', async () => {
     await attached()
 
-    setTerminalLineHeight(1.4)
-    setTerminalLetterSpacing(2)
+    useTerminalFont().setLineHeight(1.4)
+    useTerminalFont().setLetterSpacing(2)
     await flushPromises()
 
     for (const term of xterm.FakeTerminal.instances) {
@@ -990,7 +995,7 @@ describe('useTerminalWindows', () => {
     client.resize.mockClear()
     resizeHost(host, 100, 30)
 
-    setTerminalFontSize(16)
+    useTerminalFont().setFontSize(16)
     await flushPromises()
     await vi.advanceTimersByTimeAsync(100)
 
@@ -1001,10 +1006,6 @@ describe('useTerminalWindows', () => {
     for (const term of xterm.FakeTerminal.instances) {
       expect(term.resize).toHaveBeenLastCalledWith(213, 55)
     }
-
-    // currentSize is a module singleton; put the default back for later tests.
-    setTerminalFontSize(defaultTerminalFontSizePx)
-    await flushPromises()
   })
 
   // #181: normal cells were locked to whatever the renderer drew, with no way
@@ -1033,7 +1034,7 @@ describe('useTerminalWindows', () => {
     loadedFaces.length = 0
     resizeHost(host, 100, 30)
 
-    setTerminalFontWeight(700)
+    useTerminalFont().setFontWeight(700)
     await flushPromises()
     await vi.advanceTimersByTimeAsync(100)
 
@@ -1042,9 +1043,6 @@ describe('useTerminalWindows', () => {
     }
     expect(loadedFaces).toContain(`700 ${defaultTerminalFontSizePx}px ${terminalFontStack('')}`)
     expect(client.resize).toHaveBeenCalledWith('hive-abc', 100, 30)
-
-    setTerminalFontWeight(defaultTerminalFontWeight)
-    await flushPromises()
   })
 
   // A chosen family leads the stack and the bundled face backs it, so a font
@@ -1059,7 +1057,7 @@ describe('useTerminalWindows', () => {
     mountWindow(session, '@1')
     await vi.advanceTimersByTimeAsync(100)
 
-    setTerminalFontFamily('Menlo')
+    useTerminalFont().setFontFamily('Menlo')
     await flushPromises()
     await vi.advanceTimersByTimeAsync(100)
 
@@ -1067,9 +1065,6 @@ describe('useTerminalWindows', () => {
       expect(term.options.fontFamily).toBe(terminalFontStack('Menlo'))
       expect(term.options.fontFamily).toContain(TERMINAL_FONT)
     }
-
-    setTerminalFontFamily(TERMINAL_FONT)
-    await flushPromises()
   })
 
   // The attach size is a vote tmux obeys, so attaching with a placeholder would
@@ -1084,7 +1079,10 @@ describe('useTerminalWindows', () => {
 
   it('attaches with the size this app window last voted, and does not re-vote it', async () => {
     vi.useFakeTimers()
-    localStorage.setItem('hive.terminal.vote', JSON.stringify({ cols: 120, rows: 40, metrics: terminalCellMetrics() }))
+    localStorage.setItem(
+      'hive.terminal.vote',
+      JSON.stringify({ cols: 120, rows: 40, metrics: useTerminalFont().cellMetrics() }),
+    )
     const client = fakeClient()
     const session = open(client)
     await session.start()

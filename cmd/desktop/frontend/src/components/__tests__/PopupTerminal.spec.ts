@@ -2,13 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import PopupTerminal from '../PopupTerminal.vue'
 import { resetPopupTerminalForTests, usePopupTerminal } from '../../composables/usePopupTerminal'
-import {
-  defaultTerminalFontWeight,
-  defaultTerminalFontWeightBold,
-  setTerminalFontFamily,
-  setTerminalFontWeight,
-} from '../../composables/useTerminalFont'
-import { TERMINAL_FONT, terminalFontStack } from '../../lib/terminalFaces'
+import { defaultTerminalFontWeight, defaultTerminalFontWeightBold, useTerminalFont } from '../../stores/useTerminalFont'
+import { terminalFontStack } from '../../lib/terminalFaces'
 
 const xterm = vi.hoisted(() => {
   class FakeTerminal {
@@ -318,8 +313,8 @@ describe('PopupTerminal', () => {
   // be the one terminal surface that does.
   it('opens a launcher pop-up with the configured font', async () => {
     await mountPanel()
-    setTerminalFontFamily('Menlo')
-    setTerminalFontWeight(400)
+    useTerminalFont().setFontFamily('Menlo')
+    useTerminalFont().setFontWeight(400)
     await flushPromises()
 
     usePopupTerminal().show({ launcher: 'lazygit', sessionSlug: 'hive-abc' })
@@ -337,10 +332,6 @@ describe('PopupTerminal', () => {
       400,
       defaultTerminalFontWeightBold,
     )
-
-    setTerminalFontFamily(TERMINAL_FONT)
-    setTerminalFontWeight(defaultTerminalFontWeight)
-    await flushPromises()
   })
 
   it('applies a font change to the pop-up already on screen', async () => {
@@ -349,7 +340,7 @@ describe('PopupTerminal', () => {
     await flushPromises()
     const live = xterm.FakeTerminal.instances.at(-1)!
 
-    setTerminalFontWeight(700)
+    useTerminalFont().setFontWeight(700)
     await flushPromises()
 
     expect(live.options.fontWeight).toBe(700)
@@ -357,7 +348,7 @@ describe('PopupTerminal', () => {
     // the terminal that is already up.
     expect(xterm.FakeTerminal.instances.at(-1)).toBe(live)
 
-    setTerminalFontWeight(defaultTerminalFontWeight)
+    useTerminalFont().setFontWeight(defaultTerminalFontWeight)
     await flushPromises()
   })
 

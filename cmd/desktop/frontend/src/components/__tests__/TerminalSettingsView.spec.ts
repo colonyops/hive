@@ -5,10 +5,7 @@ import {
   defaultTerminalFontSizePx,
   defaultTerminalFontWeight,
   defaultTerminalFontWeightBold,
-  setTerminalFontSize,
-  setTerminalFontWeight,
-  setTerminalFontWeightBold,
-} from '../../composables/useTerminalFont'
+} from '../../stores/useTerminalFont'
 import { TERMINAL_FONT } from '../../lib/terminalFaces'
 import { resetInstalledFontsForTests } from '../../composables/useInstalledFonts'
 
@@ -60,9 +57,6 @@ describe('TerminalSettingsView', () => {
 
     await wrapper.find('[data-testid="settings-terminal-font-size-decrease"]').trigger('click')
     expect(value()).toBe(`${defaultTerminalFontSizePx}px`)
-
-    // The size is a module singleton; put the default back for later tests.
-    setTerminalFontSize(defaultTerminalFontSizePx)
   })
 
   // #181: the terminal shipped with no weight control at all, so normal cells
@@ -81,8 +75,6 @@ describe('TerminalSettingsView', () => {
 
     expect(wrapper.find('[data-testid="settings-terminal-font-weight-400"]').attributes('aria-selected')).toBe('true')
     expect(mocks.SetTerminalFontWeights).toHaveBeenCalledWith(400, defaultTerminalFontWeightBold)
-
-    setTerminalFontWeight(defaultTerminalFontWeight)
   })
 
   // Both weights go through one setter: written separately, a caller could land
@@ -95,8 +87,6 @@ describe('TerminalSettingsView', () => {
     await flushPromises()
 
     expect(mocks.SetTerminalFontWeights).toHaveBeenCalledWith(defaultTerminalFontWeight, 600)
-
-    setTerminalFontWeightBold(defaultTerminalFontWeightBold)
   })
 
   // The scan is what the webview cannot do for itself, and the bundled face

@@ -481,11 +481,6 @@
       "count": 4
     }
   },
-  "src/composables/useTerminalFont.ts": {
-    "no-restricted-syntax": {
-      "count": 6
-    }
-  },
   "src/composables/useTerminalPinnedChats.ts": {
     "no-restricted-syntax": {
       "count": 1
