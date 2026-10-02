@@ -38,10 +38,9 @@ HTTP on loopback. Without the tag none of it is compiled.
 3. **It is the agent surface for the native UI, and the `desktop-ui-audit`
    skill is how agents use it.** The skill pairs it with the app's own MCP
    server: Wails tools drive and read the page, Hive tools read and reload
-   state. `prepare` renders both, plus the canvas server, into the worktree's
-   gitignored `.mcp.json` from the same ports, so a Claude Code session
-   started in the worktree sees `hive-desktop-ui`, `hive-desktop`, and
-   `hive-canvas` with no per-user registration. Pixel screenshots come from
+   state. `prepare` renders the Wails endpoint into the worktree's gitignored
+   `.mcp.json` as `hive-desktop-ui`, so a Claude Code session started in the
+   worktree sees it with no per-user registration. Pixel screenshots come from
    `screencapture` against the window id, because the Wails server has no
    pixel tool.
 

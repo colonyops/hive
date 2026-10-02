@@ -94,13 +94,11 @@ func TestPrepareReuseFreshAndReset(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotZero(t, mcpPort)
 	assert.NotContains(t, []int{vite, wails, httpPort}, mcpPort)
-	// The same ports land in the project-scoped .mcp.json, so a Claude Code
-	// session started in the worktree finds every server without a per-user
+	// The same port lands in the project-scoped .mcp.json, so a Claude Code
+	// session started in the worktree finds the server without a per-user
 	// registration.
 	mcpURLs := readMCPConfig(t, tools.mcpPath)
-	assert.Equal(t, "http://127.0.0.1:"+strconv.Itoa(mcpPort)+"/mcp", mcpURLs["hive-desktop-ui"])
-	assert.Equal(t, "http://127.0.0.1:"+strconv.Itoa(httpPort)+"/mcp", mcpURLs["hive-desktop"])
-	assert.Equal(t, "http://127.0.0.1:"+strconv.Itoa(httpPort)+"/mcp/canvas", mcpURLs["hive-canvas"])
+	assert.Equal(t, map[string]string{"hive-desktop-ui": "http://127.0.0.1:" + strconv.Itoa(mcpPort) + "/mcp"}, mcpURLs)
 	// hive.db is not seeded; dev points at the installed hive data dir instead.
 	assert.NoFileExists(t, filepath.Join(tools.instanceDir, "data", "hive.db"))
 	assert.Equal(t, sourceData, launch[settings.EnvHiveDataDir])

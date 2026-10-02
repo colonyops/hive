@@ -456,7 +456,7 @@ the app's bundle identity.
 its frontend URL with localhost; its port defaults to `0`. `development.wails`
 uses a loopback host and port `0` by default. `cmd/desktop/devtools prepare` chooses
 distinct free ports and atomically writes the gitignored, non-secret
-`launch.env` and the `.mcp.json` rendered from the same ports; the
+`launch.env` and the `.mcp.json` rendered from its Wails MCP port; the
 `desktop:dev` mise task loads the former, then loads the optional,
 gitignored developer-authored `overrides.env` so explicit overrides win without
 special handling in devtools. The generated values bridge to framework-owned
@@ -539,11 +539,10 @@ The native app has its own loop. A dev build carries the Wails MCP server
 `launch.env` sets `WAILS_MCP=1` and a per-worktree `WAILS_MCP_PORT`, and
 `mise run desktop:dev` then serves DOM queries, JavaScript evaluation,
 synthesized mouse and keyboard input, and window control at
-`http://127.0.0.1:$WAILS_MCP_PORT/mcp`. `prepare` also writes that endpoint,
-Hive's own `/mcp`, and `/mcp/canvas` into the worktree's gitignored
-`.mcp.json` as `hive-desktop-ui`, `hive-desktop`, and `hive-canvas`, so a
-Claude Code session started in the worktree offers all three without a
-per-user registration. The **desktop-ui-audit** agent skill
+`http://127.0.0.1:$WAILS_MCP_PORT/mcp`. `prepare` also writes that endpoint
+into the worktree's gitignored `.mcp.json` as `hive-desktop-ui`, so a Claude
+Code session started in the worktree offers it without a per-user
+registration. The **desktop-ui-audit** agent skill
 carries the loop, the rules (no `call_bound_method`), the `data-testid`
 authoring guidance, and helper scripts under
 `.agents/skills/desktop-ui-audit/scripts/`, including a `screencapture`

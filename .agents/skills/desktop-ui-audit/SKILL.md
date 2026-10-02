@@ -47,10 +47,10 @@ instance, point the scripts at its file: `HIVE_LAUNCH_ENV=launch.onboarding.env`
 
 ## 2. Connect
 
-`prepare` writes the worktree's `.mcp.json` beside `launch.env` with three
-servers: `hive-desktop-ui` (this one), `hive-desktop` (the app's state tools,
-see **desktop-api**), and `hive-canvas`. A Claude Code session started in the
-worktree offers them; approve once and the tools are ordinary tools. A client
+`prepare` writes the worktree's `.mcp.json` beside `launch.env` with this
+server as `hive-desktop-ui`. A Claude Code session started in the worktree
+offers it; approve once and the tools are ordinary tools. (The app's own
+state tools are a separate registration; see **desktop-api**.) A client
 running elsewhere points at the URL in that file:
 
 ```bash

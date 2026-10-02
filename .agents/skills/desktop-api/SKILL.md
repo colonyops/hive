@@ -32,11 +32,8 @@ fresh `mise run desktop:dev:prepare` turns it on.
 ## 2. Connect
 
 The endpoint is `http://$API/mcp`, Streamable HTTP, no authentication (loopback
-bind, and no tool here spawns a process). **Prefer a real MCP client.** The
-worktree's generated `.mcp.json` already lists it as `hive-desktop` (with
-`hive-canvas` and the native UI's `hive-desktop-ui`), so a Claude Code session
-started here offers the tools after a one-time approval. A client elsewhere
-adds it by hand:
+bind, and no tool here spawns a process). **Prefer a real MCP client** — add it
+once and the tools appear as ordinary tools:
 
 ```bash
 claude mcp add --transport http hive-desktop "http://$API/mcp"
