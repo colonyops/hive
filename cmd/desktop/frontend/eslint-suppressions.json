@@ -471,11 +471,6 @@
       "count": 10
     }
   },
-  "src/composables/useTerminalAvailability.ts": {
-    "no-restricted-syntax": {
-      "count": 4
-    }
-  },
   "src/composables/useTerminalPinnedChats.ts": {
     "no-restricted-syntax": {
       "count": 1

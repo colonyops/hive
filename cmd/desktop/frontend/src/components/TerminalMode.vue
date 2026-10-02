@@ -56,7 +56,7 @@ import TerminalTab from './TerminalTab.vue'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { useCommands, useShellEscape, type Command } from '../composables/useCommands'
 import { useTerminalActions } from '../composables/useTerminalActions'
-import { useTerminalAvailability } from '../composables/useTerminalAvailability'
+import { useTerminalAvailability } from '../stores/useTerminalAvailability'
 import {
   sessionRepository,
   terminalSessionGroups,
@@ -81,16 +81,10 @@ import { useSessionStatus } from '../composables/useSessionStatus'
 import { useSessionStatuses } from '../composables/useSessionStatuses'
 import { useTerminalStatusBar } from '../stores/useTerminalStatusBar'
 import { useWailsEvent } from '../composables/useWailsEvent'
-import {
-  createTerminalClient,
-  getTerminalEndpoint,
-  type WindowForeground,
-  type WindowState,
-} from '../lib/terminalClient'
+import type { WindowForeground, WindowState } from '../lib/terminalClient'
 import { appErrorMessage, errorText } from '../lib/appError'
 import { isEditableTarget } from '../lib/isEditableTarget'
 import { paneMayAutoFocus, setTerminalTreeHandles, terminalTreeFocused } from '../lib/terminalTree'
-import { Available } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/terminalservice'
 import {
   OpenSessionInEditor,
   RevealSession,
@@ -116,7 +110,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{ 'open-tasks': []; 'session-repo-key': [repoKey: string] }>()
 
-const { checking, available, reason, client } = useTerminalAvailability()
+const { checking, available, reason, client, probe: probeAvailability } = useTerminalAvailability()
 
 // Switching sessions must not blank the pane, so a switch no longer detaches:
 // the last few attaches stay live in this pool — control client, stream and
@@ -1580,31 +1574,19 @@ const paneSessions = computed(() =>
 // the resume and the listing revalidation start at once, and the probe below
 // only re-checks availability.
 async function probe(): Promise<void> {
-  if (client.value) {
+  const hadClient = client.value !== null
+  if (hadClient) {
     if (attachable.value.length) restoreLastSession()
     void reloadSessions().then(restoreLastSession)
-  } else {
-    checking.value = true
   }
   // The session list is a SQLite read that knows nothing about tmux, so it goes
   // out with the availability probe rather than behind it. Awaiting the two in
   // series put three round trips in front of the first row.
-  const sessions = client.value ? null : reloadSessions()
-  try {
-    const availability = await Available()
-    available.value = availability.available
-    reason.value = availability.reason
-    if (!availability.available) return
-    if (!client.value) {
-      client.value = createTerminalClient(await getTerminalEndpoint())
-      await sessions
-      restoreLastSession()
-    }
-  } catch (e) {
-    available.value = false
-    reason.value = appErrorMessage(e) || (e instanceof Error && e.message) || 'The terminal is unavailable.'
-  } finally {
-    checking.value = false
+  const sessions = hadClient ? null : reloadSessions()
+  await probeAvailability()
+  if (!hadClient && client.value) {
+    await sessions
+    restoreLastSession()
   }
 }
 

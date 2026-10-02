@@ -13,7 +13,6 @@ import { resetNotificationSettingsForTests } from '../composables/useNotificatio
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { resetLaunchersForTests } from '../composables/useLaunchers'
 import { formatCombo, SEQUENCE_TIMEOUT_MS, useKeybindings } from '../composables/useKeybindings'
-import { resetTerminalAvailabilityForTests } from '../composables/useTerminalAvailability'
 import { defaultTerminalFontSizePx, useTerminalFont } from '../stores/useTerminalFont'
 import { resetTerminalSessionsForTests, useTerminalSessions } from '../composables/useTerminalSessions'
 import {
@@ -422,7 +421,6 @@ describe('App', () => {
     useKeybindings().clearAll()
     useKeybindings().clearPendingSequence()
     requestedEditorFilter.value = null
-    resetTerminalAvailabilityForTests()
     resetTerminalSessionsForTests()
     resetAttachedTerminalWindowsForTests()
     resetTerminalPinnedChatsForTests()
