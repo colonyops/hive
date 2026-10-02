@@ -62,8 +62,7 @@ export interface ExecutionOutcome {
 }
 
 /**
- * ItemChatView is one agent workspace chat an inbox item opened. ID and
- * Workspace are what the chat view is opened by.
+ * ItemChatView is an agent workspace chat an inbox item opened.
  */
 export interface ItemChatView {
     "id": number;

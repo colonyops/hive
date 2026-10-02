@@ -86,8 +86,6 @@ type ListItemChatsRow struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
-// Newest first, as ListItemSessions. The join reads the chat's current name,
-// so a chat renamed after launch reports what it is now.
 func (q *Queries) ListItemChats(ctx context.Context, arg ListItemChatsParams) ([]ListItemChatsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listItemChats,
 		arg.ProfileID,
@@ -136,7 +134,6 @@ type RescopeItemChatsParams struct {
 	ExternalID  string `json:"external_id"`
 }
 
-// The chat counterpart of RescopeItemSessions.
 func (q *Queries) RescopeItemChats(ctx context.Context, arg RescopeItemChatsParams) error {
 	_, err := q.db.ExecContext(ctx, rescopeItemChats,
 		arg.SourceScope,

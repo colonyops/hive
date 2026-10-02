@@ -1,7 +1,5 @@
-// launch-chat is a terminal node (1 in / 0 out): each arriving item opens a
-// chat in an agent workspace, with the rendered prompt as its first message.
-// It is the inline form of an action node pointing at a workspace
-// launch-session action, for a flow that is the only caller.
+// launch-chat is a terminal node: an action node's workspace launch-session
+// declared inline.
 
 import IconMessageSquarePlus from '~icons/lucide/message-square-plus'
 
@@ -10,9 +8,7 @@ export const role = 'output' as const
 
 /** Mirrors Go's flow.LaunchChatConfig. */
 export interface Config {
-  /** Agent workspace directory name; required. */
   workspace: string
-  /** Go template rendering the opening message; required. */
   prompt: string
 }
 
@@ -23,7 +19,6 @@ export const unread = false
 export const label = 'Launch chat'
 export const category = 'Destinations' as const
 export const glyph = IconMessageSquarePlus
-// Orange, shared with the Action node: see launch-session/config.ts.
 export const accentToken = 'var(--color-node-orange)'
 export const tint = 'var(--color-node-orange-tint)'
 export const outputs = 0

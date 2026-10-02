@@ -1,6 +1,4 @@
 <script setup lang="ts">
-// Optional fields are stored only when set, so a flow file stays free of keys
-// the author never touched.
 import { computed, onMounted, ref, watch } from 'vue'
 import { SessionLaunchOptions } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type { SessionLaunchRepository } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
@@ -17,9 +15,8 @@ const modeOptions: { value: RepoMode; label: string }[] = [
   { value: 'template', label: 'A template' },
 ]
 
-// The mode is read back from the repo only when the repo arrives from outside.
-// Re-reading it from the author's own edits would flip a template being typed,
-// which has no `{{` yet, to the fixed mode and unmount the field mid-keystroke.
+// Only re-derive the mode for outside changes: a template being typed has no
+// `{{` yet and would flip to the fixed mode mid-keystroke.
 const mode = ref<RepoMode>('configured')
 let emittedRepo: string | undefined
 watch(
@@ -30,8 +27,6 @@ watch(
   { immediate: true },
 )
 
-// Both pickers still show and accept the stored value, so a failed read only
-// loses the suggestions.
 const repositories = ref<SessionLaunchRepository[]>([])
 const agents = ref<string[]>([])
 onMounted(async () => {
@@ -58,8 +53,7 @@ function setMode(next: string) {
   else if (value === 'configured') set('repo', '')
 }
 
-// validate() phrases each message from its field's key, so the message is
-// routed back to the field it names.
+// validate() prefixes each message with its field's key.
 function fieldError(key: keyof Config): string | undefined {
   return props.errors?.find((message) => message.startsWith(`${key} `))
 }

@@ -10,9 +10,7 @@ import type {
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { defineStore } from './defineStore'
 
-// An install with no hive behind it, or a momentarily unreadable database,
-// means "nothing to show", not an error worth a pane full of red. Each list
-// fails on its own, so a hive outage still shows the item's chats.
+// No hive install or a locked database means "nothing to show", not an error.
 async function orEmpty<T>(read: () => Promise<T[] | null>): Promise<T[]> {
   try {
     return (await read()) ?? []
@@ -21,16 +19,12 @@ async function orEmpty<T>(read: () => Promise<T[] | null>): Promise<T[]> {
   }
 }
 
-// The hive sessions and agent workspace chats the selected item created. App
-// drives `load` from the selection; jobs:updated re-reads, because session
-// creation, chat launches, deletion and recycling all run as jobs, so that
-// event is the moment the answer can have changed.
+// jobs:updated triggers a reload because session and chat launches, deletes,
+// and recycles all run as jobs.
 export const useItemSessions = defineStore('itemSessions', () => {
   const sessions = shallowRef<ItemSessionView[]>([])
   const chats = shallowRef<ItemChatView[]>([])
 
-  // The item the lists on screen belong to, so a slow answer for a
-  // previously-selected item cannot paint over a faster one.
   let currentItemID: number | null = null
   let loadSeq = 0
 

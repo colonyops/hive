@@ -541,8 +541,8 @@ func (s *AgentWorkspacesService) LaunchWorkspaceSession(ctx context.Context, req
 		_ = s.sessions.Delete(ctx, view.ID)
 		return dispatch.SessionExecutionOutcome{}, Errorf(KindInternal, "%s", view.Notice)
 	}
-	// The chat exists either way, so a failed link is logged rather than
-	// returned: a failed launch would invite a retry that opens a second chat.
+	// Logged, not returned: the chat exists, and a failed launch would invite a
+	// retry that opens a second one.
 	for _, origin := range req.Origins {
 		if err := s.itemLinks.LinkChat(ctx, view.ID, origin); err != nil {
 			s.logger.Warn().Ctx(ctx).Err(err).Int64("chat_id", view.ID).Str("external_id", origin.ExternalID).Msg("linking chat to an inbox item")

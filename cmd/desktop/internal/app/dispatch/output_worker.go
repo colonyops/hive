@@ -58,10 +58,8 @@ type OutputData struct {
 	Origin models.ItemRef
 }
 
-// ItemRemote is the clone URL of the item's repository, reachable from every
-// template as `{{ .ItemRemote }}`. It is derived from the payload's `repo` and
-// `url` the way the New Session form drafts one, and is "" when the item names
-// no repository, so a repo template built on it fails as rendered blank.
+// ItemRemote is the item's repository clone URL, drafted the way the New
+// Session form does, or "" when the item names no repository.
 func (d OutputData) ItemRemote() string {
 	repo, _ := d.Payload["repo"].(string)
 	itemURL, _ := d.Payload["url"].(string)

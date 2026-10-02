@@ -1,7 +1,4 @@
 <script setup lang="ts">
-// The workspace list comes from the Agents area. When it is unavailable, or
-// the flow names a workspace that no longer exists, the field still shows
-// and accepts the stored name, so the editor never hides what will launch.
 import { computed, onMounted } from 'vue'
 import { SelectField, TextField, TextareaField } from '../../fields'
 import { useAgentWorkspaces } from '../../../stores/useAgentWorkspaces'
@@ -24,8 +21,7 @@ const options = computed(() => {
   return rows
 })
 
-// validate() phrases each message from its field's key, so the message is
-// routed back to the field it names.
+// validate() prefixes each message with its field's key.
 function fieldError(key: keyof Config): string | undefined {
   return props.errors?.find((message) => message.startsWith(`${key} `))
 }

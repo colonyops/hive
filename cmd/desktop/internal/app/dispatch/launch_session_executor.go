@@ -42,9 +42,7 @@ type LaunchWorkspaceSessionRequest struct {
 	Workspace string
 	Name      string
 	Prompt    string
-	// Origins are the inbox items the chat is being opened for, as on
-	// LaunchSessionRequest.
-	Origins []models.ItemRef
+	Origins   []models.ItemRef
 }
 
 type WorkspaceSessionLauncher interface {
@@ -67,8 +65,7 @@ func NewLaunchSessionExecutor(logger zerolog.Logger, launcher SessionLauncher, w
 func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Action, data OutputData, input ActionInvocationInput) (ExecutionResult, error) {
 	var cfg *actions.LaunchSessionConfig
 	var nameTemplate string
-	// Errors name the field the author wrote: actions.yml keys for a catalog
-	// action, the node's own keys for a flow launch node.
+	// Errors use the key the author wrote, which differs for a node.
 	promptField, repoField := "prompt_template", "repo_template"
 	switch c := action.Config.(type) {
 	case *actions.LaunchSessionConfig:

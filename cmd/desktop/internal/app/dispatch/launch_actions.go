@@ -5,22 +5,15 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
 )
 
-// LaunchNodeActionConfig is the executor-facing projection of a launch-session
-// or launch-chat flow node: the launch-session action fields the node maps
-// onto, plus the session name template only a node can declare. Like
-// NotifyActionConfig it is rebuilt from the node on every resolution, never
-// persisted.
+// LaunchNodeActionConfig is a launch node projected onto the launch-session
+// executor. It is rebuilt on every resolution, never persisted.
 type LaunchNodeActionConfig struct {
 	actions.LaunchSessionConfig
-	// NameTemplate renders the session's name. Empty derives one from the
-	// action id and the item key, as a catalog action does.
 	NameTemplate string
 }
 
-// launchNodeAction projects a launch node onto the launch-session executor,
-// so a node launches exactly as a catalog action with the same fields would.
-// A node of any other type reports ok=false: the flow changed between the
-// graph run and the dispatch.
+// launchNodeAction reports false for any other node type, which means the flow
+// changed between the graph run and the dispatch.
 func launchNodeAction(id string, node flow.Node) (actions.Action, bool) {
 	var cfg *LaunchNodeActionConfig
 	label := node.Name

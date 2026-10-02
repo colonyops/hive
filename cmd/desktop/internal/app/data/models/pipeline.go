@@ -82,16 +82,12 @@ func NotifyActionTarget(actionID string) (string, bool) {
 	return target, ok && target != ""
 }
 
-// LaunchActionPrefix namespaces the synthetic action id a launch-session or
-// launch-chat node enqueues its output_command under, for the same reason
-// NotifyActionPrefix exists.
+// LaunchActionPrefix is NotifyActionPrefix's counterpart for launch nodes.
 const LaunchActionPrefix = "launch:"
 
-// LaunchActionID returns the synthetic action id for a launch node, whose
-// target is the flow-qualified node id "<flowId>/<nodeId>".
+// LaunchActionID takes a flow-qualified "<flowId>/<nodeId>" target.
 func LaunchActionID(target string) string { return LaunchActionPrefix + target }
 
-// LaunchActionTarget inverts LaunchActionID.
 func LaunchActionTarget(actionID string) (string, bool) {
 	target, ok := strings.CutPrefix(actionID, LaunchActionPrefix)
 	return target, ok && target != ""

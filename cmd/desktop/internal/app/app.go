@@ -1090,11 +1090,6 @@ func (a *App) buildProducer(logger zerolog.Logger) *ingest.Producer {
 // explicit detail-pane confirmation RPCs but never start its loop: that keeps
 // the configured action path real in e2e while stopping a background shell
 // action from compromising fixture determinism.
-//
-// Actions resolve through FlowActions rather than the catalog directly:
-// a notify or launch node's config lives in its flow, not in actions.yml, so
-// the worker resolves those ids from the live flow set and everything else
-// from the authored catalog.
 func (a *App) buildOutputWorker(cfg Config) *dispatch.Worker {
 	a.dispatcher = dispatch.NewDispatcher(outputExecutors(a.launcher, a.AgentWorkspaces, a.publisher, a.observedNotifier(cfg.Notifier), cfg.Gate, a.Stores.InboxItems, a.execEnv, cfg.Logger))
 	worker := dispatch.NewWorker(a.Stores.OutputCommands, dispatch.NewFlowActions(a.flowStore, a.actionStore), a.dispatcher, dispatch.DefaultOutputWorkerInterval, cfg.Logger)

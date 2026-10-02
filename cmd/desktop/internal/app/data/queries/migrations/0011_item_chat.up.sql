@@ -1,6 +1,4 @@
--- Agent workspace chats this app opened on an inbox item's behalf: the chat
--- counterpart of item_session. A chat is a row in this database, so unlike a
--- hive session its link can cascade when the chat is deleted.
+-- The agent workspace chat counterpart of item_session.
 CREATE TABLE item_chat (
     chat_id      INTEGER NOT NULL REFERENCES agent_workspace_session(id) ON DELETE CASCADE,
     profile_id   TEXT NOT NULL,

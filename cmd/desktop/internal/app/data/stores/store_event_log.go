@@ -351,10 +351,8 @@ func notifyDedupKey(out models.Output) string {
 	return out.Key + "@" + hex.EncodeToString(sum[:8])
 }
 
-// launchDedupKey keys a launch on the item rather than on its occurrence: an
-// item that keeps changing, like a pull request taking new commits, must not
-// start a session per change. A keyless message falls back to a payload digest
-// as notifyDedupKey does.
+// launchDedupKey keys on the item, not the occurrence, so a pull request taking
+// new commits does not start a session per push.
 func launchDedupKey(out models.Output) string {
 	if out.Key != "" {
 		return out.Key

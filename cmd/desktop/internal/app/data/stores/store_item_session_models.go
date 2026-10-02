@@ -24,8 +24,7 @@ func mapItemSessionFromDB(row queries.ItemSession) ItemSession {
 	}
 }
 
-// ItemChat is one agent workspace chat opened on an inbox item's behalf, with
-// the chat's current name and workspace.
+// ItemChat is an agent workspace chat opened for an inbox item.
 type ItemChat struct {
 	ChatID    int64  `json:"chatId"`
 	Workspace string `json:"workspace"`

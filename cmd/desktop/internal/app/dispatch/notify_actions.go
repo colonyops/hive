@@ -65,24 +65,20 @@ type FlowLister interface {
 	List() []flow.Flow
 }
 
-// FlowActions resolves the synthetic ids flow terminals enqueue under (notify
-// and launch nodes) from live flows, and delegates other IDs to the authored
-// action catalog. Resolution happens per lookup so flow edits apply without a
-// restart.
+// FlowActions resolves notify and launch node ids from the live flows on each
+// lookup, so flow edits apply without a restart, and delegates other ids to the
+// actions.yml catalog.
 type FlowActions struct {
 	flows   FlowLister
 	actions ActionLister
 }
 
-// NewFlowActions wraps an authored action store with flow-node resolution.
 func NewFlowActions(flows FlowLister, catalog ActionLister) *FlowActions {
 	return &FlowActions{flows: flows, actions: catalog}
 }
 
-// Get resolves id to an executable action. A synthetic id that no longer
-// names a matching node in any flow is reported as unknown, exactly like a
-// deleted actions.yml entry: its queued command fails rather than silently
-// doing nothing.
+// Get reports a node id whose node is gone as unknown, like a deleted
+// actions.yml entry, so its queued command fails instead of doing nothing.
 func (l *FlowActions) Get(id string) (actions.Action, bool) {
 	if target, ok := models.NotifyActionTarget(id); ok {
 		node, found := l.node(target)
@@ -104,7 +100,6 @@ func (l *FlowActions) Get(id string) (actions.Action, bool) {
 	return l.actions.Get(id)
 }
 
-// node finds the node a flow-qualified "<flowId>/<nodeId>" target names.
 func (l *FlowActions) node(target string) (flow.Node, bool) {
 	if l.flows == nil {
 		return flow.Node{}, false

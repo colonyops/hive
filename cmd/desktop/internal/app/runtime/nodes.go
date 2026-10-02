@@ -143,9 +143,6 @@ func notifySinks(flowID, nodeID string, _ flow.NodeConfig, msg models.Msg) []mod
 	}}
 }
 
-// launchSinks starts a session or chat for the arriving item. Like an action
-// output, the payload is the item itself, so the node's templates see the same
-// data a launch-session action does.
 func launchSinks(flowID, nodeID string, _ flow.NodeConfig, msg models.Msg) []models.Output {
 	return []models.Output{{
 		Sink:        models.Sink{Kind: models.SinkKindLaunch, TargetID: flowID + "/" + nodeID},

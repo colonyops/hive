@@ -27,8 +27,8 @@ type RetentionPolicy struct {
 	// NodeRunLimit is the total number of newest node_run rows to retain.
 	NodeRunLimit int64
 	// TerminalOutputCommandLimit is the number of newest done/failed
-	// output_command rows to retain. Non-terminal commands are never pruned,
-	// and neither is a launch command whose item still exists.
+	// output_command rows to retain. Launch commands whose item still exists
+	// are kept regardless.
 	TerminalOutputCommandLimit int64
 	// ActivityEventLimit is the total number of newest activity_event rows to
 	// retain for the Activity view's audit history.

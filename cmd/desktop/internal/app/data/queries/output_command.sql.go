@@ -310,11 +310,8 @@ WHERE id IN (
 `
 
 // Never remove active commands: only terminal done/failed history is bounded.
-// A launch row (models.LaunchActionPrefix) is the once-per-item guard for a
-// flow launch node, so it survives while its item exists; pruning it would let
-// the item's next update start a second session or chat. The item match skips
-// source_scope because launchDedupKey does, and a rescope leaves the row's
-// scope behind.
+// A launch row is a launch node's once-per-item guard, so it survives while its
+// item exists. The match skips source_scope because a rescope leaves it behind.
 func (q *Queries) PruneTerminalOutputCommands(ctx context.Context, offset int64) error {
 	_, err := q.db.ExecContext(ctx, pruneTerminalOutputCommands, offset)
 	return err
