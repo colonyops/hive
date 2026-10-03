@@ -5,6 +5,7 @@ import IconSettings from '~icons/lucide/settings'
 import { dropClass, dropEdge, useDragReorder } from '../composables/useDragReorder'
 import { moveId, type OrderDropTarget } from '../lib/listOrder'
 import type { Profile } from '../types/feed'
+import AppTooltip from './ui/AppTooltip.vue'
 import IconButton from './ui/IconButton.vue'
 
 const props = defineProps<{ profiles: Profile[]; activeProfileId: string }>()
@@ -45,50 +46,53 @@ function onKeydown(e: KeyboardEvent, id: string): void {
 
 <template>
   <aside class="flex w-[58px] shrink-0 flex-col items-center gap-2.5 border-r border-border bg-raised py-3">
-    <button
+    <AppTooltip
       v-for="profile in profiles"
       :key="profile.id"
-      :title="profile.enabled ? profile.name : `${profile.name} (disabled)`"
-      :aria-label="profile.enabled ? profile.name : `${profile.name}, disabled`"
-      :data-id="profile.id"
-      :data-enabled="profile.enabled"
-      data-testid="profile-tile"
-      draggable="true"
-      class="relative flex size-[38px] cursor-pointer items-center justify-center rounded-xl border border-card bg-chip font-mono text-sm font-semibold text-text-2 transition-colors hover:bg-hover hover:text-text"
-      :class="[
-        dropClass(dropTarget, profile.id),
-        {
-          'text-text': profile.id === activeProfileId,
-          'opacity-55': !profile.enabled,
-          'opacity-40': profile.id === dragging,
-        },
-      ]"
-      @click="emit('select', profile.id)"
-      @keydown="onKeydown($event, profile.id)"
-      @dragstart="drag.start($event, profile.id)"
-      @dragover.prevent="drag.over($event, { id: profile.id, edge: dropEdge($event) })"
-      @drop.prevent="drag.drop"
-      @dragend="drag.end"
+      :text="profile.enabled ? profile.name : `${profile.name} (disabled)`"
     >
-      <span
-        v-if="profile.id === activeProfileId"
-        class="absolute bottom-2 left-[-13px] top-2 w-[3px] rounded-sm bg-accent"
-      />
-      <img
-        v-if="profile.image"
-        :src="profile.image"
-        alt=""
-        draggable="false"
-        class="size-full rounded-lg object-cover"
-      />
-      <template v-else>{{ profile.letter }}</template>
-      <span
-        v-if="!profile.enabled"
-        class="absolute -bottom-1 -right-1 flex size-4 items-center justify-center rounded-full border border-border bg-raised text-text-3"
-        aria-hidden="true"
-        ><IconPause class="size-2.5"
-      /></span>
-    </button>
+      <button
+        :aria-label="profile.enabled ? profile.name : `${profile.name}, disabled`"
+        :data-id="profile.id"
+        :data-enabled="profile.enabled"
+        data-testid="profile-tile"
+        draggable="true"
+        class="relative flex size-[38px] cursor-pointer items-center justify-center rounded-xl border border-card bg-chip font-mono text-sm font-semibold text-text-2 transition-colors hover:bg-hover hover:text-text"
+        :class="[
+          dropClass(dropTarget, profile.id),
+          {
+            'text-text': profile.id === activeProfileId,
+            'opacity-55': !profile.enabled,
+            'opacity-40': profile.id === dragging,
+          },
+        ]"
+        @click="emit('select', profile.id)"
+        @keydown="onKeydown($event, profile.id)"
+        @dragstart="drag.start($event, profile.id)"
+        @dragover.prevent="drag.over($event, { id: profile.id, edge: dropEdge($event) })"
+        @drop.prevent="drag.drop"
+        @dragend="drag.end"
+      >
+        <span
+          v-if="profile.id === activeProfileId"
+          class="absolute bottom-2 left-[-13px] top-2 w-[3px] rounded-sm bg-accent"
+        />
+        <img
+          v-if="profile.image"
+          :src="profile.image"
+          alt=""
+          draggable="false"
+          class="size-full rounded-lg object-cover"
+        />
+        <template v-else>{{ profile.letter }}</template>
+        <span
+          v-if="!profile.enabled"
+          class="absolute -bottom-1 -right-1 flex size-4 items-center justify-center rounded-full border border-border bg-raised text-text-3"
+          aria-hidden="true"
+          ><IconPause class="size-2.5"
+        /></span>
+      </button>
+    </AppTooltip>
     <IconButton
       label="Add profile"
       :icon="IconPlus"

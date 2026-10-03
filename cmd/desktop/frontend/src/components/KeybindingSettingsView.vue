@@ -19,6 +19,7 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
 import SettingsHeading from './settings/SettingsHeading.vue'
 import SettingsPage from './settings/SettingsPage.vue'
+import AppTooltip from './ui/AppTooltip.vue'
 import IconButton from './ui/IconButton.vue'
 import EmptyState from './ui/EmptyState.vue'
 import SearchField from './ui/SearchField.vue'
@@ -190,14 +191,14 @@ onUnmounted(commitCapture)
               :key="combo"
               class="combo"
               :class="conflictTitles(row.id, combo).length ? 'combo-conflict' : ''"
-              :title="
-                conflictTitles(row.id, combo).length
-                  ? `Also bound to ${conflictTitles(row.id, combo).join(', ')}`
-                  : undefined
-              "
               data-testid="keybinding-combo"
             >
-              <IconTriangleAlert v-if="conflictTitles(row.id, combo).length" class="size-3 shrink-0 text-accent" />
+              <AppTooltip
+                v-if="conflictTitles(row.id, combo).length"
+                :text="`Also bound to ${conflictTitles(row.id, combo).join(', ')}`"
+              >
+                <IconTriangleAlert class="size-3 shrink-0 text-accent" />
+              </AppTooltip>
               <kbd class="keycap">{{ row.formatted[i] }}</kbd>
               <IconButton
                 label="Remove shortcut"

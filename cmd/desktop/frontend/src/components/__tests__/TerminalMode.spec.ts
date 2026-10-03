@@ -501,7 +501,7 @@ describe('TerminalMode', () => {
     // Only a running session carries a glyph; an idle one greys its name instead.
     const liveness = wrapper.findAll('[data-testid="terminal-session-liveness"]')
     expect(liveness).toHaveLength(1)
-    expect(liveness[0].attributes('title')).toBe('Terminal running')
+    expect(liveness[0].text()).toBe('Terminal running')
     expect(liveness[0].get('span[aria-hidden="true"]').classes()).toEqual(
       expect.arrayContaining(['size-2.5', 'rounded-full', 'bg-current']),
     )

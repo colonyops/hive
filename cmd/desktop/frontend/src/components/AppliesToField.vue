@@ -8,6 +8,7 @@ import { computed, ref } from 'vue'
 import IconX from '~icons/lucide/x'
 import IconCornerDownLeft from '~icons/lucide/corner-down-left'
 import { useListKeyboardNav } from '../composables/useListKeyboardNav'
+import AppTooltip from './ui/AppTooltip.vue'
 import IconButton from './ui/IconButton.vue'
 
 const props = defineProps<{ modelValue: string[] | null; knownTypes: string[] }>()
@@ -104,9 +105,10 @@ defineExpose({ flush: () => add() })
               ? 'border-strong bg-chip text-text'
               : 'border-dashed border-accent/60 bg-accent-tint text-accent'
           "
-          :title="isKnown(tag) ? undefined : 'Not a known feed-item type — it won\'t match any feed item'"
         >
-          <span>{{ tag }}</span>
+          <AppTooltip :text="isKnown(tag) ? '' : 'Not a known feed-item type — it won\'t match any feed item'">
+            <span>{{ tag }}</span>
+          </AppTooltip>
           <IconButton :label="`Remove ${tag}`" :icon="IconX" size="sm" tone="danger" @click.stop="remove(tag)" />
         </span>
         <input

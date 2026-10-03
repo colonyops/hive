@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import AppTooltip from './ui/AppTooltip.vue'
 import IconButton from './ui/IconButton.vue'
 import AppMenu from './ui/AppMenu.vue'
 import SearchField from './ui/SearchField.vue'
@@ -304,14 +305,12 @@ watch(
       </button>
     </div>
     <div v-if="selectionMode" class="selection-bar" data-testid="feed-selection-bar">
-      <span
-        class="selection-count"
-        :title="`${selectedItemIds.length} selected`"
-        :aria-label="`${selectedItemIds.length} selected`"
-      >
-        <IconSquareCheckBig class="size-3.5" />
-        <span>{{ selectedItemIds.length }}</span>
-      </span>
+      <AppTooltip :text="`${selectedItemIds.length} selected`">
+        <span class="selection-count" :aria-label="`${selectedItemIds.length} selected`">
+          <IconSquareCheckBig class="size-3.5" />
+          <span>{{ selectedItemIds.length }}</span>
+        </span>
+      </AppTooltip>
       <span class="flex-1" />
       <IconButton
         label="Copy contents"

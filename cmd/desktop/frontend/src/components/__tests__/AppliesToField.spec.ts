@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import AppliesToField from '../AppliesToField.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 
 function mountField(modelValue: string[] | null = [], knownTypes = ['PR', 'Issue']) {
   return mount(AppliesToField, { props: { modelValue, knownTypes }, attachTo: document.body })
@@ -42,7 +43,7 @@ describe('AppliesToField', () => {
     expect(known.text()).not.toContain('match any known feed item')
     known.unmount()
     const unknown = mountField(['bogus'])
-    expect(unknown.get('[title]').attributes('title')).toContain('Not a known feed-item type')
+    expect(unknown.getComponent(AppTooltip).props('text')).toContain('Not a known feed-item type')
     expect(unknown.text()).toContain('match any known feed item')
     unknown.unmount()
   })

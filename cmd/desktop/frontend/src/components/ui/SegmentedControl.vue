@@ -1,5 +1,8 @@
 <script setup lang="ts" generic="T extends string">
+import { shallowRef } from 'vue'
+import { useTooltip } from '../../composables/useTooltip'
 import FormField from './FormField.vue'
+import TooltipBubble from './TooltipBubble.vue'
 
 export interface SegmentedControlOption<V extends string = string> {
   value: V
@@ -45,6 +48,24 @@ defineSlots<{
   option?: (props: { option: SegmentedControlOption<T>; selected: boolean }) => unknown
 }>()
 
+// One tooltip for the strip, carrying the title of the option under the pointer.
+const tipOption = shallowRef<SegmentedControlOption<T> | null>(null)
+const tip = useTooltip(() => tipOption.value?.title ?? '')
+
+function tipTriggers(option: SegmentedControlOption<T>) {
+  return {
+    ...tip.triggers,
+    pointerenter: (event: PointerEvent) => {
+      tipOption.value = option
+      tip.triggers.pointerenter(event)
+    },
+    focusin: (event: FocusEvent) => {
+      tipOption.value = option
+      tip.triggers.focusin(event)
+    },
+  }
+}
+
 function optionClass(selected: boolean): string[] {
   if (props.variant === 'field') {
     return [
@@ -82,12 +103,18 @@ function optionClass(selected: boolean): string[] {
         :class="optionClass(modelValue === opt.value)"
         :aria-pressed="modelValue === opt.value"
         :aria-label="opt.title"
-        :title="opt.title"
         :data-testid="testid ? `${testid}-${opt.value}` : undefined"
+        v-on="tipTriggers(opt)"
         @click="emit('update:modelValue', opt.value)"
       >
         <slot name="option" :option="opt" :selected="modelValue === opt.value">{{ opt.label }}</slot>
       </button>
+      <TooltipBubble
+        v-if="tip.anchor.value"
+        :anchor="tip.anchor.value"
+        :text="tipOption?.title ?? ''"
+        @dismiss="tip.hide"
+      />
     </div>
   </component>
 </template>

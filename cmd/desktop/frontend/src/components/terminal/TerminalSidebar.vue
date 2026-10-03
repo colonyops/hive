@@ -347,7 +347,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                 <span
                   v-if="tree.rowRunning(row)"
                   class="row-status text-severity-success"
-                  title="Terminal running"
                   data-testid="terminal-session-liveness"
                 >
                   <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />
@@ -436,7 +435,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                       <span
                         v-if="tree.rowRunning(row)"
                         class="row-status text-severity-success"
-                        :title="group.kind === 'chats' ? 'Agent running' : 'Terminal running'"
                         data-testid="terminal-session-liveness"
                       >
                         <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />

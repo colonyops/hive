@@ -17,6 +17,7 @@
 // starting a chat) or the manifest (create/edit workspace — delete lives in
 // the editor) is an emitted event; only tree state, the chat row menus, and
 // the chat delete confirmation live here.
+import AppTooltip from './ui/AppTooltip.vue'
 import IconButton from './ui/IconButton.vue'
 import InlineError from './ui/InlineError.vue'
 import { computed, ref, shallowRef, watch } from 'vue'
@@ -738,12 +739,9 @@ defineExpose({
                   <!-- The pin mark rides the name's line rather than the trailing
                      slot, which the status mark and the menu toggle already
                      share. -->
-                  <IconPin
-                    v-if="isPinned(session.id)"
-                    class="size-2.5 shrink-0 text-text-4"
-                    title="Pinned to Code"
-                    data-testid="agents-sidebar-session-pinned"
-                  />
+                  <AppTooltip v-if="isPinned(session.id)" text="Pinned to Code">
+                    <IconPin class="size-2.5 shrink-0 text-text-4" data-testid="agents-sidebar-session-pinned" />
+                  </AppTooltip>
                   <span v-if="chatAge(session)" class="entry-age">{{ chatAge(session) }}</span>
                   <!-- The way from stopped to running, which the kebab alone did
                      not state. It goes through the same select the row's own
@@ -771,19 +769,16 @@ defineExpose({
                           sessionIndicators[session.id].color,
                           { 'animate-spin': sessionIndicators[session.id].animated },
                         ]"
-                        :title="sessionIndicators[session.id].label"
                         aria-hidden="true"
                       />
                       <span
                         v-else-if="session.terminalId"
                         class="size-2.5 rounded-full bg-severity-success"
-                        title="Agent running"
                         data-testid="agents-sidebar-session-liveness"
                       />
                       <span
                         v-else
                         class="size-2.5 rounded-full border border-text-4"
-                        title="Not running"
                         data-testid="agents-sidebar-session-idle"
                       />
                     </span>

@@ -12,6 +12,7 @@ import IconLayers from '~icons/lucide/layers'
 import IconTerminal from '~icons/lucide/terminal'
 import { relativeAge } from '../lib/age'
 import { statusMeta, type TaskTreeNode } from '../lib/tasksPresentation'
+import AppTooltip from './ui/AppTooltip.vue'
 import IconButton from './ui/IconButton.vue'
 import BaseBadge from './ui/BaseBadge.vue'
 
@@ -77,13 +78,11 @@ const indent = computed(() => props.depth * 18 + 10)
       <IconBan class="size-2.5" aria-hidden="true" />Blocked
     </BaseBadge>
 
-    <BaseBadge
-      v-if="node.item.sessionId"
-      class="shrink-0 justify-center px-1 py-0.5"
-      :title="`Linked to session ${sessionName || node.item.sessionId}`"
-      data-testid="task-tree-session"
-      ><IconTerminal class="size-2.5" aria-hidden="true"
-    /></BaseBadge>
+    <AppTooltip v-if="node.item.sessionId" :text="`Linked to session ${sessionName || node.item.sessionId}`">
+      <BaseBadge class="shrink-0 justify-center px-1 py-0.5" data-testid="task-tree-session"
+        ><IconTerminal class="size-2.5" aria-hidden="true"
+      /></BaseBadge>
+    </AppTooltip>
 
     <span
       class="shrink-0 rounded-md px-1.5 py-0.5 text-micro font-medium"
