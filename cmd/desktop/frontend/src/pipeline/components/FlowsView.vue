@@ -24,7 +24,7 @@ import { useWailsEvent } from '../../composables/useWailsEvent'
 import { classify } from '../lib/runStatus'
 import NodePalette from './NodePalette.vue'
 import FlowsCanvas from './FlowsCanvas.vue'
-import PanelResizeHandle from '../../components/PanelResizeHandle.vue'
+import PanelResizeHandle from '../../components/ui/PanelResizeHandle.vue'
 
 const {
   flows,

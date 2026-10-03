@@ -1,9 +1,8 @@
 <script setup lang="ts">
-// One error banner for every settings page. Six hand-rolled variants had
-// drifted apart on radius, border colour, and margin, so a failure looked
-// like a different kind of problem depending on which page raised it.
-// Spacing is the page's job (SettingsPage stacks with a gap), not the
-// banner's.
+// The one inline error banner. Hand-rolled variants drifted apart on radius,
+// border colour, and margin, so a failure looked like a different kind of
+// problem depending on which view raised it. Spacing is the parent's job,
+// not the banner's.
 defineProps<{
   /** Accepts null so callers can pass a nullable error ref straight through. */
   message?: string | null

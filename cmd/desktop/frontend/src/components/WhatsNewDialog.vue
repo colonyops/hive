@@ -4,8 +4,8 @@
 // just the newest — plus the draft of what this build has that no stable
 // release does.
 import IconSparkles from '~icons/lucide/sparkles'
-import BaseModal from './BaseModal.vue'
-import BaseButton from './BaseButton.vue'
+import BaseModal from './ui/BaseModal.vue'
+import BaseButton from './ui/BaseButton.vue'
 import ReleaseNoteBody from './ReleaseNoteBody.vue'
 import type { ReleaseNote } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 

@@ -14,7 +14,7 @@ import IconX from '~icons/lucide/x'
 import { useActivity } from '../stores/useActivity'
 import { useNewSession } from '../composables/useNewSession'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
-import ViewHeader from './settings/ViewHeader.vue'
+import ViewHeader from './ui/ViewHeader.vue'
 import {
   ACTIVITY_FILTERS,
   activityLinks,

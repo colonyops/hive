@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, type Component } from 'vue'
 import IconX from '~icons/lucide/x'
-import { useEscapeToClose } from '../composables/useEscapeToClose'
-import { useFocusTrap } from '../composables/useFocusTrap'
-import { useRegisterOpenModal } from '../composables/useOpenModalCount'
-import { useReturnFocus } from '../composables/useReturnFocus'
+import { useEscapeToClose } from '../../composables/useEscapeToClose'
+import { useFocusTrap } from '../../composables/useFocusTrap'
+import { useRegisterOpenModal } from '../../composables/useOpenModalCount'
+import { useReturnFocus } from '../../composables/useReturnFocus'
 
 const props = withDefaults(
   defineProps<{

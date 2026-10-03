@@ -5,7 +5,7 @@
 import IconCode from '~icons/lucide/code'
 import IconFolder from '~icons/lucide/folder'
 import IconFolderOpen from '~icons/lucide/folder-open'
-import AppTooltip from './AppTooltip.vue'
+import AppTooltip from './ui/AppTooltip.vue'
 
 withDefaults(
   defineProps<{

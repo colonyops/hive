@@ -6,7 +6,7 @@ import IconExternalLink from '~icons/lucide/external-link'
 import IconFilePlus from '~icons/lucide/file-plus'
 import IconFolderOpen from '~icons/lucide/folder-open'
 import IconInfo from '~icons/lucide/info'
-import SettingsError from './settings/SettingsError.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsPathRow from './settings/SettingsPathRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
@@ -83,8 +83,8 @@ onMounted(() => {
 
 <template>
   <SettingsPage testid="settings-hive">
-    <SettingsError v-if="error" :message="error" testid="hive-settings-error" />
-    <SettingsError
+    <InlineError v-if="error" :message="error" testid="hive-settings-error" />
+    <InlineError
       v-if="hive.unreadable.value"
       :message="`This config could not be read: ${hive.unreadable.value}. Fix it in your editor, then restart Hive Desktop.`"
       testid="hive-unreadable"

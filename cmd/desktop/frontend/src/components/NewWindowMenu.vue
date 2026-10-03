@@ -2,7 +2,7 @@
 import { computed, h, markRaw, type Component } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
 import AgentIcon, { agentIconID } from './AgentIcon.vue'
-import AppMenu from './AppMenu.vue'
+import AppMenu from './ui/AppMenu.vue'
 import type { MenuEntry } from '../types/menu'
 
 const props = defineProps<{

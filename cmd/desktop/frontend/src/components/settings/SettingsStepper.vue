@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// SettingsSegmented's strip for a setting whose range is open rather than a
+// SegmentedControl's strip for a setting whose range is open rather than a
 // handful of named options, where it would need a button per rung.
 import SettingsField from './SettingsField.vue'
 

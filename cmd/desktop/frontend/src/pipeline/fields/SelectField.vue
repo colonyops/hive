@@ -2,7 +2,7 @@
 // FieldRow chrome around the app-wide AppSelect listbox. Everything about the
 // control itself — keyboard handling, popover placement, search, icons — lives
 // in AppSelect; this only adds the label/hint/error layout the field kit shares.
-import AppSelect, { type AppSelectOption } from '../../components/AppSelect.vue'
+import AppSelect, { type AppSelectOption } from '../../components/ui/AppSelect.vue'
 import FieldRow from './FieldRow.vue'
 
 export type SelectOption = AppSelectOption

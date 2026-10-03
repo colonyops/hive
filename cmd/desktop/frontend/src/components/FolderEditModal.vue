@@ -5,9 +5,9 @@
 // over a dimmed body. `delete` is emitted only after that confirmation.
 import { computed, nextTick, onMounted, ref } from 'vue'
 import IconFolder from '~icons/lucide/folder'
-import BaseButton from './BaseButton.vue'
-import BaseModal from './BaseModal.vue'
-import InlineConfirm from './InlineConfirm.vue'
+import BaseButton from './ui/BaseButton.vue'
+import BaseModal from './ui/BaseModal.vue'
+import InlineConfirm from './ui/InlineConfirm.vue'
 import type { FeedFolder } from '../types/feed'
 import { seedRef } from '../lib/seedRef'
 

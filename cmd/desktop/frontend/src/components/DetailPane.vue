@@ -2,7 +2,7 @@
 import { computed, ref } from 'vue'
 import ActionCard from './ActionCard.vue'
 import ItemActionMenu from './ItemActionMenu.vue'
-import PanelResizeHandle from './PanelResizeHandle.vue'
+import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import PullRequestMetadata from './PullRequestMetadata.vue'
 import SourceMark from './SourceMark.vue'
 import { useResizablePanel } from '../composables/useResizablePanel'

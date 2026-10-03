@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import SettingsError from './SettingsError.vue'
+import InlineError from '../ui/InlineError.vue'
 // Local webhook listener settings. Both controls here are startup-time
 // decisions — the listener binds a port and serves flow-declared routes — so
 // the drawer's job is to persist them and be honest about the pending
@@ -7,9 +7,9 @@ import SettingsError from './SettingsError.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import IconWebhook from '~icons/lucide/webhook'
 import IconRefresh from '~icons/lucide/refresh-cw'
-import AppSwitch from '../AppSwitch.vue'
-import BaseButton from '../BaseButton.vue'
-import DrawerSheet from '../DrawerSheet.vue'
+import AppSwitch from '../ui/AppSwitch.vue'
+import BaseButton from '../ui/BaseButton.vue'
+import DrawerSheet from '../ui/DrawerSheet.vue'
 import SettingsField from './SettingsField.vue'
 import { useClipboard } from '../../composables/useClipboard'
 import { useWebhookSettings } from '../../stores/useWebhookSettings'
@@ -200,7 +200,7 @@ onMounted(() => void reload())
         Restart Hive to apply the listener's enabled state and port.
       </p>
 
-      <SettingsError v-if="error" :message="error" testid="webhook-settings-error" />
+      <InlineError v-if="error" :message="error" testid="webhook-settings-error" />
     </div>
 
     <template #footer>

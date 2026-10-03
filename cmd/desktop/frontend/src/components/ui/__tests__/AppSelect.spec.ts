@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { markRaw } from 'vue'
 import AppSelect from '../AppSelect.vue'
-import { chooseOption, openSelect } from '../../test-utils/select'
+import { chooseOption, openSelect } from '../../../test-utils/select'
 
 const options = [
   { value: 'launch-session', label: 'Launch session' },

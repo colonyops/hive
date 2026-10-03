@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import AppMenu from './AppMenu.vue'
+import AppMenu from './ui/AppMenu.vue'
 import { ActionViews } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { actionTypeMeta } from '../lib/actionPresentation'

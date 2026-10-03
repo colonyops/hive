@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import AppSelect from './AppSelect.vue'
-import AppSwitch from './AppSwitch.vue'
-import BaseBadge from './BaseBadge.vue'
-import SettingsError from './settings/SettingsError.vue'
+import AppSelect from './ui/AppSelect.vue'
+import AppSwitch from './ui/AppSwitch.vue'
+import BaseBadge from './ui/BaseBadge.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
@@ -80,7 +80,7 @@ onMounted(() => {
     OS permission denied/not requested: preferences persist, but a banner falls back to a toast.
   -->
   <SettingsPage testid="notification-settings">
-    <SettingsError v-if="error" :message="error" testid="notification-settings-error" />
+    <InlineError v-if="error" :message="error" testid="notification-settings-error" />
 
     <SettingsSection title="Notifications" description="How Hive tells you about activity that needs attention." boxed>
       <SettingsRow

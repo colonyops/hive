@@ -9,8 +9,8 @@ import type { Component } from 'vue'
 import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconSearch from '~icons/lucide/search'
-import { useAnchoredPopover } from '../composables/useAnchoredPopover'
-import { seedRef } from '../lib/seedRef'
+import { useAnchoredPopover } from '../../composables/useAnchoredPopover'
+import { seedRef } from '../../lib/seedRef'
 
 export interface AppSelectOption {
   value: string

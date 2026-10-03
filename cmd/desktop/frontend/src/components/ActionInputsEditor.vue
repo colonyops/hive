@@ -3,7 +3,7 @@
 // prompt order, so a new input is appended rather than sorted in.
 import IconPlus from '~icons/lucide/plus'
 import IconTrash from '~icons/lucide/trash-2'
-import AppCheckbox from './AppCheckbox.vue'
+import AppCheckbox from './ui/AppCheckbox.vue'
 import { SelectField, TextareaField, TextField } from '../pipeline/fields'
 import type { InputSpec } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/actions/models'
 

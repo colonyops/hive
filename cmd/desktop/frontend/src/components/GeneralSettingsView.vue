@@ -3,11 +3,11 @@
 // command is the first — the Agents area, the Code tab and the Inbox all launch
 // it, so it lives here rather than with whichever of them shipped first.
 import { computed, onMounted } from 'vue'
-import SettingsError from './settings/SettingsError.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
-import AppSelect, { type AppSelectOption } from './AppSelect.vue'
+import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import { useEditorSettings } from '../composables/useEditorSettings'
 
 const { command, choices, error, refresh, setCommand } = useEditorSettings()
@@ -30,7 +30,7 @@ onMounted(() => {
 
 <template>
   <SettingsPage testid="settings-general">
-    <SettingsError v-if="error" :message="error" testid="general-error" />
+    <InlineError v-if="error" :message="error" testid="general-error" />
 
     <SettingsSection
       title="Editor"

@@ -5,9 +5,9 @@ import IconCode from '~icons/lucide/code'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPlay from '~icons/lucide/play'
 import IconX from '~icons/lucide/x'
-import AppSelect, { type AppSelectOption } from './AppSelect.vue'
-import BaseButton from './BaseButton.vue'
-import BaseModal from './BaseModal.vue'
+import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
+import BaseButton from './ui/BaseButton.vue'
+import BaseModal from './ui/BaseModal.vue'
 import RepositorySelect from './RepositorySelect.vue'
 import type {
   SessionCreateFailure,

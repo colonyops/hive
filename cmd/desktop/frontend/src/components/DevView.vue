@@ -8,15 +8,15 @@ import { notifySeverityMapping, useNotify, type NotifySeverity } from '../compos
 import { PAYLOAD_BYTES, useWailsLatency } from '../composables/useWailsLatency'
 import { useToasts } from '../composables/useToasts'
 import { formatBytes } from '../lib/bytes'
-import AppCheckbox from './AppCheckbox.vue'
-import AppSelect from './AppSelect.vue'
-import BaseButton from './BaseButton.vue'
-import BaseCard from './BaseCard.vue'
+import AppCheckbox from './ui/AppCheckbox.vue'
+import AppSelect from './ui/AppSelect.vue'
+import BaseButton from './ui/BaseButton.vue'
+import BaseCard from './ui/BaseCard.vue'
 import SettingsField from './settings/SettingsField.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
-import ViewHeader from './settings/ViewHeader.vue'
+import ViewHeader from './ui/ViewHeader.vue'
 
 const emit = defineEmits<{ close: [] }>()
 

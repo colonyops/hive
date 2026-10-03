@@ -26,13 +26,13 @@ import IconTrash2 from '~icons/lucide/trash-2'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
 import AgentIcon, { agentHasIcon } from './AgentIcon.vue'
-import AppSelect, { type AppSelectOption } from './AppSelect.vue'
-import AppSwitch from './AppSwitch.vue'
-import BaseBadge from './BaseBadge.vue'
-import BaseButton from './BaseButton.vue'
-import DrawerSheet from './DrawerSheet.vue'
-import InlineConfirm from './InlineConfirm.vue'
-import SettingsError from './settings/SettingsError.vue'
+import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
+import AppSwitch from './ui/AppSwitch.vue'
+import BaseBadge from './ui/BaseBadge.vue'
+import BaseButton from './ui/BaseButton.vue'
+import DrawerSheet from './ui/DrawerSheet.vue'
+import InlineConfirm from './ui/InlineConfirm.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import { CodeField, FieldRow, SelectField, TextField, TextareaField, type SelectOption } from '../pipeline/fields'
 import { useAgentSchedules } from '../composables/useAgentSchedules'
@@ -1204,7 +1204,7 @@ onMounted(async () => {
         @update:model-value="setPrompt"
       />
 
-      <SettingsError v-if="draftIssue" :message="draftIssue" testid="agent-workspace-editor-schedule-problem" />
+      <InlineError v-if="draftIssue" :message="draftIssue" testid="agent-workspace-editor-schedule-problem" />
 
       <div v-if="scheduleDraft.saved" class="flex flex-col gap-1.5">
         <span class="text-xs text-text-3">Recent runs</span>
@@ -1686,7 +1686,7 @@ onMounted(async () => {
         Saving rewrites these fields in agent-workspace.yaml and re-syncs the workspace's generated files. Comments and
         anything else in the file stay as written — edit the file for those.
       </p>
-      <SettingsError v-if="error && !confirming" :message="error" testid="agent-workspace-editor-error" />
+      <InlineError v-if="error && !confirming" :message="error" testid="agent-workspace-editor-error" />
     </div>
 
     <template #footer>

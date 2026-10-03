@@ -10,7 +10,7 @@ import IconGitBranch from '~icons/lucide/git-branch'
 import IconGitPullRequest from '~icons/lucide/git-pull-request'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconUpload from '~icons/lucide/upload'
-import AppTooltip from './AppTooltip.vue'
+import AppTooltip from './ui/AppTooltip.vue'
 import { useClipboard } from '../composables/useClipboard'
 import { markdownPullRequestLink } from '../lib/prLink'
 import type {

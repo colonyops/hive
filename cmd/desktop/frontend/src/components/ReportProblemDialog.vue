@@ -2,9 +2,9 @@
 import { computed, onMounted, ref } from 'vue'
 import IconLifeBuoy from '~icons/lucide/life-buoy'
 import IconCheck from '~icons/lucide/check'
-import BaseButton from './BaseButton.vue'
-import BaseModal from './BaseModal.vue'
-import AppSwitch from './AppSwitch.vue'
+import BaseButton from './ui/BaseButton.vue'
+import BaseModal from './ui/BaseModal.vue'
+import AppSwitch from './ui/AppSwitch.vue'
 import { useReportProblem } from '../composables/useReportProblem'
 
 const emit = defineEmits<{ close: [] }>()

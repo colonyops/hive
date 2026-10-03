@@ -11,7 +11,7 @@ import {
   Capture,
   Info,
 } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/webhookservice'
-import BaseButton from '../../../components/BaseButton.vue'
+import BaseButton from '../../../components/ui/BaseButton.vue'
 import { useClipboard } from '../../../composables/useClipboard'
 import { defaultWebhookSourceIcon, feedIconComponent, feedIconOptions } from '../../../lib/feedIcons'
 import { MarkImageField, SelectField, TextField, type MarkImageClient } from '../../fields'

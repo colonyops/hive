@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onClickOutside, useEventListener } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
-import AppMenu from './AppMenu.vue'
+import AppMenu from './ui/AppMenu.vue'
 import FeedListItem from './FeedListItem.vue'
 import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'

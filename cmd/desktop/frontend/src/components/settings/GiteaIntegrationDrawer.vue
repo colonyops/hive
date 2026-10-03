@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { Browser } from '@wailsio/runtime'
-import BaseButton from '../BaseButton.vue'
-import DrawerSheet from '../DrawerSheet.vue'
+import BaseButton from '../ui/BaseButton.vue'
+import DrawerSheet from '../ui/DrawerSheet.vue'
 import GiteaMark from '../marks/GiteaMark.vue'
 import SettingsField from './SettingsField.vue'
 import { useGiteaConnection } from '../../composables/useGiteaConnection'

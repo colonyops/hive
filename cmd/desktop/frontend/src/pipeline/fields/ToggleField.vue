@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import AppCheckbox from '../../components/AppCheckbox.vue'
+import AppCheckbox from '../../components/ui/AppCheckbox.vue'
 
 defineProps<{ label?: string; modelValue: boolean; hint?: string; testid?: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()

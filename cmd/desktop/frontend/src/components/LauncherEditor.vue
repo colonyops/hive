@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import SettingsError from './settings/SettingsError.vue'
+import InlineError from './ui/InlineError.vue'
 import { nextTick, onMounted, ref } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
 import IconX from '~icons/lucide/x'
-import BaseButton from './BaseButton.vue'
-import DrawerSheet from './DrawerSheet.vue'
+import BaseButton from './ui/BaseButton.vue'
+import DrawerSheet from './ui/DrawerSheet.vue'
 import { SelectField, TextField } from '../pipeline/fields'
 import { launcherIconOptions } from '../lib/launcherIcons'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
@@ -123,11 +123,7 @@ onMounted(async () => {
         >
       </p>
 
-      <SettingsError
-        v-if="validationError || error"
-        :message="validationError || error"
-        testid="launcher-editor-error"
-      />
+      <InlineError v-if="validationError || error" :message="validationError || error" testid="launcher-editor-error" />
     </div>
 
     <template #footer>

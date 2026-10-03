@@ -76,12 +76,12 @@
       "count": 2
     }
   },
-  "src/components/AppCheckbox.vue": {
+  "src/components/ui/AppCheckbox.vue": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
   },
-  "src/components/AppSelect.vue": {
+  "src/components/ui/AppSelect.vue": {
     "@typescript-eslint/no-unused-expressions": {
       "count": 1
     }
@@ -178,7 +178,7 @@
       "count": 1
     }
   },
-  "src/components/__tests__/ConfirmationDialog.spec.ts": {
+  "src/components/ui/__tests__/ConfirmationDialog.spec.ts": {
     "@typescript-eslint/require-await": {
       "count": 1
     }
@@ -199,7 +199,7 @@
       "count": 2
     }
   },
-  "src/components/__tests__/DrawerSheet.spec.ts": {
+  "src/components/ui/__tests__/DrawerSheet.spec.ts": {
     "@typescript-eslint/require-await": {
       "count": 1
     }

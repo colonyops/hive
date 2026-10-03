@@ -3,17 +3,17 @@ import { computed, onMounted, ref } from 'vue'
 import IconGripVertical from '~icons/lucide/grip-vertical'
 import IconPlus from '~icons/lucide/plus'
 import IconTrash2 from '~icons/lucide/trash-2'
-import SettingsError from './settings/SettingsError.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsHeading from './settings/SettingsHeading.vue'
 import SettingsPage from './settings/SettingsPage.vue'
-import BaseBadge from './BaseBadge.vue'
-import BaseButton from './BaseButton.vue'
-import BaseCard from './BaseCard.vue'
-import BaseIconBadge from './BaseIconBadge.vue'
+import BaseBadge from './ui/BaseBadge.vue'
+import BaseButton from './ui/BaseButton.vue'
+import BaseCard from './ui/BaseCard.vue'
+import BaseIconBadge from './ui/BaseIconBadge.vue'
 import AppIcon from './AppIcon.vue'
 import ActionEditor from './ActionEditor.vue'
-import ConfirmationDialog from './ConfirmationDialog.vue'
-import EmptyState from './settings/EmptyState.vue'
+import ConfirmationDialog from './ui/ConfirmationDialog.vue'
+import EmptyState from './ui/EmptyState.vue'
 import { useConfirmation } from '../composables/useConfirmation'
 import { actionTypeMeta } from '../lib/actionPresentation'
 import { moveId, type OrderDropTarget } from '../lib/listOrder'
@@ -154,7 +154,7 @@ function dropClass(id: string): Record<string, boolean> {
       </template>
     </SettingsHeading>
 
-    <SettingsError v-if="error && !editing" :message="error" testid="actions-error" />
+    <InlineError v-if="error && !editing" :message="error" testid="actions-error" />
     <p v-if="loading" class="text-xs text-text-4">Loading actions…</p>
 
     <div v-else class="flex flex-col gap-3">

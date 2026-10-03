@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue'
-import { useEscapeToClose } from '../composables/useEscapeToClose'
-import { useFocusTrap } from '../composables/useFocusTrap'
-import { useRegisterOpenModal } from '../composables/useOpenModalCount'
-import { useResizablePanel } from '../composables/useResizablePanel'
-import { useReturnFocus } from '../composables/useReturnFocus'
+import { useEscapeToClose } from '../../composables/useEscapeToClose'
+import { useFocusTrap } from '../../composables/useFocusTrap'
+import { useRegisterOpenModal } from '../../composables/useOpenModalCount'
+import { useResizablePanel } from '../../composables/useResizablePanel'
+import { useReturnFocus } from '../../composables/useReturnFocus'
 import PanelResizeHandle from './PanelResizeHandle.vue'
 
 const props = withDefaults(

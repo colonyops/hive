@@ -1,5 +1,5 @@
 import type { VueWrapper } from '@vue/test-utils'
-import AppTooltip from '../components/AppTooltip.vue'
+import AppTooltip from '../components/ui/AppTooltip.vue'
 
 /**
  * The tooltip text for the element carrying `testid`, read off the AppTooltip

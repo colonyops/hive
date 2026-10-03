@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import AppMenu from './AppMenu.vue'
+import AppMenu from './ui/AppMenu.vue'
 import IconInfo from '~icons/lucide/info'
 import IconPencil from '~icons/lucide/pencil'
 import IconPlay from '~icons/lucide/play'

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, nextTick, ref } from 'vue'
-import { useOpenModalCount } from '../../composables/useOpenModalCount'
+import { useOpenModalCount } from '../../../composables/useOpenModalCount'
 import DrawerSheet from '../DrawerSheet.vue'
-import SettingsLayout from '../settings/SettingsLayout.vue'
+import SettingsLayout from '../../settings/SettingsLayout.vue'
 
 function el<T extends HTMLElement>(testid: string): T {
   const element = document.querySelector<T>(`[data-testid="${testid}"]`)

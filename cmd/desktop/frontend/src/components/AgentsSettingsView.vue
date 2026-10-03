@@ -3,12 +3,12 @@
 // A workspace's agent, launch command, and MCP servers belong to its manifest.
 import { onMounted } from 'vue'
 import CanvasTypographyPreview from './settings/CanvasTypographyPreview.vue'
-import SettingsError from './settings/SettingsError.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsPathRow from './settings/SettingsPathRow.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
-import SettingsSegmented from './settings/SettingsSegmented.vue'
+import SegmentedControl from './ui/SegmentedControl.vue'
 import {
   canvasFontSizeLabels,
   canvasFontSizePx,
@@ -49,7 +49,7 @@ onMounted(() => {
 
 <template>
   <SettingsPage testid="settings-agents">
-    <SettingsError v-if="locationsError" :message="locationsError" testid="agents-error" />
+    <InlineError v-if="locationsError" :message="locationsError" testid="agents-error" />
 
     <SettingsSection
       title="Typography"
@@ -57,7 +57,7 @@ onMounted(() => {
       boxed
     >
       <SettingsRow label="Font size" hint="Applies to headings, body text, cards, and diagrams in every canvas.">
-        <SettingsSegmented
+        <SegmentedControl
           :model-value="fontSize"
           :options="fontSizeOptions"
           aria-label="Canvas text size"
@@ -69,7 +69,7 @@ onMounted(() => {
         label="Line spacing"
         hint="Changes the vertical rhythm of Markdown and HTML. Copy and save keep the original content."
       >
-        <SettingsSegmented
+        <SegmentedControl
           :model-value="lineSpacing"
           :options="lineSpacingOptions"
           aria-label="Canvas line spacing"

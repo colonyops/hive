@@ -3,9 +3,9 @@ import { Browser } from '@wailsio/runtime'
 import { computed, onMounted } from 'vue'
 import IconBookOpen from '~icons/lucide/book-open'
 import IconInfo from '~icons/lucide/info'
-import BaseBadge from './BaseBadge.vue'
+import BaseBadge from './ui/BaseBadge.vue'
 import RuntimeDashboard from './RuntimeDashboard.vue'
-import SettingsError from './settings/SettingsError.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import { useObservabilitySettings } from '../composables/useObservabilitySettings'
@@ -46,8 +46,8 @@ onMounted(() => {
       </div>
     </div>
 
-    <SettingsError v-if="error" :message="error" testid="observability-error" />
-    <SettingsError
+    <InlineError v-if="error" :message="error" testid="observability-error" />
+    <InlineError
       v-if="current?.startError"
       :message="`Telemetry did not start: ${current.startError}`"
       testid="observability-start-error"

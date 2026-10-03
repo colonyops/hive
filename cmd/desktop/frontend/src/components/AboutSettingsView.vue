@@ -21,11 +21,11 @@ import IconExternalLink from '~icons/lucide/external-link'
 import IconGitCommit from '~icons/lucide/git-commit-horizontal'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconTag from '~icons/lucide/tag'
-import AppSwitch from './AppSwitch.vue'
-import BaseBadge from './BaseBadge.vue'
+import AppSwitch from './ui/AppSwitch.vue'
+import BaseBadge from './ui/BaseBadge.vue'
 import HiveMark from './marks/HiveMark.vue'
 import ReleaseNoteBody from './ReleaseNoteBody.vue'
-import SettingsError from './settings/SettingsError.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
@@ -175,7 +175,7 @@ onMounted(async () => {
 
 <template>
   <SettingsPage testid="settings-about">
-    <SettingsError v-if="error" :message="error" testid="about-error" />
+    <InlineError v-if="error" :message="error" testid="about-error" />
 
     <section
       v-if="build"

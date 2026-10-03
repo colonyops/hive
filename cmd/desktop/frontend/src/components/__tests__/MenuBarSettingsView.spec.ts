@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import MenuBarSettingsView from '../MenuBarSettingsView.vue'
-import AppSelect from '../AppSelect.vue'
+import AppSelect from '../ui/AppSelect.vue'
 
 const mocks = vi.hoisted(() => ({
   Limits: vi.fn(),

@@ -4,8 +4,8 @@
 // app renames the tmux session alongside it (ADR session-rename-keeps-slug-and-tmux-in-step) and re-attaches.
 import { nextTick, onMounted, ref } from 'vue'
 import IconPencil from '~icons/lucide/pencil'
-import BaseButton from './BaseButton.vue'
-import BaseModal from './BaseModal.vue'
+import BaseButton from './ui/BaseButton.vue'
+import BaseModal from './ui/BaseModal.vue'
 import { seedRef } from '../lib/seedRef'
 
 const props = defineProps<{

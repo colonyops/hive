@@ -5,8 +5,8 @@ import IconCircleCheck from '~icons/lucide/circle-check'
 import IconCircleX from '~icons/lucide/circle-x'
 import BaseButton from './BaseButton.vue'
 import BaseModal from './BaseModal.vue'
-import type { ConfirmationDetail } from '../composables/useConfirmation'
-import { useAutofocus } from '../composables/useAutofocus'
+import type { ConfirmationDetail } from '../../composables/useConfirmation'
+import { useAutofocus } from '../../composables/useAutofocus'
 
 const props = withDefaults(
   defineProps<{

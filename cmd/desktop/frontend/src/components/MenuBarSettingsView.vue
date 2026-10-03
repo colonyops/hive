@@ -3,8 +3,8 @@ import { computed, onMounted, ref } from 'vue'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowUp from '~icons/lucide/arrow-up'
 import IconX from '~icons/lucide/x'
-import AppSelect from './AppSelect.vue'
-import SettingsError from './settings/SettingsError.vue'
+import AppSelect from './ui/AppSelect.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
@@ -111,7 +111,7 @@ onMounted(() => {
 
 <template>
   <SettingsPage testid="menubar-settings">
-    <SettingsError v-if="error" :message="error" testid="menubar-settings-error" />
+    <InlineError v-if="error" :message="error" testid="menubar-settings-error" />
 
     <SettingsSection
       title="Pinned feeds"

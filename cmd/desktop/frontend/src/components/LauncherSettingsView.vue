@@ -2,16 +2,16 @@
 import { computed, ref } from 'vue'
 import IconPlus from '~icons/lucide/plus'
 import IconTrash2 from '~icons/lucide/trash-2'
-import SettingsError from './settings/SettingsError.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsHeading from './settings/SettingsHeading.vue'
 import SettingsPage from './settings/SettingsPage.vue'
-import BaseBadge from './BaseBadge.vue'
-import BaseButton from './BaseButton.vue'
-import BaseCard from './BaseCard.vue'
-import BaseIconBadge from './BaseIconBadge.vue'
-import ConfirmationDialog from './ConfirmationDialog.vue'
+import BaseBadge from './ui/BaseBadge.vue'
+import BaseButton from './ui/BaseButton.vue'
+import BaseCard from './ui/BaseCard.vue'
+import BaseIconBadge from './ui/BaseIconBadge.vue'
+import ConfirmationDialog from './ui/ConfirmationDialog.vue'
 import LauncherEditor from './LauncherEditor.vue'
-import EmptyState from './settings/EmptyState.vue'
+import EmptyState from './ui/EmptyState.vue'
 import { useConfirmation } from '../composables/useConfirmation'
 import { launcherIconComponent } from '../lib/launcherIcons'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
@@ -80,7 +80,7 @@ function requestDelete(launcher: Launcher): void {
       </template>
     </SettingsHeading>
 
-    <SettingsError v-if="error && !editing" :message="error" testid="launchers-error" />
+    <InlineError v-if="error && !editing" :message="error" testid="launchers-error" />
     <p v-if="loading" class="text-xs text-text-4">Loading quick terminals…</p>
 
     <div v-else class="flex flex-col gap-3">

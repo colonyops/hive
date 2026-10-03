@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
-import BaseButton from './BaseButton.vue'
-import BaseModal from './BaseModal.vue'
+import BaseButton from './ui/BaseButton.vue'
+import BaseModal from './ui/BaseModal.vue'
 import { useAutofocus } from '../composables/useAutofocus'
 
 const props = defineProps<{ busy: boolean; error: string | null }>()

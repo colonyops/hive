@@ -2,12 +2,12 @@
 // Terminal settings: everything that governs a terminal wherever one is drawn
 // — the Code tab, the pop-up panel, and the Agents area's chats.
 import { computed, defineAsyncComponent, onMounted } from 'vue'
-import AppSelect from './AppSelect.vue'
-import AppSwitch from './AppSwitch.vue'
+import AppSelect from './ui/AppSelect.vue'
+import AppSwitch from './ui/AppSwitch.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
-import SettingsSegmented from './settings/SettingsSegmented.vue'
+import SegmentedControl from './ui/SegmentedControl.vue'
 import SettingsStepper from './settings/SettingsStepper.vue'
 import {
   maxTerminalFontSizePx,
@@ -142,7 +142,7 @@ onMounted(() => {
         label="Font weight"
         hint="The weight normal text draws at. A family that ships fewer weights renders the nearest one it has."
       >
-        <SettingsSegmented
+        <SegmentedControl
           :model-value="String(fontWeight)"
           :options="fontWeightOptions"
           aria-label="Font weight"
@@ -151,7 +151,7 @@ onMounted(() => {
         />
       </SettingsRow>
       <SettingsRow label="Bold weight" hint="The weight bold text draws at.">
-        <SettingsSegmented
+        <SegmentedControl
           :model-value="String(fontWeightBold)"
           :options="fontWeightOptions"
           aria-label="Bold weight"
@@ -163,7 +163,7 @@ onMounted(() => {
         label="Line height"
         hint="Multiplies the row height. Taller rows are easier to scan; each one costs a row of grid in the same pane."
       >
-        <SettingsSegmented
+        <SegmentedControl
           :model-value="String(lineHeight)"
           :options="lineHeightOptions"
           aria-label="Line height"
@@ -175,7 +175,7 @@ onMounted(() => {
         label="Letter spacing"
         hint="Extra tracking in device pixels — half a point per step on a Retina display. Wider cells fit fewer columns."
       >
-        <SettingsSegmented
+        <SegmentedControl
           :model-value="String(letterSpacing)"
           :options="letterSpacingOptions"
           aria-label="Letter spacing"
@@ -213,7 +213,7 @@ onMounted(() => {
         label="Warm sessions"
         hint="Sessions kept attached in the background so switching back is instant. Each holds a tmux client, its stream, and its terminals."
       >
-        <SettingsSegmented
+        <SegmentedControl
           :model-value="String(poolSize)"
           :options="poolSizeOptions"
           aria-label="Warm sessions"

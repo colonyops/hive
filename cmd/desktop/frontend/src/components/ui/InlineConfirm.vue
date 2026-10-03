@@ -13,8 +13,8 @@
 // action can drive this straight from useConfirmation.
 import { ref } from 'vue'
 import BaseButton from './BaseButton.vue'
-import { useAutofocus } from '../composables/useAutofocus'
-import { useEscapeToClose } from '../composables/useEscapeToClose'
+import { useAutofocus } from '../../composables/useAutofocus'
+import { useEscapeToClose } from '../../composables/useEscapeToClose'
 
 const props = withDefaults(
   defineProps<{

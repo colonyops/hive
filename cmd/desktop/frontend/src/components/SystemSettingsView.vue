@@ -7,7 +7,7 @@ import IconInfo from '~icons/lucide/info'
 import IconBug from '~icons/lucide/bug'
 import IconLifeBuoy from '~icons/lucide/life-buoy'
 import IconChevronRight from '~icons/lucide/chevron-right'
-import SettingsError from './settings/SettingsError.vue'
+import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsPathRow from './settings/SettingsPathRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
@@ -54,7 +54,7 @@ onMounted(() => {
       </button>
     </div>
 
-    <SettingsError v-if="error" :message="error" testid="system-error" />
+    <InlineError v-if="error" :message="error" testid="system-error" />
 
     <button
       type="button"

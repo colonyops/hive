@@ -4,9 +4,9 @@
 // own declaration, so there is nothing else to ask for.
 import { computed, ref, useId } from 'vue'
 import IconBot from '~icons/lucide/bot'
-import AppSelect, { type AppSelectOption } from './AppSelect.vue'
-import BaseButton from './BaseButton.vue'
-import BaseModal from './BaseModal.vue'
+import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
+import BaseButton from './ui/BaseButton.vue'
+import BaseModal from './ui/BaseModal.vue'
 import { useAutofocus } from '../composables/useAutofocus'
 import type { AgentWorkspace } from '../lib/agentWorkspacesClient'
 import { seedRef } from '../lib/seedRef'

@@ -15,8 +15,8 @@ import IconFolder from '~icons/lucide/folder'
 import IconFolderOpen from '~icons/lucide/folder-open'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
 import { useClipboard } from '../../composables/useClipboard'
-import BaseBadge from '../BaseBadge.vue'
-import BaseIconBadge from '../BaseIconBadge.vue'
+import BaseBadge from '../ui/BaseBadge.vue'
+import BaseIconBadge from '../ui/BaseIconBadge.vue'
 
 const props = withDefaults(
   defineProps<{

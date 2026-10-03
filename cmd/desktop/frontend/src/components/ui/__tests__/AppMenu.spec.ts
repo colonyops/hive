@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import AppMenu from '../AppMenu.vue'
 import IconMail from '~icons/lucide/mail'
-import type { MenuEntry } from '../../types/menu'
+import type { MenuEntry } from '../../../types/menu'
 
 const entries: MenuEntry[] = [
   { kind: 'action', id: 'read', label: 'Mark as read', icon: IconMail, kbd: '⇧U', testid: 'entry-read' },

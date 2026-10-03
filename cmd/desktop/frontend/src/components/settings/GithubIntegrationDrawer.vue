@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import SettingsError from './SettingsError.vue'
+import InlineError from '../ui/InlineError.vue'
 import { computed, onMounted, ref } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import IconGithub from '~icons/lucide/github'
-import BaseButton from '../BaseButton.vue'
-import DrawerSheet from '../DrawerSheet.vue'
+import BaseButton from '../ui/BaseButton.vue'
+import DrawerSheet from '../ui/DrawerSheet.vue'
 import SettingsField from './SettingsField.vue'
 import { useGitHubConnection } from '../../composables/useGitHubConnection'
 import * as SettingsService from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
@@ -245,7 +245,7 @@ onMounted(() => void load())
     <p v-if="!valid" class="mt-2 text-xs text-severity-error" data-testid="github-poll-interval-error">
       Enter a whole number of at least {{ minPollIntervalSeconds }} seconds.
     </p>
-    <SettingsError v-if="error" class="mt-4" :message="error" testid="github-settings-error" />
+    <InlineError v-if="error" class="mt-4" :message="error" testid="github-settings-error" />
 
     <template #footer>
       <div class="flex items-center justify-end gap-2.5">

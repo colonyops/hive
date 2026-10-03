@@ -5,7 +5,7 @@ import { startFrameStats, stopFrameStats, useFrameStats } from '../composables/u
 import { useRuntimeStats } from '../composables/useRuntimeStats'
 import { formatBytes, formatBytesParts } from '../lib/bytes'
 import SettingsSection from './settings/SettingsSection.vue'
-import SparkLine from './SparkLine.vue'
+import SparkLine from './ui/SparkLine.vue'
 
 const { stats, rssHistory, cpuHistory, error, start, stop } = useRuntimeStats()
 const { stats: frames } = useFrameStats()

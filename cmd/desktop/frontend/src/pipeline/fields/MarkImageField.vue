@@ -9,7 +9,7 @@ import {
   MarkImages,
   SetMarkImage,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/flowsservice'
-import BaseButton from '../../components/BaseButton.vue'
+import BaseButton from '../../components/ui/BaseButton.vue'
 import { appErrorMessage } from '../../lib/appError'
 import { fileToImageBase64, ImageUploadError, imageUploadAccept } from '../../lib/imageUpload'
 

@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import SettingsError from './settings/SettingsError.vue'
+import InlineError from './ui/InlineError.vue'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import IconPlay from '~icons/lucide/play'
 import IconX from '~icons/lucide/x'
-import BaseButton from './BaseButton.vue'
-import AppCheckbox from './AppCheckbox.vue'
-import AppSelect, { type AppSelectOption } from './AppSelect.vue'
+import BaseButton from './ui/BaseButton.vue'
+import AppCheckbox from './ui/AppCheckbox.vue'
+import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import ActionInputsEditor from './ActionInputsEditor.vue'
 import AppliesToField from './AppliesToField.vue'
-import DrawerSheet from './DrawerSheet.vue'
+import DrawerSheet from './ui/DrawerSheet.vue'
 import { SelectField, TextareaField, TextField } from '../pipeline/fields'
 import type { EditableAction } from '../composables/useActionsSettings'
 import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
@@ -300,7 +300,7 @@ onMounted(async () => {
         />
       </template>
       <ActionInputsEditor :model-value="action.inputs ?? []" @update:model-value="action.inputs = $event" />
-      <SettingsError v-if="validationError || error" :message="validationError || error" testid="action-editor-error" />
+      <InlineError v-if="validationError || error" :message="validationError || error" testid="action-editor-error" />
     </div>
 
     <template #footer>

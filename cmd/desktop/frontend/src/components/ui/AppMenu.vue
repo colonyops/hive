@@ -2,9 +2,9 @@
 import { onMounted, ref, watch } from 'vue'
 import { onClickOutside, useEventListener } from '@vueuse/core'
 import IconCheck from '~icons/lucide/check'
-import AppIcon from './AppIcon.vue'
-import { useEscapeToClose } from '../composables/useEscapeToClose'
-import type { MenuEntry } from '../types/menu'
+import AppIcon from '../AppIcon.vue'
+import { useEscapeToClose } from '../../composables/useEscapeToClose'
+import type { MenuEntry } from '../../types/menu'
 
 // The shared dropdown menu. Owns the chrome (panel, entries, separators,
 // group labels, shortcut hints) and dismissal (Escape, click-outside); the

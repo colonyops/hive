@@ -12,8 +12,8 @@ import type {
   Profile,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf/models'
 import type { DraftWorkspace } from '../composables/useHiveSetup'
-import AppCheckbox from './AppCheckbox.vue'
-import AppSelect from './AppSelect.vue'
+import AppCheckbox from './ui/AppCheckbox.vue'
+import AppSelect from './ui/AppSelect.vue'
 
 const props = defineProps<{
   agents: AgentOption[]

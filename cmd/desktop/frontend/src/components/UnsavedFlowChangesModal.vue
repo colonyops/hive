@@ -8,8 +8,8 @@
 // aborts the navigation entirely and leaves the draft untouched.
 import { ref } from 'vue'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
-import BaseButton from './BaseButton.vue'
-import BaseModal from './BaseModal.vue'
+import BaseButton from './ui/BaseButton.vue'
+import BaseModal from './ui/BaseModal.vue'
 import { useAutofocus } from '../composables/useAutofocus'
 
 const props = defineProps<{ busy: boolean; error?: string | null }>()

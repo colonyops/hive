@@ -1,10 +1,7 @@
 <script setup lang="ts">
-// A segmented control — same visual as pipeline/fields/TabStrip.vue (a
-// bordered strip of equal-width buttons, the active one raised), kept as a
-// local copy because settings pages are independent of the pipeline module.
-import SettingsField from './SettingsField.vue'
+import SettingsField from '../settings/SettingsField.vue'
 
-export interface SettingsSegmentedOption {
+export interface SegmentedControlOption {
   value: string
   label: string
   /** Spelled-out name when the label is abbreviated to keep the strip narrow. */
@@ -14,7 +11,7 @@ export interface SettingsSegmentedOption {
 const props = defineProps<{
   label?: string
   modelValue: string
-  options: SettingsSegmentedOption[]
+  options: SegmentedControlOption[]
   hint?: string
   testid?: string
   /** Names the strip when a SettingsRow supplies the visible label instead. */

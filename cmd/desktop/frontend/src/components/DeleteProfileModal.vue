@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import ConfirmationDialog from './ConfirmationDialog.vue'
+import ConfirmationDialog from './ui/ConfirmationDialog.vue'
 const props = defineProps<{ profileName: string; busy: boolean; error?: string | null }>()
 const emit = defineEmits<{ close: []; confirm: [] }>()
 </script>
