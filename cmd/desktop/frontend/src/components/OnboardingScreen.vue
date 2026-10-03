@@ -14,8 +14,8 @@ import type { DeviceFlowInfo } from '../types/github'
 import type { ConnectCard } from '../composables/useGitHubConnection'
 import type { NotificationPermission } from '../composables/useNotificationSettings'
 import type { useHiveSetup } from '../composables/useHiveSetup'
-import { useClipboard } from '../composables/useClipboard'
 import BaseButton from './ui/BaseButton.vue'
+import CopyButton from './ui/CopyButton.vue'
 
 const props = defineProps<{
   card: ConnectCard | 'hive' | 'permissions' | 'agent'
@@ -46,7 +46,6 @@ const emit = defineEmits<{
 }>()
 
 const tokenInput = ref('')
-const { copy, copied } = useClipboard({ resetDelay: 1600 })
 
 // Confirming the skip is local to this screen: it is a warning to read, not a
 // state the app has to hold. Leaving the connect step at all drops it.
@@ -91,12 +90,6 @@ async function openVerification() {
   } catch {
     window.open(uri, '_blank')
   }
-}
-
-function copyCode() {
-  const code = props.deviceFlow?.userCode
-  if (!code) return
-  void copy(code)
 }
 
 function submit() {
@@ -373,9 +366,14 @@ function submit() {
           </BaseButton>
           <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
           <p class="mt-4 text-xs text-text-4">
-            <button class="link-quiet" data-testid="onboarding-copy-code" @click="copyCode">
-              {{ copied ? 'Copied' : 'Copy code' }}
-            </button>
+            <CopyButton
+              variant="link"
+              :text="deviceFlow?.userCode ?? ''"
+              label="Copy code"
+              :reset-delay="1600"
+              class="link-quiet"
+              data-testid="onboarding-copy-code"
+            />
             ·
             <button class="link-quiet" data-testid="onboarding-use-token" @click="emit('useTokenInstead')">
               Use a token instead

@@ -14,8 +14,6 @@
 import { computed, onMounted, ref, type Component } from 'vue'
 import IconCalendar from '~icons/lucide/calendar-days'
 import IconChevronRight from '~icons/lucide/chevron-right'
-import IconCheck from '~icons/lucide/check'
-import IconCopy from '~icons/lucide/copy'
 import IconCpu from '~icons/lucide/cpu'
 import IconExternalLink from '~icons/lucide/external-link'
 import IconGitCommit from '~icons/lucide/git-commit-horizontal'
@@ -31,10 +29,10 @@ import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import { relativeTimeLabel } from '../lib/age'
 import { useAboutSettings } from '../composables/useAboutSettings'
-import { useClipboard } from '../composables/useClipboard'
 import { useReleaseNotes } from '../composables/useReleaseNotes'
 import type { ReleaseNote } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import BaseButton from './ui/BaseButton.vue'
+import CopyButton from './ui/CopyButton.vue'
 
 const {
   build,
@@ -50,8 +48,6 @@ const {
   openUpdatesDoc,
   reportProblem,
 } = useAboutSettings()
-
-const { copy, copied } = useClipboard()
 
 const osNames: Record<string, string> = { darwin: 'macOS', windows: 'Windows', linux: 'Linux' }
 
@@ -245,15 +241,7 @@ onMounted(async () => {
       testid="about-build"
     >
       <template #actions>
-        <button
-          type="button"
-          class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-card px-3 py-1.5 text-[12px] font-medium text-text-2 hover:border-strong hover:text-text"
-          data-testid="about-copy-build"
-          @click="copy(buildSummary)"
-        >
-          <component :is="copied ? IconCheck : IconCopy" class="size-3.5" />
-          {{ copied ? 'Copied' : 'Copy build info' }}
-        </button>
+        <CopyButton :text="buildSummary" label="Copy build info" data-testid="about-copy-build" />
       </template>
       <!-- Hairlines rather than gaps: four facets of one build, not four cards. -->
       <div
