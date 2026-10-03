@@ -17,7 +17,7 @@ export interface ErrorDetails {
 }
 
 // Module-scoped so a surface can raise a failure without knowing where the
-// dialog is mounted. App.vue mounts the single ErrorDialog that renders it.
+// dialog is mounted. AppDialogs mounts the single ErrorDialog that renders it.
 const current = ref<ErrorDetails | null>(null)
 
 export function useErrorDialog() {

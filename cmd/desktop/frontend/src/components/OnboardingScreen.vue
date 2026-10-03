@@ -25,7 +25,7 @@ const props = defineProps<{
   githubConnected: boolean
   // The live OS permission state; only read on the 'permissions' card.
   permission?: NotificationPermission
-  // App.vue owns the single draft instance that the wizard advances.
+  // useOnboarding owns the single draft instance that the wizard advances.
   hive?: ReturnType<typeof useHiveSetup>
 }>()
 

@@ -1,5 +1,4 @@
-import { computed, nextTick, watch, type Ref } from 'vue'
-import type { Router } from 'vue-router'
+import { computed, nextTick, watch } from 'vue'
 import IconGauge from '~icons/lucide/gauge'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconList from '~icons/lucide/list'
@@ -18,20 +17,19 @@ import {
 } from '../keybindings/catalog'
 import { keymapRows, requestedEditorFilter } from '../keybindings/keymapRows'
 import { paletteScopes, type PaletteScopeId } from '../palette/scopes'
-import { formatCombo, useKeybindings } from './useKeybindings'
-import { useCommands, useCommandPalette, useKeysScope, type Command } from './useCommands'
-import { setTheme, themeLabels, themes } from './useTheme'
+import { formatCombo, useKeybindings } from '../composables/useKeybindings'
+import { useCommands, useCommandPalette, useKeysScope, type Command } from '../composables/useCommands'
+import { setTheme, themeLabels, themes } from '../composables/useTheme'
 import { terminalSessionGroups, useTerminalSessions } from '../stores/useTerminalSessions'
 import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
-import { useAttachedTerminalWindows } from './useAttachedTerminalWindows'
+import { useAttachedTerminalWindows } from '../composables/useAttachedTerminalWindows'
 import { applicationSettingsSections } from '../router'
 import { applicationSettingsSectionMeta } from '../components/settings/sectionMeta'
 import { actionTypeMeta } from '../lib/actionPresentation'
 import { containerLine } from '../lib/itemPresentation'
-import type { ActionView } from '../types/action'
-import type { InboxItem, Profile, SidebarSelection } from '../types/feed'
+import type { AppCommandDeps } from './useAppCommands'
 
 // What each sigil is for, shown as the Keys scope's trailing legend row.
 const sigilMeanings: Partial<Record<PaletteScopeId, string>> = {
@@ -48,36 +46,8 @@ function contextLabel(context: CommandContext): string {
   if (context === 'any-terminal') return 'Terminal'
   return context
     .split('-')
-    .map((word) => word[0]!.toUpperCase() + word.slice(1))
+    .map((word) => word[0].toUpperCase() + word.slice(1))
     .join(' ')
-}
-
-export interface AppPaletteDeps {
-  /** Resolves a catalog command id to its implementation (App.vue's runMap). */
-  runCommand: (id: string) => void
-  /** Whether a catalog command's context fires from where the user is standing. */
-  contextActive: (context: CommandContext) => boolean
-  mode: Ref<'hub' | 'terminal' | 'agents'>
-  shellLoaded: Ref<boolean>
-  onboardingActive: Ref<boolean>
-  hubActive: Ref<boolean>
-  devToolsEnabled: Ref<boolean>
-  router: Router
-  profiles: Ref<Profile[]>
-  activeProfile: Ref<Profile | null>
-  requestSelectProfile: (id: string) => Promise<void>
-  navigateSidebar: (selection: SidebarSelection) => void
-  selectedItem: Ref<InboxItem | null>
-  selectedItemIDs: Ref<number[]>
-  openSelectedItemsSession: () => Promise<void>
-  actions: Ref<ActionView[]>
-  invokeAction: (id: string) => Promise<void>
-  flowsActive: Ref<boolean>
-  openFlows: (focusNodeId?: string) => void
-  requestExitFlows: () => void
-  openNewProfile: () => void
-  /** The slug attached on screen, so its own attach row does not offer itself. */
-  onScreenSessionSlug: Ref<string>
 }
 
 /**
@@ -86,31 +56,17 @@ export interface AppPaletteDeps {
  * themes), plus the Go-to rows for sessions, windows, settings sections, and
  * chats that are global rather than tied to a lazily mounted mode.
  */
-export function useAppPaletteRows(deps: AppPaletteDeps): void {
-  const {
-    runCommand,
-    contextActive,
-    mode,
-    shellLoaded,
-    onboardingActive,
-    hubActive,
-    devToolsEnabled,
-    router,
-    profiles,
-    activeProfile,
-    requestSelectProfile,
-    navigateSidebar,
-    selectedItem,
-    selectedItemIDs,
-    openSelectedItemsSession,
-    actions,
-    invokeAction,
-    flowsActive,
-    openFlows,
-    requestExitFlows,
-    openNewProfile,
-    onScreenSessionSlug,
-  } = deps
+export function useAppPaletteRows(
+  deps: AppCommandDeps,
+  runCommand: (id: string) => void,
+  contextActive: (context: CommandContext) => boolean,
+): void {
+  const { feed, nav, appMode, shellLoaded, onboardingActive, openNewProfile } = deps
+  const { profiles, activeProfile, selectedItem, selectedItemIDs, actions, invokeAction } = feed
+  const { router, devToolsEnabled, requestSelectProfile, navigateSidebar, flowsActive, openFlows } = nav
+  const { mode, hubActive, onScreenSessionSlug } = appMode
+  const { openSelectedItemsSession } = deps.feedCommands
+  const requestExitFlows = () => nav.openFeed()
 
   const { combosFor } = useKeybindings()
   const hintFor = (id: string): string => formatCombo(combosFor(id)[0] ?? '')
@@ -209,7 +165,7 @@ export function useAppPaletteRows(deps: AppPaletteDeps): void {
 
       // A row per mode this one is not: with the other modes' objects hidden,
       // these keep a mode change reachable without the title bar. Title, icon
-      // and keywords are the paired view.go-* command's — App.vue's runMap is
+      // and keywords are the paired view.go-* command's — useAppCommands' runMap is
       // the one implementation both the keymap and this row dispatch through.
       if (appReady.value) {
         const modeRow = (id: 'mode:hub' | 'mode:terminal' | 'mode:agents', catalogID: string): void => {
@@ -362,7 +318,8 @@ export function useAppPaletteRows(deps: AppPaletteDeps): void {
           keywords: ['flows', 'pipeline', 'nodes', 'canvas', 'editor'],
           icon: IconWorkflow,
           run: () => {
-            flowsActive.value ? requestExitFlows() : openFlows()
+            if (flowsActive.value) requestExitFlows()
+            else openFlows()
           },
         })
       }
@@ -454,7 +411,8 @@ export function useAppPaletteRows(deps: AppPaletteDeps): void {
     }),
   )
 
-  const { open: paletteOpen, setScope, visibleScopes } = useCommandPalette()
+  const palette = useCommandPalette()
+  const { open: paletteOpen, visibleScopes } = palette
 
   // The ? scope: every bindable command (launchers included), rows whose
   // context is live right now promoted ahead of the rest under their own
@@ -494,7 +452,7 @@ export function useAppPaletteRows(deps: AppPaletteDeps): void {
         order: 1,
         hint: scope.sigil,
         keepOpen: true,
-        run: () => setScope(scope.id),
+        run: () => palette.setScope(scope.id),
       })
     }
 

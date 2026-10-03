@@ -1,7 +1,7 @@
 import { onScopeDispose, ref, type Ref } from 'vue'
 
-// Module-scope so every BaseModal and DrawerSheet shares one registry. App.vue
-// gates global keybindings on it, and TasksView gates its own keys on it.
+// Module-scope so every BaseModal and DrawerSheet shares one registry.
+// useGlobalKeymap gates global keybindings on it, and TasksView its own keys.
 const openIds = new Set<symbol>()
 const count = ref(0)
 

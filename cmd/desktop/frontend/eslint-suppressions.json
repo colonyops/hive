@@ -1,34 +1,7 @@
 {
   "src/App.vue": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 2
-    },
-    "@typescript-eslint/use-unknown-in-catch-callback-variable": {
-      "count": 1
-    },
-    "no-console": {
-      "count": 2
+      "count": 5
     }
   },
   "src/__tests__/App.spec.ts": {
@@ -287,17 +260,6 @@
   "src/composables/useAppFont.ts": {
     "no-restricted-syntax": {
       "count": 2
-    }
-  },
-  "src/composables/useAppPaletteRows.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 1
     }
   },
   "src/composables/useAttachedTerminalWindows.ts": {
