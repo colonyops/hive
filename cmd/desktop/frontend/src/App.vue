@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Window } from '@wailsio/runtime'
 import { useEventListener, useStorage } from '@vueuse/core'
+import IconLayoutGrid from '~icons/lucide/layout-grid'
 import { useRoute, useRouter } from 'vue-router'
 import TitleBar from './components/TitleBar.vue'
 import ProfileRail from './components/ProfileRail.vue'
@@ -11,7 +12,9 @@ import DetailPane from './components/DetailPane.vue'
 import ActionInputsDialog from './components/ActionInputsDialog.vue'
 import CreateSessionDialog from './components/CreateSessionDialog.vue'
 import NewSessionDialog from './components/NewSessionDialog.vue'
-import ConfirmationDialog from './components/ui/ConfirmationDialog.vue'
+import ConfirmationHost from './components/ui/ConfirmationHost.vue'
+import RenameDialog from './components/ui/RenameDialog.vue'
+import HubOverlay from './components/ui/HubOverlay.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ErrorDialog from './components/ErrorDialog.vue'
 import ReportProblemDialog from './components/ReportProblemDialog.vue'
@@ -19,10 +22,8 @@ import WhatsNewDialog from './components/WhatsNewDialog.vue'
 import ProfileSettingsView from './components/ProfileSettingsView.vue'
 import SettingsView from './components/SettingsView.vue'
 import FlowsView from './pipeline/components/FlowsView.vue'
-import ActivityOverlay from './components/ActivityOverlay.vue'
-import TasksOverlay from './components/TasksOverlay.vue'
-import DeleteProfileModal from './components/DeleteProfileModal.vue'
-import NewProfileModal from './components/NewProfileModal.vue'
+import ActivityView from './components/ActivityView.vue'
+import TasksView from './components/TasksView.vue'
 import UnsavedFlowChangesModal from './components/UnsavedFlowChangesModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
 import ToastStack from './components/ToastStack.vue'
@@ -36,6 +37,7 @@ import { useAgentCanvasRoute } from './composables/useAgentCanvasRoute'
 import { useActivity } from './stores/useActivity'
 import { useJobs } from './stores/useJobs'
 import { useFeedState } from './composables/useFeedState'
+import { useConfirmation } from './composables/useConfirmation'
 import { useOpenModalCount } from './composables/useOpenModalCount'
 import { useCommandPalette } from './composables/useCommands'
 import { useErrorDialog } from './composables/useErrorDialog'
@@ -178,9 +180,7 @@ const {
   actionInputsAction,
   actionInputsBusy,
   actionInputsError,
-  actionRerunConfirmation,
-  actionRerunBusy,
-  actionRerunError,
+  actionRerun,
   unreadOnly,
   feedSort,
   setFeedSort,
@@ -195,7 +195,6 @@ const {
   renameProfileError,
   togglingProfileId,
   toggleProfileError,
-  deletingProfile,
   settingProfileImage,
   profileImageError,
   loadProfiles,
@@ -233,8 +232,6 @@ const {
   refreshSources,
   refreshingSources,
   invokeAction,
-  cancelActionRerun,
-  confirmActionRerun,
   cancelSessionLaunch,
   submitSessionLaunch,
   cancelActionInputs,
@@ -565,37 +562,32 @@ const updateInfo = ref<UpdateInfo | null>(null)
 const updateAvailable = computed(() => updateInfo.value?.available ?? false)
 const updateLatestVersion = computed(() => updateInfo.value?.latestVersion ?? '')
 const installingUpdate = ref(false)
-const updateConfirmOpen = ref(false)
-const updateInstallError = ref('')
+const confirmation = useConfirmation()
 
 function openUpdate(): void {
   if (installingUpdate.value) return
-  updateInstallError.value = ''
-  updateConfirmOpen.value = true
+  confirmation.request({
+    title: 'Install update?',
+    description: `Download Hive ${updateLatestVersion.value || 'update'} and relaunch the app now?`,
+    confirmLabel: 'Install and relaunch',
+    testid: 'update-confirmation',
+    onConfirm: installUpdate,
+  })
 }
 
-function cancelUpdate(): void {
-  if (installingUpdate.value) return
-  updateConfirmOpen.value = false
-  updateInstallError.value = ''
-}
-
-async function confirmUpdate(): Promise<void> {
-  if (installingUpdate.value) return
+async function installUpdate(): Promise<void> {
   installingUpdate.value = true
-  updateInstallError.value = ''
   try {
     await InstallUpdate()
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error)
+    installingUpdate.value = false
     console.error('Update install failed', error)
-    updateInstallError.value = detail
     showToast('Could not install the update', {
       severity: 'error',
-      body: detail,
+      body: error instanceof Error ? error.message : String(error),
       duration: 10_000,
     })
-    installingUpdate.value = false
+    throw error
   }
 }
 
@@ -603,9 +595,6 @@ async function confirmUpdate(): Promise<void> {
 // Clearing one feed is scoped, visible in the sidebar, and the thing the user
 // just asked for, so it runs straight away. The profile variant reaches every
 // feed at once with no undo, so it confirms and names the count first.
-const markWorkspaceReadOpen = ref(false)
-const workspaceUnreadCount = computed(() => unreadInScope(null))
-
 function markSelectedFeedRead(): void {
   // Trash carries no unread semantics, so there is nothing here to clear.
   if (selection.value.type !== 'feed') return
@@ -614,12 +603,15 @@ function markSelectedFeedRead(): void {
 
 function requestMarkWorkspaceRead(): void {
   if (markingAllRead.value) return
-  markWorkspaceReadOpen.value = true
-}
-
-async function confirmMarkWorkspaceRead(): Promise<void> {
-  await markAllRead(null)
-  markWorkspaceReadOpen.value = false
+  const count = unreadInScope(null)
+  const scope = `every feed of ${activeProfile.value?.name ?? 'this profile'}. This can't be undone.`
+  confirmation.request({
+    title: 'Mark all feeds as read?',
+    description: count === 1 ? `Clear the unread item in ${scope}` : `Clear all ${count} unread items in ${scope}`,
+    confirmLabel: 'Mark all as read',
+    testid: 'mark-workspace-read-confirmation',
+    onConfirm: () => markAllRead(null),
+  })
 }
 
 function closeSettings(): void {
@@ -808,18 +800,20 @@ async function submitProfileClearImage() {
   await clearProfileImage(activeProfileId.value)
 }
 
-const deleteProfileOpen = ref(false)
-
 function openDeleteProfile() {
-  deleteProfileOpen.value = true
-}
-
-async function confirmDeleteProfile() {
-  if (!activeProfileId.value) return
-  const deleted = await deleteProfile(activeProfileId.value)
-  if (!deleted) return
-  deleteProfileOpen.value = false
-  openFeed()
+  const profile = activeProfile.value
+  if (!profile) return
+  confirmation.request({
+    title: 'Delete profile',
+    description: `Delete ${profile.name}? Its flow file and committed feed rows are removed; other profiles keep their own source nodes.`,
+    confirmLabel: 'Delete profile',
+    testid: 'delete-profile-modal',
+    confirmTestid: 'delete-profile-confirm',
+    onConfirm: async () => {
+      if (!(await deleteProfile(profile.id))) throw new Error('Could not delete the profile.')
+      openFeed()
+    },
+  })
 }
 
 // Profiles load at startup regardless of GitHub (useFeedState's onMounted) —
@@ -1950,42 +1944,8 @@ onUnmounted(cancelSequenceTimer)
       @submit="submitNewSessionAndClearSelection"
       @dismiss-failure="dismissNewSessionFailure"
     />
-    <ConfirmationDialog
-      v-if="updateConfirmOpen"
-      title="Install update?"
-      :description="`Download Hive ${updateLatestVersion || 'update'} and relaunch the app now?`"
-      confirm-label="Install and relaunch"
-      :busy="installingUpdate"
-      :error="updateInstallError"
-      testid="update-confirmation"
-      @confirm="confirmUpdate"
-      @cancel="cancelUpdate"
-    />
-    <ConfirmationDialog
-      v-if="actionRerunConfirmation"
-      title="Run action again?"
-      :description="`${actionRerunConfirmation.label} has already run for this item. Run it again?`"
-      confirm-label="Run again"
-      :busy="actionRerunBusy"
-      :error="actionRerunError"
-      testid="action-rerun-confirmation"
-      @confirm="confirmActionRerun"
-      @cancel="cancelActionRerun"
-    />
-    <ConfirmationDialog
-      v-if="markWorkspaceReadOpen"
-      title="Mark all feeds as read?"
-      :description="
-        workspaceUnreadCount === 1
-          ? `Clear the unread item in every feed of ${activeProfile?.name ?? 'this profile'}. This can't be undone.`
-          : `Clear all ${workspaceUnreadCount} unread items in every feed of ${activeProfile?.name ?? 'this profile'}. This can't be undone.`
-      "
-      confirm-label="Mark all as read"
-      :busy="markingAllRead"
-      testid="mark-workspace-read-confirmation"
-      @confirm="confirmMarkWorkspaceRead"
-      @cancel="markWorkspaceReadOpen = false"
-    />
+    <ConfirmationHost :confirmation="confirmation" />
+    <ConfirmationHost :confirmation="actionRerun" />
     <ToastStack :toasts="toasts" @dismiss="dismissToast" @clear-all="clearToasts" />
     <PopupTerminal v-if="popupTerminalMounted" />
     <CommandPalette />
@@ -1997,27 +1957,35 @@ onUnmounted(cancelSequenceTimer)
       :entries="whatsNewEntries"
       @close="dismissWhatsNew"
     />
-    <NewProfileModal
+    <RenameDialog
       v-if="newProfileOpen"
+      title="New profile"
+      :icon="IconLayoutGrid"
+      label="Profile name"
+      hint="Saved as a flow in flows/ with the default feeds: your open PRs, the notifications inbox, and cross-repo assignments."
+      confirm-label="Create profile"
       :busy="creatingProfile"
       :error="createProfileError"
+      testid="new-profile"
+      :testids="{ modal: 'new-profile-modal', save: 'new-profile-submit' }"
       @close="newProfileOpen = false"
-      @create="submitNewProfile"
+      @save="submitNewProfile"
     />
-    <DeleteProfileModal
-      v-if="deleteProfileOpen && activeProfile"
-      :profile-name="activeProfile.name"
-      :busy="deletingProfile"
-      @close="deleteProfileOpen = false"
-      @confirm="confirmDeleteProfile"
-    />
-    <TasksOverlay v-if="tasksOpen" @close="tasksOpen = false" />
-    <ActivityOverlay
-      v-if="activityOpen"
-      @close="activityOpen = false"
-      @open-url="openUrl"
-      @open-item="openActivityItem"
-    />
+    <HubOverlay v-if="tasksOpen" label="Tasks" testid="tasks-overlay" @close="tasksOpen = false">
+      <TasksView @close="tasksOpen = false" />
+    </HubOverlay>
+    <HubOverlay v-if="activityOpen" label="Activity" testid="activity-overlay" @close="activityOpen = false">
+      <ActivityView
+        @close="activityOpen = false"
+        @open-url="openUrl"
+        @open-item="
+          (item) => {
+            openActivityItem(item)
+            activityOpen = false
+          }
+        "
+      />
+    </HubOverlay>
     <!-- Deploying from this modal can raise the error dialog. Only one is
          rendered at a time: BaseModal closes on any Escape, so stacked
          overlays would both take a single keypress and drop the guard along

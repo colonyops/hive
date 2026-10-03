@@ -19,7 +19,6 @@ const props = withDefaults(
     error?: string | null
     testid?: string
     confirmTestid?: string
-    cancelTestid?: string
   }>(),
   {
     details: () => [],
@@ -28,7 +27,6 @@ const props = withDefaults(
     error: null,
     testid: 'confirmation-dialog',
     confirmTestid: undefined,
-    cancelTestid: undefined,
   },
 )
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
@@ -83,7 +81,7 @@ useAutofocus(confirmRef)
         @click="emit('confirm')"
         >{{ busy ? 'Working…' : confirmLabel }}</BaseButton
       >
-      <BaseButton variant="secondary" :disabled="busy" :data-testid="cancelTestid ?? `${testid}-cancel`" @click="cancel"
+      <BaseButton variant="secondary" :disabled="busy" :data-testid="`${testid}-cancel`" @click="cancel"
         >Cancel</BaseButton
       >
     </template>

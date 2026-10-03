@@ -257,6 +257,27 @@ describe('SideBar folders', () => {
     wrapper.unmount()
   })
 
+  it('counts the feeds inside in the hint and the delete consequence', async () => {
+    const wrapper = mountGrouped()
+    await openFolderEditor(wrapper)
+    expect(dialog('folder-edit-hint').textContent?.trim()).toBe('1 feed inside')
+    wrapper.unmount()
+
+    const empty = mount(SideBar, {
+      props: {
+        profile: { ...grouped, tree: [{ kind: 'folder', folder: { id: 'work', name: 'Work', feeds: [] } }] },
+        selection: { type: 'feed', feedId: 'desktop' },
+      },
+      attachTo: document.body,
+    })
+    await openFolderEditor(empty)
+    expect(dialog('folder-edit-hint').textContent?.trim()).toBe('No feeds inside')
+    dialog<HTMLButtonElement>('folder-edit-delete').click()
+    await flushPromises()
+    expect(dialog('folder-delete-confirm-description').textContent).toContain('folder is empty')
+    empty.unmount()
+  })
+
   it('cancelling the delete confirmation keeps the folder and the dialog', async () => {
     const wrapper = mountGrouped()
     await openFolderEditor(wrapper)

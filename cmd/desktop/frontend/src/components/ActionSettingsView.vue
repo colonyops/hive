@@ -12,7 +12,7 @@ import BaseCard from './ui/BaseCard.vue'
 import BaseIconBadge from './ui/BaseIconBadge.vue'
 import AppIcon from './AppIcon.vue'
 import ActionEditor from './ActionEditor.vue'
-import ConfirmationDialog from './ui/ConfirmationDialog.vue'
+import ConfirmationHost from './ui/ConfirmationHost.vue'
 import EmptyState from './ui/EmptyState.vue'
 import { useConfirmation } from '../composables/useConfirmation'
 import { actionTypeMeta } from '../lib/actionPresentation'
@@ -230,16 +230,7 @@ function dropClass(id: string): Record<string, boolean> {
       @save="save"
       @cancel="editing = null"
     />
-    <ConfirmationDialog
-      v-if="confirmation.open.value && confirmation.options.value"
-      :title="confirmation.options.value.title"
-      :description="confirmation.options.value.description"
-      :confirm-label="confirmation.options.value.confirmLabel"
-      :busy="confirmation.busy.value"
-      :error="confirmation.error.value"
-      @confirm="confirmation.confirm"
-      @cancel="confirmation.cancel"
-    />
+    <ConfirmationHost :confirmation="confirmation" />
   </SettingsPage>
 </template>
 

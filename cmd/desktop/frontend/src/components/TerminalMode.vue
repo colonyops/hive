@@ -45,13 +45,13 @@ import ActionInputsDialog from './ActionInputsDialog.vue'
 import AppMenu from './ui/AppMenu.vue'
 import AppTooltip from './ui/AppTooltip.vue'
 import BaseButton from './ui/BaseButton.vue'
-import ConfirmationDialog from './ui/ConfirmationDialog.vue'
+import ConfirmationHost from './ui/ConfirmationHost.vue'
 import NewWindowMenu from './NewWindowMenu.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import SearchField from './ui/SearchField.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
-import SessionRenameDialog from './SessionRenameDialog.vue'
+import RenameDialog from './ui/RenameDialog.vue'
 import SessionRowMenu from './SessionRowMenu.vue'
 import SessionStatusChips from './SessionStatusChips.vue'
 import TerminalTab from './TerminalTab.vue'
@@ -552,14 +552,6 @@ const {
     void reloadSessions()
   },
 })
-const {
-  open: confirmOpen,
-  options: confirmOptions,
-  busy: confirmBusy,
-  error: confirmError,
-  cancel: cancelConfirm,
-  confirm: runConfirm,
-} = confirmation
 
 function setRowMenuToggle(id: string, el: unknown): void {
   if (el instanceof HTMLElement) rowMenuToggles.set(id, el)
@@ -2948,26 +2940,19 @@ onBeforeUnmount(() => {
       @submit="submitActionInputs"
     />
     <SessionDetailDialog v-if="sessionDetail" :detail="sessionDetail" @close="closeSessionDetail" />
-    <SessionRenameDialog
+    <RenameDialog
       v-if="renaming"
+      title="Rename session"
+      label="Session name"
+      hint="Its terminal session is renamed too, so an open terminal reconnects."
+      testid="session-rename"
       :name="renaming.name"
       :busy="renameBusy"
       :error="renameError"
       @close="cancelRename"
       @save="submitRename"
     />
-    <ConfirmationDialog
-      v-if="confirmOpen && confirmOptions"
-      :title="confirmOptions.title"
-      :description="confirmOptions.description"
-      :details="confirmOptions.details"
-      :confirm-label="confirmOptions.confirmLabel"
-      :busy="confirmBusy"
-      :error="confirmError"
-      testid="session-confirmation"
-      @confirm="runConfirm"
-      @cancel="cancelConfirm"
-    />
+    <ConfirmationHost :confirmation="confirmation" testid="session-confirmation" />
   </div>
 </template>
 

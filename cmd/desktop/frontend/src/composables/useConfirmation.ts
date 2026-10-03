@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { errorText } from '../lib/appError'
 
 /**
  * One line of the dialog's checklist: `danger` marks work the operation
@@ -14,30 +15,29 @@ export type ConfirmationOptions = {
   description: string
   details?: ConfirmationDetail[]
   confirmLabel?: string
+  testid?: string
+  confirmTestid?: string
   onConfirm: () => Promise<void> | void
 }
 
-function message(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : 'Could not complete that action.'
-}
+export type Confirmation = ReturnType<typeof useConfirmation>
 
-// Shared state machine for destructive dialogs. Failed confirmation deliberately
-// leaves the dialog open with its error so the user can retry or cancel.
+// Shared state machine for destructive dialogs, rendered by ConfirmationHost.
+// Failed confirmation deliberately leaves the dialog open with its error so the
+// user can retry or cancel.
 export function useConfirmation() {
-  const open = ref(false)
   const options = ref<ConfirmationOptions | null>(null)
   const busy = ref(false)
   const error = ref<string | null>(null)
 
   function request(next: ConfirmationOptions): void {
+    if (busy.value) return
     options.value = next
     error.value = null
-    open.value = true
   }
 
   function cancel(): void {
     if (busy.value) return
-    open.value = false
     options.value = null
     error.value = null
   }
@@ -48,17 +48,15 @@ export function useConfirmation() {
     error.value = null
     try {
       await options.value.onConfirm()
-      open.value = false
       options.value = null
-      error.value = null
       return true
     } catch (cause) {
-      error.value = message(cause)
+      error.value = errorText(cause, 'Could not complete that action.')
       return false
     } finally {
       busy.value = false
     }
   }
 
-  return { open, options, busy, error, request, cancel, confirm }
+  return { options, busy, error, request, cancel, confirm }
 }

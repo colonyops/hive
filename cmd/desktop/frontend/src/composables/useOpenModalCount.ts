@@ -7,7 +7,7 @@ const count = ref(0)
 
 /**
  * Registers a modal surface as open for as long as its component stays
- * mounted. Only BaseModal and DrawerSheet register: TasksOverlay gates its keys
+ * mounted. Only BaseModal and DrawerSheet register: HubOverlay gates its keys
  * on useOpenModalCount() === 0, so the count must stay zero while it is the
  * topmost surface.
  */

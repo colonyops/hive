@@ -71,7 +71,7 @@ describe('useSessionActions destructive operations', () => {
     await actions.requestDelete(session)
 
     expect(mocks.SessionRisk).toHaveBeenCalledWith('s1')
-    expect(actions.confirmation.open.value).toBe(true)
+    expect(actions.confirmation.options.value).not.toBeNull()
     expect(actions.confirmation.options.value?.details).toContainEqual({
       tone: 'danger',
       text: expect.stringContaining('Uncommitted changes'),
@@ -80,7 +80,7 @@ describe('useSessionActions destructive operations', () => {
 
     await actions.confirmation.confirm()
     expect(mocks.DeleteSession).toHaveBeenCalledWith('s1')
-    expect(actions.confirmation.open.value).toBe(false)
+    expect(actions.confirmation.options.value).toBeNull()
   })
 
   it('does not confirm at all when the pre-flight fails', async () => {
@@ -89,7 +89,7 @@ describe('useSessionActions destructive operations', () => {
 
     await actions.requestDelete(session)
 
-    expect(actions.confirmation.open.value).toBe(false)
+    expect(actions.confirmation.options.value).toBeNull()
     expect(mocks.DeleteSession).not.toHaveBeenCalled()
     expect(useToasts().toasts.value[0]?.message).toBe('no such session')
   })
@@ -120,7 +120,7 @@ describe('useSessionActions destructive operations', () => {
     await actions.requestDelete(session)
     await actions.confirmation.confirm()
 
-    expect(actions.confirmation.open.value).toBe(true)
+    expect(actions.confirmation.options.value).not.toBeNull()
     expect(actions.confirmation.error.value).toBe('sessions are unavailable')
   })
 })

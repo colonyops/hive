@@ -15,9 +15,10 @@ import IconLink2 from '~icons/lucide/link-2'
 import IconTrash2 from '~icons/lucide/trash-2'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import BaseBadge from './ui/BaseBadge.vue'
-import ConfirmationDialog from './ui/ConfirmationDialog.vue'
+import ConfirmationHost from './ui/ConfirmationHost.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import { useClipboard } from '../composables/useClipboard'
+import { useConfirmation } from '../composables/useConfirmation'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import { useTasks } from '../stores/useTasks'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
@@ -98,102 +99,59 @@ function copyId(): void {
 // Cancelling always confirms. An epic moving to done/cancelled with open
 // descendants confirms with the cascade count instead — that copy already
 // implies the cancellation, so it supersedes the plain cancel confirm.
-const pendingStatus = ref<string | null>(null)
-const cascadeConfirmCount = ref(0)
-const cascadeConfirmOpen = ref(false)
-const cancelConfirmOpen = ref(false)
-const statusBusy = ref(false)
+const confirmation = useConfirmation()
 const statusError = ref<string | null>(null)
 
 function requestStatusChange(next: string): void {
   const current = detail.value
   if (!current) return
+  statusError.value = null
+  const onConfirm = () => setStatus(current.id, next)
   const cascade =
     current.type === 'epic' && (next === 'done' || next === 'cancelled') ? cascadeCount(items.value, current.id) : 0
   if (cascade > 0) {
-    pendingStatus.value = next
-    cascadeConfirmCount.value = cascade
-    cascadeConfirmOpen.value = true
-    return
-  }
-  if (next === 'cancelled') {
-    pendingStatus.value = next
-    cancelConfirmOpen.value = true
-    return
-  }
-  void applyStatus(next)
-}
-
-async function applyStatus(status: string): Promise<void> {
-  const id = detail.value?.id
-  if (!id) return
-  statusBusy.value = true
-  statusError.value = null
-  try {
-    await setStatus(id, status)
-    cascadeConfirmOpen.value = false
-    cancelConfirmOpen.value = false
-    pendingStatus.value = null
-  } catch (err) {
-    statusError.value = errorText(err, 'Could not update status.')
-  } finally {
-    statusBusy.value = false
+    const label = statusMeta(next).label.toLowerCase()
+    confirmation.request({
+      title: 'Close nested tasks?',
+      description: `Marking this epic ${label} also closes ${cascade} open task${cascade === 1 ? '' : 's'} nested under it.`,
+      testid: 'task-cascade-confirm',
+      onConfirm,
+    })
+  } else if (next === 'cancelled') {
+    confirmation.request({
+      title: 'Cancel this task?',
+      description: 'This marks the task cancelled. It stays in the tree but drops out of the open filters.',
+      confirmLabel: 'Cancel task',
+      testid: 'task-cancel-confirm',
+      onConfirm,
+    })
+  } else {
+    setStatus(current.id, next).catch((err: unknown) => {
+      statusError.value = errorText(err, 'Could not update status.')
+    })
   }
 }
-
-function confirmPendingStatus(): void {
-  if (pendingStatus.value) void applyStatus(pendingStatus.value)
-}
-
-function cancelPendingStatus(): void {
-  cascadeConfirmOpen.value = false
-  cancelConfirmOpen.value = false
-  pendingStatus.value = null
-  statusError.value = null
-}
-
-const cascadeDescription = computed(() => {
-  const label = statusMeta(pendingStatus.value ?? '').label.toLowerCase()
-  const count = cascadeConfirmCount.value
-  return `Marking this epic ${label} also closes ${count} open task${count === 1 ? '' : 's'} nested under it.`
-})
 
 // ── Delete ───────────────────────────────────────────────────────────────
-const deleteConfirmOpen = ref(false)
-const deleteBusy = ref(false)
-const deleteError = ref<string | null>(null)
-
-function openDeleteConfirm(): void {
-  deleteError.value = null
-  deleteConfirmOpen.value = true
-}
-
-// A new selection must not inherit the previous one's failures or half-open
-// confirms — a poll can clear a vanished selection while a dialog is up, and
-// a lingering error would blame the wrong task.
-watch(selectedId, () => {
-  statusError.value = null
-  deleteError.value = null
-  pendingStatus.value = null
-  cascadeConfirmOpen.value = false
-  cancelConfirmOpen.value = false
-  deleteConfirmOpen.value = false
-})
-
-async function confirmDelete(): Promise<void> {
+function requestDelete(): void {
   const id = detail.value?.id
   if (!id) return
-  deleteBusy.value = true
-  deleteError.value = null
-  try {
-    await remove(id)
-    deleteConfirmOpen.value = false
-  } catch (err) {
-    deleteError.value = errorText(err, 'Could not delete task.')
-  } finally {
-    deleteBusy.value = false
-  }
+  confirmation.request({
+    title: 'Delete task',
+    description: 'Deletes this item and everything nested under it, comments included. This cannot be undone.',
+    confirmLabel: 'Delete',
+    testid: 'task-delete-confirm',
+    onConfirm: () => remove(id),
+  })
 }
+
+// A new selection must not inherit the previous one's failure or a half-open
+// confirm: a poll can clear a vanished selection while a dialog is up, and a
+// lingering error would blame the wrong task.
+watch(selectedId, () => {
+  statusError.value = null
+  confirmation.cancel()
+})
 
 // DetailPane.vue's precedent: docked right, handle on the left edge, width
 // persisted separately from the tree pane it sits beside.
@@ -273,7 +231,7 @@ const {
             @update:model-value="requestStatusChange"
           />
           <InlineError
-            v-if="statusError && !cascadeConfirmOpen && !cancelConfirmOpen"
+            v-if="statusError"
             testid="task-status-error"
             variant="line"
             class="mt-1.5"
@@ -359,7 +317,7 @@ const {
         </section>
 
         <div class="mt-6 border-t border-border pt-4">
-          <BaseButton variant="danger-outline" size="xs" data-testid="task-delete" @click="openDeleteConfirm">
+          <BaseButton variant="danger-outline" size="xs" data-testid="task-delete" @click="requestDelete">
             <template #icon><IconTrash2 class="size-3.5" /></template>Delete
           </BaseButton>
         </div>
@@ -367,38 +325,6 @@ const {
     </template>
     <EmptyState v-else class="m-auto font-mono" message="Select a task to inspect" data-testid="task-detail-empty" />
 
-    <ConfirmationDialog
-      v-if="cascadeConfirmOpen"
-      title="Close nested tasks?"
-      :description="cascadeDescription"
-      confirm-label="Confirm"
-      :busy="statusBusy"
-      :error="statusError"
-      testid="task-cascade-confirm"
-      @confirm="confirmPendingStatus"
-      @cancel="cancelPendingStatus"
-    />
-    <ConfirmationDialog
-      v-if="cancelConfirmOpen"
-      title="Cancel this task?"
-      description="This marks the task cancelled. It stays in the tree but drops out of the open filters."
-      confirm-label="Cancel task"
-      :busy="statusBusy"
-      :error="statusError"
-      testid="task-cancel-confirm"
-      @confirm="confirmPendingStatus"
-      @cancel="cancelPendingStatus"
-    />
-    <ConfirmationDialog
-      v-if="deleteConfirmOpen"
-      title="Delete task"
-      description="Deletes this item and everything nested under it, comments included. This cannot be undone."
-      confirm-label="Delete"
-      :busy="deleteBusy"
-      :error="deleteError"
-      testid="task-delete-confirm"
-      @confirm="confirmDelete"
-      @cancel="deleteConfirmOpen = false"
-    />
+    <ConfirmationHost :confirmation="confirmation" />
   </aside>
 </template>

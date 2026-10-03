@@ -1,9 +1,8 @@
 <script setup lang="ts">
 // Navigation guard (hc-sx4k3c7k): shown when the user tries to exit the
 // flows canvas or switch the active profile while the active flow has
-// un-deployed changes (session.dirty). Mirrors DeleteProfileModal's
-// structure/styling, extended with a third action — Deploy writes the
-// draft before proceeding, Discard drops it (App.vue calls
+// un-deployed changes (session.dirty). A confirm with three answers: Deploy
+// writes the draft before proceeding, Discard drops it (App.vue calls
 // session.discardDraft(), which reloads the flow fresh from disk), Cancel
 // aborts the navigation entirely and leaves the draft untouched.
 import InlineError from './ui/InlineError.vue'

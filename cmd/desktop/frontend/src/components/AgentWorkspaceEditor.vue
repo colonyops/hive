@@ -9,7 +9,7 @@
 // workspace's own. The skills list names packages, not individual skills
 // (ADR skill-packages-are-the-unit-a-workspace-enables). Deleting the workspace also lives here — the editor
 // is the workspace's whole management surface, so its sidebar row needs no
-// menu. Delete follows FolderEditModal.vue's shape: a quiet footer action
+// menu. Delete follows the sidebar folder dialog's shape: a quiet footer action
 // that expands into an InlineConfirm over a dimmed, inert form.
 import { computed, h, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Component } from 'vue'
@@ -1233,7 +1233,7 @@ onMounted(async () => {
     </div>
 
     <!-- While a delete is pending the form recedes: dimmed and inert, so the
-         two states can't be misread for each other (FolderEditModal's rule). -->
+         two states can't be misread for each other (the folder dialog's rule). -->
     <div
       v-else
       class="flex flex-col gap-7 transition-opacity"

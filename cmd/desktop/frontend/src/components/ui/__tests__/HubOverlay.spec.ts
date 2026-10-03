@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   OpenURL: vi.fn(),
 }))
 
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/tasksservice', () => ({
+vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/tasksservice', () => ({
   ListTasks: mocks.ListTasks,
   TaskDetail: mocks.ReadTaskDetail,
   SetTaskStatus: mocks.SetTaskStatus,
@@ -27,7 +27,9 @@ vi.mock('@wailsio/runtime', () => ({
   Browser: { OpenURL: mocks.OpenURL },
 }))
 
-import TasksOverlay from '../TasksOverlay.vue'
+import { h } from 'vue'
+import HubOverlay from '../HubOverlay.vue'
+import TasksView from '../../TasksView.vue'
 
 function el<T extends HTMLElement>(testid: string): T {
   const element = document.querySelector<T>(`[data-testid="${testid}"]`)
@@ -35,7 +37,16 @@ function el<T extends HTMLElement>(testid: string): T {
   return element
 }
 
-describe('TasksOverlay', () => {
+// TasksView is the child here because it owns Escape and the j/k walk the
+// overlay's focus handling exists for.
+function mountTasks(onViewClose = vi.fn()) {
+  return mount(HubOverlay, {
+    props: { label: 'Tasks', testid: 'tasks-overlay' },
+    slots: { default: () => h(TasksView, { onClose: onViewClose }) },
+  })
+}
+
+describe('HubOverlay', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.On.mockReturnValue(() => {})
@@ -43,8 +54,8 @@ describe('TasksOverlay', () => {
     mocks.TaskRepoKeys.mockResolvedValue([])
   })
 
-  it('hosts TasksView inside a large teleported panel', async () => {
-    const wrapper = mount(TasksOverlay)
+  it('hosts its view inside a large teleported panel', async () => {
+    const wrapper = mountTasks()
     await flushPromises()
 
     expect(el('tasks-overlay')).toBeTruthy()
@@ -54,7 +65,7 @@ describe('TasksOverlay', () => {
   })
 
   it('emits close when the backdrop is clicked', async () => {
-    const wrapper = mount(TasksOverlay)
+    const wrapper = mountTasks()
     await flushPromises()
 
     el('tasks-overlay-backdrop').click()
@@ -64,7 +75,7 @@ describe('TasksOverlay', () => {
   })
 
   it('does not close when a click lands inside the panel', async () => {
-    const wrapper = mount(TasksOverlay)
+    const wrapper = mountTasks()
     await flushPromises()
 
     el('tasks-overlay').click()
@@ -81,7 +92,7 @@ describe('TasksOverlay', () => {
     document.body.append(textarea)
     textarea.focus()
 
-    const wrapper = mount(TasksOverlay)
+    const wrapper = mountTasks()
     await flushPromises()
     expect(document.activeElement).toBe(el('tasks-overlay'))
 
@@ -92,12 +103,14 @@ describe('TasksOverlay', () => {
     textarea.remove()
   })
 
-  it('emits close on Escape via the single handler TasksView already owns', async () => {
-    const wrapper = mount(TasksOverlay)
+  it('leaves Escape to the view it hosts', async () => {
+    const onViewClose = vi.fn()
+    const wrapper = mountTasks(onViewClose)
     await flushPromises()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(onViewClose).toHaveBeenCalledOnce()
+    expect(wrapper.emitted('close')).toBeUndefined()
 
     wrapper.unmount()
   })

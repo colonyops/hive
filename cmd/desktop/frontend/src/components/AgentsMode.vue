@@ -24,7 +24,7 @@ import AgentCanvasPane from './AgentCanvasPane.vue'
 import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
 import BaseButton from './ui/BaseButton.vue'
-import ChatRenameDialog from './ChatRenameDialog.vue'
+import RenameDialog from './ui/RenameDialog.vue'
 import NewChatDialog from './NewChatDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
@@ -463,7 +463,7 @@ async function deleteWorkspaceFromEditor(dir: string): Promise<void> {
   }
 }
 
-// ── Chat rename (ChatRenameDialog.vue) ───────────────────────────────────────
+// ── Chat rename ───────────────────────────────────────
 const renamingSession = ref<AgentSession | null>(null)
 const renameBusy = ref(false)
 const renameError = ref('')
@@ -494,7 +494,7 @@ async function saveSessionRename(name: string): Promise<void> {
 
 // The sidebar's inline editor, not the dialog: by the time an edit commits,
 // the row being renamed is the open chat, so a failure surfaces on the pane
-// status bar rather than on ChatRenameDialog, which is not open.
+// status bar rather than on the rename dialog, which is not open.
 async function commitSessionRename(session: AgentSession, name: string): Promise<void> {
   paneActionError.value = ''
   try {
@@ -1037,8 +1037,11 @@ onBeforeUnmount(() => {
       @submit="submitNewSession"
     />
 
-    <ChatRenameDialog
+    <RenameDialog
       v-if="renamingSession"
+      title="Rename chat"
+      label="Chat name"
+      testid="chat-rename"
       :name="renamingSession.name"
       :busy="renameBusy"
       :error="renameError"

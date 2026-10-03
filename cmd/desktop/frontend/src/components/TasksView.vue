@@ -10,12 +10,13 @@ import IconEraser from '~icons/lucide/eraser'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconX from '~icons/lucide/x'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
-import ConfirmationDialog from './ui/ConfirmationDialog.vue'
+import ConfirmationHost from './ui/ConfirmationHost.vue'
 import TaskDetailPane from './TaskDetailPane.vue'
 import TaskTreeRow from './TaskTreeRow.vue'
 import ViewHeader from './ui/ViewHeader.vue'
 import SearchField from './ui/SearchField.vue'
 import { useClipboard } from '../composables/useClipboard'
+import { useConfirmation } from '../composables/useConfirmation'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { useToasts } from '../composables/useToasts'
 import { useOpenModalCount } from '../composables/useOpenModalCount'
@@ -190,39 +191,27 @@ onKeyStroke('y', (event) => {
 // indefinitely before anyone notices.
 const PRUNE_OLDER_THAN_DAYS = 30
 
-const pruneConfirmOpen = ref(false)
-const pruneDryRunCount = ref<number | null>(null)
-const pruneBusy = ref(false)
+const pruneConfirmation = useConfirmation()
 const pruneError = ref<string | null>(null)
 
 async function requestPrune(): Promise<void> {
   pruneError.value = null
+  const repo = repoKey.value
+  let count: number
   try {
-    pruneDryRunCount.value = await pruneDryRun(PRUNE_OLDER_THAN_DAYS, repoKey.value)
-    pruneConfirmOpen.value = true
+    count = await pruneDryRun(PRUNE_OLDER_THAN_DAYS, repo)
   } catch (err) {
     pruneError.value = errorText(err, 'Could not check what pruning would remove.')
+    return
   }
+  pruneConfirmation.request({
+    title: 'Prune old tasks',
+    description: `This removes ${count} task${count === 1 ? '' : 's'} older than ${PRUNE_OLDER_THAN_DAYS} days${repo ? ` in ${repo}` : ''}. Pruning removes everything nested under a pruned root, regardless of its own status.`,
+    confirmLabel: 'Prune',
+    testid: 'tasks-prune-confirm',
+    onConfirm: () => prune(PRUNE_OLDER_THAN_DAYS, repo),
+  })
 }
-
-async function confirmPrune(): Promise<void> {
-  pruneBusy.value = true
-  pruneError.value = null
-  try {
-    await prune(PRUNE_OLDER_THAN_DAYS, repoKey.value)
-    pruneConfirmOpen.value = false
-  } catch (err) {
-    pruneError.value = errorText(err, 'Could not prune tasks.')
-  } finally {
-    pruneBusy.value = false
-  }
-}
-
-const pruneDescription = computed(() => {
-  const count = pruneDryRunCount.value ?? 0
-  const scope = repoKey.value ? ` in ${repoKey.value}` : ''
-  return `This removes ${count} task${count === 1 ? '' : 's'} older than ${PRUNE_OLDER_THAN_DAYS} days${scope}. Pruning removes everything nested under a pruned root, regardless of its own status.`
-})
 
 useEscapeToClose(() => emit('close'))
 
@@ -313,10 +302,9 @@ onUnmounted(() => {
       Couldn't refresh tasks — {{ error }}
     </div>
     <!-- A dry-run failure never opens the confirm dialog (there's nothing to
-         confirm), so its error has nowhere to show but here — the dialog only
-         carries pruneError for a failure once it's already open. -->
+         confirm), so its error has nowhere to show but here. -->
     <div
-      v-if="pruneError && !pruneConfirmOpen"
+      v-if="pruneError"
       class="shrink-0 border-b border-severity-error-border bg-severity-error-tint px-5 py-2 text-xs text-severity-error"
       role="alert"
       data-testid="tasks-prune-error"
@@ -384,16 +372,6 @@ onUnmounted(() => {
       <TaskDetailPane />
     </div>
 
-    <ConfirmationDialog
-      v-if="pruneConfirmOpen"
-      title="Prune old tasks"
-      :description="pruneDescription"
-      confirm-label="Prune"
-      :busy="pruneBusy"
-      :error="pruneError"
-      testid="tasks-prune-confirm"
-      @confirm="confirmPrune"
-      @cancel="pruneConfirmOpen = false"
-    />
+    <ConfirmationHost :confirmation="pruneConfirmation" />
   </div>
 </template>

@@ -9,7 +9,7 @@ import BaseBadge from './ui/BaseBadge.vue'
 import BaseButton from './ui/BaseButton.vue'
 import BaseCard from './ui/BaseCard.vue'
 import BaseIconBadge from './ui/BaseIconBadge.vue'
-import ConfirmationDialog from './ui/ConfirmationDialog.vue'
+import ConfirmationHost from './ui/ConfirmationHost.vue'
 import LauncherEditor from './LauncherEditor.vue'
 import EmptyState from './ui/EmptyState.vue'
 import { useConfirmation } from '../composables/useConfirmation'
@@ -148,15 +148,6 @@ function requestDelete(launcher: Launcher): void {
       @save="save"
       @cancel="editing = null"
     />
-    <ConfirmationDialog
-      v-if="confirmation.open.value && confirmation.options.value"
-      :title="confirmation.options.value.title"
-      :description="confirmation.options.value.description"
-      :confirm-label="confirmation.options.value.confirmLabel"
-      :busy="confirmation.busy.value"
-      :error="confirmation.error.value"
-      @confirm="confirmation.confirm"
-      @cancel="confirmation.cancel"
-    />
+    <ConfirmationHost :confirmation="confirmation" />
   </SettingsPage>
 </template>

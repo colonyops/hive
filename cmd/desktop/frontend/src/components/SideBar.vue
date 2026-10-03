@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useStorage } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
@@ -10,7 +10,8 @@ import IconRss from '~icons/lucide/rss'
 import IconSettings from '~icons/lucide/settings'
 import IconTrash from '~icons/lucide/trash-2'
 import IconWorkflow from '~icons/lucide/workflow'
-import FolderEditModal from './FolderEditModal.vue'
+import InlineConfirm from './ui/InlineConfirm.vue'
+import RenameDialog from './ui/RenameDialog.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import SidebarFeedRow from './SidebarFeedRow.vue'
 import { useResizablePanel } from '../composables/useResizablePanel'
@@ -167,6 +168,22 @@ const editingFolder = computed<FeedFolder | null>(() => {
   const node = tree.value.find((n) => n.kind === 'folder' && n.folder.id === editingId.value)
   return node?.kind === 'folder' ? node.folder : null
 })
+
+// Deleting is the rare exception, so it stays a quiet footer action until it
+// is asked for, then expands into a confirm over the dimmed rename.
+const confirmingFolderDelete = ref(false)
+watch(editingId, () => (confirmingFolderDelete.value = false))
+
+function feedCount(folder: FeedFolder): string {
+  const count = folder.feeds.length
+  return `${count} ${count === 1 ? 'feed' : 'feeds'}`
+}
+
+function folderDeleteConsequence(folder: FeedFolder): string {
+  const count = folder.feeds.length
+  if (count === 0) return 'The folder is empty, so nothing else changes.'
+  return `Its ${feedCount(folder)} ${count === 1 ? 'moves' : 'move'} to the top level — nothing is unsubscribed.`
+}
 
 function replaceFolder(folder: FeedFolder, patch: Partial<FeedFolder>): void {
   emit(
@@ -395,14 +412,42 @@ function deleteFolder(folder: FeedFolder): void {
 
     <PanelResizeHandle edge="right" name="sidebar" :start="startResize" :step="step" />
 
-    <FolderEditModal
+    <RenameDialog
       v-if="editingFolder"
       :key="editingFolder.id"
-      :folder="editingFolder"
+      title="Edit folder"
+      :icon="IconFolder"
+      label="Folder name"
+      :name="editingFolder.name"
+      :hint="editingFolder.feeds.length ? `${feedCount(editingFolder)} inside` : 'No feeds inside'"
+      confirm-label="Save"
+      :locked="confirmingFolderDelete"
+      testid="folder-edit"
+      :testids="{ modal: 'folder-edit-modal', input: 'folder-edit-name' }"
       @save="saveFolderName(editingFolder, $event)"
-      @delete="deleteFolder(editingFolder)"
       @close="editingId = null"
-    />
+    >
+      <InlineConfirm
+        v-if="confirmingFolderDelete"
+        title="Delete this folder?"
+        :description="folderDeleteConsequence(editingFolder)"
+        confirm-label="Delete"
+        cancel-label="Keep"
+        testid="folder-delete-confirm"
+        @confirm="deleteFolder(editingFolder)"
+        @cancel="confirmingFolderDelete = false"
+      />
+      <template #footer-start>
+        <button
+          type="button"
+          class="cursor-pointer text-[12.5px] text-text-3 hover:text-severity-error"
+          data-testid="folder-edit-delete"
+          @click="confirmingFolderDelete = true"
+        >
+          Delete folder
+        </button>
+      </template>
+    </RenameDialog>
   </aside>
 </template>
 

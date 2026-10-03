@@ -5,7 +5,7 @@
 // a colored rail rather than a filled icon, and one segmented control filters
 // the stream. Events are recorded by backend subsystems through the
 // activity.Recorder and by the frontend via ActivityService.Record; this view
-// only reads and presents them. Shown in ActivityOverlay, opened from the
+// only reads and presents them. Shown in a HubOverlay, opened from the
 // titlebar Activity icon.
 import { computed, onMounted, ref } from 'vue'
 import IconExternalLink from '~icons/lucide/external-link'

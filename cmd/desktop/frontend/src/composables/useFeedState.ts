@@ -38,6 +38,7 @@ import type {
   SessionLaunchOptions as SessionLaunchOptionsView,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { appErrorKind, appErrorMessage, errorText } from '../lib/appError'
+import { useConfirmation } from './useConfirmation'
 import {
   canonicalPayload,
   clipboardText,
@@ -156,14 +157,7 @@ export function useFeedState() {
   const actionInputsItems = ref<InboxItem[]>([])
   const actionInputsBusy = ref(false)
   const actionInputsError = ref<string | null>(null)
-  const actionRerunConfirmation = ref<{
-    actionID: string
-    label: string
-    item: InboxItem
-    input: Record<string, unknown>
-  } | null>(null)
-  const actionRerunBusy = ref(false)
-  const actionRerunError = ref<string | null>(null)
+  const actionRerun = useConfirmation()
   const { toasts, showToast, dismissToast, clearToasts } = useToasts()
   const { notify } = useNotify()
   const creatingProfile = ref(false)
@@ -1125,8 +1119,13 @@ export function useFeedState() {
       const run = await InvokeAction(actionID, item.id, input)
       if (run.confirmationRequired) {
         const label = actions.value.find((action) => action.id === actionID)?.label ?? actionID
-        actionRerunConfirmation.value = { actionID, label, item, input }
-        actionRerunError.value = null
+        actionRerun.request({
+          title: 'Run action again?',
+          description: `${label} has already run for this item. Run it again?`,
+          confirmLabel: 'Run again',
+          testid: 'action-rerun-confirmation',
+          onConfirm: () => rerunAction(actionID, input, item),
+        })
         return false
       }
       setActionRun(item.id, actionID, run)
@@ -1162,26 +1161,11 @@ export function useFeedState() {
     }
   }
 
-  function cancelActionRerun() {
-    if (actionRerunBusy.value) return
-    actionRerunConfirmation.value = null
-    actionRerunError.value = null
-  }
-
-  async function confirmActionRerun() {
-    const pending = actionRerunConfirmation.value
-    if (!pending || actionRerunBusy.value) return
-    actionRerunBusy.value = true
-    actionRerunError.value = null
-    const succeeded = await runAction(pending.actionID, { ...pending.input, rerun: true }, pending.item)
-    actionRerunBusy.value = false
-    if (succeeded) {
-      actionRerunConfirmation.value = null
-      if (sessionLaunchAction.value) cancelSessionLaunch()
-      if (actionInputsAction.value) cancelActionInputs()
-    } else {
-      actionRerunError.value = actionError.value ?? 'Could not rerun the action.'
-    }
+  async function rerunAction(actionID: string, input: Record<string, unknown>, item: InboxItem) {
+    if (!(await runAction(actionID, { ...input, rerun: true }, item)))
+      throw new Error(actionError.value ?? 'Could not rerun the action.')
+    if (sessionLaunchAction.value) cancelSessionLaunch()
+    if (actionInputsAction.value) cancelActionInputs()
   }
 
   // An action that needs something from the user does not invoke on click: it
@@ -1253,8 +1237,7 @@ export function useFeedState() {
     const succeeded = await runAction(action.id, { session, inputs }, item)
     sessionLaunchBusy.value = false
     if (succeeded) cancelSessionLaunch()
-    else if (!actionRerunConfirmation.value)
-      sessionLaunchError.value = actionError.value ?? 'Could not create the session.'
+    else if (!actionRerun.options.value) sessionLaunchError.value = actionError.value ?? 'Could not create the session.'
   }
 
   function cancelActionInputs() {
@@ -1279,7 +1262,7 @@ export function useFeedState() {
         : await runAction(action.id, { inputs: values }, item)
     actionInputsBusy.value = false
     if (succeeded) cancelActionInputs()
-    else if (!actionRerunConfirmation.value) actionInputsError.value = actionError.value ?? 'Could not run the action.'
+    else if (!actionRerun.options.value) actionInputsError.value = actionError.value ?? 'Could not run the action.'
   }
 
   function notWired() {
@@ -1462,9 +1445,7 @@ export function useFeedState() {
     actionInputsAction,
     actionInputsBusy,
     actionInputsError,
-    actionRerunConfirmation,
-    actionRerunBusy,
-    actionRerunError,
+    actionRerun,
     unreadOnly,
     feedSort,
     setFeedSort,
@@ -1510,8 +1491,6 @@ export function useFeedState() {
     loadEvents,
     refresh,
     invokeAction,
-    cancelActionRerun,
-    confirmActionRerun,
     cancelSessionLaunch,
     submitSessionLaunch,
     cancelActionInputs,
