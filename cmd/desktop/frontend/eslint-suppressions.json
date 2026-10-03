@@ -103,11 +103,6 @@
       "count": 1
     }
   },
-  "src/components/TerminalMode.vue": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
   "src/components/TerminalSettingsView.vue": {
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
