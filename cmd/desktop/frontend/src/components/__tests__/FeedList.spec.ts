@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount, type VueWrapper } from '@vue/test-utils'
 import FeedList from '../FeedList.vue'
+import { tooltipFor } from '../../test-utils/tooltip'
 import type { ActionView } from '../../types/action'
 import type { InboxItem } from '../../types/feed'
 
@@ -177,8 +178,8 @@ describe('FeedList', () => {
 
     await wrapper.setProps({ selectionMode: true, selectedItemIds: [1, 2] })
     expect(wrapper.get('.selection-count').attributes('aria-label')).toBe('2 selected')
-    expect(wrapper.get('[data-testid="selection-copy-contents"]').attributes('title')).toBe('Copy contents')
-    expect(wrapper.get('[data-testid="selection-create-session"]').attributes('title')).toBe('Create session')
+    expect(tooltipFor(wrapper, 'selection-copy-contents')).toBe('Copy contents')
+    expect(tooltipFor(wrapper, 'selection-create-session')).toBe('Create session')
     await wrapper.get('[data-testid="selection-copy-contents"]').trigger('click')
     await wrapper.get('[data-testid="selection-create-session"]').trigger('click')
     await wrapper.get('[data-testid="selection-cancel"]').trigger('click')

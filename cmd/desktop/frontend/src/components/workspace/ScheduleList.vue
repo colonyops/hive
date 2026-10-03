@@ -2,6 +2,7 @@
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconPlay from '~icons/lucide/play'
 import IconPlus from '~icons/lucide/plus'
+import IconButton from '../ui/IconButton.vue'
 import AppSwitch from '../ui/AppSwitch.vue'
 import BaseBadge from '../ui/BaseBadge.vue'
 import EmptyState from '../ui/EmptyState.vue'
@@ -18,9 +19,6 @@ const emit = defineEmits<{
   open: [card: ScheduleCard | null, event: Event]
   run: [card: ScheduleCard]
 }>()
-
-const iconButtonClass =
-  'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text disabled:cursor-not-allowed disabled:opacity-40'
 </script>
 
 <template>
@@ -85,29 +83,23 @@ const iconButtonClass =
         />
       </div>
       <div class="flex shrink-0 items-center gap-1">
-        <button
+        <IconButton
           v-if="card.saved"
-          type="button"
-          :class="iconButtonClass"
-          title="Run now"
-          aria-label="Run now"
+          label="Run now"
+          :icon="IconPlay"
+          size="lg"
           :disabled="busy || card.running"
           :data-testid="`agent-workspace-editor-schedule-${index}-run`"
           @click="emit('run', card)"
-        >
-          <IconPlay class="size-[15px]" />
-        </button>
-        <button
-          type="button"
-          :class="iconButtonClass"
-          title="Edit this schedule"
-          aria-label="Edit this schedule"
+        />
+        <IconButton
+          label="Edit this schedule"
+          :icon="IconChevronRight"
+          size="lg"
           :disabled="busy"
           :data-testid="`agent-workspace-editor-schedule-${index}-edit`"
           @click="emit('open', card, $event)"
-        >
-          <IconChevronRight class="size-4" />
-        </button>
+        />
       </div>
     </div>
     <EmptyState v-if="!cards.length" variant="inline" class="px-4 py-3.5" message="No schedules yet." />

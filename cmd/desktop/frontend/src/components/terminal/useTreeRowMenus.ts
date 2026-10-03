@@ -37,7 +37,9 @@ export function useTreeRowMenus(options: { windowMenuAllowed: (row: TerminalSess
   const newWindowFlip = ref(false)
   const newWindowToggle = ref<HTMLElement | null>(null)
 
-  function setToggle(toggles: Map<string, HTMLElement>, key: string, el: unknown): void {
+  // A toggle is an IconButton, so the ref is its instance; the menu wants its element.
+  function setToggle(toggles: Map<string, HTMLElement>, key: string, toggle: unknown): void {
+    const el = (toggle as { $el?: unknown } | null)?.$el
     if (el instanceof HTMLElement) toggles.set(key, el)
     else toggles.delete(key)
   }

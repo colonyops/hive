@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, type Component } from 'vue'
 import IconX from '~icons/lucide/x'
+import IconButton from './IconButton.vue'
 import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import { useFocusTrap } from '../../composables/useFocusTrap'
 import { useRegisterOpenModal } from '../../composables/useOpenModalCount'
@@ -79,15 +80,14 @@ useRegisterOpenModal()
           /></span>
           <div class="flex-1 text-title font-semibold tracking-[-.01em]">{{ title }}</div>
           <slot name="header-actions" />
-          <button
-            class="cursor-pointer text-text-3 hover:text-text disabled:cursor-default disabled:opacity-50"
-            aria-label="Close"
-            :data-testid="testid ? `${testid}-close` : undefined"
+          <IconButton
+            label="Close"
+            :icon="IconX"
+            size="lg"
             :disabled="busy"
+            :data-testid="testid ? `${testid}-close` : undefined"
             @click="close"
-          >
-            <IconX class="size-4" />
-          </button>
+          />
         </header>
         <div class="min-h-0 flex-1 overflow-y-auto">
           <slot />

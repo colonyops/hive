@@ -64,7 +64,7 @@ describe('AppTooltip', () => {
   // Arriving by Tab is already deliberate; there is no cursor passing through.
   it('skips the dwell for keyboard focus', async () => {
     const wrapper = mountTooltip()
-    await wrapper.trigger('focusin')
+    wrapper.get<HTMLButtonElement>('[data-testid="trigger"]').element.focus()
     await wrapper.vm.$nextTick()
     expect(bubble()).not.toBeNull()
   })
@@ -80,11 +80,35 @@ describe('AppTooltip', () => {
 
   it('takes the bubble down with the component', async () => {
     const wrapper = mountTooltip()
-    await wrapper.trigger('focusin')
+    wrapper.get<HTMLButtonElement>('[data-testid="trigger"]').element.focus()
     await wrapper.vm.$nextTick()
     expect(bubble()).not.toBeNull()
 
     wrapper.unmount()
+    await wrapper.vm.$nextTick()
+    expect(bubble()).toBeNull()
+  })
+
+  // A menu toggle opens its menu where the bubble would sit, so a tooltip on
+  // it must stay down while the menu is open and after the click that opened it.
+  it('hides on click, including Enter or Space on a focused trigger', async () => {
+    const wrapper = mountTooltip()
+    wrapper.get<HTMLButtonElement>('[data-testid="trigger"]').element.focus()
+    await wrapper.vm.$nextTick()
+    expect(bubble()).not.toBeNull()
+
+    await wrapper.trigger('click')
+    expect(bubble()).toBeNull()
+  })
+
+  it('does not appear while its trigger reports an open menu', async () => {
+    const wrapper = mount(AppTooltip, {
+      props: { text: 'More actions' },
+      slots: { default: '<button aria-haspopup="menu" aria-expanded="true">x</button>' },
+      attachTo: document.body,
+    })
+    await wrapper.trigger('pointerenter')
+    vi.advanceTimersByTime(500)
     await wrapper.vm.$nextTick()
     expect(bubble()).toBeNull()
   })

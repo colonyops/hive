@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import ActionCard from './ActionCard.vue'
 import ItemActionMenu from './ItemActionMenu.vue'
+import IconButton from './ui/IconButton.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import PullRequestMetadata from './PullRequestMetadata.vue'
 import { useResizablePanel } from '../composables/useResizablePanel'
@@ -64,7 +65,7 @@ function attachable(session: ItemSessionView): boolean {
   return session.state === 'active'
 }
 
-const itemMenuToggle = ref<HTMLElement | null>(null)
+const itemMenuWrap = ref<HTMLElement | null>(null)
 const itemMenuOpen = ref(false)
 
 // The detail header leads with the item's source badge and type. The badge
@@ -159,23 +160,22 @@ const {
             itemContainerLine
           }}</span>
           <span class="flex-1" />
-          <div class="relative shrink-0">
-            <button
-              ref="itemMenuToggle"
-              class="more-button"
-              aria-label="Item actions"
+          <div ref="itemMenuWrap" class="relative shrink-0">
+            <IconButton
+              label="Item actions"
+              :icon="IconEllipsisVertical"
+              variant="outline"
               aria-haspopup="menu"
               data-testid="item-actions-toggle"
+              :active="itemMenuOpen"
               :aria-expanded="itemMenuOpen"
               @click="itemMenuOpen = !itemMenuOpen"
-            >
-              <IconEllipsisVertical class="size-4" />
-            </button>
+            />
             <ItemActionMenu
               v-if="itemMenuOpen"
               :item="item"
               :actions="actions"
-              :ignore="[itemMenuToggle]"
+              :ignore="[itemMenuWrap]"
               testid="item-actions-menu"
               @close="itemMenuOpen = false"
               @set-unread="(value) => emit('set-unread', value)"
@@ -303,31 +303,18 @@ const {
 </template>
 
 <style scoped>
-.edit-button,
-.more-button {
+.edit-button {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   cursor: pointer;
   border: 1px solid var(--color-card);
-  border-radius: var(--radius-sm);
-  padding: 2px 7px;
-  color: var(--color-text-2);
-  font-family: var(--font-mono);
-  font-size: var(--text-caption);
-}
-.edit-button {
   border-radius: var(--radius-md);
   padding: 3px 8px;
-  font-family: var(--font-sans);
+  color: var(--color-text-2);
+  font-size: var(--text-caption);
 }
-.more-button {
-  height: 24px;
-  padding: 0 5px;
-}
-.edit-button:hover,
-.more-button:hover,
-.more-button[aria-expanded='true'] {
+.edit-button:hover {
   border-color: var(--color-strong);
   color: var(--color-text);
 }

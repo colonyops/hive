@@ -4,6 +4,7 @@ import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconClock3 from '~icons/lucide/clock-3'
 import IconExternalLink from '~icons/lucide/external-link'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
+import IconButton from './ui/IconButton.vue'
 import Spinner from './ui/Spinner.vue'
 
 defineProps<{ jobs: readonly Job[] }>()
@@ -52,17 +53,15 @@ function statusClasses(status: string): string {
           </div>
           <div v-if="job.error" class="mt-1 line-clamp-2 text-micro text-severity-error">{{ job.error }}</div>
         </div>
-        <button
+        <IconButton
           v-if="job.commandId"
-          type="button"
-          class="mt-0.5 flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-text-3 hover:bg-chip hover:text-text"
-          :aria-label="`Open action run for ${job.label || job.actionId}`"
-          title="Open action run"
+          :label="`Open action run for ${job.label || job.actionId}`"
+          tooltip="Open action run"
+          :icon="IconExternalLink"
+          class="mt-0.5"
           :data-testid="`job-open-run-${job.id}`"
           @click="emit('open-run', job.commandId)"
-        >
-          <IconExternalLink class="size-3.5" />
-        </button>
+        />
       </li>
     </ul>
   </section>

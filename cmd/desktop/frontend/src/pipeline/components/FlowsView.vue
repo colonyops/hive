@@ -24,6 +24,7 @@ import { useWailsEvent } from '../../composables/useWailsEvent'
 import { classify } from '../lib/runStatus'
 import NodePalette from './NodePalette.vue'
 import FlowsCanvas from './FlowsCanvas.vue'
+import IconButton from '../../components/ui/IconButton.vue'
 import PanelResizeHandle from '../../components/ui/PanelResizeHandle.vue'
 import BaseButton from '../../components/ui/BaseButton.vue'
 import EmptyState from '../../components/ui/EmptyState.vue'
@@ -173,23 +174,23 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
         <div
           class="flex h-[30px] items-center overflow-hidden rounded-lg border border-strong bg-chip font-mono text-small text-text-2"
         >
-          <button
-            class="flex h-full cursor-pointer items-center px-2.5 hover:bg-hover hover:text-text"
+          <IconButton
+            label="Zoom out"
+            :icon="IconMinus"
+            size="lg"
             data-testid="canvas-zoom-out"
             @click="canvasRef?.zoomOut()"
-          >
-            <IconMinus class="size-3.5" />
-          </button>
+          />
           <span class="flex h-full items-center px-1 text-text" data-testid="canvas-zoom-level"
             >{{ zoomPercent }}%</span
           >
-          <button
-            class="flex h-full cursor-pointer items-center px-2.5 hover:bg-hover hover:text-text"
+          <IconButton
+            label="Zoom in"
+            :icon="IconPlus"
+            size="lg"
             data-testid="canvas-zoom-in"
             @click="canvasRef?.zoomIn()"
-          >
-            <IconPlus class="size-3.5" />
-          </button>
+          />
         </div>
         <button
           class="flex h-[30px] cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-strong bg-chip px-2.5 text-small text-text-2 hover:border-card hover:text-text"

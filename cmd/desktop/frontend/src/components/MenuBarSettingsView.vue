@@ -4,6 +4,7 @@ import { computed, onMounted, ref } from 'vue'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowUp from '~icons/lucide/arrow-up'
 import IconX from '~icons/lucide/x'
+import IconButton from './ui/IconButton.vue'
 import AppSelect from './ui/AppSelect.vue'
 import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
@@ -144,35 +145,26 @@ onMounted(() => {
             :testid="`menubar-pin-${index}-limit`"
             @update:model-value="(value) => setLimit(index, value)"
           />
-          <button
-            type="button"
-            class="cursor-pointer rounded-md p-1.5 text-text-3 hover:bg-chip hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+          <IconButton
+            label="Move up"
+            :icon="IconArrowUp"
             :disabled="index === 0"
-            aria-label="Move up"
             :data-testid="`menubar-pin-${index}-up`"
             @click="movePin(index, -1)"
-          >
-            <IconArrowUp class="size-3.5" />
-          </button>
-          <button
-            type="button"
-            class="cursor-pointer rounded-md p-1.5 text-text-3 hover:bg-chip hover:text-text disabled:cursor-not-allowed disabled:opacity-40"
+          />
+          <IconButton
+            label="Move down"
+            :icon="IconArrowDown"
             :disabled="index === pins.length - 1"
-            aria-label="Move down"
             :data-testid="`menubar-pin-${index}-down`"
             @click="movePin(index, 1)"
-          >
-            <IconArrowDown class="size-3.5" />
-          </button>
-          <button
-            type="button"
-            class="cursor-pointer rounded-md p-1.5 text-text-3 hover:bg-chip hover:text-text"
-            aria-label="Unpin"
+          />
+          <IconButton
+            label="Unpin"
+            :icon="IconX"
             :data-testid="`menubar-pin-${index}-remove`"
             @click="removePin(index)"
-          >
-            <IconX class="size-3.5" />
-          </button>
+          />
         </div>
       </SettingsRow>
       <SettingsRow

@@ -9,6 +9,7 @@ import { onKeyStroke } from '@vueuse/core'
 import IconEraser from '~icons/lucide/eraser'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconX from '~icons/lucide/x'
+import IconButton from './ui/IconButton.vue'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import ConfirmationHost from './ui/ConfirmationHost.vue'
 import TaskDetailPane from './TaskDetailPane.vue'
@@ -232,15 +233,7 @@ onUnmounted(() => {
           >{{ items.length }} {{ items.length === 1 ? 'item' : 'items' }}</span
         >
         <div class="flex-1" />
-        <button
-          type="button"
-          class="cursor-pointer text-text-3 hover:text-text"
-          aria-label="Close"
-          data-testid="tasks-close"
-          @click="emit('close')"
-        >
-          <IconX class="size-4" />
-        </button>
+        <IconButton label="Close" :icon="IconX" size="lg" data-testid="tasks-close" @click="emit('close')" />
       </template>
     </ViewHeader>
 

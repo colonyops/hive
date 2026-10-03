@@ -3,6 +3,7 @@
 // read-only in the webview — writes arrive only through the hive-canvas MCP
 // tools, so this pane re-reads on canvas:updated rather than ever mutating
 // (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
+import IconButton from './ui/IconButton.vue'
 import InlineError from './ui/InlineError.vue'
 import { computed, nextTick, ref, toRef, watch } from 'vue'
 import { Dialogs } from '@wailsio/runtime'
@@ -199,40 +200,23 @@ const {
         />
       </button>
       <div class="min-w-0 flex-1" />
-      <button
+      <IconButton
         v-if="shown"
-        type="button"
-        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg hover:bg-chip hover:text-text"
-        :class="copyStatus === 'error' ? 'text-severity-error' : 'text-text-3'"
-        :title="copyStatus === 'success' ? 'Copied' : 'Copy as Markdown'"
-        :aria-label="copyStatus === 'success' ? 'Copied' : 'Copy as Markdown'"
+        :label="copyStatus === 'success' ? 'Copied' : 'Copy as Markdown'"
+        :icon="copyStatus === 'success' ? IconCheck : IconCopy"
+        :class="{ '!text-severity-error': copyStatus === 'error' }"
         data-testid="agent-canvas-copy"
         @click="copyCanvas"
-      >
-        <component :is="copyStatus === 'success' ? IconCheck : IconCopy" class="size-3.5" />
-      </button>
-      <button
+      />
+      <IconButton
         v-if="shown"
-        type="button"
-        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg hover:bg-chip hover:text-text"
-        :class="saveStatus === 'error' ? 'text-severity-error' : 'text-text-3'"
-        :title="saveStatus === 'success' ? 'Saved' : 'Save as Markdown…'"
-        :aria-label="saveStatus === 'success' ? 'Saved' : 'Save as Markdown…'"
+        :label="saveStatus === 'success' ? 'Saved' : 'Save as Markdown…'"
+        :icon="saveStatus === 'success' ? IconCheck : IconDownload"
+        :class="{ '!text-severity-error': saveStatus === 'error' }"
         data-testid="agent-canvas-download"
         @click="downloadCanvas"
-      >
-        <component :is="saveStatus === 'success' ? IconCheck : IconDownload" class="size-3.5" />
-      </button>
-      <button
-        type="button"
-        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-chip hover:text-text"
-        title="Close canvas"
-        aria-label="Close canvas"
-        data-testid="agent-canvas-close"
-        @click="emit('close')"
-      >
-        <IconX class="size-3.5" />
-      </button>
+      />
+      <IconButton label="Close canvas" :icon="IconX" data-testid="agent-canvas-close" @click="emit('close')" />
     </div>
 
     <div v-if="browsing" class="flex min-h-0 flex-1 flex-col" data-testid="agent-canvas-browse">

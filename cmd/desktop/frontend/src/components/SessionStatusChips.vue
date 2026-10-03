@@ -11,6 +11,7 @@ import IconGitPullRequest from '~icons/lucide/git-pull-request'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconUpload from '~icons/lucide/upload'
 import AppTooltip from './ui/AppTooltip.vue'
+import IconButton from './ui/IconButton.vue'
 import { useClipboard } from '../composables/useClipboard'
 import { markdownPullRequestLink } from '../lib/prLink'
 import type {
@@ -156,8 +157,6 @@ async function copyLink(): Promise<void> {
         <span v-if="showGitGroup" class="mx-2 h-3.5 w-px shrink-0 bg-border" aria-hidden="true" />
 
         <div class="flex shrink-0 items-center gap-1">
-          <!-- h-6/rounded-lg is PaneStatusBar's button metric; these share a
-             row with its editor and Finder buttons. -->
           <button
             v-if="pr"
             type="button"
@@ -171,19 +170,13 @@ async function copyLink(): Promise<void> {
             <span v-if="pr.checks" :class="checksTone" data-testid="session-status-checks">{{ pr.checks }}</span>
           </button>
 
-          <AppTooltip v-if="pr" :text="copied ? 'Copied' : 'Copy link to this pull request'">
-            <button
-              type="button"
-              class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg text-text-4 hover:bg-chip hover:text-text"
-              :class="{ 'text-severity-success': copied }"
-              aria-label="Copy link to this pull request"
-              data-testid="session-status-copy"
-              @click="copyLink"
-            >
-              <IconCheck v-if="copied" class="size-3.5" />
-              <IconCopy v-else class="size-3.5" />
-            </button>
-          </AppTooltip>
+          <IconButton
+            v-if="pr"
+            label="Copy link to this pull request"
+            :icon="copied ? IconCheck : IconCopy"
+            data-testid="session-status-copy"
+            @click="copyLink"
+          />
 
           <!-- A failed lookup, never rendered as "no pull request": the branch may
            well have one, and claiming otherwise is a fact this cannot support. -->

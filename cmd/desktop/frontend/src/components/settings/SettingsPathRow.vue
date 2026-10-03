@@ -15,6 +15,7 @@ import IconFolder from '~icons/lucide/folder'
 import IconFolderOpen from '~icons/lucide/folder-open'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
 import { useClipboard } from '../../composables/useClipboard'
+import IconButton from '../ui/IconButton.vue'
 import BaseBadge from '../ui/BaseBadge.vue'
 import BaseIconBadge from '../ui/BaseIconBadge.vue'
 import BaseButton from '../ui/BaseButton.vue'
@@ -53,9 +54,6 @@ const typeIcon = computed(() => ({ folder: IconFolder, log: IconFileText, databa
 const copyLabel = computed(() =>
   copyStatus.value === 'success' ? 'Copied' : copyStatus.value === 'error' ? 'Copy failed' : 'Copy path',
 )
-
-const iconBtnClass =
-  'flex size-[30px] cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-hover hover:text-text'
 </script>
 
 <template>
@@ -105,51 +103,39 @@ const iconBtnClass =
     </div>
 
     <div class="flex shrink-0 flex-wrap items-center justify-end gap-1">
-      <button
-        type="button"
-        :class="iconBtnClass"
-        :title="copyLabel"
-        :aria-label="copyLabel"
+      <IconButton
+        :label="copyLabel"
+        :icon="copyStatus === 'success' ? IconCheck : IconCopy"
+        size="lg"
         :data-testid="props.testid ? `${props.testid}-copy` : undefined"
         @click="copy(props.path)"
-      >
-        <component :is="copyStatus === 'success' ? IconCheck : IconCopy" class="size-[15px]" />
-      </button>
-      <button
+      />
+      <IconButton
         v-if="props.canOpen"
-        type="button"
-        :class="iconBtnClass"
-        title="Open"
-        aria-label="Open"
+        label="Open"
+        :icon="IconExternalLink"
+        size="lg"
         :data-testid="props.testid ? `${props.testid}-open` : undefined"
         @click="emit('open')"
-      >
-        <IconExternalLink class="size-[15px]" />
-      </button>
-      <button
+      />
+      <IconButton
         v-if="props.canReveal"
-        type="button"
-        :class="iconBtnClass"
-        title="Reveal"
-        aria-label="Reveal"
+        label="Reveal"
+        :icon="IconFolderOpen"
+        size="lg"
         :data-testid="props.testid ? `${props.testid}-reveal` : undefined"
         @click="emit('reveal')"
-      >
-        <IconFolderOpen class="size-[15px]" />
-      </button>
+      />
 
       <template v-if="props.editable">
-        <button
+        <IconButton
           v-if="props.overridden"
-          type="button"
-          :class="iconBtnClass"
-          title="Reset to default"
-          aria-label="Reset to default"
+          label="Reset to default"
+          :icon="IconRotateCcw"
+          size="lg"
           :data-testid="props.testid ? `${props.testid}-reset` : undefined"
           @click="emit('reset')"
-        >
-          <IconRotateCcw class="size-[15px]" />
-        </button>
+        />
         <BaseButton
           variant="secondary"
           size="xs"

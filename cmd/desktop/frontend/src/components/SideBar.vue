@@ -10,6 +10,7 @@ import IconRss from '~icons/lucide/rss'
 import IconSettings from '~icons/lucide/settings'
 import IconTrash from '~icons/lucide/trash-2'
 import IconWorkflow from '~icons/lucide/workflow'
+import IconButton from './ui/IconButton.vue'
 import InlineConfirm from './ui/InlineConfirm.vue'
 import RenameDialog from './ui/RenameDialog.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
@@ -205,29 +206,25 @@ function deleteFolder(folder: FeedFolder): void {
       >
         {{ profile.name }}
       </div>
-      <button
-        class="settings-button flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text"
-        title="Profile settings"
-        aria-label="Profile settings"
+      <IconButton
+        label="Profile settings"
+        :icon="IconSettings"
         data-testid="sidebar-open-settings"
         @click="emit('open-settings')"
-      >
-        <IconSettings class="size-3.5" />
-      </button>
+      />
     </div>
 
     <section class="px-2.5 pb-1.5 pt-3" data-testid="sidebar-feeds">
       <div class="section-label">
         <IconRss class="size-3 text-feeds" /><span>FEEDS</span>
-        <button
-          class="folder-add ml-auto flex size-5 items-center justify-center rounded-md text-text-4 hover:bg-chip hover:text-text"
-          title="New folder"
-          aria-label="New folder"
+        <IconButton
+          label="New folder"
+          :icon="IconFolderPlus"
+          size="sm"
+          class="folder-add ml-auto"
           data-testid="sidebar-new-folder"
           @click="addFolder"
-        >
-          <IconFolderPlus class="size-3" />
-        </button>
+        />
       </div>
 
       <template v-for="node in tree" :key="node.kind === 'feed' ? node.feed.id : node.folder.id">
@@ -281,15 +278,14 @@ function deleteFolder(folder: FeedFolder): void {
             <span class="min-w-0 flex-1 truncate text-left font-medium" data-testid="folder-name">{{
               node.folder.name
             }}</span>
-            <button
-              class="folder-action flex size-5 shrink-0 items-center justify-center rounded-md text-text-4 hover:bg-chip hover:text-text"
-              title="Edit folder"
-              aria-label="Edit folder"
+            <IconButton
+              label="Edit folder"
+              :icon="IconPencil"
+              size="sm"
+              class="folder-action"
               data-testid="folder-edit"
               @click.stop="editingId = node.folder.id"
-            >
-              <IconPencil class="size-3" />
-            </button>
+            />
             <span class="font-mono text-caption" :class="folderNew(node.folder) ? 'text-accent' : 'text-text-3'">{{
               folderNew(node.folder) || folderTotal(node.folder)
             }}</span>

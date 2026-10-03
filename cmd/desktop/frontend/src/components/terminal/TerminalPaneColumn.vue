@@ -10,7 +10,7 @@ import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconSearch from '~icons/lucide/search'
 import IconTerminal from '~icons/lucide/terminal'
 import IconX from '~icons/lucide/x'
-import AppTooltip from '../ui/AppTooltip.vue'
+import IconButton from '../ui/IconButton.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import InlineError from '../ui/InlineError.vue'
 import PaneStatusBar from '../PaneStatusBar.vue'
@@ -142,17 +142,12 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         @refresh-pull-request="refreshSessionStatus({ refreshPullRequest: true })"
       />
       <template #actions>
-        <AppTooltip text="Tasks">
-          <button
-            type="button"
-            class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-chip hover:text-text"
-            aria-label="Tasks"
-            data-testid="terminal-statusbar-tasks"
-            @click="emit('open-tasks')"
-          >
-            <IconListTodo class="size-3.5" />
-          </button>
-        </AppTooltip>
+        <IconButton
+          label="Tasks"
+          :icon="IconListTodo"
+          data-testid="terminal-statusbar-tasks"
+          @click="emit('open-tasks')"
+        />
       </template>
     </PaneStatusBar>
 
@@ -177,15 +172,13 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           from tmux — what they show now is current, and their scrollback is tmux's, not what streamed here before the
           gap.
         </p>
-        <button
-          type="button"
-          class="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded text-text-4 hover:bg-chip hover:text-text"
+        <IconButton
+          label="Dismiss"
+          :icon="IconX"
+          size="sm"
           data-testid="terminal-output-dropped-dismiss"
-          aria-label="Dismiss"
           @click="visible?.dismissOutputDropped()"
-        >
-          <IconX class="size-3" />
-        </button>
+        />
       </div>
 
       <!-- tmux's rule, not a fault: another attached client decides the grid size. -->
@@ -204,15 +197,13 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           deciding the size. Detach it, or change tmux's
           <span class="font-mono text-text-2">window-size</span> option, to use the whole pane.
         </p>
-        <button
-          type="button"
-          class="flex size-4 shrink-0 cursor-pointer items-center justify-center rounded text-text-4 hover:bg-chip hover:text-text"
+        <IconButton
+          label="Dismiss"
+          :icon="IconX"
+          size="sm"
           data-testid="terminal-size-constraint-dismiss"
-          aria-label="Dismiss"
           @click="visible?.dismissSizeConstraint()"
-        >
-          <IconX class="size-3" />
-        </button>
+        />
       </div>
     </template>
 
@@ -262,33 +253,27 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
             data-testid="terminal-search-count"
             >{{ searchLabel() }}</span
           >
-          <button
-            type="button"
-            class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-text-4 hover:bg-chip hover:text-text"
-            aria-label="Previous match"
+          <IconButton
+            label="Previous match"
+            :icon="IconChevronUp"
+            size="sm"
             data-testid="terminal-search-prev"
             @click="visible?.findPrevious()"
-          >
-            <IconChevronUp class="size-3" />
-          </button>
-          <button
-            type="button"
-            class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-text-4 hover:bg-chip hover:text-text"
-            aria-label="Next match"
+          />
+          <IconButton
+            label="Next match"
+            :icon="IconChevronDown"
+            size="sm"
             data-testid="terminal-search-next"
             @click="visible?.findNext()"
-          >
-            <IconChevronDown class="size-3" />
-          </button>
-          <button
-            type="button"
-            class="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-text-4 hover:bg-chip hover:text-text"
-            aria-label="Close find"
+          />
+          <IconButton
+            label="Close find"
+            :icon="IconX"
+            size="sm"
             data-testid="terminal-search-close"
             @click="visible?.closeSearch()"
-          >
-            <IconX class="size-3" />
-          </button>
+          />
         </div>
 
         <Transition name="tail-pill">

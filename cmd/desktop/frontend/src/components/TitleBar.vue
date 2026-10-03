@@ -16,6 +16,7 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
 import JobsPopover from './JobsPopover.vue'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
+import IconButton from './ui/IconButton.vue'
 import Kbd from './ui/Kbd.vue'
 import Spinner from './ui/Spinner.vue'
 import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedControl.vue'
@@ -136,45 +137,38 @@ function onTitlebarDblclick(event: MouseEvent): void {
   >
     <!-- Left: panel toggle (frame) · feed history · mode switch -->
     <div class="flex min-w-0 flex-1 items-center gap-1 pr-2" :class="isMac ? 'pl-[84px]' : 'pl-3'">
-      <button
+      <IconButton
         v-if="profileName"
-        type="button"
-        class="flex size-7 shrink-0 items-center justify-center rounded-lg text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:cursor-default disabled:opacity-30"
+        :label="sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'"
+        :icon="sidebarCollapsed ? IconPanelLeftOpen : IconPanelLeftClose"
+        size="lg"
         style="--wails-draggable: no-drag"
         :disabled="!canToggleSidebar"
-        :aria-label="sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'"
-        :title="sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'"
         data-testid="titlebar-toggle-sidebar"
         @click="emit('toggle-sidebar')"
-      >
-        <component :is="sidebarCollapsed ? IconPanelLeftOpen : IconPanelLeftClose" class="size-3.5" />
-      </button>
+      />
       <nav
         v-if="profileName"
         class="ml-1 flex shrink-0 items-center gap-0.5"
         aria-label="Page history"
         style="--wails-draggable: no-drag"
       >
-        <button
-          type="button"
-          class="flex size-7 items-center justify-center rounded-lg text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:opacity-30"
+        <IconButton
+          label="Go back"
+          :icon="IconArrowLeft"
+          size="lg"
           :disabled="!canGoBack"
-          aria-label="Go back"
           data-testid="titlebar-back"
           @click="emit('back')"
-        >
-          <IconArrowLeft class="size-3.5" />
-        </button>
-        <button
-          type="button"
-          class="flex size-7 items-center justify-center rounded-lg text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:opacity-30"
+        />
+        <IconButton
+          label="Go forward"
+          :icon="IconArrowRight"
+          size="lg"
           :disabled="!canGoForward"
-          aria-label="Go forward"
           data-testid="titlebar-forward"
           @click="emit('forward')"
-        >
-          <IconArrowRight class="size-3.5" />
-        </button>
+        />
       </nav>
       <!-- Segments size to their labels. An equal-width split padded the
            shorter label out to match the longer, which read as a gap. Below
@@ -272,42 +266,41 @@ function onTitlebarDblclick(event: MouseEvent): void {
            it needs the same 10px on both sides that separates groups in the
            left cluster, not the cluster's 6px on one side and 10px on the
            other. -->
-      <button
+      <IconButton
         v-if="profileName"
-        type="button"
-        class="relative ml-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-lg"
-        :class="activityActive ? 'bg-accent-tint text-accent' : 'text-text-3 hover:bg-chip hover:text-text'"
+        label="Open activity"
+        tooltip="Activity"
+        :icon="IconActivity"
+        size="lg"
+        :active="activityActive"
+        class="relative ml-1"
         style="--wails-draggable: no-drag"
         data-testid="titlebar-activity"
-        aria-label="Open activity"
-        title="Activity"
         @click="emit('open-activity')"
       >
-        <IconActivity class="size-3.5" />
         <span
           v-if="unseenActivity && unseenActivity > 0 && !activityActive"
           class="absolute right-1 top-1 size-[6px] rounded-full bg-accent ring-2 ring-raised [animation:hivePulse_2.4s_ease-in-out_infinite]"
           data-testid="titlebar-activity-unseen"
         />
-      </button>
-      <button
+      </IconButton>
+      <IconButton
         v-if="profileName"
-        type="button"
-        class="relative ml-1 flex size-7 shrink-0 items-center justify-center rounded-lg text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:cursor-default disabled:opacity-30"
+        :label="previewCollapsed ? 'Show preview' : 'Hide preview'"
+        :icon="previewCollapsed ? IconPanelRightOpen : IconPanelRightClose"
+        size="lg"
+        class="relative ml-1"
         style="--wails-draggable: no-drag"
         :disabled="!canTogglePreview"
-        :aria-label="previewCollapsed ? 'Show preview' : 'Hide preview'"
-        :title="previewCollapsed ? 'Show preview' : 'Hide preview'"
         data-testid="titlebar-toggle-preview"
         @click="emit('toggle-preview')"
       >
-        <component :is="previewCollapsed ? IconPanelRightOpen : IconPanelRightClose" class="size-3.5" />
         <span
           v-if="previewUnseen && previewCollapsed"
           class="absolute right-1 top-1 size-[6px] rounded-full bg-accent ring-2 ring-raised"
           data-testid="titlebar-preview-unseen"
         />
-      </button>
+      </IconButton>
     </div>
   </header>
 </template>

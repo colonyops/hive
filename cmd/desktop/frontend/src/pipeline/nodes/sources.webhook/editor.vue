@@ -11,6 +11,7 @@ import {
   Capture,
   Info,
 } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/webhookservice'
+import IconButton from '../../../components/ui/IconButton.vue'
 import BaseButton from '../../../components/ui/BaseButton.vue'
 import { useClipboard } from '../../../composables/useClipboard'
 import { defaultWebhookSourceIcon, feedIconComponent, feedIconOptions } from '../../../lib/feedIcons'
@@ -161,16 +162,12 @@ async function onCopyPrompt(): Promise<void> {
       @update:model-value="updatePath"
     >
       <template #trailing>
-        <button
-          type="button"
-          class="field-action"
-          title="Generate a new path"
-          aria-label="Generate a new path"
+        <IconButton
+          label="Generate a new path"
+          :icon="IconRefresh"
           data-testid="sources.webhook-editor-path-generate"
           @click="regeneratePath"
-        >
-          <IconRefresh class="size-[14px]" />
-        </button>
+        />
       </template>
     </TextField>
     <TextField
@@ -183,16 +180,12 @@ async function onCopyPrompt(): Promise<void> {
       @update:model-value="updateSecret"
     >
       <template #trailing>
-        <button
-          type="button"
-          class="field-action"
-          title="Generate a new secret"
-          aria-label="Generate a new secret"
+        <IconButton
+          label="Generate a new secret"
+          :icon="IconRefresh"
           data-testid="sources.webhook-editor-secret-generate"
           @click="regenerateSecret"
-        >
-          <IconRefresh class="size-[14px]" />
-        </button>
+        />
       </template>
     </TextField>
     <SelectField
@@ -274,23 +267,3 @@ async function onCopyPrompt(): Promise<void> {
     </div>
   </div>
 </template>
-
-<style scoped>
-/* In-field regenerate affordance: sits inside the input's right padding, so
-   it reads as part of the field rather than a button beside it. */
-.field-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 26px;
-  width: 26px;
-  cursor: pointer;
-  border-radius: var(--radius-md);
-  color: var(--color-text-4);
-}
-
-.field-action:hover {
-  background: var(--color-selection);
-  color: var(--color-text-2);
-}
-</style>

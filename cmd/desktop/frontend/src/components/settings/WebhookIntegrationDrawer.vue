@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import IconButton from '../ui/IconButton.vue'
 import InlineError from '../ui/InlineError.vue'
 // Local webhook listener settings. Both controls here are startup-time
 // decisions — the listener binds a port and serves flow-declared routes — so
@@ -143,17 +144,15 @@ onMounted(() => void reload())
             :invalid="!portValid"
             class="min-w-0 flex-1"
           />
-          <button
-            type="button"
-            class="flex size-[34px] shrink-0 cursor-pointer items-center justify-center rounded-lg border border-card text-text-3 hover:border-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
-            title="Pick a new random port"
-            aria-label="Pick a new random port"
+          <IconButton
+            label="Pick a new random port"
+            :icon="IconRefresh"
+            size="xl"
+            variant="outline"
             data-testid="webhook-settings-port-generate"
             :disabled="loading || overridden"
             @click="onGeneratePort"
-          >
-            <IconRefresh class="size-[14px]" />
-          </button>
+          />
         </div>
       </FormField>
       <InlineError v-if="!portValid" testid="webhook-settings-port-error" variant="line" class="-mt-3">

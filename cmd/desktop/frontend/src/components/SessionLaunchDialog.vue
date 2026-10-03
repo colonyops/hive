@@ -7,6 +7,7 @@ import IconPlay from '~icons/lucide/play'
 import IconX from '~icons/lucide/x'
 import ActionInputFields from './ActionInputFields.vue'
 import RepositorySelect from './RepositorySelect.vue'
+import IconButton from './ui/IconButton.vue'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
@@ -213,15 +214,13 @@ useSubmitShortcut(submit)
             <span class="block break-all font-mono text-text-4">{{ failure.destination }}</span>
           </p>
         </div>
-        <button
-          type="button"
-          class="shrink-0 cursor-pointer self-start leading-none text-text-3 hover:text-text"
-          aria-label="Dismiss failure"
+        <IconButton
+          label="Dismiss failure"
+          :icon="IconX"
+          class="-m-1 self-start"
           :data-testid="`${testid}-failure-dismiss`"
           @click="emit('dismissFailure')"
-        >
-          <IconX class="size-[14px]" />
-        </button>
+        />
       </div>
     </section>
     <form :id="formId" class="flex flex-col gap-3 px-5 py-4" @submit.prevent="submit">

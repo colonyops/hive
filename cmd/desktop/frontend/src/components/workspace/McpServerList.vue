@@ -5,6 +5,7 @@
 import { computed, onMounted, ref } from 'vue'
 import IconPlus from '~icons/lucide/plus'
 import IconTrash2 from '~icons/lucide/trash-2'
+import IconButton from '../ui/IconButton.vue'
 import AppSwitch from '../ui/AppSwitch.vue'
 import BaseBadge from '../ui/BaseBadge.vue'
 import BaseButton from '../ui/BaseButton.vue'
@@ -132,18 +133,17 @@ async function submitImport(): Promise<void> {
             not in the catalogue — enabled ids without an entry are skipped at launch
           </div>
         </div>
-        <button
+        <IconButton
           v-if="!row.shipped && !row.missing"
-          type="button"
-          class="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-severity-error disabled:cursor-not-allowed disabled:opacity-40"
-          :title="`Remove ${row.title} from mcps.yaml (every workspace loses it)`"
-          :aria-label="`Remove ${row.title}`"
+          :label="`Remove ${row.title}`"
+          :tooltip="`Remove ${row.title} from mcps.yaml (every workspace loses it)`"
+          :icon="IconTrash2"
+          size="lg"
+          tone="danger"
           :disabled="busy"
           :data-testid="`agent-workspace-editor-mcp-remove-${row.id}`"
           @click="remove(row.id)"
-        >
-          <IconTrash2 class="size-[15px]" />
-        </button>
+        />
       </div>
       <EmptyState v-if="!rows.length" variant="inline" class="px-4 py-3.5" message="No servers in mcps.yaml yet." />
       <div v-if="importOpen" class="flex flex-col gap-2 px-4 py-3.5">

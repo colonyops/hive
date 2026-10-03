@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, type Component } from 'vue'
 import IconX from '~icons/lucide/x'
+import IconButton from './IconButton.vue'
 import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import { useFocusTrap } from '../../composables/useFocusTrap'
 import { useRegisterOpenModal } from '../../composables/useOpenModalCount'
@@ -156,17 +157,15 @@ defineExpose({ body: bodyRef })
             </div>
           </div>
           <slot name="header-actions" />
-          <button
+          <IconButton
             v-if="closable"
-            type="button"
-            class="text-text-3 hover:text-text disabled:opacity-50"
-            aria-label="Close"
+            label="Close"
+            :icon="IconX"
+            size="lg"
             :disabled="closeDisabled"
             :data-testid="part('close')"
             @click="close"
-          >
-            <IconX class="size-4" />
-          </button>
+          />
         </div>
       </header>
       <div ref="bodyRef" :class="['hive-scroll min-h-0 flex-1 overflow-y-auto px-[18px] py-[15px]', bodyClass]">

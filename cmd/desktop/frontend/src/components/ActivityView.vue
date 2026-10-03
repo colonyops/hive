@@ -13,6 +13,7 @@ import IconX from '~icons/lucide/x'
 import { useActivity } from '../stores/useActivity'
 import { useNewSession } from '../composables/useNewSession'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
+import IconButton from './ui/IconButton.vue'
 import ViewHeader from './ui/ViewHeader.vue'
 import SearchField from './ui/SearchField.vue'
 import {
@@ -114,15 +115,7 @@ onMounted(() => {
           >{{ events.length }} {{ events.length === 1 ? 'event' : 'events' }}</span
         >
         <div class="flex-1" />
-        <button
-          type="button"
-          class="cursor-pointer text-text-3 hover:text-text"
-          aria-label="Close"
-          data-testid="activity-close"
-          @click="emit('close')"
-        >
-          <IconX class="size-4" />
-        </button>
+        <IconButton label="Close" :icon="IconX" size="lg" data-testid="activity-close" @click="emit('close')" />
       </template>
     </ViewHeader>
 
@@ -220,16 +213,16 @@ onMounted(() => {
             >
               View item
             </button>
-            <button
+            <IconButton
               v-if="links.url"
-              type="button"
-              class="ml-2 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded border border-strong text-text-2 hover:border-text-3 hover:text-text"
-              :aria-label="`Open link for ${event.title} in browser`"
+              :label="`Open link for ${event.title} in browser`"
+              :icon="IconExternalLink"
+              size="lg"
+              variant="outline"
+              class="ml-2"
               :data-testid="`activity-open-url-${event.id}`"
               @click="emit('open-url', links.url)"
-            >
-              <IconExternalLink class="size-3.5" />
-            </button>
+            />
             <button
               v-if="retryableSessionDraft(event)"
               type="button"

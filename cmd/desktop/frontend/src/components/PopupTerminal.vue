@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import IconButton from './ui/IconButton.vue'
 import InlineError from './ui/InlineError.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useWindowSize } from '@vueuse/core'
@@ -261,25 +262,21 @@ onBeforeUnmount(teardown)
         <span class="shrink-0 font-mono text-small text-text">{{ title }}</span>
         <span class="truncate font-mono text-caption text-text-4">{{ subtitle }}</span>
         <div class="ml-auto flex shrink-0 items-center gap-1">
-          <button
+          <IconButton
             v-if="status === 'live'"
-            class="cursor-pointer rounded-md p-1 text-text-4 hover:bg-chip hover:text-severity-error"
-            title="End this terminal"
-            aria-label="End this terminal"
+            label="End this terminal"
+            :icon="IconPower"
+            tone="danger"
             data-testid="popup-terminal-end"
             @click="endTerminal"
-          >
-            <IconPower class="size-3.5" />
-          </button>
-          <button
-            class="cursor-pointer rounded-md p-1 text-text-4 hover:bg-chip hover:text-text"
-            title="Hide — the shell keeps running"
-            aria-label="Hide the terminal"
+          />
+          <IconButton
+            label="Hide the terminal"
+            tooltip="Hide — the shell keeps running"
+            :icon="IconX"
             data-testid="popup-terminal-hide"
             @click="hide"
-          >
-            <IconX class="size-3.5" />
-          </button>
+          />
         </div>
       </header>
 

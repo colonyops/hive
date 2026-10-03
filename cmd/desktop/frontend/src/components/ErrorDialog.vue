@@ -13,6 +13,7 @@ import { computed } from 'vue'
 import IconCheck from '~icons/lucide/check'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCopy from '~icons/lucide/copy'
+import IconButton from './ui/IconButton.vue'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
 import { useClipboard } from '../composables/useClipboard'
@@ -84,16 +85,15 @@ function reportProblem(): void {
           class="hive-scroll max-h-[240px] min-w-0 flex-1 select-text overflow-auto whitespace-pre-wrap break-words font-mono text-small leading-5 text-severity-error"
           data-testid="error-dialog-detail"
           >{{ detail }}</pre>
-        <button
-          type="button"
-          class="-mr-1 -my-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-severity-error/70 hover:bg-severity-error/15 hover:text-severity-error"
-          :title="copyLabel"
-          :aria-label="copyLabel"
+        <IconButton
+          :label="copyLabel"
+          :icon="copyStatus === 'success' ? IconCheck : IconCopy"
+          size="lg"
+          tone="danger"
+          class="-my-1 -mr-1"
           data-testid="error-dialog-copy"
           @click="copy(text)"
-        >
-          <component :is="copyStatus === 'success' ? IconCheck : IconCopy" class="size-[15px]" />
-        </button>
+        />
       </div>
 
       <p class="text-caption text-text-3">

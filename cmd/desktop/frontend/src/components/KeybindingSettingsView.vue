@@ -19,6 +19,7 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
 import SettingsHeading from './settings/SettingsHeading.vue'
 import SettingsPage from './settings/SettingsPage.vue'
+import IconButton from './ui/IconButton.vue'
 import EmptyState from './ui/EmptyState.vue'
 import SearchField from './ui/SearchField.vue'
 import { commandById } from '../keybindings/catalog'
@@ -198,15 +199,14 @@ onUnmounted(commitCapture)
             >
               <IconTriangleAlert v-if="conflictTitles(row.id, combo).length" class="size-3 shrink-0 text-accent" />
               <kbd class="keycap">{{ row.formatted[i] }}</kbd>
-              <button
-                type="button"
+              <IconButton
+                label="Remove shortcut"
+                :icon="IconX"
+                size="sm"
                 class="combo-remove"
-                aria-label="Remove shortcut"
                 data-testid="keybinding-remove"
                 @click="removeCombo(row.id, combo)"
-              >
-                <IconX class="size-3" />
-              </button>
+              />
             </span>
 
             <span v-if="!row.combos.length && capturingId !== row.id" class="text-caption text-text-4">Blank</span>
@@ -225,28 +225,23 @@ onUnmounted(commitCapture)
               <span class="text-text-4">Esc to cancel</span>
             </span>
 
-            <button
+            <IconButton
               v-else
-              type="button"
-              class="icon-btn"
-              aria-label="Add shortcut"
+              label="Add shortcut"
+              :icon="IconPlus"
+              variant="outline"
               data-testid="keybinding-add"
               @click="startCapture(row.id)"
-            >
-              <IconPlus class="size-3.5" />
-            </button>
+            />
 
-            <button
+            <IconButton
               v-if="row.overridden"
-              type="button"
-              class="icon-btn"
-              aria-label="Reset to default"
-              title="Reset to default"
+              label="Reset to default"
+              :icon="IconRotateCcw"
+              variant="outline"
               data-testid="keybinding-reset"
               @click="reset(row.id)"
-            >
-              <IconRotateCcw class="size-3.5" />
-            </button>
+            />
           </div>
         </div>
       </div>
@@ -284,26 +279,11 @@ onUnmounted(commitCapture)
 }
 /* The remove affordance is demoted so the key reads first; it lifts on hover. */
 .combo-remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  border-radius: var(--radius-md);
-  color: var(--color-text-4);
   opacity: 0.4;
-  transition:
-    opacity 0.12s,
-    color 0.12s,
-    background 0.12s;
+  transition: opacity 0.12s;
 }
 .combo:hover .combo-remove {
   opacity: 1;
-}
-.combo-remove:hover {
-  color: var(--color-text);
-  background: var(--color-hover);
 }
 .capture-chip {
   display: inline-flex;
@@ -320,21 +300,6 @@ onUnmounted(commitCapture)
   color: var(--color-text);
 }
 .capture-keycap {
-  border-color: var(--color-accent);
-}
-.icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 25px;
-  height: 25px;
-  cursor: pointer;
-  border: 1px solid var(--color-strong);
-  border-radius: var(--radius-lg);
-  color: var(--color-text-2);
-}
-.icon-btn:hover {
-  color: var(--color-text);
   border-color: var(--color-accent);
 }
 </style>

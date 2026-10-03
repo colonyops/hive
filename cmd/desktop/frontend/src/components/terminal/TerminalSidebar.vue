@@ -11,6 +11,7 @@ import IconPinOff from '~icons/lucide/pin-off'
 import IconPlus from '~icons/lucide/plus'
 import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
+import IconButton from '../ui/IconButton.vue'
 import AppMenu from '../ui/AppMenu.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import InlineError from '../ui/InlineError.vue'
@@ -295,17 +296,15 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                 :class="tree.groupAttached(group) ? 'text-accent' : 'text-text-4'"
                 >{{ group.sessions.length }}</span
               >
-              <button
+              <IconButton
                 v-if="group.kind === 'repo' && group.key"
-                type="button"
+                :label="`New session in ${group.name}`"
+                :icon="IconPlus"
+                size="sm"
                 class="row-action group-add"
-                :title="`New session in ${group.name}`"
-                :aria-label="`New session in ${group.name}`"
                 data-testid="terminal-repo-new-session"
                 @click="openNewSession(group.key)"
-              >
-                <IconPlus class="size-3" />
-              </button>
+              />
             </div>
             <component
               :is="view.expansion.expanded(group) ? IconChevronDown : IconChevronRight"
@@ -337,16 +336,14 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                 class="ml-auto size-3 shrink-0 text-text-4"
               />
               <div class="row-trailing" data-testid="terminal-session-trailing" @click.stop>
-                <button
-                  type="button"
+                <IconButton
+                  label="New tab"
+                  :icon="IconPlus"
+                  size="sm"
                   class="row-action row-lead"
-                  title="New tab"
-                  aria-label="New tab"
                   data-testid="terminal-new-window"
                   @click="ops.newWindowIn(row)"
-                >
-                  <IconPlus class="size-3" />
-                </button>
+                />
                 <span
                   v-if="tree.rowRunning(row)"
                   class="row-status text-severity-success"
@@ -356,19 +353,17 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                   <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />
                   <span class="sr-only">Terminal running</span>
                 </span>
-                <button
+                <IconButton
                   :ref="(el) => menus.setRowToggle(row.id, el)"
-                  type="button"
+                  label="Terminal actions"
+                  :icon="IconEllipsisVertical"
+                  size="sm"
                   class="row-action row-swap"
-                  title="Terminal actions"
-                  aria-label="Terminal actions"
                   aria-haspopup="menu"
                   :aria-expanded="menus.openRow === row.id"
                   data-testid="terminal-session-menu-toggle"
                   @click="menus.toggleRow(row)"
-                >
-                  <IconEllipsisVertical class="size-3" />
-                </button>
+                />
                 <SessionRowMenu
                   v-if="menus.openRow === row.id"
                   :session="row"
@@ -412,20 +407,18 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     <!-- AppMenu anchors to the positioned row so its panel spans it; the grid
                          overlap keeps this slot from becoming a positioning ancestor. -->
                     <div class="row-trailing" data-testid="terminal-session-trailing" @click.stop>
-                      <button
+                      <IconButton
                         v-if="group.kind !== 'chats'"
-                        type="button"
+                        label="New window"
+                        :icon="IconPlus"
+                        size="sm"
                         class="row-action row-lead"
-                        title="New window"
-                        aria-label="New window"
                         aria-haspopup="menu"
                         :aria-expanded="menus.openNewWindow === row.id"
                         :disabled="ops.agentWindowBusy"
                         data-testid="terminal-new-window"
                         @click="menus.toggleNewWindow(row, $event)"
-                      >
-                        <IconPlus class="size-3" />
-                      </button>
+                      />
                       <NewWindowMenu
                         v-if="menus.openNewWindow === row.id"
                         :running="tree.rowRunning(row)"
@@ -449,21 +442,19 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         <span class="size-2.5 rounded-full bg-current" aria-hidden="true" />
                         <span class="sr-only">{{ group.kind === 'chats' ? 'Agent running' : 'Terminal running' }}</span>
                       </span>
-                      <button
+                      <IconButton
                         :ref="(el) => menus.setRowToggle(row.id, el)"
-                        type="button"
+                        :label="group.kind === 'chats' ? 'Chat actions' : 'Session actions'"
+                        :icon="IconEllipsisVertical"
+                        size="sm"
                         class="row-action row-swap"
-                        :title="group.kind === 'chats' ? 'Chat actions' : 'Session actions'"
-                        :aria-label="group.kind === 'chats' ? 'Chat actions' : 'Session actions'"
                         aria-haspopup="menu"
                         :aria-expanded="menus.openRow === row.id"
                         :data-testid="
                           group.kind === 'chats' ? 'terminal-chat-menu-toggle' : 'terminal-session-menu-toggle'
                         "
                         @click="menus.toggleRow(row)"
-                      >
-                        <IconEllipsisVertical class="size-3" />
-                      </button>
+                      />
                       <AppMenu
                         v-if="menus.openRow === row.id && group.kind === 'chats'"
                         :entries="chatMenuEntries"
@@ -549,17 +540,15 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                             />
                             <span v-else class="min-w-0 flex-1 truncate font-mono text-small">{{ win.name }}</span>
                             <div class="window-trailing" data-testid="terminal-window-trailing" @click.stop>
-                              <button
+                              <IconButton
                                 v-if="win.live"
-                                type="button"
+                                :label="`Close ${win.name}`"
+                                :icon="IconX"
+                                size="sm"
                                 class="row-action row-swap"
-                                :title="`Close ${win.name}`"
-                                :aria-label="`Close ${win.name}`"
                                 data-testid="terminal-close-window"
                                 @click="ops.requestCloseWindow(row.slug, win.windowId, win.name)"
-                              >
-                                <IconX class="size-3" />
-                              </button>
+                              />
                               <span
                                 v-if="win.indicator"
                                 class="window-status"
@@ -577,20 +566,18 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                                 <span class="sr-only">{{ win.indicator.label }}</span>
                               </span>
                               <!-- Only once a configured action targets a window. -->
-                              <button
+                              <IconButton
                                 v-if="ops.rowHasWindowActions(row)"
                                 :ref="(el) => menus.setWindowToggle(windowMenuKey(row, win.windowId), el)"
-                                type="button"
+                                label="Window actions"
+                                :icon="IconEllipsisVertical"
+                                size="sm"
                                 class="row-action row-lead"
-                                title="Window actions"
-                                aria-label="Window actions"
                                 aria-haspopup="menu"
                                 :aria-expanded="menus.openWindow === windowMenuKey(row, win.windowId)"
                                 data-testid="terminal-window-menu-toggle"
                                 @click="menus.toggleWindow(row, win.windowId)"
-                              >
-                                <IconEllipsisVertical class="size-3" />
-                              </button>
+                              />
                               <AppMenu
                                 v-if="menus.openWindow === windowMenuKey(row, win.windowId)"
                                 :entries="ops.windowActionEntries"
@@ -873,12 +860,6 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
   pointer-events: none;
 }
 .row-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--radius-md);
-  color: var(--color-text-4);
-  cursor: pointer;
   opacity: 0;
 }
 .row-action:hover,

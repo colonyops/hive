@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // sources.exec has no runtime.ts: the command runs in Go, on the poll tick.
 import { computed } from 'vue'
+import IconButton from '../../../components/ui/IconButton.vue'
 import BaseButton from '../../../components/ui/BaseButton.vue'
 import FormField from '../../../components/ui/FormField.vue'
 import TextInput from '../../../components/ui/TextInput.vue'
@@ -136,16 +137,12 @@ const iconGlyph = computed(() => feedIconComponent(props.config.icon || defaultE
           :data-testid="`sources.exec-editor-env-value-${index}`"
           @update:model-value="setEnvValue(index, $event)"
         />
-        <button
-          type="button"
-          class="field-action"
-          title="Remove variable"
-          aria-label="Remove variable"
+        <IconButton
+          label="Remove variable"
+          :icon="IconTrash"
           :data-testid="`sources.exec-editor-env-remove-${index}`"
           @click="removeEnv(index)"
-        >
-          <IconTrash class="size-[14px]" />
-        </button>
+        />
       </div>
       <BaseButton variant="secondary" size="sm" data-testid="sources.exec-editor-env-add" @click="addEnv">
         Add variable

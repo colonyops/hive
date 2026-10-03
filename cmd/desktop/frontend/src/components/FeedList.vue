@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
+import IconButton from './ui/IconButton.vue'
 import AppMenu from './ui/AppMenu.vue'
 import SearchField from './ui/SearchField.vue'
 import FeedListItem from './FeedListItem.vue'
@@ -110,7 +111,7 @@ const itemGroups = computed<{ key: string; label: string | null; items: InboxIte
 })
 
 const viewMenuOpen = ref(false)
-const viewMenuToggle = ref<HTMLElement | null>(null)
+const viewMenuWrap = ref<HTMLElement | null>(null)
 const authorSubmenu = computed<MenuEntry>(() => ({
   kind: 'submenu',
   id: 'author',
@@ -184,7 +185,7 @@ function onViewMenuSelect(id: string): void {
   else if (id === 'refresh') emit('refresh')
 }
 
-const selectionActionsToggle = ref<HTMLElement | null>(null)
+const selectionActionsWrap = ref<HTMLElement | null>(null)
 const selectionActionsOpen = ref(false)
 const selectedItemIDSet = computed(() => new Set(props.selectedItemIds))
 const selectionActionEntries = computed<MenuEntry[]>(() =>
@@ -267,25 +268,23 @@ watch(
           }}<span v-if="option.value === 'unread'" class="font-mono text-micro opacity-85">{{ unreadCount }}</span>
         </template>
       </SegmentedControl>
-      <div class="relative shrink-0">
-        <button
-          ref="viewMenuToggle"
-          type="button"
-          class="view-trigger"
-          title="Feed options"
-          aria-label="Feed options"
+      <div ref="viewMenuWrap" class="relative shrink-0">
+        <IconButton
+          label="Feed options"
+          :icon="IconEllipsis"
+          size="xl"
+          variant="outline"
           data-testid="view-menu-toggle"
           aria-haspopup="menu"
+          :active="viewMenuOpen"
           :aria-expanded="viewMenuOpen"
           @click="viewMenuOpen = !viewMenuOpen"
-        >
-          <IconEllipsis class="size-4" />
-        </button>
+        />
         <AppMenu
           v-if="viewMenuOpen"
           :entries="viewMenuEntries"
           width="180px"
-          :ignore="[viewMenuToggle]"
+          :ignore="[viewMenuWrap]"
           testid="view-menu"
           @close="viewMenuOpen = false"
           @select="onViewMenuSelect"
@@ -314,61 +313,49 @@ watch(
         <span>{{ selectedItemIds.length }}</span>
       </span>
       <span class="flex-1" />
-      <button
-        type="button"
-        class="selection-action"
-        title="Copy contents"
-        aria-label="Copy contents"
+      <IconButton
+        label="Copy contents"
+        :icon="IconCopy"
+        size="lg"
         :disabled="selectedItemIds.length === 0"
         data-testid="selection-copy-contents"
         @click="emit('copy-selection-contents')"
-      >
-        <IconCopy class="size-3.5" />
-      </button>
-      <div v-if="selectionActions.length" class="relative">
-        <button
-          ref="selectionActionsToggle"
-          type="button"
-          class="selection-action"
-          title="Copy with action"
-          aria-label="Copy with action"
+      />
+      <div v-if="selectionActions.length" ref="selectionActionsWrap" class="relative">
+        <IconButton
+          label="Copy with action"
+          :icon="IconChevronDown"
+          size="lg"
           data-testid="selection-actions-toggle"
           aria-haspopup="menu"
+          :active="selectionActionsOpen"
           :aria-expanded="selectionActionsOpen"
           @click="selectionActionsOpen = !selectionActionsOpen"
-        >
-          <IconChevronDown class="size-3.5" />
-        </button>
+        />
         <AppMenu
           v-if="selectionActionsOpen"
           :entries="selectionActionEntries"
-          :ignore="[selectionActionsToggle]"
+          :ignore="[selectionActionsWrap]"
           testid="selection-actions-menu"
           @select="chooseSelectionAction"
           @close="selectionActionsOpen = false"
         />
       </div>
-      <button
-        type="button"
-        class="selection-action"
-        title="Create session"
-        aria-label="Create session"
+      <IconButton
+        label="Create session"
+        :icon="IconPlus"
+        size="lg"
         :disabled="selectedItemIds.length === 0"
         data-testid="selection-create-session"
         @click="emit('create-session-from-selection')"
-      >
-        <IconPlus class="size-3.5" />
-      </button>
-      <button
-        type="button"
-        class="selection-action"
-        title="Cancel selection"
-        aria-label="Cancel selection"
+      />
+      <IconButton
+        label="Cancel selection"
+        :icon="IconX"
+        size="lg"
         data-testid="selection-cancel"
         @click="emit('cancel-selection')"
-      >
-        <IconX class="size-3.5" />
-      </button>
+      />
     </div>
     <div class="relative min-h-0 flex-1">
       <div v-if="refreshing" class="refresh-banner" role="status" data-testid="feed-refreshing">
@@ -504,24 +491,6 @@ watch(
 .feed-list {
   background: var(--color-list);
 }
-.view-trigger {
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border: 1px solid var(--color-strong);
-  border-radius: var(--radius-lg);
-  color: var(--color-text-2);
-}
-.view-trigger:hover,
-.view-trigger[aria-expanded='true'] {
-  color: var(--color-text);
-}
-.view-trigger[aria-expanded='true'] {
-  border-color: var(--color-accent);
-}
 .selection-bar {
   display: flex;
   flex: none;
@@ -539,25 +508,6 @@ watch(
   gap: 6px;
   color: var(--color-text-2);
   font-family: var(--font-mono);
-}
-.selection-action {
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border-radius: var(--radius-md);
-  color: var(--color-text-2);
-}
-.selection-action:hover:not(:disabled),
-.selection-action[aria-expanded='true'] {
-  background: var(--color-hover);
-  color: var(--color-text);
-}
-.selection-action:disabled {
-  cursor: default;
-  color: var(--color-text-4);
 }
 .refresh-banner {
   position: absolute;

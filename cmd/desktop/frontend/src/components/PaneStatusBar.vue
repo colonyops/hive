@@ -5,7 +5,7 @@
 import IconCode from '~icons/lucide/code'
 import IconFolder from '~icons/lucide/folder'
 import IconFolderOpen from '~icons/lucide/folder-open'
-import AppTooltip from './ui/AppTooltip.vue'
+import IconButton from './ui/IconButton.vue'
 
 withDefaults(
   defineProps<{
@@ -41,30 +41,19 @@ defineEmits<{ 'open-editor': []; reveal: [] }>()
       :data-testid="`${testid}-error`"
       >{{ error }}</span
     >
-    <!-- size-6/rounded-lg is SessionStatusChips' chip metric too; changing
-         it here means changing it there. -->
-    <AppTooltip v-if="editorTitle" :text="`Open in ${editorTitle}`">
-      <button
-        type="button"
-        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-chip hover:text-text"
-        :aria-label="`Open in ${editorTitle}`"
-        :data-testid="`${testid}-open-editor`"
-        @click="$emit('open-editor')"
-      >
-        <IconCode class="size-3.5" />
-      </button>
-    </AppTooltip>
-    <AppTooltip text="Show in Finder">
-      <button
-        type="button"
-        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-chip hover:text-text"
-        aria-label="Show in Finder"
-        :data-testid="`${testid}-reveal`"
-        @click="$emit('reveal')"
-      >
-        <IconFolderOpen class="size-3.5" />
-      </button>
-    </AppTooltip>
+    <IconButton
+      v-if="editorTitle"
+      :label="`Open in ${editorTitle}`"
+      :icon="IconCode"
+      :data-testid="`${testid}-open-editor`"
+      @click="$emit('open-editor')"
+    />
+    <IconButton
+      label="Show in Finder"
+      :icon="IconFolderOpen"
+      :data-testid="`${testid}-reveal`"
+      @click="$emit('reveal')"
+    />
     <!-- Optional: an area with nothing to add here renders the row exactly as
          before, which is what keeps this shared bar drop-in for Agents too. -->
     <slot name="actions" />

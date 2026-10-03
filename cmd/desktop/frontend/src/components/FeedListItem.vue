@@ -22,6 +22,7 @@ import IconEye from '~icons/lucide/eye'
 import type { InboxItem } from '../types/feed'
 import FeedKindPill from './FeedKindPill.vue'
 import FeedSourceBadge from './FeedSourceBadge.vue'
+import IconButton from './ui/IconButton.vue'
 
 const props = defineProps<{
   item: InboxItem
@@ -73,7 +74,7 @@ const hasPullRequestSummary = computed(() => hasPullRequestReview.value || hasPu
 // flipped upward when the row sits too close to the bottom of the window for
 // the menu to fit below.
 const root = ref<HTMLElement | null>(null)
-const menuToggle = ref<HTMLElement | null>(null)
+const menuWrap = ref<HTMLElement | null>(null)
 const menuOpen = ref(false)
 const menuFlip = ref(false)
 
@@ -180,58 +181,42 @@ function activateRow(): void {
     </div>
     <!-- Hover actions replace the row metadata so they never cover the title. -->
     <div v-if="!selectionMode" class="hover-actions" data-testid="row-hover-actions" @click.stop @dblclick.stop>
-      <button
+      <IconButton
         v-if="trash"
-        class="hover-action"
-        type="button"
-        title="Stop ignoring"
-        aria-label="Stop ignoring"
+        label="Stop ignoring"
+        :icon="IconEye"
         data-testid="row-restore"
         @click="emit('toggle-ignored')"
-      >
-        <IconEye class="size-[15px]" />
-      </button>
-      <button
+      />
+      <IconButton
         v-else
-        class="hover-action"
-        type="button"
-        :title="item.archivedAt ? 'Move to inbox' : 'Archive'"
-        :aria-label="item.archivedAt ? 'Move to inbox' : 'Archive'"
+        :label="item.archivedAt ? 'Move to inbox' : 'Archive'"
+        :icon="IconArchive"
         data-testid="row-archive"
         @click="emit('toggle-archive')"
-      >
-        <IconArchive class="size-[15px]" />
-      </button>
-      <button
+      />
+      <IconButton
         v-if="item.url"
-        class="hover-action"
-        type="button"
-        title="Open in browser"
-        aria-label="Open in browser"
+        label="Open in browser"
+        :icon="IconExternalLink"
         data-testid="row-open"
         @click="emit('open-browser')"
-      >
-        <IconExternalLink class="size-[15px]" />
-      </button>
-      <div class="relative">
-        <button
-          ref="menuToggle"
-          class="hover-action"
-          type="button"
-          title="More actions"
-          aria-label="More actions"
+      />
+      <div ref="menuWrap" class="relative">
+        <IconButton
+          label="More actions"
+          :icon="IconEllipsisVertical"
           aria-haspopup="menu"
+          :active="menuOpen"
           :aria-expanded="menuOpen"
           data-testid="row-menu-toggle"
           @click="toggleMenu()"
-        >
-          <IconEllipsisVertical class="size-[15px]" />
-        </button>
+        />
         <ItemActionMenu
           v-if="menuOpen"
           :item="item"
           :flip="menuFlip"
-          :ignore="[menuToggle]"
+          :ignore="[menuWrap]"
           testid="row-menu"
           @close="menuOpen = false"
           @set-unread="(value) => emit('set-unread', value)"
@@ -330,25 +315,6 @@ function activateRow(): void {
 .feed-item.menu-open .meta-right {
   opacity: 0;
   pointer-events: none;
-}
-.hover-action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: var(--radius-md);
-  color: var(--color-text-2);
-  cursor: pointer;
-}
-.hover-action:hover,
-.hover-action[aria-expanded='true'] {
-  background: var(--color-hover);
-  color: var(--color-text);
-}
-.hover-action:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
 }
 @media (prefers-reduced-motion: reduce) {
   .hover-actions,

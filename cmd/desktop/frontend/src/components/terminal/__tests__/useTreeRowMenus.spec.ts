@@ -47,7 +47,7 @@ describe('useTreeRowMenus', () => {
   it('tracks the toggles it anchors to', () => {
     const menus = setup()
     const button = document.createElement('button')
-    menus.setRowToggle('1', button)
+    menus.setRowToggle('1', { $el: button })
     expect(menus.rowToggle('1')).toBe(button)
     menus.setRowToggle('1', null)
     expect(menus.rowToggle('1')).toBeNull()

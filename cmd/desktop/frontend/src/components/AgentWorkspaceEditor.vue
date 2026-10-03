@@ -10,6 +10,7 @@ import IconExternalLink from '~icons/lucide/external-link'
 import IconFolderCog from '~icons/lucide/folder-cog'
 import IconFolderOpen from '~icons/lucide/folder-open'
 import IconX from '~icons/lucide/x'
+import IconButton from './ui/IconButton.vue'
 import BaseButton from './ui/BaseButton.vue'
 import DrawerSheet from './ui/DrawerSheet.vue'
 import FormField from './ui/FormField.vue'
@@ -184,26 +185,24 @@ onMounted(async () => {
     @close="cancel"
   >
     <template v-if="schedules.draft" #icon>
-      <button
-        type="button"
-        class="flex size-[38px] shrink-0 cursor-pointer items-center justify-center rounded-xl border border-card text-text-2 hover:border-strong hover:text-text"
-        aria-label="Back to the workspace"
+      <IconButton
+        label="Back to the workspace"
+        :icon="IconArrowLeft"
+        size="xl"
+        variant="outline"
         data-testid="agent-workspace-editor-schedule-back"
         @click="schedules.close()"
-      >
-        <IconArrowLeft class="size-[18px]" />
-      </button>
+      />
     </template>
     <template #header-actions>
-      <button
-        class="text-text-3 hover:text-text disabled:opacity-50"
-        aria-label="Close"
+      <IconButton
+        label="Close"
+        :icon="IconX"
+        size="lg"
         data-testid="agent-workspace-editor-close"
         :disabled="busy || confirming || discarding"
         @click="closeSheet"
-      >
-        <IconX class="size-4" />
-      </button>
+      />
     </template>
 
     <!-- The schedule page takes the body over, the way the confirm strip takes

@@ -12,6 +12,7 @@ import type {
   Profile,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf/models'
 import type { DraftWorkspace } from '../composables/useHiveSetup'
+import IconButton from './ui/IconButton.vue'
 import AppCheckbox from './ui/AppCheckbox.vue'
 import AppSelect from './ui/AppSelect.vue'
 import TextInput from './ui/TextInput.vue'
@@ -191,16 +192,13 @@ function repoLabel(count: number): string {
               workspace.exists ? repoLabel(workspace.repos) : 'not found on this machine'
             }}</span>
           </span>
-          <button
-            type="button"
-            class="shrink-0 cursor-pointer rounded-md p-1 text-text-4 hover:bg-raised hover:text-text"
+          <IconButton
+            :label="`Remove ${workspace.path}`"
+            :icon="IconX"
             :disabled="busy"
-            :aria-label="`Remove ${workspace.path}`"
             :data-testid="`hive-workspace-remove-${workspace.path}`"
             @click="emit('removeWorkspace', workspace.path)"
-          >
-            <IconX class="size-3.5" />
-          </button>
+          />
         </li>
       </ul>
 

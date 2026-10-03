@@ -3,6 +3,7 @@
 // prompt order, so a new input is appended rather than sorted in.
 import IconPlus from '~icons/lucide/plus'
 import IconTrash from '~icons/lucide/trash-2'
+import IconButton from './ui/IconButton.vue'
 import AppCheckbox from './ui/AppCheckbox.vue'
 import { SelectField, TextareaField, TextField } from '../pipeline/fields'
 import type { InputSpec } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/actions/models'
@@ -87,14 +88,14 @@ function remove(index: number): void {
             @update:model-value="patch(index, { name: $event })"
           />
         </div>
-        <button
-          class="mt-7 text-text-3 hover:text-severity-error"
-          :aria-label="`Remove input ${index + 1}`"
+        <IconButton
+          :label="`Remove input ${index + 1}`"
+          :icon="IconTrash"
+          tone="danger"
+          class="mt-6"
           :data-testid="`action-input-remove-${index}`"
           @click="remove(index)"
-        >
-          <IconTrash class="size-4" />
-        </button>
+        />
       </div>
       <TextField
         :model-value="spec.label"

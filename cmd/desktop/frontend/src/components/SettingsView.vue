@@ -7,6 +7,7 @@ import IconSettings from '~icons/lucide/settings'
 import IconPlug from '~icons/lucide/plug'
 import IconRss from '~icons/lucide/rss'
 import IconWebhook from '~icons/lucide/webhook'
+import IconButton from './ui/IconButton.vue'
 import BaseBadge from './ui/BaseBadge.vue'
 import BaseCard from './ui/BaseCard.vue'
 import BaseIconBadge from './ui/BaseIconBadge.vue'
@@ -275,16 +276,14 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
                   :data-testid="`integration-${cardId(integration.key)}-status`"
                   >{{ statusFor(integration).label }}</BaseBadge
                 >
-                <button
+                <IconButton
                   v-if="drawers[integration.key]"
-                  type="button"
-                  class="flex size-7 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text"
-                  :aria-label="`Configure ${integration.title}`"
+                  :label="`Configure ${integration.title}`"
+                  :icon="IconSettings"
+                  size="lg"
                   :data-testid="`integration-${cardId(integration.key)}-configure`"
                   @click="drawers[integration.key]()"
-                >
-                  <IconSettings class="size-3.5" />
-                </button>
+                />
               </div>
             </template>
           </BaseCard>

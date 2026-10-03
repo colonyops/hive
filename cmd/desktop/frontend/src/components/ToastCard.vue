@@ -7,6 +7,7 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
 import IconZap from '~icons/lucide/zap'
 import type { ToastActionDef, ToastInstance, ToastSeverity } from '../types/toast'
+import IconButton from './ui/IconButton.vue'
 
 const props = defineProps<{ toast: ToastInstance }>()
 const emit = defineEmits<{ dismiss: [] }>()
@@ -119,14 +120,13 @@ function runAction(action: ToastActionDef) {
           </button>
         </div>
       </div>
-      <button
-        class="shrink-0 cursor-pointer self-start leading-none text-text-3 hover:text-text"
-        aria-label="Dismiss"
+      <IconButton
+        label="Dismiss"
+        :icon="IconX"
+        class="-m-1 self-start"
         data-testid="toast-dismiss"
         @click="emit('dismiss')"
-      >
-        <IconX class="size-[15px]" />
-      </button>
+      />
     </div>
     <div
       v-if="toast.duration > 0"

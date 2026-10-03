@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
 import IconTrash2 from '~icons/lucide/trash-2'
+import IconButton from '../ui/IconButton.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import BaseCard from '../ui/BaseCard.vue'
 import BaseIconBadge from '../ui/BaseIconBadge.vue'
@@ -32,14 +33,14 @@ const emit = defineEmits<{ edit: [event: MouseEvent]; delete: [] }>()
     <template #actions>
       <div class="flex w-full items-center justify-end gap-2 @[600px]/pane:w-auto @[600px]/pane:shrink-0">
         <BaseButton variant="secondary" size="xs" @click="emit('edit', $event)">Edit</BaseButton>
-        <button
-          type="button"
-          class="flex size-[34px] items-center justify-center rounded-lg border border-card text-text-3 hover:border-severity-error-border hover:text-severity-error"
-          aria-label="Delete"
+        <IconButton
+          label="Delete"
+          :icon="IconTrash2"
+          size="xl"
+          variant="outline"
+          tone="danger"
           @click="emit('delete')"
-        >
-          <IconTrash2 class="size-[15px]" />
-        </button>
+        />
       </div>
     </template>
   </BaseCard>
