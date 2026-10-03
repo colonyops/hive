@@ -153,10 +153,12 @@ The app's own focus and overlay composables have no VueUse equivalent and
 stay: `useFocusTrap` (VueUse's needs `focus-trap`, and ours deliberately
 leaves teleported popovers out), `useReturnFocus`, `useAutofocus` (it also
 focuses components that expose `focus()`), `useAnchoredPopover`,
-`useResizablePanel`, and `useEscapeToClose` (a thin `onKeyStroke` wrapper
-with an `enabled` gate). `useClipboard` goes through the Wails clipboard
-because `navigator.clipboard` no-ops in WKWebView when the document is not
-focused.
+`useResizablePanel`, and `useEscapeToClose` (one Escape stack: only the
+topmost enabled caller fires, so a stacked overlay never closes the one under
+it). Every modal surface is a `BaseModal` or a `DrawerSheet`; both register in
+`useOpenModalCount`, which gates the global keybindings. `useClipboard` goes
+through the Wails clipboard because `navigator.clipboard` no-ops in WKWebView
+when the document is not focused.
 
 ## Mock modes
 

@@ -1405,29 +1405,16 @@ function contextActive(context: CommandContext): boolean {
   }
 }
 
-// Every overlay except the tasks one — split out so onGlobalKeydown can let
-// tasks.toggle close the tasks overlay specifically, while it still stays
-// suppressed under any of these (report, new-profile, a confirm, ...), same
-// as every other command.
-const otherOverlayOpen = computed(
-  () =>
-    paletteOpen.value ||
-    reportDialogOpen.value ||
-    newProfileOpen.value ||
-    deleteProfileOpen.value ||
-    markWorkspaceReadOpen.value ||
-    newSessionOpen.value ||
-    activityOpen.value ||
-    !!sessionLaunchAction.value ||
-    !!actionInputsAction.value ||
-    !!pendingNavigation.value,
-)
+// Every dialog and drawer registers in openModalCount while it is mounted, so
+// none can be left off this gate. The palette and the two hub overlays are not
+// modals (Tasks gates its own keys on the count), so they are named here.
+// Tasks is split out so onGlobalKeydown can let tasks.toggle close the tasks
+// overlay specifically, while it stays suppressed under anything else.
+const openModalCount = useOpenModalCount()
+const otherOverlayOpen = computed(() => paletteOpen.value || activityOpen.value || openModalCount.value > 0)
 // While an overlay owns the screen, only the palette toggle stays live —
 // tasks.toggle gets its own narrower exception below.
 const anyOverlayOpen = computed(() => otherOverlayOpen.value || tasksOpen.value)
-// A BaseModal-backed confirm stacked inside the tasks overlay (delete, prune,
-// ...) must keep tasks.toggle from also closing the overlay underneath it.
-const openModalCount = useOpenModalCount()
 
 // Everything the palette lists lives in this composable — catalog commands,
 // mode switches, and the hub's own objects, plus the Go-to rows (sessions,
@@ -1491,8 +1478,7 @@ function dispatchIfActive(id: string): boolean {
     // screen — that is what lets it close again — but only that overlay: a
     // different modal (report, new-profile, a confirm stacked inside Tasks
     // itself) still swallows it like any other command.
-    const closesTasksOverlay =
-      id === 'tasks.toggle' && tasksOpen.value && !otherOverlayOpen.value && openModalCount.value === 0
+    const closesTasksOverlay = id === 'tasks.toggle' && tasksOpen.value && !otherOverlayOpen.value
     if (!closesTasksOverlay) return false
   }
   if (!contextActive(command.context)) return false

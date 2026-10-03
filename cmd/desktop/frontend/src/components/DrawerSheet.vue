@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { useFocusTrap } from '../composables/useFocusTrap'
+import { useRegisterOpenModal } from '../composables/useOpenModalCount'
 import { useResizablePanel } from '../composables/useResizablePanel'
+import { useReturnFocus } from '../composables/useReturnFocus'
 import PanelResizeHandle from './PanelResizeHandle.vue'
 
 const props = withDefaults(
@@ -21,6 +23,8 @@ const props = withDefaults(
     closeOnBackdrop?: boolean
     trapFocus?: boolean
     bodyClass?: string
+    /** Where focus goes when the sheet closes; defaults to whatever held it when it opened. */
+    returnFocusTo?: HTMLElement | null
   }>(),
   {
     defaultSize: 440,
@@ -62,6 +66,16 @@ function onBackdropClick(): void {
 useEscapeToClose(close, { enabled: () => props.closeOnEscape })
 
 const { onKeydown: trapFocus } = useFocusTrap(sheetRef, { enabled: () => props.trapFocus })
+useReturnFocus(() => props.returnFocusTo)
+useRegisterOpenModal()
+
+// A field inside may have claimed focus already (useAutofocus also waits a
+// tick, and children mount first). Otherwise focus stays on the page behind
+// the sheet, where keys would still reach it.
+onMounted(async () => {
+  await nextTick()
+  if (!sheetRef.value?.contains(document.activeElement)) sheetRef.value?.focus()
+})
 
 function startResize(event: PointerEvent): void {
   resizePanel?.startResize(event)
@@ -84,11 +98,12 @@ defineExpose({ body: bodyRef })
     />
     <aside
       ref="sheetRef"
-      class="fixed inset-y-0 right-0 z-40 flex max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-[-30px_0_60px_-20px_rgba(0,0,0,.5)]"
+      class="fixed inset-y-0 right-0 z-40 flex max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-[-30px_0_60px_-20px_rgba(0,0,0,.5)] outline-none"
       :style="{ width: panelWidth ? `${panelWidth}px` : undefined }"
       role="dialog"
       :aria-label="ariaLabel"
       aria-modal="true"
+      tabindex="-1"
       :data-testid="testid"
       @keydown="trapFocus"
     >

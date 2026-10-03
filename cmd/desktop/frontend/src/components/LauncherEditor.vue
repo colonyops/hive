@@ -8,7 +8,6 @@ import DrawerSheet from './DrawerSheet.vue'
 import { SelectField, TextField } from '../pipeline/fields'
 import { launcherIconOptions } from '../lib/launcherIcons'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
-import { useReturnFocus } from '../composables/useReturnFocus'
 import { launcherCommandID } from '../keybindings/catalog'
 import type { Launcher } from '../composables/useActionsSettings'
 
@@ -49,7 +48,6 @@ function cancel(): void {
   if (!props.busy) emit('cancel')
 }
 
-useReturnFocus(() => props.returnFocusTo)
 onMounted(async () => {
   await nextTick()
   if (props.isNew && idRef.value) idRef.value.focus()
@@ -60,6 +58,7 @@ onMounted(async () => {
 
 <template>
   <DrawerSheet
+    :return-focus-to="returnFocusTo"
     :ariaLabel="isNew ? 'New quick terminal' : 'Edit quick terminal'"
     testid="launcher-editor"
     :default-size="480"

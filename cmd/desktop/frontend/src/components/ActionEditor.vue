@@ -9,7 +9,6 @@ import AppSelect, { type AppSelectOption } from './AppSelect.vue'
 import ActionInputsEditor from './ActionInputsEditor.vue'
 import AppliesToField from './AppliesToField.vue'
 import DrawerSheet from './DrawerSheet.vue'
-import { useReturnFocus } from '../composables/useReturnFocus'
 import { SelectField, TextareaField, TextField } from '../pipeline/fields'
 import type { EditableAction } from '../composables/useActionsSettings'
 import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
@@ -132,7 +131,6 @@ function save(): void {
 function cancel(): void {
   if (!props.busy) emit('cancel')
 }
-useReturnFocus(() => props.returnFocusTo)
 onMounted(async () => {
   await nextTick()
   if (props.isNew && idRef.value) idRef.value.focus()
@@ -143,6 +141,7 @@ onMounted(async () => {
 
 <template>
   <DrawerSheet
+    :return-focus-to="returnFocusTo"
     :ariaLabel="isNew ? 'New action' : 'Edit action'"
     testid="action-editor"
     :default-size="480"

@@ -5,6 +5,7 @@ import IconSearch from '~icons/lucide/search'
 import IconZap from '~icons/lucide/zap'
 import AppIcon from './AppIcon.vue'
 import { fuzzyMatch, useCommandPalette, type Command } from '../composables/useCommands'
+import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { usePaletteRecents } from '../composables/usePaletteRecents'
 import { paletteScopes, type PaletteScopeId } from '../palette/scopes'
 
@@ -240,6 +241,10 @@ function onInput(e: Event): void {
 
 // ── Keyboard navigation ───────────────────────────────────────────────────────
 
+// The palette opens over other overlays, so its Escape goes through the shared
+// stack: handling it on the panel would also close whatever is underneath.
+useEscapeToClose(toggle, { enabled: open })
+
 function onKeydown(e: KeyboardEvent): void {
   const len = navList.value.length
   if (e.key === 'ArrowDown') {
@@ -256,8 +261,6 @@ function onKeydown(e: KeyboardEvent): void {
     e.preventDefault()
     const cmd = navList.value[selectedIndex.value]
     if (cmd) void run(cmd)
-  } else if (e.key === 'Escape') {
-    toggle()
   } else if (e.key === 'Backspace') {
     // A non-empty query means Backspace is editing text, not leaving the
     // scope — popScope() already returns false for that case.
@@ -272,8 +275,8 @@ function onKeydown(e: KeyboardEvent): void {
       <!-- Dimmed backdrop — click outside the panel to close -->
       <div v-if="open" class="palette-backdrop" @click.self="toggle">
         <!-- Panel -->
-        <!-- Keydown lives on the panel (not the input) so navigation and
-             Escape keep working when focus moves to a result row. -->
+        <!-- Keydown lives on the panel (not the input) so navigation keeps
+             working when focus moves to a result row. -->
         <div
           class="palette-panel"
           data-testid="command-palette"

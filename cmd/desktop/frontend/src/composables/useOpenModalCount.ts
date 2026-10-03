@@ -1,19 +1,15 @@
 import { onScopeDispose, ref, type Ref } from 'vue'
 
-// Module-scope so every BaseModal instance shares one registry: a
-// ConfirmationDialog stacked on top of another overlay (TasksOverlay, a
-// drawer) registers here too. That is what lets the overlay gate its own
-// Escape handler on "is anything stacked on top of me" rather than racing a
-// stacked dialog's own useEscapeToClose for the same keypress — see
-// TasksView's use of useOpenModalCount().
+// Module-scope so every BaseModal and DrawerSheet shares one registry. App.vue
+// gates global keybindings on it, and TasksView gates its own keys on it.
 const openIds = new Set<symbol>()
 const count = ref(0)
 
 /**
- * Registers a BaseModal as open for as long as its component stays mounted.
- * Only BaseModal-backed dialogs may register: an overlay that gates its own
- * dismissal on useOpenModalCount() === 0 (TasksOverlay) relies on the count
- * staying zero while it is the topmost surface.
+ * Registers a modal surface as open for as long as its component stays
+ * mounted. Only BaseModal and DrawerSheet register: TasksOverlay gates its keys
+ * on useOpenModalCount() === 0, so the count must stay zero while it is the
+ * topmost surface.
  */
 export function useRegisterOpenModal(): void {
   const id = Symbol()
@@ -25,7 +21,7 @@ export function useRegisterOpenModal(): void {
   })
 }
 
-/** Reactive count of currently-mounted BaseModal instances, shared app-wide. */
+/** Reactive count of mounted BaseModal and DrawerSheet instances, shared app-wide. */
 export function useOpenModalCount(): Readonly<Ref<number>> {
   return count
 }

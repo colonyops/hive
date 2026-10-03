@@ -44,7 +44,13 @@ function onBackdropClick(): void {
   if (props.closeOnBackdrop && !props.busy) close()
 }
 
-useEscapeToClose(close, { enabled: () => props.closeOnEscape && !props.busy })
+// Busy stays enabled and swallows the key, so Escape cannot reach the overlay underneath.
+useEscapeToClose(
+  () => {
+    if (!props.busy) close()
+  },
+  { enabled: () => props.closeOnEscape },
+)
 const { onKeydown: trapFocus } = useFocusTrap(dialog)
 useReturnFocus()
 useRegisterOpenModal()

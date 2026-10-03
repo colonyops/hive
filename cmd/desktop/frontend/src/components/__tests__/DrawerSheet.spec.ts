@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent, h, nextTick, ref } from 'vue'
+import { useOpenModalCount } from '../../composables/useOpenModalCount'
 import DrawerSheet from '../DrawerSheet.vue'
+import SettingsLayout from '../settings/SettingsLayout.vue'
 
 function el<T extends HTMLElement>(testid: string): T {
   const element = document.querySelector<T>(`[data-testid="${testid}"]`)
@@ -88,5 +91,52 @@ describe('DrawerSheet', () => {
     first.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }))
     expect(document.activeElement).toBe(last)
     wrapper.unmount()
+  })
+
+  it('closes on Escape without also closing the settings page behind it', async () => {
+    const drawerOpen = ref(true)
+    const closeDrawer = vi.fn(() => (drawerOpen.value = false))
+    const Host = defineComponent({
+      emits: ['close-settings'],
+      setup(_, { emit }) {
+        return () =>
+          h(SettingsLayout, { onClose: () => emit('close-settings') }, () =>
+            drawerOpen.value ? h(DrawerSheet, { ariaLabel: 'Nested drawer', onClose: closeDrawer }) : null,
+          )
+      },
+    })
+    const wrapper = mount(Host)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(closeDrawer).toHaveBeenCalledOnce()
+    expect(wrapper.emitted('close-settings')).toBeUndefined()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(wrapper.emitted('close-settings')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('counts as an open modal while mounted', () => {
+    const count = useOpenModalCount()
+    const wrapper = mountSheet()
+    expect(count.value).toBe(1)
+    wrapper.unmount()
+    expect(count.value).toBe(0)
+  })
+
+  it('takes focus when it opens and hands it back when it closes', async () => {
+    const trigger = document.createElement('button')
+    document.body.append(trigger)
+    trigger.focus()
+
+    const wrapper = mountSheet({ width: 400 })
+    await flushPromises()
+    expect(document.activeElement).toBe(el('demo-drawer'))
+
+    wrapper.unmount()
+    await nextTick()
+    expect(document.activeElement).toBe(trigger)
+    trigger.remove()
   })
 })

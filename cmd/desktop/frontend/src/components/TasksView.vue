@@ -221,10 +221,7 @@ const pruneDescription = computed(() => {
   return `This removes ${count} task${count === 1 ? '' : 's'} older than ${PRUNE_OLDER_THAN_DAYS} days${scope}. Pruning removes everything nested under a pruned root, regardless of its own status.`
 })
 
-// A stacked ConfirmationDialog (its own BaseModal) must take Escape first —
-// otherwise one keypress would close both the dialog and the overlay behind
-// it, since useEscapeToClose has no layering of its own.
-useEscapeToClose(() => emit('close'), { enabled: () => openModalCount.value === 0 })
+useEscapeToClose(() => emit('close'))
 
 onMounted(() => {
   startLiveUpdates()
