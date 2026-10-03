@@ -243,7 +243,8 @@ still set their own line-height.
 | `text-micro`      | 10.5 | 9.5, 10, 10.5 |
 | `text-caption`    | 11.5 | 11, 11.5      |
 | `text-small`      | 12.5 | 12, 12.5      |
-| `text-body`       | 13.5 | 13, 13.5, 14  |
+| `text-body`       | 13.5 | 13, 13.5      |
+| `text-reading`    | 14   | 14            |
 | `text-title`      | 15   | 15            |
 | `text-lead`       | 16   | 16            |
 | `text-heading`    | 17   | 16.5, 17      |

@@ -118,7 +118,7 @@ onMounted(() => void load())
         class="flex items-center justify-between gap-3 rounded-lg border border-border bg-raised px-3 py-2.5"
       >
         <div class="min-w-0">
-          <div class="truncate text-[13px] text-text" data-testid="github-connection-account">
+          <div class="truncate text-body text-text" data-testid="github-connection-account">
             {{ connectionStatus?.login ? `Connected as ${connectionStatus.login}` : 'Connected' }}
           </div>
           <div v-if="connectionStatus?.name" class="truncate text-xs text-text-3">{{ connectionStatus.name }}</div>
@@ -156,7 +156,7 @@ onMounted(() => void load())
       >
         <div class="text-xs text-text-3">Enter this code on GitHub:</div>
         <div
-          class="mt-1 font-mono text-[17px] font-semibold tracking-[.14em] text-text"
+          class="mt-1 font-mono text-heading font-semibold tracking-[.14em] text-text"
           data-testid="github-connection-code"
         >
           {{ deviceFlow?.userCode }}
@@ -199,7 +199,7 @@ onMounted(() => void load())
       </div>
 
       <div v-else class="flex items-center justify-between gap-3 rounded-lg border border-border bg-raised px-3 py-2.5">
-        <div class="text-[13px] text-text-3">No account connected</div>
+        <div class="text-body text-text-3">No account connected</div>
         <div class="flex shrink-0 items-center gap-2">
           <BaseButton variant="secondary" size="sm" data-testid="github-connection-use-token" @click="useTokenInstead"
             >Use a token</BaseButton

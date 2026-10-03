@@ -81,7 +81,7 @@ const groups = computed(() => groupEventsByDay(filtered.value))
 // shadow, not a border, so it never colors the row's divider on the sides it
 // doesn't own.
 const STYLES: Record<ActivityStyleKey, { dot: string; rail: string }> = {
-  error: { dot: 'bg-severity-error', rail: 'bg-severity-error-tint shadow-[inset_2px_0_0_var(--hv-severity-error)]' },
+  error: { dot: 'bg-severity-error', rail: 'bg-severity-error-tint shadow-rail shadow-severity-error' },
   auto_action: { dot: 'bg-accent', rail: '' },
   neutral: { dot: 'bg-text-4', rail: '' },
 }
@@ -109,8 +109,8 @@ onMounted(() => {
   <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="activity-view">
     <ViewHeader>
       <template #title>
-        <span class="text-[13px] font-semibold text-text">Activity</span>
-        <span class="font-mono text-[11px] text-text-4"
+        <span class="text-body font-semibold text-text">Activity</span>
+        <span class="font-mono text-caption text-text-4"
           >{{ events.length }} {{ events.length === 1 ? 'event' : 'events' }}</span
         >
         <div class="flex-1" />
@@ -137,7 +137,7 @@ onMounted(() => {
       >
         <template #option="{ option }">
           {{ option.label }}
-          <span class="font-mono text-[10.5px]" :class="countClass(option.value)">{{ counts[option.value] }}</span>
+          <span class="font-mono text-micro" :class="countClass(option.value)">{{ counts[option.value] }}</span>
         </template>
       </SegmentedControl>
       <div class="flex-1" />
@@ -177,12 +177,12 @@ onMounted(() => {
 
       <template v-for="group in ledger" v-else :key="group.key">
         <div class="sticky -top-px z-[1] flex items-center gap-3 border-b border-row bg-app px-5 py-2 pt-[9px]">
-          <span class="font-mono text-[10.5px] uppercase tracking-[.14em] text-text-2">{{ group.label }}</span>
-          <span v-if="group.isRelative" class="font-mono text-[10.5px] uppercase tracking-[.06em] text-text-4">{{
+          <span class="font-mono text-micro uppercase tracking-[.14em] text-text-2">{{ group.label }}</span>
+          <span v-if="group.isRelative" class="font-mono text-micro uppercase tracking-[.06em] text-text-4">{{
             group.dateLabel
           }}</span>
           <div class="h-px flex-1 bg-row" />
-          <span class="font-mono text-[10.5px] text-text-4"
+          <span class="font-mono text-micro text-text-4"
             >{{ group.events.length }} {{ group.events.length === 1 ? 'event' : 'events' }}</span
           >
         </div>
@@ -194,17 +194,17 @@ onMounted(() => {
             :class="style.rail || 'hover:bg-row-hover'"
             data-testid="activity-row"
           >
-            <span class="w-[72px] shrink-0 pt-px font-mono text-[11.5px] text-text-3">{{
+            <span class="w-[72px] shrink-0 pt-px font-mono text-caption text-text-3">{{
               timeLabel(event.createdAt)
             }}</span>
             <span class="flex w-4 shrink-0 justify-center pt-[7px]"
               ><span class="size-1.5 rounded-full" :class="style.dot"
             /></span>
             <div class="min-w-0 flex-1 pl-3">
-              <div class="text-[13px] leading-normal text-text">{{ event.title }}</div>
+              <div class="text-body leading-normal text-text">{{ event.title }}</div>
               <div
                 v-if="event.body || event.source"
-                class="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[11.5px] text-text-3"
+                class="mt-0.5 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-caption text-text-3"
               >
                 <span v-if="event.body">{{ event.body }}</span>
                 <span v-if="event.source" class="font-mono text-text-4">{{ event.source }}</span>
@@ -213,7 +213,7 @@ onMounted(() => {
             <button
               v-if="links.item"
               type="button"
-              class="ml-3 inline-flex h-7 shrink-0 cursor-pointer items-center rounded border border-strong px-2 text-[11.5px] text-text-2 hover:border-text-3 hover:text-text"
+              class="ml-3 inline-flex h-7 shrink-0 cursor-pointer items-center rounded border border-strong px-2 text-caption text-text-2 hover:border-text-3 hover:text-text"
               :aria-label="`View item for ${event.title}`"
               :data-testid="`activity-open-item-${event.id}`"
               @click="emit('open-item', links.item)"
@@ -233,7 +233,7 @@ onMounted(() => {
             <button
               v-if="retryableSessionDraft(event)"
               type="button"
-              class="ml-3 shrink-0 cursor-pointer self-start rounded border border-strong px-2 py-1 text-[11.5px] text-text-2 hover:border-text-3 hover:text-text"
+              class="ml-3 shrink-0 cursor-pointer self-start rounded border border-strong px-2 py-1 text-caption text-text-2 hover:border-text-3 hover:text-text"
               :aria-label="`Retry ${event.title}`"
               :data-testid="`activity-retry-${event.id}`"
               @click="retry(event.metadata ?? null)"
@@ -248,7 +248,7 @@ onMounted(() => {
     <!-- status strip -->
     <div
       v-if="events.length && !error"
-      class="flex h-[30px] shrink-0 items-center gap-3.5 border-t border-row bg-sidebar px-5 font-mono text-[11px] text-text-3"
+      class="flex h-[30px] shrink-0 items-center gap-3.5 border-t border-row bg-sidebar px-5 font-mono text-caption text-text-3"
       data-testid="activity-status"
     >
       <span class="flex items-center gap-1.5"

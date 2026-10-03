@@ -114,8 +114,8 @@ onMounted(() => void reload())
       >
         <span class="size-2 shrink-0 rounded-full bg-current" />
         <div class="min-w-0 flex-1">
-          <div class="text-[12.5px] font-semibold">{{ status.label }}</div>
-          <div v-if="status.detail" class="mt-0.5 break-words text-[11.5px] opacity-80">{{ status.detail }}</div>
+          <div class="text-small font-semibold">{{ status.label }}</div>
+          <div v-if="status.detail" class="mt-0.5 break-words text-caption opacity-80">{{ status.detail }}</div>
         </div>
       </div>
 
@@ -168,7 +168,7 @@ onMounted(() => void reload())
       >
         <div class="flex items-center gap-2">
           <code
-            class="min-w-0 flex-1 truncate rounded-lg border border-strong bg-app px-3 py-2 font-mono text-[12px] text-text-2"
+            class="min-w-0 flex-1 truncate rounded-lg border border-strong bg-app px-3 py-2 font-mono text-small text-text-2"
             data-testid="webhook-settings-base-url-value"
             >{{ baseUrl }}</code
           >
@@ -178,7 +178,7 @@ onMounted(() => void reload())
 
       <p
         v-if="restartPending"
-        class="rounded-lg border border-border bg-severity-info-tint px-3 py-2.5 text-[12px] leading-relaxed text-text-2"
+        class="rounded-lg border border-border bg-severity-info-tint px-3 py-2.5 text-small leading-relaxed text-text-2"
         data-testid="webhook-settings-restart-note"
       >
         Restart Hive to apply the listener's enabled state and port.

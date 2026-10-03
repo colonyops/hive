@@ -26,7 +26,7 @@ function statusClasses(status: string): string {
   >
     <header class="border-b border-border px-3.5 py-2.5">
       <div class="text-xs font-semibold text-text">Action jobs</div>
-      <div class="mt-0.5 text-[10.5px] text-text-3">Running and recently completed work</div>
+      <div class="mt-0.5 text-micro text-text-3">Running and recently completed work</div>
     </header>
     <ul class="max-h-80 divide-y divide-border overflow-y-auto">
       <li
@@ -45,12 +45,12 @@ function statusClasses(status: string): string {
           <IconCircleAlert v-else class="size-3.5" />
         </span>
         <div class="min-w-0 flex-1">
-          <div class="truncate text-[12px] font-medium text-text">{{ job.label || job.actionId }}</div>
-          <div class="mt-0.5 flex items-center gap-1.5 text-[10.5px]">
+          <div class="truncate text-small font-medium text-text">{{ job.label || job.actionId }}</div>
+          <div class="mt-0.5 flex items-center gap-1.5 text-micro">
             <span :class="job.status === 'failed' ? 'text-severity-error' : 'text-text-3'">{{ job.step }}</span>
             <span v-if="job.target" class="truncate text-text-4">· {{ job.target }}</span>
           </div>
-          <div v-if="job.error" class="mt-1 line-clamp-2 text-[10.5px] text-severity-error">{{ job.error }}</div>
+          <div v-if="job.error" class="mt-1 line-clamp-2 text-micro text-severity-error">{{ job.error }}</div>
         </div>
         <button
           v-if="job.commandId"

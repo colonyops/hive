@@ -21,11 +21,11 @@ function onChange(event: Event): void {
 <template>
   <div>
     <label
-      class="flex items-center gap-2 text-[13px]"
+      class="flex items-center gap-2 text-body"
       :class="disabled ? 'cursor-not-allowed text-text-4' : 'cursor-pointer'"
     >
       <span
-        class="relative flex size-4 shrink-0 items-center justify-center rounded-[5px] border-[1.5px] transition-colors focus-within:ring-2 focus-within:ring-accent"
+        class="relative flex size-4 shrink-0 items-center justify-center rounded-md border-[1.5px] transition-colors focus-within:ring-2 focus-within:ring-accent"
         :class="modelValue ? 'border-accent bg-accent' : 'border-strong bg-transparent'"
       >
         <input

@@ -77,7 +77,7 @@ function onKeydown(e: KeyboardEvent) {
 <template>
   <FormField v-slot="{ id }" :label="label" :hint="hint" :error="error" :testid="testid">
     <div
-      class="hv-code-shell flex overflow-hidden rounded-[9px] border border-row bg-app"
+      class="hv-code-shell flex overflow-hidden rounded-lg border border-row bg-app"
       :style="{ height: `${shellHeight}px` }"
     >
       <div
@@ -116,7 +116,7 @@ function onKeydown(e: KeyboardEvent) {
 .hv-code-layer {
   padding: 12px 14px;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--text-small);
   line-height: 20px;
   white-space: pre;
   top: 0;
@@ -156,7 +156,7 @@ function onKeydown(e: KeyboardEvent) {
 .hv-code-gutter {
   padding: 12px 10px;
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--text-small);
   line-height: 20px;
   background: var(--color-raised);
   border-right: 1px solid var(--color-row);

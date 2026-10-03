@@ -29,7 +29,7 @@ const overflowCount = computed(() => Math.max(0, props.toasts.length - MAX_VISIB
     <TransitionGroup name="toast">
       <ToastCard v-for="toast in visible" :key="toast.id" :toast="toast" @dismiss="emit('dismiss', toast.id)" />
     </TransitionGroup>
-    <div v-if="overflowCount > 0" class="text-center font-mono text-[11.5px] text-text-3" data-testid="toast-overflow">
+    <div v-if="overflowCount > 0" class="text-center font-mono text-caption text-text-3" data-testid="toast-overflow">
       {{ overflowCount }} more ·
       <button class="cursor-pointer hover:text-text" data-testid="toast-clear-all" @click="emit('clear-all')">
         Clear all

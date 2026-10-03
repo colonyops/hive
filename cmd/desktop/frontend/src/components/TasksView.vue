@@ -227,8 +227,8 @@ onUnmounted(() => {
   <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="tasks-view">
     <ViewHeader>
       <template #title>
-        <span class="text-[13px] font-semibold text-text">Tasks</span>
-        <span class="font-mono text-[11px] text-text-4"
+        <span class="text-body font-semibold text-text">Tasks</span>
+        <span class="font-mono text-caption text-text-4"
           >{{ items.length }} {{ items.length === 1 ? 'item' : 'items' }}</span
         >
         <div class="flex-1" />
@@ -256,7 +256,7 @@ onUnmounted(() => {
       >
         <template #option="{ option }">
           {{ option.label }}
-          <span class="font-mono text-[10.5px] text-text-4">{{ counts[option.value] }}</span>
+          <span class="font-mono text-micro text-text-4">{{ counts[option.value] }}</span>
         </template>
       </SegmentedControl>
 
@@ -326,7 +326,7 @@ onUnmounted(() => {
           class="flex h-full flex-col items-center justify-center gap-3 px-10 text-center"
           data-testid="tasks-empty"
         >
-          <div class="text-[13px] text-text-3">No tasks in {{ repoKey }}.</div>
+          <div class="text-body text-text-3">No tasks in {{ repoKey }}.</div>
           <button
             type="button"
             class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
@@ -341,10 +341,10 @@ onUnmounted(() => {
           class="flex h-full flex-col items-center justify-center gap-2 px-10 text-center"
           data-testid="tasks-empty"
         >
-          <div class="text-[13px] text-text-3">No tasks yet.</div>
+          <div class="text-body text-text-3">No tasks yet.</div>
           <p class="text-xs text-text-4">
             Agents create tasks with
-            <code class="rounded bg-chip px-1 py-0.5 font-mono text-[11px] text-text-3">hive hc create</code>.
+            <code class="rounded bg-chip px-1 py-0.5 font-mono text-caption text-text-3">hive hc create</code>.
           </p>
         </div>
         <div

@@ -77,7 +77,7 @@ defineExpose({
       autocapitalize="off"
       autocorrect="off"
       spellcheck="false"
-      class="min-w-0 flex-1 bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-4"
+      class="min-w-0 flex-1 bg-transparent text-small text-text outline-none placeholder:text-text-4"
       :data-testid="testid"
       @input="onInput"
       @keydown="onKeydown"

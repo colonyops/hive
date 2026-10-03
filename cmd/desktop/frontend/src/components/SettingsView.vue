@@ -174,7 +174,7 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
 <template>
   <SettingsLayout data-testid="settings-view" @close="emit('close')">
     <template #sidebar-title>
-      <div class="text-[15px] font-semibold tracking-[-.01em] text-text">Application settings</div>
+      <div class="text-title font-semibold tracking-[-.01em] text-text">Application settings</div>
     </template>
     <template #nav>
       <div v-for="(group, index) in navGroups" :key="group.title" class="flex flex-col gap-0.5">
@@ -200,7 +200,7 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
       </div>
     </template>
     <template #header-title>
-      <span class="text-[13px] font-semibold text-text">{{ sectionTitle }}</span>
+      <span class="text-body font-semibold text-text">{{ sectionTitle }}</span>
     </template>
 
     <GeneralSettingsView v-if="props.activeCategory === 'general'" />
@@ -235,7 +235,7 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
           <BaseCard
             v-for="integration in integrations"
             :key="integration.key"
-            class="flex-wrap items-start rounded-[11px] border border-card bg-raised @[600px]/pane:flex-nowrap @[600px]/pane:items-center"
+            class="flex-wrap items-start rounded-xl border border-card bg-raised @[600px]/pane:flex-nowrap @[600px]/pane:items-center"
             :data-testid="`integration-${cardId(integration.key)}`"
           >
             <template #icon>
@@ -255,7 +255,7 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
               </BaseIconBadge>
             </template>
             <div class="min-w-0 flex-1">
-              <div class="text-[13.5px] font-semibold text-text">{{ integration.title }}</div>
+              <div class="text-body font-semibold text-text">{{ integration.title }}</div>
               <div class="mt-0.5 truncate text-xs text-text-3">{{ subtitleFor(integration) }}</div>
             </div>
             <template #actions>
@@ -264,14 +264,14 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
                   v-if="integration.stability !== 'stable'"
                   tone="neutral"
                   variant="pill"
-                  class="px-2 py-1 text-[10.5px] font-semibold uppercase"
+                  class="px-2 py-1 text-micro font-semibold uppercase"
                   :data-testid="`integration-${cardId(integration.key)}-stability`"
                   >{{ integration.stability }}</BaseBadge
                 >
                 <BaseBadge
                   :tone="statusFor(integration).tone"
                   variant="pill"
-                  class="px-2.5 py-1 text-[11px] font-semibold"
+                  class="px-2.5 py-1 text-caption font-semibold"
                   :data-testid="`integration-${cardId(integration.key)}-status`"
                   >{{ statusFor(integration).label }}</BaseBadge
                 >

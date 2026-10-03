@@ -115,7 +115,7 @@ function toggleReason(value: string, checked: boolean) {
     </div>
 
     <div class="flex items-center gap-6 border-t border-row pt-4">
-      <div class="text-[12.5px] text-text-2">Types</div>
+      <div class="text-small text-text-2">Types</div>
       <ToggleField
         label="Pull requests"
         :model-value="typeChecked('pr')"
@@ -132,7 +132,7 @@ function toggleReason(value: string, checked: boolean) {
 
     <div class="grid grid-cols-2 gap-4 border-t border-row pt-4">
       <fieldset>
-        <legend class="mb-2 text-[12.5px] text-text-2">CI status</legend>
+        <legend class="mb-2 text-small text-text-2">CI status</legend>
         <div class="grid grid-cols-2 gap-x-3 gap-y-1.5">
           <ToggleField
             v-for="state in allCIStates"
@@ -145,7 +145,7 @@ function toggleReason(value: string, checked: boolean) {
         </div>
       </fieldset>
       <fieldset>
-        <legend class="mb-2 text-[12.5px] text-text-2">Review status</legend>
+        <legend class="mb-2 text-small text-text-2">Review status</legend>
         <div class="grid grid-cols-2 gap-x-3 gap-y-1.5">
           <ToggleField
             v-for="state in allReviewStates"
@@ -160,7 +160,7 @@ function toggleReason(value: string, checked: boolean) {
     </div>
 
     <div>
-      <div class="mb-2 text-[12.5px] text-text-2">Notification reasons</div>
+      <div class="mb-2 text-small text-text-2">Notification reasons</div>
       <div class="grid grid-cols-3 gap-x-3 gap-y-1.5" data-testid="github-filter-editor-reasons">
         <AppCheckbox
           v-for="reason in allReasons"
@@ -168,7 +168,7 @@ function toggleReason(value: string, checked: boolean) {
           :model-value="reasonChecked(reason)"
           :testid="`github-filter-editor-reason-${reason}`"
           @update:model-value="toggleReason(reason, $event)"
-          ><span class="font-mono text-[11.5px]">{{ reason }}</span></AppCheckbox
+          ><span class="font-mono text-caption">{{ reason }}</span></AppCheckbox
         >
       </div>
     </div>

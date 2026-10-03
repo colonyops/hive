@@ -264,7 +264,7 @@ watch(
       >
         <template #option="{ option }">
           {{ option.label
-          }}<span v-if="option.value === 'unread'" class="font-mono text-[10px] opacity-85">{{ unreadCount }}</span>
+          }}<span v-if="option.value === 'unread'" class="font-mono text-micro opacity-85">{{ unreadCount }}</span>
         </template>
       </SegmentedControl>
       <div class="relative shrink-0">
@@ -378,7 +378,7 @@ watch(
         <!-- Load failure: the "GitHub unreachable" design state. -->
         <div v-if="loadError" class="state-frame" data-testid="feed-error">
           <div class="state-icon text-accent"><IconTriangleAlert class="size-5" /></div>
-          <div class="text-[13.5px] font-semibold">GitHub unreachable</div>
+          <div class="text-body font-semibold">GitHub unreachable</div>
           <div class="max-w-[240px] text-xs leading-relaxed text-text-3">{{ loadError }}</div>
           <button class="state-action" :disabled="refreshing" @click="emit('refresh')">
             {{ refreshing ? 'Refreshing…' : 'Retry now' }}
@@ -462,7 +462,7 @@ watch(
           >
             <template v-if="search.trim() || authorFilter">
               <div class="state-icon text-text-3"><IconSearch class="size-5" /></div>
-              <div class="text-[13.5px] font-semibold">No matches</div>
+              <div class="text-body font-semibold">No matches</div>
               <div v-if="authorFilter" class="max-w-[240px] text-xs leading-relaxed text-text-3">
                 No items by {{ authorFilter }} match the current filters.
               </div>
@@ -472,7 +472,7 @@ watch(
             </template>
             <template v-else-if="unreadOnly">
               <div class="state-icon text-kind-pr"><IconCheck class="size-5" /></div>
-              <div class="text-[13.5px] font-semibold">You're all caught up</div>
+              <div class="text-body font-semibold">You're all caught up</div>
               <div class="max-w-[240px] text-xs leading-relaxed text-text-3">
                 No unread items in {{ title === 'Unread' ? 'this profile' : title }}. New items will show up here as
                 they arrive.
@@ -480,7 +480,7 @@ watch(
             </template>
             <template v-else>
               <div class="state-icon text-text-3"><IconGitBranch class="size-5" /></div>
-              <div class="text-[13.5px] font-semibold">No items yet</div>
+              <div class="text-body font-semibold">No items yet</div>
               <div class="max-w-[240px] text-xs leading-relaxed text-text-3">
                 New items will show up here as they arrive.
               </div>
@@ -512,7 +512,7 @@ watch(
   justify-content: center;
   cursor: pointer;
   border: 1px solid var(--color-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   color: var(--color-text-2);
 }
 .view-trigger:hover,
@@ -531,7 +531,7 @@ watch(
   background: var(--color-pane);
   padding: 6px 14px;
   color: var(--color-text-2);
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 .selection-count {
   display: inline-flex;
@@ -547,7 +547,7 @@ watch(
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--color-text-2);
 }
 .selection-action:hover:not(:disabled),
@@ -572,7 +572,7 @@ watch(
   background: var(--color-pane);
   padding: 7px 14px;
   color: var(--color-text-3);
-  font-size: 12px;
+  font-size: var(--text-small);
   pointer-events: none;
 }
 /* A compact full-bleed strip on a raised background: the tier on the left, its
@@ -589,7 +589,7 @@ watch(
   padding: 7px 16px 7px 18px;
   color: var(--color-text-3);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--text-micro);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -604,7 +604,7 @@ watch(
   padding: 8px 14px 6px;
   color: var(--color-text-3);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--text-micro);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
@@ -631,7 +631,7 @@ watch(
   width: 44px;
   height: 44px;
   border: 1px solid var(--color-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   background: var(--color-chip);
   margin-bottom: 4px;
 }
@@ -639,9 +639,9 @@ watch(
   margin-top: 8px;
   padding: 6px 14px;
   border: 1px solid var(--color-strong);
-  border-radius: 7px;
+  border-radius: var(--radius-lg);
   color: var(--color-text-2);
-  font-size: 12px;
+  font-size: var(--text-small);
   cursor: pointer;
 }
 .state-action:hover {

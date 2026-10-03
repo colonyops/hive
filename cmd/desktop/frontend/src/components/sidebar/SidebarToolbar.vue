@@ -60,7 +60,7 @@ defineExpose({
     />
     <button
       type="button"
-      class="flex size-6 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text disabled:cursor-default"
+      class="flex size-6 cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-chip hover:text-text disabled:cursor-default"
       :data-testid="reloadTestid"
       :aria-label="reloadLabel"
       :aria-busy="loading"
@@ -71,7 +71,7 @@ defineExpose({
     </button>
     <button
       type="button"
-      class="flex size-6 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text disabled:cursor-default"
+      class="flex size-6 cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-chip hover:text-text disabled:cursor-default"
       :data-testid="newTestid"
       :aria-label="newLabel"
       :title="newLabel"
@@ -86,7 +86,7 @@ defineExpose({
       <button
         ref="menuToggle"
         type="button"
-        class="flex size-6 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text"
+        class="flex size-6 cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-chip hover:text-text"
         :data-testid="`${testid}-menu-toggle`"
         :aria-label="menuLabel"
         aria-haspopup="menu"

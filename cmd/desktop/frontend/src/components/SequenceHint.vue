@@ -25,7 +25,7 @@ const continuations = computed(() => {
 <template>
   <div
     v-if="pendingSequence"
-    class="pointer-events-none fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 select-none items-center gap-3 rounded-full border border-card bg-raised px-3 py-1.5 font-mono text-[11px] text-text-3 shadow-lg"
+    class="pointer-events-none fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 select-none items-center gap-3 rounded-full border border-card bg-raised px-3 py-1.5 font-mono text-caption text-text-3 shadow-lg"
     data-testid="sequence-hint"
   >
     <span class="flex items-center gap-1">

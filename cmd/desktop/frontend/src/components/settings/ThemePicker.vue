@@ -23,7 +23,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: Theme] }>()
       :key="theme"
       type="button"
       role="radio"
-      class="flex cursor-pointer flex-col gap-2 rounded-[10px] border p-2 text-left transition-colors"
+      class="flex cursor-pointer flex-col gap-2 rounded-xl border p-2 text-left transition-colors"
       :class="modelValue === theme ? 'border-accent bg-accent-tint' : 'border-card bg-raised hover:border-strong'"
       :aria-checked="modelValue === theme"
       :data-testid="`settings-theme-${theme}`"
@@ -44,7 +44,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: Theme] }>()
           </span>
         </span>
       </span>
-      <span class="truncate text-[12px]" :class="modelValue === theme ? 'font-medium text-text' : 'text-text-2'">{{
+      <span class="truncate text-small" :class="modelValue === theme ? 'font-medium text-text' : 'text-text-2'">{{
         themeLabels[theme]
       }}</span>
     </button>

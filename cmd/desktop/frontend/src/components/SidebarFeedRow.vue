@@ -25,7 +25,7 @@ const tooltip = computed(() => props.feed.description || props.feed.name)
   >
     <span class="nav-icon"><component :is="icon" class="size-3" /></span>
     <span class="min-w-0 flex-1 truncate text-left">{{ feed.name }}</span>
-    <span class="font-mono text-[11px]" :class="feed.newCount ? 'text-accent' : 'text-text-3'">{{
+    <span class="font-mono text-caption" :class="feed.newCount ? 'text-accent' : 'text-text-3'">{{
       feed.newCount || feed.count
     }}</span>
   </div>
@@ -39,9 +39,9 @@ const tooltip = computed(() => props.feed.description || props.feed.name)
   gap: 9px;
   width: 100%;
   padding: 7px 8px;
-  border-radius: 7px;
+  border-radius: var(--radius-lg);
   color: var(--color-text-2);
-  font-size: 13px;
+  font-size: var(--text-body);
   cursor: pointer;
 }
 .sidebar-entry:hover {
@@ -69,7 +69,7 @@ const tooltip = computed(() => props.feed.description || props.feed.name)
   width: 18px;
   height: 18px;
   border: 1px solid var(--color-strong);
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: var(--color-app);
   color: var(--color-text-2);
 }

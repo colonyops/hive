@@ -16,7 +16,7 @@ describe('BaseBadge', () => {
   })
 
   it('uses chip rounding by default and pill rounding when requested', () => {
-    expect(mount(BaseBadge).classes()).toContain('rounded-[5px]')
+    expect(mount(BaseBadge).classes()).toContain('rounded-md')
     expect(mount(BaseBadge, { props: { variant: 'pill' } }).classes()).toContain('rounded-full')
   })
 
@@ -30,9 +30,9 @@ describe('BaseBadge', () => {
   })
 
   it('forwards attributes and merges caller classes onto its root', () => {
-    const wrapper = mount(BaseBadge, { attrs: { class: 'px-2 py-0.5 text-[11px]', 'data-testid': 'badge' } })
+    const wrapper = mount(BaseBadge, { attrs: { class: 'px-2 py-0.5 text-caption', 'data-testid': 'badge' } })
 
     expect(wrapper.attributes('data-testid')).toBe('badge')
-    expect(wrapper.classes()).toEqual(expect.arrayContaining(['px-2', 'py-0.5', 'text-[11px]']))
+    expect(wrapper.classes()).toEqual(expect.arrayContaining(['px-2', 'py-0.5', 'text-caption']))
   })
 })

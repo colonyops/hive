@@ -29,7 +29,7 @@ const dims = computed(() =>
       :aria-checked="modelValue"
       :aria-label="ariaLabel"
       :disabled="disabled"
-      class="flex items-center gap-2 text-left text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+      class="flex items-center gap-2 text-left text-body outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
       :class="disabled ? '' : 'cursor-pointer'"
       :data-testid="testid"
       @click="emit('update:modelValue', !modelValue)"

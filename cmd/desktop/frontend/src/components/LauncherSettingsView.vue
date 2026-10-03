@@ -92,13 +92,13 @@ function requestDelete(launcher: Launcher): void {
         @delete="requestDelete(launcher)"
       >
         <template #badges>
-          <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-[11px]">{{
+          <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-caption">{{
             launcher.command
           }}</BaseBadge>
-          <BaseBadge v-if="launcher.cwd" class="px-2 py-0.5 font-mono text-[11px] !text-text-2">{{
+          <BaseBadge v-if="launcher.cwd" class="px-2 py-0.5 font-mono text-caption !text-text-2">{{
             launcher.cwd
           }}</BaseBadge>
-          <BaseBadge class="px-2 py-0.5 text-[11px]" :data-testid="`launcher-shortcut-${launcher.id}`">
+          <BaseBadge class="px-2 py-0.5 text-caption" :data-testid="`launcher-shortcut-${launcher.id}`">
             <span
               class="size-1.5 rounded-full"
               :class="shortcut(launcher.id) ? 'bg-severity-success' : 'bg-text-4'"
@@ -110,7 +110,7 @@ function requestDelete(launcher: Launcher): void {
       <EmptyState v-if="!launchers.length" message="No quick terminals configured." />
       <div
         v-else
-        class="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-text-4"
+        class="mt-1 flex items-center gap-1.5 font-mono text-caption text-text-4"
         data-testid="launchers-source"
       >
         Synced from .hive/actions.yml · {{ launchers.length }}

@@ -136,14 +136,14 @@ function activateRow(): void {
       <div class="min-w-0 flex-1">
         <div class="flex items-baseline gap-2.5">
           <div
-            class="min-w-0 flex-1 truncate text-left text-[13.5px] leading-[1.35]"
+            class="min-w-0 flex-1 truncate text-left text-body leading-[1.35]"
             :class="item.unread ? 'font-semibold text-text' : 'font-normal text-text-2'"
             data-testid="item-title"
           >
             {{ item.title }}
           </div>
           <div class="meta-right flex shrink-0 items-center">
-            <span class="font-mono text-[11px] text-text-4">{{ relativeAge(item.lastEventAt) }}</span>
+            <span class="font-mono text-caption text-text-4">{{ relativeAge(item.lastEventAt) }}</span>
           </div>
         </div>
         <div class="mt-[5px] flex min-w-0 items-center gap-2">
@@ -154,13 +154,13 @@ function activateRow(): void {
           ><FeedKindPill :tone="itemKindStyle" data-testid="type-pill" :data-kind="itemKind">{{
             itemKindLabel
           }}</FeedKindPill
-          ><span class="min-w-0 flex-1 truncate font-mono text-[11px] text-text-3"
+          ><span class="min-w-0 flex-1 truncate font-mono text-caption text-text-3"
             >{{ presentation.sourceLabel }}<template v-if="itemContainer"> · {{ itemContainerLine }}</template></span
           ><PullRequestMetadata class="ml-auto" :item="item" mode="changes" />
         </div>
         <div
           v-if="itemByline || hasPullRequestSummary"
-          class="mt-[5px] flex items-center gap-1.5 truncate text-left text-[12px] leading-[1.4] text-text-3"
+          class="mt-[5px] flex items-center gap-1.5 truncate text-left text-small leading-[1.4] text-text-3"
           data-testid="item-byline"
         >
           <span v-if="itemByline" class="truncate text-text-2">{{ itemByline }}</span
@@ -292,7 +292,7 @@ function activateRow(): void {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--color-strong);
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: var(--color-app);
 }
 .selection-box.checked {
@@ -312,9 +312,9 @@ function activateRow(): void {
   gap: 2px;
   padding: 3px;
   border: 1px solid var(--color-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--color-pane);
-  box-shadow: 0 6px 18px -8px rgb(0 0 0 / 0.4);
+  box-shadow: var(--shadow-popover);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.1s ease;
@@ -337,7 +337,7 @@ function activateRow(): void {
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--color-text-2);
   cursor: pointer;
 }

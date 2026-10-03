@@ -53,13 +53,13 @@ function reportProblem(): void {
     @close="emit('close')"
   >
     <div class="flex flex-col gap-3 px-5 py-4">
-      <p v-if="error.summary" class="text-[13px] leading-relaxed text-text-2" data-testid="error-dialog-summary">
+      <p v-if="error.summary" class="text-body leading-relaxed text-text-2" data-testid="error-dialog-summary">
         {{ error.summary }}
       </p>
 
       <dl
         v-if="contextEntries.length"
-        class="flex flex-wrap gap-x-4 gap-y-1 text-[12px]"
+        class="flex flex-wrap gap-x-4 gap-y-1 text-small"
         data-testid="error-dialog-context"
       >
         <div v-for="[key, value] in contextEntries" :key="key" class="flex gap-1.5">
@@ -81,12 +81,12 @@ function reportProblem(): void {
       >
         <span class="flex h-5 shrink-0 items-center"><IconCircleAlert class="size-4 text-severity-error" /></span>
         <pre
-          class="hive-scroll max-h-[240px] min-w-0 flex-1 select-text overflow-auto whitespace-pre-wrap break-words font-mono text-[12.5px] leading-5 text-severity-error"
+          class="hive-scroll max-h-[240px] min-w-0 flex-1 select-text overflow-auto whitespace-pre-wrap break-words font-mono text-small leading-5 text-severity-error"
           data-testid="error-dialog-detail"
           >{{ detail }}</pre>
         <button
           type="button"
-          class="-mr-1 -my-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[7px] text-severity-error/70 hover:bg-severity-error/15 hover:text-severity-error"
+          class="-mr-1 -my-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-lg text-severity-error/70 hover:bg-severity-error/15 hover:text-severity-error"
           :title="copyLabel"
           :aria-label="copyLabel"
           data-testid="error-dialog-copy"
@@ -96,7 +96,7 @@ function reportProblem(): void {
         </button>
       </div>
 
-      <p class="text-[11.5px] text-text-3">
+      <p class="text-caption text-text-3">
         Report a problem opens a GitHub issue. Copy this error first; it belongs in the issue body.
       </p>
     </div>

@@ -37,7 +37,7 @@ function setCooldown(cooldownSeconds: number) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 text-[13px] leading-relaxed" data-testid="notify-node-editor">
+  <div class="flex flex-col gap-4 text-body leading-relaxed" data-testid="notify-node-editor">
     <p class="text-text-2">
       Messages arriving here raise a system notification. Clicking it focuses Hive on the item that triggered it. The
       app's notification settings always win — a flow cannot notify while notifications are off.

@@ -69,7 +69,7 @@ const iconGlyph = computed(() => feedIconComponent(props.config.icon || defaultE
 <template>
   <div class="flex flex-col gap-4">
     <p
-      class="rounded-lg border border-strong bg-app px-3 py-2.5 text-[11.5px] text-text-3"
+      class="rounded-lg border border-strong bg-app px-3 py-2.5 text-caption text-text-3"
       data-testid="sources.exec-editor-notice"
     >
       This node runs a command on your machine every poll, with your environment. Treat a flow file from elsewhere the

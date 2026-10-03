@@ -12,7 +12,7 @@ const html = computed(() => renderGithubMarkdown(props.body))
 
 <template>
   <!-- eslint-disable-next-line vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
-  <div v-if="html" class="release-notes text-[13.5px] leading-[1.65] text-text-2" v-html="html" />
+  <div v-if="html" class="release-notes text-body leading-[1.65] text-text-2" v-html="html" />
 </template>
 
 <style scoped>
@@ -23,7 +23,7 @@ const html = computed(() => renderGithubMarkdown(props.body))
   color: var(--color-text);
   font-weight: 650;
   line-height: 1.3;
-  font-size: 13px;
+  font-size: var(--text-body);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -59,10 +59,10 @@ const html = computed(() => renderGithubMarkdown(props.body))
 }
 .release-notes :deep(code) {
   padding: 1px 5px;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: var(--color-card);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-small);
 }
 .release-notes :deep(a) {
   color: var(--color-accent);

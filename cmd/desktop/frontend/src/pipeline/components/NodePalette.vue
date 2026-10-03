@@ -60,7 +60,7 @@ function onDragStart(e: DragEvent, type: string) {
 
       <template v-for="category in CATEGORIES" :key="category">
         <div v-if="filtered[category].length > 0" class="mb-3">
-          <div class="mb-1.5 px-1 text-[10.5px] font-semibold uppercase tracking-wide text-text-4">{{ category }}</div>
+          <div class="mb-1.5 px-1 text-micro font-semibold uppercase tracking-wide text-text-4">{{ category }}</div>
           <button
             v-for="def in filtered[category]"
             :key="def.type"
@@ -84,14 +84,14 @@ function onDragStart(e: DragEvent, type: string) {
               <component :is="def.glyph" :class="def.logoMark ? 'size-full' : 'size-3.5'" />
             </span>
             <span class="min-w-0 flex-1">
-              <span class="block truncate text-[12.5px] font-medium text-text" data-testid="palette-entry-label">{{
+              <span class="block truncate text-small font-medium text-text" data-testid="palette-entry-label">{{
                 def.label
               }}</span>
-              <span class="block truncate text-[10.5px] text-text-4" data-testid="palette-entry-summary">{{
+              <span class="block truncate text-micro text-text-4" data-testid="palette-entry-summary">{{
                 summarize(def.help)
               }}</span>
             </span>
-            <span class="shrink-0 font-mono text-[12px] leading-none text-text-4" aria-hidden="true">⠿</span>
+            <span class="shrink-0 font-mono text-small leading-none text-text-4" aria-hidden="true">⠿</span>
           </button>
         </div>
       </template>

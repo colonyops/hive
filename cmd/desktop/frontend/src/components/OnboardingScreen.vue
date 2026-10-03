@@ -111,13 +111,13 @@ function submit() {
     <aside class="flex w-[470px] shrink-0 flex-col border-r border-border bg-raised px-11 py-12">
       <div class="mb-10 flex items-center gap-3">
         <div
-          class="flex size-[38px] items-center justify-center rounded-[11px] bg-accent-tint font-mono text-[17px] font-bold text-accent"
+          class="flex size-[38px] items-center justify-center rounded-xl bg-accent-tint font-mono text-heading font-bold text-accent"
         >
           h
         </div>
-        <span class="font-mono text-[17px] font-semibold">hive</span>
+        <span class="font-mono text-heading font-semibold">hive</span>
       </div>
-      <h1 class="mb-3 text-[26px] font-semibold leading-[1.25] tracking-[-.02em]">
+      <h1 class="mb-3 text-display font-semibold leading-[1.25] tracking-[-.02em]">
         Triage GitHub and<br />spin up sessions.
       </h1>
       <p class="mb-11 max-w-[330px] text-sm leading-relaxed text-text-3">
@@ -138,7 +138,7 @@ function submit() {
         >
           <span
             aria-hidden="true"
-            class="flex size-[30px] shrink-0 items-center justify-center rounded-full text-[13px] font-semibold"
+            class="flex size-[30px] shrink-0 items-center justify-center rounded-full text-body font-semibold"
             :class="
               step.step === activeStep
                 ? 'bg-accent text-accent-contrast'
@@ -162,7 +162,7 @@ function submit() {
     <section class="flex min-h-0 flex-1 justify-center overflow-y-auto bg-pane p-10">
       <div class="my-auto" :class="card === 'hive' ? 'w-[560px] max-w-full' : 'w-[420px] text-center'">
         <div
-          class="mx-auto mb-5 flex size-[60px] items-center justify-center rounded-[15px] border border-strong bg-chip text-text"
+          class="mx-auto mb-5 flex size-[60px] items-center justify-center rounded-2xl border border-strong bg-chip text-text"
         >
           <IconAlertTriangle v-if="confirmingSkip" class="size-[30px]" />
           <IconFolderGit2 v-else-if="card === 'hive'" class="size-[30px]" />
@@ -176,7 +176,7 @@ function submit() {
 
         <!-- skip: the warning the bypass goes past, not a gate -->
         <template v-if="confirmingSkip">
-          <p class="mb-6 text-[13.5px] leading-relaxed text-text-3">
+          <p class="mb-6 text-body leading-relaxed text-text-3">
             Your profile will have no sources, so your feed stays empty until you connect an account under Settings ▸
             Integrations.
           </p>
@@ -195,15 +195,15 @@ function submit() {
              session picker is as empty as it is with no file. -->
         <template v-else-if="card === 'hive' && hive">
           <template v-if="hive.usable.value">
-            <p class="mb-6 text-center text-[13.5px] leading-relaxed text-text-3">
+            <p class="mb-6 text-center text-body leading-relaxed text-text-3">
               Hive found your configuration and will use it as it is.
             </p>
             <div
-              class="mb-6 rounded-[11px] border border-strong bg-chip px-4 py-3.5 text-left"
+              class="mb-6 rounded-xl border border-strong bg-chip px-4 py-3.5 text-left"
               data-testid="onboarding-hive-existing"
             >
-              <p class="truncate font-mono text-[12px] text-text-3">{{ hive.path.value }}</p>
-              <p class="mt-2 text-[12.5px] text-text-2">
+              <p class="truncate font-mono text-small text-text-3">{{ hive.path.value }}</p>
+              <p class="mt-2 text-small text-text-2">
                 Starts sessions with <span class="font-mono text-text">{{ hive.defaultAgent.value }}</span> across
                 {{ hive.workspaces.value.length === 1 ? '1 folder' : `${hive.workspaces.value.length} folders` }} of
                 repositories.
@@ -218,7 +218,7 @@ function submit() {
           </template>
 
           <template v-else>
-            <p class="mb-6 text-center text-[13.5px] leading-relaxed text-text-3">
+            <p class="mb-6 text-center text-body leading-relaxed text-text-3">
               Hive starts coding sessions in your repositories. Tell it which agent to run and where your code lives.
             </p>
             <div class="mb-6 text-left">
@@ -267,7 +267,7 @@ function submit() {
         <!-- permissions: step 3, the OS notification grant -->
         <template v-else-if="card === 'permissions'">
           <template v-if="permission === 'granted'">
-            <p class="mb-6 text-[13.5px] leading-relaxed text-text-3">
+            <p class="mb-6 text-body leading-relaxed text-text-3">
               Notifications are on. Hive will raise a system banner when activity needs you while you are working in
               another app.
             </p>
@@ -276,10 +276,7 @@ function submit() {
             </BaseButton>
           </template>
           <template v-else-if="permission === 'denied'">
-            <p
-              class="mb-6 text-[13.5px] leading-relaxed text-text-3"
-              data-testid="onboarding-permissions-denied-guidance"
-            >
+            <p class="mb-6 text-body leading-relaxed text-text-3" data-testid="onboarding-permissions-denied-guidance">
               Notifications are blocked. You can enable them for Hive in your operating system's notification settings
               whenever you like — until then, activity still lands in Activity and as in-app alerts while Hive is
               focused.
@@ -289,7 +286,7 @@ function submit() {
             </BaseButton>
           </template>
           <template v-else>
-            <p class="mb-6 text-[13.5px] leading-relaxed text-text-3">
+            <p class="mb-6 text-body leading-relaxed text-text-3">
               Hive can raise a system banner when new feed activity lands or a session finishes while you are working in
               another app. Turn it on so nothing slips by in the background.
             </p>
@@ -320,7 +317,7 @@ function submit() {
         <!-- The Hive workspace includes the app's MCP servers and skills, so
              the agent can build profiles and feeds after the interview. -->
         <template v-else-if="card === 'agent'">
-          <p class="mb-6 text-[13.5px] leading-relaxed text-text-3">
+          <p class="mb-6 text-body leading-relaxed text-text-3">
             Hive comes with a workspace where your coding agent can configure the app for you. It starts with a short
             interview about how you work, then sets up your profiles and feeds. Nothing changes without your say-so.
           </p>
@@ -338,7 +335,7 @@ function submit() {
 
         <!-- idle: not started -->
         <template v-else-if="card === 'idle'">
-          <p class="mb-6 text-[13.5px] leading-relaxed text-text-3">
+          <p class="mb-6 text-body leading-relaxed text-text-3">
             Sign in from this device. Hive fills your profile with your open PRs, your assignments, and the
             notifications inbox.
           </p>
@@ -355,11 +352,11 @@ function submit() {
 
         <!-- device: waiting for authorization -->
         <template v-else-if="card === 'device'">
-          <p class="mb-6 text-[13.5px] leading-relaxed text-text-3">
+          <p class="mb-6 text-body leading-relaxed text-text-3">
             Open the link and enter this code to authorize Hive on your account.
           </p>
           <div
-            class="mb-2.5 rounded-xl border border-strong bg-app px-4 py-[18px] font-mono text-[32px] font-semibold tracking-[.28em] text-accent"
+            class="mb-2.5 rounded-xl border border-strong bg-app px-4 py-[18px] font-mono text-display-lg font-semibold tracking-[.28em] text-accent"
             data-testid="onboarding-user-code"
           >
             {{ deviceFlow?.userCode }}
@@ -386,7 +383,7 @@ function submit() {
         <!-- Keep this branch explicit so an unknown card renders nothing
              instead of a token form under the wrong heading. -->
         <template v-else-if="card === 'token'">
-          <p class="mb-6 text-[13.5px] leading-relaxed text-text-3">
+          <p class="mb-6 text-body leading-relaxed text-text-3">
             Paste a personal access token with <span class="font-mono text-text-2">repo</span> and
             <span class="font-mono text-text-2">notifications</span> scopes.
           </p>

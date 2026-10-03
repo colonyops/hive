@@ -48,13 +48,13 @@ defineSlots<{
 function optionClass(selected: boolean): string[] {
   if (props.variant === 'field') {
     return [
-      'flex-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12.5px]',
+      'flex-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-small',
       selected ? 'bg-raised text-text' : 'text-text-3 hover:text-text-2',
     ]
   }
   return [
     'flex items-center gap-1.5 rounded-md px-2.5 font-medium',
-    props.size === 'sm' ? 'h-[22px] text-[11.5px]' : 'h-[26px] text-[12.5px]',
+    props.size === 'sm' ? 'h-[22px] text-caption' : 'h-[26px] text-small',
     selected ? 'bg-chip text-text' : 'text-text-2 hover:text-text',
   ]
 }

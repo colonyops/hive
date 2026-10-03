@@ -89,11 +89,11 @@ const visible = computed(() => {
 const triggerClass = computed(
   () =>
     ({
-      sm: 'gap-1.5 rounded-md px-2 py-1.5 text-[11px]',
-      md: 'gap-2 rounded-lg px-3 py-2.5 text-[13.5px]',
+      sm: 'gap-1.5 rounded-md px-2 py-1.5 text-caption',
+      md: 'gap-2 rounded-lg px-3 py-2.5 text-body',
     })[props.size],
 )
-const optionText = computed(() => (props.size === 'sm' ? 'text-[12px]' : 'text-[13px]'))
+const optionText = computed(() => (props.size === 'sm' ? 'text-small' : 'text-body'))
 
 // Two independent signals, following AppMenu/CommandPalette: `bg-hover` is
 // where the keyboard is, the trailing check is what's selected. The check is
@@ -312,7 +312,7 @@ onClickOutside(
       <div
         v-if="open"
         ref="popover"
-        class="fixed z-50 flex flex-col overflow-hidden rounded-lg border border-card bg-raised shadow-[0_16px_34px_-12px_rgba(0,0,0,.6)]"
+        class="fixed z-50 flex flex-col overflow-hidden rounded-lg border border-card bg-raised shadow-popover"
         :style="popoverStyle"
         :data-testid="testid ? `${testid}-popover` : undefined"
       >
@@ -324,7 +324,7 @@ onClickOutside(
             v-model="query"
             type="text"
             :placeholder="searchPlaceholder ?? 'Search…'"
-            class="w-0 min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-4"
+            class="w-0 min-w-0 flex-1 bg-transparent text-body text-text outline-none placeholder:text-text-4"
             :data-testid="testid ? `${testid}-search` : undefined"
             @keydown="onKeydown"
           />
@@ -364,7 +364,7 @@ onClickOutside(
                 <!-- w-0 min-w-full: a percentage min-width contributes nothing to
                      intrinsic sizing, so a long hint truncates instead of stretching
                      the popover to the viewport. -->
-                <span v-if="option.hint" class="w-0 min-w-full truncate font-mono text-[10.5px] text-text-4">{{
+                <span v-if="option.hint" class="w-0 min-w-full truncate font-mono text-micro text-text-4">{{
                   option.hint
                 }}</span>
               </span>
@@ -379,7 +379,7 @@ onClickOutside(
         </ul>
         <div
           v-else
-          class="px-3 py-4 text-center text-[12.5px] text-text-4"
+          class="px-3 py-4 text-center text-small text-text-4"
           :data-testid="testid ? `${testid}-empty` : undefined"
         >
           {{ searchable && query.trim() ? 'No matches' : 'No options' }}

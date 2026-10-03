@@ -174,31 +174,29 @@ onMounted(async () => {
   <SettingsPage testid="settings-about">
     <InlineError v-if="error" :message="error" testid="about-error" />
 
-    <section
-      v-if="build"
-      class="overflow-hidden rounded-[11px] border border-card bg-raised"
-      data-testid="about-identity"
-    >
+    <section v-if="build" class="overflow-hidden rounded-xl border border-card bg-raised" data-testid="about-identity">
       <div class="flex flex-col gap-3.5 p-4 @[560px]/pane:flex-row @[560px]/pane:items-center @[560px]/pane:gap-4">
         <span
-          class="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] border border-card bg-chip text-accent"
+          class="flex size-[34px] shrink-0 items-center justify-center rounded-lg border border-card bg-chip text-accent"
         >
           <HiveMark class="size-[18px]" />
         </span>
         <div class="min-w-0 flex-1">
           <div class="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-            <h2 class="text-[13.5px] font-semibold text-text">Hive Desktop</h2>
-            <span class="font-mono text-[11px] text-text-4" data-testid="about-build-version">{{ build.version }}</span>
+            <h2 class="text-body font-semibold text-text">Hive Desktop</h2>
+            <span class="font-mono text-caption text-text-4" data-testid="about-build-version">{{
+              build.version
+            }}</span>
             <BaseBadge
               :tone="status.tone"
               variant="pill"
               dot
-              class="px-2.5 py-0.5 text-[11px] font-medium"
+              class="px-2.5 py-0.5 text-caption font-medium"
               data-testid="about-update-status"
               >{{ status.label }}</BaseBadge
             >
           </div>
-          <p class="mt-1 text-[12.5px] leading-relaxed text-text-3" data-testid="about-update-checked">
+          <p class="mt-1 text-small leading-relaxed text-text-3" data-testid="about-update-checked">
             {{ checkedLabel }}
           </p>
         </div>
@@ -220,15 +218,11 @@ onMounted(async () => {
         class="border-t border-border bg-accent-tint/40 px-4 py-3.5"
         data-testid="about-update-available"
       >
-        <div class="text-[13px] font-semibold text-text">{{ update.latestVersion }} is available</div>
-        <div class="mt-0.5 text-[11.5px] text-text-3">
+        <div class="text-body font-semibold text-text">{{ update.latestVersion }} is available</div>
+        <div class="mt-0.5 text-caption text-text-3">
           Install it from the update badge in the title bar — Hive relaunches into the new version.
         </div>
-        <p
-          v-if="update.notes"
-          class="mt-2 whitespace-pre-line text-[12px] text-text-2"
-          data-testid="about-update-notes"
-        >
+        <p v-if="update.notes" class="mt-2 whitespace-pre-line text-small text-text-2" data-testid="about-update-notes">
           {{ update.notes }}
         </p>
       </div>
@@ -245,7 +239,7 @@ onMounted(async () => {
       </template>
       <!-- Hairlines rather than gaps: four facets of one build, not four cards. -->
       <div
-        class="grid grid-cols-1 overflow-hidden rounded-[11px] border border-card bg-raised @[440px]/pane:grid-cols-2 @[800px]/pane:grid-cols-4"
+        class="grid grid-cols-1 overflow-hidden rounded-xl border border-card bg-raised @[440px]/pane:grid-cols-2 @[800px]/pane:grid-cols-4"
       >
         <div
           v-for="stat in stats"
@@ -254,16 +248,14 @@ onMounted(async () => {
           :data-testid="`about-stat-${stat.key}`"
         >
           <span
-            class="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[.12em] text-text-3"
+            class="flex items-center gap-1.5 font-mono text-micro font-semibold uppercase tracking-[.12em] text-text-3"
           >
             <component :is="stat.icon" class="size-3" />{{ stat.label }}
           </span>
-          <span
-            class="truncate font-mono text-[16px] tabular-nums text-text"
-            :data-testid="`about-build-${stat.key}`"
-            >{{ stat.value }}</span
-          >
-          <span class="truncate text-[11px] text-text-4">{{ stat.hint }}</span>
+          <span class="truncate font-mono text-lead tabular-nums text-text" :data-testid="`about-build-${stat.key}`">{{
+            stat.value
+          }}</span>
+          <span class="truncate text-caption text-text-4">{{ stat.hint }}</span>
         </div>
       </div>
     </SettingsSection>
@@ -285,16 +277,16 @@ onMounted(async () => {
           v-for="link in links"
           :key="link.key"
           type="button"
-          class="flex cursor-pointer flex-col gap-1 rounded-[11px] border border-card bg-raised px-4 py-3.5 text-left transition-colors hover:border-strong"
+          class="flex cursor-pointer flex-col gap-1 rounded-xl border border-card bg-raised px-4 py-3.5 text-left transition-colors hover:border-strong"
           :data-testid="`about-link-${link.key}`"
           @click="link.open()"
         >
           <span class="flex items-center justify-between gap-2">
-            <span class="truncate text-[13px] font-semibold text-text">{{ link.label }}</span>
+            <span class="truncate text-body font-semibold text-text">{{ link.label }}</span>
             <IconExternalLink v-if="link.external" class="size-3 shrink-0 text-text-4" />
             <IconChevronRight v-else class="size-3.5 shrink-0 text-text-4" />
           </span>
-          <span class="truncate text-[12px] text-text-3">{{ link.hint }}</span>
+          <span class="truncate text-small text-text-3">{{ link.hint }}</span>
         </button>
       </div>
     </SettingsSection>
@@ -318,14 +310,14 @@ onMounted(async () => {
             class="size-3.5 shrink-0 self-center text-text-4 transition-transform"
             :class="expanded.includes(keyOf(entry)) ? 'rotate-90' : ''"
           />
-          <span class="font-mono text-[13px] font-semibold text-text">
+          <span class="font-mono text-body font-semibold text-text">
             {{ entry.draft ? 'Unreleased' : entry.version }}
           </span>
-          <span v-if="entry.date" class="shrink-0 text-[11px] text-text-3">{{ entry.date }}</span>
-          <span v-if="entry.summary" class="min-w-0 flex-1 truncate text-[12px] text-text-3">{{ entry.summary }}</span>
+          <span v-if="entry.date" class="shrink-0 text-caption text-text-3">{{ entry.date }}</span>
+          <span v-if="entry.summary" class="min-w-0 flex-1 truncate text-small text-text-3">{{ entry.summary }}</span>
         </button>
         <div v-if="expanded.includes(keyOf(entry))" class="mt-2.5 pl-6">
-          <p v-if="entry.summary" class="mb-2 text-[13px] leading-[1.6] text-text-2">{{ entry.summary }}</p>
+          <p v-if="entry.summary" class="mb-2 text-body leading-[1.6] text-text-2">{{ entry.summary }}</p>
           <ReleaseNoteBody :body="entry.body" />
         </div>
       </div>

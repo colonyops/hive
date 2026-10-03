@@ -121,7 +121,7 @@ useEventListener(anchoredWindow, 'resize', measure)
           type="text"
           :placeholder="`${search.label}…`"
           :aria-label="search.label"
-          class="w-0 min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-4"
+          class="w-0 min-w-0 flex-1 bg-transparent text-body text-text outline-none placeholder:text-text-4"
           :data-testid="search.testid"
         />
       </label>
@@ -177,7 +177,7 @@ useEventListener(anchoredWindow, 'resize', measure)
             <IconCheck v-else-if="entry.checked" class="size-3.5 shrink-0 text-accent" />
             <span v-else-if="entry.checked === false" class="size-3.5 shrink-0" aria-hidden="true" />
             <span class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
-            <Kbd v-if="entry.kbd" class="ml-auto pl-2 text-[10.5px] text-text-4">{{ entry.kbd }}</Kbd>
+            <Kbd v-if="entry.kbd" class="ml-auto pl-2 text-micro text-text-4">{{ entry.kbd }}</Kbd>
           </button>
         </template>
         <EmptyState
@@ -199,10 +199,10 @@ useEventListener(anchoredWindow, 'resize', measure)
   z-index: 30;
   width: 230px;
   border: 1px solid var(--color-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--color-pane);
   padding: 5px;
-  box-shadow: 0 18px 45px -12px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-popover);
 }
 .app-menu.flip {
   top: auto;
@@ -230,10 +230,10 @@ useEventListener(anchoredWindow, 'resize', measure)
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 7px 9px;
   color: var(--color-text-2);
-  font-size: 12px;
+  font-size: var(--text-small);
   text-align: left;
 }
 .app-menu-entry:hover:not(:disabled) {
@@ -252,7 +252,7 @@ useEventListener(anchoredWindow, 'resize', measure)
 .app-menu-label {
   padding: 6px 9px 3px;
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  font-size: var(--text-micro);
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;

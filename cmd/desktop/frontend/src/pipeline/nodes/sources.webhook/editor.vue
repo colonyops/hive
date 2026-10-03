@@ -215,29 +215,29 @@ async function onCopyPrompt(): Promise<void> {
     />
 
     <div v-if="endpointUrl">
-      <div class="mb-1.5 text-[12px] text-text-2">Endpoint</div>
+      <div class="mb-1.5 text-small text-text-2">Endpoint</div>
       <div class="flex items-center gap-2">
         <code
-          class="min-w-0 flex-1 truncate rounded-lg border border-strong bg-app px-3 py-2 font-mono text-[12px] text-text-2"
+          class="min-w-0 flex-1 truncate rounded-lg border border-strong bg-app px-3 py-2 font-mono text-small text-text-2"
           data-testid="sources.webhook-editor-url"
           >{{ endpointUrl }}</code
         >
         <CopyButton :text="endpointUrl" data-testid="sources.webhook-editor-copy-url" />
       </div>
-      <p v-if="info && !info.running" class="mt-1.5 text-[11.5px] text-text-4">
+      <p v-if="info && !info.running" class="mt-1.5 text-caption text-text-4">
         The listener is not running in this session; the URL applies to a live desktop run.
       </p>
     </div>
 
     <div>
-      <div class="mb-1.5 text-[12px] text-text-2">Last delivery</div>
+      <div class="mb-1.5 text-small text-text-2">Last delivery</div>
       <template v-if="hasCapture">
-        <div class="mb-1.5 font-mono text-[11px] text-text-4" data-testid="sources.webhook-editor-captured-at">
+        <div class="mb-1.5 font-mono text-caption text-text-4" data-testid="sources.webhook-editor-captured-at">
           {{ capturedAt }}
         </div>
         <div
           v-if="missingFields.length > 0"
-          class="mb-2 rounded-lg border border-strong bg-selection px-3 py-2.5 text-[12px] leading-relaxed text-text-2"
+          class="mb-2 rounded-lg border border-strong bg-selection px-3 py-2.5 text-small leading-relaxed text-text-2"
           data-testid="sources.webhook-editor-shape-warning"
         >
           Missing canonical item fields: <span class="font-mono">{{ missingFields.join(', ') }}</span> — the item still
@@ -247,7 +247,7 @@ async function onCopyPrompt(): Promise<void> {
           <span class="font-mono">state</span> also enables auto-archive.
         </div>
         <pre
-          class="max-h-48 overflow-auto rounded-lg border border-row bg-app px-3 py-2.5 font-mono text-[11.5px] leading-relaxed text-text-2"
+          class="max-h-48 overflow-auto rounded-lg border border-row bg-app px-3 py-2.5 font-mono text-caption leading-relaxed text-text-2"
           data-testid="sources.webhook-editor-capture"
           >{{ capturePreview }}</pre>
       </template>
@@ -269,8 +269,8 @@ async function onCopyPrompt(): Promise<void> {
       >
         Copy LLM prompt
       </BaseButton>
-      <span v-if="promptCopied" class="text-[11.5px] text-text-4">Copied — paste into your coding agent</span>
-      <span v-else class="text-[11.5px] text-text-4">Generates a function-node transform for this payload</span>
+      <span v-if="promptCopied" class="text-caption text-text-4">Copied — paste into your coding agent</span>
+      <span v-else class="text-caption text-text-4">Generates a function-node transform for this payload</span>
     </div>
   </div>
 </template>
@@ -285,7 +285,7 @@ async function onCopyPrompt(): Promise<void> {
   height: 26px;
   width: 26px;
   cursor: pointer;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   color: var(--color-text-4);
 }
 

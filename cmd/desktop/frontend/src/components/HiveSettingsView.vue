@@ -94,7 +94,7 @@ onMounted(() => {
       <template #actions>
         <button
           type="button"
-          class="flex cursor-pointer items-center gap-1.5 text-[12px] font-medium text-accent hover:underline"
+          class="flex cursor-pointer items-center gap-1.5 text-small font-medium text-accent hover:underline"
           data-testid="hive-cli-docs"
           @click="openHiveCLIDocs"
         >
@@ -102,7 +102,7 @@ onMounted(() => {
           <IconExternalLink class="size-3" />
         </button>
       </template>
-      <div class="flex flex-col gap-2 text-[12.5px] leading-5 text-text-2">
+      <div class="flex flex-col gap-2 text-small leading-5 text-text-2">
         <p>
           Hive Desktop includes the Hive runtime it needs. It does not require or invoke a separately installed Hive
           CLI.
@@ -132,7 +132,7 @@ onMounted(() => {
       />
       <div class="flex items-center gap-3 px-4 py-3.5" data-testid="hive-restart-notice">
         <IconInfo class="size-4 shrink-0 text-severity-info" />
-        <div class="text-[12.5px] leading-relaxed text-text-2">
+        <div class="text-small leading-relaxed text-text-2">
           Edit this file in your own editor — the Hive CLI documentation above describes every key. Hive Desktop reads
           it at startup, so restart the app to apply a change.
         </div>
@@ -142,12 +142,12 @@ onMounted(() => {
         class="flex flex-col items-start gap-3 px-4 py-3.5 @[600px]/pane:flex-row @[600px]/pane:items-center"
         data-testid="hive-config-missing"
       >
-        <p class="min-w-0 flex-1 text-[12px] leading-5 text-text-3">
+        <p class="min-w-0 flex-1 text-small leading-5 text-text-3">
           No configuration file yet. Hive uses built-in defaults until you create one.
         </p>
         <button
           type="button"
-          class="shrink-0 cursor-pointer rounded-[7px] border border-accent/45 bg-accent-tint px-3 py-1.5 text-[12.5px] font-medium text-accent hover:border-accent"
+          class="shrink-0 cursor-pointer rounded-lg border border-accent/45 bg-accent-tint px-3 py-1.5 text-small font-medium text-accent hover:border-accent"
           data-testid="hive-config-create"
           @click="createOrOpenHiveConfig"
         >

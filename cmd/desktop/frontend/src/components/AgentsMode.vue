@@ -731,7 +731,7 @@ onBeforeUnmount(() => {
       data-testid="agents-unavailable"
     >
       <IconMessagesSquare class="size-6 text-text-4" />
-      <div class="text-[13.5px] font-semibold">Chats area unavailable</div>
+      <div class="text-body font-semibold">Chats area unavailable</div>
       <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="agents-unavailable-reason">
         {{ reason || 'The Chats area is not available in this build.' }}
       </p>
@@ -773,7 +773,7 @@ onBeforeUnmount(() => {
       <div class="flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           v-if="selectedWorkspace && missingMCPs.length"
-          class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-[11px] text-severity-warning"
+          class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-caption text-severity-warning"
           data-testid="agents-missing-mcps"
         >
           Missing MCP servers: {{ missingMCPs.join(', ') }}
@@ -781,7 +781,7 @@ onBeforeUnmount(() => {
 
         <div
           v-if="selectedWorkspace && missingSkillsNotice"
-          class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-[11px] text-severity-warning"
+          class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-caption text-severity-warning"
           data-testid="agents-missing-skills"
         >
           {{ missingSkillsNotice }}
@@ -789,7 +789,7 @@ onBeforeUnmount(() => {
 
         <div
           v-if="selectedWorkspace && unknownPackageNames.length"
-          class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-[11px] text-severity-warning"
+          class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-caption text-severity-warning"
           data-testid="agents-missing-packages"
         >
           Missing skill packages: {{ unknownPackageNames.join(', ') }}
@@ -830,7 +830,7 @@ onBeforeUnmount(() => {
             <button
               v-if="paneScrolledUp && paneStatus === 'live'"
               type="button"
-              class="absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-[11.5px] text-text-2 shadow-lg hover:text-text"
+              class="absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-caption text-text-2 shadow-lg hover:text-text"
               data-testid="agents-scroll-to-bottom"
               @click="scrollPaneToBottom"
             >
@@ -859,7 +859,7 @@ onBeforeUnmount(() => {
             <div class="flex min-h-full items-center justify-center px-8 py-10">
               <div class="flex w-full max-w-[380px] flex-col items-center gap-3 text-center">
                 <IconMessagesSquare class="size-6 text-text-4" />
-                <h2 class="text-[13.5px] font-semibold text-text">No chat open</h2>
+                <h2 class="text-body font-semibold text-text">No chat open</h2>
                 <p class="text-xs leading-relaxed text-text-3">
                   A chat is an agent attached to a workspace's directory. It launches with the workspace's command and
                   MCP servers.

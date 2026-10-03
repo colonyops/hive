@@ -11,7 +11,7 @@ const previewStyle = computed(() => ({
 
 <template>
   <div data-testid="settings-canvas-preview">
-    <p class="mb-1.5 text-[12.5px] text-text-2">Preview</p>
+    <p class="mb-1.5 text-small text-text-2">Preview</p>
     <div class="rounded-lg border border-border bg-app p-4">
       <div class="hv-html text-text-2" :style="previewStyle" data-testid="settings-canvas-preview-content">
         <h2>Project plan</h2>

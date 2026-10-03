@@ -102,7 +102,7 @@ async function reveal(open: () => Promise<void>, fallback: string): Promise<void
     description="A package is glob patterns over skill names in skills.yml. Names come from the skills Hive ships and the SKILL.md files under .shared/skills."
     testid="agent-workspace-editor-skills"
   >
-    <div class="divide-y divide-row overflow-hidden rounded-[11px] border border-card bg-raised">
+    <div class="divide-y divide-row overflow-hidden rounded-xl border border-card bg-raised">
       <div v-for="row in rows" :key="row.name">
         <div class="flex items-start gap-3 px-4 py-3.5">
           <AppSwitch
@@ -115,15 +115,13 @@ async function reveal(open: () => Promise<void>, fallback: string): Promise<void
           />
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
-              <span
-                class="truncate text-[13.5px] font-semibold"
-                :class="enabled(row.name) ? 'text-text' : 'text-text-2'"
-                >{{ row.title }}</span
-              >
+              <span class="truncate text-body font-semibold" :class="enabled(row.name) ? 'text-text' : 'text-text-2'">{{
+                row.title
+              }}</span>
               <button
                 v-if="!row.warning"
                 type="button"
-                class="flex shrink-0 cursor-pointer items-center gap-1 font-mono text-[11px] text-text-4 hover:text-text-2"
+                class="flex shrink-0 cursor-pointer items-center gap-1 font-mono text-caption text-text-4 hover:text-text-2"
                 :aria-expanded="expanded.has(row.name)"
                 :data-testid="`agent-workspace-editor-skill-members-${row.name}`"
                 @click="toggleExpanded(row.name)"
@@ -135,13 +133,13 @@ async function reveal(open: () => Promise<void>, fallback: string): Promise<void
                 />
               </button>
             </div>
-            <div v-if="row.description" class="mt-1 text-[12px] leading-relaxed text-text-3">
+            <div v-if="row.description" class="mt-1 text-small leading-relaxed text-text-3">
               {{ row.description }}
             </div>
-            <div v-if="!row.warning && !row.members.length" class="mt-1 text-[11.5px] text-severity-warning">
+            <div v-if="!row.warning && !row.members.length" class="mt-1 text-caption text-severity-warning">
               matches no skill — check its patterns in skills.yml
             </div>
-            <div v-if="row.warning" class="mt-1 text-[11.5px] text-severity-warning">{{ row.warning }}</div>
+            <div v-if="row.warning" class="mt-1 text-caption text-severity-warning">{{ row.warning }}</div>
           </div>
         </div>
         <ul
@@ -149,8 +147,8 @@ async function reveal(open: () => Promise<void>, fallback: string): Promise<void
           class="flex flex-col gap-1 border-t border-row pb-3 pl-[58px] pr-4 pt-2.5"
         >
           <li v-for="member in row.members" :key="member.slug" class="flex items-center gap-2">
-            <span class="truncate font-mono text-[11.5px] text-text-3">{{ member.slug }}</span>
-            <BaseBadge tone="muted" variant="pill" class="shrink-0 px-2 py-0.5 text-[10.5px] font-medium">{{
+            <span class="truncate font-mono text-caption text-text-3">{{ member.slug }}</span>
+            <BaseBadge tone="muted" variant="pill" class="shrink-0 px-2 py-0.5 text-micro font-medium">{{
               member.shipped ? 'shipped' : 'custom'
             }}</BaseBadge>
           </li>

@@ -175,14 +175,14 @@ const {
       <div class="border-b border-border px-5 pb-4 pt-[18px]">
         <div class="flex items-start justify-between gap-3">
           <h1
-            class="min-w-0 flex-1 text-[16.5px] font-semibold leading-[1.3] tracking-[-.01em]"
+            class="min-w-0 flex-1 text-heading font-semibold leading-[1.3] tracking-[-.01em]"
             data-testid="task-detail-title"
           >
             {{ detail.title }}
           </h1>
           <button
             type="button"
-            class="flex shrink-0 items-center gap-1.5 rounded border border-card px-2 py-1 font-mono text-[10.5px] text-text-3 hover:border-strong hover:text-text"
+            class="flex shrink-0 items-center gap-1.5 rounded border border-card px-2 py-1 font-mono text-micro text-text-3 hover:border-strong hover:text-text"
             data-testid="task-detail-copy-id"
             @click="copyId"
           >
@@ -192,7 +192,7 @@ const {
         </div>
 
         <div
-          class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-text-3"
+          class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-3"
           data-testid="task-detail-meta"
         >
           <span>{{ detail.repoKey }}</span>
@@ -210,7 +210,7 @@ const {
 
         <div
           v-if="detail.blocked"
-          class="mt-2 flex items-center gap-1.5 text-[11.5px] font-medium text-severity-error"
+          class="mt-2 flex items-center gap-1.5 text-caption font-medium text-severity-error"
           data-testid="task-detail-blocked"
         >
           <IconBan class="size-3 shrink-0" aria-hidden="true" />{{ blockedReason }}
@@ -237,7 +237,7 @@ const {
         <!-- eslint-disable vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
         <div
           v-if="bodyHtml"
-          class="markdown-body mt-3.5 text-[13.5px] leading-[1.65] text-text-2"
+          class="markdown-body mt-3.5 text-body leading-[1.65] text-text-2"
           data-testid="task-detail-body"
           @click="onBodyClick"
           v-html="bodyHtml"
@@ -247,7 +247,7 @@ const {
 
       <div class="px-5 pb-5 pt-4">
         <section v-if="(detail.blockers ?? []).length" data-testid="task-blockers">
-          <h2 class="mb-2 font-mono text-[10.5px] tracking-[.12em] text-text-3">BLOCKERS</h2>
+          <h2 class="mb-2 font-mono text-micro tracking-[.12em] text-text-3">BLOCKERS</h2>
           <div class="flex flex-wrap gap-1.5">
             <!-- A chip with a title is a live task the user will want to
                  inspect, so it selects it in place; one without (the blocker
@@ -257,13 +257,13 @@ const {
               <button
                 v-if="blocker.title"
                 type="button"
-                class="inline-flex cursor-pointer items-center gap-1.5 rounded-[5px] border border-card px-2 py-1 text-[11.5px] text-text-2 hover:border-strong hover:text-text"
+                class="inline-flex cursor-pointer items-center gap-1.5 rounded-md border border-card px-2 py-1 text-caption text-text-2 hover:border-strong hover:text-text"
                 data-testid="task-blocker-chip"
                 @click="select(blocker.id)"
               >
                 <IconLink2 class="size-3 shrink-0 text-text-4" />{{ blocker.title }}
                 <span
-                  class="rounded-[4px] px-1 py-px text-[9.5px] font-medium"
+                  class="rounded-sm px-1 py-px text-micro font-medium"
                   :class="statusMeta(blocker.status).classes"
                   data-testid="task-blocker-status"
                   >{{ statusMeta(blocker.status).label }}</span
@@ -271,7 +271,7 @@ const {
               </button>
               <span
                 v-else
-                class="inline-flex items-center gap-1.5 rounded-[5px] border border-card px-2 py-1 text-[11.5px] italic text-text-4"
+                class="inline-flex items-center gap-1.5 rounded-md border border-card px-2 py-1 text-caption italic text-text-4"
                 data-testid="task-blocker-chip"
                 ><IconLink2 class="size-3 shrink-0 text-text-4" />{{ blocker.id }}</span
               >
@@ -284,25 +284,25 @@ const {
           class="mt-5 border-t border-border pt-4"
           data-testid="task-comments"
         >
-          <h2 class="mb-3 font-mono text-[10.5px] tracking-[.12em] text-text-3">COMMENTS</h2>
+          <h2 class="mb-3 font-mono text-micro tracking-[.12em] text-text-3">COMMENTS</h2>
           <div class="flex flex-col gap-3.5">
             <div v-for="comment in detail.comments ?? []" :key="comment.id" data-testid="task-comment">
               <div class="mb-1 flex items-center gap-2">
                 <BaseBadge
                   v-if="isCheckpoint(comment)"
                   tone="accent"
-                  class="px-2 py-0.5 text-[10px] font-semibold"
+                  class="px-2 py-0.5 text-micro font-semibold"
                   data-testid="task-comment-checkpoint"
                 >
                   <IconBookmarkCheck class="size-3" />CHECKPOINT
                 </BaseBadge>
-                <span class="font-mono text-[10.5px] text-text-4" :title="absoluteTime(comment.createdAt)">{{
+                <span class="font-mono text-micro text-text-4" :title="absoluteTime(comment.createdAt)">{{
                   relativeAgo(Date.parse(comment.createdAt))
                 }}</span>
               </div>
               <!-- eslint-disable vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
               <div
-                class="markdown-body text-[13px] leading-[1.6] text-text-2"
+                class="markdown-body text-body leading-[1.6] text-text-2"
                 @click="onBodyClick"
                 v-html="commentHtml(comment)"
               />

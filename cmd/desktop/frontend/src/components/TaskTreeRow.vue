@@ -34,7 +34,7 @@ const indent = computed(() => props.depth * 18 + 10)
 
 <template>
   <div
-    class="flex min-w-0 cursor-pointer items-center gap-1.5 py-[7px] pr-3 text-[12.5px] transition-colors"
+    class="flex min-w-0 cursor-pointer items-center gap-1.5 py-[7px] pr-3 text-small transition-colors"
     :class="selected ? 'bg-selection text-text' : 'text-text-2 hover:bg-row-hover hover:text-text'"
     :style="{ paddingLeft: indent + 'px' }"
     role="button"
@@ -64,14 +64,14 @@ const indent = computed(() => props.depth * 18 + 10)
 
     <span class="min-w-0 flex-1 truncate">{{ node.item.title }}</span>
 
-    <span v-if="isEpic" class="shrink-0 font-mono text-[10.5px] text-text-4" data-testid="task-tree-counts"
+    <span v-if="isEpic" class="shrink-0 font-mono text-micro text-text-4" data-testid="task-tree-counts"
       >[{{ node.counts.done }}/{{ node.counts.total }}]</span
     >
 
     <BaseBadge
       v-if="node.item.blocked"
       tone="danger"
-      class="shrink-0 px-1.5 py-0.5 text-[10px] font-medium"
+      class="shrink-0 px-1.5 py-0.5 text-micro font-medium"
       data-testid="task-tree-blocked"
     >
       <IconBan class="size-2.5" aria-hidden="true" />Blocked
@@ -86,14 +86,14 @@ const indent = computed(() => props.depth * 18 + 10)
     /></BaseBadge>
 
     <span
-      class="shrink-0 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium"
+      class="shrink-0 rounded-md px-1.5 py-0.5 text-micro font-medium"
       :class="status.classes"
       data-testid="task-tree-status"
       >{{ status.label }}</span
     >
 
     <span
-      class="w-9 shrink-0 text-right font-mono text-[10.5px] text-text-4"
+      class="w-9 shrink-0 text-right font-mono text-micro text-text-4"
       :title="new Date(node.item.updatedAt).toLocaleString()"
       data-testid="task-tree-age"
       >{{ relativeAge(Date.parse(node.item.updatedAt)) }}</span

@@ -185,13 +185,13 @@ const {
     <div class="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1">
       <button
         type="button"
-        class="flex h-6 min-w-0 cursor-pointer items-center gap-1 rounded-[7px] px-1.5 hover:bg-chip"
+        class="flex h-6 min-w-0 cursor-pointer items-center gap-1 rounded-lg px-1.5 hover:bg-chip"
         :aria-expanded="browsing"
         aria-label="Browse canvases"
         data-testid="agent-canvas-title"
         @click="browsing = !browsing"
       >
-        <span class="min-w-0 truncate text-[12px] font-semibold text-text">{{ headerTitle }}</span>
+        <span class="min-w-0 truncate text-small font-semibold text-text">{{ headerTitle }}</span>
         <IconChevronDown
           class="size-3.5 shrink-0 text-text-3 transition-transform"
           :class="browsing ? 'rotate-180' : ''"
@@ -202,7 +202,7 @@ const {
       <button
         v-if="shown"
         type="button"
-        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[7px] hover:bg-chip hover:text-text"
+        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg hover:bg-chip hover:text-text"
         :class="copyStatus === 'error' ? 'text-severity-error' : 'text-text-3'"
         :title="copyStatus === 'success' ? 'Copied' : 'Copy as Markdown'"
         :aria-label="copyStatus === 'success' ? 'Copied' : 'Copy as Markdown'"
@@ -214,7 +214,7 @@ const {
       <button
         v-if="shown"
         type="button"
-        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[7px] hover:bg-chip hover:text-text"
+        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg hover:bg-chip hover:text-text"
         :class="saveStatus === 'error' ? 'text-severity-error' : 'text-text-3'"
         :title="saveStatus === 'success' ? 'Saved' : 'Save as Markdown…'"
         :aria-label="saveStatus === 'success' ? 'Saved' : 'Save as Markdown…'"
@@ -225,7 +225,7 @@ const {
       </button>
       <button
         type="button"
-        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text"
+        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-chip hover:text-text"
         title="Close canvas"
         aria-label="Close canvas"
         data-testid="agent-canvas-close"
@@ -250,7 +250,7 @@ const {
       </div>
       <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-2 pt-1">
         <template v-for="group in groupedMetas" :key="group.label">
-          <p class="px-3 pb-1 pt-2.5 text-[10.5px] font-medium uppercase tracking-wide text-text-4">
+          <p class="px-3 pb-1 pt-2.5 text-micro font-medium uppercase tracking-wide text-text-4">
             {{ group.label }}
           </p>
           <div class="divide-y divide-border">
@@ -269,11 +269,11 @@ const {
                 aria-hidden="true"
               />
               <span
-                class="min-w-0 flex-1 truncate text-[12.5px]"
+                class="min-w-0 flex-1 truncate text-small"
                 :class="meta.name === shown ? 'text-text' : 'text-text-2'"
                 >{{ meta.title || meta.name }}</span
               >
-              <span class="shrink-0 font-mono text-[10.5px] text-text-4">{{ relativeAge(meta.updatedAt) }}</span>
+              <span class="shrink-0 font-mono text-micro text-text-4">{{ relativeAge(meta.updatedAt) }}</span>
             </button>
           </div>
         </template>

@@ -143,7 +143,7 @@ onClickOutside(
       :id="id"
       ref="trigger"
       type="button"
-      class="flex w-full items-center gap-2 rounded-lg border bg-app px-3 py-2.5 text-left text-[13.5px] text-text outline-none"
+      class="flex w-full items-center gap-2 rounded-lg border bg-app px-3 py-2.5 text-left text-body text-text outline-none"
       :class="open ? 'border-accent' : 'border-strong'"
       :data-testid="testid"
       aria-label="Repository"
@@ -165,7 +165,7 @@ onClickOutside(
       <div
         v-if="open"
         ref="popover"
-        class="fixed z-50 flex flex-col overflow-hidden rounded-lg border border-card bg-raised shadow-[0_16px_34px_-12px_rgba(0,0,0,.6)]"
+        class="fixed z-50 flex flex-col overflow-hidden rounded-lg border border-card bg-raised shadow-popover"
         :style="popoverStyle"
         :data-testid="testid ? `${testid}-popover` : undefined"
       >
@@ -177,7 +177,7 @@ onClickOutside(
             v-model="query"
             type="text"
             placeholder="Search repositories or paste a remote…"
-            class="w-0 min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-4"
+            class="w-0 min-w-0 flex-1 bg-transparent text-body text-text outline-none placeholder:text-text-4"
             :data-testid="testid ? `${testid}-search` : undefined"
             @keydown="onKeydown"
           />
@@ -198,7 +198,7 @@ onClickOutside(
           >
             <button
               type="button"
-              class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left text-[13px]"
+              class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left text-body"
               :class="
                 index === active ? 'bg-hover text-text' : repo.remote === modelValue ? 'text-text' : 'text-text-2'
               "
@@ -216,14 +216,14 @@ onClickOutside(
                   >{{ segment.text }}</span
                 >
               </span>
-              <span v-if="repo.hint" class="shrink-0 truncate text-[11.5px] text-text-4">{{ repo.hint }}</span>
+              <span v-if="repo.hint" class="shrink-0 truncate text-caption text-text-4">{{ repo.hint }}</span>
               <IconCheck v-if="repo.remote === modelValue" class="size-3.5 shrink-0 text-accent" :stroke-width="3" />
             </button>
           </li>
           <li v-if="custom" role="option" :aria-selected="false">
             <button
               type="button"
-              class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left text-[13px]"
+              class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left text-body"
               :class="active === ranked.length ? 'bg-hover text-text' : 'text-text-2'"
               :data-testid="testid ? `${testid}-custom` : undefined"
               @mousedown.prevent
@@ -237,7 +237,7 @@ onClickOutside(
         </ul>
         <div
           v-else
-          class="px-3 py-4 text-center text-[12.5px] text-text-4"
+          class="px-3 py-4 text-center text-small text-text-4"
           :data-testid="testid ? `${testid}-empty` : undefined"
         >
           <template v-if="query.trim()">No matching repository</template>
@@ -247,7 +247,7 @@ onClickOutside(
                  empty one is a setting, not a missing feature. Someone who
                  skipped the first-run step lands here and would otherwise have
                  nothing to go on. -->
-            <span class="mt-1 block text-[11.5px]">Add the folders holding them under Settings ▸ Hive CLI.</span>
+            <span class="mt-1 block text-caption">Add the folders holding them under Settings ▸ Hive CLI.</span>
           </template>
         </div>
       </div>

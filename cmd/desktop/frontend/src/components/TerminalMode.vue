@@ -75,7 +75,7 @@ const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, ca
       data-testid="terminal-unavailable"
     >
       <IconTerminal class="size-6 text-text-4" />
-      <div class="text-[13.5px] font-semibold">Terminal unavailable</div>
+      <div class="text-body font-semibold">Terminal unavailable</div>
       <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="terminal-unavailable-reason">
         {{ reason || 'The terminal is not available in this build.' }}
       </p>

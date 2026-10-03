@@ -196,19 +196,19 @@ useSubmitShortcut(submit)
       <div class="flex items-start gap-2">
         <IconCircleAlert class="mt-px size-[15px] shrink-0 text-severity-error" />
         <div class="min-w-0 flex-1">
-          <div class="text-[12.5px] font-semibold text-severity-error">This session was not created</div>
-          <p
-            class="mt-0.5 break-words text-[12px] leading-[1.45] text-text-2"
-            :data-testid="`${testid}-failure-reason`"
-          >
+          <div class="text-small font-semibold text-severity-error">This session was not created</div>
+          <p class="mt-0.5 break-words text-small leading-[1.45] text-text-2" :data-testid="`${testid}-failure-reason`">
             {{ failureHeadline }}
           </p>
           <pre
             v-if="failure.output"
-            class="mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded border border-strong bg-app px-2 py-1.5 font-mono text-[10.5px] leading-[1.5] text-text-3"
+            class="mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded border border-strong bg-app px-2 py-1.5 font-mono text-micro leading-[1.5] text-text-3"
             :data-testid="`${testid}-failure-output`"
             >{{ failure.output }}</pre>
-          <p v-if="failure.leftoverCheckout && failure.destination" class="mt-2 text-[11px] leading-[1.45] text-text-3">
+          <p
+            v-if="failure.leftoverCheckout && failure.destination"
+            class="mt-2 text-caption leading-[1.45] text-text-3"
+          >
             {{ failure.cloneStrategy === 'worktree' ? 'Worktree' : 'Checkout' }} left on disk, safe to delete:
             <span class="block break-all font-mono text-text-4">{{ failure.destination }}</span>
           </p>

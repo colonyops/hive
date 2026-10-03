@@ -210,7 +210,7 @@ const nextRunsLine = computed(() => {
           v-for="day in WEEK_ORDER"
           :key="day"
           type="button"
-          class="cursor-pointer rounded-[7px] border px-2.5 py-1 text-[11.5px]"
+          class="cursor-pointer rounded-lg border px-2.5 py-1 text-caption"
           :class="
             dayPicked(day) ? 'border-accent bg-accent text-accent-contrast' : 'border-card text-text-2 hover:text-text'
           "
@@ -292,17 +292,17 @@ const nextRunsLine = computed(() => {
       >
         <div v-for="run in draft.history" :key="run.id" class="flex items-start gap-2.5 px-3 py-2">
           <span
-            class="mt-px shrink-0 font-mono text-[10.5px] text-text-4"
+            class="mt-px shrink-0 font-mono text-micro text-text-4"
             :title="new Date(run.startedAt).toLocaleString()"
             >{{ runStamp(run.startedAt) }}</span
           >
           <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-1.5 text-[11.5px] text-text-2">
+            <div class="flex items-center gap-1.5 text-caption text-text-2">
               <span class="size-1.5 shrink-0 rounded-full" :class="statusDot(run.status)" />
               <span>{{ run.status }} · {{ reasonLabel(run) }}</span>
-              <span v-if="run.missed > 0" class="font-mono text-[10px] text-text-4">{{ run.missed }} missed</span>
+              <span v-if="run.missed > 0" class="font-mono text-micro text-text-4">{{ run.missed }} missed</span>
             </div>
-            <p v-if="run.error" class="mt-0.5 text-[10.5px] leading-relaxed text-severity-error">{{ run.error }}</p>
+            <p v-if="run.error" class="mt-0.5 text-micro leading-relaxed text-severity-error">{{ run.error }}</p>
           </div>
         </div>
       </div>

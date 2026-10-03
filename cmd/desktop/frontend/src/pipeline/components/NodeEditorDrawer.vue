@@ -166,7 +166,7 @@ useAutofocus(nameRef)
   >
     <template #icon>
       <span
-        class="flex size-[26px] shrink-0 items-center justify-center rounded-[7px]"
+        class="flex size-[26px] shrink-0 items-center justify-center rounded-lg"
         :style="{
           background: def.tint ?? 'var(--color-accent-tint)',
           color: def.accentToken ?? 'var(--color-accent)',
@@ -221,15 +221,15 @@ useAutofocus(nameRef)
           @click="docsOpen = !docsOpen"
         >
           <component :is="docsOpen ? IconChevronDown : IconChevronRight" class="size-3.5 text-text-3" />
-          <span class="text-[12.5px] font-semibold text-text">Docs</span>
-          <span v-if="!docsOpen" class="truncate text-[11.5px] text-text-4" data-testid="node-editor-docs-summary">{{
+          <span class="text-small font-semibold text-text">Docs</span>
+          <span v-if="!docsOpen" class="truncate text-caption text-text-4" data-testid="node-editor-docs-summary">{{
             helpSummary
           }}</span>
         </button>
         <!-- eslint-disable vue/no-v-html -- renderMarkdown escapes the first-party node docs -->
         <div
           v-if="docsOpen"
-          class="hive-doc mt-3 text-[13px] leading-relaxed text-text-2"
+          class="hive-doc mt-3 text-body leading-relaxed text-text-2"
           data-testid="node-editor-docs"
           v-html="docsHtml"
         />
@@ -243,7 +243,7 @@ useAutofocus(nameRef)
           <button
             ref="deleteTriggerRef"
             type="button"
-            class="cursor-pointer whitespace-nowrap text-[12px] text-kind-issue hover:brightness-110"
+            class="cursor-pointer whitespace-nowrap text-small text-kind-issue hover:brightness-110"
             data-testid="node-editor-delete"
             :aria-expanded="deleteConfirming"
             @click="requestDelete"
@@ -253,12 +253,12 @@ useAutofocus(nameRef)
 
           <div
             v-if="deleteConfirming"
-            class="absolute bottom-full left-0 z-10 mb-2 flex w-max flex-col gap-2.5 rounded-lg border border-strong bg-pane p-3 shadow-[0_12px_30px_-8px_rgba(0,0,0,.5)]"
+            class="absolute bottom-full left-0 z-10 mb-2 flex w-max flex-col gap-2.5 rounded-lg border border-strong bg-pane p-3 shadow-popover"
             role="group"
             aria-label="Confirm delete node"
             data-testid="node-editor-delete-popover"
           >
-            <div class="whitespace-nowrap text-[12px] text-text-2">Delete this node?</div>
+            <div class="whitespace-nowrap text-small text-text-2">Delete this node?</div>
             <div class="flex items-center gap-2">
               <BaseButton
                 ref="deleteCancelRef"
@@ -328,7 +328,7 @@ useAutofocus(nameRef)
 }
 
 .hive-doc :deep(code) {
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--color-chip);
   padding: 0.1em 0.35em;
   font-family: var(--font-mono);
@@ -337,7 +337,7 @@ useAutofocus(nameRef)
 
 .hive-doc :deep(pre) {
   overflow-x: auto;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--color-row);
   background: var(--color-app);
   padding: 0.65em 0.85em;

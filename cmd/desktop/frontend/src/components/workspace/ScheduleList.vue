@@ -46,19 +46,19 @@ const iconButtonClass =
       />
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2">
-          <span class="truncate text-[13.5px] font-semibold" :class="card.disabled ? 'text-text-2' : 'text-text'">{{
+          <span class="truncate text-body font-semibold" :class="card.disabled ? 'text-text-2' : 'text-text'">{{
             card.name || card.id
           }}</span>
           <BaseBadge
             v-if="!card.saved || card.edited"
             tone="muted"
             variant="pill"
-            class="shrink-0 px-2 py-0.5 text-[10.5px] font-medium"
+            class="shrink-0 px-2 py-0.5 text-micro font-medium"
             :data-testid="`agent-workspace-editor-schedule-${index}-unsaved`"
             >unsaved</BaseBadge
           >
         </div>
-        <div class="mt-1 truncate text-[12px] text-text-3">
+        <div class="mt-1 truncate text-small text-text-3">
           <span :data-testid="`agent-workspace-editor-schedule-${index}-summary`">{{ describe(card.shape) }}</span>
           <template v-if="nextRunLabel(card)">
             <span aria-hidden="true"> · </span>
@@ -67,13 +67,13 @@ const iconButtonClass =
         </div>
         <div
           v-if="card.lastRun"
-          class="mt-1 flex items-center gap-1.5 text-[11.5px] text-text-4"
+          class="mt-1 flex items-center gap-1.5 text-caption text-text-4"
           :data-testid="`agent-workspace-editor-schedule-${index}-last-run`"
         >
           <span class="size-1.5 shrink-0 rounded-full" :class="statusDot(card.lastRun.status)" />
           <span class="truncate">{{ lastRunLabel(card.lastRun) }}</span>
         </div>
-        <p v-if="card.lastRun?.error" class="mt-1 text-[11.5px] leading-relaxed text-severity-warning">
+        <p v-if="card.lastRun?.error" class="mt-1 text-caption leading-relaxed text-severity-warning">
           {{ card.lastRun.error }}
         </p>
         <InlineError

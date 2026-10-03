@@ -43,10 +43,10 @@ onMounted(() => {
       data-testid="system-restart-banner"
     >
       <IconInfo class="size-4 shrink-0 text-severity-info" />
-      <div class="min-w-0 flex-1 text-[12.5px] text-text-2">Location changes take effect after restarting Hive.</div>
+      <div class="min-w-0 flex-1 text-small text-text-2">Location changes take effect after restarting Hive.</div>
       <button
         type="button"
-        class="shrink-0 cursor-pointer rounded-md border border-border px-2.5 py-1.5 text-[12px] font-medium text-text-2 hover:bg-chip hover:text-text"
+        class="shrink-0 cursor-pointer rounded-md border border-border px-2.5 py-1.5 text-small font-medium text-text-2 hover:bg-chip hover:text-text"
         data-testid="system-quit"
         @click="quit"
       >
@@ -58,16 +58,16 @@ onMounted(() => {
 
     <button
       type="button"
-      class="group flex cursor-pointer items-center gap-3.5 overflow-hidden rounded-[11px] border border-accent/40 bg-raised px-4 py-3.5 text-left transition-colors hover:border-accent hover:bg-accent-tint/20"
+      class="group flex cursor-pointer items-center gap-3.5 overflow-hidden rounded-xl border border-accent/40 bg-raised px-4 py-3.5 text-left transition-colors hover:border-accent hover:bg-accent-tint/20"
       data-testid="system-report-problem"
       @click="reportProblem"
     >
-      <span class="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-accent-tint text-accent">
+      <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-tint text-accent">
         <IconBug class="size-[18px]" />
       </span>
       <div class="min-w-0 flex-1">
-        <div class="text-[13.5px] font-semibold text-text">Report a problem</div>
-        <div class="mt-0.5 text-[11.5px] text-text-3">Open a GitHub issue. Nothing from this machine is attached.</div>
+        <div class="text-body font-semibold text-text">Report a problem</div>
+        <div class="mt-0.5 text-caption text-text-3">Open a GitHub issue. Nothing from this machine is attached.</div>
       </div>
       <IconChevronRight
         class="size-4 shrink-0 text-text-3 transition-transform group-hover:translate-x-0.5 group-hover:text-text-2"
@@ -76,16 +76,16 @@ onMounted(() => {
 
     <button
       type="button"
-      class="group flex cursor-pointer items-center gap-3.5 overflow-hidden rounded-[11px] border border-card bg-raised px-4 py-3.5 text-left transition-colors hover:border-strong"
+      class="group flex cursor-pointer items-center gap-3.5 overflow-hidden rounded-xl border border-card bg-raised px-4 py-3.5 text-left transition-colors hover:border-strong"
       data-testid="system-save-bundle"
       @click="openBundleDialog"
     >
-      <span class="flex size-9 shrink-0 items-center justify-center rounded-[9px] bg-app text-text-2">
+      <span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-app text-text-2">
         <IconLifeBuoy class="size-[18px]" />
       </span>
       <div class="min-w-0 flex-1">
-        <div class="text-[13.5px] font-semibold text-text">Save a diagnostic bundle</div>
-        <div class="mt-0.5 text-[11.5px] text-text-3">
+        <div class="text-body font-semibold text-text">Save a diagnostic bundle</div>
+        <div class="mt-0.5 text-caption text-text-3">
           For when a maintainer asks for one. Send it privately, not on an issue.
         </div>
       </div>

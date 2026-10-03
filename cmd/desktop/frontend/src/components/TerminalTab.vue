@@ -138,7 +138,7 @@ function startDividerDrag(divider: PaneDivider, event: PointerEvent): void {
       </div>
       <div
         v-if="tab.zoomed && split"
-        class="pointer-events-none absolute right-2 top-1 z-10 rounded border border-strong bg-raised/90 px-1.5 py-0.5 font-mono text-[10px] text-text-3"
+        class="pointer-events-none absolute right-2 top-1 z-10 rounded border border-strong bg-raised/90 px-1.5 py-0.5 font-mono text-micro text-text-3"
         data-testid="terminal-pane-zoomed"
       >
         zoomed

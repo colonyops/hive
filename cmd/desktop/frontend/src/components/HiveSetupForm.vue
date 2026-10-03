@@ -80,8 +80,8 @@ function repoLabel(count: number): string {
   <div class="flex flex-col gap-7">
     <section class="flex flex-col gap-3" data-testid="hive-setup-agents">
       <div>
-        <h3 class="text-[13.5px] font-semibold text-text">Coding agent</h3>
-        <p class="mt-1 text-[12.5px] leading-relaxed text-text-3">
+        <h3 class="text-body font-semibold text-text">Coding agent</h3>
+        <p class="mt-1 text-small leading-relaxed text-text-3">
           Pick the agents Hive can start a session with. Installed ones are marked; you can choose one you have not
           installed yet.
         </p>
@@ -92,7 +92,7 @@ function repoLabel(count: number): string {
           v-for="agent in agents"
           :key="agent.name"
           type="button"
-          class="flex items-center gap-2.5 rounded-[9px] border px-3 py-2.5 text-left transition-colors"
+          class="flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors"
           :class="
             selectedAgents.has(agent.name)
               ? 'border-accent bg-accent-tint text-text'
@@ -105,19 +105,19 @@ function repoLabel(count: number): string {
         >
           <span
             aria-hidden="true"
-            class="flex size-4 shrink-0 items-center justify-center rounded-[5px] border"
+            class="flex size-4 shrink-0 items-center justify-center rounded-md border"
             :class="selectedAgents.has(agent.name) ? 'border-accent bg-accent text-accent-contrast' : 'border-strong'"
             ><IconCheck v-if="selectedAgents.has(agent.name)" class="size-3"
           /></span>
           <span class="min-w-0 flex-1">
-            <span class="block truncate text-[13px] font-medium">{{ agent.label }}</span>
-            <span class="block truncate font-mono text-[11px] text-text-4">{{ agent.name }}</span>
+            <span class="block truncate text-body font-medium">{{ agent.label }}</span>
+            <span class="block truncate font-mono text-caption text-text-4">{{ agent.name }}</span>
           </span>
           <BaseBadge
             v-if="agent.installed"
             tone="success"
             variant="pill"
-            class="shrink-0 px-1.5 py-0.5 text-[10px] font-medium"
+            class="shrink-0 px-1.5 py-0.5 text-micro font-medium"
             :data-testid="`hive-agent-installed-${agent.name}`"
             >installed</BaseBadge
           >
@@ -126,14 +126,14 @@ function repoLabel(count: number): string {
 
       <p
         v-if="!agents.some((a) => a.installed)"
-        class="text-[12px] leading-relaxed text-text-4"
+        class="text-small leading-relaxed text-text-4"
         data-testid="hive-no-agents-installed"
       >
         None of these were found on your PATH. Pick the one you plan to use — Hive will find it once it is installed.
       </p>
 
       <div v-if="selectedAgents.size > 1" class="flex flex-col gap-2" data-testid="hive-default-agent">
-        <span class="text-[12px] font-medium text-text-3">Start new sessions with</span>
+        <span class="text-small font-medium text-text-3">Start new sessions with</span>
         <AppSelect
           :model-value="defaultAgent"
           :options="defaultAgentOptions"
@@ -146,7 +146,7 @@ function repoLabel(count: number): string {
 
       <p
         v-if="defaultAgentOverride"
-        class="flex items-start gap-2 rounded-lg border border-border bg-severity-info-tint p-3 text-[12px] leading-relaxed text-text-2"
+        class="flex items-start gap-2 rounded-lg border border-border bg-severity-info-tint p-3 text-small leading-relaxed text-text-2"
         data-testid="hive-default-agent-override"
       >
         <IconTriangleAlert class="mt-px size-3.5 shrink-0 text-severity-info" />
@@ -169,8 +169,8 @@ function repoLabel(count: number): string {
 
     <section class="flex flex-col gap-3" data-testid="hive-setup-workspaces">
       <div>
-        <h3 class="text-[13.5px] font-semibold text-text">Where your repositories are</h3>
-        <p class="mt-1 text-[12.5px] leading-relaxed text-text-3">
+        <h3 class="text-body font-semibold text-text">Where your repositories are</h3>
+        <p class="mt-1 text-small leading-relaxed text-text-3">
           Add the folders that <em>contain</em> your repositories — <span class="font-mono text-text-2">~/code</span>,
           not <span class="font-mono text-text-2">~/code/my-app</span>. Everything under them shows up in the new
           session picker. You can add more than one.
@@ -181,13 +181,13 @@ function repoLabel(count: number): string {
         <li
           v-for="workspace in workspaces"
           :key="workspace.path"
-          class="flex items-center gap-2.5 rounded-[9px] border border-strong bg-chip px-3 py-2.5"
+          class="flex items-center gap-2.5 rounded-lg border border-strong bg-chip px-3 py-2.5"
           :data-testid="`hive-workspace-${workspace.path}`"
         >
           <IconFolder class="size-4 shrink-0 text-text-3" />
           <span class="min-w-0 flex-1">
-            <span class="block truncate font-mono text-[12.5px] text-text">{{ workspace.path }}</span>
-            <span class="block text-[11px]" :class="workspace.exists ? 'text-text-4' : 'text-kind-issue'">{{
+            <span class="block truncate font-mono text-small text-text">{{ workspace.path }}</span>
+            <span class="block text-caption" :class="workspace.exists ? 'text-text-4' : 'text-kind-issue'">{{
               workspace.exists ? repoLabel(workspace.repos) : 'not found on this machine'
             }}</span>
           </span>
@@ -206,7 +206,7 @@ function repoLabel(count: number): string {
 
       <button
         type="button"
-        class="flex cursor-pointer items-center justify-center gap-2 rounded-[9px] border border-dashed border-strong px-3 py-2.5 text-[12.5px] font-medium text-text-2 hover:border-accent hover:text-accent disabled:opacity-55"
+        class="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-strong px-3 py-2.5 text-small font-medium text-text-2 hover:border-accent hover:text-accent disabled:opacity-55"
         :disabled="busy"
         data-testid="hive-add-workspace"
         @click="emit('addWorkspace')"
@@ -241,7 +241,7 @@ function repoLabel(count: number): string {
       </div>
     </section>
 
-    <p v-if="customProfiles.length" class="text-[12px] leading-relaxed text-text-4" data-testid="hive-custom-profiles">
+    <p v-if="customProfiles.length" class="text-small leading-relaxed text-text-4" data-testid="hive-custom-profiles">
       Your config also defines
       <span class="font-mono text-text-3">{{ customProfiles.map((p) => p.name).join(', ') }}</span
       >. {{ customProfiles.length === 1 ? 'It is' : 'They are' }} kept as written.

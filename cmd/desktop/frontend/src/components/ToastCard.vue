@@ -84,33 +84,33 @@ function runAction(action: ToastActionDef) {
 
 <template>
   <div
-    class="overflow-hidden rounded-[11px] bg-raised shadow-[0_18px_40px_-14px_rgba(0,0,0,.7)]"
+    class="overflow-hidden rounded-xl bg-raised shadow-popover"
     :class="['border', style.border]"
     data-testid="toast"
     :data-toast-severity="toast.severity"
   >
     <div class="flex gap-3 px-3.5 pb-[13px] pt-3.5">
-      <span class="flex size-[26px] shrink-0 items-center justify-center rounded-[7px]" :class="style.iconBg">
+      <span class="flex size-[26px] shrink-0 items-center justify-center rounded-lg" :class="style.iconBg">
         <component :is="icon" class="size-[15px]" :class="style.iconColor" />
       </span>
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
-          <span class="text-[13.5px] font-semibold text-text" data-testid="toast-title">{{ toast.message }}</span>
+          <span class="text-body font-semibold text-text" data-testid="toast-title">{{ toast.message }}</span>
           <span
             v-if="toast.severity === 'auto-action'"
-            class="rounded-[4px] border border-accent/30 bg-accent/13 px-[5px] py-px font-mono text-[9.5px] tracking-[.06em] text-accent"
+            class="rounded-sm border border-accent/30 bg-accent/13 px-[5px] py-px font-mono text-micro tracking-[.06em] text-accent"
             data-testid="toast-auto-badge"
             >AUTO</span
           >
         </div>
-        <p v-if="toast.body" class="mt-0.5 text-[12.5px] leading-[1.45] text-text-2" data-testid="toast-body">
+        <p v-if="toast.body" class="mt-0.5 text-small leading-[1.45] text-text-2" data-testid="toast-body">
           {{ toast.body }}
         </p>
         <div v-if="toast.actions.length" class="mt-[9px] flex gap-3.5">
           <button
             v-for="(action, i) in toast.actions"
             :key="action.label"
-            class="cursor-pointer text-[12.5px]"
+            class="cursor-pointer text-small"
             :class="i === 0 ? [style.accent, 'font-semibold hover:brightness-125'] : 'text-text-3 hover:text-text'"
             data-testid="toast-action"
             @click="runAction(action)"

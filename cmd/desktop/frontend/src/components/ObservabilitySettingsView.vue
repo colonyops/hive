@@ -41,7 +41,7 @@ onMounted(() => {
       data-testid="observability-restart-banner"
     >
       <IconInfo class="size-4 shrink-0 text-severity-info" />
-      <div class="min-w-0 flex-1 text-[12.5px] text-text-2">
+      <div class="min-w-0 flex-1 text-small text-text-2">
         Restart Hive to apply the telemetry changes in settings.yaml.
       </div>
     </div>
@@ -63,7 +63,7 @@ onMounted(() => {
       <template #actions>
         <button
           type="button"
-          class="flex cursor-pointer items-center gap-1.5 text-[12px] font-medium text-accent hover:underline"
+          class="flex cursor-pointer items-center gap-1.5 text-small font-medium text-accent hover:underline"
           data-testid="observability-docs"
           @click="Browser.OpenURL(DOCS_URL)"
         >
@@ -74,16 +74,16 @@ onMounted(() => {
       <p v-if="loading && !current" class="font-mono text-xs text-text-4">Loading…</p>
 
       <div v-if="current" class="grid grid-cols-1 gap-3 @[640px]/pane:grid-cols-2">
-        <article class="rounded-[11px] border border-card bg-raised p-4" data-testid="observability-otlp">
+        <article class="rounded-xl border border-card bg-raised p-4" data-testid="observability-otlp">
           <div class="flex items-start gap-3">
             <div class="min-w-0 flex-1">
-              <div class="text-[13.5px] font-semibold text-text">Metrics, logs, and traces</div>
+              <div class="text-body font-semibold text-text">Metrics, logs, and traces</div>
               <p class="mt-1 text-xs leading-relaxed text-text-3">OpenTelemetry Protocol over HTTPS.</p>
             </div>
             <BaseBadge
               :tone="statusFor(current.otlp).tone"
               variant="pill"
-              class="px-2.5 py-1 text-[11px] font-semibold"
+              class="px-2.5 py-1 text-caption font-semibold"
               data-testid="observability-otlp-status"
             >
               {{ statusFor(current.otlp).label }}
@@ -93,7 +93,7 @@ onMounted(() => {
             <BaseBadge
               :tone="current.otlp.enabled ? 'success' : 'neutral'"
               variant="pill"
-              class="px-2.5 py-1 text-[11px] font-semibold"
+              class="px-2.5 py-1 text-caption font-semibold"
               data-testid="observability-otlp-enabled"
             >
               {{ current.otlp.enabled ? 'Enabled' : 'Disabled' }}
@@ -101,7 +101,7 @@ onMounted(() => {
             <BaseBadge
               :tone="current.otlp.configured ? 'success' : 'neutral'"
               variant="pill"
-              class="px-2.5 py-1 text-[11px] font-semibold"
+              class="px-2.5 py-1 text-caption font-semibold"
               data-testid="observability-otlp-configured"
             >
               {{ current.otlp.configured ? 'Configured' : 'Not configured' }}
@@ -109,16 +109,16 @@ onMounted(() => {
           </div>
         </article>
 
-        <article class="rounded-[11px] border border-card bg-raised p-4" data-testid="observability-profiles">
+        <article class="rounded-xl border border-card bg-raised p-4" data-testid="observability-profiles">
           <div class="flex items-start gap-3">
             <div class="min-w-0 flex-1">
-              <div class="text-[13.5px] font-semibold text-text">Continuous profiles</div>
+              <div class="text-body font-semibold text-text">Continuous profiles</div>
               <p class="mt-1 text-xs leading-relaxed text-text-3">CPU, allocation, and in-use heap profiles.</p>
             </div>
             <BaseBadge
               :tone="statusFor(current.profiles).tone"
               variant="pill"
-              class="px-2.5 py-1 text-[11px] font-semibold"
+              class="px-2.5 py-1 text-caption font-semibold"
               data-testid="observability-profiles-status"
             >
               {{ statusFor(current.profiles).label }}
@@ -128,7 +128,7 @@ onMounted(() => {
             <BaseBadge
               :tone="current.profiles.enabled ? 'success' : 'neutral'"
               variant="pill"
-              class="px-2.5 py-1 text-[11px] font-semibold"
+              class="px-2.5 py-1 text-caption font-semibold"
               data-testid="observability-profiles-enabled"
             >
               {{ current.profiles.enabled ? 'Enabled' : 'Disabled' }}
@@ -136,7 +136,7 @@ onMounted(() => {
             <BaseBadge
               :tone="current.profiles.configured ? 'success' : 'neutral'"
               variant="pill"
-              class="px-2.5 py-1 text-[11px] font-semibold"
+              class="px-2.5 py-1 text-caption font-semibold"
               data-testid="observability-profiles-configured"
             >
               {{ current.profiles.configured ? 'Configured' : 'Not configured' }}

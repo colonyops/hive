@@ -186,7 +186,7 @@ onMounted(async () => {
     <template v-if="schedules.draft" #icon>
       <button
         type="button"
-        class="flex size-[38px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-card text-text-2 hover:border-strong hover:text-text"
+        class="flex size-[38px] shrink-0 cursor-pointer items-center justify-center rounded-xl border border-card text-text-2 hover:border-strong hover:text-text"
         aria-label="Back to the workspace"
         data-testid="agent-workspace-editor-schedule-back"
         @click="schedules.close()"
@@ -329,7 +329,7 @@ onMounted(async () => {
         <button
           v-if="schedules.draft.key !== null"
           type="button"
-          class="cursor-pointer text-[12.5px] text-text-3 hover:text-severity-error disabled:opacity-50"
+          class="cursor-pointer text-small text-text-3 hover:text-severity-error disabled:opacity-50"
           :disabled="busy"
           data-testid="agent-workspace-editor-schedule-remove"
           @click="schedules.draft.removing = true"
@@ -381,7 +381,7 @@ onMounted(async () => {
         <button
           v-if="!creating"
           type="button"
-          class="cursor-pointer text-[12.5px] text-text-3 hover:text-severity-error disabled:opacity-50"
+          class="cursor-pointer text-small text-text-3 hover:text-severity-error disabled:opacity-50"
           :disabled="busy"
           data-testid="agent-workspace-editor-delete"
           @click="confirming = true"

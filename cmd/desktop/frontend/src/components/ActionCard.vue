@@ -26,7 +26,7 @@ const emit = defineEmits<{ run: [] }>()
     </button>
     <details v-if="run && run.status !== 'done'" class="action-failure" data-testid="action-failure">
       <summary class="cursor-pointer">{{ run.error || 'Action failed' }}</summary>
-      <dl class="mt-2 space-y-1 font-mono text-[11px] text-text-3">
+      <dl class="mt-2 space-y-1 font-mono text-caption text-text-3">
         <div>
           <dt class="inline text-severity-error">status:</dt>
           <dd class="inline">{{ run.status }}</dd>
@@ -76,7 +76,7 @@ const emit = defineEmits<{ run: [] }>()
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-size: 12.5px;
+  font-size: var(--text-small);
   color: var(--color-text);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -84,14 +84,14 @@ const emit = defineEmits<{ run: [] }>()
 .action-row-pending {
   flex: none;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-caption);
   color: var(--color-text-3);
 }
 .action-failure {
   border-top: 1px solid var(--color-border);
   padding: 8px 11px;
   text-align: left;
-  font-size: 12px;
+  font-size: var(--text-small);
   color: var(--color-severity-error);
 }
 </style>

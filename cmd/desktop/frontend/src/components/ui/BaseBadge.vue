@@ -36,7 +36,7 @@ const dotClasses = {
 
 const classes = computed(() => [
   'inline-flex items-center gap-1.5',
-  props.variant === 'pill' ? 'rounded-full' : 'rounded-[5px]',
+  props.variant === 'pill' ? 'rounded-full' : 'rounded-md',
   toneClasses[props.tone],
 ])
 </script>

@@ -563,7 +563,7 @@ defineExpose({
         data-testid="agents-sidebar-root-missing"
       >
         <p class="leading-relaxed">The configured workspace root is unavailable:</p>
-        <p class="font-mono text-[11px] text-severity-error">{{ rootProblem }}</p>
+        <p class="font-mono text-caption text-severity-error">{{ rootProblem }}</p>
         <p class="leading-relaxed">
           Point <code>agent_workspaces.dir</code> in settings.yaml at a reachable folder; Settings ▸ Chats shows where
           it resolves.
@@ -726,7 +726,7 @@ defineExpose({
                   <input
                     v-if="renamingSessionId === session.id"
                     v-model="renameDraft"
-                    class="min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none"
+                    class="min-w-0 flex-1 bg-transparent text-body text-text outline-none"
                     data-testid="agents-sidebar-session-rename-input"
                     autocapitalize="off"
                     autocorrect="off"
@@ -859,7 +859,7 @@ defineExpose({
   gap: 8px;
   padding: 0 12px;
   color: var(--color-text);
-  font-size: 13px;
+  font-size: var(--text-body);
   font-weight: 500;
   cursor: pointer;
 }
@@ -878,7 +878,7 @@ defineExpose({
   justify-content: center;
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   color: var(--color-text-4);
   cursor: pointer;
 }
@@ -905,7 +905,7 @@ defineExpose({
   gap: 8px;
   padding: 0 12px;
   color: var(--color-text-2);
-  font-size: 13px;
+  font-size: var(--text-body);
   cursor: pointer;
 }
 .sidebar-entry:hover,
@@ -961,7 +961,7 @@ defineExpose({
   justify-content: center;
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   color: var(--color-text-4);
   cursor: pointer;
   opacity: 0;
@@ -988,7 +988,7 @@ defineExpose({
 .entry-age {
   flex: none;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--text-micro);
   color: var(--color-text-4);
 }
 
@@ -1018,7 +1018,7 @@ defineExpose({
   justify-content: center;
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   color: var(--color-text-4);
   cursor: pointer;
   opacity: 0;
@@ -1064,7 +1064,7 @@ defineExpose({
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   color: var(--color-text-4);
   cursor: pointer;
   opacity: 0;
@@ -1088,7 +1088,7 @@ defineExpose({
    8px between them. */
 .chat-empty {
   padding: 7px 12px 7px 38px;
-  font-size: 11.5px;
+  font-size: var(--text-caption);
   font-style: italic;
   color: var(--color-text-4);
 }

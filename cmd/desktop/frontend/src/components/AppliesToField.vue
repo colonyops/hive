@@ -97,7 +97,7 @@ defineExpose({ flush: () => add() })
         <span
           v-for="tag in tags"
           :key="tag"
-          class="inline-flex items-center gap-1 rounded-md border py-0.5 pl-2 pr-1 font-mono text-[12px]"
+          class="inline-flex items-center gap-1 rounded-md border py-0.5 pl-2 pr-1 font-mono text-small"
           :class="
             isKnown(tag)
               ? 'border-strong bg-chip text-text'
@@ -120,7 +120,7 @@ defineExpose({ flush: () => add() })
           v-model="draft"
           data-testid="action-applies-to"
           placeholder="Add type…"
-          class="min-w-[80px] flex-1 bg-transparent font-mono text-[12.5px] text-text outline-none"
+          class="min-w-[80px] flex-1 bg-transparent font-mono text-small text-text outline-none"
           role="combobox"
           :aria-expanded="open"
           @focus="onInput"
@@ -132,7 +132,7 @@ defineExpose({ flush: () => add() })
 
       <ul
         v-if="open && suggestions.length"
-        class="absolute inset-x-0 top-[calc(100%+6px)] z-20 flex flex-col gap-0.5 rounded-lg border border-card bg-raised p-[5px] shadow-[0_16px_34px_-12px_rgba(0,0,0,.6)]"
+        class="absolute inset-x-0 top-[calc(100%+6px)] z-20 flex flex-col gap-0.5 rounded-lg border border-card bg-raised p-[5px] shadow-popover"
         role="listbox"
         data-testid="action-applies-to-suggestions"
       >
@@ -145,7 +145,7 @@ defineExpose({ flush: () => add() })
             @mousedown.prevent="add(type)"
             @mousemove="active = index"
           >
-            <span class="font-mono text-[12.5px] text-text-2"
+            <span class="font-mono text-small text-text-2"
               ><span>{{ highlight(type).pre }}</span
               ><span class="text-accent">{{ highlight(type).mid }}</span
               ><span>{{ highlight(type).post }}</span></span
@@ -157,7 +157,7 @@ defineExpose({ flush: () => add() })
       </ul>
     </div>
 
-    <p v-if="hasUnknown" class="mt-1.5 text-[11px] leading-relaxed text-accent">
+    <p v-if="hasUnknown" class="mt-1.5 text-caption leading-relaxed text-accent">
       Highlighted types don't match any known feed item yet.
     </p>
   </div>

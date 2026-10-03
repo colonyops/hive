@@ -147,9 +147,11 @@ const { dragging, target: dropTarget } = drag
           /></span>
         </template>
         <template #badges>
-          <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-[11px]">{{ action.id }}</BaseBadge>
-          <BaseBadge class="px-2 py-0.5 text-[11px] !text-text-2">{{ actionTypeMeta(action.type).label }}</BaseBadge>
-          <BaseBadge class="px-2 py-0.5 text-[11px]">
+          <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-caption">{{
+            action.id
+          }}</BaseBadge>
+          <BaseBadge class="px-2 py-0.5 text-caption !text-text-2">{{ actionTypeMeta(action.type).label }}</BaseBadge>
+          <BaseBadge class="px-2 py-0.5 text-caption">
             <span class="size-1.5 rounded-full" :class="action.showInDetail ? 'bg-severity-success' : 'bg-text-4'" />{{
               action.showInDetail ? 'Shown in detail' : 'Flow-only'
             }}
@@ -160,7 +162,7 @@ const { dragging, target: dropTarget } = drag
       <EmptyState v-if="!actions.length" message="No actions configured." />
       <div
         v-else
-        class="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-text-4"
+        class="mt-1 flex items-center gap-1.5 font-mono text-caption text-text-4"
         data-testid="actions-source"
       >
         Synced from .hive/actions.yml · {{ actions.length }} {{ actions.length === 1 ? 'action' : 'actions' }}

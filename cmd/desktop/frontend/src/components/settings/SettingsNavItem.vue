@@ -24,7 +24,7 @@ const stateClasses = computed(() => {
 <template>
   <button
     type="button"
-    class="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] @[700px]/settings:justify-start"
+    class="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-md px-2.5 py-2 text-left text-body @[700px]/settings:justify-start"
     :class="stateClasses"
     :aria-current="props.active ? 'true' : undefined"
     :title="props.label"

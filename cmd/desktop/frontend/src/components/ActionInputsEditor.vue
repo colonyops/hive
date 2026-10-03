@@ -62,9 +62,9 @@ function remove(index: number): void {
 <template>
   <div class="grid gap-2">
     <div class="flex items-center justify-between">
-      <div class="text-[12.5px] text-text-2">Inputs</div>
+      <div class="text-small text-text-2">Inputs</div>
       <button
-        class="flex items-center gap-1 text-[12px] text-text-3 hover:text-text"
+        class="flex items-center gap-1 text-small text-text-3 hover:text-text"
         data-testid="action-input-add"
         @click="add"
       >

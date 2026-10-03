@@ -18,8 +18,8 @@ defineProps<{
     :data-testid="testid"
   >
     <div class="min-w-0 flex-1">
-      <div class="text-[13.5px] font-semibold text-text">{{ label }}</div>
-      <p v-if="hint" class="mt-1 text-[12px] leading-relaxed text-text-3">{{ hint }}</p>
+      <div class="text-body font-semibold text-text">{{ label }}</div>
+      <p v-if="hint" class="mt-1 text-small leading-relaxed text-text-3">{{ hint }}</p>
     </div>
     <div class="shrink-0 @[600px]/pane:flex @[600px]/pane:justify-end"><slot /></div>
   </div>

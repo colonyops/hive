@@ -14,8 +14,8 @@ withDefaults(defineProps<{ icon: Component; image?: string; source?: string; siz
   <span
     :data-source="source"
     :class="[
-      'inline-flex flex-none items-center justify-center border border-strong bg-chip text-text',
-      size === 'md' ? 'size-[30px] rounded-lg' : 'size-[26px] rounded-[7px]',
+      'inline-flex flex-none items-center justify-center rounded-lg border border-strong bg-chip text-text',
+      size === 'md' ? 'size-[30px]' : 'size-[26px]',
     ]"
     ><SourceMark :icon="icon" :image="image" :class="size === 'md' ? 'size-4' : 'size-[15px]'"
   /></span>

@@ -130,7 +130,7 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
         <div class="relative">
           <button
             type="button"
-            class="flex h-[30px] cursor-pointer items-center gap-1.5 rounded-lg border border-strong bg-chip px-2.5 text-[12.5px] text-text hover:border-card"
+            class="flex h-[30px] cursor-pointer items-center gap-1.5 rounded-lg border border-strong bg-chip px-2.5 text-small text-text hover:border-card"
             data-testid="flow-selector-toggle"
             @click="flowMenuOpen = !flowMenuOpen"
           >
@@ -141,7 +141,7 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
 
           <div
             v-if="flowMenuOpen"
-            class="absolute left-0 top-[calc(100%+6px)] z-20 w-[240px] overflow-hidden rounded-lg border border-strong bg-pane shadow-[0_20px_50px_-14px_rgba(0,0,0,.5)]"
+            class="absolute left-0 top-[calc(100%+6px)] z-20 w-[240px] overflow-hidden rounded-lg border border-strong bg-pane shadow-popover"
             data-testid="flow-selector-menu"
           >
             <div class="hive-scroll max-h-[240px] overflow-y-auto p-1">
@@ -158,20 +158,20 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
                   class="size-1.5 shrink-0 rounded-full"
                   :class="!f.valid ? 'bg-severity-error' : f.enabled ? 'bg-severity-success' : 'bg-text-4'"
                 />
-                <span class="min-w-0 flex-1 truncate text-[12.5px] text-text">{{ f.name || f.id }}</span>
+                <span class="min-w-0 flex-1 truncate text-small text-text">{{ f.name || f.id }}</span>
               </button>
             </div>
           </div>
         </div>
 
-        <span class="whitespace-nowrap font-mono text-[11px] text-text-3" data-testid="canvas-node-wire-count"
+        <span class="whitespace-nowrap font-mono text-caption text-text-3" data-testid="canvas-node-wire-count"
           >{{ nodeCount }} nodes · {{ wireCount }} wires</span
         >
 
         <div class="flex-1" />
 
         <div
-          class="flex h-[30px] items-center overflow-hidden rounded-lg border border-strong bg-chip font-mono text-[12px] text-text-2"
+          class="flex h-[30px] items-center overflow-hidden rounded-lg border border-strong bg-chip font-mono text-small text-text-2"
         >
           <button
             class="flex h-full cursor-pointer items-center px-2.5 hover:bg-hover hover:text-text"
@@ -192,7 +192,7 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
           </button>
         </div>
         <button
-          class="flex h-[30px] cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-strong bg-chip px-2.5 text-[12px] text-text-2 hover:border-card hover:text-text"
+          class="flex h-[30px] cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-strong bg-chip px-2.5 text-small text-text-2 hover:border-card hover:text-text"
           data-testid="canvas-fit"
           @click="canvasRef?.fit()"
         >
@@ -240,7 +240,7 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
       </div>
 
       <div
-        class="flex h-[30px] shrink-0 items-center gap-3.5 border-t border-row bg-canvas-toolbar px-3.5 font-mono text-[10.5px] text-text-3"
+        class="flex h-[30px] shrink-0 items-center gap-3.5 border-t border-row bg-canvas-toolbar px-3.5 font-mono text-micro text-text-3"
         data-testid="canvas-status-strip"
       >
         <span v-if="dirty" class="flex items-center gap-1.5" data-testid="flow-dirty-indicator">

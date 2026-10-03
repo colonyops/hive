@@ -33,7 +33,7 @@ async function onDisconnect(account: string): Promise<void> {
         class="flex items-center justify-between gap-3 rounded-lg border border-border bg-raised px-3 py-2.5"
         :data-testid="`${testid}-connected-${account}`"
       >
-        <div class="min-w-0 truncate font-mono text-[13px] text-text">{{ account }}</div>
+        <div class="min-w-0 truncate font-mono text-body text-text">{{ account }}</div>
         <BaseButton
           variant="secondary"
           size="sm"
@@ -46,7 +46,7 @@ async function onDisconnect(account: string): Promise<void> {
     </div>
     <div
       v-else
-      class="rounded-lg border border-border bg-raised px-3 py-2.5 text-[13px] text-text-3"
+      class="rounded-lg border border-border bg-raised px-3 py-2.5 text-body text-text-3"
       :data-testid="`${testid}-connected-empty`"
     >
       No {{ noun }} connected

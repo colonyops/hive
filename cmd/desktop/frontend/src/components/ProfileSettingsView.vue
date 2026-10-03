@@ -97,7 +97,7 @@ async function onImageChange(event: Event): Promise<void> {
 <template>
   <SettingsLayout data-testid="profile-settings-view" @close="emit('close')">
     <template #sidebar-title>
-      <div class="text-[15px] font-semibold tracking-[-.01em] text-text">Profile settings</div>
+      <div class="text-title font-semibold tracking-[-.01em] text-text">Profile settings</div>
       <div class="mt-1 truncate text-xs text-text-3">{{ props.profile.name }}</div>
     </template>
     <template #nav>
@@ -118,7 +118,7 @@ async function onImageChange(event: Event): Promise<void> {
       />
     </template>
     <template #header-title>
-      <span class="text-[13px] font-semibold text-text">{{
+      <span class="text-body font-semibold text-text">{{
         props.activeSection === 'general' ? 'General' : 'Danger zone'
       }}</span>
     </template>
@@ -126,13 +126,13 @@ async function onImageChange(event: Event): Promise<void> {
     <SettingsPage>
       <template v-if="props.activeSection === 'general'">
         <div class="rounded-lg border border-border bg-raised p-4">
-          <div class="text-[13px] font-medium text-text">Profile image</div>
+          <div class="text-body font-medium text-text">Profile image</div>
           <p class="mt-1 text-xs leading-relaxed text-text-3">
             Shown in the sidebar rail. Square images look best — larger images are cropped to a square and downscaled.
           </p>
           <div class="mt-3 flex items-center gap-4">
             <div
-              class="flex size-[52px] shrink-0 items-center justify-center overflow-hidden rounded-[12px] border border-card bg-chip font-mono text-lg font-semibold text-text-2"
+              class="flex size-[52px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-card bg-chip font-mono text-lg font-semibold text-text-2"
               data-testid="profile-settings-image-preview"
             >
               <img v-if="props.profile.image" :src="props.profile.image" alt="" class="size-full object-cover" />
@@ -201,7 +201,7 @@ async function onImageChange(event: Event): Promise<void> {
           </div>
           <div class="mt-4 flex items-start justify-between gap-5 border-t border-border pt-4">
             <div>
-              <div class="text-[13px] font-medium text-text">Profile polling</div>
+              <div class="text-body font-medium text-text">Profile polling</div>
               <p class="mt-1 text-xs leading-relaxed text-text-3">
                 Disabled profiles keep their existing feed items but stop polling and running their flow.
               </p>
@@ -225,8 +225,8 @@ async function onImageChange(event: Event): Promise<void> {
         </form>
       </template>
 
-      <div v-else class="rounded-[11px] border border-severity-error/35 bg-raised p-4">
-        <div class="text-[14px] font-semibold text-text">Delete profile</div>
+      <div v-else class="rounded-xl border border-severity-error/35 bg-raised p-4">
+        <div class="text-reading font-semibold text-text">Delete profile</div>
         <p class="mt-1.5 text-xs leading-relaxed text-text-3">
           Permanently remove this profile, its flow file, inbox items, and membership claims.
         </p>

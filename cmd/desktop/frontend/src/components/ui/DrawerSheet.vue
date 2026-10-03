@@ -112,7 +112,7 @@ defineExpose({ body: bodyRef })
     />
     <aside
       ref="sheetRef"
-      class="fixed inset-y-0 right-0 z-40 flex max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-[-30px_0_60px_-20px_rgba(0,0,0,.5)] outline-none"
+      class="fixed inset-y-0 right-0 z-40 flex max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-drawer outline-none"
       :style="{ width: panelWidth ? `${panelWidth}px` : undefined }"
       role="dialog"
       :aria-label="ariaLabel ?? title"
@@ -134,7 +134,7 @@ defineExpose({ body: bodyRef })
             <BaseIconBadge
               v-if="icon"
               :size="large ? 38 : 26"
-              :rounded="large ? 'rounded-[10px]' : 'rounded-[7px]'"
+              :rounded="large ? 'rounded-xl' : 'rounded-lg'"
               :class="large ? 'bg-accent text-accent-contrast' : 'bg-chip text-text-2'"
             >
               <component :is="icon" :class="large ? 'size-[18px]' : 'size-3.5'" />
@@ -142,14 +142,14 @@ defineExpose({ body: bodyRef })
           </slot>
           <div class="min-w-0 flex-1">
             <div
-              :class="['truncate font-semibold tracking-[-.01em]', large ? 'text-[15px]' : 'text-[14px]']"
+              :class="['truncate font-semibold tracking-[-.01em]', large ? 'text-title' : 'text-reading']"
               :data-testid="part('title')"
             >
               {{ title }}
             </div>
             <div
               v-if="subtitle"
-              :class="['truncate font-mono text-text-3', large ? 'text-[12px]' : 'text-[11px]']"
+              :class="['truncate font-mono text-text-3', large ? 'text-small' : 'text-caption']"
               :data-testid="part('subtitle')"
             >
               {{ subtitle }}

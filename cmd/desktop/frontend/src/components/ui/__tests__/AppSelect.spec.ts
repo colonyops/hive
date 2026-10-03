@@ -194,13 +194,13 @@ describe('AppSelect', () => {
     }
 
     it('defaults to the form-field metrics TextField uses', () => {
-      expect(classesFor()).toEqual(expect.arrayContaining(['rounded-lg', 'px-3', 'py-2.5', 'text-[13.5px]']))
+      expect(classesFor()).toEqual(expect.arrayContaining(['rounded-lg', 'px-3', 'py-2.5', 'text-body']))
       expect(classesFor()).toEqual(classesFor('md'))
     })
 
     it('shrinks to toolbar metrics at sm', () => {
-      expect(classesFor('sm')).toEqual(expect.arrayContaining(['rounded-md', 'px-2', 'py-1.5', 'text-[11px]']))
-      expect(classesFor('sm')).not.toContain('text-[13.5px]')
+      expect(classesFor('sm')).toEqual(expect.arrayContaining(['rounded-md', 'px-2', 'py-1.5', 'text-caption']))
+      expect(classesFor('sm')).not.toContain('text-body')
     })
   })
 

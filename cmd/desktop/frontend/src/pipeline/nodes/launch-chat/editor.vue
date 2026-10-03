@@ -32,7 +32,7 @@ function set<K extends keyof Config>(key: K, value: Config[K]) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 text-[13px] leading-relaxed" data-testid="launch-chat-node-editor">
+  <div class="flex flex-col gap-4 text-body leading-relaxed" data-testid="launch-chat-node-editor">
     <p class="text-text-2">
       Each item arriving here opens a chat in an agent workspace, once per item. The prompt is the chat's first message,
       and the item's detail view links the chat.

@@ -145,7 +145,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         <AppTooltip text="Tasks">
           <button
             type="button"
-            class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text"
+            class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-chip hover:text-text"
             aria-label="Tasks"
             data-testid="terminal-statusbar-tasks"
             @click="emit('open-tasks')"
@@ -158,7 +158,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
 
     <p
       v-if="actionError"
-      class="shrink-0 border-b border-border px-3 py-1.5 text-[11.5px] text-severity-error"
+      class="shrink-0 border-b border-border px-3 py-1.5 text-caption text-severity-error"
       data-testid="terminal-action-error"
     >
       {{ actionError }}
@@ -172,7 +172,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         data-testid="terminal-output-dropped"
       >
         <IconInfo class="mt-px size-3.5 shrink-0 text-severity-warning" />
-        <p class="min-w-0 flex-1 text-[11.5px] leading-relaxed text-text-3">
+        <p class="min-w-0 flex-1 text-caption leading-relaxed text-text-3">
           Output arrived faster than this window could draw it, so some of it was dropped. These panes were repainted
           from tmux — what they show now is current, and their scrollback is tmux's, not what streamed here before the
           gap.
@@ -195,7 +195,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
         data-testid="terminal-size-constraint"
       >
         <IconInfo class="mt-px size-3.5 shrink-0 text-text-4" />
-        <p class="min-w-0 flex-1 text-[11.5px] leading-relaxed text-text-3">
+        <p class="min-w-0 flex-1 text-caption leading-relaxed text-text-3">
           tmux is drawing this window at
           <span class="font-mono text-text-2">{{ sizeConstraint.granted.cols }}×{{ sizeConstraint.granted.rows }}</span
           >, not the
@@ -250,7 +250,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
             type="text"
             placeholder="Find"
             spellcheck="false"
-            class="w-44 bg-transparent text-[11.5px] text-text outline-none placeholder:text-text-4"
+            class="w-44 bg-transparent text-caption text-text outline-none placeholder:text-text-4"
             data-testid="terminal-search-input"
             @input="visible?.setSearchQuery(($event.target as HTMLInputElement).value)"
             @keydown.enter.exact.prevent="visible?.findNext()"
@@ -258,7 +258,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
             @keydown.esc.prevent="visible?.closeSearch()"
           />
           <span
-            class="min-w-[54px] shrink-0 text-right font-mono text-[10.5px] text-text-4"
+            class="min-w-[54px] shrink-0 text-right font-mono text-micro text-text-4"
             data-testid="terminal-search-count"
             >{{ searchLabel() }}</span
           >
@@ -295,7 +295,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           <button
             v-if="activeScrolledUp && status !== 'ended'"
             type="button"
-            class="absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-[11.5px] text-text-2 shadow-lg hover:text-text"
+            class="absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-caption text-text-2 shadow-lg hover:text-text"
             data-testid="terminal-scroll-to-bottom"
             @click="visible?.scrollToBottom()"
           >
@@ -310,7 +310,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           data-testid="terminal-session-not-started"
         >
           <IconTerminal class="size-6 text-text-4" />
-          <div class="text-[13.5px] font-semibold">
+          <div class="text-body font-semibold">
             {{ chatAttached ? 'Chat not running' : scratchAttached ? 'Terminal not started' : 'Session not started' }}
           </div>
           <p v-if="chatAttached" class="max-w-[420px] text-xs leading-relaxed text-text-3">
@@ -363,7 +363,7 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-app/95 px-10 text-center"
           data-testid="terminal-session-ended"
         >
-          <div class="text-[13.5px] font-semibold">
+          <div class="text-body font-semibold">
             {{ endReason === 'disconnected' ? 'Terminal stream lost' : 'Session ended' }}
           </div>
           <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="terminal-session-ended-reason">

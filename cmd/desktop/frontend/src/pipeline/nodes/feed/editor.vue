@@ -23,7 +23,7 @@ function setDescription(value: string) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 text-[13px] leading-relaxed" data-testid="feed-node-editor">
+  <div class="flex flex-col gap-4 text-body leading-relaxed" data-testid="feed-node-editor">
     <p class="text-text-2">
       Messages arriving here upsert into this feed as unread items. The feed appears in the sidebar under
       <span class="font-medium text-text">FEEDS</span>, named after this node.

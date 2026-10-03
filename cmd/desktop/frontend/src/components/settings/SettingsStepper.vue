@@ -36,7 +36,7 @@ function nudge(delta: 1 | -1): void {
     >
       <button
         type="button"
-        class="cursor-pointer rounded-md px-2.5 py-1.5 text-[12.5px] text-text-3 transition-colors hover:text-text-2 disabled:cursor-default disabled:text-text-4/50"
+        class="cursor-pointer rounded-md px-2.5 py-1.5 text-small text-text-3 transition-colors hover:text-text-2 disabled:cursor-default disabled:text-text-4/50"
         :disabled="modelValue <= min"
         aria-label="Decrease"
         :data-testid="testid ? `${testid}-decrease` : undefined"
@@ -45,14 +45,14 @@ function nudge(delta: 1 | -1): void {
         −
       </button>
       <span
-        class="min-w-[4.5rem] text-center text-[12.5px] text-text"
+        class="min-w-[4.5rem] text-center text-small text-text"
         aria-live="polite"
         :data-testid="testid ? `${testid}-value` : undefined"
         >{{ display }}</span
       >
       <button
         type="button"
-        class="cursor-pointer rounded-md px-2.5 py-1.5 text-[12.5px] text-text-3 transition-colors hover:text-text-2 disabled:cursor-default disabled:text-text-4/50"
+        class="cursor-pointer rounded-md px-2.5 py-1.5 text-small text-text-3 transition-colors hover:text-text-2 disabled:cursor-default disabled:text-text-4/50"
         :disabled="modelValue >= max"
         aria-label="Increase"
         :data-testid="testid ? `${testid}-increase` : undefined"

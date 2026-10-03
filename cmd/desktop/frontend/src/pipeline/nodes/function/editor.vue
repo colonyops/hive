@@ -58,7 +58,7 @@ function onTimeoutInput(text: string) {
       @update:model-value="(v) => set('on_message', v)"
     />
 
-    <div class="flex flex-wrap items-center gap-2 text-[11px] text-text-3" data-testid="function-editor-recipes">
+    <div class="flex flex-wrap items-center gap-2 text-caption text-text-3" data-testid="function-editor-recipes">
       Recipes
       <button
         v-for="recipe in recipes"
@@ -73,7 +73,7 @@ function onTimeoutInput(text: string) {
     </div>
 
     <div
-      class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-text-3"
+      class="flex flex-wrap items-center gap-2 font-mono text-caption text-text-3"
       data-testid="function-editor-footer-chips"
     >
       <label class="inline-flex items-center gap-1.5 rounded-md border border-row bg-app px-2 py-1">

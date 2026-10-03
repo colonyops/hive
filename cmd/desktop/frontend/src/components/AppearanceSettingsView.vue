@@ -91,15 +91,15 @@ onMounted(loadInstalledFonts)
           @update:model-value="setAppMonoFontFamily"
         />
       </SettingsRow>
-      <!-- At the chrome's own sizes rather than a display-size specimen: 11-13px
+      <!-- At the chrome's own sizes rather than a display-size specimen: 11.5-13.5px
            on macOS antialiasing is where a face either holds up or does not. -->
       <div class="px-4 py-3.5" data-testid="settings-appearance-font-preview">
         <div class="rounded-lg border border-card bg-app px-3.5 py-3">
-          <div class="text-[13.5px] font-semibold text-text">Review requested on hive-desktop</div>
-          <p class="mt-1 text-[12px] leading-relaxed text-text-3">
+          <div class="text-body font-semibold text-text">Review requested on hive-desktop</div>
+          <p class="mt-1 text-small leading-relaxed text-text-3">
             Handgloves — the quick brown fox jumps over the lazy dog.
           </p>
-          <div class="mt-2.5 font-mono text-[11.5px] text-text-2">
+          <div class="mt-2.5 font-mono text-caption text-text-2">
             feat/user-selectable-fonts · +148 −37 · 0Il1 O0 {}[]()
           </div>
         </div>

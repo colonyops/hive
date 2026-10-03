@@ -85,12 +85,12 @@ onMounted(async () => {
         @update:model-value="launcher.icon = $event"
       />
 
-      <p class="text-[11.5px] leading-relaxed text-text-3">
+      <p class="text-caption leading-relaxed text-text-3">
         Runs through a login shell, so your PATH and aliases resolve it. Leave the working directory empty to open where
         the terminal you are looking at is, wherever its prompt has been taken — it is then offered only while a
         terminal is open. Set one to reach it from anywhere.
       </p>
-      <p class="text-[11.5px] leading-relaxed text-text-3" data-testid="launcher-shortcut">
+      <p class="text-caption leading-relaxed text-text-3" data-testid="launcher-shortcut">
         <template v-if="shortcut()"
           >Bound to <Kbd variant="boxed">{{ shortcut() }}</Kbd> — rebind it in Settings ▸ Keyboard.</template
         >

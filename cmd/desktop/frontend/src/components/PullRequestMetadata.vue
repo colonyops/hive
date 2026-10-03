@@ -107,7 +107,7 @@ const visible = computed(() => showStatus.value || showReview.value || showChang
 <template>
   <span
     v-if="metadata && visible"
-    class="inline-flex shrink-0 items-center gap-3 font-mono text-[10.5px]"
+    class="inline-flex shrink-0 items-center gap-3 font-mono text-micro"
     data-testid="pr-metadata"
   >
     <span

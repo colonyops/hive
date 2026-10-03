@@ -59,12 +59,8 @@ useEscapeToClose(cancel)
     :data-testid="testid"
   >
     <div class="min-w-0 flex-1">
-      <div class="text-[12.5px] font-semibold text-severity-error">{{ title }}</div>
-      <p
-        v-if="description"
-        class="mt-0.5 text-[11.5px] leading-snug text-text-2"
-        :data-testid="`${testid}-description`"
-      >
+      <div class="text-small font-semibold text-severity-error">{{ title }}</div>
+      <p v-if="description" class="mt-0.5 text-caption leading-snug text-text-2" :data-testid="`${testid}-description`">
         {{ description }}
       </p>
       <InlineError v-if="error" :testid="`${testid}-error`" variant="line" class="mt-1 font-medium" :message="error" />

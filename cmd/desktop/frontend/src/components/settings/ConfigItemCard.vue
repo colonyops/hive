@@ -15,16 +15,16 @@ const emit = defineEmits<{ edit: [event: MouseEvent]; delete: [] }>()
 <template>
   <BaseCard
     :padded="false"
-    class="config-item group/item relative flex-wrap items-start gap-3 rounded-[11px] border border-card bg-raised px-4 py-3.5 transition-colors hover:border-strong @[600px]/pane:flex-nowrap @[600px]/pane:items-center @[600px]/pane:gap-4 [&.dragging]:opacity-45"
+    class="config-item group/item relative flex-wrap items-start gap-3 rounded-xl border border-card bg-raised px-4 py-3.5 transition-colors hover:border-strong @[600px]/pane:flex-nowrap @[600px]/pane:items-center @[600px]/pane:gap-4 [&.dragging]:opacity-45"
   >
     <template #icon>
       <slot name="leading" />
-      <BaseIconBadge :size="38" rounded="rounded-[10px]" class="border border-accent/35 bg-accent-tint text-accent">
+      <BaseIconBadge :size="38" rounded="rounded-xl" class="border border-accent/35 bg-accent-tint text-accent">
         <component :is="icon" class="size-[17px]" />
       </BaseIconBadge>
     </template>
     <div class="min-w-0 flex-1">
-      <div class="truncate text-[15px] font-semibold tracking-[-.01em] text-text">{{ title }}</div>
+      <div class="truncate text-title font-semibold tracking-[-.01em] text-text">{{ title }}</div>
       <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
         <slot name="badges" />
       </div>
@@ -34,7 +34,7 @@ const emit = defineEmits<{ edit: [event: MouseEvent]; delete: [] }>()
         <BaseButton variant="secondary" size="xs" @click="emit('edit', $event)">Edit</BaseButton>
         <button
           type="button"
-          class="flex size-[34px] items-center justify-center rounded-[7px] border border-card text-text-3 hover:border-severity-error-border hover:text-severity-error"
+          class="flex size-[34px] items-center justify-center rounded-lg border border-card text-text-3 hover:border-severity-error-border hover:text-severity-error"
           aria-label="Delete"
           @click="emit('delete')"
         >
@@ -57,7 +57,7 @@ const emit = defineEmits<{ edit: [event: MouseEvent]; delete: [] }>()
   left: 8px;
   right: 8px;
   height: 2px;
-  border-radius: 1px;
+  border-radius: var(--radius-xs);
   background: var(--color-accent);
   opacity: 0;
   pointer-events: none;

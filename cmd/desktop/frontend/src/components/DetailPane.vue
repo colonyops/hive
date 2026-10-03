@@ -189,7 +189,7 @@ const {
             />
           </div>
         </div>
-        <h1 class="text-[17px] font-semibold leading-[1.3] tracking-[-.01em]">{{ item.title }}</h1>
+        <h1 class="text-heading font-semibold leading-[1.3] tracking-[-.01em]">{{ item.title }}</h1>
         <p class="mt-[9px] text-xs text-text-3">
           <template v-if="itemByline"
             ><span class="text-text-2">{{ itemByline }}</span> · </template
@@ -199,7 +199,7 @@ const {
         <!-- eslint-disable vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
         <div
           v-if="bodyHtml"
-          class="markdown-body hive-scroll mt-3 overflow-y-auto text-[14px] leading-[1.65] text-text-2"
+          class="markdown-body hive-scroll mt-3 overflow-y-auto text-reading leading-[1.65] text-text-2"
           :style="{ height: bodyHeight + 'px' }"
           data-testid="detail-body"
           @click="onBodyClick"
@@ -218,8 +218,8 @@ const {
              never renders an empty header for an item with zero matches. -->
         <template v-if="actions.length">
           <div class="mb-[13px] flex items-center gap-2">
-            <span class="font-mono text-[10.5px] tracking-[.12em] text-accent">ACTIONS</span>
-            <span class="font-mono text-[10.5px] text-text-4">· for {{ itemKind }}</span>
+            <span class="font-mono text-micro tracking-[.12em] text-accent">ACTIONS</span>
+            <span class="font-mono text-micro text-text-4">· for {{ itemKind }}</span>
             <span class="flex-1" />
             <button class="edit-button" @click="emit('edit')"><IconSettings class="size-3" /> Edit</button>
           </div>
@@ -238,7 +238,7 @@ const {
              none: an item that never started work should not carry a heading
              announcing that. -->
         <section v-if="(sessions ?? []).length" class="mt-6 border-t border-border pt-4" data-testid="item-sessions">
-          <h2 class="mb-3 font-mono text-[10.5px] tracking-[.12em] text-accent">SESSIONS</h2>
+          <h2 class="mb-3 font-mono text-micro tracking-[.12em] text-accent">SESSIONS</h2>
           <ul class="session-list">
             <li v-for="session in sessions ?? []" :key="session.id">
               <component
@@ -250,8 +250,8 @@ const {
                 @click="attachable(session) && emit('open-session', session.slug)"
               >
                 <span class="session-dot" :class="session.running ? 'session-dot-live' : 'session-dot-idle'" />
-                <span class="min-w-0 flex-1 truncate text-[13px] text-text">{{ session.name }}</span>
-                <span class="shrink-0 font-mono text-[10.5px] text-text-4">{{
+                <span class="min-w-0 flex-1 truncate text-body text-text">{{ session.name }}</span>
+                <span class="shrink-0 font-mono text-micro text-text-4">{{
                   session.running ? 'running' : session.state === 'active' ? 'idle' : session.state
                 }}</span>
               </component>
@@ -264,7 +264,7 @@ const {
           </ul>
         </section>
         <section v-if="(chats ?? []).length" class="mt-6 border-t border-border pt-4" data-testid="item-chats">
-          <h2 class="mb-3 font-mono text-[10.5px] tracking-[.12em] text-accent">CHATS</h2>
+          <h2 class="mb-3 font-mono text-micro tracking-[.12em] text-accent">CHATS</h2>
           <ul class="session-list">
             <li v-for="chat in chats ?? []" :key="chat.id">
               <button
@@ -274,7 +274,7 @@ const {
                 @click="emit('open-chat', chat.workspace, chat.id)"
               >
                 <span class="session-dot session-dot-idle" />
-                <span class="min-w-0 flex-1 truncate text-[13px] text-text">{{ chat.name }}</span>
+                <span class="min-w-0 flex-1 truncate text-body text-text">{{ chat.name }}</span>
               </button>
               <p class="session-meta">
                 <span class="truncate">{{ chat.workspace }}</span>
@@ -285,14 +285,14 @@ const {
           </ul>
         </section>
         <section v-if="(events ?? []).length" class="mt-6 border-t border-border pt-4" data-testid="observed-activity">
-          <h2 class="mb-3 font-mono text-[10.5px] tracking-[.12em] text-accent">ACTIVITY</h2>
+          <h2 class="mb-3 font-mono text-micro tracking-[.12em] text-accent">ACTIVITY</h2>
           <ol class="space-y-2">
             <li v-for="event in events ?? []" :key="event.id" class="text-xs text-text-3">
               <span class="text-text-2">{{ event.summary || event.kind }}</span
-              ><span v-if="event.summary && event.kind !== 'observed'" class="ml-1 font-mono text-[10px] text-text-4">{{
+              ><span v-if="event.summary && event.kind !== 'observed'" class="ml-1 font-mono text-micro text-text-4">{{
                 event.kind.replaceAll('_', ' ')
               }}</span
-              ><span class="ml-2 font-mono text-[10px]">{{ relativeAge(event.createdAt) }}</span>
+              ><span class="ml-2 font-mono text-micro">{{ relativeAge(event.createdAt) }}</span>
             </li>
           </ol>
         </section>
@@ -310,14 +310,14 @@ const {
   gap: 4px;
   cursor: pointer;
   border: 1px solid var(--color-card);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 2px 7px;
   color: var(--color-text-2);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-caption);
 }
 .edit-button {
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   padding: 3px 8px;
   font-family: var(--font-sans);
 }
@@ -334,7 +334,7 @@ const {
 .action-list {
   overflow: hidden;
   border: 1px solid var(--color-card);
-  border-radius: 9px;
+  border-radius: var(--radius-lg);
   background: var(--color-raised);
 }
 .session-list {
@@ -376,6 +376,6 @@ const {
   padding-left: 15px;
   color: var(--color-text-4);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--text-micro);
 }
 </style>

@@ -34,9 +34,9 @@ defineExpose({
     ref="input"
     :value="model"
     :type="type"
-    class="w-full rounded-lg border bg-app text-text outline-none placeholder:text-text-4 focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
+    class="w-full rounded-lg border bg-app text-body text-text outline-none placeholder:text-text-4 focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
     :class="[
-      size === 'sm' ? 'px-[11px] py-[9px] text-[13px]' : 'px-3 py-2.5 text-[13.5px]',
+      size === 'sm' ? 'px-[11px] py-[9px]' : 'px-3 py-2.5',
       invalid ? 'border-severity-error' : 'border-strong',
       { 'font-mono': monospace },
     ]"

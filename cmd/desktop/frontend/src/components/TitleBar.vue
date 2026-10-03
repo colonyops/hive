@@ -35,7 +35,7 @@ import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedCon
 //            edge. Panel toggles are the only things at the extremes, so they
 //            read as the frame; new utilities append to the icon run.
 // Every control is one of two shapes: a 28px square icon button or a 28px
-// labeled/segmented button, both 7px-radius with a `chip` hover fill. Groups
+// labeled/segmented button, both `rounded-lg` with a `chip` hover fill. Groups
 // are separated by margin, not rules — at four controls a hairline costs as
 // much attention as the control beside it.
 // Amber is reserved for things asking for attention — unread activity, an
@@ -139,7 +139,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <button
         v-if="profileName"
         type="button"
-        class="flex size-7 shrink-0 items-center justify-center rounded-[7px] text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:cursor-default disabled:opacity-30"
+        class="flex size-7 shrink-0 items-center justify-center rounded-lg text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:cursor-default disabled:opacity-30"
         style="--wails-draggable: no-drag"
         :disabled="!canToggleSidebar"
         :aria-label="sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'"
@@ -157,7 +157,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       >
         <button
           type="button"
-          class="flex size-7 items-center justify-center rounded-[7px] text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:opacity-30"
+          class="flex size-7 items-center justify-center rounded-lg text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:opacity-30"
           :disabled="!canGoBack"
           aria-label="Go back"
           data-testid="titlebar-back"
@@ -167,7 +167,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
         </button>
         <button
           type="button"
-          class="flex size-7 items-center justify-center rounded-[7px] text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:opacity-30"
+          class="flex size-7 items-center justify-center rounded-lg text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:opacity-30"
           :disabled="!canGoForward"
           aria-label="Go forward"
           data-testid="titlebar-forward"
@@ -205,7 +205,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
     <div class="flex shrink-0 items-center justify-end gap-1.5 pl-2 pr-3">
       <button
         v-if="updateAvailable"
-        class="flex shrink-0 items-center gap-1.5 rounded-md border border-severity-info-border bg-severity-info-tint px-2 py-1 text-[11.5px] font-semibold text-severity-info disabled:cursor-wait enabled:cursor-pointer enabled:hover:opacity-85"
+        class="flex shrink-0 items-center gap-1.5 rounded-md border border-severity-info-border bg-severity-info-tint px-2 py-1 text-caption font-semibold text-severity-info disabled:cursor-wait enabled:cursor-pointer enabled:hover:opacity-85"
         style="--wails-draggable: no-drag"
         data-testid="titlebar-update-chip"
         :disabled="updateInstalling"
@@ -223,7 +223,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       </button>
       <button
         v-if="errorCount && errorCount > 0"
-        class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-severity-error-border bg-severity-error-tint px-2 py-1 text-[11.5px] font-semibold text-severity-error hover:opacity-85"
+        class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-severity-error-border bg-severity-error-tint px-2 py-1 text-caption font-semibold text-severity-error hover:opacity-85"
         style="--wails-draggable: no-drag"
         data-testid="titlebar-error-chip"
         @click="emit('open-error-node')"
@@ -233,7 +233,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <div v-if="profileName && jobsActive" ref="jobsRoot" class="relative shrink-0" style="--wails-draggable: no-drag">
         <button
           type="button"
-          class="flex cursor-pointer items-center gap-1.5 rounded-md border border-accent/50 bg-accent/10 px-2 py-1 text-[11.5px] font-medium text-accent hover:border-accent"
+          class="flex cursor-pointer items-center gap-1.5 rounded-md border border-accent/50 bg-accent/10 px-2 py-1 text-caption font-medium text-accent hover:border-accent"
           data-testid="titlebar-jobs"
           aria-label="Show action jobs"
           :aria-expanded="jobsOpen"
@@ -263,7 +263,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
         @click="emit('open-palette')"
       >
         <IconSearch class="size-3.5 shrink-0" />
-        <span class="min-w-0 flex-1 truncate text-left text-[12.5px]">Search…</span>
+        <span class="min-w-0 flex-1 truncate text-left text-small">Search…</span>
         <Kbd variant="boxed" class="hidden shrink-0 min-[700px]:block">{{ isMac ? '⌘' : 'Ctrl ' }}K</Kbd>
       </button>
       <!-- Activity: a 28px icon between the palette and the frame. An amber dot
@@ -275,7 +275,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <button
         v-if="profileName"
         type="button"
-        class="relative ml-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-[7px]"
+        class="relative ml-1 flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-lg"
         :class="activityActive ? 'bg-accent-tint text-accent' : 'text-text-3 hover:bg-chip hover:text-text'"
         style="--wails-draggable: no-drag"
         data-testid="titlebar-activity"
@@ -293,7 +293,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <button
         v-if="profileName"
         type="button"
-        class="relative ml-1 flex size-7 shrink-0 items-center justify-center rounded-[7px] text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:cursor-default disabled:opacity-30"
+        class="relative ml-1 flex size-7 shrink-0 items-center justify-center rounded-lg text-text-3 enabled:cursor-pointer enabled:hover:bg-chip enabled:hover:text-text disabled:cursor-default disabled:opacity-30"
         style="--wails-draggable: no-drag"
         :disabled="!canTogglePreview"
         :aria-label="previewCollapsed ? 'Show preview' : 'Hide preview'"

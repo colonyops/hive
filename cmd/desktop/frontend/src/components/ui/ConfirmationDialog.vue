@@ -50,12 +50,12 @@ useAutofocus(confirmRef)
     @close="cancel"
   >
     <div class="flex flex-col gap-3 px-5 py-4">
-      <p class="text-[13px] leading-relaxed text-text-2">{{ description }}</p>
+      <p class="text-body leading-relaxed text-text-2">{{ description }}</p>
       <ul v-if="details.length" class="flex flex-col gap-1.5" :data-testid="`${testid}-details`">
         <li
           v-for="(detail, i) in details"
           :key="i"
-          class="flex items-start gap-2 text-[12.5px] leading-snug"
+          class="flex items-start gap-2 text-small leading-snug"
           :data-tone="detail.tone"
         >
           <IconCircleX

@@ -101,7 +101,7 @@ async function submitImport(): Promise<void> {
     description="The shared library in mcps.yaml; each switch is this workspace's own."
     testid="agent-workspace-editor-mcps"
   >
-    <div class="divide-y divide-row overflow-hidden rounded-[11px] border border-card bg-raised">
+    <div class="divide-y divide-row overflow-hidden rounded-xl border border-card bg-raised">
       <div v-for="row in rows" :key="row.id" class="flex items-start gap-3 px-4 py-3.5">
         <AppSwitch
           class="mt-0.5"
@@ -113,22 +113,22 @@ async function submitImport(): Promise<void> {
         />
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2">
-            <span class="truncate text-[13.5px] font-semibold" :class="enabled(row.id) ? 'text-text' : 'text-text-2'">{{
+            <span class="truncate text-body font-semibold" :class="enabled(row.id) ? 'text-text' : 'text-text-2'">{{
               row.title
             }}</span>
             <BaseBadge
               :tone="row.shipped ? 'neutral' : 'accent'"
               variant="pill"
-              class="shrink-0 px-2 py-0.5 text-[10.5px] font-semibold uppercase"
+              class="shrink-0 px-2 py-0.5 text-micro font-semibold uppercase"
               >{{ row.shipped ? row.stability : 'custom' }}</BaseBadge
             >
-            <span v-if="row.shadows" class="shrink-0 text-[10.5px] text-severity-warning">replaces shipped</span>
+            <span v-if="row.shadows" class="shrink-0 text-micro text-severity-warning">replaces shipped</span>
           </div>
-          <div v-if="row.command" class="mt-1 truncate font-mono text-[11.5px] text-text-4" :title="row.command">
+          <div v-if="row.command" class="mt-1 truncate font-mono text-caption text-text-4" :title="row.command">
             {{ row.command }}
           </div>
-          <div v-if="row.problem" class="mt-1 text-[11.5px] text-severity-warning">{{ row.problem }}</div>
-          <div v-if="row.missing" class="mt-1 text-[11.5px] text-severity-warning">
+          <div v-if="row.problem" class="mt-1 text-caption text-severity-warning">{{ row.problem }}</div>
+          <div v-if="row.missing" class="mt-1 text-caption text-severity-warning">
             not in the catalogue — enabled ids without an entry are skipped at launch
           </div>
         </div>

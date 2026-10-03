@@ -66,7 +66,7 @@ function set<K extends keyof Config>(key: K, value: Config[K]) {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4 text-[13px] leading-relaxed" data-testid="launch-session-node-editor">
+  <div class="flex flex-col gap-4 text-body leading-relaxed" data-testid="launch-session-node-editor">
     <p class="text-text-2">
       Each item arriving here starts a Hive coding session, once per item. The item's detail view links the session.
     </p>

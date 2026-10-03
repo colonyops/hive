@@ -37,8 +37,8 @@ withDefaults(
   </div>
 
   <div v-else class="flex items-baseline gap-2.5">
-    <h3 class="text-[10.5px] font-semibold uppercase tracking-[.12em] text-text-3">{{ title }}</h3>
+    <h3 class="text-micro font-semibold uppercase tracking-[.12em] text-text-3">{{ title }}</h3>
     <div v-if="rule" class="h-px flex-1 self-center bg-border" />
-    <p v-if="description" class="text-[11.5px] text-text-4">{{ description }}</p>
+    <p v-if="description" class="text-caption text-text-4">{{ description }}</p>
   </div>
 </template>

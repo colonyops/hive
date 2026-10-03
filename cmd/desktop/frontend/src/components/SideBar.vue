@@ -200,7 +200,7 @@ function deleteFolder(folder: FeedFolder): void {
       data-testid="sidebar-profile-header"
     >
       <div
-        class="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-.01em]"
+        class="min-w-0 flex-1 truncate text-title font-semibold tracking-[-.01em]"
         data-testid="sidebar-profile-name"
       >
         {{ profile.name }}
@@ -290,7 +290,7 @@ function deleteFolder(folder: FeedFolder): void {
             >
               <IconPencil class="size-3" />
             </button>
-            <span class="font-mono text-[11px]" :class="folderNew(node.folder) ? 'text-accent' : 'text-text-3'">{{
+            <span class="font-mono text-caption" :class="folderNew(node.folder) ? 'text-accent' : 'text-text-3'">{{
               folderNew(node.folder) || folderTotal(node.folder)
             }}</span>
           </div>
@@ -354,14 +354,14 @@ function deleteFolder(folder: FeedFolder): void {
         ><IconWorkflow class="size-3"
       /></span>
       <span class="min-w-0 flex-1">
-        <span class="block text-[12.5px] font-semibold text-text">Edit flow</span>
-        <span class="block truncate font-mono text-[11px] text-text-3">Open editor</span>
+        <span class="block text-small font-semibold text-text">Edit flow</span>
+        <span class="block truncate font-mono text-caption text-text-3">Open editor</span>
       </span>
       <BaseBadge
         v-if="flowsDirty"
         tone="accent"
         dot
-        class="shrink-0 border border-accent/35 px-1.5 py-0.5 text-[10.5px] font-semibold"
+        class="shrink-0 border border-accent/35 px-1.5 py-0.5 text-micro font-semibold"
         data-testid="undeployed-badge"
         >Un-deployed</BaseBadge
       >
@@ -398,7 +398,7 @@ function deleteFolder(folder: FeedFolder): void {
       <template #footer-start>
         <button
           type="button"
-          class="cursor-pointer text-[12.5px] text-text-3 hover:text-severity-error"
+          class="cursor-pointer text-small text-text-3 hover:text-severity-error"
           data-testid="folder-edit-delete"
           @click="confirmingFolderDelete = true"
         >
@@ -418,7 +418,7 @@ function deleteFolder(folder: FeedFolder): void {
   padding: 10px;
   border-top: 1px solid var(--color-border);
   color: var(--color-text-2);
-  font-size: 12.5px;
+  font-size: var(--text-small);
   text-align: left;
   cursor: pointer;
 }
@@ -442,7 +442,7 @@ function deleteFolder(folder: FeedFolder): void {
   width: 22px;
   height: 22px;
   border: 1px solid var(--color-card);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-app);
   color: var(--color-text-3);
 }
@@ -454,7 +454,7 @@ function deleteFolder(folder: FeedFolder): void {
   width: 18px;
   height: 18px;
   border: 1px solid var(--color-strong);
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: var(--color-app);
   color: var(--color-text-2);
 }
@@ -465,7 +465,7 @@ function deleteFolder(folder: FeedFolder): void {
   padding: 0 6px 8px;
   color: var(--color-text-4);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--text-micro);
   letter-spacing: 0.12em;
 }
 .folder-add {
@@ -479,7 +479,7 @@ function deleteFolder(folder: FeedFolder): void {
 /* An item wrapper carries the drag handle + insertion indicator; the row/header
    inside it stays visually unchanged. */
 .sb-item {
-  border-radius: 7px;
+  border-radius: var(--radius-lg);
 }
 .sb-item.indented {
   padding-left: 12px;
@@ -497,9 +497,9 @@ function deleteFolder(folder: FeedFolder): void {
   gap: 9px;
   width: 100%;
   padding: 7px 8px;
-  border-radius: 7px;
+  border-radius: var(--radius-lg);
   color: var(--color-text-2);
-  font-size: 13px;
+  font-size: var(--text-body);
   cursor: pointer;
 }
 .folder-header:hover {
@@ -533,13 +533,13 @@ function deleteFolder(folder: FeedFolder): void {
 }
 .folder-empty {
   padding: 6px 8px 6px 20px;
-  font-size: 11.5px;
+  font-size: var(--text-caption);
   color: var(--color-text-4);
   font-style: italic;
 }
 .sb-folder.drop-into {
   background: var(--color-accent-tint);
-  border-radius: 7px;
+  border-radius: var(--radius-lg);
 }
 .sb-folder.drop-before {
   box-shadow: inset 0 2px 0 0 var(--color-accent);
@@ -550,7 +550,7 @@ function deleteFolder(folder: FeedFolder): void {
 
 .sb-end {
   height: 14px;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
 }
 .sb-end.drop-end {
   box-shadow: inset 0 2px 0 0 var(--color-accent);

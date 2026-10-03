@@ -348,7 +348,7 @@ function onKeydown(e: KeyboardEvent): void {
                 <span v-if="entry.cmd.kind" class="palette-kind" data-testid="command-palette-command-kind">{{
                   entry.cmd.kind
                 }}</span>
-                <Kbd v-if="entry.cmd.hint" variant="plain" class="shrink-0 text-[11px] text-text-3">{{
+                <Kbd v-if="entry.cmd.hint" variant="plain" class="shrink-0 text-caption text-text-3">{{
                   entry.cmd.hint
                 }}</Kbd>
                 <span v-if="entry.index === selectedIndex" class="palette-enter-badge" aria-hidden="true">↵</span>
@@ -395,10 +395,10 @@ function onKeydown(e: KeyboardEvent): void {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 14px;
+  border-radius: var(--radius-2xl);
   border: 1px solid var(--color-strong);
   background: var(--color-pane);
-  box-shadow: 0 40px 90px -20px var(--color-backdrop);
+  box-shadow: var(--shadow-modal);
 }
 
 /* Scope tab strip */
@@ -421,7 +421,7 @@ function onKeydown(e: KeyboardEvent): void {
   border-bottom: 2px solid transparent;
   background: transparent;
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--text-small);
   color: var(--color-text-3);
   cursor: pointer;
 }
@@ -465,7 +465,7 @@ function onKeydown(e: KeyboardEvent): void {
   border: none;
   outline: none;
   font-family: var(--font-sans);
-  font-size: 17px;
+  font-size: var(--text-heading);
   color: var(--color-text);
   min-width: 0;
   caret-color: var(--color-accent);
@@ -486,7 +486,7 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-group-header {
   padding: 12px 6px 4px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-micro);
   font-weight: 600;
   letter-spacing: 0.12em;
   color: var(--color-text-3);
@@ -501,8 +501,8 @@ function onKeydown(e: KeyboardEvent): void {
   gap: 12px;
   width: 100%;
   padding: 9px 10px;
-  border-radius: 9px;
-  font-size: 14px;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-reading);
   color: var(--color-text-2);
   cursor: pointer;
   border: none;
@@ -527,7 +527,7 @@ function onKeydown(e: KeyboardEvent): void {
   justify-content: center;
   width: 26px;
   height: 26px;
-  border-radius: 7px;
+  border-radius: var(--radius-lg);
   background: var(--color-chip);
   color: var(--color-text-2);
   flex-shrink: 0;
@@ -566,18 +566,18 @@ function onKeydown(e: KeyboardEvent): void {
    where the hint beside it is a key. */
 .palette-kind {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--text-caption);
   color: var(--color-text-3);
 }
 
 /* Enter badge on the selected row */
 .palette-enter-badge {
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: var(--text-small);
   font-weight: 600;
   color: var(--color-accent-contrast);
   background: var(--color-accent);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 4px 9px;
   line-height: 1;
 }
@@ -592,7 +592,7 @@ function onKeydown(e: KeyboardEvent): void {
   border-top: 1px solid var(--color-row);
   background: var(--color-raised);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-caption);
   color: var(--color-text-3);
   flex-shrink: 0;
   user-select: none;

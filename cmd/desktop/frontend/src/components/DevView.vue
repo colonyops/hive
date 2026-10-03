@@ -226,8 +226,8 @@ useEscapeToClose(() => emit('close'))
   <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="dev-view">
     <ViewHeader>
       <template #title>
-        <span class="text-[13px] font-semibold text-text">Developer tools</span>
-        <span class="font-mono text-[11px] text-text-4">internal</span>
+        <span class="text-body font-semibold text-text">Developer tools</span>
+        <span class="font-mono text-caption text-text-4">internal</span>
       </template>
     </ViewHeader>
 
@@ -238,14 +238,14 @@ useEscapeToClose(() => emit('close'))
           description="What one call across the frontend↔Go boundary costs, empty and carrying a payload."
           testid="dev-latency"
         >
-          <div class="flex flex-col gap-3.5 rounded-[11px] border border-card bg-raised p-4">
+          <div class="flex flex-col gap-3.5 rounded-xl border border-card bg-raised p-4">
             <div class="flex flex-col gap-3.5 @[420px]/pane:flex-row @[420px]/pane:items-center @[420px]/pane:gap-4">
               <span
-                class="flex size-[34px] shrink-0 items-center justify-center rounded-[9px] border border-card bg-chip font-mono text-[13px] font-semibold text-accent"
+                class="flex size-[34px] shrink-0 items-center justify-center rounded-lg border border-card bg-chip font-mono text-body font-semibold text-accent"
                 >ms</span
               >
               <div class="min-w-0 flex-1">
-                <div class="text-[13.5px] font-semibold text-text">Measure the boundary</div>
+                <div class="text-body font-semibold text-text">Measure the boundary</div>
                 <div class="mt-0.5 text-xs leading-relaxed text-text-3">
                   40 calls each, issued one at a time after a warm-up, through the same bound-method plumbing every
                   service call uses.
@@ -264,7 +264,7 @@ useEscapeToClose(() => emit('close'))
 
             <div
               v-if="latency"
-              class="grid grid-cols-2 overflow-hidden rounded-[9px] border border-card bg-raised"
+              class="grid grid-cols-2 overflow-hidden rounded-lg border border-card bg-raised"
               data-testid="dev-latency-results"
             >
               <div
@@ -276,13 +276,13 @@ useEscapeToClose(() => emit('close'))
                 class="-ml-px flex flex-col gap-1.5 border-l border-border px-4 py-3"
                 :data-testid="`dev-latency-${leg.key}`"
               >
-                <div class="font-mono text-[10px] font-semibold uppercase tracking-[.12em] text-text-3">
+                <div class="font-mono text-micro font-semibold uppercase tracking-[.12em] text-text-3">
                   {{ leg.label }}
                 </div>
-                <div class="font-mono text-[16px] tabular-nums text-text">
-                  {{ leg.value.meanMs.toFixed(3) }}<span class="text-[11px] text-text-4">ms per call</span>
+                <div class="font-mono text-lead tabular-nums text-text">
+                  {{ leg.value.meanMs.toFixed(3) }}<span class="text-caption text-text-4">ms per call</span>
                 </div>
-                <div class="font-mono text-[11px] tabular-nums text-text-4">
+                <div class="font-mono text-caption tabular-nums text-text-4">
                   {{ leg.value.minMs.toFixed(3) }}–{{ leg.value.maxMs.toFixed(3) }} per batch · n={{ leg.value.calls }}
                 </div>
               </div>
@@ -291,7 +291,7 @@ useEscapeToClose(() => emit('close'))
             <!-- Not a footnote for its own sake: at 1ms granularity a per-call
                  timing is 0 or 1 and nothing else, which is what the batching
                  exists to get around. -->
-            <p v-if="latency" class="text-[11px] tabular-nums text-text-4" data-testid="dev-latency-resolution">
+            <p v-if="latency" class="text-caption tabular-nums text-text-4" data-testid="dev-latency-resolution">
               Timed in batches of 20 — this webview's clock resolves to {{ latency.resolutionMs.toFixed(3) }}ms, coarser
               than one call.
             </p>
@@ -311,7 +311,7 @@ useEscapeToClose(() => emit('close'))
               /></span>
             </template>
             <div class="@container/notify-test min-w-0 flex-1" data-testid="dev-notification-form">
-              <div class="text-[13.5px] font-semibold text-text">Test notification</div>
+              <div class="text-body font-semibold text-text">Test notification</div>
               <div class="mt-0.5 text-xs text-text-3">Send one through a delivery path and see where it lands.</div>
 
               <div
@@ -367,8 +367,8 @@ useEscapeToClose(() => emit('close'))
                       @change="channel = option.value"
                     />
                     <span>
-                      <span class="block text-[12.5px] text-text">{{ option.label }}</span>
-                      <span class="block text-[12px] text-text-3">{{ option.hint }}</span>
+                      <span class="block text-small text-text">{{ option.label }}</span>
+                      <span class="block text-small text-text-3">{{ option.hint }}</span>
                     </span>
                   </label>
                 </div>
@@ -390,7 +390,7 @@ useEscapeToClose(() => emit('close'))
                     <span>Sending in {{ remaining }}s…</span>
                     <button
                       type="button"
-                      class="cursor-pointer rounded-md border border-border px-2 py-0.5 text-[11px] font-medium text-text-2 hover:bg-chip hover:text-text"
+                      class="cursor-pointer rounded-md border border-border px-2 py-0.5 text-caption font-medium text-text-2 hover:bg-chip hover:text-text"
                       data-testid="dev-notification-cancel"
                       @click="cancelPending"
                     >

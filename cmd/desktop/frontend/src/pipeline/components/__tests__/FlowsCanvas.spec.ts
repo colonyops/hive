@@ -147,7 +147,7 @@ describe('FlowsCanvas', () => {
     // Inner card is 52px tall, 2px radius, with a 6px (w-1.5 = 0.375rem = 6px) left role cap.
     const inner = wrapper.get('[data-testid="flow-node-source"] > div')
     expect(inner.classes()).toContain('h-[52px]')
-    expect(inner.classes()).toContain('rounded-[2px]')
+    expect(inner.classes()).toContain('rounded-xs')
     // Ports render as 9×13 rounded rects.
     const outPort = wrapper.get('[data-testid="port-out-source-0"]')
     expect(outPort.attributes('style')).toContain('width: 9px')

@@ -91,7 +91,7 @@ const options = computed<AppSelectOption[]>(() => [
       />
       <p
         v-if="selection !== CUSTOM"
-        class="truncate font-mono text-[11px] text-text-4"
+        class="truncate font-mono text-caption text-text-4"
         :title="command"
         data-testid="agent-workspace-editor-command-preview"
       >
@@ -104,7 +104,7 @@ const options = computed<AppSelectOption[]>(() => [
           spellcheck="false"
           :disabled="busy"
           placeholder="claude --session-id {{ .SessionID }}"
-          class="w-full resize-y rounded-lg border bg-app px-3 py-2.5 font-mono text-[12px] leading-relaxed text-text outline-none focus:border-accent"
+          class="w-full resize-y rounded-lg border bg-app px-3 py-2.5 font-mono text-small leading-relaxed text-text outline-none focus:border-accent"
           :class="dangerous ? 'border-severity-warning' : 'border-strong'"
           data-testid="agent-workspace-editor-command-input"
         />
@@ -112,20 +112,20 @@ const options = computed<AppSelectOption[]>(() => [
           class="flex flex-col gap-1 rounded-lg border border-card px-3 py-2.5"
           data-testid="agent-workspace-editor-command-fields"
         >
-          <p class="text-[11px] leading-relaxed text-text-3">
+          <p class="text-caption leading-relaxed text-text-3">
             Hive renders this as a Go template each time a chat starts, and fills in:
           </p>
           <dl class="flex flex-col gap-1">
             <div v-for="entry in TEMPLATE_FIELDS" :key="entry.field" class="flex flex-wrap items-baseline gap-x-2">
-              <dt class="shrink-0 font-mono text-[11px] text-text-2">{{ entry.field }}</dt>
-              <dd class="min-w-0 flex-1 text-[11px] leading-relaxed text-text-4">{{ entry.means }}</dd>
+              <dt class="shrink-0 font-mono text-caption text-text-2">{{ entry.field }}</dt>
+              <dd class="min-w-0 flex-1 text-caption leading-relaxed text-text-4">{{ entry.means }}</dd>
             </div>
           </dl>
         </div>
       </template>
       <p
         v-if="dangerous"
-        class="flex items-start gap-1.5 text-[11.5px] leading-relaxed text-severity-warning"
+        class="flex items-start gap-1.5 text-caption leading-relaxed text-severity-warning"
         data-testid="agent-workspace-editor-command-danger"
       >
         <IconTriangleAlert class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />

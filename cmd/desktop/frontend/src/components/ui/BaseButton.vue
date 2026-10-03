@@ -25,9 +25,9 @@ const buttonRef = ref<HTMLButtonElement | null>(null)
 const classes = computed(() => [
   'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg transition disabled:cursor-default disabled:opacity-50',
   {
-    xs: 'px-3 py-1.5 text-[12.5px] font-medium',
-    sm: 'px-3.5 py-2 text-[13px] font-medium',
-    md: 'px-4 py-2.5 text-[13.5px] font-semibold',
+    xs: 'px-3 py-1.5 text-small font-medium',
+    sm: 'px-3.5 py-2 text-body font-medium',
+    md: 'px-4 py-2.5 text-body font-semibold',
   }[props.size],
   {
     primary: 'bg-accent text-accent-contrast hover:brightness-110',

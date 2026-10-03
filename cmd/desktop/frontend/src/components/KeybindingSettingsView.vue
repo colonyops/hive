@@ -181,7 +181,7 @@ onUnmounted(commitCapture)
           data-testid="keybinding-row"
           :data-command-id="row.id"
         >
-          <div class="min-w-0 flex-1 text-[13px] text-text">{{ row.title }}</div>
+          <div class="min-w-0 flex-1 text-body text-text">{{ row.title }}</div>
 
           <div class="flex flex-wrap items-center justify-end gap-2">
             <span
@@ -209,7 +209,7 @@ onUnmounted(commitCapture)
               </button>
             </span>
 
-            <span v-if="!row.combos.length && capturingId !== row.id" class="text-[11px] text-text-4">Blank</span>
+            <span v-if="!row.combos.length && capturingId !== row.id" class="text-caption text-text-4">Blank</span>
 
             <span
               v-if="capturingId === row.id"
@@ -270,10 +270,10 @@ onUnmounted(commitCapture)
   padding: 0 9px;
   border: 1px solid var(--color-strong);
   border-bottom-width: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-chip);
   font-family: var(--font-mono);
-  font-size: 12.5px;
+  font-size: var(--text-small);
   font-weight: 500;
   line-height: 1;
   color: var(--color-text);
@@ -290,7 +290,7 @@ onUnmounted(commitCapture)
   width: 18px;
   height: 18px;
   cursor: pointer;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   color: var(--color-text-4);
   opacity: 0.4;
   transition:
@@ -313,10 +313,10 @@ onUnmounted(commitCapture)
   padding: 2px 10px 2px 6px;
   cursor: pointer;
   border: 1px dashed var(--color-accent);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-chip);
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: var(--text-small);
   color: var(--color-text);
 }
 .capture-keycap {
@@ -330,7 +330,7 @@ onUnmounted(commitCapture)
   height: 25px;
   cursor: pointer;
   border: 1px solid var(--color-strong);
-  border-radius: 7px;
+  border-radius: var(--radius-lg);
   color: var(--color-text-2);
 }
 .icon-btn:hover {

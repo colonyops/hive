@@ -15,7 +15,7 @@ const id = useId()
 
 <template>
   <div>
-    <label v-if="label || $slots.label" :for="id" class="mb-1.5 block text-[12.5px] text-text-2">
+    <label v-if="label || $slots.label" :for="id" class="mb-1.5 block text-small text-text-2">
       <slot name="label">{{ label }}</slot>
     </label>
     <slot :id="id" />

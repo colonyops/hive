@@ -123,7 +123,7 @@ onMounted(() => {
     <SettingsSection title="System permission" description="macOS decides whether Hive may show banners at all." boxed>
       <SettingsRow label="OS notification permission" :hint="permissionHint">
         <div class="flex items-center gap-2.5">
-          <BaseBadge :tone="permissionTone" variant="pill" class="px-2.5 py-1 text-[11px] font-semibold">
+          <BaseBadge :tone="permissionTone" variant="pill" class="px-2.5 py-1 text-caption font-semibold">
             <span data-testid="notification-permission-status">{{ permissionLabel }}</span>
           </BaseBadge>
           <BaseButton

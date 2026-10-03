@@ -30,7 +30,7 @@ useAutofocus(deployRef)
     @close="emit('close')"
   >
     <div class="flex flex-col gap-3 px-5 py-4">
-      <p class="text-[13px] leading-relaxed text-text-2">
+      <p class="text-body leading-relaxed text-text-2">
         This profile's flow has un-deployed changes. Deploy them now, or discard the draft to continue without them.
       </p>
       <InlineError v-if="error" testid="unsaved-flow-error" variant="line" :message="error" />

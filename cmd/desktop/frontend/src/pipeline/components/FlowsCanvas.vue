@@ -692,7 +692,7 @@ onBeforeUnmount(() => {
         @dblclick="onNodeDblClick(node)"
       >
         <div
-          class="relative flex h-[52px] overflow-hidden rounded-[2px] bg-action-card active:cursor-grabbing"
+          class="relative flex h-[52px] overflow-hidden rounded-xs bg-action-card active:cursor-grabbing"
           :style="{ boxShadow: cardShadow(node) }"
         >
           <div class="w-1.5 shrink-0" :style="{ background: capColor(node) }" />
@@ -706,10 +706,10 @@ onBeforeUnmount(() => {
               <component :is="defFor(node)?.glyph" :class="isLogoMark(node) ? 'size-full' : 'size-3.5'" />
             </span>
             <div class="min-w-0 flex-1">
-              <div class="truncate text-[12.5px] font-semibold text-text" data-testid="flow-node-title">
+              <div class="truncate text-small font-semibold text-text" data-testid="flow-node-title">
                 {{ titleFor(node) }}
               </div>
-              <div class="truncate font-mono text-[10.5px] text-text-3">{{ node.type }}</div>
+              <div class="truncate font-mono text-micro text-text-3">{{ node.type }}</div>
             </div>
           </div>
 
@@ -749,7 +749,7 @@ onBeforeUnmount(() => {
             :style="{ background: statusDotColor(node) }"
           />
           <span
-            class="truncate font-mono text-[10.5px]"
+            class="truncate font-mono text-micro"
             :style="{ color: statusTextColor(node) }"
             data-testid="flow-node-status"
             >{{ statusText(node) }}</span
@@ -772,7 +772,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .port {
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--color-node-port);
   border: 1px solid var(--color-canvas);
 }
@@ -796,11 +796,11 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   pointer-events: none;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-micro);
   color: var(--color-accent);
   background: var(--color-pane);
   border: 1px solid var(--color-accent);
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   padding: 2px 7px;
 }
 

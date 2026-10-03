@@ -10,7 +10,7 @@ const props = withDefaults(
   }>(),
   {
     size: 38,
-    rounded: 'rounded-[7px]',
+    rounded: 'rounded-lg',
   },
 )
 

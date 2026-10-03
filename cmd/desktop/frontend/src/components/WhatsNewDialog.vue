@@ -23,7 +23,7 @@ const emit = defineEmits<{ close: [] }>()
     @close="emit('close')"
   >
     <div class="flex flex-col gap-6 px-5 py-4">
-      <p v-if="props.entries.length === 0" class="text-[13.5px] text-text-2">Hive updated to {{ props.version }}.</p>
+      <p v-if="props.entries.length === 0" class="text-body text-text-2">Hive updated to {{ props.version }}.</p>
 
       <section v-for="entry in props.entries" :key="entry.draft ? 'draft' : entry.version" class="flex flex-col gap-2">
         <!-- The version heading is suppressed for a single-release update: the
@@ -31,19 +31,19 @@ const emit = defineEmits<{ close: [] }>()
              The draft is headed either way — its notes describe work that has
              not shipped a stable release, which the title does not say. -->
         <header v-if="entry.draft || props.entries.length > 1" class="flex items-baseline gap-2.5">
-          <span class="font-mono text-[13px] font-semibold text-text">
+          <span class="font-mono text-body font-semibold text-text">
             {{ entry.draft ? 'Unreleased' : entry.version }}
           </span>
-          <span v-if="entry.date" class="text-[11px] text-text-3">{{ entry.date }}</span>
+          <span v-if="entry.date" class="text-caption text-text-3">{{ entry.date }}</span>
         </header>
-        <p v-if="entry.summary" class="text-[13.5px] leading-[1.6] text-text">{{ entry.summary }}</p>
+        <p v-if="entry.summary" class="text-body leading-[1.6] text-text">{{ entry.summary }}</p>
         <ReleaseNoteBody :body="entry.body" />
       </section>
     </div>
 
     <template #footer>
       <div class="flex flex-1 items-center justify-between">
-        <span class="text-[11.5px] text-text-3">Settings &rsaquo; About keeps every release.</span>
+        <span class="text-caption text-text-3">Settings &rsaquo; About keeps every release.</span>
         <BaseButton data-testid="whats-new-dismiss" @click="emit('close')">Got it</BaseButton>
       </div>
     </template>

@@ -99,15 +99,15 @@ onBeforeUnmount(hide)
   max-width: 280px;
   pointer-events: none;
   border: 1px solid var(--color-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--color-pane);
   padding: 4px 7px;
   color: var(--color-text-2);
-  font-size: 11px;
+  font-size: var(--text-caption);
   line-height: 1.35;
   /* pre-line so a caller can put a second line in while long text still wraps
      at max-width. */
   white-space: pre-line;
-  box-shadow: 0 10px 28px -10px rgb(0 0 0 / 0.55);
+  box-shadow: var(--shadow-popover);
 }
 </style>

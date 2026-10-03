@@ -87,7 +87,7 @@ defineExpose({ focusSearch: () => feedList.value?.focusSearch() })
     class="flex min-w-0 flex-1 flex-col items-center justify-center gap-3 px-10 text-center"
     data-testid="workspace-empty"
   >
-    <div class="text-[13.5px] font-semibold">No sources yet</div>
+    <div class="text-body font-semibold">No sources yet</div>
     <p class="max-w-[400px] text-xs leading-relaxed text-text-3">
       {{
         githubConnected

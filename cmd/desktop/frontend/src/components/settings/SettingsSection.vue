@@ -36,7 +36,7 @@ withDefaults(
     </SettingsHeading>
     <div
       v-if="boxed"
-      class="divide-y divide-row overflow-hidden rounded-[11px] border border-card bg-raised"
+      class="divide-y divide-row overflow-hidden rounded-xl border border-card bg-raised"
       :class="padded ? '[&>*]:px-4 [&>*]:py-3.5' : ''"
     >
       <slot />

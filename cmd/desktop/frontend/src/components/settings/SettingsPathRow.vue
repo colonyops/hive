@@ -55,7 +55,7 @@ const copyLabel = computed(() =>
 )
 
 const iconBtnClass =
-  'flex size-[30px] cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-hover hover:text-text'
+  'flex size-[30px] cursor-pointer items-center justify-center rounded-lg text-text-3 hover:bg-hover hover:text-text'
 </script>
 
 <template>
@@ -78,11 +78,11 @@ const iconBtnClass =
 
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-baseline gap-x-2.5 gap-y-0.5">
-          <span class="shrink-0 text-[13.5px] font-semibold text-text">{{ props.label }}</span>
+          <span class="shrink-0 text-body font-semibold text-text">{{ props.label }}</span>
           <BaseBadge
             v-if="props.overridden"
             variant="pill"
-            class="shrink-0 px-2 py-0.5 text-[10.5px] font-semibold"
+            class="shrink-0 px-2 py-0.5 text-micro font-semibold"
             :data-testid="props.testid ? `${props.testid}-overridden` : undefined"
             >{{ props.overriddenLabel }}</BaseBadge
           >
@@ -90,7 +90,7 @@ const iconBtnClass =
             v-if="!props.exists"
             tone="muted"
             variant="pill"
-            class="shrink-0 px-2 py-0.5 text-[10.5px] font-medium"
+            class="shrink-0 px-2 py-0.5 text-micro font-medium"
             >Not created yet</BaseBadge
           >
           <span
@@ -100,7 +100,7 @@ const iconBtnClass =
             >{{ props.path }}</span
           >
         </div>
-        <p v-if="props.hint" class="mt-0.5 text-[11.5px] text-text-3">{{ props.hint }}</p>
+        <p v-if="props.hint" class="mt-0.5 text-caption text-text-3">{{ props.hint }}</p>
       </div>
     </div>
 

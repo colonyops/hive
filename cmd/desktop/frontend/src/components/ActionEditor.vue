@@ -160,7 +160,7 @@ onMounted(async () => {
         @update:model-value="setType"
       />
       <div class="grid gap-1.5" data-testid="action-targets">
-        <span class="text-[12px] font-medium text-text-2">Offer on</span>
+        <span class="text-small font-medium text-text-2">Offer on</span>
         <AppCheckbox
           v-for="option in targetOptions"
           :key="option.value"
@@ -170,7 +170,7 @@ onMounted(async () => {
           :testid="`action-target-${option.value}`"
           @update:model-value="setTarget(option.value, $event)"
         />
-        <p v-if="!terminalTargetsAllowed" class="text-[11.5px] text-text-3">
+        <p v-if="!terminalTargetsAllowed" class="text-caption text-text-3">
           A launch-session action creates a new session, so it is offered on feed items only.
         </p>
       </div>
@@ -208,7 +208,7 @@ onMounted(async () => {
           label="Repository template"
           testid="action-launch-repo"
         />
-        <div v-if="launchTarget === 'workspace'" class="grid gap-1.5 text-[12px] font-medium text-text-2">
+        <div v-if="launchTarget === 'workspace'" class="grid gap-1.5 text-small font-medium text-text-2">
           <span>Agent workspace</span>
           <AppSelect
             :model-value="action.launch.workspace ?? ''"

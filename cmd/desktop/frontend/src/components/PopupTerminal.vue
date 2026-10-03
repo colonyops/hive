@@ -258,12 +258,12 @@ onBeforeUnmount(teardown)
         data-testid="popup-terminal-header"
       >
         <IconTerminal class="size-3.5 shrink-0 text-text-4" />
-        <span class="shrink-0 font-mono text-[12px] text-text">{{ title }}</span>
-        <span class="truncate font-mono text-[11px] text-text-4">{{ subtitle }}</span>
+        <span class="shrink-0 font-mono text-small text-text">{{ title }}</span>
+        <span class="truncate font-mono text-caption text-text-4">{{ subtitle }}</span>
         <div class="ml-auto flex shrink-0 items-center gap-1">
           <button
             v-if="status === 'live'"
-            class="cursor-pointer rounded-[5px] p-1 text-text-4 hover:bg-chip hover:text-severity-error"
+            class="cursor-pointer rounded-md p-1 text-text-4 hover:bg-chip hover:text-severity-error"
             title="End this terminal"
             aria-label="End this terminal"
             data-testid="popup-terminal-end"
@@ -272,7 +272,7 @@ onBeforeUnmount(teardown)
             <IconPower class="size-3.5" />
           </button>
           <button
-            class="cursor-pointer rounded-[5px] p-1 text-text-4 hover:bg-chip hover:text-text"
+            class="cursor-pointer rounded-md p-1 text-text-4 hover:bg-chip hover:text-text"
             title="Hide — the shell keeps running"
             aria-label="Hide the terminal"
             data-testid="popup-terminal-hide"
@@ -316,7 +316,7 @@ onBeforeUnmount(teardown)
               :message="error"
             />
             <button
-              class="cursor-pointer rounded-[7px] bg-chip px-2.5 py-1 font-mono text-[11.5px] text-text hover:bg-strong"
+              class="cursor-pointer rounded-lg bg-chip px-2.5 py-1 font-mono text-caption text-text hover:bg-strong"
               data-testid="popup-terminal-new"
               @click="openTerminal"
             >
@@ -332,9 +332,9 @@ onBeforeUnmount(teardown)
           class="absolute inset-x-0 bottom-0 flex items-center gap-3 border-t border-row bg-raised px-3 py-2"
           data-testid="popup-terminal-ended"
         >
-          <span class="truncate font-mono text-[11px] text-text-4">{{ endedReason }}</span>
+          <span class="truncate font-mono text-caption text-text-4">{{ endedReason }}</span>
           <button
-            class="ml-auto shrink-0 cursor-pointer rounded-[5px] bg-chip px-2 py-0.5 font-mono text-[11.5px] text-text hover:bg-strong"
+            class="ml-auto shrink-0 cursor-pointer rounded-md bg-chip px-2 py-0.5 font-mono text-caption text-text hover:bg-strong"
             data-testid="popup-terminal-new"
             @click="openTerminal"
           >

@@ -97,7 +97,7 @@ async function copyLink(): Promise<void> {
   <!-- The branch is the only item allowed to shrink, so a narrow pane truncates
        the branch name and everything else stays whole. It carries no tooltip,
        so a name cut this way cannot be read back. -->
-  <div v-if="git" class="flex min-w-0 items-center text-[11px]" data-testid="session-status-chips">
+  <div v-if="git" class="flex min-w-0 items-center text-caption" data-testid="session-status-chips">
     <div v-if="showGitGroup" class="flex min-w-0 items-center gap-1">
       <span
         v-if="showBranch"
@@ -156,12 +156,12 @@ async function copyLink(): Promise<void> {
         <span v-if="showGitGroup" class="mx-2 h-3.5 w-px shrink-0 bg-border" aria-hidden="true" />
 
         <div class="flex shrink-0 items-center gap-1">
-          <!-- h-6/rounded-[7px] is PaneStatusBar's button metric; these share a
+          <!-- h-6/rounded-lg is PaneStatusBar's button metric; these share a
              row with its editor and Finder buttons. -->
           <button
             v-if="pr"
             type="button"
-            class="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-[7px] px-1.5 hover:bg-chip"
+            class="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-1.5 hover:bg-chip"
             :class="prTone"
             data-testid="session-status-pr"
             @click="openPullRequest"
@@ -174,7 +174,7 @@ async function copyLink(): Promise<void> {
           <AppTooltip v-if="pr" :text="copied ? 'Copied' : 'Copy link to this pull request'">
             <button
               type="button"
-              class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[7px] text-text-4 hover:bg-chip hover:text-text"
+              class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-lg text-text-4 hover:bg-chip hover:text-text"
               :class="{ 'text-severity-success': copied }"
               aria-label="Copy link to this pull request"
               data-testid="session-status-copy"
@@ -190,7 +190,7 @@ async function copyLink(): Promise<void> {
           <AppTooltip v-else-if="pullRequestError" :text="`${pullRequestError} — click to retry`">
             <button
               type="button"
-              class="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-[7px] px-1.5 text-severity-error hover:bg-chip"
+              class="flex h-6 shrink-0 cursor-pointer items-center gap-1 rounded-lg px-1.5 text-severity-error hover:bg-chip"
               data-testid="session-status-pr-error"
               @click="emit('refresh-pull-request')"
             >

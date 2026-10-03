@@ -53,7 +53,7 @@ function onKeydown(e: KeyboardEvent, id: string): void {
       :data-enabled="profile.enabled"
       data-testid="profile-tile"
       draggable="true"
-      class="relative flex size-[38px] cursor-pointer items-center justify-center rounded-[10px] border border-card bg-chip font-mono text-sm font-semibold text-text-2 transition-colors hover:bg-hover hover:text-text"
+      class="relative flex size-[38px] cursor-pointer items-center justify-center rounded-xl border border-card bg-chip font-mono text-sm font-semibold text-text-2 transition-colors hover:bg-hover hover:text-text"
       :class="[
         dropClass(dropTarget, profile.id),
         {
@@ -78,7 +78,7 @@ function onKeydown(e: KeyboardEvent, id: string): void {
         :src="profile.image"
         alt=""
         draggable="false"
-        class="size-full rounded-[9px] object-cover"
+        class="size-full rounded-lg object-cover"
       />
       <template v-else>{{ profile.letter }}</template>
       <span
@@ -89,7 +89,7 @@ function onKeydown(e: KeyboardEvent, id: string): void {
       /></span>
     </button>
     <button
-      class="flex size-[38px] cursor-pointer items-center justify-center rounded-[10px] border border-dashed border-card text-text-4 hover:border-strong hover:text-text-2"
+      class="flex size-[38px] cursor-pointer items-center justify-center rounded-xl border border-dashed border-card text-text-4 hover:border-strong hover:text-text-2"
       aria-label="Add profile"
       data-testid="profile-add"
       @click="emit('add')"
@@ -99,7 +99,7 @@ function onKeydown(e: KeyboardEvent, id: string): void {
     <div class="flex-1" />
     <button
       type="button"
-      class="flex size-[38px] cursor-pointer items-center justify-center rounded-[10px] text-text-3 hover:bg-hover hover:text-text"
+      class="flex size-[38px] cursor-pointer items-center justify-center rounded-xl text-text-3 hover:bg-hover hover:text-text"
       title="Application settings"
       aria-label="Application settings"
       data-testid="application-settings"

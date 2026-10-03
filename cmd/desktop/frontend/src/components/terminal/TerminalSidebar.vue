@@ -247,10 +247,10 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
       data-testid="terminal-sessions-running-note"
     >
       <IconListFilter class="size-3 shrink-0 text-accent" />
-      <span class="min-w-0 flex-1 truncate text-[11.5px] text-text-2">{{ view.runningNote }}</span>
+      <span class="min-w-0 flex-1 truncate text-caption text-text-2">{{ view.runningNote }}</span>
       <button
         type="button"
-        class="shrink-0 cursor-pointer text-[11.5px] text-text-3 hover:text-text"
+        class="shrink-0 cursor-pointer text-caption text-text-3 hover:text-text"
         data-testid="terminal-sessions-running-clear"
         @click="view.runningOnly = false"
       >
@@ -288,10 +288,10 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
             @keydown.enter.self.prevent="view.expansion.toggle(group)"
             @keydown.space.self.prevent="view.expansion.toggle(group)"
           >
-            <span class="min-w-0 truncate text-[13.5px] text-text">{{ group.name }}</span>
+            <span class="min-w-0 truncate text-body text-text">{{ group.name }}</span>
             <div class="group-trailing" @click.stop>
               <span
-                class="group-count font-mono text-[11.5px]"
+                class="group-count font-mono text-caption"
                 :class="tree.groupAttached(group) ? 'text-accent' : 'text-text-4'"
                 >{{ group.sessions.length }}</span
               >
@@ -331,7 +331,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
               @keydown.space.self.prevent="view.expansion.toggle(group)"
               @contextmenu.prevent="menus.toggleRow(row, $event)"
             >
-              <span class="min-w-0 truncate text-[13.5px] text-text">{{ group.name }}</span>
+              <span class="min-w-0 truncate text-body text-text">{{ group.name }}</span>
               <component
                 :is="view.expansion.expanded(group) ? IconChevronDown : IconChevronRight"
                 class="ml-auto size-3 shrink-0 text-text-4"
@@ -406,7 +406,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     @keydown.space.self.prevent="nav.enterSession(row)"
                     @contextmenu.prevent="menus.toggleRow(row, $event)"
                   >
-                    <span class="min-w-0 flex-1 truncate text-[13.5px]" :class="{ 'text-text-3': tree.rowIdle(row) }">{{
+                    <span class="min-w-0 flex-1 truncate text-body" :class="{ 'text-text-3': tree.rowIdle(row) }">{{
                       row.name
                     }}</span>
                     <!-- AppMenu anchors to the positioned row so its panel spans it; the grid
@@ -535,7 +535,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                             <input
                               v-if="rename.windowId === win.windowId"
                               v-model="rename.draft"
-                              class="min-w-0 flex-1 bg-transparent font-mono text-[12.5px] text-text outline-none"
+                              class="min-w-0 flex-1 bg-transparent font-mono text-small text-text outline-none"
                               data-testid="terminal-rename-input"
                               autocapitalize="off"
                               autocorrect="off"
@@ -547,7 +547,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                               @keydown.esc="rename.windowId = ''"
                               @blur="rename.commit"
                             />
-                            <span v-else class="min-w-0 flex-1 truncate font-mono text-[12.5px]">{{ win.name }}</span>
+                            <span v-else class="min-w-0 flex-1 truncate font-mono text-small">{{ win.name }}</span>
                             <div class="window-trailing" data-testid="terminal-window-trailing" @click.stop>
                               <button
                                 v-if="win.live"
@@ -618,7 +618,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                         @keydown.enter.self.prevent="nav.enterSession(row)"
                         @keydown.space.self.prevent="nav.enterSession(row)"
                       >
-                        <span class="min-w-0 flex-1 truncate font-mono text-[12.5px]">Start a terminal</span>
+                        <span class="min-w-0 flex-1 truncate font-mono text-small">Start a terminal</span>
                       </div>
                     </div>
                   </Transition>
@@ -670,7 +670,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
   padding: 8px 12px;
   border-top: 1px solid var(--color-border);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-caption);
   color: var(--color-text-4);
   user-select: none;
 }
@@ -876,7 +876,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   color: var(--color-text-4);
   cursor: pointer;
   opacity: 0;
