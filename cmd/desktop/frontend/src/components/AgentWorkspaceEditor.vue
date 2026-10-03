@@ -11,21 +11,15 @@
 // is the workspace's whole management surface, so its sidebar row needs no
 // menu. Delete follows the sidebar folder dialog's shape: a quiet footer action
 // that expands into an InlineConfirm over a dimmed, inert form.
-import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
-import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconExternalLink from '~icons/lucide/external-link'
 import IconFolderCog from '~icons/lucide/folder-cog'
 import IconFolderOpen from '~icons/lucide/folder-open'
-import IconPencil from '~icons/lucide/pencil'
 import IconPlay from '~icons/lucide/play'
 import IconPlus from '~icons/lucide/plus'
-import IconTrash2 from '~icons/lucide/trash-2'
-import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
-import { agentIcon } from '../lib/agentIcon'
-import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import AppSwitch from './ui/AppSwitch.vue'
 import BaseBadge from './ui/BaseBadge.vue'
 import BaseButton from './ui/BaseButton.vue'
@@ -35,7 +29,10 @@ import FormField from './ui/FormField.vue'
 import TextInput from './ui/TextInput.vue'
 import InlineError from './ui/InlineError.vue'
 import SettingsSection from './settings/SettingsSection.vue'
-import { CodeField, SelectField, TextField, TextareaField, type SelectOption } from '../pipeline/fields'
+import CommandField from './workspace/CommandField.vue'
+import McpServerList from './workspace/McpServerList.vue'
+import SkillPackageList from './workspace/SkillPackageList.vue'
+import { SelectField, TextField, TextareaField, type SelectOption } from '../pipeline/fields'
 import { useAgentSchedules } from '../composables/useAgentSchedules'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { timeLabel } from '../lib/activityPresentation'
@@ -56,7 +53,6 @@ import type {
   AgentScheduleRun,
   AgentWorkspace,
   ScheduleEdit,
-  SkillPackageMember,
   WorkspaceEditRequest,
 } from '../lib/agentWorkspacesClient'
 import { seedRef } from '../lib/seedRef'
@@ -74,23 +70,7 @@ const emit = defineEmits<{
   delete: [dir: string]
 }>()
 
-const {
-  root,
-  editor,
-  mcpCatalogue,
-  skillPackages,
-  skillNames,
-  skillPackagesProblem,
-  presets,
-  reloadMCPCatalogue,
-  importMCPServers,
-  removeMCPServer,
-  reloadSkillPackages,
-  revealSkillPackages,
-  revealSharedSkills,
-  openWorkspaceInEditor,
-  revealWorkspace,
-} = useAgentWorkspaces()
+const { root, editor, presets, openWorkspaceInEditor, revealWorkspace } = useAgentWorkspaces()
 
 const creating = computed(() => !props.workspace)
 
@@ -112,81 +92,9 @@ const command = seedRef(() => props.workspace?.command ?? '')
 const selectedMCPs = seedRef<string[]>(() => props.workspace?.mcps ?? [])
 const selectedSkills = seedRef<string[]>(() => props.workspace?.skills ?? [])
 
-const CUSTOM = '__custom__'
-
-// Without this the derived selection below snaps back to a suggestion the
-// moment the typed command matches one again.
-const editingCommand = ref(false)
-
-const selection = computed<string>({
-  get: () => (editingCommand.value ? CUSTOM : (presets.value.find((p) => p.command === command.value)?.id ?? CUSTOM)),
-  set(id) {
-    if (id === CUSTOM) {
-      editingCommand.value = true
-      return
-    }
-    const preset = presets.value.find((p) => p.id === id)
-    if (!preset) return
-    command.value = preset.command
-    editingCommand.value = false
-  },
-})
-
-// A hive-seeded preset's label is its profile key, which is already the agent
-// when the profile just runs that CLI.
-const presetOptions = computed<AppSelectOption[]>(() => [
-  ...presets.value.map((preset) => ({
-    value: preset.id,
-    label: preset.label === preset.agent ? preset.agent : `${preset.agent} · ${preset.label}`,
-    hint: preset.command,
-    icon: agentIcon(preset.agent),
-  })),
-  { value: CUSTOM, label: 'Custom', hint: 'Write the invocation yourself', icon: markRaw(IconPencil) },
-])
-
-// A watch, not an initializer: presets arrive with the area's overview, which
-// can land after this sheet is mounted.
-watch(
-  presets,
-  (rows) => {
-    if (!creating.value || command.value || !rows.length) return
-    command.value = rows[0].command
-    // A default the form fills in for itself is not an edit the user has to be
-    // asked about on the way out.
-    baseline.value = formState()
-  },
-  { immediate: true },
-)
-
-// DANGEROUS_FLAGS mirrors agentws's own list. It is duplicated rather than
-// served because it only drives a warning: a flag missing here shows no
-// banner, which is the same "not recognized" the Go side means, and the
-// manifest's own danger flag still labels the saved row.
-const DANGEROUS_FLAGS = [
-  '--dangerously-skip-permissions',
-  '--dangerously-bypass-approvals-and-sandbox',
-  '--yolo',
-  '--full-auto',
-]
-const commandIsDangerous = computed(() => DANGEROUS_FLAGS.some((flag) => command.value.includes(flag)))
-
-// Kept in step with agentws.LaunchData.
-const TEMPLATE_FIELDS = [
-  { field: '{{ .Dir }}', means: 'the workspace directory on disk' },
-  { field: '{{ .MCPConfig }}', means: 'the MCP config Hive generates for this workspace' },
-  { field: '{{ .SessionID }}', means: 'the id Hive minted for this chat' },
-  { field: '{{ .Resume }}', means: 'true when reopening a chat, false on a new one' },
-  {
-    field: '{{ .Prompt }}',
-    means: 'an optional opening message for a schedule or prompted launch; pass it through shq',
-  },
-  { field: 'shq', means: 'quotes a value for the shell — pipe every path through it' },
-]
-
 // The settings pages' vocabulary: SettingsSection's boxed card, drawn here so
 // a list can end in its own action row; the quiet icon button a row carries;
-// and the accent row a card ends with, which the card's hairlines separate
-// from the list above it.
+// and the accent row a card ends with.
 const listCardClass = 'divide-y divide-row overflow-hidden rounded-[11px] border border-card bg-raised'
 const iconButtonClass =
   'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text disabled:cursor-not-allowed disabled:opacity-40'
@@ -194,156 +102,6 @@ const footerButtonClass =
   'flex w-full cursor-pointer items-center gap-2 px-4 py-3 text-left text-[13px] font-medium text-accent hover:bg-chip disabled:cursor-not-allowed disabled:opacity-50'
 
 const confirming = ref(false)
-
-// ── MCP rows ─────────────────────────────────────────────────────────────────
-// The catalogue's rows plus any declared id the catalogue no longer resolves,
-// so a hand-authored entry that went missing is visible and removable rather
-// than silently kept.
-interface MCPRow {
-  id: string
-  title: string
-  command: string
-  problem: string
-  shipped: boolean
-  stability: string
-  shadows: string
-  missing: boolean
-}
-
-const mcpRows = computed<MCPRow[]>(() => {
-  const rows: MCPRow[] = mcpCatalogue.value.map((e) => ({
-    id: e.id,
-    title: e.title || e.id,
-    command: e.command,
-    problem: e.problem,
-    shipped: e.shipped,
-    stability: e.stability,
-    shadows: e.shadows,
-    missing: false,
-  }))
-  const known = new Set(rows.map((r) => r.id))
-  for (const id of selectedMCPs.value) {
-    if (!known.has(id))
-      rows.push({ id, title: id, command: '', problem: '', shipped: false, stability: '', shadows: '', missing: true })
-  }
-  return rows
-})
-
-function mcpEnabled(id: string): boolean {
-  return selectedMCPs.value.includes(id)
-}
-
-function toggleMCP(id: string): void {
-  selectedMCPs.value = mcpEnabled(id) ? selectedMCPs.value.filter((x) => x !== id) : [...selectedMCPs.value, id]
-}
-
-const mcpError = ref('')
-
-async function removeServer(id: string): Promise<void> {
-  mcpError.value = ''
-  try {
-    await removeMCPServer(id)
-    selectedMCPs.value = selectedMCPs.value.filter((x) => x !== id)
-  } catch (failure) {
-    mcpError.value = failure instanceof Error ? failure.message : 'The server could not be removed.'
-  }
-}
-
-// ── Skill package rows ───────────────────────────────────────────────────────
-// A workspace enables packages, not skills: skills.yml defines each package as
-// glob patterns, and the rows show what those patterns select right now. An
-// enabled name skills.yml no longer defines still rows, so it can be switched
-// off rather than silently selecting nothing.
-interface SkillPackageRow {
-  name: string
-  title: string
-  description: string
-  members: SkillPackageMember[]
-  missing: boolean
-  /** Why the name does not resolve, when it does not. */
-  warning: string
-}
-
-const skillRows = computed<SkillPackageRow[]>(() => {
-  const rows: SkillPackageRow[] = skillPackages.value.map((pkg) => ({
-    name: pkg.name,
-    title: pkg.title || pkg.name,
-    description: pkg.description,
-    members: pkg.members,
-    missing: false,
-    warning: '',
-  }))
-  const known = new Set(rows.map((r) => r.name))
-  const bySlug = new Map(skillNames.value.map((skill) => [skill.slug, skill]))
-  for (const name of selectedSkills.value) {
-    if (known.has(name)) continue
-    rows.push({
-      name,
-      title: name,
-      description: '',
-      members: [],
-      missing: true,
-      warning: missingSkillWarning(name, bySlug.get(name)?.selectedBy),
-    })
-  }
-  return rows
-})
-
-// A name skills.yml does not define is a package that never existed *or* a
-// skill slug from a manifest written before packages were the enablement unit
-// (hay-kot/hive-desktop#307). Only the second has a fix on screen, and saying "not defined in
-// skills.yml" for both hides it.
-function missingSkillWarning(name: string, selectedBy: string[] | undefined): string {
-  if (!selectedBy) return 'not defined in skills.yml — an enabled package without a definition brings nothing'
-  if (!selectedBy.length) return 'a skill, not a package — no package selects it yet, so define one in skills.yml'
-  const packages = selectedBy.map((pkg) => `"${pkg}"`).join(' or ')
-  return `a skill, not a package — the ${packages} package selects it, so enable that and switch this off`
-}
-
-function skillEnabled(name: string): boolean {
-  return selectedSkills.value.includes(name)
-}
-
-function toggleSkill(name: string): void {
-  selectedSkills.value = skillEnabled(name)
-    ? selectedSkills.value.filter((x) => x !== name)
-    : [...selectedSkills.value, name]
-}
-
-// A package's members are worth seeing before enabling it — it is the whole
-// authority the package grants — but not worth the height by default, so the
-// list expands on demand.
-const expandedSkillPackages = ref<string[]>([])
-
-function skillPackageExpanded(name: string): boolean {
-  return expandedSkillPackages.value.includes(name)
-}
-
-function toggleSkillPackageExpanded(name: string): void {
-  expandedSkillPackages.value = skillPackageExpanded(name)
-    ? expandedSkillPackages.value.filter((x) => x !== name)
-    : [...expandedSkillPackages.value, name]
-}
-
-const skillError = ref('')
-
-async function openSkillPackages(): Promise<void> {
-  skillError.value = ''
-  try {
-    await revealSkillPackages()
-  } catch (failure) {
-    skillError.value = failure instanceof Error ? failure.message : 'skills.yml could not be opened.'
-  }
-}
-
-async function openSharedSkills(): Promise<void> {
-  skillError.value = ''
-  try {
-    await revealSharedSkills()
-  } catch (failure) {
-    skillError.value = failure instanceof Error ? failure.message : 'The skills folder could not be opened.'
-  }
-}
 
 // ── Schedules ────────────────────────────────────────────────────────────────
 // A schedule is a manifest key like the lists above, so it is edited here and
@@ -456,6 +214,20 @@ function formState(): string {
 
 const baseline = ref(formState())
 const dirty = computed(() => formState() !== baseline.value)
+
+// A watch, not an initializer: presets arrive with the area's overview, which
+// can land after this sheet is mounted.
+watch(
+  presets,
+  (rows) => {
+    if (!creating.value || command.value || !rows.length) return
+    command.value = rows[0].command
+    // A default the form fills in for itself is not an edit the user has to be
+    // asked about on the way out.
+    baseline.value = formState()
+  },
+  { immediate: true },
+)
 
 const REPEAT_OPTIONS: SelectOption[] = [
   { value: 'hourly', label: 'Hourly' },
@@ -900,39 +672,6 @@ function scheduleEdits(): ScheduleEdit[] {
   }))
 }
 
-// ── Paste-in JSON import ─────────────────────────────────────────────────────
-const importOpen = ref(false)
-const importText = ref('')
-const importBusy = ref(false)
-const importPlaceholder = '{"mcpServers": {"my-server": {"command": "npx", "args": ["-y", "…"]}}}'
-
-function formatImportJSON(): void {
-  mcpError.value = ''
-  try {
-    importText.value = JSON.stringify(JSON.parse(importText.value), null, 2)
-  } catch (failure) {
-    mcpError.value = failure instanceof Error ? `Not valid JSON: ${failure.message}` : 'Not valid JSON.'
-  }
-}
-
-async function submitImport(): Promise<void> {
-  if (!importText.value.trim() || importBusy.value) return
-  importBusy.value = true
-  mcpError.value = ''
-  try {
-    const added = await importMCPServers(importText.value)
-    for (const id of added) {
-      if (!mcpEnabled(id)) selectedMCPs.value = [...selectedMCPs.value, id]
-    }
-    importText.value = ''
-    importOpen.value = false
-  } catch (failure) {
-    mcpError.value = failure instanceof Error ? failure.message : 'The pasted configuration could not be imported.'
-  } finally {
-    importBusy.value = false
-  }
-}
-
 // ── Open the directory outside the app ───────────────────────────────────────
 const actionError = ref('')
 
@@ -995,8 +734,6 @@ function closeSheet(): void {
 const nameInput = ref<{ focus: () => void } | null>(null)
 const dirInput = ref<{ focus: () => void } | null>(null)
 onMounted(async () => {
-  void reloadMCPCatalogue()
-  void reloadSkillPackages()
   await nextTick()
   ;(creating.value ? dirInput.value : nameInput.value)?.focus()
 })
@@ -1298,271 +1035,9 @@ onMounted(async () => {
         />
       </div>
 
-      <SettingsSection
-        title="Command"
-        description="What a chat in this workspace launches. A suggestion fills the field; Custom edits the template itself."
-        testid="agent-workspace-editor-command"
-      >
-        <div class="flex flex-col gap-1.5">
-          <AppSelect
-            v-model="selection"
-            :options="presetOptions"
-            searchable
-            search-placeholder="Search commands…"
-            aria-label="Command"
-            testid="agent-workspace-editor-command-preset"
-            :disabled="busy"
-          />
-          <p
-            v-if="selection !== CUSTOM"
-            class="truncate font-mono text-[11px] text-text-4"
-            :title="command"
-            data-testid="agent-workspace-editor-command-preview"
-          >
-            {{ command }}
-          </p>
-          <template v-else>
-            <textarea
-              v-model="command"
-              rows="4"
-              spellcheck="false"
-              :disabled="busy"
-              placeholder="claude --session-id {{ .SessionID }}"
-              class="w-full resize-y rounded-lg border bg-app px-3 py-2.5 font-mono text-[12px] leading-relaxed text-text outline-none focus:border-accent"
-              :class="commandIsDangerous ? 'border-severity-warning' : 'border-strong'"
-              data-testid="agent-workspace-editor-command-input"
-            />
-            <div
-              class="flex flex-col gap-1 rounded-lg border border-card px-3 py-2.5"
-              data-testid="agent-workspace-editor-command-fields"
-            >
-              <p class="text-[11px] leading-relaxed text-text-3">
-                Hive renders this as a Go template each time a chat starts, and fills in:
-              </p>
-              <dl class="flex flex-col gap-1">
-                <div v-for="entry in TEMPLATE_FIELDS" :key="entry.field" class="flex flex-wrap items-baseline gap-x-2">
-                  <dt class="shrink-0 font-mono text-[11px] text-text-2">{{ entry.field }}</dt>
-                  <dd class="min-w-0 flex-1 text-[11px] leading-relaxed text-text-4">{{ entry.means }}</dd>
-                </div>
-              </dl>
-            </div>
-          </template>
-          <p
-            v-if="commandIsDangerous"
-            class="flex items-start gap-1.5 text-[11.5px] leading-relaxed text-severity-warning"
-            data-testid="agent-workspace-editor-command-danger"
-          >
-            <IconTriangleAlert class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
-            <span
-              >This command bypasses the agent's permission prompts. Unattended, it can take any action your user
-              account can, including through every enabled MCP server.</span
-            >
-          </p>
-        </div>
-      </SettingsSection>
-
-      <SettingsSection
-        title="MCP servers"
-        description="The shared library in mcps.yaml; each switch is this workspace's own."
-        testid="agent-workspace-editor-mcps"
-      >
-        <div :class="listCardClass">
-          <div v-for="row in mcpRows" :key="row.id" class="flex items-start gap-3 px-4 py-3.5">
-            <AppSwitch
-              class="mt-0.5"
-              :model-value="mcpEnabled(row.id)"
-              :aria-label="`Enable ${row.title}`"
-              :disabled="busy"
-              :testid="`agent-workspace-editor-mcp-${row.id}`"
-              @update:model-value="toggleMCP(row.id)"
-            />
-            <div class="min-w-0 flex-1">
-              <div class="flex items-center gap-2">
-                <span
-                  class="truncate text-[13.5px] font-semibold"
-                  :class="mcpEnabled(row.id) ? 'text-text' : 'text-text-2'"
-                  >{{ row.title }}</span
-                >
-                <BaseBadge
-                  :tone="row.shipped ? 'neutral' : 'accent'"
-                  variant="pill"
-                  class="shrink-0 px-2 py-0.5 text-[10.5px] font-semibold uppercase"
-                  >{{ row.shipped ? row.stability : 'custom' }}</BaseBadge
-                >
-                <span v-if="row.shadows" class="shrink-0 text-[10.5px] text-severity-warning">replaces shipped</span>
-              </div>
-              <div v-if="row.command" class="mt-1 truncate font-mono text-[11.5px] text-text-4" :title="row.command">
-                {{ row.command }}
-              </div>
-              <div v-if="row.problem" class="mt-1 text-[11.5px] text-severity-warning">{{ row.problem }}</div>
-              <div v-if="row.missing" class="mt-1 text-[11.5px] text-severity-warning">
-                not in the catalogue — enabled ids without an entry are skipped at launch
-              </div>
-            </div>
-            <button
-              v-if="!row.shipped && !row.missing"
-              type="button"
-              :class="[iconButtonClass, 'hover:text-severity-error']"
-              :title="`Remove ${row.title} from mcps.yaml (every workspace loses it)`"
-              :aria-label="`Remove ${row.title}`"
-              :disabled="busy"
-              :data-testid="`agent-workspace-editor-mcp-remove-${row.id}`"
-              @click="removeServer(row.id)"
-            >
-              <IconTrash2 class="size-[15px]" />
-            </button>
-          </div>
-          <EmptyState
-            v-if="!mcpRows.length"
-            variant="inline"
-            class="px-4 py-3.5"
-            message="No servers in mcps.yaml yet."
-          />
-          <div v-if="importOpen" class="flex flex-col gap-2 px-4 py-3.5">
-            <CodeField
-              v-model="importText"
-              :rows="8"
-              :placeholder="importPlaceholder"
-              testid="agent-workspace-editor-mcp-import-text"
-            />
-            <div class="flex items-center gap-2">
-              <BaseButton
-                size="sm"
-                :busy="importBusy"
-                :disabled="!importText.trim()"
-                data-testid="agent-workspace-editor-mcp-import-submit"
-                @click="submitImport"
-                >Add servers</BaseButton
-              >
-              <BaseButton
-                variant="secondary"
-                size="sm"
-                :disabled="importBusy || !importText.trim()"
-                data-testid="agent-workspace-editor-mcp-import-format"
-                @click="formatImportJSON"
-                >Format JSON</BaseButton
-              >
-              <BaseButton variant="secondary" size="sm" :disabled="importBusy" @click="importOpen = false"
-                >Cancel</BaseButton
-              >
-            </div>
-            <span class="text-xs text-text-4"
-              >Pasted servers land in mcps.yaml — the library every workspace picks from — and switch on here.</span
-            >
-          </div>
-          <button
-            v-else
-            type="button"
-            :class="footerButtonClass"
-            :disabled="busy"
-            data-testid="agent-workspace-editor-mcp-import"
-            @click="importOpen = true"
-          >
-            <IconPlus class="size-3.5" />Add servers from JSON…
-          </button>
-        </div>
-        <InlineError v-if="mcpError" testid="agent-workspace-editor-mcp-error" variant="line" :message="mcpError" />
-      </SettingsSection>
-
-      <SettingsSection
-        title="Skill packages"
-        description="A package is glob patterns over skill names in skills.yml. Names come from the skills Hive ships and the SKILL.md files under .shared/skills."
-        testid="agent-workspace-editor-skills"
-      >
-        <div :class="listCardClass">
-          <div v-for="row in skillRows" :key="row.name">
-            <div class="flex items-start gap-3 px-4 py-3.5">
-              <AppSwitch
-                class="mt-0.5"
-                :model-value="skillEnabled(row.name)"
-                :aria-label="`Enable ${row.title}`"
-                :disabled="busy"
-                :testid="`agent-workspace-editor-skill-${row.name}`"
-                @update:model-value="toggleSkill(row.name)"
-              />
-              <div class="min-w-0 flex-1">
-                <div class="flex items-center gap-2">
-                  <span
-                    class="truncate text-[13.5px] font-semibold"
-                    :class="skillEnabled(row.name) ? 'text-text' : 'text-text-2'"
-                    >{{ row.title }}</span
-                  >
-                  <button
-                    v-if="!row.missing"
-                    type="button"
-                    class="flex shrink-0 cursor-pointer items-center gap-1 font-mono text-[11px] text-text-4 hover:text-text-2"
-                    :aria-expanded="skillPackageExpanded(row.name)"
-                    :data-testid="`agent-workspace-editor-skill-members-${row.name}`"
-                    @click="toggleSkillPackageExpanded(row.name)"
-                  >
-                    {{ row.members.length }} {{ row.members.length === 1 ? 'skill' : 'skills' }}
-                    <IconChevronDown
-                      class="size-3 transition-transform"
-                      :class="{ '-rotate-90': !skillPackageExpanded(row.name) }"
-                    />
-                  </button>
-                </div>
-                <div v-if="row.description" class="mt-1 text-[12px] leading-relaxed text-text-3">
-                  {{ row.description }}
-                </div>
-                <div v-if="!row.missing && !row.members.length" class="mt-1 text-[11.5px] text-severity-warning">
-                  matches no skill — check its patterns in skills.yml
-                </div>
-                <div v-if="row.warning" class="mt-1 text-[11.5px] text-severity-warning">{{ row.warning }}</div>
-              </div>
-            </div>
-            <ul
-              v-if="skillPackageExpanded(row.name) && row.members.length"
-              class="flex flex-col gap-1 border-t border-row pb-3 pl-[58px] pr-4 pt-2.5"
-            >
-              <li v-for="member in row.members" :key="member.slug" class="flex items-center gap-2">
-                <span class="truncate font-mono text-[11.5px] text-text-3">{{ member.slug }}</span>
-                <BaseBadge tone="muted" variant="pill" class="shrink-0 px-2 py-0.5 text-[10.5px] font-medium">{{
-                  member.shipped ? 'shipped' : 'custom'
-                }}</BaseBadge>
-              </li>
-            </ul>
-          </div>
-          <EmptyState
-            v-if="!skillRows.length"
-            variant="inline"
-            class="px-4 py-3.5"
-            message="No packages are defined yet."
-          />
-          <div class="flex divide-x divide-row">
-            <button
-              type="button"
-              :class="footerButtonClass"
-              :disabled="busy"
-              data-testid="agent-workspace-editor-skills-packages"
-              @click="openSkillPackages"
-            >
-              <IconPencil class="size-3.5" />Edit skills.yml…
-            </button>
-            <button
-              type="button"
-              :class="footerButtonClass"
-              :disabled="busy"
-              data-testid="agent-workspace-editor-skills-shared"
-              @click="openSharedSkills"
-            >
-              <IconFolderOpen class="size-3.5" />Open the skills folder…
-            </button>
-          </div>
-        </div>
-        <InlineError
-          v-if="skillPackagesProblem"
-          testid="agent-workspace-editor-skills-problem"
-          variant="line"
-          :message="skillPackagesProblem"
-        />
-        <InlineError
-          v-if="skillError"
-          testid="agent-workspace-editor-skill-error"
-          variant="line"
-          :message="skillError"
-        />
-      </SettingsSection>
+      <CommandField v-model="command" :busy="busy" />
+      <McpServerList v-model="selectedMCPs" :busy="busy" />
+      <SkillPackageList v-model="selectedSkills" :busy="busy" />
 
       <!-- Schedules are manifest state like the lists above, so they are part
            of this form and travel with its Save. -->
