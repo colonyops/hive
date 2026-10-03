@@ -11,7 +11,6 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 )
 
 const (
@@ -296,7 +295,7 @@ type itemSessionsInput struct {
 }
 
 type itemSessionsResult struct {
-	Sessions []dispatch.ItemSessionView `json:"sessions"`
+	Sessions []app.ItemSessionView `json:"sessions"`
 }
 
 // ListItemSessions reports the hive sessions one inbox item started.

@@ -1,0 +1,1572 @@
+package session
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/hive/events/testbus"
+	"github.com/colonyops/hive/internal/platform/git"
+	"github.com/colonyops/hive/pkg/executil/executiltest"
+	"github.com/colonyops/hive/pkg/tmpl"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+const testRemote = "https://github.com/test/repo"
+
+// mockStore implements session.Store for testing.
+type mockStore struct {
+	sessions map[string]session.Session
+}
+
+func newMockStore() *mockStore {
+	return &mockStore{sessions: make(map[string]session.Session)}
+}
+
+func (m *mockStore) List(_ context.Context) ([]session.Session, error) {
+	var result []session.Session
+	for _, s := range m.sessions {
+		result = append(result, s)
+	}
+	return result, nil
+}
+
+func (m *mockStore) Get(_ context.Context, id string) (session.Session, error) {
+	s, ok := m.sessions[id]
+	if !ok {
+		return session.Session{}, session.ErrNotFound
+	}
+	return s, nil
+}
+
+func (m *mockStore) Save(_ context.Context, s session.Session) error {
+	m.sessions[s.ID] = s
+	return nil
+}
+
+func (m *mockStore) Delete(_ context.Context, id string) error {
+	delete(m.sessions, id)
+	return nil
+}
+
+// mockGit implements git.Git for testing.
+type mockGit struct{}
+
+func (m *mockGit) Clone(_ context.Context, _, _ string) error                   { return nil }
+func (m *mockGit) Checkout(_ context.Context, _, _ string) error                { return nil }
+func (m *mockGit) Pull(_ context.Context, _ string) error                       { return nil }
+func (m *mockGit) ResetHard(_ context.Context, _ string) error                  { return nil }
+func (m *mockGit) RemoteURL(_ context.Context, _ string) (string, error)        { return "", nil }
+func (m *mockGit) IsClean(_ context.Context, _ string) (bool, error)            { return true, nil }
+func (m *mockGit) Branch(_ context.Context, _ string) (string, error)           { return "main", nil }
+func (m *mockGit) CloneBare(_ context.Context, _, _ string) error               { return nil }
+func (m *mockGit) WorktreeAdd(_ context.Context, _, _, _ string) error          { return nil }
+func (m *mockGit) WorktreeRemove(_ context.Context, _, _, _ string) error       { return nil }
+func (m *mockGit) Fetch(_ context.Context, _ string) error                      { return nil }
+func (m *mockGit) HasUnpushedCommits(_ context.Context, _ string) (bool, error) { return false, nil }
+
+func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
+	return "main", nil
+}
+func (m *mockGit) DiffStats(_ context.Context, _ string) (int, int, error) { return 0, 0, nil }
+func (m *mockGit) IsValidRepo(_ context.Context, _ string) error           { return nil }
+
+type testMultiplexer struct{}
+
+func (testMultiplexer) CreateSession(context.Context, multiplexer.SessionSpec) error { return nil }
+func (testMultiplexer) OpenSession(context.Context, multiplexer.SessionSpec, multiplexer.Target) error {
+	return nil
+}
+
+func (testMultiplexer) AddWindows(context.Context, multiplexer.Target, []multiplexer.WindowSpec) error {
+	return nil
+}
+
+func (testMultiplexer) AttachOrSwitch(context.Context, multiplexer.Target, multiplexer.AttachStreams) error {
+	return nil
+}
+
+func (testMultiplexer) CurrentSession(context.Context) (multiplexer.Target, error) {
+	return multiplexer.Target{}, nil
+}
+
+func (testMultiplexer) RenameSession(context.Context, multiplexer.Target, string) error { return nil }
+
+func (testMultiplexer) KillSession(context.Context, multiplexer.Target) error { return nil }
+
+func (testMultiplexer) KillWindow(context.Context, multiplexer.Target) error { return nil }
+
+func newTestService(t *testing.T, store session.Store, cfg *config.Config) *Service {
+	t.Helper()
+	return newTestServiceWithBus(t, store, cfg, testbus.New(t).EventBus)
+}
+
+func newTestServiceWithBus(t *testing.T, store session.Store, cfg *config.Config, bus *events.EventBus) *Service {
+	t.Helper()
+	if cfg == nil {
+		cfg = &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+		}
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{})
+	return NewService(store, &mockGit{}, cfg, bus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+}
+
+func TestRenameSession(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	past := time.Now().Add(-1 * time.Hour)
+	sess := session.Session{
+		ID:        "test1",
+		Name:      "old-name",
+		Slug:      "old-name",
+		State:     session.StateActive,
+		CreatedAt: past,
+		UpdatedAt: past,
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.RenameSession(context.Background(), "test1", "new-name")
+	require.NoError(t, err)
+
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, "new-name", updated.Name)
+	assert.Equal(t, "new-name", updated.Slug)
+	assert.True(t, updated.UpdatedAt.After(past))
+}
+
+func TestRenameSession_Slugify(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	sess := session.Session{
+		ID:    "test1",
+		Name:  "old",
+		Slug:  "old",
+		State: session.StateActive,
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.RenameSession(context.Background(), "test1", "My Feature Branch")
+	require.NoError(t, err)
+
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, "My Feature Branch", updated.Name)
+	assert.Equal(t, "my-feature-branch", updated.Slug)
+}
+
+type renameMultiplexer struct {
+	testMultiplexer
+	from multiplexer.Target
+	to   string
+	err  error
+}
+
+func (m *renameMultiplexer) RenameSession(_ context.Context, from multiplexer.Target, to string) error {
+	m.from = from
+	m.to = to
+	return m.err
+}
+
+func TestRenameSessionPersistsActualTmuxTarget(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		renameErr error
+		wantMeta  string
+	}{
+		{name: "success stores new target", wantMeta: "new-name"},
+		{name: "failure retains old actual target", renameErr: assert.AnError, wantMeta: "actual-old"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newMockStore()
+			sess := session.Session{ID: "test1", Name: "old-name", Slug: "old-name", Path: "/tmp/test", Remote: testRemote, State: session.StateActive}
+			sess.SetMeta(session.MetaTmuxSession, "actual-old")
+			require.NoError(t, store.Save(context.Background(), sess))
+			svc := newTestService(t, store, nil)
+			mux := &renameMultiplexer{err: tt.renameErr}
+			svc.lifecycle = mux
+
+			require.NoError(t, svc.RenameSession(context.Background(), sess.ID, "new-name"))
+			updated, err := store.Get(context.Background(), sess.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "actual-old", mux.from.Session)
+			assert.Equal(t, "new-name", mux.to)
+			assert.Equal(t, tt.wantMeta, updated.GetMeta(session.MetaTmuxSession))
+		})
+	}
+}
+
+func TestRenameSession_NotFound(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	err := svc.RenameSession(context.Background(), "nonexistent", "new-name")
+	assert.Error(t, err)
+}
+
+func TestRenameSession_EmptyName(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	err := svc.RenameSession(context.Background(), "test1", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "name cannot be empty")
+}
+
+func TestRenameSession_InvalidChars(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	err := svc.RenameSession(context.Background(), "test1", "feat: something!")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid session name")
+}
+
+// TestCreateSession_SlugUsedAsTmuxName verifies that CreateSession uses the slug (not the
+// display name) as the tmux session name when using the windows spawn strategy. This ensures
+// that tmux session detection always works via slug-based lookup, even when the display name
+// contains spaces or uppercase letters (e.g. "My Feature" → tmux session "my-feature").
+func TestCreateSession_SlugUsedAsTmuxName(t *testing.T) {
+	store := newMockStore()
+
+	var capturedTmuxName string
+	exec := &capturingExec{capturedName: &capturedTmuxName}
+
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Rules: []config.Rule{
+			{
+				Pattern: "",
+				Windows: []config.WindowConfig{{Name: "agent"}},
+			},
+		},
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{})
+	mux := &captureMultiplexer{capturedName: &capturedTmuxName}
+	svc := NewService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, mux)
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:       "My Feature",
+		Remote:     testRemote,
+		Background: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, sess)
+
+	assert.Equal(t, "my-feature", sess.Slug)
+	assert.Equal(t, "my-feature", capturedTmuxName,
+		"tmux session should be created with the slug, not the display name")
+}
+
+type captureMultiplexer struct {
+	testMultiplexer
+	capturedName *string
+}
+
+func (m *captureMultiplexer) CreateSession(_ context.Context, spec multiplexer.SessionSpec) error {
+	*m.capturedName = spec.Target.Session
+	return nil
+}
+
+// capturingExec records command execution for assertion.
+type capturingExec struct {
+	capturedName *string
+}
+
+func (c *capturingExec) Run(_ context.Context, cmd string, args ...string) ([]byte, error) {
+	if cmd == "tmux" && len(args) >= 4 && args[0] == "new-session" {
+		for i, a := range args {
+			if a == "-s" && i+1 < len(args) {
+				*c.capturedName = args[i+1]
+				break
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (c *capturingExec) RunDir(_ context.Context, _ string, _ string, _ ...string) ([]byte, error) {
+	return nil, nil
+}
+
+func (c *capturingExec) RunStream(_ context.Context, _ io.Writer, _ io.Writer, _ string, _ ...string) error {
+	return nil
+}
+
+func (c *capturingExec) RunDirStream(_ context.Context, _ string, _ io.Writer, _ io.Writer, _ string, _ ...string) error {
+	return nil
+}
+
+func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
+	store := newMockStore()
+	exec := &capturingStreamExec{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Agents: config.AgentsConfig{
+			Default: "claude",
+			Profiles: map[string]config.AgentProfile{
+				"claude": {Command: "claude"},
+				"aider":  {Command: "aider-bin", Flags: []string{"--yes", "--model", "sonnet"}},
+			},
+		},
+		Rules: []config.Rule{
+			{Pattern: "", Spawn: []string{"{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}},
+		},
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
+	svc := NewService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:     "agent override",
+		Remote:   testRemote,
+		AgentKey: "aider",
+	})
+	require.NoError(t, err)
+	require.Len(t, exec.streamCommands, 1)
+	assert.Equal(t, "aider-bin|aider|--yes --model sonnet", exec.streamCommands[0])
+}
+
+func TestCreateSession_RuleAgentOverridesSpawnRenderer(t *testing.T) {
+	store := newMockStore()
+	exec := &capturingStreamExec{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Agents: config.AgentsConfig{
+			Default: "claude",
+			Profiles: map[string]config.AgentProfile{
+				"claude": {Command: "claude"},
+				"aider":  {Command: "aider-bin", Flags: []string{"--model", "sonnet"}},
+			},
+		},
+		Rules: []config.Rule{
+			{Pattern: "", Agent: "aider", Spawn: []string{"{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}},
+		},
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
+	svc := NewService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "rule agent override",
+		Remote: testRemote,
+	})
+	require.NoError(t, err)
+	require.Len(t, exec.streamCommands, 1)
+	assert.Equal(t, "aider-bin|aider|--model sonnet", exec.streamCommands[0])
+}
+
+func TestCreateSession_AgentKeyOverridesRuleAgent(t *testing.T) {
+	store := newMockStore()
+	exec := &capturingStreamExec{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Agents: config.AgentsConfig{
+			Default: "claude",
+			Profiles: map[string]config.AgentProfile{
+				"claude": {Command: "claude"},
+				"aider":  {Command: "aider-bin"},
+				"codex":  {Command: "codex-bin", Flags: []string{"--fast"}},
+			},
+		},
+		Rules: []config.Rule{
+			{Pattern: "", Agent: "aider", Spawn: []string{"{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}},
+		},
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
+	svc := NewService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:     "cli agent override",
+		Remote:   testRemote,
+		AgentKey: "codex",
+	})
+	require.NoError(t, err)
+	require.Len(t, exec.streamCommands, 1)
+	assert.Equal(t, "codex-bin|codex|--fast", exec.streamCommands[0])
+}
+
+func TestCreateSession_UnknownAgentKey(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Agents: config.AgentsConfig{
+			Default:  "claude",
+			Profiles: map[string]config.AgentProfile{"claude": {Command: "claude"}},
+		},
+		Rules: []config.Rule{{Pattern: "", Spawn: []string{"{{ agentCommand }}"}}},
+	}
+	svc := newTestService(t, store, cfg)
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:     "missing agent",
+		Remote:   testRemote,
+		AgentKey: "missing",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `unknown agent "missing"`)
+}
+
+type capturingStreamExec struct {
+	streamCommands []string
+}
+
+func (c *capturingStreamExec) Run(_ context.Context, _ string, _ ...string) ([]byte, error) {
+	return nil, nil
+}
+
+func (c *capturingStreamExec) RunDir(_ context.Context, _ string, _ string, _ ...string) ([]byte, error) {
+	return nil, nil
+}
+
+func (c *capturingStreamExec) RunStream(_ context.Context, _ io.Writer, _ io.Writer, cmd string, args ...string) error {
+	if cmd == "sh" && len(args) == 2 && args[0] == "-c" {
+		c.streamCommands = append(c.streamCommands, args[1])
+	}
+	return nil
+}
+
+func (c *capturingStreamExec) RunDirStream(_ context.Context, _ string, _ io.Writer, _ io.Writer, _ string, _ ...string) error {
+	return nil
+}
+
+func TestEnforceMaxRecycled(t *testing.T) {
+	intPtr := func(n int) *int { return &n }
+
+	t.Run("unlimited (0) does nothing", func(t *testing.T) {
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   []config.Rule{{Pattern: "", MaxRecycled: intPtr(0)}},
+		}
+		svc := newTestService(t, store, cfg)
+
+		// Add sessions
+		remote := testRemote
+		for i := 0; i < 10; i++ {
+			sess := session.Session{
+				ID:        string(rune('a' + i)),
+				Remote:    remote,
+				State:     session.StateRecycled,
+				Path:      t.TempDir(),
+				UpdatedAt: time.Now().Add(time.Duration(i) * time.Hour),
+			}
+			store.sessions[sess.ID] = sess
+		}
+
+		err := svc.enforceMaxRecycled(context.Background(), remote, config.CloneStrategyFull)
+		require.NoError(t, err)
+
+		// All 10 should still exist
+		sessions, _ := store.List(context.Background())
+		assert.Len(t, sessions, 10)
+	})
+
+	t.Run("deletes oldest beyond limit", func(t *testing.T) {
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   []config.Rule{{Pattern: "", MaxRecycled: intPtr(3)}},
+		}
+		svc := newTestService(t, store, cfg)
+
+		remote := testRemote
+		baseTime := time.Now()
+
+		// Create 5 sessions with different ages
+		for i := 0; i < 5; i++ {
+			sess := session.Session{
+				ID:        string(rune('a' + i)),
+				Remote:    remote,
+				State:     session.StateRecycled,
+				Path:      t.TempDir(),
+				UpdatedAt: baseTime.Add(time.Duration(i) * time.Hour), // a=oldest, e=newest
+			}
+			store.sessions[sess.ID] = sess
+		}
+
+		err := svc.enforceMaxRecycled(context.Background(), remote, config.CloneStrategyFull)
+		require.NoError(t, err)
+
+		// Should keep 3 newest: c, d, e
+		sessions, _ := store.List(context.Background())
+		assert.Len(t, sessions, 3)
+
+		// Verify the newest 3 remain
+		for _, s := range sessions {
+			assert.Contains(t, []string{"c", "d", "e"}, s.ID, "expected only newest sessions to remain")
+		}
+	})
+
+	t.Run("only affects matching remote", func(t *testing.T) {
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   []config.Rule{{Pattern: "", MaxRecycled: intPtr(1)}},
+		}
+		svc := newTestService(t, store, cfg)
+
+		remote1 := "https://github.com/test/repo1"
+		remote2 := "https://github.com/test/repo2"
+		baseTime := time.Now()
+
+		// 3 sessions for repo1
+		for i := 0; i < 3; i++ {
+			sess := session.Session{
+				ID:        string(rune('a' + i)),
+				Remote:    remote1,
+				State:     session.StateRecycled,
+				Path:      t.TempDir(),
+				UpdatedAt: baseTime.Add(time.Duration(i) * time.Hour),
+			}
+			store.sessions[sess.ID] = sess
+		}
+
+		// 3 sessions for repo2
+		for i := 0; i < 3; i++ {
+			sess := session.Session{
+				ID:        string(rune('x' + i)),
+				Remote:    remote2,
+				State:     session.StateRecycled,
+				Path:      t.TempDir(),
+				UpdatedAt: baseTime.Add(time.Duration(i) * time.Hour),
+			}
+			store.sessions[sess.ID] = sess
+		}
+
+		// Enforce only for repo1
+		err := svc.enforceMaxRecycled(context.Background(), remote1, config.CloneStrategyFull)
+		require.NoError(t, err)
+
+		sessions, _ := store.List(context.Background())
+		// 1 from repo1 + 3 from repo2 = 4
+		assert.Len(t, sessions, 4)
+	})
+}
+
+func TestPrune(t *testing.T) {
+	intPtr := func(n int) *int { return &n }
+
+	t.Run("all=true deletes all recycled", func(t *testing.T) {
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   []config.Rule{{Pattern: "", MaxRecycled: intPtr(10)}}, // high limit shouldn't matter with all=true
+		}
+		svc := newTestService(t, store, cfg)
+
+		remote := testRemote
+		// Add recycled sessions
+		for i := 0; i < 5; i++ {
+			sess := session.Session{
+				ID:        string(rune('a' + i)),
+				Remote:    remote,
+				State:     session.StateRecycled,
+				Path:      t.TempDir(),
+				UpdatedAt: time.Now(),
+			}
+			store.sessions[sess.ID] = sess
+		}
+		// Add active session
+		store.sessions["active"] = session.Session{
+			ID:     "active",
+			Remote: remote,
+			State:  session.StateActive,
+			Path:   t.TempDir(),
+		}
+
+		count, err := svc.Prune(context.Background(), true)
+		require.NoError(t, err)
+		assert.Equal(t, 5, count)
+
+		sessions, _ := store.List(context.Background())
+		assert.Len(t, sessions, 1)
+		assert.Equal(t, "active", sessions[0].ID)
+	})
+
+	t.Run("all=false respects max_recycled", func(t *testing.T) {
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   []config.Rule{{Pattern: "", MaxRecycled: intPtr(2)}},
+		}
+		svc := newTestService(t, store, cfg)
+
+		remote := testRemote
+		baseTime := time.Now()
+
+		// Add 5 recycled sessions
+		for i := 0; i < 5; i++ {
+			sess := session.Session{
+				ID:        string(rune('a' + i)),
+				Remote:    remote,
+				State:     session.StateRecycled,
+				Path:      t.TempDir(),
+				UpdatedAt: baseTime.Add(time.Duration(i) * time.Hour),
+			}
+			store.sessions[sess.ID] = sess
+		}
+
+		count, err := svc.Prune(context.Background(), false)
+		require.NoError(t, err)
+		assert.Equal(t, 3, count) // Should delete 3 (5-2)
+
+		sessions, _ := store.List(context.Background())
+		assert.Len(t, sessions, 2)
+	})
+
+	t.Run("all=false enforces max_recycled per strategy pool", func(t *testing.T) {
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   []config.Rule{{Pattern: "", MaxRecycled: intPtr(1)}},
+		}
+		svc := newTestService(t, store, cfg)
+
+		remote := testRemote
+		baseTime := time.Now()
+
+		for i := 0; i < 2; i++ {
+			fullSess := session.Session{
+				ID:            fmt.Sprintf("full-%d", i),
+				Remote:        remote,
+				State:         session.StateRecycled,
+				CloneStrategy: config.CloneStrategyFull,
+				Path:          t.TempDir(),
+				UpdatedAt:     baseTime.Add(time.Duration(i) * time.Hour),
+			}
+			store.sessions[fullSess.ID] = fullSess
+
+			wtSess := session.Session{
+				ID:            fmt.Sprintf("wt-%d", i),
+				Remote:        remote,
+				State:         session.StateRecycled,
+				CloneStrategy: config.CloneStrategyWorktree,
+				Path:          t.TempDir(),
+				UpdatedAt:     baseTime.Add(time.Duration(i) * time.Hour),
+			}
+			store.sessions[wtSess.ID] = wtSess
+		}
+
+		count, err := svc.Prune(context.Background(), false)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count)
+
+		sessions, _ := store.List(context.Background())
+		assert.Len(t, sessions, 2)
+
+		fullCount, wtCount := 0, 0
+		for _, sess := range sessions {
+			switch sess.CloneStrategy {
+			case config.CloneStrategyFull:
+				fullCount++
+			case config.CloneStrategyWorktree:
+				wtCount++
+			}
+		}
+
+		assert.Equal(t, 1, fullCount, "full-clone pool should keep one session")
+		assert.Equal(t, 1, wtCount, "worktree pool should keep one session")
+	})
+
+	t.Run("always deletes corrupted", func(t *testing.T) {
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   []config.Rule{{Pattern: "", MaxRecycled: intPtr(10)}}, // high limit
+		}
+		svc := newTestService(t, store, cfg)
+
+		// Add corrupted session
+		store.sessions["corrupted"] = session.Session{
+			ID:    "corrupted",
+			State: session.StateCorrupted,
+			Path:  t.TempDir(),
+		}
+		// Add active session
+		store.sessions["active"] = session.Session{
+			ID:    "active",
+			State: session.StateActive,
+			Path:  t.TempDir(),
+		}
+
+		count, err := svc.Prune(context.Background(), false)
+		require.NoError(t, err)
+		assert.Equal(t, 1, count)
+
+		sessions, _ := store.List(context.Background())
+		assert.Len(t, sessions, 1)
+		assert.Equal(t, "active", sessions[0].ID)
+	})
+
+	t.Run("per-rule max_recycled", func(t *testing.T) {
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules: []config.Rule{
+				{Pattern: "", MaxRecycled: intPtr(5)},                     // catch-all default
+				{Pattern: "github.com/strict/.*", MaxRecycled: intPtr(1)}, // strict override
+			},
+		}
+		svc := newTestService(t, store, cfg)
+
+		remoteStrict := "https://github.com/strict/repo"
+		remoteNormal := "https://github.com/normal/repo"
+		baseTime := time.Now()
+
+		// Add 3 sessions for strict repo
+		for i := 0; i < 3; i++ {
+			sess := session.Session{
+				ID:        string(rune('a' + i)),
+				Remote:    remoteStrict,
+				State:     session.StateRecycled,
+				Path:      t.TempDir(),
+				UpdatedAt: baseTime.Add(time.Duration(i) * time.Hour),
+			}
+			store.sessions[sess.ID] = sess
+		}
+
+		// Add 3 sessions for normal repo
+		for i := 0; i < 3; i++ {
+			sess := session.Session{
+				ID:        string(rune('x' + i)),
+				Remote:    remoteNormal,
+				State:     session.StateRecycled,
+				Path:      t.TempDir(),
+				UpdatedAt: baseTime.Add(time.Duration(i) * time.Hour),
+			}
+			store.sessions[sess.ID] = sess
+		}
+
+		count, err := svc.Prune(context.Background(), false)
+		require.NoError(t, err)
+		// strict: keep 1, delete 2
+		// normal: keep 3 (under limit of 5)
+		assert.Equal(t, 2, count)
+
+		sessions, _ := store.List(context.Background())
+		assert.Len(t, sessions, 4)
+
+		// Count per remote
+		strictCount := 0
+		normalCount := 0
+		for _, s := range sessions {
+			if s.Remote == remoteStrict {
+				strictCount++
+			} else {
+				normalCount++
+			}
+		}
+		assert.Equal(t, 1, strictCount, "strict repo should have 1 session")
+		assert.Equal(t, 3, normalCount, "normal repo should have 3 sessions")
+	})
+}
+
+func TestSessionService_Events(t *testing.T) {
+	t.Run("create emits session.created", func(t *testing.T) {
+		store := newMockStore()
+		tb := testbus.New(t)
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+		}
+		svc := newTestServiceWithBus(t, store, cfg, tb.EventBus)
+
+		sess, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:   "test-session",
+			Remote: "https://github.com/example/repo.git",
+		})
+		require.NoError(t, err)
+
+		p := testbus.FindPayload[events.SessionCreatedPayload](tb, t, events.EventSessionCreated)
+		assert.Equal(t, sess.ID, p.Session.ID)
+		assert.Equal(t, "test-session", p.Session.Name)
+	})
+
+	t.Run("recycle emits session.recycled", func(t *testing.T) {
+		store := newMockStore()
+		tb := testbus.New(t)
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+		}
+		svc := newTestServiceWithBus(t, store, cfg, tb.EventBus)
+
+		sessDir := filepath.Join(cfg.ReposDir(), "repo-active-abc")
+		require.NoError(t, os.MkdirAll(sessDir, 0o755))
+
+		sess := session.Session{
+			ID:     "recycle1",
+			Name:   "to-recycle",
+			Slug:   "to-recycle",
+			State:  session.StateActive,
+			Path:   sessDir,
+			Remote: "https://github.com/example/repo.git",
+		}
+		require.NoError(t, store.Save(context.Background(), sess))
+
+		err := svc.RecycleSession(context.Background(), "recycle1", io.Discard)
+		require.NoError(t, err)
+
+		p := testbus.FindPayload[events.SessionRecycledPayload](tb, t, events.EventSessionRecycled)
+		assert.Equal(t, "recycle1", p.Session.ID)
+		assert.Equal(t, session.StateRecycled, p.Session.State)
+		assert.Equal(t, sessDir, p.Session.Path, "recycled session path must not change")
+	})
+
+	t.Run("rename emits session.renamed", func(t *testing.T) {
+		store := newMockStore()
+		tb := testbus.New(t)
+		svc := newTestServiceWithBus(t, store, nil, tb.EventBus)
+
+		sess := session.Session{
+			ID:    "test1",
+			Name:  "old-name",
+			Slug:  "old-name",
+			State: session.StateActive,
+		}
+		require.NoError(t, store.Save(context.Background(), sess))
+
+		err := svc.RenameSession(context.Background(), "test1", "new-name")
+		require.NoError(t, err)
+
+		p := testbus.FindPayload[events.SessionRenamedPayload](tb, t, events.EventSessionRenamed)
+		assert.Equal(t, "old-name", p.OldName)
+		assert.Equal(t, "new-name", p.Session.Name)
+	})
+
+	t.Run("delete emits session.deleted", func(t *testing.T) {
+		store := newMockStore()
+		tb := testbus.New(t)
+		svc := newTestServiceWithBus(t, store, nil, tb.EventBus)
+
+		sess := session.Session{
+			ID:    "del1",
+			Name:  "to-delete",
+			State: session.StateRecycled,
+			Path:  t.TempDir(),
+		}
+		require.NoError(t, store.Save(context.Background(), sess))
+
+		err := svc.DeleteSession(context.Background(), "del1")
+		require.NoError(t, err)
+
+		p := testbus.FindPayload[events.SessionDeletedPayload](tb, t, events.EventSessionDeleted)
+		assert.Equal(t, "del1", p.SessionID)
+	})
+}
+
+func TestCreateSession_PathFormat(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "my-feature",
+		Remote: "https://github.com/example/myrepo.git",
+	})
+	require.NoError(t, err)
+
+	base := filepath.Base(sess.Path)
+
+	assert.Regexp(t, `^myrepo-[a-z0-9]{6}$`, base,
+		"directory name must be {repoName}-{6charID}")
+	assert.NotContains(t, base, "my-feature",
+		"directory name must not contain the session slug")
+	assert.NotEqual(t, fmt.Sprintf("myrepo-%s", sess.ID), base,
+		"directory name must not use Session.ID")
+}
+
+func TestRecycleSession_PathUnchanged(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	sessDir := filepath.Join(cfg.ReposDir(), "repo-x7k2qp")
+	require.NoError(t, os.MkdirAll(sessDir, 0o755))
+
+	sess := session.Session{
+		ID:     "abc123",
+		Name:   "my-session",
+		Slug:   "my-session",
+		State:  session.StateActive,
+		Path:   sessDir,
+		Remote: "https://github.com/example/repo.git",
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.RecycleSession(context.Background(), "abc123", io.Discard)
+	require.NoError(t, err)
+
+	recycled, err := store.Get(context.Background(), "abc123")
+	require.NoError(t, err)
+	assert.Equal(t, sessDir, recycled.Path, "directory must not be renamed on recycle")
+	assert.Equal(t, session.StateRecycled, recycled.State)
+}
+
+type killMultiplexer struct {
+	testMultiplexer
+	killed []multiplexer.Target
+}
+
+func (m *killMultiplexer) KillSession(_ context.Context, target multiplexer.Target) error {
+	m.killed = append(m.killed, target)
+	return nil
+}
+
+func TestRecycleSession_KillsPersistedTargetAndClearsIt(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+	svc := newTestService(t, store, cfg)
+	mux := &killMultiplexer{}
+	svc.lifecycle = mux
+
+	sessDir := filepath.Join(cfg.ReposDir(), "repo-x7k2qp")
+	require.NoError(t, os.MkdirAll(sessDir, 0o755))
+	sess := session.Session{ID: "abc123", Name: "renamed", Slug: "renamed", State: session.StateActive, Path: sessDir, Remote: testRemote}
+	sess.SetMeta(session.MetaTmuxSession, "original")
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	require.NoError(t, svc.RecycleSession(context.Background(), "abc123", io.Discard))
+
+	assert.Equal(t, []multiplexer.Target{{Session: "original"}}, mux.killed)
+	recycled, err := store.Get(context.Background(), "abc123")
+	require.NoError(t, err)
+	assert.Empty(t, recycled.GetMeta(session.MetaTmuxSession), "a reused clone must target its new slug, not the killed tmux session")
+}
+
+func TestCreateSession_RecycledSessionKeepsPath(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	recycledPath := filepath.Join(cfg.ReposDir(), "repo-x7k2qp")
+
+	recycled := session.Session{
+		ID:     "abc123",
+		Name:   "old-name",
+		Slug:   "old-name",
+		State:  session.StateRecycled,
+		Path:   recycledPath,
+		Remote: "https://github.com/example/repo.git",
+	}
+	require.NoError(t, store.Save(context.Background(), recycled))
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "new-name",
+		Remote: "https://github.com/example/repo.git",
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "abc123", sess.ID, "should reuse the recycled session record")
+	assert.Equal(t, recycledPath, sess.Path, "path must not change on reactivation")
+	assert.Equal(t, "new-name", sess.Name)
+	assert.Equal(t, session.StateActive, sess.State)
+}
+
+func TestCreateSession_DuplicateNameRejected(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	// Pre-populate an active session with a known name.
+	require.NoError(t, store.Save(context.Background(), session.Session{
+		ID:     "existing1",
+		Name:   "my-feature",
+		Slug:   "my-feature",
+		State:  session.StateActive,
+		Remote: testRemote,
+	}))
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "My Feature",
+		Remote: testRemote,
+	})
+	require.ErrorIs(t, err, session.ErrDuplicateName, "names with the same slug collide")
+
+	// Recycled sessions with the same name should not block creation.
+	require.NoError(t, store.Save(context.Background(), session.Session{
+		ID:     "recycled1",
+		Name:   "recycled-feature",
+		Slug:   "recycled-feature",
+		State:  session.StateRecycled,
+		Remote: testRemote,
+	}))
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "recycled-feature",
+		Remote: testRemote,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "recycled-feature", sess.Name)
+}
+
+func TestCreateSession_CollisionSuffixOnTakenName(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, &config.Config{DataDir: t.TempDir(), GitPath: "git"})
+	require.NoError(t, store.Save(context.Background(), session.Session{ID: "a", Name: "review-repo", Slug: "review-repo", State: session.StateActive, Remote: testRemote}))
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{Name: "review-repo", Remote: testRemote, CollisionSuffix: "7"})
+	require.NoError(t, err)
+	assert.Equal(t, "review-repo-7", sess.Name)
+	assert.Equal(t, "review-repo-7", sess.Slug)
+}
+
+func TestCreateSession_RetryCollidesWithItsSavedAttempt(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, &config.Config{DataDir: t.TempDir(), GitPath: "git"})
+	require.NoError(t, store.Save(context.Background(), session.Session{ID: "a", Name: "review-repo", Slug: "review-repo", State: session.StateActive, Remote: testRemote}))
+	earlier := session.Session{ID: "b", Name: "other", Slug: "other", State: session.StateActive, Remote: testRemote}
+	earlier.SetMeta(session.MetaTmuxSession, "review-repo-7")
+	require.NoError(t, store.Save(context.Background(), earlier))
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{Name: "review-repo", Remote: testRemote, CollisionSuffix: "7"})
+	require.ErrorIs(t, err, session.ErrDuplicateName)
+	all, err := store.List(context.Background())
+	require.NoError(t, err)
+	assert.Len(t, all, 2)
+}
+
+func TestRenameSession_RejectsAnotherSessionsSlug(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+	require.NoError(t, store.Save(context.Background(), session.Session{ID: "a", Name: "Fix Bug", Slug: "fix-bug", State: session.StateActive}))
+	require.NoError(t, store.Save(context.Background(), session.Session{ID: "b", Name: "other", Slug: "other", State: session.StateActive}))
+
+	err := svc.RenameSession(context.Background(), "b", "fix bug")
+	require.ErrorIs(t, err, session.ErrDuplicateName)
+
+	require.NoError(t, svc.RenameSession(context.Background(), "a", "fix-bug"), "a session may rename onto its own slug")
+}
+
+func TestCreateSessionWithWindows_RollbackOnRunShFailure(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	req := NewSessionRequest{
+		Name:   "test-session",
+		Remote: testRemote,
+		ShCmd:  "exit 1", // fails: directory won't exist since mockGit.Clone is a no-op
+	}
+
+	err := svc.CreateSessionWithWindows(context.Background(), req, nil, false)
+	require.Error(t, err)
+
+	// Session must be cleaned up from the store after RunSh failure.
+	sessions, listErr := store.List(context.Background())
+	require.NoError(t, listErr)
+	assert.Empty(t, sessions, "session should not remain in store after RunSh failure")
+}
+
+func TestSetSessionGroup(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	past := time.Now().Add(-1 * time.Hour)
+	sess := session.Session{
+		ID:        "test1",
+		Name:      "my-session",
+		State:     session.StateActive,
+		CreatedAt: past,
+		UpdatedAt: past,
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.SetSessionGroup(context.Background(), "test1", "backend")
+	require.NoError(t, err)
+
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, "backend", updated.Group())
+	assert.True(t, updated.UpdatedAt.After(past))
+}
+
+func TestSetSessionGroup_NotFound(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	err := svc.SetSessionGroup(context.Background(), "nonexistent", "backend")
+	assert.Error(t, err)
+}
+
+func TestSetSessionGroup_ClearGroup(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	sess := session.Session{
+		ID:       "test1",
+		Name:     "my-session",
+		State:    session.StateActive,
+		Metadata: map[string]string{"group": "backend"},
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.SetSessionGroup(context.Background(), "test1", "")
+	require.NoError(t, err)
+
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Empty(t, updated.Group())
+}
+
+func TestSetSessionGroup_TrimWhitespace(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	sess := session.Session{
+		ID:    "test1",
+		Name:  "my-session",
+		State: session.StateActive,
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.SetSessionGroup(context.Background(), "test1", "  backend  ")
+	require.NoError(t, err)
+
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, "backend", updated.Group())
+}
+
+func TestRecycleWorktreeSession_DeletesSession(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata map[string]string
+	}{
+		{
+			name:     "with branch metadata",
+			metadata: map[string]string{session.MetaWorktreeBranch: "hive-abc123"},
+		},
+		{
+			name: "without branch metadata",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newMockStore()
+			tb := testbus.New(t)
+			cfg := &config.Config{
+				DataDir: t.TempDir(),
+				GitPath: "git",
+			}
+			svc := newTestServiceWithBus(t, store, cfg, tb.EventBus)
+
+			sessDir := filepath.Join(cfg.ReposDir(), "repo-wt-abc123")
+			require.NoError(t, os.MkdirAll(sessDir, 0o755))
+
+			sess := session.Session{
+				ID:            "wt1",
+				Name:          "worktree-session",
+				Slug:          "worktree-session",
+				State:         session.StateActive,
+				Path:          sessDir,
+				Remote:        "https://github.com/example/repo.git",
+				CloneStrategy: config.CloneStrategyWorktree,
+				Metadata:      tt.metadata,
+			}
+			require.NoError(t, store.Save(context.Background(), sess))
+
+			err := svc.RecycleSession(context.Background(), "wt1", io.Discard)
+			require.NoError(t, err)
+
+			_, err = store.Get(context.Background(), "wt1")
+			require.ErrorIs(t, err, session.ErrNotFound)
+			_, err = os.Stat(sessDir)
+			require.ErrorIs(t, err, os.ErrNotExist)
+			deleted := testbus.FindPayload[events.SessionDeletedPayload](tb, t, events.EventSessionDeleted)
+			assert.Equal(t, "wt1", deleted.SessionID)
+		})
+	}
+}
+
+func TestDeleteWorktreeSession(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	sessDir := t.TempDir()
+
+	sess := session.Session{
+		ID:            "wt-del",
+		Name:          "to-delete",
+		Slug:          "to-delete",
+		State:         session.StateRecycled,
+		Path:          sessDir,
+		Remote:        "https://github.com/example/repo.git",
+		CloneStrategy: config.CloneStrategyWorktree,
+		Metadata:      map[string]string{session.MetaWorktreeBranch: "hive-del"},
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.DeleteSession(context.Background(), "wt-del")
+	require.NoError(t, err)
+
+	_, err = store.Get(context.Background(), "wt-del")
+	assert.ErrorIs(t, err, session.ErrNotFound)
+}
+
+func TestEnforceMaxRecycled_SeparateByStrategy(t *testing.T) {
+	intPtr := func(n int) *int { return &n }
+
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Rules:   []config.Rule{{Pattern: "", MaxRecycled: intPtr(1)}},
+	}
+	svc := newTestService(t, store, cfg)
+
+	remote := testRemote
+	baseTime := time.Now()
+
+	// 3 full-clone recycled sessions
+	for i := 0; i < 3; i++ {
+		sess := session.Session{
+			ID:            fmt.Sprintf("full-%d", i),
+			Remote:        remote,
+			State:         session.StateRecycled,
+			CloneStrategy: config.CloneStrategyFull,
+			Path:          t.TempDir(),
+			UpdatedAt:     baseTime.Add(time.Duration(i) * time.Hour),
+		}
+		store.sessions[sess.ID] = sess
+	}
+
+	// 3 worktree recycled sessions
+	for i := 0; i < 3; i++ {
+		sess := session.Session{
+			ID:            fmt.Sprintf("wt-%d", i),
+			Remote:        remote,
+			State:         session.StateRecycled,
+			CloneStrategy: config.CloneStrategyWorktree,
+			Path:          t.TempDir(),
+			UpdatedAt:     baseTime.Add(time.Duration(i) * time.Hour),
+		}
+		store.sessions[sess.ID] = sess
+	}
+
+	// Enforce limit for full-clone only
+	err := svc.enforceMaxRecycled(context.Background(), remote, config.CloneStrategyFull)
+	require.NoError(t, err)
+
+	sessions, _ := store.List(context.Background())
+	// 1 full + 3 worktree = 4
+	assert.Len(t, sessions, 4)
+
+	// Count strategies
+	fullCount, wtCount := 0, 0
+	for _, s := range sessions {
+		switch s.CloneStrategy {
+		case config.CloneStrategyFull:
+			fullCount++
+		case config.CloneStrategyWorktree:
+			wtCount++
+		}
+	}
+	assert.Equal(t, 1, fullCount, "full strategy should respect limit of 1")
+	assert.Equal(t, 3, wtCount, "worktree sessions must not be affected")
+}
+
+func TestCreateSession_BranchTemplate(t *testing.T) {
+	makeService := func(t *testing.T, gitImpl git.Git, rules []config.Rule) *Service {
+		t.Helper()
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   rules,
+		}
+		log := zerolog.New(io.Discard)
+		renderer := tmpl.New(tmpl.Config{})
+		return NewService(store, gitImpl, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+	}
+
+	t.Run("valid template uses rendered branch", func(t *testing.T) {
+		var capturedBranch string
+		spy := &capturingMockGit{}
+		spy.WorktreeAddFn = func(_ context.Context, _, _, branch string) error {
+			capturedBranch = branch
+			return nil
+		}
+		svc := makeService(t, spy, []config.Rule{
+			{Pattern: "", CloneStrategy: config.CloneStrategyWorktree, BranchTemplate: "feat/{{ .Slug }}-{{ .ID }}"},
+		})
+		sess, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:   "my-feature",
+			Remote: "https://github.com/example/repo.git",
+		})
+		require.NoError(t, err)
+		assert.Regexp(t, `^feat/my-feature-[a-z0-9]+$`, capturedBranch)
+		assert.Equal(t, capturedBranch, sess.GetMeta(session.MetaWorktreeBranch))
+	})
+
+	t.Run("no template uses default hive/<slug>-<id>", func(t *testing.T) {
+		var capturedBranch string
+		spy := &capturingMockGit{}
+		spy.WorktreeAddFn = func(_ context.Context, _, _, branch string) error {
+			capturedBranch = branch
+			return nil
+		}
+		svc := makeService(t, spy, []config.Rule{
+			{Pattern: "", CloneStrategy: config.CloneStrategyWorktree},
+		})
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:   "my-feature",
+			Remote: "https://github.com/example/repo.git",
+		})
+		require.NoError(t, err)
+		assert.Regexp(t, `^hive/my-feature-[a-z0-9]+$`, capturedBranch)
+	})
+
+	t.Run("template rendering to invalid branch name returns error", func(t *testing.T) {
+		svc := makeService(t, &mockGit{}, []config.Rule{
+			// .Name will be "My Feature" (has a space) → invalid git branch name
+			{Pattern: "", CloneStrategy: config.CloneStrategyWorktree, BranchTemplate: "feat/{{ .Name }}"},
+		})
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:   "My Feature",
+			Remote: "https://github.com/example/repo.git",
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid git branch name")
+		assert.Contains(t, err.Error(), "feat/My Feature")
+	})
+
+	t.Run("template render failure returns error", func(t *testing.T) {
+		svc := makeService(t, &mockGit{}, []config.Rule{
+			{Pattern: "", CloneStrategy: config.CloneStrategyWorktree, BranchTemplate: "feat/{{ .Unknown }}"},
+		})
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:   "my-feature",
+			Remote: "https://github.com/example/repo.git",
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "branch_template render failed")
+	})
+}
+
+func TestCreateSession_ErrorIncludesDestinationAndStrategy(t *testing.T) {
+	newService := func(t *testing.T, gitImpl git.Git, rules []config.Rule) *Service {
+		t.Helper()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   rules,
+		}
+		return NewService(
+			newMockStore(),
+			gitImpl,
+			cfg,
+			testbus.New(t).EventBus,
+			&executiltest.Exec{},
+			tmpl.New(tmpl.Config{}),
+			PlainStyler{},
+			zerolog.New(io.Discard),
+			io.Discard,
+			io.Discard,
+			testMultiplexer{},
+		)
+	}
+
+	assertContext := func(t *testing.T, err error, operation, destination, strategy string, cause error) {
+		t.Helper()
+		require.Error(t, err)
+		require.ErrorIs(t, err, cause)
+
+		var createErr *CreateSessionError
+		require.ErrorAs(t, err, &createErr)
+		assert.Equal(t, operation, createErr.Operation)
+		assert.Equal(t, destination, createErr.Destination)
+		assert.Equal(t, strategy, createErr.CloneStrategy)
+		assert.Contains(t, err.Error(), destination)
+		assert.Contains(t, err.Error(), strategy)
+	}
+
+	t.Run("clone failure", func(t *testing.T) {
+		cause := errors.New("clone failed")
+		var destination string
+		spy := &capturingMockGit{
+			CloneFn: func(_ context.Context, _, dest string) error {
+				destination = dest
+				return cause
+			},
+		}
+		svc := newService(t, spy, nil)
+
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:          "clone-failure",
+			Remote:        testRemote,
+			CloneStrategy: config.CloneStrategyFull,
+			SkipSpawn:     true,
+		})
+		assertContext(t, err, "clone repository", destination, config.CloneStrategyFull, cause)
+	})
+
+	t.Run("worktree add failure", func(t *testing.T) {
+		cause := errors.New("worktree failed")
+		var destination string
+		spy := &capturingMockGit{
+			WorktreeAddFn: func(_ context.Context, _, path, _ string) error {
+				destination = path
+				return cause
+			},
+		}
+		svc := newService(t, spy, nil)
+
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:          "worktree-failure",
+			Remote:        testRemote,
+			CloneStrategy: config.CloneStrategyWorktree,
+			SkipSpawn:     true,
+		})
+		assertContext(t, err, "worktree add", destination, config.CloneStrategyWorktree, cause)
+	})
+
+	t.Run("rules failure", func(t *testing.T) {
+		var destination string
+		spy := &capturingMockGit{
+			CloneFn: func(_ context.Context, _, dest string) error {
+				destination = dest
+				return nil
+			},
+		}
+		svc := newService(t, spy, []config.Rule{{Pattern: "["}})
+
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:          "rules-failure",
+			Remote:        testRemote,
+			CloneStrategy: config.CloneStrategyFull,
+			SkipSpawn:     true,
+		})
+		require.Error(t, err)
+
+		var createErr *CreateSessionError
+		require.ErrorAs(t, err, &createErr)
+		assert.Equal(t, "execute rules", createErr.Operation)
+		assert.Equal(t, destination, createErr.Destination)
+		assert.Equal(t, config.CloneStrategyFull, createErr.CloneStrategy)
+		assert.Contains(t, err.Error(), destination)
+		assert.Contains(t, err.Error(), config.CloneStrategyFull)
+	})
+}
+
+func TestCreateSession_DoesNotReuseRecycledWorktree(t *testing.T) {
+	store := newMockStore()
+	remote := "https://github.com/example/repo.git"
+	store.sessions["wt-1"] = session.Session{
+		ID:            "wt-1",
+		Name:          "old-session",
+		Slug:          "old-session",
+		Remote:        remote,
+		State:         session.StateRecycled,
+		CloneStrategy: config.CloneStrategyWorktree,
+		Path:          t.TempDir(),
+		Metadata:      map[string]string{session.MetaWorktreeBranch: "hive/old-session-abc123"},
+	}
+
+	var addedBranch string
+	spy := &capturingMockGit{}
+	spy.WorktreeAddFn = func(_ context.Context, _, _, branch string) error {
+		addedBranch = branch
+		return nil
+	}
+
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Rules:   []config.Rule{{Pattern: "", CloneStrategy: config.CloneStrategyWorktree}},
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{})
+	svc := NewService(store, spy, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:      "new-feature",
+		Remote:    remote,
+		SkipSpawn: true,
+	})
+	require.NoError(t, err)
+
+	assert.NotEqual(t, "wt-1", sess.ID)
+	assert.Regexp(t, `^hive/new-feature-[a-z0-9]+$`, addedBranch)
+	assert.Equal(t, addedBranch, sess.GetMeta(session.MetaWorktreeBranch))
+}
+
+// capturingMockGit extends mockGit with optional function overrides for capturing calls.
+type capturingMockGit struct {
+	mockGit
+	CloneFn       func(ctx context.Context, url, dest string) error
+	WorktreeAddFn func(ctx context.Context, repoDir, path, branch string) error
+}
+
+func (m *capturingMockGit) Clone(ctx context.Context, url, dest string) error {
+	if m.CloneFn != nil {
+		return m.CloneFn(ctx, url, dest)
+	}
+	return nil
+}
+
+func (m *capturingMockGit) WorktreeAdd(ctx context.Context, repoDir, path, branch string) error {
+	if m.WorktreeAddFn != nil {
+		return m.WorktreeAddFn(ctx, repoDir, path, branch)
+	}
+	return nil
+}
+
+// Ensure the mock implements the interface at compile time.
+var (
+	_ git.Git       = (*mockGit)(nil)
+	_ git.Git       = (*capturingMockGit)(nil)
+	_ session.Store = (*mockStore)(nil)
+)

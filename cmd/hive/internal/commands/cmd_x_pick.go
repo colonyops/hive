@@ -14,12 +14,12 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/core/git"
-	"github.com/colonyops/hive/internal/core/kv"
-	"github.com/colonyops/hive/internal/core/multiplexer"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/domain/kv"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
@@ -263,16 +263,9 @@ func (m *pickModel) applyFilter() {
 }
 
 // statusMatchesFilter reports whether a pane's status satisfies the
-// picker's string filter value. "approval" also matches StatusQuestion:
-// question renders at the approval tier. This mirrors
-// sessions.statusMatchesFilter as a separate copy — the picker's filter
-// value is a plain string (not a terminal.Status), and pulling in the TUI
-// package for one three-line predicate isn't worth the dependency.
+// picker's filter value. "approval" also matches question.
 func statusMatchesFilter(status terminal.Status, filter string) bool {
-	if string(status) == filter {
-		return true
-	}
-	return filter == string(terminal.StatusApproval) && status == terminal.StatusQuestion
+	return string(status) == filter || string(status.Simplified()) == filter
 }
 
 const maxRecents = 3
@@ -497,7 +490,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 
 				target := wi.Target
 				if target.Session == "" {
-					target.Session = hive.SessionTarget(item.Session).Session
+					target.Session = sessionsvc.Target(item.Session).Session
 				}
 				windowItem := pickItem{
 					Session:     item.Session,
@@ -550,7 +543,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				return fmt.Errorf("invalid --format %q: valid values are id, name, path, json", flagFormat)
 			}
 
-			sessions, err := cmd.app.Sessions.ListSessions(ctx)
+			sessions, err := cmd.app.Sessions().ListSessions(ctx)
 			if err != nil {
 				return fmt.Errorf("listing sessions: %w", err)
 			}
@@ -558,7 +551,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			// Filter to active sessions only
 			var items []pickItem
 			var currentSlug string
-			if current, currentErr := cmd.app.Sessions.CurrentSession(ctx); currentErr != nil {
+			if current, currentErr := cmd.app.Sessions().CurrentSession(ctx); currentErr != nil {
 				log.Debug().Err(currentErr).Msg("tmux session detection failed")
 			} else {
 				currentSlug = current.Session
@@ -571,7 +564,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				if flagRepo != "" && !strings.Contains(strings.ToLower(s.Remote), strings.ToLower(flagRepo)) {
 					continue
 				}
-				target := hive.SessionTarget(s)
+				target := sessionsvc.Target(s)
 				if flagHideCurrent && target.Session == currentSlug {
 					continue
 				}
@@ -592,7 +585,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				}
 			}
 
-			termMgr := cmd.app.Terminal
+			termMgr := cmd.app.Terminal()
 
 			// Pre-fetch statuses synchronously so the first render has data.
 			// Keep baseItems as the original per-session slice; refreshStatusCmd
@@ -636,7 +629,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				return err
 			}
 
-			return cmd.app.Sessions.AttachOrSwitch(ctx, result.selected.Target, multiplexer.AttachStreams{
+			return cmd.app.Sessions().AttachOrSwitch(ctx, result.selected.Target, multiplexer.AttachStreams{
 				Stdin: os.Stdin, Stdout: c.Root().Writer, Stderr: os.Stderr,
 			})
 		},

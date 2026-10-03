@@ -14,11 +14,13 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/huh/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/hive"
+	hiveconfig "github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/agent"
+	"github.com/colonyops/hive/pkg/atomicfile"
+	"github.com/colonyops/hive/pkg/pathutil"
 	"github.com/urfave/cli/v3"
-	"gopkg.in/yaml.v3"
 )
 
 type agentTemplateData struct {
@@ -48,12 +50,13 @@ type stepResult struct {
 	fixHint string
 }
 
-var knownAgents = []string{"claude", "opencode", "codex", "pi", "amp", "copilot", "cursor"}
-
-var agentFlagMap = map[string][]string{
-	"claude":   {"--dangerously-skip-permissions"},
-	"opencode": {"--agent", "free-permissions-runner"},
-	"codex":    {"--full-auto"},
+func knownAgentNames() []string {
+	known := agent.Known()
+	names := make([]string, len(known))
+	for i, a := range known {
+		names[i] = a.Name
+	}
+	return names
 }
 
 // detectInstalledAgents returns the subset of known agent names found on PATH,
@@ -137,7 +140,7 @@ func aliasShellFor(rcFile string) string {
 // validateRCFile rejects empty paths, directories, and paths whose parent
 // directory does not exist. The file itself may not exist yet.
 func validateRCFile(s string) error {
-	path := expandTilde(strings.TrimSpace(s))
+	path := pathutil.ExpandHome(strings.TrimSpace(s))
 	if path == "" {
 		return fmt.Errorf("path is required")
 	}
@@ -257,49 +260,16 @@ func appendTmuxBinding(configPath string) error {
 }
 
 // defaultConfigPath returns $XDG_CONFIG_HOME/hive/config.yaml.
-// This is the write-side counterpart to config.DefaultConfigPath which probes for existing files.
+// This is the write-side counterpart to hiveconfig.DefaultConfigPath, which probes for existing files.
 func defaultConfigPath() string {
-	return filepath.Join(config.DefaultConfigDir(), "config.yaml")
-}
-
-// toStringSlice serialises a []string as a YAML inline sequence using yaml.v3.
-// Example: []string{"--foo"} → `["--foo"]`, nil/empty → `[]`.
-func toStringSlice(ss []string) string {
-	if len(ss) == 0 {
-		return "[]"
-	}
-	node := &yaml.Node{
-		Kind:  yaml.SequenceNode,
-		Style: yaml.FlowStyle,
-	}
-	for _, s := range ss {
-		node.Content = append(node.Content, &yaml.Node{
-			Kind:  yaml.ScalarNode,
-			Value: s,
-		})
-	}
-	out, err := yaml.Marshal(node)
-	if err != nil {
-		return "[]"
-	}
-	return strings.TrimRight(string(out), "\n")
-}
-
-// toYAMLScalar serialises a string as a safe YAML scalar via yaml.v3.
-// Values containing YAML-significant characters (e.g. ": ") are quoted.
-func toYAMLScalar(s string) string {
-	out, err := yaml.Marshal(s)
-	if err != nil {
-		return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
-	}
-	return strings.TrimRight(string(out), "\n")
+	return filepath.Join(hiveconfig.DefaultConfigDir(), "config.yaml")
 }
 
 // renderConfigTemplate executes configTemplate with data and returns the rendered string.
 func renderConfigTemplate(data configTemplateData) (string, error) {
 	funcMap := template.FuncMap{
-		"toStringSlice": toStringSlice,
-		"toYAMLScalar":  toYAMLScalar,
+		"toStringSlice": hiveconfig.YAMLFlowSequence,
+		"toYAMLScalar":  hiveconfig.YAMLScalar,
 	}
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configTemplate)
 	if err != nil {
@@ -347,11 +317,11 @@ rules:
 
 // InitCmd implements the interactive setup wizard.
 type InitCmd struct {
-	app *hive.App
+	app *app.App
 }
 
 // NewInitCmd constructs an InitCmd.
-func NewInitCmd(_ *Flags, app *hive.App) *InitCmd {
+func NewInitCmd(_ *Flags, app *app.App) *InitCmd {
 	return &InitCmd{app: app}
 }
 
@@ -430,23 +400,6 @@ func huhThemeTokyoNight(isDark bool) *huh.Styles {
 	return t
 }
 
-// expandTilde replaces a leading ~ or ~/ with the user's home directory.
-// Returns the path unchanged if ~ cannot be resolved or is not present.
-func expandTilde(path string) string {
-	if path == "~" {
-		if home, err := os.UserHomeDir(); err == nil {
-			return home
-		}
-		return path
-	}
-	if strings.HasPrefix(path, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, path[2:])
-		}
-	}
-	return path
-}
-
 // dirSuggestions returns absolute paths of subdirectories matching the typed input.
 // A trailing slash in input lists contents of the expanded directory; otherwise it
 // lists siblings whose name starts with the basename of the expanded input.
@@ -455,7 +408,7 @@ func dirSuggestions(input string) []string {
 	if input == "" {
 		return nil
 	}
-	expanded := expandTilde(input)
+	expanded := pathutil.ExpandHome(input)
 
 	var dir, prefix string
 	if strings.HasSuffix(input, "/") {
@@ -487,19 +440,20 @@ func dirSuggestions(input string) []string {
 	return result
 }
 
+// validateWorkspaceParent words hiveconfig.CheckWorkspace's result for the
+// init wizard's terminal prompt.
 func validateWorkspaceParent(s string) error {
-	path := expandTilde(s)
-	info, err := os.Stat(path)
-	if err != nil {
+	err := hiveconfig.CheckWorkspace(s)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, hiveconfig.ErrWorkspaceNotDir):
+		return fmt.Errorf("not a directory")
+	case errors.Is(err, hiveconfig.ErrWorkspaceIsRepo):
+		return fmt.Errorf("choose the parent folder that contains your repositories, not a git repository")
+	default:
 		return fmt.Errorf("path does not exist")
 	}
-	if !info.IsDir() {
-		return fmt.Errorf("not a directory")
-	}
-	if _, err := os.Stat(filepath.Join(path, ".git")); err == nil {
-		return fmt.Errorf("choose the parent folder that contains your repositories, not a git repository")
-	}
-	return nil
 }
 
 func printBanner() {
@@ -567,7 +521,7 @@ func (cmd *InitCmd) run(_ context.Context, _ *cli.Command) error {
 	}
 	needsTmux := hasTmux && tmuxCfgPath != "" && !tmuxAlready
 
-	installed := detectInstalledAgents(knownAgents)
+	installed := detectInstalledAgents(knownAgentNames())
 	if len(installed) == 0 {
 		installed = []string{"claude"}
 	}
@@ -648,8 +602,8 @@ func (cmd *InitCmd) run(_ context.Context, _ *cli.Command) error {
 		}
 	}
 
-	workspace = expandTilde(workspace)
-	rcFile = expandTilde(strings.TrimSpace(rcFile))
+	workspace = pathutil.ExpandHome(strings.TrimSpace(workspace))
+	rcFile = pathutil.ExpandHome(strings.TrimSpace(rcFile))
 
 	// The chosen rc file may differ from the default checked above.
 	if needsAlias && doAlias && rcFile != "" {
@@ -744,12 +698,7 @@ func (cmd *InitCmd) applyConfigFile(cfgPath, agentName string, installed []strin
 		return stepResult{name: "Config file", status: statusFailed, detail: err.Error()}
 	}
 
-	tmp := cfgPath + ".tmp"
-	if err := os.WriteFile(tmp, []byte(rendered), 0o644); err != nil {
-		return stepResult{name: "Config file", status: statusFailed, detail: err.Error()}
-	}
-	if err := os.Rename(tmp, cfgPath); err != nil {
-		_ = os.Remove(tmp)
+	if err := atomicfile.Write(cfgPath, []byte(rendered), 0o644); err != nil {
 		return stepResult{name: "Config file", status: statusFailed, detail: err.Error()}
 	}
 	return stepResult{name: "Config file", status: statusDone, detail: "created " + cfgPath}
@@ -757,11 +706,12 @@ func (cmd *InitCmd) applyConfigFile(cfgPath, agentName string, installed []strin
 
 // flagsFor returns the skip-permissions flags for an agent when skipPerms is true,
 // or nil if the agent has no known flags or skipPerms is false.
-func flagsFor(agent string, skipPerms bool) []string {
+func flagsFor(name string, skipPerms bool) []string {
 	if !skipPerms {
 		return nil
 	}
-	return agentFlagMap[agent]
+	a, _ := agent.Lookup(name)
+	return a.SkipPermissionFlags
 }
 
 func printSummary(w io.Writer, results []stepResult) {

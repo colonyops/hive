@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/core/doctor"
+	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/stretchr/testify/assert"
 )
 

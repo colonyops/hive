@@ -11,6 +11,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
 func terminalCatalog(t *testing.T, yaml string) *actions.ActionStore {
@@ -46,19 +47,20 @@ actions:
     command_template: 'echo {{ .Key }}'
 `
 
-func terminalSessionsService(t *testing.T, executor dispatch.Executor) (*SessionsService, *fakeJobRunner, *fakeSessionManager) {
+func terminalSessionsService(t *testing.T, executor dispatch.Executor) (*SessionsService, *fakeJobRunner, *hiveHarness) {
 	t.Helper()
-	manager, detail := activeSession()
-	detail.Path = "/work/review-81"
-	detail.WorktreeBranch = "feat/review"
-	manager.details["s1"] = detail
+	h := newHiveHarness(t, engineOptions{})
+	sess := reviewSession()
+	sess.Path = "/work/review-81"
+	sess.SetMeta(session.MetaWorktreeBranch, "feat/review")
+	h.save(t, sess)
 	runner := &fakeJobRunner{}
 	dispatcher := dispatch.NewDispatcher(map[string]dispatch.Executor{
 		"shell":     executor,
 		"clipboard": dispatch.NewClipboardExecutor(),
 	})
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner, Catalog: terminalCatalog(t, terminalActionsYAML), Dispatcher: dispatcher})
-	return svc, runner, manager
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: runner, Catalog: terminalCatalog(t, terminalActionsYAML), Dispatcher: dispatcher})
+	return svc, runner, h
 }
 
 func TestTerminalActionViews_ScopedToTheSurface(t *testing.T) {
@@ -138,11 +140,10 @@ func TestInvokeTerminalAction_RefusesAClipboardAction(t *testing.T) {
 }
 
 func TestInvokeTerminalAction_RefusesANonActiveSession(t *testing.T) {
-	svc, _, manager := terminalSessionsService(t, &recordingActionExecutor{})
-	detail := manager.details["s1"]
-	detail.State = "recycled"
-	manager.details["s1"] = detail
-	manager.sessions[0].State = "recycled"
+	svc, _, h := terminalSessionsService(t, &recordingActionExecutor{})
+	sess := h.session(t, "s1")
+	sess.State = session.StateRecycled
+	h.save(t, sess)
 
 	_, err := svc.InvokeTerminalAction(t.Context(), "open-in-zed", dispatch.TerminalTarget{Slug: "review-81"}, nil)
 	require.Error(t, err)

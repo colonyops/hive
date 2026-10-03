@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // connectedPullRequests wires a lookup whose accounts are bound to baseURL, one

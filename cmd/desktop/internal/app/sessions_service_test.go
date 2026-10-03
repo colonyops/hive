@@ -3,10 +3,19 @@ package app
 import (
 	"context"
 	"errors"
+	"io"
+	"os"
+	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
+	"github.com/colonyops/hive/pkg/executil/executiltest"
+	"github.com/rs/zerolog"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,10 +31,8 @@ type defaultAgentFunc func(context.Context) string
 func (f defaultAgentFunc) DefaultAgent(ctx context.Context) string { return f(ctx) }
 
 type fakeSessionLauncher struct {
-	opts      dispatch.SessionLaunchOptions
-	calls     []dispatch.LaunchSessionRequest
-	optsCalls int
-	err       error
+	calls []dispatch.LaunchSessionRequest
+	err   error
 }
 
 func (f *fakeSessionLauncher) LaunchSession(_ context.Context, req dispatch.LaunchSessionRequest) (dispatch.SessionExecutionOutcome, error) {
@@ -34,11 +41,6 @@ func (f *fakeSessionLauncher) LaunchSession(_ context.Context, req dispatch.Laun
 		return dispatch.SessionExecutionOutcome{}, f.err
 	}
 	return dispatch.SessionExecutionOutcome{ID: "session-1", Name: req.Name}, nil
-}
-
-func (f *fakeSessionLauncher) SessionLaunchOptions(context.Context) (dispatch.SessionLaunchOptions, error) {
-	f.optsCalls++
-	return f.opts, nil
 }
 
 type fakeWorkspaceLauncher struct {
@@ -56,121 +58,35 @@ func (f *fakeWorkspaceLauncher) LaunchWorkspaceSession(_ context.Context, req di
 	return dispatch.SessionExecutionOutcome{ID: "42", Name: req.Name, Slug: "agentws-42"}, f.err
 }
 
-// fakeSessionManager stands in for the hive seam. details is keyed by session
-// id; sessions is what the list returns.
-type fakeSessionManager struct {
-	sessions []dispatch.SessionSummary
-	statuses dispatch.SessionStatusSnapshot
-	details  map[string]dispatch.SessionDetail
-	gitByID  map[string]dispatch.SessionGitStatus
-	risk     dispatch.SessionRisk
-	running  map[string]bool
-	err      error
-	// runningErr fails only the liveness probe, which is how tmux being
-	// unreachable presents behind a hive listing that succeeded.
-	runningErr error
-
-	renamed     [][2]string
-	deleted     []string
-	recycled    []string
-	pruned      int
-	renameErr   error
-	afterRename func()
-	spawned     [][3]string
-	spawnErr    error
-}
-
-func (f *fakeSessionManager) ListSessions(context.Context) ([]dispatch.SessionSummary, error) {
-	return f.sessions, f.err
-}
-
-func (f *fakeSessionManager) SessionStatuses(context.Context) (dispatch.SessionStatusSnapshot, error) {
-	return f.statuses, f.err
-}
-
-func (f *fakeSessionManager) SessionDetail(_ context.Context, id string) (dispatch.SessionDetail, error) {
-	detail, ok := f.details[id]
-	if !ok {
-		return dispatch.SessionDetail{}, errors.New("no such session")
-	}
-	return detail, nil
-}
-
-func (f *fakeSessionManager) SessionGitStatus(_ context.Context, id string) (dispatch.SessionGitStatus, error) {
-	status, ok := f.gitByID[id]
-	if !ok {
-		return dispatch.SessionGitStatus{}, errors.New("no such session")
-	}
-	return status, nil
-}
-
-func (f *fakeSessionManager) RunningSessions(_ context.Context, ids []string) (map[string]bool, error) {
-	if f.err != nil {
-		return nil, f.err
-	}
-	if f.runningErr != nil {
-		return nil, f.runningErr
-	}
-	running := map[string]bool{}
-	for _, id := range ids {
-		running[id] = f.running[id]
-	}
-	return running, nil
-}
-
-func (f *fakeSessionManager) SessionRisk(context.Context, string) (dispatch.SessionRisk, error) {
-	return f.risk, f.err
-}
-
-func (f *fakeSessionManager) RenameSession(_ context.Context, id, name string) error {
-	if f.afterRename != nil {
-		f.afterRename()
-	}
-	if f.renameErr != nil {
-		return f.renameErr
-	}
-	f.renamed = append(f.renamed, [2]string{id, name})
-	detail := f.details[id]
-	detail.Name = name
-	detail.Slug = session.Slugify(name)
-	f.details[id] = detail
-	return nil
-}
-
-func (f *fakeSessionManager) DeleteSession(_ context.Context, id string) error {
-	f.deleted = append(f.deleted, id)
-	return f.err
-}
-
-func (f *fakeSessionManager) RecycleSession(_ context.Context, id string) error {
-	f.recycled = append(f.recycled, id)
-	return f.err
-}
-
-func (f *fakeSessionManager) PruneSessions(context.Context) (int, error) {
-	f.pruned++
-	return 3, f.err
-}
-
-func (f *fakeSessionManager) SpawnTmuxSession(_ context.Context, name, path, repo string) error {
-	if f.spawnErr != nil {
-		return f.spawnErr
-	}
-	f.spawned = append(f.spawned, [3]string{name, path, repo})
-	return nil
-}
-
 type fakeSessionTmux struct {
 	renames     [][2]string
 	contextErrs []error
 	absent      bool
 	err         error
+	// afterRename runs once the live rename is recorded, to interleave a
+	// failure between it and hive's own update.
+	afterRename func()
 }
 
 func (f *fakeSessionTmux) RenameSessionIfPresent(ctx context.Context, from, to string) (bool, error) {
 	f.renames = append(f.renames, [2]string{from, to})
 	f.contextErrs = append(f.contextErrs, ctx.Err())
+	if f.afterRename != nil {
+		f.afterRename()
+		f.afterRename = nil
+	}
 	return !f.absent && f.err == nil, f.err
+}
+
+type fakeWindowSource struct {
+	results map[string][]tmuxcc.IndexedWindow
+	err     error
+	seen    []string
+}
+
+func (f *fakeWindowSource) ListIndexedWindows(_ context.Context, sessions []string) (map[string][]tmuxcc.IndexedWindow, error) {
+	f.seen = append(f.seen, sessions...)
+	return f.results, f.err
 }
 
 // fakeJobRunner runs the tracked function synchronously so tests can observe
@@ -197,56 +113,73 @@ func (r *fakeActivityRecorder) Record(_ context.Context, e activity.Event) {
 	r.events = append(r.events, e)
 }
 
-func activeSession() (*fakeSessionManager, dispatch.SessionDetail) {
-	detail := dispatch.SessionDetail{ID: "s1", Name: "review 81", Slug: "review-81", Repo: "acme/site", State: "active"}
-	return &fakeSessionManager{
-		sessions: []dispatch.SessionSummary{{ID: "s1", Name: detail.Name, Slug: detail.Slug, Repo: detail.Repo, State: "active"}},
-		details:  map[string]dispatch.SessionDetail{"s1": detail},
-	}, detail
+func activeHarness(t *testing.T) *hiveHarness {
+	t.Helper()
+	h := newHiveHarness(t, engineOptions{})
+	h.save(t, reviewSession())
+	return h
+}
+
+func (h *hiveHarness) session(t *testing.T, id string) session.Session {
+	t.Helper()
+	s, err := h.engine.Sessions().GetSession(t.Context(), id)
+	require.NoError(t, err)
+	return s
 }
 
 func TestSessionsService_SessionLaunchWorkspacesDoesNotResolveRepositories(t *testing.T) {
-	repositories := &fakeSessionLauncher{}
 	workspaceOptions := []dispatch.SessionLaunchWorkspace{{Dir: "alerts", Name: "Alerts", SupportsPrompt: true}}
-	svc := newSessionsService(SessionsDeps{
-		Launcher: repositories, WorkspaceLauncher: &fakeWorkspaceLauncher{options: workspaceOptions},
-	})
+	svc := newSessionsService(SessionsDeps{WorkspaceLauncher: &fakeWorkspaceLauncher{options: workspaceOptions}})
 
 	assert.Equal(t, workspaceOptions, svc.SessionLaunchWorkspaces(t.Context()))
-	assert.Zero(t, repositories.optsCalls)
 }
 
-func TestSessionsService_SessionLaunchOptions(t *testing.T) {
-	expected := dispatch.SessionLaunchOptions{
-		Repositories:      []dispatch.SessionLaunchRepository{{Name: "hive", Repository: "https://github.com/colonyops/hive.git"}},
-		DefaultRepository: "https://github.com/colonyops/hive.git",
-		Agents:            []string{"claude"},
-		DefaultAgent:      "claude",
+func withAgents(agents ...string) func(*config.Config) {
+	return func(cfg *config.Config) {
+		cfg.Agents.Profiles = map[string]config.AgentProfile{}
+		for _, agent := range agents {
+			cfg.Agents.Profiles[agent] = config.AgentProfile{}
+		}
+		cfg.Agents.Default = agents[0]
 	}
-	manager, _ := activeSession()
+}
+
+// The form gets each repository's label and remote, never its local path.
+func TestSessionsService_SessionLaunchOptions(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{cfg: withAgents("claude")})
+	checkout := t.TempDir()
+	h.save(t, session.Session{
+		ID: "s1", Name: "hive", Slug: "hive", Path: checkout,
+		Remote: "https://github.com/colonyops/hive.git", State: session.StateActive,
+	})
 	workspaceOptions := []dispatch.SessionLaunchWorkspace{{Dir: "alerts", Name: "Alerts", SupportsPrompt: true}}
 	svc := newSessionsService(SessionsDeps{
-		Launcher: &fakeSessionLauncher{opts: expected}, WorkspaceLauncher: &fakeWorkspaceLauncher{options: workspaceOptions},
-		Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, DefaultAgentEnv: NopDefaultAgentReader{},
+		Hive: h.engine, WorkspaceLauncher: &fakeWorkspaceLauncher{options: workspaceOptions},
+		Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, DefaultAgentEnv: NopDefaultAgentReader{},
 	})
+
 	got, err := svc.SessionLaunchOptions(t.Context())
 	require.NoError(t, err)
-	expected.Workspaces = workspaceOptions
-	assert.Equal(t, expected, got)
+	assert.Equal(t, dispatch.SessionLaunchOptions{
+		Repositories:      []dispatch.SessionLaunchRepository{{Name: "hive", Repository: "https://github.com/colonyops/hive.git"}},
+		DefaultRepository: "https://github.com/colonyops/hive.git",
+		Workspaces:        workspaceOptions,
+		Agents:            []string{"claude"},
+		DefaultAgent:      "claude",
+	}, got)
 }
 
 // The form preselects what hive itself would run: HIVE_DEFAULT_AGENT when it
 // names a configured profile, agents.default otherwise.
 func TestSessionsService_SessionLaunchOptionsPrefersTheEnvironmentAgent(t *testing.T) {
-	opts := dispatch.SessionLaunchOptions{Agents: []string{"claude", "codex"}, DefaultAgent: "claude"}
-	manager, _ := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{opts: opts}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+	h := newHiveHarness(t, engineOptions{cfg: withAgents("claude", "codex")})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 
 	svc.defaultAgentEnv = defaultAgentFunc(func(context.Context) string { return " codex " })
 	got, err := svc.SessionLaunchOptions(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, "codex", got.DefaultAgent)
-	assert.Equal(t, opts.Agents, got.Agents, "the choices themselves are hive's")
+	assert.Equal(t, []string{"claude", "codex"}, got.Agents, "the choices themselves are hive's")
 
 	svc.defaultAgentEnv = defaultAgentFunc(func(context.Context) string { return "aider" })
 	got, err = svc.SessionLaunchOptions(t.Context())
@@ -262,8 +195,8 @@ func TestSessionsService_SessionLaunchOptionsPrefersTheEnvironmentAgent(t *testi
 func TestSessionsService_CreateSessionValidatesBeforeTracking(t *testing.T) {
 	launcher := &fakeSessionLauncher{}
 	runner := &fakeJobRunner{}
-	manager, _ := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: launcher, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
+	h := activeHarness(t)
+	svc := newSessionsService(SessionsDeps{Launcher: launcher, Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: runner})
 
 	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Name: "review", Prompt: "go"})
 	assert.Equal(t, KindInvalid, KindOf(err), "a target is required")
@@ -284,8 +217,8 @@ func TestSessionsService_CreateSessionValidatesBeforeTracking(t *testing.T) {
 func TestSessionsService_CreateSessionLaunchesAsAJob(t *testing.T) {
 	launcher := &fakeSessionLauncher{}
 	runner := &fakeJobRunner{}
-	manager, _ := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: launcher, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
+	h := activeHarness(t)
+	svc := newSessionsService(SessionsDeps{Launcher: launcher, Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: runner})
 
 	jobID, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{
 		Repository: "  https://github.com/acme/site.git  ",
@@ -311,12 +244,12 @@ func TestSessionsService_CreateSessionLaunchesAWorkspaceChat(t *testing.T) {
 	repositories := &fakeSessionLauncher{}
 	workspaces := &fakeWorkspaceLauncher{}
 	runner := &fakeJobRunner{}
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	alert := models.ItemRef{ProfileID: "p", SourceKind: "github", ExternalID: "acme/site#81"}
 	items := &fakeItemSessionStore{refs: map[int64]models.ItemRef{42: alert}}
 	svc := newSessionsService(SessionsDeps{
 		Launcher: repositories, WorkspaceLauncher: workspaces,
-		Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner, Items: items, Links: items,
+		Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: runner, Items: items, Links: items,
 	})
 
 	jobID, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{
@@ -329,68 +262,56 @@ func TestSessionsService_CreateSessionLaunchesAWorkspaceChat(t *testing.T) {
 	assert.Equal(t, []dispatch.LaunchWorkspaceSessionRequest{{
 		Workspace: "alerts", Name: "incident", Prompt: "cluster prod is down", Origins: []models.ItemRef{alert},
 	}}, workspaces.calls)
-	assert.Zero(t, repositories.optsCalls, "a workspace command selects its own agent")
 }
 
 // CreateSession resolves an unstated agent through the same env override the
-// form preselects with (hay-kot/hive-desktop#438): the form and the launch it submits must agree
-// on which agent runs.
-func TestSessionsService_CreateSessionResolvesTheEnvironmentAgentWhenNoneIsRequested(t *testing.T) {
-	launcher := &fakeSessionLauncher{opts: dispatch.SessionLaunchOptions{Agents: []string{"claude", "codex"}}}
-	runner := &fakeJobRunner{}
-	manager, _ := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: launcher, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
+// form preselects with (hay-kot/hive-desktop#438): the form and the launch it
+// submits must agree on which agent runs.
+func TestSessionsService_CreateSessionResolvesTheLaunchAgent(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		env       string
+		requested string
+		want      string
+	}{
+		{name: "the environment agent when none is requested", env: "codex", want: "codex"},
+		{name: "an explicit agent over the environment", env: "codex", requested: "claude", want: "claude"},
+		{name: "no agent for an environment agent with no profile", env: "aider"},
+		{name: "no agent with no environment default"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHiveHarness(t, engineOptions{cfg: withAgents("claude", "codex")})
+			launcher := &fakeSessionLauncher{}
+			svc := newSessionsService(SessionsDeps{Launcher: launcher, Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+			svc.defaultAgentEnv = defaultAgentFunc(func(context.Context) string { return tt.env })
+
+			_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "review-81", Agent: tt.requested})
+			require.NoError(t, err)
+			require.Len(t, launcher.calls, 1)
+			assert.Equal(t, tt.want, launcher.calls[0].Agent, "hive resolves agents.default itself when handed no agent")
+		})
+	}
+}
+
+// Resolving the agent reads the profiles off the config, so the click that
+// starts a session never pays for SessionLaunchOptions' workspace scan.
+func TestSessionsService_CreateSessionRunsNoSubprocessToResolveTheAgent(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{cfg: func(cfg *config.Config) {
+		withAgents("claude", "codex")(cfg)
+		cfg.Workspaces = []string{t.TempDir()}
+	}})
+	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 	svc.defaultAgentEnv = defaultAgentFunc(func(context.Context) string { return "codex" })
 
 	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "review-81"})
 	require.NoError(t, err)
-	require.Len(t, launcher.calls, 1)
-	assert.Equal(t, "codex", launcher.calls[0].Agent)
-}
-
-func TestSessionsService_CreateSessionKeepsAnExplicitAgentOverTheEnvironment(t *testing.T) {
-	launcher := &fakeSessionLauncher{opts: dispatch.SessionLaunchOptions{Agents: []string{"claude", "codex"}}}
-	runner := &fakeJobRunner{}
-	manager, _ := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: launcher, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
-	svc.defaultAgentEnv = defaultAgentFunc(func(context.Context) string { return "codex" })
-
-	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "review-81", Agent: "claude"})
-	require.NoError(t, err)
-	require.Len(t, launcher.calls, 1)
-	assert.Equal(t, "claude", launcher.calls[0].Agent, "an explicit choice is never overridden")
-}
-
-func TestSessionsService_CreateSessionIgnoresAnEnvironmentAgentWithNoConfiguredProfile(t *testing.T) {
-	launcher := &fakeSessionLauncher{opts: dispatch.SessionLaunchOptions{Agents: []string{"claude"}}}
-	runner := &fakeJobRunner{}
-	manager, _ := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: launcher, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
-	svc.defaultAgentEnv = defaultAgentFunc(func(context.Context) string { return "aider" })
-
-	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "review-81"})
-	require.NoError(t, err)
-	require.Len(t, launcher.calls, 1)
-	assert.Empty(t, launcher.calls[0].Agent, "hive resolves agents.default itself when handed no agent")
-}
-
-func TestSessionsService_CreateSessionLeavesAgentEmptyWithNoEnvironmentDefault(t *testing.T) {
-	launcher := &fakeSessionLauncher{opts: dispatch.SessionLaunchOptions{Agents: []string{"claude"}}}
-	runner := &fakeJobRunner{}
-	manager, _ := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: launcher, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
-
-	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "review-81"})
-	require.NoError(t, err)
-	require.Len(t, launcher.calls, 1)
-	assert.Empty(t, launcher.calls[0].Agent)
-	assert.Zero(t, launcher.optsCalls, "no override means nothing to validate, so the workspace scan behind SessionLaunchOptions must not run on the create click")
+	assert.Empty(t, h.exec.Calls())
 }
 
 func TestSessionsService_CreateSessionSurfacesDuplicateNameOnTheJob(t *testing.T) {
 	runner := &fakeJobRunner{}
-	manager, _ := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{err: session.ErrDuplicateName}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
+	h := activeHarness(t)
+	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{err: session.ErrDuplicateName}, Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: runner})
 
 	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "dupe"})
 	require.NoError(t, err, "a duplicate name is a job failure, not a validation error")
@@ -399,62 +320,83 @@ func TestSessionsService_CreateSessionSurfacesDuplicateNameOnTheJob(t *testing.T
 }
 
 func TestSessionsService_ListSessionsPassesEveryStateThrough(t *testing.T) {
-	manager, _ := activeSession()
-	manager.sessions = append(manager.sessions, dispatch.SessionSummary{ID: "s2", Name: "old", Slug: "old", State: "recycled"})
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+	h := activeHarness(t)
+	h.save(t, session.Session{ID: "s2", Name: "old", Slug: "old", State: session.StateRecycled})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+
 	got, err := svc.ListSessions(t.Context())
 	require.NoError(t, err)
-	assert.Equal(t, manager.sessions, got, "a recycled session is unattachable, not unmanageable")
+	states := map[string]session.State{}
+	for _, s := range got {
+		states[s.ID] = s.State
+	}
+	assert.Equal(t, map[string]session.State{"s1": session.StateActive, "s2": session.StateRecycled}, states,
+		"a recycled session is unattachable, not unmanageable")
 }
 
-func TestSessionsService_SessionStatusesPassesSnapshotThrough(t *testing.T) {
-	manager, _ := activeSession()
-	manager.statuses = dispatch.SessionStatusSnapshot{
-		Items: []dispatch.SessionStatus{{
-			SessionID: "s1",
-			Running:   true,
-			Windows:   []dispatch.SessionWindowStatus{{WindowID: "@1", Status: "ready", Tool: "codex"}},
-		}},
-		PollInterval: 1500 * time.Millisecond,
+func TestSessionsService_SessionDetailReadsWorktreeMetadata(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{})
+	sess := session.Session{
+		ID: "s1", Name: "review 81", Slug: "review-81", Path: "/tmp/review-81",
+		Remote: "acme/site", State: session.StateActive, CloneStrategy: session.CloneStrategyWorktree,
+		Tags: []string{"pr-81"},
 	}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+	sess.SetMeta(session.MetaWorktreeBranch, "hive/review-81")
+	h.save(t, sess)
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
 
-	got, err := svc.SessionStatuses(t.Context())
+	got, err := svc.SessionDetail(t.Context(), "s1")
 	require.NoError(t, err)
-	assert.Equal(t, manager.statuses, got)
+	assert.Equal(t, "hive/review-81", got.GetMeta(session.MetaWorktreeBranch))
+	assert.Equal(t, []string{"pr-81"}, got.Tags)
+	assert.Equal(t, "/tmp/review-81", got.Path)
+
+	_, err = svc.SessionDetail(t.Context(), "gone")
+	assert.Equal(t, KindNotFound, KindOf(err))
+	_, err = svc.SessionDetail(t.Context(), " ")
+	assert.Equal(t, KindInvalid, KindOf(err))
 }
 
 func TestSessionsService_RenameSessionRenamesTmuxBeforeTheStore(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	tmux := &fakeSessionTmux{}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: tmux, Jobs: &fakeJobRunner{}})
 
 	got, err := svc.RenameSession(t.Context(), "s1", "  Review 82  ")
 	require.NoError(t, err)
 	assert.Equal(t, "Review 82", got.Name)
-	assert.Equal(t, "review-82", got.Slug, "the summary carries the new tmux target")
+	assert.Equal(t, "review-82", got.Slug, "the session carries the new tmux target")
 	assert.Equal(t, [][2]string{{"review-81", "review-82"}}, tmux.renames)
-	assert.Equal(t, [][2]string{{"s1", "Review 82"}}, manager.renamed)
+	assert.Equal(t, "Review 82", h.session(t, "s1").Name)
 }
 
 func TestSessionsService_RenameSessionLeavesTheStoreAloneWhenTmuxFails(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	tmux := &fakeSessionTmux{err: errors.New("duplicate session: review-82")}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: tmux, Jobs: &fakeJobRunner{}})
 
 	_, err := svc.RenameSession(t.Context(), "s1", "review 82")
 	assert.Equal(t, KindConflict, KindOf(err))
-	assert.Empty(t, manager.renamed, "the slug must not move without its tmux session")
+	assert.Equal(t, "review 81", h.session(t, "s1").Name, "the slug must not move without its tmux session")
+}
+
+// failSessionWrites makes hive.db refuse every later session write, which is
+// how a full disk presents to the rename.
+func failSessionWrites(t *testing.T, h *hiveHarness) {
+	t.Helper()
+	_, err := h.engine.DB().Conn().ExecContext(t.Context(),
+		`CREATE TRIGGER fail_session_writes BEFORE UPDATE ON sessions BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
+	require.NoError(t, err)
 }
 
 func TestSessionsService_RenameSessionRollsActualTmuxTargetBackWhenTheStoreFails(t *testing.T) {
-	manager, _ := activeSession()
-	detail := manager.details["s1"]
-	detail.TmuxSession = "actual-review-81"
-	manager.details["s1"] = detail
-	manager.renameErr = errors.New("disk full")
+	h := newHiveHarness(t, engineOptions{})
+	sess := reviewSession()
+	sess.SetMeta(session.MetaTmuxSession, "actual-review-81")
+	h.save(t, sess)
+	failSessionWrites(t, h)
 	tmux := &fakeSessionTmux{}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: tmux, Jobs: &fakeJobRunner{}})
 
 	_, err := svc.RenameSession(t.Context(), "s1", "review 82")
 	assert.Equal(t, KindInternal, KindOf(err))
@@ -462,10 +404,10 @@ func TestSessionsService_RenameSessionRollsActualTmuxTargetBackWhenTheStoreFails
 }
 
 func TestSessionsService_RenameSessionDoesNotRollBackAnAbsentTmuxSession(t *testing.T) {
-	manager, _ := activeSession()
-	manager.renameErr = errors.New("disk full")
+	h := activeHarness(t)
+	failSessionWrites(t, h)
 	tmux := &fakeSessionTmux{absent: true}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: tmux, Jobs: &fakeJobRunner{}})
 
 	_, err := svc.RenameSession(t.Context(), "s1", "review 82")
 	assert.Equal(t, KindInternal, KindOf(err))
@@ -473,12 +415,10 @@ func TestSessionsService_RenameSessionDoesNotRollBackAnAbsentTmuxSession(t *test
 }
 
 func TestSessionsService_RenameSessionRollbackOutlivesRequestCancellation(t *testing.T) {
-	manager, _ := activeSession()
-	manager.renameErr = context.Canceled
+	h := activeHarness(t)
 	ctx, cancel := context.WithCancel(t.Context())
-	manager.afterRename = cancel
-	tmux := &fakeSessionTmux{}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+	tmux := &fakeSessionTmux{afterRename: cancel}
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: tmux, Jobs: &fakeJobRunner{}})
 
 	_, err := svc.RenameSession(ctx, "s1", "review 82")
 	assert.Equal(t, KindInternal, KindOf(err))
@@ -488,37 +428,37 @@ func TestSessionsService_RenameSessionRollbackOutlivesRequestCancellation(t *tes
 }
 
 func TestSessionsService_RenameSessionRejectsASlugCollision(t *testing.T) {
-	manager, _ := activeSession()
-	manager.sessions = append(manager.sessions, dispatch.SessionSummary{ID: "s2", Name: "Review 82", Slug: "review-82"})
+	h := activeHarness(t)
+	h.save(t, session.Session{ID: "s2", Name: "Review 82", Slug: "review-82", State: session.StateActive})
 	tmux := &fakeSessionTmux{}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: tmux, Jobs: &fakeJobRunner{}})
 
 	// "review/82" slugifies onto s2's slug, which would give both sessions the
 	// same tmux session name and the same directory slug.
 	_, err := svc.RenameSession(t.Context(), "s1", "review/82")
 	assert.Equal(t, KindInvalid, KindOf(err))
 	assert.Empty(t, tmux.renames)
-	assert.Empty(t, manager.renamed)
+	assert.Equal(t, "review 81", h.session(t, "s1").Name)
 }
 
 func TestSessionsService_RenameSessionRejectsAPersistedTmuxTargetCollision(t *testing.T) {
-	manager, _ := activeSession()
-	manager.sessions = append(manager.sessions, dispatch.SessionSummary{
-		ID: "s2", Name: "Renamed Elsewhere", Slug: "renamed-elsewhere", TmuxSession: "review-82",
-	})
+	h := activeHarness(t)
+	renamed := session.Session{ID: "s2", Name: "Renamed Elsewhere", Slug: "renamed-elsewhere", State: session.StateActive}
+	renamed.SetMeta(session.MetaTmuxSession, "review-82")
+	h.save(t, renamed)
 	tmux := &fakeSessionTmux{}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: tmux, Jobs: &fakeJobRunner{}})
 
 	_, err := svc.RenameSession(t.Context(), "s1", "review 82")
 	assert.Equal(t, KindInvalid, KindOf(err))
 	assert.Empty(t, tmux.renames)
-	assert.Empty(t, manager.renamed)
+	assert.Equal(t, "review 81", h.session(t, "s1").Name)
 }
 
 func TestSessionsService_RenameSessionValidatesTheName(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	tmux := &fakeSessionTmux{}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: tmux, Jobs: &fakeJobRunner{}})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: tmux, Jobs: &fakeJobRunner{}})
 
 	_, err := svc.RenameSession(t.Context(), "s1", "  ")
 	assert.Equal(t, KindInvalid, KindOf(err))
@@ -533,31 +473,41 @@ func TestSessionsService_DeleteAndRecycleRunAsJobsLabelledWithTheSessionName(t *
 		call     func(*SessionsService, context.Context) (int64, error)
 		label    string
 		actionID string
-		seen     func(*fakeSessionManager) []string
+		after    func(*testing.T, *hiveHarness)
 	}{
-		{"delete", func(s *SessionsService, ctx context.Context) (int64, error) { return s.DeleteSession(ctx, "s1") }, "Delete session", deleteSessionJobActionID, func(m *fakeSessionManager) []string { return m.deleted }},
-		{"recycle", func(s *SessionsService, ctx context.Context) (int64, error) { return s.RecycleSession(ctx, "s1") }, "Recycle session", recycleSessionJobActionID, func(m *fakeSessionManager) []string { return m.recycled }},
+		{"delete", func(s *SessionsService, ctx context.Context) (int64, error) { return s.DeleteSession(ctx, "s1") }, "Delete session", deleteSessionJobActionID, func(t *testing.T, h *hiveHarness) {
+			_, err := h.engine.Sessions().GetSession(t.Context(), "s1")
+			assert.Error(t, err, "the record is gone")
+		}},
+		{"recycle", func(s *SessionsService, ctx context.Context) (int64, error) { return s.RecycleSession(ctx, "s1") }, "Recycle session", recycleSessionJobActionID, func(t *testing.T, h *hiveHarness) {
+			assert.Equal(t, session.StateRecycled, h.session(t, "s1").State)
+		}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			manager, _ := activeSession()
+			h := newHiveHarness(t, engineOptions{})
+			sess := reviewSession()
+			sess.Path = t.TempDir()
+			require.NoError(t, os.Mkdir(filepath.Join(sess.Path, ".git"), 0o755))
+			h.save(t, sess)
 			runner := &fakeJobRunner{}
-			svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
+			svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: runner})
 
 			jobID, err := tt.call(svc, t.Context())
 			require.NoError(t, err)
+			require.NoError(t, runner.err)
 			assert.Equal(t, int64(7), jobID)
 			assert.Equal(t, tt.label, runner.label)
 			assert.Equal(t, tt.actionID, runner.actionID)
 			assert.Equal(t, "review 81", runner.target, "the name is read before the session can stop existing")
-			assert.Equal(t, []string{"s1"}, tt.seen(manager))
+			tt.after(t, h)
 		})
 	}
 }
 
 func TestSessionsService_DestructiveOperationsRejectAnUnknownSession(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	runner := &fakeJobRunner{}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: runner})
 
 	_, err := svc.DeleteSession(t.Context(), "gone")
 	assert.Equal(t, KindNotFound, KindOf(err))
@@ -566,89 +516,184 @@ func TestSessionsService_DestructiveOperationsRejectAnUnknownSession(t *testing.
 	assert.False(t, runner.ran)
 }
 
-func TestSessionsService_PruneRunsAsAJob(t *testing.T) {
-	manager, _ := activeSession()
+func TestSessionsService_PruneRunsAsAJobAndDeletesEveryRecycledSession(t *testing.T) {
+	h := activeHarness(t)
+	h.save(t,
+		session.Session{ID: "s2", Name: "old", Slug: "old", Path: t.TempDir(), State: session.StateRecycled},
+		session.Session{ID: "s3", Name: "broken", Slug: "broken", Path: t.TempDir(), State: session.StateCorrupted},
+	)
 	runner := &fakeJobRunner{}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: runner})
 
 	jobID, err := svc.PruneSessions(t.Context())
 	require.NoError(t, err)
+	require.NoError(t, runner.err)
 	assert.Equal(t, int64(7), jobID)
 	assert.Equal(t, pruneSessionsJobActionID, runner.actionID)
-	assert.Equal(t, 1, manager.pruned)
+	got, err := svc.ListSessions(t.Context())
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "s1", got[0].ID)
 }
 
 func TestSessionsService_SessionRiskCarriesTheWorktreeRecycleWarning(t *testing.T) {
-	manager, _ := activeSession()
-	manager.risk = dispatch.SessionRisk{UncommittedChanges: true, RecycleDeletes: true}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+	h := newHiveHarness(t, engineOptions{})
+	h.save(t, session.Session{ID: "s1", Name: "old", Slug: "old", Path: "/tmp/old", State: session.StateRecycled, CloneStrategy: session.CloneStrategyWorktree})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 
 	risk, err := svc.SessionRisk(t.Context(), "s1")
 	require.NoError(t, err)
-	assert.Equal(t, manager.risk, risk)
+	// No live clone left to hold unsaved work, but recycling a worktree
+	// session still deletes it, which the confirmation has to say.
+	assert.Equal(t, SessionRisk{RecycleDeletes: true}, risk)
 
 	_, err = svc.SessionRisk(t.Context(), " ")
 	assert.Equal(t, KindInvalid, KindOf(err))
+	_, err = svc.SessionRisk(t.Context(), "gone")
+	assert.Equal(t, KindNotFound, KindOf(err))
 }
 
-func TestSessionsService_SessionDetail(t *testing.T) {
-	manager, detail := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+func TestSessionsService_SessionGitStatusReadsTheCheckout(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{})
+	h.exec.Responses = []executiltest.Response{
+		{Out: []byte("feat/bar\n")},
+		{Out: []byte(" M README.md\n")},
+	}
+	sess := reviewSession()
+	sess.Path = "/tmp/review-81"
+	sess.Remote = "git@github.com:acme/site.git"
+	h.save(t, sess)
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
 
-	got, err := svc.SessionDetail(t.Context(), "s1")
+	got, err := svc.SessionGitStatus(t.Context(), "s1")
 	require.NoError(t, err)
-	assert.Equal(t, detail, got)
+	assert.True(t, got.Resolved)
+	assert.Equal(t, "feat/bar", got.Branch)
+	assert.True(t, got.Dirty)
+	assert.Equal(t, [3]string{"github.com", "acme", "site"}, [3]string{got.Host, got.Owner, got.Repo})
 
-	_, err = svc.SessionDetail(t.Context(), "gone")
+	_, err = svc.SessionGitStatus(t.Context(), "gone")
 	assert.Equal(t, KindNotFound, KindOf(err))
 }
 
 func TestSessionsService_StartTmuxSessionSpawnsFromTheSessionsOwnCheckout(t *testing.T) {
-	manager, detail := activeSession()
-	detail.Path = "/repos/site-wt-ab12"
-	manager.details["s1"] = detail
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+	h := newHiveHarness(t, engineOptions{})
+	sess := reviewSession()
+	sess.Path = "/repos/site-wt-ab12"
+	h.save(t, sess)
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 
 	require.NoError(t, svc.StartTmuxSession(t.Context(), "review-81"))
-	assert.Equal(t, [][3]string{{"review 81", "/repos/site-wt-ab12", "acme/site"}}, manager.spawned,
-		"the spawn is hive's, so it gets the name, checkout and remote hive spawns from")
+	require.Len(t, h.mux.opened, 1, "the spawn is hive's, so it gets the name, checkout and remote hive spawns from")
+	assert.Equal(t, "review-81", h.mux.opened[0].Target.Session)
+	assert.Equal(t, "/repos/site-wt-ab12", h.mux.opened[0].WorkingDirectory)
+	assert.True(t, h.mux.opened[0].Background, "the desktop attaches over control mode; the spawn must stay detached")
+}
+
+// recordingTmux stands in for the tmux binary hive's own client drives, so the
+// spawn is checked against the real shared spawner with no tmux server
+// running. absent fails has-session, which is how tmux answers for a session it
+// does not hold.
+type recordingTmux struct {
+	absent bool
+	runs   [][]string
+}
+
+func (r *recordingTmux) record(args []string) error {
+	r.runs = append(r.runs, append([]string{"tmux"}, args...))
+	if r.absent && len(args) > 0 && args[0] == "has-session" {
+		return errors.New("can't find session")
+	}
+	return nil
+}
+
+func (*recordingTmux) Available() bool { return true }
+
+func (r *recordingTmux) Capture(_ context.Context, args ...string) ([]byte, []byte, error) {
+	return nil, nil, r.record(args)
+}
+
+func (r *recordingTmux) Input(_ context.Context, _ io.Reader, args ...string) ([]byte, []byte, error) {
+	return nil, nil, r.record(args)
+}
+
+func (r *recordingTmux) Interactive(_ context.Context, _ multiplexer.AttachStreams, args ...string) error {
+	return r.record(args)
+}
+
+// spawnRule is a rule whose windows are distinguishable from hive's defaults,
+// so a test can tell "hive rendered the configured spawn" from "something here
+// built a window set of its own".
+func spawnRule(cfg *config.Config) {
+	cfg.Rules = []config.Rule{{
+		Windows: []config.WindowConfig{
+			{Name: "agent", Command: "run {{ .Slug }}", Focus: true},
+			{Name: "shell"},
+		},
+	}}
+}
+
+func TestSessionsService_StartTmuxSessionSpawnsTheConfiguredWindowsDetached(t *testing.T) {
+	runner := &recordingTmux{absent: true}
+	h := newHiveHarness(t, engineOptions{cfg: spawnRule, mux: tmuxexec.New(runner, zerolog.Nop())})
+	sess := reviewSession()
+	sess.Path = "/tmp/review-81"
+	h.save(t, sess)
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
+
+	require.NoError(t, svc.StartTmuxSession(t.Context(), "review-81"))
+
+	assert.Contains(t, runner.runs, []string{"tmux", "has-session", "-t", "review-81"})
+	assert.Contains(t, runner.runs, []string{"tmux", "new-session", "-d", "-s", "review-81", "-n", "agent", "-c", "/tmp/review-81", "--", "sh", "-c", "run review-81"})
+	assert.Contains(t, runner.runs, []string{"tmux", "new-window", "-t", "review-81", "-n", "shell", "-c", "/tmp/review-81"})
+	for _, run := range runner.runs {
+		assert.NotContains(t, run, "attach-session", "the desktop attaches over control mode; the spawn must stay detached")
+		assert.NotContains(t, run, "switch-client")
+	}
+}
+
+func TestSessionsService_StartTmuxSessionLeavesALiveSessionAlone(t *testing.T) {
+	runner := &recordingTmux{}
+	h := newHiveHarness(t, engineOptions{cfg: spawnRule, mux: tmuxexec.New(runner, zerolog.Nop())})
+	sess := reviewSession()
+	sess.Path = "/tmp/review-81"
+	h.save(t, sess)
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
+
+	require.NoError(t, svc.StartTmuxSession(t.Context(), "review-81"))
+	assert.Equal(t, [][]string{{"tmux", "has-session", "-t", "review-81"}}, runner.runs,
+		"a session tmux already holds is not respawned, so every cold attach can ask for one")
 }
 
 func TestSessionsService_StartTmuxSessionRejectsASlugNoSessionCarries(t *testing.T) {
-	manager, _ := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+	h := activeHarness(t)
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 
 	// A tmux session made by hand is attachable, but there is nothing to
 	// create one from when it is gone.
 	assert.Equal(t, KindNotFound, KindOf(svc.StartTmuxSession(t.Context(), "hand-rolled")))
 	assert.Equal(t, KindInvalid, KindOf(svc.StartTmuxSession(t.Context(), "  ")))
-	assert.Empty(t, manager.spawned)
+	assert.Empty(t, h.mux.opened)
 }
 
 func TestSessionsService_StartTmuxSessionRefusesASessionWithNoCheckout(t *testing.T) {
-	recycled := dispatch.SessionDetail{ID: "s2", Name: "old", Slug: "old", Repo: "acme/site", State: "recycled"}
-	manager := &fakeSessionManager{
-		sessions: []dispatch.SessionSummary{{ID: "s2", Name: "old", Slug: "old", Repo: "acme/site", State: "recycled"}},
-		details:  map[string]dispatch.SessionDetail{"s2": recycled},
-	}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+	h := newHiveHarness(t, engineOptions{})
+	h.save(t, session.Session{ID: "s2", Name: "old", Slug: "old", Remote: "acme/site", State: session.StateRecycled})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 
 	assert.Equal(t, KindConflict, KindOf(svc.StartTmuxSession(t.Context(), "old")))
-	assert.Empty(t, manager.spawned, "a recycled session's directory is gone; a terminal in it would be one too")
+	assert.Empty(t, h.mux.opened, "a recycled session's directory is gone; a terminal in it would be one too")
 }
 
 func TestSessionsService_StartTmuxSessionRefusesASlugItsNameWouldNotSpawn(t *testing.T) {
 	// Hive spawns under the slug it derives from the name, so a record whose two
 	// have drifted apart would create a session under a name nothing attaches to.
-	drifted := dispatch.SessionDetail{ID: "s1", Name: "review 82", Slug: "review-81", Repo: "acme/site", State: "active"}
-	manager := &fakeSessionManager{
-		sessions: []dispatch.SessionSummary{{ID: "s1", Name: "review 82", Slug: "review-81", Repo: "acme/site", State: "active"}},
-		details:  map[string]dispatch.SessionDetail{"s1": drifted},
-	}
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+	h := newHiveHarness(t, engineOptions{})
+	h.save(t, session.Session{ID: "s1", Name: "review 82", Slug: "review-81", Remote: "acme/site", State: session.StateActive})
+	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 
 	assert.Equal(t, KindConflict, KindOf(svc.StartTmuxSession(t.Context(), "review-81")))
-	assert.Empty(t, manager.spawned)
+	assert.Empty(t, h.mux.opened)
 }
 
 // A nil reader in SessionsDeps is substituted at construction, so the service
@@ -672,7 +717,7 @@ func TestNopEditorCommandReaderAnswersNoConfiguredEditor(t *testing.T) {
 }
 
 func TestSessionsService_CreateSessionKeepsTheFormWhenCreationFails(t *testing.T) {
-	failure := &dispatch.SessionCreateError{
+	failure := &sessionsvc.LaunchError{
 		Name:          "review-81",
 		Remote:        "https://github.com/acme/site.git",
 		CloneStrategy: "full",
@@ -680,12 +725,12 @@ func TestSessionsService_CreateSessionKeepsTheFormWhenCreationFails(t *testing.T
 		Output:        "Clone strategy: full\nCloning repository...",
 		Err:           errors.New("clone repository: git clone: exec git: exit status 1"),
 	}
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	bus := newTestBus(t)
 	failed := subscribeEvents[events.SessionCreateFailed](t, bus)
 	items := &fakeItemSessionStore{refs: map[int64]models.ItemRef{42: {ProfileID: "p", SourceKind: "github", ExternalID: "acme/site#81"}}}
 	svc := newSessionsService(SessionsDeps{
-		Launcher: &fakeSessionLauncher{err: failure}, Manager: manager, Statuses: manager,
+		Launcher: &fakeSessionLauncher{err: failure}, Hive: h.engine,
 		Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Items: items, Links: items, Events: bus,
 	})
 
@@ -717,10 +762,10 @@ func TestSessionsService_CreateSessionKeepsTheFormWhenCreationFails(t *testing.T
 
 // An untyped error is the reason, and the rest is absent rather than invented.
 func TestSessionsService_CreateSessionKeepsTheFormForAnUntypedFailure(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	svc := newSessionsService(SessionsDeps{
-		Launcher: &fakeSessionLauncher{err: errors.New("tmux unavailable")}, Manager: manager,
-		Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
+		Launcher: &fakeSessionLauncher{err: errors.New("tmux unavailable")}, Hive: h.engine,
+		Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
 	})
 
 	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "review-81"})
@@ -734,9 +779,9 @@ func TestSessionsService_CreateSessionKeepsTheFormForAnUntypedFailure(t *testing
 }
 
 func TestSessionsService_FailedSessionDraftIsEmptyUntilSomethingFails(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	svc := newSessionsService(SessionsDeps{
-		Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager,
+		Launcher: &fakeSessionLauncher{}, Hive: h.engine,
 		Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
 	})
 
@@ -753,9 +798,9 @@ func TestSessionsService_FailedSessionDraftIsEmptyUntilSomethingFails(t *testing
 
 func TestSessionsService_SubmittingAgainRetiresThePendingFailure(t *testing.T) {
 	launcher := &fakeSessionLauncher{err: errors.New("clone repository: git clone: exec git: exit status 1")}
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	svc := newSessionsService(SessionsDeps{
-		Launcher: launcher, Manager: manager, Statuses: manager,
+		Launcher: launcher, Hive: h.engine,
 		Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
 	})
 
@@ -774,9 +819,9 @@ func TestSessionsService_SubmittingAgainRetiresThePendingFailure(t *testing.T) {
 }
 
 func TestSessionsService_DismissFailedSessionClearsIt(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	svc := newSessionsService(SessionsDeps{
-		Launcher: &fakeSessionLauncher{err: errors.New("nope")}, Manager: manager, Statuses: manager,
+		Launcher: &fakeSessionLauncher{err: errors.New("nope")}, Hive: h.engine,
 		Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
 	})
 	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "review-81"})
@@ -791,10 +836,10 @@ func TestSessionsService_DismissFailedSessionClearsIt(t *testing.T) {
 // The form is still open and the field is what is wrong, so handing the whole
 // attempt back would replace an editable error with a retry.
 func TestSessionsService_DuplicateNameIsNotAPendingFailure(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	svc := newSessionsService(SessionsDeps{
-		Launcher: &fakeSessionLauncher{err: session.ErrDuplicateName}, Manager: manager,
-		Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
+		Launcher: &fakeSessionLauncher{err: session.ErrDuplicateName}, Hive: h.engine,
+		Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
 	})
 
 	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "dupe"})
@@ -806,14 +851,14 @@ func TestSessionsService_DuplicateNameIsNotAPendingFailure(t *testing.T) {
 
 // The row is the half that survives a restart, so it carries the form.
 func TestSessionsService_CreateSessionRecordsARetryableActivityRow(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	recorder := &fakeActivityRecorder{}
 	svc := newSessionsService(SessionsDeps{
-		Launcher: &fakeSessionLauncher{err: &dispatch.SessionCreateError{
+		Launcher: &fakeSessionLauncher{err: &sessionsvc.LaunchError{
 			Step: "Cloning repository...",
 			Err:  errors.New("clone repository: git clone: exec git: exit status 1"),
 		}},
-		Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
+		Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
 		Recorder: recorder,
 	})
 
@@ -841,12 +886,12 @@ func TestSessionsService_CreateSessionRecordsARetryableActivityRow(t *testing.T)
 }
 
 func TestSessionsService_WorkspaceFailureRecordsARetryableDraft(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	recorder := &fakeActivityRecorder{}
 	items := &fakeItemSessionStore{}
 	svc := newSessionsService(SessionsDeps{
 		Launcher: &fakeSessionLauncher{}, WorkspaceLauncher: &fakeWorkspaceLauncher{err: errors.New("agent exited")},
-		Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Recorder: recorder,
+		Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Recorder: recorder,
 		Items: items, Links: items,
 	})
 
@@ -876,10 +921,10 @@ func TestSessionsService_WorkspaceFailureRecordsARetryableDraft(t *testing.T) {
 }
 
 func TestSessionsService_CreateSessionRecordsNoFailureRowWhenItWorks(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	recorder := &fakeActivityRecorder{}
 	svc := newSessionsService(SessionsDeps{
-		Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager,
+		Launcher: &fakeSessionLauncher{}, Hive: h.engine,
 		Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Recorder: recorder,
 	})
 
@@ -889,9 +934,9 @@ func TestSessionsService_CreateSessionRecordsNoFailureRowWhenItWorks(t *testing.
 }
 
 func TestSessionsService_SessionDraftFromActivityRefusesAnUnrelatedRow(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	svc := newSessionsService(SessionsDeps{
-		Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager,
+		Launcher: &fakeSessionLauncher{}, Hive: h.engine,
 		Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
 	})
 

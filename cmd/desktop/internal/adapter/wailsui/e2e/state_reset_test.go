@@ -18,10 +18,10 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	appstores "github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
-	"github.com/colonyops/hive/internal/core/messaging"
-	"github.com/colonyops/hive/internal/core/session"
-	coredb "github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/domain/messaging"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/store"
+	coredb "github.com/colonyops/hive/internal/store/db"
 )
 
 func TestStateResetHarnessUnavailableOutsideMockHarness(t *testing.T) {
@@ -106,11 +106,11 @@ func TestStateResetRestoresFreshlySeededBaseline(t *testing.T) {
 	// Mutate the core action tables the way a launch-session/publish-message
 	// action does.
 	now := time.Now()
-	require.NoError(t, stores.NewSessionStore(core).Save(ctx, session.Session{
+	require.NoError(t, store.NewSessionStore(core).Save(ctx, session.Session{
 		ID: "s1", Name: "smoke-session", Slug: "smoke-session", Remote: "file:///fixture",
 		State: session.StateActive, CreatedAt: now, UpdatedAt: now,
 	}))
-	_, err = stores.NewMessageStore(core, 0).Publish(ctx, messaging.Message{Payload: "mutated", Sender: "test"}, []string{"smoke.reset"})
+	_, err = store.NewMessageStore(core, 0).Publish(ctx, messaging.Message{Payload: "mutated", Sender: "test"}, []string{"smoke.reset"})
 	require.NoError(t, err)
 
 	// Mutate config: rewrite tracked files, mint an untracked flow, create

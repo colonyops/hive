@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/colonyops/hive/internal/core/action"
+	"github.com/colonyops/hive/cmd/hive/internal/action"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/pkg/executil"
 )
 
@@ -28,19 +29,11 @@ func (e *SpawnWindowsExecutor) Execute(ctx context.Context) (<-chan string, <-ch
 func (e *SpawnWindowsExecutor) run(ctx context.Context) error {
 	p := e.payload
 
-	if p.NewSession != nil && p.ShCmd != "" {
-		// Invariant: sh: is routed to NewSession.ShCmd by resolveWindowsAction.
-		// A non-empty top-level ShCmd with NewSession set would be silently ignored.
-		return fmt.Errorf("internal error: SpawnWindowsPayload.ShCmd must be empty when NewSession is set")
+	if p.NewSession {
+		req := sessionsvc.NewSessionRequest{Name: p.NewSessionName, Remote: p.NewSessionRemote, ShCmd: p.ShCmd}
+		return e.spawner.CreateSessionWithWindows(ctx, req, p.Windows, p.Background)
 	}
 
-	// New-session mode: create Hive session first.
-	// sh: (if any) runs inside CreateSessionWithWindows after the git clone.
-	if p.NewSession != nil {
-		return e.spawner.CreateSessionWithWindows(ctx, *p.NewSession, p.Windows, p.Background)
-	}
-
-	// Same-session mode: optionally run sh: in the selected session's path, then add windows.
 	if p.ShCmd != "" {
 		if err := executil.RunSh(ctx, p.ShDir, p.ShCmd); err != nil {
 			return fmt.Errorf("sh: %w", err)

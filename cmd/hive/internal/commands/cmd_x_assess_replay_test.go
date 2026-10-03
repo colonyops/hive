@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/terminal/assess"
-	"github.com/colonyops/hive/internal/core/terminal/status"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
@@ -19,7 +19,7 @@ import (
 
 func TestAssessWatchCmd_MissingArgErrors(t *testing.T) {
 	flags := &Flags{}
-	cmd := NewExperimentalCmd(flags, &hive.App{})
+	cmd := NewExperimentalCmd(flags, &app.App{})
 
 	app := &cli.Command{Name: "hive"}
 	cmd.Register(app)
@@ -30,7 +30,7 @@ func TestAssessWatchCmd_MissingArgErrors(t *testing.T) {
 
 func TestAssessReplayCmd_MissingArgErrors(t *testing.T) {
 	flags := &Flags{}
-	cmd := NewExperimentalCmd(flags, &hive.App{})
+	cmd := NewExperimentalCmd(flags, &app.App{})
 
 	app := &cli.Command{Name: "hive"}
 	cmd.Register(app)
@@ -55,7 +55,7 @@ func TestAssessReplayCmd_Deterministic(t *testing.T) {
 	runReplay := func() string {
 		var out bytes.Buffer
 		flags := &Flags{}
-		cmd := NewExperimentalCmd(flags, &hive.App{})
+		cmd := NewExperimentalCmd(flags, &app.App{})
 		app := &cli.Command{Name: "hive", Writer: &out}
 		cmd.Register(app)
 

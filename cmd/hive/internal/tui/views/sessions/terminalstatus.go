@@ -6,13 +6,13 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/domain/session"
+	statussvc "github.com/colonyops/hive/internal/hive/status"
 )
 
 // TerminalStatusBatchCompleteMsg is sent when all terminal status fetches complete.
 type TerminalStatusBatchCompleteMsg struct {
-	Results map[string]hive.TerminalStatus // sessionID or hive.RootStatusKey -> status
+	Results map[string]statussvc.TerminalStatus // sessionID or statussvc.RootStatusKey -> status
 }
 
 // TerminalPollTickMsg triggers a terminal status poll cycle.
@@ -22,7 +22,7 @@ const terminalStatusBatchTimeout = 5 * time.Second
 
 // FetchTerminalStatusBatch returns a command that fetches terminal status for
 // sessions and workspace root checkouts in a single batch.
-func FetchTerminalStatusBatch(status *hive.StatusService, sessions []*session.Session, roots []hive.RootRepoTarget) tea.Cmd {
+func FetchTerminalStatusBatch(status *statussvc.Service, sessions []*session.Session, roots []statussvc.RootRepoTarget) tea.Cmd {
 	if (len(sessions) == 0 && len(roots) == 0) || !status.Available() {
 		return nil
 	}

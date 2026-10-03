@@ -20,12 +20,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/shared"
-	act "github.com/colonyops/hive/internal/core/action"
-	corereview "github.com/colonyops/hive/internal/core/review"
-	"github.com/colonyops/hive/internal/data/stores"
+	corereview "github.com/colonyops/hive/internal/domain/review"
+	"github.com/colonyops/hive/internal/store"
 )
 
 // ReviewFinalizedMsg is sent when review is finalized and copied to clipboard.
@@ -44,8 +44,8 @@ type View struct {
 	viewport          viewport.Model
 	watcher           *DocumentWatcher
 	contextDir        string
-	repoKey           string              // owner/repo display label
-	store             *stores.ReviewStore // SQLite persistence for review sessions
+	repoKey           string             // owner/repo display label
+	store             *store.ReviewStore // SQLite persistence for review sessions
 	width             int
 	height            int
 	fullScreen        bool                     // True when showing document in full-screen
@@ -92,7 +92,7 @@ type View struct {
 // New creates a new review view.
 // If contextDir is non-empty, it will watch for file changes.
 // If store is non-nil, comments will be persisted to the database.
-func New(documents []Document, contextDir string, store *stores.ReviewStore, handler KeyResolver, splitRatio int) View {
+func New(documents []Document, contextDir string, store *store.ReviewStore, handler KeyResolver, splitRatio int) View {
 	items := BuildTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
 	l := list.New(items, delegate, 0, 0)
@@ -2434,7 +2434,7 @@ func (v *View) Height() int {
 }
 
 // Store returns the review store.
-func (v *View) Store() *stores.ReviewStore {
+func (v *View) Store() *store.ReviewStore {
 	return v.store
 }
 

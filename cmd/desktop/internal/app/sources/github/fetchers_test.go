@@ -7,10 +7,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	ghsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // connectorNode is the flow node a fixture instance is built for.

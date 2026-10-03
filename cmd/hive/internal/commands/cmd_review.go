@@ -7,21 +7,21 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/tui"
 	review "github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 )
 
 type ReviewCmd struct {
 	flags  *Flags
-	app    *hive.App
+	app    *app.App
 	file   string
 	latest bool
 }
 
 // NewReviewCmd creates a new review command.
-func NewReviewCmd(flags *Flags, app *hive.App) *ReviewCmd {
+func NewReviewCmd(flags *Flags, app *app.App) *ReviewCmd {
 	return &ReviewCmd{flags: flags, app: app}
 }
 
@@ -169,7 +169,7 @@ func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Do
 		Documents:   documents,
 		InitialDoc:  initialDoc,
 		ContextDir:  contextDir,
-		DB:          cmd.app.DB,
+		DB:          cmd.app.DB(),
 		CopyCommand: cmd.app.Config.CopyCommand,
 	}
 
@@ -192,13 +192,13 @@ func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Do
 func (cmd *ReviewCmd) resolveContextDir(ctx context.Context) (string, error) {
 	// Let ResolveDir detect from current working directory
 	// This uses the same git remote detection as 'hive ctx'
-	contextDir, err := cmd.app.Context.ResolveDir(ctx, "", false)
+	contextDir, err := cmd.app.Context().ResolveDir(ctx, "", false)
 	if err != nil {
 		return "", err
 	}
 
 	// Ensure context dir exists
-	_, err = cmd.app.Context.Init(contextDir)
+	_, err = cmd.app.Context().Init(contextDir)
 	if err != nil {
 		return "", err
 	}

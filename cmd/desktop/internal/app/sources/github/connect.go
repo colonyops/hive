@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/sourcehttp"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // Connection states on the wire. Connected/disconnected, not
@@ -60,7 +60,7 @@ type DeviceFlowInfo struct {
 // connect/disconnect for tests and e2e.
 //
 // Acquisition is the only provider-specific half of credentials — lookup is
-// generic and lives in app/credentials — which is why this interface is
+// generic and lives in platform/credentials — which is why this interface is
 // declared by the connector that implements it rather than by the app.
 // A connector with no state machine (an API token pasted into a
 // secret-marked config field) needs none of it.

@@ -9,15 +9,11 @@ import (
 	"text/template"
 )
 
-// shellQuote returns a shell-safe quoted string. It wraps the string in single
-// quotes and escapes any existing single quotes using the '\" technique.
-func shellQuote(s string) string {
-	if s == "" {
-		return "''"
-	}
-	// Replace ' with '\'' (end quote, escaped quote, start quote)
-	escaped := strings.ReplaceAll(s, "'", `'\''`)
-	return "'" + escaped + "'"
+// ShellQuote quotes s as one POSIX shell word: single quotes, with each
+// embedded single quote closed, escaped and re-opened. Templates reach it as
+// shq.
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func stringOrDefault(s, def string) string {
@@ -56,7 +52,7 @@ func New(cfg Config) *Renderer {
 	return &Renderer{
 		cfg: cfg,
 		funcs: template.FuncMap{
-			"shq":          shellQuote,
+			"shq":          ShellQuote,
 			"join":         strings.Join,
 			"hiveTmux":     func() string { return cfg.scriptPath("hive-tmux") },
 			"agentSend":    func() string { return cfg.scriptPath("agent-send") },

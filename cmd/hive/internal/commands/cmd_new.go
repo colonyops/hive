@@ -7,8 +7,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/internal/domain/session"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/urfave/cli/v3"
 )
 
@@ -68,7 +69,7 @@ func sessionCreateFlags(f *createSessionFlags) []cli.Flag {
 // createSessionFromFlags validates the shared create flags and creates the
 // session. Progress may be nil (service output then goes to the service's
 // default writers).
-func createSessionFromFlags(ctx context.Context, app *hive.App, name string, f *createSessionFlags, progress io.Writer) (*session.Session, error) {
+func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *createSessionFlags, progress io.Writer) (*session.Session, error) {
 	if f.agent != "" {
 		if _, ok := app.Config.Agents.Profiles[f.agent]; !ok {
 			return nil, fmt.Errorf("unknown agent %q", f.agent)
@@ -84,7 +85,7 @@ func createSessionFromFlags(ctx context.Context, app *hive.App, name string, f *
 		}
 	}
 
-	sess, err := app.Sessions.CreateSession(ctx, hive.CreateOptions{
+	sess, err := app.Sessions().CreateSession(ctx, sessionsvc.CreateOptions{
 		Name:          name,
 		Remote:        f.remote,
 		Source:        source,
@@ -102,12 +103,12 @@ func createSessionFromFlags(ctx context.Context, app *hive.App, name string, f *
 
 type NewCmd struct {
 	flags       *Flags
-	app         *hive.App
+	app         *app.App
 	createFlags createSessionFlags
 }
 
 // NewNewCmd creates a new new command
-func NewNewCmd(flags *Flags, app *hive.App) *NewCmd {
+func NewNewCmd(flags *Flags, app *app.App) *NewCmd {
 	return &NewCmd{flags: flags, app: app}
 }
 

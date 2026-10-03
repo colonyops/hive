@@ -41,7 +41,7 @@ panel filters on both.
 | Tab      | Question                                          | Signals                                                                                                             |
 | -------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | Runtime  | How heavy is the app and what it spawned?         | `process.*` gauges (`cmd/desktop/internal/app/procstats`), Go runtime metrics, `target_info`                                    |
-| Terminal | Is terminal output keeping up?                    | `tmux.stream.*` (`cmd/desktop/internal/app/tmuxcc`), `terminal.attach` spans                                                    |
+| Terminal | Is terminal output keeping up?                    | `tmux.stream.*` (`internal/platform/tmux/control`), `terminal.attach` spans                                                    |
 | Sources  | Why is my feed stale, and am I near a rate limit? | `ingest.tick` and `ingest.source <kind>` spans, `source.*` and otelhttp metrics (`cmd/desktop/internal/app/sources/...`)        |
 | Logs     | What went wrong?                                  | The zerolog bridge, as `service_name="hive-desktop"`                                                                |
 | Traces   | What triggered work, and how long did it take?    | Root spans, error spans, and HTTP spans with no trigger above them                                                  |

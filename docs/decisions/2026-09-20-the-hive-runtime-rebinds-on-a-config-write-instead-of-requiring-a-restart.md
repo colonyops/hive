@@ -1,6 +1,6 @@
 # The Hive runtime rebinds on a config write instead of requiring a restart
 
-- **Status:** accepted
+- **Status:** accepted; the mechanism is amended by [ADR both-programs-run-on-one-layered-hive-engine](2026-10-03-both-programs-run-on-one-layered-hive-engine.md): `hive.Engine.Reload` rebuilds the config-derived services, and the `dispatch` adapters and their `Rebind` are gone
 - **Date:** 2026-09-20
 
 ## Context

@@ -6,7 +6,7 @@ One repository, one Go module, four things in it:
 | --- | --- | --- |
 | `cmd/hive/` | The **hive CLI/TUI**: a tmux-native command center that runs coding agents in isolated git clones with live status, shared context, tasks, and inter-agent messaging. The root program (`main.go` keeps `go install github.com/colonyops/hive@latest` working). | This file |
 | `cmd/desktop/` | **Hive Desktop**, the Wails v3 app: an inbox that collects work into feeds, a Code area on the CLI's session engine, and agent chat workspaces. | [`cmd/desktop/AGENTS.md`](cmd/desktop/AGENTS.md) |
-| `internal/` | The packages both programs share: config, sessions, git, the `hive.db` stores, messaging, hc, terminal status, HTTP plumbing. | [`docs/architecture.md`](docs/architecture.md) |
+| `internal/` | The hive engine both programs run on, in layers: `domain` (pure models), `platform` (git, tmux, SQLite and other drivers), `store` (`hive.db`), `config` (the engine sections of `config.yaml`), and `hive` (the application services and `hive.Engine`). | [`docs/architecture.md`](docs/architecture.md) |
 | `docs/` | hivedesktop.com: the landing page and the product docs for both programs (Zensical; pages under `docs/docs/`). The contributor docs sit beside it: `docs/architecture.md`, `docs/decisions/`, `docs/distribution.md`. | [`docs/AGENTS.md`](docs/AGENTS.md) |
 | `cmd/tools/` | Development and release binaries that never ship: `adr` (decision records) and `release` (the one release run for every program: the changelog commands, the desktop publisher, and the tag and workflow dispatch that ship the CLI). | |
 
@@ -20,9 +20,11 @@ against. The document describes a **target state**; where the current code
 and the document disagree, the document wins for new work.
 
 Shared `internal/` must not import charm, Wails, or anything below `cmd/`.
-`cmd/hive` must not import the desktop program, and `cmd/desktop/internal/app`
-consumes the shared packages only through its seam. depguard fails the lint on
-a violation (`.golangci.yml`).
+Inside it, imports point down the layers: `hive` over `platform`, `store` and
+`config`, all of them over `domain`, and everything over `pkg/`. `cmd/hive`
+must not import the desktop program. depguard fails the lint on a violation
+(`.golangci.yml`); `docs/architecture.md`, "Layers and the dependency rule",
+has the rules.
 
 ## Comments
 
@@ -129,25 +131,27 @@ cmd/hive/
 ├── main.go         # The hive program
 ├── cli/            # Entry code that both main.go files run
 └── internal/       # CLI-only code
+    ├── app/        # Composition root: engine services plus CLI pieces
+    ├── config/     # CLI config sections (views, keybindings, user commands, TUI, plugins, sources)
+    ├── action/     # Keybinding action types
     ├── commands/   # CLI command handlers (urfave/cli/v3)
+    ├── plugins/    # Command packs and status providers
+    ├── sources/    # CLI-backed issue and PR sources (gh, tea)
     ├── styles/     # lipgloss styles
+    ├── theme/      # Color palettes
     └── tui/        # Bubble Tea TUI (tree view, modals, keybindings)
 cmd/desktop/        # Hive Desktop (see cmd/desktop/AGENTS.md)
 cmd/tools/          # adr, release
 docs/               # hivedesktop.com (docs/docs/) and the contributor docs (see docs/AGENTS.md)
-internal/           # Shared with Hive Desktop
-├── core/
-│   ├── config/     # Configuration loading, validation, defaults
-│   ├── git/        # Git operations (clone, pull, status)
-│   ├── session/    # Session model and Store interface
-│   ├── hc/         # Honeycomb task model
-│   ├── messaging/  # Pub/sub messaging between agents
-│   └── terminal/   # Terminal status detection (tmux, assess rules)
-├── data/           # hive.db: migrations, sqlc queries, stores
-├── hive/           # Service layer - orchestrates all operations
-├── sources/        # CLI-backed issue and PR sources (gh, tea)
-├── web/            # HTTP plumbing shared with cmd/desktop/devserver
-└── tmuxtest/       # tmux test helpers
+internal/           # The hive engine, shared with Hive Desktop
+├── domain/         # Pure models and ports: session, hc, messaging, terminal status and assess rules, agent
+├── platform/       # Drivers: git, tmux (exec, status, control, bin), proc, sqlite,
+│                   # execenv, credentials, secrets, observe, workspace, tmuxtest
+├── store/          # hive.db: migrations, sqlc queries, stores
+├── config/         # Engine config: loading, validation, defaults, the YAML writer, migrate/
+├── hive/           # hive.Engine and one subpackage per service (session, status, hc,
+│                   # messaging, todo, gitstatus, doctor, events, ...)
+└── web/            # HTTP plumbing shared with cmd/desktop/devserver
 ```
 
 UI code goes below `cmd/hive/internal/`.
@@ -157,12 +161,14 @@ UI code goes below `cmd/hive/internal/`.
 | File                                        | Purpose                                             |
 | ------------------------------------------- | --------------------------------------------------- |
 | `cmd/hive/cli/cli.go`                       | CLI entry point, global flags, command registration |
-| `internal/hive/service.go`                  | Service layer - coordinates sessions, git, rules    |
-| `internal/core/config/config.go`            | Config structs, loading, defaults                   |
-| `internal/core/config/validate.go`          | Template data structs, validation                   |
+| `internal/hive/engine.go`                   | `hive.Engine`: composes the services, `Reload`      |
+| `internal/hive/session/service.go`          | Session service - coordinates sessions, git, rules  |
+| `internal/config/config.go`                 | Engine config structs, loading, defaults            |
+| `internal/config/validate.go`               | Template data structs, validation                   |
+| `cmd/hive/internal/config/config.go`        | CLI config: views, keybindings, user commands       |
 | `cmd/hive/internal/tui/model.go`            | TUI model, update loop, view rendering              |
 | `cmd/hive/internal/tui/views/sessions/tree_view.go` | Session tree with status indicators         |
-| `internal/core/terminal/assess/rules_*.go` | AI agent status detection rules                     |
+| `internal/domain/terminal/assess/rules_*.go` | AI agent status detection rules                     |
 
 ### Development
 
@@ -230,7 +236,7 @@ This generates constants (`ItemTypeEpic`, `ItemTypeTask`), `ParseItemType`, `IsV
 
 #### sqlc
 
-Queries live in `internal/data/db/queries/`. Generated files (`queries*.sql.go`, `models.go`) are committed and must never be edited manually.
+Queries live in `internal/store/db/queries/`. Generated files (`queries*.sql.go`, `models.go`) are committed and must never be edited manually.
 
 ```bash
 mise run generate    # regenerates after SQL or sqlc.yaml changes
@@ -297,7 +303,7 @@ spawn:
   - my-script {{ .Name | shq }} {{ .Path | shq }}
 ```
 
-Available variables vary by context - see `internal/core/config/validate.go` for `*TemplateData` structs.
+Available variables vary by context - see `internal/config/validate.go` for `*TemplateData` structs.
 
 #### Error Handling
 
@@ -308,10 +314,10 @@ Never silently discard errors. If an error cannot be presented to the user (e.g.
 The TUI dispatches keystrokes through three layers, in this order:
 
 1. **Layer 1: hardcoded, non-overridable** - `ctrl+c`, `esc`, `tab`, and `shift+tab` in normal-mode handling, plus modal-lifecycle dismissal keys (`esc` / `q`) inside dialogs and modals.
-2. **Layer 2: configurable via `KeybindingResolver`** - every other user-overridable key. Default bindings live in `defaultViewsConfig` (`internal/core/config/config_views.go`), and user config in `cfg.Views.{Global,Sessions,Tasks,Review}.Keybindings` overrides those defaults because `maps.Copy(merged, user)` overlays user values onto the merged map.
+2. **Layer 2: configurable via `KeybindingResolver`** - every other user-overridable key. Default bindings live in `defaultViewsConfig` (`cmd/hive/internal/config/config_views.go`), and user config in `cfg.Views.{Global,Sessions,Tasks,Review}.Keybindings` overrides those defaults because `maps.Copy(merged, user)` overlays user values onto the merged map.
 3. **Layer 3: bubbles list internals** - the underlying list component claims keys like `g`, `G`, `j`, `k`, `h`, `l`, `u`, `d`, `f`, `b`, `/`, `?`, `q`, and `esc`. This is intentionally out of scope for hive keybinding configuration: the resolver consumes configured bindings before the list sees them.
 
-When adding a new overridable key, do not add a new `if keyStr == "X"` block in view code. Register an `action.Type` in `internal/core/action/type.go`, add a default `UserCommand` in `defaultUserCommands` (`internal/core/config/config.go`), bind it in `defaultViewsConfig`, and dispatch it from `cmd/hive/internal/tui/model_handlers.go`.
+When adding a new overridable key, do not add a new `if keyStr == "X"` block in view code. Register an `action.Type` in `cmd/hive/internal/action/type.go`, add a default `UserCommand` in `defaultUserCommands` (`cmd/hive/internal/config/config.go`), bind it in `defaultViewsConfig`, and dispatch it from `cmd/hive/internal/tui/model_handlers.go`.
 
 #### Session States
 

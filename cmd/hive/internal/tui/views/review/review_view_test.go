@@ -13,8 +13,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -828,7 +828,7 @@ func TestFinalizedSessionsNotReloaded(t *testing.T) {
 	}()
 
 	// Create a test store
-	store := stores.NewReviewStore(database)
+	store := store.NewReviewStore(database)
 
 	// Create a test document
 	docPath := filepath.Join(tmpDir, "test.md")

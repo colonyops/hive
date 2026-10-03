@@ -3,18 +3,18 @@ package commands
 import (
 	"context"
 
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 
 type ConfigCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 }
 
 // NewConfigCmd creates a new config command
-func NewConfigCmd(flags *Flags, app *hive.App) *ConfigCmd {
+func NewConfigCmd(flags *Flags, app *app.App) *ConfigCmd {
 	return &ConfigCmd{flags: flags, app: app}
 }
 

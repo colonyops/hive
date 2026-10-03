@@ -1,7 +1,6 @@
 package dispatch
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
@@ -9,7 +8,8 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
+	"github.com/colonyops/hive/internal/platform/observe"
+	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 )
@@ -103,10 +103,13 @@ func runShell(ctx context.Context, env ExecEnvironment, spanName string, cmd she
 		environ = append(environ, k+"="+v)
 	}
 	proc.Env = environ
-	stdout, stderr := &boundedExecutionWriter{}, &boundedExecutionWriter{}
+	// One byte past the bound is what lets boundExecutionStream tell output
+	// that fit exactly from output that overflowed.
+	stdout := &executil.HeadWriter{Max: maxExecutionStreamBytes + 1}
+	stderr := &executil.HeadWriter{Max: maxExecutionStreamBytes + 1}
 	proc.Stdout, proc.Stderr = stdout, stderr
 	err = proc.Run()
-	return ExecutionLog{Stdout: stdout.String(), Stderr: stderr.String()}, err
+	return ExecutionLog{Stdout: boundExecutionStream(stdout.String()), Stderr: boundExecutionStream(stderr.String())}, err
 }
 
 // shellWorkingDir resolves the directory the command runs in. A configured
@@ -122,35 +125,4 @@ func shellWorkingDir(cfg *actions.ShellConfig, data OutputData) string {
 		return data.Session.Path
 	}
 	return ""
-}
-
-// boundedExecutionWriter drains every write while retaining only a bounded
-// diagnostic prefix. It must return the full input length so a noisy child
-// cannot block on a full stdout/stderr pipe.
-type boundedExecutionWriter struct {
-	buf       bytes.Buffer
-	truncated bool
-}
-
-func (w *boundedExecutionWriter) Write(p []byte) (int, error) {
-	original := len(p)
-	if w.buf.Len() < maxExecutionStreamBytes {
-		remaining := maxExecutionStreamBytes - w.buf.Len()
-		if len(p) > remaining {
-			p = p[:remaining]
-			w.truncated = true
-		}
-		_, _ = w.buf.Write(p)
-	} else if len(p) > 0 {
-		w.truncated = true
-	}
-	return original, nil
-}
-
-func (w *boundedExecutionWriter) String() string {
-	stream := w.buf.String()
-	if !w.truncated {
-		return stream
-	}
-	return stream[:maxExecutionStreamBytes-len(truncatedStreamMarker)] + truncatedStreamMarker
 }

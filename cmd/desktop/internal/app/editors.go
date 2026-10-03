@@ -4,7 +4,7 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/execenv"
+	"github.com/colonyops/hive/internal/platform/execenv"
 )
 
 // EditorChoice is one editor the Settings selector offers: a CLI command, the

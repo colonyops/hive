@@ -2,11 +2,11 @@ package sessions
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/workspace"
-	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/platform/workspace"
 )
 
 // --- Outbound messages (sessions view -> parent Model) ---

@@ -10,19 +10,19 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/tui"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/hive"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/pkg/profiler"
 )
 
 type TuiCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 }
 
 // NewTuiCmd creates a new tui command
-func NewTuiCmd(flags *Flags, app *hive.App) *TuiCmd {
+func NewTuiCmd(flags *Flags, app *app.App) *TuiCmd {
 	return &TuiCmd{
 		flags: flags,
 		app:   app,
@@ -52,7 +52,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		warnings = append(warnings, "Not running inside tmux. Some features (preview, spawn) require tmux.")
 	}
 	if _, err := os.Stat(cmd.flags.ConfigPath); cmd.flags.ConfigPath == "" || os.IsNotExist(err) {
-		warnings = append(warnings, "No config file found. Expected location: "+config.DefaultConfigDir())
+		warnings = append(warnings, "No config file found. Expected location: "+hiveconfig.DefaultConfigDir())
 	}
 
 	// Start profiler server if enabled
@@ -74,29 +74,29 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	}
 
 	// Detect current repository remote for highlighting current repo
-	localRemote, _ := cmd.app.Sessions.DetectRemote(ctx, ".")
+	localRemote, _ := cmd.app.Sessions().DetectRemote(ctx, ".")
 
 	source, _ := os.Getwd()
 
 	deps := tui.Deps{
 		Config:        cmd.app.Config,
-		Service:       cmd.app.Sessions,
-		MsgStore:      cmd.app.Messages,
-		TodoService:   cmd.app.Todos,
-		Bus:           cmd.app.Bus,
-		Status:        cmd.app.Status,
+		Service:       cmd.app.Sessions(),
+		MsgStore:      cmd.app.Messages(),
+		TodoService:   cmd.app.Todos(),
+		Bus:           cmd.app.Bus(),
+		Status:        cmd.app.Status(),
 		PluginManager: cmd.app.Plugins,
 		CommandSet:    cmd.app.CommandSet,
-		DB:            cmd.app.DB,
+		DB:            cmd.app.DB(),
 		KVStore:       cmd.app.KV,
-		Renderer:      cmd.app.Renderer,
+		Renderer:      cmd.app.Renderer(),
 		BuildInfo: tui.BuildInfo{
 			Version: cmd.app.Build.Version,
 			Commit:  cmd.app.Build.Commit,
 			Date:    cmd.app.Build.Date,
 		},
 		DoctorService: cmd.app.Doctor,
-		Honeycomb:     cmd.app.Honeycomb,
+		Honeycomb:     cmd.app.HC(),
 		Sources:       cmd.app.Sources,
 	}
 	opts := tui.Opts{
@@ -106,7 +106,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		ConfigPath:  cmd.flags.ConfigPath,
 	}
 
-	restoreOutput := cmd.app.Sessions.SilenceOutput()
+	restoreOutput := cmd.app.Sessions().SilenceOutput()
 
 	m := tui.New(deps, opts)
 	p := tea.NewProgram(m)

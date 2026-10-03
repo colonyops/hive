@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,8 +25,8 @@ func TestResolveRendersTheCommandTemplate(t *testing.T) {
 
 	line, err := Resolve(w, "sess-1", false, "")
 	require.NoError(t, err)
-	assert.Contains(t, line, shellQuote(filepath.Join("/abs/demo", ".mcp.json")))
-	assert.Contains(t, line, shellQuote("/abs/demo"))
+	assert.Contains(t, line, tmpl.ShellQuote(filepath.Join("/abs/demo", ".mcp.json")))
+	assert.Contains(t, line, tmpl.ShellQuote("/abs/demo"))
 	assert.Contains(t, line, "--session-id sess-1")
 
 	resumed, err := Resolve(w, "sess-1", true, "")
@@ -124,7 +125,7 @@ func TestJoinTemplateLinesFoldsTheSource(t *testing.T) {
 
 // TestLaunchLineQuotesShellMetacharacters actually executes the finished
 // line through a real shell for each dangerous workspace directory, rather
-// than asserting shellQuote's own escaping in isolation: the property that
+// than asserting tmpl.ShellQuote's own escaping in isolation: the property that
 // matters is that the string never takes effect as shell syntax, and running
 // it is the only way to prove that.
 func TestLaunchLineQuotesShellMetacharacters(t *testing.T) {
@@ -261,7 +262,7 @@ func TestResolvePassesThePromptThroughEveryPreset(t *testing.T) {
 			for _, prompt := range prompts {
 				prompted, err := Resolve(w, "sess-1", false, prompt)
 				require.NoError(t, err)
-				assert.Equal(t, bare+" -- "+shellQuote(prompt), prompted)
+				assert.Equal(t, bare+" -- "+tmpl.ShellQuote(prompt), prompted)
 			}
 		})
 	}

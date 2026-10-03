@@ -11,8 +11,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
+	"github.com/colonyops/hive/internal/platform/observe"
+	"github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
 // terminalStarter spawns the tmux session a slug names when tmux has none. It

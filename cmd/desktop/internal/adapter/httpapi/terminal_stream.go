@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
+	"github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
 // The data-plane wire. Output and Input carry raw bytes behind length-prefixed

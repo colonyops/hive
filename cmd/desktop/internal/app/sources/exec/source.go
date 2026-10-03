@@ -6,14 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
 	osexec "os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/pkg/executil"
+	"github.com/colonyops/hive/pkg/pathutil"
 )
 
 // maxStdout caps what one run may print, matching the webhook listener's
@@ -77,9 +77,9 @@ func (s *source) Produce(ctx context.Context, emit func(models.Msg) error) error
 
 // run executes the command and returns its stdout.
 func (s *source) run(ctx context.Context) ([]byte, error) {
-	dir, err := expandHome(s.cwd)
+	dir, err := pathutil.ExpandHomeE(s.cwd)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resolving %q: %w", s.cwd, err)
 	}
 
 	runCtx, cancel := context.WithTimeout(ctx, s.timeout)
@@ -89,16 +89,16 @@ func (s *source) run(ctx context.Context) ([]byte, error) {
 	cmd.WaitDelay = killGrace
 	cmd.Dir = dir
 	cmd.Env = s.commandEnv(runCtx)
-	stdout := &boundedWriter{max: maxStdout}
-	stderr := &boundedWriter{max: maxStderrExcerpt}
+	stdout := &executil.HeadWriter{Max: maxStdout}
+	stderr := &executil.HeadWriter{Max: maxStderrExcerpt}
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
 	runErr := cmd.Run()
 	switch {
-	case stdout.overflowed:
+	case stdout.Truncated():
 		return nil, fmt.Errorf("the command printed more than %d bytes to stdout", maxStdout)
 	case runErr == nil:
-		return stdout.buf.Bytes(), nil
+		return stdout.Bytes(), nil
 	case ctx.Err() != nil:
 		return nil, ctx.Err()
 	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
@@ -184,48 +184,10 @@ func describeJSON(fragment []byte) string {
 	}
 }
 
-// expandHome resolves a leading `~`, which nothing else does: cmd.Dir takes a
-// path, not a shell word, so `cwd: ~/src` would otherwise fail on a directory
-// that plainly exists.
-func expandHome(dir string) (string, error) {
-	if dir != "~" && !strings.HasPrefix(dir, "~/") {
-		return dir, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolving %q: %w", dir, err)
-	}
-	return filepath.Join(home, strings.TrimPrefix(dir, "~")), nil
-}
-
-func stderrSuffix(stderr *boundedWriter) string {
-	text := strings.TrimSpace(stderr.buf.String())
+func stderrSuffix(stderr *executil.HeadWriter) string {
+	text := strings.TrimSpace(stderr.String())
 	if text == "" {
 		return ""
 	}
 	return ": " + text
-}
-
-// boundedWriter retains at most max bytes while draining every write, so a
-// command that prints far more than it should cannot block on a full pipe. It
-// reports whether anything was dropped, which is what turns an over-long stdout
-// into a failure instead of a truncated snapshot.
-type boundedWriter struct {
-	buf        bytes.Buffer
-	max        int
-	overflowed bool
-}
-
-func (w *boundedWriter) Write(p []byte) (int, error) {
-	if remaining := w.max - w.buf.Len(); remaining > 0 {
-		if len(p) > remaining {
-			w.overflowed = true
-			_, _ = w.buf.Write(p[:remaining])
-		} else {
-			_, _ = w.buf.Write(p)
-		}
-	} else if len(p) > 0 {
-		w.overflowed = true
-	}
-	return len(p), nil
 }

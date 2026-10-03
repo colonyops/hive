@@ -11,7 +11,7 @@ Hive uses [sqlc](https://sqlc.dev) to generate type-safe Go from SQL queries. Th
 ## File Layout
 
 ```
-internal/data/db/
+internal/store/db/
 ├── queries/
 │   ├── queries.sql          # Core session/message queries
 │   └── queries_hc.sql       # Honeycomb queries (separate file)
@@ -69,11 +69,11 @@ When a column stores a domain enum, add an override in `sqlc.yaml` so the genera
 overrides:
   - column: "hc_items.status"
     go_type:
-      import: "github.com/colonyops/hive/internal/core/hc"
+      import: "github.com/colonyops/hive/internal/domain/hc"
       type: "Status"
   - column: "hc_items.type"
     go_type:
-      import: "github.com/colonyops/hive/internal/core/hc"
+      import: "github.com/colonyops/hive/internal/domain/hc"
       type: "ItemType"
 ```
 
@@ -81,7 +81,7 @@ The domain type must implement `driver.Valuer` and `sql.Scanner` (or use text ma
 
 ## Schema Source of Truth
 
-sqlc derives the schema from `internal/data/db/migrations/*.up.sql`. When you add a migration, run `mise run generate` to regenerate models. The generated `models.go` is always overwritten — do not add hand-written code there.
+sqlc derives the schema from `internal/store/db/migrations/*.up.sql`. When you add a migration, run `mise run generate` to regenerate models. The generated `models.go` is always overwritten — do not add hand-written code there.
 
 ## Separate Query Files
 

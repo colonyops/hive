@@ -1,6 +1,6 @@
 package review
 
-import "github.com/colonyops/hive/internal/core/action"
+import "github.com/colonyops/hive/cmd/hive/internal/action"
 
 // ActionRequestMsg requests the parent to execute a resolved action.
 type ActionRequestMsg struct {

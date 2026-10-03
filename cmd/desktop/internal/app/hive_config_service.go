@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf"
+	"github.com/colonyops/hive/internal/config"
 )
 
 // HiveSetup is the external Hive configuration as the first-run and settings
@@ -40,9 +41,9 @@ type hiveConfigOptions struct {
 	// nil means NopDefaultAgentReader.
 	DefaultAgent DefaultAgentReader
 	// Check is hive's own loader, run against a written candidate before it
-	// replaces the file. hiveconf validates the two keys it owns; only hive
+	// replaces the file. config.ApplyEdit validates the two keys it owns; only hive
 	// can say whether the whole file still loads.
-	Check hiveconf.Check
+	Check config.Check
 	// Reload rebuilds the Hive-config-derived services. Save calls it so a
 	// write takes effect in the running process instead of at the next launch
 	// (ADR the-hive-runtime-rebinds-on-a-config-write-instead-of-requiring-a-restart).
@@ -60,7 +61,7 @@ type HiveConfigService struct {
 	location     func() HiveConfigLocation
 	lookPath     hiveconf.LookPath
 	defaultAgent DefaultAgentReader
-	check        hiveconf.Check
+	check        config.Check
 	reload       func(context.Context) error
 }
 
@@ -95,7 +96,7 @@ func (s *HiveConfigService) Setup(ctx context.Context) HiveSetup {
 // InspectWorkspace validates a candidate parent folder and reports its
 // immediate repository count.
 func (s *HiveConfigService) InspectWorkspace(_ context.Context, path string) (hiveconf.Workspace, error) {
-	if err := hiveconf.ValidateWorkspace(path); err != nil {
+	if err := config.CheckWorkspace(path); err != nil {
 		return hiveconf.Workspace{}, Wrap(err, KindInvalid, "%s", path)
 	}
 	return hiveconf.Inspect(path), nil
@@ -108,12 +109,15 @@ func (s *HiveConfigService) InspectWorkspace(_ context.Context, path string) (hi
 // that is reported, not swallowed: the file on disk loads, so the honest
 // answer is that it needs a restart to take effect.
 func (s *HiveConfigService) Save(ctx context.Context, req HiveSetupRequest) (HiveSetup, error) {
-	edit := hiveconf.Edit{
+	edit := config.Edit{
 		DefaultAgent: req.DefaultAgent,
-		Profiles:     req.Profiles,
+		Profiles:     make([]config.EditProfile, 0, len(req.Profiles)),
 		Workspaces:   req.Workspaces,
 	}
-	if err := hiveconf.Apply(s.location().Path, edit, s.check); err != nil {
+	for _, p := range req.Profiles {
+		edit.Profiles = append(edit.Profiles, config.EditProfile{Name: p.Name, Command: p.Command, Flags: p.Flags})
+	}
+	if err := config.ApplyEdit(s.location().Path, edit, s.check); err != nil {
 		return HiveSetup{}, Wrap(err, hiveWriteKind(err), "saving the Hive configuration")
 	}
 	if s.reload != nil {
@@ -128,7 +132,7 @@ func (s *HiveConfigService) Save(ctx context.Context, req HiveSetupRequest) (Hiv
 // take the write. Only the former is worth showing beside the field that
 // caused it.
 func hiveWriteKind(err error) Kind {
-	if _, ok := errors.AsType[hiveconf.InvalidEditError](err); ok {
+	if _, ok := errors.AsType[config.InvalidEditError](err); ok {
 		return KindInvalid
 	}
 	return KindInternal

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal"
 	"gopkg.in/yaml.v3"
 )
 

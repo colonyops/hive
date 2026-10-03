@@ -118,3 +118,25 @@ func TestAgentWorkspacesRootResolution(t *testing.T) {
 		assert.Equal(t, envDir, paths.AgentWorkspacesDir)
 	})
 }
+
+func TestHiveDataDirFollowsTheCLIsDataDirFromTheLoginShell(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv(EnvDataDir, data)
+	shell := map[string]string{"HIVE_DATA_DIR": "/from/shell"}
+
+	paths := ResolvePaths(Bootstrap{}, ResolveOptions{Getenv: func(name string) string { return shell[name] }})
+	assert.Equal(t, "/from/shell", paths.HiveDataDir)
+
+	shell[EnvHiveDataDir] = "/desktop/only"
+	paths = ResolvePaths(Bootstrap{}, ResolveOptions{Getenv: func(name string) string { return shell[name] }})
+	assert.Equal(t, "/desktop/only", paths.HiveDataDir, "the desktop-only variable wins")
+}
+
+func TestHiveDataDirIgnoresHIVEDATADIRWithoutALookup(t *testing.T) {
+	data := t.TempDir()
+	t.Setenv(EnvDataDir, data)
+	unsetEnv(t, EnvHiveDataDir)
+	t.Setenv("HIVE_DATA_DIR", t.TempDir())
+
+	assert.Equal(t, data, ResolvePaths(Bootstrap{}, ResolveOptions{}).HiveDataDir)
+}

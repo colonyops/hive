@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/list"
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
 func TestIsSession(t *testing.T) {

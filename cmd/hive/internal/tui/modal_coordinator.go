@@ -7,14 +7,14 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	lipgloss "charm.land/lipgloss/v2"
 
+	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components/form"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/sourcepicker"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/notify"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/domain/notify"
+	"github.com/colonyops/hive/internal/domain/session"
+	todosvc "github.com/colonyops/hive/internal/hive/todo"
 )
 
 // ModalCoordinator owns all modal component references, pending action state,
@@ -220,7 +220,7 @@ func (mc *ModalCoordinator) DismissInfo() {
 }
 
 // ShowTodoPanel creates and displays the todo action panel.
-func (mc *ModalCoordinator) ShowTodoPanel(service *hive.TodoService) {
+func (mc *ModalCoordinator) ShowTodoPanel(service *todosvc.Service) {
 	mc.TodoPanel = NewTodoPanel(service, mc.width, mc.height)
 }
 

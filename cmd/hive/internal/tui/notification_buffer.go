@@ -5,7 +5,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/colonyops/hive/internal/core/notify"
+	"github.com/colonyops/hive/internal/domain/notify"
 )
 
 // NotificationBuffer buffers notifications and emits coalesced drain signals.

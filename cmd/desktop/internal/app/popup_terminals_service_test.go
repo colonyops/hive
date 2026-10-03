@@ -9,23 +9,32 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
-func newPopupHarness(t *testing.T, manager *fakeSessionManager) *PopupTerminalsService {
+func checkoutHarness(t *testing.T, path string, state session.State) *hiveHarness {
 	t.Helper()
-	return newPopupHarnessWithCatalog(t, manager, nil)
+	h := newHiveHarness(t, engineOptions{})
+	sess := reviewSession()
+	sess.Path, sess.State = path, state
+	h.save(t, sess)
+	return h
 }
 
-func newPopupHarnessWithCatalog(t *testing.T, manager *fakeSessionManager, catalog *actions.ActionStore) *PopupTerminalsService {
+func newPopupHarness(t *testing.T, h *hiveHarness) *PopupTerminalsService {
 	t.Helper()
-	return newPopupHarnessIn(t, manager, catalog, &fakeTerminalDirs{})
+	return newPopupHarnessWithCatalog(t, h, nil)
 }
 
-func newPopupHarnessIn(t *testing.T, manager *fakeSessionManager, catalog *actions.ActionStore, terminals terminalWorkingDirectory) *PopupTerminalsService {
+func newPopupHarnessWithCatalog(t *testing.T, h *hiveHarness, catalog *actions.ActionStore) *PopupTerminalsService {
 	t.Helper()
-	sessions := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+	return newPopupHarnessIn(t, h, catalog, &fakeTerminalDirs{})
+}
+
+func newPopupHarnessIn(t *testing.T, h *hiveHarness, catalog *actions.ActionStore, terminals terminalWorkingDirectory) *PopupTerminalsService {
+	t.Helper()
+	sessions := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 	pty := ptyterm.NewManager(ptyterm.ManagerOptions{Shell: []string{"/bin/sh"}})
 	t.Cleanup(func() { _ = pty.Stop(t.Context()) })
 	return newPopupTerminalsService(PopupTerminalsDeps{Manager: pty, Terminals: terminals, Directory: sessions, Catalog: catalog})
@@ -61,13 +70,9 @@ func popupCatalog(t *testing.T, yaml string) *actions.ActionStore {
 // is where the pop-up opens, which is what keeps a launch working from a row
 // whose tmux session has not been started yet.
 func TestPopupTerminalsService_OpensInTheSessionCheckout(t *testing.T) {
-	manager, detail := activeSession()
 	checkout := t.TempDir()
-	manager.details["s1"] = dispatch.SessionDetail{
-		ID: detail.ID, Name: detail.Name, Slug: detail.Slug, Repo: detail.Repo, State: detail.State,
-		Path: checkout,
-	}
-	svc := newPopupHarness(t, manager)
+	h := checkoutHarness(t, checkout, session.StateActive)
+	svc := newPopupHarness(t, h)
 
 	term, err := svc.Open(t.Context(), OpenPopupTerminal{SessionSlug: "review-81"})
 	require.NoError(t, err)
@@ -87,8 +92,8 @@ func TestPopupTerminalsService_OpensInTheSessionCheckout(t *testing.T) {
 // The resolution order is the contract: a slug wins over a path, and a caller
 // with neither still lands somewhere a shell makes sense.
 func TestPopupTerminalsService_ResolvesTheDirectoryInOrder(t *testing.T) {
-	manager, _ := activeSession()
-	svc := newPopupHarness(t, manager)
+	h := activeHarness(t)
+	svc := newPopupHarness(t, h)
 	dir := t.TempDir()
 
 	explicit, err := svc.Open(t.Context(), OpenPopupTerminal{Dir: dir})
@@ -105,12 +110,8 @@ func TestPopupTerminalsService_ResolvesTheDirectoryInOrder(t *testing.T) {
 // A recycled session has no checkout left, so there is nowhere to open one. The
 // tmux backend refuses the same case for the same reason.
 func TestPopupTerminalsService_RefusesASessionWithNoCheckout(t *testing.T) {
-	manager, detail := activeSession()
-	manager.sessions[0].State = "recycled"
-	manager.details["s1"] = dispatch.SessionDetail{
-		ID: detail.ID, Name: detail.Name, Slug: detail.Slug, Repo: detail.Repo, State: "recycled", Path: t.TempDir(),
-	}
-	svc := newPopupHarness(t, manager)
+	h := checkoutHarness(t, t.TempDir(), session.StateRecycled)
+	svc := newPopupHarness(t, h)
 
 	_, err := svc.Open(t.Context(), OpenPopupTerminal{SessionSlug: "review-81"})
 	require.Equal(t, KindConflict, KindOf(err))
@@ -137,14 +138,11 @@ launchers:
 // A launcher without a cwd opens where its terminal is, which is what makes one
 // shortcut mean "lazygit here" wherever you are (ADR a-new-tab-and-a-launcher-open-where-the-terminal-s-active-pane-is).
 func TestPopupTerminalsService_LauncherOpensWhereTheTerminalIs(t *testing.T) {
-	manager, detail := activeSession()
 	checkout := t.TempDir()
 	elsewhere := t.TempDir()
-	manager.details["s1"] = dispatch.SessionDetail{
-		ID: detail.ID, Name: detail.Name, Slug: detail.Slug, Repo: detail.Repo, State: detail.State, Path: checkout,
-	}
+	h := checkoutHarness(t, checkout, session.StateActive)
 	terminals := &fakeTerminalDirs{dirs: map[string]string{"review-81": elsewhere}}
-	svc := newPopupHarnessIn(t, manager, popupCatalog(t, launcherCatalogYAML), terminals)
+	svc := newPopupHarnessIn(t, h, popupCatalog(t, launcherCatalogYAML), terminals)
 
 	term, err := svc.Open(t.Context(), OpenPopupTerminal{Launcher: "lazygit", SessionSlug: "review-81"})
 	require.NoError(t, err)
@@ -156,10 +154,10 @@ func TestPopupTerminalsService_LauncherOpensWhereTheTerminalIs(t *testing.T) {
 // and a launcher works on them for the same reason it follows a cd: the
 // directory comes from tmux, which knows all three the same way.
 func TestPopupTerminalsService_LauncherOpensOnATerminalHiveKnowsNothingAbout(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	dir := t.TempDir()
 	terminals := &fakeTerminalDirs{dirs: map[string]string{ScratchSlug: dir}}
-	svc := newPopupHarnessIn(t, manager, popupCatalog(t, launcherCatalogYAML), terminals)
+	svc := newPopupHarnessIn(t, h, popupCatalog(t, launcherCatalogYAML), terminals)
 
 	term, err := svc.Open(t.Context(), OpenPopupTerminal{Launcher: "lazygit", SessionSlug: ScratchSlug})
 	require.NoError(t, err)
@@ -171,12 +169,9 @@ func TestPopupTerminalsService_LauncherOpensOnATerminalHiveKnowsNothingAbout(t *
 // has its checkout — so a launcher fired at a stopped session opens there
 // rather than refusing.
 func TestPopupTerminalsService_LauncherFallsBackToTheCheckout(t *testing.T) {
-	manager, detail := activeSession()
 	checkout := t.TempDir()
-	manager.details["s1"] = dispatch.SessionDetail{
-		ID: detail.ID, Name: detail.Name, Slug: detail.Slug, Repo: detail.Repo, State: detail.State, Path: checkout,
-	}
-	svc := newPopupHarnessWithCatalog(t, manager, popupCatalog(t, launcherCatalogYAML))
+	h := checkoutHarness(t, checkout, session.StateActive)
+	svc := newPopupHarnessWithCatalog(t, h, popupCatalog(t, launcherCatalogYAML))
 
 	term, err := svc.Open(t.Context(), OpenPopupTerminal{Launcher: "lazygit", SessionSlug: "review-81"})
 	require.NoError(t, err)
@@ -187,11 +182,8 @@ func TestPopupTerminalsService_LauncherFallsBackToTheCheckout(t *testing.T) {
 // opened in the home directory: `lazygit` with no repository under it starts
 // fine and fails immediately, which is the whole bug (ADR quick-terminal-launchers-are-session-scoped).
 func TestPopupTerminalsService_LauncherWithoutATerminalIsRefused(t *testing.T) {
-	manager, detail := activeSession()
-	manager.details["s1"] = dispatch.SessionDetail{
-		ID: detail.ID, Name: detail.Name, Slug: detail.Slug, Repo: detail.Repo, State: detail.State, Path: t.TempDir(),
-	}
-	svc := newPopupHarnessWithCatalog(t, manager, popupCatalog(t, launcherCatalogYAML))
+	h := checkoutHarness(t, t.TempDir(), session.StateActive)
+	svc := newPopupHarnessWithCatalog(t, h, popupCatalog(t, launcherCatalogYAML))
 
 	_, err := svc.Open(t.Context(), OpenPopupTerminal{Launcher: "lazygit"})
 	require.Equal(t, KindInvalid, KindOf(err), "no slug is a refusal, not the home directory")
@@ -215,11 +207,8 @@ func TestPopupTerminalsService_LauncherWithoutATerminalIsRefused(t *testing.T) {
 // looking at when they pressed the key. It is also what makes one reachable
 // with no session at all: the directory it needs is in the catalog.
 func TestPopupTerminalsService_LauncherCwdWinsOverTheSession(t *testing.T) {
-	manager, detail := activeSession()
-	manager.details["s1"] = dispatch.SessionDetail{
-		ID: detail.ID, Name: detail.Name, Slug: detail.Slug, Repo: detail.Repo, State: detail.State, Path: t.TempDir(),
-	}
-	svc := newPopupHarnessWithCatalog(t, manager, popupCatalog(t, launcherCatalogYAML))
+	h := checkoutHarness(t, t.TempDir(), session.StateActive)
+	svc := newPopupHarnessWithCatalog(t, h, popupCatalog(t, launcherCatalogYAML))
 
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
@@ -235,8 +224,8 @@ func TestPopupTerminalsService_LauncherCwdWinsOverTheSession(t *testing.T) {
 }
 
 func TestPopupTerminalsService_ListsLaunchersInCatalogOrder(t *testing.T) {
-	manager, _ := activeSession()
-	svc := newPopupHarnessWithCatalog(t, manager, popupCatalog(t, launcherCatalogYAML))
+	h := activeHarness(t)
+	svc := newPopupHarnessWithCatalog(t, h, popupCatalog(t, launcherCatalogYAML))
 
 	launchers, err := svc.Launchers(t.Context())
 	require.NoError(t, err)
@@ -249,8 +238,8 @@ func TestPopupTerminalsService_ListsLaunchersInCatalogOrder(t *testing.T) {
 }
 
 func TestPopupTerminalsService_RefusesALaunchThatIsNotOne(t *testing.T) {
-	manager, _ := activeSession()
-	svc := newPopupHarnessWithCatalog(t, manager, popupCatalog(t, launcherCatalogYAML))
+	h := activeHarness(t)
+	svc := newPopupHarnessWithCatalog(t, h, popupCatalog(t, launcherCatalogYAML))
 
 	_, err := svc.Open(t.Context(), OpenPopupTerminal{Launcher: "nope"})
 	require.Equal(t, KindNotFound, KindOf(err))
@@ -267,8 +256,8 @@ func TestPopupTerminalsService_RefusesALaunchThatIsNotOne(t *testing.T) {
 }
 
 func TestPopupTerminalsService_ClassifiesFailures(t *testing.T) {
-	manager, _ := activeSession()
-	svc := newPopupHarness(t, manager)
+	h := activeHarness(t)
+	svc := newPopupHarness(t, h)
 
 	_, err := svc.Open(t.Context(), OpenPopupTerminal{SessionSlug: "no-such-session"})
 	require.Equal(t, KindNotFound, KindOf(err))

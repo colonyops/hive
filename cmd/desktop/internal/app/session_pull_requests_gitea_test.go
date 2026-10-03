@@ -11,9 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/gitea"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // giteaInstance wires a connected Gitea account against server, and returns the
@@ -61,10 +60,10 @@ func TestSessionPullRequestsAnswersAGiteaSessionInTheSameView(t *testing.T) {
 	lookup := newSessionPullRequests(newGitHubForge(nil, nil), forge)
 
 	view, err := lookup.Lookup(t.Context(),
-		dispatch.SessionPullRequestKey{Host: host, Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
+		SessionPullRequestKey{Host: host, Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
 	require.NoError(t, err)
-	assert.Equal(t, dispatch.SessionPullRequest{
-		Status: dispatch.PullRequestStatusFound, Number: 12, Title: "Add the thing", State: "OPEN",
+	assert.Equal(t, SessionPullRequest{
+		Status: PullRequestStatusFound, Number: 12, Title: "Add the thing", State: "OPEN",
 		URL: "https://git.example.com/acme/site/pulls/12", ReviewDecision: "REVIEW_REQUIRED",
 		Checks: "failing", Additions: 31, Deletions: 4,
 	}, view)
@@ -94,12 +93,12 @@ func TestSessionPullRequestsSeparatesAGiteaBranchWithNoneFromAnUnservedHost(t *t
 	lookup := newSessionPullRequests(newGitHubForge(nil, nil), forge)
 
 	none, err := lookup.Lookup(t.Context(),
-		dispatch.SessionPullRequestKey{Host: host, Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
+		SessionPullRequestKey{Host: host, Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
 	require.NoError(t, err)
-	assert.Equal(t, dispatch.PullRequestStatusNone, none.Status)
+	assert.Equal(t, PullRequestStatusNone, none.Status)
 
 	unsupported, err := lookup.Lookup(t.Context(),
-		dispatch.SessionPullRequestKey{Host: "git.other.test", Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
+		SessionPullRequestKey{Host: "git.other.test", Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
 	require.NoError(t, err)
-	assert.Equal(t, dispatch.PullRequestStatusUnsupported, unsupported.Status)
+	assert.Equal(t, PullRequestStatusUnsupported, unsupported.Status)
 }

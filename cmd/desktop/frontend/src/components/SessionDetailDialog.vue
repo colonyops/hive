@@ -6,7 +6,7 @@ import { computed } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
-import type { SessionDetail } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type { SessionDetail } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{ detail: SessionDetail }>()
 const emit = defineEmits<{ close: [] }>()

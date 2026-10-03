@@ -9,12 +9,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/sources"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/command"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/sourcepicker"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/internal/domain/session"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 )
 
 // stubSource is a minimal sources.Source for registry-backed wiring tests.
@@ -123,10 +123,10 @@ func sourcepickerResult(src sources.Source, manifest sources.Manifest) sourcepic
 
 // fakeSessionCreator records CreateSession calls for fan-out tests.
 type fakeSessionCreator struct {
-	created []hive.CreateOptions
+	created []sessionsvc.CreateOptions
 }
 
-func (f *fakeSessionCreator) CreateSession(_ context.Context, opts hive.CreateOptions) (*session.Session, error) {
+func (f *fakeSessionCreator) CreateSession(_ context.Context, opts sessionsvc.CreateOptions) (*session.Session, error) {
 	f.created = append(f.created, opts)
 	return &session.Session{ID: fmt.Sprintf("id-%d", len(f.created)), Slug: opts.Name}, nil
 }

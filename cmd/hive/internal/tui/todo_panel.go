@@ -12,8 +12,8 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/core/todo"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/domain/todo"
+	todosvc "github.com/colonyops/hive/internal/hive/todo"
 )
 
 const (
@@ -39,7 +39,7 @@ var todoFilterLabels = [...]string{
 
 // TodoPanel displays an interactive list of todo items.
 type TodoPanel struct {
-	service  *hive.TodoService
+	service  *todosvc.Service
 	viewport viewport.Model
 	allItems []todo.Todo // unfiltered list from store
 	items    []todo.Todo // filtered view
@@ -51,7 +51,7 @@ type TodoPanel struct {
 }
 
 // NewTodoPanel creates a new interactive todo panel modal.
-func NewTodoPanel(service *hive.TodoService, width, height int) *TodoPanel {
+func NewTodoPanel(service *todosvc.Service, width, height int) *TodoPanel {
 	modalWidth := calcTodoPanelWidth(width)
 	modalHeight := min(height-todoPanelMargin, todoPanelMaxHeight)
 	contentHeight := modalHeight - todoPanelChrome

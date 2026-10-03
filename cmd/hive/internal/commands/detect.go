@@ -7,22 +7,22 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/terminal/assess"
-	"github.com/colonyops/hive/internal/core/terminal/classifier"
-	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
+	"github.com/colonyops/hive/internal/platform/proc/classifier"
+	tmuxstatus "github.com/colonyops/hive/internal/platform/tmux/status"
 )
 
 // DetectCmd classifies tmux panes for a hive session.
 type DetectCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 }
 
 // NewDetectCmd creates a new detect command.
-func NewDetectCmd(flags *Flags, app *hive.App) *DetectCmd {
+func NewDetectCmd(flags *Flags, app *app.App) *DetectCmd {
 	return &DetectCmd{flags: flags, app: app}
 }
 
@@ -79,8 +79,8 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 
 	tmuxSessions := detectTmuxSessionNames(sess)
 
-	capture := terminaltmux.PaneCapture{Source: source}
-	cls := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher, terminaltmux.WithPaneSource(source)).Classifier()
+	capture := tmuxstatus.PaneCapture{Source: source}
+	cls := tmuxstatus.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher, tmuxstatus.WithPaneSource(source)).Classifier()
 	engine := assess.NewEngine()
 	out := detectOutput{Session: sess.Slug}
 	for _, pane := range panes {
@@ -144,7 +144,7 @@ func detectTmuxSessionNames(sess session.Session) map[string]bool {
 }
 
 func (cmd *DetectCmd) findSession(ctx context.Context, ref string) (session.Session, error) {
-	sessions, err := cmd.app.Sessions.ListSessions(ctx)
+	sessions, err := cmd.app.Sessions().ListSessions(ctx)
 	if err != nil {
 		return session.Session{}, fmt.Errorf("listing sessions: %w", err)
 	}

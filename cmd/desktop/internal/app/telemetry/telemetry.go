@@ -2,7 +2,7 @@
 // the OTel providers globally, and owns their shutdown (ADR
 // continuous-profiles-are-pushed-directly-with-pyroscope). It is SDK setup,
 // not an instrumentation API; a package that emits reaches the registered OTel
-// providers through cmd/desktop/internal/app/observe.
+// providers through internal/platform/observe.
 //
 // OTLP export, profile export, and local scrape are independent gates. With
 // every gate off, [New] returns what [Off] returns and the globals keep the

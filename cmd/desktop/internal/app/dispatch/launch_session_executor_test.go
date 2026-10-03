@@ -17,9 +17,8 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
-	"github.com/colonyops/hive/internal/core/git"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/domain/session"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 )
 
 // fakeSessionLauncher records every LaunchSession call.
@@ -45,30 +44,16 @@ func (f *fakeWorkspaceSessionLauncher) LaunchWorkspaceSession(_ context.Context,
 }
 
 type fakeSessionCreator struct {
-	calls   []hive.CreateOptions
-	err     error
-	options hive.SessionLaunchOptions
+	calls []sessionsvc.LaunchRequest
+	err   error
 }
 
-func (f *fakeSessionCreator) SessionLaunchOptions(context.Context) (hive.SessionLaunchOptions, error) {
-	return f.options, nil
-}
-
-func (f *fakeSessionCreator) ResolveSessionLaunchRepository(_ context.Context, remote string) (hive.SessionLaunchRepository, error) {
-	for _, repo := range f.options.Repositories {
-		if git.EquivalentRemote(repo.Remote, remote) {
-			return repo, nil
-		}
-	}
-	return hive.SessionLaunchRepository{Remote: remote}, nil
-}
-
-func (f *fakeSessionCreator) CreateSession(_ context.Context, opts hive.CreateOptions) (*session.Session, error) {
-	f.calls = append(f.calls, opts)
+func (f *fakeSessionCreator) CreateFromRequest(_ context.Context, req sessionsvc.LaunchRequest) (session.Session, error) {
+	f.calls = append(f.calls, req)
 	if f.err != nil {
-		return nil, f.err
+		return session.Session{}, f.err
 	}
-	return &session.Session{ID: "session-1"}, nil
+	return session.Session{ID: "session-1"}, nil
 }
 
 func TestLaunchSessionExecutor_RendersPromptAndRepoTemplates(t *testing.T) {
@@ -270,44 +255,26 @@ func TestLaunchSessionExecutor_NilLauncherIsError(t *testing.T) {
 	}
 }
 
-func TestHiveSessionLauncher_MapsRequestToSessionService(t *testing.T) {
+func repositoryLauncher(creator SessionCreator, links ItemSessionLinker) *RepositoryLauncher {
+	return NewRepositoryLauncher(func() SessionCreator { return creator }, links, nil, zerolog.Nop())
+}
+
+func TestRepositoryLauncher_MapsRequestToSessionService(t *testing.T) {
 	creator := &fakeSessionCreator{}
-	launcher := NewHiveSessionLauncher(creator)
+	launcher := repositoryLauncher(creator, nil)
 
 	_, err := launcher.LaunchSession(t.Context(), LaunchSessionRequest{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
 	})
 	require.NoError(t, err)
-	require.Len(t, creator.calls, 1)
-	require.NotNil(t, creator.calls[0].Progress, "every attempt gets its own progress writer, so a failure can name the step it died on")
-	require.Equal(t, hive.CreateOptions{
-		Name: "review-pr-1", Prompt: "Review this", AgentKey: "claude", Remote: "https://example.test/repo.git", Background: true, CollisionSuffix: "7",
-	}, withoutProgress(creator.calls[0]))
+	require.Equal(t, []sessionsvc.LaunchRequest{{
+		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
+	}}, creator.calls)
 }
 
-// The per-attempt writer has no comparable identity, so drop it to compare the
-// rest by value.
-func withoutProgress(opts hive.CreateOptions) hive.CreateOptions {
-	opts.Progress = nil
-	return opts
-}
-
-func TestHiveSessionLauncher_PrefersEquivalentConfiguredCheckout(t *testing.T) {
-	creator := &fakeSessionCreator{options: hive.SessionLaunchOptions{Repositories: []hive.SessionLaunchRepository{{
-		Name: "hive", Remote: "git@github.com:colonyops/hive.git", Source: "/work/hive",
-	}}}}
-	_, err := NewHiveSessionLauncher(creator).LaunchSession(t.Context(), LaunchSessionRequest{
-		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://github.com/colonyops/hive.git",
-	})
-	require.NoError(t, err)
-	require.Equal(t, hive.CreateOptions{
-		Name: "review-pr-1", Prompt: "Review this", AgentKey: "claude", Remote: "git@github.com:colonyops/hive.git", Source: "/work/hive", Background: true,
-	}, withoutProgress(creator.calls[0]))
-}
-
-func TestHiveSessionLauncher_PropagatesServiceFailure(t *testing.T) {
+func TestRepositoryLauncher_PropagatesServiceFailure(t *testing.T) {
 	creator := &fakeSessionCreator{err: errors.New("tmux unavailable")}
-	_, err := NewHiveSessionLauncher(creator).LaunchSession(t.Context(), LaunchSessionRequest{Name: "review-pr-1"})
+	_, err := repositoryLauncher(creator, nil).LaunchSession(t.Context(), LaunchSessionRequest{Name: "review-pr-1"})
 	require.ErrorIs(t, err, creator.err)
 }
 
@@ -330,11 +297,10 @@ func (f *fakeItemSessionLinker) Link(_ context.Context, sessionID string, ref mo
 	return nil
 }
 
-func TestHiveSessionLauncher_LinksTheCreatedSessionToItsItem(t *testing.T) {
+func TestRepositoryLauncher_LinksTheCreatedSessionToItsItem(t *testing.T) {
 	creator := &fakeSessionCreator{}
 	linker := &fakeItemSessionLinker{}
-	launcher := NewHiveSessionLauncher(creator)
-	launcher.SetItemSessionLinker(linker, zerolog.Nop())
+	launcher := repositoryLauncher(creator, linker)
 	ref := models.ItemRef{ProfileID: "p", SourceKind: "github", SourceScope: "acct", ExternalID: "acme/repo#1"}
 
 	_, err := launcher.LaunchSession(t.Context(), LaunchSessionRequest{Name: "review-1", Prompt: "go", Repo: "r", Origins: []models.ItemRef{ref}})
@@ -349,11 +315,10 @@ func TestHiveSessionLauncher_LinksTheCreatedSessionToItsItem(t *testing.T) {
 // A session with no item behind it — the blank New Session form, an action run
 // from a terminal target — must not produce a link, or every such session
 // would share one.
-func TestHiveSessionLauncher_LinksOneCreatedSessionToEveryUniqueOrigin(t *testing.T) {
+func TestRepositoryLauncher_LinksOneCreatedSessionToEveryUniqueOrigin(t *testing.T) {
 	creator := &fakeSessionCreator{}
 	linker := &fakeItemSessionLinker{}
-	launcher := NewHiveSessionLauncher(creator)
-	launcher.SetItemSessionLinker(linker, zerolog.Nop())
+	launcher := repositoryLauncher(creator, linker)
 	first := models.ItemRef{ProfileID: "p", SourceKind: "github", SourceScope: "acct", ExternalID: "acme/repo#1"}
 	second := models.ItemRef{ProfileID: "p", SourceKind: "github", SourceScope: "acct", ExternalID: "acme/repo#2"}
 
@@ -364,11 +329,10 @@ func TestHiveSessionLauncher_LinksOneCreatedSessionToEveryUniqueOrigin(t *testin
 	assert.Equal(t, []models.ItemRef{first, second}, linker.links["session-1"])
 }
 
-func TestHiveSessionLauncher_LinksNothingWithoutAnOrigin(t *testing.T) {
+func TestRepositoryLauncher_LinksNothingWithoutAnOrigin(t *testing.T) {
 	creator := &fakeSessionCreator{}
 	linker := &fakeItemSessionLinker{}
-	launcher := NewHiveSessionLauncher(creator)
-	launcher.SetItemSessionLinker(linker, zerolog.Nop())
+	launcher := repositoryLauncher(creator, linker)
 
 	_, err := launcher.LaunchSession(t.Context(), LaunchSessionRequest{Name: "review-1", Prompt: "go", Repo: "r"})
 	require.NoError(t, err)
@@ -379,10 +343,9 @@ func TestHiveSessionLauncher_LinksNothingWithoutAnOrigin(t *testing.T) {
 
 // The session exists either way, so reporting the launch as failed would be a
 // lie — and would invite a retry that creates a second session.
-func TestHiveSessionLauncher_ReportsSuccessWhenTheLinkCannotBeWritten(t *testing.T) {
-	launcher := NewHiveSessionLauncher(&fakeSessionCreator{})
+func TestRepositoryLauncher_ReportsSuccessWhenTheLinkCannotBeWritten(t *testing.T) {
 	linker := &fakeItemSessionLinker{err: errors.New("disk full")}
-	launcher.SetItemSessionLinker(linker, zerolog.Nop())
+	launcher := repositoryLauncher(&fakeSessionCreator{}, linker)
 	origins := []models.ItemRef{
 		{ProfileID: "p", SourceKind: "github", ExternalID: "acme/repo#1"},
 		{ProfileID: "p", SourceKind: "github", ExternalID: "acme/repo#2"},

@@ -7,10 +7,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/posthog/client"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // Normalized alert states. PostHog sends display strings — "Firing", "Not

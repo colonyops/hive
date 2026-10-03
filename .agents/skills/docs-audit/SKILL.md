@@ -19,7 +19,7 @@ with their own skills; step 3 says which change belongs where.
 ```bash
 git diff main...HEAD --stat
 git diff main...HEAD -- cmd/desktop/internal/app cmd/desktop/frontend/src   # desktop
-git diff main...HEAD -- cmd/hive internal/core/config                         # CLI
+git diff main...HEAD -- cmd/hive internal/config                              # CLI
 ```
 
 For a PR that is not checked out, `gh pr diff <number>`.
@@ -41,7 +41,7 @@ Read the diff for these and write them down before deciding anything:
 - **an agent-facing thing**: a shipped skill, an MCP catalogue entry, a
   workspace manifest field;
 - **a CLI or TUI change**: a new `hive` command or flag, a config field in
-  `internal/core/config`, a default in `defaultViewsConfig` or
+  `internal/config` or `cmd/hive/internal/config`, a default in `defaultViewsConfig` or
   `defaultUserCommands`, a template variable, a status indicator;
 - **a failure a user meets**: a new error message, a new precondition (a
   binary on PATH, a permission, a version floor), a removed fallback.

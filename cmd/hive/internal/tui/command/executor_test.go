@@ -6,8 +6,9 @@ import (
 	"io"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -323,14 +324,16 @@ func (m *mockTmuxOpener) OpenTmuxSession(_ context.Context, name, path, remote, 
 }
 
 type mockWindowSpawner struct {
-	killed []multiplexer.Target
+	killed  []multiplexer.Target
+	created []sessionsvc.NewSessionRequest
 }
 
-func (m *mockWindowSpawner) AddWindowsToTmuxSession(_ context.Context, _, _ string, _ []action.WindowSpec, _ bool) error {
+func (m *mockWindowSpawner) AddWindowsToTmuxSession(_ context.Context, _, _ string, _ []multiplexer.WindowSpec, _ bool) error {
 	return nil
 }
 
-func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, _ action.NewSessionRequest, _ []action.WindowSpec, _ bool) error {
+func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, req sessionsvc.NewSessionRequest, _ []multiplexer.WindowSpec, _ bool) error {
+	m.created = append(m.created, req)
 	return nil
 }
 
@@ -379,7 +382,7 @@ func TestService_CreateExecutor(t *testing.T) {
 			name: "spawn windows action",
 			action: Action{Type: action.TypeSpawnWindows, SpawnWindows: &action.SpawnWindowsPayload{
 				TmuxTarget: "sess",
-				Windows:    []action.WindowSpec{{Name: "w1"}},
+				Windows:    []multiplexer.WindowSpec{{Name: "w1"}},
 			}},
 			wantErr: false,
 		},
@@ -423,4 +426,20 @@ func TestServiceKillWindowExecutorDelegatesTypedTarget(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, ExecuteSync(context.Background(), executor))
 	assert.Equal(t, []multiplexer.Target{target}, windowService.killed)
+}
+
+func TestSpawnWindowsExecutorNewSessionCarriesShCmd(t *testing.T) {
+	spawner := &mockWindowSpawner{}
+	exec := &SpawnWindowsExecutor{
+		payload: &action.SpawnWindowsPayload{
+			ShCmd:            "gh pr checkout 1",
+			NewSession:       true,
+			NewSessionName:   "pr-1",
+			NewSessionRemote: "https://github.com/o/r",
+		},
+		spawner: spawner,
+	}
+
+	require.NoError(t, exec.run(context.Background()))
+	assert.Equal(t, []sessionsvc.NewSessionRequest{{Name: "pr-1", Remote: "https://github.com/o/r", ShCmd: "gh pr checkout 1"}}, spawner.created)
 }

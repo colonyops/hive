@@ -11,16 +11,16 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/git"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 
 type SessionCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 
 	// per-subcommand flags
 	infoJSON bool
@@ -45,7 +45,7 @@ type SessionCmd struct {
 }
 
 // NewSessionCmd creates a new session command
-func NewSessionCmd(flags *Flags, app *hive.App) *SessionCmd {
+func NewSessionCmd(flags *Flags, app *app.App) *SessionCmd {
 	return &SessionCmd{flags: flags, app: app}
 }
 
@@ -189,7 +189,7 @@ func printSessionHuman(out io.Writer, sess session.Session) {
 
 func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	// Detect session from current working directory
-	sessionID, err := cmd.app.Sessions.DetectSession(ctx)
+	sessionID, err := cmd.app.Sessions().DetectSession(ctx)
 	if err != nil {
 		return fmt.Errorf("detect session: %w", err)
 	}
@@ -204,7 +204,7 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	}
 
 	// Get full session details
-	sess, err := cmd.app.Sessions.GetSession(ctx, sessionID)
+	sess, err := cmd.app.Sessions().GetSession(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}
@@ -245,7 +245,7 @@ func (cmd *SessionCmd) runShow(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("session ID required")
 	}
 
-	sess, err := cmd.app.Sessions.GetSession(ctx, id)
+	sess, err := cmd.app.Sessions().GetSession(ctx, id)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}
@@ -357,7 +357,7 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 	}
 
 	if cmd.updateName != "" {
-		if err := cmd.app.Sessions.RenameSession(ctx, id, cmd.updateName); err != nil {
+		if err := cmd.app.Sessions().RenameSession(ctx, id, cmd.updateName); err != nil {
 			return fmt.Errorf("rename session: %w", err)
 		}
 	}
@@ -367,12 +367,12 @@ func (cmd *SessionCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 		if cmd.updateClearGroup {
 			group = ""
 		}
-		if err := cmd.app.Sessions.SetSessionGroup(ctx, id, group); err != nil {
+		if err := cmd.app.Sessions().SetSessionGroup(ctx, id, group); err != nil {
 			return fmt.Errorf("set session group: %w", err)
 		}
 	}
 
-	sess, err := cmd.app.Sessions.GetSession(ctx, id)
+	sess, err := cmd.app.Sessions().GetSession(ctx, id)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}
@@ -397,7 +397,7 @@ type lsSessionInfo struct {
 }
 
 func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
-	sessions, err := cmd.app.Sessions.ListSessions(ctx)
+	sessions, err := cmd.app.Sessions().ListSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("list sessions: %w", err)
 	}
@@ -510,7 +510,7 @@ func (cmd *SessionCmd) runDelete(ctx context.Context, c *cli.Command) error {
 		}
 	}
 
-	if err := cmd.app.Sessions.DeleteSession(ctx, id); err != nil {
+	if err := cmd.app.Sessions().DeleteSession(ctx, id); err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}
 
@@ -565,13 +565,13 @@ func (cmd *SessionCmd) runRecycle(ctx context.Context, c *cli.Command) error {
 		}
 	}
 
-	if err := cmd.app.Sessions.RecycleSession(ctx, id, os.Stderr); err != nil {
+	if err := cmd.app.Sessions().RecycleSession(ctx, id, os.Stderr); err != nil {
 		return fmt.Errorf("recycle session: %w", err)
 	}
 
 	if cmd.recycleJSON {
 		// Worktree sessions are deleted on recycle, so the record may be gone.
-		sess, err := cmd.app.Sessions.GetSession(ctx, id)
+		sess, err := cmd.app.Sessions().GetSession(ctx, id)
 		switch {
 		case errors.Is(err, session.ErrNotFound):
 			return iojson.WriteLine(c.Root().Writer, map[string]any{"id": id, "deleted": true})
@@ -601,7 +601,7 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session
 	}
 
 	// Count unread inbox messages
-	if msgs, err := cmd.app.Messages.GetUnread(ctx, s.ID, s.InboxTopic()); err == nil {
+	if msgs, err := cmd.app.Messages().GetUnread(ctx, s.ID, s.InboxTopic()); err == nil {
 		info.Unread = len(msgs)
 	}
 
@@ -611,7 +611,7 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session
 // checkRisk returns an error describing uncommitted or unpushed work that
 // would be lost if the session were destroyed by the given action.
 func (cmd *SessionCmd) checkRisk(ctx context.Context, id, action string) error {
-	risk, err := cmd.app.Sessions.CheckSessionRisk(ctx, id)
+	risk, err := cmd.app.Sessions().CheckSessionRisk(ctx, id)
 	if err != nil {
 		return fmt.Errorf("check session risk: %w", err)
 	}

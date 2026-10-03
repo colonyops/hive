@@ -18,7 +18,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
+	"github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
 const (

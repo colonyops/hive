@@ -12,31 +12,6 @@ import (
 
 const maxStderrLen = 500
 
-// limitedWriter caps writes to a bytes.Buffer at a maximum byte count.
-// Bytes beyond the limit are silently discarded.
-type limitedWriter struct {
-	buf *bytes.Buffer
-	n   int64
-	max int64
-}
-
-func (w *limitedWriter) Write(p []byte) (int, error) {
-	if w.n >= w.max {
-		return len(p), nil
-	}
-	remaining := w.max - w.n
-	origLen := len(p)
-	if int64(origLen) > remaining {
-		p = p[:remaining]
-	}
-	n, err := w.buf.Write(p)
-	w.n += int64(n)
-	if err != nil {
-		return n, err
-	}
-	return origLen, nil
-}
-
 // CommandError describes a failed child process and its capped output.
 type CommandError struct {
 	Command string
@@ -96,11 +71,11 @@ func RunSh(ctx context.Context, dir, cmd string) error {
 	if dir != "" {
 		c.Dir = dir
 	}
-	var buf bytes.Buffer
+	stderr := &HeadWriter{Max: maxStderrLen}
 	c.Stdout = io.Discard
-	c.Stderr = &limitedWriter{buf: &buf, max: maxStderrLen}
+	c.Stderr = stderr
 	if err := c.Run(); err != nil {
-		return errorWithOutput(err, buf.Bytes())
+		return errorWithOutput(err, stderr.Bytes())
 	}
 	return nil
 }
@@ -117,12 +92,39 @@ type Executor interface {
 	RunDirStream(ctx context.Context, dir string, stdout, stderr io.Writer, cmd string, args ...string) error
 }
 
-// RealExecutor calls actual shell commands.
-type RealExecutor struct{}
+// RealExecutor calls actual shell commands. Its zero value runs them in this
+// process's environment and resolves them through this process's PATH.
+type RealExecutor struct {
+	// Env, when set, is the environment each command runs with.
+	Env func(ctx context.Context) []string
+	// LookPath, when set, resolves the command name before it runs. os/exec
+	// searches this process's PATH and ignores Cmd.Env, so a program that only
+	// the Env PATH holds needs this to start. A name LookPath cannot resolve
+	// runs unchanged, so the caller sees the OS's own error for it.
+	LookPath func(ctx context.Context, file string) (string, error)
+	// StreamDiagnosticBytes, when positive, appends up to that many leading
+	// bytes of a failed streamed command's stderr to its error, for callers
+	// that stream stderr somewhere nobody reads.
+	StreamDiagnosticBytes int
+}
+
+func (e *RealExecutor) command(ctx context.Context, dir, cmd string, args ...string) *exec.Cmd {
+	if e.LookPath != nil {
+		if path, err := e.LookPath(ctx, cmd); err == nil {
+			cmd = path
+		}
+	}
+	c := exec.CommandContext(ctx, cmd, args...)
+	c.Dir = dir
+	if e.Env != nil {
+		c.Env = e.Env(ctx)
+	}
+	return c
+}
 
 // Run executes a command and returns its combined output.
 func (e *RealExecutor) Run(ctx context.Context, cmd string, args ...string) ([]byte, error) {
-	out, err := exec.CommandContext(ctx, cmd, args...).CombinedOutput()
+	out, err := e.command(ctx, "", cmd, args...).CombinedOutput()
 	if err != nil {
 		return out, NewCommandError(cmd, "", out, err)
 	}
@@ -133,10 +135,7 @@ func (e *RealExecutor) Run(ctx context.Context, cmd string, args ...string) ([]b
 // stdout and stderr separately. Keeping the streams apart lets callers parse
 // stdout as JSON while surfacing stderr as the error message.
 func (e *RealExecutor) RunOutputDir(ctx context.Context, dir, cmd string, args ...string) ([]byte, []byte, error) {
-	c := exec.CommandContext(ctx, cmd, args...)
-	if dir != "" {
-		c.Dir = dir
-	}
+	c := e.command(ctx, dir, cmd, args...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	c.Stdout = &stdout
@@ -149,9 +148,7 @@ func (e *RealExecutor) RunOutputDir(ctx context.Context, dir, cmd string, args .
 
 // RunDir executes a command in a specific directory.
 func (e *RealExecutor) RunDir(ctx context.Context, dir, cmd string, args ...string) ([]byte, error) {
-	c := exec.CommandContext(ctx, cmd, args...)
-	c.Dir = dir
-	out, err := c.CombinedOutput()
+	out, err := e.command(ctx, dir, cmd, args...).CombinedOutput()
 	if err != nil {
 		return out, NewCommandError(cmd, dir, out, err)
 	}
@@ -160,10 +157,7 @@ func (e *RealExecutor) RunDir(ctx context.Context, dir, cmd string, args ...stri
 
 // RunStream executes a command and streams stdout/stderr to the provided writers.
 func (e *RealExecutor) RunStream(ctx context.Context, stdout, stderr io.Writer, cmd string, args ...string) error {
-	c := exec.CommandContext(ctx, cmd, args...)
-	c.Stdout = stdout
-	c.Stderr = stderr
-	if err := c.Run(); err != nil {
+	if err := e.stream(ctx, "", stdout, stderr, cmd, args...); err != nil {
 		return fmt.Errorf("exec %s: %w", cmd, err)
 	}
 	return nil
@@ -171,12 +165,32 @@ func (e *RealExecutor) RunStream(ctx context.Context, stdout, stderr io.Writer, 
 
 // RunDirStream executes a command in a specific directory and streams output.
 func (e *RealExecutor) RunDirStream(ctx context.Context, dir string, stdout, stderr io.Writer, cmd string, args ...string) error {
-	c := exec.CommandContext(ctx, cmd, args...)
-	c.Dir = dir
-	c.Stdout = stdout
-	c.Stderr = stderr
-	if err := c.Run(); err != nil {
+	if err := e.stream(ctx, dir, stdout, stderr, cmd, args...); err != nil {
 		return fmt.Errorf("exec %s in %s: %w", cmd, dir, err)
 	}
 	return nil
+}
+
+func (e *RealExecutor) stream(ctx context.Context, dir string, stdout, stderr io.Writer, cmd string, args ...string) error {
+	c := e.command(ctx, dir, cmd, args...)
+	c.Stdout = stdout
+	c.Stderr = stderr
+	var diagnostic *HeadWriter
+	if e.StreamDiagnosticBytes > 0 {
+		diagnostic = &HeadWriter{Max: e.StreamDiagnosticBytes}
+		c.Stderr = diagnostic
+		if stderr != nil {
+			c.Stderr = io.MultiWriter(stderr, diagnostic)
+		}
+	}
+	err := c.Run()
+	if err == nil {
+		return nil
+	}
+	if diagnostic != nil {
+		if opening := diagnostic.String(); opening != "" {
+			return fmt.Errorf("%w: %s", err, opening)
+		}
+	}
+	return err
 }

@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,18 +16,14 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/colonyops/hive/pkg/tmpl"
-
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	datastores "github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/execenv"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/hivewatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/ingest"
@@ -50,20 +45,17 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/rss"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/terminalimg"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxbin"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/git"
-	"github.com/colonyops/hive/internal/core/multiplexer"
-	coreterminal "github.com/colonyops/hive/internal/core/terminal"
-	terminalstatus "github.com/colonyops/hive/internal/core/terminal/status"
-	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
-	coredb "github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/scripts"
-	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
+	hiveevents "github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/hive/session/scripts"
+	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/internal/platform/execenv"
+	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
+	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 )
 
 // Config is everything App needs that it cannot resolve itself.
@@ -73,6 +65,9 @@ type Config struct {
 	Paths         settings.Paths
 	MockMode      string
 	Logger        zerolog.Logger
+	// ExecEnv is the login-shell environment main resolved the paths with,
+	// shared so the shell is probed once. nil builds one.
+	ExecEnv *execenv.Resolver
 
 	// CredentialKeyringService isolates development credentials from the installed app.
 	CredentialKeyringService string
@@ -210,21 +205,13 @@ type App struct {
 	webhookHost string
 	webhookPort int
 
-	// Hive integration: sessions and internal events use Hive's own shared
-	// state and event bus, while this app keeps its own database.
-	launcher  *dispatch.HiveSessionLauncher
-	sessions  *dispatch.HiveSessionManager
-	hiveDB    *coredb.DB
-	honeycomb *dispatch.HiveHoneycomb
+	// hive owns the config-derived services and swaps them on Reload.
+	hive     *hive.Engine
+	launcher *dispatch.RepositoryLauncher
 
-	// hiveBus and hiveDataDir are what a reload needs and must not rebuild:
-	// the bus subscribers already hold, and the resolved data directory.
-	hiveBus     *eventbus.EventBus
 	hiveDataDir string
-	// reloadMu serializes ReloadHiveRuntime. Each adapter swap is atomic on
-	// its own; the mutex is what makes the four swaps of one reload land
-	// together, so two overlapping saves cannot leave the launcher on one
-	// config and the manager on another.
+	// reloadMu serializes ReloadHiveRuntime, so the engine, the agent command
+	// lines and the config location of one reload land together.
 	reloadMu sync.Mutex
 
 	// Full agent command lines are atomic because ReloadHiveRuntime replaces
@@ -260,9 +247,8 @@ type App struct {
 	// pollInterval is the validated, clamped interval the producer polls on.
 	pollInterval time.Duration
 
-	logger    zerolog.Logger
-	mock      string
-	publisher *dispatch.HiveMessagePublisher
+	logger zerolog.Logger
+	mock   string
 
 	// ctx is the application's lifetime, not a request's. Background
 	// callbacks wired at construction — the config watchers, the GitHub
@@ -308,7 +294,11 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 
 	a.pollInterval = cfg.Settings.Polling.Interval.Duration()
 	a.tmux = tmuxbin.NewResolver(cfg.Settings.Paths.Tmux)
-	a.execEnv = execenv.NewResolver(execenv.Options{Logger: cfg.Logger})
+	a.execEnv = cfg.ExecEnv
+	if a.execEnv == nil {
+		a.execEnv = execenv.NewResolver(execenv.Options{Logger: cfg.Logger})
+	}
+	a.execEnv.SetLogger(cfg.Logger)
 
 	// Mock modes get an in-memory credential store: a keychain read can
 	// prompt, and a fixture run that prompts is a fixture run that hangs.
@@ -359,8 +349,8 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		return nil, err
 	}
 	a.hiveWatcher = hivewatch.New(hiveWatchInterval, cfg.Logger,
-		sessionsProbe(a.sessions, a.Events),
-		tasksProbe(a.honeycomb, a.Events),
+		sessionsProbe(func(ctx context.Context) ([]session.Session, error) { return a.hive.Sessions().ListSessions(ctx) }, a.Events),
+		tasksProbe(a.hive.HC().Fingerprint, a.Events),
 	)
 	a.popupTerminals = ptyterm.NewManager(ptyterm.ManagerOptions{Environ: a.execEnv.Environ})
 
@@ -502,8 +492,8 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Events:   a.Events,
 	})
 	a.Sessions = newSessionsService(SessionsDeps{
-		Launcher: a.launcher, WorkspaceLauncher: a.AgentWorkspaces,
-		Manager: a.sessions, Statuses: a.sessions, Git: a.sessions, Tmux: a.terminals,
+		Hive: a.hive, Launcher: a.launcher, WorkspaceLauncher: a.AgentWorkspaces,
+		Windows: a.terminals, Tmux: a.terminals,
 		AgentWindows: a.terminals, AgentCommands: a.profileCommands,
 		Jobs: a.Jobs, Items: a.Stores.InboxItems, Links: a.Stores.ItemSessions, Catalog: a.actionStore, Dispatcher: a.dispatcher,
 		Recorder: a.Activity, Events: a.Events, Logger: cfg.Logger,
@@ -517,14 +507,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	})
 	a.Terminals = newTerminalsService(TerminalsDeps{Manager: a.terminals, Starter: a.Sessions, Home: os.UserHomeDir, Logger: cfg.Logger})
 	a.PopupTerminals = newPopupTerminalsService(PopupTerminalsDeps{Manager: a.popupTerminals, Terminals: a.Terminals, Directory: a.Sessions, Catalog: a.actionStore})
-	// a.honeycomb holding a nil *dispatch.HiveHoneycomb would otherwise pass a
-	// non-nil taskSource whose nil-guard never fires — the explicit check keeps
-	// Tasks answering unavailable instead.
-	var tasks taskSource
-	if a.honeycomb != nil {
-		tasks = a.honeycomb
-	}
-	a.Tasks = newTasksService(tasks)
+	a.Tasks = newTasksService(a.hive)
 
 	// After AgentWorkspaces: the scheduler launches chats through it, and the
 	// service reads the same workspace store the scheduler takes its specs
@@ -680,16 +663,13 @@ func (a *App) MCPBaseURL(ctx context.Context) string {
 	return HTTPBaseURLAt(a.Webhooks.Host(), port)
 }
 
-// HiveConn exposes the connection to the shared Hive action database
-// (sessions, messages) as a plain *sql.DB. Shared hive types stop at this
-// method — adapters that need raw access, such as the e2e harness's table
-// resets and read-only snapshots, take the stdlib type rather than
-// *coredb.DB.
+// HiveConn exposes hive.db (sessions, messages) as a plain *sql.DB for the
+// e2e harness's table resets and read-only snapshots.
 func (a *App) HiveConn() *sql.DB {
-	if a.hiveDB == nil {
+	if a.hive == nil {
 		return nil
 	}
-	return a.hiveDB.Conn()
+	return a.hive.DB().Conn()
 }
 
 // Close stops the background subsystems and releases resources. It is the
@@ -792,8 +772,8 @@ func (a *App) Close() error {
 	}
 
 	var err error
-	if a.hiveDB != nil {
-		if closeErr := a.hiveDB.Close(); closeErr != nil {
+	if a.hive != nil {
+		if closeErr := a.hive.DB().Close(); closeErr != nil {
 			err = fmt.Errorf("close hive action database: %w", closeErr)
 		}
 	}
@@ -1101,7 +1081,8 @@ func (a *App) buildProducer(logger zerolog.Logger) *ingest.Producer {
 // the configured action path real in e2e while stopping a background shell
 // action from compromising fixture determinism.
 func (a *App) buildOutputWorker(cfg Config) *dispatch.Worker {
-	a.dispatcher = dispatch.NewDispatcher(outputExecutors(a.launcher, a.AgentWorkspaces, a.publisher, a.observedNotifier(cfg.Notifier), cfg.Gate, a.Stores.InboxItems, a.execEnv, cfg.Logger))
+	messages := func() dispatch.MessageService { return a.hive.Messages() }
+	a.dispatcher = dispatch.NewDispatcher(outputExecutors(a.launcher, a.AgentWorkspaces, messages, a.observedNotifier(cfg.Notifier), cfg.Gate, a.Stores.InboxItems, a.execEnv, cfg.Logger))
 	worker := dispatch.NewWorker(a.Stores.OutputCommands, dispatch.NewFlowActions(a.flowStore, a.actionStore), a.dispatcher, dispatch.DefaultOutputWorkerInterval, cfg.Logger)
 	worker.SetRecorder(a.Activity)
 	worker.SetJobRecorder(a.Jobs)
@@ -1164,25 +1145,17 @@ type hiveConfigEnvironment interface {
 	Getenv(context.Context, string) string
 }
 
-// Hive keeps this list private. The ACL mirrors it so a Dock launch can honor
-// XDG_CONFIG_HOME from the login shell instead of probing the launcher's home.
-var hiveConfigNames = []string{"config.yaml", "config.yml", "hive.yaml", "hive.yml"}
-
+// XDG_CONFIG_HOME is read through env so a Dock launch honors the login
+// shell's value instead of probing the launcher's home.
 func resolveHiveConfigLocation(ctx context.Context, env hiveConfigEnvironment) HiveConfigLocation {
-	if path := env.Getenv(ctx, "HIVE_CONFIG"); path != "" {
+	if path := env.Getenv(ctx, config.EnvConfig); path != "" {
 		return HiveConfigLocation{Path: path, EnvironmentOverride: true}
 	}
 	configDir := config.DefaultConfigDir()
 	if configHome := env.Getenv(ctx, "XDG_CONFIG_HOME"); configHome != "" {
 		configDir = filepath.Join(configHome, "hive")
 	}
-	for _, name := range hiveConfigNames {
-		path := filepath.Join(configDir, name)
-		if _, err := os.Stat(path); err == nil {
-			return HiveConfigLocation{Path: path}
-		}
-	}
-	return HiveConfigLocation{Path: filepath.Join(configDir, hiveConfigNames[0])}
+	return HiveConfigLocation{Path: config.ConfigPathIn(configDir)}
 }
 
 func resolveHiveDefaultAgent(ctx context.Context, env hiveConfigEnvironment, configured string, profiles []string) string {
@@ -1222,15 +1195,11 @@ func (a *App) openWebhook(_ context.Context, cfg Config) {
 	a.webhook.SetRecorder(a.Activity)
 }
 
-// openHiveRuntime opens the Hive dependencies desktop actions need. The
-// desktop keeps its own database, while sessions and internal events
-// intentionally use Hive's shared state and event bus.
-//
-// It splits in two on purpose. The database and the event bus are opened once
-// and live for the process: reopening a connection pool underneath in-flight
-// queries, or restarting a bus subscribers already hold, buys nothing a
-// config edit needs. Everything the Hive config decides is built by
-// buildHiveServices, which ReloadHiveRuntime runs again (ADR the-hive-runtime-rebinds-on-a-config-write-instead-of-requiring-a-restart).
+// openHiveRuntime opens the database and the event bus once for the process:
+// reopening a connection pool underneath in-flight queries, or restarting a bus
+// subscribers already hold, buys nothing a config edit needs.
+// Everything the hive config decides is the engine's to rebuild, which
+// ReloadHiveRuntime asks it to (ADR the-hive-runtime-rebinds-on-a-config-write-instead-of-requiring-a-restart).
 func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	dataDir := cfg.Paths.HiveDataDir
 	if dataDir == "" {
@@ -1249,37 +1218,44 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		cfg.Logger.Warn().Err(err).Msg("extract hive action scripts failed")
 	}
 
-	// coredb.Open takes no context. Threading one means changing the shared
-	// internal/data/db package and its CLI callers.
-	//nolint:contextcheck // shared signature, see internal/data/db
-	database, err := coredb.Open(dataDir, coredb.OpenOptions{
-		MaxOpenConns: hiveCfg.Database.MaxOpenConns,
-		MaxIdleConns: hiveCfg.Database.MaxIdleConns,
-		BusyTimeout:  hiveCfg.Database.BusyTimeout,
-	})
+	database, err := hive.OpenDB(ctx, dataDir, hiveCfg.Database)
 	if err != nil {
 		return fmt.Errorf("open hive action database: %w", err)
 	}
-	if err := stores.MigrateFromJSON(ctx, database, dataDir); err != nil {
-		_ = database.Close()
-		return fmt.Errorf("migrate hive action data: %w", err)
-	}
-	a.hiveDB = database
-	a.honeycomb = dispatch.NewHiveHoneycomb(hive.NewHoneycombService(stores.NewHCStore(database), cfg.Logger.With().Str("component", "hive-hc").Logger()))
 
-	bus := eventbus.New(64)
+	bus := hiveevents.New(64)
 	busCtx, cancel := context.WithCancel(ctx)
-	a.hiveBusCancel = cancel
 	go bus.Start(busCtx)
-	a.hiveBus = bus
 
-	built := a.buildHiveServices(hiveCfg, database, bus)
-	a.agentCommands.Store(&built.agentCommands)
-	a.launcher = dispatch.NewHiveSessionLauncher(built.sessions)
-	a.launcher.SetRecorder(a.Activity)
-	a.launcher.SetItemSessionLinker(a.Stores.ItemSessions, cfg.Logger)
-	a.sessions = dispatch.NewHiveSessionManager(built.sessions, built.statuses, hiveSessionWindowSource{terminals: a.terminals}, built.git, built.pollInterval)
-	a.publisher = dispatch.NewHiveMessagePublisher(built.messages)
+	tmuxBinary := func(ctx context.Context) (string, error) {
+		return a.resolveTmuxBinary(ctx)
+	}
+	tmuxClient := tmuxexec.New(newTmuxRunner(tmuxBinary, a.execEnv.Environ), a.logger.With().Str("component", "tmux").Logger())
+	ports := hive.Ports{
+		DB:       database,
+		Bus:      bus,
+		Executor: newEnvExecutor(a.execEnv),
+		Mux:      hiveMultiplexer{Client: tmuxClient, renamer: a.terminals},
+		DataDir:  dataDir,
+		Logger:   a.logger,
+	}
+	// Mock modes have no tmux to read, so status stays off.
+	if a.mock == "" {
+		ports.PaneSource = tmuxClient
+	}
+	engine, err := hive.New(hiveCfg, ports)
+	if err != nil {
+		cancel()
+		_ = database.Close()
+		return fmt.Errorf("start hive engine: %w", err)
+	}
+	a.hive = engine
+	a.hiveBusCancel = cancel
+	a.agentCommands.Store(new(agentCommands(hiveCfg)))
+	a.launcher = dispatch.NewRepositoryLauncher(
+		func() dispatch.SessionCreator { return a.hive.Sessions() },
+		a.Stores.ItemSessions, a.Activity, cfg.Logger,
+	)
 	return nil
 }
 
@@ -1300,14 +1276,11 @@ func (a *App) loadHiveConfig(ctx context.Context, dataDir string) (*config.Confi
 	return hiveCfg, nil
 }
 
-// hiveServices is everything the Hive config decides. Its fields are what a
-// reload replaces; anything not here is either process-lived (the database,
-// the bus) or this app's own (the tmux pool).
 func newTmuxRunner(
 	binary func(context.Context) (string, error),
 	environ func(context.Context) []string,
-) tmuxadapter.Runner {
-	return tmuxadapter.NewExecRunner(tmuxadapter.ExecRunnerOptions{
+) tmuxexec.Runner {
+	return tmuxexec.NewExecRunner(tmuxexec.ExecRunnerOptions{
 		Binary:      binary,
 		Environ:     tmuxcc.RunnerEnviron(environ),
 		PrepareArgs: tmuxcc.RunnerArgs,
@@ -1338,7 +1311,7 @@ type tmuxSessionRenamer interface {
 // on the same session name. A raw rename would leave the control-mode manager
 // registered under the old name.
 type hiveMultiplexer struct {
-	*tmuxadapter.Client
+	*tmuxexec.Client
 	renamer tmuxSessionRenamer
 }
 
@@ -1349,86 +1322,9 @@ func (m hiveMultiplexer) RenameSession(ctx context.Context, target multiplexer.T
 	return m.renamer.RenameSession(ctx, target.Session, newName)
 }
 
-type hiveServices struct {
-	sessions      *hive.SessionService
-	statuses      *hive.StatusService
-	git           git.Git
-	messages      *hive.MessageService
-	pollInterval  time.Duration
-	agentCommands map[string]string
-}
-
-// buildHiveServices constructs the config-derived half of the Hive runtime. It
-// takes the database and bus rather than opening them so it can run more than
-// once against the same ones.
-//
-// Nothing here is closed on the way out of a reload, because nothing here owns
-// anything to close: the session, status and message services hold the handles
-// they were given and spawn per call, and the tmux capture recorder writes one
-// file per capture without keeping a handle.
-func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus *eventbus.EventBus) hiveServices {
-	profile := hiveCfg.Agents.DefaultProfile()
-	renderer := tmpl.New(tmpl.Config{
-		ScriptPaths:  scripts.ScriptPaths(a.hiveDataDir),
-		AgentCommand: profile.CommandOrDefault(hiveCfg.Agents.Default),
-		AgentWindow:  hiveCfg.Agents.Default,
-		AgentFlags:   profile.ShellFlags(),
-	})
-	exec := newEnvExecutor(a.execEnv)
-	gitExec := git.NewExecutor(hiveCfg.GitPath, exec)
-	serviceLogger := a.logger.With().Str("component", "hive-actions").Logger()
-	tmuxBinary := func(ctx context.Context) (string, error) {
-		return a.resolveTmuxBinary(ctx)
-	}
-	tmuxClient := tmuxadapter.New(newTmuxRunner(tmuxBinary, a.execEnv.Environ), serviceLogger.With().Str("component", "tmux").Logger())
-	sessionMultiplexer := hiveMultiplexer{Client: tmuxClient, renamer: a.terminals}
-	sessions := hive.NewSessionService(
-		stores.NewSessionStore(database),
-		gitExec,
-		hiveCfg,
-		bus,
-		exec,
-		renderer,
-		hive.PlainStyler{},
-		serviceLogger,
-		io.Discard,
-		io.Discard,
-		sessionMultiplexer,
-	)
-
-	var statusService *hive.StatusService
-	if a.mock == "" {
-		statusOptions := []terminaltmux.Option{
-			terminaltmux.WithPaneSource(tmuxClient),
-			terminaltmux.WithStatusOptions(terminalstatus.OptionsFromConfig(hiveCfg.Terminal.Status, hiveCfg.Tmux.PollInterval)),
-			terminaltmux.WithMissingTolerance(hiveCfg.Terminal.Status.Confirm.Missing.Polls),
-		}
-		if hiveCfg.Tmux.CaptureRecording.Enabled {
-			recorder, recorderErr := terminaltmux.NewJSONCaptureRecorder(hiveCfg.TmuxCaptureRecordingsDir())
-			if recorderErr != nil {
-				a.logger.Warn().Err(recorderErr).Msg("enable tmux pane capture recording for session status")
-			} else {
-				statusOptions = append(statusOptions, terminaltmux.WithCaptureRecorder(recorder))
-			}
-		}
-		terminalManager := coreterminal.NewManager([]string{"tmux"})
-		terminalManager.Register(terminaltmux.NewFromPreviewMatchers(hiveCfg.Tmux.PreviewWindowMatcher, statusOptions...))
-		statusService = hive.NewStatusService(terminalManager, hiveCfg.Git.StatusWorkers)
-	}
-
-	return hiveServices{
-		sessions:      sessions,
-		statuses:      statusService,
-		git:           gitExec,
-		messages:      hive.NewMessageService(stores.NewMessageStore(database, hiveCfg.Messaging.MaxMessages), hiveCfg, bus),
-		pollInterval:  hiveCfg.Tmux.PollInterval,
-		agentCommands: agentCommands(hiveCfg),
-	}
-}
-
-// ReloadHiveRuntime re-reads the Hive config and points the session, status
-// and message adapters at services built from it. It is what makes a config
-// the app itself just wrote take effect without a relaunch.
+// ReloadHiveRuntime re-reads the Hive config and has the engine rebuild its
+// services from it, so a config the app just wrote takes effect without a
+// relaunch.
 //
 // A failed load changes nothing: the running services keep serving the config
 // they were built from, which is strictly better than a process left with no
@@ -1439,7 +1335,7 @@ func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus
 // store keep their startup settings, so database: and a changed data dir still
 // need a restart.
 func (a *App) ReloadHiveRuntime(ctx context.Context) error {
-	if a.hiveDB == nil || a.hiveBus == nil {
+	if a.hive == nil {
 		return Errorf(KindInternal, "the Hive runtime is not open")
 	}
 	a.reloadMu.Lock()
@@ -1448,11 +1344,10 @@ func (a *App) ReloadHiveRuntime(ctx context.Context) error {
 	if err != nil {
 		return Wrap(err, KindInvalid, "reloading the Hive config")
 	}
-	built := a.buildHiveServices(hiveCfg, a.hiveDB, a.hiveBus)
-	a.agentCommands.Store(&built.agentCommands)
-	a.launcher.Rebind(built.sessions)
-	a.sessions.Rebind(built.sessions, built.statuses, built.git, built.pollInterval)
-	a.publisher.Rebind(built.messages)
+	if err := a.hive.Reload(hiveCfg); err != nil {
+		return Wrap(err, KindInvalid, "reloading the Hive config")
+	}
+	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	return nil
 }
 

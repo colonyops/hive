@@ -26,7 +26,7 @@ var inputTypes = map[string]bool{
 // template parser accepts only for an identifier.
 var inputNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*$`)
 
-// maxInputNameLen bounds a declared input name, mirroring maxSlugLen.
+// maxInputNameLen bounds a declared input name, mirroring slug.MaxLen.
 const maxInputNameLen = 64
 
 // InputSpec declares one value collected from the user when an action is

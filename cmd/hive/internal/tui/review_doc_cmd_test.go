@@ -4,11 +4,11 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/eventbus/testbus"
-	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/hive/events/testbus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -17,7 +17,7 @@ func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
 	tb := testbus.New(t)
 
 	var received atomic.Int32
-	tb.SubscribeNotificationPublished(func(_ eventbus.NotificationPublishedPayload) {
+	tb.SubscribeNotificationPublished(func(_ events.NotificationPublishedPayload) {
 		received.Add(1)
 	})
 
@@ -36,7 +36,7 @@ func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
 	cmd := HiveDocReviewCmd{Arg: ""}
 	_ = cmd.Execute(m)
 
-	tb.AssertPublished(t, eventbus.EventNotificationPublished)
+	tb.AssertPublished(t, events.EventNotificationPublished)
 	assert.Equal(t, int32(1), received.Load(), "expected a warning notification to be published")
 }
 

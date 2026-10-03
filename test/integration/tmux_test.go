@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
-	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -109,7 +109,7 @@ func TestTmuxMetadataTargetUsedForRecycleAndDelete(t *testing.T) {
 }
 
 func TestTmuxTypedWindowKillAndMissingTargets(t *testing.T) {
-	client := tmuxadapter.NewDefault(zerolog.Nop())
+	client := tmuxexec.NewDefault(zerolog.Nop())
 	cleanupTmuxSession(t, "window-lifecycle")
 	out, err := exec.Command("tmux", "new-session", "-d", "-s", "window-lifecycle", "-n", "one").CombinedOutput()
 	require.NoError(t, err, "tmux new-session: %s", out)
@@ -129,7 +129,7 @@ func integrationSession(t *testing.T, h *Harness, id string) session.Session {
 	database, err := db.Open(h.DataDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
 	defer func() { require.NoError(t, database.Close()) }()
-	sess, err := stores.NewSessionStore(database).Get(context.Background(), id)
+	sess, err := store.NewSessionStore(database).Get(context.Background(), id)
 	require.NoError(t, err)
 	return sess
 }
@@ -139,7 +139,7 @@ func setIntegrationTmuxTarget(t *testing.T, h *Harness, id, target string) {
 	database, err := db.Open(h.DataDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
 	defer func() { require.NoError(t, database.Close()) }()
-	store := stores.NewSessionStore(database)
+	store := store.NewSessionStore(database)
 	sess, err := store.Get(context.Background(), id)
 	require.NoError(t, err)
 	sess.SetMeta(session.MetaTmuxSession, target)
@@ -169,7 +169,7 @@ func TestTmuxCapture(t *testing.T) {
 
 func TestTmuxInputPrimitives(t *testing.T) {
 	ctx := context.Background()
-	client := tmuxadapter.NewDefault(zerolog.Nop())
+	client := tmuxexec.NewDefault(zerolog.Nop())
 	target := multiplexer.Target{Session: "input-primitives", Window: "0", Pane: "0"}
 	cleanupTmuxSession(t, target.Session)
 	outputPath := filepath.Join(t.TempDir(), "literal.bin")
@@ -202,7 +202,7 @@ func TestTmuxInputPrimitives(t *testing.T) {
 
 func TestTmuxPasteIsByteExactAndCleansBuffer(t *testing.T) {
 	ctx := context.Background()
-	client := tmuxadapter.NewDefault(zerolog.Nop())
+	client := tmuxexec.NewDefault(zerolog.Nop())
 	target := multiplexer.Target{Session: "paste-primitives", Window: "0", Pane: "0"}
 	cleanupTmuxSession(t, target.Session)
 	outputPath := filepath.Join(t.TempDir(), "paste.bin")
@@ -432,7 +432,7 @@ rules:
 }
 
 func TestTmuxCreateSessionCleansPartialSession(t *testing.T) {
-	client := tmuxadapter.NewDefault(zerolog.Nop())
+	client := tmuxexec.NewDefault(zerolog.Nop())
 	name := "partial-cleanup"
 	cleanupTmuxSession(t, name)
 

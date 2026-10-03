@@ -17,10 +17,10 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	appstores "github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
-	"github.com/colonyops/hive/internal/core/messaging"
-	"github.com/colonyops/hive/internal/core/session"
-	coredb "github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/domain/messaging"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/store"
+	coredb "github.com/colonyops/hive/internal/store/db"
 )
 
 func TestActionSmokeMiddlewareUnavailableOutsideDedicatedHarness(t *testing.T) {
@@ -69,13 +69,13 @@ func TestActionSmokeMiddlewareReadsOnlyCurrentRunWithoutMutation(t *testing.T) {
 	t.Setenv(settings.EnvActionsPath, filepath.Join(t.TempDir(), "private-actions.yml"))
 	ctx := context.Background()
 
-	sessionStore := stores.NewSessionStore(core)
+	sessionStore := store.NewSessionStore(core)
 	now := time.Now()
 	require.NoError(t, sessionStore.Save(ctx, session.Session{ID: "kept", Name: "smoke-unit-template", Slug: "smoke-unit-template", Remote: "file:///fixture", State: session.StateActive, CreatedAt: now, UpdatedAt: now}))
 	require.NoError(t, sessionStore.Save(ctx, session.Session{ID: "hidden", Name: "smoke-other-template", Slug: "smoke-other-template", Remote: "file:///other", State: session.StateActive, CreatedAt: now, UpdatedAt: now}))
-	_, err := stores.NewMessageStore(core, 0).Publish(ctx, messaging.Message{Payload: "rendered", Sender: "hive-desktop"}, []string{"smoke.unit"})
+	_, err := store.NewMessageStore(core, 0).Publish(ctx, messaging.Message{Payload: "rendered", Sender: "hive-desktop"}, []string{"smoke.unit"})
 	require.NoError(t, err)
-	_, err = stores.NewMessageStore(core, 0).Publish(ctx, messaging.Message{Payload: "hidden", Sender: "other"}, []string{"smoke.other"})
+	_, err = store.NewMessageStore(core, 0).Publish(ctx, messaging.Message{Payload: "hidden", Sender: "other"}, []string{"smoke.other"})
 	require.NoError(t, err)
 
 	outputCommands := appstores.New(pipeline, appstores.Options{}).OutputCommands

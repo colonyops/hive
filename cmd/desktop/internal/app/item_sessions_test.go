@@ -13,6 +13,8 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
+	"github.com/colonyops/hive/internal/domain/session"
+	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
 // fakeItemSessionStore stands in for the durable link table. links is keyed by
@@ -49,18 +51,21 @@ func (f *fakeItemSessionStore) Unlink(_ context.Context, sessionIDs []string) er
 	return nil
 }
 
-func itemSessionsService(manager *fakeSessionManager, links *fakeItemSessionStore) *SessionsService {
-	return newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Items: links, Links: links, Logger: zerolog.Nop()})
+func itemSessionsService(h *hiveHarness, windows sessionWindowSource, links *fakeItemSessionStore) *SessionsService {
+	return newSessionsService(SessionsDeps{Hive: h.engine, Windows: windows, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Items: links, Links: links, Logger: zerolog.Nop()})
+}
+
+func keptSession() session.Session {
+	return session.Session{ID: "s1", Name: "kept", Slug: "kept", State: session.StateActive}
 }
 
 func TestSessionsService_ItemSessionsJoinsLinksToLiveHiveState(t *testing.T) {
-	manager := &fakeSessionManager{
-		sessions: []dispatch.SessionSummary{
-			{ID: "s1", Name: "review 81 renamed", Slug: "review-81-renamed", Repo: "acme/site", State: "active"},
-			{ID: "s2", Name: "review 81 rerun", Slug: "review-81-rerun", Repo: "acme/site", State: "recycled"},
-		},
-		running: map[string]bool{"s1": true},
-	}
+	h := newHiveHarness(t, engineOptions{panes: stubPanes{}})
+	h.save(t,
+		session.Session{ID: "s1", Name: "review 81 renamed", Slug: "review-81-renamed", Remote: "acme/site", State: session.StateActive},
+		session.Session{ID: "s2", Name: "review 81 rerun", Slug: "review-81-rerun", Remote: "acme/site", State: session.StateRecycled},
+	)
+	windows := &fakeWindowSource{results: map[string][]tmuxcc.IndexedWindow{"review-81-renamed": {{ID: "@1", Index: "0"}}}}
 	links := &fakeItemSessionStore{
 		refs: map[int64]models.ItemRef{7: {ProfileID: "p", SourceKind: "github", ExternalID: "acme/site#81"}},
 		links: map[string][]stores.ItemSession{"acme/site#81": {
@@ -69,28 +74,29 @@ func TestSessionsService_ItemSessionsJoinsLinksToLiveHiveState(t *testing.T) {
 		}},
 	}
 
-	views, err := itemSessionsService(manager, links).ItemSessions(t.Context(), 7)
+	views, err := itemSessionsService(h, windows, links).ItemSessions(t.Context(), 7)
 	require.NoError(t, err)
 	require.Len(t, views, 2)
 
 	// The link order is preserved, and everything but createdAt comes from
-	// hive — so a session renamed outside this app reports its current name.
+	// hive, so a session renamed outside this app reports its current name.
 	assert.Equal(t, "s2", views[0].ID)
-	assert.Equal(t, "recycled", views[0].State)
+	assert.Equal(t, string(session.StateRecycled), views[0].State)
 	assert.False(t, views[0].Running)
 	assert.Equal(t, "s1", views[1].ID)
 	assert.Equal(t, "review 81 renamed", views[1].Name)
 	assert.Equal(t, "review-81-renamed", views[1].Slug)
+	assert.Equal(t, "acme/site", views[1].Repo)
 	assert.True(t, views[1].Running)
 	assert.Equal(t, int64(100), views[1].CreatedAt.UnixMilli())
+	assert.Equal(t, []string{"review-81-renamed"}, windows.seen, "only the active sessions the item asked about are probed")
 }
 
 // Nothing tells this app when a session is deleted from the CLI, so the read
-// is what notices — and it must both hide and drop the link.
+// is what notices, and it must both hide and drop the link.
 func TestSessionsService_ItemSessionsPrunesLinksHiveCannotAccountFor(t *testing.T) {
-	manager := &fakeSessionManager{
-		sessions: []dispatch.SessionSummary{{ID: "s1", Name: "kept", Slug: "kept", State: "active"}},
-	}
+	h := newHiveHarness(t, engineOptions{})
+	h.save(t, keptSession())
 	links := &fakeItemSessionStore{
 		refs: map[int64]models.ItemRef{7: {ProfileID: "p", ExternalID: "acme/site#81"}},
 		links: map[string][]stores.ItemSession{"acme/site#81": {
@@ -99,7 +105,7 @@ func TestSessionsService_ItemSessionsPrunesLinksHiveCannotAccountFor(t *testing.
 		}},
 	}
 
-	views, err := itemSessionsService(manager, links).ItemSessions(t.Context(), 7)
+	views, err := itemSessionsService(h, nil, links).ItemSessions(t.Context(), 7)
 	require.NoError(t, err)
 	require.Len(t, views, 1)
 	assert.Equal(t, "s1", views[0].ID)
@@ -109,13 +115,14 @@ func TestSessionsService_ItemSessionsPrunesLinksHiveCannotAccountFor(t *testing.
 // A listing that failed proves nothing about what still exists; pruning on it
 // would throw associations away because hive.db was momentarily unreadable.
 func TestSessionsService_ItemSessionsKeepsLinksWhenHiveCannotBeRead(t *testing.T) {
-	manager := &fakeSessionManager{err: errors.New("hive.db locked")}
+	h := newHiveHarness(t, engineOptions{})
+	require.NoError(t, h.engine.DB().Close())
 	links := &fakeItemSessionStore{
 		refs:  map[int64]models.ItemRef{7: {ProfileID: "p", ExternalID: "acme/site#81"}},
 		links: map[string][]stores.ItemSession{"acme/site#81": {{SessionID: "s1", CreatedAt: 100}}},
 	}
 
-	_, err := itemSessionsService(manager, links).ItemSessions(t.Context(), 7)
+	_, err := itemSessionsService(h, nil, links).ItemSessions(t.Context(), 7)
 	assert.Equal(t, KindInternal, KindOf(err))
 	assert.Empty(t, links.unlinked)
 }
@@ -123,9 +130,8 @@ func TestSessionsService_ItemSessionsKeepsLinksWhenHiveCannotBeRead(t *testing.T
 // The view is already correct without the prune, so a failed cleanup must not
 // hide the sessions that do still exist.
 func TestSessionsService_ItemSessionsSurvivesAFailedPrune(t *testing.T) {
-	manager := &fakeSessionManager{
-		sessions: []dispatch.SessionSummary{{ID: "s1", Name: "kept", Slug: "kept", State: "active"}},
-	}
+	h := newHiveHarness(t, engineOptions{})
+	h.save(t, keptSession())
 	links := &fakeItemSessionStore{
 		refs: map[int64]models.ItemRef{7: {ProfileID: "p", ExternalID: "acme/site#81"}},
 		links: map[string][]stores.ItemSession{"acme/site#81": {
@@ -135,47 +141,64 @@ func TestSessionsService_ItemSessionsSurvivesAFailedPrune(t *testing.T) {
 		unlinkErr: errors.New("disk full"),
 	}
 
-	views, err := itemSessionsService(manager, links).ItemSessions(t.Context(), 7)
+	views, err := itemSessionsService(h, nil, links).ItemSessions(t.Context(), 7)
 	require.NoError(t, err)
 	require.Len(t, views, 1)
 	assert.Equal(t, "s1", views[0].ID)
 }
 
 // Liveness is the last thing added to an otherwise complete answer, so losing
-// it must not cost the sessions themselves — the frontend renders a failed read
+// it must not cost the sessions themselves: the frontend renders a failed read
 // as an empty pane.
 func TestSessionsService_ItemSessionsKeepsSessionsWhenLivenessCannotBeRead(t *testing.T) {
-	manager := &fakeSessionManager{
-		sessions:   []dispatch.SessionSummary{{ID: "s1", Name: "kept", Slug: "kept", State: "active"}},
-		runningErr: errors.New("tmux is not reachable"),
-	}
+	h := newHiveHarness(t, engineOptions{panes: stubPanes{}})
+	h.save(t, keptSession())
+	windows := &fakeWindowSource{err: errors.New("tmux is not reachable")}
 	links := &fakeItemSessionStore{
 		refs:  map[int64]models.ItemRef{7: {ProfileID: "p", ExternalID: "acme/site#81"}},
 		links: map[string][]stores.ItemSession{"acme/site#81": {{SessionID: "s1", CreatedAt: 100}}},
 	}
 
-	views, err := itemSessionsService(manager, links).ItemSessions(t.Context(), 7)
+	views, err := itemSessionsService(h, windows, links).ItemSessions(t.Context(), 7)
 	require.NoError(t, err)
 	require.Len(t, views, 1)
 	assert.Equal(t, "s1", views[0].ID)
 	assert.False(t, views[0].Running)
 }
 
+// Terminal status ships dark in mock modes, so no liveness source is data, not
+// a failure: nothing reads as running and the caller still gets its sessions.
+func TestSessionsService_ItemSessionsReportNothingRunningWithoutStatus(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{})
+	h.save(t, keptSession())
+	windows := &fakeWindowSource{results: map[string][]tmuxcc.IndexedWindow{"kept": {{ID: "@1"}}}}
+	links := &fakeItemSessionStore{
+		refs:  map[int64]models.ItemRef{7: {ProfileID: "p", ExternalID: "acme/site#81"}},
+		links: map[string][]stores.ItemSession{"acme/site#81": {{SessionID: "s1", CreatedAt: 100}}},
+	}
+
+	views, err := itemSessionsService(h, windows, links).ItemSessions(t.Context(), 7)
+	require.NoError(t, err)
+	require.Len(t, views, 1)
+	assert.False(t, views[0].Running)
+	assert.Empty(t, windows.seen)
+}
+
 func TestSessionsService_ItemSessionsRejectsAnUnknownItem(t *testing.T) {
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	links := &fakeItemSessionStore{refs: map[int64]models.ItemRef{}}
 
-	_, err := itemSessionsService(manager, links).ItemSessions(t.Context(), 404)
+	_, err := itemSessionsService(h, nil, links).ItemSessions(t.Context(), 404)
 	assert.Equal(t, KindNotFound, KindOf(err))
 }
 
 func TestSessionsService_CreateSessionCarriesEveryDraftedItemInOneLaunch(t *testing.T) {
 	launcher := &fakeSessionLauncher{}
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	first := models.ItemRef{ProfileID: "p", SourceKind: "github", ExternalID: "acme/site#81"}
 	second := models.ItemRef{ProfileID: "p", SourceKind: "github", ExternalID: "acme/site#82"}
 	fake := &fakeItemSessionStore{refs: map[int64]models.ItemRef{7: first, 8: second, 9: first}}
-	svc := newSessionsService(SessionsDeps{Launcher: launcher, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Items: fake, Links: fake, Logger: zerolog.Nop()})
+	svc := newSessionsService(SessionsDeps{Launcher: launcher, Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Items: fake, Links: fake, Logger: zerolog.Nop()})
 
 	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "review-81", ItemIDs: []int64{7, 8, 7, 9}})
 	require.NoError(t, err)
@@ -187,9 +210,9 @@ func TestSessionsService_CreateSessionCarriesEveryDraftedItemInOneLaunch(t *test
 // user the session they asked for.
 func TestSessionsService_CreateSessionLaunchesUnlinkedWhenTheItemHasGone(t *testing.T) {
 	launcher := &fakeSessionLauncher{}
-	manager, _ := activeSession()
+	h := activeHarness(t)
 	fake := &fakeItemSessionStore{refs: map[int64]models.ItemRef{}}
-	svc := newSessionsService(SessionsDeps{Launcher: launcher, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Items: fake, Links: fake, Logger: zerolog.Nop()})
+	svc := newSessionsService(SessionsDeps{Launcher: launcher, Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}, Items: fake, Links: fake, Logger: zerolog.Nop()})
 
 	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "review-81", ItemIDs: []int64{404}})
 	require.NoError(t, err)
@@ -205,13 +228,14 @@ func TestSessionsService_ItemChatsListsLinkedChats(t *testing.T) {
 		}},
 	}
 
-	views, err := itemSessionsService(&fakeSessionManager{}, links).ItemChats(t.Context(), 7)
+	h := newHiveHarness(t, engineOptions{})
+	views, err := itemSessionsService(h, nil, links).ItemChats(t.Context(), 7)
 	require.NoError(t, err)
 	require.Len(t, views, 1)
 	assert.Equal(t, int64(9), views[0].ID)
 	assert.Equal(t, "triage", views[0].Workspace)
 	assert.Equal(t, int64(200), views[0].CreatedAt.UnixMilli())
 
-	_, err = itemSessionsService(&fakeSessionManager{}, links).ItemChats(t.Context(), 8)
+	_, err = itemSessionsService(h, nil, links).ItemChats(t.Context(), 8)
 	assert.Equal(t, KindNotFound, KindOf(err))
 }

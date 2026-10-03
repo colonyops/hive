@@ -42,7 +42,7 @@ jobs:
               - '.golangci.yml'
               - 'cmd/hive/.goreleaser.yml'
               - 'sqlc.yaml'
-              - 'internal/data/db/**'
+              - 'internal/store/db/**'
               - 'cmd/desktop/internal/app/data/queries/**'
               - 'cmd/desktop/frontend/bindings/**'
               - 'cmd/desktop/scripts/**'

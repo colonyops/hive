@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { riskDescription, riskDetails, useSessionActions } from '../useSessionActions'
 import { resetToastsForTests, useToasts } from '../useToasts'
-import type { SessionSummary } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type { SessionSummary } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const mocks = vi.hoisted(() => ({
   DeleteSession: vi.fn(),

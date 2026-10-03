@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/pkg/atomicfile"
 	"github.com/rs/zerolog"
 	"gopkg.in/yaml.v3"
 )
@@ -127,38 +128,11 @@ func backupName(set Set, srcPath string, fromVersion int, now time.Time) string 
 	return fmt.Sprintf("%s-%s.v%d.%s%s.bak", set.Name, stem, fromVersion, ts, ext)
 }
 
-// writeAtomic writes data to path via temp-file-in-same-dir + fsync + rename,
-// 0o600 — the same shape as settings.saveSettingsAt and flow.writeFileAtomic,
-// duplicated here because configmigrate must not import either package.
 func writeAtomic(path string, data []byte) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return fmt.Errorf("create %s dir: %w", filepath.Base(path), err)
 	}
-
-	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return fmt.Errorf("create temp file for %s: %w", filepath.Base(path), err)
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("chmod temp file for %s: %w", filepath.Base(path), err)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write temp file for %s: %w", filepath.Base(path), err)
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("sync temp file for %s: %w", filepath.Base(path), err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp file for %s: %w", filepath.Base(path), err)
-	}
-	if err := os.Rename(tmpPath, path); err != nil {
+	if err := atomicfile.Write(path, data, 0o600); err != nil {
 		return fmt.Errorf("replace %s: %w", filepath.Base(path), err)
 	}
 	return nil

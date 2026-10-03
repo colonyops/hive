@@ -44,7 +44,7 @@ func TestRunSh_LargeStderrDoesNotFailSuccessfulCommand(t *testing.T) {
 	ctx := context.Background()
 
 	// Command that writes >500 bytes to stderr but exits 0.
-	// Before the fix, limitedWriter returned a short byte count causing io.ErrShortWrite.
+	// A capped stderr writer must still report full writes, or exec fails with io.ErrShortWrite.
 	longStderr := strings.Repeat("W", maxStderrLen*2)
 	cmd := fmt.Sprintf("printf '%%s' '%s' >&2; exit 0", longStderr)
 

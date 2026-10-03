@@ -7,7 +7,7 @@ import IconPlay from '~icons/lucide/play'
 import IconRecycle from '~icons/lucide/recycle'
 import IconSquare from '~icons/lucide/square'
 import IconTrash from '~icons/lucide/trash-2'
-import type { SessionSummary } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type { SessionSummary } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { MenuEntry } from '../types/menu'
 
 // The one menu for a hive session, opened from the session row. It owns the

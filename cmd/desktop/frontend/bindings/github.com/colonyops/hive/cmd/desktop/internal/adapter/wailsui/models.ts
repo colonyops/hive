@@ -3,7 +3,7 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as dispatch$0 from "../../app/dispatch/models.js";
+import * as app$0 from "../../app/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as procstats$0 from "../../app/procstats/models.js";
@@ -460,11 +460,56 @@ export interface RuntimeStats {
 }
 
 /**
- * SessionStatusSnapshot is one poll result in the units the browser timer uses.
+ * SessionDetail is one session read in full, for a detail view.
  */
-export interface SessionStatusSnapshot {
-    "items": dispatch$0.SessionStatus[] | null;
-    "pollIntervalMs": number;
+export interface SessionDetail {
+    "id": string;
+    "name": string;
+    "slug": string;
+    "repo": string;
+    "state": string;
+    "path": string;
+    "cloneStrategy": string;
+    "worktreeBranch": string;
+    "tags": string[] | null;
+    "createdAt": string;
+    "updatedAt": string;
+}
+
+/**
+ * SessionGitStatus is one session's checkout as the session status bar reads
+ * it. Resolved separates "git answered" from the zero value; Error carries why
+ * a read failed and is never a substitute for it.
+ */
+export interface SessionGitStatus {
+    "path": string;
+    "branch": string;
+    "dirty": boolean;
+    "unpushed": boolean;
+
+    /**
+     * Additions and Deletions are lines against the default branch, not HEAD.
+     */
+    "additions": number;
+    "deletions": number;
+
+    /**
+     * Host, Owner and Repo are the remote's coordinates, and are empty for a
+     * remote that names no host, such as a local path.
+     */
+    "host": string;
+    "owner": string;
+    "repo": string;
+    "resolved": boolean;
+    "error": string;
+}
+
+export interface SessionSummary {
+    "id": string;
+    "name": string;
+    "slug": string;
+    "repo": string;
+    "state": string;
 }
 
 /**
@@ -483,6 +528,43 @@ export interface SystemInfo {
      * its workspaces, not part of the install.
      */
     "agentWorkspaces": PathInfo;
+}
+
+export interface TaskDetail {
+    "id": string;
+    "repoKey": string;
+    "epicId": string;
+    "parentId": string;
+    "sessionId": string;
+    "title": string;
+    "type": string;
+    "status": string;
+    "blocked": boolean;
+    "depth": number;
+    "createdAt": string;
+    "updatedAt": string;
+    "desc": string;
+    "blockers": app$0.TaskBlocker[] | null;
+    "comments": app$0.TaskComment[] | null;
+}
+
+/**
+ * TaskItem omits Desc: the list never needs it, and TaskDetail reads it on
+ * demand.
+ */
+export interface TaskItem {
+    "id": string;
+    "repoKey": string;
+    "epicId": string;
+    "parentId": string;
+    "sessionId": string;
+    "title": string;
+    "type": string;
+    "status": string;
+    "blocked": boolean;
+    "depth": number;
+    "createdAt": string;
+    "updatedAt": string;
 }
 
 /**

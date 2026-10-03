@@ -4,6 +4,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app/slug"
 )
 
 var (
@@ -24,7 +26,7 @@ type markImageConfig interface {
 // It reads from disk rather than the cached snapshot, so a concurrent external
 // edit is not reverted.
 func (s *FlowStore) SetSourceImage(flowID, nodeID, hash string) (Flow, error) {
-	if !validSlug(flowID) {
+	if !slug.Valid(flowID) {
 		return Flow{}, ErrFlowNotFound
 	}
 

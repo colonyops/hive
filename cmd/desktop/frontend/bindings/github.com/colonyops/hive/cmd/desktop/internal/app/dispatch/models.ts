@@ -61,52 +61,10 @@ export interface ExecutionOutcome {
     "clipboard"?: ClipboardExecutionOutcome | null;
 }
 
-/**
- * ItemChatView is an agent workspace chat an inbox item opened.
- */
-export interface ItemChatView {
-    "id": number;
-    "workspace": string;
-    "name": string;
-    "createdAt": string;
-}
-
-/**
- * ItemSessionView is one hive session an inbox item spawned. Only CreatedAt
- * comes from the link — everything else is read live from hive, so a session
- * renamed or recycled outside this app reports what it actually is.
- */
-export interface ItemSessionView {
-    "id": string;
-    "name": string;
-    "slug": string;
-    "repo": string;
-    "state": string;
-    "running": boolean;
-    "createdAt": string;
-}
-
 export interface MessageExecutionOutcome {
     "topic": string;
     "sender": string;
 }
-
-/**
- * PullRequestStatus is why a session has no pull request to show, or that it
- * does. The four are kept apart deliberately: rendering "no pull request" for
- * a failed lookup or a disconnected account states a different, wrong fact.
- */
-export enum PullRequestStatus {
-    /**
-     * The Go zero value for the underlying type of the enum.
-     */
-    $zero = "",
-
-    PullRequestStatusNone = "none",
-    PullRequestStatusFound = "found",
-    PullRequestStatusDisconnected = "disconnected",
-    PullRequestStatusUnsupported = "unsupported",
-};
 
 /**
  * SessionCreateFailure is why one session creation attempt failed.
@@ -149,23 +107,6 @@ export interface SessionCreateFailure {
 }
 
 /**
- * SessionDetail is one session read in full, for a detail view.
- */
-export interface SessionDetail {
-    "id": string;
-    "name": string;
-    "slug": string;
-    "repo": string;
-    "state": string;
-    "path": string;
-    "cloneStrategy": string;
-    "worktreeBranch": string;
-    "tags": string[] | null;
-    "createdAt": string;
-    "updatedAt": string;
-}
-
-/**
  * SessionDraft is a New Session form the app prefills: from inbox items, or
  * from a creation attempt that failed and is being handed back. Agent and
  * ItemIDs are only meaningful for the second, which has to restore both
@@ -195,34 +136,6 @@ export interface SessionExecutionOutcome {
      */
     "slug"?: string;
     "path"?: string;
-}
-
-/**
- * SessionGitStatus is one session's checkout as the session status bar reads
- * it. Resolved separates "git answered" from the zero value; Error carries why
- * a read failed and is never a substitute for it.
- */
-export interface SessionGitStatus {
-    "path": string;
-    "branch": string;
-    "dirty": boolean;
-    "unpushed": boolean;
-
-    /**
-     * Additions and Deletions are lines against the default branch, not HEAD.
-     */
-    "additions": number;
-    "deletions": number;
-
-    /**
-     * Host, Owner and Repo are the remote's coordinates, and are empty for a
-     * remote that names no host — a local path or a bare clone URL.
-     */
-    "host": string;
-    "owner": string;
-    "repo": string;
-    "resolved": boolean;
-    "error": string;
 }
 
 export interface SessionInvocationInput {
@@ -260,168 +173,6 @@ export interface SessionLaunchWorkspace {
     "dir": string;
     "name": string;
     "supportsPrompt": boolean;
-}
-
-/**
- * SessionPullRequest is the branch's pull request as the session status bar
- * shows it. Everything below Status is meaningful only for
- * PullRequestStatusFound.
- */
-export interface SessionPullRequest {
-    "status": PullRequestStatus;
-    "number": number;
-    "title": string;
-    "state": string;
-    "isDraft": boolean;
-    "url": string;
-
-    /**
-     * ReviewDecision is GitHub's own vocabulary — APPROVED,
-     * CHANGES_REQUESTED, REVIEW_REQUIRED — or empty when review is not
-     * required.
-     */
-    "reviewDecision": string;
-
-    /**
-     * Checks is passing, pending, failing, or empty for a head commit with no
-     * checks configured.
-     */
-    "checks": string;
-
-    /**
-     * The pull request's own line counts, deliberately not SessionGitStatus's:
-     * those measure the working tree and drift as the branch moves on.
-     */
-    "additions": number;
-    "deletions": number;
-
-    /**
-     * Cached distinguishes "this just arrived" from "this was already known".
-     * The bar animates only the former.
-     */
-    "cached": boolean;
-}
-
-/**
- * SessionPullRequestKey addresses the pull request a session's branch has.
- * Host is what decides which forge is asked, so a lookup carries it rather
- * than inferring one from owner and repo, which every forge spells the same.
- */
-export interface SessionPullRequestKey {
-    "host": string;
-    "owner": string;
-    "repo": string;
-    "branch": string;
-}
-
-/**
- * SessionRisk is the pre-flight a destructive operation confirms against: what
- * unsaved work the session holds, and whether recycling it is really a delete.
- */
-export interface SessionRisk {
-    "uncommittedChanges": boolean;
-    "unpushedCommits": boolean;
-
-    /**
-     * RecycleDeletes reports that recycling this session destroys it: hive
-     * routes a worktree session's recycle straight to DeleteSession, because a
-     * worktree has no clone of its own to reset.
-     */
-    "recycleDeletes": boolean;
-}
-
-/**
- * SessionStatus separates tmux liveness from the activity detected in each
- * agent window.
- */
-export interface SessionStatus {
-    "sessionId": string;
-    "running": boolean;
-    "windows": SessionWindowStatus[] | null;
-}
-
-/**
- * SessionSummary is one session as the desktop's session list sees it. The
- * persisted tmux target stays internal; the rest is the frontend projection.
- */
-export interface SessionSummary {
-    "id": string;
-    "name": string;
-    "slug": string;
-    "repo": string;
-    "state": string;
-}
-
-/**
- * SessionWindowStatus is one tmux window's detected agent activity.
- */
-export interface SessionWindowStatus {
-    "windowId": string;
-    "status": string;
-    "tool": string;
-}
-
-/**
- * TaskBlocker is one explicit blocker as shown on a task's detail view. A
- * blocker whose item has since been deleted keeps its ID with an empty Title
- * rather than being dropped from the list.
- */
-export interface TaskBlocker {
-    "id": string;
-    "title": string;
-    "status": string;
-}
-
-/**
- * TaskComment is one comment on a task, in the order hc stored it.
- */
-export interface TaskComment {
-    "id": string;
-    "message": string;
-    "createdAt": string;
-}
-
-/**
- * TaskDetail is one hc item read in full, for a detail view. Blockers are
- * resolved by TaskDetail's own per-blocker GetItem reads: ListItems never
- * fills BlockerIDs, so there is no cheaper way to a blocker's title.
- */
-export interface TaskDetail {
-    "id": string;
-    "repoKey": string;
-    "epicId": string;
-    "parentId": string;
-    "sessionId": string;
-    "title": string;
-    "type": string;
-    "status": string;
-    "blocked": boolean;
-    "depth": number;
-    "createdAt": string;
-    "updatedAt": string;
-    "desc": string;
-    "blockers": TaskBlocker[] | null;
-    "comments": TaskComment[] | null;
-}
-
-/**
- * TaskItem is one hc item as the desktop's tasks list sees it. Desc is
- * deliberately absent: the list view never needs it, and TaskDetail re-reads
- * it on demand.
- */
-export interface TaskItem {
-    "id": string;
-    "repoKey": string;
-    "epicId": string;
-    "parentId": string;
-    "sessionId": string;
-    "title": string;
-    "type": string;
-    "status": string;
-    "blocked": boolean;
-    "depth": number;
-    "createdAt": string;
-    "updatedAt": string;
 }
 
 /**

@@ -20,11 +20,14 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/execenv"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/mcpcatalog"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/prompts"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/schedule"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
+	terminalstatus "github.com/colonyops/hive/internal/domain/terminal/status"
+	"github.com/colonyops/hive/internal/platform/execenv"
+	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
 const (
@@ -296,8 +299,8 @@ type SessionView struct {
 // session id so the caller does not have to re-derive a tmux session name.
 type SessionActivityItem struct {
 	ID int64 `json:"id"`
-	// Status is one of dispatch.AgentActivityStatus's values: ready, active,
-	// or approval -- approval is the highest-urgency state.
+	// Status is one of terminal.Status's simplified values: ready, active, or
+	// approval -- approval is the highest-urgency state.
 	Status string `json:"status"`
 }
 
@@ -483,7 +486,7 @@ func (s *AgentWorkspacesService) Sessions(ctx context.Context, dir string) ([]Se
 }
 
 // SessionActivity captures each live session's tmux pane and classifies it
-// with dispatch.ClassifyAgentScreen: capture-pane through Hive's assessment
+// with classifyAgentScreen: capture-pane through Hive's assessment
 // engine, the same input SessionStatuses/FetchBatch use for hive's own
 // sessions (hc-ou4o02zx). An
 // empty dir spans every workspace — the sidebar shows every session at once,
@@ -516,7 +519,7 @@ func (s *AgentWorkspacesService) SessionActivity(ctx context.Context, dir string
 			// reported, the same tolerance sessionView extends to liveness.
 			continue
 		}
-		items = append(items, SessionActivityItem{ID: rec.ID, Status: string(dispatch.ClassifyAgentScreen(rec.Agent, screen))})
+		items = append(items, SessionActivityItem{ID: rec.ID, Status: string(classifyAgentScreen(rec.Agent, screen))})
 	}
 	return items, nil
 }
@@ -1831,4 +1834,11 @@ func agentLaunchError(err error, dir string) error {
 	default:
 		return Wrap(err, KindInternal, "resolving the launch for workspace %q", dir)
 	}
+}
+
+// classifyAgentScreen folds questions onto approval because the activity
+// vocabulary has one user-blocked state.
+func classifyAgentScreen(agent, screen string) terminal.Status {
+	assessment := assess.NewEngine().Assess(assess.Snapshot{Content: screen, Tool: strings.ToLower(agent)})
+	return terminalstatus.MapState(assessment.State).Simplified()
 }

@@ -25,7 +25,7 @@ import (
 func outputExecutors(
 	launcher dispatch.SessionLauncher,
 	workspaceLauncher dispatch.WorkspaceSessionLauncher,
-	publisher dispatch.MessagePublisher,
+	messages func() dispatch.MessageService,
 	notifier dispatch.SystemNotifier,
 	gate dispatch.NotificationGate,
 	items dispatch.InboxItemLocator,
@@ -35,7 +35,7 @@ func outputExecutors(
 	return map[string]dispatch.Executor{
 		dispatch.ActionTypeLaunchSession: dispatch.NewLaunchSessionExecutor(logger, launcher, workspaceLauncher, env),
 		"shell":                          dispatch.NewShellExecutor(logger, env),
-		"publish-message":                dispatch.NewPublishMessageExecutor(publisher),
+		"publish-message":                dispatch.NewPublishMessageExecutor(messages),
 		"clipboard":                      dispatch.NewClipboardExecutor(),
 		dispatch.ActionTypeNotify:        dispatch.NewNotifyExecutor(notifier, gate, items, logger),
 	}

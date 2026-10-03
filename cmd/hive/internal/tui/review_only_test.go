@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
-	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/store/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app/slug"
 )
 
 // Seed is the graph a newly created flow starts with, plus the canvas
@@ -184,7 +186,7 @@ func (s *FlowStore) Statuses() []FlowStatus {
 // — and the store's in-memory state — is untouched: the last-good flow
 // keeps serving.
 func (s *FlowStore) Save(f Flow) error {
-	if !validSlug(f.ID) {
+	if !slug.Valid(f.ID) {
 		return fmt.Errorf("flow: id %q is not a valid slug", f.ID)
 	}
 
@@ -215,7 +217,7 @@ func (s *FlowStore) Save(f Flow) error {
 // SetEnabled it reads the file directly rather than the possibly-stale cached
 // snapshot, so a concurrent external graph edit is not reverted.
 func (s *FlowStore) SetImage(id, hash string) (Flow, error) {
-	if !validSlug(id) {
+	if !slug.Valid(id) {
 		return Flow{}, fmt.Errorf("flow: id %q is not a valid slug", id)
 	}
 
@@ -303,7 +305,7 @@ func (s *FlowStore) Rename(id, name string) (Flow, error) {
 // SetEnabled updates whether a flow participates in polling and runtime
 // execution without changing its graph or display name.
 func (s *FlowStore) SetEnabled(id string, enabled bool) (Flow, error) {
-	if !validSlug(id) {
+	if !slug.Valid(id) {
 		return Flow{}, fmt.Errorf("flow: id %q is not a valid slug", id)
 	}
 

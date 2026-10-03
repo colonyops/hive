@@ -25,13 +25,15 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/report"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/secrets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/telemetry"
+	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/internal/platform/execenv"
+	"github.com/colonyops/hive/internal/platform/observe"
+	"github.com/colonyops/hive/internal/platform/secrets"
+	"github.com/colonyops/hive/pkg/buildinfo"
 )
 
 //go:embed all:frontend/dist
@@ -79,20 +81,23 @@ func main() {
 	if err := cfg.UnknownKeys(); err != nil {
 		logger.Warn().Err(err).Msg("settings.yaml has keys this build ignores")
 	}
-	// Mock mode can select an isolated flows directory, so finalize the path
-	// snapshot only after settings and environment precedence are resolved.
-	initialLogPath := paths.LogFile
-	paths = settings.ResolvePaths(bootstrap, settings.ResolveOptions{
-		MockMode:           cfg.MockMode(),
-		AgentWorkspacesDir: cfg.AgentWorkspaces.Dir,
-	})
-
 	// Cancelled by shutdown rather than deferred: log.Fatal below would skip a
 	// defer, and shutdown is the one path both exits take.
 	ctx, cancel := context.WithCancel(context.Background())
 
-	version, commit, date := resolvedBuildInfo()
-	environment := telemetryEnvironment(version)
+	// Mock mode can select an isolated flows directory, so finalize the path
+	// snapshot only after settings and environment precedence are resolved.
+	initialLogPath := paths.LogFile
+	// The resolver is shared with the app so the login shell is probed once.
+	execEnv := execenv.NewResolver(execenv.Options{Logger: logger})
+	paths = settings.ResolvePaths(bootstrap, settings.ResolveOptions{
+		MockMode:           cfg.MockMode(),
+		AgentWorkspacesDir: cfg.AgentWorkspaces.Dir,
+		Getenv:             func(name string) string { return execEnv.Getenv(ctx, name) },
+	})
+
+	build := buildinfo.Resolve(version, commit, date)
+	environment := telemetryEnvironment(build.Version)
 
 	// Built before the final logger because its log bridge is one of that
 	// logger's writer arms. A bad configuration disables telemetry rather than
@@ -104,7 +109,7 @@ func main() {
 			HTTPTimeout: telemetryFlushGrace,
 		},
 		Scrape:      cfg.Development.Metrics.Enabled,
-		Version:     version,
+		Version:     build.Version,
 		Environment: environment,
 		HostID:      cfg.Telemetry.HostID,
 	}
@@ -141,7 +146,7 @@ func main() {
 			Bool("profiles", cfg.Telemetry.Profiles.Enabled).
 			Bool("scrape", cfg.Development.Metrics.Enabled).
 			Str("environment", environment).
-			Str("version", version).
+			Str("version", build.Version).
 			Msg("telemetry enabled")
 	}
 
@@ -174,8 +179,8 @@ func main() {
 	// One span per startup phase, so "the app is slow to open" resolves to
 	// which phase without further instrumentation.
 	startupCtx, startupSpan := tracer.Start(ctx, "app.startup", trace.WithAttributes(
-		attribute.String("build.commit", commit),
-		attribute.String("build.date", date),
+		attribute.String("build.commit", build.Commit),
+		attribute.String("build.date", build.Date),
 	))
 
 	// The adapter is built first because the core takes two driven ports from
@@ -196,10 +201,11 @@ func main() {
 		Paths:                    paths,
 		MockMode:                 cfg.MockMode(),
 		Logger:                   logger,
+		ExecEnv:                  execEnv,
 		CredentialKeyringService: os.Getenv(credentials.EnvKeyringService),
 		Notifier:                 ui.Notifier(),
 		Gate:                     ui.Gate(),
-		Build:                    report.Build{Version: version, Commit: commit, Date: date},
+		Build:                    report.Build{Version: build.Version, Commit: build.Commit, Date: build.Date},
 		TelemetryRuntime:         telemetryRuntime,
 	})
 	coreSpan.End()
@@ -233,13 +239,13 @@ func main() {
 	// /api/ is the frontend's terminal control planes and the liveness probe.
 	// It needs no token — it spawns nothing — and no teardown branch: the
 	// server is stateless, so no session outlives a request.
-	if core.MountAPI(mcpsrv.PathPrefix, mcpsrv.New(core, logger, mcpsrv.Options{Version: version}).Handler()) {
+	if core.MountAPI(mcpsrv.PathPrefix, mcpsrv.New(core, logger, mcpsrv.Options{Version: build.Version}).Handler()) {
 		logger.Info().Str("path", mcpsrv.PathPrefix).Msg("agent MCP server mounted")
 	}
 	// The canvas MCP server is a separate mount and catalogue entry, so a
 	// workspace can enable the canvas without the app-control tool set
 	// (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
-	if core.MountAPI(mcpsrv.CanvasPathPrefix, mcpsrv.NewCanvas(core, logger, mcpsrv.Options{Version: version}).Handler()) {
+	if core.MountAPI(mcpsrv.CanvasPathPrefix, mcpsrv.NewCanvas(core, logger, mcpsrv.Options{Version: build.Version}).Handler()) {
 		logger.Info().Str("path", mcpsrv.CanvasPathPrefix).Msg("canvas MCP server mounted")
 	}
 	terminal := wailsui.TerminalTransport{}
@@ -277,7 +283,7 @@ func main() {
 		AppIcon:       appIcon,
 		TrayIcon:      trayIcon,
 		TrayIconLinux: trayIconLinux,
-		Build:         wailsui.Build{Version: version, Commit: commit, Date: date},
+		Build:         wailsui.Build{Version: build.Version, Commit: build.Commit, Date: build.Date},
 		Terminal:      terminal,
 		PopupTerminal: popupTerminal,
 		Agents:        agents,

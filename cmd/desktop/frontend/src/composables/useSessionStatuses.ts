@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { SessionStatuses } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
-import type { SessionStatus } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type { SessionStatus } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const DEFAULT_POLL_INTERVAL_MS = 1500
 

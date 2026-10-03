@@ -3,13 +3,13 @@ package tui
 import (
 	"fmt"
 
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/kvcache"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components/form"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/workspace"
-	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/pkg/kv"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	statussvc "github.com/colonyops/hive/internal/hive/status"
+	"github.com/colonyops/hive/internal/platform/workspace"
 )
 
 // newFormDialog creates a form.Dialog from config fields, injecting runtime data.
@@ -19,7 +19,7 @@ func newFormDialog(
 	fields []config.FormField,
 	sessions []session.Session,
 	repos []workspace.DiscoveredRepo,
-	termStatuses *kv.Store[string, hive.TerminalStatus],
+	termStatuses *kvcache.Store[string, statussvc.TerminalStatus],
 ) (*form.Dialog, error) {
 	components := make([]form.Field, 0, len(fields))
 	variables := make([]string, 0, len(fields))
@@ -60,7 +60,7 @@ func newFormDialog(
 // filterActiveSessions returns sessions that are active and have a non-missing
 // terminal status. When termStatuses is nil (no terminal integration), falls
 // back to filtering by session state only.
-func filterActiveSessions(sessions []session.Session, termStatuses *kv.Store[string, hive.TerminalStatus]) []session.Session {
+func filterActiveSessions(sessions []session.Session, termStatuses *kvcache.Store[string, statussvc.TerminalStatus]) []session.Session {
 	filtered := make([]session.Session, 0, len(sessions))
 	for _, s := range sessions {
 		if s.State != session.StateActive {

@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/colonyops/hive/pkg/atomicfile"
 )
 
 // StateFileName is the marker file's name under the state directory.
@@ -68,21 +70,7 @@ func (s *State) Acknowledge(version string) error {
 		return err
 	}
 
-	tmp, err := os.CreateTemp(filepath.Dir(s.path), StateFileName+".*")
-	if err != nil {
-		return fmt.Errorf("stage release notes marker: %w", err)
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }()
-
-	if _, err := tmp.Write(append(contents, '\n')); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("write release notes marker: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("write release notes marker: %w", err)
-	}
-	if err := os.Rename(tmpName, s.path); err != nil {
+	if err := atomicfile.Write(s.path, append(contents, '\n'), 0o600); err != nil {
 		return fmt.Errorf("replace release notes marker: %w", err)
 	}
 	return nil

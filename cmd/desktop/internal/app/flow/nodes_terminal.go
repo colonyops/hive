@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/icons"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/slug"
 )
 
 // feedDescriptionMaxLen caps a feed's hover description. It is generous enough
@@ -50,7 +51,7 @@ func (c *ActionConfig) Validate(refs Refs) error {
 	if c.Action == "" {
 		return fmt.Errorf("action: action is required")
 	}
-	if !validSlug(c.Action) {
+	if !slug.Valid(c.Action) {
 		return fmt.Errorf("action: action %q is not a valid id", c.Action)
 	}
 	if !refsResolveAction(refs, c.Action) {

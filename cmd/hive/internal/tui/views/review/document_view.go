@@ -6,7 +6,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	corereview "github.com/colonyops/hive/internal/core/review"
+	corereview "github.com/colonyops/hive/internal/domain/review"
 )
 
 // DocumentView handles document rendering with line numbers, comments, and cursor highlighting.

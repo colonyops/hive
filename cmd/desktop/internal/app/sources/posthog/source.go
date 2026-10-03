@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // Provider is the credentials provider every PostHog credential is filed

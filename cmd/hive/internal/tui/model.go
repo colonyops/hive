@@ -18,31 +18,36 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/sources"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
+	"github.com/colonyops/hive/cmd/hive/internal/theme"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/sourcepicker"
-	act "github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/doctor"
-	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/git"
-	corekv "github.com/colonyops/hive/internal/core/kv"
-	"github.com/colonyops/hive/internal/core/notify"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/theme"
-	"github.com/colonyops/hive/internal/sources"
+	hiveconfig "github.com/colonyops/hive/internal/config"
+	corekv "github.com/colonyops/hive/internal/domain/kv"
+	"github.com/colonyops/hive/internal/domain/notify"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/hive/doctor"
+	"github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/platform/git"
 
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/command"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/messages"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/tasks"
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
-	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/plugins"
-	"github.com/colonyops/hive/internal/hive/updatecheck"
+	"github.com/colonyops/hive/cmd/hive/internal/updatecheck"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 
+	hcsvc "github.com/colonyops/hive/internal/hive/hc"
+	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	statussvc "github.com/colonyops/hive/internal/hive/status"
+	todosvc "github.com/colonyops/hive/internal/hive/todo"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -77,21 +82,21 @@ const (
 type Deps struct {
 	// Required; nil causes a panic at construction time.
 	Config        *config.Config
-	Service       *hive.SessionService
+	Service       *sessionsvc.Service
 	Renderer      *tmpl.Renderer
-	Status        *hive.StatusService
+	Status        *statussvc.Service
 	PluginManager *plugins.Manager
 	CommandSet    *plugins.CommandSet
-	TodoService   *hive.TodoService
+	TodoService   *todosvc.Service
 	DB            *db.DB
 
 	// Optional; nil disables the corresponding feature.
-	MsgStore      *hive.MessageService
-	Bus           *eventbus.EventBus
+	MsgStore      *msgsvc.Service
+	Bus           *events.EventBus
 	KVStore       corekv.KV
 	BuildInfo     BuildInfo
-	DoctorService *hive.DoctorService
-	Honeycomb     *hive.HoneycombService
+	DoctorService *doctor.Service
+	Honeycomb     *hcsvc.Service
 	Sources       *sources.Registry
 }
 
@@ -106,7 +111,7 @@ type Opts struct {
 // Model is the main Bubble Tea model for the TUI.
 type Model struct {
 	cfg            *config.Config
-	service        *hive.SessionService
+	service        *sessionsvc.Service
 	cmdService     *command.Service
 	handler        *KeybindingResolver
 	state          UIState
@@ -147,17 +152,17 @@ type Model struct {
 	toastController *ToastController
 	toastView       *ToastView
 
-	bus *eventbus.EventBus
+	bus *events.EventBus
 
-	todoService *hive.TodoService
+	todoService *todosvc.Service
 	todoBadge   todoBadgeState
-	todoCh      <-chan eventbus.TodoCreatedPayload
+	todoCh      <-chan events.TodoCreatedPayload
 
 	renderer      *tmpl.Renderer
 	buildInfo     BuildInfo
 	updateChecker *updatecheck.Checker
 	updateInfo    *updatecheck.Result
-	doctorService *hive.DoctorService
+	doctorService *doctor.Service
 	configPath    string
 
 	sourceRegistry     *sources.Registry
@@ -243,7 +248,7 @@ type todoAutoCompleteResultMsg struct {
 }
 
 type todoCreatedMsg struct {
-	payload eventbus.TodoCreatedPayload
+	payload events.TodoCreatedPayload
 }
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
@@ -315,20 +320,20 @@ func New(deps Deps, opts Opts) Model {
 		docs, _ = review.DiscoverDocuments(contextDir)
 	}
 
-	var reviewStore *stores.ReviewStore
+	var reviewStore *store.ReviewStore
 	if deps.DB != nil {
-		reviewStore = stores.NewReviewStore(deps.DB)
+		reviewStore = store.NewReviewStore(deps.DB)
 	}
 
 	reviewView := review.New(docs, contextDir, reviewStore, handler, cfg.Views.Review.SplitRatioOrDefault(30))
 	reviewView.SetRepoKey(repoKey)
 
-	notifyStore := stores.NewNotifyStore(deps.DB)
+	notifyStore := store.NewNotifyStore(deps.DB)
 	toastCtrl := NewToastController()
 	toastView := NewToastView(toastCtrl)
 	notifyBuffer := NewNotificationBuffer()
 	if deps.Bus != nil {
-		deps.Bus.SubscribeNotificationPublished(func(p eventbus.NotificationPublishedPayload) {
+		deps.Bus.SubscribeNotificationPublished(func(p events.NotificationPublishedPayload) {
 			notifyBuffer.Push(notify.Notification{
 				Level:   p.Level,
 				Message: p.Message,
@@ -337,10 +342,10 @@ func New(deps Deps, opts Opts) Model {
 	}
 
 	// Subscribe to todo events if enabled
-	var todoCh <-chan eventbus.TodoCreatedPayload
+	var todoCh <-chan events.TodoCreatedPayload
 	if deps.Bus != nil && cfg.Todos.Notifications.Toast {
-		ch := make(chan eventbus.TodoCreatedPayload, 16)
-		deps.Bus.SubscribeTodoCreated(func(payload eventbus.TodoCreatedPayload) {
+		ch := make(chan events.TodoCreatedPayload, 16)
+		deps.Bus.SubscribeTodoCreated(func(payload events.TodoCreatedPayload) {
 			select {
 			case ch <- payload:
 			default:
@@ -390,7 +395,6 @@ func New(deps Deps, opts Opts) Model {
 	}
 }
 
-// quit sets the quitting flag and emits tui.stopped.
 func (m Model) quit() (Model, tea.Cmd) {
 	m.quitting = true
 	if m.sessionsView != nil {
@@ -399,18 +403,12 @@ func (m Model) quit() (Model, tea.Cmd) {
 	if m.modals.BgStreamCancel != nil {
 		m.modals.BgStreamCancel()
 	}
-	if m.bus != nil {
-		m.bus.PublishTuiStopped(eventbus.TUIStoppedPayload{})
-	}
 	return m, tea.Quit
 }
 
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
-	if m.bus != nil {
-		m.bus.PublishTuiStarted(eventbus.TUIStartedPayload{})
-	}
 	if m.notifyBuffer != nil {
 		cmds = append(cmds, m.notifyBuffer.WaitForSignal())
 	}
@@ -919,7 +917,7 @@ func (m Model) handleFormDialogKey(msg tea.KeyPressMsg, keyStr string) (tea.Mode
 // sessionRiskCheckedMsg is returned by the async git risk check before delete/recycle.
 type sessionRiskCheckedMsg struct {
 	action Action
-	risk   hive.SessionRisk
+	risk   sessionsvc.Risk
 }
 
 // riskCheckLoaderDelay is how long to wait before showing the "Checking for
@@ -1781,7 +1779,7 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) defaultAgentKey() string {
-	if envDefault := os.Getenv(config.EnvDefaultAgent); envDefault != "" {
+	if envDefault := os.Getenv(hiveconfig.EnvDefaultAgent); envDefault != "" {
 		if _, ok := m.cfg.Agents.Profiles[envDefault]; ok {
 			return envDefault
 		}
@@ -2008,7 +2006,7 @@ func (m Model) startRecycle(sessionID string) tea.Cmd {
 // startCreate returns a command that starts session creation with streaming output.
 func (m Model) startCreate(name, remote, agentKey string) tea.Cmd {
 	return func() tea.Msg {
-		exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
+		exec := m.cmdService.NewCreateExecutor(sessionsvc.CreateOptions{
 			Name:       name,
 			Remote:     remote,
 			Source:     m.source,
@@ -2089,7 +2087,7 @@ func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
 func (m *Model) publishNotificationf(level notify.Level, format string, args ...any) {
 	message := fmt.Sprintf(format, args...)
 	if m.bus != nil {
-		m.bus.PublishNotificationPublished(eventbus.NotificationPublishedPayload{
+		m.bus.PublishNotificationPublished(events.NotificationPublishedPayload{
 			Level:   level,
 			Message: message,
 		})

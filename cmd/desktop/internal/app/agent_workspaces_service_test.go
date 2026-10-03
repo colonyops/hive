@@ -22,9 +22,9 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/execenv"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
-	"github.com/colonyops/hive/internal/tmuxtest"
+	"github.com/colonyops/hive/internal/platform/execenv"
+	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
+	"github.com/colonyops/hive/pkg/executil"
 )
 
 // newTestAgentWorkspacesService builds a service over root with a real
@@ -581,7 +581,7 @@ func TestDetachedLaunchThatNeverStartedLeavesNoRecord(t *testing.T) {
 		})
 		require.NoError(t, err)
 		blocker := exec.CommandContext(t.Context(), "tmux", "new-session", "-d", "-s", sessionName(rec))
-		blocker.Env = tmuxtest.ScrubbedEnv()
+		blocker.Env = executil.WithoutEnv(nil, "TMUX", "TMUX_PANE")
 		require.NoError(t, blocker.Run())
 
 		_, err = svc.launchTerminal(t.Context(), rec, terminalLaunch{dir: root, line: agentCmd, detached: detached})

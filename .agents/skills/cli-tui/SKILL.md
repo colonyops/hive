@@ -49,11 +49,11 @@ The precedence is in the root `AGENTS.md` ("Keybinding Precedence"). The rule
 that matters most: **a user-overridable key is never an `if keyStr == "x"`
 block in view code.** To add one:
 
-1. register an `action.Type` in `internal/core/action/type.go` and run
+1. register an `action.Type` in `cmd/hive/internal/action/type.go` and run
    `mise run generate:enums`;
 2. add a default `UserCommand` to `defaultUserCommands`
-   (`internal/core/config/config.go`);
-3. bind it in `defaultViewsConfig` (`internal/core/config/config_views.go`);
+   (`cmd/hive/internal/config/config.go`);
+3. bind it in `defaultViewsConfig` (`cmd/hive/internal/config/config_views.go`);
 4. dispatch it from `model_handlers.go`.
 
 Hardcoded keys are only the layer-1 set: `ctrl+c`, `esc`, `tab`,

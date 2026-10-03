@@ -3,7 +3,7 @@
 // (inbox_item/inbox_event), feed membership claims, output commands, activity
 // events and jobs, and per-node run metrics. It is isolated from hive's shared
 // hive.db so desktop pipeline write traffic never contends with the CLI/TUI
-// data path. It shares the migration runner in internal/data/migrate.
+// data path. It shares the migration runner in internal/store/migrate.
 package queries
 
 import (
@@ -18,9 +18,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/colonyops/hive/internal/data/migrate"
-
-	_ "modernc.org/sqlite"
+	"github.com/colonyops/hive/internal/platform/sqlite"
+	"github.com/colonyops/hive/internal/store/migrate"
 )
 
 //go:embed migrations/*.sql
@@ -88,7 +87,7 @@ func DatabasePath(dir string) string {
 }
 
 // Open creates a new desktop-pipeline.db connection in dir, applying all
-// pending migrations. Unlike internal/data/db, there is no legacy bootstrap
+// pending migrations. Unlike internal/store/db, there is no legacy bootstrap
 // step here: this is a new database with no pre-migration history, so Open
 // calls migrate.Up directly.
 //
@@ -114,45 +113,20 @@ func Open(ctx context.Context, dir string, opts OpenOptions) (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	dbPath := DatabasePath(dir)
-
-	// Open with pragmas for WAL mode, busy timeout, and foreign keys, plus
-	// _txlock=immediate so write transactions begin with BEGIN IMMEDIATE.
-	//
-	// Several goroutines write this DB concurrently through WithinTx (the
-	// producer's IngestObservation, the frontend runtime's CommitBatch, the
-	// output worker, retention). Each reads before it writes. With the driver
-	// default (BEGIN, deferred) two such transactions can both hold a read
-	// lock and then both try to upgrade to the write lock — a deadlock SQLite
-	// resolves by returning SQLITE_BUSY *immediately*, ignoring busy_timeout,
-	// because waiting could never succeed. IMMEDIATE takes the write lock up
-	// front, so a second writer waits on busy_timeout and retries cleanly
-	// instead of failing. Read-only transactions still begin deferred, so WAL
-	// read concurrency is preserved.
-	dsn := fmt.Sprintf("file:%s?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)&_pragma=foreign_keys(ON)", dbPath, opts.BusyTimeout)
-	conn, err := sql.Open("sqlite", dsn)
+	conn, err := sqlite.Open(ctx, DatabasePath(dir), sqlite.Options{
+		MaxOpenConns: opts.MaxOpenConns,
+		MaxIdleConns: opts.MaxIdleConns,
+		BusyTimeout:  time.Duration(opts.BusyTimeout) * time.Millisecond,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, err
 	}
-
-	// Configure connection pool - minimal connections for SQLite.
-	conn.SetMaxOpenConns(opts.MaxOpenConns)
-	conn.SetMaxIdleConns(opts.MaxIdleConns)
-	conn.SetConnMaxLifetime(0) // Connections live forever.
 
 	db := &DB{
 		Queries:     New(conn),
 		conn:        conn,
 		pauseCommit: opts.PauseCommit,
 		logger:      opts.Logger,
-	}
-
-	// Verify connectivity - fail fast for SQLite.
-	if err := conn.PingContext(ctx); err != nil {
-		if closeErr := conn.Close(); closeErr != nil {
-			return nil, fmt.Errorf("failed to connect to database: %w (close also failed: %w)", err, closeErr)
-		}
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	if err := db.initSchema(ctx); err != nil {

@@ -1,8 +1,7 @@
-// Package hiveconf reads and writes the external Hive CLI configuration shared
-// with the `hive` binary. It reports raw declarations rather than Hive's merged
-// defaults, so a fallback is never mistaken for a user choice (Bounded Context,
-// architecture.md). An absent file is valid but not usable for repository
-// sessions.
+// Package hiveconf reads the hive config file the `hive` binary shares. It
+// reports raw declarations rather than hive's merged defaults, so a fallback is
+// never mistaken for a user choice. An absent file is valid but not usable for
+// repository sessions.
 package hiveconf
 
 import (
@@ -11,24 +10,15 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/agent"
+	"github.com/colonyops/hive/pkg/pathutil"
 	"gopkg.in/yaml.v3"
 )
 
-// Keep names and order aligned with `hive init`. Unlisted profiles remain
-// supported and round-trip unchanged.
-var knownAgents = []AgentKind{
-	{Name: "claude", Label: "Claude Code", SkipPermissionFlags: []string{"--dangerously-skip-permissions"}},
-	{Name: "opencode", Label: "OpenCode", SkipPermissionFlags: []string{"--agent", "free-permissions-runner"}},
-	{Name: "codex", Label: "Codex", SkipPermissionFlags: []string{"--full-auto"}},
-	{Name: "copilot", Label: "GitHub Copilot"},
-	{Name: "cursor", Label: "Cursor"},
-	{Name: "amp", Label: "Amp"},
-	{Name: "pi", Label: "Pi"},
-}
-
-// AgentKind is one entry in the catalog: what the profile is called in the
-// config file, what to show a person, and the flags that turn off the agent's
-// own permission prompts.
+// AgentKind is the wire form of one agent.Known entry: what the profile is
+// called in the config file, what to show a person, and the flags that turn
+// off the agent's own permission prompts.
 type AgentKind struct {
 	Name  string `json:"name"`
 	Label string `json:"label"`
@@ -145,7 +135,7 @@ func decodeAgents(node yaml.Node) (defaultAgent string, profiles []Profile) {
 		switch {
 		case key == "default":
 			defaultAgent = value.Value
-		case reservedAgentKeys[key]:
+		case config.IsReservedAgentKey(key):
 		default:
 			var p struct {
 				Command string   `yaml:"command"`
@@ -167,7 +157,7 @@ func decodeAgents(node yaml.Node) (defaultAgent string, profiles []Profile) {
 // Inspect reports whether a workspace exists and counts its immediate Git
 // repositories.
 func Inspect(path string) Workspace {
-	expanded := ExpandTilde(path)
+	expanded := pathutil.ExpandHome(path)
 	w := Workspace{Path: path}
 	info, err := os.Stat(expanded)
 	if err != nil || !info.IsDir() {
@@ -199,59 +189,16 @@ type LookPath func(ctx context.Context, name string) (string, error)
 // agents are not floated to the top, because a picker whose rows move between
 // launches is harder to use than one that does not.
 func AgentOptions(ctx context.Context, lookPath LookPath) []AgentOption {
-	options := make([]AgentOption, 0, len(knownAgents))
-	for _, kind := range knownAgents {
+	known := agent.Known()
+	options := make([]AgentOption, 0, len(known))
+	for _, a := range known {
 		installed := false
 		if lookPath != nil {
-			_, err := lookPath(ctx, kind.Name)
+			_, err := lookPath(ctx, a.Name)
 			installed = err == nil
 		}
+		kind := AgentKind{Name: a.Name, Label: a.Label, SkipPermissionFlags: a.SkipPermissionFlags}
 		options = append(options, AgentOption{AgentKind: kind, Installed: installed})
 	}
 	return options
-}
-
-// ExpandTilde replaces a leading ~ with the user's home directory, matching
-// how hive resolves a configured workspace at scan time. A path this app
-// cannot expand is returned unchanged so it fails as the literal it is.
-func ExpandTilde(path string) string {
-	if path != "~" && !strings.HasPrefix(path, "~/") {
-		return path
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-	if path == "~" {
-		return home
-	}
-	return filepath.Join(home, path[2:])
-}
-
-// ErrWorkspaceIsRepo reports a chosen path that is itself a git repository.
-// It is the one validation failure worth its own message: picking a repo
-// instead of the folder that holds repos is the mistake people actually make,
-// and the resulting config finds nothing with no hint as to why.
-var ErrWorkspaceIsRepo = InvalidEditError{Reason: "that is a repository, not the folder that holds your repositories"}
-
-// ValidateWorkspace checks a path is usable as a workspace parent. It mirrors
-// `hive init`'s validateWorkspaceParent so the two tools reject the same
-// input.
-func ValidateWorkspace(path string) error {
-	trimmed := strings.TrimSpace(path)
-	if trimmed == "" {
-		return invalid("choose a folder")
-	}
-	expanded := ExpandTilde(trimmed)
-	info, err := os.Stat(expanded)
-	if err != nil {
-		return invalid("that folder does not exist")
-	}
-	if !info.IsDir() {
-		return invalid("that is a file, not a folder")
-	}
-	if _, err := os.Stat(filepath.Join(expanded, ".git")); err == nil {
-		return ErrWorkspaceIsRepo
-	}
-	return nil
 }

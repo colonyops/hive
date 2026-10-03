@@ -10,9 +10,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/gitea/giteaclient"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/sourcehttp"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // Instance is one connected Gitea or Forgejo account, as the Integrations

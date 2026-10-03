@@ -15,8 +15,8 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/internal/platform/observe"
 )
 
 // Producer is the poll loop that turns configured source connectors into

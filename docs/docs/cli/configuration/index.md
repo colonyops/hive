@@ -153,6 +153,7 @@ terminal:
 | Option                   | Type     | Default  | Description                  |
 | ------------------------ | -------- | -------- | ---------------------------- |
 | `messaging.topic_prefix` | `string` | `agent`  | Default prefix for topic IDs |
+| `messaging.max_messages` | `int`    | `100`    | Messages kept per topic; older ones are deleted on publish. `0` keeps every message |
 
 ## Context
 

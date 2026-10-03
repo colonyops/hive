@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/todo"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/rs/zerolog/log"
@@ -16,7 +16,7 @@ import (
 // TodoCmd implements the hive todo command group.
 type TodoCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 
 	// add flags
 	addTitle  string
@@ -31,7 +31,7 @@ type TodoCmd struct {
 }
 
 // NewTodoCmd creates a new todo command.
-func NewTodoCmd(flags *Flags, app *hive.App) *TodoCmd {
+func NewTodoCmd(flags *Flags, app *app.App) *TodoCmd {
 	return &TodoCmd{flags: flags, app: app}
 }
 
@@ -153,7 +153,7 @@ func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 	}
 
 	// Auto-detect session ID (best-effort)
-	sessionID, err := cmd.app.Sessions.DetectSession(ctx)
+	sessionID, err := cmd.app.Sessions().DetectSession(ctx)
 	if err != nil {
 		log.Debug().Err(err).Msg("failed to detect session for todo")
 	}
@@ -189,7 +189,7 @@ func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 
-	created, err := cmd.app.Todos.Add(ctx, td)
+	created, err := cmd.app.Todos().Add(ctx, td)
 	if err != nil {
 		return err
 	}
@@ -208,7 +208,7 @@ func (cmd *TodoCmd) runList(ctx context.Context, c *cli.Command) error {
 		filter.Status = &status
 	}
 
-	items, err := cmd.app.Todos.List(ctx, filter)
+	items, err := cmd.app.Todos().List(ctx, filter)
 	if err != nil {
 		return fmt.Errorf("list todos: %w", err)
 	}
@@ -236,11 +236,11 @@ func (cmd *TodoCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 	var updated todo.Todo
 	switch status {
 	case todo.StatusAcknowledged:
-		updated, err = cmd.app.Todos.Acknowledge(ctx, id)
+		updated, err = cmd.app.Todos().Acknowledge(ctx, id)
 	case todo.StatusCompleted:
-		updated, err = cmd.app.Todos.Complete(ctx, id)
+		updated, err = cmd.app.Todos().Complete(ctx, id)
 	case todo.StatusDismissed:
-		updated, err = cmd.app.Todos.Dismiss(ctx, id)
+		updated, err = cmd.app.Todos().Dismiss(ctx, id)
 	case todo.StatusPending:
 		return fmt.Errorf("cannot set status back to pending")
 	default:

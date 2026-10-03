@@ -1,6 +1,6 @@
 package app
 
-import "github.com/colonyops/hive/cmd/desktop/internal/app/observe"
+import "github.com/colonyops/hive/internal/platform/observe"
 
 var tracer = observe.Tracer("/internal/app")
 

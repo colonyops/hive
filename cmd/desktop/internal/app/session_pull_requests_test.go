@@ -7,9 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
+	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,12 +39,12 @@ const openPRBody = `{"data":{"r0":{"pullRequests":{"nodes":[{"number":311,"state
 func TestSessionPullRequestsAnswersFromCacheUntilRefreshed(t *testing.T) {
 	server, calls := graphQLServer(t, openPRBody)
 	lookup := newSessionPullRequests(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
-	key := dispatch.SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
+	key := SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
 
 	first, err := lookup.Lookup(t.Context(), key, false)
 	require.NoError(t, err)
-	assert.Equal(t, dispatch.SessionPullRequest{
-		Status: dispatch.PullRequestStatusFound, Number: 311, State: "OPEN", IsDraft: true,
+	assert.Equal(t, SessionPullRequest{
+		Status: PullRequestStatusFound, Number: 311, State: "OPEN", IsDraft: true,
 		URL: "https://github.com/acme/site/pull/311", ReviewDecision: "REVIEW_REQUIRED", Checks: "pending",
 	}, first)
 
@@ -68,7 +67,7 @@ func TestSessionPullRequestsRereadsOnceTheEntryIsStale(t *testing.T) {
 	lookup := newSessionPullRequests(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
 	now := time.Now()
 	lookup.now = func() time.Time { return now }
-	key := dispatch.SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
+	key := SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
 
 	_, err := lookup.Lookup(t.Context(), key, false)
 	require.NoError(t, err)
@@ -85,27 +84,27 @@ func TestSessionPullRequestsRereadsOnceTheEntryIsStale(t *testing.T) {
 func TestSessionPullRequestsKeepsItsEmptyAnswersDistinct(t *testing.T) {
 	server, _ := graphQLServer(t, `{"data":{"r0":{"pullRequests":{"nodes":[]}}}}`)
 	client := ghclient.NewClient(ghclient.WithAPIBase(server.URL))
-	key := dispatch.SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
+	key := SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
 
 	none, err := newSessionPullRequests(newGitHubForge(client, connectedStore(t))).Lookup(t.Context(), key, false)
 	require.NoError(t, err)
-	assert.Equal(t, dispatch.PullRequestStatusNone, none.Status)
+	assert.Equal(t, PullRequestStatusNone, none.Status)
 
 	disconnected, err := newSessionPullRequests(newGitHubForge(client, credentials.NewMemoryStore())).Lookup(t.Context(), key, false)
 	require.NoError(t, err)
-	assert.Equal(t, dispatch.PullRequestStatusDisconnected, disconnected.Status)
+	assert.Equal(t, PullRequestStatusDisconnected, disconnected.Status)
 
 	unsupported, err := newSessionPullRequests(newGitHubForge(client, connectedStore(t))).Lookup(t.Context(),
-		dispatch.SessionPullRequestKey{Branch: "feat/bar"}, false)
+		SessionPullRequestKey{Branch: "feat/bar"}, false)
 	require.NoError(t, err)
-	assert.Equal(t, dispatch.PullRequestStatusUnsupported, unsupported.Status)
+	assert.Equal(t, PullRequestStatusUnsupported, unsupported.Status)
 
 	// A host no forge serves is unsupported too, and never disconnected: a
 	// remote is not evidence that its host is a forge the app can ask.
 	unknownHost, err := newSessionPullRequests(newGitHubForge(client, connectedStore(t))).Lookup(t.Context(),
-		dispatch.SessionPullRequestKey{Host: "git.example.test", Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
+		SessionPullRequestKey{Host: "git.example.test", Owner: "acme", Repo: "site", Branch: "feat/bar"}, false)
 	require.NoError(t, err)
-	assert.Equal(t, dispatch.PullRequestStatusUnsupported, unknownHost.Status)
+	assert.Equal(t, PullRequestStatusUnsupported, unknownHost.Status)
 }
 
 // A failed lookup is an error, never a cached "none" — and nothing is cached,
@@ -120,7 +119,7 @@ func TestSessionPullRequestsReportsAFailedLookupAndCachesNothing(t *testing.T) {
 	defer server.Close()
 
 	lookup := newSessionPullRequests(newGitHubForge(ghclient.NewClient(ghclient.WithAPIBase(server.URL)), connectedStore(t)))
-	key := dispatch.SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
+	key := SessionPullRequestKey{Host: "github.com", Owner: "acme", Repo: "site", Branch: "feat/bar"}
 
 	_, err := lookup.Lookup(t.Context(), key, false)
 	require.Error(t, err)

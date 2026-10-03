@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/colonyops/hive/pkg/atomicfile"
 )
 
 // ErrInvalidWorkspace reports a workspace value that is not a single local
@@ -366,11 +368,7 @@ func (s *Store) write(c Canvas) error {
 	if err != nil {
 		return fmt.Errorf("canvas: encode %s/%s: %w", c.Workspace, c.Name, err)
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("canvas: write temp: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := atomicfile.Write(path, data, 0o600); err != nil {
 		return fmt.Errorf("canvas: replace: %w", err)
 	}
 	return nil

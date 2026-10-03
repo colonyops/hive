@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
@@ -25,6 +24,7 @@ import (
 	ghsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/feed"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // testCredential is the account every fixture source fetches as. Sources

@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/execenv"
+	"github.com/colonyops/hive/internal/platform/execenv"
 )
 
 // toolDir installs an executable named tool that prints marker, and returns the
@@ -81,16 +81,6 @@ func TestEnvExecutorStillStreamsToItsCaller(t *testing.T) {
 	err := exec.RunStream(t.Context(), io.Discard, &stderr, "sh", "-c", "echo complaint >&2; exit 3")
 	require.Error(t, err)
 	assert.Equal(t, "complaint", strings.TrimSpace(stderr.String()))
-}
-
-func TestHeadBufferDrainsEverythingItDoesNotKeep(t *testing.T) {
-	buf := &headBuffer{max: 8}
-	stream := []byte(strings.Repeat("x", 4096))
-
-	n, err := buf.Write(stream)
-	require.NoError(t, err)
-	assert.Equal(t, len(stream), n, "a noisy child must never block on the pipe")
-	assert.Len(t, buf.String(), 8)
 }
 
 // hive clones with `_, err := e.exec.Run(...)`, so git's own reason sat in a

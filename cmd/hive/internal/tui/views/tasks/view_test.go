@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/slug"
 )
 
 // Catalog is one parsed actions.yml: the actions the app runs on the user's
@@ -106,8 +107,8 @@ func validateActions(actionList []Action) error {
 		if a.ID == "" {
 			return fmt.Errorf("action: id is required")
 		}
-		if !validSlug(a.ID) {
-			return fmt.Errorf("action %q: id is not a valid slug (lowercase letters, digits, hyphens, starting with a letter or digit, max %d chars)", a.ID, maxSlugLen)
+		if !slug.Valid(a.ID) {
+			return fmt.Errorf("action %q: id is not a valid slug (lowercase letters, digits, hyphens, starting with a letter or digit, max %d chars)", a.ID, slug.MaxLen)
 		}
 		if ids[a.ID] {
 			return fmt.Errorf("action %q: duplicate action id", a.ID)

@@ -30,50 +30,45 @@ func (s *SessionService) SessionLaunchWorkspaces(ctx context.Context) []dispatch
 
 // ListSessions returns every session in every state; Slug is the tmux target an
 // attach uses, and only an active session has one.
-func (s *SessionService) ListSessions(ctx context.Context) ([]dispatch.SessionSummary, error) {
-	return s.sessions.ListSessions(ctx)
-}
-
-// SessionStatusSnapshot is one poll result in the units the browser timer uses.
-type SessionStatusSnapshot struct {
-	Items          []dispatch.SessionStatus `json:"items"`
-	PollIntervalMS int64                    `json:"pollIntervalMs"`
+func (s *SessionService) ListSessions(ctx context.Context) ([]SessionSummary, error) {
+	sessions, err := s.sessions.ListSessions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return sessionSummariesOf(sessions), nil
 }
 
 // SessionStatuses returns the current terminal-detected agent state for each
 // active session.
-func (s *SessionService) SessionStatuses(ctx context.Context) (SessionStatusSnapshot, error) {
-	snapshot, err := s.sessions.SessionStatuses(ctx)
-	if err != nil {
-		return SessionStatusSnapshot{}, err
-	}
-	return sessionStatusSnapshotOf(snapshot), nil
-}
-
-func sessionStatusSnapshotOf(snapshot dispatch.SessionStatusSnapshot) SessionStatusSnapshot {
-	return SessionStatusSnapshot{
-		Items:          snapshot.Items,
-		PollIntervalMS: snapshot.PollInterval.Milliseconds(),
-	}
+func (s *SessionService) SessionStatuses(ctx context.Context) (app.SessionStatusSnapshot, error) {
+	return s.sessions.SessionStatuses(ctx)
 }
 
 // SessionDetail reads one session in full, for the detail view.
-func (s *SessionService) SessionDetail(ctx context.Context, id string) (dispatch.SessionDetail, error) {
-	return s.sessions.SessionDetail(ctx, id)
+func (s *SessionService) SessionDetail(ctx context.Context, id string) (SessionDetail, error) {
+	detail, err := s.sessions.SessionDetail(ctx, id)
+	if err != nil {
+		return SessionDetail{}, err
+	}
+	return sessionDetailOf(detail), nil
 }
 
 // SessionGitStatus reads the session's checkout for the session status bar.
 // Cheap and local — four git subprocesses — so the bar polls it, unlike
 // SessionPullRequest.
-func (s *SessionService) SessionGitStatus(ctx context.Context, id string) (dispatch.SessionGitStatus, error) {
-	return s.sessions.SessionGitStatus(ctx, id)
+func (s *SessionService) SessionGitStatus(ctx context.Context, id string) (SessionGitStatus, error) {
+	status, err := s.sessions.SessionGitStatus(ctx, id)
+	if err != nil {
+		return SessionGitStatus{}, err
+	}
+	return sessionGitStatusOf(status), nil
 }
 
 // SessionPullRequest resolves the pull request for a branch SessionGitStatus
 // reported, answering from a short-lived cache unless refresh is set. Its
 // Status field says why there is nothing to show, so a caller never has to
 // read an empty result as "none".
-func (s *SessionService) SessionPullRequest(ctx context.Context, key dispatch.SessionPullRequestKey, refresh bool) (dispatch.SessionPullRequest, error) {
+func (s *SessionService) SessionPullRequest(ctx context.Context, key app.SessionPullRequestKey, refresh bool) (app.SessionPullRequest, error) {
 	return s.sessions.SessionPullRequest(ctx, key, refresh)
 }
 
@@ -89,19 +84,19 @@ func (s *SessionService) RevealSession(ctx context.Context, id string) error {
 
 // ItemSessions returns the sessions an inbox item spawned, newest first, with
 // the state hive reports for each now. Slug is the attach target.
-func (s *SessionService) ItemSessions(ctx context.Context, itemID int64) ([]dispatch.ItemSessionView, error) {
+func (s *SessionService) ItemSessions(ctx context.Context, itemID int64) ([]app.ItemSessionView, error) {
 	return s.sessions.ItemSessions(ctx, itemID)
 }
 
 // ItemChats returns the agent workspace chats an inbox item opened, newest
 // first.
-func (s *SessionService) ItemChats(ctx context.Context, itemID int64) ([]dispatch.ItemChatView, error) {
+func (s *SessionService) ItemChats(ctx context.Context, itemID int64) ([]app.ItemChatView, error) {
 	return s.sessions.ItemChats(ctx, itemID)
 }
 
 // SessionRisk reports the uncommitted or unpushed work a delete or recycle
 // would discard, for the confirmation that precedes one.
-func (s *SessionService) SessionRisk(ctx context.Context, id string) (dispatch.SessionRisk, error) {
+func (s *SessionService) SessionRisk(ctx context.Context, id string) (app.SessionRisk, error) {
 	return s.sessions.SessionRisk(ctx, id)
 }
 
@@ -132,8 +127,12 @@ func (s *SessionService) DismissFailedSession(ctx context.Context) error {
 // RenameSession renames a session and returns its new summary. The slug in it
 // is the new tmux target: renaming re-slugs, so an attached caller has to
 // re-attach under the name that comes back.
-func (s *SessionService) RenameSession(ctx context.Context, id, name string) (dispatch.SessionSummary, error) {
-	return s.sessions.RenameSession(ctx, id, name)
+func (s *SessionService) RenameSession(ctx context.Context, id, name string) (SessionSummary, error) {
+	renamed, err := s.sessions.RenameSession(ctx, id, name)
+	if err != nil {
+		return SessionSummary{}, err
+	}
+	return sessionSummaryOf(renamed), nil
 }
 
 // DeleteSession starts the delete as a background job and returns the job id.

@@ -2,13 +2,13 @@ version: "2"
 sql:
   - engine: "sqlite"
     queries:
-      - "internal/data/db/queries/queries.sql"
-      - "internal/data/db/queries/queries_hc.sql"
-    schema: "internal/data/db/migrations/*.up.sql"
+      - "internal/store/db/queries/queries.sql"
+      - "internal/store/db/queries/queries_hc.sql"
+    schema: "internal/store/db/migrations/*.up.sql"
     gen:
       go:
         package: "db"
-        out: "internal/data/db"
+        out: "internal/store/db"
         emit_json_tags: true
         emit_prepared_queries: false
         emit_interface: false
@@ -17,11 +17,11 @@ sql:
         overrides:
           - column: "hc_items.status"
             go_type:
-              import: "github.com/colonyops/hive/internal/core/hc"
+              import: "github.com/colonyops/hive/internal/domain/hc"
               type: "Status"
           - column: "hc_items.type"
             go_type:
-              import: "github.com/colonyops/hive/internal/core/hc"
+              import: "github.com/colonyops/hive/internal/domain/hc"
               type: "ItemType"
   - engine: "sqlite"
     queries:

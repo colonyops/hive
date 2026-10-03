@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/secrets"
+	"github.com/colonyops/hive/internal/platform/secrets"
 )
 
 const settingsFileName = "settings.yaml"
@@ -228,7 +228,7 @@ type OnboardingSettings struct {
 // because it is a stable machine identifier the user must choose to disclose
 // (ADR telemetry-carries-the-opentelemetry-host-identifier-configured-for-the-machine).
 //
-// Endpoint, InstanceID, and Token may be a cmd/desktop/internal/app/secrets reference — "env:NAME",
+// Endpoint, InstanceID, and Token may be a internal/platform/secrets reference — "env:NAME",
 // "file:/path", "op://vault/item/field" — so one 1Password item can hold a
 // whole destination. They differ in whether a literal is allowed: Token
 // *requires* a reference, because a literal there is a credential in a

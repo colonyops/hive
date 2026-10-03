@@ -3,7 +3,7 @@ package messages
 import (
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/domain/messaging"
 )
 
 // Controller manages message data and filtering.

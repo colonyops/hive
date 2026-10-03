@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/gitea/giteaclient"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // Provider is the credentials provider name every Gitea credential is filed

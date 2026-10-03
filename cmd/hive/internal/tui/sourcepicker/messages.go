@@ -6,7 +6,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/cmd/hive/internal/sources"
 )
 
 // --- Tab lifecycle messages ---

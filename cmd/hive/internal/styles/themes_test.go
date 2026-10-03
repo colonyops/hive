@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/internal/core/theme"
+	"github.com/colonyops/hive/cmd/hive/internal/theme"
 )
 
 // The theme package parses its colors without lipgloss. The values must stay

@@ -3,10 +3,9 @@ package app
 import (
 	"context"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	ghsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // gitHubForge looks a branch's pull request up on github.com. GitHub
@@ -23,17 +22,17 @@ func newGitHubForge(client *ghclient.Client, creds credentials.Store) *gitHubFor
 
 func (g *gitHubForge) serves(host string) bool { return host == "github.com" }
 
-func (g *gitHubForge) pullRequest(ctx context.Context, key dispatch.SessionPullRequestKey) (dispatch.SessionPullRequest, error) {
+func (g *gitHubForge) pullRequest(ctx context.Context, key SessionPullRequestKey) (SessionPullRequest, error) {
 	if g.client == nil || g.creds == nil {
-		return dispatch.SessionPullRequest{Status: dispatch.PullRequestStatusDisconnected}, nil
+		return SessionPullRequest{Status: PullRequestStatusDisconnected}, nil
 	}
 
 	tokens, err := g.tokens()
 	if err != nil {
-		return dispatch.SessionPullRequest{}, Wrap(err, KindInternal, "reading GitHub credentials")
+		return SessionPullRequest{}, Wrap(err, KindInternal, "reading GitHub credentials")
 	}
 	if len(tokens) == 0 {
-		return dispatch.SessionPullRequest{Status: dispatch.PullRequestStatusDisconnected}, nil
+		return SessionPullRequest{Status: PullRequestStatusDisconnected}, nil
 	}
 
 	ref := ghclient.BranchRef{Owner: key.Owner, Repo: key.Repo, Branch: key.Branch}
@@ -50,8 +49,8 @@ func (g *gitHubForge) pullRequest(ctx context.Context, key dispatch.SessionPullR
 			continue
 		}
 		pr := results[0]
-		return dispatch.SessionPullRequest{
-			Status:         dispatch.PullRequestStatusFound,
+		return SessionPullRequest{
+			Status:         PullRequestStatusFound,
 			Number:         pr.Number,
 			Title:          pr.Title,
 			State:          pr.State,
@@ -64,9 +63,9 @@ func (g *gitHubForge) pullRequest(ctx context.Context, key dispatch.SessionPullR
 		}, nil
 	}
 	if lastErr != nil {
-		return dispatch.SessionPullRequest{}, Wrap(lastErr, KindInternal, "reading the pull request for %s", key.Branch)
+		return SessionPullRequest{}, Wrap(lastErr, KindInternal, "reading the pull request for %s", key.Branch)
 	}
-	return dispatch.SessionPullRequest{Status: dispatch.PullRequestStatusNone}, nil
+	return SessionPullRequest{Status: PullRequestStatusNone}, nil
 }
 
 // tokens lists every token that could see the repository. The env override is

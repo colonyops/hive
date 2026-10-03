@@ -3,7 +3,7 @@ package tui
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/colonyops/hive/internal/core/notify"
+	"github.com/colonyops/hive/internal/domain/notify"
 )
 
 // HiveDocReviewCmd switches to the Docs tab, opening a specific document if Arg is set.

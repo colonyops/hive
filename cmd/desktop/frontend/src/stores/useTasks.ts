@@ -11,7 +11,7 @@ import {
 import type {
   TaskDetail,
   TaskItem,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { appErrorKind } from '../lib/appError'
 import { DEFAULT_TASK_FILTER, type TaskFilterId } from '../lib/tasksPresentation'

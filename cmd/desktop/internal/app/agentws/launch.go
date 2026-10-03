@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/colonyops/hive/pkg/tmpl"
 )
 
 // LaunchData is what a workspace's command template renders against. It is
@@ -48,7 +50,7 @@ var (
 // contain a space and the template author cannot quote it by hand without
 // knowing what the value will be.
 var launchFuncs = template.FuncMap{
-	"shq":  shellQuote,
+	"shq":  tmpl.ShellQuote,
 	"join": strings.Join,
 }
 
@@ -150,7 +152,7 @@ func SupportsPrompt(command string) bool {
 	if err != nil {
 		return false
 	}
-	return bare != prompted && strings.Contains(prompted, shellQuote(probe))
+	return bare != prompted && strings.Contains(prompted, tmpl.ShellQuote(probe))
 }
 
 // dangerousFlags are the permission bypasses this build knows by name. The
@@ -206,12 +208,5 @@ func Resolve(w Workspace, sessionID string, resume bool, prompt string) (string,
 	// cd somewhere else before -c executes; tmux's -c only sets the pane's
 	// initial directory. The explicit cd is what guarantees the agent starts
 	// in the workspace regardless of what the user's dotfiles do.
-	return "cd " + shellQuote(w.Dir) + " && " + command, nil
-}
-
-// shellQuote wraps s for a POSIX login shell: single quotes, with embedded
-// single quotes closed and re-opened. Every path Hive interpolates into a
-// launch line passes through here, and templates reach it as shq.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	return "cd " + tmpl.ShellQuote(w.Dir) + " && " + command, nil
 }

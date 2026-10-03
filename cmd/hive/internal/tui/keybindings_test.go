@@ -3,10 +3,11 @@ package tui
 import (
 	"testing"
 
-	act "github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/hive/plugins"
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
+	hiveconfig "github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -744,7 +745,7 @@ func TestResolveWindowsAction_SameSession(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"Spawn": {
 			Help: "spawn windows",
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent", Command: "claude 'Do work in {{ .Path }}'", Focus: true},
 			},
 		},
@@ -760,7 +761,7 @@ func TestResolveWindowsAction_SameSession(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)
-	assert.Nil(t, a.SpawnWindows.NewSession)
+	assert.False(t, a.SpawnWindows.NewSession)
 	assert.Equal(t, sess.Name, a.SpawnWindows.TmuxTarget)
 	assert.Equal(t, sess.Path, a.SpawnWindows.SessionDir)
 	require.Len(t, a.SpawnWindows.Windows, 1)
@@ -773,7 +774,7 @@ func TestResolveWindowsAction_SameSessionWithSh(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"Review": {
 			Sh: "git fetch",
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent", Command: "claude"},
 			},
 		},
@@ -785,10 +786,9 @@ func TestResolveWindowsAction_SameSessionWithSh(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)
-	// Same-session: sh: goes to top-level ShCmd, not NewSession
 	assert.Equal(t, "git fetch", a.SpawnWindows.ShCmd)
 	assert.Equal(t, sess.Path, a.SpawnWindows.ShDir)
-	assert.Nil(t, a.SpawnWindows.NewSession)
+	assert.False(t, a.SpawnWindows.NewSession)
 }
 
 func TestResolveWindowsAction_NewSession(t *testing.T) {
@@ -799,7 +799,7 @@ func TestResolveWindowsAction_NewSession(t *testing.T) {
 			Options: config.UserCommandOptions{
 				SessionName: "pr-{{ .Form.pr }}",
 			},
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "leader", Command: "claude"},
 			},
 			Form: []config.FormField{{Variable: "pr", Type: config.FormTypeText, Label: "PR"}},
@@ -813,11 +813,10 @@ func TestResolveWindowsAction_NewSession(t *testing.T) {
 
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)
-	require.NotNil(t, a.SpawnWindows.NewSession)
-	assert.Equal(t, "pr-123", a.SpawnWindows.NewSession.Name)
-	// sh: should be routed to NewSession.ShCmd in new-session mode
-	assert.Equal(t, "gh pr view 123", a.SpawnWindows.NewSession.ShCmd)
-	assert.Empty(t, a.SpawnWindows.ShCmd)
+	require.True(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, "pr-123", a.SpawnWindows.NewSessionName)
+	assert.Equal(t, "gh pr view 123", a.SpawnWindows.ShCmd)
+	assert.Empty(t, a.SpawnWindows.ShDir, "new-session mode runs sh: in the new clone, not the selected session")
 }
 
 func TestResolveWindowsAction_NewSessionInheritsRemote(t *testing.T) {
@@ -828,7 +827,7 @@ func TestResolveWindowsAction_NewSessionInheritsRemote(t *testing.T) {
 				SessionName: "new-sess",
 				// Remote intentionally omitted — should inherit from selected session.
 			},
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent", Command: "claude"},
 			},
 		},
@@ -841,8 +840,8 @@ func TestResolveWindowsAction_NewSessionInheritsRemote(t *testing.T) {
 
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)
-	require.NotNil(t, a.SpawnWindows.NewSession)
-	assert.Equal(t, sess.Remote, a.SpawnWindows.NewSession.Remote,
+	require.True(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, sess.Remote, a.SpawnWindows.NewSessionRemote,
 		"new session should inherit selected session's remote when options.remote is omitted")
 }
 
@@ -854,7 +853,7 @@ func TestResolveWindowsAction_NewSessionExplicitRemote(t *testing.T) {
 				SessionName: "new-sess",
 				Remote:      "https://github.com/other/repo",
 			},
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent", Command: "claude"},
 			},
 		},
@@ -865,8 +864,8 @@ func TestResolveWindowsAction_NewSessionExplicitRemote(t *testing.T) {
 	cmd := commands["NewWin"]
 	a := handler.ResolveUserCommand("NewWin", cmd, sess, nil, nil)
 
-	require.NotNil(t, a.SpawnWindows.NewSession)
-	assert.Equal(t, "https://github.com/other/repo", a.SpawnWindows.NewSession.Remote,
+	require.True(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, "https://github.com/other/repo", a.SpawnWindows.NewSessionRemote,
 		"explicit options.remote should override session remote")
 }
 
@@ -877,7 +876,7 @@ func TestResolveWindowsAction_TemplateError(t *testing.T) {
 			Options: config.UserCommandOptions{
 				SessionName: "{{ .Invalid }}",
 			},
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent"},
 			},
 		},
@@ -1137,7 +1136,7 @@ func TestRenderWithFormData_WindowsWithFormValues(t *testing.T) {
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
 	commands := map[string]config.UserCommand{
 		"Spawn": {
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent", Command: "claude 'Review PR {{ .Form.pr }} in {{ .Path }}'"},
 			},
 			Form: []config.FormField{{Variable: "pr", Type: config.FormTypeText, Label: "PR"}},

@@ -3,7 +3,7 @@ package sourcehttp
 import (
 	"go.opentelemetry.io/otel/metric"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
+	"github.com/colonyops/hive/internal/platform/observe"
 )
 
 var meter = observe.Meter("/internal/app/sources/sourcehttp")

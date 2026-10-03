@@ -2,15 +2,11 @@ package sessions
 
 import (
 	"context"
-	"sync"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/colonyops/hive/internal/core/git"
-	"github.com/rs/zerolog/log"
-)
 
-const gitStatusTimeout = 5 * time.Second
+	"github.com/colonyops/hive/internal/hive/gitstatus"
+)
 
 // GitStatus holds the git status information for a session.
 type GitStatus struct {
@@ -27,77 +23,25 @@ type GitStatusBatchCompleteMsg struct {
 	Results map[string]GitStatus
 }
 
-// fetchGitStatusForPath fetches git status for a single path.
-func fetchGitStatusForPath(ctx context.Context, g git.Git, path string) GitStatus {
-	status := GitStatus{}
-
-	// Get branch name
-	branch, err := g.Branch(ctx, path)
-	if err != nil {
-		log.Debug().Err(err).Str("path", path).Msg("git branch lookup failed")
-		status.Error = err
-		return status
-	}
-	status.Branch = branch
-
-	// Get diff stats
-	additions, deletions, err := g.DiffStats(ctx, path)
-	if err != nil {
-		log.Debug().Err(err).Str("path", path).Msg("git diff stats lookup failed")
-		status.Error = err
-		return status
-	}
-	status.Additions = additions
-	status.Deletions = deletions
-
-	// Check if clean
-	isClean, err := g.IsClean(ctx, path)
-	if err != nil {
-		log.Debug().Err(err).Str("path", path).Msg("git clean check failed")
-		status.Error = err
-		return status
-	}
-	status.HasChanges = !isClean
-
-	return status
-}
-
-// FetchGitStatusBatch returns a command that fetches git status for multiple paths
-// using a bounded worker pool.
-func FetchGitStatusBatch(g git.Git, paths []string, workers int) tea.Cmd {
+// FetchGitStatusBatch returns a command that reads git status for every path.
+// The tree does not show unpushed commits, so it skips that read.
+func FetchGitStatusBatch(svc *gitstatus.Service, paths []string) tea.Cmd {
 	if len(paths) == 0 {
 		return nil
 	}
 
 	return func() tea.Msg {
-		results := make(map[string]GitStatus)
-		var mu sync.Mutex
-
-		// Create a semaphore to limit concurrency
-		sem := make(chan struct{}, workers)
-		var wg sync.WaitGroup
-
-		for _, path := range paths {
-			wg.Add(1)
-			go func(p string) {
-				defer wg.Done()
-
-				// Acquire semaphore
-				sem <- struct{}{}
-				defer func() { <-sem }()
-
-				ctx, cancel := context.WithTimeout(context.Background(), gitStatusTimeout)
-				defer cancel()
-
-				status := fetchGitStatusForPath(ctx, g, p)
-
-				mu.Lock()
-				results[p] = status
-				mu.Unlock()
-			}(path)
+		read := svc.ReadBatch(context.Background(), paths, gitstatus.Options{})
+		results := make(map[string]GitStatus, len(read))
+		for path, status := range read {
+			results[path] = GitStatus{
+				Branch:     status.Branch,
+				Additions:  status.Additions,
+				Deletions:  status.Deletions,
+				HasChanges: status.Dirty,
+				Error:      status.Err,
+			}
 		}
-
-		wg.Wait()
 		return GitStatusBatchCompleteMsg{Results: results}
 	}
 }

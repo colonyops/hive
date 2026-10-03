@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/colonyops/hive/pkg/atomicfile"
 	"golang.org/x/image/draw"
 
 	_ "image/gif"  // register GIF decoder for image.Decode
@@ -139,11 +140,7 @@ func writeFileAtomic(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("sourcemark: create dir: %w", err)
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("sourcemark: write %s: %w", filepath.Base(path), err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := atomicfile.Write(path, data, 0o600); err != nil {
 		return fmt.Errorf("sourcemark: replace %s: %w", filepath.Base(path), err)
 	}
 	return nil

@@ -8,7 +8,7 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/internal/core/notify"
+	"github.com/colonyops/hive/internal/domain/notify"
 )
 
 type toastTickMsg time.Time

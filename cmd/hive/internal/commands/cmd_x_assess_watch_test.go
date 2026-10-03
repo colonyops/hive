@@ -12,10 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/terminal/assess"
-	"github.com/colonyops/hive/internal/core/terminal/status"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	hiveconfig "github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
@@ -37,7 +38,7 @@ func (f *fakeAssessCapture) CapturePane(_ context.Context, _ string) (string, er
 }
 
 func TestAssessWatchCmdRejectsNonPositiveIntervalBeforeCapture(t *testing.T) {
-	cmd := NewExperimentalCmd(&Flags{}, &hive.App{})
+	cmd := NewExperimentalCmd(&Flags{}, &app.App{})
 	app := &cli.Command{Name: "hive", Writer: io.Discard}
 	cmd.Register(app)
 
@@ -56,10 +57,10 @@ func TestWatchTrackerOptionsRejectsNonPositiveIntervals(t *testing.T) {
 
 func TestTrackerOptionsUseApplicationConfig(t *testing.T) {
 	stable := false
-	app := &hive.App{Config: &config.Config{
-		Tmux: config.TmuxConfig{PollInterval: 275 * time.Millisecond},
-		Terminal: config.TerminalConfig{Status: config.TerminalStatusConfig{Confirm: config.TerminalConfirmConfig{
-			Idle: config.ConfirmPolicyConfig{Polls: 7, MinDuration: 3 * time.Second, StableContent: &stable},
+	app := &app.App{Config: &config.Config{
+		Tmux: hiveconfig.TmuxConfig{PollInterval: 275 * time.Millisecond},
+		Terminal: hiveconfig.TerminalConfig{Status: hiveconfig.TerminalStatusConfig{Confirm: hiveconfig.TerminalConfirmConfig{
+			Idle: hiveconfig.ConfirmPolicyConfig{Polls: 7, MinDuration: 3 * time.Second, StableContent: &stable},
 		}}},
 	}}
 

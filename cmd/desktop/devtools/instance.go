@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/devproxy"
+	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/rs/zerolog"
 )
 

@@ -39,5 +39,5 @@ func (d *devtools) writeMCPConfig(env map[string]string) error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(d.mcpPath, append(data, '\n'), ".mcp-*.json")
+	return writeFileAtomic(d.mcpPath, append(data, '\n'))
 }

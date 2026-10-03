@@ -3,7 +3,7 @@
 # design — a false positive here is just a brief flash), then confirm it
 # settles back to "ready" only after the idle confirmation policy's
 # poll-count and hold window are satisfied (see
-# internal/core/terminal/status/options.go's ConfirmIdle) — not on the
+# internal/domain/terminal/status/options.go's ConfirmIdle) — not on the
 # first idle-looking frame, which would be premature given output can still
 # be churning.
 #

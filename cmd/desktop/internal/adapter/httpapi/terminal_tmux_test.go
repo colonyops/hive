@@ -16,12 +16,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
-	"github.com/colonyops/hive/internal/tmuxtest"
+	"github.com/colonyops/hive/internal/platform/tmux/control"
+	"github.com/colonyops/hive/internal/platform/tmuxtest"
+	"github.com/colonyops/hive/pkg/executil"
 )
 
 // These tests drive a real tmux server. Each one gets a server of its own and
-// its own session name, so they never see each other's. See internal/tmuxtest
+// its own session name, so they never see each other's. See internal/platform/tmuxtest
 // for how they are kept away from a developer's own.
 
 type tmuxFixture struct {
@@ -43,7 +44,7 @@ func startTmux(t *testing.T, slug string) *tmuxFixture {
 func (f *tmuxFixture) tmux(args ...string) string {
 	f.t.Helper()
 	cmd := exec.CommandContext(f.t.Context(), "tmux", append([]string{"-S", f.socket}, args...)...)
-	cmd.Env = tmuxtest.ScrubbedEnv()
+	cmd.Env = executil.WithoutEnv(nil, "TMUX", "TMUX_PANE")
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(f.t, err, "tmux %v: %s", args, out)
 	return string(out)

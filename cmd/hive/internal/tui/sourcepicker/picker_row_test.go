@@ -6,7 +6,7 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/cmd/hive/internal/sources"
 )
 
 func TestRowWidthsMatchSelectedVsUnselected(t *testing.T) {

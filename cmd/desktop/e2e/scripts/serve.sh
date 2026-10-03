@@ -129,7 +129,8 @@ EOF
   echo "starting ${mode} mock server ${name} on port ${port}" >&2
   if [[ "${mode}" == "onboarding" ]]; then
     env -u HIVE_DESKTOP_FLOWS_DIR -u HIVE_DESKTOP_ACTIONS_PATH \
-      HIVE_DESKTOP_DATA_DIR="${data_dir}" XDG_CONFIG_HOME="${config_home}" \
+      HIVE_DESKTOP_DATA_DIR="${data_dir}" HIVE_DESKTOP_HIVE_DATA_DIR="${data_dir}" \
+      XDG_CONFIG_HOME="${config_home}" \
       HIVE_DESKTOP_DEVELOPMENT_MOCKS_MODE="${mode}" WAILS_SERVER_PORT="${port}" \
       cmd/desktop/bin/hive-desktop-server &
   else
@@ -146,6 +147,7 @@ onboarding:
 EOF
     env \
       HIVE_DESKTOP_DATA_DIR="${data_dir}" \
+      HIVE_DESKTOP_HIVE_DATA_DIR="${data_dir}" \
       HIVE_DESKTOP_HTTP_PORT=0 \
       HIVE_CONFIG="${data_dir}/hive-e2e.yaml" \
       XDG_CONFIG_HOME="${config_home}" \
