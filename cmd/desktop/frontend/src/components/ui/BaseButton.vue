@@ -5,7 +5,7 @@ import Spinner from './Spinner.vue'
 const props = withDefaults(
   defineProps<{
     variant?: 'primary' | 'secondary' | 'danger' | 'danger-outline' | 'ghost'
-    size?: 'sm' | 'md'
+    size?: 'xs' | 'sm' | 'md'
     busy?: boolean
     disabled?: boolean
     type?: 'button' | 'submit'
@@ -24,7 +24,11 @@ const buttonRef = ref<HTMLButtonElement | null>(null)
 
 const classes = computed(() => [
   'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg transition disabled:cursor-default disabled:opacity-50',
-  props.size === 'md' ? 'px-4 py-2.5 text-[13.5px] font-semibold' : 'px-3.5 py-2 text-[13px] font-medium',
+  {
+    xs: 'px-3 py-1.5 text-[12.5px] font-medium',
+    sm: 'px-3.5 py-2 text-[13px] font-medium',
+    md: 'px-4 py-2.5 text-[13.5px] font-semibold',
+  }[props.size],
   {
     primary: 'bg-accent text-accent-contrast hover:brightness-110',
     secondary: 'border border-card text-text-2 hover:text-text',

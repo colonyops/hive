@@ -197,12 +197,10 @@ const TEMPLATE_FIELDS = [
 ]
 
 // The settings pages' vocabulary: SettingsSection's boxed card, drawn here so
-// a list can end in its own action row; the small outlined button a row
-// carries; the quiet icon button beside it; and the accent row a card ends
-// with, which the card's hairlines separate from the list above it.
+// a list can end in its own action row; the quiet icon button a row carries;
+// and the accent row a card ends with, which the card's hairlines separate
+// from the list above it.
 const listCardClass = 'divide-y divide-row overflow-hidden rounded-[11px] border border-card bg-raised'
-const inlineButtonClass =
-  'flex shrink-0 cursor-pointer items-center gap-1.5 rounded-[7px] border border-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50'
 const iconButtonClass =
   'flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text disabled:cursor-not-allowed disabled:opacity-40'
 const footerButtonClass =
@@ -1252,25 +1250,27 @@ onMounted(async () => {
 
       <div v-if="!creating" class="flex flex-col gap-1.5">
         <div class="flex items-center gap-2">
-          <button
+          <BaseButton
             v-if="editor.command"
-            type="button"
-            :class="inlineButtonClass"
+            variant="secondary"
+            size="xs"
+            class="shrink-0"
             :disabled="busy"
             data-testid="agent-workspace-editor-open-editor"
             @click="openInEditor"
           >
-            <IconExternalLink class="size-3.5" />Open in {{ editor.title }}
-          </button>
-          <button
-            type="button"
-            :class="inlineButtonClass"
+            <template #icon><IconExternalLink class="size-3.5" /></template>Open in {{ editor.title }}
+          </BaseButton>
+          <BaseButton
+            variant="secondary"
+            size="xs"
+            class="shrink-0"
             :disabled="busy"
             data-testid="agent-workspace-editor-reveal"
             @click="reveal"
           >
-            <IconFolderOpen class="size-3.5" />Show in Finder
-          </button>
+            <template #icon><IconFolderOpen class="size-3.5" /></template>Show in Finder
+          </BaseButton>
         </div>
         <span v-if="!editor.command" class="text-xs text-text-4"
           >Pick a default editor in Settings › General to open this directory in it.</span

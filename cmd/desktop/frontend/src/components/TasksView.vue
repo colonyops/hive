@@ -24,6 +24,7 @@ import { useTerminalSessions } from '../stores/useTerminalSessions'
 import { errorText } from '../lib/appError'
 import { isEditableTarget } from '../lib/isEditableTarget'
 import { buildTaskTree, filterCounts, TASK_FILTERS, type TaskTreeNode } from '../lib/tasksPresentation'
+import BaseButton from './ui/BaseButton.vue'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -295,24 +296,13 @@ onUnmounted(() => {
 
       <div class="flex-1" />
 
-      <button
-        type="button"
-        class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
-        :disabled="loading"
-        data-testid="tasks-refresh"
-        @click="reload"
-      >
-        <IconRefreshCw class="size-3.5" :class="loading ? 'animate-spin' : ''" />Refresh
-      </button>
+      <BaseButton variant="secondary" size="xs" :busy="loading" data-testid="tasks-refresh" @click="reload">
+        <template #icon><IconRefreshCw class="size-3.5" /></template>Refresh
+      </BaseButton>
 
-      <button
-        type="button"
-        class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text"
-        data-testid="tasks-prune"
-        @click="requestPrune"
-      >
-        <IconEraser class="size-3.5" />Prune
-      </button>
+      <BaseButton variant="secondary" size="xs" data-testid="tasks-prune" @click="requestPrune">
+        <template #icon><IconEraser class="size-3.5" /></template>Prune
+      </BaseButton>
     </div>
 
     <!-- A transient load failure keeps the last-seen items on screen (see

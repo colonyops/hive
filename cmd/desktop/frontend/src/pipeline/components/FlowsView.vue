@@ -25,6 +25,7 @@ import { classify } from '../lib/runStatus'
 import NodePalette from './NodePalette.vue'
 import FlowsCanvas from './FlowsCanvas.vue'
 import PanelResizeHandle from '../../components/ui/PanelResizeHandle.vue'
+import BaseButton from '../../components/ui/BaseButton.vue'
 
 const {
   flows,
@@ -199,15 +200,19 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
 
         <div class="mx-0.5 h-5 w-px bg-row" />
 
-        <button
-          class="flex h-[30px] cursor-pointer items-center gap-1.5 rounded-lg bg-accent px-2.5 text-[12.5px] font-semibold text-accent-contrast disabled:cursor-default disabled:opacity-40"
-          :disabled="!dirty || saving || !activeFlow"
+        <BaseButton
+          size="xs"
+          class="h-[30px]"
+          :busy="saving"
+          :disabled="!dirty || !activeFlow"
           data-testid="deploy-button"
           @click="deploy"
         >
-          <span v-if="dirty" class="size-[7px] rounded-full bg-accent-contrast/50" data-testid="deploy-dirty-dot" />
+          <template #icon>
+            <span v-if="dirty" class="size-[7px] rounded-full bg-accent-contrast/50" data-testid="deploy-dirty-dot" />
+          </template>
           {{ saving ? 'Deploying…' : 'Deploy' }}
-        </button>
+        </BaseButton>
       </div>
 
       <div class="flex min-h-0 flex-1">

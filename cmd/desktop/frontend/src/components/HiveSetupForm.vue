@@ -15,6 +15,7 @@ import type { DraftWorkspace } from '../composables/useHiveSetup'
 import AppCheckbox from './ui/AppCheckbox.vue'
 import AppSelect from './ui/AppSelect.vue'
 import TextInput from './ui/TextInput.vue'
+import BaseButton from './ui/BaseButton.vue'
 
 const props = defineProps<{
   agents: AgentOption[]
@@ -225,15 +226,15 @@ function repoLabel(count: number): string {
           monospace
           class="min-w-0 flex-1 placeholder:font-sans"
         />
-        <button
-          type="button"
-          class="shrink-0 cursor-pointer rounded-[7px] border border-strong px-3 py-2 text-[12.5px] font-medium text-text-2 hover:border-accent hover:text-accent disabled:opacity-55"
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          class="shrink-0"
           :disabled="busy || !typed.trim()"
           data-testid="hive-workspace-path-add"
           @click="submitTyped"
+          >Add</BaseButton
         >
-          Add
-        </button>
       </div>
     </section>
 

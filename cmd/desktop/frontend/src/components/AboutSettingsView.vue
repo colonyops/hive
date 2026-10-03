@@ -34,6 +34,7 @@ import { useAboutSettings } from '../composables/useAboutSettings'
 import { useClipboard } from '../composables/useClipboard'
 import { useReleaseNotes } from '../composables/useReleaseNotes'
 import type { ReleaseNote } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import BaseButton from './ui/BaseButton.vue'
 
 const {
   build,
@@ -205,16 +206,17 @@ onMounted(async () => {
             {{ checkedLabel }}
           </p>
         </div>
-        <button
-          type="button"
-          class="flex shrink-0 cursor-pointer items-center gap-1.5 self-start rounded-lg border border-card px-3.5 py-2 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50 @[560px]/pane:self-auto"
-          :disabled="checking"
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          class="shrink-0 self-start @[560px]/pane:self-auto"
+          :busy="checking"
           data-testid="about-check-update"
           @click="checkForUpdates"
         >
-          <IconRefreshCw class="size-3.5" :class="checking ? 'animate-spin' : ''" />
+          <template #icon><IconRefreshCw class="size-3.5" /></template>
           {{ checking ? 'Checking…' : 'Check for updates' }}
-        </button>
+        </BaseButton>
       </div>
 
       <div

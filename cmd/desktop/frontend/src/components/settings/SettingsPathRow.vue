@@ -17,6 +17,7 @@ import IconRotateCcw from '~icons/lucide/rotate-ccw'
 import { useClipboard } from '../../composables/useClipboard'
 import BaseBadge from '../ui/BaseBadge.vue'
 import BaseIconBadge from '../ui/BaseIconBadge.vue'
+import BaseButton from '../ui/BaseButton.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -149,14 +150,15 @@ const iconBtnClass =
         >
           <IconRotateCcw class="size-[15px]" />
         </button>
-        <button
-          type="button"
-          class="ml-1 cursor-pointer rounded-[7px] border border-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text"
+        <BaseButton
+          variant="secondary"
+          size="xs"
+          class="ml-1"
           :data-testid="props.testid ? `${props.testid}-change` : undefined"
           @click="emit('change')"
         >
           Change…
-        </button>
+        </BaseButton>
       </template>
     </div>
   </article>

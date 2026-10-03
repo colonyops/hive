@@ -27,6 +27,7 @@ import { renderGithubMarkdown } from '../lib/githubMarkdown'
 import { externalMarkdownHref } from '../lib/markdownLinks'
 import { cascadeCount, checkpointBody, isCheckpoint, matchesTaskFilter, statusMeta } from '../lib/tasksPresentation'
 import type { TaskComment } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import BaseButton from './ui/BaseButton.vue'
 
 const { detail, items, selectedId, setStatus, remove, select } = useTasks()
 
@@ -357,14 +358,9 @@ const {
         </section>
 
         <div class="mt-6 border-t border-border pt-4">
-          <button
-            type="button"
-            class="flex items-center gap-1.5 rounded-lg border border-severity-error/40 px-3 py-1.5 text-[12px] font-medium text-severity-error hover:bg-severity-error-tint"
-            data-testid="task-delete"
-            @click="openDeleteConfirm"
-          >
-            <IconTrash2 class="size-3.5" />Delete
-          </button>
+          <BaseButton variant="danger-outline" size="xs" data-testid="task-delete" @click="openDeleteConfirm">
+            <template #icon><IconTrash2 class="size-3.5" /></template>Delete
+          </BaseButton>
         </div>
       </div>
     </template>

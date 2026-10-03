@@ -15,6 +15,7 @@ import type { ConnectCard } from '../composables/useGitHubConnection'
 import type { NotificationPermission } from '../composables/useNotificationSettings'
 import type { useHiveSetup } from '../composables/useHiveSetup'
 import { useClipboard } from '../composables/useClipboard'
+import BaseButton from './ui/BaseButton.vue'
 
 const props = defineProps<{
   card: ConnectCard | 'hive' | 'permissions' | 'agent'
@@ -179,9 +180,9 @@ function submit() {
             Your profile will have no sources, so your feed stays empty until you connect an account under Settings ▸
             Integrations.
           </p>
-          <button class="primary-button" data-testid="onboarding-skip-confirm" @click="emit('skipConnect')">
+          <BaseButton class="w-full" data-testid="onboarding-skip-confirm" @click="emit('skipConnect')">
             Continue without GitHub
-          </button>
+          </BaseButton>
           <p class="mt-4 text-xs text-text-4">
             <button class="link-quiet" data-testid="onboarding-skip-back" @click="confirmingSkip = false">
               Back to connecting
@@ -208,9 +209,9 @@ function submit() {
                 repositories.
               </p>
             </div>
-            <button class="primary-button" data-testid="onboarding-hive-continue" @click="emit('finishHive')">
+            <BaseButton class="w-full" data-testid="onboarding-hive-continue" @click="emit('finishHive')">
               Continue
-            </button>
+            </BaseButton>
             <p class="mt-4 text-center text-xs text-text-4">
               You can change any of this later under Settings ▸ Hive CLI.
             </p>
@@ -238,14 +239,15 @@ function submit() {
                 @remove-workspace="hive.removeWorkspace"
               />
             </div>
-            <button
-              class="primary-button"
-              :disabled="busy || !hive.canSave.value"
+            <BaseButton
+              class="w-full"
+              :busy="busy"
+              :disabled="!hive.canSave.value"
               data-testid="onboarding-hive-submit"
               @click="emit('saveHive')"
             >
               {{ busy ? 'Saving…' : 'Save and continue' }}
-            </button>
+            </BaseButton>
             <InlineError
               v-if="error"
               testid="onboarding-hive-error"
@@ -269,13 +271,9 @@ function submit() {
               Notifications are on. Hive will raise a system banner when activity needs you while you are working in
               another app.
             </p>
-            <button
-              class="primary-button"
-              data-testid="onboarding-permissions-finish"
-              @click="emit('finishPermissions')"
-            >
+            <BaseButton class="w-full" data-testid="onboarding-permissions-finish" @click="emit('finishPermissions')">
               Continue
-            </button>
+            </BaseButton>
           </template>
           <template v-else-if="permission === 'denied'">
             <p
@@ -286,27 +284,23 @@ function submit() {
               whenever you like — until then, activity still lands in Activity and as in-app alerts while Hive is
               focused.
             </p>
-            <button
-              class="primary-button"
-              data-testid="onboarding-permissions-finish"
-              @click="emit('finishPermissions')"
-            >
+            <BaseButton class="w-full" data-testid="onboarding-permissions-finish" @click="emit('finishPermissions')">
               Continue
-            </button>
+            </BaseButton>
           </template>
           <template v-else>
             <p class="mb-6 text-[13.5px] leading-relaxed text-text-3">
               Hive can raise a system banner when new feed activity lands or a session finishes while you are working in
               another app. Turn it on so nothing slips by in the background.
             </p>
-            <button
-              class="primary-button"
-              :disabled="busy"
+            <BaseButton
+              class="w-full"
+              :busy="busy"
               data-testid="onboarding-permissions-allow"
               @click="emit('requestPermission')"
             >
               {{ busy ? 'Requesting…' : 'Allow notifications' }}
-            </button>
+            </BaseButton>
             <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
             <p class="mt-4 text-xs leading-relaxed text-text-4">
               Prefer to decide later?
@@ -330,14 +324,9 @@ function submit() {
             Hive comes with a workspace where your coding agent can configure the app for you. It starts with a short
             interview about how you work, then sets up your profiles and feeds. Nothing changes without your say-so.
           </p>
-          <button
-            class="primary-button"
-            :disabled="busy"
-            data-testid="onboarding-agent-start"
-            @click="emit('startAgent')"
-          >
+          <BaseButton class="w-full" :busy="busy" data-testid="onboarding-agent-start" @click="emit('startAgent')">
             {{ busy ? 'Starting…' : 'Start with your agent' }}
-          </button>
+          </BaseButton>
           <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
           <p class="mt-4 text-xs leading-relaxed text-text-4">
             <button class="link-quiet underline" data-testid="onboarding-agent-skip" @click="emit('finishAgent')">
@@ -353,14 +342,9 @@ function submit() {
             Sign in from this device. Hive fills your profile with your open PRs, your assignments, and the
             notifications inbox.
           </p>
-          <button
-            class="primary-button"
-            :disabled="busy"
-            data-testid="onboarding-connect"
-            @click="emit('startDeviceFlow')"
-          >
+          <BaseButton class="w-full" :busy="busy" data-testid="onboarding-connect" @click="emit('startDeviceFlow')">
             Connect GitHub
-          </button>
+          </BaseButton>
           <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
           <p class="mt-4 text-xs text-text-4">
             <button class="link-quiet" data-testid="onboarding-use-token" @click="emit('useTokenInstead')">
@@ -384,9 +368,9 @@ function submit() {
             <span class="size-1.5 rounded-full bg-accent [animation:hivePulse_1.6s_ease-in-out_infinite]" />
             Waiting for authorization…
           </div>
-          <button class="primary-button" data-testid="onboarding-open-verification" @click="openVerification">
+          <BaseButton class="w-full" data-testid="onboarding-open-verification" @click="openVerification">
             Open github.com/login/device ↗
-          </button>
+          </BaseButton>
           <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
           <p class="mt-4 text-xs text-text-4">
             <button class="link-quiet" data-testid="onboarding-copy-code" @click="copyCode">
@@ -415,14 +399,15 @@ function submit() {
             monospace
             class="mb-3"
           />
-          <button
-            class="primary-button"
-            :disabled="busy || !tokenInput.trim()"
+          <BaseButton
+            class="w-full"
+            :busy="busy"
+            :disabled="!tokenInput.trim()"
             data-testid="onboarding-token-submit"
             @click="submit"
           >
             Save token
-          </button>
+          </BaseButton>
           <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
           <p class="mt-4 text-xs text-text-4">
             <button class="link-quiet" data-testid="onboarding-back" @click="emit('backToStart')">
@@ -444,24 +429,6 @@ function submit() {
 </template>
 
 <style scoped>
-.primary-button {
-  width: 100%;
-  border-radius: 9px;
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  padding: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: filter 0.12s ease;
-}
-.primary-button:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-.primary-button:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
 .link-quiet {
   color: inherit;
   cursor: pointer;

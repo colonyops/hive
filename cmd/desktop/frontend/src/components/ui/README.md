@@ -25,7 +25,7 @@ the table.
 
 | Block                | Use it for                                                                                                    | Key props                                                                                                                                                                                                                 |
 | -------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BaseButton`         | Every button with a label.                                                                                    | `variant` (`primary`, `secondary`, `danger`, `danger-outline`, `ghost`), `size` (`sm`, `md`), `busy` (disables it and puts a `Spinner` in place of the icon), `disabled`, `type`; `#icon` slot                            |
+| `BaseButton`         | Every button with a label.                                                                                    | `variant` (`primary`, `secondary`, `danger`, `danger-outline`, `ghost`), `size` (`xs`, `sm`, `md`), `busy` (disables it and puts a `Spinner` in place of the icon), `disabled`, `type`; `#icon` slot                      |
 | `BaseModal`          | A centered dialog.                                                                                            | `title`, `icon`, `tone`, `width`, `ariaRole`, `busy`, `closeOnBackdrop`, `closeOnEscape`, `testid`; emits `close`; `#footer`, `#header-actions`                                                                           |
 | `DrawerSheet`        | A side sheet (editors, integration setup). Resizable unless `width` is set.                                   | `ariaLabel`, `testid`, `width`, `storageKey`, `closeOnEscape`, `closeOnBackdrop`, `trapFocus`, `returnFocusTo`; emits `close`; `#header`, `#footer`                                                                       |
 | `ConfirmationDialog` | A modal "are you sure" with optional detail rows.                                                             | `title`, `description`, `details`, `confirmLabel`, `busy`, `error`, `testid`; emits `confirm`, `cancel`                                                                                                                   |
@@ -107,6 +107,7 @@ A labelled button is a `BaseButton`. An icon-only button may be a plain
 
 `busy` is for the button whose action is running: it draws the spinner. A
 Cancel beside it that must not fire meanwhile takes `disabled`, not `busy`.
+`xs` is the compact button of a toolbar or a settings row.
 
 ### Form fields are `FormField` plus `TextInput`
 

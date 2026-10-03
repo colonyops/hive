@@ -115,12 +115,7 @@ function requestDelete(launcher: Launcher): void {
         </div>
         <template #actions>
           <div class="flex w-full items-center justify-end gap-2 @[600px]/pane:w-auto @[600px]/pane:shrink-0">
-            <button
-              class="rounded-[7px] border border-card px-3.5 py-1.5 text-[12.5px] text-text-2 hover:border-strong hover:text-text"
-              @click="edit(launcher, $event)"
-            >
-              Edit
-            </button>
+            <BaseButton variant="secondary" size="xs" @click="edit(launcher, $event)">Edit</BaseButton>
             <button
               class="flex size-[34px] items-center justify-center rounded-[7px] border border-card text-text-3 hover:border-severity-error-border hover:text-severity-error"
               aria-label="Delete"

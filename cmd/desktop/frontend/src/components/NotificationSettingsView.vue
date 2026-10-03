@@ -8,6 +8,7 @@ import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import { useNotificationSettings, type NotificationDelivery } from '../composables/useNotificationSettings'
+import BaseButton from './ui/BaseButton.vue'
 
 const {
   notificationsEnabled,
@@ -125,16 +126,17 @@ onMounted(() => {
           <BaseBadge :tone="permissionTone" variant="pill" class="px-2.5 py-1 text-[11px] font-semibold">
             <span data-testid="notification-permission-status">{{ permissionLabel }}</span>
           </BaseBadge>
-          <button
+          <BaseButton
             v-if="permission === 'not-requested'"
-            type="button"
-            class="shrink-0 cursor-pointer rounded-[7px] border border-card px-3 py-1.5 text-[12.5px] font-medium text-text-2 hover:border-strong hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
-            :disabled="requestingPermission"
+            variant="secondary"
+            size="xs"
+            class="shrink-0"
+            :busy="requestingPermission"
             data-testid="notification-permission-request"
             @click="requestPermission"
           >
             {{ requestingPermission ? 'Requesting…' : 'Allow' }}
-          </button>
+          </BaseButton>
         </div>
       </SettingsRow>
       <div
