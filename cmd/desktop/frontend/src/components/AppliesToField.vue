@@ -7,6 +7,7 @@
 import { computed, ref } from 'vue'
 import IconX from '~icons/lucide/x'
 import IconCornerDownLeft from '~icons/lucide/corner-down-left'
+import { useListKeyboardNav } from '../composables/useListKeyboardNav'
 
 const props = defineProps<{ modelValue: string[] | null; knownTypes: string[] }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string[]] }>()
@@ -58,15 +59,11 @@ function onInput(): void {
   open.value = true
   active.value = 0
 }
+const nav = useListKeyboardNav({ active, count: () => suggestions.value.length, wrap: false })
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'ArrowDown') {
-    event.preventDefault()
-    open.value = true
-    active.value = Math.min(active.value + 1, suggestions.value.length - 1)
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault()
-    active.value = Math.max(active.value - 1, 0)
-  } else if (event.key === 'Enter' || event.key === ',') {
+  if (event.key === 'ArrowDown') open.value = true
+  if (nav.onKeydown(event)) return
+  if (event.key === 'Enter' || event.key === ',') {
     event.preventDefault()
     const pick = open.value ? suggestions.value[active.value] : undefined
     add(pick)

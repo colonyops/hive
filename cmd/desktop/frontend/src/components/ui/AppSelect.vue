@@ -10,6 +10,7 @@ import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconSearch from '~icons/lucide/search'
 import { useAnchoredPopover } from '../../composables/useAnchoredPopover'
+import { useListKeyboardNav } from '../../composables/useListKeyboardNav'
 import { seedRef } from '../../lib/seedRef'
 
 export interface AppSelectOption {
@@ -108,21 +109,16 @@ function optionClass(option: AppSelectOption, index: number): string[] {
   ]
 }
 
-// Keep the active index in range as the filtered list shrinks/grows.
-watch(visible, (options) => {
-  if (active.value >= options.length) active.value = Math.max(0, options.length - 1)
+// The list scrolls past its max height (the icon picker is 30+ rows), so the
+// walk keeps the active row on screen.
+const nav = useListKeyboardNav({
+  active,
+  count: () => visible.value.length,
+  open: () => open.value,
+  disabled: (index) => !!visible.value[index]?.disabled,
+  homeEnd: () => !props.editable,
+  row: (index) => list.value?.children[index]?.firstElementChild,
 })
-
-/** The list scrolls past its max height (the icon picker is 30+ rows), so keep the active row on screen. */
-function revealActive(): void {
-  if (!open.value) return
-  void nextTick(() =>
-    (list.value?.children[active.value]?.firstElementChild as HTMLElement | undefined)?.scrollIntoView?.({
-      block: 'nearest',
-    }),
-  )
-}
-watch(active, revealActive)
 
 function firstEnabled(): number {
   const index = visible.value.findIndex((option) => !option.disabled)
@@ -137,7 +133,6 @@ function openList(): void {
   const current = visible.value.findIndex((option) => option.value === props.modelValue)
   active.value = current === -1 ? firstEnabled() : current
   measure()
-  revealActive()
   void nextTick(() => {
     measure() // now that the list has rendered and its natural width is known
     if (props.searchable) searchInput.value?.focus()
@@ -192,32 +187,6 @@ function onEditableInput(event: Event): void {
   measure()
 }
 
-/** Walk to the next enabled option, wrapping; a fully disabled list leaves `active` alone. */
-function step(delta: number): void {
-  const options = visible.value
-  if (!options.length) return
-  let index = active.value
-  for (let n = 0; n < options.length; n++) {
-    index = (index + delta + options.length) % options.length
-    if (!options[index].disabled) {
-      active.value = index
-      return
-    }
-  }
-}
-
-/** Home/End land on the outermost enabled option, not on a disabled edge row. */
-function jump(edge: 'start' | 'end'): void {
-  const options = visible.value
-  const delta = edge === 'start' ? 1 : -1
-  for (let index = edge === 'start' ? 0 : options.length - 1; index >= 0 && index < options.length; index += delta) {
-    if (!options[index].disabled) {
-      active.value = index
-      return
-    }
-  }
-}
-
 /** Shared by the trigger (closed list) and the search box (open list). */
 function onKeydown(event: KeyboardEvent): void {
   if (!open.value) {
@@ -234,22 +203,11 @@ function onKeydown(event: KeyboardEvent): void {
     }
     return
   }
+  if (nav.onKeydown(event)) return
   if (event.key === 'Escape') {
     event.preventDefault()
     event.stopPropagation()
     close()
-  } else if (event.key === 'ArrowDown') {
-    event.preventDefault()
-    step(1)
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault()
-    step(-1)
-  } else if (event.key === 'Home' && !props.editable) {
-    event.preventDefault()
-    jump('start')
-  } else if (event.key === 'End' && !props.editable) {
-    event.preventDefault()
-    jump('end')
   } else if (event.key === 'Enter') {
     event.preventDefault()
     const option = visible.value[active.value]

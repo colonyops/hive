@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, shallowRef, watch } from 'vue'
 import { onClickOutside, useEventListener } from '@vueuse/core'
 import IconCheck from '~icons/lucide/check'
+import IconChevronRight from '~icons/lucide/chevron-right'
+import IconSearch from '~icons/lucide/search'
 import AppIcon from '../AppIcon.vue'
 import { useEscapeToClose } from '../../composables/useEscapeToClose'
-import type { MenuEntry } from '../../types/menu'
+import type { MenuEntry, MenuSearch } from '../../types/menu'
+import EmptyState from './EmptyState.vue'
 import Kbd from './Kbd.vue'
 
 // The shared dropdown menu. Owns the chrome (panel, entries, separators,
@@ -26,12 +29,38 @@ const props = defineProps<{
   anchor?: HTMLElement | null
   ignore?: (HTMLElement | null)[]
   testid?: string
+  /** A filter box over the entries. */
+  search?: MenuSearch
+  /** Set on the panel a submenu entry opens: it hangs off its entry's left side. */
+  nested?: boolean
 }>()
 const emit = defineEmits<{ select: [id: string]; close: [] }>()
 
 const root = ref<HTMLElement | null>(null)
 onClickOutside(root, () => emit('close'), { ignore: () => props.ignore ?? [] })
 useEscapeToClose(() => emit('close'))
+
+const query = ref('')
+const searchInput = ref<HTMLInputElement | null>(null)
+const shown = computed(() => {
+  const q = query.value.trim().toLowerCase()
+  if (!props.search || !q) return props.entries
+  return props.entries.filter((entry) => entry.kind === 'action' && entry.label.toLowerCase().includes(q))
+})
+onMounted(() => searchInput.value?.focus())
+
+// One submenu open at a time. Its own Escape closes only it (the Escape stack
+// fires the topmost caller), and focus goes back to the entry that opened it.
+const openSubmenu = ref('')
+const submenuToggle = shallowRef<HTMLElement | null>(null)
+function toggleSubmenu(id: string, event: MouseEvent): void {
+  submenuToggle.value = event.currentTarget as HTMLElement
+  openSubmenu.value = openSubmenu.value === id ? '' : id
+}
+function closeSubmenu(): void {
+  openSubmenu.value = ''
+  void nextTick(() => submenuToggle.value?.focus())
+}
 
 // ── Anchored (teleported) placement ──────────────────────────────────────
 const ANCHOR_GAP = 5
@@ -79,41 +108,85 @@ useEventListener(anchoredWindow, 'resize', measure)
     <div
       ref="root"
       class="app-menu"
-      :class="{ flip: !anchor && flip }"
+      :class="{ flip: !anchor && flip, 'app-menu-nested': nested, 'app-menu-searchable': search }"
       :style="anchor ? anchoredStyle : width ? { width } : undefined"
       role="menu"
       :data-testid="testid"
     >
-      <template v-for="(entry, index) in entries" :key="index">
-        <div v-if="entry.kind === 'separator'" class="app-menu-sep" />
-        <div v-else-if="entry.kind === 'label'" class="app-menu-label">{{ entry.text }}</div>
-        <button
-          v-else
-          class="app-menu-entry"
-          :role="entry.checked === undefined ? 'menuitem' : 'menuitemcheckbox'"
-          :aria-checked="entry.checked"
-          :disabled="entry.disabled"
-          :data-testid="entry.testid"
-          @click="emit('select', entry.id)"
-        >
-          <component
-            :is="entry.icon"
-            v-if="entry.icon"
-            class="size-3.5 shrink-0"
-            :style="entry.iconColor ? { color: entry.iconColor } : undefined"
-          />
-          <AppIcon
-            v-else-if="entry.iconName"
-            :name="entry.iconName"
-            class="size-3.5 shrink-0"
-            :style="entry.iconColor ? { color: entry.iconColor } : undefined"
-          />
-          <IconCheck v-else-if="entry.checked" class="size-3.5 shrink-0 text-accent" />
-          <span v-else-if="entry.checked === false" class="size-3.5 shrink-0" aria-hidden="true" />
-          <span class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
-          <Kbd v-if="entry.kbd" class="ml-auto pl-2 text-[10.5px] text-text-4">{{ entry.kbd }}</Kbd>
-        </button>
-      </template>
+      <label v-if="search" class="flex shrink-0 items-center gap-2 border-b border-row px-2.5 py-2">
+        <IconSearch class="size-3.5 shrink-0 text-text-4" />
+        <input
+          ref="searchInput"
+          v-model="query"
+          type="text"
+          :placeholder="`${search.label}…`"
+          :aria-label="search.label"
+          class="w-0 min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-4"
+          :data-testid="search.testid"
+        />
+      </label>
+      <div :class="{ 'hive-scroll app-menu-scroll': search }">
+        <template v-for="(entry, index) in shown" :key="index">
+          <div v-if="entry.kind === 'separator'" class="app-menu-sep" />
+          <div v-else-if="entry.kind === 'label'" class="app-menu-label">{{ entry.text }}</div>
+          <div v-else-if="entry.kind === 'submenu'" class="relative">
+            <button
+              class="app-menu-entry"
+              role="menuitem"
+              aria-haspopup="menu"
+              :aria-expanded="openSubmenu === entry.id"
+              :data-testid="entry.testid"
+              @click="toggleSubmenu(entry.id, $event)"
+            >
+              <component :is="entry.icon" v-if="entry.icon" class="size-3.5 shrink-0" />
+              <span class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
+              <IconChevronRight class="size-3.5 shrink-0 text-text-4" />
+            </button>
+            <AppMenu
+              v-if="openSubmenu === entry.id"
+              nested
+              :entries="entry.entries"
+              :search="entry.search"
+              :ignore="[submenuToggle]"
+              :testid="entry.panelTestid"
+              @select="emit('select', $event)"
+              @close="closeSubmenu"
+            />
+          </div>
+          <button
+            v-else
+            class="app-menu-entry"
+            :role="entry.checked === undefined ? 'menuitem' : 'menuitemcheckbox'"
+            :aria-checked="entry.checked"
+            :disabled="entry.disabled"
+            :data-testid="entry.testid"
+            @click="emit('select', entry.id)"
+          >
+            <component
+              :is="entry.icon"
+              v-if="entry.icon"
+              class="size-3.5 shrink-0"
+              :style="entry.iconColor ? { color: entry.iconColor } : undefined"
+            />
+            <AppIcon
+              v-else-if="entry.iconName"
+              :name="entry.iconName"
+              class="size-3.5 shrink-0"
+              :style="entry.iconColor ? { color: entry.iconColor } : undefined"
+            />
+            <IconCheck v-else-if="entry.checked" class="size-3.5 shrink-0 text-accent" />
+            <span v-else-if="entry.checked === false" class="size-3.5 shrink-0" aria-hidden="true" />
+            <span class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
+            <Kbd v-if="entry.kbd" class="ml-auto pl-2 text-[10.5px] text-text-4">{{ entry.kbd }}</Kbd>
+          </button>
+        </template>
+        <EmptyState
+          v-if="search && !shown.length"
+          class="px-3"
+          message="No matches"
+          :data-testid="testid ? `${testid}-empty` : undefined"
+        />
+      </div>
     </div>
   </Teleport>
 </template>
@@ -134,6 +207,22 @@ useEventListener(anchoredWindow, 'resize', measure)
 .app-menu.flip {
   top: auto;
   bottom: calc(100% + 5px);
+}
+.app-menu-nested {
+  top: -5px;
+  right: calc(100% + 7px);
+}
+.app-menu-searchable {
+  display: flex;
+  max-height: 16rem;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+.app-menu-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 5px;
 }
 .app-menu-entry {
   display: flex;

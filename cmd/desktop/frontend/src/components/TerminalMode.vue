@@ -10,10 +10,9 @@ import {
   shallowRef,
   watch,
   watchEffect,
-  type Component,
 } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useResizeObserver, useStorage } from '@vueuse/core'
+import { useStorage } from '@vueuse/core'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconChevronDown from '~icons/lucide/chevron-down'
@@ -21,21 +20,16 @@ import IconChevronUp from '~icons/lucide/chevron-up'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconChevronsDownUp from '~icons/lucide/chevrons-down-up'
 import IconChevronsUpDown from '~icons/lucide/chevrons-up-down'
-import IconCircleAlert from '~icons/lucide/circle-alert'
-import IconCircleCheck from '~icons/lucide/circle-check'
-import IconCircleOff from '~icons/lucide/circle-off'
 import IconEllipsisVertical from '~icons/lucide/ellipsis-vertical'
 import IconInfo from '~icons/lucide/info'
 import IconListFilter from '~icons/lucide/list-filter'
 import IconListTodo from '~icons/lucide/list-todo'
-import IconLoaderCircle from '~icons/lucide/loader-circle'
 import IconPencil from '~icons/lucide/pencil'
 import IconPinOff from '~icons/lucide/pin-off'
 import IconPlay from '~icons/lucide/play'
 import IconPlus from '~icons/lucide/plus'
 import IconRecycle from '~icons/lucide/recycle'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
-import IconRotateCw from '~icons/lucide/rotate-cw'
 import IconSearch from '~icons/lucide/search'
 import IconSquare from '~icons/lucide/square'
 import IconTerminal from '~icons/lucide/terminal'
@@ -49,7 +43,8 @@ import ConfirmationHost from './ui/ConfirmationHost.vue'
 import NewWindowMenu from './NewWindowMenu.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
-import SearchField from './ui/SearchField.vue'
+import SidebarToolbar from './sidebar/SidebarToolbar.vue'
+import TreeRail from './ui/TreeRail.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
 import RenameDialog from './ui/RenameDialog.vue'
 import SessionRowMenu from './SessionRowMenu.vue'
@@ -76,6 +71,11 @@ import { useTerminalWindows, type TerminalWindowTab, type UseTerminalWindows } f
 import { activePaneOf } from '../lib/terminalLayout'
 import { useNewSession } from '../composables/useNewSession'
 import { useResizablePanel } from '../composables/useResizablePanel'
+import { dropClass, dropEdge, useDragReorder } from '../composables/useDragReorder'
+import { useSelectionRail } from '../composables/useSelectionRail'
+import { useTreeExpansion } from '../composables/useTreeExpansion'
+import { activityIndicator, type StatusIndicator } from '../lib/agentActivity'
+import { moveId, type OrderDropTarget } from '../lib/listOrder'
 import { useEditorSettings } from '../composables/useEditorSettings'
 import { useSessionActions } from '../composables/useSessionActions'
 import { useSessionStatus } from '../composables/useSessionStatus'
@@ -91,10 +91,7 @@ import {
   RevealSession,
   SessionLaunchOptions,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
-import type {
-  SessionStatus,
-  SessionWindowStatus,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type { SessionStatus } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import type { MenuEntry } from '../types/menu'
 import Kbd from './ui/Kbd.vue'
 import EmptyState from './ui/EmptyState.vue'
@@ -405,35 +402,15 @@ const {
   startPolling: startStatusPolling,
   stopPolling: stopStatusPolling,
 } = useSessionStatuses()
-interface StatusIndicator {
-  icon: Component
-  color: string
-  label: string
-  animated?: boolean
-}
 // Idle is carried by the row's own name rather than a glyph — undefined until
 // the first status poll lands, so a row is not greyed before its state is known.
 const sessionIdle = computed<Record<string, boolean>>(() =>
   Object.fromEntries(Object.entries(sessionStatuses.value).map(([id, status]) => [id, !status.running])),
 )
 
-function windowActivityIndicator(status: SessionWindowStatus): StatusIndicator {
-  const tool = status.tool || 'Agent'
-  switch (status.status) {
-    case 'active':
-      return { icon: IconLoaderCircle, color: 'text-severity-success', label: `${tool} is working`, animated: true }
-    case 'approval':
-      return { icon: IconCircleAlert, color: 'text-severity-warning', label: `${tool} needs approval` }
-    case 'ready':
-      return { icon: IconCircleCheck, color: 'text-text-2', label: `${tool} is ready` }
-    default:
-      return { icon: IconCircleOff, color: 'text-text-4', label: `${tool} status unavailable` }
-  }
-}
-
 function windowIndicator(sessionID: string, windowID: string): StatusIndicator | null {
   const status = sessionStatuses.value[sessionID]?.windows?.find((window) => window.windowId === windowID)
-  return status ? windowActivityIndicator(status) : null
+  return status ? activityIndicator(status.status, status.tool) : null
 }
 
 // The configured actions from actions.yml that declare a terminal target. They
@@ -498,8 +475,6 @@ const rowMenuToggles = new Map<string, HTMLElement>()
 const openWindowMenu = ref('')
 const windowMenuFlip = ref(false)
 const windowMenuToggles = new Map<string, HTMLElement>()
-const sidebarMenuOpen = ref(false)
-const sidebarMenuToggle = ref<HTMLElement | null>(null)
 const sidebarMenuEntries = computed<MenuEntry[]>(() => [
   {
     kind: 'action',
@@ -620,7 +595,6 @@ function runWindowAction(row: TerminalSessionRow, windowId: string, entryID: str
 }
 
 function onSidebarMenuSelect(id: string): void {
-  sidebarMenuOpen.value = false
   if (id === 'running-only') runningOnly.value = !runningOnly.value
   else if (id === 'collapse-all' || id === 'expand-all') setAllGroups(id === 'expand-all')
   else if (id === 'prune' && prunableCount.value) requestPrune(prunableCount.value)
@@ -665,33 +639,21 @@ function groupRunning(group: TerminalSessionGroup): boolean {
   return group.sessions.some(rowRunning)
 }
 
-// Expand/collapse is transient view state, not configuration — localStorage,
-// same as the hub sidebar's folder collapse. A repo the user has never toggled
-// has no entry and takes the default, which is open only where something is
-// live: a machine's worth of dormant repos would otherwise bury the one being
-// worked in. The attached repo counts as live on its own, because statuses
-// arrive a poll after the tree does and the repo on screen must not wait.
-const groupExpansion = useStorage<Record<string, boolean>>('hive.terminal.sidebar.groups', {})
-function groupExpanded(group: TerminalSessionGroup): boolean {
-  // A filter overrides the stored state: a group is only in the list because
-  // something in it matched, and a collapsed one would hide the match.
-  if (sessionFilter.value.trim()) return true
-  // Both pinned sections default open — free space nobody can see is not free
-  // space. For the scratch section the row is its heading, so this is what its
-  // chevron folds: the tabs under it, not the row itself.
-  if (group.kind !== 'repo') return groupExpansion.value[group.key] ?? true
-  return groupExpansion.value[group.key] ?? (groupAttached(group) || groupRunning(group))
-}
-function toggleGroup(group: TerminalSessionGroup): void {
-  groupExpansion.value[group.key] = !groupExpanded(group)
-}
-
-// Every group, not the ones the tree happens to be drawing: a bulk fold that
-// the narrowed-away groups escaped would spring back open as a surprise the
-// moment the scope or the query came off.
-function setAllGroups(expanded: boolean): void {
-  for (const group of sessionGroups.value) groupExpansion.value[group.key] = expanded
-}
+// A repo defaults open only where something is live: a machine's worth of
+// dormant repos would otherwise bury the one being worked in. The attached repo
+// counts as live on its own, because statuses arrive a poll after the tree does
+// and the repo on screen must not wait. Both pinned sections default open; for
+// the scratch section the row is its heading, so its chevron folds the tabs.
+const {
+  expanded: groupExpanded,
+  toggle: toggleGroup,
+  setAll: setAllGroups,
+} = useTreeExpansion<TerminalSessionGroup>('hive.terminal.sidebar.groups', {
+  key: (group) => group.key,
+  defaultOpen: (group) => group.kind !== 'repo' || groupAttached(group) || groupRunning(group),
+  filtering: () => !!sessionFilter.value.trim(),
+  nodes: () => sessionGroups.value,
+})
 
 // Windows are only known live through an attach, so every other active
 // session's come from a one-shot listing per session — fetched only while the
@@ -1379,69 +1341,20 @@ onBeforeUnmount(() => setTerminalTreeHandles(null))
 // group's own height animates, and a collapsed group contributes nothing — so
 // there is no arithmetic over the list that stays true.
 const treeContent = ref<HTMLElement | null>(null)
-interface SelectionRail {
-  y: number
-  height: number
-  shown: boolean
-}
-const sessionRail = ref<SelectionRail>({ y: 0, height: 0, shown: false })
-const windowRail = ref<SelectionRail>({ y: 0, height: 0, shown: false })
-
-// A rail with no row to sit on fades out where it stands rather than resetting,
-// so it does not travel from a stale origin the next time one appears.
-function measureRail(rail: SelectionRail, selector: string): SelectionRail {
-  const content = treeContent.value
-  const row = content?.querySelector<HTMLElement>(selector)
-  if (!content || !row) return { ...rail, shown: false }
-  return {
-    y: row.getBoundingClientRect().top - content.getBoundingClientRect().top,
-    height: row.offsetHeight,
-    shown: true,
-  }
-}
-
-function measureRails(): void {
-  sessionRail.value = measureRail(sessionRail.value, '[data-testid="terminal-session-row"][data-attached="true"]')
-  windowRail.value = measureRail(windowRail.value, '[data-testid="terminal-window-row"][data-active="true"]')
-}
-
-// Rows move under FLIP and inside a panel whose height is animating, so one
-// measurement lands mid-flight and sticks. Re-measure per frame until the tree
-// has stopped moving; a later trigger extends the window rather than stacking
-// a second loop on it.
-let railSettleUntil = 0
-let railSettleFrame = 0
-function settleRails(): void {
-  measureRails() // land on the same frame as the click; the loop only corrects
-  // The loop exists to correct a measurement taken while rows are still moving.
-  // Nothing moves during the first fill — motion is suppressed for it — so
-  // there is nothing to chase, and running it would force layout every frame
-  // for as long as the tree took to fill in.
-  if (!treeSettled.value) return
-  railSettleUntil = performance.now() + 260
-  if (railSettleFrame) return
-  const step = (): void => {
-    measureRails()
-    railSettleFrame = performance.now() < railSettleUntil ? requestAnimationFrame(step) : 0
-  }
-  railSettleFrame = requestAnimationFrame(step)
-}
-
-// A resize of the tree's content is every layout change that can move a row —
-// expand/collapse, a session arriving, a window subtree filling in — and it
-// fires per frame while a height animates. Selection can also change without
-// moving anything, which is what the watch below covers.
-useResizeObserver(treeContent, () => settleRails())
-
-watch(
-  () => [activeSlug.value, current.value?.activeWindowId.value, props.sidebarCollapsed] as const,
-  () => void nextTick(settleRails),
+// Rows move under FLIP and inside a panel whose height is animating, so the
+// rails settle over a few frames. Nothing moves during the first fill (motion
+// is suppressed for it), so they only settle once the tree has.
+const { rails, update: settleRails } = useSelectionRail(
+  treeContent,
+  [
+    '[data-testid="terminal-session-row"][data-attached="true"]',
+    '[data-testid="terminal-window-row"][data-active="true"]',
+  ],
+  {
+    sources: [activeSlug, () => current.value?.activeWindowId.value, () => props.sidebarCollapsed],
+    settle: () => treeSettled.value,
+  },
 )
-
-onBeforeUnmount(() => {
-  if (railSettleFrame) cancelAnimationFrame(railSettleFrame)
-  railSettleFrame = 0
-})
 
 // Expand/collapse animates the measured height — the hooks only pin the start
 // and end values, and the .tree-expand-* classes carry the (fast) transition.
@@ -1933,82 +1846,35 @@ function commitRename(): void {
 
 // ── window reordering ───────────────────────────────────────────────────────
 // A window carries the slug it came from and can only land back in that
-// session. Native HTML5 DnD, the same shape the hub sidebar uses; the dragged
-// window is tracked here because dataTransfer cannot be read during dragover,
-// and the hovered edge drives the marker.
-const WINDOW_DRAG_MIME = 'application/x-hive-terminal-window'
-const draggingWindow = ref<{ slug: string; windowId: string } | null>(null)
-const dropTarget = ref<{ slug: string; windowId: string; after: boolean } | null>(null)
+// session. It is only movable while its session holds a control client, which
+// is exactly when the tree renders its live tabs, so a pooled session is the
+// whole precondition.
+const windowDrag = useDragReorder<{ slug: string; windowId: string }, OrderDropTarget & { windowId: string }>({
+  mime: 'application/x-hive-terminal-window',
+  payload: (dragged) => dragged.windowId,
+  onDrop: (dragged, target) => {
+    const session = pool.get(dragged.slug)
+    const order = moveId(session?.tabs.value.map((tab) => tab.windowId) ?? [], dragged.windowId, {
+      id: target.windowId,
+      edge: target.edge,
+    })
+    if (session && order) void session.moveWindow(dragged.windowId, order.indexOf(dragged.windowId))
+  },
+})
 
-function onWindowDragStart(event: DragEvent, slug: string, windowId: string): void {
-  draggingWindow.value = { slug, windowId }
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData(WINDOW_DRAG_MIME, windowId)
-  }
+const { target: windowDropTarget } = windowDrag
+
+// Both edges of the dragged window name the gap it already fills, so neither
+// marks a move.
+function onWindowDragOver(event: DragEvent, row: TerminalSessionRow, windowId: string): void {
+  const dragged = windowDrag.dragging.value
+  const movable = dragged?.slug === row.slug && dragged.windowId !== windowId
+  windowDrag.over(event, movable ? { id: windowMenuKey(row, windowId), windowId, edge: dropEdge(event) } : null)
 }
 
-function onWindowDragOver(event: DragEvent, slug: string, windowId: string): void {
-  const dragged = draggingWindow.value
-  if (!dragged) return
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
-  // Order is a property of one session, and both edges of the dragged window
-  // name the gap it already fills — neither is a move, so neither marks one.
-  // Without the second half the drop reads as an insertion past every other
-  // window and sends it to the end.
-  if (dragged.slug !== slug || dragged.windowId === windowId) {
-    dropTarget.value = null
-    return
-  }
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  dropTarget.value = { slug, windowId, after: event.clientY > rect.top + rect.height / 2 }
-}
-
-function onWindowDrop(): void {
-  const target = dropTarget.value
-  const dragged = draggingWindow.value
-  onWindowDragEnd()
-  if (!target || !dragged) return
-  const session = pool.get(dragged.slug)
-  if (!session) return
-  void session.moveWindow(dragged.windowId, dropPosition(windowOrder(dragged.slug), dragged.windowId, target))
-}
-
-function onWindowDragEnd(): void {
-  draggingWindow.value = null
-  dropTarget.value = null
-}
-
-// The order a drag reorders against. A window is only movable while its session
-// holds a control client, which is exactly when the tree renders its live tabs
-// rather than a cached listing — so a pooled session is the whole precondition.
-function windowOrder(slug: string): string[] {
-  return pool.get(slug)?.tabs.value.map((tab) => tab.windowId) ?? []
-}
-
-// The drop edge names a gap between windows; the API takes the index the moved
-// window ends up at, which is that gap once the window is out of the list.
-function dropPosition(order: string[], windowId: string, target: { windowId: string; after: boolean }): number {
-  const rest = order.filter((id) => id !== windowId)
-  const anchor = rest.indexOf(target.windowId)
-  if (anchor < 0) return rest.length
-  return target.after ? anchor + 1 : anchor
-}
-
-// Dimmed where the drag started, marked where the pointer is.
 function draggingWindowRow(slug: string, windowId: string): boolean {
-  const dragged = draggingWindow.value
-  return !!dragged && dragged.slug === slug && dragged.windowId === windowId
-}
-
-function showDropBefore(slug: string, windowId: string): boolean {
-  const target = dropTarget.value
-  return !!target && !target.after && target.slug === slug && target.windowId === windowId
-}
-
-function showDropAfter(slug: string, windowId: string): boolean {
-  const target = dropTarget.value
-  return !!target && target.after && target.slug === slug && target.windowId === windowId
+  const dragged = windowDrag.dragging.value
+  return dragged?.slug === slug && dragged.windowId === windowId
 }
 
 // Entering the mode is an activation, not a mount: the pool, its tmux control
@@ -2082,68 +1948,25 @@ onBeforeUnmount(() => {
         @focusin="terminalTreeFocused = true"
         @focusout="onTreeFocusOut"
       >
-        <div class="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
-          <!-- Flush in the bar rather than a boxed field: the sidebar resizes
-               down to 180px, and a bordered input beside three controls leaves
-               the bar looking like nothing but chrome. -->
-          <SearchField
-            ref="filterInput"
-            v-model="sessionFilter"
-            variant="bar"
-            aria-label="Filter sessions"
-            testid="terminal-sessions-filter"
-            @escape="focusTreeCursor"
-            @keydown.down.prevent="focusTreeCursor"
-            @keydown.enter.prevent="focusTreeCursor"
-          />
-          <!-- The refresh control doubles as the staleness indicator: the
-               cached tree renders instantly, and the spin is what says a
-               revalidation is still in flight. -->
-          <button
-            type="button"
-            class="flex size-6 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text disabled:cursor-default"
-            data-testid="terminal-sessions-refresh"
-            aria-label="Reload sessions"
-            :aria-busy="sessionsLoading"
-            :disabled="sessionsLoading"
-            @click="reloadSessions"
-          >
-            <IconRotateCw class="size-3.5" :class="{ 'animate-spin': sessionsLoading }" />
-          </button>
-          <button
-            type="button"
-            class="flex size-6 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text"
-            data-testid="terminal-new-session"
-            aria-label="New session"
-            title="New session"
-            @click="openNewSession(sessionRepository(activeSlug))"
-          >
-            <IconPlus class="size-3.5" />
-          </button>
-          <!-- List-wide operations; a session's own live on its row. -->
-          <div class="relative flex">
-            <button
-              ref="sidebarMenuToggle"
-              type="button"
-              class="flex size-6 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text"
-              data-testid="terminal-sessions-menu-toggle"
-              aria-label="Session list actions"
-              aria-haspopup="menu"
-              :aria-expanded="sidebarMenuOpen"
-              @click="sidebarMenuOpen = !sidebarMenuOpen"
-            >
-              <IconEllipsisVertical class="size-3.5" />
-            </button>
-            <AppMenu
-              v-if="sidebarMenuOpen"
-              :entries="sidebarMenuEntries"
-              :ignore="[sidebarMenuToggle]"
-              testid="terminal-sessions-menu"
-              @close="sidebarMenuOpen = false"
-              @select="onSidebarMenuSelect"
-            />
-          </div>
-        </div>
+        <SidebarToolbar
+          ref="filterInput"
+          v-model="sessionFilter"
+          filter-label="Filter sessions"
+          reload-label="Reload sessions"
+          new-label="New session"
+          menu-label="Session list actions"
+          :menu-entries="sidebarMenuEntries"
+          :loading="sessionsLoading"
+          testid="terminal-sessions"
+          reload-testid="terminal-sessions-refresh"
+          new-testid="terminal-new-session"
+          @escape="focusTreeCursor"
+          @keydown.down.prevent="focusTreeCursor"
+          @keydown.enter.prevent="focusTreeCursor"
+          @reload="reloadSessions"
+          @new="openNewSession(sessionRepository(activeSlug))"
+          @select="onSidebarMenuSelect"
+        />
         <div
           v-if="runningNote"
           class="flex h-7 shrink-0 items-center gap-2 border-b border-border bg-chip px-3"
@@ -2444,17 +2267,16 @@ onBeforeUnmount(() => {
                               v-for="(win, index) in windowRowsFor(row)"
                               :key="win.windowId"
                               class="window-slot"
-                              :class="{
-                                'opacity-40': draggingWindowRow(row.slug, win.windowId),
-                                'drop-before': showDropBefore(row.slug, win.windowId),
-                                'drop-after': showDropAfter(row.slug, win.windowId),
-                              }"
+                              :class="[
+                                dropClass(windowDropTarget, windowMenuKey(row, win.windowId)),
+                                { 'opacity-40': draggingWindowRow(row.slug, win.windowId) },
+                              ]"
                               :draggable="win.live && renamingId !== win.windowId"
                               data-testid="terminal-window-slot"
-                              @dragstart="onWindowDragStart($event, row.slug, win.windowId)"
-                              @dragover.prevent="onWindowDragOver($event, row.slug, win.windowId)"
-                              @drop.prevent="onWindowDrop"
-                              @dragend="onWindowDragEnd"
+                              @dragstart="windowDrag.start($event, { slug: row.slug, windowId: win.windowId })"
+                              @dragover.prevent="onWindowDragOver($event, row, win.windowId)"
+                              @drop.prevent="windowDrag.drop"
+                              @dragend="windowDrag.end"
                             >
                               <!-- Not a <button>, for the same reason the session
                                    row above is not: its own menu toggle is one. -->
@@ -2586,19 +2408,8 @@ onBeforeUnmount(() => {
             </div>
             <!-- Last, so they paint over the rows: every row and panel is
                  positioned too, and among positioned boxes DOM order decides. -->
-            <div
-              v-for="rail in [
-                { key: 'session', state: sessionRail, testid: 'terminal-session-rail' },
-                { key: 'window', state: windowRail, testid: 'terminal-window-rail' },
-              ]"
-              :key="rail.key"
-              class="tree-rail"
-              :class="{ 'tree-rail-shown': rail.state.shown }"
-              :style="{ transform: `translateY(${rail.state.y}px)`, height: `${rail.state.height}px` }"
-              :data-testid="rail.testid"
-              :data-shown="rail.state.shown"
-              aria-hidden="true"
-            />
+            <TreeRail :rail="rails[0]" data-testid="terminal-session-rail" />
+            <TreeRail :rail="rails[1]" data-testid="terminal-window-rail" />
           </div>
           <!-- Under the tree rather than instead of it: the pinned section is
                drawn whether or not hive has a session to list. -->
@@ -3099,30 +2910,6 @@ onBeforeUnmount(() => {
   color: var(--color-accent);
 }
 
-/* The travelling selection markers. Out of flow, so moving one costs no layout
-   anywhere else, and its height is free to animate between the two row heights.
-   The z-index is load-bearing: rows and panels are positioned boxes as well, so
-   without it a rail is painted over by whichever of them comes after it. */
-.tree-rail {
-  /* Square ends, not rounded: the attached session's row and its active
-     window's are usually adjacent, and two rounded bars stacked pinch the edge
-     at the seam instead of reading as one continuous mark. */
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 1;
-  width: 3px;
-  background: var(--color-accent);
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform 0.2s cubic-bezier(0.2, 0, 0, 1),
-    height 0.2s cubic-bezier(0.2, 0, 0, 1),
-    opacity 0.12s ease;
-}
-.tree-rail-shown {
-  opacity: 1;
-}
 .window-row::before {
   content: '';
   position: absolute;
@@ -3209,8 +2996,7 @@ onBeforeUnmount(() => {
   .tree-leave-active,
   .tree-move,
   .tree-expand-enter-active,
-  .tree-expand-leave-active,
-  .tree-rail {
+  .tree-expand-leave-active {
     transition: none;
   }
 }

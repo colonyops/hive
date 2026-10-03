@@ -31,4 +31,24 @@ export interface MenuActionEntry {
   testid?: string
 }
 
-export type MenuEntry = MenuActionEntry | { kind: 'separator' } | { kind: 'label'; text: string }
+/** An entry that opens a nested menu beside the one it sits in. */
+export interface MenuSubmenuEntry {
+  kind: 'submenu'
+  id: string
+  label: string
+  icon?: Component
+  testid?: string
+  entries: MenuEntry[]
+  /** A filter box over the nested entries, matched against their labels. */
+  search?: MenuSearch
+  /** data-testid of the nested panel; its empty note is `${panelTestid}-empty`. */
+  panelTestid?: string
+}
+
+export interface MenuSearch {
+  /** The box's accessible name; its placeholder adds an ellipsis. */
+  label: string
+  testid?: string
+}
+
+export type MenuEntry = MenuActionEntry | MenuSubmenuEntry | { kind: 'separator' } | { kind: 'label'; text: string }

@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { onClickOutside, useEventListener } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
 import AppMenu from './ui/AppMenu.vue'
 import SearchField from './ui/SearchField.vue'
 import FeedListItem from './FeedListItem.vue'
 import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
-import IconChevronRight from '~icons/lucide/chevron-right'
 import IconCopy from '~icons/lucide/copy'
 import IconEllipsis from '~icons/lucide/ellipsis'
 import IconGitBranch from '~icons/lucide/git-branch'
@@ -24,7 +22,6 @@ import type { ActionView } from '../types/action'
 import type { FeedSort, InboxItem } from '../types/feed'
 import type { MenuEntry } from '../types/menu'
 import Spinner from './ui/Spinner.vue'
-import EmptyState from './ui/EmptyState.vue'
 import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedControl.vue'
 
 // Presentation-only: the store (useFeedState) owns the search text and the
@@ -112,16 +109,81 @@ const itemGroups = computed<{ key: string; label: string | null; items: InboxIte
   }))
 })
 
-const viewMenu = ref<HTMLElement | null>(null)
 const viewMenuOpen = ref(false)
-const authorMenuOpen = ref(false)
-const authorMenuTrigger = ref<HTMLElement | null>(null)
-const authorSearchInput = ref<HTMLInputElement | null>(null)
-const authorQuery = ref('')
-const filteredAuthors = computed(() => {
-  const query = authorQuery.value.trim().toLowerCase()
-  return query ? props.authors.filter((author) => author.toLowerCase().includes(query)) : props.authors
+const viewMenuToggle = ref<HTMLElement | null>(null)
+const authorSubmenu = computed<MenuEntry>(() => ({
+  kind: 'submenu',
+  id: 'author',
+  label: 'Author',
+  icon: IconUserRound,
+  testid: 'view-author-filter',
+  panelTestid: 'view-author-submenu',
+  search: { label: 'Search authors', testid: 'view-author-search' },
+  entries: [
+    { kind: 'action', id: 'author:', label: 'All authors', checked: !props.authorFilter, testid: 'view-author-all' },
+    ...props.authors.map<MenuEntry>((author) => ({
+      kind: 'action',
+      id: `author:${author}`,
+      label: author,
+      checked: author === props.authorFilter,
+      testid: 'view-author-option',
+    })),
+  ],
+}))
+
+const viewMenuEntries = computed<MenuEntry[]>(() => {
+  const entries: MenuEntry[] = [
+    { kind: 'label', text: 'Sort by' },
+    ...sortOptions.map<MenuEntry>((option) => ({
+      kind: 'action',
+      id: `sort:${option.value}`,
+      label: option.label,
+      checked: option.value === props.sort,
+      testid: `view-sort-${option.value}`,
+    })),
+  ]
+  if (props.authors.length || props.authorFilter) {
+    entries.push({ kind: 'separator' }, { kind: 'label', text: 'Filter by' }, authorSubmenu.value)
+  }
+  entries.push(
+    { kind: 'separator' },
+    {
+      kind: 'action',
+      id: 'select-items',
+      label: 'Select items',
+      icon: IconSquareCheckBig,
+      testid: 'view-menu-select-items',
+    },
+  )
+  // Trash has no unread semantics, so it gets no mark-all-read entry at all.
+  if (!props.trash) {
+    entries.push({
+      kind: 'action',
+      id: 'mark-read',
+      label: 'Mark all as read',
+      icon: IconMailCheck,
+      testid: 'view-menu-mark-read',
+    })
+  }
+  entries.push({
+    kind: 'action',
+    id: 'refresh',
+    label: props.refreshing ? 'Refreshing…' : 'Refresh',
+    icon: IconRefreshCw,
+    disabled: props.refreshing,
+    testid: 'view-menu-refresh',
+  })
+  return entries
 })
+function onViewMenuSelect(id: string): void {
+  viewMenuOpen.value = false
+  if (id.startsWith('sort:')) emit('set-sort', id.slice('sort:'.length) as FeedSort)
+  else if (id.startsWith('author:')) emit('update:author-filter', id.slice('author:'.length))
+  else if (id === 'select-items') emit('enter-selection')
+  else if (id === 'mark-read') emit('mark-all-read')
+  else if (id === 'refresh') emit('refresh')
+}
+
 const selectionActionsToggle = ref<HTMLElement | null>(null)
 const selectionActionsOpen = ref(false)
 const selectedItemIDSet = computed(() => new Set(props.selectedItemIds))
@@ -139,54 +201,6 @@ function chooseSelectionAction(actionID: string): void {
   selectionActionsOpen.value = false
   emit('run-selection-action', actionID)
 }
-
-function closeViewMenu(): void {
-  viewMenuOpen.value = false
-  authorMenuOpen.value = false
-  authorQuery.value = ''
-}
-function toggleViewMenu(): void {
-  if (viewMenuOpen.value) closeViewMenu()
-  else viewMenuOpen.value = true
-}
-function openAuthorMenu(): void {
-  authorMenuOpen.value = true
-  authorQuery.value = ''
-  void nextTick(() => authorSearchInput.value?.focus())
-}
-function chooseSort(value: FeedSort): void {
-  emit('set-sort', value)
-  closeViewMenu()
-}
-function chooseAuthor(value: string): void {
-  emit('update:author-filter', value)
-  closeViewMenu()
-}
-function refreshFromMenu(): void {
-  emit('refresh')
-  closeViewMenu()
-}
-// Trash has no unread semantics, so it gets no mark-all-read entry at all.
-function markAllReadFromMenu(): void {
-  emit('mark-all-read')
-  closeViewMenu()
-}
-function enterSelectionFromMenu(): void {
-  emit('enter-selection')
-  closeViewMenu()
-}
-function onDocumentKeydown(event: KeyboardEvent): void {
-  if (!viewMenuOpen.value || event.key !== 'Escape') return
-  if (authorMenuOpen.value) {
-    authorMenuOpen.value = false
-    authorMenuTrigger.value?.focus()
-  } else closeViewMenu()
-}
-
-onClickOutside(viewMenu, () => {
-  if (viewMenuOpen.value) closeViewMenu()
-})
-useEventListener(document, 'keydown', onDocumentKeydown)
 
 // Selected, not just focused: view.focus-search means "start a new search"
 // far more often than "edit the old one" — same call TerminalMode's own
@@ -253,8 +267,9 @@ watch(
           }}<span v-if="option.value === 'unread'" class="font-mono text-[10px] opacity-85">{{ unreadCount }}</span>
         </template>
       </SegmentedControl>
-      <div ref="viewMenu" class="relative shrink-0">
+      <div class="relative shrink-0">
         <button
+          ref="viewMenuToggle"
           type="button"
           class="view-trigger"
           title="Feed options"
@@ -262,144 +277,19 @@ watch(
           data-testid="view-menu-toggle"
           aria-haspopup="menu"
           :aria-expanded="viewMenuOpen"
-          @click="toggleViewMenu"
+          @click="viewMenuOpen = !viewMenuOpen"
         >
           <IconEllipsis class="size-4" />
         </button>
-        <div v-if="viewMenuOpen" class="view-menu" role="menu" data-testid="view-menu">
-          <div class="view-menu-label">Sort by</div>
-          <button
-            v-for="option in sortOptions"
-            :key="option.value"
-            type="button"
-            class="view-menu-item"
-            role="menuitemradio"
-            :aria-checked="option.value === sort"
-            :data-testid="`view-sort-${option.value}`"
-            @click="chooseSort(option.value)"
-          >
-            <IconCheck
-              class="size-3.5"
-              :class="option.value === sort ? 'text-accent' : 'opacity-0'"
-              :stroke-width="3"
-            />
-            <span>{{ option.label }}</span>
-          </button>
-          <template v-if="authors.length || authorFilter">
-            <div class="view-menu-divider" />
-            <div class="view-menu-label">Filter by</div>
-            <div class="relative">
-              <button
-                ref="authorMenuTrigger"
-                type="button"
-                class="view-menu-item"
-                role="menuitem"
-                aria-haspopup="menu"
-                :aria-expanded="authorMenuOpen"
-                data-testid="view-author-filter"
-                @click="openAuthorMenu"
-              >
-                <IconUserRound class="size-3.5 shrink-0 text-text-3" />
-                <span class="flex-1">Author</span>
-                <IconChevronRight class="size-3.5 shrink-0 text-text-4" />
-              </button>
-              <div
-                v-if="authorMenuOpen"
-                class="author-submenu flex max-h-64 flex-col overflow-hidden"
-                role="menu"
-                aria-label="Filter by author"
-                data-testid="view-author-submenu"
-              >
-                <label class="flex shrink-0 items-center gap-2 border-b border-row px-2.5 py-2">
-                  <IconSearch class="size-3.5 shrink-0 text-text-4" />
-                  <input
-                    ref="authorSearchInput"
-                    v-model="authorQuery"
-                    type="text"
-                    placeholder="Search authors…"
-                    aria-label="Search authors"
-                    class="w-0 min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-text-4"
-                    data-testid="view-author-search"
-                  />
-                </label>
-                <div class="hive-scroll min-h-0 overflow-y-auto p-[5px]">
-                  <button
-                    v-if="!authorQuery.trim()"
-                    type="button"
-                    class="view-menu-item"
-                    role="menuitemradio"
-                    :aria-checked="!authorFilter"
-                    data-testid="view-author-all"
-                    @click="chooseAuthor('')"
-                  >
-                    <IconCheck
-                      class="size-3.5 shrink-0"
-                      :class="!authorFilter ? 'text-accent' : 'opacity-0'"
-                      :stroke-width="3"
-                    />
-                    <span>All authors</span>
-                  </button>
-                  <button
-                    v-for="author in filteredAuthors"
-                    :key="author"
-                    type="button"
-                    class="view-menu-item"
-                    role="menuitemradio"
-                    :aria-checked="author === authorFilter"
-                    data-testid="view-author-option"
-                    @click="chooseAuthor(author)"
-                  >
-                    <IconCheck
-                      class="size-3.5 shrink-0"
-                      :class="author === authorFilter ? 'text-accent' : 'opacity-0'"
-                      :stroke-width="3"
-                    />
-                    <span class="truncate" :title="author">{{ author }}</span>
-                  </button>
-                  <EmptyState
-                    v-if="authorQuery.trim() && filteredAuthors.length === 0"
-                    class="px-3"
-                    message="No matches"
-                    data-testid="view-author-empty"
-                  />
-                </div>
-              </div>
-            </div>
-          </template>
-          <div class="view-menu-divider" />
-          <button
-            type="button"
-            class="view-menu-item"
-            role="menuitem"
-            data-testid="view-menu-select-items"
-            @click="enterSelectionFromMenu"
-          >
-            <IconSquareCheckBig class="size-3.5 text-text-3" />
-            <span>Select items</span>
-          </button>
-          <button
-            v-if="!trash"
-            type="button"
-            class="view-menu-item"
-            role="menuitem"
-            data-testid="view-menu-mark-read"
-            @click="markAllReadFromMenu"
-          >
-            <IconMailCheck class="size-3.5 text-text-3" />
-            <span>Mark all as read</span>
-          </button>
-          <button
-            type="button"
-            class="view-menu-item"
-            role="menuitem"
-            data-testid="view-menu-refresh"
-            :disabled="refreshing"
-            @click="refreshFromMenu"
-          >
-            <IconRefreshCw class="size-3.5 text-text-3" :class="{ 'animate-spin': refreshing }" />
-            <span>{{ refreshing ? 'Refreshing…' : 'Refresh' }}</span>
-          </button>
-        </div>
+        <AppMenu
+          v-if="viewMenuOpen"
+          :entries="viewMenuEntries"
+          width="180px"
+          :ignore="[viewMenuToggle]"
+          testid="view-menu"
+          @close="viewMenuOpen = false"
+          @select="onViewMenuSelect"
+        />
       </div>
     </header>
     <div v-if="authorFilter" class="flex shrink-0 border-b border-border px-3.5 py-2">
@@ -684,57 +574,6 @@ watch(
   color: var(--color-text-3);
   font-size: 12px;
   pointer-events: none;
-}
-.view-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 20;
-  width: 180px;
-  border: 1px solid var(--color-strong);
-  border-radius: 8px;
-  background: var(--color-pane);
-  padding: 5px;
-  box-shadow: 0 20px 50px -14px rgb(0 0 0 / 0.5);
-}
-.author-submenu {
-  position: absolute;
-  top: -5px;
-  right: calc(100% + 7px);
-  width: 220px;
-  border: 1px solid var(--color-strong);
-  border-radius: 8px;
-  background: var(--color-pane);
-  box-shadow: 0 20px 50px -14px rgb(0 0 0 / 0.5);
-}
-.view-menu-label {
-  padding: 5px 9px 4px;
-  color: var(--color-text-3);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.view-menu-item {
-  display: flex;
-  width: 100%;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  border-radius: 6px;
-  padding: 7px 9px;
-  color: var(--color-text-2);
-  font-size: 12.5px;
-  text-align: left;
-}
-.view-menu-item:hover {
-  background: var(--color-hover);
-  color: var(--color-text);
-}
-.view-menu-divider {
-  height: 1px;
-  background: var(--color-row);
-  margin: 4px;
 }
 /* A compact full-bleed strip on a raised background: the tier on the left, its
    row count on the right, padded to land on the row's title and age columns.

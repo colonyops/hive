@@ -16,6 +16,7 @@ import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import SidebarFeedRow from './SidebarFeedRow.vue'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import { applyMove, SIDEBAR_DRAG_MIME, type DragRef, type DropTarget } from '../lib/feedTree'
+import { dropEdge, useDragReorder } from '../composables/useDragReorder'
 import type { FeedFolder, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
 import BaseBadge from './ui/BaseBadge.vue'
 
@@ -58,66 +59,23 @@ function folderTotal(folder: FeedFolder): number {
 }
 
 // ── drag-and-drop ─────────────────────────────────────────────────────────
-// Same native HTML5 DnD approach as the flow palette; the dragged item is
-// tracked in a local ref (dataTransfer can't be read during dragover), and a
-// drop target drives the insertion indicators.
-const dragging = ref<DragRef | null>(null)
-const dropTarget = ref<DropTarget | null>(null)
+const drag = useDragReorder<DragRef, DropTarget>({
+  mime: SIDEBAR_DRAG_MIME,
+  payload: (item) => item.id,
+  onDrop: (dragged, target) => emit('reorder', applyMove(tree.value, dragged, target)),
+})
+const { target: dropTarget } = drag
 
-function onDragStart(e: DragEvent, ref: DragRef): void {
-  dragging.value = ref
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData(SIDEBAR_DRAG_MIME, ref.id)
-  }
-}
-
-function edge(e: DragEvent): 'before' | 'after' {
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  return e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
-}
-
-function allowDrop(e: DragEvent): boolean {
-  if (!dragging.value) return false
-  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-  return true
-}
-
-function onItemDragOver(e: DragEvent, ref: DragRef): void {
-  if (!allowDrop(e)) return
-  dropTarget.value = { kind: edge(e), ref }
-}
-
+// A feed onto a folder header: top slice drops before the folder, bottom slice
+// after it (both top level), the middle drops into the folder.
 function onFolderDragOver(e: DragEvent, folder: FeedFolder): void {
-  if (!allowDrop(e)) return
-  if (dragging.value?.kind === 'folder') {
-    dropTarget.value = { kind: edge(e), ref: folderDragRef(folder) }
-    return
-  }
-  // A feed onto a folder header: top slice drops before the folder, bottom
-  // slice after it (both top level), the middle drops into the folder.
+  const header = folderDragRef(folder)
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
   const y = e.clientY - rect.top
-  if (y < rect.height * 0.25) dropTarget.value = { kind: 'before', ref: folderDragRef(folder) }
-  else if (y > rect.height * 0.75) dropTarget.value = { kind: 'after', ref: folderDragRef(folder) }
-  else dropTarget.value = { kind: 'into', folderId: folder.id }
-}
-
-function onEndDragOver(e: DragEvent): void {
-  if (!allowDrop(e)) return
-  dropTarget.value = { kind: 'top-end' }
-}
-
-function onDrop(): void {
-  if (dragging.value && dropTarget.value) {
-    emit('reorder', applyMove(tree.value, dragging.value, dropTarget.value))
-  }
-  onDragEnd()
-}
-
-function onDragEnd(): void {
-  dragging.value = null
-  dropTarget.value = null
+  if (drag.dragging.value?.kind === 'folder') drag.over(e, { kind: dropEdge(e), ref: header })
+  else if (y < rect.height * 0.25) drag.over(e, { kind: 'before', ref: header })
+  else if (y > rect.height * 0.75) drag.over(e, { kind: 'after', ref: header })
+  else drag.over(e, { kind: 'into', folderId: folder.id })
 }
 
 function sameRef(a: DragRef, b: DragRef): boolean {
@@ -280,10 +238,10 @@ function deleteFolder(folder: FeedFolder): void {
           :class="{ 'drop-before': showBefore(feedRef(node.feed)), 'drop-after': showAfter(feedRef(node.feed)) }"
           draggable="true"
           data-testid="sidebar-item"
-          @dragstart="onDragStart($event, feedRef(node.feed))"
-          @dragover.prevent="onItemDragOver($event, feedRef(node.feed))"
-          @drop.prevent="onDrop"
-          @dragend="onDragEnd"
+          @dragstart="drag.start($event, feedRef(node.feed))"
+          @dragover.prevent="drag.over($event, { kind: dropEdge($event), ref: feedRef(node.feed) })"
+          @drop.prevent="drag.drop"
+          @dragend="drag.end"
         >
           <SidebarFeedRow
             :feed="node.feed"
@@ -307,10 +265,10 @@ function deleteFolder(folder: FeedFolder): void {
           <div
             class="folder-header"
             draggable="true"
-            @dragstart="onDragStart($event, folderDragRef(node.folder))"
+            @dragstart="drag.start($event, folderDragRef(node.folder))"
             @dragover.prevent="onFolderDragOver($event, node.folder)"
-            @drop.prevent="onDrop"
-            @dragend="onDragEnd"
+            @drop.prevent="drag.drop"
+            @dragend="drag.end"
             @click="onHeaderClick(node.folder)"
           >
             <span class="nav-icon">
@@ -345,10 +303,10 @@ function deleteFolder(folder: FeedFolder): void {
               :class="{ 'drop-before': showBefore(feedRef(feed)), 'drop-after': showAfter(feedRef(feed)) }"
               draggable="true"
               data-testid="sidebar-item"
-              @dragstart="onDragStart($event, feedRef(feed))"
-              @dragover.prevent="onItemDragOver($event, feedRef(feed))"
-              @drop.prevent="onDrop"
-              @dragend="onDragEnd"
+              @dragstart="drag.start($event, feedRef(feed))"
+              @dragover.prevent="drag.over($event, { kind: dropEdge($event), ref: feedRef(feed) })"
+              @drop.prevent="drag.drop"
+              @dragend="drag.end"
             >
               <SidebarFeedRow
                 :feed="feed"
@@ -366,9 +324,9 @@ function deleteFolder(folder: FeedFolder): void {
         class="sb-end"
         :class="{ 'drop-end': showEnd }"
         data-testid="sidebar-drop-end"
-        @dragover.prevent="onEndDragOver"
-        @drop.prevent="onDrop"
-        @dragend="onDragEnd"
+        @dragover.prevent="drag.over($event, { kind: 'top-end' })"
+        @drop.prevent="drag.drop"
+        @dragend="drag.end"
       />
     </section>
 

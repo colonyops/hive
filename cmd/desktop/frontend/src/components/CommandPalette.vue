@@ -6,6 +6,7 @@ import IconZap from '~icons/lucide/zap'
 import AppIcon from './AppIcon.vue'
 import { fuzzyMatch, useCommandPalette, type Command } from '../composables/useCommands'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
+import { useListKeyboardNav } from '../composables/useListKeyboardNav'
 import { usePaletteRecents } from '../composables/usePaletteRecents'
 import { paletteScopes, type PaletteScopeId } from '../palette/scopes'
 import Kbd from './ui/Kbd.vue'
@@ -200,19 +201,14 @@ watch(open, async (v) => {
   }
 })
 
-// Scroll selected row into view. Gated on `open` — closed, the watch source
-// is a constant -1 that never touches selectedIndex, so the
-// selection/navList/results chain (which recomputes on every session-status
-// poll in the Code view) is never evaluated for a scroll that has no row to
-// land on. Arrows, hover, and the open watch's own reset above all still
-// drive it normally once open.
-watch(
-  () => (open.value ? selectedIndex.value : -1),
-  (idx) => {
-    if (idx < 0) return
-    void nextTick(() => rowElements.get(idx)?.scrollIntoView({ block: 'nearest' }))
-  },
-)
+// Gated on `open`: closed, nothing evaluates the selection/navList/results
+// chain, which recomputes on every session-status poll in the Code view.
+const nav = useListKeyboardNav({
+  active: selectedIndex,
+  count: () => navList.value.length,
+  open: () => open.value,
+  row: (index) => rowElements.get(index),
+})
 
 function setRowRef(el: Element | ComponentPublicInstance | null, index: number): void {
   if (el instanceof HTMLElement) rowElements.set(index, el)
@@ -248,14 +244,8 @@ function onInput(e: Event): void {
 useEscapeToClose(toggle, { enabled: open })
 
 function onKeydown(e: KeyboardEvent): void {
-  const len = navList.value.length
-  if (e.key === 'ArrowDown') {
-    e.preventDefault()
-    selectedIndex.value = len ? (selectedIndex.value + 1) % len : 0
-  } else if (e.key === 'ArrowUp') {
-    e.preventDefault()
-    selectedIndex.value = len ? (selectedIndex.value - 1 + len) % len : 0
-  } else if (e.key === 'Tab') {
+  if (nav.onKeydown(e)) return
+  if (e.key === 'Tab') {
     e.preventDefault()
     cycleScope(e.shiftKey ? -1 : 1)
   } else if (e.key === 'Enter') {

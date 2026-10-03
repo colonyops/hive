@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import IconPause from '~icons/lucide/pause'
 import IconPlus from '~icons/lucide/plus'
 import IconSettings from '~icons/lucide/settings'
+import { dropClass, dropEdge, useDragReorder } from '../composables/useDragReorder'
+import { moveId, type OrderDropTarget } from '../lib/listOrder'
 import type { Profile } from '../types/feed'
 
 const props = defineProps<{ profiles: Profile[]; activeProfileId: string }>()
@@ -13,56 +14,19 @@ const emit = defineEmits<{
   reorder: [profileIds: string[]]
 }>()
 
-// Same native HTML5 DnD approach as the sidebar: the dragged tile is tracked in
-// a local ref (dataTransfer can't be read during dragover) and the drop target
-// drives the insertion indicator. A drop emits the whole rail, top first —
-// profiles.order is one list, not a per-profile field.
-const PROFILE_DRAG_MIME = 'application/x-hive-profile'
+// A drop emits the whole rail, top first: profiles.order is one list, not a
+// per-profile field. A drop that lands where the tile already was emits
+// nothing, or it would persist settings and reload the rail for nothing.
+const drag = useDragReorder<string>({ mime: 'application/x-hive-profile', onDrop: reorder })
+const { dragging, target: dropTarget } = drag
 
-const dragging = ref<string | null>(null)
-const dropTarget = ref<{ id: string; edge: 'before' | 'after' } | null>(null)
-
-function onDragStart(e: DragEvent, id: string): void {
-  dragging.value = id
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData(PROFILE_DRAG_MIME, id)
-  }
-}
-
-function onDragOver(e: DragEvent, id: string): void {
-  if (!dragging.value) return
-  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
-  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-  dropTarget.value = { id, edge: e.clientY < rect.top + rect.height / 2 ? 'before' : 'after' }
-}
-
-function onDrop(): void {
-  const target = dropTarget.value
-  if (dragging.value && target) emitReorder(moved(dragging.value, target.id, target.edge))
-  onDragEnd()
-}
-
-function onDragEnd(): void {
-  dragging.value = null
-  dropTarget.value = null
-}
-
-// moved is the rail with id lifted out and reinserted at target's edge.
-function moved(id: string, targetID: string, edge: 'before' | 'after'): string[] {
-  const ids = props.profiles.map((p) => p.id).filter((other) => other !== id)
-  const at = ids.indexOf(targetID)
-  if (at === -1) return []
-  ids.splice(edge === 'before' ? at : at + 1, 0, id)
-  return ids
-}
-
-// A drop that lands where the tile already was is not a reorder — emitting it
-// would persist settings and reload the rail for nothing.
-function emitReorder(ids: string[]): void {
-  if (ids.length !== props.profiles.length) return
-  if (ids.every((id, i) => id === props.profiles[i].id)) return
-  emit('reorder', ids)
+function reorder(id: string, target: OrderDropTarget): void {
+  const ids = moveId(
+    props.profiles.map((profile) => profile.id),
+    id,
+    target,
+  )
+  if (ids) emit('reorder', ids)
 }
 
 // Alt+Up/Down moves the focused tile, so the rail can be reordered without a
@@ -74,13 +38,7 @@ function onKeydown(e: KeyboardEvent, id: string): void {
   if (at === -1 || to < 0 || to >= props.profiles.length) return
   e.preventDefault()
   e.stopPropagation()
-  emitReorder(moved(id, props.profiles[to].id, e.key === 'ArrowUp' ? 'before' : 'after'))
-}
-
-function dropClass(id: string): string {
-  const target = dropTarget.value
-  if (!target || target.id !== id) return ''
-  return target.edge === 'before' ? 'drop-before' : 'drop-after'
+  reorder(id, { id: props.profiles[to].id, edge: e.key === 'ArrowUp' ? 'before' : 'after' })
 }
 </script>
 
@@ -97,7 +55,7 @@ function dropClass(id: string): string {
       draggable="true"
       class="relative flex size-[38px] cursor-pointer items-center justify-center rounded-[10px] border border-card bg-chip font-mono text-sm font-semibold text-text-2 transition-colors hover:bg-hover hover:text-text"
       :class="[
-        dropClass(profile.id),
+        dropClass(dropTarget, profile.id),
         {
           'text-text': profile.id === activeProfileId,
           'opacity-55': !profile.enabled,
@@ -106,10 +64,10 @@ function dropClass(id: string): string {
       ]"
       @click="emit('select', profile.id)"
       @keydown="onKeydown($event, profile.id)"
-      @dragstart="onDragStart($event, profile.id)"
-      @dragover.prevent="onDragOver($event, profile.id)"
-      @drop.prevent="onDrop"
-      @dragend="onDragEnd"
+      @dragstart="drag.start($event, profile.id)"
+      @dragover.prevent="drag.over($event, { id: profile.id, edge: dropEdge($event) })"
+      @drop.prevent="drag.drop"
+      @dragend="drag.end"
     >
       <span
         v-if="profile.id === activeProfileId"

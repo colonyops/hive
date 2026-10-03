@@ -18,17 +18,14 @@
 // the editor) is an emitted event; only tree state, the chat row menus, and
 // the chat delete confirmation live here.
 import InlineError from './ui/InlineError.vue'
-import { computed, nextTick, ref, shallowRef, watch, type Component } from 'vue'
-import { useResizeObserver, useStorage } from '@vueuse/core'
+import { computed, ref, shallowRef, watch } from 'vue'
 import IconCalendarClock from '~icons/lucide/calendar-clock'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconChevronsDownUp from '~icons/lucide/chevrons-down-up'
 import IconChevronsUpDown from '~icons/lucide/chevrons-up-down'
-import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconEllipsisVertical from '~icons/lucide/ellipsis-vertical'
 import IconFolderPlus from '~icons/lucide/folder-plus'
-import IconLoaderCircle from '~icons/lucide/loader-circle'
 import IconMessageSquare from '~icons/lucide/message-square'
 import IconPencil from '~icons/lucide/pencil'
 import IconPin from '~icons/lucide/pin'
@@ -36,21 +33,23 @@ import IconPinOff from '~icons/lucide/pin-off'
 import IconPlay from '~icons/lucide/play'
 import IconPlus from '~icons/lucide/plus'
 import IconPower from '~icons/lucide/power'
-import IconRotateCw from '~icons/lucide/rotate-cw'
 import IconTrash2 from '~icons/lucide/trash-2'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import AppMenu from './ui/AppMenu.vue'
 import ConfirmationDialog from './ui/ConfirmationDialog.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
-import SearchField from './ui/SearchField.vue'
+import SidebarToolbar from './sidebar/SidebarToolbar.vue'
+import TreeRail from './ui/TreeRail.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useResizablePanel } from '../composables/useResizablePanel'
+import { useSelectionRail } from '../composables/useSelectionRail'
+import { useTreeExpansion } from '../composables/useTreeExpansion'
+import { activityIndicator, type StatusIndicator } from '../lib/agentActivity'
 import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
 import { relativeAge } from '../lib/age'
 import type { AgentSession, AgentWorkspace } from '../lib/agentWorkspacesClient'
 import type { MenuEntry } from '../types/menu'
-import Spinner from './ui/Spinner.vue'
 import EmptyState from './ui/EmptyState.vue'
 
 const props = withDefaults(
@@ -189,32 +188,20 @@ const emptyNote = computed(() => {
   return query ? `Nothing matches “${query}”.` : 'No workspaces yet. Create one from the list menu.'
 })
 
-// Expand/collapse is transient view state, not configuration — localStorage,
-// the same call the hub sidebar's folder collapse and the Code view's group
-// collapse make. A workspace the user has never toggled has no entry and takes
-// the default, which is open only where something is live or the open chat
-// sits: a root's worth of dormant workspaces would otherwise bury the one being
-// worked in. An explicit toggle always wins, including over the open chat,
-// which is what makes a deliberate fold stay folded.
-const expansion = useStorage<Record<string, boolean>>('hive.agents.sidebar.workspaces', {})
-
-function expanded(node: WorkspaceNode): boolean {
-  // A filter overrides the stored state: a workspace is only in the list
-  // because something in it matched, and a folded one would hide the match.
-  if (filter.value.trim()) return true
-  return expansion.value[node.dir] ?? (node.live || node.sessions.some((session) => session.id === props.openSessionId))
-}
-
-function toggleExpanded(node: WorkspaceNode): void {
-  expansion.value[node.dir] = !expanded(node)
-}
-
-// Every workspace, not the ones the tree happens to be drawing: a bulk fold
-// that the filtered-away workspaces escaped would spring back open the moment
-// the query came off.
-function setAllExpanded(open: boolean): void {
-  for (const node of tree.value) expansion.value[node.dir] = open
-}
+// The default opens a workspace only where something is live or the open chat
+// sits. An explicit toggle wins even over the open chat, which is what makes a
+// deliberate fold stay folded.
+const {
+  expanded,
+  toggle: toggleExpanded,
+  unfold: unfoldNode,
+  setAll: setAllExpanded,
+} = useTreeExpansion<WorkspaceNode>('hive.agents.sidebar.workspaces', {
+  key: (node) => node.dir,
+  defaultOpen: (node) => node.live || node.sessions.some((session) => session.id === props.openSessionId),
+  filtering: () => !!filter.value.trim(),
+  nodes: () => tree.value,
+})
 
 function editWorkspace(node: WorkspaceNode): void {
   if (node.workspace) emit('edit-workspace', node.workspace)
@@ -245,12 +232,9 @@ function activateWorkspace(node: WorkspaceNode): void {
   emit('select-workspace', node.dir)
 }
 
-// Only a workspace that is actually folded gets an entry written, so focusing
-// one the default already opened leaves it on the default rather than pinning
-// it open for good.
 function unfold(dir: string): void {
   const node = tree.value.find((candidate) => candidate.dir === dir)
-  if (node && !expanded(node)) expansion.value[dir] = true
+  if (node) unfoldNode(node)
 }
 
 // Focus that arrives from outside unfolds the workspace it names: the Code view
@@ -311,34 +295,14 @@ function nextScheduleLine(workspace: AgentWorkspace): string {
   return `Next: ${soonest}, ${when}`
 }
 
-// The Code view's vocabulary, unchanged: a spinning loader while the agent
-// works, an alert while it waits on approval. Any other live chat gets the
-// green liveness dot — ready-and-waiting is still live — and an idle chat an
-// explicit hollow ring the same size, so live-vs-idle is always stated rather
-// than implied by absence.
-interface StatusIndicator {
-  icon: Component
-  cls: string
-  label: string
-  animated?: boolean
-}
-
+// The Code view's vocabulary: a spinning loader while the agent works, an
+// alert while it waits on approval. Any other live chat gets the green liveness
+// dot (ready-and-waiting is still live) and an idle chat a hollow ring the same
+// size, so live-vs-idle is always stated rather than implied by absence.
 const sessionIndicators = computed<Record<number, StatusIndicator>>(() => {
   const out: Record<number, StatusIndicator> = {}
   for (const [id, status] of Object.entries(props.sessionActivity)) {
-    switch (status) {
-      case 'active':
-        out[Number(id)] = {
-          icon: IconLoaderCircle,
-          cls: 'text-severity-success',
-          label: 'Agent is working',
-          animated: true,
-        }
-        break
-      case 'approval':
-        out[Number(id)] = { icon: IconCircleAlert, cls: 'text-severity-warning', label: 'Agent needs approval' }
-        break
-    }
+    if (status === 'active' || status === 'approval') out[Number(id)] = activityIndicator(status)
   }
   return out
 })
@@ -409,9 +373,6 @@ function closeSessionMenu(): void {
 // the bar's + is the one the user reaches for. Reload is not here: the bar's
 // own control does it, and it doubles as the indicator that says it is
 // running.
-const listMenuOpen = ref(false)
-const listMenuToggle = shallowRef<HTMLElement | null>(null)
-
 const listMenuEntries = computed<MenuEntry[]>(() => [
   {
     kind: 'action',
@@ -438,7 +399,6 @@ const listMenuEntries = computed<MenuEntry[]>(() => [
 ])
 
 function onListMenuSelect(id: string): void {
-  listMenuOpen.value = false
   if (id === 'new-workspace') emit('create-workspace')
   else if (id === 'collapse-all') setAllExpanded(false)
   else if (id === 'expand-all') setAllExpanded(true)
@@ -547,47 +507,14 @@ const {
   edge: 'right',
 })
 
-// ── The selection rail (the Code view's traveling mark, TerminalMode.vue) ─
-// Measured off the open chat's row rather than drawn by it, so changing the
-// selection reads as the same mark relocating rather than a second one
-// appearing where the first went out.
-interface SelectionRail {
-  y: number
-  height: number
-  shown: boolean
-}
+// ── The selection rail (the Code view's traveling mark) ──────────────────
 const treeContent = ref<HTMLElement | null>(null)
-const rail = ref<SelectionRail>({ y: 0, height: 0, shown: false })
-
-// A rail with no row to sit on fades out where it stands rather than resetting,
-// so it does not travel from a stale origin when one reappears.
-function measureRail(): void {
-  const content = treeContent.value
-  const row = content?.querySelector<HTMLElement>('[data-testid="agents-sidebar-session-row"][data-open="true"]')
-  if (!content || !row) {
-    rail.value = { ...rail.value, shown: false }
-    return
-  }
-  rail.value = {
-    y: row.getBoundingClientRect().top - content.getBoundingClientRect().top,
-    height: row.offsetHeight,
-    shown: true,
-  }
-}
-
-// The stored fold map mutates in place, so the fold state reaches this watch as
-// a key rather than by identity.
+// The stored fold map mutates in place, so the fold state reaches the rail as a
+// key rather than by identity.
 const foldKey = computed(() => tree.value.map((node) => `${node.dir}:${expanded(node) ? 1 : 0}`).join('|'))
-
-watch(
-  () => [props.openSessionId, tree.value, foldKey.value] as const,
-  () => void nextTick(measureRail),
-  { immediate: true },
-)
-
-// Rows also move without a selection change — a workspace refilling after a
-// reload, an error line appearing — and a content resize is every one of those.
-useResizeObserver(treeContent, () => measureRail())
+const { rails } = useSelectionRail(treeContent, ['[data-testid="agents-sidebar-session-row"][data-open="true"]'], {
+  sources: [() => props.openSessionId, tree, foldKey],
+})
 
 defineExpose({
   focus: () => rootEl.value?.focus(),
@@ -603,72 +530,24 @@ defineExpose({
     data-testid="agents-workspace-sidebar"
     tabindex="-1"
   >
-    <!-- The Code view's sidebar bar, control for control (TerminalMode.vue):
-         the two areas are the same app, and a tree with its own vocabulary of
-         chrome does not read that way. The filter is flush rather than boxed
-         for that view's reason too — the sidebar resizes down narrow, and a
-         bordered field beside three controls leaves the bar looking like
-         nothing but chrome. -->
-    <div class="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
-      <SearchField
-        ref="filterInput"
-        v-model="filter"
-        variant="bar"
-        aria-label="Filter workspaces and chats"
-        testid="agents-sidebar-filter"
-        @escape="rootEl?.focus()"
-      />
-      <!-- Doubles as the staleness indicator, as the Code view's does: both
-           lists render from their last-good rows, and the spin is what says a
-           re-read is still in flight. -->
-      <button
-        type="button"
-        class="flex size-6 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text disabled:cursor-default"
-        data-testid="agents-sidebar-reload"
-        aria-label="Reload workspaces"
-        :aria-busy="listLoading"
-        :disabled="listLoading"
-        @click="reloadAll"
-      >
-        <IconRotateCw class="size-3.5" :class="{ 'animate-spin': listLoading }" />
-      </button>
-      <button
-        type="button"
-        class="flex size-6 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text disabled:cursor-default"
-        data-testid="agents-sidebar-new-session"
-        aria-label="New chat"
-        title="New chat"
-        :disabled="startingSession"
-        :aria-busy="startingSession"
-        @click="emit('request-new-session')"
-      >
-        <Spinner v-if="startingSession" />
-        <IconPlus v-else class="size-3.5" />
-      </button>
-      <!-- List-wide operations; a workspace's own live on its row. -->
-      <div class="relative flex">
-        <button
-          ref="listMenuToggle"
-          type="button"
-          class="flex size-6 cursor-pointer items-center justify-center rounded-[7px] text-text-3 hover:bg-chip hover:text-text"
-          data-testid="agents-sidebar-menu-toggle"
-          aria-label="Workspace list actions"
-          aria-haspopup="menu"
-          :aria-expanded="listMenuOpen"
-          @click="listMenuOpen = !listMenuOpen"
-        >
-          <IconEllipsisVertical class="size-3.5" />
-        </button>
-        <AppMenu
-          v-if="listMenuOpen"
-          :entries="listMenuEntries"
-          :ignore="[listMenuToggle]"
-          testid="agents-sidebar-menu"
-          @close="listMenuOpen = false"
-          @select="onListMenuSelect"
-        />
-      </div>
-    </div>
+    <SidebarToolbar
+      ref="filterInput"
+      v-model="filter"
+      filter-label="Filter workspaces and chats"
+      reload-label="Reload workspaces"
+      new-label="New chat"
+      menu-label="Workspace list actions"
+      :menu-entries="listMenuEntries"
+      :loading="listLoading"
+      :creating="startingSession"
+      testid="agents-sidebar"
+      reload-testid="agents-sidebar-reload"
+      new-testid="agents-sidebar-new-session"
+      @escape="rootEl?.focus()"
+      @reload="reloadAll"
+      @new="emit('request-new-session')"
+      @select="onListMenuSelect"
+    />
 
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-4" data-testid="agents-sidebar-tree">
       <InlineError
@@ -895,7 +774,7 @@ defineExpose({
                         v-if="sessionIndicators[session.id]"
                         class="size-3"
                         :class="[
-                          sessionIndicators[session.id].cls,
+                          sessionIndicators[session.id].color,
                           { 'animate-spin': sessionIndicators[session.id].animated },
                         ]"
                         :title="sessionIndicators[session.id].label"
@@ -940,14 +819,7 @@ defineExpose({
               </template>
             </div>
           </div>
-          <span
-            class="tree-rail"
-            :class="{ 'tree-rail-shown': rail.shown }"
-            :style="{ transform: `translateY(${rail.y}px)`, height: `${rail.height}px` }"
-            data-testid="agents-sidebar-session-rail"
-            :data-shown="rail.shown"
-            aria-hidden="true"
-          />
+          <TreeRail :rail="rails[0]" data-testid="agents-sidebar-session-rail" />
         </div>
       </template>
     </div>
@@ -1210,33 +1082,6 @@ defineExpose({
 .entry-menu:focus-visible,
 .sidebar-entry.menu-open .entry-menu {
   opacity: 1;
-}
-
-/* TerminalMode.vue's tree-rail, verbatim. Square ends, and motion fast enough
-   to read as the same mark relocating rather than a second one appearing. The
-   z-index is load-bearing: the rows and the wells are painted boxes too, so
-   without it the rail goes under them. */
-.tree-rail {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 1;
-  width: 3px;
-  background: var(--color-accent);
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    transform 0.2s cubic-bezier(0.2, 0, 0, 1),
-    height 0.2s cubic-bezier(0.2, 0, 0, 1),
-    opacity 0.12s ease;
-}
-.tree-rail-shown {
-  opacity: 1;
-}
-@media (prefers-reduced-motion: reduce) {
-  .tree-rail {
-    transition: none;
-  }
 }
 
 /* Lined up with a chat name: the row's 12px inset, its 18px glyph cell, and the

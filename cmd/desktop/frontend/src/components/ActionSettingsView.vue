@@ -14,7 +14,8 @@ import ConfirmationHost from './ui/ConfirmationHost.vue'
 import EmptyState from './ui/EmptyState.vue'
 import { useConfirmation } from '../composables/useConfirmation'
 import { actionTypeMeta } from '../lib/actionPresentation'
-import { moveId, type OrderDropTarget } from '../lib/listOrder'
+import { moveId } from '../lib/listOrder'
+import { dropClass, dropEdge, useDragReorder } from '../composables/useDragReorder'
 import { useActionsSettings, type EditableAction } from '../composables/useActionsSettings'
 import { SessionLaunchWorkspaces } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
@@ -89,54 +90,20 @@ function requestDelete(action: EditableAction): void {
   })
 }
 
-// ── drag-and-drop ─────────────────────────────────────────────────────────
-// The catalog list order is what the detail pane and item menu render, so a
-// drop rewrites actions.yml's sequence. Native HTML5 DnD like the sidebar: the
-// dragged id lives in a ref (dataTransfer can't be read during dragover) and
-// the hovered edge drives the insertion indicator. The MIME payload is set so
-// the drag carries data (some engines refuse to start an empty one) and is
-// identifiable as this list's; the drop handlers read the ref, not the payload.
-const ACTION_DRAG_MIME = 'application/x-hive-action'
-const dragId = ref<string | null>(null)
-const dropTarget = ref<OrderDropTarget | null>(null)
-
-function onDragStart(event: DragEvent, id: string): void {
-  dragId.value = id
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData(ACTION_DRAG_MIME, id)
-  }
-}
-function onDragOver(event: DragEvent, id: string): void {
-  if (!dragId.value) return
-  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
-  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  dropTarget.value = { id, edge: event.clientY < rect.top + rect.height / 2 ? 'before' : 'after' }
-}
-function onDrop(): void {
-  const order =
-    dragId.value && dropTarget.value
-      ? moveId(
-          actions.value.map((action) => action.id),
-          dragId.value,
-          dropTarget.value,
-        )
-      : null
-  onDragEnd()
-  if (order) void reorder(order)
-}
-function onDragEnd(): void {
-  dragId.value = null
-  dropTarget.value = null
-}
-function dropClass(id: string): Record<string, boolean> {
-  const target = dropTarget.value
-  return {
-    dragging: dragId.value === id,
-    'drop-before': target?.id === id && target.edge === 'before',
-    'drop-after': target?.id === id && target.edge === 'after',
-  }
-}
+// The catalog order is what the detail pane and item menu render, so a drop
+// rewrites actions.yml's sequence.
+const drag = useDragReorder<string>({
+  mime: 'application/x-hive-action',
+  onDrop: (id, target) => {
+    const order = moveId(
+      actions.value.map((action) => action.id),
+      id,
+      target,
+    )
+    if (order) void reorder(order)
+  },
+})
+const { dragging, target: dropTarget } = drag
 </script>
 
 <template>
@@ -162,12 +129,12 @@ function dropClass(id: string): Record<string, boolean> {
         :title="action.label"
         :icon="appIcon(actionTypeMeta(action.type).icon)"
         :data-testid="`action-row-${action.id}`"
-        :class="dropClass(action.id)"
+        :class="[dropClass(dropTarget, action.id), { dragging: dragging === action.id }]"
         draggable="true"
-        @dragstart="onDragStart($event, action.id)"
-        @dragover.prevent="onDragOver($event, action.id)"
-        @drop.prevent="onDrop"
-        @dragend="onDragEnd"
+        @dragstart="drag.start($event, action.id)"
+        @dragover.prevent="drag.over($event, { id: action.id, edge: dropEdge($event) })"
+        @drop.prevent="drag.drop"
+        @dragend="drag.end"
         @edit="edit(action, $event)"
         @delete="requestDelete(action)"
       >

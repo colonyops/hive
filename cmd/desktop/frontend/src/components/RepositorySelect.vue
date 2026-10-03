@@ -13,6 +13,7 @@ import IconGitBranch from '~icons/lucide/git-branch'
 import IconSearch from '~icons/lucide/search'
 import type { SessionLaunchRepository } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { useAnchoredPopover } from '../composables/useAnchoredPopover'
+import { useListKeyboardNav } from '../composables/useListKeyboardNav'
 import { highlightSegments, rankRepositories, repoDisplayName, toChoices } from '../lib/repositories'
 
 const props = defineProps<{
@@ -49,19 +50,13 @@ const rowCount = computed(() => ranked.value.length + (custom.value ? 1 : 0))
 
 const selectedLabel = computed(() => repoDisplayName(props.modelValue) || props.modelValue)
 
-watch(rowCount, (count) => {
-  if (active.value >= count) active.value = Math.max(0, count - 1)
+const nav = useListKeyboardNav({
+  active,
+  count: () => rowCount.value,
+  open: () => open.value,
+  homeEnd: () => true,
+  row: (index) => list.value?.children[index]?.firstElementChild,
 })
-
-function revealActive(): void {
-  if (!open.value) return
-  void nextTick(() =>
-    (list.value?.children[active.value]?.firstElementChild as HTMLElement | undefined)?.scrollIntoView?.({
-      block: 'nearest',
-    }),
-  )
-}
-watch(active, revealActive)
 
 const { style: popoverStyle, measure } = useAnchoredPopover(root, popover, open)
 
@@ -102,12 +97,6 @@ function commitActive(): void {
   if (custom.value) choose(custom.value)
 }
 
-function step(delta: number): void {
-  const count = rowCount.value
-  if (!count) return
-  active.value = (active.value + delta + count) % count
-}
-
 function onKeydown(event: KeyboardEvent): void {
   if (!open.value) {
     if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
@@ -116,22 +105,11 @@ function onKeydown(event: KeyboardEvent): void {
     }
     return
   }
+  if (nav.onKeydown(event)) return
   if (event.key === 'Escape') {
     event.preventDefault()
     event.stopPropagation()
     close()
-  } else if (event.key === 'ArrowDown') {
-    event.preventDefault()
-    step(1)
-  } else if (event.key === 'ArrowUp') {
-    event.preventDefault()
-    step(-1)
-  } else if (event.key === 'Home') {
-    event.preventDefault()
-    active.value = 0
-  } else if (event.key === 'End') {
-    event.preventDefault()
-    active.value = Math.max(0, rowCount.value - 1)
   } else if (event.key === 'Enter') {
     event.preventDefault()
     commitActive()

@@ -49,6 +49,47 @@ describe('AppMenu', () => {
     expect(wrapper.get('[data-testid="entry-off"] span').classes()).toContain('size-3.5')
   })
 
+  it('opens a submenu beside its entry, filters it, and relays its choice', async () => {
+    const wrapper = mount(AppMenu, {
+      props: {
+        entries: [
+          {
+            kind: 'submenu',
+            id: 'author',
+            label: 'Author',
+            testid: 'entry-author',
+            panelTestid: 'author-panel',
+            search: { label: 'Search authors', testid: 'author-search' },
+            entries: [
+              { kind: 'action', id: 'author:amy', label: 'amy', testid: 'author-amy' },
+              { kind: 'action', id: 'author:ben', label: 'ben', testid: 'author-ben' },
+            ],
+          },
+        ] satisfies MenuEntry[],
+      },
+      attachTo: document.body,
+    })
+    expect(wrapper.find('[data-testid="author-panel"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="entry-author"]').trigger('click')
+    expect(wrapper.get('[data-testid="entry-author"]').attributes('aria-expanded')).toBe('true')
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="author-search"]').element)
+
+    await wrapper.get('[data-testid="author-search"]').setValue('am')
+    expect(wrapper.find('[data-testid="author-ben"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="author-search"]').setValue('zed')
+    expect(wrapper.find('[data-testid="author-panel-empty"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="author-search"]').setValue('')
+    await wrapper.get('[data-testid="author-ben"]').trigger('click')
+    expect(wrapper.emitted('select')).toEqual([['author:ben']])
+
+    // Escape closes the submenu alone, and the menu under it stays open.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="author-panel"]').exists()).toBe(false)
+    expect(wrapper.emitted('close')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('flips upward when asked to open above its anchor', () => {
     const wrapper = mount(AppMenu, { props: { entries, flip: true } })
     expect(wrapper.get('.app-menu').classes()).toContain('flip')
