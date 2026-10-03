@@ -20,7 +20,6 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal, type IDisposable, type ILinkHandler } from '@xterm/xterm'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconMessagesSquare from '~icons/lucide/messages-square'
-import IconLoaderCircle from '~icons/lucide/loader-circle'
 import AgentCanvasPane from './AgentCanvasPane.vue'
 import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
@@ -46,6 +45,7 @@ import { claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { watchTailPin } from '../lib/terminalTail'
 import type { AgentSession, AgentWorkspace, WorkspaceEditRequest } from '../lib/agentWorkspacesClient'
+import Spinner from './ui/Spinner.vue'
 import '@xterm/xterm/css/xterm.css'
 
 /** Poll period for the M2 approval indicator (hc-ou4o02zx §5), while active. */
@@ -962,9 +962,7 @@ onBeforeUnmount(() => {
             class="absolute inset-0 z-10 flex items-center justify-center bg-app"
             data-testid="agents-pane-opening"
           >
-            <p class="flex items-center gap-2 font-mono text-xs text-text-4">
-              <IconLoaderCircle class="size-3.5 animate-spin" aria-hidden="true" />Opening…
-            </p>
+            <p class="flex items-center gap-2 font-mono text-xs text-text-4"><Spinner />Opening…</p>
           </div>
           <!-- The zero state: no PTY exists, so the pane says what a chat is,
                carries whatever ended the last one, and offers the same new-chat

@@ -155,7 +155,7 @@ async function onSave(): Promise<void> {
         <BaseButton class="flex-1" :busy="saving" :disabled="loading" data-testid="report-submit" @click="onSave">{{
           saving ? 'Saving…' : 'Save bundle'
         }}</BaseButton>
-        <BaseButton variant="secondary" :busy="saving" @click="emit('close')">Cancel</BaseButton>
+        <BaseButton variant="secondary" :disabled="saving" @click="emit('close')">Cancel</BaseButton>
       </template>
     </template>
   </BaseModal>

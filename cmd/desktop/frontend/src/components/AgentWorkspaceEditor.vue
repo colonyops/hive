@@ -1767,7 +1767,7 @@ onMounted(async () => {
         <BaseButton
           variant="secondary"
           size="sm"
-          :busy="busy"
+          :disabled="busy"
           data-testid="agent-workspace-editor-cancel"
           @click="cancel"
           >Cancel</BaseButton

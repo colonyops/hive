@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import Spinner from './Spinner.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -39,8 +40,16 @@ defineExpose({ focus: () => buttonRef.value?.focus() })
 </script>
 
 <template>
-  <button ref="buttonRef" :type="type" :disabled="disabled || busy" :class="classes" @click="emit('click', $event)">
-    <slot name="icon" />
+  <button
+    ref="buttonRef"
+    :type="type"
+    :disabled="disabled || busy"
+    :aria-busy="busy || undefined"
+    :class="classes"
+    @click="emit('click', $event)"
+  >
+    <Spinner v-if="busy" />
+    <slot v-else name="icon" />
     <slot />
   </button>
 </template>

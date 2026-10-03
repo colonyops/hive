@@ -59,7 +59,7 @@ function submit(): void {
       <BaseButton class="flex-1" :busy="busy" data-testid="action-inputs-submit" @click="submit">{{
         busy ? (submitLabel === 'Copy' ? 'Copying…' : 'Running…') : submitLabel
       }}</BaseButton>
-      <BaseButton variant="secondary" :busy="busy" @click="emit('close')">Cancel</BaseButton>
+      <BaseButton variant="secondary" :disabled="busy" @click="emit('close')">Cancel</BaseButton>
     </template>
   </BaseModal>
 </template>

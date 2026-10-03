@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { h } from 'vue'
 import BaseButton from '../BaseButton.vue'
+import Spinner from '../Spinner.vue'
 
 describe('BaseButton', () => {
   it.each([
@@ -39,5 +40,26 @@ describe('BaseButton', () => {
 
     expect(wrapper.find('[data-testid="button-icon"]').exists()).toBe(true)
     expect(wrapper.text()).toBe('iconSave')
+  })
+
+  it('shows a spinner in place of the icon while busy', () => {
+    const wrapper = mount(BaseButton, {
+      props: { busy: true },
+      slots: {
+        icon: () => h('span', { 'data-testid': 'button-icon' }, 'icon'),
+        default: () => 'Save',
+      },
+    })
+
+    expect(wrapper.findComponent(Spinner).exists()).toBe(true)
+    expect(wrapper.find('[data-testid="button-icon"]').exists()).toBe(false)
+    expect(wrapper.attributes('aria-busy')).toBe('true')
+  })
+
+  it('draws no spinner when idle', () => {
+    const wrapper = mount(BaseButton, { slots: { default: () => 'Save' } })
+
+    expect(wrapper.findComponent(Spinner).exists()).toBe(false)
+    expect(wrapper.attributes('aria-busy')).toBeUndefined()
   })
 })

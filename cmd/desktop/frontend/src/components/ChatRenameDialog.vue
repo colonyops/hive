@@ -61,7 +61,7 @@ onMounted(async () => {
     </div>
     <template #footer>
       <div class="flex-1" />
-      <BaseButton variant="secondary" :busy="busy" data-testid="chat-rename-cancel" @click="emit('close')"
+      <BaseButton variant="secondary" :disabled="busy" data-testid="chat-rename-cancel" @click="emit('close')"
         >Cancel</BaseButton
       >
       <BaseButton :busy="busy" :disabled="!draft.trim()" data-testid="chat-rename-save" @click="submit"

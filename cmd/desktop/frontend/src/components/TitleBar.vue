@@ -13,11 +13,11 @@ import IconPanelRightClose from '~icons/lucide/panel-right-close'
 import IconPanelRightOpen from '~icons/lucide/panel-right-open'
 import IconSearch from '~icons/lucide/search'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
-import IconLoader from '~icons/lucide/loader'
 import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
 import JobsPopover from './JobsPopover.vue'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
 import Kbd from './ui/Kbd.vue'
+import Spinner from './ui/Spinner.vue'
 
 // One button grammar for the whole chrome, with a fixed slot per zone. The bar
 // is two clusters, not three centered columns — a window-centered palette sat
@@ -233,7 +233,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
         "
         @click="emit('open-update')"
       >
-        <IconLoader v-if="updateInstalling" class="size-3 animate-spin" />
+        <Spinner v-if="updateInstalling" size="sm" />
         <IconArrowUpCircle v-else class="size-3" />
         <template v-if="updateInstalling">Installing…</template>
         <template v-else
@@ -258,7 +258,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
           :aria-expanded="jobsOpen"
           @click="jobsOpen = !jobsOpen"
         >
-          <IconLoader class="size-3.5 animate-spin" />
+          <Spinner />
           {{ activeJobs?.length ?? 0 }} job<template v-if="(activeJobs?.length ?? 0) !== 1">s</template>
         </button>
         <JobsPopover

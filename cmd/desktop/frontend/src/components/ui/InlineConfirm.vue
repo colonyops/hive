@@ -74,7 +74,7 @@ useEscapeToClose(cancel)
       variant="secondary"
       size="sm"
       class="shrink-0"
-      :busy="busy"
+      :disabled="busy"
       :data-testid="`${testid}-cancel`"
       @click="cancel"
       >{{ cancelLabel }}</BaseButton

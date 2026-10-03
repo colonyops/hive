@@ -23,6 +23,7 @@ import { groupItemsByDate } from '../lib/dateGroups'
 import type { ActionView } from '../types/action'
 import type { FeedSort, InboxItem } from '../types/feed'
 import type { MenuEntry } from '../types/menu'
+import Spinner from './ui/Spinner.vue'
 
 // Presentation-only: the store (useFeedState) owns the search text and the
 // filtered `visibleItems`, so keyboard navigation and this list render the
@@ -482,7 +483,7 @@ watch(
     </div>
     <div class="relative min-h-0 flex-1">
       <div v-if="refreshing" class="refresh-banner" role="status" data-testid="feed-refreshing">
-        <IconRefreshCw class="size-3.5 animate-spin" />Refreshing…
+        <Spinner />Refreshing…
       </div>
       <div ref="listContainer" class="hive-scroll h-full overflow-y-auto">
         <!-- Load failure: the "GitHub unreachable" design state. -->

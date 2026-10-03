@@ -305,7 +305,7 @@ onMounted(async () => {
 
     <template #footer>
       <div class="flex justify-end gap-2.5">
-        <BaseButton variant="secondary" size="sm" :busy="busy" @click="cancel">Cancel</BaseButton
+        <BaseButton variant="secondary" size="sm" :disabled="busy" @click="cancel">Cancel</BaseButton
         ><BaseButton size="sm" :busy="busy" data-testid="action-save" @click="save">{{
           busy ? 'Saving…' : 'Save'
         }}</BaseButton>

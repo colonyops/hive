@@ -83,7 +83,7 @@ useAutofocus(confirmRef)
         @click="emit('confirm')"
         >{{ busy ? 'Working…' : confirmLabel }}</BaseButton
       >
-      <BaseButton variant="secondary" :busy="busy" :data-testid="cancelTestid ?? `${testid}-cancel`" @click="cancel"
+      <BaseButton variant="secondary" :disabled="busy" :data-testid="cancelTestid ?? `${testid}-cancel`" @click="cancel"
         >Cancel</BaseButton
       >
     </template>

@@ -222,7 +222,7 @@ useSubmitShortcut(submit)
         {{ busy ? 'Creating…' : target === 'workspace' ? 'Start chat' : 'Create session' }}
         <Kbd v-if="!busy" variant="on-accent">{{ submitHint }}</Kbd>
       </BaseButton>
-      <BaseButton variant="secondary" :busy="busy" @click="emit('close')">Cancel</BaseButton>
+      <BaseButton variant="secondary" :disabled="busy" @click="emit('close')">Cancel</BaseButton>
     </template>
   </BaseModal>
 </template>

@@ -56,7 +56,7 @@ useAutofocus(deployRef)
             Discard changes
           </button>
         </div>
-        <BaseButton variant="ghost" :busy="busy" data-testid="unsaved-flow-cancel" @click="emit('close')"
+        <BaseButton variant="ghost" :disabled="busy" data-testid="unsaved-flow-cancel" @click="emit('close')"
           >Cancel</BaseButton
         >
       </div>

@@ -50,6 +50,7 @@ import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
 import { relativeAge } from '../lib/age'
 import type { AgentSession, AgentWorkspace } from '../lib/agentWorkspacesClient'
 import type { MenuEntry } from '../types/menu'
+import Spinner from './ui/Spinner.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -640,7 +641,7 @@ defineExpose({
         :aria-busy="startingSession"
         @click="emit('request-new-session')"
       >
-        <IconLoaderCircle v-if="startingSession" class="size-3.5 animate-spin" />
+        <Spinner v-if="startingSession" />
         <IconPlus v-else class="size-3.5" />
       </button>
       <!-- List-wide operations; a workspace's own live on its row. -->

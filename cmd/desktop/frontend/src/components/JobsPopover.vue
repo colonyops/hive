@@ -3,8 +3,8 @@ import IconCheck from '~icons/lucide/check'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconClock3 from '~icons/lucide/clock-3'
 import IconExternalLink from '~icons/lucide/external-link'
-import IconLoader from '~icons/lucide/loader'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
+import Spinner from './ui/Spinner.vue'
 
 defineProps<{ jobs: readonly Job[] }>()
 const emit = defineEmits<{ 'open-run': [commandId: number] }>()
@@ -39,7 +39,7 @@ function statusClasses(status: string): string {
           class="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border"
           :class="statusClasses(job.status)"
         >
-          <IconLoader v-if="job.status === 'running'" class="size-3.5 animate-spin" />
+          <Spinner v-if="job.status === 'running'" />
           <IconClock3 v-else-if="job.status === 'queued'" class="size-3.5" />
           <IconCheck v-else-if="job.status === 'done'" class="size-3.5" />
           <IconCircleAlert v-else class="size-3.5" />
