@@ -132,6 +132,14 @@ standard: when something is a store, how to write one, the building blocks
 The lint enforces the split; the composables that predate it sit in
 `eslint-suppressions.json` until each one migrates (#536).
 
+## Frontend components
+
+Reusable building blocks (buttons, overlays, form controls, banners) live in
+`frontend/src/components/ui/`; feature components stay in `components/` or a
+feature folder. `frontend/src/components/ui/README.md` is the index and the
+rules: which block to use, the overlay and test-id conventions, and how to add
+a block. Read it before writing a button, a dialog, or an error line.
+
 ## Frontend DOM, timers, and storage
 
 Reach for `@vueuse/core` first: `useEventListener`, `onKeyStroke`,
