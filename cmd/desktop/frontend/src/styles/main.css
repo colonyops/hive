@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* Docs quote the arbitrary classes the lint rejects; scanning them would emit those rules. */
+@source not "../**/*.md";
 @import "../assets/fonts/terminal-fonts.css";
 
 @theme inline {
