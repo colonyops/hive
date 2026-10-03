@@ -69,7 +69,7 @@ const (
 // NewSessionForm manages the new session creation form.
 type NewSessionForm struct {
 	repos         []workspace.DiscoveredRepo
-	existingNames map[string]bool
+	existingSlugs map[string]bool
 
 	repoSelect SelectField
 	nameInput  textinput.Model
@@ -95,11 +95,12 @@ type NewSessionFormResult struct {
 
 // NewNewSessionForm creates a new session form with the given repos.
 // If preselectedRemote is non-empty, the matching repo will be pre-selected.
-// existingNames is used to validate that the session name is unique.
+// existingSlugs holds the slugs of existing sessions; a name is taken when its
+// slug is in it.
 // agentKeys, when non-empty, adds a compact agent selector at the top of the form.
 // The default agent (index 0 in agentKeys) is pre-selected; it is skipped in the
 // forward tab cycle and reachable via shift+tab from the repo field.
-func NewNewSessionForm(repos []workspace.DiscoveredRepo, preselectedRemote string, existingNames map[string]bool, agentKeys []string) *NewSessionForm {
+func NewNewSessionForm(repos []workspace.DiscoveredRepo, preselectedRemote string, existingSlugs map[string]bool, agentKeys []string) *NewSessionForm {
 	selectedIdx := 0
 	for i, r := range repos {
 		if r.Remote == preselectedRemote {
@@ -131,7 +132,7 @@ func NewNewSessionForm(repos []workspace.DiscoveredRepo, preselectedRemote strin
 
 	f := &NewSessionForm{
 		repos:         repos,
-		existingNames: existingNames,
+		existingSlugs: existingSlugs,
 		repoSelect:    repoSelect,
 		nameInput:     nameInput,
 		focusedField:  0, // repo is 0 without agent, 1 with agent
@@ -285,7 +286,7 @@ func (f *NewSessionForm) validateAndSubmit() (NewSessionForm, tea.Cmd) {
 		f.nameError = err.Error()
 		return *f, nil
 	}
-	if f.existingNames[name] {
+	if f.existingSlugs[session.Slugify(name)] {
 		f.nameError = "Session name already exists"
 		return *f, nil
 	}

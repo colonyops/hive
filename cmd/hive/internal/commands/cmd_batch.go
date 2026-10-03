@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/validate"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
@@ -263,16 +264,17 @@ func (b BatchInput) Validate() error {
 	for i, sess := range b.Sessions {
 		field := fmt.Sprintf("sessions[%d]", i)
 
-		if err := validate.SessionName(sess.Name); err != nil {
+		if err := session.ValidateName(sess.Name); err != nil {
 			errs = errs.Append(field+".name", err)
 			continue
 		}
 
-		if seenNames[sess.Name] {
+		slug := session.Slugify(sess.Name)
+		if seenNames[slug] {
 			errs = errs.Append(field+".name", fmt.Errorf("duplicate name %q", sess.Name))
 			continue
 		}
-		seenNames[sess.Name] = true
+		seenNames[slug] = true
 
 		// Validate session_id if provided
 		if sess.SessionID != "" {

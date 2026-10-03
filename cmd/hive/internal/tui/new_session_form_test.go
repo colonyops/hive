@@ -86,8 +86,8 @@ func TestNewNewSessionForm(t *testing.T) {
 	})
 
 	t.Run("validates duplicate session name", func(t *testing.T) {
-		existingNames := map[string]bool{"existing-session": true}
-		form := NewNewSessionForm(repos, "", existingNames, nil)
+		existingSlugs := map[string]bool{"existing-session": true}
+		form := NewNewSessionForm(repos, "", existingSlugs, nil)
 		form.focusedField = 1 // Focus name input
 		form.nameInput.SetValue("existing-session")
 		// Try to submit with duplicate name

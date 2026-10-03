@@ -319,7 +319,7 @@ func (l *HiveSessionLauncher) LaunchSession(ctx context.Context, req LaunchSessi
 	// failed but not the step, so without this a clone failure arrives as
 	// "clone repository: git clone: exec git: exit status 1" and nothing else.
 	progress := &sessionProgress{}
-	s, err := sessions.CreateSession(ctx, hive.CreateOptions{Name: req.Name, Prompt: req.Prompt, Remote: remote, Source: source, AgentKey: req.Agent, Background: true, UseBatchSpawn: false, Tags: tags, Progress: progress})
+	s, err := sessions.CreateSession(ctx, hive.CreateOptions{Name: req.Name, Prompt: req.Prompt, Remote: remote, Source: source, AgentKey: req.Agent, Background: true, UseBatchSpawn: false, UniqueName: req.UniqueName, Tags: tags, Progress: progress})
 	if err != nil {
 		if errors.Is(err, session.ErrDuplicateName) {
 			return SessionExecutionOutcome{}, fmt.Errorf("%w: %w", ErrDuplicateSessionName, err)
@@ -801,20 +801,32 @@ func sessionSummaryOf(s session.Session) SessionSummary {
 	}
 }
 
-// SlugifySessionName converts a display name to the slug Hive uses for
-// tmux session names and directory paths. It wraps the shared
-// session.Slugify so that launch_session_executor.go — not itself an ACL
-// seam — never imports internal/core/session directly; a rename there
-// breaks this one file instead of spreading to a non-seam caller.
+// The session-name functions below wrap internal/core/session so that
+// launch_session_executor.go -- not itself an ACL seam -- never imports it
+// directly; a rename there breaks this one file instead of spreading to a
+// non-seam caller.
+
+// SlugifySessionName converts a display name to the slug Hive uses for tmux
+// session names and directory paths.
 func SlugifySessionName(name string) string {
 	return session.Slugify(name)
 }
 
 // ValidateSessionName validates name against Hive's session naming rules.
-// See SlugifySessionName for why this wraps session.ValidateName
-// instead of letting callers import internal/core/session directly.
 func ValidateSessionName(name string) error {
 	return session.ValidateName(name)
+}
+
+// ToSessionName normalizes generated text into a valid session name, trying
+// each fallback when raw has no letters or digits. It returns "" when none
+// does.
+func ToSessionName(raw string, fallbacks ...string) string {
+	return session.ToSessionName(raw, fallbacks...)
+}
+
+// SessionNameWithSuffix appends "-suffix" to name within the length cap.
+func SessionNameWithSuffix(name, suffix string) string {
+	return session.NameWithSuffix(name, suffix)
 }
 
 type DurableMessageService interface {

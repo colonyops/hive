@@ -1,6 +1,7 @@
 package session
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -114,6 +115,7 @@ func TestValidateName(t *testing.T) {
 		{"feat[0]", "invalid session name"},
 		{`feat\branch`, "invalid session name"},
 		{"-starts-with-hyphen", "invalid session name"},
+		{strings.Repeat("a", MaxNameLength+1), "the maximum is"},
 	}
 	for _, tt := range invalid {
 		t.Run("invalid/"+tt.input, func(t *testing.T) {
@@ -139,6 +141,9 @@ func TestSlugify(t *testing.T) {
 		{"underscores", "my_session_name", "my-session-name"},
 		{"mixed case", "MySessionName", "mysessionname"},
 		{"empty after trim", "   ", ""},
+		{"accents fold", "Café Crème", "cafe-creme"},
+		{"undecomposable letters fold", "Straße Ørsted", "strasse-orsted"},
+		{"no ascii letters", "修正 🚀", ""},
 	}
 
 	for _, tt := range tests {
@@ -146,4 +151,40 @@ func TestSlugify(t *testing.T) {
 			assert.Equal(t, tt.want, Slugify(tt.in))
 		})
 	}
+}
+
+func TestToSessionName(t *testing.T) {
+	tests := []struct {
+		name      string
+		raw       string
+		fallbacks []string
+		want      string
+	}{
+		{"slugifies", "Fix: the Bug!", nil, "fix-the-bug"},
+		{"caps on a word boundary", "gh-1234-" + strings.Repeat("word-", 20), nil, "gh-1234-word-word-word-word-word-word-word-word-word-word"},
+		{"cuts a single long word", strings.Repeat("a", 80), nil, strings.Repeat("a", MaxNameLength)},
+		{"falls back when nothing survives", "修正 🚀", []string{"session-42"}, "session-42"},
+		{"skips empty fallbacks", "!!!", []string{"", "item 7"}, "item-7"},
+		{"empty when nothing survives", "!!!", []string{"???"}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ToSessionName(tt.raw, tt.fallbacks...)
+			assert.Equal(t, tt.want, got)
+			if got != "" {
+				assert.NoError(t, ValidateName(got))
+			}
+		})
+	}
+}
+
+func TestNameWithSuffix(t *testing.T) {
+	assert.Equal(t, "fix-bug-2", NameWithSuffix("fix-bug", "2"))
+	assert.Equal(t, "Fix Bug-rerun-3", NameWithSuffix("Fix Bug", "rerun-3"))
+
+	long := ToSessionName(strings.Repeat("word ", 20))
+	got := NameWithSuffix(long, "rerun-12345")
+	assert.LessOrEqual(t, len(got), MaxNameLength)
+	assert.True(t, strings.HasSuffix(got, "-word-rerun-12345"), got)
+	assert.NoError(t, ValidateName(got))
 }

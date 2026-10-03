@@ -60,6 +60,10 @@ Rules:
   `templates.tags` — Go templates rendered against the selected item. Templates
   are shared across backends, so keep them forge-neutral (all backends populate
   `.Fields.number`, `.Fields.url`, and `.Detail`).
+- The rendered name becomes a slug of at most 60 characters. When it has no
+  letters or digits left, hive uses `session-<item id>`. When an active session
+  already holds the slug, hive adds `-2`, `-3`, and so on. See
+  [session names](../getting-started/sessions.md#session-names).
 - Template data:
   - `.ID`, `.Title`, `.Subtitle`
   - `.Detail` — fetched markdown/detail content when available

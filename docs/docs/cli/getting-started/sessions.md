@@ -49,6 +49,14 @@ An isolated git clone in a dedicated directory with its own terminal environment
 
 **Not to be confused with**: Tmux session (see relationship below)
 
+### Session names
+
+A session has a display name and a slug. You type the name; hive derives the slug from it by lowercasing it, folding accented letters (`é` to `e`), and joining the letters and digits with single hyphens. `Fix Auth Bug` becomes `fix-auth-bug`. The slug names the tmux session and the clone directory.
+
+- A name is 1 to 60 characters of letters, digits, spaces, and `_ . : / -`, and starts with a letter or a digit.
+- Two active sessions cannot share a slug, so `Fix Bug` and `fix-bug` count as the same name. `hive new`, `hive batch`, the TUI, and a rename all reject a duplicate.
+- A name that hive generates, from a [source](../configuration/sources.md) template or a Hive Desktop launch node, is turned into a slug and cut to 60 characters at a word boundary. When its slug is already taken, hive adds `-2`, `-3`, and so on instead of failing.
+
 [Hive Desktop](../../desktop/code/terminal-mode.md) shows the same sessions in its Code area when both use the same Hive data root, which is the default.
 
 ## Agent

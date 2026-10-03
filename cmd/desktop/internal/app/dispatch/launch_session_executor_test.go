@@ -157,7 +157,7 @@ func TestLaunchSessionExecutor_ConfiguredRepoTemplateIgnoresInteractiveOverride(
 		Name: "frontend-name", Repository: "https://github.com/other/repo.git", Agent: "frontend-agent",
 	}})
 	require.NoError(t, err)
-	require.Equal(t, LaunchSessionRequest{Name: "spawn-review-item-1", Prompt: "hi", Repo: "git@github.com:colonyops/hive.git", Agent: "configured-agent"}, launcher.calls[0])
+	require.Equal(t, LaunchSessionRequest{Name: "spawn-review-item-1", Prompt: "hi", Repo: "git@github.com:colonyops/hive.git", Agent: "configured-agent", UniqueName: true}, launcher.calls[0])
 }
 
 func TestLaunchSessionExecutor_NoRepoTemplate_LeavesRepoEmpty(t *testing.T) {
@@ -174,6 +174,32 @@ func TestLaunchSessionExecutor_NoRepoTemplate_LeavesRepoEmpty(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, launcher.calls, 1)
 	assert.Equal(t, "git@example/repo", launcher.calls[0].Repo)
+	assert.False(t, launcher.calls[0].UniqueName, "a typed name keeps the duplicate error")
+}
+
+func TestLaunchSessionExecutor_NormalizesTheRenderedName(t *testing.T) {
+	for _, tt := range []struct {
+		name     string
+		template string
+		payload  map[string]any
+		want     string
+	}{
+		{name: "no letters or digits falls back to the derived name", template: "{{ .Payload.title }}", payload: map[string]any{"title": "修正 🚀"}, want: "spawn-review-item-1"},
+		{name: "accents fold", template: "{{ .Payload.title }}", payload: map[string]any{"title": "Café menu"}, want: "cafe-menu"},
+		{name: "long titles are capped on a word", template: "{{ .Payload.title }}", payload: map[string]any{"title": strings.Repeat("word ", 20)}, want: strings.TrimSuffix(strings.Repeat("word-", 12), "-")},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			launcher := &fakeSessionLauncher{}
+			exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
+			action := actions.Action{ID: "spawn-review", Type: "launch-session", Config: &LaunchNodeActionConfig{
+				PromptTemplate: "hi", RepoTemplate: "example/repo", NameTemplate: tt.template,
+			}}
+			_, err := exec.Execute(t.Context(), action, OutputData{Key: "item-1", Payload: tt.payload, Raw: json.RawMessage(`{}`)}, ActionInvocationInput{})
+			require.NoError(t, err)
+			require.Len(t, launcher.calls, 1)
+			assert.Equal(t, tt.want, launcher.calls[0].Name)
+		})
+	}
 }
 
 func TestLaunchSessionExecutor_LaunchesConfiguredWorkspace(t *testing.T) {
@@ -539,5 +565,5 @@ func TestLaunchSessionExecutor_RunsALaunchNodeProjection(t *testing.T) {
 
 	_, err := exec.Execute(t.Context(), action, reviewItem(), ActionInvocationInput{})
 	require.NoError(t, err)
-	require.Equal(t, []LaunchSessionRequest{{Name: "review-42", Prompt: "Review 42", Agent: "claude", Repo: "example/repo"}}, launcher.calls)
+	require.Equal(t, []LaunchSessionRequest{{Name: "review-42", Prompt: "Review 42", Agent: "claude", Repo: "example/repo", UniqueName: true}}, launcher.calls)
 }

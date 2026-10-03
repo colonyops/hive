@@ -226,7 +226,7 @@ func RenderSessionDraftItems(items []SessionDraftItem) (SessionDraft, error) {
 		}
 	}
 
-	name := SlugifySessionName(items[0].Title)
+	name := ToSessionName(items[0].Title)
 	if len(items) > 1 {
 		name = "inbox-selection-" + uuid.NewString()[:8]
 	}

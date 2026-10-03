@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -66,6 +67,11 @@ type CreateOptions struct {
 	AgentKey string
 	// Tags are user-defined labels attached to the session for external provider tracking.
 	Tags []string
+	// UniqueName appends -2, -3, ... to a Name whose slug an active session
+	// already holds, instead of failing with session.ErrDuplicateName. Callers
+	// that generate the name set it; callers where a person typed the name
+	// leave it off so the person picks another.
+	UniqueName bool
 	// Progress receives human-readable progress lines during session creation.
 	// When non-nil, service output (hooks, file copies) is also redirected here.
 	Progress io.Writer
@@ -228,21 +234,15 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	if err := session.ValidateName(opts.Name); err != nil {
 		return nil, err
 	}
+	name, err := s.claimName(ctx, opts.Name, "", opts.UniqueName)
+	if err != nil {
+		return nil, err
+	}
+	opts.Name = name
 
 	var sess session.Session
 	var dirID string
 	slug := session.Slugify(opts.Name)
-
-	// Check for duplicate active session name
-	existing, err := s.sessions.List(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list sessions: %w", err)
-	}
-	for _, e := range existing {
-		if e.State == session.StateActive && e.Name == opts.Name {
-			return nil, fmt.Errorf("%w: %q", session.ErrDuplicateName, opts.Name)
-		}
-	}
 
 	// Full clones retain their checkout when recycled and can be reused. Worktree
 	// recycling deletes the checkout and session record because the shared bare
@@ -395,6 +395,36 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	return &sess, nil
 }
 
+// claimName returns name, or with unique a suffixed variant of it, once its
+// slug is free among the active sessions other than exceptID. The slug and
+// the persisted tmux name both count, because either one addresses the tmux
+// session.
+func (s *SessionService) claimName(ctx context.Context, name, exceptID string, unique bool) (string, error) {
+	sessions, err := s.sessions.List(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list sessions: %w", err)
+	}
+	taken := make(map[string]string, 2*len(sessions))
+	for _, e := range sessions {
+		if e.State != session.StateActive || e.ID == exceptID {
+			continue
+		}
+		taken[e.Slug] = e.Name
+		taken[SessionTarget(e).Session] = e.Name
+	}
+	candidate := name
+	for n := 2; ; n++ {
+		holder, clash := taken[session.Slugify(candidate)]
+		if !clash {
+			return candidate, nil
+		}
+		if !unique {
+			return "", fmt.Errorf("%w: %q matches active session %q", session.ErrDuplicateName, name, holder)
+		}
+		candidate = session.NameWithSuffix(name, strconv.Itoa(n))
+	}
+}
+
 // worktreeBranchName returns the branch name for a worktree session, applying
 // the configured branch template for the remote when one is set.
 func (s *SessionService) worktreeBranchName(remote, name, slug, dirID string) (string, error) {
@@ -510,12 +540,14 @@ func (s *SessionService) RenameSession(ctx context.Context, id, newName string) 
 		return fmt.Errorf("rename session: %w", err)
 	}
 
-	slug := session.Slugify(newName)
-
 	sess, err := s.sessions.Get(ctx, id)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}
+	if _, err := s.claimName(ctx, newName, id, false); err != nil {
+		return fmt.Errorf("rename session: %w", err)
+	}
+	slug := session.Slugify(newName)
 
 	oldName := sess.Name
 	oldTarget := SessionTarget(sess)

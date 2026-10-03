@@ -1747,9 +1747,9 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 	}
 
 	allSessions := m.sessionsView.AllSessions()
-	existingNames := make(map[string]bool, len(allSessions))
+	existingSlugs := make(map[string]bool, len(allSessions))
 	for _, s := range allSessions {
-		existingNames[s.Name] = true
+		existingSlugs[session.Slugify(s.Name)] = true
 	}
 
 	defaultAgent := m.defaultAgentKey()
@@ -1773,7 +1773,7 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	newSessionForm := NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames, agentKeys)
+	newSessionForm := NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingSlugs, agentKeys)
 	newSessionForm.selectAgent(defaultAgent)
 	m.modals.NewSession = newSessionForm
 	m.state = stateCreatingSession

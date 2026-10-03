@@ -54,13 +54,7 @@ func RenderSessionTemplates(cfg TemplateConfig, item Item, detail Detail) (Rende
 	if err != nil {
 		return RenderedSession{}, fmt.Errorf("name template: %w", err)
 	}
-	// Source item titles commonly contain punctuation (quotes, "!", "#",
-	// parens, etc.) that hive's session name validation
-	// (internal/core/session.ValidateName) rejects outright. Sanitize so a
-	// template like "gh-{{ .Fields.number }}-{{ .Title }}" always produces a
-	// creatable session name instead of surfacing "invalid session name" at
-	// CreateSession time, deep past template rendering.
-	name = sanitizeSessionName(name, item.ID)
+	name = session.ToSessionName(name, "session-"+item.ID)
 
 	prompt, err := renderer.Render(cfg.Prompt, data)
 	if err != nil {
@@ -84,38 +78,6 @@ func RenderSessionTemplates(cfg TemplateConfig, item Item, detail Detail) (Rende
 		Prompt: prompt,
 		Tags:   tags,
 	}, nil
-}
-
-// maxSessionNameLength caps sanitized session names so long issue/PR titles
-// don't produce unwieldy directory, branch, and tmux session names.
-const maxSessionNameLength = 60
-
-// sanitizeSessionName rewrites a rendered session Name into kebab-case (via
-// session.Slugify) so it passes hive's session name validation and remains
-// predictable for issue titles. Long names are truncated at a word boundary
-// to maxSessionNameLength. If nothing usable remains, it falls back to the
-// item's ID.
-func sanitizeSessionName(name, fallbackID string) string {
-	if normalized := session.Slugify(name); normalized != "" {
-		return truncateSlug(normalized, maxSessionNameLength)
-	}
-	if normalized := session.Slugify(fallbackID); normalized != "" {
-		return truncateSlug("session-"+normalized, maxSessionNameLength)
-	}
-	return "session-item"
-}
-
-// truncateSlug shortens a kebab-case slug to at most max characters,
-// preferring to cut at a hyphen boundary so words aren't split mid-way.
-func truncateSlug(slug string, max int) string {
-	if len(slug) <= max {
-		return slug
-	}
-	truncated := slug[:max]
-	if idx := strings.LastIndex(truncated, "-"); idx > 0 {
-		truncated = truncated[:idx]
-	}
-	return strings.Trim(truncated, "-")
 }
 
 // detailText returns a plain-text representation of a Detail for use as the

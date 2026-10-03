@@ -1,45 +1,22 @@
 // Package session defines session domain types and interfaces.
+//
+// # Names
+//
+// A session has two names:
+//
+//   - Name is the display name a person reads in the TUI, the desktop, and
+//     templates. It is 1 to MaxNameLength characters of a-z, A-Z, 0-9, space,
+//     and _ . : / -, and starts with a letter or digit (ValidateName).
+//   - Slug is Slugify(Name): lowercase a-z and 0-9 joined by single hyphens.
+//     It names the tmux session and the clone directory, so it is the identity
+//     that must be unique among active sessions. "Fix Bug" and "fix-bug" are
+//     the same session name for that check.
+//
+// Text that a template or an external item generates goes through
+// ToSessionName, which always produces a valid Name or "".
 package session
 
-import (
-	"fmt"
-	"regexp"
-	"strings"
-	"time"
-)
-
-var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
-
-// validName matches the allowed session name character set.
-// Blocks characters that are meaningless or actively harmful in session names
-// while allowing the full range developers commonly use in branch/ticket names.
-// Disallowed: ~ ^ * ? [ \ @ and control characters.
-var validName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9 _.:/\-]*$`)
-
-// ValidateName returns an error if name contains characters outside the
-// allowed set. Slugify maps all non-alphanumeric characters to hyphens, so
-// the derived slug is always safe for tmux session names and git branch names
-// regardless of what permitted characters appear in the raw name.
-func ValidateName(name string) error {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return fmt.Errorf("session name cannot be empty")
-	}
-	if !validName.MatchString(name) {
-		return fmt.Errorf("invalid session name: allowed characters are a-z, 0-9, spaces, and - _ : . /")
-	}
-	return nil
-}
-
-// Slugify converts a name to a URL-safe slug for use in directory paths and tmux session names.
-// "My Session Name"    -> "my-session-name"
-// "dev/test-thing" -> "dev-test-thing"
-func Slugify(name string) string {
-	s := strings.ToLower(strings.TrimSpace(name))
-	s = nonAlphanumeric.ReplaceAllString(s, "-")
-	s = strings.Trim(s, "-")
-	return s
-}
+import "time"
 
 // State represents the lifecycle state of a session.
 type State string

@@ -1103,6 +1103,7 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 		Source:        scope.Source,
 		UseBatchSpawn: true,
 		Background:    true,
+		UniqueName:    true,
 		Tags:          rendered.Tags,
 	})
 

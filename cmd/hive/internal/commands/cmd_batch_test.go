@@ -44,6 +44,21 @@ func TestBatchInput_Validate(t *testing.T) {
 			wantErr: "duplicate",
 		},
 		{
+			name: "names with the same slug",
+			input: BatchInput{Sessions: []BatchSession{
+				{Name: "Fix Bug"},
+				{Name: "fix-bug"},
+			}},
+			wantErr: "duplicate",
+		},
+		{
+			name: "name with characters hive new rejects",
+			input: BatchInput{Sessions: []BatchSession{
+				{Name: "fix~bug"},
+			}},
+			wantErr: "invalid session name",
+		},
+		{
 			name: "invalid session_id uppercase",
 			input: BatchInput{Sessions: []BatchSession{
 				{Name: "test", SessionID: "ABC123"},
