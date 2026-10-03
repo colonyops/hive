@@ -157,6 +157,7 @@ func TestCreateSourceSessions_FanOut(t *testing.T) {
 	require.Len(t, creator.created, 2, "every selected item spawns a session")
 	assert.Equal(t, "session-1", creator.created[0].Name)
 	assert.Equal(t, "session-2", creator.created[1].Name)
+	assert.Equal(t, "1", creator.created[0].CollisionSuffix, "a taken name gets the item id")
 	assert.Equal(t, "id-1", firstID, "first created session is recorded for selection")
 	assert.Equal(t, "session-1", firstName)
 }

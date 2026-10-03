@@ -62,7 +62,7 @@ Rules:
   `.Fields.number`, `.Fields.url`, and `.Detail`).
 - The rendered name becomes a slug of at most 60 characters. When it has no
   letters or digits left, hive uses `session-<item id>`. When an active session
-  already holds the slug, hive adds `-2`, `-3`, and so on. See
+  already holds the slug, hive adds the item id, such as `-42`. See
   [session names](../getting-started/sessions.md#session-names).
 - Template data:
   - `.ID`, `.Title`, `.Subtitle`

@@ -1058,20 +1058,41 @@ func TestCreateSession_DuplicateSlugRejected(t *testing.T) {
 	assert.Contains(t, err.Error(), `"Fix Bug"`)
 }
 
-func TestCreateSession_UniqueNameSuffixesACollision(t *testing.T) {
-	store := newMockStore()
-	svc := newTestService(t, store, &config.Config{DataDir: t.TempDir(), GitPath: "git"})
-	require.NoError(t, store.Save(context.Background(), session.Session{
-		ID: "existing1", Name: "review-repo", Slug: "review-repo", State: session.StateActive, Remote: testRemote,
-	}))
-	moved := session.Session{ID: "existing2", Name: "other", Slug: "other", State: session.StateActive, Remote: testRemote}
-	moved.SetMeta(session.MetaTmuxSession, "review-repo-2")
-	require.NoError(t, store.Save(context.Background(), moved))
+func TestCreateSession_CollisionSuffix(t *testing.T) {
+	newSvc := func(t *testing.T, existing ...session.Session) (*SessionService, *mockStore) {
+		store := newMockStore()
+		for _, e := range existing {
+			require.NoError(t, store.Save(context.Background(), e))
+		}
+		return newTestService(t, store, &config.Config{DataDir: t.TempDir(), GitPath: "git"}), store
+	}
+	taken := session.Session{ID: "a", Name: "review-repo", Slug: "review-repo", State: session.StateActive, Remote: testRemote}
 
-	sess, err := svc.CreateSession(context.Background(), CreateOptions{Name: "review-repo", Remote: testRemote, UniqueName: true})
-	require.NoError(t, err)
-	assert.Equal(t, "review-repo-3", sess.Name, "the persisted tmux name holds -2")
-	assert.Equal(t, "review-repo-3", sess.Slug)
+	t.Run("a free name is used as is", func(t *testing.T) {
+		svc, _ := newSvc(t)
+		sess, err := svc.CreateSession(context.Background(), CreateOptions{Name: "review-repo", Remote: testRemote, CollisionSuffix: "7"})
+		require.NoError(t, err)
+		assert.Equal(t, "review-repo", sess.Name)
+	})
+
+	t.Run("a taken name gets the suffix", func(t *testing.T) {
+		svc, _ := newSvc(t, taken)
+		sess, err := svc.CreateSession(context.Background(), CreateOptions{Name: "review-repo", Remote: testRemote, CollisionSuffix: "7"})
+		require.NoError(t, err)
+		assert.Equal(t, "review-repo-7", sess.Name)
+		assert.Equal(t, "review-repo-7", sess.Slug)
+	})
+
+	t.Run("a retry after a saved attempt fails instead of creating a second session", func(t *testing.T) {
+		earlier := session.Session{ID: "b", Name: "other", Slug: "other", State: session.StateActive, Remote: testRemote}
+		earlier.SetMeta(session.MetaTmuxSession, "review-repo-7")
+		svc, store := newSvc(t, taken, earlier)
+		_, err := svc.CreateSession(context.Background(), CreateOptions{Name: "review-repo", Remote: testRemote, CollisionSuffix: "7"})
+		require.ErrorIs(t, err, session.ErrDuplicateName)
+		all, listErr := store.List(context.Background())
+		require.NoError(t, listErr)
+		assert.Len(t, all, 2)
+	})
 }
 
 func TestRenameSession_RejectsAnotherSessionsSlug(t *testing.T) {

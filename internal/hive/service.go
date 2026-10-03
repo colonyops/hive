@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -67,11 +66,14 @@ type CreateOptions struct {
 	AgentKey string
 	// Tags are user-defined labels attached to the session for external provider tracking.
 	Tags []string
-	// UniqueName appends -2, -3, ... to a Name whose slug an active session
-	// already holds, instead of failing with session.ErrDuplicateName. Callers
-	// that generate the name set it; callers where a person typed the name
-	// leave it off so the person picks another.
-	UniqueName bool
+	// CollisionSuffix, when set, turns a Name whose slug an active session
+	// already holds into Name-CollisionSuffix instead of failing with
+	// session.ErrDuplicateName. Callers that generate the name set it to an id
+	// that is stable for the request, so a retry after a failure that left the
+	// session saved claims the same name and fails, instead of creating a
+	// second session. Callers where a person typed the name leave it empty so
+	// the person picks another.
+	CollisionSuffix string
 	// Progress receives human-readable progress lines during session creation.
 	// When non-nil, service output (hooks, file copies) is also redirected here.
 	Progress io.Writer
@@ -234,7 +236,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	if err := session.ValidateName(opts.Name); err != nil {
 		return nil, err
 	}
-	name, err := s.claimName(ctx, opts.Name, "", opts.UniqueName)
+	name, err := s.claimName(ctx, opts.Name, "", opts.CollisionSuffix)
 	if err != nil {
 		return nil, err
 	}
@@ -395,11 +397,11 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	return &sess, nil
 }
 
-// claimName returns name, or with unique a suffixed variant of it, once its
-// slug is free among the active sessions other than exceptID. The slug and
-// the persisted tmux name both count, because either one addresses the tmux
-// session.
-func (s *SessionService) claimName(ctx context.Context, name, exceptID string, unique bool) (string, error) {
+// claimName returns name, or name with collisionSuffix when name is taken,
+// once its slug is free among the active sessions other than exceptID. The
+// slug and the persisted tmux name both count, because either one addresses
+// the tmux session.
+func (s *SessionService) claimName(ctx context.Context, name, exceptID, collisionSuffix string) (string, error) {
 	sessions, err := s.sessions.List(ctx)
 	if err != nil {
 		return "", fmt.Errorf("list sessions: %w", err)
@@ -412,17 +414,18 @@ func (s *SessionService) claimName(ctx context.Context, name, exceptID string, u
 		taken[e.Slug] = e.Name
 		taken[SessionTarget(e).Session] = e.Name
 	}
-	candidate := name
-	for n := 2; ; n++ {
-		holder, clash := taken[session.Slugify(candidate)]
-		if !clash {
-			return candidate, nil
-		}
-		if !unique {
-			return "", fmt.Errorf("%w: %q matches active session %q", session.ErrDuplicateName, name, holder)
-		}
-		candidate = session.NameWithSuffix(name, strconv.Itoa(n))
+	holder, clash := taken[session.Slugify(name)]
+	if !clash {
+		return name, nil
 	}
+	if collisionSuffix == "" {
+		return "", fmt.Errorf("%w: %q matches active session %q", session.ErrDuplicateName, name, holder)
+	}
+	suffixed := session.NameWithSuffix(name, collisionSuffix)
+	if holder, clash := taken[session.Slugify(suffixed)]; clash {
+		return "", fmt.Errorf("%w: %q and %q match active session %q", session.ErrDuplicateName, name, suffixed, holder)
+	}
+	return suffixed, nil
 }
 
 // worktreeBranchName returns the branch name for a worktree session, applying
@@ -544,7 +547,7 @@ func (s *SessionService) RenameSession(ctx context.Context, id, newName string) 
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}
-	if _, err := s.claimName(ctx, newName, id, false); err != nil {
+	if _, err := s.claimName(ctx, newName, id, ""); err != nil {
 		return fmt.Errorf("rename session: %w", err)
 	}
 	slug := session.Slugify(newName)

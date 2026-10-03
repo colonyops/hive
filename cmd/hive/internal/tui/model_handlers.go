@@ -1103,8 +1103,10 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 		Source:        scope.Source,
 		UseBatchSpawn: true,
 		Background:    true,
-		UniqueName:    true,
-		Tags:          rendered.Tags,
+		// Stable for the item, so creating the same item twice fails
+		// instead of stacking suffixes.
+		CollisionSuffix: session.Slugify(result.Item.ID),
+		Tags:            rendered.Tags,
 	})
 
 	output, done, cancel := exec.Execute(ctx)

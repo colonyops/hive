@@ -382,7 +382,7 @@ func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing
 	_, err = service.InvokeAction(t.Context(), InvokeActionRequest{ActionID: "review-pr", ItemID: prID, Input: dispatch.ActionInvocationInput{}})
 	require.NoError(t, err)
 	require.Equal(t, []dispatch.LaunchSessionRequest{{
-		Name: "review-pr-pr-1", Prompt: "Review Fix it", Repo: "git@example/repo.git", UniqueName: true,
+		Name: "review-pr-pr-1", Prompt: "Review Fix it", Repo: "git@example/repo.git", CollisionSuffix: "1",
 		Origins: []models.ItemRef{{ProfileID: "p", SourceKind: "github", ExternalID: "pr-1"}},
 	}}, launcher.calls)
 

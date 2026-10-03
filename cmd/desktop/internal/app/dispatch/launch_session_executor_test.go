@@ -157,7 +157,7 @@ func TestLaunchSessionExecutor_ConfiguredRepoTemplateIgnoresInteractiveOverride(
 		Name: "frontend-name", Repository: "https://github.com/other/repo.git", Agent: "frontend-agent",
 	}})
 	require.NoError(t, err)
-	require.Equal(t, LaunchSessionRequest{Name: "spawn-review-item-1", Prompt: "hi", Repo: "git@github.com:colonyops/hive.git", Agent: "configured-agent", UniqueName: true}, launcher.calls[0])
+	require.Equal(t, LaunchSessionRequest{Name: "spawn-review-item-1", Prompt: "hi", Repo: "git@github.com:colonyops/hive.git", Agent: "configured-agent"}, launcher.calls[0])
 }
 
 func TestLaunchSessionExecutor_NoRepoTemplate_LeavesRepoEmpty(t *testing.T) {
@@ -174,32 +174,22 @@ func TestLaunchSessionExecutor_NoRepoTemplate_LeavesRepoEmpty(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, launcher.calls, 1)
 	assert.Equal(t, "git@example/repo", launcher.calls[0].Repo)
-	assert.False(t, launcher.calls[0].UniqueName, "a typed name keeps the duplicate error")
+	assert.Empty(t, launcher.calls[0].CollisionSuffix, "a typed name keeps the duplicate error")
 }
 
-func TestLaunchSessionExecutor_NormalizesTheRenderedName(t *testing.T) {
-	for _, tt := range []struct {
-		name     string
-		template string
-		payload  map[string]any
-		want     string
-	}{
-		{name: "no letters or digits falls back to the derived name", template: "{{ .Payload.title }}", payload: map[string]any{"title": "修正 🚀"}, want: "spawn-review-item-1"},
-		{name: "accents fold", template: "{{ .Payload.title }}", payload: map[string]any{"title": "Café menu"}, want: "cafe-menu"},
-		{name: "long titles are capped on a word", template: "{{ .Payload.title }}", payload: map[string]any{"title": strings.Repeat("word ", 20)}, want: strings.TrimSuffix(strings.Repeat("word-", 12), "-")},
-	} {
-		t.Run(tt.name, func(t *testing.T) {
-			launcher := &fakeSessionLauncher{}
-			exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
-			action := actions.Action{ID: "spawn-review", Type: "launch-session", Config: &LaunchNodeActionConfig{
-				PromptTemplate: "hi", RepoTemplate: "example/repo", NameTemplate: tt.template,
-			}}
-			_, err := exec.Execute(t.Context(), action, OutputData{Key: "item-1", Payload: tt.payload, Raw: json.RawMessage(`{}`)}, ActionInvocationInput{})
-			require.NoError(t, err)
-			require.Len(t, launcher.calls, 1)
-			assert.Equal(t, tt.want, launcher.calls[0].Name)
-		})
-	}
+func TestLaunchSessionExecutor_GeneratedName(t *testing.T) {
+	launcher := &fakeSessionLauncher{}
+	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
+	action := actions.Action{ID: "spawn-review", Type: "launch-session", Config: &LaunchNodeActionConfig{
+		PromptTemplate: "hi", RepoTemplate: "example/repo", NameTemplate: "{{ .Payload.title }}",
+	}}
+	data := OutputData{Key: "item-1", Payload: map[string]any{"title": "修正 🚀"}, Raw: json.RawMessage(`{}`), CommandID: 42}
+
+	_, err := exec.Execute(t.Context(), action, data, ActionInvocationInput{})
+	require.NoError(t, err)
+	require.Len(t, launcher.calls, 1)
+	assert.Equal(t, "spawn-review-item-1", launcher.calls[0].Name, "a title with no letters or digits falls back to the derived name")
+	assert.Equal(t, "42", launcher.calls[0].CollisionSuffix, "every retry of the command claims the same name")
 }
 
 func TestLaunchSessionExecutor_LaunchesConfiguredWorkspace(t *testing.T) {
@@ -285,13 +275,13 @@ func TestHiveSessionLauncher_MapsRequestToSessionService(t *testing.T) {
 	launcher := NewHiveSessionLauncher(creator)
 
 	_, err := launcher.LaunchSession(t.Context(), LaunchSessionRequest{
-		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git",
+		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
 	})
 	require.NoError(t, err)
 	require.Len(t, creator.calls, 1)
 	require.NotNil(t, creator.calls[0].Progress, "every attempt gets its own progress writer, so a failure can name the step it died on")
 	require.Equal(t, hive.CreateOptions{
-		Name: "review-pr-1", Prompt: "Review this", AgentKey: "claude", Remote: "https://example.test/repo.git", Background: true,
+		Name: "review-pr-1", Prompt: "Review this", AgentKey: "claude", Remote: "https://example.test/repo.git", Background: true, CollisionSuffix: "7",
 	}, withoutProgress(creator.calls[0]))
 }
 
@@ -565,5 +555,5 @@ func TestLaunchSessionExecutor_RunsALaunchNodeProjection(t *testing.T) {
 
 	_, err := exec.Execute(t.Context(), action, reviewItem(), ActionInvocationInput{})
 	require.NoError(t, err)
-	require.Equal(t, []LaunchSessionRequest{{Name: "review-42", Prompt: "Review 42", Agent: "claude", Repo: "example/repo", UniqueName: true}}, launcher.calls)
+	require.Equal(t, []LaunchSessionRequest{{Name: "review-42", Prompt: "Review 42", Agent: "claude", Repo: "example/repo"}}, launcher.calls)
 }

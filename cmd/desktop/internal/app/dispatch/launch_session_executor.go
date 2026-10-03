@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -28,9 +29,9 @@ type LaunchSessionRequest struct {
 	Prompt string
 	Agent  string
 	Repo   string
-	// UniqueName suffixes a generated name whose slug a session already
-	// holds instead of failing.
-	UniqueName bool
+	// CollisionSuffix is appended to a generated name whose slug a session
+	// already holds; empty keeps the duplicate error.
+	CollisionSuffix string
 	// Origins are the inbox items the session is being created for. An empty
 	// slice means the session has no inbox item behind it.
 	Origins []models.ItemRef
@@ -100,7 +101,13 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 	}
 	workspace := strings.TrimSpace(cfg.Workspace)
 	agent := cfg.Agent
-	generatedName := true
+	// The command id stays the same across retries, so a retry after a
+	// failure that left the session saved collides with it instead of
+	// creating a second one.
+	var collisionSuffix string
+	if data.CommandID != 0 {
+		collisionSuffix = strconv.FormatInt(data.CommandID, 10)
+	}
 	if strings.TrimSpace(cfg.RepoTemplate) == "" && workspace == "" {
 		if input.Session == nil {
 			return ExecutionResult{}, fmt.Errorf("launch-session: target and session name input are required")
@@ -108,7 +115,7 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 		repo = strings.TrimSpace(input.Session.Repository)
 		workspace = strings.TrimSpace(input.Session.Workspace)
 		name = strings.TrimSpace(input.Session.Name)
-		generatedName = false
+		collisionSuffix = ""
 		if (repo == "") == (workspace == "") {
 			return ExecutionResult{}, fmt.Errorf("launch-session: exactly one of repository or workspace is required")
 		}
@@ -145,7 +152,7 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 	if workspace != "" {
 		outcome, err = e.launchWorkspace(ctx, LaunchWorkspaceSessionRequest{Workspace: workspace, Name: name, Prompt: prompt, Origins: origins})
 	} else {
-		outcome, err = e.launchRepository(ctx, LaunchSessionRequest{Name: name, Prompt: prompt, Agent: agent, Repo: repo, UniqueName: generatedName, Origins: origins})
+		outcome, err = e.launchRepository(ctx, LaunchSessionRequest{Name: name, Prompt: prompt, Agent: agent, Repo: repo, CollisionSuffix: collisionSuffix, Origins: origins})
 	}
 	if err != nil {
 		return ExecutionResult{Attempted: true}, err

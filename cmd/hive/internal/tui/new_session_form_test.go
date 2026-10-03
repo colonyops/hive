@@ -85,12 +85,11 @@ func TestNewNewSessionForm(t *testing.T) {
 		assert.Contains(t, updated.nameError, "invalid session name")
 	})
 
-	t.Run("validates duplicate session name", func(t *testing.T) {
+	t.Run("rejects a name whose slug is taken", func(t *testing.T) {
 		existingSlugs := map[string]bool{"existing-session": true}
 		form := NewNewSessionForm(repos, "", existingSlugs, nil)
 		form.focusedField = 1 // Focus name input
-		form.nameInput.SetValue("existing-session")
-		// Try to submit with duplicate name
+		form.nameInput.SetValue("Existing Session")
 		updated, _ := form.Update(keyPress(tea.KeyEnter))
 		assert.False(t, updated.Submitted())
 		assert.Equal(t, "Session name already exists", updated.nameError)

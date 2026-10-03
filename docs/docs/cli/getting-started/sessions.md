@@ -55,7 +55,7 @@ A session has a display name and a slug. You type the name; hive derives the slu
 
 - A name is 1 to 60 characters of letters, digits, spaces, and `_ . : / -`, and starts with a letter or a digit.
 - Two active sessions cannot share a slug, so `Fix Bug` and `fix-bug` count as the same name. `hive new`, `hive batch`, the TUI, and a rename all reject a duplicate.
-- A name that hive generates, from a [source](../configuration/sources.md) template or a Hive Desktop launch node, is turned into a slug and cut to 60 characters at a word boundary. When its slug is already taken, hive adds `-2`, `-3`, and so on instead of failing.
+- A name that hive generates, from a [source](../configuration/sources.md) template or a Hive Desktop launch node, is turned into a slug and cut to 60 characters at a word boundary. When its slug is already taken, hive adds an id from where the name came from (the item id for a source, the command id for a launch node) instead of failing.
 
 [Hive Desktop](../../desktop/code/terminal-mode.md) shows the same sessions in its Code area when both use the same Hive data root, which is the default.
 
