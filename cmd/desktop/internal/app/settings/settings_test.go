@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	configmigrate "github.com/colonyops/hive/internal/config/migrate"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 )
 
 func isolateSettings(t *testing.T) string {

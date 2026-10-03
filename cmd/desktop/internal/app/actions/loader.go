@@ -10,8 +10,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/slug"
-	configmigrate "github.com/colonyops/hive/internal/config/migrate"
 )
 
 // Catalog is one parsed actions.yml: the actions the app runs on the user's

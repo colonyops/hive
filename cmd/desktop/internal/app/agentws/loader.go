@@ -10,7 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	configmigrate "github.com/colonyops/hive/internal/config/migrate"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 )
 
 // LoadWorkspace reads and validates one agent-workspace.yaml. Dir is set from

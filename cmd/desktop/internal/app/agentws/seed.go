@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	configmigrate "github.com/colonyops/hive/internal/config/migrate"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 )
 
 const defaultMCPsYAML = `version: 1

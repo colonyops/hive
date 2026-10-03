@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/schedule"
-	configmigrate "github.com/colonyops/hive/internal/config/migrate"
 )
 
 // TestConfigRoundTrip proves parse -> validate -> serialise for both files

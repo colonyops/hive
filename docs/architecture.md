@@ -266,7 +266,7 @@ needs no lint edit:
 | Domain | `internal/domain/` | Models, rules, enums, sentinel errors, and the ports the engine needs. No I/O, no config | `pkg/`, other `domain/*` | `domain-is-pure` |
 | Platform | `internal/platform/` | Drivers for one outside system each: git, tmux, SQLite, process inspection, the login-shell environment, credentials, secrets, the OTel API | `pkg/`, `domain/`, other `platform/*` | `platform-is-a-driver` |
 | Store | `internal/store/` | `hive.db`: sqlc output, migrations, one store per aggregate | `pkg/`, `domain/`, `platform/sqlite` | `store-is-persistence` |
-| Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer, versioned migration | `pkg/`, `domain/` | `config-is-data` |
+| Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer | `pkg/`, `domain/` | `config-is-data` |
 | Engine | `internal/hive/` | One subpackage per application service, the event bus, and `hive.Engine`, which composes them | everything above | |
 | Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features, program-only config | any shared layer, their own tree | `core`, `cli-no-desktop-deps` |
 
@@ -379,6 +379,7 @@ cmd/desktop/internal/
                                   #   declared — consumer-defined, no notify/ package
     actions/                      # actions.yml catalog, watcher, editable model
       docs/                       # per-action-type markdown
+    configmigrate/                # versioned migrations for settings.yaml, flows, actions.yml
     prompts/                      # Go-owned LLM prompt templates + registry (ADR go-owned-llm-prompts)
       templates/                 #   .tmpl files the registry renders
     mcpcatalog/                   # the shipped MCP server catalogue: Descriptor +
@@ -499,7 +500,6 @@ internal/                         # the hive engine both programs run on (see
                                   #   validate, paths (the data-dir resolver),
                                   #   write.go (the comment-preserving writer
                                   #   hive init and first run share)
-    migrate/                      #   versioned config migrations
   hive/                           # the engine
     engine.go                     #   hive.Engine: New(cfg, Ports), Reload(cfg),
                                   #   one accessor per service
@@ -881,7 +881,7 @@ newer build wrote still starts this build and its updater
 
 `settings.yaml`, `flows/*.yaml`, and `actions.yml` each carry a top-level
 `version:` and are migrated forward in place at startup by
-`internal/config/migrate` (ADR yaml-config-migration) — a per-file, integer-versioned runner
+`cmd/desktop/internal/app/configmigrate` (ADR yaml-config-migration) — a per-file, integer-versioned runner
 distinct from the SQLite schema migrations (`internal/store/migrate`)
 that track applied versions in a table.
 

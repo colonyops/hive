@@ -10,7 +10,7 @@
 // formatting, and key order are NOT preserved (ADR yaml-config-migration). The comment-preserving
 // normal-save writers (flow.SaveFlow, the actions store CRUD) are unaffected —
 // they are never routed through here.
-package migrate
+package configmigrate
 
 import (
 	"bytes"

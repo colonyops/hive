@@ -30,9 +30,9 @@ transport shape in its adapters (`wailsui`, `mcpsrv`), not at a seam in
 | --- | --- | --- | --- |
 | Kit | `pkg/` | Hive-agnostic helpers | none |
 | Domain | `internal/domain/` | Models, rules, enums, ports. No I/O, no config | `domain-is-pure`: no other `internal/`, no `os/exec`, `net`, `database/sql`, fsnotify |
-| Platform | `internal/platform/` | Drivers for outside systems: git, tmux, SQLite, process inspection, execenv, credentials, secrets, observe | `platform-is-a-driver`: no `internal/hive`, `store`, `config` |
-| Store | `internal/store/` | `hive.db` | `store-is-persistence`: no `internal/hive`, `config`, or `platform` except `platform/sqlite` |
-| Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, write, migrate | `config-is-data`: no `internal/hive`, `store`, `platform` |
+| Platform | `internal/platform/` | Drivers for outside systems: git, tmux, SQLite, process inspection, execenv, credentials, secrets, observe | `platform-is-a-driver`: only `domain` and other `platform/*` |
+| Store | `internal/store/` | `hive.db` | `store-is-persistence`: only `domain` and `platform/sqlite` |
+| Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, write | `config-is-data`: only `domain` |
 | Engine | `internal/hive/` | One subpackage per application service, and `hive.Engine` | none beyond `shared-surface-free` |
 | Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features and config | Go `internal` visibility; `cli-no-desktop-deps` |
 

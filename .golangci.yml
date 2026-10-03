@@ -82,39 +82,37 @@ linters:
           files:
             - "**/internal/platform/**"
             - "!**/cmd/**"
+          # Longer lax-mode allow matches override the internal deny.
+          list-mode: lax
+          allow:
+            - github.com/colonyops/hive/internal/domain
+            - github.com/colonyops/hive/internal/platform
           deny:
-            - pkg: github.com/colonyops/hive/internal/hive
-              desc: &driver platform drives one outside system and knows nothing of services, stores or config (docs/architecture.md, "Layers and the dependency rule"). Take what you need as a parameter.
-            - pkg: github.com/colonyops/hive/internal/store
-              desc: *driver
-            - pkg: github.com/colonyops/hive/internal/config
-              desc: *driver
+            - pkg: github.com/colonyops/hive/internal
+              desc: platform drives one outside system and imports only domain and other drivers (docs/architecture.md, "Layers and the dependency rule"). Take what you need as a parameter.
         config-is-data:
           files:
             - "**/internal/config/**"
             - "!**/cmd/**"
+          list-mode: lax
+          allow:
+            - github.com/colonyops/hive/internal/domain
+            - github.com/colonyops/hive/internal/config
           deny:
-            - pkg: github.com/colonyops/hive/internal/hive
-              desc: &configdata config is data. It loads, validates and writes config.yaml and knows nothing of services, stores, drivers or the programs (docs/architecture.md, "Layers and the dependency rule").
-            - pkg: github.com/colonyops/hive/internal/store
-              desc: *configdata
-            - pkg: github.com/colonyops/hive/internal/platform
-              desc: *configdata
+            - pkg: github.com/colonyops/hive/internal
+              desc: config is data. It loads, validates and writes config.yaml and imports only domain (docs/architecture.md, "Layers and the dependency rule").
         store-is-persistence:
           files:
             - "**/internal/store/**"
             - "!**/cmd/**"
-          # Longer lax-mode allow matches override the platform deny.
           list-mode: lax
           allow:
+            - github.com/colonyops/hive/internal/domain
+            - github.com/colonyops/hive/internal/store
             - github.com/colonyops/hive/internal/platform/sqlite
           deny:
-            - pkg: github.com/colonyops/hive/internal/hive
-              desc: &persistence store is hive.db persistence and knows nothing of services, config or drivers other than platform/sqlite (docs/architecture.md, "Layers and the dependency rule").
-            - pkg: github.com/colonyops/hive/internal/config
-              desc: *persistence
-            - pkg: github.com/colonyops/hive/internal/platform
-              desc: *persistence
+            - pkg: github.com/colonyops/hive/internal
+              desc: store is hive.db persistence and imports only domain and platform/sqlite (docs/architecture.md, "Layers and the dependency rule").
         core:
           files:
             - "**/cmd/desktop/internal/app/**"

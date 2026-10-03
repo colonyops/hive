@@ -7,7 +7,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	configmigrate "github.com/colonyops/hive/internal/config/migrate"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 )
 
 // MigrateDir migrates every flow definition file under dir forward to current,
