@@ -53,8 +53,7 @@ func TestOpen_ReadThenWriteContention(t *testing.T) {
 				busy++
 			}
 		}
-		t.Logf("deferred locking: %d of %d transactions failed with SQLITE_BUSY (%d errors total)",
-			busy, contentionHandles*contentionGoroutines*contentionIterations, len(errs))
+		assert.Positive(t, busy, "deferred locking should fail some transactions with SQLITE_BUSY")
 	})
 }
 

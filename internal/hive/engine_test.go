@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
@@ -167,6 +168,22 @@ func TestEngineFailedReloadKeepsTheOldServices(t *testing.T) {
 	assert.Same(t, messages, h.engine.Messages())
 	assert.Equal(t, gitExec, h.engine.Git())
 	h.bus.AssertNotPublished(t, events.EventConfigReloaded, 50*time.Millisecond)
+}
+
+func TestEngineCapsMessagesPerTopic(t *testing.T) {
+	cfg := loadConfig(t, t.TempDir())
+	assert.Equal(t, 100, cfg.Messaging.MaxMessages)
+
+	cfg.Messaging.MaxMessages = 2
+	h := newEngine(t, cfg, nil)
+	for _, payload := range []string{"one", "two", "three"} {
+		_, err := h.engine.Messages().Publish(t.Context(), messaging.Message{Payload: payload}, []string{"inbox"})
+		require.NoError(t, err)
+	}
+
+	kept, err := h.engine.Messages().Subscribe(t.Context(), "inbox", time.Time{})
+	require.NoError(t, err)
+	assert.Len(t, kept, 2)
 }
 
 func TestEngineHoneycombSurvivesAReload(t *testing.T) {

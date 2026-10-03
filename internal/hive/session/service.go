@@ -134,7 +134,7 @@ func NewService(
 	out := &switchWriter{w: stdout}
 	err := &switchWriter{w: stderr}
 	if client == nil {
-		panic("hive.NewService: multiplexer is required")
+		panic("session.NewService: multiplexer is required")
 	}
 	return &Service{
 		sessions:   sessions,
