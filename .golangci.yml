@@ -155,55 +155,6 @@ linters:
               desc: |
                 An exporter is wired once, in cmd/desktop/internal/app/telemetry.
                 See docs/architecture.md, "Telemetry".
-        # cmd/desktop/internal/app consumes the shared hive packages only
-        # through the seam in dispatch/hive_adapters.go (docs/architecture.md,
-        # "Bounded Context"). The files list is the allowlist of files that sit
-        # on that seam.
-        app-shared-via-seam:
-          files:
-            - "**/cmd/desktop/internal/app/**"
-            - "!**/cmd/desktop/internal/app/app.go"
-            - "!**/cmd/desktop/internal/app/dispatch/hive_adapters.go"
-            - "!**/cmd/desktop/internal/app/dispatch/hive_adapters_test.go"
-            - "!**/cmd/desktop/internal/app/dispatch/hive_hc_adapters.go"
-            - "!**/cmd/desktop/internal/app/dispatch/hive_hc_adapters_test.go"
-            - "!**/cmd/desktop/internal/app/dispatch/session_create_error.go"
-            - "!**/cmd/desktop/internal/app/dispatch/session_git_status_test.go"
-            - "!**/cmd/desktop/internal/app/dispatch/launch_session_executor_test.go"
-            - "!**/cmd/desktop/internal/app/data/queries/dbext.go"
-            - "!**/cmd/desktop/internal/app/data/queries/dbext_test.go"
-            - "!**/cmd/desktop/internal/app/hiveconf/hiveconf_test.go"
-          # Pure domain packages skip the seam (ADR
-          # pure-shared-domain-packages-are-imported-directly-services-and-stores-stay-behind-the-seam);
-          # domain-is-pure keeps them pure.
-          list-mode: lax
-          allow:
-            - github.com/colonyops/hive/internal/domain
-            # Engine config is data like domain (config-is-data keeps it so):
-            # the desktop reads its writer, migrations and data-dir resolver.
-            - github.com/colonyops/hive/internal/config
-            # Desktop drivers that moved to platform, and the tmux test helper
-            # that was never behind the seam.
-            - github.com/colonyops/hive/internal/platform/credentials
-            - github.com/colonyops/hive/internal/platform/execenv
-            - github.com/colonyops/hive/internal/platform/observe
-            - github.com/colonyops/hive/internal/platform/secrets
-            - github.com/colonyops/hive/internal/platform/tmux/bin
-            - github.com/colonyops/hive/internal/platform/tmux/control
-            - github.com/colonyops/hive/internal/platform/tmuxtest
-          deny:
-            - pkg: github.com/colonyops/hive/internal/store
-              desc: &seam |
-                cmd/desktop/internal/app consumes the shared hive packages only
-                through the seam: declare a narrow interface here, let the
-                shared type satisfy it structurally, and convert at the
-                boundary in dispatch/hive_adapters.go. If this file genuinely
-                belongs at the seam, extend the allowlist in this rule's
-                `files`, with a comment saying why.
-            - pkg: github.com/colonyops/hive/internal/hive
-              desc: *seam
-            - pkg: github.com/colonyops/hive/internal/platform
-              desc: *seam
         cli-no-desktop-deps:
           files:
             - "**/cmd/hive/**"

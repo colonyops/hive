@@ -1,7 +1,7 @@
 import type {
   TaskComment,
   TaskItem,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 // Pure presentation helpers for the Tasks view: filter groups, the tree the
 // two-pane view renders, checkpoint-comment parsing, cascade-delete counting,

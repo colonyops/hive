@@ -11,7 +11,7 @@ import type {
   SessionDetail as SessionDetailView,
   SessionRisk as SessionRiskView,
   SessionSummary,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { appErrorMessage } from '../lib/appError'
 import { useConfirmation, type ConfirmationDetail } from './useConfirmation'
 import { useToasts } from './useToasts'

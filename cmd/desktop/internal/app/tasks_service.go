@@ -5,117 +5,170 @@ import (
 	"errors"
 	"time"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
+	"github.com/colonyops/hive/internal/domain/hc"
+	"github.com/colonyops/hive/internal/hive"
+	hcsvc "github.com/colonyops/hive/internal/hive/hc"
 )
 
-// taskSource is the seam's HiveHoneycomb surface TasksService consumes. It is
-// declared here, over dispatch's projection types, rather than importing
-// dispatch.HiveHoneycomb directly, so a fake can stand in without pulling in
-// the shared hive packages (depguard forbids that import in this package).
-type taskSource interface {
-	ListTasks(ctx context.Context, repoKey string) ([]dispatch.TaskItem, error)
-	TaskDetail(ctx context.Context, id string) (dispatch.TaskDetail, error)
-	SetTaskStatus(ctx context.Context, id, status string) error
-	DeleteTask(ctx context.Context, id string) error
-	PruneTasks(ctx context.Context, opts dispatch.TaskPruneOptions) (int, error)
-	TaskRepoKeys(ctx context.Context) ([]string, error)
+// TaskBlocker is one explicit blocker on a task. A blocker whose item has since
+// been deleted keeps its ID with an empty Title rather than being dropped.
+type TaskBlocker struct {
+	ID     string
+	Title  string
+	Status hc.Status
 }
 
-// A nil source makes every method return KindUnavailable.
+// TaskDetail is one hc item read in full, for a detail view.
+type TaskDetail struct {
+	hc.Item
+	Blockers []TaskBlocker
+	Comments []hc.Comment
+}
+
+// TasksService is the desktop's tasks view over hive's hc issue tracker. A nil
+// engine makes every method return KindUnavailable.
 type TasksService struct {
-	source taskSource
+	hive *hive.Engine
 }
 
-func newTasksService(source taskSource) *TasksService {
-	return &TasksService{source: source}
+func newTasksService(engine *hive.Engine) *TasksService {
+	return &TasksService{hive: engine}
 }
 
-func (s *TasksService) ListTasks(ctx context.Context, repoKey string) ([]dispatch.TaskItem, error) {
-	if s.source == nil {
+func (s *TasksService) tasks() (*hcsvc.Service, error) {
+	if s.hive == nil {
 		return nil, Errorf(KindUnavailable, "tasks are unavailable")
 	}
-	items, err := s.source.ListTasks(ctx, repoKey)
+	return s.hive.HC(), nil
+}
+
+// ListTasks returns every item for repoKey, epics and tasks alike, with no
+// status filter: the tasks view's filter groups do not map to hc's single
+// status field, so it filters the full list itself.
+func (s *TasksService) ListTasks(ctx context.Context, repoKey string) ([]hc.Item, error) {
+	tasks, err := s.tasks()
 	if err != nil {
-		return nil, s.classifyError(err, "listing tasks")
+		return nil, err
+	}
+	items, err := tasks.ListItems(ctx, hc.ListFilter{RepoKey: repoKey})
+	if err != nil {
+		return nil, classifyTaskError(err, "listing tasks")
 	}
 	return items, nil
 }
 
-func (s *TasksService) TaskDetail(ctx context.Context, id string) (dispatch.TaskDetail, error) {
-	if s.source == nil {
-		return dispatch.TaskDetail{}, Errorf(KindUnavailable, "tasks are unavailable")
-	}
-	detail, err := s.source.TaskDetail(ctx, id)
+// TaskDetail reads one item in full: its own fields, its comments, and a title
+// for each explicit blocker. ListItems never fills BlockerIDs, so each
+// blocker's title costs its own GetItem.
+func (s *TasksService) TaskDetail(ctx context.Context, id string) (TaskDetail, error) {
+	tasks, err := s.tasks()
 	if err != nil {
-		return dispatch.TaskDetail{}, s.classifyError(err, "reading task %q", id)
+		return TaskDetail{}, err
 	}
-	return detail, nil
+	item, err := tasks.GetItem(ctx, id)
+	if err != nil {
+		return TaskDetail{}, classifyTaskError(err, "reading task %q", id)
+	}
+	comments, err := tasks.ListComments(ctx, id)
+	if err != nil {
+		return TaskDetail{}, classifyTaskError(err, "reading task %q", id)
+	}
+
+	blockers := make([]TaskBlocker, 0, len(item.BlockerIDs))
+	for _, blockerID := range item.BlockerIDs {
+		blocker, err := tasks.GetItem(ctx, blockerID)
+		if err != nil {
+			if errors.Is(err, hc.ErrNotFound) {
+				// The blocker item is gone, but the edge is not this read's to
+				// fix: surface the ID with no title.
+				blockers = append(blockers, TaskBlocker{ID: blockerID})
+				continue
+			}
+			return TaskDetail{}, Wrap(err, KindInternal, "reading blocker %q of task %q", blockerID, id)
+		}
+		blockers = append(blockers, TaskBlocker{ID: blocker.ID, Title: blocker.Title, Status: blocker.Status})
+	}
+	return TaskDetail{Item: item, Blockers: blockers, Comments: comments}, nil
 }
 
+// SetTaskStatus sets id's status. A terminal status on an epic cascades to
+// every non-terminal descendant when it changes the epic's status
+// (hcsvc.Service.UpdateItem).
 func (s *TasksService) SetTaskStatus(ctx context.Context, id, status string) error {
-	if s.source == nil {
-		return Errorf(KindUnavailable, "tasks are unavailable")
+	tasks, err := s.tasks()
+	if err != nil {
+		return err
 	}
-	if err := s.source.SetTaskStatus(ctx, id, status); err != nil {
-		return s.classifyError(err, "setting status for task %q", id)
+	parsed, err := hc.ParseStatus(status)
+	if err != nil {
+		return Wrap(err, KindInvalid, "setting status for task %q", id)
+	}
+	if _, err := tasks.UpdateItem(ctx, id, hc.ItemUpdate{Status: &parsed}); err != nil {
+		return classifyTaskError(err, "setting status for task %q", id)
 	}
 	return nil
 }
 
+// DeleteTask deletes id and its whole subtree, comments included. GetItem
+// runs first so a missing id reports KindNotFound instead of DeleteItem's
+// silent no-op on an unknown ID.
 func (s *TasksService) DeleteTask(ctx context.Context, id string) error {
-	if s.source == nil {
-		return Errorf(KindUnavailable, "tasks are unavailable")
+	tasks, err := s.tasks()
+	if err != nil {
+		return err
 	}
-	if err := s.source.DeleteTask(ctx, id); err != nil {
-		return s.classifyError(err, "deleting task %q", id)
+	if _, err := tasks.GetItem(ctx, id); err != nil {
+		return classifyTaskError(err, "deleting task %q", id)
+	}
+	if err := tasks.DeleteItem(ctx, id); err != nil {
+		return classifyTaskError(err, "deleting task %q", id)
 	}
 	return nil
 }
 
 const maxPruneOlderThanDays = 36500 // 100 years
 
-// PruneTasks takes olderThanDays rather than a time.Duration: it is the unit
-// the tasks view's prune dialog collects, and converting here keeps the
-// dispatch DTO's duration out of the frontend binding.
+// PruneTasks removes terminal, stale items. It takes olderThanDays because that
+// is the unit the prune dialog collects. Leaving the statuses unset keeps the
+// store's done-and-cancelled default.
 func (s *TasksService) PruneTasks(ctx context.Context, olderThanDays int, repoKey string, dryRun bool) (int, error) {
-	if s.source == nil {
-		return 0, Errorf(KindUnavailable, "tasks are unavailable")
+	tasks, err := s.tasks()
+	if err != nil {
+		return 0, err
 	}
-	// The upper bound keeps the day→duration conversion below from overflowing
-	// int64 nanoseconds (~106751 days), which would turn the cutoff negative
-	// and prune every terminal item regardless of age.
+	// The upper bound keeps the day-to-duration conversion below from
+	// overflowing int64 nanoseconds (~106751 days), which would turn the cutoff
+	// negative and prune every terminal item regardless of age.
 	if olderThanDays < 0 || olderThanDays > maxPruneOlderThanDays {
 		return 0, Errorf(KindInvalid, "olderThanDays must be between 0 and %d", maxPruneOlderThanDays)
 	}
-	count, err := s.source.PruneTasks(ctx, dispatch.TaskPruneOptions{
+	count, err := tasks.Prune(ctx, hc.PruneOpts{
 		OlderThan: time.Duration(olderThanDays) * 24 * time.Hour,
 		RepoKey:   repoKey,
 		DryRun:    dryRun,
 	})
 	if err != nil {
-		return count, s.classifyError(err, "pruning tasks")
+		return count, classifyTaskError(err, "pruning tasks")
 	}
 	return count, nil
 }
 
+// TaskRepoKeys returns every distinct repo key that has at least one hc item.
 func (s *TasksService) TaskRepoKeys(ctx context.Context) ([]string, error) {
-	if s.source == nil {
-		return nil, Errorf(KindUnavailable, "tasks are unavailable")
-	}
-	keys, err := s.source.TaskRepoKeys(ctx)
+	tasks, err := s.tasks()
 	if err != nil {
-		return nil, s.classifyError(err, "listing task repo keys")
+		return nil, err
+	}
+	keys, err := tasks.ListRepoKeys(ctx)
+	if err != nil {
+		return nil, classifyTaskError(err, "listing task repo keys")
 	}
 	return keys, nil
 }
 
-// classifyError maps a source failure to its Kind.
-func (s *TasksService) classifyError(err error, format string, args ...any) error {
-	if errors.Is(err, dispatch.ErrTaskNotFound) {
+func classifyTaskError(err error, format string, args ...any) error {
+	if errors.Is(err, hc.ErrNotFound) {
 		return Wrap(err, KindNotFound, format, args...)
-	}
-	if errors.Is(err, dispatch.ErrInvalidTaskStatus) {
-		return Wrap(err, KindInvalid, format, args...)
 	}
 	return Wrap(err, KindInternal, format, args...)
 }

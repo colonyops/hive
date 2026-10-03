@@ -1,14 +1,16 @@
-package dispatch
+package app
 
 import (
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/colonyops/hive/internal/domain/terminal"
 )
 
 // These are synthetic capture-pane fixtures, not the raw-pty ring tails
-// hc-alqns469 spiked and falsified — ClassifyAgentScreen's input is a tmux
+// hc-alqns469 spiked and falsified — classifyAgentScreen's input is a tmux
 // capture-pane -p -J screen (see tmuxcc.Manager.CapturePane), which is what
 // Hive's assessment engine is tuned against. Real capture-pane fixtures need a live
 // tmux session and are out of scope here (see hc-ou4o02zx).
@@ -25,7 +27,7 @@ func TestClassifyAgentScreenReady(t *testing.T) {
 		"❯",
 	}, "\n")
 
-	assert.Equal(t, AgentActivityReady, ClassifyAgentScreen("claude", screen))
+	assert.Equal(t, terminal.StatusReady, classifyAgentScreen("claude", screen))
 }
 
 func TestClassifyAgentScreenActive(t *testing.T) {
@@ -36,7 +38,7 @@ func TestClassifyAgentScreenActive(t *testing.T) {
 		"",
 	}, "\n")
 
-	assert.Equal(t, AgentActivityActive, ClassifyAgentScreen("claude", screen))
+	assert.Equal(t, terminal.StatusActive, classifyAgentScreen("claude", screen))
 }
 
 func TestClassifyAgentScreenApproval(t *testing.T) {
@@ -49,7 +51,7 @@ func TestClassifyAgentScreenApproval(t *testing.T) {
 		"  No, and tell Claude what to do differently",
 	}, "\n")
 
-	assert.Equal(t, AgentActivityApproval, ClassifyAgentScreen("claude", screen))
+	assert.Equal(t, terminal.StatusApproval, classifyAgentScreen("claude", screen))
 }
 
 // TestClassifyAgentScreenApprovalDoesNotStickAfterAnAnswer asserts the
@@ -75,7 +77,7 @@ func TestClassifyAgentScreenApprovalDoesNotStickAfterAnAnswer(t *testing.T) {
 	lines = append(lines, "Applied 1 edit to main.go", "", "❯")
 	screen := strings.Join(lines, "\n")
 
-	assert.Equal(t, AgentActivityReady, ClassifyAgentScreen("claude", screen))
+	assert.Equal(t, terminal.StatusReady, classifyAgentScreen("claude", screen))
 }
 
 // TestClassifyAgentScreenBusyOutranksApproval asserts the assessment engine's
@@ -90,7 +92,7 @@ func TestClassifyAgentScreenBusyOutranksApproval(t *testing.T) {
 		"⠋ working… (esc to interrupt)",
 	}, "\n")
 
-	assert.Equal(t, AgentActivityActive, ClassifyAgentScreen("claude", screen))
+	assert.Equal(t, terminal.StatusActive, classifyAgentScreen("claude", screen))
 }
 
 func TestClassifyAgentScreenCodexApproval(t *testing.T) {
@@ -98,5 +100,5 @@ func TestClassifyAgentScreenCodexApproval(t *testing.T) {
 
 	screen := "Would you like to run the following command?\nPress enter to confirm or esc to cancel"
 
-	assert.Equal(t, AgentActivityApproval, ClassifyAgentScreen("codex", screen))
+	assert.Equal(t, terminal.StatusApproval, classifyAgentScreen("codex", screen))
 }

@@ -28,7 +28,7 @@ import type {
   ActionRunView,
   ItemChatView,
   ItemSessionView,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import FeedKindPill from './FeedKindPill.vue'
 import FeedSourceBadge from './FeedSourceBadge.vue'
 

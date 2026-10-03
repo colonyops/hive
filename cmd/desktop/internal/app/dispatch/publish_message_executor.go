@@ -10,17 +10,25 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
+	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/platform/observe"
 )
 
-type MessagePublisher interface {
-	PublishMessage(ctx context.Context, payload, topic string) (string, error)
+// MessageSender is the sender every message this app publishes carries.
+const MessageSender = "hive-desktop"
+
+// MessageService is satisfied by *msgsvc.Service.
+type MessageService interface {
+	Publish(context.Context, messaging.Message, []string) (messaging.PublishResult, error)
 }
 
-type PublishMessageExecutor struct{ publisher MessagePublisher }
+// PublishMessageExecutor publishes a rendered message to hive's message bus.
+// messages is called once per execution, so a hive config reload (a changed
+// messaging.max_messages) reaches the next publish.
+type PublishMessageExecutor struct{ messages func() MessageService }
 
-func NewPublishMessageExecutor(publisher MessagePublisher) *PublishMessageExecutor {
-	return &PublishMessageExecutor{publisher: publisher}
+func NewPublishMessageExecutor(messages func() MessageService) *PublishMessageExecutor {
+	return &PublishMessageExecutor{messages: messages}
 }
 
 func (e *PublishMessageExecutor) Execute(ctx context.Context, action actions.Action, data OutputData, _ ActionInvocationInput) (ExecutionResult, error) {
@@ -28,7 +36,7 @@ func (e *PublishMessageExecutor) Execute(ctx context.Context, action actions.Act
 	if !ok {
 		return ExecutionResult{}, fmt.Errorf("publish-message executor: action %q has config type %T", action.ID, action.Config)
 	}
-	if e.publisher == nil {
+	if e.messages == nil {
 		return ExecutionResult{}, fmt.Errorf("publish-message executor: no message publisher configured")
 	}
 	payload, err := tmpl.New(tmpl.Config{}).Render(cfg.MessageTemplate, data)
@@ -43,19 +51,24 @@ func (e *PublishMessageExecutor) Execute(ctx context.Context, action actions.Act
 	if err != nil {
 		return ExecutionResult{Attempted: true}, err
 	}
-	if topic != cfg.Topic {
-		return ExecutionResult{Attempted: true}, fmt.Errorf("publish-message: expected topic %q, got %q", cfg.Topic, topic)
-	}
-	return ExecutionResult{Attempted: true, Outcome: &ExecutionOutcome{Message: &MessageExecutionOutcome{Topic: topic, Sender: "hive-desktop"}}}, nil
+	return ExecutionResult{Attempted: true, Outcome: &ExecutionOutcome{Message: &MessageExecutionOutcome{Topic: topic, Sender: MessageSender}}}, nil
 }
 
-// The broker is another process, and it answers with the topic it published
-// on, which is what the caller checks.
+// The topic is literal: a wildcard the store expands would fan one action out
+// to topics nobody configured, so anything but the exact topic back is an
+// error.
 func (e *PublishMessageExecutor) publish(ctx context.Context, payload, topic string) (published string, err error) {
 	ctx, span := observe.StartConditionalSpan(ctx, tracer, "dispatch.publish-message", trace.WithAttributes(
 		attribute.String(attrTopic, topic),
 	))
 	defer observe.End(span, &err)
 
-	return e.publisher.PublishMessage(ctx, payload, topic)
+	result, err := e.messages().Publish(ctx, messaging.Message{Payload: payload, Sender: MessageSender}, []string{topic})
+	if err != nil {
+		return "", fmt.Errorf("publish message: %w", err)
+	}
+	if len(result.Topics) != 1 || result.Topics[0] != topic {
+		return "", fmt.Errorf("publish-message: expected topic %q, got %v", topic, result.Topics)
+	}
+	return topic, nil
 }

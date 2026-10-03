@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type {
   TaskComment,
   TaskItem,
-} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import {
   buildTaskTree,
   cascadeCount,

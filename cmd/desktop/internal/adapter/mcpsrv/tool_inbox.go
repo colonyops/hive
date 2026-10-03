@@ -6,12 +6,12 @@ import (
 	"encoding/json"
 	"maps"
 	"slices"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 )
 
 const (
@@ -296,7 +296,30 @@ type itemSessionsInput struct {
 }
 
 type itemSessionsResult struct {
-	Sessions []dispatch.ItemSessionView `json:"sessions"`
+	Sessions []ItemSessionView `json:"sessions"`
+}
+
+// ItemSessionView is one hive session an inbox item spawned, as the
+// list_item_sessions tool reports it.
+type ItemSessionView struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	Repo      string    `json:"repo"`
+	State     string    `json:"state"`
+	Running   bool      `json:"running"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func itemSessionViewsOf(views []app.ItemSessionView) []ItemSessionView {
+	out := make([]ItemSessionView, 0, len(views))
+	for _, v := range views {
+		out = append(out, ItemSessionView{
+			ID: v.ID, Name: v.Name, Slug: v.Slug, Repo: v.Repo,
+			State: string(v.State), Running: v.Running, CreatedAt: v.CreatedAt,
+		})
+	}
+	return out
 }
 
 // ListItemSessions reports the hive sessions one inbox item started.
@@ -316,5 +339,5 @@ func (ctrl *Controller) ListItemSessions(ctx context.Context, _ *mcp.CallToolReq
 	if err != nil {
 		return nil, nil, ctrl.toolError(err)
 	}
-	return nil, itemSessionsResult{Sessions: sessions}, nil
+	return nil, itemSessionsResult{Sessions: itemSessionViewsOf(sessions)}, nil
 }

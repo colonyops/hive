@@ -23,11 +23,12 @@ import * as actions$0 from "../../app/actions/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as stores$0 from "../../app/data/stores/models.js";
+
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as dispatch$0 from "../../app/dispatch/models.js";
+import * as $models from "./models.js";
 
-export function ActionRun(commandID: number): $CancellablePromise<dispatch$0.ActionRunView> {
+export function ActionRun(commandID: number): $CancellablePromise<$models.ActionRunView> {
     return $Call.ByID(4254816512, commandID);
 }
 
@@ -51,7 +52,7 @@ export function FindItems(profileID: string, externalID: string): $CancellablePr
     return $Call.ByID(1214368686, profileID, externalID);
 }
 
-export function InvokeAction(actionID: string, itemID: number, input: dispatch$0.ActionInvocationInput): $CancellablePromise<dispatch$0.ActionRunView> {
+export function InvokeAction(actionID: string, itemID: number, input: $models.ActionInvocationInput): $CancellablePromise<$models.ActionRunView> {
     return $Call.ByID(2590183007, actionID, itemID, input);
 }
 
@@ -71,7 +72,7 @@ export function MarkRead(profileID: string, feedID: string): $CancellablePromise
     return $Call.ByID(3433917548, profileID, feedID);
 }
 
-export function NewSessionDraft(itemIDs: number[] | null): $CancellablePromise<dispatch$0.SessionDraft> {
+export function NewSessionDraft(itemIDs: number[] | null): $CancellablePromise<$models.SessionDraft> {
     return $Call.ByID(3725626310, itemIDs);
 }
 

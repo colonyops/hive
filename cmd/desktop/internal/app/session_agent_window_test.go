@@ -6,7 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/internal/platform/tmux/control"
+	"github.com/colonyops/hive/internal/domain/session"
+	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
 type fakeAgentWindows struct {
@@ -20,13 +21,14 @@ func (f *fakeAgentWindows) NewCommandWindow(_ context.Context, slug, dir, name, 
 }
 
 func TestNewAgentWindowSharesCheckoutAndReadsCurrentProfile(t *testing.T) {
-	manager, detail := activeSession()
+	h := newHiveHarness(t, engineOptions{})
+	detail := reviewSession()
 	detail.Path = "/work/shared checkout"
-	manager.details[detail.ID] = detail
+	h.save(t, detail)
 	windows := &fakeAgentWindows{}
 	commands := map[string]string{"codex": "my-wrapper codex --model 'custom model'"}
 	svc := newSessionsService(SessionsDeps{
-		Manager: manager, AgentWindows: windows,
+		Hive: h.engine, AgentWindows: windows,
 		AgentCommands: func() map[string]string { return commands },
 	})
 
@@ -34,7 +36,7 @@ func TestNewAgentWindowSharesCheckoutAndReadsCurrentProfile(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "@42", id)
 	require.Equal(t, [][4]string{{detail.Slug, detail.Path, "codex", commands["codex"]}}, windows.calls)
-	require.Empty(t, manager.spawned)
+	require.Empty(t, h.mux.opened)
 
 	commands = map[string]string{"codex": "new-wrapper codex"}
 	_, err = svc.NewAgentWindow(t.Context(), detail.Slug, "codex")
@@ -44,8 +46,9 @@ func TestNewAgentWindowSharesCheckoutAndReadsCurrentProfile(t *testing.T) {
 
 func TestNewAgentWindowRejectsInvalidTargetsBeforeSpawning(t *testing.T) {
 	for _, tc := range []struct {
-		name, slug, agent, state string
-		kind                     Kind
+		name, slug, agent string
+		state             session.State
+		kind              Kind
 	}{
 		{name: "missing profile", slug: "review-81", kind: KindInvalid},
 		{name: "unknown profile", slug: "review-81", agent: "sh -c bad", kind: KindInvalid},
@@ -53,17 +56,18 @@ func TestNewAgentWindowRejectsInvalidTargetsBeforeSpawning(t *testing.T) {
 		{name: "unknown session", slug: "missing", agent: "codex", kind: KindNotFound},
 		{name: "scratch", slug: ScratchSlug, agent: "codex", kind: KindNotFound},
 		{name: "chat", slug: "agentws-123", agent: "codex", kind: KindNotFound},
-		{name: "recycled", slug: "review-81", agent: "codex", state: "recycled", kind: KindConflict},
+		{name: "recycled", slug: "review-81", agent: "codex", state: session.StateRecycled, kind: KindConflict},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			manager, detail := activeSession()
+			h := newHiveHarness(t, engineOptions{})
+			detail := reviewSession()
 			if tc.state != "" {
 				detail.State = tc.state
-				manager.details[detail.ID] = detail
 			}
+			h.save(t, detail)
 			windows := &fakeAgentWindows{}
 			svc := newSessionsService(SessionsDeps{
-				Manager: manager, AgentWindows: windows,
+				Hive: h.engine, AgentWindows: windows,
 				AgentCommands: func() map[string]string { return map[string]string{"codex": "codex"} },
 			})
 			_, err := svc.NewAgentWindow(t.Context(), tc.slug, tc.agent)
@@ -75,12 +79,13 @@ func TestNewAgentWindowRejectsInvalidTargetsBeforeSpawning(t *testing.T) {
 }
 
 func TestNewAgentWindowReportsAStoppedTerminal(t *testing.T) {
-	manager, detail := activeSession()
+	h := activeHarness(t)
+	detail := reviewSession()
 	svc := newSessionsService(SessionsDeps{
-		Manager: manager, AgentWindows: &fakeAgentWindows{err: tmuxcc.ErrNotAttached},
+		Hive: h.engine, AgentWindows: &fakeAgentWindows{err: tmuxcc.ErrNotAttached},
 		AgentCommands: func() map[string]string { return map[string]string{"codex": "codex"} },
 	})
 	_, err := svc.NewAgentWindow(t.Context(), detail.Slug, "codex")
 	require.Equal(t, KindNotFound, KindOf(err))
-	require.Empty(t, manager.spawned)
+	require.Empty(t, h.mux.opened)
 }

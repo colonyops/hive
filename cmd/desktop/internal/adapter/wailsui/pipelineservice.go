@@ -6,7 +6,6 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 )
 
 // PipelineService exposes the inbox to the frontend. Every method is a
@@ -73,16 +72,24 @@ func (s *PipelineService) ActionViews(ctx context.Context, itemID int64) ([]acti
 	return s.inbox.ActionViews(ctx, itemID)
 }
 
-func (s *PipelineService) NewSessionDraft(ctx context.Context, itemIDs []int64) (dispatch.SessionDraft, error) {
-	return s.inbox.NewSessionDraft(ctx, itemIDs)
+func (s *PipelineService) NewSessionDraft(ctx context.Context, itemIDs []int64) (SessionDraft, error) {
+	draft, err := s.inbox.NewSessionDraft(ctx, itemIDs)
+	if err != nil {
+		return SessionDraft{}, err
+	}
+	return sessionDraftOf(draft), nil
 }
 
-func (s *PipelineService) InvokeAction(ctx context.Context, actionID string, itemID int64, input dispatch.ActionInvocationInput) (dispatch.ActionRunView, error) {
-	return s.inbox.InvokeAction(ctx, app.InvokeActionRequest{
+func (s *PipelineService) InvokeAction(ctx context.Context, actionID string, itemID int64, input ActionInvocationInput) (ActionRunView, error) {
+	run, err := s.inbox.InvokeAction(ctx, app.InvokeActionRequest{
 		ActionID: actionID,
 		ItemID:   itemID,
-		Input:    input,
+		Input:    input.core(),
 	})
+	if err != nil {
+		return ActionRunView{}, err
+	}
+	return actionRunViewOf(run), nil
 }
 
 // RenderClipboardAction returns one text block rendered across ordered items.
@@ -95,6 +102,10 @@ func (s *PipelineService) NodeRuns(ctx context.Context, flowID string, limit int
 	return s.inbox.NodeRuns(ctx, flowID, limit)
 }
 
-func (s *PipelineService) ActionRun(ctx context.Context, commandID int64) (dispatch.ActionRunView, error) {
-	return s.inbox.ActionRun(ctx, commandID)
+func (s *PipelineService) ActionRun(ctx context.Context, commandID int64) (ActionRunView, error) {
+	run, err := s.inbox.ActionRun(ctx, commandID)
+	if err != nil {
+		return ActionRunView{}, err
+	}
+	return actionRunViewOf(run), nil
 }

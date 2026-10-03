@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { SessionLaunchOptions } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
-import type { SessionLaunchRepository } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type { SessionLaunchRepository } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import RepositorySelect from '../../../components/RepositorySelect.vue'
 import FormField from '../../../components/ui/FormField.vue'
 import { SelectField, TextField, TextareaField } from '../../fields'

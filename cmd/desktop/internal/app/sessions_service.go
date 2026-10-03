@@ -4,13 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"slices"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/colonyops/hive/internal/domain/session"
-
-	"github.com/colonyops/hive/pkg/osopen"
 
 	"github.com/rs/zerolog"
 
@@ -20,7 +18,12 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/execenv"
+	"github.com/colonyops/hive/pkg/osopen"
 )
 
 // Job action ids label session jobs in the jobs UI.
@@ -32,40 +35,16 @@ const (
 	sessionRenameRollbackTimeout = 5 * time.Second
 )
 
+// sessionLauncher creates a repository session and records where it came
+// from. *dispatch.RepositoryLauncher satisfies it; the output worker's
+// launch-session executor goes through the same one.
 type sessionLauncher interface {
 	LaunchSession(context.Context, dispatch.LaunchSessionRequest) (dispatch.SessionExecutionOutcome, error)
-	SessionLaunchOptions(context.Context) (dispatch.SessionLaunchOptions, error)
 }
 
 type workspaceSessionLauncher interface {
 	dispatch.WorkspaceSessionLauncher
 	SessionLaunchWorkspaces(context.Context) []dispatch.SessionLaunchWorkspace
-}
-
-// sessionManager is the read and lifecycle half of the session surface, kept
-// apart from sessionLauncher because launching is a dispatch action: an output
-// command holds a launcher, and it has no business holding a delete.
-type sessionManager interface {
-	ListSessions(context.Context) ([]dispatch.SessionSummary, error)
-	SessionDetail(ctx context.Context, id string) (dispatch.SessionDetail, error)
-	SessionRisk(ctx context.Context, id string) (dispatch.SessionRisk, error)
-	RenameSession(ctx context.Context, id, name string) error
-	DeleteSession(ctx context.Context, id string) error
-	RecycleSession(ctx context.Context, id string) error
-	PruneSessions(ctx context.Context) (int, error)
-	SpawnTmuxSession(ctx context.Context, name, path, repo string) error
-}
-
-type sessionStatusSource interface {
-	SessionStatuses(context.Context) (dispatch.SessionStatusSnapshot, error)
-	RunningSessions(ctx context.Context, ids []string) (map[string]bool, error)
-}
-
-// sessionGitSource reads a session's checkout. Its own interface rather than a
-// tenth method on sessionManager: reading git is not part of managing a
-// session's lifecycle.
-type sessionGitSource interface {
-	SessionGitStatus(ctx context.Context, id string) (dispatch.SessionGitStatus, error)
 }
 
 // sessionTmux preflights a live tmux rename before Hive updates the record.
@@ -94,15 +73,49 @@ type itemSessionStore interface {
 	Unlink(ctx context.Context, sessionIDs []string) error
 }
 
+// ItemSessionView is one hive session an inbox item spawned. Only CreatedAt
+// comes from the link. Everything else is read live from hive, so a session
+// renamed or recycled outside this app reports what it actually is.
+type ItemSessionView struct {
+	ID        string
+	Name      string
+	Slug      string
+	Repo      string
+	State     session.State
+	Running   bool
+	CreatedAt time.Time
+}
+
+// ItemChatView is an agent workspace chat an inbox item opened.
+type ItemChatView struct {
+	ID        int64
+	Workspace string
+	Name      string
+	CreatedAt time.Time
+}
+
+// SessionRisk is the pre-flight a destructive operation confirms against: what
+// unsaved work the session holds, and whether recycling it is really a delete.
+type SessionRisk struct {
+	UncommittedChanges bool
+	UnpushedCommits    bool
+	// RecycleDeletes reports that recycling this session destroys it: hive
+	// routes a worktree session's recycle straight to DeleteSession, because a
+	// worktree has no clone of its own to reset.
+	RecycleDeletes bool
+}
+
 // SessionsService is the desktop's session surface: the New Session form's
 // launch path, read plus lifecycle management of the sessions that exist, and
 // the configured actions a terminal session or window offers.
+//
+// It reads every hive service from the engine per call, so a hive config
+// reload reaches the next call.
 type SessionsService struct {
+	hive              *hive.Engine
 	launcher          sessionLauncher
 	workspaceLauncher workspaceSessionLauncher
-	manager           sessionManager
-	statuses          sessionStatusSource
-	git               sessionGitSource
+	windows           sessionWindowSource
 	tmux              sessionTmux
 	agentWindows      sessionAgentWindows
 	agentCommands     func() map[string]string
@@ -147,22 +160,23 @@ type NopEditorCommandReader struct{}
 func (NopEditorCommandReader) Editor(context.Context) (string, error) { return "", nil }
 
 type SessionsDeps struct {
+	Hive              *hive.Engine
 	Launcher          sessionLauncher
 	WorkspaceLauncher workspaceSessionLauncher
-	Manager           sessionManager
-	Statuses          sessionStatusSource
-	Git               sessionGitSource
-	Tmux              sessionTmux
-	AgentWindows      sessionAgentWindows
-	AgentCommands     func() map[string]string
-	Jobs              sessionJobRunner
-	Items             inboxItemRefReader
-	Links             itemSessionStore
-	Catalog           *actions.ActionStore
-	Dispatcher        *dispatch.Dispatcher
-	Recorder          activity.Recorder
-	PullRequests      *sessionPullRequests
-	ExecEnv           *execenv.Resolver
+	// Windows maps a session's windows to their stable tmux ids. nil leaves
+	// liveness to hive's own status detection.
+	Windows       sessionWindowSource
+	Tmux          sessionTmux
+	AgentWindows  sessionAgentWindows
+	AgentCommands func() map[string]string
+	Jobs          sessionJobRunner
+	Items         inboxItemRefReader
+	Links         itemSessionStore
+	Catalog       *actions.ActionStore
+	Dispatcher    *dispatch.Dispatcher
+	Recorder      activity.Recorder
+	PullRequests  *sessionPullRequests
+	ExecEnv       *execenv.Resolver
 	// EditorCommand reads the configured editor from settings on every call,
 	// so a settings change applies without restarting. nil means
 	// NopEditorCommandReader.
@@ -182,11 +196,10 @@ func newSessionsService(d SessionsDeps) *SessionsService {
 		d.DefaultAgentEnv = NopDefaultAgentReader{}
 	}
 	return &SessionsService{
+		hive:              d.Hive,
 		launcher:          d.Launcher,
 		workspaceLauncher: d.WorkspaceLauncher,
-		manager:           d.Manager,
-		statuses:          d.Statuses,
-		git:               d.Git,
+		windows:           d.Windows,
 		tmux:              d.Tmux,
 		agentWindows:      d.AgentWindows,
 		agentCommands:     d.AgentCommands,
@@ -207,12 +220,22 @@ func newSessionsService(d SessionsDeps) *SessionsService {
 
 // SessionLaunchOptions supplies the repository, workspace, and agent choices
 // the New Session form presents.
+//
+// Local source paths stay here: the form gets labels, remotes, and agent keys.
 func (s *SessionsService) SessionLaunchOptions(ctx context.Context) (dispatch.SessionLaunchOptions, error) {
-	opts, err := s.launcher.SessionLaunchOptions(ctx)
+	options, err := s.hive.Sessions().SessionLaunchOptions(ctx)
 	if err != nil {
 		return dispatch.SessionLaunchOptions{}, Wrap(err, KindInternal, "resolving session launch options")
 	}
-	opts.Workspaces = s.SessionLaunchWorkspaces(ctx)
+	opts := dispatch.SessionLaunchOptions{
+		DefaultRepository: options.DefaultRepository,
+		Workspaces:        s.SessionLaunchWorkspaces(ctx),
+		Agents:            options.Agents,
+		DefaultAgent:      options.DefaultAgent,
+	}
+	for _, repo := range options.Repositories {
+		opts.Repositories = append(opts.Repositories, dispatch.SessionLaunchRepository{Name: repo.Name, Repository: repo.Remote})
+	}
 	return s.withEnvironmentDefaultAgent(ctx, opts), nil
 }
 
@@ -255,55 +278,37 @@ func (s *SessionsService) preferredEnvAgent(ctx context.Context, agents []string
 
 // resolveLaunchAgent answers the agent a launch should run when the request
 // names none: HIVE_DEFAULT_AGENT when it names a configured profile,
-// otherwise "" so hive resolves its own agents.default. A launch-options read
-// failure also falls through to "": a create must not start failing because a
-// preselection could not be read.
+// otherwise "" so hive resolves its own agents.default.
 //
-// This runs synchronously on the click that starts a session
-// (CreateSession builds the request before handing off to the job), so the
-// options read -- a git subprocess per configured workspace
-// (cmd/desktop/frontend/src/composables/useNewSession.ts) -- is gated on there
-// being an override to validate. The env read is a cached map lookup, so
-// checking it first is free for the common case of no override at all.
+// It reads the profiles off the config rather than SessionLaunchOptions, which
+// runs a git subprocess per configured workspace on the click that starts a
+// session.
 func (s *SessionsService) resolveLaunchAgent(ctx context.Context, requested string) string {
 	if trimmed := strings.TrimSpace(requested); trimmed != "" {
 		return trimmed
 	}
-	if strings.TrimSpace(s.defaultAgentEnv.DefaultAgent(ctx)) == "" {
-		return ""
+	profiles := s.hive.Config().Agents.Profiles
+	agents := make([]string, 0, len(profiles))
+	for key := range profiles {
+		agents = append(agents, key)
 	}
-	opts, err := s.launcher.SessionLaunchOptions(ctx)
-	if err != nil {
-		return ""
-	}
-	return s.preferredEnvAgent(ctx, opts.Agents)
+	return s.preferredEnvAgent(ctx, agents)
 }
 
 // ListSessions returns every session, whatever its state. Only an active one
 // can be attached to — Slug is its tmux session name — but a recycled or
 // corrupted session still has to be readable and deletable.
-func (s *SessionsService) ListSessions(ctx context.Context) ([]dispatch.SessionSummary, error) {
-	sessions, err := s.manager.ListSessions(ctx)
+func (s *SessionsService) ListSessions(ctx context.Context) ([]session.Session, error) {
+	sessions, err := s.hive.Sessions().ListSessions(ctx)
 	if err != nil {
 		return nil, Wrap(err, KindInternal, "listing sessions")
 	}
 	return sessions, nil
 }
 
-// SessionStatuses detects the live agent state for active sessions. Missing or
-// unavailable terminals are data, so only a failure to read the session set
-// fails the request.
-func (s *SessionsService) SessionStatuses(ctx context.Context) (dispatch.SessionStatusSnapshot, error) {
-	statuses, err := s.statuses.SessionStatuses(ctx)
-	if err != nil {
-		return dispatch.SessionStatusSnapshot{}, Wrap(err, KindInternal, "reading session status")
-	}
-	return statuses, nil
-}
-
 // ItemChats returns the agent workspace chats an inbox item opened, newest
 // first.
-func (s *SessionsService) ItemChats(ctx context.Context, itemID int64) ([]dispatch.ItemChatView, error) {
+func (s *SessionsService) ItemChats(ctx context.Context, itemID int64) ([]ItemChatView, error) {
 	ref, err := s.items.RefByID(ctx, itemID)
 	if err != nil {
 		if stores.IsNotFound(err) {
@@ -315,9 +320,9 @@ func (s *SessionsService) ItemChats(ctx context.Context, itemID int64) ([]dispat
 	if err != nil {
 		return nil, Wrap(err, KindInternal, "listing chats for item %d", itemID)
 	}
-	views := make([]dispatch.ItemChatView, 0, len(chats))
+	views := make([]ItemChatView, 0, len(chats))
 	for _, chat := range chats {
-		views = append(views, dispatch.ItemChatView{
+		views = append(views, ItemChatView{
 			ID: chat.ChatID, Workspace: chat.Workspace, Name: chat.Name, CreatedAt: time.UnixMilli(chat.CreatedAt),
 		})
 	}
@@ -327,7 +332,7 @@ func (s *SessionsService) ItemChats(ctx context.Context, itemID int64) ([]dispat
 // ItemSessions returns the hive sessions an inbox item spawned, newest first,
 // joined to the state hive reports for them now. The read is also what
 // reconciles (ADR macos-dmg-installer).
-func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]dispatch.ItemSessionView, error) {
+func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]ItemSessionView, error) {
 	ref, err := s.items.RefByID(ctx, itemID)
 	if err != nil {
 		if stores.IsNotFound(err) {
@@ -340,19 +345,19 @@ func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]dis
 		return nil, Wrap(err, KindInternal, "listing sessions for item %d", itemID)
 	}
 	if len(links) == 0 {
-		return []dispatch.ItemSessionView{}, nil
+		return []ItemSessionView{}, nil
 	}
 
-	sessions, err := s.manager.ListSessions(ctx)
+	sessions, err := s.ListSessions(ctx)
 	if err != nil {
-		return nil, Wrap(err, KindInternal, "listing sessions")
+		return nil, err
 	}
-	known := make(map[string]dispatch.SessionSummary, len(sessions))
-	for _, summary := range sessions {
-		known[summary.ID] = summary
+	known := make(map[string]session.Session, len(sessions))
+	for _, sess := range sessions {
+		known[sess.ID] = sess
 	}
 
-	views := make([]dispatch.ItemSessionView, 0, len(links))
+	views := make([]ItemSessionView, 0, len(links))
 	ids := make([]string, 0, len(links))
 	var gone []string
 	for _, link := range links {
@@ -362,11 +367,11 @@ func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]dis
 			continue
 		}
 		ids = append(ids, summary.ID)
-		views = append(views, dispatch.ItemSessionView{
+		views = append(views, ItemSessionView{
 			ID:        summary.ID,
 			Name:      summary.Name,
 			Slug:      summary.Slug,
-			Repo:      summary.Repo,
+			Repo:      summary.Remote,
 			State:     summary.State,
 			CreatedAt: time.UnixMilli(link.CreatedAt),
 		})
@@ -377,7 +382,7 @@ func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]dis
 		s.logger.Warn().Err(err).Int64("item_id", itemID).Msg("dropping links to deleted sessions")
 	}
 
-	running, err := s.statuses.RunningSessions(ctx, ids)
+	running, err := s.runningSessions(ctx, sessions, ids)
 	if err != nil {
 		// Same reason as the prune above: the views are already correct
 		// without liveness, and failing the read blanks a pane that had an
@@ -392,13 +397,13 @@ func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]dis
 }
 
 // SessionDetail reads one session in full.
-func (s *SessionsService) SessionDetail(ctx context.Context, id string) (dispatch.SessionDetail, error) {
+func (s *SessionsService) SessionDetail(ctx context.Context, id string) (session.Session, error) {
 	if strings.TrimSpace(id) == "" {
-		return dispatch.SessionDetail{}, Errorf(KindInvalid, "session id is required")
+		return session.Session{}, Errorf(KindInvalid, "session id is required")
 	}
-	detail, err := s.manager.SessionDetail(ctx, id)
+	detail, err := s.hive.Sessions().GetSession(ctx, id)
 	if err != nil {
-		return dispatch.SessionDetail{}, Wrap(err, KindNotFound, "reading session %q", id)
+		return session.Session{}, Wrap(err, KindNotFound, "reading session %q", id)
 	}
 	return detail, nil
 }
@@ -407,24 +412,27 @@ func (s *SessionsService) SessionDetail(ctx context.Context, id string) (dispatc
 // dirty, unpushed, and the line delta against the default branch. A session
 // with no live checkout answers an unresolved status rather than an error —
 // there is nothing wrong, there is just nothing to read.
-func (s *SessionsService) SessionGitStatus(ctx context.Context, id string) (dispatch.SessionGitStatus, error) {
+//
+// Unlike SessionRisk it reports failures instead of assuming the risky answer
+// (gitstatus.Status).
+func (s *SessionsService) SessionGitStatus(ctx context.Context, id string) (gitstatus.Status, error) {
 	if strings.TrimSpace(id) == "" {
-		return dispatch.SessionGitStatus{}, Errorf(KindInvalid, "session id is required")
+		return gitstatus.Status{}, Errorf(KindInvalid, "session id is required")
 	}
-	status, err := s.git.SessionGitStatus(ctx, id)
+	sess, err := s.hive.Sessions().GetSession(ctx, id)
 	if err != nil {
-		return dispatch.SessionGitStatus{}, Wrap(err, KindNotFound, "reading git status for session %q", id)
+		return gitstatus.Status{}, Wrap(err, KindNotFound, "reading git status for session %q", id)
 	}
-	return status, nil
+	return s.hive.GitStatus().ReadSession(ctx, sess), nil
 }
 
 // SessionPullRequest resolves the pull request for a branch SessionGitStatus
 // already reported. The branch is passed rather than read again: resolving it
 // costs a git subprocess the caller has just paid for, and the two halves
 // refresh on different cadences.
-func (s *SessionsService) SessionPullRequest(ctx context.Context, key dispatch.SessionPullRequestKey, refresh bool) (dispatch.SessionPullRequest, error) {
+func (s *SessionsService) SessionPullRequest(ctx context.Context, key SessionPullRequestKey, refresh bool) (SessionPullRequest, error) {
 	if s.pullRequests == nil {
-		return dispatch.SessionPullRequest{Status: dispatch.PullRequestStatusDisconnected}, nil
+		return SessionPullRequest{Status: PullRequestStatusDisconnected}, nil
 	}
 	return s.pullRequests.Lookup(ctx, key, refresh)
 }
@@ -467,16 +475,24 @@ func (s *SessionsService) sessionCheckout(ctx context.Context, id string) (strin
 }
 
 // SessionRisk reports the work a delete or recycle of id would discard, so the
-// caller can name it in its confirmation instead of guessing.
-func (s *SessionsService) SessionRisk(ctx context.Context, id string) (dispatch.SessionRisk, error) {
+// caller can name it in its confirmation instead of guessing. Hive reports no
+// risk for a non-active session, which is correct: there is no live clone left
+// to hold unsaved work.
+func (s *SessionsService) SessionRisk(ctx context.Context, id string) (SessionRisk, error) {
 	if strings.TrimSpace(id) == "" {
-		return dispatch.SessionRisk{}, Errorf(KindInvalid, "session id is required")
+		return SessionRisk{}, Errorf(KindInvalid, "session id is required")
 	}
-	risk, err := s.manager.SessionRisk(ctx, id)
+	sessions := s.hive.Sessions()
+	sess, err := sessions.GetSession(ctx, id)
 	if err != nil {
-		return dispatch.SessionRisk{}, Wrap(err, KindNotFound, "checking session %q", id)
+		return SessionRisk{}, Wrap(err, KindNotFound, "checking session %q", id)
 	}
-	return risk, nil
+	risk := sessions.CheckRisk(ctx, sess)
+	return SessionRisk{
+		UncommittedChanges: risk.UncommittedChanges,
+		UnpushedCommits:    risk.UnpushedCommits,
+		RecycleDeletes:     sess.CloneStrategy == session.CloneStrategyWorktree,
+	}, nil
 }
 
 // CreateSession validates a New Session form, then launches a repository
@@ -576,7 +592,7 @@ func (s *SessionsService) CreateSession(ctx context.Context, req dispatch.Create
 // to report against the whole attempt.
 func (s *SessionsService) recordFailedCreate(ctx context.Context, req dispatch.CreateSessionRequest, err error) error {
 	failure := dispatch.SessionCreateFailure{Reason: err.Error(), At: time.Now()}
-	var detail *dispatch.SessionCreateError
+	var detail *sessionsvc.LaunchError
 	if errors.As(err, &detail) {
 		failure = dispatch.SessionCreateFailure{
 			Reason:           detail.Err.Error(),
@@ -679,57 +695,49 @@ func (s *SessionsService) setFailedCreate(draft *dispatch.SessionDraft) {
 // onto another session's target. The shared Hive service then updates the
 // record and its persisted multiplexer target. If that update fails, Desktop
 // puts the live tmux name back.
-func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (dispatch.SessionSummary, error) {
+func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (session.Session, error) {
 	if strings.TrimSpace(id) == "" {
-		return dispatch.SessionSummary{}, Errorf(KindInvalid, "session id is required")
+		return session.Session{}, Errorf(KindInvalid, "session id is required")
 	}
 	name = strings.TrimSpace(name)
 	if name == "" {
-		return dispatch.SessionSummary{}, Errorf(KindInvalid, "session name is required")
+		return session.Session{}, Errorf(KindInvalid, "session name is required")
 	}
 	if err := session.ValidateName(name); err != nil {
-		return dispatch.SessionSummary{}, Wrap(err, KindInvalid, "session name")
+		return session.Session{}, Wrap(err, KindInvalid, "session name")
 	}
 
-	current, err := s.manager.SessionDetail(ctx, id)
+	sessions := s.hive.Sessions()
+	current, err := sessions.GetSession(ctx, id)
 	if err != nil {
-		return dispatch.SessionSummary{}, Wrap(err, KindNotFound, "reading session %q", id)
+		return session.Session{}, Wrap(err, KindNotFound, "reading session %q", id)
 	}
 	slug := session.Slugify(name)
 	if err := s.assertSlugFree(ctx, id, slug); err != nil {
-		return dispatch.SessionSummary{}, err
+		return session.Session{}, err
 	}
 
-	tmuxSession := current.TmuxSession
-	if tmuxSession == "" {
-		tmuxSession = current.Slug
-	}
+	tmuxSession := sessionsvc.Target(current).Session
 	tmuxRenamed, err := s.tmux.RenameSessionIfPresent(ctx, tmuxSession, slug)
 	if err != nil {
-		return dispatch.SessionSummary{}, Wrap(err, KindConflict, "renaming the terminal session for %q", current.Name)
+		return session.Session{}, Wrap(err, KindConflict, "renaming the terminal session for %q", current.Name)
 	}
-	if err := s.manager.RenameSession(ctx, id, name); err != nil {
+	if err := sessions.RenameSession(ctx, id, name); err != nil {
 		if tmuxRenamed {
 			rollbackCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionRenameRollbackTimeout)
 			defer cancel()
 			if _, rollbackErr := s.tmux.RenameSessionIfPresent(rollbackCtx, slug, tmuxSession); rollbackErr != nil {
-				return dispatch.SessionSummary{}, Wrap(err, KindInternal, "renaming session %q (its terminal session is now named %q)", current.Name, slug)
+				return session.Session{}, Wrap(err, KindInternal, "renaming session %q (its terminal session is now named %q)", current.Name, slug)
 			}
 		}
-		return dispatch.SessionSummary{}, Wrap(err, KindInternal, "renaming session %q", current.Name)
+		return session.Session{}, Wrap(err, KindInternal, "renaming session %q", current.Name)
 	}
 
-	renamed, err := s.manager.SessionDetail(ctx, id)
+	renamed, err := sessions.GetSession(ctx, id)
 	if err != nil {
-		return dispatch.SessionSummary{}, Wrap(err, KindInternal, "re-reading renamed session %q", id)
+		return session.Session{}, Wrap(err, KindInternal, "re-reading renamed session %q", id)
 	}
-	return dispatch.SessionSummary{
-		ID:    renamed.ID,
-		Name:  renamed.Name,
-		Slug:  renamed.Slug,
-		Repo:  renamed.Repo,
-		State: renamed.State,
-	}, nil
+	return renamed, nil
 }
 
 // StartTmuxSession spawns the tmux session a slug names. A session hive knows
@@ -751,7 +759,7 @@ func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) err
 	if err != nil {
 		return err
 	}
-	if detail.State != string(session.StateActive) {
+	if detail.State != session.StateActive {
 		return Errorf(KindConflict, "session %q is %s, so there is no checkout left to open a terminal in", detail.Name, detail.State)
 	}
 	// Hive spawns under the slug it derives from the name, so a record whose two
@@ -759,7 +767,10 @@ func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) err
 	if spawned := session.Slugify(detail.Name); spawned != slug {
 		return Errorf(KindConflict, "session %q would start as %q, not %q", detail.Name, spawned, slug)
 	}
-	if err := s.manager.SpawnTmuxSession(ctx, detail.Name, detail.Path, detail.Repo); err != nil {
+	// Detached: the desktop attaches over control mode, and an attaching spawn
+	// would hand the session to whatever terminal launched the app, or fail
+	// for a launcher that has none.
+	if err := s.hive.Sessions().OpenTmuxSession(ctx, detail.Name, detail.Path, detail.Remote, "", true); err != nil {
 		return Wrap(err, KindInternal, "starting the terminal session for %q", detail.Name)
 	}
 	return nil
@@ -777,53 +788,67 @@ func (s *SessionsService) SessionDirectory(ctx context.Context, slug string) (st
 	if err != nil {
 		return "", err
 	}
-	if detail.State != string(session.StateActive) {
+	if detail.State != session.StateActive {
 		return "", Errorf(KindConflict, "session %q is %s, so there is no checkout left to open a terminal in", detail.Name, detail.State)
 	}
 	return detail.Path, nil
 }
 
-// detailBySlug reads the session a tmux session name belongs to. The listing is
-// what maps a slug to an id; nothing queries hive by slug.
-func (s *SessionsService) detailBySlug(ctx context.Context, slug string) (dispatch.SessionDetail, error) {
-	sessions, err := s.manager.ListSessions(ctx)
+// detailBySlug reads the session a tmux session name belongs to. Nothing
+// queries hive by slug, so the listing maps it.
+func (s *SessionsService) detailBySlug(ctx context.Context, slug string) (session.Session, error) {
+	sessions, err := s.ListSessions(ctx)
 	if err != nil {
-		return dispatch.SessionDetail{}, Wrap(err, KindInternal, "listing sessions")
+		return session.Session{}, err
 	}
-	for _, summary := range sessions {
-		if summary.Slug != slug {
-			continue
-		}
-		detail, err := s.manager.SessionDetail(ctx, summary.ID)
-		if err != nil {
-			return dispatch.SessionDetail{}, Wrap(err, KindNotFound, "reading session %q", summary.Name)
-		}
-		return detail, nil
+	i := slices.IndexFunc(sessions, func(sess session.Session) bool { return sess.Slug == slug })
+	if i < 0 {
+		return session.Session{}, Errorf(KindNotFound, "no session named %q", slug)
 	}
-	return dispatch.SessionDetail{}, Errorf(KindNotFound, "no session named %q", slug)
+	return sessions[i], nil
 }
 
 // DeleteSession removes a session, its worktree or clone, and its tmux session,
 // as a background job: it runs git and filesystem work that a caller must not
 // block on. The caller is expected to have confirmed against SessionRisk first.
 func (s *SessionsService) DeleteSession(ctx context.Context, id string) (int64, error) {
-	return s.destructiveJob(ctx, id, "Delete session", deleteSessionJobActionID, s.manager.DeleteSession)
+	return s.destructiveJob(ctx, id, "Delete session", deleteSessionJobActionID, func(ctx context.Context, id string) error {
+		if err := s.hive.Sessions().DeleteSession(ctx, id); err != nil {
+			return fmt.Errorf("delete hive session: %w", err)
+		}
+		return nil
+	})
 }
 
 // RecycleSession resets a session for reuse, as a background job for the same
 // reason DeleteSession is one. For a worktree session hive recycles by
 // deleting, which is what SessionRisk.RecycleDeletes warns about.
+//
+// The recycle commands' output is discarded. They are the user's own (hive's
+// recycle_commands) and the job records whether they succeeded; streaming
+// their stdout would need a job log to stream into.
 func (s *SessionsService) RecycleSession(ctx context.Context, id string) (int64, error) {
-	return s.destructiveJob(ctx, id, "Recycle session", recycleSessionJobActionID, s.manager.RecycleSession)
+	return s.destructiveJob(ctx, id, "Recycle session", recycleSessionJobActionID, func(ctx context.Context, id string) error {
+		if err := s.hive.Sessions().RecycleSession(ctx, id, io.Discard); err != nil {
+			return fmt.Errorf("recycle hive session: %w", err)
+		}
+		return nil
+	})
 }
 
 // PruneSessions deletes every recycled and corrupted session as a background
 // job, and reports the job id rather than the count: the work outlives the
 // call, so the count is not known yet.
+//
+// Hive's Prune also has a mode that only trims each pool back to
+// max_recycled. That is a config reconciliation, not something a menu entry
+// can honestly name, so the desktop exposes the unambiguous one.
 func (s *SessionsService) PruneSessions(ctx context.Context) (int64, error) {
 	return s.jobs.Track(ctx, "Prune sessions", pruneSessionsJobActionID, "", func(bg context.Context) error {
-		_, err := s.manager.PruneSessions(bg)
-		return err
+		if _, err := s.hive.Sessions().Prune(bg, true); err != nil {
+			return fmt.Errorf("prune hive sessions: %w", err)
+		}
+		return nil
 	}), nil
 }
 
@@ -834,7 +859,7 @@ func (s *SessionsService) destructiveJob(ctx context.Context, id, label, actionI
 	if strings.TrimSpace(id) == "" {
 		return 0, Errorf(KindInvalid, "session id is required")
 	}
-	detail, err := s.manager.SessionDetail(ctx, id)
+	detail, err := s.hive.Sessions().GetSession(ctx, id)
 	if err != nil {
 		return 0, Wrap(err, KindNotFound, "reading session %q", id)
 	}
@@ -847,12 +872,12 @@ func (s *SessionsService) destructiveJob(ctx context.Context, id, label, actionI
 // or live tmux target. Hive validates the new name but does not check it for
 // collisions, and the session table has no uniqueness constraint.
 func (s *SessionsService) assertSlugFree(ctx context.Context, id, slug string) error {
-	sessions, err := s.manager.ListSessions(ctx)
+	sessions, err := s.hive.Sessions().ListSessions(ctx)
 	if err != nil {
 		return Wrap(err, KindInternal, "checking existing session names")
 	}
 	for _, other := range sessions {
-		if other.ID != id && (other.Slug == slug || other.TmuxSession == slug) {
+		if other.ID != id && (other.Slug == slug || sessionsvc.Target(other).Session == slug) {
 			return Errorf(KindInvalid, "a session named %q already exists", other.Name)
 		}
 	}

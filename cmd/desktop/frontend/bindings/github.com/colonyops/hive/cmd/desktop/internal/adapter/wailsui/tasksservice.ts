@@ -12,13 +12,13 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as dispatch$0 from "../../app/dispatch/models.js";
+import * as $models from "./models.js";
 
 export function DeleteTask(id: string): $CancellablePromise<void> {
     return $Call.ByID(498612603, id);
 }
 
-export function ListTasks(repoKey: string): $CancellablePromise<dispatch$0.TaskItem[] | null> {
+export function ListTasks(repoKey: string): $CancellablePromise<$models.TaskItem[] | null> {
     return $Call.ByID(480176773, repoKey);
 }
 
@@ -30,7 +30,7 @@ export function SetTaskStatus(id: string, status: string): $CancellablePromise<v
     return $Call.ByID(2116066304, id, status);
 }
 
-export function TaskDetail(id: string): $CancellablePromise<dispatch$0.TaskDetail> {
+export function TaskDetail(id: string): $CancellablePromise<$models.TaskDetail> {
     return $Call.ByID(2471965633, id);
 }
 

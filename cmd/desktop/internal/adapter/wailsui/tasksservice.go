@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 )
 
 // TasksService exposes the desktop's tasks view over Hive's hc issue tracker.
@@ -16,12 +15,20 @@ func NewTasksService(t *app.TasksService) *TasksService {
 	return &TasksService{tasks: t}
 }
 
-func (s *TasksService) ListTasks(ctx context.Context, repoKey string) ([]dispatch.TaskItem, error) {
-	return s.tasks.ListTasks(ctx, repoKey)
+func (s *TasksService) ListTasks(ctx context.Context, repoKey string) ([]TaskItem, error) {
+	items, err := s.tasks.ListTasks(ctx, repoKey)
+	if err != nil {
+		return nil, err
+	}
+	return taskItemsOf(items), nil
 }
 
-func (s *TasksService) TaskDetail(ctx context.Context, id string) (dispatch.TaskDetail, error) {
-	return s.tasks.TaskDetail(ctx, id)
+func (s *TasksService) TaskDetail(ctx context.Context, id string) (TaskDetail, error) {
+	detail, err := s.tasks.TaskDetail(ctx, id)
+	if err != nil {
+		return TaskDetail{}, err
+	}
+	return taskDetailOf(detail), nil
 }
 
 func (s *TasksService) SetTaskStatus(ctx context.Context, id, status string) error {

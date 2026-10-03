@@ -17,7 +17,7 @@ import { markdownPullRequestLink } from '../lib/prLink'
 import type {
   SessionGitStatus,
   SessionPullRequest,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
   git: SessionGitStatus | null

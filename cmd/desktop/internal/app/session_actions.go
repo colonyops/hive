@@ -132,7 +132,7 @@ func (s *SessionsService) terminalActionContext(
 	if err != nil {
 		return actions.Action{}, dispatch.OutputData{}, err
 	}
-	if detail.State != string(session.StateActive) {
+	if detail.State != session.StateActive {
 		return actions.Action{}, dispatch.OutputData{}, Errorf(KindConflict, "session %q is %s, so there is no checkout left to run an action in", detail.Name, detail.State)
 	}
 	resolved, err := action.ResolveInputs(inputs)
@@ -148,9 +148,9 @@ func (s *SessionsService) terminalActionContext(
 			ID:     detail.ID,
 			Name:   detail.Name,
 			Slug:   detail.Slug,
-			Repo:   detail.Repo,
+			Repo:   detail.Remote,
 			Path:   detail.Path,
-			Branch: detail.WorktreeBranch,
+			Branch: detail.GetMeta(session.MetaWorktreeBranch),
 		},
 	}
 	if windowID != "" {

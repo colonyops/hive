@@ -10,20 +10,21 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/hivewatch"
+	"github.com/colonyops/hive/internal/domain/hc"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
 type fakeSessionLister struct {
 	mu       sync.Mutex
-	sessions []dispatch.SessionSummary
+	sessions []session.Session
 	calls    int
 }
 
 // ListSessions reverses its order on every second read, so a repeated read of
 // the same set proves store order is not a change.
-func (f *fakeSessionLister) ListSessions(context.Context) ([]dispatch.SessionSummary, error) {
+func (f *fakeSessionLister) ListSessions(context.Context) ([]session.Session, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
@@ -34,7 +35,7 @@ func (f *fakeSessionLister) ListSessions(context.Context) ([]dispatch.SessionSum
 	return out, nil
 }
 
-func (f *fakeSessionLister) set(sessions ...dispatch.SessionSummary) {
+func (f *fakeSessionLister) set(sessions ...session.Session) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.sessions = sessions
@@ -42,17 +43,17 @@ func (f *fakeSessionLister) set(sessions ...dispatch.SessionSummary) {
 
 type fakeTasksFingerprinter struct {
 	mu sync.Mutex
-	fp dispatch.TasksFingerprint
+	fp hc.Fingerprint
 }
 
-func (f *fakeTasksFingerprinter) TasksFingerprint(context.Context) (dispatch.TasksFingerprint, error) {
+func (f *fakeTasksFingerprinter) Fingerprint(context.Context) (hc.Fingerprint, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.fp, nil
 }
 
-func summary(id, name string) dispatch.SessionSummary {
-	return dispatch.SessionSummary{ID: id, Name: name, Slug: name, Repo: "github.com/colonyops/hive", State: "active"}
+func summary(id, name string) session.Session {
+	return session.Session{ID: id, Name: name, Slug: name, Remote: "github.com/colonyops/hive", State: session.StateActive}
 }
 
 func watcherFor(probes ...hivewatch.Probe) *hivewatch.Watcher {
@@ -62,8 +63,8 @@ func watcherFor(probes ...hivewatch.Probe) *hivewatch.Watcher {
 func TestSessionsProbe_OrderIsNotAChange(t *testing.T) {
 	bus := newTestBus(t)
 	updates := subscribeEvents[events.SessionsUpdated](t, bus)
-	lister := &fakeSessionLister{sessions: []dispatch.SessionSummary{summary("a", "one"), summary("b", "two")}}
-	w := watcherFor(sessionsProbe(lister, bus))
+	lister := &fakeSessionLister{sessions: []session.Session{summary("a", "one"), summary("b", "two")}}
+	w := watcherFor(sessionsProbe(lister.ListSessions, bus))
 
 	w.Tick(t.Context())
 	w.Tick(t.Context())
@@ -74,12 +75,12 @@ func TestSessionsProbe_OrderIsNotAChange(t *testing.T) {
 func TestSessionsProbe_PublishesTheDelta(t *testing.T) {
 	bus := newTestBus(t)
 	updates := subscribeEvents[events.SessionsUpdated](t, bus)
-	lister := &fakeSessionLister{sessions: []dispatch.SessionSummary{summary("a", "one"), summary("b", "two"), summary("c", "three")}}
-	w := watcherFor(sessionsProbe(lister, bus))
+	lister := &fakeSessionLister{sessions: []session.Session{summary("a", "one"), summary("b", "two"), summary("c", "three")}}
+	w := watcherFor(sessionsProbe(lister.ListSessions, bus))
 	w.Tick(t.Context())
 
 	recycled := summary("b", "two")
-	recycled.State = "recycled"
+	recycled.State = session.StateRecycled
 	lister.set(summary("a", "one"), recycled, summary("d", "four"))
 	w.Tick(t.Context())
 
@@ -90,8 +91,8 @@ func TestSessionsProbe_PublishesTheDelta(t *testing.T) {
 func TestTasksProbe_PublishesOnlyWhenTheFingerprintChanges(t *testing.T) {
 	bus := newTestBus(t)
 	updates := subscribeEvents[events.TasksUpdated](t, bus)
-	tasks := &fakeTasksFingerprinter{fp: dispatch.TasksFingerprint{Items: 3}}
-	w := watcherFor(tasksProbe(tasks, bus))
+	tasks := &fakeTasksFingerprinter{fp: hc.Fingerprint{Items: 3}}
+	w := watcherFor(tasksProbe(tasks.Fingerprint, bus))
 
 	w.Tick(t.Context())
 	w.Tick(t.Context())

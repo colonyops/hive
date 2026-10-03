@@ -1,4 +1,4 @@
-import type { SessionPullRequest } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import type { SessionPullRequest } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 // Kept byte-identical to the `prlink` shell script this replaces: links already
 // pasted into Slack read a certain way, and formatting that differs by which

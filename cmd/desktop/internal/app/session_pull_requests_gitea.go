@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/gitea"
 )
 
@@ -24,16 +23,16 @@ func (g *giteaForge) serves(host string) bool {
 	return g.pulls != nil && g.pulls.Serves(host)
 }
 
-func (g *giteaForge) pullRequest(ctx context.Context, key dispatch.SessionPullRequestKey) (dispatch.SessionPullRequest, error) {
+func (g *giteaForge) pullRequest(ctx context.Context, key SessionPullRequestKey) (SessionPullRequest, error) {
 	pull, found, err := g.pulls.ForBranch(ctx, key.Host, key.Owner, key.Repo, key.Branch)
 	if err != nil {
-		return dispatch.SessionPullRequest{}, Wrap(err, KindInternal, "reading the pull request for %s", key.Branch)
+		return SessionPullRequest{}, Wrap(err, KindInternal, "reading the pull request for %s", key.Branch)
 	}
 	if !found {
-		return dispatch.SessionPullRequest{Status: dispatch.PullRequestStatusNone}, nil
+		return SessionPullRequest{Status: PullRequestStatusNone}, nil
 	}
-	return dispatch.SessionPullRequest{
-		Status:         dispatch.PullRequestStatusFound,
+	return SessionPullRequest{
+		Status:         PullRequestStatusFound,
 		Number:         pull.Number,
 		Title:          pull.Title,
 		State:          pull.State,

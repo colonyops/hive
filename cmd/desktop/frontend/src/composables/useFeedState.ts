@@ -36,7 +36,7 @@ import { Refresh as RefreshSources } from '../../bindings/github.com/colonyops/h
 import type {
   ActionRunView,
   SessionLaunchOptions as SessionLaunchOptionsView,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { appErrorKind, appErrorMessage, errorText } from '../lib/appError'
 import { useConfirmation } from './useConfirmation'
 import {
