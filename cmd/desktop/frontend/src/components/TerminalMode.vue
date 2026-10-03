@@ -96,6 +96,7 @@ import type {
   SessionWindowStatus,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import type { MenuEntry } from '../types/menu'
+import Kbd from './ui/Kbd.vue'
 import '@xterm/xterm/css/xterm.css'
 
 // `active` is whether this mode is the surface on screen. The component is
@@ -2624,12 +2625,12 @@ onBeforeUnmount(() => {
              because it is rebindable; the arrows are the tree's own handler and
              cannot move. -->
         <div v-if="attachable.length" class="tree-hints" data-testid="terminal-tree-hints">
-          <span><span class="tree-hint-key">↑↓</span> switch</span>
-          <span><span class="tree-hint-key">↵</span> enter</span>
+          <span><Kbd variant="plain" class="text-text-3">↑↓</Kbd> switch</span>
+          <span><Kbd variant="plain" class="text-text-3">↵</Kbd> enter</span>
           <!-- Whichever half of the focus pair leaves where focus is. The pane
                has nowhere to advertise its own way out, so the tree carries it. -->
           <span v-if="focusHint"
-            ><span class="tree-hint-key">{{ focusHint.keys }}</span> {{ focusHint.label }}</span
+            ><Kbd variant="plain" class="text-text-3">{{ focusHint.keys }}</Kbd> {{ focusHint.label }}</span
           >
         </div>
         <PanelResizeHandle edge="right" name="terminal-sidebar" :start="startResize" :step="step" />
@@ -2979,9 +2980,6 @@ onBeforeUnmount(() => {
   font-size: 11px;
   color: var(--color-text-4);
   user-select: none;
-}
-.tree-hint-key {
-  color: var(--color-text-3);
 }
 
 .session-row {

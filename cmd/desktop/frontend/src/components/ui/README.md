@@ -44,6 +44,7 @@ the table.
 | `AppMenu`            | A dropdown menu of actions.                                                                                   | `entries`, `anchor`, `flip`, `width`, `ignore`, `testid`; emits `select`, `close`                                                                                                                                         |
 | `AppTooltip`         | A hover or focus hint on any trigger.                                                                         | `text` (empty renders no tooltip), `delay`; default slot is the trigger                                                                                                                                                   |
 | `BaseBadge`          | A status pill or chip.                                                                                        | `tone`, `variant` (`pill`, `chip`), `dot`                                                                                                                                                                                 |
+| `Kbd`                | A key or shortcut hint (`⌘K`, `esc`, `↵`).                                                                    | `variant` (`boxed`, `on-accent` inside a primary button, `plain` for mono text in the surrounding color)                                                                                                                  |
 | `BaseCard`           | A bordered card, optionally clickable.                                                                        | `as` (`article`, `button`), `interactive`, `padded`; `#icon`, `#actions`                                                                                                                                                  |
 | `BaseIconBadge`      | A square tile behind an icon.                                                                                 | `size` (px), `rounded`                                                                                                                                                                                                    |
 | `PanelResizeHandle`  | The drag edge of a resizable panel, wired to `useResizablePanel`.                                             | `edge`, `name`, `start`, `step`                                                                                                                                                                                           |
@@ -145,6 +146,13 @@ for a failure that belongs to a whole view, form, or sheet. `line` is bare
 text; use it under a field, inside a list row, or beside a button. Both use
 `text-severity-error` and nothing else: never `text-kind-issue` for an error.
 Pass spacing (`mt-2`, `px-3`) and `leading-relaxed` as a class.
+
+### Key hints are `Kbd`
+
+A shortcut shown to the user is a `Kbd`, never a styled `<kbd>` or
+`<span>`. `plain` sets only the mono font; pass the color the line needs
+as a class. The key caps in Settings > Keyboard are the binding editor's
+own capture surface, not hints, and keep their local style.
 
 ### Test ids
 

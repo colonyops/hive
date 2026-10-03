@@ -16,6 +16,7 @@ import { formatCombo } from '../composables/useKeybindings'
 import { useSubmitShortcut } from '../composables/useSubmitShortcut'
 import { type ActionInputValues, initialActionInputs, validateActionInputs } from '../lib/actionInputs'
 import { seedRef } from '../lib/seedRef'
+import Kbd from './ui/Kbd.vue'
 
 // An interactive launch-session action can also declare inputs; the two
 // compose in one dialog rather than stacking two.
@@ -219,9 +220,7 @@ useSubmitShortcut(submit)
         data-testid="create-session-submit"
       >
         {{ busy ? 'Creating…' : target === 'workspace' ? 'Start chat' : 'Create session' }}
-        <kbd v-if="!busy" class="rounded bg-black/15 px-1 py-0.5 font-mono text-[10.5px] leading-none">{{
-          submitHint
-        }}</kbd>
+        <Kbd v-if="!busy" variant="on-accent">{{ submitHint }}</Kbd>
       </BaseButton>
       <BaseButton variant="secondary" :busy="busy" @click="emit('close')">Cancel</BaseButton>
     </template>

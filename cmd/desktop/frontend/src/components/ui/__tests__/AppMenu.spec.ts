@@ -17,7 +17,7 @@ describe('AppMenu', () => {
     expect(wrapper.findAll('[role="menuitem"]')).toHaveLength(2)
     expect(wrapper.find('.app-menu-sep').exists()).toBe(true)
     expect(wrapper.get('.app-menu-label').text()).toBe('Actions')
-    expect(wrapper.get('[data-testid="entry-read"] .app-menu-kbd').text()).toBe('⇧U')
+    expect(wrapper.get('[data-testid="entry-read"] kbd').text()).toBe('⇧U')
     expect(wrapper.get('[data-testid="entry-run"] svg').attributes('style')).toContain('color:')
   })
 

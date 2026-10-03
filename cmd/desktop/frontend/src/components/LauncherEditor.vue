@@ -10,6 +10,7 @@ import { launcherIconOptions } from '../lib/launcherIcons'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { launcherCommandID } from '../keybindings/catalog'
 import type { Launcher } from '../composables/useActionsSettings'
+import Kbd from './ui/Kbd.vue'
 
 const props = defineProps<{
   isNew: boolean
@@ -114,8 +115,7 @@ onMounted(async () => {
       </p>
       <p class="text-[11.5px] leading-relaxed text-text-3" data-testid="launcher-shortcut">
         <template v-if="shortcut()"
-          >Bound to <kbd class="rounded border border-card px-1 py-0.5 font-mono">{{ shortcut() }}</kbd> — rebind it in
-          Settings ▸ Keyboard.</template
+          >Bound to <Kbd>{{ shortcut() }}</Kbd> — rebind it in Settings ▸ Keyboard.</template
         >
         <template v-else
           >Unbound. Give it a shortcut under <code>launcher.{{ launcher.id || 'id' }}</code> in Settings ▸

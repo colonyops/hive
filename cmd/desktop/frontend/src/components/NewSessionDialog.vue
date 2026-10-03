@@ -21,6 +21,7 @@ import { useAutofocus } from '../composables/useAutofocus'
 import { formatCombo } from '../composables/useKeybindings'
 import { useSubmitShortcut } from '../composables/useSubmitShortcut'
 import { seedRef } from '../lib/seedRef'
+import Kbd from './ui/Kbd.vue'
 
 const props = defineProps<{
   options: SessionLaunchOptions
@@ -271,9 +272,7 @@ useSubmitShortcut(submit)
         data-testid="new-session-submit"
       >
         {{ busy ? 'Creating…' : failure ? 'Try again' : target === 'workspace' ? 'Start chat' : 'Create session' }}
-        <kbd v-if="!busy" class="rounded bg-black/15 px-1 py-0.5 font-mono text-[10.5px] leading-none">{{
-          submitHint
-        }}</kbd>
+        <Kbd v-if="!busy" variant="on-accent">{{ submitHint }}</Kbd>
       </BaseButton>
       <BaseButton variant="secondary" :busy="busy" @click="emit('close')">Cancel</BaseButton>
     </template>

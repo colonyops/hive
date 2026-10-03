@@ -8,6 +8,7 @@ import { fuzzyMatch, useCommandPalette, type Command } from '../composables/useC
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { usePaletteRecents } from '../composables/usePaletteRecents'
 import { paletteScopes, type PaletteScopeId } from '../palette/scopes'
+import Kbd from './ui/Kbd.vue'
 
 const { open, query, scope, visibleScopes, results, toggle, run, setQuery, setScope, cycleScope, popScope } =
   useCommandPalette()
@@ -318,7 +319,7 @@ function onKeydown(e: KeyboardEvent): void {
               spellcheck="false"
               @input="onInput"
             />
-            <kbd class="palette-kbd">esc</kbd>
+            <Kbd class="shrink-0 select-none">esc</Kbd>
           </div>
 
           <!-- Results list -->
@@ -356,7 +357,9 @@ function onKeydown(e: KeyboardEvent): void {
                 <span v-if="entry.cmd.kind" class="palette-kind" data-testid="command-palette-command-kind">{{
                   entry.cmd.kind
                 }}</span>
-                <span v-if="entry.cmd.hint" class="palette-hint">{{ entry.cmd.hint }}</span>
+                <Kbd v-if="entry.cmd.hint" variant="plain" class="shrink-0 text-[11px] text-text-3">{{
+                  entry.cmd.hint
+                }}</Kbd>
                 <span v-if="entry.index === selectedIndex" class="palette-enter-badge" aria-hidden="true">↵</span>
               </button>
             </template>
@@ -366,9 +369,9 @@ function onKeydown(e: KeyboardEvent): void {
 
           <!-- Footer key hints -->
           <div class="palette-footer">
-            <span><span class="palette-footer-key">↑↓</span> navigate</span>
-            <span><span class="palette-footer-key">↵</span> run</span>
-            <span><span class="palette-footer-key">⇥</span> scope</span>
+            <span><Kbd variant="plain" class="text-text-2">↑↓</Kbd> navigate</span>
+            <span><Kbd variant="plain" class="text-text-2">↵</Kbd> run</span>
+            <span><Kbd variant="plain" class="text-text-2">⇥</Kbd> scope</span>
           </div>
         </div>
       </div>
@@ -479,18 +482,6 @@ function onKeydown(e: KeyboardEvent): void {
   color: var(--color-text-4);
 }
 
-.palette-kbd {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-text-3);
-  border: 1px solid var(--color-card);
-  border-radius: 5px;
-  padding: 2px 7px;
-  user-select: none;
-  line-height: 1.5;
-}
-
 /* Results */
 .palette-results {
   flex: 1;
@@ -586,14 +577,6 @@ function onKeydown(e: KeyboardEvent): void {
   color: var(--color-text-3);
 }
 
-/* Right-aligned hint */
-.palette-hint {
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--color-text-3);
-}
-
 /* Enter badge on the selected row */
 .palette-enter-badge {
   flex-shrink: 0;
@@ -628,10 +611,6 @@ function onKeydown(e: KeyboardEvent): void {
   color: var(--color-text-3);
   flex-shrink: 0;
   user-select: none;
-}
-
-.palette-footer-key {
-  color: var(--color-text-2);
 }
 
 /* Transition */

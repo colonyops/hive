@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { commandById } from '../keybindings/catalog'
+import Kbd from './ui/Kbd.vue'
 
 const { pendingSequence } = useKeybindings()
 
@@ -28,13 +29,7 @@ const continuations = computed(() => {
     data-testid="sequence-hint"
   >
     <span class="flex items-center gap-1">
-      <kbd
-        v-for="(step, i) in steps"
-        :key="i"
-        class="rounded border border-card bg-card px-1.5 py-0.5 text-text-2"
-        data-testid="sequence-hint-step"
-        >{{ step }}</kbd
-      >
+      <Kbd v-for="(step, i) in steps" :key="i" data-testid="sequence-hint-step">{{ step }}</Kbd>
     </span>
     <span
       v-for="continuation in continuations"
@@ -42,11 +37,7 @@ const continuations = computed(() => {
       class="flex items-center gap-1.5"
       data-testid="sequence-hint-continuation"
     >
-      <kbd
-        class="rounded border border-card bg-card px-1.5 py-0.5 text-text-2"
-        data-testid="sequence-hint-continuation-key"
-        >{{ continuation.label }}</kbd
-      >
+      <Kbd data-testid="sequence-hint-continuation-key">{{ continuation.label }}</Kbd>
       <span data-testid="sequence-hint-continuation-title">{{ continuation.title }}</span>
     </span>
   </div>

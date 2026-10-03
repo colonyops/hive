@@ -5,6 +5,7 @@ import IconCheck from '~icons/lucide/check'
 import AppIcon from '../AppIcon.vue'
 import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import type { MenuEntry } from '../../types/menu'
+import Kbd from './Kbd.vue'
 
 // The shared dropdown menu. Owns the chrome (panel, entries, separators,
 // group labels, shortcut hints) and dismissal (Escape, click-outside); the
@@ -110,7 +111,7 @@ useEventListener(anchoredWindow, 'resize', measure)
           <IconCheck v-else-if="entry.checked" class="size-3.5 shrink-0 text-accent" />
           <span v-else-if="entry.checked === false" class="size-3.5 shrink-0" aria-hidden="true" />
           <span class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
-          <span v-if="entry.kbd" class="app-menu-kbd">{{ entry.kbd }}</span>
+          <Kbd v-if="entry.kbd" variant="plain" class="ml-auto pl-2 text-[10.5px] text-text-4">{{ entry.kbd }}</Kbd>
         </button>
       </template>
     </div>
@@ -152,13 +153,6 @@ useEventListener(anchoredWindow, 'resize', measure)
 }
 .app-menu-entry:disabled {
   cursor: default;
-  color: var(--color-text-4);
-}
-.app-menu-kbd {
-  margin-left: auto;
-  padding-left: 8px;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
   color: var(--color-text-4);
 }
 .app-menu-sep {

@@ -17,6 +17,7 @@ import IconLoader from '~icons/lucide/loader'
 import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
 import JobsPopover from './JobsPopover.vue'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
+import Kbd from './ui/Kbd.vue'
 
 // One button grammar for the whole chrome, with a fixed slot per zone. The bar
 // is two clusters, not three centered columns — a window-centered palette sat
@@ -282,10 +283,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       >
         <IconSearch class="size-3.5 shrink-0" />
         <span class="min-w-0 flex-1 truncate text-left text-[12.5px]">Search…</span>
-        <kbd
-          class="hidden shrink-0 rounded border border-card px-1.5 py-0.5 font-mono text-[10.5px] leading-none text-text-3 min-[700px]:block"
-          >{{ isMac ? '⌘' : 'Ctrl ' }}K</kbd
-        >
+        <Kbd class="hidden shrink-0 min-[700px]:block">{{ isMac ? '⌘' : 'Ctrl ' }}K</Kbd>
       </button>
       <!-- Activity: a 28px icon between the palette and the frame. An amber dot
            flags activity recorded since the page was last opened; amber fill
