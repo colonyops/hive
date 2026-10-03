@@ -33,6 +33,7 @@ import BaseButton from './ui/BaseButton.vue'
 import DrawerSheet from './ui/DrawerSheet.vue'
 import InlineConfirm from './ui/InlineConfirm.vue'
 import FormField from './ui/FormField.vue'
+import TextInput from './ui/TextInput.vue'
 import InlineError from './ui/InlineError.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import { CodeField, SelectField, TextField, TextareaField, type SelectOption } from '../pipeline/fields'
@@ -712,9 +713,9 @@ function toggleDay(day: number): void {
   if (days.length) queuePreview()
 }
 
-function onTimeInput(event: Event): void {
+function onTimeInput(value: string): void {
   const draft = scheduleDraft.value
-  const match = /^(\d{1,2}):(\d{2})/.exec((event.target as HTMLInputElement).value)
+  const match = /^(\d{1,2}):(\d{2})/.exec(value)
   if (!draft || !match || draft.shape.kind === 'custom' || draft.shape.kind === 'hourly') return
   draft.shape = { ...draft.shape, hour: Number(match[1]), minute: Number(match[2]) }
   queuePreview()
@@ -744,8 +745,8 @@ function setMinute(minute: number): void {
   queuePreview()
 }
 
-function onMinuteInput(event: Event): void {
-  setMinute(Number((event.target as HTMLInputElement).value))
+function onMinuteInput(value: string): void {
+  setMinute(Number(value))
 }
 
 function setMonthDay(value: string): void {
@@ -1007,7 +1008,7 @@ function closeSheet(): void {
 }
 
 const nameInput = ref<{ focus: () => void } | null>(null)
-const dirInput = ref<HTMLInputElement | null>(null)
+const dirInput = ref<{ focus: () => void } | null>(null)
 onMounted(async () => {
   void reloadMCPCatalogue()
   void reloadSkillPackages()
@@ -1098,29 +1099,27 @@ onMounted(async () => {
             testid="agent-workspace-editor-schedule-minute"
             @update:model-value="setMinuteSelection"
           />
-          <input
+          <TextInput
             v-if="scheduleDraft.minuteFree"
             type="number"
             min="0"
             max="59"
-            :value="scheduleDraft.shape.minute"
+            :model-value="String(scheduleDraft.shape.minute)"
             :disabled="busy"
             aria-label="Minute past the hour"
-            class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
             data-testid="agent-workspace-editor-schedule-minute-free"
-            @input="onMinuteInput"
+            @update:model-value="onMinuteInput"
           />
         </div>
         <FormField v-else-if="scheduleDraft.shape.kind !== 'custom'" v-slot="{ id }" label="Time">
-          <input
+          <TextInput
             :id="id"
             type="time"
             step="60"
-            :value="clock(scheduleDraft.shape.hour, scheduleDraft.shape.minute)"
+            :model-value="clock(scheduleDraft.shape.hour, scheduleDraft.shape.minute)"
             :disabled="busy"
-            class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
             data-testid="agent-workspace-editor-schedule-time"
-            @input="onTimeInput"
+            @update:model-value="onTimeInput"
           />
         </FormField>
       </div>
@@ -1291,20 +1290,19 @@ onMounted(async () => {
           label="Directory name"
           hint="A new directory under the workspace root, seeded with an AGENTS.md to shape."
         >
-          <input
+          <TextInput
             :id="id"
             ref="dirInput"
             v-model="dir"
-            type="text"
             placeholder="my-project"
             autocapitalize="off"
             autocorrect="off"
             spellcheck="false"
             aria-label="Directory name"
             :disabled="busy"
-            class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 font-mono text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent disabled:opacity-60"
             data-testid="agent-workspace-editor-dir"
             @keydown.enter="submit"
+            monospace
           />
         </FormField>
         <TextField

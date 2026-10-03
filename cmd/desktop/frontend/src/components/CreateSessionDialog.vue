@@ -5,6 +5,7 @@ import IconPlay from '~icons/lucide/play'
 import ActionInputFields from './ActionInputFields.vue'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import FormField from './ui/FormField.vue'
+import TextInput from './ui/TextInput.vue'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
 import RepositorySelect from './RepositorySelect.vue'
@@ -44,7 +45,7 @@ const name = ref('')
 const agent = seedRef(() => props.options.defaultAgent)
 const inputValues = seedRef<ActionInputValues>(() => initialActionInputs(props.inputs))
 const validationError = ref('')
-const nameInput = ref<HTMLInputElement | null>(null)
+const nameInput = ref<{ focus: () => void } | null>(null)
 const canSubmit = computed(() => {
   const selectedTarget = target.value === 'repository' ? repository.value : workspace.value
   if (selectedTarget.trim() === '' || name.value.trim() === '') return false
@@ -176,14 +177,13 @@ useSubmitShortcut(submit)
         />
       </FormField>
       <FormField v-slot="{ id }" label="Session name">
-        <input
+        <TextInput
           :id="id"
           ref="nameInput"
           v-model="name"
           autocapitalize="off"
           autocorrect="off"
           spellcheck="false"
-          class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] text-text outline-none focus:border-accent"
           placeholder="review-pr-123"
           data-testid="session-name"
         />

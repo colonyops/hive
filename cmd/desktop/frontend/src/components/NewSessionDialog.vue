@@ -8,6 +8,8 @@ import IconPlay from '~icons/lucide/play'
 import IconX from '~icons/lucide/x'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import FormField from './ui/FormField.vue'
+import TextArea from './ui/TextArea.vue'
+import TextInput from './ui/TextInput.vue'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
 import RepositorySelect from './RepositorySelect.vue'
@@ -57,7 +59,7 @@ const name = seedRef(() => props.initial.name)
 const prompt = seedRef(() => props.initial.prompt)
 const agent = seedRef(() => props.initial.agent)
 const validationError = ref('')
-const nameInput = ref<HTMLInputElement | null>(null)
+const nameInput = ref<{ focus: () => void } | null>(null)
 const canSubmit = computed(() => {
   const selectedTarget = target.value === 'repository' ? repository.value : workspace.value
   if (selectedTarget.trim() === '' || name.value.trim() === '') return false
@@ -215,14 +217,13 @@ useSubmitShortcut(submit)
       <FormField v-slot="{ id }" label="Session name">
         <!-- A session name slugs into a tmux name and a directory path, so the
              webview's text substitutions must not touch what was typed. -->
-        <input
+        <TextInput
           :id="id"
           ref="nameInput"
           v-model="name"
           autocapitalize="off"
           autocorrect="off"
           spellcheck="false"
-          class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] text-text outline-none focus:border-accent"
           placeholder="review-pr-123"
           data-testid="new-session-name"
         />
@@ -230,13 +231,13 @@ useSubmitShortcut(submit)
       <FormField>
         <template #label>Prompt <span class="text-text-4">(optional)</span></template>
         <template #default="{ id }">
-          <textarea
+          <TextArea
             :id="id"
             v-model="prompt"
-            rows="6"
-            class="w-full resize-y rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] leading-relaxed text-text outline-none focus:border-accent"
+            :rows="6"
             placeholder="Describe the task for the agent…"
             data-testid="new-session-prompt"
+            class="leading-relaxed"
           />
         </template>
       </FormField>

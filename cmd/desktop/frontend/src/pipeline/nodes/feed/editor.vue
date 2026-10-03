@@ -3,6 +3,7 @@
 // cosmetic sidebar presentation: the glyph shown in the tree and a hover
 // tooltip that explains the feed's context (handy for LLM-generated feeds).
 import FormField from '../../../components/ui/FormField.vue'
+import TextArea from '../../../components/ui/TextArea.vue'
 import { SelectField } from '../../fields'
 import { defaultFeedIcon, feedIconOptions } from '../../../lib/feedIcons'
 import { descriptionMaxLen, type Config } from './config'
@@ -16,8 +17,7 @@ function setIcon(value: string) {
   emit('update:config', { ...props.config, icon: value || undefined })
 }
 
-function setDescription(e: Event) {
-  const value = (e.target as HTMLTextAreaElement).value
+function setDescription(value: string) {
   emit('update:config', { ...props.config, description: value || undefined })
 }
 </script>
@@ -41,15 +41,14 @@ function setDescription(e: Event) {
     />
 
     <FormField v-slot="{ id }" label="Description">
-      <textarea
+      <TextArea
         :id="id"
-        :value="config.description ?? ''"
-        rows="3"
+        :model-value="config.description ?? ''"
+        size="sm"
         :maxlength="descriptionMaxLen"
         placeholder="Optional context shown as a tooltip when hovering the feed — useful for explaining generated feeds."
-        class="w-full resize-y rounded-lg border border-strong bg-app px-[11px] py-[9px] text-[13px] text-text outline-none placeholder:text-text-4 focus:border-accent"
         data-testid="feed-editor-description"
-        @input="setDescription"
+        @update:model-value="setDescription"
       />
     </FormField>
   </div>

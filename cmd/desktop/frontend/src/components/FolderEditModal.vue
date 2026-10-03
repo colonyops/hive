@@ -8,6 +8,7 @@ import IconFolder from '~icons/lucide/folder'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
 import FormField from './ui/FormField.vue'
+import TextInput from './ui/TextInput.vue'
 import InlineConfirm from './ui/InlineConfirm.vue'
 import type { FeedFolder } from '../types/feed'
 import { seedRef } from '../lib/seedRef'
@@ -16,7 +17,7 @@ const props = defineProps<{ folder: FeedFolder }>()
 const emit = defineEmits<{ close: []; save: [name: string]; delete: [] }>()
 
 const name = seedRef(() => props.folder.name)
-const inputRef = ref<HTMLInputElement | null>(null)
+const inputRef = ref<{ focus: () => void; select: () => void } | null>(null)
 const confirming = ref(false)
 
 const count = computed(() => props.folder.feeds.length)
@@ -64,13 +65,11 @@ onMounted(async () => {
       class="px-5 py-4 transition-opacity"
       :class="{ 'opacity-45': confirming }"
     >
-      <input
+      <TextInput
         :id="id"
         ref="inputRef"
         v-model="name"
-        type="text"
         :disabled="confirming"
-        class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
         data-testid="folder-edit-name"
         @keydown.enter="submit"
       />

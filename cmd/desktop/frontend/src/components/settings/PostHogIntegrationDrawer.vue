@@ -7,6 +7,7 @@ import AppSelect, { type AppSelectOption } from '../ui/AppSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import DrawerSheet from '../ui/DrawerSheet.vue'
 import FormField from '../ui/FormField.vue'
+import TextInput from '../ui/TextInput.vue'
 import { usePostHogConnection } from '../../composables/usePostHogConnection'
 import { useIntegrations } from '../../composables/useIntegrations'
 
@@ -170,21 +171,23 @@ async function onDisconnect(account: string) {
         </div>
 
         <div class="flex flex-col gap-2">
-          <input
+          <TextInput
             v-model="urlInput"
             type="url"
             :disabled="picking"
             placeholder="https://us.posthog.com"
-            class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] font-mono text-[13px] text-text outline-none focus:border-accent disabled:opacity-60"
             data-testid="posthog-connect-url"
+            size="sm"
+            monospace
           />
-          <input
+          <TextInput
             v-model="tokenInput"
             type="password"
             :disabled="picking"
             placeholder="phx_…"
-            class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] font-mono text-[13px] text-text outline-none focus:border-accent disabled:opacity-60"
             data-testid="posthog-connect-token"
+            size="sm"
+            monospace
           />
 
           <!-- Step two. A personal API key spans projects, so the project is

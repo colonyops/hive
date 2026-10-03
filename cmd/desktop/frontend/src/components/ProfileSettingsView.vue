@@ -5,6 +5,7 @@ import IconSlidersHorizontal from '~icons/lucide/sliders-horizontal'
 import IconTrash2 from '~icons/lucide/trash-2'
 import AppSwitch from './ui/AppSwitch.vue'
 import FormField from './ui/FormField.vue'
+import TextInput from './ui/TextInput.vue'
 import BaseButton from './ui/BaseButton.vue'
 import SettingsLayout from './settings/SettingsLayout.vue'
 import SettingsPage from './settings/SettingsPage.vue'
@@ -177,13 +178,13 @@ async function onImageChange(event: Event): Promise<void> {
         <form class="rounded-lg border border-border bg-raised p-4" @submit.prevent="submitRename">
           <FormField v-slot="{ id }" label="Profile name" :error="props.renameError" testid="profile-settings-rename">
             <div class="flex items-center gap-2.5">
-              <input
+              <TextInput
                 :id="id"
                 v-model="name"
-                type="text"
-                class="min-w-0 flex-1 rounded-lg border border-strong bg-app px-3 py-2 text-[13.5px] text-text outline-none focus:border-accent disabled:opacity-60"
                 :disabled="props.renaming"
                 data-testid="profile-settings-name"
+                size="sm"
+                class="min-w-0 flex-1"
               />
               <BaseButton
                 type="submit"

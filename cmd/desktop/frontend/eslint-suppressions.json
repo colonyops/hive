@@ -76,16 +76,6 @@
       "count": 2
     }
   },
-  "src/components/ui/AppCheckbox.vue": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/components/ui/AppSelect.vue": {
-    "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    }
-  },
   "src/components/CommandPalette.vue": {
     "@typescript-eslint/unbound-method": {
       "count": 6
@@ -178,11 +168,6 @@
       "count": 1
     }
   },
-  "src/components/ui/__tests__/ConfirmationDialog.spec.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
   "src/components/__tests__/DetailPane.spec.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
@@ -197,11 +182,6 @@
     },
     "@typescript-eslint/require-await": {
       "count": 2
-    }
-  },
-  "src/components/ui/__tests__/DrawerSheet.spec.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
     }
   },
   "src/components/__tests__/FeedList.spec.ts": {
@@ -248,6 +228,26 @@
     }
   },
   "src/components/settings/__tests__/SettingsLayout.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/components/ui/AppCheckbox.vue": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/components/ui/AppSelect.vue": {
+    "@typescript-eslint/no-unused-expressions": {
+      "count": 1
+    }
+  },
+  "src/components/ui/__tests__/ConfirmationDialog.spec.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/components/ui/__tests__/DrawerSheet.spec.ts": {
     "@typescript-eslint/require-await": {
       "count": 1
     }
@@ -598,16 +598,6 @@
     }
   },
   "src/pipeline/fields/NumberField.vue": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/pipeline/fields/TextField.vue": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/pipeline/fields/TextareaField.vue": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     }

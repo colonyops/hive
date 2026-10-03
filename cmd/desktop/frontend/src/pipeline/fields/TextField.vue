@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import FormField from '../../components/ui/FormField.vue'
+import TextInput from '../../components/ui/TextInput.vue'
 
-const props = defineProps<{
+defineProps<{
   label?: string
   modelValue?: string
   placeholder?: string
@@ -15,36 +16,26 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
-const inputRef = ref<HTMLInputElement | null>(null)
+const inputRef = ref<{ focus: () => void } | null>(null)
 
-function onInput(e: Event) {
-  emit('update:modelValue', (e.target as HTMLInputElement).value)
-}
-
-function focus() {
-  inputRef.value?.focus()
-}
-
-defineExpose({ focus })
+defineExpose({ focus: () => inputRef.value?.focus() })
 </script>
 
 <template>
   <FormField v-slot="{ id }" :label="label" :hint="hint" :error="error" :testid="testid">
     <!-- `trailing` holds an in-field affordance (e.g. a regenerate button).
-         The input gains right padding only when the slot is filled, so
-         fields without one keep their exact previous metrics. -->
+         The input gains right padding only when the slot is filled. -->
     <div class="relative">
-      <input
+      <TextInput
         :id="id"
         ref="inputRef"
-        type="text"
-        :value="modelValue"
+        :model-value="modelValue"
         :placeholder="placeholder"
         :disabled="disabled"
-        class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent disabled:opacity-60"
-        :class="[{ 'font-mono': monospace }, $slots.trailing ? 'pr-10' : '']"
+        :monospace="monospace"
+        :class="{ 'pr-10': $slots.trailing }"
         :data-testid="testid"
-        @input="onInput"
+        @update:model-value="emit('update:modelValue', $event)"
       />
       <div v-if="$slots.trailing" class="absolute inset-y-0 right-0 flex items-center pr-1.5">
         <slot name="trailing" />

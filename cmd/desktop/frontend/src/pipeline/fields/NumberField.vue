@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import FormField from '../../components/ui/FormField.vue'
+import TextInput from '../../components/ui/TextInput.vue'
 
 const props = defineProps<{
   label?: string
@@ -15,25 +16,24 @@ const props = defineProps<{
 
 const emit = defineEmits<{ 'update:modelValue': [value: number] }>()
 
-function onInput(e: Event) {
-  const n = Number((e.target as HTMLInputElement).value)
+function onUpdate(value: string) {
+  const n = Number(value)
   emit('update:modelValue', Number.isFinite(n) ? n : 0)
 }
 </script>
 
 <template>
   <FormField v-slot="{ id }" :label="label" :hint="hint" :error="error" :testid="testid">
-    <input
+    <TextInput
       :id="id"
       type="number"
-      :value="modelValue"
+      :model-value="String(modelValue)"
       :min="min"
       :max="max"
       :step="step"
       :placeholder="placeholder"
-      class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
       :data-testid="testid"
-      @input="onInput"
+      @update:model-value="onUpdate"
     />
   </FormField>
 </template>

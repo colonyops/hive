@@ -11,6 +11,7 @@ import AppSwitch from '../ui/AppSwitch.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import DrawerSheet from '../ui/DrawerSheet.vue'
 import FormField from '../ui/FormField.vue'
+import TextInput from '../ui/TextInput.vue'
 import { useClipboard } from '../../composables/useClipboard'
 import { useWebhookSettings } from '../../stores/useWebhookSettings'
 
@@ -139,7 +140,7 @@ onMounted(() => void reload())
 
       <FormField v-slot="{ id }" label="Port" :hint="portHint" testid="webhook-settings-port">
         <div class="flex items-center gap-2">
-          <input
+          <TextInput
             :id="id"
             v-model="port"
             type="number"
@@ -147,10 +148,12 @@ onMounted(() => void reload())
             min="1024"
             max="65535"
             step="1"
-            class="min-w-0 flex-1 rounded-lg border border-strong bg-app px-[11px] py-[9px] font-mono text-[13px] text-text outline-none focus:border-accent disabled:cursor-not-allowed disabled:opacity-60"
-            :class="!portValid ? 'border-severity-error' : ''"
             data-testid="webhook-settings-port-input"
             :disabled="loading || overridden"
+            size="sm"
+            monospace
+            :invalid="!portValid"
+            class="min-w-0 flex-1"
           />
           <button
             type="button"

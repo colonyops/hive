@@ -8,6 +8,7 @@ import IconPencil from '~icons/lucide/pencil'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
 import FormField from './ui/FormField.vue'
+import TextInput from './ui/TextInput.vue'
 import { seedRef } from '../lib/seedRef'
 
 const props = defineProps<{
@@ -18,7 +19,7 @@ const props = defineProps<{
 const emit = defineEmits<{ close: []; save: [name: string] }>()
 
 const draft = seedRef(() => props.name)
-const inputRef = ref<HTMLInputElement | null>(null)
+const inputRef = ref<{ focus: () => void; select: () => void } | null>(null)
 
 function submit(): void {
   if (props.busy) return
@@ -49,16 +50,14 @@ onMounted(async () => {
         hint="Its terminal session is renamed too, so an open terminal reconnects."
         testid="session-rename"
       >
-        <input
+        <TextInput
           :id="id"
           ref="inputRef"
           v-model="draft"
-          type="text"
           autocapitalize="off"
           autocorrect="off"
           spellcheck="false"
           :disabled="busy"
-          class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
           data-testid="session-rename-input"
           @keydown.enter="submit"
         />

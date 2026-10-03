@@ -4,13 +4,14 @@ import { ref } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
+import TextInput from './ui/TextInput.vue'
 import { useAutofocus } from '../composables/useAutofocus'
 
 const props = defineProps<{ busy: boolean; error: string | null }>()
 const emit = defineEmits<{ close: []; create: [name: string] }>()
 
 const name = ref('')
-const inputRef = ref<HTMLInputElement | null>(null)
+const inputRef = ref<{ focus: () => void } | null>(null)
 
 function submit() {
   if (props.busy) return
@@ -24,12 +25,10 @@ useAutofocus(inputRef)
 <template>
   <BaseModal title="New profile" :icon="IconLayoutGrid" testid="new-profile-modal" @close="emit('close')">
     <div class="flex flex-col gap-3 px-5 py-4">
-      <input
+      <TextInput
         ref="inputRef"
         v-model="name"
-        type="text"
         placeholder="Frontend Triage"
-        class="w-full rounded-lg border border-strong bg-app px-3.5 py-2.5 text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
         data-testid="new-profile-input"
         @keydown.enter="submit"
       />

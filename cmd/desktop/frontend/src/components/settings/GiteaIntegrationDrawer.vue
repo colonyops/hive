@@ -6,6 +6,7 @@ import BaseButton from '../ui/BaseButton.vue'
 import DrawerSheet from '../ui/DrawerSheet.vue'
 import GiteaMark from '../marks/GiteaMark.vue'
 import FormField from '../ui/FormField.vue'
+import TextInput from '../ui/TextInput.vue'
 import { useGiteaConnection } from '../../composables/useGiteaConnection'
 import { useIntegrations } from '../../composables/useIntegrations'
 
@@ -144,19 +145,21 @@ async function onDisconnect(account: string) {
           </div>
         </div>
         <div class="flex flex-col gap-2">
-          <input
+          <TextInput
             v-model="urlInput"
             type="url"
             placeholder="https://git.example.com"
-            class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] font-mono text-[13px] text-text outline-none focus:border-accent"
             data-testid="gitea-connect-url"
+            size="sm"
+            monospace
           />
-          <input
+          <TextInput
             v-model="tokenInput"
             type="password"
             placeholder="Access token"
-            class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] font-mono text-[13px] text-text outline-none focus:border-accent"
             data-testid="gitea-connect-token"
+            size="sm"
+            monospace
           />
           <div>
             <BaseButton

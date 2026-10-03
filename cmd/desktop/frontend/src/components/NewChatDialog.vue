@@ -6,6 +6,7 @@ import { computed, ref, useId } from 'vue'
 import IconBot from '~icons/lucide/bot'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import FormField from './ui/FormField.vue'
+import TextInput from './ui/TextInput.vue'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
 import { useAutofocus } from '../composables/useAutofocus'
@@ -25,7 +26,7 @@ const emit = defineEmits<{ close: []; submit: [input: { workspace: string; name:
 const formId = useId()
 const workspace = seedRef(() => props.initialWorkspace)
 const name = ref('')
-const nameInput = ref<HTMLInputElement | null>(null)
+const nameInput = ref<{ focus: () => void } | null>(null)
 const options = computed<AppSelectOption[]>(() =>
   props.workspaces.map((ws) => ({ value: ws.dir, label: ws.name || ws.dir })),
 )
@@ -55,7 +56,7 @@ useAutofocus(nameInput)
       <FormField>
         <template #label>Name <span class="text-text-4">(optional)</span></template>
         <template #default="{ id }">
-          <input
+          <TextInput
             :id="id"
             ref="nameInput"
             v-model="name"
@@ -63,7 +64,6 @@ useAutofocus(nameInput)
             autocorrect="off"
             spellcheck="false"
             placeholder="New Chat"
-            class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] text-text outline-none placeholder:text-text-4 focus:border-accent"
             data-testid="new-chat-name"
           />
         </template>

@@ -13,6 +13,7 @@ import AppSwitch from '../../components/ui/AppSwitch.vue'
 import BaseButton from '../../components/ui/BaseButton.vue'
 import DrawerSheet from '../../components/ui/DrawerSheet.vue'
 import FormField from '../../components/ui/FormField.vue'
+import TextInput from '../../components/ui/TextInput.vue'
 import { useAutofocus } from '../../composables/useAutofocus'
 import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import type { NodeTypeDefinition } from '../nodeType'
@@ -136,7 +137,7 @@ const helpSummary = computed(() => summarize(props.def.help))
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
-const nameRef = ref<HTMLInputElement | null>(null)
+const nameRef = ref<{ focus: () => void } | null>(null)
 
 function onEscape() {
   // The delete popover takes precedence: Esc cancels the pending confirm
@@ -185,15 +186,14 @@ useAutofocus(nameRef)
     </template>
 
     <FormField v-slot="{ id }" label="Name">
-      <input
+      <TextInput
         :id="id"
         ref="nameRef"
         v-model="name"
-        type="text"
         :placeholder="def.label"
-        class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] text-[13px] text-text outline-none placeholder:text-text-4 focus:border-accent"
         data-testid="node-editor-name"
         @keydown.enter="submit"
+        size="sm"
       />
     </FormField>
 

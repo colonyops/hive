@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InlineError from './ui/InlineError.vue'
+import TextInput from './ui/TextInput.vue'
 import { computed, ref, watch } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import IconAlertTriangle from '~icons/lucide/alert-triangle'
@@ -405,13 +406,14 @@ function submit() {
             Paste a personal access token with <span class="font-mono text-text-2">repo</span> and
             <span class="font-mono text-text-2">notifications</span> scopes.
           </p>
-          <input
+          <TextInput
             v-model="tokenInput"
             type="password"
             placeholder="ghp_…"
-            class="mb-3 w-full rounded-lg border border-strong bg-app px-3.5 py-2.5 font-mono text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
             data-testid="onboarding-token-input"
             @keydown.enter="submit"
+            monospace
+            class="mb-3"
           />
           <button
             class="primary-button"

@@ -14,6 +14,7 @@ import type {
 import type { DraftWorkspace } from '../composables/useHiveSetup'
 import AppCheckbox from './ui/AppCheckbox.vue'
 import AppSelect from './ui/AppSelect.vue'
+import TextInput from './ui/TextInput.vue'
 
 const props = defineProps<{
   agents: AgentOption[]
@@ -211,17 +212,18 @@ function repoLabel(count: number): string {
       </button>
 
       <div class="flex items-center gap-2">
-        <input
+        <TextInput
           v-model="typed"
-          type="text"
           placeholder="or type a path, e.g. ~/code"
           autocomplete="off"
           spellcheck="false"
           :disabled="busy"
           aria-label="Add a repository folder by path"
-          class="min-w-0 flex-1 rounded-lg border border-strong bg-app px-3 py-2 font-mono text-[12.5px] text-text outline-none placeholder:font-sans placeholder:text-text-4 focus:border-accent disabled:opacity-55"
           data-testid="hive-workspace-path"
           @keydown.enter.prevent="submitTyped"
+          size="sm"
+          monospace
+          class="min-w-0 flex-1 placeholder:font-sans"
         />
         <button
           type="button"

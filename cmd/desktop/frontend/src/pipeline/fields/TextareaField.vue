@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import FormField from '../../components/ui/FormField.vue'
+import TextArea from '../../components/ui/TextArea.vue'
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
     label?: string
     modelValue: string
@@ -19,23 +20,18 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
-
-function onInput(e: Event) {
-  emit('update:modelValue', (e.target as HTMLTextAreaElement).value)
-}
 </script>
 
 <template>
   <FormField v-slot="{ id }" :label="label" :hint="hint" :error="error" :testid="testid">
-    <textarea
+    <TextArea
       :id="id"
-      :value="modelValue"
+      :model-value="modelValue"
       :rows="rows"
       :placeholder="placeholder"
-      class="w-full resize-y rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
-      :class="{ 'font-mono': monospace }"
+      :monospace="monospace"
       :data-testid="testid"
-      @input="onInput"
+      @update:model-value="emit('update:modelValue', $event)"
     />
   </FormField>
 </template>
