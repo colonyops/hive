@@ -13,11 +13,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/session"
+
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
 	"github.com/colonyops/hive/internal/tmuxtest"
 )
@@ -408,7 +409,7 @@ func TestScratchSlugIsUnreachableFromASessionName(t *testing.T) {
 	assert.Equal(t, ScratchSlug, terminals.Scratch(t.Context()).Slug)
 
 	for _, name := range []string{"Scratch", "scratch", "SCRATCH", "  Scratch  ", "scratch/1"} {
-		assert.NotEqual(t, ScratchSlug, dispatch.SlugifySessionName(name),
+		assert.NotEqual(t, ScratchSlug, session.Slugify(name),
 			"a hive session named %q must not slugify onto the scratch terminal", name)
 	}
 }

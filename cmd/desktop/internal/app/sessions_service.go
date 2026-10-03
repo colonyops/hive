@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/session"
+
 	"github.com/colonyops/hive/pkg/osopen"
 
 	"github.com/rs/zerolog"
@@ -494,7 +496,7 @@ func (s *SessionsService) CreateSession(ctx context.Context, req dispatch.Create
 	if name == "" {
 		return 0, Errorf(KindInvalid, "session name is required")
 	}
-	if err := dispatch.ValidateSessionName(name); err != nil {
+	if err := session.ValidateName(name); err != nil {
 		return 0, Wrap(err, KindInvalid, "session name")
 	}
 
@@ -559,7 +561,7 @@ func (s *SessionsService) CreateSession(ctx context.Context, req dispatch.Create
 		if err == nil {
 			return nil
 		}
-		if errors.Is(err, dispatch.ErrDuplicateSessionName) {
+		if errors.Is(err, session.ErrDuplicateName) {
 			return fmt.Errorf("a session named %q already exists", name)
 		}
 		return s.recordFailedCreate(bg, req, err)
@@ -685,7 +687,7 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (d
 	if name == "" {
 		return dispatch.SessionSummary{}, Errorf(KindInvalid, "session name is required")
 	}
-	if err := dispatch.ValidateSessionName(name); err != nil {
+	if err := session.ValidateName(name); err != nil {
 		return dispatch.SessionSummary{}, Wrap(err, KindInvalid, "session name")
 	}
 
@@ -693,7 +695,7 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (d
 	if err != nil {
 		return dispatch.SessionSummary{}, Wrap(err, KindNotFound, "reading session %q", id)
 	}
-	slug := dispatch.SlugifySessionName(name)
+	slug := session.Slugify(name)
 	if err := s.assertSlugFree(ctx, id, slug); err != nil {
 		return dispatch.SessionSummary{}, err
 	}
@@ -754,7 +756,7 @@ func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) err
 	}
 	// Hive spawns under the slug it derives from the name, so a record whose two
 	// disagree would create a tmux session nothing is attaching to (ADR session-rename-keeps-slug-and-tmux-in-step).
-	if spawned := dispatch.SlugifySessionName(detail.Name); spawned != slug {
+	if spawned := session.Slugify(detail.Name); spawned != slug {
 		return Errorf(KindConflict, "session %q would start as %q, not %q", detail.Name, spawned, slug)
 	}
 	if err := s.manager.SpawnTmuxSession(ctx, detail.Name, detail.Path, detail.Repo); err != nil {

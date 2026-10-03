@@ -11,24 +11,20 @@ import (
 	"golang.org/x/text/unicode/norm"
 )
 
-// MaxNameLength caps both a typed Name and a generated one, so a long issue or
-// pull request title cannot produce an unwieldy tmux name, branch, or path.
+// MaxNameLength keeps a long title from producing an unwieldy tmux name or path.
 const MaxNameLength = 60
 
 var (
 	nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
 
-	// Disallowed: ~ ^ * ? [ \ @ and control characters, which are meaningless
-	// or harmful in the branch and ticket names developers type here.
+	// Excludes ~ ^ * ? [ \ @, which are meaningless or harmful in branch names.
 	validName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9 _.:/\-]*$`)
 
 	// Letters that Unicode does not decompose into an ASCII base and a mark.
 	foldLetters = strings.NewReplacer("ß", "ss", "æ", "ae", "œ", "oe", "ø", "o", "ł", "l", "đ", "d", "þ", "th")
 )
 
-// ValidateName returns an error if name is blank, longer than MaxNameLength,
-// or contains characters outside the allowed set. It does not check
-// uniqueness, which depends on the other sessions.
+// ValidateName checks a name's length and characters, not its uniqueness.
 func ValidateName(name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
@@ -43,12 +39,8 @@ func ValidateName(name string) error {
 	return nil
 }
 
-// Slugify converts a name to the slug used for tmux session names and
-// directory paths: lowercase ASCII letters and digits joined by single hyphens.
-// Accented letters fold to their base letter; anything else becomes a hyphen.
-//
-//	"My Session Name" -> "my-session-name"
-//	"Café/Menu"       -> "cafe-menu"
+// Slugify lowercases name, folds accents, and joins the remaining letters and
+// digits with single hyphens: "Café/Menu" -> "cafe-menu".
 func Slugify(name string) string {
 	s := strings.ToLower(strings.TrimSpace(name))
 	s = foldLetters.Replace(s)
@@ -59,10 +51,8 @@ func Slugify(name string) string {
 	return strings.Trim(s, "-")
 }
 
-// ToSessionName normalizes generated text, such as a rendered template or an
-// issue title, into a name that passes ValidateName. It slugifies raw and caps
-// it at MaxNameLength on a word boundary. When raw has no letters or digits,
-// it tries each fallback in turn. It returns "" when nothing survives.
+// ToSessionName turns generated text into a valid, length-capped slug, trying
+// each fallback when raw has no letters or digits. It returns "" if none does.
 func ToSessionName(raw string, fallbacks ...string) string {
 	for _, candidate := range append([]string{raw}, fallbacks...) {
 		if slug := Slugify(candidate); slug != "" {
@@ -72,8 +62,7 @@ func ToSessionName(raw string, fallbacks ...string) string {
 	return ""
 }
 
-// NameWithSuffix appends "-suffix" to name, shortening name on a word boundary
-// so the result stays within MaxNameLength.
+// NameWithSuffix appends "-suffix", shortening name to stay within MaxNameLength.
 func NameWithSuffix(name, suffix string) string {
 	return truncateName(name, MaxNameLength-len(suffix)-1) + "-" + suffix
 }

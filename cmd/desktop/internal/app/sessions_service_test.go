@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/session"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -130,7 +132,7 @@ func (f *fakeSessionManager) RenameSession(_ context.Context, id, name string) e
 	f.renamed = append(f.renamed, [2]string{id, name})
 	detail := f.details[id]
 	detail.Name = name
-	detail.Slug = dispatch.SlugifySessionName(name)
+	detail.Slug = session.Slugify(name)
 	f.details[id] = detail
 	return nil
 }
@@ -388,7 +390,7 @@ func TestSessionsService_CreateSessionLeavesAgentEmptyWithNoEnvironmentDefault(t
 func TestSessionsService_CreateSessionSurfacesDuplicateNameOnTheJob(t *testing.T) {
 	runner := &fakeJobRunner{}
 	manager, _ := activeSession()
-	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{err: dispatch.ErrDuplicateSessionName}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
+	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{err: session.ErrDuplicateName}, Manager: manager, Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: runner})
 
 	_, err := svc.CreateSession(t.Context(), dispatch.CreateSessionRequest{Repository: "r", Name: "dupe"})
 	require.NoError(t, err, "a duplicate name is a job failure, not a validation error")
@@ -791,7 +793,7 @@ func TestSessionsService_DismissFailedSessionClearsIt(t *testing.T) {
 func TestSessionsService_DuplicateNameIsNotAPendingFailure(t *testing.T) {
 	manager, _ := activeSession()
 	svc := newSessionsService(SessionsDeps{
-		Launcher: &fakeSessionLauncher{err: dispatch.ErrDuplicateSessionName}, Manager: manager,
+		Launcher: &fakeSessionLauncher{err: session.ErrDuplicateName}, Manager: manager,
 		Statuses: manager, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{},
 	})
 

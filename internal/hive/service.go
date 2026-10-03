@@ -66,13 +66,8 @@ type CreateOptions struct {
 	AgentKey string
 	// Tags are user-defined labels attached to the session for external provider tracking.
 	Tags []string
-	// CollisionSuffix, when set, turns a Name whose slug an active session
-	// already holds into Name-CollisionSuffix instead of failing with
-	// session.ErrDuplicateName. Callers that generate the name set it to an id
-	// that is stable for the request, so a retry after a failure that left the
-	// session saved claims the same name and fails, instead of creating a
-	// second session. Callers where a person typed the name leave it empty so
-	// the person picks another.
+	// CollisionSuffix is appended to a Name whose slug is taken. Use an id that
+	// is stable across retries, so a retry collides with its own earlier session.
 	CollisionSuffix string
 	// Progress receives human-readable progress lines during session creation.
 	// When non-nil, service output (hooks, file copies) is also redirected here.
@@ -397,10 +392,8 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	return &sess, nil
 }
 
-// claimName returns name, or name with collisionSuffix when name is taken,
-// once its slug is free among the active sessions other than exceptID. The
-// slug and the persisted tmux name both count, because either one addresses
-// the tmux session.
+// claimName checks name against active sessions' slugs and tmux names, either
+// of which addresses the tmux session.
 func (s *SessionService) claimName(ctx context.Context, name, exceptID, collisionSuffix string) (string, error) {
 	sessions, err := s.sessions.List(ctx)
 	if err != nil {

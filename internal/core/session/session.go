@@ -1,19 +1,8 @@
 // Package session defines session domain types and interfaces.
 //
-// # Names
-//
-// A session has two names:
-//
-//   - Name is the display name a person reads in the TUI, the desktop, and
-//     templates. It is 1 to MaxNameLength characters of a-z, A-Z, 0-9, space,
-//     and _ . : / -, and starts with a letter or digit (ValidateName).
-//   - Slug is Slugify(Name): lowercase a-z and 0-9 joined by single hyphens.
-//     It names the tmux session and the clone directory, so it is the identity
-//     that must be unique among active sessions. "Fix Bug" and "fix-bug" are
-//     the same session name for that check.
-//
-// Text that a template or an external item generates goes through
-// ToSessionName, which always produces a valid Name or "".
+// A session's Name is what people read (ValidateName). Its Slug, Slugify(Name),
+// names the tmux session and clone directory, so uniqueness among active
+// sessions is checked on the slug. Generated names go through ToSessionName.
 package session
 
 import "time"

@@ -1097,14 +1097,12 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 	}
 
 	exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
-		Name:          rendered.Name,
-		Prompt:        rendered.Prompt,
-		Remote:        scope.Remote,
-		Source:        scope.Source,
-		UseBatchSpawn: true,
-		Background:    true,
-		// Stable for the item, so creating the same item twice fails
-		// instead of stacking suffixes.
+		Name:            rendered.Name,
+		Prompt:          rendered.Prompt,
+		Remote:          scope.Remote,
+		Source:          scope.Source,
+		UseBatchSpawn:   true,
+		Background:      true,
 		CollisionSuffix: session.Slugify(result.Item.ID),
 		Tags:            rendered.Tags,
 	})

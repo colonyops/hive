@@ -163,8 +163,7 @@ func TestToSessionName(t *testing.T) {
 		{"slugifies", "Fix: the Bug!", nil, "fix-the-bug"},
 		{"caps on a word boundary", "gh-1234-" + strings.Repeat("word-", 20), nil, "gh-1234-word-word-word-word-word-word-word-word-word-word"},
 		{"cuts a single long word", strings.Repeat("a", 80), nil, strings.Repeat("a", MaxNameLength)},
-		{"falls back when nothing survives", "修正 🚀", []string{"session-42"}, "session-42"},
-		{"skips empty fallbacks", "!!!", []string{"", "item 7"}, "item-7"},
+		{"falls back past empty candidates", "修正 🚀", []string{"", "item 7"}, "item-7"},
 		{"empty when nothing survives", "!!!", []string{"???"}, ""},
 	}
 	for _, tt := range tests {

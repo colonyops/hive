@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/session"
+
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/google/uuid"
 )
@@ -226,7 +228,7 @@ func RenderSessionDraftItems(items []SessionDraftItem) (SessionDraft, error) {
 		}
 	}
 
-	name := ToSessionName(items[0].Title)
+	name := session.ToSessionName(items[0].Title)
 	if len(items) > 1 {
 		name = "inbox-selection-" + uuid.NewString()[:8]
 	}

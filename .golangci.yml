@@ -116,6 +116,13 @@ linters:
             - "!**/cmd/desktop/internal/app/data/queries/dbext.go"
             - "!**/cmd/desktop/internal/app/data/queries/dbext_test.go"
             - "!**/cmd/desktop/internal/app/hiveconf/hiveconf_test.go"
+          # Lax: the longer allow entries beat the internal/core deny. session
+          # and validate are pure primitives imported directly (ADR
+          # pure-shared-domain-packages-are-imported-directly-services-and-stores-stay-behind-the-seam).
+          list-mode: lax
+          allow:
+            - github.com/colonyops/hive/internal/core/session
+            - github.com/colonyops/hive/internal/core/validate
           deny:
             - pkg: github.com/colonyops/hive/internal/core
               desc: &seam |

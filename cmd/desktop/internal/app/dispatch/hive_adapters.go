@@ -51,11 +51,6 @@ func ClassifyAgentScreen(agent, screen string) AgentActivityStatus {
 	}
 }
 
-// ErrDuplicateSessionName is the seam-local translation of Hive's
-// session.ErrDuplicateName, so a core service can classify a name collision
-// without importing the shared session package.
-var ErrDuplicateSessionName = errors.New("session name already exists")
-
 type SessionCreator interface {
 	CreateSession(context.Context, hive.CreateOptions) (*session.Session, error)
 }
@@ -322,7 +317,7 @@ func (l *HiveSessionLauncher) LaunchSession(ctx context.Context, req LaunchSessi
 	s, err := sessions.CreateSession(ctx, hive.CreateOptions{Name: req.Name, Prompt: req.Prompt, Remote: remote, Source: source, AgentKey: req.Agent, Background: true, UseBatchSpawn: false, CollisionSuffix: req.CollisionSuffix, Tags: tags, Progress: progress})
 	if err != nil {
 		if errors.Is(err, session.ErrDuplicateName) {
-			return SessionExecutionOutcome{}, fmt.Errorf("%w: %w", ErrDuplicateSessionName, err)
+			return SessionExecutionOutcome{}, err
 		}
 		failure := &SessionCreateError{
 			Name:   req.Name,
@@ -799,34 +794,6 @@ func sessionSummaryOf(s session.Session) SessionSummary {
 		State:       string(s.State),
 		TmuxSession: hive.SessionTarget(s).Session,
 	}
-}
-
-// The session-name functions below wrap internal/core/session so that
-// launch_session_executor.go -- not itself an ACL seam -- never imports it
-// directly; a rename there breaks this one file instead of spreading to a
-// non-seam caller.
-
-// SlugifySessionName converts a display name to the slug Hive uses for tmux
-// session names and directory paths.
-func SlugifySessionName(name string) string {
-	return session.Slugify(name)
-}
-
-// ValidateSessionName validates name against Hive's session naming rules.
-func ValidateSessionName(name string) error {
-	return session.ValidateName(name)
-}
-
-// ToSessionName normalizes generated text into a valid session name, trying
-// each fallback when raw has no letters or digits. It returns "" when none
-// does.
-func ToSessionName(raw string, fallbacks ...string) string {
-	return session.ToSessionName(raw, fallbacks...)
-}
-
-// SessionNameWithSuffix appends "-suffix" to name within the length cap.
-func SessionNameWithSuffix(name, suffix string) string {
-	return session.NameWithSuffix(name, suffix)
 }
 
 type DurableMessageService interface {
