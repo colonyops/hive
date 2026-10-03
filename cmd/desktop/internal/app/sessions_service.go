@@ -77,32 +77,32 @@ type itemSessionStore interface {
 // comes from the link. Everything else is read live from hive, so a session
 // renamed or recycled outside this app reports what it actually is.
 type ItemSessionView struct {
-	ID        string
-	Name      string
-	Slug      string
-	Repo      string
-	State     session.State
-	Running   bool
-	CreatedAt time.Time
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	Repo      string    `json:"repo"`
+	State     string    `json:"state"`
+	Running   bool      `json:"running"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // ItemChatView is an agent workspace chat an inbox item opened.
 type ItemChatView struct {
-	ID        int64
-	Workspace string
-	Name      string
-	CreatedAt time.Time
+	ID        int64     `json:"id"`
+	Workspace string    `json:"workspace"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // SessionRisk is the pre-flight a destructive operation confirms against: what
 // unsaved work the session holds, and whether recycling it is really a delete.
 type SessionRisk struct {
-	UncommittedChanges bool
-	UnpushedCommits    bool
+	UncommittedChanges bool `json:"uncommittedChanges"`
+	UnpushedCommits    bool `json:"unpushedCommits"`
 	// RecycleDeletes reports that recycling this session destroys it: hive
 	// routes a worktree session's recycle straight to DeleteSession, because a
 	// worktree has no clone of its own to reset.
-	RecycleDeletes bool
+	RecycleDeletes bool `json:"recycleDeletes"`
 }
 
 // SessionsService is the desktop's session surface: the New Session form's
@@ -372,7 +372,7 @@ func (s *SessionsService) ItemSessions(ctx context.Context, itemID int64) ([]Ite
 			Name:      summary.Name,
 			Slug:      summary.Slug,
 			Repo:      summary.Remote,
-			State:     summary.State,
+			State:     string(summary.State),
 			CreatedAt: time.UnixMilli(link.CreatedAt),
 		})
 	}

@@ -3,36 +3,10 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as app$0 from "../../app/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as procstats$0 from "../../app/procstats/models.js";
-
-/**
- * ActionInvocationInput carries only user-supplied action inputs. It never
- * carries executable configuration or message attribution.
- */
-export interface ActionInvocationInput {
-    "session"?: SessionInvocationInput | null;
-
-    /**
-     * Inputs are the values collected for the action's declared inputs, keyed
-     * by input name. They are validated against the catalog's declaration on
-     * every invocation, so a name the action does not declare is refused.
-     */
-    "inputs"?: { [_ in string]?: string } | null;
-    "rerun"?: boolean;
-}
-
-/**
- * ActionRunView is one action run's state and, once it finished, its outcome.
- */
-export interface ActionRunView {
-    "commandId": number;
-    "status": string;
-    "result"?: ExecutionOutcome | null;
-    "error"?: string;
-    "stdout"?: string;
-    "stderr"?: string;
-    "confirmationRequired"?: boolean;
-}
 
 /**
  * AgentsAvailability gates the Chats area. Like terminal mode, it depends on
@@ -162,28 +136,6 @@ export interface CanvasToggle {
 }
 
 /**
- * ClipboardExecutionOutcome carries the text a clipboard action rendered. The
- * frontend copies it; the core never touches the clipboard.
- */
-export interface ClipboardExecutionOutcome {
-    "text": string;
-}
-
-/**
- * CreateSessionRequest is a user-submitted New Session form. ItemIDs are the
- * inbox items the form was drafted from; the core resolves their identities
- * and never takes item refs from a client.
- */
-export interface CreateSessionRequest {
-    "repository"?: string;
-    "workspace"?: string;
-    "name": string;
-    "prompt": string;
-    "agent"?: string;
-    "itemIds"?: number[] | null;
-}
-
-/**
  * DevToolsInfo is what the frontend needs before it decides to render the pane.
  */
 export interface DevToolsInfo {
@@ -212,16 +164,6 @@ export interface EditorSettings {
     "command": string;
     "title": string;
     "choices": EditorChoice[] | null;
-}
-
-/**
- * ExecutionOutcome is a tagged-by-presence union. Exactly one branch is set
- * for successful side-effecting executors.
- */
-export interface ExecutionOutcome {
-    "session"?: SessionExecutionOutcome | null;
-    "message"?: MessageExecutionOutcome | null;
-    "clipboard"?: ClipboardExecutionOutcome | null;
 }
 
 /**
@@ -280,31 +222,6 @@ export interface InstalledFonts {
 }
 
 /**
- * ItemChatView is an agent workspace chat an inbox item opened.
- */
-export interface ItemChatView {
-    "id": number;
-    "workspace": string;
-    "name": string;
-    "createdAt": string;
-}
-
-/**
- * ItemSessionView is one hive session an inbox item spawned. Only CreatedAt
- * comes from the link. Everything else is read live from hive, so a session
- * renamed or recycled outside this app reports what it actually is.
- */
-export interface ItemSessionView {
-    "id": string;
-    "name": string;
-    "slug": string;
-    "repo": string;
-    "state": string;
-    "running": boolean;
-    "createdAt": string;
-}
-
-/**
  * KeybindingSettings carries keyboard shortcut overrides keyed by command id.
  * Like AppearanceSettings the values are opaque to Go: the frontend owns the
  * command vocabulary and the combo grammar.
@@ -339,14 +256,6 @@ export interface MenuBarNavigation {
     "feedId": string;
     "itemId": number;
     "settings": boolean;
-}
-
-/**
- * MessageExecutionOutcome is where a publish-message action published.
- */
-export interface MessageExecutionOutcome {
-    "topic": string;
-    "sender": string;
 }
 
 /**
@@ -492,23 +401,6 @@ export interface PopupTerminalEndpoint {
 }
 
 /**
- * PullRequestStatus is why a session has no pull request to show, or that it
- * does. The four are kept apart deliberately: rendering "no pull request" for
- * a failed lookup or a disconnected account states a different, wrong fact.
- */
-export enum PullRequestStatus {
-    /**
-     * The Go zero value for the underlying type of the enum.
-     */
-    $zero = "",
-
-    PullRequestStatusNone = "none",
-    PullRequestStatusFound = "found",
-    PullRequestStatusDisconnected = "disconnected",
-    PullRequestStatusUnsupported = "unsupported",
-};
-
-/**
  * RefreshResult is what one manual tick was worth. Appended counts rows added
  * to the event log, not inbox items the user will see: the engine routes them
  * afterwards, and a flow may drop them.
@@ -568,45 +460,6 @@ export interface RuntimeStats {
 }
 
 /**
- * SessionCreateFailure is why one session creation attempt failed.
- */
-export interface SessionCreateFailure {
-    /**
-     * Reason is the wrapped error, a chain like
-     * "clone repository: git clone: exec git: exit status 1".
-     */
-    "reason": string;
-
-    /**
-     * Step is the last thing creation reported: "Cloning repository...",
-     * "Executing rules...".
-     */
-    "step": string;
-
-    /**
-     * Output is the tail of the attempt's progress output, hook output included.
-     */
-    "output": string;
-
-    /**
-     * CloneStrategy is "full" or "worktree".
-     */
-    "cloneStrategy": string;
-
-    /**
-     * Destination is the checkout hive resolved for the attempt.
-     */
-    "destination": string;
-
-    /**
-     * LeftoverCheckout reports that Destination survived the failure, which is
-     * what makes it a directory to go and delete.
-     */
-    "leftoverCheckout": boolean;
-    "at": string;
-}
-
-/**
  * SessionDetail is one session read in full, for a detail view.
  */
 export interface SessionDetail {
@@ -621,39 +474,6 @@ export interface SessionDetail {
     "tags": string[] | null;
     "createdAt": string;
     "updatedAt": string;
-}
-
-/**
- * SessionDraft is a New Session form the app prefills: from inbox items, or
- * from a creation attempt that failed and is being handed back.
- */
-export interface SessionDraft {
-    "repository"?: string;
-    "workspace"?: string;
-    "name": string;
-    "prompt": string;
-    "agent"?: string;
-    "itemIds"?: number[] | null;
-
-    /**
-     * Failure is null on a draft that is not a retry, which is also what "no
-     * attempt is waiting" looks like.
-     */
-    "failure"?: SessionCreateFailure | null;
-}
-
-/**
- * SessionExecutionOutcome is the session a launch-session action started.
- */
-export interface SessionExecutionOutcome {
-    "id": string;
-    "name": string;
-
-    /**
-     * Slug names the tmux session; Path is the checkout a post hook runs in.
-     */
-    "slug"?: string;
-    "path"?: string;
 }
 
 /**
@@ -685,130 +505,6 @@ export interface SessionGitStatus {
 }
 
 /**
- * SessionInvocationInput is the session an interactive launch-session action
- * asks for.
- */
-export interface SessionInvocationInput {
-    "name": string;
-    "repository"?: string;
-    "workspace"?: string;
-    "agent"?: string;
-}
-
-/**
- * SessionLaunchOptions is what the New Session form offers.
- */
-export interface SessionLaunchOptions {
-    "repositories": SessionLaunchRepository[] | null;
-    "defaultRepository": string;
-    "workspaces": SessionLaunchWorkspace[] | null;
-    "agents": string[] | null;
-    "defaultAgent": string;
-}
-
-/**
- * SessionLaunchRepository is the safe presentation of a repository a session
- * can start in. Local checkout paths stay backend-only.
- */
-export interface SessionLaunchRepository {
-    "name": string;
-    "repository": string;
-}
-
-/**
- * SessionLaunchWorkspace identifies a configured workspace by its stable
- * directory name.
- */
-export interface SessionLaunchWorkspace {
-    "dir": string;
-    "name": string;
-    "supportsPrompt": boolean;
-}
-
-/**
- * SessionPullRequest is the branch's pull request as the session status bar
- * shows it. Everything below Status is meaningful only for
- * PullRequestStatusFound.
- */
-export interface SessionPullRequest {
-    "status": PullRequestStatus;
-    "number": number;
-    "title": string;
-    "state": string;
-    "isDraft": boolean;
-    "url": string;
-
-    /**
-     * ReviewDecision is GitHub's own vocabulary (APPROVED, CHANGES_REQUESTED,
-     * REVIEW_REQUIRED), or empty when review is not required.
-     */
-    "reviewDecision": string;
-
-    /**
-     * Checks is passing, pending, failing, or empty for a head commit with no
-     * checks configured.
-     */
-    "checks": string;
-
-    /**
-     * The pull request's own line counts, deliberately not SessionGitStatus's:
-     * those measure the working tree and drift as the branch moves on.
-     */
-    "additions": number;
-    "deletions": number;
-
-    /**
-     * Cached distinguishes "this just arrived" from "this was already known".
-     * The bar animates only the former.
-     */
-    "cached": boolean;
-}
-
-/**
- * SessionPullRequestKey addresses the pull request a session's branch has.
- */
-export interface SessionPullRequestKey {
-    "host": string;
-    "owner": string;
-    "repo": string;
-    "branch": string;
-}
-
-/**
- * SessionRisk is the pre-flight a destructive operation confirms against: what
- * unsaved work the session holds, and whether recycling it is really a delete.
- */
-export interface SessionRisk {
-    "uncommittedChanges": boolean;
-    "unpushedCommits": boolean;
-
-    /**
-     * RecycleDeletes reports that recycling this session destroys it: hive
-     * routes a worktree session's recycle straight to a delete, because a
-     * worktree has no clone of its own to reset.
-     */
-    "recycleDeletes": boolean;
-}
-
-/**
- * SessionStatus separates tmux liveness from the activity detected in each
- * agent window.
- */
-export interface SessionStatus {
-    "sessionId": string;
-    "running": boolean;
-    "windows": SessionWindowStatus[] | null;
-}
-
-/**
- * SessionStatusSnapshot is one poll result in the units the browser timer uses.
- */
-export interface SessionStatusSnapshot {
-    "items": SessionStatus[] | null;
-    "pollIntervalMs": number;
-}
-
-/**
  * SessionSummary is one session as the session list sees it.
  */
 export interface SessionSummary {
@@ -817,15 +513,6 @@ export interface SessionSummary {
     "slug": string;
     "repo": string;
     "state": string;
-}
-
-/**
- * SessionWindowStatus is one tmux window's detected agent activity.
- */
-export interface SessionWindowStatus {
-    "windowId": string;
-    "status": string;
-    "tool": string;
 }
 
 /**
@@ -847,25 +534,6 @@ export interface SystemInfo {
 }
 
 /**
- * TaskBlocker is one explicit blocker on a task's detail view. A blocker whose
- * item has since been deleted keeps its ID with an empty Title.
- */
-export interface TaskBlocker {
-    "id": string;
-    "title": string;
-    "status": string;
-}
-
-/**
- * TaskComment is one comment on a task, in the order hc stored it.
- */
-export interface TaskComment {
-    "id": string;
-    "message": string;
-    "createdAt": string;
-}
-
-/**
  * TaskDetail is one hc item read in full, for a detail view.
  */
 export interface TaskDetail {
@@ -882,8 +550,8 @@ export interface TaskDetail {
     "createdAt": string;
     "updatedAt": string;
     "desc": string;
-    "blockers": TaskBlocker[] | null;
-    "comments": TaskComment[] | null;
+    "blockers": app$0.TaskBlocker[] | null;
+    "comments": app$0.TaskComment[] | null;
 }
 
 /**
@@ -928,22 +596,6 @@ export interface TerminalEndpoint {
 export interface TerminalFilesDropped {
     "target": string;
     "paths": string[] | null;
-}
-
-/**
- * TerminalTarget identifies the terminal session, and optionally the window
- * inside it, an action was invoked from. It carries identity only: every value
- * a template can read is resolved from the session record at invocation time,
- * so a client cannot hand an executor a checkout path of its choosing.
- */
-export interface TerminalTarget {
-    "slug": string;
-
-    /**
-     * WindowID is set when the invocation came from a window row. It is the
-     * tmux window id, so it addresses the window across renames.
-     */
-    "windowId"?: string;
 }
 
 /**

@@ -10,7 +10,7 @@ import AppliesToField from './AppliesToField.vue'
 import DrawerSheet from './ui/DrawerSheet.vue'
 import { SelectField, TextareaField, TextField } from '../pipeline/fields'
 import type { EditableAction } from '../composables/useActionsSettings'
-import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { seedRef } from '../lib/seedRef'
 
 const props = withDefaults(

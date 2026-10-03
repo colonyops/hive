@@ -81,7 +81,7 @@ func TestSessionsService_ItemSessionsJoinsLinksToLiveHiveState(t *testing.T) {
 	// The link order is preserved, and everything but createdAt comes from
 	// hive, so a session renamed outside this app reports its current name.
 	assert.Equal(t, "s2", views[0].ID)
-	assert.Equal(t, session.StateRecycled, views[0].State)
+	assert.Equal(t, string(session.StateRecycled), views[0].State)
 	assert.False(t, views[0].Running)
 	assert.Equal(t, "s1", views[1].ID)
 	assert.Equal(t, "review 81 renamed", views[1].Name)

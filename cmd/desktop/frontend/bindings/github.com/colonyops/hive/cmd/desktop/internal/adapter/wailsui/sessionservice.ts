@@ -13,7 +13,13 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as app$0 from "../../app/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as actions$0 from "../../app/actions/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as dispatch$0 from "../../app/dispatch/models.js";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -23,7 +29,7 @@ import * as $models from "./models.js";
  * CreateSession validates the form and starts its repository session or
  * workspace chat as a background job. Its outcome surfaces in the jobs UI.
  */
-export function CreateSession(req: $models.CreateSessionRequest): $CancellablePromise<number> {
+export function CreateSession(req: dispatch$0.CreateSessionRequest): $CancellablePromise<number> {
     return $Call.ByID(1294063921, req);
 }
 
@@ -45,7 +51,7 @@ export function DismissFailedSession(): $CancellablePromise<void> {
  * FailedSessionDraft returns the last New Session form whose creation failed,
  * with the failure on it. A draft whose Failure is null means none is waiting.
  */
-export function FailedSessionDraft(): $CancellablePromise<$models.SessionDraft> {
+export function FailedSessionDraft(): $CancellablePromise<dispatch$0.SessionDraft> {
     return $Call.ByID(3882847165);
 }
 
@@ -53,7 +59,7 @@ export function FailedSessionDraft(): $CancellablePromise<$models.SessionDraft> 
  * InvokeTerminalAction runs an action against a terminal target as a
  * background job and returns the job id; its outcome surfaces in the jobs UI.
  */
-export function InvokeTerminalAction(actionID: string, target: $models.TerminalTarget, inputs: { [_ in string]?: string } | null): $CancellablePromise<number> {
+export function InvokeTerminalAction(actionID: string, target: dispatch$0.TerminalTarget, inputs: { [_ in string]?: string } | null): $CancellablePromise<number> {
     return $Call.ByID(1289376945, actionID, target, inputs);
 }
 
@@ -61,7 +67,7 @@ export function InvokeTerminalAction(actionID: string, target: $models.TerminalT
  * ItemChats returns the agent workspace chats an inbox item opened, newest
  * first.
  */
-export function ItemChats(itemID: number): $CancellablePromise<$models.ItemChatView[] | null> {
+export function ItemChats(itemID: number): $CancellablePromise<app$0.ItemChatView[] | null> {
     return $Call.ByID(1387995223, itemID);
 }
 
@@ -69,7 +75,7 @@ export function ItemChats(itemID: number): $CancellablePromise<$models.ItemChatV
  * ItemSessions returns the sessions an inbox item spawned, newest first, with
  * the state hive reports for each now. Slug is the attach target.
  */
-export function ItemSessions(itemID: number): $CancellablePromise<$models.ItemSessionView[] | null> {
+export function ItemSessions(itemID: number): $CancellablePromise<app$0.ItemSessionView[] | null> {
     return $Call.ByID(2353521493, itemID);
 }
 
@@ -117,7 +123,7 @@ export function RenameSession(id: string, name: string): $CancellablePromise<$mo
  * for a terminal target. The frontend writes it through the native Wails
  * clipboard; the core produces the text and never touches the clipboard.
  */
-export function RenderTerminalClipboardAction(actionID: string, target: $models.TerminalTarget, inputs: { [_ in string]?: string } | null): $CancellablePromise<string> {
+export function RenderTerminalClipboardAction(actionID: string, target: dispatch$0.TerminalTarget, inputs: { [_ in string]?: string } | null): $CancellablePromise<string> {
     return $Call.ByID(2361844653, actionID, target, inputs);
 }
 
@@ -140,7 +146,7 @@ export function SessionDetail(id: string): $CancellablePromise<$models.SessionDe
  * activity row carries. Pass the row's own metadata; the keys in it are the
  * backend's.
  */
-export function SessionDraftFromActivity(metadata: { [_ in string]?: string } | null): $CancellablePromise<$models.SessionDraft> {
+export function SessionDraftFromActivity(metadata: { [_ in string]?: string } | null): $CancellablePromise<dispatch$0.SessionDraft> {
     return $Call.ByID(2572141453, metadata);
 }
 
@@ -153,7 +159,7 @@ export function SessionGitStatus(id: string): $CancellablePromise<$models.Sessio
     return $Call.ByID(2894329729, id);
 }
 
-export function SessionLaunchOptions(): $CancellablePromise<$models.SessionLaunchOptions> {
+export function SessionLaunchOptions(): $CancellablePromise<dispatch$0.SessionLaunchOptions> {
     return $Call.ByID(425409100);
 }
 
@@ -161,7 +167,7 @@ export function SessionLaunchOptions(): $CancellablePromise<$models.SessionLaunc
  * SessionLaunchWorkspaces returns workspace choices without resolving
  * repository options.
  */
-export function SessionLaunchWorkspaces(): $CancellablePromise<$models.SessionLaunchWorkspace[] | null> {
+export function SessionLaunchWorkspaces(): $CancellablePromise<dispatch$0.SessionLaunchWorkspace[] | null> {
     return $Call.ByID(1470361552);
 }
 
@@ -171,7 +177,7 @@ export function SessionLaunchWorkspaces(): $CancellablePromise<$models.SessionLa
  * Status field says why there is nothing to show, so a caller never has to
  * read an empty result as "none".
  */
-export function SessionPullRequest(key: $models.SessionPullRequestKey, refresh: boolean): $CancellablePromise<$models.SessionPullRequest> {
+export function SessionPullRequest(key: app$0.SessionPullRequestKey, refresh: boolean): $CancellablePromise<app$0.SessionPullRequest> {
     return $Call.ByID(1543770423, key, refresh);
 }
 
@@ -179,7 +185,7 @@ export function SessionPullRequest(key: $models.SessionPullRequestKey, refresh: 
  * SessionRisk reports the uncommitted or unpushed work a delete or recycle
  * would discard, for the confirmation that precedes one.
  */
-export function SessionRisk(id: string): $CancellablePromise<$models.SessionRisk> {
+export function SessionRisk(id: string): $CancellablePromise<app$0.SessionRisk> {
     return $Call.ByID(3040917582, id);
 }
 
@@ -187,7 +193,7 @@ export function SessionRisk(id: string): $CancellablePromise<$models.SessionRisk
  * SessionStatuses returns the current terminal-detected agent state for each
  * active session.
  */
-export function SessionStatuses(): $CancellablePromise<$models.SessionStatusSnapshot> {
+export function SessionStatuses(): $CancellablePromise<app$0.SessionStatusSnapshot> {
     return $Call.ByID(2484743835);
 }
 

@@ -21,7 +21,7 @@ import type { InputSpec } from '../../bindings/github.com/colonyops/hive/cmd/des
 import type {
   SessionCreateFailure,
   SessionLaunchOptions,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { useAutofocus } from '../composables/useAutofocus'
 import { formatCombo } from '../composables/useKeybindings'
 import { useSubmitShortcut } from '../composables/useSubmitShortcut'

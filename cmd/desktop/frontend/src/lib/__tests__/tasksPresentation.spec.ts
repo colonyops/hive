@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  TaskComment,
-  TaskItem,
-} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { TaskItem } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { TaskComment } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import {
   buildTaskTree,
   cascadeCount,

@@ -3,7 +3,7 @@ import { mount } from '@vue/test-utils'
 import DetailPane from '../DetailPane.vue'
 import type { ActionView } from '../../types/action'
 import type { InboxItem } from '../../types/feed'
-import type { ItemSessionView } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { ItemSessionView } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const item: InboxItem = {
   id: 42,

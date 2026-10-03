@@ -25,10 +25,10 @@ import IconSettings from '~icons/lucide/settings'
 import type { InboxEvent, InboxItem } from '../types/feed'
 import type { ActionView } from '../types/action'
 import type {
-  ActionRunView,
   ItemChatView,
   ItemSessionView,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import type { ActionRunView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import FeedKindPill from './FeedKindPill.vue'
 import FeedSourceBadge from './FeedSourceBadge.vue'
 

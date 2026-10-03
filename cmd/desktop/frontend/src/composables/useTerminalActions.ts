@@ -4,7 +4,7 @@ import {
   RenderTerminalClipboardAction,
   TerminalActionViews,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
-import type { TerminalTarget } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { TerminalTarget } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import { appErrorMessage } from '../lib/appError'
 import { actionTypeMeta } from '../lib/actionPresentation'
 import type { ActionView } from '../types/action'

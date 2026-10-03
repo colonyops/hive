@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
@@ -21,24 +20,25 @@ type sessionWindowSource interface {
 // SessionWindowStatus is one tmux window's detected agent activity. Status is
 // simplified: ready, active, or approval.
 type SessionWindowStatus struct {
-	WindowID string
-	Status   terminal.Status
-	Tool     string
+	WindowID string `json:"windowId"`
+	Status   string `json:"status"`
+	Tool     string `json:"tool"`
 }
 
 // SessionStatus separates tmux liveness from the activity detected in each
 // agent window.
 type SessionStatus struct {
-	SessionID string
-	Running   bool
-	Windows   []SessionWindowStatus
+	SessionID string                `json:"sessionId"`
+	Running   bool                  `json:"running"`
+	Windows   []SessionWindowStatus `json:"windows"`
 }
 
 // SessionStatusSnapshot carries one poll result and the hive-configured delay
-// the caller should use before requesting the next one.
+// the caller should use before requesting the next one, in the milliseconds a
+// browser timer takes.
 type SessionStatusSnapshot struct {
-	Items        []SessionStatus
-	PollInterval time.Duration
+	Items          []SessionStatus `json:"items"`
+	PollIntervalMS int64           `json:"pollIntervalMs"`
 }
 
 // SessionStatuses detects the live agent state for active sessions. Missing or
@@ -46,8 +46,8 @@ type SessionStatusSnapshot struct {
 // fails the request.
 func (s *SessionsService) SessionStatuses(ctx context.Context) (SessionStatusSnapshot, error) {
 	snapshot := SessionStatusSnapshot{
-		Items:        []SessionStatus{},
-		PollInterval: s.hive.Config().Tmux.PollInterval,
+		Items:          []SessionStatus{},
+		PollIntervalMS: s.hive.Config().Tmux.PollInterval.Milliseconds(),
 	}
 	statuses := s.hive.Status()
 	if !statuses.Available() {
@@ -96,7 +96,7 @@ func projectSessionStatuses(
 			if windowID := stableWindowID("", status.WindowName, refs); windowID != "" {
 				item.Windows = append(item.Windows, SessionWindowStatus{
 					WindowID: windowID,
-					Status:   status.Status.Simplified(),
+					Status:   string(status.Status.Simplified()),
 					Tool:     status.Tool,
 				})
 			}
@@ -108,7 +108,7 @@ func projectSessionStatuses(
 			}
 			item.Windows = append(item.Windows, SessionWindowStatus{
 				WindowID: windowID,
-				Status:   window.Status.Simplified(),
+				Status:   string(window.Status.Simplified()),
 				Tool:     window.Tool,
 			})
 		}

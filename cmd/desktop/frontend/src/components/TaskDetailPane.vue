@@ -27,7 +27,7 @@ import { relativeAgo } from '../lib/age'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
 import { externalMarkdownHref } from '../lib/markdownLinks'
 import { cascadeCount, checkpointBody, isCheckpoint, matchesTaskFilter, statusMeta } from '../lib/tasksPresentation'
-import type { TaskComment } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { TaskComment } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import BaseButton from './ui/BaseButton.vue'
 import EmptyState from './ui/EmptyState.vue'
 

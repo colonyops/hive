@@ -9,9 +9,9 @@ import {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type {
   SessionDetail as SessionDetailView,
-  SessionRisk as SessionRiskView,
   SessionSummary,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { SessionRisk as SessionRiskView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { appErrorMessage } from '../lib/appError'
 import { useConfirmation, type ConfirmationDetail } from './useConfirmation'
 import { useToasts } from './useToasts'

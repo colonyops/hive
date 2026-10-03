@@ -13,16 +13,22 @@ import (
 // TaskBlocker is one explicit blocker on a task. A blocker whose item has since
 // been deleted keeps its ID with an empty Title rather than being dropped.
 type TaskBlocker struct {
-	ID     string
-	Title  string
-	Status hc.Status
+	ID     string `json:"id"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
+}
+
+type TaskComment struct {
+	ID        string    `json:"id"`
+	Message   string    `json:"message"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // TaskDetail is one hc item read in full, for a detail view.
 type TaskDetail struct {
 	hc.Item
 	Blockers []TaskBlocker
-	Comments []hc.Comment
+	Comments []TaskComment
 }
 
 // TasksService is the desktop's tasks view over hive's hc issue tracker. A nil
@@ -86,9 +92,13 @@ func (s *TasksService) TaskDetail(ctx context.Context, id string) (TaskDetail, e
 			}
 			return TaskDetail{}, Wrap(err, KindInternal, "reading blocker %q of task %q", blockerID, id)
 		}
-		blockers = append(blockers, TaskBlocker{ID: blocker.ID, Title: blocker.Title, Status: blocker.Status})
+		blockers = append(blockers, TaskBlocker{ID: blocker.ID, Title: blocker.Title, Status: string(blocker.Status)})
 	}
-	return TaskDetail{Item: item, Blockers: blockers, Comments: comments}, nil
+	taskComments := make([]TaskComment, 0, len(comments))
+	for _, c := range comments {
+		taskComments = append(taskComments, TaskComment{ID: c.ID, Message: c.Message, CreatedAt: c.CreatedAt})
+	}
+	return TaskDetail{Item: item, Blockers: blockers, Comments: taskComments}, nil
 }
 
 // SetTaskStatus sets id's status. A terminal status on an epic cascades to

@@ -49,37 +49,14 @@ func taskItemsOf(items []hc.Item) []TaskItem {
 	return out
 }
 
-// TaskBlocker is one explicit blocker on a task's detail view. A blocker whose
-// item has since been deleted keeps its ID with an empty Title.
-type TaskBlocker struct {
-	ID     string `json:"id"`
-	Title  string `json:"title"`
-	Status string `json:"status"`
-}
-
-// TaskComment is one comment on a task, in the order hc stored it.
-type TaskComment struct {
-	ID        string    `json:"id"`
-	Message   string    `json:"message"`
-	CreatedAt time.Time `json:"createdAt"`
-}
-
 // TaskDetail is one hc item read in full, for a detail view.
 type TaskDetail struct {
 	TaskItem
-	Desc     string        `json:"desc"`
-	Blockers []TaskBlocker `json:"blockers"`
-	Comments []TaskComment `json:"comments"`
+	Desc     string            `json:"desc"`
+	Blockers []app.TaskBlocker `json:"blockers"`
+	Comments []app.TaskComment `json:"comments"`
 }
 
 func taskDetailOf(d app.TaskDetail) TaskDetail {
-	blockers := make([]TaskBlocker, 0, len(d.Blockers))
-	for _, b := range d.Blockers {
-		blockers = append(blockers, TaskBlocker{ID: b.ID, Title: b.Title, Status: string(b.Status)})
-	}
-	comments := make([]TaskComment, 0, len(d.Comments))
-	for _, c := range d.Comments {
-		comments = append(comments, TaskComment{ID: c.ID, Message: c.Message, CreatedAt: c.CreatedAt})
-	}
-	return TaskDetail{TaskItem: taskItemOf(d.Item), Desc: d.Desc, Blockers: blockers, Comments: comments}
+	return TaskDetail{TaskItem: taskItemOf(d.Item), Desc: d.Desc, Blockers: d.Blockers, Comments: d.Comments}
 }

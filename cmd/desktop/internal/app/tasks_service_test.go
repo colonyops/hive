@@ -84,7 +84,7 @@ func TestTasksService_TaskDetailResolvesBlockerTitlesAndComments(t *testing.T) {
 	detail, err := svc.TaskDetail(ctx, blocked.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "needs blocker", detail.Desc)
-	assert.Equal(t, []TaskBlocker{{ID: blocker.ID, Title: "Blocker", Status: hc.StatusOpen}}, detail.Blockers)
+	assert.Equal(t, []TaskBlocker{{ID: blocker.ID, Title: "Blocker", Status: "open"}}, detail.Blockers)
 	require.Len(t, detail.Comments, 1)
 	assert.Equal(t, "note", detail.Comments[0].Message)
 }

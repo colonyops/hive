@@ -38,10 +38,10 @@ func TestProjectSessionStatusesMapsWindowsToStableIDs(t *testing.T) {
 
 	assert.Equal(t, []SessionStatus{
 		{SessionID: "s1", Running: true, Windows: []SessionWindowStatus{
-			{WindowID: "@1", Status: terminal.StatusApproval, Tool: "claude"},
-			{WindowID: "@2", Status: terminal.StatusActive, Tool: "pi"},
+			{WindowID: "@1", Status: "approval", Tool: "claude"},
+			{WindowID: "@2", Status: "active", Tool: "pi"},
 		}},
-		{SessionID: "s2", Running: true, Windows: []SessionWindowStatus{{WindowID: "@3", Status: terminal.StatusApproval, Tool: "codex"}}},
+		{SessionID: "s2", Running: true, Windows: []SessionWindowStatus{{WindowID: "@3", Status: "approval", Tool: "codex"}}},
 		{SessionID: "s4", Windows: []SessionWindowStatus{}},
 	}, projectSessionStatuses(active, statuses, windows, true), "a session hive has no status for is left out")
 }
@@ -113,7 +113,7 @@ func TestSessionsService_SessionStatusesIsEmptyWithoutStatus(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got.Items)
 	assert.NotNil(t, got.Items)
-	assert.Equal(t, 1500*time.Millisecond, got.PollInterval)
+	assert.Equal(t, int64(1500), got.PollIntervalMS)
 	assert.Empty(t, windows.seen)
 }
 
@@ -125,7 +125,7 @@ func TestSessionsService_SessionStatusesReportTheReloadedPollInterval(t *testing
 
 	before, err := svc.SessionStatuses(t.Context())
 	require.NoError(t, err)
-	assert.Equal(t, 5*time.Second, before.PollInterval)
+	assert.Equal(t, int64(5000), before.PollIntervalMS)
 
 	reloaded := *h.cfg
 	reloaded.Tmux.PollInterval = 9 * time.Second
@@ -133,5 +133,5 @@ func TestSessionsService_SessionStatusesReportTheReloadedPollInterval(t *testing
 
 	after, err := svc.SessionStatuses(t.Context())
 	require.NoError(t, err)
-	assert.Equal(t, 9*time.Second, after.PollInterval)
+	assert.Equal(t, int64(9000), after.PollIntervalMS)
 }

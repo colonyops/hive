@@ -18,7 +18,7 @@ import { moveId } from '../lib/listOrder'
 import { dropClass, dropEdge, useDragReorder } from '../composables/useDragReorder'
 import { useActionsSettings, type EditableAction } from '../composables/useActionsSettings'
 import { SessionLaunchWorkspaces } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
-import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { SessionLaunchWorkspace } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 
 const props = withDefaults(defineProps<{ knownTypes?: string[] }>(), { knownTypes: () => [] })
 const { actions, loading, error, create, update, remove, reorder } = useActionsSettings()

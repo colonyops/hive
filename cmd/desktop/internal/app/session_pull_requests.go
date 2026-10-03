@@ -10,10 +10,10 @@ import (
 // Host decides which forge is asked, so a lookup carries it rather than
 // inferring one from owner and repo, which every forge spells the same.
 type SessionPullRequestKey struct {
-	Host   string
-	Owner  string
-	Repo   string
-	Branch string
+	Host   string `json:"host"`
+	Owner  string `json:"owner"`
+	Repo   string `json:"repo"`
+	Branch string `json:"branch"`
 }
 
 // PullRequestStatus is why a session has no pull request to show, or that it
@@ -32,25 +32,25 @@ const (
 // shows it. Everything below Status is meaningful only for
 // PullRequestStatusFound.
 type SessionPullRequest struct {
-	Status  PullRequestStatus
-	Number  int
-	Title   string
-	State   string
-	IsDraft bool
-	URL     string
+	Status  PullRequestStatus `json:"status"`
+	Number  int               `json:"number"`
+	Title   string            `json:"title"`
+	State   string            `json:"state"`
+	IsDraft bool              `json:"isDraft"`
+	URL     string            `json:"url"`
 	// ReviewDecision is GitHub's own vocabulary (APPROVED, CHANGES_REQUESTED,
 	// REVIEW_REQUIRED), or empty when review is not required.
-	ReviewDecision string
+	ReviewDecision string `json:"reviewDecision"`
 	// Checks is passing, pending, failing, or empty for a head commit with no
 	// checks configured.
-	Checks string
+	Checks string `json:"checks"`
 	// The pull request's own line counts, deliberately not the git status's:
 	// those measure the working tree and drift as the branch moves on.
-	Additions int
-	Deletions int
+	Additions int `json:"additions"`
+	Deletions int `json:"deletions"`
 	// Cached distinguishes "this just arrived" from "this was already known".
 	// The bar animates only the former.
-	Cached bool
+	Cached bool `json:"cached"`
 }
 
 // sessionPRCacheTTL bounds how stale a session's pull-request badge may be.

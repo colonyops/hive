@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
 import { actionTypeMeta } from '../lib/actionPresentation'
 import type { ActionView } from '../types/action'
-import type { ActionRunView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { ActionRunView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 
 const props = defineProps<{ action: ActionView; pending?: boolean; run?: ActionRunView }>()
 const view = computed(() => actionTypeMeta(props.action.type))

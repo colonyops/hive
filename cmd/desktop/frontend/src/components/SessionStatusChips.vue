@@ -14,10 +14,8 @@ import AppTooltip from './ui/AppTooltip.vue'
 import IconButton from './ui/IconButton.vue'
 import { useClipboard } from '../composables/useClipboard'
 import { markdownPullRequestLink } from '../lib/prLink'
-import type {
-  SessionGitStatus,
-  SessionPullRequest,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { SessionGitStatus } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { SessionPullRequest } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = defineProps<{
   git: SessionGitStatus | null

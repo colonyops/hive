@@ -6,7 +6,7 @@ import {
 import type {
   ItemChatView,
   ItemSessionView,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { defineStore } from './defineStore'
 

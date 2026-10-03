@@ -1,4 +1,4 @@
-import type { SessionLaunchRepository } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type { SessionLaunchRepository } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 
 /**
  * "git@github.com:owner/name.git" and "https://github.com/owner/name.git" both

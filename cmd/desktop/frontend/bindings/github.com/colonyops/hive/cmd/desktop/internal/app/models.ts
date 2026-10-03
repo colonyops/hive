@@ -75,6 +75,31 @@ export interface Integration {
     "envOverride": boolean;
 }
 
+/**
+ * ItemChatView is an agent workspace chat an inbox item opened.
+ */
+export interface ItemChatView {
+    "id": number;
+    "workspace": string;
+    "name": string;
+    "createdAt": string;
+}
+
+/**
+ * ItemSessionView is one hive session an inbox item spawned. Only CreatedAt
+ * comes from the link. Everything else is read live from hive, so a session
+ * renamed or recycled outside this app reports what it actually is.
+ */
+export interface ItemSessionView {
+    "id": string;
+    "name": string;
+    "slug": string;
+    "repo": string;
+    "state": string;
+    "running": boolean;
+    "createdAt": string;
+}
+
 export interface MenuBarFeedChoice {
     "feed": string;
     "profileName": string;
@@ -105,6 +130,23 @@ export interface PopupLauncher {
 }
 
 /**
+ * PullRequestStatus is why a session has no pull request to show, or that it
+ * does. The four are kept apart deliberately: rendering "no pull request" for
+ * a failed lookup or a disconnected account states a different, wrong fact.
+ */
+export enum PullRequestStatus {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    PullRequestStatusNone = "none",
+    PullRequestStatusFound = "found",
+    PullRequestStatusDisconnected = "disconnected",
+    PullRequestStatusUnsupported = "unsupported",
+};
+
+/**
  * ScratchTerminal declares the scratch terminal to the surfaces that draw it.
  * There is exactly one, it is created on first use, and it holds no hive
  * session, checkout or agent — its tabs are whatever the user opened.
@@ -112,4 +154,117 @@ export interface PopupLauncher {
 export interface ScratchTerminal {
     "slug": string;
     "name": string;
+}
+
+/**
+ * SessionPullRequest is the branch's pull request as the session status bar
+ * shows it. Everything below Status is meaningful only for
+ * PullRequestStatusFound.
+ */
+export interface SessionPullRequest {
+    "status": PullRequestStatus;
+    "number": number;
+    "title": string;
+    "state": string;
+    "isDraft": boolean;
+    "url": string;
+
+    /**
+     * ReviewDecision is GitHub's own vocabulary (APPROVED, CHANGES_REQUESTED,
+     * REVIEW_REQUIRED), or empty when review is not required.
+     */
+    "reviewDecision": string;
+
+    /**
+     * Checks is passing, pending, failing, or empty for a head commit with no
+     * checks configured.
+     */
+    "checks": string;
+
+    /**
+     * The pull request's own line counts, deliberately not the git status's:
+     * those measure the working tree and drift as the branch moves on.
+     */
+    "additions": number;
+    "deletions": number;
+
+    /**
+     * Cached distinguishes "this just arrived" from "this was already known".
+     * The bar animates only the former.
+     */
+    "cached": boolean;
+}
+
+/**
+ * SessionPullRequestKey addresses the pull request a session's branch has.
+ * Host decides which forge is asked, so a lookup carries it rather than
+ * inferring one from owner and repo, which every forge spells the same.
+ */
+export interface SessionPullRequestKey {
+    "host": string;
+    "owner": string;
+    "repo": string;
+    "branch": string;
+}
+
+/**
+ * SessionRisk is the pre-flight a destructive operation confirms against: what
+ * unsaved work the session holds, and whether recycling it is really a delete.
+ */
+export interface SessionRisk {
+    "uncommittedChanges": boolean;
+    "unpushedCommits": boolean;
+
+    /**
+     * RecycleDeletes reports that recycling this session destroys it: hive
+     * routes a worktree session's recycle straight to DeleteSession, because a
+     * worktree has no clone of its own to reset.
+     */
+    "recycleDeletes": boolean;
+}
+
+/**
+ * SessionStatus separates tmux liveness from the activity detected in each
+ * agent window.
+ */
+export interface SessionStatus {
+    "sessionId": string;
+    "running": boolean;
+    "windows": SessionWindowStatus[] | null;
+}
+
+/**
+ * SessionStatusSnapshot carries one poll result and the hive-configured delay
+ * the caller should use before requesting the next one, in the milliseconds a
+ * browser timer takes.
+ */
+export interface SessionStatusSnapshot {
+    "items": SessionStatus[] | null;
+    "pollIntervalMs": number;
+}
+
+/**
+ * SessionWindowStatus is one tmux window's detected agent activity. Status is
+ * simplified: ready, active, or approval.
+ */
+export interface SessionWindowStatus {
+    "windowId": string;
+    "status": string;
+    "tool": string;
+}
+
+/**
+ * TaskBlocker is one explicit blocker on a task. A blocker whose item has since
+ * been deleted keeps its ID with an empty Title rather than being dropped.
+ */
+export interface TaskBlocker {
+    "id": string;
+    "title": string;
+    "status": string;
+}
+
+export interface TaskComment {
+    "id": string;
+    "message": string;
+    "createdAt": string;
 }

@@ -11,7 +11,7 @@ import type {
   SessionCreateFailure,
   SessionDraft,
   SessionLaunchOptions as SessionLaunchOptionsView,
-} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import type { InboxItem } from '../types/feed'
 import { useToasts } from './useToasts'
 

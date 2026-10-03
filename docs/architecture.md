@@ -283,7 +283,10 @@ layers; `app` never imports `adapter`, Wails, or any transport package. An
 `app` package that needs something from the outside declares an interface and
 takes it as a constructor parameter. Domain types cross freely into `app`
 signatures. Where a transport needs a different shape (camelCase JSON, a
-narrower tool schema) the adapter converts.
+narrower tool schema) the adapter converts. A projection `app` builds itself
+(`SessionRisk`, `ItemSessionView`, `ActionRunView`) has one definition, with
+camelCase `json` tags, and the adapters return it as is; only a domain type
+gets an adapter copy, because its own tags are the CLI's JSON contract.
 
 A change the desktop needs in a shared package is made there, in the same PR,
 with the CLI in mind. A program still reads `internal/store` directly in a few
@@ -530,6 +533,8 @@ every user-facing surface is an adapter inside the desktop binary.
 - GUI-only state (window focus, tray, native dialogs, the updater) is adapter
   code and stays there.
 - Wire/DTO types shaped by a transport belong to that adapter, not to `app`.
+  The exception is a projection `app` builds: it carries its `json` tags and
+  is not copied.
 
 ## Extension points
 
