@@ -2,7 +2,6 @@
 import { computed, ref } from 'vue'
 import ItemActionMenu from './ItemActionMenu.vue'
 import PullRequestMetadata from './PullRequestMetadata.vue'
-import SourceMark from './SourceMark.vue'
 import { relativeAge } from '../lib/age'
 import {
   byline,
@@ -21,6 +20,8 @@ import IconEllipsisVertical from '~icons/lucide/ellipsis-vertical'
 import IconExternalLink from '~icons/lucide/external-link'
 import IconEye from '~icons/lucide/eye'
 import type { InboxItem } from '../types/feed'
+import FeedKindPill from './FeedKindPill.vue'
+import FeedSourceBadge from './FeedSourceBadge.vue'
 
 const props = defineProps<{
   item: InboxItem
@@ -124,9 +125,14 @@ function activateRow(): void {
           ><IconCheck v-if="checked" class="size-3" :stroke-width="3"
         /></span>
       </span>
-      <span v-else class="source-badge" :data-source="item.sourceKind" data-testid="source-badge"
-        ><SourceMark :icon="sourceMark" :image="sourceMarkImage" class="size-4"
-      /></span>
+      <FeedSourceBadge
+        v-else
+        class="mt-px"
+        :icon="sourceMark"
+        :image="sourceMarkImage"
+        :source="item.sourceKind"
+        data-testid="source-badge"
+      />
       <div class="min-w-0 flex-1">
         <div class="flex items-baseline gap-2.5">
           <div
@@ -141,19 +147,13 @@ function activateRow(): void {
           </div>
         </div>
         <div class="mt-[5px] flex min-w-0 items-center gap-2">
-          <span
-            v-if="archived && item.archivedReason"
-            class="type-pill type-pill-neutral"
-            data-testid="archive-reason"
-            >{{ item.archivedReason }}</span
-          ><span v-if="trash && item.ignoredAt != null" class="type-pill type-pill-neutral" data-testid="ignored-pill"
-            >ignored</span
-          ><span
-            class="type-pill"
-            :class="'type-pill-' + itemKindStyle"
-            data-testid="type-pill"
-            :data-kind="itemKind"
-            >{{ itemKindLabel }}</span
+          <FeedKindPill v-if="archived && item.archivedReason" data-testid="archive-reason">{{
+            item.archivedReason
+          }}</FeedKindPill
+          ><FeedKindPill v-if="trash && item.ignoredAt != null" data-testid="ignored-pill">ignored</FeedKindPill
+          ><FeedKindPill :tone="itemKindStyle" data-testid="type-pill" :data-kind="itemKind">{{
+            itemKindLabel
+          }}</FeedKindPill
           ><span class="min-w-0 flex-1 truncate font-mono text-[11px] text-text-3"
             >{{ presentation.sourceLabel }}<template v-if="itemContainer"> · {{ itemContainerLine }}</template></span
           ><PullRequestMetadata class="ml-auto" :item="item" mode="changes" />
@@ -276,19 +276,6 @@ function activateRow(): void {
   background: var(--color-selection);
   pointer-events: none;
 }
-.source-badge {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  margin-top: 1px;
-  border: 1px solid var(--color-strong);
-  border-radius: 8px;
-  background: var(--color-chip);
-  color: var(--color-text);
-}
 .selection-check {
   display: inline-flex;
   flex: none;
@@ -312,29 +299,6 @@ function activateRow(): void {
   border-color: var(--color-accent);
   background: var(--color-accent);
   color: var(--color-accent-contrast);
-}
-.type-pill {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  border-radius: 4px;
-  padding: 2px 7px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-.type-pill-pr {
-  background: var(--color-kind-pr-tint);
-  color: var(--color-kind-pr);
-}
-.type-pill-issue {
-  background: var(--color-kind-issue-tint);
-  color: var(--color-kind-issue);
-}
-.type-pill-neutral {
-  background: var(--color-chip);
-  color: var(--color-text-2);
 }
 .meta-right {
   transition: opacity 0.1s ease;

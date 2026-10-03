@@ -4,7 +4,6 @@ import ActionCard from './ActionCard.vue'
 import ItemActionMenu from './ItemActionMenu.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import PullRequestMetadata from './PullRequestMetadata.vue'
-import SourceMark from './SourceMark.vue'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import {
   body,
@@ -29,6 +28,8 @@ import type {
   ItemChatView,
   ItemSessionView,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
+import FeedKindPill from './FeedKindPill.vue'
+import FeedSourceBadge from './FeedSourceBadge.vue'
 
 const props = defineProps<{
   item: InboxItem | null
@@ -71,7 +72,7 @@ const itemMenuOpen = ref(false)
 // registry), so the adjacent context stays focused on the repository and
 // item number.
 const presentation = computed(() => presentationFor(props.item?.sourceKind))
-// The github/default adapters never dereference `item`; SourceMark only
+// The github/default adapters never dereference `item`; the source badge only
 // renders inside the `v-if="item"` branch below, so a null item here is
 // never actually resolved to the webhook adapter (which does).
 const markContext = computed(() => ({ sourceIcons: props.sourceIcons, sourceImages: props.sourceImages }))
@@ -143,17 +144,17 @@ const {
     <template v-if="item">
       <div class="relative border-b border-border px-5 pb-4 pt-[18px]">
         <div class="mb-[11px] flex items-center gap-[9px]">
-          <span class="source-badge" :data-source="item.sourceKind" data-testid="source-badge"
-            ><SourceMark :icon="sourceMark" :image="sourceMarkImage" class="size-[15px]"
-          /></span>
-          <span
-            class="kind-pill shrink-0 whitespace-nowrap"
-            :class="'kind-pill-' + itemKindStyle"
-            data-testid="kind-pill"
-          >
+          <FeedSourceBadge
+            size="sm"
+            :icon="sourceMark"
+            :image="sourceMarkImage"
+            :source="item.sourceKind"
+            data-testid="source-badge"
+          />
+          <FeedKindPill size="md" :tone="itemKindStyle" data-testid="kind-pill">
             <component :is="itemKindIcon" v-if="itemKindIcon" class="size-[13px]" />
             {{ itemKindLabel }}
-          </span>
+          </FeedKindPill>
           <span v-if="itemContainer" class="min-w-0 truncate font-mono text-xs text-text-3">{{
             itemContainerLine
           }}</span>
@@ -302,40 +303,6 @@ const {
 </template>
 
 <style scoped>
-.source-badge {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  background: var(--color-chip);
-  border: 1px solid var(--color-strong);
-  color: var(--color-text);
-}
-.kind-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 22px;
-  padding: 0 9px 0 7px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 600;
-}
-.kind-pill-pr {
-  background: var(--color-kind-pr-tint);
-  color: var(--color-kind-pr);
-}
-.kind-pill-issue {
-  background: var(--color-kind-issue-tint);
-  color: var(--color-kind-issue);
-}
-.kind-pill-neutral {
-  background: var(--color-chip);
-  color: var(--color-text-2);
-}
 .edit-button,
 .more-button {
   display: inline-flex;

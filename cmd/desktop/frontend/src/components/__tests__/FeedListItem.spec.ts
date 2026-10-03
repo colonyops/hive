@@ -38,7 +38,7 @@ describe('FeedListItem', () => {
   it('decodes GitHub payload type and metadata through the presentation adapter', () => {
     const wrapper = mountItem()
     expect(wrapper.find('[data-testid="source-badge"]').attributes('data-source')).toBe('github')
-    expect(wrapper.find('[data-testid="type-pill"]').classes()).toContain('type-pill-pr')
+    expect(wrapper.find('[data-testid="type-pill"]').attributes('data-tone')).toBe('pr')
     expect(wrapper.find('[data-testid="type-pill"]').text()).toBe('Pull Request')
     expect(wrapper.get('[data-testid="item-byline"]').text()).toContain('octocat')
     expect(wrapper.get('[data-testid="item-byline"]').text()).toContain('Approved')
@@ -60,7 +60,7 @@ describe('FeedListItem', () => {
     expect(mountItem().get('[data-testid="item-title"]').classes()).toContain('font-semibold')
 
     const issue = mountItem({ unread: false, payload: { ...(baseItem.payload as object), kind: 'Issue' } })
-    expect(issue.find('[data-testid="type-pill"]').classes()).toContain('type-pill-issue')
+    expect(issue.find('[data-testid="type-pill"]').attributes('data-tone')).toBe('issue')
     expect(issue.get('[data-testid="item-title"]').classes()).toContain('font-normal')
     expect(issue.get('[data-testid="item-byline"]').text()).toBe('octocat')
     expect(issue.find('[data-testid="pr-metadata"]').exists()).toBe(false)

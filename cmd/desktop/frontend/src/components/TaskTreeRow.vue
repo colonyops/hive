@@ -12,6 +12,7 @@ import IconLayers from '~icons/lucide/layers'
 import IconTerminal from '~icons/lucide/terminal'
 import { relativeAge } from '../lib/age'
 import { statusMeta, type TaskTreeNode } from '../lib/tasksPresentation'
+import BaseBadge from './ui/BaseBadge.vue'
 
 const props = defineProps<{
   node: TaskTreeNode
@@ -67,21 +68,22 @@ const indent = computed(() => props.depth * 18 + 10)
       >[{{ node.counts.done }}/{{ node.counts.total }}]</span
     >
 
-    <span
+    <BaseBadge
       v-if="node.item.blocked"
-      class="flex shrink-0 items-center gap-1 rounded-[5px] bg-severity-error-tint px-1.5 py-0.5 text-[10px] font-medium text-severity-error"
+      tone="danger"
+      class="shrink-0 px-1.5 py-0.5 text-[10px] font-medium"
       data-testid="task-tree-blocked"
     >
       <IconBan class="size-2.5" aria-hidden="true" />Blocked
-    </span>
+    </BaseBadge>
 
-    <span
+    <BaseBadge
       v-if="node.item.sessionId"
-      class="flex shrink-0 items-center justify-center rounded-[5px] bg-chip px-1 py-0.5 text-text-3"
+      class="shrink-0 justify-center px-1 py-0.5"
       :title="`Linked to session ${sessionName || node.item.sessionId}`"
       data-testid="task-tree-session"
       ><IconTerminal class="size-2.5" aria-hidden="true"
-    /></span>
+    /></BaseBadge>
 
     <span
       class="shrink-0 rounded-[5px] px-1.5 py-0.5 text-[10px] font-medium"

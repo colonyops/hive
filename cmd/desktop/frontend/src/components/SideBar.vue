@@ -16,6 +16,7 @@ import SidebarFeedRow from './SidebarFeedRow.vue'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import { applyMove, SIDEBAR_DRAG_MIME, type DragRef, type DropTarget } from '../lib/feedTree'
 import type { FeedFolder, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
+import BaseBadge from './ui/BaseBadge.vue'
 
 const props = defineProps<{ profile: Profile; selection: SidebarSelection; flowsDirty?: boolean }>()
 const emit = defineEmits<{
@@ -381,11 +382,13 @@ function deleteFolder(folder: FeedFolder): void {
         <span class="block text-[12.5px] font-semibold text-text">Edit flow</span>
         <span class="block truncate font-mono text-[11px] text-text-3">Open editor</span>
       </span>
-      <span
+      <BaseBadge
         v-if="flowsDirty"
-        class="flex shrink-0 items-center gap-1.5 rounded-md border border-accent/35 bg-accent-tint px-1.5 py-0.5 text-[10.5px] font-semibold text-accent"
+        tone="accent"
+        dot
+        class="shrink-0 border border-accent/35 px-1.5 py-0.5 text-[10.5px] font-semibold"
         data-testid="undeployed-badge"
-        ><span class="size-1.5 shrink-0 rounded-full bg-accent" />Un-deployed</span
+        >Un-deployed</BaseBadge
       >
       <IconChevronRight class="size-3.5 shrink-0 text-text-4" />
     </button>

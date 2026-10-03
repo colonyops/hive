@@ -166,7 +166,9 @@ describe('DetailPane', () => {
         ],
       },
     })
-    expect(wrapper.get('.kind-pill').classes()).toEqual(expect.arrayContaining(['shrink-0', 'whitespace-nowrap']))
+    expect(wrapper.get('[data-testid="kind-pill"]').classes()).toEqual(
+      expect.arrayContaining(['shrink-0', 'whitespace-nowrap']),
+    )
     expect(wrapper.findAll('[data-testid="action-card"]')).toHaveLength(2)
   })
 
@@ -218,7 +220,7 @@ describe('DetailPane', () => {
     }
     const wrapper = mount(DetailPane, { props: { item: webhookItem, actions: [] } })
     expect(wrapper.get('[data-testid="kind-pill"]').text()).toBe('Item')
-    expect(wrapper.get('[data-testid="kind-pill"]').classes()).toContain('kind-pill-neutral')
+    expect(wrapper.get('[data-testid="kind-pill"]').attributes('data-tone')).toBe('neutral')
     expect(wrapper.get('[data-testid="source-badge"]').attributes('data-source')).toBe('webhook')
     expect(wrapper.text()).not.toContain('#42')
     expect(wrapper.find('[data-testid="pr-metadata"]').exists()).toBe(false)

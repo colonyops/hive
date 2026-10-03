@@ -4,6 +4,7 @@
 // shape and the matches()/glob semantics this only edits, never evaluates).
 import { GlobListField, ToggleField } from '../../fields'
 import type { Config } from './config'
+import AppCheckbox from '../../../components/ui/AppCheckbox.vue'
 
 const props = defineProps<{ config: Config; errors?: string[] }>()
 const emit = defineEmits<{ 'update:config': [config: Config] }>()
@@ -161,19 +162,14 @@ function toggleReason(value: string, checked: boolean) {
     <div>
       <div class="mb-2 text-[12.5px] text-text-2">Notification reasons</div>
       <div class="grid grid-cols-3 gap-x-3 gap-y-1.5" data-testid="github-filter-editor-reasons">
-        <label
+        <AppCheckbox
           v-for="reason in allReasons"
           :key="reason"
-          class="flex cursor-pointer items-center gap-2 font-mono text-[11.5px] text-text-2"
+          :model-value="reasonChecked(reason)"
+          :testid="`github-filter-editor-reason-${reason}`"
+          @update:model-value="toggleReason(reason, $event)"
+          ><span class="font-mono text-[11.5px]">{{ reason }}</span></AppCheckbox
         >
-          <input
-            type="checkbox"
-            :checked="reasonChecked(reason)"
-            class="accent-accent"
-            :data-testid="`github-filter-editor-reason-${reason}`"
-            @change="(e) => toggleReason(reason, (e.target as HTMLInputElement).checked)"
-          />{{ reason }}
-        </label>
       </div>
     </div>
   </div>
