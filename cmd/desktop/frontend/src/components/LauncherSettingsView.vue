@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import IconPlus from '~icons/lucide/plus'
-import IconTrash2 from '~icons/lucide/trash-2'
 import InlineError from './ui/InlineError.vue'
 import SettingsHeading from './settings/SettingsHeading.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import BaseBadge from './ui/BaseBadge.vue'
 import BaseButton from './ui/BaseButton.vue'
-import BaseCard from './ui/BaseCard.vue'
-import BaseIconBadge from './ui/BaseIconBadge.vue'
+import ConfigItemCard from './settings/ConfigItemCard.vue'
 import ConfirmationHost from './ui/ConfirmationHost.vue'
 import LauncherEditor from './LauncherEditor.vue'
 import EmptyState from './ui/EmptyState.vue'
@@ -84,48 +82,30 @@ function requestDelete(launcher: Launcher): void {
     <p v-if="loading" class="text-xs text-text-4">Loading quick terminals…</p>
 
     <div v-else class="flex flex-col gap-3">
-      <BaseCard
+      <ConfigItemCard
         v-for="launcher in launchers"
         :key="launcher.id"
-        :padded="false"
-        class="flex-wrap items-start gap-3 rounded-[11px] border border-card bg-raised px-4 py-3.5 transition-colors hover:border-strong @[600px]/pane:flex-nowrap @[600px]/pane:items-center @[600px]/pane:gap-4"
+        :title="launcher.label"
+        :icon="launcherIconComponent(launcher.icon)"
         :data-testid="`launcher-row-${launcher.id}`"
+        @edit="edit(launcher, $event)"
+        @delete="requestDelete(launcher)"
       >
-        <template #icon>
-          <BaseIconBadge :size="38" rounded="rounded-[10px]" class="border border-accent/35 bg-accent-tint text-accent">
-            <component :is="launcherIconComponent(launcher.icon)" class="size-[17px]" />
-          </BaseIconBadge>
+        <template #badges>
+          <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-[11px]">{{
+            launcher.command
+          }}</BaseBadge>
+          <BaseBadge v-if="launcher.cwd" class="px-2 py-0.5 font-mono text-[11px] !text-text-2">{{
+            launcher.cwd
+          }}</BaseBadge>
+          <BaseBadge class="px-2 py-0.5 text-[11px]" :data-testid="`launcher-shortcut-${launcher.id}`">
+            <span
+              class="size-1.5 rounded-full"
+              :class="shortcut(launcher.id) ? 'bg-severity-success' : 'bg-text-4'"
+            />{{ shortcut(launcher.id) || 'Unbound' }}
+          </BaseBadge>
         </template>
-        <div class="min-w-0 flex-1">
-          <div class="truncate text-[15px] font-semibold tracking-[-.01em] text-text">{{ launcher.label }}</div>
-          <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-[11px]">{{
-              launcher.command
-            }}</BaseBadge>
-            <BaseBadge v-if="launcher.cwd" class="px-2 py-0.5 font-mono text-[11px] !text-text-2">{{
-              launcher.cwd
-            }}</BaseBadge>
-            <BaseBadge class="px-2 py-0.5 text-[11px]" :data-testid="`launcher-shortcut-${launcher.id}`">
-              <span
-                class="size-1.5 rounded-full"
-                :class="shortcut(launcher.id) ? 'bg-severity-success' : 'bg-text-4'"
-              />{{ shortcut(launcher.id) || 'Unbound' }}
-            </BaseBadge>
-          </div>
-        </div>
-        <template #actions>
-          <div class="flex w-full items-center justify-end gap-2 @[600px]/pane:w-auto @[600px]/pane:shrink-0">
-            <BaseButton variant="secondary" size="xs" @click="edit(launcher, $event)">Edit</BaseButton>
-            <button
-              class="flex size-[34px] items-center justify-center rounded-[7px] border border-card text-text-3 hover:border-severity-error-border hover:text-severity-error"
-              aria-label="Delete"
-              @click="requestDelete(launcher)"
-            >
-              <IconTrash2 class="size-[15px]" />
-            </button>
-          </div>
-        </template>
-      </BaseCard>
+      </ConfigItemCard>
 
       <EmptyState v-if="!launchers.length" message="No quick terminals configured." />
       <div

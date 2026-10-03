@@ -2,15 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import IconGripVertical from '~icons/lucide/grip-vertical'
 import IconPlus from '~icons/lucide/plus'
-import IconTrash2 from '~icons/lucide/trash-2'
 import InlineError from './ui/InlineError.vue'
 import SettingsHeading from './settings/SettingsHeading.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import BaseBadge from './ui/BaseBadge.vue'
 import BaseButton from './ui/BaseButton.vue'
-import BaseCard from './ui/BaseCard.vue'
-import BaseIconBadge from './ui/BaseIconBadge.vue'
-import AppIcon from './AppIcon.vue'
+import { appIcon } from './AppIcon.vue'
+import ConfigItemCard from './settings/ConfigItemCard.vue'
 import ActionEditor from './ActionEditor.vue'
 import ConfirmationHost from './ui/ConfirmationHost.vue'
 import EmptyState from './ui/EmptyState.vue'
@@ -158,55 +156,39 @@ function dropClass(id: string): Record<string, boolean> {
     <p v-if="loading" class="text-xs text-text-4">Loading actions…</p>
 
     <div v-else class="flex flex-col gap-3">
-      <BaseCard
+      <ConfigItemCard
         v-for="action in actions"
         :key="action.id"
-        :padded="false"
-        class="action-row flex-wrap items-start gap-3 rounded-[11px] border border-card bg-raised px-4 py-3.5 transition-colors hover:border-strong @[600px]/pane:flex-nowrap @[600px]/pane:items-center @[600px]/pane:gap-4"
-        :class="dropClass(action.id)"
+        :title="action.label"
+        :icon="appIcon(actionTypeMeta(action.type).icon)"
         :data-testid="`action-row-${action.id}`"
+        :class="dropClass(action.id)"
         draggable="true"
         @dragstart="onDragStart($event, action.id)"
         @dragover.prevent="onDragOver($event, action.id)"
         @drop.prevent="onDrop"
         @dragend="onDragEnd"
+        @edit="edit(action, $event)"
+        @delete="requestDelete(action)"
       >
-        <template #icon>
-          <span class="drag-grip" aria-hidden="true" :data-testid="`action-grip-${action.id}`"
+        <template #leading>
+          <span
+            class="-mx-1.5 flex w-3 flex-none cursor-grab items-center justify-center text-text-4 opacity-0 transition-opacity group-hover/item:opacity-100 group-[.dragging]/item:opacity-100"
+            aria-hidden="true"
+            :data-testid="`action-grip-${action.id}`"
             ><IconGripVertical class="size-[15px]"
           /></span>
-          <BaseIconBadge :size="38" rounded="rounded-[10px]" class="border border-accent/35 bg-accent-tint text-accent">
-            <AppIcon :name="actionTypeMeta(action.type).icon" class="size-[17px]" />
-          </BaseIconBadge>
         </template>
-        <div class="min-w-0 flex-1">
-          <div class="truncate text-[15px] font-semibold tracking-[-.01em] text-text">{{ action.label }}</div>
-          <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-[11px]">{{
-              action.id
-            }}</BaseBadge>
-            <BaseBadge class="px-2 py-0.5 text-[11px] !text-text-2">{{ actionTypeMeta(action.type).label }}</BaseBadge>
-            <BaseBadge class="px-2 py-0.5 text-[11px]">
-              <span
-                class="size-1.5 rounded-full"
-                :class="action.showInDetail ? 'bg-severity-success' : 'bg-text-4'"
-              />{{ action.showInDetail ? 'Shown in detail' : 'Flow-only' }}
-            </BaseBadge>
-          </div>
-        </div>
-        <template #actions>
-          <div class="flex w-full items-center justify-end gap-2 @[600px]/pane:w-auto @[600px]/pane:shrink-0">
-            <BaseButton variant="secondary" size="xs" @click="edit(action, $event)">Edit</BaseButton>
-            <button
-              class="flex size-[34px] items-center justify-center rounded-[7px] border border-card text-text-3 hover:border-severity-error-border hover:text-severity-error"
-              aria-label="Delete"
-              @click="requestDelete(action)"
-            >
-              <IconTrash2 class="size-[15px]" />
-            </button>
-          </div>
+        <template #badges>
+          <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-[11px]">{{ action.id }}</BaseBadge>
+          <BaseBadge class="px-2 py-0.5 text-[11px] !text-text-2">{{ actionTypeMeta(action.type).label }}</BaseBadge>
+          <BaseBadge class="px-2 py-0.5 text-[11px]">
+            <span class="size-1.5 rounded-full" :class="action.showInDetail ? 'bg-severity-success' : 'bg-text-4'" />{{
+              action.showInDetail ? 'Shown in detail' : 'Flow-only'
+            }}
+          </BaseBadge>
         </template>
-      </BaseCard>
+      </ConfigItemCard>
 
       <EmptyState v-if="!actions.length" message="No actions configured." />
       <div
@@ -233,56 +215,3 @@ function dropClass(id: string): Record<string, boolean> {
     <ConfirmationHost :confirmation="confirmation" />
   </SettingsPage>
 </template>
-
-<style scoped>
-/* The grip is the affordance; the whole row is the drag source, so a drag can
-   start anywhere on it (its buttons still take their own clicks). */
-.drag-grip {
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: 12px;
-  margin: 0 -6px;
-  color: var(--color-text-4);
-  cursor: grab;
-  opacity: 0;
-  transition: opacity 0.12s ease;
-}
-.action-row:hover .drag-grip,
-.action-row.dragging .drag-grip {
-  opacity: 1;
-}
-.action-row.dragging {
-  opacity: 0.45;
-}
-
-/* The insertion line floats in the gap between cards rather than lighting up a
-   card's own border, which reads as an edit to that card and sits badly against
-   the 11px corners. */
-.action-row {
-  position: relative;
-}
-.action-row::before,
-.action-row::after {
-  content: '';
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--color-accent);
-  opacity: 0;
-  pointer-events: none;
-}
-.action-row::before {
-  top: -7px;
-}
-.action-row::after {
-  bottom: -7px;
-}
-.action-row.drop-before::before,
-.action-row.drop-after::after {
-  opacity: 1;
-}
-</style>

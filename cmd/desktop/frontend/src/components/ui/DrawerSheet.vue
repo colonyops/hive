@@ -1,15 +1,26 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, type Component } from 'vue'
+import IconX from '~icons/lucide/x'
 import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import { useFocusTrap } from '../../composables/useFocusTrap'
 import { useRegisterOpenModal } from '../../composables/useOpenModalCount'
 import { useResizablePanel } from '../../composables/useResizablePanel'
 import { useReturnFocus } from '../../composables/useReturnFocus'
+import BaseIconBadge from './BaseIconBadge.vue'
 import PanelResizeHandle from './PanelResizeHandle.vue'
 
 const props = withDefaults(
   defineProps<{
-    ariaLabel: string
+    title: string
+    subtitle?: string
+    icon?: Component
+    /** `lg` is the editor header: a bigger accent tile and title. */
+    headerSize?: 'sm' | 'lg'
+    /** Adds a close button to the header; it emits `close` like Escape does. */
+    closable?: boolean
+    closeDisabled?: boolean
+    /** Defaults to `title`. */
+    ariaLabel?: string
     testid?: string
     backdropTestid?: string
     /** Fixed width in px — opts out of the default resizable behavior. */
@@ -27,6 +38,7 @@ const props = withDefaults(
     returnFocusTo?: HTMLElement | null
   }>(),
   {
+    headerSize: 'sm',
     defaultSize: 440,
     min: 360,
     max: 760,
@@ -54,6 +66,8 @@ const resizePanel =
     : null
 /* eslint-enable vue/no-setup-props-reactivity-loss */
 const panelWidth = computed(() => resizePanel?.size.value ?? props.width)
+const large = computed(() => props.headerSize === 'lg')
+const part = (name: string) => (props.testid ? `${props.testid}-${name}` : undefined)
 
 function close(): void {
   emit('close')
@@ -101,7 +115,7 @@ defineExpose({ body: bodyRef })
       class="fixed inset-y-0 right-0 z-40 flex max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-[-30px_0_60px_-20px_rgba(0,0,0,.5)] outline-none"
       :style="{ width: panelWidth ? `${panelWidth}px` : undefined }"
       role="dialog"
-      :aria-label="ariaLabel"
+      :aria-label="ariaLabel ?? title"
       aria-modal="true"
       tabindex="-1"
       :data-testid="testid"
@@ -114,8 +128,46 @@ defineExpose({ body: bodyRef })
         :start="startResize"
         :step="stepResize"
       />
-      <header v-if="$slots.header" class="shrink-0 border-b border-row bg-pane px-[18px] py-[15px]">
-        <slot name="header" />
+      <header class="shrink-0 border-b border-row bg-pane px-[18px] py-[15px]">
+        <div :class="['flex items-center', large ? 'gap-3' : 'gap-2.5']">
+          <slot name="icon">
+            <BaseIconBadge
+              v-if="icon"
+              :size="large ? 38 : 26"
+              :rounded="large ? 'rounded-[10px]' : 'rounded-[7px]'"
+              :class="large ? 'bg-accent text-accent-contrast' : 'bg-chip text-text-2'"
+            >
+              <component :is="icon" :class="large ? 'size-[18px]' : 'size-3.5'" />
+            </BaseIconBadge>
+          </slot>
+          <div class="min-w-0 flex-1">
+            <div
+              :class="['truncate font-semibold tracking-[-.01em]', large ? 'text-[15px]' : 'text-[14px]']"
+              :data-testid="part('title')"
+            >
+              {{ title }}
+            </div>
+            <div
+              v-if="subtitle"
+              :class="['truncate font-mono text-text-3', large ? 'text-[12px]' : 'text-[11px]']"
+              :data-testid="part('subtitle')"
+            >
+              {{ subtitle }}
+            </div>
+          </div>
+          <slot name="header-actions" />
+          <button
+            v-if="closable"
+            type="button"
+            class="text-text-3 hover:text-text disabled:opacity-50"
+            aria-label="Close"
+            :disabled="closeDisabled"
+            :data-testid="part('close')"
+            @click="close"
+          >
+            <IconX class="size-4" />
+          </button>
+        </div>
       </header>
       <div ref="bodyRef" :class="['hive-scroll min-h-0 flex-1 overflow-y-auto px-[18px] py-[15px]', bodyClass]">
         <slot />

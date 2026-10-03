@@ -96,7 +96,9 @@ onMounted(() => void reload())
 
 <template>
   <DrawerSheet
-    ariaLabel="Webhook settings"
+    title="Webhook settings"
+    subtitle="Local listener"
+    :icon="IconWebhook"
     testid="webhook-integration-drawer"
     backdrop-testid="webhook-integration-backdrop"
     :default-size="420"
@@ -104,18 +106,6 @@ onMounted(() => void reload())
     :max="620"
     @close="emit('close')"
   >
-    <template #header>
-      <div class="flex items-center gap-2.5">
-        <span class="flex size-[26px] items-center justify-center rounded-[7px] bg-chip text-text-2"
-          ><IconWebhook class="size-3.5"
-        /></span>
-        <div>
-          <div class="text-[14px] font-semibold tracking-[-.01em]">Webhook settings</div>
-          <div class="font-mono text-[11px] text-text-3">Local listener</div>
-        </div>
-      </div>
-    </template>
-
     <div class="flex flex-col gap-5">
       <div
         class="flex items-center gap-3 rounded-lg border px-3 py-2.5"

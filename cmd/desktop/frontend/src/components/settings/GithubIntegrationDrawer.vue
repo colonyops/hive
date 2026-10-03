@@ -102,7 +102,9 @@ onMounted(() => void load())
 
 <template>
   <DrawerSheet
-    ariaLabel="GitHub settings"
+    title="GitHub settings"
+    subtitle="Connection and polling"
+    :icon="IconGithub"
     testid="github-integration-drawer"
     backdrop-testid="github-integration-backdrop"
     :default-size="380"
@@ -110,18 +112,6 @@ onMounted(() => void load())
     :max="560"
     @close="emit('close')"
   >
-    <template #header>
-      <div class="flex items-center gap-2.5">
-        <span class="flex size-[26px] items-center justify-center rounded-[7px] bg-chip text-text-2"
-          ><IconGithub class="size-3.5"
-        /></span>
-        <div>
-          <div class="text-[14px] font-semibold tracking-[-.01em]">GitHub settings</div>
-          <div class="font-mono text-[11px] text-text-3">Connection and polling</div>
-        </div>
-      </div>
-    </template>
-
     <FormField label="Connection" testid="github-connection">
       <div
         v-if="connected"

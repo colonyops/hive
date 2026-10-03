@@ -13,9 +13,9 @@ function el<T extends HTMLElement>(testid: string): T {
 
 function mountSheet(props: Record<string, unknown> = {}) {
   return mount(DrawerSheet, {
-    props: { ariaLabel: 'Demo drawer', testid: 'demo-drawer', ...props },
+    props: { title: 'Demo drawer', subtitle: 'demo.yml', testid: 'demo-drawer', ...props },
     slots: {
-      header: '<span data-testid="drawer-header">Header</span>',
+      'header-actions': '<span data-testid="drawer-header-action">Action</span>',
       default: '<span data-testid="drawer-body">Body</span>',
       footer: '<span data-testid="drawer-footer">Footer</span>',
     },
@@ -26,13 +26,39 @@ describe('DrawerSheet', () => {
   it('teleports its standard bands and wires the supplied testid to the sheet and backdrop', () => {
     const wrapper = mountSheet()
 
-    expect(el('demo-drawer').getAttribute('aria-label')).toBe('Demo drawer')
     expect(el('demo-drawer-backdrop')).toBeTruthy()
-    expect(el('drawer-header').textContent).toBe('Header')
+    expect(el('demo-drawer-title').textContent).toBe('Demo drawer')
+    expect(el('demo-drawer-subtitle').textContent).toBe('demo.yml')
+    expect(el('drawer-header-action').textContent).toBe('Action')
     expect(el('drawer-body').textContent).toBe('Body')
     expect(el('drawer-footer').textContent).toBe('Footer')
 
     wrapper.unmount()
+  })
+
+  it('names the dialog after its title unless an aria label is given', () => {
+    const titled = mountSheet()
+    expect(el('demo-drawer').getAttribute('aria-label')).toBe('Demo drawer')
+    titled.unmount()
+
+    const labelled = mountSheet({ ariaLabel: 'Edit demo' })
+    expect(el('demo-drawer').getAttribute('aria-label')).toBe('Edit demo')
+    labelled.unmount()
+  })
+
+  it('shows a header close button only when closable, which emits close unless disabled', () => {
+    const plain = mountSheet()
+    expect(document.querySelector('[data-testid="demo-drawer-close"]')).toBeNull()
+    plain.unmount()
+
+    const closable = mountSheet({ closable: true })
+    el('demo-drawer-close').click()
+    expect(closable.emitted('close')).toHaveLength(1)
+    closable.unmount()
+
+    const disabled = mountSheet({ closable: true, closeDisabled: true })
+    expect(el<HTMLButtonElement>('demo-drawer-close').disabled).toBe(true)
+    disabled.unmount()
   })
 
   it('emits close when its backdrop is clicked', async () => {
@@ -76,7 +102,7 @@ describe('DrawerSheet', () => {
     const wrapper = mount(DrawerSheet, {
       // Fixed width: the resize handle is focusable and would otherwise be
       // the trap's first tab stop, which is beside the point here.
-      props: { ariaLabel: 'Focus drawer', testid: 'focus-drawer', width: 400 },
+      props: { title: 'Focus drawer', testid: 'focus-drawer', width: 400 },
       slots: {
         default: '<button data-testid="first-focus">First</button><button data-testid="last-focus">Last</button>',
       },
@@ -101,7 +127,7 @@ describe('DrawerSheet', () => {
       setup(_, { emit }) {
         return () =>
           h(SettingsLayout, { onClose: () => emit('close-settings') }, () =>
-            drawerOpen.value ? h(DrawerSheet, { ariaLabel: 'Nested drawer', onClose: closeDrawer }) : null,
+            drawerOpen.value ? h(DrawerSheet, { title: 'Nested drawer', onClose: closeDrawer }) : null,
           )
       },
     })

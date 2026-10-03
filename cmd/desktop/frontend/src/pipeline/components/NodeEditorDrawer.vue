@@ -157,32 +157,26 @@ useAutofocus(nameRef)
 <template>
   <DrawerSheet
     :ariaLabel="`Edit ${def.label}`"
+    :title="`Edit node · ${def.label}`"
+    :subtitle="subtitle"
     testid="node-editor"
     :close-on-escape="false"
     body-class="flex flex-col gap-[14px]"
     @close="emit('close')"
   >
-    <template #header>
-      <div class="flex items-center gap-[11px]">
-        <span
-          class="flex size-[26px] shrink-0 items-center justify-center rounded-[7px]"
-          :style="{
-            background: def.tint ?? 'var(--color-accent-tint)',
-            color: def.accentToken ?? 'var(--color-accent)',
-          }"
-        >
-          <component :is="def.glyph" class="size-3.5" />
-        </span>
-        <div class="min-w-0 flex-1">
-          <div class="truncate text-[14px] font-semibold tracking-[-.01em]" data-testid="node-editor-title">
-            Edit node · {{ def.label }}
-          </div>
-          <div class="truncate font-mono text-[11px] text-text-3" data-testid="node-editor-subtitle">
-            {{ subtitle }}
-          </div>
-        </div>
-        <AppSwitch v-model="enabled" label="Enabled" class="shrink-0" testid="node-editor-enabled" />
-      </div>
+    <template #icon>
+      <span
+        class="flex size-[26px] shrink-0 items-center justify-center rounded-[7px]"
+        :style="{
+          background: def.tint ?? 'var(--color-accent-tint)',
+          color: def.accentToken ?? 'var(--color-accent)',
+        }"
+      >
+        <component :is="def.glyph" class="size-3.5" />
+      </span>
+    </template>
+    <template #header-actions>
+      <AppSwitch v-model="enabled" label="Enabled" class="shrink-0" testid="node-editor-enabled" />
     </template>
 
     <FormField v-slot="{ id }" label="Name">

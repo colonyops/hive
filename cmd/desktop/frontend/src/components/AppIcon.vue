@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<script lang="ts">
 import type { Component } from 'vue'
 import IconClipboard from '~icons/lucide/clipboard'
 import IconDiamond from '~icons/lucide/diamond'
@@ -10,8 +10,6 @@ import IconSearch from '~icons/lucide/search'
 import IconSparkles from '~icons/lucide/sparkles'
 import IconTerminal from '~icons/lucide/terminal'
 import IconZap from '~icons/lucide/zap'
-
-defineProps<{ name: string }>()
 
 // Icon names arrive as data (Action.icon from the Go backend). unplugin-icons
 // resolves imports at build time, so every name the backend can send must be
@@ -27,8 +25,16 @@ const registry: Record<string, Component> = {
   sparkles: IconSparkles,
   terminal: IconTerminal,
 }
+
+export function appIcon(name: string): Component {
+  return registry[name] ?? IconZap
+}
+</script>
+
+<script setup lang="ts">
+defineProps<{ name: string }>()
 </script>
 
 <template>
-  <component :is="registry[name] ?? IconZap" />
+  <component :is="appIcon(name)" />
 </template>

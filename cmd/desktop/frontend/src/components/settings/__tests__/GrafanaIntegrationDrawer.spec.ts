@@ -120,12 +120,12 @@ describe('GrafanaIntegrationDrawer', () => {
     const wrapper = mountDrawer()
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="grafana-connect-stack-link"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="grafana-connect-instance-link"]').exists()).toBe(false)
 
     await wrapper.find('[data-testid="grafana-connect-url"]').setValue('https://my-stack.grafana.net/')
-    expect(wrapper.find('[data-testid="grafana-connect-stack-link"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="grafana-connect-instance-link"]').exists()).toBe(true)
 
-    await wrapper.find('[data-testid="grafana-connect-stack-link"]').trigger('click')
+    await wrapper.find('[data-testid="grafana-connect-instance-link"]').trigger('click')
     expect(mocks.OpenURL).toHaveBeenCalledWith('https://my-stack.grafana.net/org/serviceaccounts')
   })
 

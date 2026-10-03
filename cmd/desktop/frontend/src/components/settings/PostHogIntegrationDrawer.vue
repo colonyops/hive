@@ -1,31 +1,40 @@
 <script setup lang="ts">
-import InlineError from '../ui/InlineError.vue'
 import { computed, ref } from 'vue'
-import { Browser } from '@wailsio/runtime'
 import IconBug from '~icons/lucide/bug'
 import AppSelect, { type AppSelectOption } from '../ui/AppSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
-import DrawerSheet from '../ui/DrawerSheet.vue'
-import FormField from '../ui/FormField.vue'
-import TextInput from '../ui/TextInput.vue'
-import { usePostHogConnection } from '../../composables/usePostHogConnection'
-import { useIntegrations } from '../../composables/useIntegrations'
+import TokenConnectDrawer, { type TokenProvider } from './TokenConnectDrawer.vue'
+import {
+  Connect,
+  Disconnect,
+  Projects,
+} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/posthogservice'
+import type { useTokenConnection } from '../../composables/useTokenConnection'
+import type { Project } from '../../types/posthog'
+
+type Run = ReturnType<typeof useTokenConnection>['run']
 
 const emit = defineEmits<{ close: [] }>()
 
-const API_KEY_DOCS = 'https://posthog.com/docs/api/personal-api-keys'
+const provider: TokenProvider = {
+  id: 'posthog',
+  name: 'PostHog',
+  icon: IconBug,
+  noun: 'project',
+  connectLabel: 'Connect a project',
+  hint: 'The key is validated once and stored in your keychain; only the host and project id are written to disk.',
+  docsUrl: 'https://posthog.com/docs/api/personal-api-keys',
+  tokenPage: { path: '/settings/user-api-keys', label: 'API keys on your instance' },
+  urlPlaceholder: 'https://us.posthog.com',
+  tokenPlaceholder: 'phx_…',
+  defaultUrl: 'https://us.posthog.com',
+  disconnect: Disconnect,
+}
 
-const { busy, error, projects, loadProjects, connect, reset, disconnect } = usePostHogConnection()
-const { accountsFor } = useIntegrations()
-const connectedAccounts = computed(() => accountsFor('posthog'))
-
-const urlInput = ref('https://us.posthog.com')
-const tokenInput = ref('')
+// A personal API key spans projects, so connecting is two steps: list what the
+// key can see, then bind the project the user picks.
+const projects = ref<Project[]>([])
 const selectedProject = ref<number | null>(null)
-const disconnecting = ref<string | null>(null)
-
-const canLoad = computed(() => urlInput.value.trim() !== '' && tokenInput.value.trim() !== '')
-const picking = computed(() => projects.value.length > 0)
 
 // AppSelect is string-valued and a project id is numeric, so the conversion
 // happens here rather than leaking a stringly-typed id into the connect call.
@@ -39,202 +48,66 @@ function chooseProject(value: string) {
   selectedProject.value = Number.isFinite(id) ? id : null
 }
 
-// The entered instance's own key page, so creating the key is one click away.
-const instanceKeysUrl = computed(() => {
-  const base = urlInput.value.trim().replace(/\/+$/, '')
-  if (!/^https?:\/\//i.test(base)) return ''
-  return `${base}/settings/user-api-keys`
-})
-
-function openDocs() {
-  void Browser.OpenURL(API_KEY_DOCS)
-}
-
-function openInstanceKeys() {
-  if (instanceKeysUrl.value) void Browser.OpenURL(instanceKeysUrl.value)
-}
-
-async function onLoadProjects() {
-  if (!canLoad.value) return
-  const ok = await loadProjects(urlInput.value.trim(), tokenInput.value.trim())
+async function onLoadProjects(run: Run, url: string, token: string) {
+  const ok = await run(async () => {
+    projects.value = (await Projects(url, token)) ?? []
+  }, 'PostHog rejected the API key.')
   if (ok) selectedProject.value = projects.value[0]?.id ?? null
 }
 
-async function onConnect() {
-  if (selectedProject.value === null) return
-  const ok = await connect(urlInput.value.trim(), tokenInput.value.trim(), selectedProject.value)
-  if (ok) {
-    // The key stays so a second project can be connected without re-pasting it.
-    selectedProject.value = null
-    reset()
-  }
+async function onConnect(run: Run, url: string, token: string) {
+  const projectID = selectedProject.value
+  if (projectID === null) return
+  // The key stays so a second project can be connected without re-pasting it.
+  if (await run(() => Connect(url, token, projectID), 'PostHog rejected the connection.')) startOver()
 }
 
-function onStartOver() {
+function startOver(clearError?: () => void) {
   selectedProject.value = null
-  reset()
-}
-
-async function onDisconnect(account: string) {
-  disconnecting.value = account
-  try {
-    await disconnect(account)
-  } finally {
-    disconnecting.value = null
-  }
+  projects.value = []
+  clearError?.()
 }
 </script>
 
 <template>
-  <DrawerSheet
-    ariaLabel="PostHog settings"
-    testid="posthog-integration-drawer"
-    backdrop-testid="posthog-integration-backdrop"
-    :default-size="380"
-    :min="320"
-    :max="560"
-    @close="emit('close')"
-  >
-    <template #header>
-      <div class="flex items-center gap-2.5">
-        <span class="flex size-[26px] items-center justify-center rounded-[7px] bg-chip text-text-2"
-          ><IconBug class="size-3.5"
-        /></span>
-        <div>
-          <div class="text-[14px] font-semibold tracking-[-.01em]">PostHog settings</div>
-          <div class="font-mono text-[11px] text-text-3">Connected projects</div>
-        </div>
-      </div>
-    </template>
+  <TokenConnectDrawer :provider="provider" :locked="projects.length > 0" @close="emit('close')">
+    Create a <span class="text-text-2">personal API key</span> with the <span class="text-text-2">project:read</span>,
+    <span class="text-text-2">error_tracking:read</span> and <span class="text-text-2">alert:read</span> scopes, then
+    paste it below. One key can connect several projects — connect each one separately to route them to different feeds.
 
-    <FormField label="Connected projects" testid="posthog-connected">
-      <div v-if="connectedAccounts.length > 0" class="flex flex-col gap-2">
-        <div
-          v-for="account in connectedAccounts"
-          :key="account"
-          class="flex items-center justify-between gap-3 rounded-lg border border-border bg-raised px-3 py-2.5"
-          :data-testid="`posthog-connected-${account}`"
-        >
-          <div class="min-w-0 truncate font-mono text-[13px] text-text">{{ account }}</div>
+    <template #extra-step="{ url, token, ready, busy, run, clearError }">
+      <template v-if="projects.length > 0">
+        <AppSelect
+          :model-value="selectedProjectValue"
+          :options="projectOptions"
+          aria-label="PostHog project"
+          testid="posthog-connect-project"
+          @update:model-value="chooseProject"
+        />
+        <div class="flex gap-2">
           <BaseButton
-            variant="secondary"
             size="sm"
-            :busy="disconnecting === account"
-            :data-testid="`posthog-disconnect-${account}`"
-            @click="onDisconnect(account)"
-            >Disconnect</BaseButton
+            :busy="busy"
+            :disabled="selectedProject === null"
+            data-testid="posthog-connect-submit"
+            @click="onConnect(run, url, token)"
+            >Connect</BaseButton
+          >
+          <BaseButton variant="secondary" size="sm" data-testid="posthog-connect-back" @click="startOver(clearError)"
+            >Use another key</BaseButton
           >
         </div>
-      </div>
-      <div
-        v-else
-        class="rounded-lg border border-border bg-raised px-3 py-2.5 text-[13px] text-text-3"
-        data-testid="posthog-connected-empty"
-      >
-        No project connected
-      </div>
-    </FormField>
-
-    <div class="mt-5">
-      <FormField
-        label="Connect a project"
-        hint="The key is validated once and stored in your keychain; only the host and project id are written to disk."
-        testid="posthog-connect"
-      >
-        <div
-          class="mb-2.5 rounded-lg border border-border bg-app px-3 py-2.5 text-xs leading-relaxed text-text-3"
-          data-testid="posthog-connect-help"
-        >
-          Create a <span class="text-text-2">personal API key</span> with the
-          <span class="text-text-2">project:read</span>, <span class="text-text-2">error_tracking:read</span> and
-          <span class="text-text-2">alert:read</span> scopes, then paste it below. One key can connect several projects
-          — connect each one separately to route them to different feeds.
-          <div class="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
-            <button
-              type="button"
-              class="cursor-pointer text-accent hover:underline"
-              data-testid="posthog-connect-docs"
-              @click="openDocs"
-            >
-              PostHog docs ↗
-            </button>
-            <button
-              v-if="instanceKeysUrl"
-              type="button"
-              class="cursor-pointer text-accent hover:underline"
-              data-testid="posthog-connect-instance-link"
-              @click="openInstanceKeys"
-            >
-              API keys on your instance ↗
-            </button>
-          </div>
-        </div>
-
-        <div class="flex flex-col gap-2">
-          <TextInput
-            v-model="urlInput"
-            type="url"
-            :disabled="picking"
-            placeholder="https://us.posthog.com"
-            data-testid="posthog-connect-url"
-            size="sm"
-            monospace
-          />
-          <TextInput
-            v-model="tokenInput"
-            type="password"
-            :disabled="picking"
-            placeholder="phx_…"
-            data-testid="posthog-connect-token"
-            size="sm"
-            monospace
-          />
-
-          <!-- Step two. A personal API key spans projects, so the project is
-               picked from what the key can actually see rather than typed. -->
-          <template v-if="picking">
-            <AppSelect
-              :model-value="selectedProjectValue"
-              :options="projectOptions"
-              aria-label="PostHog project"
-              testid="posthog-connect-project"
-              @update:model-value="chooseProject"
-            />
-            <div class="flex gap-2">
-              <BaseButton
-                size="sm"
-                :busy="busy"
-                :disabled="selectedProject === null"
-                data-testid="posthog-connect-submit"
-                @click="onConnect"
-                >Connect</BaseButton
-              >
-              <BaseButton variant="secondary" size="sm" data-testid="posthog-connect-back" @click="onStartOver"
-                >Use another key</BaseButton
-              >
-            </div>
-          </template>
-          <div v-else>
-            <BaseButton
-              size="sm"
-              :busy="busy"
-              :disabled="!canLoad"
-              data-testid="posthog-connect-load"
-              @click="onLoadProjects"
-              >Find projects</BaseButton
-            >
-          </div>
-        </div>
-      </FormField>
-    </div>
-    <InlineError v-if="error" testid="posthog-connect-error" variant="line" class="mt-2" :message="error" />
-
-    <template #footer>
-      <div class="flex items-center justify-end gap-2.5">
-        <BaseButton variant="secondary" size="sm" data-testid="posthog-settings-close" @click="emit('close')"
-          >Close</BaseButton
+      </template>
+      <div v-else>
+        <BaseButton
+          size="sm"
+          :busy="busy"
+          :disabled="!ready"
+          data-testid="posthog-connect-load"
+          @click="onLoadProjects(run, url, token)"
+          >Find projects</BaseButton
         >
       </div>
     </template>
-  </DrawerSheet>
+  </TokenConnectDrawer>
 </template>

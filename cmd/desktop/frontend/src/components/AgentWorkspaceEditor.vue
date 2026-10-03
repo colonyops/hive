@@ -1020,41 +1020,37 @@ onMounted(async () => {
   <DrawerSheet
     ref="sheet"
     :ariaLabel="creating ? 'New workspace' : 'Edit workspace'"
+    :title="headerTitle"
+    :subtitle="headerSubtitle"
+    :icon="IconFolderCog"
+    header-size="lg"
     testid="agent-workspace-editor"
     :default-size="520"
     :close-on-escape="!confirming && !discarding && !scheduleDraft?.removing"
     :close-on-backdrop="!confirming && !discarding"
     @close="cancel"
   >
-    <template #header>
-      <div class="flex items-center gap-3">
-        <button
-          v-if="scheduleDraft"
-          type="button"
-          class="flex size-[38px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-card text-text-2 hover:border-strong hover:text-text"
-          aria-label="Back to the workspace"
-          data-testid="agent-workspace-editor-schedule-back"
-          @click="closeScheduleDraft"
-        >
-          <IconArrowLeft class="size-[18px]" />
-        </button>
-        <span v-else class="flex size-[38px] items-center justify-center rounded-[10px] bg-accent text-accent-contrast"
-          ><IconFolderCog class="size-[18px]"
-        /></span>
-        <div class="min-w-0 flex-1">
-          <div class="text-[15px] font-semibold tracking-[-.01em]">{{ headerTitle }}</div>
-          <div class="truncate font-mono text-[12px] text-text-3">{{ headerSubtitle }}</div>
-        </div>
-        <button
-          class="text-text-3 hover:text-text disabled:opacity-50"
-          aria-label="Close"
-          data-testid="agent-workspace-editor-close"
-          :disabled="busy || confirming || discarding"
-          @click="closeSheet"
-        >
-          <IconX class="size-4" />
-        </button>
-      </div>
+    <template v-if="scheduleDraft" #icon>
+      <button
+        type="button"
+        class="flex size-[38px] shrink-0 cursor-pointer items-center justify-center rounded-[10px] border border-card text-text-2 hover:border-strong hover:text-text"
+        aria-label="Back to the workspace"
+        data-testid="agent-workspace-editor-schedule-back"
+        @click="closeScheduleDraft"
+      >
+        <IconArrowLeft class="size-[18px]" />
+      </button>
+    </template>
+    <template #header-actions>
+      <button
+        class="text-text-3 hover:text-text disabled:opacity-50"
+        aria-label="Close"
+        data-testid="agent-workspace-editor-close"
+        :disabled="busy || confirming || discarding"
+        @click="closeSheet"
+      >
+        <IconX class="size-4" />
+      </button>
     </template>
 
     <!-- The schedule page takes the body over, the way the confirm strip takes

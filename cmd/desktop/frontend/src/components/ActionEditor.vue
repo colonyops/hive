@@ -2,7 +2,6 @@
 import InlineError from './ui/InlineError.vue'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import IconPlay from '~icons/lucide/play'
-import IconX from '~icons/lucide/x'
 import BaseButton from './ui/BaseButton.vue'
 import AppCheckbox from './ui/AppCheckbox.vue'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
@@ -30,7 +29,6 @@ const emit = defineEmits<{ save: []; cancel: [] }>()
 const idRef = ref<{ focus: () => void } | null>(null)
 const labelRef = ref<{ focus: () => void } | null>(null)
 const appliesField = ref<{ flush: () => void } | null>(null)
-const closeRef = ref<HTMLButtonElement | null>(null)
 const validationError = ref<string | null>(null)
 const launchTarget = seedRef<'interactive' | 'repository' | 'workspace'>(() =>
   action.value.launch?.workspace ? 'workspace' : action.value.launch?.repoTemplate ? 'repository' : 'interactive',
@@ -134,42 +132,23 @@ function cancel(): void {
 onMounted(async () => {
   await nextTick()
   if (props.isNew && idRef.value) idRef.value.focus()
-  else if (labelRef.value) labelRef.value.focus()
-  else closeRef.value?.focus()
+  else labelRef.value?.focus()
 })
 </script>
 
 <template>
   <DrawerSheet
     :return-focus-to="returnFocusTo"
-    :ariaLabel="isNew ? 'New action' : 'Edit action'"
+    :title="isNew ? 'New action' : 'Edit action'"
+    :subtitle="isNew ? 'Create a reusable desktop action' : action.id"
+    :icon="IconPlay"
+    header-size="lg"
+    closable
+    :close-disabled="busy"
     testid="action-editor"
     :default-size="480"
     @close="cancel"
   >
-    <template #header>
-      <div class="flex items-center gap-3">
-        <span class="flex size-[38px] items-center justify-center rounded-[10px] bg-accent text-accent-contrast"
-          ><IconPlay class="size-[18px]"
-        /></span>
-        <div class="min-w-0 flex-1">
-          <div class="text-[15px] font-semibold tracking-[-.01em]">{{ isNew ? 'New action' : 'Edit action' }}</div>
-          <div class="truncate font-mono text-[12px] text-text-3">
-            {{ isNew ? 'Create a reusable desktop action' : action.id }}
-          </div>
-        </div>
-        <button
-          ref="closeRef"
-          class="text-text-3 hover:text-text disabled:opacity-50"
-          aria-label="Close"
-          :disabled="busy"
-          @click="cancel"
-        >
-          <IconX class="size-4" />
-        </button>
-      </div>
-    </template>
-
     <div class="grid gap-3">
       <TextField ref="idRef" v-model="action.id" label="ID" :disabled="!isNew" testid="action-id" />
       <TextField ref="labelRef" v-model="action.label" label="Label" testid="action-label" />

@@ -2,7 +2,6 @@
 import InlineError from './ui/InlineError.vue'
 import { nextTick, onMounted, ref } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
-import IconX from '~icons/lucide/x'
 import BaseButton from './ui/BaseButton.vue'
 import DrawerSheet from './ui/DrawerSheet.vue'
 import { SelectField, TextField } from '../pipeline/fields'
@@ -22,7 +21,6 @@ const launcher = defineModel<Launcher>('launcher', { required: true })
 const emit = defineEmits<{ save: []; cancel: [] }>()
 const idRef = ref<{ focus: () => void } | null>(null)
 const labelRef = ref<{ focus: () => void } | null>(null)
-const closeRef = ref<HTMLButtonElement | null>(null)
 const validationError = ref<string | null>(null)
 
 const kb = useKeybindings()
@@ -52,44 +50,23 @@ function cancel(): void {
 onMounted(async () => {
   await nextTick()
   if (props.isNew && idRef.value) idRef.value.focus()
-  else if (labelRef.value) labelRef.value.focus()
-  else closeRef.value?.focus()
+  else labelRef.value?.focus()
 })
 </script>
 
 <template>
   <DrawerSheet
     :return-focus-to="returnFocusTo"
-    :ariaLabel="isNew ? 'New quick terminal' : 'Edit quick terminal'"
+    :title="isNew ? 'New quick terminal' : 'Edit quick terminal'"
+    :subtitle="isNew ? 'Open the pop-up terminal into a program' : launcher.id"
+    :icon="IconTerminal"
+    header-size="lg"
+    closable
+    :close-disabled="busy"
     testid="launcher-editor"
     :default-size="480"
     @close="cancel"
   >
-    <template #header>
-      <div class="flex items-center gap-3">
-        <span class="flex size-[38px] items-center justify-center rounded-[10px] bg-accent text-accent-contrast"
-          ><IconTerminal class="size-[18px]"
-        /></span>
-        <div class="min-w-0 flex-1">
-          <div class="text-[15px] font-semibold tracking-[-.01em]">
-            {{ isNew ? 'New quick terminal' : 'Edit quick terminal' }}
-          </div>
-          <div class="truncate font-mono text-[12px] text-text-3">
-            {{ isNew ? 'Open the pop-up terminal into a program' : launcher.id }}
-          </div>
-        </div>
-        <button
-          ref="closeRef"
-          class="text-text-3 hover:text-text disabled:opacity-50"
-          aria-label="Close"
-          :disabled="busy"
-          @click="cancel"
-        >
-          <IconX class="size-4" />
-        </button>
-      </div>
-    </template>
-
     <div class="grid gap-3">
       <TextField ref="idRef" v-model="launcher.id" label="ID" :disabled="!isNew" testid="launcher-id" />
       <TextField ref="labelRef" v-model="launcher.label" label="Label" testid="launcher-label" />
