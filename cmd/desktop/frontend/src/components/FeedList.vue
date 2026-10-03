@@ -24,6 +24,7 @@ import type { ActionView } from '../types/action'
 import type { FeedSort, InboxItem } from '../types/feed'
 import type { MenuEntry } from '../types/menu'
 import Spinner from './ui/Spinner.vue'
+import EmptyState from './ui/EmptyState.vue'
 
 // Presentation-only: the store (useFeedState) owns the search text and the
 // filtered `visibleItems`, so keyboard navigation and this list render the
@@ -356,13 +357,12 @@ watch(
                     />
                     <span class="truncate" :title="author">{{ author }}</span>
                   </button>
-                  <div
+                  <EmptyState
                     v-if="authorQuery.trim() && filteredAuthors.length === 0"
-                    class="px-3 py-4 text-center text-[12.5px] text-text-4"
+                    class="px-3"
+                    message="No matches"
                     data-testid="view-author-empty"
-                  >
-                    No matches
-                  </div>
+                  />
                 </div>
               </div>
             </div>

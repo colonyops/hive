@@ -26,6 +26,7 @@ import NodePalette from './NodePalette.vue'
 import FlowsCanvas from './FlowsCanvas.vue'
 import PanelResizeHandle from '../../components/ui/PanelResizeHandle.vue'
 import BaseButton from '../../components/ui/BaseButton.vue'
+import EmptyState from '../../components/ui/EmptyState.vue'
 
 const {
   flows,
@@ -230,13 +231,12 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
           @remove-wire="removeWire"
           @add-node-at="onAddNodeAt"
         />
-        <div
+        <EmptyState
           v-else
-          class="flex flex-1 items-center justify-center px-8 text-center text-[13px] text-text-4"
+          class="flex flex-1 items-center justify-center px-8"
+          message="Select a flow to start editing."
           data-testid="flows-view-empty"
-        >
-          Select a flow to start editing.
-        </div>
+        />
       </div>
 
       <div

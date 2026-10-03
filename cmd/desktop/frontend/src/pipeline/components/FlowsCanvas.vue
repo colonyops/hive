@@ -50,6 +50,7 @@ import { isEditableTarget } from '../../lib/isEditableTarget'
 import { startDrag } from '../../composables/useDragGesture'
 import type { FlowNode, Wire } from '../types'
 import NodeEditorDrawer from './NodeEditorDrawer.vue'
+import EmptyState from '../../components/ui/EmptyState.vue'
 
 const props = defineProps<{
   flow: EditorFlow
@@ -633,13 +634,12 @@ onBeforeUnmount(() => {
     @dragleave="onDragLeave"
     @drop.prevent="onDrop"
   >
-    <div
+    <EmptyState
       v-if="flow.nodes.length === 0"
-      class="pointer-events-none flex h-full items-center justify-center px-8 text-center text-[13px] text-text-4"
+      class="pointer-events-none flex h-full items-center justify-center px-8"
+      message="Add a node from the palette to get started. Drag from an output port to an input port to wire nodes together."
       data-testid="canvas-empty"
-    >
-      Add a node from the palette to get started. Drag from an output port to an input port to wire nodes together.
-    </div>
+    />
 
     <div
       class="absolute left-0 top-0 origin-top-left"

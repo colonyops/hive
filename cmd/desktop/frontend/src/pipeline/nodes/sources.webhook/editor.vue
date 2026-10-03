@@ -19,6 +19,7 @@ import IconRefresh from '~icons/lucide/refresh-cw'
 import { randomPath, randomSecret } from './config'
 import type { Config } from './config'
 import { renderPrompt } from '../../../composables/usePrompts'
+import EmptyState from '../../../components/ui/EmptyState.vue'
 
 export interface WebhookInfoView {
   running: boolean
@@ -258,9 +259,12 @@ async function onCopyPrompt(): Promise<void> {
           data-testid="sources.webhook-editor-capture"
           >{{ capturePreview }}</pre>
       </template>
-      <p v-else class="text-[12px] text-text-4" data-testid="sources.webhook-editor-no-capture">
-        Nothing captured yet — POST JSON to the endpoint and reopen this editor to see the payload here.
-      </p>
+      <EmptyState
+        v-else
+        variant="inline"
+        message="Nothing captured yet — POST JSON to the endpoint and reopen this editor to see the payload here."
+        data-testid="sources.webhook-editor-no-capture"
+      />
     </div>
 
     <div class="flex items-center gap-2.5">

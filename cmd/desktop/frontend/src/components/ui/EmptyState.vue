@@ -2,20 +2,26 @@
 withDefaults(
   defineProps<{
     message?: string
-    boxed?: boolean
+    /**
+     * `plain` centers the message in an empty list or pane; `boxed` draws it as
+     * a card; `inline` is a left-aligned note inside a list, card, or sidebar
+     * section, padded by the caller to match its rows.
+     */
+    variant?: 'plain' | 'boxed' | 'inline'
   }>(),
-  {
-    boxed: false,
-  },
+  { message: undefined, variant: 'plain' },
 )
 </script>
 
 <template>
   <div
-    :class="[
-      'py-8 text-center text-xs',
-      boxed ? 'rounded-lg border border-border bg-raised px-4 text-text-3' : 'text-text-4',
-    ]"
+    :class="
+      {
+        plain: 'py-8 text-center text-xs text-text-4',
+        boxed: 'rounded-lg border border-border bg-raised px-4 py-8 text-center text-xs text-text-3',
+        inline: 'text-xs leading-relaxed text-text-3',
+      }[variant]
+    "
   >
     <slot>{{ message }}</slot>
   </div>

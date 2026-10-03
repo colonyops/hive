@@ -29,6 +29,7 @@ import {
   type ActivityItemLink,
   type ActivityStyleKey,
 } from '../lib/activityPresentation'
+import EmptyState from './ui/EmptyState.vue'
 
 const emit = defineEmits<{
   close: []
@@ -165,20 +166,19 @@ onMounted(() => {
           Retry
         </button>
       </div>
-      <div v-else-if="!events.length && loading" class="px-6 py-16 text-center font-mono text-xs text-text-4">
+      <div v-else-if="!events.length && loading" class="px-6 py-8 text-center font-mono text-xs text-text-4">
         Loading activity…
       </div>
-      <div
+      <EmptyState
         v-else-if="!groups.length"
-        class="px-6 py-16 text-center font-mono text-xs text-text-4"
-        data-testid="activity-empty"
-      >
-        {{
+        class="px-6 font-mono"
+        :message="
           events.length
             ? 'No activity matches this filter.'
             : 'No activity yet. Refreshes, sessions, and actions will show up here.'
-        }}
-      </div>
+        "
+        data-testid="activity-empty"
+      />
 
       <template v-for="group in ledger" v-else :key="group.key">
         <div class="sticky -top-px z-[1] flex items-center gap-3 border-b border-row bg-app px-5 py-2 pt-[9px]">

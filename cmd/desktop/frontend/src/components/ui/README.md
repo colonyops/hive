@@ -31,7 +31,7 @@ the table.
 | `ConfirmationDialog` | A modal "are you sure" with optional detail rows.                                                             | `title`, `description`, `details`, `confirmLabel`, `busy`, `error`, `testid`; emits `confirm`, `cancel`                                                                                                                   |
 | `InlineConfirm`      | A confirm that replaces a row or card in place, no overlay.                                                   | `title`, `description`, `confirmLabel`, `cancelLabel`, `busy`, `error`, `testid`; emits `confirm`, `cancel`                                                                                                               |
 | `InlineError`        | Any error message shown in a view, form, or sheet; renders `role="alert"`.                                    | `message` (accepts `null`), `variant` (`banner`, `line`), `testid`; default slot                                                                                                                                          |
-| `EmptyState`         | "Nothing here yet" text in a list or pane.                                                                    | `message`, `boxed`; default slot                                                                                                                                                                                          |
+| `EmptyState`         | "Nothing here yet" text in a list or pane.                                                                    | `message`, `variant` (`plain` centered, `boxed` as a card, `inline` as a left-aligned note the caller pads); default slot                                                                                                 |
 | `ViewHeader`         | The title strip of a full-frame view (Settings, Activity, Dev).                                               | `#title` slot                                                                                                                                                                                                             |
 | `FormField`          | A label above a control, with a hint or an error below.                                                       | `label`, `hint`, `error` (accepts `null`), `testid`; `#default="{ id }"` (bind `:id="id"` on the control), `#label`                                                                                                       |
 | `TextInput`          | A one-line text field. Other attributes (`id`, `placeholder`, `data-testid`, `@keydown`) go to the `<input>`. | `v-model` (always a string), `type`, `monospace`, `size` (`sm`, `md`), `invalid`; exposes `focus()`, `select()`                                                                                                           |
@@ -152,6 +152,13 @@ for a failure that belongs to a whole view, form, or sheet. `line` is bare
 text; use it under a field, inside a list row, or beside a button. Both use
 `text-severity-error` and nothing else: never `text-kind-issue` for an error.
 Pass spacing (`mt-2`, `px-3`) and `leading-relaxed` as a class.
+
+`EmptyState` sets the color and the size of the message, so do not pass
+those as a class. Use `plain` where the list or pane itself is empty and
+`inline` for a note in a card or a sidebar section, padded like its rows.
+An empty pane with a heading and an action (the feed's "You're all caught
+up", the chat pane's "No chat open") is a panel of its own, not an
+`EmptyState`.
 
 ### Key hints are `Kbd`
 

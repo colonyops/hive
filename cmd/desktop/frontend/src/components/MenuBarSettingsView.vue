@@ -19,6 +19,7 @@ import type {
   MenuBarFeedChoice,
   MenuBarPin,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import EmptyState from './ui/EmptyState.vue'
 
 const pins = ref<MenuBarPin[]>([])
 const choices = ref<MenuBarFeedChoice[]>([])
@@ -115,9 +116,13 @@ onMounted(() => {
       :description="`Up to ${maxFeeds} feeds listed in the menu bar dropdown, top first.`"
       boxed
     >
-      <div v-if="loaded && pins.length === 0" class="px-4 py-3.5 text-xs text-text-3" data-testid="menubar-empty">
-        No feeds are pinned. The menu bar links here until you pin one.
-      </div>
+      <EmptyState
+        v-if="loaded && pins.length === 0"
+        variant="inline"
+        class="px-4 py-3.5"
+        message="No feeds are pinned. The menu bar links here until you pin one."
+        data-testid="menubar-empty"
+      />
       <SettingsRow
         v-for="(pin, index) in pins"
         :key="pin.feed"

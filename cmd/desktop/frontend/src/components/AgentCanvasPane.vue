@@ -22,6 +22,7 @@ import { useWailsEvent } from '../composables/useWailsEvent'
 import { relativeAge } from '../lib/age'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
 import type { AgentWorkspacesClient, CanvasBlock, WorkspaceCanvasMeta } from '../lib/agentWorkspacesClient'
+import EmptyState from './ui/EmptyState.vue'
 
 const props = defineProps<{
   /** The open chat, whose most recent canvas is the default pick. */
@@ -321,9 +322,12 @@ const {
         class="leading-relaxed"
         :message="error"
       />
-      <p v-else-if="!loading" class="text-xs leading-relaxed text-text-4" data-testid="agent-canvas-empty">
-        The agent hasn't put anything here yet.
-      </p>
+      <EmptyState
+        v-else-if="!loading"
+        variant="inline"
+        message="The agent hasn't put anything here yet."
+        data-testid="agent-canvas-empty"
+      />
     </div>
   </aside>
 </template>

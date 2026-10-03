@@ -61,6 +61,7 @@ import type {
   WorkspaceEditRequest,
 } from '../lib/agentWorkspacesClient'
 import { seedRef } from '../lib/seedRef'
+import EmptyState from './ui/EmptyState.vue'
 
 const props = defineProps<{
   /** The workspace being edited, or null to create one. */
@@ -1429,9 +1430,12 @@ onMounted(async () => {
               <IconTrash2 class="size-[15px]" />
             </button>
           </div>
-          <p v-if="!mcpRows.length" class="px-4 py-3.5 text-xs leading-relaxed text-text-3">
-            No servers in mcps.yaml yet.
-          </p>
+          <EmptyState
+            v-if="!mcpRows.length"
+            variant="inline"
+            class="px-4 py-3.5"
+            message="No servers in mcps.yaml yet."
+          />
           <div v-if="importOpen" class="flex flex-col gap-2 px-4 py-3.5">
             <CodeField
               v-model="importText"
@@ -1537,9 +1541,12 @@ onMounted(async () => {
               </li>
             </ul>
           </div>
-          <p v-if="!skillRows.length" class="px-4 py-3.5 text-xs leading-relaxed text-text-3">
-            No packages are defined yet.
-          </p>
+          <EmptyState
+            v-if="!skillRows.length"
+            variant="inline"
+            class="px-4 py-3.5"
+            message="No packages are defined yet."
+          />
           <div class="flex divide-x divide-row">
             <button
               type="button"
@@ -1667,7 +1674,7 @@ onMounted(async () => {
               </button>
             </div>
           </div>
-          <p v-if="!scheduleCards.length" class="px-4 py-3.5 text-xs leading-relaxed text-text-3">No schedules yet.</p>
+          <EmptyState v-if="!scheduleCards.length" variant="inline" class="px-4 py-3.5" message="No schedules yet." />
           <button
             type="button"
             :class="footerButtonClass"

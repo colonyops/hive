@@ -9,6 +9,7 @@ import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { usePaletteRecents } from '../composables/usePaletteRecents'
 import { paletteScopes, type PaletteScopeId } from '../palette/scopes'
 import Kbd from './ui/Kbd.vue'
+import EmptyState from './ui/EmptyState.vue'
 
 const { open, query, scope, visibleScopes, results, toggle, run, setQuery, setScope, cycleScope, popScope } =
   useCommandPalette()
@@ -364,7 +365,9 @@ function onKeydown(e: KeyboardEvent): void {
               </button>
             </template>
 
-            <div v-if="results.length === 0 && query" class="palette-empty">No results for "{{ query }}"</div>
+            <EmptyState v-if="results.length === 0 && query" class="px-4 font-mono" data-testid="command-palette-empty"
+              >No results for "{{ query }}"</EmptyState
+            >
           </div>
 
           <!-- Footer key hints -->
@@ -590,14 +593,6 @@ function onKeydown(e: KeyboardEvent): void {
 }
 
 /* Empty state */
-.palette-empty {
-  padding: 20px 16px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--color-text-4);
-  text-align: center;
-}
-
 /* Footer key hints */
 .palette-footer {
   display: flex;

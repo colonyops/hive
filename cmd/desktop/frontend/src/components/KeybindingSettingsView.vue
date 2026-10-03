@@ -166,7 +166,7 @@ onUnmounted(commitCapture)
       </template>
     </SettingsHeading>
 
-    <EmptyState v-if="empty" boxed data-testid="keybinding-empty">
+    <EmptyState v-if="empty" variant="boxed" data-testid="keybinding-empty">
       No shortcuts match "{{ filter.trim() }}".
     </EmptyState>
 

@@ -174,7 +174,7 @@ describe('CommandPalette', () => {
     await wrapper!.find('[data-testid="command-palette-input"]').setValue('zzz')
 
     expect(wrapper!.findAll('.palette-row')).toHaveLength(0)
-    expect(wrapper!.find('.palette-empty').text()).toContain('No results for "zzz"')
+    expect(wrapper!.find('[data-testid="command-palette-empty"]').text()).toContain('No results for "zzz"')
 
     await panel().trigger('keydown', { key: 'Enter' })
 

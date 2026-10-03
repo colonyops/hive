@@ -28,6 +28,7 @@ import { externalMarkdownHref } from '../lib/markdownLinks'
 import { cascadeCount, checkpointBody, isCheckpoint, matchesTaskFilter, statusMeta } from '../lib/tasksPresentation'
 import type { TaskComment } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import BaseButton from './ui/BaseButton.vue'
+import EmptyState from './ui/EmptyState.vue'
 
 const { detail, items, selectedId, setStatus, remove, select } = useTasks()
 
@@ -364,9 +365,7 @@ const {
         </div>
       </div>
     </template>
-    <div v-else class="m-auto font-mono text-xs text-text-4" data-testid="task-detail-empty">
-      Select a task to inspect
-    </div>
+    <EmptyState v-else class="m-auto font-mono" message="Select a task to inspect" data-testid="task-detail-empty" />
 
     <ConfirmationDialog
       v-if="cascadeConfirmOpen"

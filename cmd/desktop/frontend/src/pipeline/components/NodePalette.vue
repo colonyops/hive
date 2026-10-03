@@ -12,6 +12,7 @@ import { palette } from '../registry'
 import { NODE_TYPE_MIME } from '../lib/dragTypes'
 import { summarize } from '../lib/markdown'
 import type { NodeCategory, NodeTypeDefinition } from '../nodeType'
+import EmptyState from '../../components/ui/EmptyState.vue'
 
 const query = ref('')
 
@@ -53,9 +54,9 @@ function onDragStart(e: DragEvent, type: string) {
     </div>
 
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto p-2.5">
-      <div v-if="!hasResults" class="px-1 py-6 text-center text-[12px] text-text-4" data-testid="palette-empty">
+      <EmptyState v-if="!hasResults" class="px-1" data-testid="palette-empty">
         No node types match &ldquo;{{ query }}&rdquo;
-      </div>
+      </EmptyState>
 
       <template v-for="category in CATEGORIES" :key="category">
         <div v-if="filtered[category].length > 0" class="mb-3">

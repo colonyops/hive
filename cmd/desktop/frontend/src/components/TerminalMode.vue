@@ -97,6 +97,7 @@ import type {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import type { MenuEntry } from '../types/menu'
 import Kbd from './ui/Kbd.vue'
+import EmptyState from './ui/EmptyState.vue'
 import '@xterm/xterm/css/xterm.css'
 
 // `active` is whether this mode is the surface on screen. The component is
@@ -2609,16 +2610,20 @@ onBeforeUnmount(() => {
           </div>
           <!-- Under the tree rather than instead of it: the pinned section is
                drawn whether or not hive has a session to list. -->
-          <p v-if="treeNote === 'empty'" class="px-3 py-2 text-xs text-text-3" data-testid="terminal-sessions-empty">
-            No active sessions. Start one from the hub and it will appear here.
-          </p>
-          <p
+          <EmptyState
+            v-if="treeNote === 'empty'"
+            variant="inline"
+            class="px-3 py-2"
+            message="No active sessions. Start one from the hub and it will appear here."
+            data-testid="terminal-sessions-empty"
+          />
+          <EmptyState
             v-else-if="treeNote === 'no-matches'"
-            class="px-3 py-2 text-xs text-text-3"
+            variant="inline"
+            class="px-3 py-2"
+            :message="noMatchesNote"
             data-testid="terminal-sessions-no-matches"
-          >
-            {{ noMatchesNote }}
-          </p>
+          />
         </div>
         <!-- The tree's keys are not otherwise announced anywhere, so the panel
              carries its own legend. The focus chord is read off the live keymap
