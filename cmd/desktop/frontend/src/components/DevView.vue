@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import { useIntervalFn } from '@vueuse/core'
 import { computed, ref } from 'vue'
 import IconBell from '~icons/lucide/bell'
@@ -298,9 +299,7 @@ useEscapeToClose(() => emit('close'))
               than one call.
             </p>
 
-            <p v-if="latencyError" class="text-xs text-severity-error" data-testid="dev-latency-error">
-              {{ latencyError }}
-            </p>
+            <InlineError v-if="latencyError" testid="dev-latency-error" variant="line" :message="latencyError" />
           </div>
         </SettingsSection>
 

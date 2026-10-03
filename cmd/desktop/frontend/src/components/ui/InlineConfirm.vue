@@ -11,6 +11,7 @@
 //
 // `busy`/`error` mirror ConfirmationDialog's contract, so a host with an async
 // action can drive this straight from useConfirmation.
+import InlineError from './InlineError.vue'
 import { ref } from 'vue'
 import BaseButton from './BaseButton.vue'
 import { useAutofocus } from '../../composables/useAutofocus'
@@ -66,9 +67,7 @@ useEscapeToClose(cancel)
       >
         {{ description }}
       </p>
-      <p v-if="error" class="mt-1 text-[11.5px] font-medium text-severity-error" :data-testid="`${testid}-error`">
-        {{ error }}
-      </p>
+      <InlineError v-if="error" :testid="`${testid}-error`" variant="line" class="mt-1 font-medium" :message="error" />
     </div>
     <BaseButton
       ref="cancelRef"

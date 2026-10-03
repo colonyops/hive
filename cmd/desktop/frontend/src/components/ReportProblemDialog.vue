@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import { computed, onMounted, ref } from 'vue'
 import IconLifeBuoy from '~icons/lucide/life-buoy'
 import IconCheck from '~icons/lucide/check'
@@ -58,7 +59,7 @@ async function onSave(): Promise<void> {
         data-testid="report-path"
         >{{ saved.path }}</code
       >
-      <p v-if="error" class="text-[12px] text-severity-error" data-testid="report-error">{{ error }}</p>
+      <InlineError v-if="error" testid="report-error" variant="line" :message="error" />
     </div>
 
     <form v-else class="flex flex-col gap-4 px-5 py-4" @submit.prevent="onSave">
@@ -142,7 +143,7 @@ async function onSave(): Promise<void> {
         Tokens, secrets and API keys are stripped from everything above. Names are not, so this file belongs in a
         private channel, never on a public issue.
       </p>
-      <p v-if="error" class="text-[12px] text-severity-error" data-testid="report-error">{{ error }}</p>
+      <InlineError v-if="error" testid="report-error" variant="line" :message="error" />
     </form>
 
     <template #footer>

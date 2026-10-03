@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import { computed, ref, useId } from 'vue'
 import IconPlay from '~icons/lucide/play'
 import ActionInputFields from './ActionInputFields.vue'
@@ -197,9 +198,12 @@ useSubmitShortcut(submit)
         />
       </div>
       <ActionInputFields v-if="inputs.length" v-model="inputValues" :inputs="inputs" />
-      <p v-if="validationError || error" class="text-xs text-severity-error" data-testid="create-session-error">
-        {{ validationError || error }}
-      </p>
+      <InlineError
+        v-if="validationError || error"
+        testid="create-session-error"
+        variant="line"
+        :message="validationError || error"
+      />
     </form>
     <template #footer>
       <BaseButton

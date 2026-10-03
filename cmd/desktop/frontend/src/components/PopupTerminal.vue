@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useResizeObserver, useWindowSize } from '@vueuse/core'
 import { Browser } from '@wailsio/runtime'
@@ -457,13 +458,13 @@ onBeforeUnmount(teardown)
             <p class="font-mono text-xs text-text-4">Opening a shell…</p>
           </template>
           <template v-else>
-            <p
+            <InlineError
               v-if="error"
-              class="max-w-[420px] text-xs leading-relaxed text-severity-error"
-              data-testid="popup-terminal-error"
-            >
-              {{ error }}
-            </p>
+              testid="popup-terminal-error"
+              variant="line"
+              class="max-w-[420px] leading-relaxed"
+              :message="error"
+            />
             <button
               class="cursor-pointer rounded-[7px] bg-chip px-2.5 py-1 font-mono text-[11.5px] text-text hover:bg-strong"
               data-testid="popup-terminal-new"

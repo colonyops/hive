@@ -218,9 +218,13 @@ onMounted(() => void load())
         </div>
       </div>
     </SettingsField>
-    <p v-if="connectError" class="mt-2 text-xs text-severity-error" data-testid="github-connection-error">
-      {{ connectError }}
-    </p>
+    <InlineError
+      v-if="connectError"
+      testid="github-connection-error"
+      variant="line"
+      class="mt-2"
+      :message="connectError"
+    />
 
     <div class="mt-5">
       <SettingsField label="Poll interval" :hint="minimumHint" testid="github-poll-interval">
@@ -242,9 +246,9 @@ onMounted(() => void load())
         </div>
       </SettingsField>
     </div>
-    <p v-if="!valid" class="mt-2 text-xs text-severity-error" data-testid="github-poll-interval-error">
+    <InlineError v-if="!valid" testid="github-poll-interval-error" variant="line" class="mt-2">
       Enter a whole number of at least {{ minPollIntervalSeconds }} seconds.
-    </p>
+    </InlineError>
     <InlineError v-if="error" class="mt-4" :message="error" testid="github-settings-error" />
 
     <template #footer>

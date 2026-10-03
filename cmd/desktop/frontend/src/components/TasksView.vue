@@ -325,7 +325,8 @@ onUnmounted(() => {
          a replacement for it. -->
     <div
       v-if="error"
-      class="shrink-0 border-b border-severity-error/30 bg-severity-error-tint px-5 py-2 text-xs text-severity-error"
+      class="shrink-0 border-b border-severity-error-border bg-severity-error-tint px-5 py-2 text-xs text-severity-error"
+      role="alert"
       data-testid="tasks-error"
     >
       Couldn't refresh tasks — {{ error }}
@@ -335,7 +336,8 @@ onUnmounted(() => {
          carries pruneError for a failure once it's already open. -->
     <div
       v-if="pruneError && !pruneConfirmOpen"
-      class="shrink-0 border-b border-severity-error/30 bg-severity-error-tint px-5 py-2 text-xs text-severity-error"
+      class="shrink-0 border-b border-severity-error-border bg-severity-error-tint px-5 py-2 text-xs text-severity-error"
+      role="alert"
       data-testid="tasks-prune-error"
     >
       Couldn't prune tasks — {{ pruneError }}

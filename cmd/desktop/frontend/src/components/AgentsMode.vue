@@ -10,6 +10,7 @@
 // TerminalMode.vue is narrower — the aside/main split, plus (since ADR agent-workspace-sessions-are-tmux-sessions)
 // the pane's xterm wiring itself: a session is a tmux session, addressed and
 // framed exactly like a hive one, just not discovered through hive.
+import InlineError from './ui/InlineError.vue'
 import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDocumentVisibility, useResizeObserver } from '@vueuse/core'
@@ -984,9 +985,13 @@ onBeforeUnmount(() => {
                 <p v-if="!workspaces.length" class="text-xs leading-relaxed text-text-3">
                   No workspaces yet. Author one under {{ root }}.
                 </p>
-                <p v-if="paneError" class="text-xs leading-relaxed text-severity-error" data-testid="agents-pane-error">
-                  {{ paneError }}
-                </p>
+                <InlineError
+                  v-if="paneError"
+                  testid="agents-pane-error"
+                  variant="line"
+                  class="leading-relaxed"
+                  :message="paneError"
+                />
                 <BaseButton
                   size="sm"
                   :disabled="!workspaces.length"

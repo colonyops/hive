@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import { computed, ref, watch } from 'vue'
 import IconSlidersHorizontal from '~icons/lucide/sliders-horizontal'
 import IconTrash2 from '~icons/lucide/trash-2'
@@ -163,13 +164,13 @@ async function onImageChange(event: Event): Promise<void> {
               >
             </div>
           </div>
-          <p
+          <InlineError
             v-if="displayImageError"
-            class="mt-2 text-xs text-severity-error"
-            data-testid="profile-settings-image-error"
-          >
-            {{ displayImageError }}
-          </p>
+            testid="profile-settings-image-error"
+            variant="line"
+            class="mt-2"
+            :message="displayImageError"
+          />
         </div>
 
         <form class="rounded-lg border border-border bg-raised p-4" @submit.prevent="submitRename">
@@ -192,13 +193,13 @@ async function onImageChange(event: Event): Promise<void> {
               >{{ props.renaming ? 'Saving…' : 'Save' }}</BaseButton
             >
           </div>
-          <p
+          <InlineError
             v-if="props.renameError"
-            class="mt-2 text-xs text-severity-error"
-            data-testid="profile-settings-rename-error"
-          >
-            {{ props.renameError }}
-          </p>
+            testid="profile-settings-rename-error"
+            variant="line"
+            class="mt-2"
+            :message="props.renameError"
+          />
           <div class="mt-3 border-t border-border pt-3 text-xs text-text-3" data-testid="profile-settings-sources">
             {{ props.profile.sourceSummary }}
           </div>
@@ -218,13 +219,13 @@ async function onImageChange(event: Event): Promise<void> {
               @update:model-value="emit('toggle-enabled', $event)"
             />
           </div>
-          <p
+          <InlineError
             v-if="props.toggleError"
-            class="mt-2 text-xs text-severity-error"
-            data-testid="profile-settings-toggle-error"
-          >
-            {{ props.toggleError }}
-          </p>
+            testid="profile-settings-toggle-error"
+            variant="line"
+            class="mt-2"
+            :message="props.toggleError"
+          />
         </form>
       </template>
 

@@ -4,6 +4,7 @@
 // everything about the selection: identity, the status control and its
 // confirms (cancel; epic → done/cancelled cascade), rendered description and
 // comments, blockers, and delete. TasksView owns the list/tree only.
+import InlineError from './ui/InlineError.vue'
 import { computed, ref, watch } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import IconBan from '~icons/lucide/ban'
@@ -269,13 +270,13 @@ const {
             testid="task-status-select"
             @update:model-value="requestStatusChange"
           />
-          <p
+          <InlineError
             v-if="statusError && !cascadeConfirmOpen && !cancelConfirmOpen"
-            class="mt-1.5 text-[11.5px] text-severity-error"
-            data-testid="task-status-error"
-          >
-            {{ statusError }}
-          </p>
+            testid="task-status-error"
+            variant="line"
+            class="mt-1.5"
+            :message="statusError"
+          />
         </div>
 
         <!-- eslint-disable vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->

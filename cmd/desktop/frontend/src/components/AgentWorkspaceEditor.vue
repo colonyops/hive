@@ -1208,7 +1208,7 @@ onMounted(async () => {
 
       <div v-if="scheduleDraft.saved" class="flex flex-col gap-1.5">
         <span class="text-xs text-text-3">Recent runs</span>
-        <p v-if="scheduleDraft.historyError" class="text-xs text-severity-error">{{ scheduleDraft.historyError }}</p>
+        <InlineError v-if="scheduleDraft.historyError" variant="line" :message="scheduleDraft.historyError" />
         <p v-else-if="!scheduleDraft.historyLoaded" class="text-xs text-text-4">Loading…</p>
         <p v-else-if="!scheduleDraft.history.length" class="text-xs text-text-4">No runs yet.</p>
         <div
@@ -1244,17 +1244,13 @@ onMounted(async () => {
     >
       <!-- Above the open/reveal actions on purpose: the fix is in the file,
            and those two buttons are what reach it. -->
-      <div
-        v-if="manifestProblem"
-        class="flex flex-col gap-1 rounded-md border border-severity-error-border bg-severity-error-tint px-3 py-2 text-xs leading-relaxed text-severity-error"
-        data-testid="agent-workspace-editor-problem"
-      >
+      <InlineError v-if="manifestProblem" class="flex flex-col gap-1" testid="agent-workspace-editor-problem">
         <p>{{ manifestProblem }}</p>
         <p>
           Fix agent-workspace.yaml before saving from here. This form could not read the file, so saving would rewrite
           its lists as empty. The buttons below open it.
         </p>
-      </div>
+      </InlineError>
 
       <div v-if="!creating" class="flex flex-col gap-1.5">
         <div class="flex items-center gap-2">
@@ -1281,9 +1277,12 @@ onMounted(async () => {
         <span v-if="!editor.command" class="text-xs text-text-4"
           >Pick a default editor in Settings › General to open this directory in it.</span
         >
-        <p v-if="actionError" class="text-xs text-severity-error" data-testid="agent-workspace-editor-action-error">
-          {{ actionError }}
-        </p>
+        <InlineError
+          v-if="actionError"
+          testid="agent-workspace-editor-action-error"
+          variant="line"
+          :message="actionError"
+        />
       </div>
 
       <div class="flex flex-col gap-3">
@@ -1477,9 +1476,7 @@ onMounted(async () => {
             <IconPlus class="size-3.5" />Add servers from JSON…
           </button>
         </div>
-        <p v-if="mcpError" class="text-xs text-severity-error" data-testid="agent-workspace-editor-mcp-error">
-          {{ mcpError }}
-        </p>
+        <InlineError v-if="mcpError" testid="agent-workspace-editor-mcp-error" variant="line" :message="mcpError" />
       </SettingsSection>
 
       <SettingsSection
@@ -1565,16 +1562,18 @@ onMounted(async () => {
             </button>
           </div>
         </div>
-        <p
+        <InlineError
           v-if="skillPackagesProblem"
-          class="text-xs text-severity-error"
-          data-testid="agent-workspace-editor-skills-problem"
-        >
-          {{ skillPackagesProblem }}
-        </p>
-        <p v-if="skillError" class="text-xs text-severity-error" data-testid="agent-workspace-editor-skill-error">
-          {{ skillError }}
-        </p>
+          testid="agent-workspace-editor-skills-problem"
+          variant="line"
+          :message="skillPackagesProblem"
+        />
+        <InlineError
+          v-if="skillError"
+          testid="agent-workspace-editor-skill-error"
+          variant="line"
+          :message="skillError"
+        />
       </SettingsSection>
 
       <!-- Schedules are manifest state like the lists above, so they are part
@@ -1635,13 +1634,13 @@ onMounted(async () => {
               <p v-if="card.lastRun?.error" class="mt-1 text-[11.5px] leading-relaxed text-severity-warning">
                 {{ card.lastRun.error }}
               </p>
-              <p
+              <InlineError
                 v-if="card.actionError"
-                class="mt-1 text-[11.5px] leading-relaxed text-severity-error"
-                :data-testid="`agent-workspace-editor-schedule-${index}-action-error`"
-              >
-                {{ card.actionError }}
-              </p>
+                :testid="`agent-workspace-editor-schedule-${index}-action-error`"
+                variant="line"
+                class="mt-1 leading-relaxed"
+                :message="card.actionError"
+              />
             </div>
             <div class="flex shrink-0 items-center gap-1">
               <button

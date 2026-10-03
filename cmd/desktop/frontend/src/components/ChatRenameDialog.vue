@@ -2,6 +2,7 @@
 // Rename dialog for an agent chat, mirroring SessionRenameDialog.vue. Unlike
 // a hive session, a chat's name is presentation only — the tmux session is
 // addressed by record id — so there is no reconnect hint to give.
+import InlineError from './ui/InlineError.vue'
 import { nextTick, onMounted, ref } from 'vue'
 import IconPencil from '~icons/lucide/pencil'
 import BaseButton from './ui/BaseButton.vue'
@@ -55,13 +56,7 @@ onMounted(async () => {
         data-testid="chat-rename-input"
         @keydown.enter="submit"
       />
-      <p
-        v-if="error"
-        class="mt-1 rounded border border-severity-error bg-severity-error-tint px-3 py-2 text-xs text-severity-error"
-        data-testid="chat-rename-error"
-      >
-        {{ error }}
-      </p>
+      <InlineError v-if="error" testid="chat-rename-error" class="mt-1" :message="error" />
     </div>
     <template #footer>
       <div class="flex-1" />

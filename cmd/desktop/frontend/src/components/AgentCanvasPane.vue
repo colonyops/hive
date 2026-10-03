@@ -3,6 +3,7 @@
 // read-only in the webview — writes arrive only through the hive-canvas MCP
 // tools, so this pane re-reads on canvas:updated rather than ever mutating
 // (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
+import InlineError from './ui/InlineError.vue'
 import { computed, nextTick, ref, toRef, watch } from 'vue'
 import { Dialogs } from '@wailsio/runtime'
 import IconCheck from '~icons/lucide/check'
@@ -326,9 +327,13 @@ const {
           </button>
         </article>
       </template>
-      <p v-else-if="error" class="text-xs leading-relaxed text-severity-error" data-testid="agent-canvas-error">
-        {{ error }}
-      </p>
+      <InlineError
+        v-else-if="error"
+        testid="agent-canvas-error"
+        variant="line"
+        class="leading-relaxed"
+        :message="error"
+      />
       <p v-else-if="!loading" class="text-xs leading-relaxed text-text-4" data-testid="agent-canvas-empty">
         The agent hasn't put anything here yet.
       </p>

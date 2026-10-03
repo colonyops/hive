@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from '../ui/InlineError.vue'
 import { computed, ref } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import IconActivity from '~icons/lucide/activity'
@@ -170,7 +171,7 @@ async function onDisconnect(account: string) {
         </div>
       </SettingsField>
     </div>
-    <p v-if="error" class="mt-2 text-xs text-severity-error" data-testid="grafana-connect-error">{{ error }}</p>
+    <InlineError v-if="error" testid="grafana-connect-error" variant="line" class="mt-2" :message="error" />
 
     <template #footer>
       <div class="flex items-center justify-end gap-2.5">

@@ -12,6 +12,7 @@
 // up with the rendered tokens; scrolling the textarea (by wheel or by
 // typing past the visible area) re-syncs the other two's scrollTop/
 // scrollLeft in onScroll/onInput below.
+import InlineError from '../../components/ui/InlineError.vue'
 import { computed, ref } from 'vue'
 import { codeLineCount, highlightCode } from '../lib/highlightCode'
 
@@ -108,13 +109,13 @@ function onKeydown(e: KeyboardEvent) {
         />
       </div>
     </div>
-    <p
+    <InlineError
       v-if="error"
-      class="mt-1.5 text-xs leading-relaxed text-kind-issue"
-      :data-testid="testid ? `${testid}-error` : undefined"
-    >
-      {{ error }}
-    </p>
+      :testid="testid ? `${testid}-error` : undefined"
+      variant="line"
+      class="mt-1.5 leading-relaxed"
+      :message="error"
+    />
     <p
       v-else-if="hint"
       class="mt-1.5 text-xs leading-relaxed text-text-4"

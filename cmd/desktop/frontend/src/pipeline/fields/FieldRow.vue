@@ -5,6 +5,7 @@
 // data-testid so multiple fields on one page stay distinguishable
 // (`${testid}-error` / `${testid}-hint`) — plain "field-row-error" would
 // collide across a form with several fields.
+import InlineError from '../../components/ui/InlineError.vue'
 defineProps<{
   label?: string
   hint?: string
@@ -17,13 +18,13 @@ defineProps<{
   <div>
     <div v-if="label" class="mb-1.5 text-[12.5px] text-text-2">{{ label }}</div>
     <slot />
-    <p
+    <InlineError
       v-if="error"
-      class="mt-1.5 text-xs leading-relaxed text-kind-issue"
-      :data-testid="testid ? `${testid}-error` : undefined"
-    >
-      {{ error }}
-    </p>
+      :testid="testid ? `${testid}-error` : undefined"
+      variant="line"
+      class="mt-1.5 leading-relaxed"
+      :message="error"
+    />
     <p
       v-else-if="hint"
       class="mt-1.5 text-xs leading-relaxed text-text-4"

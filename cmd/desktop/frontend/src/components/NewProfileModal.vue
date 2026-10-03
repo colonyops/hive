@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import { ref } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import BaseButton from './ui/BaseButton.vue'
@@ -36,7 +37,7 @@ useAutofocus(inputRef)
         Saved as a flow in <span class="font-mono text-text-3">flows/</span> with the default feeds — your open PRs, the
         notifications inbox, and cross-repo assignments.
       </p>
-      <p v-if="error" class="text-xs text-kind-issue" data-testid="new-profile-error">{{ error }}</p>
+      <InlineError v-if="error" testid="new-profile-error" variant="line" :message="error" />
     </div>
     <template #footer>
       <BaseButton class="flex-1" :busy="busy" :disabled="!name.trim()" data-testid="new-profile-submit" @click="submit"

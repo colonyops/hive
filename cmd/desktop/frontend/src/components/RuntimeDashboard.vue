@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import { computed, onMounted, onUnmounted } from 'vue'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import { startFrameStats, stopFrameStats, useFrameStats } from '../composables/useFrameStats'
@@ -82,7 +83,7 @@ onUnmounted(() => {
     description="What this install is costing the machine right now. Process data is sampled every two seconds; UI frames are sampled while this page is open."
     testid="observability-runtime"
   >
-    <p v-if="error" class="text-xs text-severity-error" data-testid="observability-runtime-error">{{ error }}</p>
+    <InlineError v-if="error" testid="observability-runtime-error" variant="line" :message="error" />
 
     <div v-if="stats" class="flex flex-col gap-3">
       <div class="grid grid-cols-1 gap-3 @[440px]/pane:grid-cols-2 @[720px]/pane:grid-cols-3">

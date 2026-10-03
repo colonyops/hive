@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import { computed, ref, watch } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import IconAlertTriangle from '~icons/lucide/alert-triangle'
@@ -244,9 +245,13 @@ function submit() {
             >
               {{ busy ? 'Saving…' : 'Save and continue' }}
             </button>
-            <p v-if="error" class="mt-4 text-center text-xs text-kind-issue" data-testid="onboarding-hive-error">
-              {{ error }}
-            </p>
+            <InlineError
+              v-if="error"
+              testid="onboarding-hive-error"
+              variant="line"
+              class="mt-4 text-center"
+              :message="error"
+            />
             <p class="mt-4 text-center text-xs text-text-4">
               <button class="link-quiet underline" data-testid="onboarding-hive-skip" @click="emit('finishHive')">
                 Skip for now
@@ -301,7 +306,7 @@ function submit() {
             >
               {{ busy ? 'Requesting…' : 'Allow notifications' }}
             </button>
-            <p v-if="error" class="mt-4 text-xs text-kind-issue" data-testid="onboarding-error">{{ error }}</p>
+            <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
             <p class="mt-4 text-xs leading-relaxed text-text-4">
               Prefer to decide later?
               <button
@@ -332,7 +337,7 @@ function submit() {
           >
             {{ busy ? 'Starting…' : 'Start with your agent' }}
           </button>
-          <p v-if="error" class="mt-4 text-xs text-kind-issue" data-testid="onboarding-error">{{ error }}</p>
+          <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
           <p class="mt-4 text-xs leading-relaxed text-text-4">
             <button class="link-quiet underline" data-testid="onboarding-agent-skip" @click="emit('finishAgent')">
               Not now
@@ -355,7 +360,7 @@ function submit() {
           >
             Connect GitHub
           </button>
-          <p v-if="error" class="mt-4 text-xs text-kind-issue" data-testid="onboarding-error">{{ error }}</p>
+          <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
           <p class="mt-4 text-xs text-text-4">
             <button class="link-quiet" data-testid="onboarding-use-token" @click="emit('useTokenInstead')">
               Use a token instead
@@ -381,7 +386,7 @@ function submit() {
           <button class="primary-button" data-testid="onboarding-open-verification" @click="openVerification">
             Open github.com/login/device ↗
           </button>
-          <p v-if="error" class="mt-4 text-xs text-kind-issue" data-testid="onboarding-error">{{ error }}</p>
+          <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
           <p class="mt-4 text-xs text-text-4">
             <button class="link-quiet" data-testid="onboarding-copy-code" @click="copyCode">
               {{ copied ? 'Copied' : 'Copy code' }}
@@ -416,7 +421,7 @@ function submit() {
           >
             Save token
           </button>
-          <p v-if="error" class="mt-4 text-xs text-kind-issue" data-testid="onboarding-error">{{ error }}</p>
+          <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
           <p class="mt-4 text-xs text-text-4">
             <button class="link-quiet" data-testid="onboarding-back" @click="emit('backToStart')">
               Back to device sign-in

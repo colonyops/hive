@@ -164,9 +164,9 @@ onMounted(() => void reload())
           </button>
         </div>
       </SettingsField>
-      <p v-if="!portValid" class="-mt-3 text-xs text-severity-error" data-testid="webhook-settings-port-error">
+      <InlineError v-if="!portValid" testid="webhook-settings-port-error" variant="line" class="-mt-3">
         Enter 0 for automatic allocation or a whole number between 1024 and 65535.
-      </p>
+      </InlineError>
 
       <SettingsField
         v-if="baseUrl"

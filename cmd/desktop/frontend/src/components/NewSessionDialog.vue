@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import { computed, ref, useId } from 'vue'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCode from '~icons/lucide/code'
@@ -243,9 +244,12 @@ useSubmitShortcut(submit)
           @update:model-value="agent = $event"
         />
       </div>
-      <p v-if="validationError || error" class="text-xs text-severity-error" data-testid="new-session-error">
-        {{ validationError || error }}
-      </p>
+      <InlineError
+        v-if="validationError || error"
+        testid="new-session-error"
+        variant="line"
+        :message="validationError || error"
+      />
     </form>
     <template #footer>
       <BaseButton

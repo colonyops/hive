@@ -4,6 +4,7 @@
 // records the hash, so this field emits a hash and never a file. Backend access
 // goes through the `client` prop (defaulting to the generated Wails bindings) so
 // tests inject fakes instead of mocking module imports.
+import InlineError from '../../components/ui/InlineError.vue'
 import { ref, watch, type Component } from 'vue'
 import {
   MarkImages,
@@ -151,6 +152,6 @@ function remove(): void {
     <p class="mt-1.5 text-[11.5px] text-text-4">
       Shown on this source's items instead of the icon. PNG, JPEG, GIF, or WebP.
     </p>
-    <p v-if="error" class="mt-1.5 text-[11.5px] text-severity-error" :data-testid="`${testid}-error`">{{ error }}</p>
+    <InlineError v-if="error" :testid="`${testid}-error`" variant="line" class="mt-1.5" :message="error" />
   </div>
 </template>

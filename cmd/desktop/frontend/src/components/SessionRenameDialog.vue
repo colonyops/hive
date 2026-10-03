@@ -2,6 +2,7 @@
 // Rename dialog for a hive session. Renaming re-slugs, and the slug is the tmux
 // session name, so the hint says what a rename does to an open terminal — the
 // app renames the tmux session alongside it (ADR session-rename-keeps-slug-and-tmux-in-step) and re-attaches.
+import InlineError from './ui/InlineError.vue'
 import { nextTick, onMounted, ref } from 'vue'
 import IconPencil from '~icons/lucide/pencil'
 import BaseButton from './ui/BaseButton.vue'
@@ -56,13 +57,7 @@ onMounted(async () => {
         @keydown.enter="submit"
       />
       <span class="text-xs text-text-4">Its terminal session is renamed too, so an open terminal reconnects.</span>
-      <p
-        v-if="error"
-        class="mt-1 rounded border border-severity-error bg-severity-error-tint px-3 py-2 text-xs text-severity-error"
-        data-testid="session-rename-error"
-      >
-        {{ error }}
-      </p>
+      <InlineError v-if="error" testid="session-rename-error" class="mt-1" :message="error" />
     </div>
     <template #footer>
       <div class="flex-1" />

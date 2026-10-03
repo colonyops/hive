@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from '../ui/InlineError.vue'
 import { computed, ref } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import BaseButton from '../ui/BaseButton.vue'
@@ -170,7 +171,7 @@ async function onDisconnect(account: string) {
         </div>
       </SettingsField>
     </div>
-    <p v-if="error" class="mt-2 text-xs text-severity-error" data-testid="gitea-connect-error">{{ error }}</p>
+    <InlineError v-if="error" testid="gitea-connect-error" variant="line" class="mt-2" :message="error" />
 
     <template #footer>
       <div class="flex items-center justify-end gap-2.5">

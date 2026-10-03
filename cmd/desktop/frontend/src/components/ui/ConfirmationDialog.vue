@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './InlineError.vue'
 import { ref } from 'vue'
 import IconAlertTriangle from '~icons/lucide/alert-triangle'
 import IconCircleCheck from '~icons/lucide/circle-check'
@@ -70,13 +71,7 @@ useAutofocus(confirmRef)
           }}</span>
         </li>
       </ul>
-      <p
-        v-if="error"
-        class="rounded border border-severity-error bg-severity-error-tint px-3 py-2 text-xs text-severity-error"
-        :data-testid="`${testid}-error`"
-      >
-        {{ error }}
-      </p>
+      <InlineError v-if="error" :testid="`${testid}-error`" :message="error" />
     </div>
     <template #footer>
       <BaseButton

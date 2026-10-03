@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import { ref } from 'vue'
 import IconCopy from '~icons/lucide/copy'
 import IconPlay from '~icons/lucide/play'
@@ -47,9 +48,12 @@ function submit(): void {
   >
     <form class="grid gap-3 px-5 py-4" @submit.prevent="submit">
       <ActionInputFields v-model="values" :inputs="inputs" />
-      <p v-if="validationError || error" class="text-xs text-severity-error" data-testid="action-inputs-error">
-        {{ validationError || error }}
-      </p>
+      <InlineError
+        v-if="validationError || error"
+        testid="action-inputs-error"
+        variant="line"
+        :message="validationError || error"
+      />
     </form>
     <template #footer>
       <BaseButton class="flex-1" :busy="busy" data-testid="action-inputs-submit" @click="submit">{{

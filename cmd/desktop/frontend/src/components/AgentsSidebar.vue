@@ -17,6 +17,7 @@
 // starting a chat) or the manifest (create/edit workspace — delete lives in
 // the editor) is an emitted event; only tree state, the chat row menus, and
 // the chat delete confirmation live here.
+import InlineError from './ui/InlineError.vue'
 import { computed, nextTick, ref, shallowRef, watch, type Component } from 'vue'
 import { useResizeObserver, useStorage } from '@vueuse/core'
 import IconCalendarClock from '~icons/lucide/calendar-clock'
@@ -681,13 +682,13 @@ defineExpose({
     </div>
 
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-4" data-testid="agents-sidebar-tree">
-      <p
+      <InlineError
         v-if="workspacesError"
-        class="px-3 py-2 text-xs text-severity-error"
-        data-testid="agents-sidebar-workspaces-error"
-      >
-        {{ workspacesError }}
-      </p>
+        testid="agents-sidebar-workspaces-error"
+        variant="line"
+        class="px-3 py-2"
+        :message="workspacesError"
+      />
       <div
         v-else-if="rootProblem"
         class="flex flex-col gap-2 px-3 py-2 text-xs text-text-3"
@@ -718,13 +719,13 @@ defineExpose({
         <!-- The chat read can fail on its own, which leaves every workspace row
              correct and every count wrong; say so rather than draw an empty
              tree. -->
-        <p
+        <InlineError
           v-if="recentsError"
-          class="px-3 pb-1 text-[11px] text-severity-error"
-          data-testid="agents-sidebar-sessions-error"
-        >
-          {{ recentsError }}
-        </p>
+          testid="agents-sidebar-sessions-error"
+          variant="line"
+          class="px-3 pb-1"
+          :message="recentsError"
+        />
 
         <!-- The rails' positioning context, and the box whose resize tells them
              a row has moved. -->

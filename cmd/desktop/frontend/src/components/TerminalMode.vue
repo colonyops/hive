@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InlineError from './ui/InlineError.vue'
 import {
   computed,
   nextTick,
@@ -2183,9 +2184,13 @@ onBeforeUnmount(() => {
           </button>
         </div>
         <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-4">
-          <p v-if="sessionsError" class="px-3 py-2 text-xs text-severity-error" data-testid="terminal-sessions-error">
-            {{ sessionsError }}
-          </p>
+          <InlineError
+            v-if="sessionsError"
+            testid="terminal-sessions-error"
+            variant="line"
+            class="px-3 py-2"
+            :message="sessionsError"
+          />
           <p
             v-else-if="!treeReady"
             class="px-3 py-2 font-mono text-xs text-text-4"
@@ -2876,9 +2881,13 @@ onBeforeUnmount(() => {
                 No terminal is running for <span class="font-mono text-text-2">{{ activeSlug }}</span> yet. Starting it
                 opens this session's configured windows and runs its agent command.
               </p>
-              <p v-if="startError" class="max-w-[420px] text-xs text-severity-error" data-testid="terminal-start-error">
-                {{ startError }}
-              </p>
+              <InlineError
+                v-if="startError"
+                testid="terminal-start-error"
+                variant="line"
+                class="max-w-[420px]"
+                :message="startError"
+              />
               <div class="mt-1 flex items-center gap-2">
                 <BaseButton
                   size="sm"

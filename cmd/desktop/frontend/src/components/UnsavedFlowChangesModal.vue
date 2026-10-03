@@ -6,6 +6,7 @@
 // draft before proceeding, Discard drops it (App.vue calls
 // session.discardDraft(), which reloads the flow fresh from disk), Cancel
 // aborts the navigation entirely and leaves the draft untouched.
+import InlineError from './ui/InlineError.vue'
 import { ref } from 'vue'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import BaseButton from './ui/BaseButton.vue'
@@ -33,7 +34,7 @@ useAutofocus(deployRef)
       <p class="text-[13px] leading-relaxed text-text-2">
         This profile's flow has un-deployed changes. Deploy them now, or discard the draft to continue without them.
       </p>
-      <p v-if="error" class="text-xs text-severity-error" data-testid="unsaved-flow-error">{{ error }}</p>
+      <InlineError v-if="error" testid="unsaved-flow-error" variant="line" :message="error" />
     </div>
     <template #footer>
       <div class="flex w-full flex-col gap-2">
