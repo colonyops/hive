@@ -16,7 +16,6 @@ import (
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 )
 
-// jsonKeys marshals v and returns its top-level keys, sorted.
 func jsonKeys(t *testing.T, v any) []string {
 	t.Helper()
 	raw, err := json.Marshal(v)
@@ -36,9 +35,8 @@ func sorted(keys ...string) []string {
 	return keys
 }
 
-// The frontend reads these names. The wire types hold them still while the
-// domain types behind them change; the app and dispatch types carry them
-// directly.
+// The frontend reads these names, so they must not drift with the domain
+// types behind the wire types.
 func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 	taskKeys := []string{"id", "repoKey", "epicId", "parentId", "sessionId", "title", "type", "status", "blocked", "depth", "createdAt", "updatedAt"}
 	for _, tt := range []struct {
@@ -92,8 +90,7 @@ func TestSessionDetailOfReadsTheWorktreeBranch(t *testing.T) {
 	assert.Equal(t, "active", got.State)
 }
 
-// The read rules (a failed read never claims dirty, a failed branch stands
-// for the whole status) are pinned in hive/gitstatus. This pins that the wire
+// The read rules are pinned in hive/gitstatus; this pins only that the wire
 // carries the failure as text.
 func TestSessionGitStatusOfCarriesAFailedReadAsText(t *testing.T) {
 	got := sessionGitStatusOf(gitstatus.Status{Branch: "feat/bar", Resolved: true, Err: errors.New("git status: exit 128")})

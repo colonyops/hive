@@ -6,15 +6,12 @@ import (
 	"github.com/colonyops/hive/internal/platform/execenv"
 )
 
-// newEnvExecutor is Hive's shell executor running its children in the
-// environment execenv resolves (ADR subprocess-environment). Session hooks are
-// the user's own commands and reach it as `sh -c`, so without this they run
-// with the PATH a desktop launch inherits and a session cannot be created at
-// all on a machine whose tools came from a package manager.
+// newEnvExecutor runs Hive's children in the environment execenv resolves
+// (ADR subprocess-environment), so session hooks do not get the bare PATH a
+// desktop launch inherits.
 //
 // Hive streams hook output to io.Discard, so the error repeats the opening of
-// stderr: a failed hook would otherwise surface in the jobs list as an exit
-// status with nothing naming the command the shell could not find.
+// stderr. Without it a failed hook shows only an exit status.
 func newEnvExecutor(env *execenv.Resolver) executil.Executor {
 	return &executil.RealExecutor{
 		Env:                   env.Environ,

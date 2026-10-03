@@ -1836,8 +1836,7 @@ func agentLaunchError(err error, dir string) error {
 	}
 }
 
-// classifyAgentScreen classifies a captured tmux pane with hive's stateless
-// assessment engine. Questions fold onto approval because the activity
+// classifyAgentScreen folds questions onto approval because the activity
 // vocabulary has one user-blocked state.
 func classifyAgentScreen(agent, screen string) terminal.Status {
 	assessment := assess.NewEngine().Assess(assess.Snapshot{Content: screen, Tool: strings.ToLower(agent)})

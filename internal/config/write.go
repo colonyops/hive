@@ -57,10 +57,9 @@ func invalid(format string, args ...any) error {
 	return InvalidEditError{Reason: fmt.Sprintf(format, args...)}
 }
 
-// Check inspects a candidate config before it replaces the file. ApplyEdit
-// hands it a temp file's path and an error stops the write. It exists because
-// the loader whose opinion matters is the calling program's: a program that
-// reads more sections than this package validates checks the whole file.
+// Check inspects a candidate config file before it replaces the real one, and
+// an error stops the write. It lets a program that reads more sections than
+// this package validates check the whole file.
 type Check func(path string) error
 
 // normalized is the edit Apply validates and writes. Trimming here rather than
@@ -130,10 +129,8 @@ var (
 	ErrWorkspaceEmpty   = InvalidEditError{Reason: "choose a folder"}
 	ErrWorkspaceMissing = InvalidEditError{Reason: "that folder does not exist"}
 	ErrWorkspaceNotDir  = InvalidEditError{Reason: "that is a file, not a folder"}
-	// ErrWorkspaceIsRepo is the one validation failure worth its own message:
-	// picking a repo instead of the folder that holds repos is the mistake
-	// people actually make, and the resulting config finds nothing with no hint
-	// as to why.
+	// ErrWorkspaceIsRepo is the mistake people actually make, and the resulting
+	// config finds nothing with no hint as to why.
 	ErrWorkspaceIsRepo = InvalidEditError{Reason: "that is a repository, not the folder that holds your repositories"}
 )
 

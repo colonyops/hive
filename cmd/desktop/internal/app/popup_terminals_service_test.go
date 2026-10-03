@@ -13,8 +13,6 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 )
 
-// checkoutHarness is a real engine holding reviewSession with its checkout at
-// path.
 func checkoutHarness(t *testing.T, path string, state session.State) *hiveHarness {
 	t.Helper()
 	h := newHiveHarness(t, engineOptions{})

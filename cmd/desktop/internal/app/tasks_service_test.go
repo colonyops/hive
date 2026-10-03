@@ -11,8 +11,6 @@ import (
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
 )
 
-// newTasksHarness returns the service under test and the engine's own hc
-// service, to seed and verify state through hive's API.
 func newTasksHarness(t *testing.T) (*TasksService, *hcsvc.Service) {
 	t.Helper()
 	h := newHiveHarness(t, engineOptions{})

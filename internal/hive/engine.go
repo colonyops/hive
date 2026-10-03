@@ -96,7 +96,6 @@ func OpenDB(ctx context.Context, dataDir string, opts config.DatabaseConfig) (*d
 	return database, nil
 }
 
-// New builds the engine from cfg over the given ports.
 func New(cfg *config.Config, p Ports) (*Engine, error) {
 	switch {
 	case p.DB == nil:
@@ -220,8 +219,6 @@ func (e *Engine) Todos() *todosvc.Service { return e.load().todos }
 
 func (e *Engine) GitStatus() *gitstatus.Service { return e.load().gitStatus }
 
-// Bus returns the event bus the engine publishes on.
 func (e *Engine) Bus() *events.EventBus { return e.ports.Bus }
 
-// DB returns hive.db.
 func (e *Engine) DB() *db.DB { return e.ports.DB }

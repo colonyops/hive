@@ -5,7 +5,6 @@ package agent
 
 import "slices"
 
-// Agent is one catalog entry.
 type Agent struct {
 	// Name is the profile key in config.yaml and the command on PATH.
 	Name  string
@@ -37,7 +36,6 @@ func Known() []Agent {
 	return out
 }
 
-// Lookup returns the catalog entry named name.
 func Lookup(name string) (Agent, bool) {
 	for _, a := range Known() {
 		if a.Name == name {

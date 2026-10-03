@@ -259,9 +259,6 @@ func repositoryLauncher(creator SessionCreator, links ItemSessionLinker) *Reposi
 	return NewRepositoryLauncher(func() SessionCreator { return creator }, links, nil, zerolog.Nop())
 }
 
-// Repository resolution, progress capture and the failure draft are the
-// session service's (hive/session CreateFromRequest); the launcher only maps
-// the request.
 func TestRepositoryLauncher_MapsRequestToSessionService(t *testing.T) {
 	creator := &fakeSessionCreator{}
 	launcher := repositoryLauncher(creator, nil)

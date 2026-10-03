@@ -84,7 +84,6 @@ func TestCreateFromRequestReportsTheFailedOperationAndItsCheckout(t *testing.T) 
 	assert.Contains(t, err.Error(), "clone repository", "the step travels in the surfaced error")
 }
 
-// git's own reason survives the wrapping.
 func TestCreateFromRequestReportsWhyACloneWasRefused(t *testing.T) {
 	cfg := &config.Config{DataDir: t.TempDir()}
 	missing := filepath.Join(t.TempDir(), "no-such-repo")
@@ -150,8 +149,6 @@ func TestProgressLogKeepsTheLastLineAndBoundsTheTail(t *testing.T) {
 	assert.NotContains(t, tail, "step a", "the oldest lines fall out of a bounded tail")
 }
 
-// A step line arrives per Fprintf, but a hook's output arrives in whatever
-// chunks the pipe delivers, so a write is not a line.
 func TestProgressLogSplitsPartialWritesIntoLines(t *testing.T) {
 	progress := &progressLog{}
 	_, _ = progress.Write([]byte("Executing rules...\nhook: "))

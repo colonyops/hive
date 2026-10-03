@@ -21,7 +21,6 @@ import (
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
-// fakeMux records what the session service asks of tmux without one running.
 type fakeMux struct {
 	mu      sync.Mutex
 	renamed [][2]string
@@ -149,7 +148,6 @@ func (h *hiveHarness) save(t *testing.T, sessions ...session.Session) {
 	}
 }
 
-// reviewSession is the active session most tests act on.
 func reviewSession() session.Session {
 	return session.Session{ID: "s1", Name: "review 81", Slug: "review-81", Remote: "acme/site", State: session.StateActive, CloneStrategy: session.CloneStrategyFull}
 }

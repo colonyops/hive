@@ -37,10 +37,9 @@ type LaunchError struct {
 	// clone (a spawn that failed).
 	Destination   string
 	CloneStrategy string
-	// LeftoverCheckout reports that Destination is still on disk. The
-	// destination is named whether or not anything survives there: git removes
-	// its own directory when it refuses a clone, and keeps a complete one when
-	// a post-checkout hook fails. Only the second is a directory to delete.
+	// LeftoverCheckout reports that Destination is still on disk: git removes
+	// its own directory when it refuses a clone, but keeps a complete one when
+	// a post-checkout hook fails.
 	LeftoverCheckout bool
 	// Step is the failed operation ("clone repository", "worktree add") when
 	// CreateSessionError carries one, and otherwise the last progress line.
@@ -71,10 +70,8 @@ func (s *Service) CreateFromRequest(ctx context.Context, req LaunchRequest) (ses
 		return session.Session{}, fmt.Errorf("resolve launch repository: %w", err)
 	}
 
-	// One progress log per attempt: CreateSessionError names the operation
-	// that failed but not the steps before it, so without this a clone
-	// failure arrives as "clone repository: git clone: exec git: exit status
-	// 1" and nothing else.
+	// CreateSessionError names the operation that failed but not the steps
+	// before it, which the progress log keeps.
 	progress := &progressLog{}
 	sess, err := s.CreateSession(ctx, CreateOptions{
 		Name:            req.Name,
@@ -98,8 +95,8 @@ func (s *Service) CreateFromRequest(ctx context.Context, req LaunchRequest) (ses
 			Output: progress.Tail(),
 			Err:    err,
 		}
-		// The typed error's Operation beats the last progress line: it is the
-		// authority on which step failed, not a guess at what printed last.
+		// The typed error's Operation, not the last progress line, is the
+		// authority on which step failed.
 		if created, ok := errors.AsType[*CreateSessionError](err); ok {
 			failure.Destination, failure.CloneStrategy = created.Destination, created.CloneStrategy
 			failure.LeftoverCheckout = isDir(created.Destination)

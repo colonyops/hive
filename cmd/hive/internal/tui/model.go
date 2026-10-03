@@ -395,7 +395,6 @@ func New(deps Deps, opts Opts) Model {
 	}
 }
 
-// quit sets the quitting flag and stops background work.
 func (m Model) quit() (Model, tea.Cmd) {
 	m.quitting = true
 	if m.sessionsView != nil {

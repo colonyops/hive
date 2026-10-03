@@ -66,7 +66,6 @@ type Options struct {
 	Unpushed bool
 }
 
-// Service reads checkout status through one git executor.
 type Service struct {
 	git     Git
 	workers int

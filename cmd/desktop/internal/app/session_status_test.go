@@ -117,8 +117,6 @@ func TestSessionsService_SessionStatusesIsEmptyWithoutStatus(t *testing.T) {
 	assert.Empty(t, windows.seen)
 }
 
-// The poll interval is hive config, so a reload changes the next answer
-// without rebuilding the service.
 func TestSessionsService_SessionStatusesReportTheReloadedPollInterval(t *testing.T) {
 	h := newHiveHarness(t, engineOptions{cfg: func(cfg *config.Config) { cfg.Tmux.PollInterval = 5 * time.Second }})
 	svc := newSessionsService(SessionsDeps{Hive: h.engine})

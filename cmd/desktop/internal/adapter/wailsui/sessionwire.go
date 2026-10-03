@@ -7,7 +7,6 @@ import (
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 )
 
-// SessionSummary is one session as the session list sees it.
 type SessionSummary struct {
 	ID    string `json:"id"`
 	Name  string `json:"name"`

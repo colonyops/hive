@@ -14,7 +14,6 @@ import (
 	"github.com/colonyops/hive/internal/platform/observe"
 )
 
-// MessageSender is the sender every message this app publishes carries.
 const MessageSender = "hive-desktop"
 
 // MessageService is satisfied by *msgsvc.Service.
@@ -22,9 +21,8 @@ type MessageService interface {
 	Publish(context.Context, messaging.Message, []string) (messaging.PublishResult, error)
 }
 
-// PublishMessageExecutor publishes a rendered message to hive's message bus.
-// messages is called once per execution, so a hive config reload (a changed
-// messaging.max_messages) reaches the next publish.
+// PublishMessageExecutor calls messages once per execution, so a hive config
+// reload (a changed messaging.max_messages) reaches the next publish.
 type PublishMessageExecutor struct{ messages func() MessageService }
 
 func NewPublishMessageExecutor(messages func() MessageService) *PublishMessageExecutor {

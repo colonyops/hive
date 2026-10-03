@@ -24,10 +24,8 @@ type ItemSessionLinker interface {
 }
 
 // RepositoryLauncher creates a hive session for a launch request, then links
-// it to the inbox items it came from and records it in the activity log.
-//
-// sessions is called once per launch, so a hive config reload reaches the
-// next launch without rebuilding the launcher.
+// it to the inbox items it came from and records it in the activity log. It
+// calls sessions once per launch, so a hive config reload reaches the next one.
 type RepositoryLauncher struct {
 	sessions func() SessionCreator
 	links    ItemSessionLinker

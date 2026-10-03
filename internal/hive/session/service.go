@@ -25,7 +25,6 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// CreateOptions configures session creation.
 // LaunchRepository is a repository available to an interactive
 // session launch. Source is an existing local checkout used for Hive's normal
 // file-copy behavior; desktop maps this to a narrower presentation DTO.
@@ -44,6 +43,7 @@ type LaunchOptions struct {
 	DefaultAgent      string
 }
 
+// CreateOptions configures session creation.
 type CreateOptions struct {
 	Name          string // Session name (used in path)
 	SessionID     string // Session ID (auto-generated if empty)

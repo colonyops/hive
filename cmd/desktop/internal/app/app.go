@@ -205,15 +205,10 @@ type App struct {
 	webhookHost string
 	webhookPort int
 
-	// hive is the hive engine: sessions, tasks, messages and internal events
-	// use hive's own shared state and event bus, while this app keeps its own
-	// database. It owns the config-derived services and swaps them on Reload.
-	hive *hive.Engine
-	// launcher creates repository sessions for both the New Session form and
-	// the launch-session executor.
+	// hive owns the config-derived services and swaps them on Reload.
+	hive     *hive.Engine
 	launcher *dispatch.RepositoryLauncher
 
-	// hiveDataDir is the resolved hive data directory, which a reload reuses.
 	hiveDataDir string
 	// reloadMu serializes ReloadHiveRuntime, so the engine, the agent command
 	// lines and the config location of one reload land together.
@@ -1200,13 +1195,9 @@ func (a *App) openWebhook(_ context.Context, cfg Config) {
 	a.webhook.SetRecorder(a.Activity)
 }
 
-// openHiveRuntime opens the hive engine desktop actions need. The desktop
-// keeps its own database, while sessions and internal events intentionally use
-// hive's shared state and event bus.
-//
-// The database and the event bus are opened here once and live for the
-// process: reopening a connection pool underneath in-flight queries, or
-// restarting a bus subscribers already hold, buys nothing a config edit needs.
+// openHiveRuntime opens the database and the event bus once for the process:
+// reopening a connection pool underneath in-flight queries, or restarting a bus
+// subscribers already hold, buys nothing a config edit needs.
 // Everything the hive config decides is the engine's to rebuild, which
 // ReloadHiveRuntime asks it to (ADR the-hive-runtime-rebinds-on-a-config-write-instead-of-requiring-a-restart).
 func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
@@ -1332,8 +1323,8 @@ func (m hiveMultiplexer) RenameSession(ctx context.Context, target multiplexer.T
 }
 
 // ReloadHiveRuntime re-reads the Hive config and has the engine rebuild its
-// services from it. It is what makes a config the app itself just wrote take
-// effect without a relaunch.
+// services from it, so a config the app just wrote takes effect without a
+// relaunch.
 //
 // A failed load changes nothing: the running services keep serving the config
 // they were built from, which is strictly better than a process left with no

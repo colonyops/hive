@@ -7,8 +7,8 @@ import (
 	"github.com/colonyops/hive/internal/domain/hc"
 )
 
-// TaskItem is one hc item as the tasks list sees it. Desc is absent: the list
-// never needs it, and TaskDetail reads it on demand.
+// TaskItem omits Desc: the list never needs it, and TaskDetail reads it on
+// demand.
 type TaskItem struct {
 	ID        string    `json:"id"`
 	RepoKey   string    `json:"repoKey"`
@@ -49,7 +49,6 @@ func taskItemsOf(items []hc.Item) []TaskItem {
 	return out
 }
 
-// TaskDetail is one hc item read in full, for a detail view.
 type TaskDetail struct {
 	TaskItem
 	Desc     string            `json:"desc"`

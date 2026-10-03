@@ -504,9 +504,6 @@ export interface SessionGitStatus {
     "error": string;
 }
 
-/**
- * SessionSummary is one session as the session list sees it.
- */
 export interface SessionSummary {
     "id": string;
     "name": string;
@@ -533,9 +530,6 @@ export interface SystemInfo {
     "agentWorkspaces": PathInfo;
 }
 
-/**
- * TaskDetail is one hc item read in full, for a detail view.
- */
 export interface TaskDetail {
     "id": string;
     "repoKey": string;
@@ -555,8 +549,8 @@ export interface TaskDetail {
 }
 
 /**
- * TaskItem is one hc item as the tasks list sees it. Desc is absent: the list
- * never needs it, and TaskDetail reads it on demand.
+ * TaskItem omits Desc: the list never needs it, and TaskDetail reads it on
+ * demand.
  */
 export interface TaskItem {
     "id": string;

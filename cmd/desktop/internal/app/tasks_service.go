@@ -24,15 +24,13 @@ type TaskComment struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// TaskDetail is one hc item read in full, for a detail view.
 type TaskDetail struct {
 	hc.Item
 	Blockers []TaskBlocker
 	Comments []TaskComment
 }
 
-// TasksService is the desktop's tasks view over hive's hc issue tracker. A nil
-// engine makes every method return KindUnavailable.
+// TasksService methods return KindUnavailable when the engine is nil.
 type TasksService struct {
 	hive *hive.Engine
 }

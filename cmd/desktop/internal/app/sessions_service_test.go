@@ -78,8 +78,6 @@ func (f *fakeSessionTmux) RenameSessionIfPresent(ctx context.Context, from, to s
 	return !f.absent && f.err == nil, f.err
 }
 
-// fakeWindowSource answers ListIndexedWindows from a fixed map and records the
-// tmux sessions it was asked about.
 type fakeWindowSource struct {
 	results map[string][]tmuxcc.IndexedWindow
 	err     error
@@ -115,7 +113,6 @@ func (r *fakeActivityRecorder) Record(_ context.Context, e activity.Event) {
 	r.events = append(r.events, e)
 }
 
-// activeHarness is a real engine holding reviewSession.
 func activeHarness(t *testing.T) *hiveHarness {
 	t.Helper()
 	h := newHiveHarness(t, engineOptions{})

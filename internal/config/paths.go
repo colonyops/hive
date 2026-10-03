@@ -10,8 +10,7 @@ import (
 const (
 	// EnvConfig names the config file, overriding the probe of the config
 	// directory.
-	EnvConfig = "HIVE_CONFIG"
-	// EnvDataDir names the hive data directory.
+	EnvConfig  = "HIVE_CONFIG"
 	EnvDataDir = "HIVE_DATA_DIR"
 	// EnvDesktopDataDir names the hive data directory for Hive Desktop only. It
 	// wins over EnvDataDir so a development desktop can point at a hive.db

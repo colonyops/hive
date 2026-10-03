@@ -35,9 +35,6 @@ const (
 	sessionRenameRollbackTimeout = 5 * time.Second
 )
 
-// sessionLauncher creates a repository session and records where it came
-// from. *dispatch.RepositoryLauncher satisfies it; the output worker's
-// launch-session executor goes through the same one.
 type sessionLauncher interface {
 	LaunchSession(context.Context, dispatch.LaunchSessionRequest) (dispatch.SessionExecutionOutcome, error)
 }
