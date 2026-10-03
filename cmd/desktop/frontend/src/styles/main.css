@@ -84,6 +84,34 @@
 @theme {
   --font-sans: "Inter Variable", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* No --line-height companions, so a text-* token sets only font-size and
+     the element keeps the line-height it inherits. Tailwind's own text-xs
+     and text-sm still set theirs. */
+  --text-micro: 10.5px;
+  --text-caption: 11.5px;
+  --text-small: 12.5px;
+  --text-body: 13.5px;
+  --text-title: 15px;
+  --text-lead: 16px;
+  --text-heading: 17px;
+  --text-display: 28px;
+  --text-display-lg: 32px;
+
+  --radius-*: initial;
+  --radius: 4px;
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 11px;
+  --radius-2xl: 14px;
+
+  --shadow-popover: 0 16px 34px -12px rgb(0 0 0 / 0.6);
+  --shadow-drawer: -30px 0 60px -20px rgb(0 0 0 / 0.5);
+  --shadow-modal: 0 40px 90px -20px var(--color-backdrop);
+  /* Pair with a shadow-<color>; an inset rail does not touch the row's borders. */
+  --shadow-rail: inset 2px 0 0 currentColor;
 }
 
 /* The default dark and light themes are the Theme Redesign's Hive Signal

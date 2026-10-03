@@ -225,12 +225,56 @@ Tailwind cannot express (a pseudo-element, a keyframe, a child of
 
 ## Tokens
 
-Color tokens live in `src/styles/main.css` under `@theme` (`bg-raised`,
-`text-text-2`, `border-card`, `text-severity-error`) and are the only colors
-to use. Typography and radius tokens do not exist yet, so the code still
-carries arbitrary sizes such as `text-[12.5px]`. #537 adds them; until it
-does, copy the size the nearest existing block uses rather than picking a
-new one.
+All tokens live in `src/styles/main.css` under `@theme`. Use them instead of
+arbitrary values; the lint rejects `text-[Npx]`, `rounded-[Npx]`, and
+`shadow-[...]` in a `.vue` file. In a scoped `<style>` block, use the
+variables: `var(--text-small)`, `var(--radius-lg)`, `var(--shadow-popover)`.
+
+**Color.** `bg-raised`, `text-text-2`, `border-card`, `text-severity-error`,
+and the rest of `--color-*` are the only colors to use.
+
+**Text.** A `text-*` size token sets only `font-size`, so the element keeps
+the line-height it inherits; set one with `leading-*` where it matters.
+Tailwind's `text-xs` (12px, line-height 1.333) and `text-sm` still exist and
+still set their own line-height.
+
+| Token             | Size | Was           |
+| ----------------- | ---- | ------------- |
+| `text-micro`      | 10.5 | 9.5, 10, 10.5 |
+| `text-caption`    | 11.5 | 11, 11.5      |
+| `text-small`      | 12.5 | 12, 12.5      |
+| `text-body`       | 13.5 | 13, 13.5, 14  |
+| `text-title`      | 15   | 15            |
+| `text-lead`       | 16   | 16            |
+| `text-heading`    | 17   | 16.5, 17      |
+| `text-display`    | 28   | 26, 28        |
+| `text-display-lg` | 32   | 32            |
+
+**Radius.** These replace Tailwind's radius scale. Bare `rounded` is the
+same 4px as `rounded-sm`.
+
+| Token         | Size | Was                       |
+| ------------- | ---- | ------------------------- |
+| `rounded-xs`  | 2    | 1, 2                      |
+| `rounded-sm`  | 4    | 3, 4                      |
+| `rounded-md`  | 6    | 5, 6                      |
+| `rounded-lg`  | 8    | 7, 8, 9                   |
+| `rounded-xl`  | 11   | 10, 11, 12 (`rounded-xl`) |
+| `rounded-2xl` | 14   | 14, 15                    |
+
+**Shadow.** One per role, for elevation. A focus ring or an inset accent
+bar in a scoped style is not elevation and keeps its own `box-shadow`.
+
+| Token            | Use it for                                                    |
+| ---------------- | ------------------------------------------------------------- |
+| `shadow-popover` | Menus, selects, tooltips, toasts, floating toolbars           |
+| `shadow-drawer`  | `DrawerSheet`                                                 |
+| `shadow-modal`   | The command palette                                           |
+| `shadow-rail`    | A 2px inset left rail; pair it with a color (`shadow-accent`) |
+
+The lint reads static `class` attributes and literal strings in `:class`. It
+does not see a class built in a script constant or a computed, so keep those
+on the tokens by hand.
 
 ## Adding a building block
 
