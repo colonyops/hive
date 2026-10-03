@@ -1,8 +1,6 @@
-import { effectScope, markRaw, nextTick, ref, watch, type Ref } from 'vue'
-import { Browser } from '@wailsio/runtime'
+import { effectScope, markRaw, nextTick, ref, type Ref } from 'vue'
 import { SearchAddon, type ISearchOptions } from '@xterm/addon-search'
-import { WebLinksAddon } from '@xterm/addon-web-links'
-import { Terminal, type IDisposable, type ILinkHandler } from '@xterm/xterm'
+import type { IDisposable, Terminal } from '@xterm/xterm'
 // Rides the async terminal chunk on purpose: ~10MB of glyphs nobody pays for
 // until they open Terminal mode.
 import {
@@ -17,7 +15,7 @@ import {
   type WindowEventKind,
   type WindowState,
 } from '../lib/terminalClient'
-import { loadTerminalFaces, terminalFontStack, resetTerminalFacesForTests } from '../lib/terminalFaces'
+import { resetTerminalFacesForTests } from '../lib/terminalFaces'
 import { proposeGrid, terminalCellSize, type CellSize } from '../lib/terminalGrid'
 import { activePaneOf, paneGrids, windowPanes } from '../lib/terminalLayout'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
@@ -30,10 +28,10 @@ import { scrolledOffTail } from '../lib/terminalTail'
 import { paneMayAutoFocus } from '../lib/terminalTree'
 import { commandEscapesPane, commandPiercesPane } from '../keybindings/catalog'
 import { comboFromEvent, terminalEscapeCombo, useKeybindings } from './useKeybindings'
-import { searchHighlightColors, xtermTheme } from '../lib/terminalTheme'
+import { searchHighlightColors } from '../lib/terminalTheme'
 import { resizeTerminalPreservingViewport } from '../lib/terminalViewport'
 import { useTerminalFont } from '../stores/useTerminalFont'
-import { useTheme } from './useTheme'
+import { createTerminal, loadTerminalFont, watchTerminalAppearance } from './useXtermPane'
 
 // The keymap is a module singleton with no lifecycle of its own, so the pane's
 // key handlers read it once here rather than calling in per keystroke.
@@ -169,16 +167,6 @@ const RESIZE_DEBOUNCE_MS = 80
 // well inside this; an unanswered vote means something else decided the size.
 const CONSTRAINT_SETTLE_MS = 750
 
-// A link has to leave the webview: it hosts one document for the app's whole
-// lifetime, and xterm's own default for an OSC 8 hyperlink — confirm() then
-// window.open() — is answered by neither, so a click on one does nothing at
-// all. WebLinksAddon covers the bare URLs xterm does not linkify on its own.
-function openLink(uri: string): void {
-  void Browser.OpenURL(uri).catch(() => {})
-}
-
-const linkHandler: ILinkHandler = { activate: (_event, uri) => openLink(uri) }
-
 interface WindowRuntime {
   host?: HTMLElement
   observer?: ResizeObserver
@@ -261,15 +249,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   let socket: WebSocket | null = null
   let disposed = false
 
-  const {
-    px: fontSizePx,
-    family: fontFamily,
-    weight: fontWeight,
-    weightBold: fontWeightBold,
-    lineHeight,
-    letterSpacing,
-    cellMetrics,
-  } = useTerminalFont()
+  const { cellMetrics } = useTerminalFont()
 
   // The last size this client voted for: a request, never the size anything
   // renders at. It opens at the last measured vote, and null — nothing measured
@@ -289,38 +269,19 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   // New-window commands deferred until tmux reports the target pane.
   const pendingCommands = new Map<string, () => boolean>()
 
-  scope.run(() => {
-    const { theme } = useTheme()
-    watch(theme, () => {
-      const palette = xtermTheme()
-      for (const state of panes.values()) state.term.options.theme = palette
-      // A decoration keeps the colour it was drawn with, so live highlights
-      // would stay in the old theme until the next keystroke.
-      if (search.value.open) runSearch('incremental')
-    })
-    // New cell metrics change how many cells fit the same box, so the vote
-    // must re-run; the grid itself stays at tmux's size until tmux answers.
-    // Weight and family move the advance width as much as size does, and
-    // spacing moves the cell without touching the glyph, so all six re-vote —
-    // and the faces have to be resident before xterm re-measures against them,
-    // or it measures the outgoing font (ADR terminal-atlas-renderer).
-    watch(
-      [fontSizePx, fontFamily, fontWeight, fontWeightBold, lineHeight, letterSpacing],
-      async ([px, family, weight, weightBold, height, spacing]) => {
-        await loadTerminalFaces(family, px, weight, weightBold)
-        if (disposed) return
-        for (const state of panes.values()) {
-          state.term.options.fontFamily = terminalFontStack(family)
-          state.term.options.fontSize = px
-          state.term.options.fontWeight = weight
-          state.term.options.fontWeightBold = weightBold
-          state.term.options.lineHeight = height
-          state.term.options.letterSpacing = spacing
-        }
-        scheduleVote()
+  // New cell metrics change how many cells fit the same box, so the vote
+  // must re-run; the grid itself stays at tmux's size until tmux answers.
+  // A decoration keeps the colour it was drawn with, so live search highlights
+  // re-run on a theme change rather than wait for the next keystroke.
+  scope.run(() =>
+    watchTerminalAppearance(
+      () => [...panes.values()].map((state) => state.term),
+      scheduleVote,
+      () => {
+        if (search.value.open) runSearch('incremental')
       },
-    )
-  })
+    ),
+  )
 
   function findTab(windowId: string): TerminalWindowTab | undefined {
     return tabs.value.find((tab) => tab.windowId === windowId)
@@ -357,23 +318,9 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   }
 
   function createPane(windowId: string, paneId: string, grid: TerminalSize | undefined): TerminalPane {
-    const term = markRaw(
-      new Terminal({
-        fontFamily: terminalFontStack(fontFamily.value),
-        fontSize: fontSizePx.value,
-        fontWeight: fontWeight.value,
-        fontWeightBold: fontWeightBold.value,
-        lineHeight: lineHeight.value,
-        letterSpacing: letterSpacing.value,
-        linkHandler,
-        scrollback: 5000,
-        theme: xtermTheme(),
-        // registerDecoration is still proposed API, and every find highlights
-        // through it — without this the first findNext throws and search is dead.
-        allowProposedApi: true,
-      }),
-    )
-    term.loadAddon(markRaw(new WebLinksAddon((_event, uri) => openLink(uri))))
+    // registerDecoration is still proposed API, and every find highlights
+    // through it -- without this the first findNext throws and search is dead.
+    const term = createTerminal({ allowProposedApi: true })
     const finder = markRaw(new SearchAddon())
     term.loadAddon(finder)
     const output = markRaw(
@@ -963,7 +910,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       // 0x0 sets no client size at all: tmux ignores a control client until it
       // sets one, so the session keeps the size its other clients gave it.
       const [, { windows: listed }] = await Promise.all([
-        loadTerminalFaces(fontFamily.value, fontSizePx.value, fontWeight.value, fontWeightBold.value),
+        loadTerminalFont(),
         client.attach(slug, vote?.cols ?? 0, vote?.rows ?? 0),
       ])
       if (disposed) return

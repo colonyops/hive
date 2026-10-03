@@ -1,23 +1,15 @@
 <script setup lang="ts">
 import InlineError from './ui/InlineError.vue'
-import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { useResizeObserver, useWindowSize } from '@vueuse/core'
-import { Browser } from '@wailsio/runtime'
-import { FitAddon } from '@xterm/addon-fit'
-import { WebLinksAddon } from '@xterm/addon-web-links'
-import { Terminal, type IDisposable, type ILinkHandler } from '@xterm/xterm'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useWindowSize } from '@vueuse/core'
+import type { Terminal } from '@xterm/xterm'
 import IconTerminal from '~icons/lucide/terminal'
 import IconX from '~icons/lucide/x'
 import IconPower from '~icons/lucide/power'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
-import { useTerminalFont } from '../stores/useTerminalFont'
-import { useTheme } from '../composables/useTheme'
-import { xtermTheme } from '../lib/terminalTheme'
+import { loadTerminalFont, useXtermPane } from '../composables/useXtermPane'
 import { decodeFrame, encodeInputFrames, type PopupTerminalState } from '../lib/popupTerminalClient'
-import { loadTerminalFaces, terminalFontStack } from '../lib/terminalFaces'
-import { claimAtlasRenderer } from '../lib/terminalRenderer'
 import { installTerminalImages } from '../lib/terminalImages'
-import { claimsShiftEnter } from '../lib/terminalKeys'
 import '@xterm/xterm/css/xterm.css'
 
 // The floating pop-up terminal: one PTY this process owns, rendered over
@@ -26,19 +18,9 @@ import '@xterm/xterm/css/xterm.css'
 // things that end it are the process exiting, End, and quitting Hive.
 
 const { visible, checking, available, reason, client, request, launchSeq, hide, ready } = usePopupTerminal()
-const {
-  px: fontSizePx,
-  family: fontFamily,
-  weight: fontWeight,
-  weightBold: fontWeightBold,
-  lineHeight,
-  letterSpacing,
-} = useTerminalFont()
-const { theme } = useTheme()
 
 const MIN_WIDTH = 380
 const MIN_HEIGHT = 220
-const RESIZE_DEBOUNCE_MS = 80
 
 // The share of the window a pop-up opens at, centred. It is a constant until
 // there is a setting for it: the size is a preference, and 85% is the one that
@@ -47,29 +29,19 @@ const DEFAULT_SIZE_FRACTION = 0.85
 
 const panel = ref<HTMLElement | null>(null)
 const host = ref<HTMLElement | null>(null)
-const term = shallowRef<Terminal | null>(null)
+const pane = useXtermPane(host, () => pane.fitToHost())
+const { term } = pane
 const terminal = ref<PopupTerminalState | null>(null)
 const status = ref<'idle' | 'opening' | 'live' | 'ended'>('idle')
 const error = ref('')
 const endedReason = ref('')
 
-let socket: WebSocket | null = null
-let fit: FitAddon | null = null
-let resizeTimer: ReturnType<typeof setTimeout> | undefined
-// The observer keeps the grid on the box as the window changes; it is not
-// what establishes it, so it is armed after the launch rather than before.
-const observedHost = shallowRef<HTMLElement | null>(null)
-useResizeObserver(observedHost, scheduleFit)
-// An atlas renderer is live on the pane. False after a claim that did not
-// survive, which is what makes the next reveal retry it (ADR terminal-renderer-claimed-on-activation).
-let rendered = false
 // The launch the pane on screen belongs to. Behind launchSeq means someone has
 // asked for a different terminal since, and the pane is showing the wrong one.
 let renderedSeq = -1
 // Where focus was when the pop-up took it, so dismissing the panel puts the
 // caller back where they were rather than on the document body.
 let focusReturn: HTMLElement | null = null
-const disposers: IDisposable[] = []
 
 const title = computed(() => terminal.value?.title || 'Terminal')
 const subtitle = computed(() => terminal.value?.dir ?? '')
@@ -111,11 +83,7 @@ async function openTerminal(): Promise<void> {
   error.value = ''
   renderedSeq = launchSeq.value
   try {
-    // Before the Terminal is constructed, not after: xterm measures its cell on
-    // open and never re-measures, and the atlas renderer caches the glyphs that
-    // were resident — a pane opened ahead of the face shows tofu where every
-    // Nerd Font icon in a TUI should be.
-    await loadTerminalFaces(fontFamily.value, fontSizePx.value, fontWeight.value, fontWeightBold.value)
+    await loadTerminalFont()
     // Built and measured before the process exists, so the PTY is spawned on
     // the grid it will be drawn on. Sizing it afterwards is what a TUI sees as
     // a full screen at the fallback grid followed by a SIGWINCH reflow — the
@@ -125,13 +93,13 @@ async function openTerminal(): Promise<void> {
     // open and never re-measures: a pane built a frame early measures nothing
     // and keeps that cell for the rest of its life.
     await nextTick()
-    const created = buildPane()
+    const created = pane.build()
     if (!created) {
       error.value = 'The terminal could not be rendered.'
       status.value = 'idle'
       return
     }
-    const size = measurePane()
+    const size = pane.measure()
     if (size) created.resize(size.cols, size.rows)
 
     const opened = await client.value.open({ ...request.value, ...size })
@@ -146,102 +114,44 @@ async function openTerminal(): Promise<void> {
   }
 }
 
-// The pane exists before the terminal does, because measuring it is what the
-// launch needs.
-function buildPane(): Terminal | null {
-  if (!host.value) return null
-
-  const created = markRaw(
-    new Terminal({
-      fontFamily: terminalFontStack(fontFamily.value),
-      fontSize: fontSizePx.value,
-      fontWeight: fontWeight.value,
-      fontWeightBold: fontWeightBold.value,
-      lineHeight: lineHeight.value,
-      letterSpacing: letterSpacing.value,
-      scrollback: 5000,
-      theme: xtermTheme(),
-      linkHandler,
-    }),
-  )
-  const fitAddon = markRaw(new FitAddon())
-  created.loadAddon(fitAddon)
-  created.loadAddon(markRaw(new WebLinksAddon((_event, uri) => openLink(uri))))
-  created.attachCustomKeyEventHandler((event) => !claimsShiftEnter(created, event))
-  created.open(host.value)
-  loadRenderer(created)
-
-  term.value = created
-  fit = fitAddon
-  return created
-}
-
-// The grid this pane's box holds, or null when there is nothing to measure:
-// proposeDimensions on a host with no box answers a bogus tiny grid rather than
-// failing, and opening a PTY at that is worse than letting the server default.
-function measurePane(): { cols: number; rows: number } | null {
-  if (!host.value?.clientWidth || !host.value.clientHeight) return null
-  const proposed = fit?.proposeDimensions()
-  if (!proposed?.cols || !proposed.rows) return null
-  return { cols: proposed.cols, rows: proposed.rows }
-}
-
 function attachStream(created: Terminal, state: PopupTerminalState): void {
   if (!client.value || !host.value) return
 
-  disposers.push(created.onData((data) => send(data)))
+  pane.track(created.onData((data) => pane.send(encodeInputFrames(data))))
   // The server applies whatever size it is told, so the grid xterm measured is
   // the grid the process is given — there is nothing to reconcile afterwards.
-  disposers.push(
+  pane.track(
     created.onResize(({ cols, rows }) => {
       void client.value?.resize(state.id, cols, rows).catch(() => {})
     }),
   )
 
-  socket = client.value.openStream(state.id)
-  const capturedSocket = socket
-  disposers.push({
+  const opened = client.value.openStream(state.id)
+  pane.track({
     dispose: installTerminalImages(host.value, {
       pasteText: (text) => created.paste(text),
       capture: () => ({
         current: () =>
           visible.value &&
-          socket === capturedSocket &&
-          capturedSocket.readyState === WebSocket.OPEN &&
+          pane.socket() === opened &&
+          opened.readyState === WebSocket.OPEN &&
           terminal.value?.id === state.id,
         paste: (text) => created.paste(text),
         focus: () => created.focus(),
       }),
     }),
   })
-  socket.onmessage = (event: MessageEvent<ArrayBuffer>) => {
+  opened.onmessage = (event: MessageEvent<ArrayBuffer>) => {
     const frame = decodeFrame(event.data)
     if (!frame) return
     if (frame.type === 'output') created.write(frame.data)
     else exited()
   }
-  socket.onerror = () => fail('The terminal connection dropped.')
-  socket.onclose = () => {
+  opened.onerror = () => fail('The terminal connection dropped.')
+  opened.onclose = () => {
     if (status.value === 'live') fail('The terminal connection closed.')
   }
-
-  observedHost.value = host.value
-}
-
-function send(data: string): void {
-  if (socket?.readyState !== WebSocket.OPEN) return
-  for (const frame of encodeInputFrames(data)) socket.send(frame)
-}
-
-function scheduleFit(): void {
-  clearTimeout(resizeTimer)
-  resizeTimer = setTimeout(() => {
-    try {
-      fit?.fit()
-    } catch {
-      // A panel mid-transition can measure to nothing; the next observation fits.
-    }
-  }, RESIZE_DEBOUNCE_MS)
+  pane.attach(opened)
 }
 
 // The shell exited, so the pop-up goes with it. Typing `exit` is how a terminal
@@ -262,7 +172,7 @@ function fail(why: string): void {
   if (status.value === 'ended') return
   status.value = 'ended'
   endedReason.value = why
-  teardownStream()
+  pane.closeStream()
 }
 
 // Ends the terminal on purpose, the deliberate counterpart to typing `exit`:
@@ -273,48 +183,9 @@ async function endTerminal(): Promise<void> {
   if (id) await client.value?.close(id).catch(() => {})
 }
 
-function teardownStream(): void {
-  if (socket) {
-    socket.onmessage = null
-    socket.onerror = null
-    socket.onclose = null
-    socket.close()
-    socket = null
-  }
-}
-
 function teardown(): void {
-  teardownStream()
-  clearTimeout(resizeTimer)
-  observedHost.value = null
-  for (const disposer of disposers.splice(0)) disposer.dispose()
-  term.value?.dispose()
-  term.value = null
-  fit = null
-  rendered = false
+  pane.teardown()
   endedReason.value = ''
-}
-
-// A link has to leave the webview: it hosts one document for the app's whole
-// lifetime, and xterm's own default for an OSC 8 hyperlink — confirm() then
-// window.open() — is answered by neither. WebLinksAddon covers the bare URLs
-// xterm does not linkify on its own. Same rule as the session panes.
-function openLink(uri: string): void {
-  void Browser.OpenURL(uri).catch(() => {})
-}
-
-const linkHandler: ILinkHandler = { activate: (_event, uri) => openLink(uri) }
-
-// A failed claim leaves `rendered` false, which is what makes the next reveal
-// retry it rather than leaving the pane on the DOM renderer (ADR terminal-renderer-claimed-on-activation).
-function loadRenderer(target: Terminal): void {
-  claimAtlasRenderer(
-    target,
-    (addon) => disposers.push(addon),
-    (claimed) => {
-      rendered = claimed
-    },
-  )
 }
 
 // What being shown means: a terminal, focused, in the box the panel opens at.
@@ -335,7 +206,7 @@ async function reveal(): Promise<void> {
   }
   // A renderer claim that failed earlier gets another chance every time the
   // pane comes back on screen (ADR terminal-renderer-claimed-on-activation).
-  if (!rendered && term.value) loadRenderer(term.value)
+  pane.claimRenderer()
   term.value?.focus()
 }
 
@@ -346,27 +217,6 @@ watch([visible, launchSeq], ([open]) => {
   if (open) void reveal()
   else restoreFocus()
 })
-
-watch(theme, () => {
-  if (term.value) term.value.options.theme = xtermTheme()
-})
-// The faces have to be resident before xterm re-measures its cell against them,
-// or it measures the outgoing font and the atlas caches glyphs at the wrong
-// metrics (ADR terminal-atlas-renderer).
-watch(
-  [fontSizePx, fontFamily, fontWeight, fontWeightBold, lineHeight, letterSpacing],
-  async ([px, family, weight, weightBold, height, spacing]) => {
-    await loadTerminalFaces(family, px, weight, weightBold)
-    if (!term.value) return
-    term.value.options.fontFamily = terminalFontStack(family)
-    term.value.options.fontSize = px
-    term.value.options.fontWeight = weight
-    term.value.options.fontWeightBold = weightBold
-    term.value.options.lineHeight = height
-    term.value.options.letterSpacing = spacing
-    scheduleFit()
-  },
-)
 
 // Only what was focused outside the panel is worth returning to; a re-reveal
 // while the pane already has focus must not record the pane itself.

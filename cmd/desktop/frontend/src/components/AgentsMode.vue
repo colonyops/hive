@@ -11,13 +11,10 @@
 // the pane's xterm wiring itself: a session is a tmux session, addressed and
 // framed exactly like a hive one, just not discovered through hive.
 import InlineError from './ui/InlineError.vue'
-import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useDocumentVisibility, useResizeObserver } from '@vueuse/core'
-import { Browser } from '@wailsio/runtime'
-import { FitAddon } from '@xterm/addon-fit'
-import { WebLinksAddon } from '@xterm/addon-web-links'
-import { Terminal, type IDisposable, type ILinkHandler } from '@xterm/xterm'
+import { useDocumentVisibility } from '@vueuse/core'
+import type { Terminal } from '@xterm/xterm'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import AgentCanvasPane from './AgentCanvasPane.vue'
@@ -29,19 +26,14 @@ import SessionLaunchDialog from './SessionLaunchDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
-import { useTerminalFont } from '../stores/useTerminalFont'
-import { useTheme } from '../composables/useTheme'
 import { useAgentCanvasRoute } from '../composables/useAgentCanvasRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
-import { xtermTheme } from '../lib/terminalTheme'
+import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXtermPane'
 import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentWorkspacesClient'
-import { loadTerminalFaces, terminalFontStack } from '../lib/terminalFaces'
-import { claimAtlasRenderer } from '../lib/terminalRenderer'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { isEditableTarget } from '../lib/isEditableTarget'
 import { installTerminalImages } from '../lib/terminalImages'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
-import { claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { watchTailPin } from '../lib/terminalTail'
 import type { AgentSession, AgentWorkspace, WorkspaceEditRequest } from '../lib/agentWorkspacesClient'
@@ -105,24 +97,13 @@ const missingSkillsNotice = computed(() => {
   return `${names} ${subject} — ${carrier} ${entries.length === 1 ? 'it' : 'them'}. Enable that instead in the workspace editor.`
 })
 
-const {
-  px: fontSizePx,
-  family: fontFamily,
-  weight: fontWeight,
-  weightBold: fontWeightBold,
-  lineHeight,
-  letterSpacing,
-} = useTerminalFont()
-const { theme } = useTheme()
-
 // The session pane's state lives here, ahead of the route watcher below: that
 // watcher's immediate call reaches into teardownPane on first run, and a
 // `let`/`const` referenced before its own declaration line has executed is a
 // ReferenceError even though the function that closes over it is hoisted.
-const RESIZE_DEBOUNCE_MS = 80
-
 const paneHost = ref<HTMLElement | null>(null)
-const term = shallowRef<Terminal | null>(null)
+const pane = useXtermPane(paneHost, voteSize)
+const { term } = pane
 const openSessionId = ref<number | null>(null)
 const paneStatus = ref<'idle' | 'opening' | 'live'>('idle')
 const paneError = ref('')
@@ -130,13 +111,6 @@ const paneWorkspaceDir = ref('')
 const paneActionError = ref('')
 const paneScrolledUp = ref(false)
 
-let socket: WebSocket | null = null
-let fit: FitAddon | null = null
-let resizeTimer: ReturnType<typeof setTimeout> | undefined
-const observedPaneHost = shallowRef<HTMLElement | null>(null)
-useResizeObserver(observedPaneHost, scheduleSizeVote)
-let rendered = false
-const disposers: IDisposable[] = []
 // The tmux wire is windowed (ADR agent-workspace-sessions-are-tmux-sessions): every frame in and out of the pane's
 // socket names the window it belongs to, so the pane has to know which one is
 // its own for the life of one attach.
@@ -548,9 +522,9 @@ async function revealPaneWorkspace(): Promise<void> {
 }
 
 // ── The session pane ─────────────────────────────────────────────────────────
-// Mirrors PopupTerminal.vue's xterm wiring over the same wire protocol
-// (cmd/desktop/internal/adapter/httpapi/pty_stream.go); only the launch call and the
-// control-plane base differ, per the shared client this composable resolves.
+// The xterm pane is PopupTerminal.vue's (useXtermPane), over the same wire
+// protocol (cmd/desktop/internal/adapter/httpapi/pty_stream.go); only the
+// launch call and the control-plane base differ.
 
 async function launchIntoPane(
   workspace: string,
@@ -567,15 +541,15 @@ async function launchIntoPane(
   paneStatus.value = 'opening'
   paneError.value = ''
   try {
-    await loadTerminalFaces(fontFamily.value, fontSizePx.value, fontWeight.value, fontWeightBold.value)
+    await loadTerminalFont()
     await nextTick()
-    const created = buildPane()
+    const created = pane.build()
     if (!created) {
       paneError.value = 'The session pane could not be rendered.'
       paneStatus.value = 'idle'
       return
     }
-    const size = measurePane()
+    const size = pane.measure()
     const result = await action(size ?? {})
     openSessionId.value = result.id
     if (!result.terminalId || !result.windowId) {
@@ -598,7 +572,7 @@ async function launchIntoPane(
     else if (size) created.resize(size.cols, size.rows)
     // The launch already voted this measurement; seeding the dedup keeps the
     // observer's first fire from re-casting it.
-    lastVote = size ?? null
+    lastVote = size
     attachStream(created, result.terminalId, result.windowId, result.paneId)
     paneStatus.value = 'live'
     // A launch that lands while the user is typing elsewhere must not steal
@@ -612,39 +586,6 @@ async function launchIntoPane(
   }
 }
 
-function buildPane(): Terminal | null {
-  if (!paneHost.value) return null
-  const created = markRaw(
-    new Terminal({
-      fontFamily: terminalFontStack(fontFamily.value),
-      fontSize: fontSizePx.value,
-      fontWeight: fontWeight.value,
-      fontWeightBold: fontWeightBold.value,
-      lineHeight: lineHeight.value,
-      letterSpacing: letterSpacing.value,
-      scrollback: 5000,
-      theme: xtermTheme(),
-      linkHandler,
-    }),
-  )
-  const fitAddon = markRaw(new FitAddon())
-  created.loadAddon(fitAddon)
-  created.loadAddon(markRaw(new WebLinksAddon((_event, uri) => openLink(uri))))
-  created.attachCustomKeyEventHandler((event) => !claimsShiftEnter(created, event))
-  created.open(paneHost.value)
-  loadRenderer(created)
-  term.value = created
-  fit = fitAddon
-  return created
-}
-
-function measurePane(): { cols: number; rows: number } | undefined {
-  if (!paneHost.value?.clientWidth || !paneHost.value.clientHeight) return undefined
-  const proposed = fit?.proposeDimensions()
-  if (!proposed?.cols || !proposed.rows) return undefined
-  return { cols: proposed.cols, rows: proposed.rows }
-}
-
 // The pane renders tmux's grid, never its own fit — the Code view's rule
 // (useTerminalWindows.ts): a host resize is a size *vote* posted to
 // sessions/resize, and the window 'layout-changed' frame tmux answers with is what
@@ -654,17 +595,17 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
 
   paneWindowId = windowId
   panePaneId = paneId
-  disposers.push(silenceDeviceReports(created))
-  disposers.push(created.onData((data) => send(data)))
-  disposers.push({
+  pane.track(silenceDeviceReports(created))
+  pane.track(created.onData((data) => send(data)))
+  pane.track({
     dispose: installTerminalImages(paneHost.value, {
       pasteText: sendPaste,
       capture: () => {
-        const capturedSocket = socket
+        const capturedSocket = pane.socket()
         const capturedPane = panePaneId
         return {
           current: () =>
-            socket === capturedSocket &&
+            pane.socket() === capturedSocket &&
             capturedSocket?.readyState === WebSocket.OPEN &&
             panePaneId === capturedPane &&
             props.active !== false,
@@ -674,7 +615,7 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
       },
     }),
   })
-  disposers.push(
+  pane.track(
     watchTailPin(created, paneHost.value, (scrolledUp) => {
       paneScrolledUp.value = scrolledUp
     }),
@@ -707,31 +648,24 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
   opened.onclose = () => {
     if (paneStatus.value === 'live') fail('The session connection closed.')
   }
-  socket = opened
-
-  observedPaneHost.value = paneHost.value
+  pane.attach(opened)
 }
 
 function send(data: string): void {
-  if (socket?.readyState !== WebSocket.OPEN || !panePaneId) return
-  for (const frame of encodeInputFrames(panePaneId, data)) socket.send(frame)
+  if (!panePaneId) return
+  pane.send(encodeInputFrames(panePaneId, data))
 }
 
 function sendPaste(text: string): void {
-  if (socket?.readyState !== WebSocket.OPEN || !panePaneId) return
-  for (const frame of encodePasteFrames(panePaneId, text)) socket.send(frame)
+  if (!panePaneId) return
+  pane.send(encodePasteFrames(panePaneId, text))
 }
 
 let lastVote: { cols: number; rows: number } | null = null
 
-function scheduleSizeVote(): void {
-  clearTimeout(resizeTimer)
-  resizeTimer = setTimeout(voteSize, RESIZE_DEBOUNCE_MS)
-}
-
 function voteSize(): void {
   if (paneStatus.value !== 'live' || openSessionId.value === null) return
-  const proposed = measurePane()
+  const proposed = pane.measure()
   if (!proposed) return
   if (lastVote && proposed.cols === lastVote.cols && proposed.rows === lastVote.rows) return
   lastVote = proposed
@@ -757,25 +691,8 @@ function fail(why: string): void {
   void reloadRecents()
 }
 
-function teardownStream(): void {
-  if (socket) {
-    socket.onmessage = null
-    socket.onerror = null
-    socket.onclose = null
-    socket.close()
-    socket = null
-  }
-}
-
 function teardownPane(): void {
-  teardownStream()
-  clearTimeout(resizeTimer)
-  observedPaneHost.value = null
-  for (const disposer of disposers.splice(0)) disposer.dispose()
-  term.value?.dispose()
-  term.value = null
-  fit = null
-  rendered = false
+  pane.teardown()
   paneWindowId = ''
   lastVote = null
   paneError.value = ''
@@ -786,40 +703,6 @@ function scrollPaneToBottom(): void {
   term.value?.scrollToBottom()
   term.value?.focus()
 }
-
-function openLink(uri: string): void {
-  void Browser.OpenURL(uri).catch(() => {})
-}
-
-const linkHandler: ILinkHandler = { activate: (_event, uri) => openLink(uri) }
-
-function loadRenderer(target: Terminal): void {
-  claimAtlasRenderer(
-    target,
-    (addon) => disposers.push(addon),
-    (claimed) => {
-      rendered = claimed
-    },
-  )
-}
-
-watch(theme, () => {
-  if (term.value) term.value.options.theme = xtermTheme()
-})
-watch(
-  [fontSizePx, fontFamily, fontWeight, fontWeightBold, lineHeight, letterSpacing],
-  async ([px, family, weight, weightBold, height, spacing]) => {
-    await loadTerminalFaces(family, px, weight, weightBold)
-    if (!term.value) return
-    term.value.options.fontFamily = terminalFontStack(family)
-    term.value.options.fontSize = px
-    term.value.options.fontWeight = weight
-    term.value.options.fontWeightBold = weightBold
-    term.value.options.lineHeight = height
-    term.value.options.letterSpacing = spacing
-    scheduleSizeVote()
-  },
-)
 
 // ── Focus handles for the global keymap (agents.focus-sidebar/-pane) ─────────
 const sidebarEl = ref<InstanceType<typeof AgentsSidebar> | null>(null)
