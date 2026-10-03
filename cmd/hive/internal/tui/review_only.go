@@ -11,8 +11,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	review "github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 )
 
 // ReviewOnlyOptions configures the review-only TUI.
@@ -39,7 +39,7 @@ type ReviewOnlyModel struct {
 // NewReviewOnly creates a new review-only TUI model.
 func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	// Create review store from DB queries
-	store := stores.NewReviewStore(opts.DB)
+	store := store.NewReviewStore(opts.DB)
 
 	// Create review view
 	reviewView := review.New(opts.Documents, opts.ContextDir, store, nil, 0)

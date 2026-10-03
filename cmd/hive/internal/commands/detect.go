@@ -144,7 +144,7 @@ func detectTmuxSessionNames(sess session.Session) map[string]bool {
 }
 
 func (cmd *DetectCmd) findSession(ctx context.Context, ref string) (session.Session, error) {
-	sessions, err := cmd.app.Sessions.ListSessions(ctx)
+	sessions, err := cmd.app.Sessions().ListSessions(ctx)
 	if err != nil {
 		return session.Session{}, fmt.Errorf("listing sessions: %w", err)
 	}

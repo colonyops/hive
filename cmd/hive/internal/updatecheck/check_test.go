@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/kv"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +18,7 @@ func newTestKVStore(t *testing.T) kv.KV {
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
-	return stores.NewKVStore(database)
+	return store.NewKVStore(database)
 }
 
 func cacheRelease(t *testing.T, store kv.KV, checker *Checker, tag string) {

@@ -16,7 +16,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/shared"
 	"github.com/colonyops/hive/internal/domain/hc"
 	corekv "github.com/colonyops/hive/internal/domain/kv"
-	"github.com/colonyops/hive/internal/hive"
+	hcsvc "github.com/colonyops/hive/internal/hive/hc"
 )
 
 // focusPane tracks which pane has keyboard focus.
@@ -33,7 +33,7 @@ const headerLines = 2
 
 // View is the Bubble Tea sub-model for the tasks tab.
 type View struct {
-	svc    *hive.HoneycombService
+	svc    *hcsvc.Service
 	width  int
 	height int
 	active bool
@@ -64,7 +64,7 @@ type View struct {
 }
 
 // New creates a new tasks View.
-func New(svc *hive.HoneycombService, repoKey string, handler KeyResolver, kvStore corekv.KV, splitRatio int) *View {
+func New(svc *hcsvc.Service, repoKey string, handler KeyResolver, kvStore corekv.KV, splitRatio int) *View {
 	return &View{
 		svc:          svc,
 		repoKey:      repoKey,
@@ -343,7 +343,7 @@ func (v *View) RepoKey() string {
 }
 
 // Svc returns the honeycomb service, or nil if not configured.
-func (v *View) Svc() *hive.HoneycombService {
+func (v *View) Svc() *hcsvc.Service {
 	return v.svc
 }
 

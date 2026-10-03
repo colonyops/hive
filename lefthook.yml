@@ -33,9 +33,9 @@ pre-commit:
     - name: generated-code
       glob:
         - "sqlc.yaml"
-        - "internal/data/db/queries/*.sql"
-        - "internal/data/db/migrations/*.sql"
-        - "internal/core/eventbus/events.go"
+        - "internal/store/db/queries/*.sql"
+        - "internal/store/db/migrations/*.sql"
+        - "internal/hive/events/events.go"
         - "cmd/hive/internal/action/type.go"
         - "internal/domain/hc/item.go"
         - "internal/domain/notify/store.go"

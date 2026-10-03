@@ -6,12 +6,12 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/store"
 )
 
 // Start launches a background goroutine that periodically sweeps expired KV entries.
 // It blocks until the context is cancelled.
-func Start(ctx context.Context, kvStore *stores.KVStore, interval time.Duration) {
+func Start(ctx context.Context, kvStore *store.KVStore, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 

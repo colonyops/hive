@@ -4,23 +4,22 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/colonyops/hive/internal/config"
-	"github.com/colonyops/hive/internal/core/eventbus"
-	coredb "github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	coreterminal "github.com/colonyops/hive/internal/domain/terminal"
-	hivesvc "github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/events"
+	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	statussvc "github.com/colonyops/hive/internal/hive/status"
 	"github.com/colonyops/hive/internal/platform/git"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
+	"github.com/colonyops/hive/internal/store"
+	coredb "github.com/colonyops/hive/internal/store/db"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
@@ -51,7 +50,7 @@ func TestHiveMessagePublisherPersistsThroughCoreSQLiteReopen(t *testing.T) {
 	dir := t.TempDir()
 	first, err := coredb.Open(dir, coredb.DefaultOpenOptions())
 	require.NoError(t, err)
-	service := hivesvc.NewMessageService(stores.NewMessageStore(first, 0), &config.Config{}, eventbus.New(8))
+	service := msgsvc.NewService(store.NewMessageStore(first, 0), &config.Config{}, events.New(8))
 	publisher := NewHiveMessagePublisher(service)
 	const topic = "agent.session.inbox"
 	published, err := publisher.PublishMessage(t.Context(), "hello from desktop", topic)
@@ -62,7 +61,7 @@ func TestHiveMessagePublisherPersistsThroughCoreSQLiteReopen(t *testing.T) {
 	reopened, err := coredb.Open(dir, coredb.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, reopened.Close()) })
-	reopenedService := hivesvc.NewMessageService(stores.NewMessageStore(reopened, 0), &config.Config{}, eventbus.New(8))
+	reopenedService := msgsvc.NewService(store.NewMessageStore(reopened, 0), &config.Config{}, events.New(8))
 	messages, err := reopenedService.Subscribe(t.Context(), topic, time.Time{})
 	require.NoError(t, err)
 	require.Len(t, messages, 1)
@@ -83,30 +82,25 @@ func newHiveSessions(t *testing.T) (*HiveSessionManager, session.Store) {
 
 func newHiveSessionsWith(t *testing.T, cfg *config.Config, exec executil.Executor) (*HiveSessionManager, session.Store) {
 	t.Helper()
-	store := stores.NewSessionStore(openCoreDB(t))
+	store := store.NewSessionStore(openCoreDB(t))
 	return NewHiveSessionManager(newHiveSessionServiceOver(t, store, cfg, exec), nil, nil, nil, 0), store
 }
 
-func newHiveSessionService(t *testing.T, cfg *config.Config, exec executil.Executor) *hivesvc.SessionService {
-	t.Helper()
-	return newHiveSessionServiceOver(t, stores.NewSessionStore(openCoreDB(t)), cfg, exec)
-}
-
-func newHiveSessionServiceOver(t *testing.T, store session.Store, cfg *config.Config, exec executil.Executor) *hivesvc.SessionService {
+func newHiveSessionServiceOver(t *testing.T, store session.Store, cfg *config.Config, exec executil.Executor) *sessionsvc.Service {
 	t.Helper()
 	runner, ok := exec.(tmuxexec.Runner)
 	if !ok {
 		runner = noopTmuxRunner{}
 	}
 	tmuxClient := tmuxexec.New(runner, zerolog.Nop())
-	return hivesvc.NewSessionService(
+	return sessionsvc.NewService(
 		store,
 		git.NewExecutor("git", exec),
 		cfg,
-		eventbus.New(8),
+		events.New(8),
 		exec,
 		tmpl.New(tmpl.Config{}),
-		hivesvc.PlainStyler{},
+		sessionsvc.PlainStyler{},
 		zerolog.Nop(),
 		io.Discard,
 		io.Discard,
@@ -149,13 +143,13 @@ func (m listingSessionManagement) ListSessions(context.Context) ([]session.Sessi
 
 type fakeSessionStatusSource struct {
 	available bool
-	results   map[string]hivesvc.TerminalStatus
+	results   map[string]statussvc.TerminalStatus
 	seen      []*session.Session
 }
 
 func (f *fakeSessionStatusSource) Available() bool { return f.available }
 
-func (f *fakeSessionStatusSource) FetchBatch(_ context.Context, sessions []*session.Session, _ []hivesvc.RootRepoTarget) map[string]hivesvc.TerminalStatus {
+func (f *fakeSessionStatusSource) FetchBatch(_ context.Context, sessions []*session.Session, _ []statussvc.RootRepoTarget) map[string]statussvc.TerminalStatus {
 	f.seen = sessions
 	return f.results
 }
@@ -276,8 +270,8 @@ func TestHiveSessionManagerListsEveryState(t *testing.T) {
 func TestHiveSessionManagerProjectsLiveStatusForActiveSessions(t *testing.T) {
 	statuses := &fakeSessionStatusSource{
 		available: true,
-		results: map[string]hivesvc.TerminalStatus{
-			"s1": {Windows: []hivesvc.WindowStatus{
+		results: map[string]statussvc.TerminalStatus{
+			"s1": {Windows: []statussvc.WindowStatus{
 				{WindowIndex: "0", Status: coreterminal.StatusApproval, Tool: "claude"},
 				{WindowIndex: "2", Status: coreterminal.StatusActive, Tool: "pi"},
 				{WindowIndex: "9", WindowName: "departed", Status: coreterminal.StatusActive, Tool: "codex"},
@@ -427,89 +421,4 @@ func TestHiveSessionManagerRiskIsEmptyForANonActiveSession(t *testing.T) {
 	// No live clone left to hold unsaved work — but recycling a worktree
 	// session still deletes it, which the confirmation has to say.
 	assert.Equal(t, SessionRisk{RecycleDeletes: true}, risk)
-}
-
-// newHiveLauncher builds the launcher over the real shared session service,
-// for the same reason newHiveSessions does: a fake shaped to fit the seam would
-// report whatever the test wanted to hear.
-func newHiveLauncher(t *testing.T, cfg *config.Config) *HiveSessionLauncher {
-	t.Helper()
-	return NewHiveSessionLauncher(newHiveSessionService(t, cfg, &executil.RealExecutor{}))
-}
-
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, string(out))
-}
-
-// failingPostCheckoutRepo is the shape of the incident: a clonable remote plus
-// a global post-checkout hook that exits non-zero. git propagates the hook's
-// exit code, so the checkout is complete and the clone still failed.
-func failingPostCheckoutRepo(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	src := filepath.Join(root, "site")
-	require.NoError(t, os.MkdirAll(src, 0o755))
-	runGit(t, src, "init", "-q")
-	require.NoError(t, os.WriteFile(filepath.Join(src, "a.txt"), []byte("hi"), 0o644))
-	runGit(t, src, "add", ".")
-	runGit(t, src, "-c", "user.email=a@b.c", "-c", "user.name=a", "commit", "-qm", "init")
-
-	hooks := filepath.Join(root, "hooks")
-	require.NoError(t, os.MkdirAll(hooks, 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(hooks, "post-checkout"), []byte("#!/bin/sh\nexit 1\n"), 0o755))
-	// GIT_CONFIG_* reaches the clone the way a global hook would, without
-	// touching the machine.
-	t.Setenv("GIT_CONFIG_COUNT", "1")
-	t.Setenv("GIT_CONFIG_KEY_0", "core.hooksPath")
-	t.Setenv("GIT_CONFIG_VALUE_0", hooks)
-	return src
-}
-
-func TestHiveSessionLauncherReportsTheFailedOperationAndItsCheckout(t *testing.T) {
-	cfg := &config.Config{DataDir: t.TempDir()}
-	remote := failingPostCheckoutRepo(t)
-
-	_, err := newHiveLauncher(t, cfg).LaunchSession(t.Context(), LaunchSessionRequest{Name: "review-81", Repo: remote})
-
-	var failure *SessionCreateError
-	require.ErrorAs(t, err, &failure)
-	assert.Equal(t, "review-81", failure.Name)
-	assert.Equal(t, remote, failure.Remote)
-
-	// Off hive's own CreateSessionError, not derived here.
-	assert.Equal(t, "clone repository", failure.Step)
-	assert.Equal(t, "full", failure.CloneStrategy)
-	assert.Equal(t, cfg.ReposDir(), filepath.Dir(failure.Destination))
-	assert.True(t, failure.LeftoverCheckout, "a hook that fails after checkout leaves it complete")
-	assert.DirExists(t, failure.Destination, "the complete checkout the failed clone left behind")
-
-	// The progress tail is still the desktop's own: hive's error names one
-	// operation, the tail names the sequence that led to it.
-	assert.Contains(t, failure.Output, "Clone strategy: full")
-	assert.Contains(t, failure.Output, "Cloning repository...")
-	assert.Contains(t, err.Error(), "clone repository", "the step travels in the surfaced error")
-}
-
-// git's own reason survives hive's wrapping.
-func TestHiveSessionLauncherReportsWhyACloneWasRefused(t *testing.T) {
-	cfg := &config.Config{DataDir: t.TempDir()}
-	missing := filepath.Join(t.TempDir(), "no-such-repo")
-
-	_, err := newHiveLauncher(t, cfg).LaunchSession(t.Context(), LaunchSessionRequest{Name: "review-81", Repo: missing})
-
-	var failure *SessionCreateError
-	require.ErrorAs(t, err, &failure)
-	assert.Equal(t, "clone repository", failure.Step)
-	assert.Equal(t, "full", failure.CloneStrategy)
-	assert.Contains(t, err.Error(), "does not exist", "git's words, not just its exit status")
-
-	// hive names a destination either way; git removed this one, so there is
-	// nothing to tell the user to delete.
-	assert.NotEmpty(t, failure.Destination)
-	assert.False(t, failure.LeftoverCheckout)
-	assert.NoDirExists(t, failure.Destination)
 }

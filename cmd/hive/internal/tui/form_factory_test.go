@@ -7,7 +7,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/kvcache"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
-	"github.com/colonyops/hive/internal/hive"
+	statussvc "github.com/colonyops/hive/internal/hive/status"
 	"github.com/colonyops/hive/internal/platform/workspace"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -163,10 +163,10 @@ func TestNewFormDialog(t *testing.T) {
 			{ID: "s2", Name: "beta", State: session.StateActive},
 			{ID: "s3", Name: "gamma", State: session.StateActive},
 		}
-		ts := kvcache.New[string, hive.TerminalStatus]()
-		ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusActive})
-		ts.Set("s2", hive.TerminalStatus{Status: terminal.StatusMissing})
-		ts.Set("s3", hive.TerminalStatus{Status: terminal.StatusReady})
+		ts := kvcache.New[string, statussvc.TerminalStatus]()
+		ts.Set("s1", statussvc.TerminalStatus{Status: terminal.StatusActive})
+		ts.Set("s2", statussvc.TerminalStatus{Status: terminal.StatusMissing})
+		ts.Set("s3", statussvc.TerminalStatus{Status: terminal.StatusReady})
 
 		fields := []config.FormField{
 			{Variable: "target", Preset: config.FormPresetSessionSelector, Label: "Target"},

@@ -4,18 +4,18 @@ import (
 	"context"
 
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/hive"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 )
 
 // SessionCreator is the interface for creating sessions.
 type SessionCreator interface {
-	CreateSession(ctx context.Context, opts hive.CreateOptions) (*session.Session, error)
+	CreateSession(ctx context.Context, opts sessionsvc.CreateOptions) (*session.Session, error)
 }
 
 // CreateExecutor executes a session creation with streaming output.
 type CreateExecutor struct {
 	creator SessionCreator
-	opts    hive.CreateOptions
+	opts    sessionsvc.CreateOptions
 
 	// ResultSessionID and ResultSessionName are populated with the created
 	// session's ID and name before the done channel fires. Safe to read

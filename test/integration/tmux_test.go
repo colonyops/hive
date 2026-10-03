@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/platform/tmux/exec"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -129,7 +129,7 @@ func integrationSession(t *testing.T, h *Harness, id string) session.Session {
 	database, err := db.Open(h.DataDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
 	defer func() { require.NoError(t, database.Close()) }()
-	sess, err := stores.NewSessionStore(database).Get(context.Background(), id)
+	sess, err := store.NewSessionStore(database).Get(context.Background(), id)
 	require.NoError(t, err)
 	return sess
 }
@@ -139,7 +139,7 @@ func setIntegrationTmuxTarget(t *testing.T, h *Harness, id, target string) {
 	database, err := db.Open(h.DataDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
 	defer func() { require.NoError(t, database.Close()) }()
-	store := stores.NewSessionStore(database)
+	store := store.NewSessionStore(database)
 	sess, err := store.Get(context.Background(), id)
 	require.NoError(t, err)
 	sess.SetMeta(session.MetaTmuxSession, target)

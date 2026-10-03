@@ -2,7 +2,6 @@ package dispatch
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -18,9 +17,10 @@ import (
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	terminalstatus "github.com/colonyops/hive/internal/domain/terminal/status"
-	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/platform/git"
-	"github.com/colonyops/hive/internal/platform/tmux/control"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	statussvc "github.com/colonyops/hive/internal/hive/status"
+	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
 // AgentActivityStatus is this app's own vocabulary for a captured tmux pane's
@@ -47,12 +47,11 @@ func ClassifyAgentScreen(agent, screen string) AgentActivityStatus {
 }
 
 type SessionCreator interface {
-	CreateSession(context.Context, hive.CreateOptions) (*session.Session, error)
+	CreateFromRequest(context.Context, sessionsvc.LaunchRequest) (session.Session, error)
 }
 
 type sessionLaunchOptionsSource interface {
-	SessionLaunchOptions(context.Context) (hive.SessionLaunchOptions, error)
-	ResolveSessionLaunchRepository(context.Context, string) (hive.SessionLaunchRepository, error)
+	SessionLaunchOptions(context.Context) (sessionsvc.LaunchOptions, error)
 }
 
 // SessionManagement is the shared session surface the desktop manages
@@ -65,13 +64,13 @@ type SessionManagement interface {
 	DeleteSession(ctx context.Context, id string) error
 	RecycleSession(ctx context.Context, id string, w io.Writer) error
 	Prune(ctx context.Context, all bool) (int, error)
-	CheckRisk(ctx context.Context, sess session.Session) hive.SessionRisk
+	CheckRisk(ctx context.Context, sess session.Session) sessionsvc.Risk
 	OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error
 }
 
 type sessionStatusSource interface {
 	Available() bool
-	FetchBatch(context.Context, []*session.Session, []hive.RootRepoTarget) map[string]hive.TerminalStatus
+	FetchBatch(context.Context, []*session.Session, []statussvc.RootRepoTarget) map[string]statussvc.TerminalStatus
 }
 
 // SessionWindowRef joins Hive's index-based activity result to the stable tmux
@@ -282,14 +281,6 @@ func (l *HiveSessionLauncher) LaunchSession(ctx context.Context, req LaunchSessi
 	if sessions == nil {
 		return SessionExecutionOutcome{}, fmt.Errorf("launch session: hive session service is unavailable")
 	}
-	remote, source := req.Repo, ""
-	if known, ok := sessions.(sessionLaunchOptionsSource); ok {
-		repo, err := known.ResolveSessionLaunchRepository(ctx, req.Repo)
-		if err != nil {
-			return SessionExecutionOutcome{}, fmt.Errorf("resolve launch repository: %w", err)
-		}
-		remote, source = repo.Remote, repo.Source
-	}
 	// Tags are presentational, for a reader inside hive, and are never read
 	// back. ItemSessionLinker writes the associations this app queries.
 	origins := uniqueKnownOrigins(req.Origins)
@@ -297,34 +288,16 @@ func (l *HiveSessionLauncher) LaunchSession(ctx context.Context, req LaunchSessi
 	for _, origin := range origins {
 		tags = append(tags, origin.ExternalID)
 	}
-	// One progress writer per attempt: hive's error names the operation that
-	// failed but not the step, so without this a clone failure arrives as
-	// "clone repository: git clone: exec git: exit status 1" and nothing else.
-	progress := &sessionProgress{}
-	s, err := sessions.CreateSession(ctx, hive.CreateOptions{Name: req.Name, Prompt: req.Prompt, Remote: remote, Source: source, AgentKey: req.Agent, Background: true, UseBatchSpawn: false, CollisionSuffix: req.CollisionSuffix, Tags: tags, Progress: progress})
+	s, err := sessions.CreateFromRequest(ctx, sessionsvc.LaunchRequest{
+		Name:            req.Name,
+		Prompt:          req.Prompt,
+		Agent:           req.Agent,
+		Repo:            req.Repo,
+		CollisionSuffix: req.CollisionSuffix,
+		Tags:            tags,
+	})
 	if err != nil {
-		if errors.Is(err, session.ErrDuplicateName) {
-			return SessionExecutionOutcome{}, err
-		}
-		failure := &SessionCreateError{
-			Name:   req.Name,
-			Remote: remote,
-			Step:   progress.LastLine(),
-			Output: progress.Tail(),
-			Err:    err,
-		}
-		// hive names the operation, the checkout and the strategy on its own
-		// error for every step that runs after it resolved a destination. Its
-		// Operation beats the derived progress line: it is the authority on
-		// which step failed, not a guess at the last thing that printed.
-		if created, ok := errors.AsType[*hive.CreateSessionError](err); ok {
-			failure.Destination, failure.CloneStrategy = created.Destination, created.CloneStrategy
-			failure.LeftoverCheckout = leftoverCheckout(created.Destination)
-			if created.Operation != "" {
-				failure.Step = created.Operation
-			}
-		}
-		return SessionExecutionOutcome{}, failure
+		return SessionExecutionOutcome{}, err
 	}
 	// The session exists either way, so a failed link is logged rather than
 	// returned: reporting the launch as failed would be a lie, and would
@@ -338,7 +311,7 @@ func (l *HiveSessionLauncher) LaunchSession(ctx context.Context, req LaunchSessi
 	}
 	if l.recorder != nil {
 		name := req.Name
-		if s != nil && s.Name != "" {
+		if s.Name != "" {
 			name = s.Name
 		}
 		l.recorder.Record(ctx, activity.SessionCreated(name, req.Agent, req.Repo))
@@ -408,14 +381,7 @@ type managerHive struct {
 // sessionGit is the read-only slice of the shared git executor a session's
 // status needs. Narrowed rather than taking git.Git whole so the seam cannot
 // grow a Checkout or a ResetHard: reporting status must not move a worktree.
-type sessionGit interface {
-	Branch(ctx context.Context, dir string) (string, error)
-	IsClean(ctx context.Context, dir string) (bool, error)
-	HasUnpushedCommits(ctx context.Context, dir string) (bool, error)
-	DiffStats(ctx context.Context, dir string) (additions, deletions int, err error)
-}
-
-var _ sessionGit = git.Git(nil)
+type sessionGit = gitstatus.Git
 
 func NewHiveSessionManager(sessions SessionManagement, statuses sessionStatusSource, windows sessionWindowSource, gitExec sessionGit, statusPollInterval time.Duration) *HiveSessionManager {
 	m := &HiveSessionManager{windows: windows}
@@ -481,7 +447,7 @@ func (m *HiveSessionManager) SessionStatuses(ctx context.Context) (SessionStatus
 		if !ok {
 			continue
 		}
-		refs := windowSets[hive.SessionTarget(*s).Session]
+		refs := windowSets[sessionsvc.Target(*s).Session]
 		item := SessionStatus{SessionID: s.ID, Running: len(refs) > 0, Windows: []SessionWindowStatus{}}
 		if m.windows == nil {
 			item.Running = status.Status != terminal.StatusMissing
@@ -517,7 +483,7 @@ func (m *HiveSessionManager) sessionWindows(ctx context.Context, sessions []*ses
 	}
 	targets := make([]string, 0, len(sessions))
 	for _, s := range sessions {
-		targets = append(targets, hive.SessionTarget(*s).Session)
+		targets = append(targets, sessionsvc.Target(*s).Session)
 	}
 	return m.windows.ListIndexedWindows(ctx, targets)
 }
@@ -583,7 +549,7 @@ func (m *HiveSessionManager) RunningSessions(ctx context.Context, ids []string) 
 	}
 	if m.windows != nil {
 		for _, s := range subset {
-			if len(windowSets[hive.SessionTarget(*s).Session]) > 0 {
+			if len(windowSets[sessionsvc.Target(*s).Session]) > 0 {
 				running[s.ID] = true
 			}
 		}
@@ -610,7 +576,7 @@ func (m *HiveSessionManager) SessionDetail(ctx context.Context, id string) (Sess
 		Path:           s.Path,
 		CloneStrategy:  s.CloneStrategy,
 		WorktreeBranch: s.GetMeta(session.MetaWorktreeBranch),
-		TmuxSession:    hive.SessionTarget(s).Session,
+		TmuxSession:    sessionsvc.Target(s).Session,
 		Tags:           s.Tags,
 		CreatedAt:      s.CreatedAt,
 		UpdatedAt:      s.UpdatedAt,
@@ -634,9 +600,7 @@ func (m *HiveSessionManager) SessionRisk(ctx context.Context, id string) (Sessio
 	}, nil
 }
 
-// SessionGitStatus reads one session's checkout: its branch, whether it is
-// dirty, whether it has commits the remote does not, and the line delta
-// against the default branch.
+// SessionGitStatus reads one session's checkout through hive/gitstatus.
 //
 // Unlike SessionRisk it reports failures instead of assuming the risky answer.
 // Hive treats an IsClean error as dirty because a delete confirmation must
@@ -655,55 +619,23 @@ func (m *HiveSessionManager) SessionGitStatus(ctx context.Context, id string) (S
 		return SessionGitStatus{Error: "git is unavailable"}, nil
 	}
 
-	host, owner, repo := remoteCoordinates(s.Remote)
-	status := SessionGitStatus{Path: s.Path, Host: host, Owner: owner, Repo: repo}
-
-	branch, err := h.git.Branch(ctx, s.Path)
-	if err != nil {
-		// Every other read needs the working checkout Branch proves, so its
-		// failure stands for the whole status.
-		return SessionGitStatus{Path: s.Path, Host: host, Owner: owner, Repo: repo, Error: err.Error()}, nil
+	read := gitstatus.NewService(h.git, 1).ReadSession(ctx, s)
+	status := SessionGitStatus{
+		Path:      read.Path,
+		Branch:    read.Branch,
+		Dirty:     read.Dirty,
+		Unpushed:  read.Unpushed,
+		Additions: read.Additions,
+		Deletions: read.Deletions,
+		Host:      read.Host,
+		Owner:     read.Owner,
+		Repo:      read.Repo,
+		Resolved:  read.Resolved,
 	}
-	status.Branch = branch
-	status.Resolved = true
-
-	if clean, err := h.git.IsClean(ctx, s.Path); err == nil {
-		status.Dirty = !clean
-	} else {
-		status.Error = err.Error()
-	}
-	if unpushed, err := h.git.HasUnpushedCommits(ctx, s.Path); err == nil {
-		status.Unpushed = unpushed
-	} else if status.Error == "" {
-		// A worktree with no upstream reaches here on every read, so it must
-		// not displace a real error above.
-		status.Error = err.Error()
-	}
-	if additions, deletions, err := h.git.DiffStats(ctx, s.Path); err == nil {
-		status.Additions, status.Deletions = additions, deletions
-	} else if status.Error == "" {
+	if err := read.Error(); err != nil {
 		status.Error = err.Error()
 	}
 	return status, nil
-}
-
-// remoteCoordinates reads the host, owner and repo off a remote. Which forge
-// serves that host is not decided here: the app layer asks the connected
-// accounts, and a host none of them serves is what makes a pull-request lookup
-// unsupported.
-//
-// A remote naming no host — a local path — carries no coordinates either, since
-// git.ExtractOwnerRepo is host-agnostic and would read the last two path
-// segments of anything.
-func remoteCoordinates(remote string) (host, owner, repo string) {
-	// Lowered here so the forge match and the pull-request cache key are both
-	// canonical: a remote may be written with any casing in its host.
-	host = strings.ToLower(git.ExtractHost(remote))
-	if host == "" {
-		return "", "", ""
-	}
-	owner, repo = git.ExtractOwnerRepo(remote)
-	return host, owner, repo
 }
 
 // SpawnTmuxSession creates the tmux session for a session hive already holds,
@@ -769,7 +701,7 @@ func sessionSummaryOf(s session.Session) SessionSummary {
 		Slug:        s.Slug,
 		Repo:        s.Remote,
 		State:       string(s.State),
-		TmuxSession: hive.SessionTarget(s).Session,
+		TmuxSession: sessionsvc.Target(s).Session,
 	}
 }
 

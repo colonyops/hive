@@ -69,8 +69,8 @@ run = "go-enum --nocase --names --marshal -f cmd/hive/internal/action/type.go -f
 [tasks."generate:sqlc"]
 description = "Generate both store layers (hive.db and the desktop pipeline) from sqlc.yaml"
 sources = [
-  "internal/data/db/queries/*.sql",
-  "internal/data/db/migrations/*.up.sql",
+  "internal/store/db/queries/*.sql",
+  "internal/store/db/migrations/*.up.sql",
   "cmd/desktop/internal/app/data/queries/queries/*.sql",
   "cmd/desktop/internal/app/data/queries/migrations/*.up.sql",
   "sqlc.yaml",
@@ -81,8 +81,8 @@ run = "sqlc generate"
 [tasks.generate]
 description = "Run all code generators"
 depends = ["generate:enums", "generate:sqlc"]
-sources = ["internal/core/eventbus/events.go"]
-outputs = ["internal/core/eventbus/eventbus.gen.go"]
+sources = ["internal/hive/events/events.go"]
+outputs = ["internal/hive/events/eventbus.gen.go"]
 run = "go generate ./..."
 
 # ── Quality gates ────────────────────────────────────────────────────────────
@@ -135,7 +135,7 @@ mise run --force generate
 # would pass unnoticed. The diff is against the index, not HEAD, so it also
 # answers correctly as a pre-commit hook.
 git add -N internal cmd/hive/internal cmd/desktop/internal
-git diff --exit-code -- '*_enum.go' '*.gen.go' 'internal/data/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' || {
+git diff --exit-code -- '*_enum.go' '*.gen.go' 'internal/store/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' || {
   echo "Generated files are out of date. Run 'mise run generate' and commit the result." >&2
   exit 1
 }

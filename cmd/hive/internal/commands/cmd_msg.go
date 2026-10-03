@@ -12,14 +12,14 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/hive"
+	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/urfave/cli/v3"
 )
 
-func (cmd *MsgCmd) messages() *hive.MessageService {
-	return cmd.app.Messages
+func (cmd *MsgCmd) messages() *msgsvc.Service {
+	return cmd.app.Messages()
 }
 
 type MsgCmd struct {
@@ -414,7 +414,7 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 	return nil
 }
 
-func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, msgs *hive.MessageService, topic string, ack bool) error {
+func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, msgs *msgsvc.Service, topic string, ack bool) error {
 	timeout, err := time.ParseDuration(cmd.subTimeout)
 	if err != nil {
 		return fmt.Errorf("invalid timeout: %w", err)
@@ -453,7 +453,7 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, msgs *
 	}
 }
 
-func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, msgs *hive.MessageService, topic string, ack bool) error {
+func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, msgs *msgsvc.Service, topic string, ack bool) error {
 	// Use 24h default for --wait mode (essentially forever for handoff scenarios)
 	timeout := 24 * time.Hour
 	if cmd.subTimeout != "30s" { // User explicitly set a timeout
@@ -572,20 +572,20 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *MsgCmd) detectSessionID(ctx context.Context) (string, error) {
-	return cmd.app.Sessions.DetectSession(ctx)
+	return cmd.app.Sessions().DetectSession(ctx)
 }
 
 // resolveSessionID resolves a session from a --session flag value (ID or name).
 // Returns the session ID if found, or an error.
 func (cmd *MsgCmd) resolveSessionID(ctx context.Context, sessionRef string) (string, error) {
 	// Try direct ID lookup first
-	sess, err := cmd.app.Sessions.GetSession(ctx, sessionRef)
+	sess, err := cmd.app.Sessions().GetSession(ctx, sessionRef)
 	if err == nil {
 		return sess.ID, nil
 	}
 
 	// Fall back to name match
-	sessions, err := cmd.app.Sessions.ListSessions(ctx)
+	sessions, err := cmd.app.Sessions().ListSessions(ctx)
 	if err != nil {
 		return "", fmt.Errorf("list sessions: %w", err)
 	}
@@ -612,7 +612,7 @@ func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) erro
 
 // acknowledgeMessages marks messages as read by the current session.
 // Logs errors but does not fail the operation.
-func (cmd *MsgCmd) acknowledgeMessages(ctx context.Context, msgs *hive.MessageService, messages []messaging.Message) {
+func (cmd *MsgCmd) acknowledgeMessages(ctx context.Context, msgs *msgsvc.Service, messages []messaging.Message) {
 	sessionID, err := cmd.detectSessionID(ctx)
 	if err != nil {
 		log.Printf("warning: failed to detect session for acknowledgment: %v", err)

@@ -5,34 +5,34 @@ import (
 	"testing"
 
 	hiveconfig "github.com/colonyops/hive/internal/config"
-	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/todo"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/events"
+	todosvc "github.com/colonyops/hive/internal/hive/todo"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func newTodoPanelService(t *testing.T) *hive.TodoService {
+func newTodoPanelService(t *testing.T) *todosvc.Service {
 	t.Helper()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
 
-	store := stores.NewTodoStore(database)
-	bus := eventbus.New(16)
+	store := store.NewTodoStore(database)
+	bus := events.New(16)
 	ctx, cancel := context.WithCancel(context.Background())
 	go bus.Start(ctx)
 	t.Cleanup(cancel)
 
 	cfg := hiveconfig.DefaultConfig()
 	cfg.DataDir = t.TempDir()
-	return hive.NewTodoService(store, bus, &cfg, zerolog.Nop())
+	return todosvc.NewService(store, bus, &cfg, zerolog.Nop())
 }
 
-func addHumanTodo(t *testing.T, svc *hive.TodoService, id, title string) todo.Todo {
+func addHumanTodo(t *testing.T, svc *todosvc.Service, id, title string) todo.Todo {
 	t.Helper()
 	td, err := todo.NewHumanTodo(id, title, todo.Ref{})
 	require.NoError(t, err)
@@ -41,7 +41,7 @@ func addHumanTodo(t *testing.T, svc *hive.TodoService, id, title string) todo.To
 	return created
 }
 
-func newTestTodoPanel(t *testing.T, svc *hive.TodoService) *TodoPanel {
+func newTestTodoPanel(t *testing.T, svc *todosvc.Service) *TodoPanel {
 	t.Helper()
 	return NewTodoPanel(svc, 120, 40)
 }

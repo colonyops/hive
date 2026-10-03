@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
-	coredb "github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/hc"
-	hivesvc "github.com/colonyops/hive/internal/hive"
+	hcsvc "github.com/colonyops/hive/internal/hive/hc"
+	"github.com/colonyops/hive/internal/store"
+	coredb "github.com/colonyops/hive/internal/store/db"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -19,13 +19,13 @@ import (
 // hive's actual implementation rather than a fake shaped to fit it. svc is
 // returned alongside the adapter so tests can seed and verify state through
 // hive's own API.
-func newHiveHoneycombTasks(t *testing.T) (*HiveHoneycomb, *hivesvc.HoneycombService) {
+func newHiveHoneycombTasks(t *testing.T) (*HiveHoneycomb, *hcsvc.Service) {
 	t.Helper()
 	database, err := coredb.Open(t.TempDir(), coredb.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, database.Close()) })
 
-	svc := hivesvc.NewHoneycombService(stores.NewHCStore(database), zerolog.Nop())
+	svc := hcsvc.NewService(store.NewHCStore(database), zerolog.Nop())
 	return NewHiveHoneycomb(svc), svc
 }
 

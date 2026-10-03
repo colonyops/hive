@@ -74,29 +74,29 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	}
 
 	// Detect current repository remote for highlighting current repo
-	localRemote, _ := cmd.app.Sessions.DetectRemote(ctx, ".")
+	localRemote, _ := cmd.app.Sessions().DetectRemote(ctx, ".")
 
 	source, _ := os.Getwd()
 
 	deps := tui.Deps{
 		Config:        cmd.app.Config,
-		Service:       cmd.app.Sessions,
-		MsgStore:      cmd.app.Messages,
-		TodoService:   cmd.app.Todos,
-		Bus:           cmd.app.Bus,
-		Status:        cmd.app.Status,
+		Service:       cmd.app.Sessions(),
+		MsgStore:      cmd.app.Messages(),
+		TodoService:   cmd.app.Todos(),
+		Bus:           cmd.app.Bus(),
+		Status:        cmd.app.Status(),
 		PluginManager: cmd.app.Plugins,
 		CommandSet:    cmd.app.CommandSet,
-		DB:            cmd.app.DB,
+		DB:            cmd.app.DB(),
 		KVStore:       cmd.app.KV,
-		Renderer:      cmd.app.Renderer,
+		Renderer:      cmd.app.Renderer(),
 		BuildInfo: tui.BuildInfo{
 			Version: cmd.app.Build.Version,
 			Commit:  cmd.app.Build.Commit,
 			Date:    cmd.app.Build.Date,
 		},
 		DoctorService: cmd.app.Doctor,
-		Honeycomb:     cmd.app.Honeycomb,
+		Honeycomb:     cmd.app.HC(),
 		Sources:       cmd.app.Sources,
 	}
 	opts := tui.Opts{
@@ -106,7 +106,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		ConfigPath:  cmd.flags.ConfigPath,
 	}
 
-	restoreOutput := cmd.app.Sessions.SilenceOutput()
+	restoreOutput := cmd.app.Sessions().SilenceOutput()
 
 	m := tui.New(deps, opts)
 	p := tea.NewProgram(m)

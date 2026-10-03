@@ -1,0 +1,336 @@
+// Package hc is the honeycomb task service.
+package hc
+
+import (
+	"context"
+	"fmt"
+	"iter"
+	"strings"
+	"time"
+
+	"github.com/colonyops/hive/internal/domain/hc"
+	"github.com/rs/zerolog"
+)
+
+// Service orchestrates hc item and comment operations.
+type Service struct {
+	store  hc.Store
+	logger zerolog.Logger
+}
+
+// NewService creates a new Service.
+func NewService(store hc.Store, logger zerolog.Logger) *Service {
+	return &Service{
+		store:  store,
+		logger: logger,
+	}
+}
+
+// CreateItem creates a single hc item, resolving parent relationships when a
+// ParentID is supplied.
+func (s *Service) CreateItem(ctx context.Context, repoKey string, input hc.CreateItemInput) (hc.Item, error) {
+	if input.Title == "" {
+		return hc.Item{}, fmt.Errorf("title is required")
+	}
+
+	now := time.Now()
+	item := hc.Item{
+		ID:        hc.GenerateID(),
+		RepoKey:   repoKey,
+		Title:     input.Title,
+		Desc:      input.Desc,
+		Type:      input.Type,
+		ParentID:  input.ParentID,
+		Status:    hc.StatusOpen,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if input.ParentID != "" {
+		parent, err := s.store.GetItem(ctx, input.ParentID)
+		if err != nil {
+			return hc.Item{}, fmt.Errorf("get parent item %q: %w", input.ParentID, err)
+		}
+
+		if parent.IsEpic() {
+			item.EpicID = parent.ID
+			item.Depth = 1
+		} else {
+			item.EpicID = parent.EpicID
+			item.Depth = parent.Depth + 1
+		}
+	}
+
+	if err := s.store.CreateItems(ctx, []hc.Item{item}); err != nil {
+		return hc.Item{}, fmt.Errorf("create item: %w", err)
+	}
+
+	return item, nil
+}
+
+// createInputEntry pairs a CreateInput with its generated hc.Item.
+type createInputEntry struct {
+	input hc.CreateInput
+	item  hc.Item
+}
+
+// walkCreateInputWithEntry yields (CreateInput, hc.Item) pairs from the tree in BFS order.
+func walkCreateInputWithEntry(input hc.CreateInput, repoKey, epicID, parentID string, depth int, now time.Time) iter.Seq[createInputEntry] {
+	return func(yield func(createInputEntry) bool) {
+		id := hc.GenerateID()
+		item := hc.Item{
+			ID:        id,
+			RepoKey:   repoKey,
+			EpicID:    epicID,
+			ParentID:  parentID,
+			Title:     input.Title,
+			Desc:      input.Desc,
+			Type:      input.Type,
+			Status:    hc.StatusOpen,
+			Depth:     depth,
+			CreatedAt: now,
+			UpdatedAt: now,
+		}
+		if !yield(createInputEntry{input: input, item: item}) {
+			return
+		}
+		childEpicID := epicID
+		if depth == 0 {
+			childEpicID = id
+		}
+		for _, child := range input.Children {
+			for entry := range walkCreateInputWithEntry(child, repoKey, childEpicID, id, depth+1, now) {
+				if !yield(entry) {
+					return
+				}
+			}
+		}
+	}
+}
+
+// validateBatchBlockerRefs checks that all Blockers refs in the batch refer to known refs
+// and that no in-batch cycles exist. It also builds and returns the resolved edge list.
+func validateBatchBlockerRefs(entries []createInputEntry) ([][2]string, error) {
+	refToID := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if e.input.Ref != "" {
+			refToID[e.input.Ref] = e.item.ID
+		}
+	}
+
+	var edges [][2]string
+	for _, e := range entries {
+		for _, blocker := range e.input.Blockers {
+			blockerID, ok := refToID[blocker]
+			if !ok {
+				return nil, fmt.Errorf("unknown blocker ref %q", blocker)
+			}
+			edges = append(edges, [2]string{blockerID, e.item.ID})
+		}
+	}
+
+	// Check for in-batch cycles by testing each candidate edge against the full set.
+	for _, edge := range edges {
+		if hc.WouldCycle(edges, edge[0], edge[1]) {
+			return nil, fmt.Errorf("in-batch cycle detected involving ref edges")
+		}
+	}
+	return edges, nil
+}
+
+// CreateBulk walks a CreateInput tree (BFS) and persists all items in one
+// atomic call. The root node must be of type epic.
+func (s *Service) CreateBulk(ctx context.Context, repoKey string, input hc.CreateInput) ([]hc.Item, error) {
+	if input.Type != hc.ItemTypeEpic {
+		return nil, fmt.Errorf("root item must be of type epic, got %q", input.Type)
+	}
+
+	now := time.Now()
+	var entries []createInputEntry
+	for entry := range walkCreateInputWithEntry(input, repoKey, "", "", 0, now) {
+		entries = append(entries, entry)
+	}
+
+	edges, err := validateBatchBlockerRefs(entries)
+	if err != nil {
+		return nil, fmt.Errorf("validate blocker refs: %w", err)
+	}
+
+	items := make([]hc.Item, len(entries))
+	for i, e := range entries {
+		items[i] = e.item
+	}
+
+	if err := s.store.CreateBulkWithEdges(ctx, items, edges); err != nil {
+		return nil, fmt.Errorf("bulk create items: %w", err)
+	}
+
+	return items, nil
+}
+
+// AddBlocker records that blockerID blocks blockedID.
+// Cycle detection and the insert are performed atomically by the store.
+// Returns hc.ErrCyclicDependency if the edge would create a cycle.
+func (s *Service) AddBlocker(ctx context.Context, blockerID, blockedID string) error {
+	return s.store.AddBlocker(ctx, blockerID, blockedID)
+}
+
+// RemoveBlocker removes the explicit blocker relationship.
+func (s *Service) RemoveBlocker(ctx context.Context, blockerID, blockedID string) error {
+	return s.store.RemoveBlocker(ctx, blockerID, blockedID)
+}
+
+// ListBlockers returns IDs of open/in_progress items that explicitly block the given item.
+func (s *Service) ListBlockers(ctx context.Context, itemID string) ([]string, error) {
+	return s.store.ListBlockers(ctx, itemID)
+}
+
+// GetItem returns an item by ID.
+func (s *Service) GetItem(ctx context.Context, id string) (hc.Item, error) {
+	return s.store.GetItem(ctx, id)
+}
+
+// UpdateItem applies a partial update to an item and returns the result.
+// If the item is an epic and the update transitions it to a terminal status
+// (done or cancelled) from a different status, all non-terminal descendants
+// are updated to the same terminal status.
+func (s *Service) UpdateItem(ctx context.Context, id string, update hc.ItemUpdate) (hc.Item, error) {
+	old, err := s.store.GetItem(ctx, id)
+	if err != nil {
+		return hc.Item{}, fmt.Errorf("get item before update %q: %w", id, err)
+	}
+
+	updated, err := s.store.UpdateItem(ctx, id, update)
+	if err != nil {
+		return hc.Item{}, err
+	}
+
+	isTerminal := updated.Status == hc.StatusDone || updated.Status == hc.StatusCancelled
+	statusChanged := old.Status != updated.Status
+	if updated.IsEpic() && isTerminal && statusChanged {
+		if cascadeErr := s.store.BulkUpdateStatus(ctx, updated.ID, updated.Status); cascadeErr != nil {
+			return hc.Item{}, fmt.Errorf("cascade status to descendants of epic %q: %w", updated.ID, cascadeErr)
+		}
+	}
+
+	return updated, nil
+}
+
+// ListItems returns items matching the supplied filter.
+func (s *Service) ListItems(ctx context.Context, filter hc.ListFilter) ([]hc.Item, error) {
+	return s.store.ListItems(ctx, filter)
+}
+
+// Next returns the next actionable item for the given filter.
+func (s *Service) Next(ctx context.Context, filter hc.NextFilter) (hc.Item, bool, error) {
+	return s.store.NextItem(ctx, filter)
+}
+
+// ListComments returns all comments for an item in chronological order.
+func (s *Service) ListComments(ctx context.Context, itemID string) ([]hc.Comment, error) {
+	return s.store.ListComments(ctx, itemID)
+}
+
+// AddComment attaches a new comment to an item and returns the created comment.
+func (s *Service) AddComment(ctx context.Context, itemID, message string) (hc.Comment, error) {
+	if strings.TrimSpace(message) == "" {
+		return hc.Comment{}, fmt.Errorf("message is required")
+	}
+
+	if _, err := s.store.GetItem(ctx, itemID); err != nil {
+		return hc.Comment{}, fmt.Errorf("hc item %q: %w", itemID, hc.ErrNotFound)
+	}
+
+	comment := hc.Comment{
+		ID:        hc.GenerateCommentID(),
+		ItemID:    itemID,
+		Message:   message,
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.store.AddComment(ctx, comment); err != nil {
+		return hc.Comment{}, fmt.Errorf("add comment to item %q: %w", itemID, err)
+	}
+
+	return comment, nil
+}
+
+// Context assembles a ContextBlock for the given epic and session.
+func (s *Service) Context(ctx context.Context, epicID, sessionID string) (hc.ContextBlock, error) {
+	epic, err := s.store.GetItem(ctx, epicID)
+	if err != nil {
+		return hc.ContextBlock{}, fmt.Errorf("get epic %q: %w", epicID, err)
+	}
+
+	if !epic.IsEpic() {
+		return hc.ContextBlock{}, fmt.Errorf("item %q is not an epic", epicID)
+	}
+
+	all, err := s.store.ListItems(ctx, hc.ListFilter{EpicID: epicID})
+	if err != nil {
+		return hc.ContextBlock{}, fmt.Errorf("list items for epic %q: %w", epicID, err)
+	}
+
+	var counts hc.TaskCounts
+	var allOpen []hc.Item
+	var myTasks []hc.TaskWithComment
+
+	for _, item := range all {
+		switch item.Status {
+		case hc.StatusOpen:
+			counts.Open++
+		case hc.StatusInProgress:
+			counts.InProgress++
+		case hc.StatusDone:
+			counts.Done++
+		case hc.StatusCancelled:
+			counts.Cancelled++
+		}
+
+		if (item.Status == hc.StatusOpen || item.Status == hc.StatusInProgress) &&
+			(sessionID == "" || item.SessionID != sessionID) {
+			allOpen = append(allOpen, item)
+		}
+
+		if sessionID != "" && item.SessionID == sessionID && (item.Status == hc.StatusOpen || item.Status == hc.StatusInProgress) {
+			twc := hc.TaskWithComment{Item: item}
+
+			comments, err := s.store.ListComments(ctx, item.ID)
+			if err != nil {
+				s.logger.Warn().Err(err).Str("item_id", item.ID).Msg("failed to list comments for my task")
+			} else if len(comments) > 0 {
+				twc.LatestComment = comments[len(comments)-1]
+			}
+
+			myTasks = append(myTasks, twc)
+		}
+	}
+
+	return hc.ContextBlock{
+		Epic:         epic,
+		Counts:       counts,
+		MyTasks:      myTasks,
+		AllOpenTasks: allOpen,
+	}, nil
+}
+
+// ListRepoKeys returns all distinct, non-empty repo keys.
+func (s *Service) ListRepoKeys(ctx context.Context) ([]string, error) {
+	return s.store.ListRepoKeys(ctx)
+}
+
+// Fingerprint summarizes every hc table so a reader can detect a change
+// another process made without re-reading the items.
+func (s *Service) Fingerprint(ctx context.Context) (hc.Fingerprint, error) {
+	return s.store.Fingerprint(ctx)
+}
+
+// DeleteItem removes an item by ID.
+func (s *Service) DeleteItem(ctx context.Context, id string) error {
+	return s.store.DeleteItem(ctx, id)
+}
+
+// Prune delegates to the store's Prune implementation.
+func (s *Service) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
+	return s.store.Prune(ctx, opts)
+}

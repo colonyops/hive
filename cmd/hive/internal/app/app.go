@@ -8,19 +8,13 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/sources"
-	"github.com/colonyops/hive/internal/core/doctor"
-	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/domain/kv"
-	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
-	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
-	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/pkg/tmpl"
-	"github.com/rs/zerolog"
+	"github.com/colonyops/hive/internal/hive/doctor"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/store"
 )
 
 // BuildInfo holds build-time metadata set by the main package.
@@ -32,7 +26,7 @@ type BuildInfo struct {
 
 // Multiplexer exposes the shared operations used by application commands.
 type Multiplexer interface {
-	hive.SessionMultiplexer
+	sessionsvc.Multiplexer
 	terminal.PaneSource
 	ResolveTarget(ctx context.Context, raw string) (multiplexer.Pane, error)
 	SendLiteral(ctx context.Context, target multiplexer.Target, text string) error
@@ -40,67 +34,43 @@ type Multiplexer interface {
 	Paste(ctx context.Context, target multiplexer.Target, text []byte, opts multiplexer.PasteOptions) error
 }
 
-// App is the central entry point for all hive operations.
-// Commands and TUI consume App instead of cherry-picking raw dependencies.
+// App is the central entry point for all hive operations. It embeds the
+// engine, whose accessors (Sessions, Messages, HC, ...) commands and the TUI
+// call per use, and adds what only the CLI has.
 type App struct {
-	Sessions  *hive.SessionService
-	Messages  *hive.MessageService
-	Context   *hive.ContextService
-	Doctor    *hive.DoctorService
-	Todos     *hive.TodoService
-	Honeycomb *hive.HoneycombService
-	Status    *hive.StatusService
+	*hive.Engine
 
-	Bus         *eventbus.EventBus
-	Terminal    *terminal.Manager
+	// Config is the CLI config. It shadows Engine.Config, and its embedded
+	// engine half is the config the engine was built from.
+	Config      *config.Config
+	Doctor      *doctor.Service
 	Multiplexer Multiplexer
 	Plugins     *plugins.Manager
 	CommandSet  *plugins.CommandSet
-	Config      *config.Config
-	DB          *db.DB
 	KV          kv.KV
-	Renderer    *tmpl.Renderer
 	Build       BuildInfo
 	Sources     *sources.Registry
 }
 
-// NewApp constructs an App from explicit dependencies. The engine services
-// get the engine half of cfg; doctor validates all of it.
+// NewApp wraps an engine built from &cfg.Config with the CLI pieces. Doctor
+// validates the whole CLI config, so `hive doctor` keeps reporting errors in
+// sections only the CLI reads.
 func NewApp(
-	sessions *hive.SessionService,
-	sessionStore session.Store,
-	msgStore messaging.Store,
-	todoStore todo.Store,
-	hcStore hc.Store,
+	engine *hive.Engine,
 	cfg *config.Config,
-	bus *eventbus.EventBus,
-	termMgr *terminal.Manager,
 	multiplexer Multiplexer,
 	pluginMgr *plugins.Manager,
 	commandSet *plugins.CommandSet,
-	database *db.DB,
 	kvStore kv.KV,
-	renderer *tmpl.Renderer,
 	pluginInfos []doctor.PluginInfo,
-	logger zerolog.Logger,
 ) *App {
-	engineCfg := &cfg.Config
 	return &App{
-		Sessions:    sessions,
-		Messages:    hive.NewMessageService(msgStore, engineCfg, bus),
-		Context:     hive.NewContextService(engineCfg, sessions.Git()),
-		Doctor:      hive.NewDoctorService(sessionStore, engineCfg, cfg, pluginInfos),
-		Todos:       hive.NewTodoService(todoStore, bus, engineCfg, logger.With().Str("component", "todos").Logger()),
-		Honeycomb:   hive.NewHoneycombService(hcStore, logger.With().Str("component", "honeycomb").Logger()),
-		Status:      hive.NewStatusService(termMgr, cfg.Git.StatusWorkers),
-		Bus:         bus,
-		Terminal:    termMgr,
+		Engine:      engine,
+		Config:      cfg,
+		Doctor:      doctor.NewService(store.NewSessionStore(engine.DB()), &cfg.Config, cfg, pluginInfos),
 		Multiplexer: multiplexer,
 		Plugins:     pluginMgr,
 		CommandSet:  commandSet,
-		Config:      cfg,
-		DB:          database,
 		KV:          kvStore,
-		Renderer:    renderer,
 	}
 }

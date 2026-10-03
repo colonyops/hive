@@ -14,7 +14,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/sourcepicker"
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/hive"
+	todosvc "github.com/colonyops/hive/internal/hive/todo"
 )
 
 // ModalCoordinator owns all modal component references, pending action state,
@@ -220,7 +220,7 @@ func (mc *ModalCoordinator) DismissInfo() {
 }
 
 // ShowTodoPanel creates and displays the todo action panel.
-func (mc *ModalCoordinator) ShowTodoPanel(service *hive.TodoService) {
+func (mc *ModalCoordinator) ShowTodoPanel(service *todosvc.Service) {
 	mc.TodoPanel = NewTodoPanel(service, mc.width, mc.height)
 }
 

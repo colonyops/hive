@@ -27,7 +27,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/todo"
-	"github.com/colonyops/hive/internal/hive"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
@@ -1097,7 +1097,7 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 		return "", "", err
 	}
 
-	exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
+	exec := m.cmdService.NewCreateExecutor(sessionsvc.CreateOptions{
 		Name:            rendered.Name,
 		Prompt:          rendered.Prompt,
 		Remote:          scope.Remote,

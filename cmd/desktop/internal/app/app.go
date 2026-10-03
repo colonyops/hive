@@ -49,13 +49,15 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/terminalimg"
 	"github.com/colonyops/hive/internal/config"
-	"github.com/colonyops/hive/internal/core/eventbus"
-	coredb "github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	coreterminal "github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/scripts"
+	hiveevents "github.com/colonyops/hive/internal/hive/events"
+	hcsvc "github.com/colonyops/hive/internal/hive/hc"
+	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/hive/session/scripts"
+	statussvc "github.com/colonyops/hive/internal/hive/status"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/execenv"
 	"github.com/colonyops/hive/internal/platform/git"
@@ -63,6 +65,8 @@ import (
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	tmuxstatus "github.com/colonyops/hive/internal/platform/tmux/status"
+	"github.com/colonyops/hive/internal/store"
+	coredb "github.com/colonyops/hive/internal/store/db"
 )
 
 // Config is everything App needs that it cannot resolve itself.
@@ -221,7 +225,7 @@ type App struct {
 
 	// hiveBus and hiveDataDir are what a reload needs and must not rebuild:
 	// the bus subscribers already hold, and the resolved data directory.
-	hiveBus     *eventbus.EventBus
+	hiveBus     *hiveevents.EventBus
 	hiveDataDir string
 	// reloadMu serializes ReloadHiveRuntime. Each adapter swap is atomic on
 	// its own; the mutex is what makes the four swaps of one reload land
@@ -1248,8 +1252,8 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	}
 
 	// coredb.Open takes no context. Threading one means changing the shared
-	// internal/data/db package and its CLI callers.
-	//nolint:contextcheck // shared signature, see internal/data/db
+	// internal/store/db package and its CLI callers.
+	//nolint:contextcheck // shared signature, see internal/store/db
 	database, err := coredb.Open(dataDir, coredb.OpenOptions{
 		MaxOpenConns: hiveCfg.Database.MaxOpenConns,
 		MaxIdleConns: hiveCfg.Database.MaxIdleConns,
@@ -1258,14 +1262,14 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return fmt.Errorf("open hive action database: %w", err)
 	}
-	if err := stores.MigrateFromJSON(ctx, database, dataDir); err != nil {
+	if err := store.MigrateFromJSON(ctx, database, dataDir); err != nil {
 		_ = database.Close()
 		return fmt.Errorf("migrate hive action data: %w", err)
 	}
 	a.hiveDB = database
-	a.honeycomb = dispatch.NewHiveHoneycomb(hive.NewHoneycombService(stores.NewHCStore(database), cfg.Logger.With().Str("component", "hive-hc").Logger()))
+	a.honeycomb = dispatch.NewHiveHoneycomb(hcsvc.NewService(store.NewHCStore(database), cfg.Logger.With().Str("component", "hive-hc").Logger()))
 
-	bus := eventbus.New(64)
+	bus := hiveevents.New(64)
 	busCtx, cancel := context.WithCancel(ctx)
 	a.hiveBusCancel = cancel
 	go bus.Start(busCtx)
@@ -1348,10 +1352,10 @@ func (m hiveMultiplexer) RenameSession(ctx context.Context, target multiplexer.T
 }
 
 type hiveServices struct {
-	sessions      *hive.SessionService
-	statuses      *hive.StatusService
+	sessions      *sessionsvc.Service
+	statuses      *statussvc.Service
 	git           git.Git
-	messages      *hive.MessageService
+	messages      *msgsvc.Service
 	pollInterval  time.Duration
 	agentCommands map[string]string
 }
@@ -1364,7 +1368,7 @@ type hiveServices struct {
 // anything to close: the session, status and message services hold the handles
 // they were given and spawn per call, and the tmux capture recorder writes one
 // file per capture without keeping a handle.
-func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus *eventbus.EventBus) hiveServices {
+func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus *hiveevents.EventBus) hiveServices {
 	profile := hiveCfg.Agents.DefaultProfile()
 	renderer := tmpl.New(tmpl.Config{
 		ScriptPaths:  scripts.ScriptPaths(a.hiveDataDir),
@@ -1380,21 +1384,21 @@ func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus
 	}
 	tmuxClient := tmuxexec.New(newTmuxRunner(tmuxBinary, a.execEnv.Environ), serviceLogger.With().Str("component", "tmux").Logger())
 	sessionMultiplexer := hiveMultiplexer{Client: tmuxClient, renamer: a.terminals}
-	sessions := hive.NewSessionService(
-		stores.NewSessionStore(database),
+	sessions := sessionsvc.NewService(
+		store.NewSessionStore(database),
 		gitExec,
 		hiveCfg,
 		bus,
 		exec,
 		renderer,
-		hive.PlainStyler{},
+		sessionsvc.PlainStyler{},
 		serviceLogger,
 		io.Discard,
 		io.Discard,
 		sessionMultiplexer,
 	)
 
-	var statusService *hive.StatusService
+	var statusService *statussvc.Service
 	if a.mock == "" {
 		statusOptions := []tmuxstatus.Option{
 			tmuxstatus.WithPaneSource(tmuxClient),
@@ -1411,14 +1415,14 @@ func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus
 		}
 		terminalManager := coreterminal.NewManager([]string{"tmux"})
 		terminalManager.Register(tmuxstatus.NewFromPreviewMatchers(hiveCfg.Tmux.PreviewWindowMatcher, statusOptions...))
-		statusService = hive.NewStatusService(terminalManager, hiveCfg.Git.StatusWorkers)
+		statusService = statussvc.NewService(terminalManager, hiveCfg.Git.StatusWorkers)
 	}
 
 	return hiveServices{
 		sessions:      sessions,
 		statuses:      statusService,
 		git:           gitExec,
-		messages:      hive.NewMessageService(stores.NewMessageStore(database, hiveCfg.Messaging.MaxMessages), hiveCfg, bus),
+		messages:      msgsvc.NewService(store.NewMessageStore(database, hiveCfg.Messaging.MaxMessages), hiveCfg, bus),
 		pollInterval:  hiveCfg.Tmux.PollInterval,
 		agentCommands: agentCommands(hiveCfg),
 	}

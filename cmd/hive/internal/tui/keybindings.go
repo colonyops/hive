@@ -13,7 +13,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/hive"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -188,7 +188,7 @@ func (h *KeybindingResolver) commandFor(key string) (config.UserCommand, bool) {
 func (h *KeybindingResolver) resolveWindowsAction(a Action, cmd config.UserCommand, sess session.Session, data map[string]any) Action {
 	a.Type = action.TypeSpawnWindows
 
-	windows, err := hive.RenderUserCommandWindows(h.renderer, cmd.Windows, data)
+	windows, err := sessionsvc.RenderUserCommandWindows(h.renderer, cmd.Windows, data)
 	if err != nil {
 		a.Err = fmt.Errorf("template error in windows: %w", err)
 		return a

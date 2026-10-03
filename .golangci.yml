@@ -85,7 +85,7 @@ linters:
           deny:
             - pkg: github.com/colonyops/hive/internal/hive
               desc: &driver platform drives one outside system and knows nothing of services, stores or config (docs/architecture.md, "Layers and the dependency rule"). Take what you need as a parameter.
-            - pkg: github.com/colonyops/hive/internal/data
+            - pkg: github.com/colonyops/hive/internal/store
               desc: *driver
             - pkg: github.com/colonyops/hive/internal/config
               desc: *driver
@@ -96,12 +96,25 @@ linters:
           deny:
             - pkg: github.com/colonyops/hive/internal/hive
               desc: &configdata config is data. It loads, validates and writes config.yaml and knows nothing of services, stores, drivers or the programs (docs/architecture.md, "Layers and the dependency rule").
-            - pkg: github.com/colonyops/hive/internal/data
+            - pkg: github.com/colonyops/hive/internal/store
               desc: *configdata
             - pkg: github.com/colonyops/hive/internal/platform
               desc: *configdata
-            - pkg: github.com/colonyops/hive/internal/core
-              desc: *configdata
+        store-is-persistence:
+          files:
+            - "**/internal/store/**"
+            - "!**/cmd/**"
+          # Longer lax-mode allow matches override the platform deny.
+          list-mode: lax
+          allow:
+            - github.com/colonyops/hive/internal/platform/sqlite
+          deny:
+            - pkg: github.com/colonyops/hive/internal/hive
+              desc: &persistence store is hive.db persistence and knows nothing of services, config or drivers other than platform/sqlite (docs/architecture.md, "Layers and the dependency rule").
+            - pkg: github.com/colonyops/hive/internal/config
+              desc: *persistence
+            - pkg: github.com/colonyops/hive/internal/platform
+              desc: *persistence
         core:
           files:
             - "**/cmd/desktop/internal/app/**"
@@ -154,6 +167,7 @@ linters:
             - "!**/cmd/desktop/internal/app/dispatch/hive_adapters_test.go"
             - "!**/cmd/desktop/internal/app/dispatch/hive_hc_adapters.go"
             - "!**/cmd/desktop/internal/app/dispatch/hive_hc_adapters_test.go"
+            - "!**/cmd/desktop/internal/app/dispatch/session_create_error.go"
             - "!**/cmd/desktop/internal/app/dispatch/session_git_status_test.go"
             - "!**/cmd/desktop/internal/app/dispatch/launch_session_executor_test.go"
             - "!**/cmd/desktop/internal/app/data/queries/dbext.go"
@@ -178,7 +192,7 @@ linters:
             - github.com/colonyops/hive/internal/platform/tmux/control
             - github.com/colonyops/hive/internal/platform/tmuxtest
           deny:
-            - pkg: github.com/colonyops/hive/internal/core
+            - pkg: github.com/colonyops/hive/internal/store
               desc: &seam |
                 cmd/desktop/internal/app consumes the shared hive packages only
                 through the seam: declare a narrow interface here, let the
@@ -186,8 +200,6 @@ linters:
                 boundary in dispatch/hive_adapters.go. If this file genuinely
                 belongs at the seam, extend the allowlist in this rule's
                 `files`, with a comment saying why.
-            - pkg: github.com/colonyops/hive/internal/data
-              desc: *seam
             - pkg: github.com/colonyops/hive/internal/hive
               desc: *seam
             - pkg: github.com/colonyops/hive/internal/platform

@@ -17,7 +17,7 @@ type TemplateConfig struct {
 }
 
 // RenderedSession is the result of rendering a TemplateConfig against a
-// selected Item, ready to pass into hive.CreateOptions.
+// selected Item, ready to pass into sessionsvc.CreateOptions.
 type RenderedSession struct {
 	Name   string
 	Prompt string

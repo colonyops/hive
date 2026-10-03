@@ -18,8 +18,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/platform/git"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 )
 
 // fakeSessionLauncher records every LaunchSession call.
@@ -45,30 +44,21 @@ func (f *fakeWorkspaceSessionLauncher) LaunchWorkspaceSession(_ context.Context,
 }
 
 type fakeSessionCreator struct {
-	calls   []hive.CreateOptions
+	calls   []sessionsvc.LaunchRequest
 	err     error
-	options hive.SessionLaunchOptions
+	options sessionsvc.LaunchOptions
 }
 
-func (f *fakeSessionCreator) SessionLaunchOptions(context.Context) (hive.SessionLaunchOptions, error) {
+func (f *fakeSessionCreator) SessionLaunchOptions(context.Context) (sessionsvc.LaunchOptions, error) {
 	return f.options, nil
 }
 
-func (f *fakeSessionCreator) ResolveSessionLaunchRepository(_ context.Context, remote string) (hive.SessionLaunchRepository, error) {
-	for _, repo := range f.options.Repositories {
-		if git.EquivalentRemote(repo.Remote, remote) {
-			return repo, nil
-		}
-	}
-	return hive.SessionLaunchRepository{Remote: remote}, nil
-}
-
-func (f *fakeSessionCreator) CreateSession(_ context.Context, opts hive.CreateOptions) (*session.Session, error) {
-	f.calls = append(f.calls, opts)
+func (f *fakeSessionCreator) CreateFromRequest(_ context.Context, req sessionsvc.LaunchRequest) (session.Session, error) {
+	f.calls = append(f.calls, req)
 	if f.err != nil {
-		return nil, f.err
+		return session.Session{}, f.err
 	}
-	return &session.Session{ID: "session-1"}, nil
+	return session.Session{ID: "session-1"}, nil
 }
 
 func TestLaunchSessionExecutor_RendersPromptAndRepoTemplates(t *testing.T) {
@@ -270,6 +260,9 @@ func TestLaunchSessionExecutor_NilLauncherIsError(t *testing.T) {
 	}
 }
 
+// Repository resolution, progress capture and the failure draft are the
+// session service's (hive/session CreateFromRequest); the launcher only maps
+// the request.
 func TestHiveSessionLauncher_MapsRequestToSessionService(t *testing.T) {
 	creator := &fakeSessionCreator{}
 	launcher := NewHiveSessionLauncher(creator)
@@ -278,31 +271,9 @@ func TestHiveSessionLauncher_MapsRequestToSessionService(t *testing.T) {
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
 	})
 	require.NoError(t, err)
-	require.Len(t, creator.calls, 1)
-	require.NotNil(t, creator.calls[0].Progress, "every attempt gets its own progress writer, so a failure can name the step it died on")
-	require.Equal(t, hive.CreateOptions{
-		Name: "review-pr-1", Prompt: "Review this", AgentKey: "claude", Remote: "https://example.test/repo.git", Background: true, CollisionSuffix: "7",
-	}, withoutProgress(creator.calls[0]))
-}
-
-// The per-attempt writer has no comparable identity, so drop it to compare the
-// rest by value.
-func withoutProgress(opts hive.CreateOptions) hive.CreateOptions {
-	opts.Progress = nil
-	return opts
-}
-
-func TestHiveSessionLauncher_PrefersEquivalentConfiguredCheckout(t *testing.T) {
-	creator := &fakeSessionCreator{options: hive.SessionLaunchOptions{Repositories: []hive.SessionLaunchRepository{{
-		Name: "hive", Remote: "git@github.com:colonyops/hive.git", Source: "/work/hive",
-	}}}}
-	_, err := NewHiveSessionLauncher(creator).LaunchSession(t.Context(), LaunchSessionRequest{
-		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://github.com/colonyops/hive.git",
-	})
-	require.NoError(t, err)
-	require.Equal(t, hive.CreateOptions{
-		Name: "review-pr-1", Prompt: "Review this", AgentKey: "claude", Remote: "git@github.com:colonyops/hive.git", Source: "/work/hive", Background: true,
-	}, withoutProgress(creator.calls[0]))
+	require.Equal(t, []sessionsvc.LaunchRequest{{
+		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
+	}}, creator.calls)
 }
 
 func TestHiveSessionLauncher_PropagatesServiceFailure(t *testing.T) {

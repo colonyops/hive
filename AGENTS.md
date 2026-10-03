@@ -233,7 +233,7 @@ This generates constants (`ItemTypeEpic`, `ItemTypeTask`), `ParseItemType`, `IsV
 
 #### sqlc
 
-Queries live in `internal/data/db/queries/`. Generated files (`queries*.sql.go`, `models.go`) are committed and must never be edited manually.
+Queries live in `internal/store/db/queries/`. Generated files (`queries*.sql.go`, `models.go`) are committed and must never be edited manually.
 
 ```bash
 mise run generate    # regenerates after SQL or sqlc.yaml changes

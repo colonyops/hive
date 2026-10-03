@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/colonyops/hive/cmd/hive/internal/action"
-	"github.com/colonyops/hive/internal/hive"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/pkg/executil"
 )
 
@@ -30,7 +30,7 @@ func (e *SpawnWindowsExecutor) run(ctx context.Context) error {
 	p := e.payload
 
 	if p.NewSession {
-		req := hive.NewSessionRequest{Name: p.NewSessionName, Remote: p.NewSessionRemote, ShCmd: p.ShCmd}
+		req := sessionsvc.NewSessionRequest{Name: p.NewSessionName, Remote: p.NewSessionRemote, ShCmd: p.ShCmd}
 		return e.spawner.CreateSessionWithWindows(ctx, req, p.Windows, p.Background)
 	}
 

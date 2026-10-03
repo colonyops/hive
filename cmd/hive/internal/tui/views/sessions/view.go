@@ -21,10 +21,12 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/hive/gitstatus"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	statussvc "github.com/colonyops/hive/internal/hive/status"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/workspace"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -41,16 +43,16 @@ var builderPool = sync.Pool{
 type ViewOpts struct {
 	// Required — nil causes a panic at construction time.
 	Cfg           *config.Config
-	Service       *hive.SessionService
+	Service       *sessionsvc.Service
 	Handler       KeyResolver
-	Status        *hive.StatusService
+	Status        *statussvc.Service
 	PluginManager *plugins.Manager
 
 	// Optional — nil disables the corresponding feature.
 	LocalRemote string
 	Workspaces  []string
 	Renderer    *tmpl.Renderer
-	Bus         *eventbus.EventBus
+	Bus         *events.EventBus
 }
 
 // View is the Bubble Tea sub-model for the sessions tab.
@@ -61,8 +63,8 @@ type View struct {
 	localRemote  string
 
 	cfg     *config.Config
-	service *hive.SessionService
-	bus     *eventbus.EventBus
+	service *sessionsvc.Service
+	bus     *events.EventBus
 
 	// List and tree rendering
 	list         list.Model
@@ -75,8 +77,8 @@ type View struct {
 	gitWorkers  int
 
 	// Terminal integration
-	status             *hive.StatusService
-	terminalStatuses   *kvcache.Store[string, hive.TerminalStatus]
+	status             *statussvc.Service
+	terminalStatuses   *kvcache.Store[string, statussvc.TerminalStatus]
 	previewEnabled     bool
 	previewTemplates   *PreviewTemplates
 	currentTmuxSession string
@@ -125,7 +127,7 @@ func New(opts ViewOpts) *View {
 	cfg := opts.Cfg
 
 	gitStatuses := kvcache.New[string, GitStatus]()
-	terminalStatuses := kvcache.New[string, hive.TerminalStatus]()
+	terminalStatuses := kvcache.New[string, statussvc.TerminalStatus]()
 	columnWidths := &ColumnWidths{}
 
 	pluginStatuses := make(map[string]*kvcache.Store[string, plugins.Status])
@@ -335,7 +337,7 @@ func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) 
 					if sess == nil {
 						continue
 					}
-					v.bus.PublishAgentStatusChanged(eventbus.AgentStatusChangedPayload{
+					v.bus.PublishAgentStatusChanged(events.AgentStatusChangedPayload{
 						Session:   sess,
 						OldStatus: prevStatus,
 						NewStatus: newStatus.Status,
@@ -365,11 +367,11 @@ func (v *View) handleTerminalPollTick() tea.Cmd {
 }
 
 // rootRepoTargets collects workspace checkouts currently shown as repo headers.
-func (v *View) rootRepoTargets() []hive.RootRepoTarget {
-	var targets []hive.RootRepoTarget
+func (v *View) rootRepoTargets() []statussvc.RootRepoTarget {
+	var targets []statussvc.RootRepoTarget
 	for _, ti := range TreeItemsAll(v.list.Items()) {
 		if ti.IsHeader && ti.RootPath != "" {
-			targets = append(targets, hive.RootRepoTarget{Name: ti.RepoName, Path: ti.RootPath})
+			targets = append(targets, statussvc.RootRepoTarget{Name: ti.RepoName, Path: ti.RootPath})
 		}
 	}
 	return targets
@@ -799,7 +801,7 @@ func (v *View) applyFilter() tea.Cmd {
 		return nil
 	}
 	// refreshing is cleared when GitStatusBatchCompleteMsg is received
-	return FetchGitStatusBatch(v.service.Git(), paths, v.gitWorkers)
+	return FetchGitStatusBatch(gitstatus.NewService(v.service.Git(), v.gitWorkers), paths)
 }
 
 // rebuildWindowItems strips existing window sub-items from the list and re-expands
@@ -823,7 +825,7 @@ func (v *View) rebuildWindowItems() {
 		if !ti.IsSession() {
 			continue
 		}
-		if ts, ok := v.terminalStatuses.Get(ti.Session.ID); ok && hive.ShouldExposeWindows(ts.Windows) {
+		if ts, ok := v.terminalStatuses.Get(ti.Session.ID); ok && statussvc.ShouldExposeWindows(ts.Windows) {
 			for _, w := range ts.Windows {
 				expected["w\x1f"+ti.Session.ID+"\x1f"+w.WindowIndex+"\x1f"+w.WindowName] = struct{}{}
 				if len(w.Panes) > 1 {
@@ -880,7 +882,7 @@ func (v *View) expandWindowItems(items []list.Item) []list.Item {
 		}
 
 		ts, ok := v.terminalStatuses.Get(treeItem.Session.ID)
-		if !ok || !hive.ShouldExposeWindows(ts.Windows) {
+		if !ok || !statussvc.ShouldExposeWindows(ts.Windows) {
 			continue
 		}
 
@@ -1210,7 +1212,7 @@ func (v *View) renderRootRepoPreview(contentHeight, previewWidth int) string {
 		return header + "\n\n(current session, preventing recursive view)"
 	}
 
-	status, ok := v.terminalStatuses.Get(hive.RootStatusKey(ti.RootPath))
+	status, ok := v.terminalStatuses.Get(statussvc.RootStatusKey(ti.RootPath))
 	if !ok || status.PaneContent == "" {
 		return header + "\n\nNo pane content available"
 	}
@@ -1298,7 +1300,7 @@ func (v *View) handleFilterAction(actionType act.Type) bool {
 
 // selectedPaneStatus returns the PaneStatus for the currently selected pane item,
 // or nil if a session/window is selected.
-func (v *View) selectedPaneStatus() *hive.PaneStatus {
+func (v *View) selectedPaneStatus() *statussvc.PaneStatus {
 	item := v.list.SelectedItem()
 	if item == nil {
 		return nil
@@ -1329,7 +1331,7 @@ func (v *View) selectedPaneStatus() *hive.PaneStatus {
 
 // selectedWindowStatus returns the WindowStatus for the currently selected window item,
 // or nil if a session (not a window) is selected.
-func (v *View) selectedWindowStatus() *hive.WindowStatus {
+func (v *View) selectedWindowStatus() *statussvc.WindowStatus {
 	item := v.list.SelectedItem()
 	if item == nil {
 		return nil
@@ -1429,7 +1431,7 @@ func (v *View) RefreshGitStatuses() tea.Cmd {
 		return nil
 	}
 
-	return FetchGitStatusBatch(v.service.Git(), paths, v.gitWorkers)
+	return FetchGitStatusBatch(gitstatus.NewService(v.service.Git(), v.gitWorkers), paths)
 }
 
 // scheduleSessionRefresh returns a command that schedules the next session refresh.
@@ -1585,7 +1587,7 @@ func (v *View) DiscoveredRepos() []workspace.DiscoveredRepo {
 }
 
 // TerminalStatuses returns the terminal status store.
-func (v *View) TerminalStatuses() *kvcache.Store[string, hive.TerminalStatus] {
+func (v *View) TerminalStatuses() *kvcache.Store[string, statussvc.TerminalStatus] {
 	return v.terminalStatuses
 }
 
@@ -1766,7 +1768,7 @@ func MaybeOverrideWindowDelete(action act.Action, treeItem *TreeItem) act.Action
 		return action
 	}
 
-	target := hive.SessionTarget(treeItem.ParentSession)
+	target := sessionsvc.Target(treeItem.ParentSession)
 	target.Window = treeItem.WindowIndex
 	if err := target.ValidateWindow(); err != nil {
 		action.Err = fmt.Errorf("unable to resolve tmux window target: %w", err)

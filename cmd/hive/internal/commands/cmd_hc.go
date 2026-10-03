@@ -61,11 +61,11 @@ Session ID and repo key are auto-detected from the working directory.`,
 
 func (cmd *HoneycombCmd) run(ctx context.Context, c *cli.Command) error {
 	opts := tui.HoneycombOnlyOptions{
-		Honeycomb: cmd.app.Honeycomb,
+		Honeycomb: cmd.app.HC(),
 		RepoKey:   cmd.detectRepoKey(ctx),
 		Config:    cmd.app.Config,
 		KVStore:   cmd.app.KV,
-		Renderer:  cmd.app.Renderer,
+		Renderer:  cmd.app.Renderer(),
 	}
 	m := tui.NewHoneycombOnly(opts)
 	if _, err := tea.NewProgram(m).Run(); err != nil {
@@ -75,7 +75,7 @@ func (cmd *HoneycombCmd) run(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *HoneycombCmd) detectSession(ctx context.Context) string {
-	sessionID, err := cmd.app.Sessions.DetectSession(ctx)
+	sessionID, err := cmd.app.Sessions().DetectSession(ctx)
 	if err != nil {
 		log.Debug().Err(err).Msg("failed to detect session for hc")
 	}
@@ -83,7 +83,7 @@ func (cmd *HoneycombCmd) detectSession(ctx context.Context) string {
 }
 
 func (cmd *HoneycombCmd) detectRepoKey(ctx context.Context) string {
-	url, err := cmd.app.Sessions.Git().RemoteURL(ctx, ".")
+	url, err := cmd.app.Sessions().Git().RemoteURL(ctx, ".")
 	if err != nil {
 		log.Debug().Err(err).Msg("failed to get remote URL for hc")
 		return ""
@@ -164,7 +164,7 @@ Examples:
 				if err != nil {
 					return fmt.Errorf("read input: %w", err)
 				}
-				items, err := cmd.app.Honeycomb.CreateBulk(ctx, repoKey, input)
+				items, err := cmd.app.HC().CreateBulk(ctx, repoKey, input)
 				if err != nil {
 					return fmt.Errorf("create bulk: %w", err)
 				}
@@ -185,7 +185,7 @@ Examples:
 				return fmt.Errorf("tasks require a --parent; use --type epic to create a root item")
 			}
 
-			item, err := cmd.app.Honeycomb.CreateItem(ctx, repoKey, hc.CreateItemInput{
+			item, err := cmd.app.HC().CreateItem(ctx, repoKey, hc.CreateItemInput{
 				Title:    c.Args().First(),
 				Desc:     flagDesc,
 				Type:     itemType,
@@ -259,7 +259,7 @@ Examples:
 				filter.Status = &open
 			}
 
-			items, err := cmd.app.Honeycomb.ListItems(ctx, filter)
+			items, err := cmd.app.HC().ListItems(ctx, filter)
 			if err != nil {
 				return fmt.Errorf("list items: %w", err)
 			}
@@ -436,12 +436,12 @@ Examples:
 			}
 			id := c.Args().First()
 
-			item, err := cmd.app.Honeycomb.GetItem(ctx, id)
+			item, err := cmd.app.HC().GetItem(ctx, id)
 			if err != nil {
 				return fmt.Errorf("get item %q: %w", id, err)
 			}
 
-			comments, err := cmd.app.Honeycomb.ListComments(ctx, id)
+			comments, err := cmd.app.HC().ListComments(ctx, id)
 			if err != nil {
 				return fmt.Errorf("list comments for %q: %w", id, err)
 			}
@@ -461,7 +461,7 @@ Examples:
 			// Resolve epic title for breadcrumb
 			var epicTitle string
 			if item.EpicID != "" {
-				epic, err := cmd.app.Honeycomb.GetItem(ctx, item.EpicID)
+				epic, err := cmd.app.HC().GetItem(ctx, item.EpicID)
 				if err != nil {
 					log.Debug().Err(err).Str("epic_id", item.EpicID).Msg("failed to resolve epic title")
 				} else {
@@ -471,7 +471,7 @@ Examples:
 
 			var blockers []hc.Item
 			for _, blockerID := range item.BlockerIDs {
-				b, err := cmd.app.Honeycomb.GetItem(ctx, blockerID)
+				b, err := cmd.app.HC().GetItem(ctx, blockerID)
 				if err != nil {
 					log.Debug().Err(err).Str("blocker_id", blockerID).Msg("failed to fetch blocker item")
 					continue
@@ -696,14 +696,14 @@ Examples:
 				}
 
 				var err error
-				item, err = cmd.app.Honeycomb.UpdateItem(ctx, id, update)
+				item, err = cmd.app.HC().UpdateItem(ctx, id, update)
 				if err != nil {
 					return fmt.Errorf("update item %q: %w", id, err)
 				}
 			}
 
 			if flagAddBlocker != "" {
-				if err := cmd.app.Honeycomb.AddBlocker(ctx, flagAddBlocker, id); err != nil {
+				if err := cmd.app.HC().AddBlocker(ctx, flagAddBlocker, id); err != nil {
 					if errors.Is(err, hc.ErrCyclicDependency) {
 						return fmt.Errorf("cannot add blocker: would create a cyclic dependency")
 					}
@@ -712,7 +712,7 @@ Examples:
 			}
 
 			if flagRemoveBlocker != "" {
-				if err := cmd.app.Honeycomb.RemoveBlocker(ctx, flagRemoveBlocker, id); err != nil {
+				if err := cmd.app.HC().RemoveBlocker(ctx, flagRemoveBlocker, id); err != nil {
 					return fmt.Errorf("remove blocker: %w", err)
 				}
 			}
@@ -721,7 +721,7 @@ Examples:
 			// current state; UpdateItem returns the row before edges are written.
 			if !hasUpdate || flagAddBlocker != "" || flagRemoveBlocker != "" {
 				var err error
-				item, err = cmd.app.Honeycomb.GetItem(ctx, id)
+				item, err = cmd.app.HC().GetItem(ctx, id)
 				if err != nil {
 					return fmt.Errorf("get item %q: %w", id, err)
 				}
@@ -767,7 +767,7 @@ Examples:
 				}
 			}
 
-			item, found, err := cmd.app.Honeycomb.Next(ctx, filter)
+			item, found, err := cmd.app.HC().Next(ctx, filter)
 			if err != nil {
 				return fmt.Errorf("next item: %w", err)
 			}
@@ -778,7 +778,7 @@ Examples:
 			if flagAssign && item.Status != hc.StatusInProgress {
 				sessionID := filter.SessionID
 				statusInProgress := hc.StatusInProgress
-				updated, err := cmd.app.Honeycomb.UpdateItem(ctx, item.ID, hc.ItemUpdate{
+				updated, err := cmd.app.HC().UpdateItem(ctx, item.ID, hc.ItemUpdate{
 					Status:    &statusInProgress,
 					SessionID: &sessionID,
 				})
@@ -810,7 +810,7 @@ Examples:
 				return fmt.Errorf("item ID and message required as arguments")
 			}
 
-			comment, err := cmd.app.Honeycomb.AddComment(ctx, c.Args().Get(0), strings.Join(c.Args().Slice()[1:], " "))
+			comment, err := cmd.app.HC().AddComment(ctx, c.Args().Get(0), strings.Join(c.Args().Slice()[1:], " "))
 			if err != nil {
 				return fmt.Errorf("add comment to %q: %w", c.Args().Get(0), err)
 			}
@@ -847,7 +847,7 @@ Examples:
 			}
 
 			epicID := c.Args().First()
-			cb, err := cmd.app.Honeycomb.Context(ctx, epicID, cmd.detectSession(ctx))
+			cb, err := cmd.app.HC().Context(ctx, epicID, cmd.detectSession(ctx))
 			if err != nil {
 				return fmt.Errorf("get context for epic %q: %w", epicID, err)
 			}
@@ -904,7 +904,7 @@ Examples:
 				}
 			}
 
-			count, err := cmd.app.Honeycomb.Prune(ctx, hc.PruneOpts{
+			count, err := cmd.app.HC().Prune(ctx, hc.PruneOpts{
 				OlderThan: olderThan,
 				Statuses:  statuses,
 				RepoKey:   cmd.detectRepoKey(ctx),

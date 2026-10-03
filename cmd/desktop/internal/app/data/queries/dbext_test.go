@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/internal/data/migrate"
+	"github.com/colonyops/hive/internal/store/migrate"
 )
 
 func openTestDB(t *testing.T) *DB {

@@ -15,7 +15,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
-	"github.com/colonyops/hive/internal/hive"
+	statussvc "github.com/colonyops/hive/internal/hive/status"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/workspace"
 )
@@ -61,7 +61,7 @@ const currentRepoIndicator = "◆"
 // For active sessions with terminal integration, it uses terminal status.
 // For recycled sessions or when no terminal status is available, it falls back to session state.
 // The animFrame parameter controls the fade animation for active status (0 to AnimationFrameCount-1).
-func renderStatusIndicator(state session.State, termStatus *hive.TerminalStatus, treeStyles TreeDelegateStyles, animFrame int) string {
+func renderStatusIndicator(state session.State, termStatus *statussvc.TerminalStatus, treeStyles TreeDelegateStyles, animFrame int) string {
 	// Recycled sessions always show recycled indicator
 	if state == session.StateRecycled {
 		return treeStyles.StatusRecycled.Render(styles.StatusIndicatorRecycled)
@@ -308,7 +308,7 @@ func CalculateColumnWidths(sessions []session.Session, gitBranches map[string]st
 type TreeDelegate struct {
 	Styles           TreeDelegateStyles
 	GitStatuses      *kvcache.Store[string, GitStatus]
-	TerminalStatuses *kvcache.Store[string, hive.TerminalStatus]
+	TerminalStatuses *kvcache.Store[string, statussvc.TerminalStatus]
 	PluginStatuses   map[string]*kvcache.Store[string, plugins.Status] // plugin name -> session ID -> status
 	ColumnWidths     *ColumnWidths
 	AnimationFrame   int  // Current frame for status animations
@@ -398,7 +398,7 @@ func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, _ list.Model,
 	// Status dot only when an agent is actually running in the root checkout;
 	// StatusMissing is the common case and would just add noise to every header.
 	if d.TerminalStatuses != nil {
-		if ts, ok := d.TerminalStatuses.Get(hive.RootStatusKey(item.RootPath)); ok && ts.Status != terminal.StatusMissing {
+		if ts, ok := d.TerminalStatuses.Get(statussvc.RootStatusKey(item.RootPath)); ok && ts.Status != terminal.StatusMissing {
 			result = renderStatusIndicator(session.StateActive, &ts, d.Styles, d.AnimationFrame) + " " + result
 		}
 	}
@@ -443,7 +443,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
 	// Get terminal status if available
-	var termStatus *hive.TerminalStatus
+	var termStatus *statussvc.TerminalStatus
 	if d.TerminalStatuses != nil {
 		if ts, ok := d.TerminalStatuses.Get(item.Session.ID); ok {
 			termStatus = &ts
@@ -517,7 +517,7 @@ func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 	}
 	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 
-	termStatus := &hive.TerminalStatus{Status: item.PaneStatus}
+	termStatus := &statussvc.TerminalStatus{Status: item.PaneStatus}
 	statusStr := renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
 
 	nameStyle := d.Styles.SessionName
@@ -560,7 +560,7 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 
 	// Get per-window terminal status from the delegate's store
-	var windowStatus *hive.WindowStatus
+	var windowStatus *statussvc.WindowStatus
 	if d.TerminalStatuses != nil {
 		if ts, ok := d.TerminalStatuses.Get(item.ParentSession.ID); ok {
 			for i := range ts.Windows {
@@ -575,7 +575,7 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	// Status indicator
 	var statusStr string
 	if windowStatus != nil {
-		termStatus := &hive.TerminalStatus{Status: windowStatus.Status}
+		termStatus := &statussvc.TerminalStatus{Status: windowStatus.Status}
 		statusStr = renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
 	} else {
 		statusStr = d.Styles.StatusUnknown.Render(styles.StatusIndicatorMissing)

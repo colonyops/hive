@@ -155,12 +155,12 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 
-	createdSubdirs, err := cmd.app.Context.Init(ctxDir)
+	createdSubdirs, err := cmd.app.Context().Init(ctxDir)
 	if err != nil {
 		return err
 	}
 
-	alreadyExists, err := cmd.app.Context.CreateSymlink(ctxDir)
+	alreadyExists, err := cmd.app.Context().CreateSymlink(ctxDir)
 	if err != nil {
 		return err
 	}
@@ -189,7 +189,7 @@ func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("invalid duration: %w", err)
 	}
 
-	count, err := cmd.app.Context.Prune(ctxDir, duration)
+	count, err := cmd.app.Context().Prune(ctxDir, duration)
 	if err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *CtxCmd) resolveContextDir(ctx context.Context) (string, error) {
-	return cmd.app.Context.ResolveDir(ctx, cmd.repo, cmd.shared)
+	return cmd.app.Context().ResolveDir(ctx, cmd.repo, cmd.shared)
 }
 
 func parseDuration(s string) (time.Duration, error) {

@@ -8,7 +8,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
-	"github.com/colonyops/hive/internal/hive"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -325,14 +325,14 @@ func (m *mockTmuxOpener) OpenTmuxSession(_ context.Context, name, path, remote, 
 
 type mockWindowSpawner struct {
 	killed  []multiplexer.Target
-	created []hive.NewSessionRequest
+	created []sessionsvc.NewSessionRequest
 }
 
 func (m *mockWindowSpawner) AddWindowsToTmuxSession(_ context.Context, _, _ string, _ []multiplexer.WindowSpec, _ bool) error {
 	return nil
 }
 
-func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, req hive.NewSessionRequest, _ []multiplexer.WindowSpec, _ bool) error {
+func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, req sessionsvc.NewSessionRequest, _ []multiplexer.WindowSpec, _ bool) error {
 	m.created = append(m.created, req)
 	return nil
 }
@@ -441,5 +441,5 @@ func TestSpawnWindowsExecutorNewSessionCarriesShCmd(t *testing.T) {
 	}
 
 	require.NoError(t, exec.run(context.Background()))
-	assert.Equal(t, []hive.NewSessionRequest{{Name: "pr-1", Remote: "https://github.com/o/r", ShCmd: "gh pr checkout 1"}}, spawner.created)
+	assert.Equal(t, []sessionsvc.NewSessionRequest{{Name: "pr-1", Remote: "https://github.com/o/r", ShCmd: "gh pr checkout 1"}}, spawner.created)
 }

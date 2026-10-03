@@ -7,10 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/hive/internal/config"
-	"github.com/colonyops/hive/internal/core/doctor"
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/doctor"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 )
 
 // The engine config does not know keybindings, so `hive doctor` must validate
@@ -25,7 +24,7 @@ func TestDoctorConfigCheckFailsOnAnInvalidKeybinding(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
 
-	svc := hive.NewDoctorService(stores.NewSessionStore(database), &cfg.Config, cfg, nil)
+	svc := doctor.NewService(store.NewSessionStore(database), &cfg.Config, cfg, nil)
 	results := svc.RunChecks(t.Context(), "", false)
 
 	var configResult *doctor.Result

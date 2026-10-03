@@ -18,13 +18,13 @@ import (
 	"github.com/colonyops/hive/internal/domain/hc"
 	corekv "github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/domain/notify"
-	"github.com/colonyops/hive/internal/hive"
+	hcsvc "github.com/colonyops/hive/internal/hive/hc"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
 // HoneycombOnlyOptions configures the honeycomb-only TUI.
 type HoneycombOnlyOptions struct {
-	Honeycomb *hive.HoneycombService
+	Honeycomb *hcsvc.Service
 	RepoKey   string
 	Config    *config.Config
 	KVStore   corekv.KV

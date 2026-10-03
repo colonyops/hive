@@ -3,7 +3,7 @@
 // (inbox_item/inbox_event), feed membership claims, output commands, activity
 // events and jobs, and per-node run metrics. It is isolated from hive's shared
 // hive.db so desktop pipeline write traffic never contends with the CLI/TUI
-// data path. It shares the migration runner in internal/data/migrate.
+// data path. It shares the migration runner in internal/store/migrate.
 package queries
 
 import (
@@ -18,8 +18,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/colonyops/hive/internal/data/migrate"
 	"github.com/colonyops/hive/internal/platform/sqlite"
+	"github.com/colonyops/hive/internal/store/migrate"
 )
 
 //go:embed migrations/*.sql
@@ -87,7 +87,7 @@ func DatabasePath(dir string) string {
 }
 
 // Open creates a new desktop-pipeline.db connection in dir, applying all
-// pending migrations. Unlike internal/data/db, there is no legacy bootstrap
+// pending migrations. Unlike internal/store/db, there is no legacy bootstrap
 // step here: this is a new database with no pre-migration history, so Open
 // calls migrate.Up directly.
 //

@@ -48,7 +48,7 @@ Active sessions are not affected.`,
 
 func (cmd *PruneCmd) run(ctx context.Context, c *cli.Command) error {
 	all := c.Bool("all")
-	count, err := cmd.app.Sessions.Prune(ctx, all)
+	count, err := cmd.app.Sessions().Prune(ctx, all)
 	if err != nil {
 		return fmt.Errorf("prune sessions: %w", err)
 	}

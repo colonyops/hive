@@ -20,7 +20,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/domain/messaging"
-	"github.com/colonyops/hive/internal/hive"
+	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
 )
 
 const (
@@ -56,7 +56,7 @@ var builderPool = sync.Pool{
 // View is the Bubble Tea sub-model for the messages tab.
 type View struct {
 	ctrl         *Controller
-	msgStore     *hive.MessageService
+	msgStore     *msgsvc.Service
 	lastPollTime time.Time
 	topicFilter  string
 	copyCommand  string
@@ -75,7 +75,7 @@ type View struct {
 }
 
 // New creates a new messages View.
-func New(msgStore *hive.MessageService, topicFilter, copyCommand string, splitRatio int) *View {
+func New(msgStore *msgsvc.Service, topicFilter, copyCommand string, splitRatio int) *View {
 	return &View{
 		ctrl:            NewController(),
 		msgStore:        msgStore,
@@ -940,7 +940,7 @@ func formatAge(t time.Time) string {
 // Commands
 // --------------------------------------------------------------------
 
-func loadMessages(svc *hive.MessageService, topic string, since time.Time) tea.Cmd {
+func loadMessages(svc *msgsvc.Service, topic string, since time.Time) tea.Cmd {
 	return func() tea.Msg {
 		if svc == nil {
 			return messagesLoadedMsg{err: nil}

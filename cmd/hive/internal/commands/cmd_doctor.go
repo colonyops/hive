@@ -8,7 +8,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/internal/core/doctor"
+	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )

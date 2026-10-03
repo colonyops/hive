@@ -9,7 +9,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/hive"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/urfave/cli/v3"
 )
 
@@ -85,7 +85,7 @@ func createSessionFromFlags(ctx context.Context, app *app.App, name string, f *c
 		}
 	}
 
-	sess, err := app.Sessions.CreateSession(ctx, hive.CreateOptions{
+	sess, err := app.Sessions().CreateSession(ctx, sessionsvc.CreateOptions{
 		Name:          name,
 		Remote:        f.remote,
 		Source:        source,

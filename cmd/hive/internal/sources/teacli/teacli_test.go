@@ -10,9 +10,9 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/sources"
 	"github.com/colonyops/hive/cmd/hive/internal/sources/cliengine"
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/kv"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
@@ -28,7 +28,7 @@ func newTestKV(t *testing.T) kv.KV {
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
-	return stores.NewKVStore(database)
+	return store.NewKVStore(database)
 }
 
 func newSource(t *testing.T, driver cliengine.Driver, exec *executiltest.Exec) *cliengine.Source {

@@ -813,7 +813,7 @@ newer build wrote still starts this build and its updater
 `settings.yaml`, `flows/*.yaml`, and `actions.yml` each carry a top-level
 `version:` and are migrated forward in place at startup by
 `internal/config/migrate` (ADR yaml-config-migration) — a per-file, integer-versioned runner
-distinct from the SQLite schema migrations (`internal/data/migrate`)
+distinct from the SQLite schema migrations (`internal/store/migrate`)
 that track applied versions in a table.
 
 Paths resolve before settings because the config root determines where

@@ -18,7 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
-	"github.com/colonyops/hive/internal/hive"
+	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/rs/zerolog/log"
@@ -490,7 +490,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 
 				target := wi.Target
 				if target.Session == "" {
-					target.Session = hive.SessionTarget(item.Session).Session
+					target.Session = sessionsvc.Target(item.Session).Session
 				}
 				windowItem := pickItem{
 					Session:     item.Session,
@@ -543,7 +543,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				return fmt.Errorf("invalid --format %q: valid values are id, name, path, json", flagFormat)
 			}
 
-			sessions, err := cmd.app.Sessions.ListSessions(ctx)
+			sessions, err := cmd.app.Sessions().ListSessions(ctx)
 			if err != nil {
 				return fmt.Errorf("listing sessions: %w", err)
 			}
@@ -551,7 +551,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			// Filter to active sessions only
 			var items []pickItem
 			var currentSlug string
-			if current, currentErr := cmd.app.Sessions.CurrentSession(ctx); currentErr != nil {
+			if current, currentErr := cmd.app.Sessions().CurrentSession(ctx); currentErr != nil {
 				log.Debug().Err(currentErr).Msg("tmux session detection failed")
 			} else {
 				currentSlug = current.Session
@@ -564,7 +564,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				if flagRepo != "" && !strings.Contains(strings.ToLower(s.Remote), strings.ToLower(flagRepo)) {
 					continue
 				}
-				target := hive.SessionTarget(s)
+				target := sessionsvc.Target(s)
 				if flagHideCurrent && target.Session == currentSlug {
 					continue
 				}
@@ -585,7 +585,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				}
 			}
 
-			termMgr := cmd.app.Terminal
+			termMgr := cmd.app.Terminal()
 
 			// Pre-fetch statuses synchronously so the first render has data.
 			// Keep baseItems as the original per-session slice; refreshStatusCmd
@@ -629,7 +629,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				return err
 			}
 
-			return cmd.app.Sessions.AttachOrSwitch(ctx, result.selected.Target, multiplexer.AttachStreams{
+			return cmd.app.Sessions().AttachOrSwitch(ctx, result.selected.Target, multiplexer.AttachStreams{
 				Stdin: os.Stdin, Stdout: c.Root().Writer, Stderr: os.Stderr,
 			})
 		},

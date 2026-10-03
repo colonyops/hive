@@ -23,13 +23,14 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/tasks"
 	hiveconfig "github.com/colonyops/hive/internal/config"
-	"github.com/colonyops/hive/internal/core/eventbus/testbus"
-	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/events/testbus"
+	statussvc "github.com/colonyops/hive/internal/hive/status"
+	todosvc "github.com/colonyops/hive/internal/hive/todo"
+	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 )
 
 func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Model {
@@ -56,8 +57,8 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 	tb := testbus.New(t)
 	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
 	pluginManager := plugins.NewManager(plugins.NewWorkerPool(0), commandSet)
-	todoService := hive.NewTodoService(
-		stores.NewTodoStore(database),
+	todoService := todosvc.NewService(
+		store.NewTodoStore(database),
 		tb.EventBus,
 		&cfg.Config,
 		zerolog.New(io.Discard),
@@ -67,7 +68,7 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 		Config:        cfg,
 		Service:       newMouseTestSessionService(t),
 		Renderer:      testRenderer,
-		Status:        hive.NewStatusService(terminal.NewManager(nil), 1),
+		Status:        statussvc.NewService(terminal.NewManager(nil), 1),
 		PluginManager: pluginManager,
 		CommandSet:    commandSet,
 		TodoService:   todoService,
@@ -141,8 +142,8 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 	tb := testbus.New(t)
 	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
 	pluginManager := plugins.NewManager(plugins.NewWorkerPool(0), commandSet)
-	todoService := hive.NewTodoService(
-		stores.NewTodoStore(database),
+	todoService := todosvc.NewService(
+		store.NewTodoStore(database),
 		tb.EventBus,
 		&cfg.Config,
 		zerolog.New(io.Discard),
@@ -152,7 +153,7 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 		Config:        cfg,
 		Service:       newMouseTestSessionService(t),
 		Renderer:      testRenderer,
-		Status:        hive.NewStatusService(terminal.NewManager(nil), 1),
+		Status:        statussvc.NewService(terminal.NewManager(nil), 1),
 		PluginManager: pluginManager,
 		CommandSet:    commandSet,
 		TodoService:   todoService,
