@@ -30,6 +30,7 @@ import {
   type ActivityStyleKey,
 } from '../lib/activityPresentation'
 import EmptyState from './ui/EmptyState.vue'
+import SegmentedControl from './ui/SegmentedControl.vue'
 
 const emit = defineEmits<{
   close: []
@@ -49,6 +50,7 @@ function retry(metadata: { [_ in string]?: string } | null): void {
 const { events, loading, error, reload, markSeen } = useActivity()
 
 const activeFilter = ref<ActivityFilterId>('all')
+const filterOptions = ACTIVITY_FILTERS.map((filter) => ({ value: filter.id, label: filter.label }))
 const search = ref('')
 
 // Opening the view clears the titlebar's unseen indicator.
@@ -126,25 +128,18 @@ onMounted(() => {
 
     <!-- toolbar: one segmented filter + search -->
     <div class="flex shrink-0 items-center gap-2.5 border-b border-row bg-sidebar px-5 py-2.5">
-      <div class="flex items-center gap-0.5 rounded-lg border border-strong bg-app p-0.5">
-        <button
-          v-for="filter in ACTIVITY_FILTERS"
-          :key="filter.id"
-          type="button"
-          class="flex h-[26px] cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition-colors"
-          :class="
-            activeFilter === filter.id
-              ? 'bg-chip font-semibold text-text'
-              : 'text-text-2 hover:bg-row-hover hover:text-text'
-          "
-          :data-testid="`activity-filter-${filter.id}`"
-          :aria-pressed="activeFilter === filter.id"
-          @click="activeFilter = filter.id"
-        >
-          {{ filter.label }}
-          <span class="font-mono text-[10.5px]" :class="countClass(filter.id)">{{ counts[filter.id] }}</span>
-        </button>
-      </div>
+      <SegmentedControl
+        v-model="activeFilter"
+        variant="compact"
+        :options="filterOptions"
+        aria-label="Filter activity"
+        testid="activity-filter"
+      >
+        <template #option="{ option }">
+          {{ option.label }}
+          <span class="font-mono text-[10.5px]" :class="countClass(option.value)">{{ counts[option.value] }}</span>
+        </template>
+      </SegmentedControl>
       <div class="flex-1" />
       <SearchField
         v-model="search"

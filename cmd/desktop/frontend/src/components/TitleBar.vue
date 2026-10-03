@@ -18,6 +18,7 @@ import JobsPopover from './JobsPopover.vue'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
 import Kbd from './ui/Kbd.vue'
 import Spinner from './ui/Spinner.vue'
+import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedControl.vue'
 
 // One button grammar for the whole chrome, with a fixed slot per zone. The bar
 // is two clusters, not three centered columns — a window-centered palette sat
@@ -97,6 +98,13 @@ const emit = defineEmits<{
 // them and keep the height in sync with InvisibleTitleBarHeight (42) in main.go
 // so the controls stay vertically centered.
 const isMac = navigator.userAgent.includes('Mac')
+
+const modeOptions: SegmentedControlOption<'hub' | 'terminal' | 'agents'>[] = [
+  { value: 'hub', label: 'Inbox', title: 'Inbox' },
+  { value: 'terminal', label: 'Code', title: 'Code' },
+  { value: 'agents', label: 'Chats', title: 'Chats' },
+]
+const modeIcons = { hub: IconInbox, terminal: IconCode, agents: IconMessagesSquare }
 const jobsRoot = ref<HTMLElement | null>(null)
 const jobsOpen = ref(false)
 
@@ -168,56 +176,29 @@ function onTitlebarDblclick(event: MouseEvent): void {
           <IconArrowRight class="size-3.5" />
         </button>
       </nav>
-      <div
+      <!-- Segments size to their labels. An equal-width split padded the
+           shorter label out to match the longer, which read as a gap. Below
+           the labels breakpoint the spans hide and the icons carry the
+           segment (title keeps the name). -->
+      <SegmentedControl
         v-if="profileName"
-        class="ml-1.5 flex h-7 shrink-0 items-center gap-[2px] rounded-[7px] border border-card bg-app p-[2px]"
+        variant="compact"
+        size="sm"
+        class="ml-1.5 shrink-0"
         style="--wails-draggable: no-drag"
-        role="group"
+        :model-value="mode"
+        :options="modeOptions"
         aria-label="App mode"
+        testid="titlebar-mode"
+        @update:model-value="emit('set-mode', $event)"
       >
-        <!-- Segments size to their labels. An equal-width split padded the
-             shorter label out to match the longer, which read as a gap. Below
-             the labels breakpoint the spans hide and the icons carry the
-             segment (title/aria-label keep the name). Every :class and
-             :aria-pressed is a positive comparison against its own mode —
-             with three modes "not terminal" no longer means "hub". -->
-        <button
-          type="button"
-          class="flex h-full cursor-pointer items-center gap-1.5 rounded-[5px] px-2.5 text-[11.5px] transition-colors"
-          :class="mode === 'hub' ? 'bg-chip font-medium text-text' : 'font-medium text-text-3 hover:text-text'"
-          :aria-pressed="mode === 'hub'"
-          aria-label="Inbox"
-          title="Inbox"
-          data-testid="titlebar-mode-hub"
-          @click="emit('set-mode', 'hub')"
-        >
-          <IconInbox class="size-3.5 shrink-0" /><span class="hidden min-[860px]:inline">Inbox</span>
-        </button>
-        <button
-          type="button"
-          class="flex h-full cursor-pointer items-center gap-1.5 rounded-[5px] px-2.5 text-[11.5px] transition-colors"
-          :class="mode === 'terminal' ? 'bg-chip font-medium text-text' : 'font-medium text-text-3 hover:text-text'"
-          :aria-pressed="mode === 'terminal'"
-          aria-label="Code"
-          title="Code"
-          data-testid="titlebar-mode-terminal"
-          @click="emit('set-mode', 'terminal')"
-        >
-          <IconCode class="size-3.5 shrink-0" /><span class="hidden min-[860px]:inline">Code</span>
-        </button>
-        <button
-          type="button"
-          class="flex h-full cursor-pointer items-center gap-1.5 rounded-[5px] px-2.5 text-[11.5px] transition-colors"
-          :class="mode === 'agents' ? 'bg-chip font-medium text-text' : 'font-medium text-text-3 hover:text-text'"
-          :aria-pressed="mode === 'agents'"
-          aria-label="Chats"
-          title="Chats"
-          data-testid="titlebar-mode-agents"
-          @click="emit('set-mode', 'agents')"
-        >
-          <IconMessagesSquare class="size-3.5 shrink-0" /><span class="hidden min-[860px]:inline">Chats</span>
-        </button>
-      </div>
+        <template #option="{ option }">
+          <component :is="modeIcons[option.value]" class="size-3.5 shrink-0" /><span
+            class="hidden min-[860px]:inline"
+            >{{ option.label }}</span
+          >
+        </template>
+      </SegmentedControl>
     </div>
 
     <!-- Right: status chips · palette launcher · Activity · preview toggle (frame) -->

@@ -2408,7 +2408,7 @@ describe('App', () => {
     router.back()
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({ feed: 'personal/desktop' })
-    expect(wrapper.find('[data-testid="filter-all"]').classes()).toContain('active')
+    expect(wrapper.find('[data-testid="filter-all"]').attributes('aria-pressed')).toBe('true')
 
     router.back()
     await flushPromises()

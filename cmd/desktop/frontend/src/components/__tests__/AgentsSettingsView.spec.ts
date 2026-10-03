@@ -59,8 +59,8 @@ describe('AgentsSettingsView', () => {
     const wrapper = mount(AgentsSettingsView)
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="settings-canvas-font-size-small"]').attributes('aria-selected')).toBe('true')
-    expect(wrapper.get('[data-testid="settings-canvas-line-spacing-compact"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="settings-canvas-font-size-small"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="settings-canvas-line-spacing-compact"]').attributes('aria-pressed')).toBe('true')
 
     await wrapper.get('[data-testid="settings-canvas-font-size-xl"]').trigger('click')
     await wrapper.get('[data-testid="settings-canvas-line-spacing-relaxed"]').trigger('click')

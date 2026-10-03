@@ -25,6 +25,7 @@ import { errorText } from '../lib/appError'
 import { isEditableTarget } from '../lib/isEditableTarget'
 import { buildTaskTree, filterCounts, TASK_FILTERS, type TaskTreeNode } from '../lib/tasksPresentation'
 import BaseButton from './ui/BaseButton.vue'
+import SegmentedControl from './ui/SegmentedControl.vue'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -50,6 +51,7 @@ const {
 } = useTasks()
 
 const counts = computed(() => filterCounts(items.value))
+const filterOptions = TASK_FILTERS.map((taskFilter) => ({ value: taskFilter.id, label: taskFilter.label }))
 const search = ref('')
 
 // TerminalMode keeps the session list loaded (it mounts once at app start),
@@ -255,25 +257,19 @@ onUnmounted(() => {
 
     <!-- toolbar: segmented filter + repo scope + refresh + prune -->
     <div class="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-row bg-sidebar px-5 py-2.5">
-      <div class="flex items-center gap-0.5 rounded-lg border border-strong bg-app p-0.5">
-        <button
-          v-for="taskFilter in TASK_FILTERS"
-          :key="taskFilter.id"
-          type="button"
-          class="flex h-[26px] cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-[12.5px] transition-colors"
-          :class="
-            filter === taskFilter.id
-              ? 'bg-chip font-semibold text-text'
-              : 'text-text-2 hover:bg-row-hover hover:text-text'
-          "
-          :data-testid="`tasks-filter-${taskFilter.id}`"
-          :aria-pressed="filter === taskFilter.id"
-          @click="setFilter(taskFilter.id)"
-        >
-          {{ taskFilter.label }}
-          <span class="font-mono text-[10.5px] text-text-4">{{ counts[taskFilter.id] }}</span>
-        </button>
-      </div>
+      <SegmentedControl
+        :model-value="filter"
+        variant="compact"
+        :options="filterOptions"
+        aria-label="Filter tasks"
+        testid="tasks-filter"
+        @update:model-value="setFilter"
+      >
+        <template #option="{ option }">
+          {{ option.label }}
+          <span class="font-mono text-[10.5px] text-text-4">{{ counts[option.value] }}</span>
+        </template>
+      </SegmentedControl>
 
       <div class="w-[220px]">
         <AppSelect

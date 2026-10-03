@@ -25,6 +25,7 @@ import type { FeedSort, InboxItem } from '../types/feed'
 import type { MenuEntry } from '../types/menu'
 import Spinner from './ui/Spinner.vue'
 import EmptyState from './ui/EmptyState.vue'
+import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedControl.vue'
 
 // Presentation-only: the store (useFeedState) owns the search text and the
 // filtered `visibleItems`, so keyboard navigation and this list render the
@@ -80,6 +81,15 @@ const emit = defineEmits<{
   'item-create-session': [item: InboxItem, target: 'repository' | 'workspace']
   'item-run-action': [item: InboxItem, actionId: string]
 }>()
+
+const trashFilterOptions: SegmentedControlOption<'all' | 'ignored'>[] = [
+  { value: 'all', label: 'All' },
+  { value: 'ignored', label: 'Ignored' },
+]
+const unreadFilterOptions: SegmentedControlOption<'all' | 'unread'>[] = [
+  { value: 'all', label: 'All' },
+  { value: 'unread', label: 'Unread' },
+]
 
 const sortOptions: { value: FeedSort; label: string }[] = [
   { value: 'newest', label: 'Newest' },
@@ -218,42 +228,31 @@ watch(
       />
       <!-- Trash filters by disposition (ignored vs everything); feeds filter
            by unread. Trash carries no unread semantics. -->
-      <div v-if="trash" class="segmented" role="group" aria-label="Filter">
-        <button
-          class="seg"
-          :class="{ active: trashFilter === 'all' }"
-          data-testid="filter-trash-all"
-          @click="emit('set-trash-filter', 'all')"
-        >
-          All
-        </button>
-        <button
-          class="seg"
-          :class="{ active: trashFilter === 'ignored' }"
-          data-testid="filter-trash-ignored"
-          @click="emit('set-trash-filter', 'ignored')"
-        >
-          Ignored
-        </button>
-      </div>
-      <div v-else class="segmented" role="group" aria-label="Filter">
-        <button
-          class="seg"
-          :class="{ active: !unreadOnly }"
-          data-testid="filter-all"
-          @click="emit('set-unread', false)"
-        >
-          All
-        </button>
-        <button
-          class="seg"
-          :class="{ active: unreadOnly }"
-          data-testid="filter-unread"
-          @click="emit('set-unread', true)"
-        >
-          Unread<span class="seg-count">{{ unreadCount }}</span>
-        </button>
-      </div>
+      <SegmentedControl
+        v-if="trash"
+        variant="compact"
+        class="shrink-0"
+        :model-value="trashFilter"
+        :options="trashFilterOptions"
+        aria-label="Filter"
+        testid="filter-trash"
+        @update:model-value="emit('set-trash-filter', $event)"
+      />
+      <SegmentedControl
+        v-else
+        variant="compact"
+        class="shrink-0"
+        :model-value="unreadOnly ? 'unread' : 'all'"
+        :options="unreadFilterOptions"
+        aria-label="Filter"
+        testid="filter"
+        @update:model-value="emit('set-unread', $event === 'unread')"
+      >
+        <template #option="{ option }">
+          {{ option.label
+          }}<span v-if="option.value === 'unread'" class="font-mono text-[10px] opacity-85">{{ unreadCount }}</span>
+        </template>
+      </SegmentedControl>
       <div ref="viewMenu" class="relative shrink-0">
         <button
           type="button"
@@ -614,39 +613,6 @@ watch(
 <style scoped>
 .feed-list {
   background: var(--color-list);
-}
-.segmented {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: 2px;
-  border: 1px solid var(--color-strong);
-  border-radius: 8px;
-  background: var(--color-app);
-  padding: 2px;
-}
-.seg {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  border-radius: 6px;
-  padding: 4px 11px;
-  color: var(--color-text-2);
-  font-size: 12px;
-  font-weight: 500;
-}
-.seg:hover:not(.active) {
-  color: var(--color-text);
-}
-.seg.active {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-}
-.seg-count {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  opacity: 0.85;
 }
 .view-trigger {
   display: inline-flex;

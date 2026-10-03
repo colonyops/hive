@@ -17,6 +17,7 @@ import { useSubmitShortcut } from '../composables/useSubmitShortcut'
 import { type ActionInputValues, initialActionInputs, validateActionInputs } from '../lib/actionInputs'
 import { seedRef } from '../lib/seedRef'
 import Kbd from './ui/Kbd.vue'
+import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedControl.vue'
 
 // An interactive launch-session action can also declare inputs; the two
 // compose in one dialog rather than stacking two.
@@ -40,6 +41,10 @@ const emit = defineEmits<{
 const formId = useId()
 const submitHint = formatCombo('mod+enter')
 const target = ref<'repository' | 'workspace'>('repository')
+const targetOptions: SegmentedControlOption<'repository' | 'workspace'>[] = [
+  { value: 'repository', label: 'Repository' },
+  { value: 'workspace', label: 'Agent workspace' },
+]
 const repository = seedRef(() => props.options.defaultRepository)
 const workspace = seedRef(() => props.options.workspaces?.find((item) => item.supportsPrompt)?.dir || '')
 const name = ref('')
@@ -129,33 +134,13 @@ useSubmitShortcut(submit)
     @close="emit('close')"
   >
     <form :id="formId" class="flex flex-col gap-3 px-5 py-4" @submit.prevent="submit">
-      <div
-        class="grid grid-cols-2 gap-1 rounded-lg border border-card bg-app p-1"
-        role="group"
+      <SegmentedControl
+        v-model="target"
+        :columns="2"
+        :options="targetOptions"
         aria-label="Session target"
-        data-testid="session-target"
-      >
-        <button
-          type="button"
-          class="rounded-md px-3 py-1.5 text-xs font-medium"
-          :class="target === 'repository' ? 'bg-raised text-text shadow-sm' : 'text-text-3 hover:text-text'"
-          :aria-pressed="target === 'repository'"
-          data-testid="session-target-repository"
-          @click="target = 'repository'"
-        >
-          Repository
-        </button>
-        <button
-          type="button"
-          class="rounded-md px-3 py-1.5 text-xs font-medium"
-          :class="target === 'workspace' ? 'bg-raised text-text shadow-sm' : 'text-text-3 hover:text-text'"
-          :aria-pressed="target === 'workspace'"
-          data-testid="session-target-workspace"
-          @click="target = 'workspace'"
-        >
-          Agent workspace
-        </button>
-      </div>
+        testid="session-target"
+      />
       <FormField v-if="target === 'repository'" v-slot="{ id }" label="Repository">
         <RepositorySelect
           :id="id"

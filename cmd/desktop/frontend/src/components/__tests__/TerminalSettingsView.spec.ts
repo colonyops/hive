@@ -67,13 +67,13 @@ describe('TerminalSettingsView', () => {
     expect(
       wrapper
         .find(`[data-testid="settings-terminal-font-weight-${defaultTerminalFontWeight}"]`)
-        .attributes('aria-selected'),
+        .attributes('aria-pressed'),
     ).toBe('true')
 
     await wrapper.find('[data-testid="settings-terminal-font-weight-400"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="settings-terminal-font-weight-400"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('[data-testid="settings-terminal-font-weight-400"]').attributes('aria-pressed')).toBe('true')
     expect(mocks.SetTerminalFontWeights).toHaveBeenCalledWith(400, defaultTerminalFontWeightBold)
   })
 
@@ -121,12 +121,12 @@ describe('TerminalSettingsView', () => {
   it('reflects and changes the terminal warm-session count', async () => {
     const wrapper = mount(TerminalSettingsView)
 
-    expect(wrapper.find('[data-testid="settings-terminal-pool-size-3"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('[data-testid="settings-terminal-pool-size-3"]').attributes('aria-pressed')).toBe('true')
 
     await wrapper.find('[data-testid="settings-terminal-pool-size-5"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="settings-terminal-pool-size-5"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('[data-testid="settings-terminal-pool-size-5"]').attributes('aria-pressed')).toBe('true')
     expect(mocks.SetTerminalPoolSize).toHaveBeenCalledWith(5)
   })
 })

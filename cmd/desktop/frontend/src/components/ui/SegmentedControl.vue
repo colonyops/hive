@@ -1,51 +1,93 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends string">
 import FormField from './FormField.vue'
 
-export interface SegmentedControlOption {
-  value: string
+export interface SegmentedControlOption<V extends string = string> {
+  value: V
   label: string
-  /** Spelled-out name when the label is abbreviated to keep the strip narrow. */
+  /** Spelled-out name when the label is abbreviated or hidden; it also names the segment for screen readers. */
   title?: string
 }
 
-const props = defineProps<{
-  label?: string
-  modelValue: string
-  options: SegmentedControlOption[]
-  hint?: string
-  testid?: string
-  /** Names the strip when a SettingsRow supplies the visible label instead. */
-  ariaLabel?: string
-  /** Lay the options out as a grid with this many columns instead of a single strip. */
-  columns?: number
+const props = withDefaults(
+  defineProps<{
+    modelValue?: T
+    options: SegmentedControlOption<T>[]
+    /**
+     * `field` is a settings control with an optional label and hint above
+     * and below. `compact` is the bare strip a toolbar, a title bar, or a
+     * dialog header carries.
+     */
+    variant?: 'field' | 'compact'
+    /** `compact` only: `sm` for the title bar and dialog headers, `md` for view toolbars. */
+    size?: 'sm' | 'md'
+    label?: string
+    hint?: string
+    testid?: string
+    /** Names the strip when a SettingsRow supplies the visible label instead. */
+    ariaLabel?: string
+    /** Lay the options out as a grid with this many columns instead of a single strip. */
+    columns?: number
+  }>(),
+  {
+    variant: 'field',
+    size: 'md',
+    label: undefined,
+    hint: undefined,
+    testid: undefined,
+    ariaLabel: undefined,
+    columns: undefined,
+  },
+)
+
+const emit = defineEmits<{ 'update:modelValue': [value: T] }>()
+
+defineSlots<{
+  option?: (props: { option: SegmentedControlOption<T>; selected: boolean }) => unknown
 }>()
 
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+function optionClass(selected: boolean): string[] {
+  if (props.variant === 'field') {
+    return [
+      'flex-1 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12.5px]',
+      selected ? 'bg-raised text-text' : 'text-text-3 hover:text-text-2',
+    ]
+  }
+  return [
+    'flex items-center gap-1.5 rounded-md px-2.5 font-medium',
+    props.size === 'sm' ? 'h-[22px] text-[11.5px]' : 'h-[26px] text-[12.5px]',
+    selected ? 'bg-chip text-text' : 'text-text-2 hover:text-text',
+  ]
+}
 </script>
 
 <template>
-  <FormField :label="label" :hint="hint" :testid="testid">
+  <component :is="variant === 'field' ? FormField : 'div'" v-bind="variant === 'field' ? { label, hint } : {}">
     <div
-      class="gap-1 rounded-lg border border-row bg-app p-1"
-      :class="props.columns ? 'grid' : 'flex'"
+      :class="[
+        props.columns ? 'grid' : 'flex',
+        variant === 'field'
+          ? 'gap-1 rounded-lg border border-row bg-app p-1'
+          : 'gap-0.5 rounded-lg border border-strong bg-app p-0.5',
+      ]"
       :style="props.columns ? { gridTemplateColumns: `repeat(${props.columns}, minmax(0, 1fr))` } : undefined"
-      role="tablist"
+      role="group"
       :aria-label="props.ariaLabel ?? props.label"
+      :data-testid="variant === 'compact' ? testid : undefined"
     >
       <button
         v-for="opt in options"
         :key="opt.value"
         type="button"
-        role="tab"
-        class="flex-1 cursor-pointer whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12.5px] transition-colors"
-        :class="modelValue === opt.value ? 'bg-raised text-text' : 'text-text-3 hover:text-text-2'"
-        :aria-selected="modelValue === opt.value"
+        class="cursor-pointer transition-colors"
+        :class="optionClass(modelValue === opt.value)"
+        :aria-pressed="modelValue === opt.value"
+        :aria-label="opt.title"
         :title="opt.title"
         :data-testid="testid ? `${testid}-${opt.value}` : undefined"
         @click="emit('update:modelValue', opt.value)"
       >
-        {{ opt.label }}
+        <slot name="option" :option="opt" :selected="modelValue === opt.value">{{ opt.label }}</slot>
       </button>
     </div>
-  </FormField>
+  </component>
 </template>
