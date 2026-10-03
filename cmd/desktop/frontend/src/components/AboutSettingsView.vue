@@ -241,7 +241,7 @@ onMounted(async () => {
       testid="about-build"
     >
       <template #actions>
-        <CopyButton :text="buildSummary" label="Copy build info" data-testid="about-copy-build" />
+        <CopyButton :text="buildSummary" label="Copy build info" size="xs" data-testid="about-copy-build" />
       </template>
       <!-- Hairlines rather than gaps: four facets of one build, not four cards. -->
       <div

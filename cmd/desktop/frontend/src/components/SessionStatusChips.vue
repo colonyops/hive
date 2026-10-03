@@ -3,18 +3,20 @@
 // which is why it sits in PaneStatusBar's slot rather than in the bar itself.
 import { computed } from 'vue'
 import { Browser } from '@wailsio/runtime'
+import IconCheck from '~icons/lucide/check'
+import IconCopy from '~icons/lucide/copy'
 import IconFileDiff from '~icons/lucide/file-diff'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconGitPullRequest from '~icons/lucide/git-pull-request'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconUpload from '~icons/lucide/upload'
 import AppTooltip from './ui/AppTooltip.vue'
+import { useClipboard } from '../composables/useClipboard'
 import { markdownPullRequestLink } from '../lib/prLink'
 import type {
   SessionGitStatus,
   SessionPullRequest,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
-import CopyButton from './ui/CopyButton.vue'
 
 const props = defineProps<{
   git: SessionGitStatus | null
@@ -79,13 +81,16 @@ function openPullRequest(): void {
   if (url) void Browser.OpenURL(url)
 }
 
-const pullRequestLink = computed(() => {
+const { copy, copied } = useClipboard()
+
+async function copyLink(): Promise<void> {
   const found = pr.value
   // The repository name alone, as the shell script used: the owner is implied
   // by wherever this is being pasted.
   const repo = props.git?.repo
-  return found && repo ? markdownPullRequestLink(found, repo) : ''
-})
+  if (!found || !repo) return
+  await copy(markdownPullRequestLink(found, repo))
+}
 </script>
 
 <template>
@@ -166,13 +171,19 @@ const pullRequestLink = computed(() => {
             <span v-if="pr.checks" :class="checksTone" data-testid="session-status-checks">{{ pr.checks }}</span>
           </button>
 
-          <CopyButton
-            v-if="pr"
-            variant="icon"
-            :text="pullRequestLink"
-            label="Copy link to this pull request"
-            data-testid="session-status-copy"
-          />
+          <AppTooltip v-if="pr" :text="copied ? 'Copied' : 'Copy link to this pull request'">
+            <button
+              type="button"
+              class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-[7px] text-text-4 hover:bg-chip hover:text-text"
+              :class="{ 'text-severity-success': copied }"
+              aria-label="Copy link to this pull request"
+              data-testid="session-status-copy"
+              @click="copyLink"
+            >
+              <IconCheck v-if="copied" class="size-3.5" />
+              <IconCopy v-else class="size-3.5" />
+            </button>
+          </AppTooltip>
 
           <!-- A failed lookup, never rendered as "no pull request": the branch may
            well have one, and claiming otherwise is a fact this cannot support. -->

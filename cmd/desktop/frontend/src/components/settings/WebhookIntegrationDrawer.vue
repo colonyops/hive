@@ -12,8 +12,8 @@ import BaseButton from '../ui/BaseButton.vue'
 import DrawerSheet from '../ui/DrawerSheet.vue'
 import FormField from '../ui/FormField.vue'
 import TextInput from '../ui/TextInput.vue'
-import { useClipboard } from '../../composables/useClipboard'
 import { useWebhookSettings } from '../../stores/useWebhookSettings'
+import CopyButton from '../ui/CopyButton.vue'
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -75,8 +75,6 @@ const statusToneClass = computed(
       neutral: 'border-border bg-chip text-text-2',
     })[status.value.tone as 'success' | 'error' | 'neutral'],
 )
-
-const { copy: copyUrl, copied: urlCopied } = useClipboard()
 
 async function onGeneratePort() {
   const next = await generatePort()
@@ -184,15 +182,7 @@ onMounted(() => void reload())
             data-testid="webhook-settings-base-url-value"
             >{{ baseUrl }}</code
           >
-          <BaseButton
-            variant="secondary"
-            size="sm"
-            class="whitespace-nowrap"
-            data-testid="webhook-settings-copy-url"
-            @click="copyUrl(baseUrl)"
-          >
-            {{ urlCopied ? 'Copied' : 'Copy' }}
-          </BaseButton>
+          <CopyButton :text="baseUrl" data-testid="webhook-settings-copy-url" />
         </div>
       </FormField>
 

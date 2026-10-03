@@ -320,7 +320,7 @@ function onKeydown(e: KeyboardEvent): void {
               spellcheck="false"
               @input="onInput"
             />
-            <Kbd class="shrink-0 select-none">esc</Kbd>
+            <Kbd variant="boxed" class="shrink-0 select-none">esc</Kbd>
           </div>
 
           <!-- Results list -->
@@ -372,9 +372,9 @@ function onKeydown(e: KeyboardEvent): void {
 
           <!-- Footer key hints -->
           <div class="palette-footer">
-            <span><Kbd variant="plain" class="text-text-2">↑↓</Kbd> navigate</span>
-            <span><Kbd variant="plain" class="text-text-2">↵</Kbd> run</span>
-            <span><Kbd variant="plain" class="text-text-2">⇥</Kbd> scope</span>
+            <span><Kbd class="text-text-2">↑↓</Kbd> navigate</span>
+            <span><Kbd class="text-text-2">↵</Kbd> run</span>
+            <span><Kbd class="text-text-2">⇥</Kbd> scope</span>
           </div>
         </div>
       </div>

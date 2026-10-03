@@ -29,7 +29,7 @@ const continuations = computed(() => {
     data-testid="sequence-hint"
   >
     <span class="flex items-center gap-1">
-      <Kbd v-for="(step, i) in steps" :key="i" data-testid="sequence-hint-step">{{ step }}</Kbd>
+      <Kbd variant="boxed" v-for="(step, i) in steps" :key="i" data-testid="sequence-hint-step">{{ step }}</Kbd>
     </span>
     <span
       v-for="continuation in continuations"
@@ -37,7 +37,7 @@ const continuations = computed(() => {
       class="flex items-center gap-1.5"
       data-testid="sequence-hint-continuation"
     >
-      <Kbd data-testid="sequence-hint-continuation-key">{{ continuation.label }}</Kbd>
+      <Kbd variant="boxed" data-testid="sequence-hint-continuation-key">{{ continuation.label }}</Kbd>
       <span data-testid="sequence-hint-continuation-title">{{ continuation.title }}</span>
     </span>
   </div>

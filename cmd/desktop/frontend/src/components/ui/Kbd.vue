@@ -1,5 +1,5 @@
 <script setup lang="ts">
-withDefaults(defineProps<{ variant?: 'boxed' | 'on-accent' | 'plain' }>(), { variant: 'boxed' })
+withDefaults(defineProps<{ variant?: 'plain' | 'boxed' | 'on-accent' }>(), { variant: 'plain' })
 </script>
 
 <template>

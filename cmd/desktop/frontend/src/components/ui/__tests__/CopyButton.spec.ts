@@ -16,50 +16,32 @@ afterEach(() => {
 })
 
 describe('CopyButton', () => {
-  it.each(['button', 'icon', 'link'] as const)('copies its text as a %s', async (variant) => {
-    const wrapper = mount(CopyButton, {
-      props: { text: 'abc123', label: 'Copy id', variant },
-      attrs: { 'data-testid': 'copy' },
-    })
-
-    await wrapper.get('[data-testid="copy"]').trigger('click')
-    await flushPromises()
-
-    expect(mocks.SetText).toHaveBeenCalledWith('abc123')
-    wrapper.unmount()
-  })
-
-  it('shows Copied until the reset delay passes', async () => {
-    const wrapper = mount(CopyButton, {
-      props: { text: 'abc123', label: 'Copy id', variant: 'link', resetDelay: 500 },
-    })
+  it('copies its text and shows Copied until the reset', async () => {
+    const wrapper = mount(CopyButton, { props: { text: 'abc123', label: 'Copy id' } })
 
     await wrapper.trigger('click')
     await flushPromises()
+    expect(mocks.SetText).toHaveBeenCalledWith('abc123')
     expect(wrapper.text()).toBe('Copied')
 
-    vi.advanceTimersByTime(500)
+    vi.advanceTimersByTime(2000)
     await flushPromises()
     expect(wrapper.text()).toBe('Copy id')
   })
 
   it('does nothing with empty text', async () => {
-    const wrapper = mount(CopyButton, { props: { text: '', label: 'Copy id', variant: 'link' } })
+    const wrapper = mount(CopyButton, { props: { text: '' } })
 
     await wrapper.trigger('click')
     await flushPromises()
 
     expect(mocks.SetText).not.toHaveBeenCalled()
-    expect(wrapper.text()).toBe('Copy id')
+    expect(wrapper.text()).toBe('Copy')
   })
 
-  it('names an icon button by its label', () => {
-    const wrapper = mount(CopyButton, {
-      props: { text: 'x', label: 'Copy link', variant: 'icon' },
-      attrs: { 'data-testid': 'copy' },
-    })
+  it('passes a test id through to the button', () => {
+    const wrapper = mount(CopyButton, { props: { text: 'x' }, attrs: { 'data-testid': 'copy' } })
 
-    expect(wrapper.get('[data-testid="copy"]').attributes('aria-label')).toBe('Copy link')
-    wrapper.unmount()
+    expect(wrapper.attributes('data-testid')).toBe('copy')
   })
 })

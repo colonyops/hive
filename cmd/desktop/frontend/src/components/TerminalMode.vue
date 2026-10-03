@@ -2630,12 +2630,12 @@ onBeforeUnmount(() => {
              because it is rebindable; the arrows are the tree's own handler and
              cannot move. -->
         <div v-if="attachable.length" class="tree-hints" data-testid="terminal-tree-hints">
-          <span><Kbd variant="plain" class="text-text-3">↑↓</Kbd> switch</span>
-          <span><Kbd variant="plain" class="text-text-3">↵</Kbd> enter</span>
+          <span><Kbd class="text-text-3">↑↓</Kbd> switch</span>
+          <span><Kbd class="text-text-3">↵</Kbd> enter</span>
           <!-- Whichever half of the focus pair leaves where focus is. The pane
                has nowhere to advertise its own way out, so the tree carries it. -->
           <span v-if="focusHint"
-            ><Kbd variant="plain" class="text-text-3">{{ focusHint.keys }}</Kbd> {{ focusHint.label }}</span
+            ><Kbd class="text-text-3">{{ focusHint.keys }}</Kbd> {{ focusHint.label }}</span
           >
         </div>
         <PanelResizeHandle edge="right" name="terminal-sidebar" :start="startResize" :step="step" />

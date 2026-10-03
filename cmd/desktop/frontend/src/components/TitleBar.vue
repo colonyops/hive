@@ -214,7 +214,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
         "
         @click="emit('open-update')"
       >
-        <Spinner v-if="updateInstalling" size="sm" />
+        <Spinner v-if="updateInstalling" />
         <IconArrowUpCircle v-else class="size-3" />
         <template v-if="updateInstalling">Installing…</template>
         <template v-else
@@ -264,7 +264,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       >
         <IconSearch class="size-3.5 shrink-0" />
         <span class="min-w-0 flex-1 truncate text-left text-[12.5px]">Search…</span>
-        <Kbd class="hidden shrink-0 min-[700px]:block">{{ isMac ? '⌘' : 'Ctrl ' }}K</Kbd>
+        <Kbd variant="boxed" class="hidden shrink-0 min-[700px]:block">{{ isMac ? '⌘' : 'Ctrl ' }}K</Kbd>
       </button>
       <!-- Activity: a 28px icon between the palette and the frame. An amber dot
            flags activity recorded since the page was last opened; amber fill
