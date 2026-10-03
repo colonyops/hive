@@ -8,6 +8,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
+	"github.com/colonyops/hive/internal/platform/tmux/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -39,6 +40,15 @@ func TestStatusOptionsFromConfig_NoTerminalSectionMatchesDefaultOptions(t *testi
 
 	got := StatusOptionsFromConfig(cfg.Terminal.Status, cfg.Tmux.PollInterval)
 	assert.Equal(t, status.DefaultOptions(), got)
+}
+
+func TestDefaultMissingToleranceMatchesConfigDefault(t *testing.T) {
+	// Config-less constructions (tmuxstatus.New, test seams) fall back to
+	// tmuxstatus.DefaultMissingTolerance while production reads the config
+	// default.
+	cfg, err := config.Load("", t.TempDir())
+	require.NoError(t, err)
+	assert.Equal(t, tmuxstatus.DefaultMissingTolerance, cfg.Terminal.Status.Confirm.Missing.Polls)
 }
 
 func TestStatusOptionsFromConfig_YAMLRoundTrip(t *testing.T) {

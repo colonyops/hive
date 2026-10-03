@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxbin"
+	"github.com/colonyops/hive/internal/platform/tmux/bin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

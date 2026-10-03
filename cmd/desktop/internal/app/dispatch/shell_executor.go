@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
+	"github.com/colonyops/hive/internal/platform/observe"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"

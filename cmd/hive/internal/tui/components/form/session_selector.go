@@ -2,8 +2,8 @@ package form
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/platform/git"
 )
 
 // SessionSelectorField is a preset form field for selecting sessions.

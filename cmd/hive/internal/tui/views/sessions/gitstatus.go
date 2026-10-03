@@ -6,7 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/rs/zerolog/log"
 )
 

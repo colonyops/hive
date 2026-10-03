@@ -9,9 +9,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/posthog/client"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/sourcehttp"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // defaultCooldown applies when a rate-limit response carried no reset time.

@@ -23,12 +23,10 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	datastores "github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/execenv"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/hivewatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/ingest"
@@ -50,19 +48,21 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/rss"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/terminalimg"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxbin"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/git"
-	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	coredb "github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	coreterminal "github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/scripts"
-	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
+	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/internal/platform/execenv"
+	"github.com/colonyops/hive/internal/platform/git"
+	"github.com/colonyops/hive/internal/platform/tmux/bin"
+	"github.com/colonyops/hive/internal/platform/tmux/control"
+	"github.com/colonyops/hive/internal/platform/tmux/exec"
+	"github.com/colonyops/hive/internal/platform/tmux/status"
 )
 
 // Config is everything App needs that it cannot resolve itself.
@@ -1305,8 +1305,8 @@ func (a *App) loadHiveConfig(ctx context.Context, dataDir string) (*config.Confi
 func newTmuxRunner(
 	binary func(context.Context) (string, error),
 	environ func(context.Context) []string,
-) tmuxadapter.Runner {
-	return tmuxadapter.NewExecRunner(tmuxadapter.ExecRunnerOptions{
+) tmuxexec.Runner {
+	return tmuxexec.NewExecRunner(tmuxexec.ExecRunnerOptions{
 		Binary:      binary,
 		Environ:     tmuxcc.RunnerEnviron(environ),
 		PrepareArgs: tmuxcc.RunnerArgs,
@@ -1337,7 +1337,7 @@ type tmuxSessionRenamer interface {
 // on the same session name. A raw rename would leave the control-mode manager
 // registered under the old name.
 type hiveMultiplexer struct {
-	*tmuxadapter.Client
+	*tmuxexec.Client
 	renamer tmuxSessionRenamer
 }
 
@@ -1379,7 +1379,7 @@ func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus
 	tmuxBinary := func(ctx context.Context) (string, error) {
 		return a.resolveTmuxBinary(ctx)
 	}
-	tmuxClient := tmuxadapter.New(newTmuxRunner(tmuxBinary, a.execEnv.Environ), serviceLogger.With().Str("component", "tmux").Logger())
+	tmuxClient := tmuxexec.New(newTmuxRunner(tmuxBinary, a.execEnv.Environ), serviceLogger.With().Str("component", "tmux").Logger())
 	sessionMultiplexer := hiveMultiplexer{Client: tmuxClient, renamer: a.terminals}
 	sessions := hive.NewSessionService(
 		stores.NewSessionStore(database),
@@ -1397,21 +1397,21 @@ func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus
 
 	var statusService *hive.StatusService
 	if a.mock == "" {
-		statusOptions := []terminaltmux.Option{
-			terminaltmux.WithPaneSource(tmuxClient),
-			terminaltmux.WithStatusOptions(hive.StatusOptionsFromConfig(hiveCfg.Terminal.Status, hiveCfg.Tmux.PollInterval)),
-			terminaltmux.WithMissingTolerance(hiveCfg.Terminal.Status.Confirm.Missing.Polls),
+		statusOptions := []tmuxstatus.Option{
+			tmuxstatus.WithPaneSource(tmuxClient),
+			tmuxstatus.WithStatusOptions(hive.StatusOptionsFromConfig(hiveCfg.Terminal.Status, hiveCfg.Tmux.PollInterval)),
+			tmuxstatus.WithMissingTolerance(hiveCfg.Terminal.Status.Confirm.Missing.Polls),
 		}
 		if hiveCfg.Tmux.CaptureRecording.Enabled {
-			recorder, recorderErr := terminaltmux.NewJSONCaptureRecorder(hiveCfg.TmuxCaptureRecordingsDir())
+			recorder, recorderErr := tmuxstatus.NewJSONCaptureRecorder(hiveCfg.TmuxCaptureRecordingsDir())
 			if recorderErr != nil {
 				a.logger.Warn().Err(recorderErr).Msg("enable tmux pane capture recording for session status")
 			} else {
-				statusOptions = append(statusOptions, terminaltmux.WithCaptureRecorder(recorder))
+				statusOptions = append(statusOptions, tmuxstatus.WithCaptureRecorder(recorder))
 			}
 		}
 		terminalManager := coreterminal.NewManager([]string{"tmux"})
-		terminalManager.Register(terminaltmux.NewFromPreviewMatchers(hiveCfg.Tmux.PreviewWindowMatcher, statusOptions...))
+		terminalManager.Register(tmuxstatus.NewFromPreviewMatchers(hiveCfg.Tmux.PreviewWindowMatcher, statusOptions...))
 		statusService = hive.NewStatusService(terminalManager, hiveCfg.Git.StatusWorkers)
 	}
 

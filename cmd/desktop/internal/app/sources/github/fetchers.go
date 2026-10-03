@@ -7,9 +7,9 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/feed"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // Fetchers hands out one feed.LiveProvider per credential, constructing them

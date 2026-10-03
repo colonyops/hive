@@ -13,14 +13,14 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
-	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	terminalstatus "github.com/colonyops/hive/internal/domain/terminal/status"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/platform/git"
+	"github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
 // AgentActivityStatus is this app's own vocabulary for a captured tmux pane's

@@ -3,8 +3,8 @@ package sessions
 import (
 	"sort"
 
-	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/platform/git"
 )
 
 // RepoGroup represents a repository with its associated sessions.

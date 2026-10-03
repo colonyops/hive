@@ -13,10 +13,10 @@ import (
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/git"
-	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/platform/git"
+	"github.com/colonyops/hive/internal/platform/workspace"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/colonyops/hive/pkg/tmpl"

@@ -25,13 +25,13 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/report"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/secrets"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/telemetry"
+	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/internal/platform/observe"
+	"github.com/colonyops/hive/internal/platform/secrets"
 	"github.com/colonyops/hive/pkg/buildinfo"
 )
 

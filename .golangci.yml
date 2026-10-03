@@ -78,6 +78,19 @@ linters:
               desc: domain does no I/O; persistence belongs in the store layer.
             - pkg: github.com/fsnotify
               desc: domain does no I/O; put watchers in internal/platform.
+        platform-is-a-driver:
+          files:
+            - "**/internal/platform/**"
+            - "!**/cmd/**"
+          deny:
+            - pkg: github.com/colonyops/hive/internal/hive
+              desc: &driver platform drives one outside system and knows nothing of services, stores or config (docs/architecture.md, "Layers and the dependency rule"). Take what you need as a parameter.
+            - pkg: github.com/colonyops/hive/internal/data
+              desc: *driver
+            - pkg: github.com/colonyops/hive/internal/config
+              desc: *driver
+            - pkg: github.com/colonyops/hive/internal/core/config
+              desc: *driver
         core:
           files:
             - "**/cmd/desktop/internal/app/**"
@@ -112,8 +125,8 @@ linters:
               desc: |
                 The OTel SDK is cmd/desktop/internal/app/telemetry's. A package
                 that emits declares package-level instruments through
-                cmd/desktop/internal/app/observe and needs no SDK type to do
-                it. See docs/architecture.md, "Telemetry".
+                internal/platform/observe and needs no SDK type to do it. See
+                docs/architecture.md, "Telemetry".
             - pkg: go.opentelemetry.io/otel/exporters
               desc: |
                 An exporter is wired once, in cmd/desktop/internal/app/telemetry.
@@ -141,6 +154,15 @@ linters:
           list-mode: lax
           allow:
             - github.com/colonyops/hive/internal/domain
+            # Desktop drivers that moved to platform, and the tmux test helper
+            # that was never behind the seam.
+            - github.com/colonyops/hive/internal/platform/credentials
+            - github.com/colonyops/hive/internal/platform/execenv
+            - github.com/colonyops/hive/internal/platform/observe
+            - github.com/colonyops/hive/internal/platform/secrets
+            - github.com/colonyops/hive/internal/platform/tmux/bin
+            - github.com/colonyops/hive/internal/platform/tmux/control
+            - github.com/colonyops/hive/internal/platform/tmuxtest
           deny:
             - pkg: github.com/colonyops/hive/internal/core
               desc: &seam |
@@ -154,7 +176,7 @@ linters:
               desc: *seam
             - pkg: github.com/colonyops/hive/internal/hive
               desc: *seam
-            - pkg: github.com/colonyops/hive/internal/integration
+            - pkg: github.com/colonyops/hive/internal/platform
               desc: *seam
             - pkg: github.com/colonyops/hive/internal/sources
               desc: *seam

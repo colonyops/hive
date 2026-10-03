@@ -8,8 +8,8 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/platform/workspace"
 )
 
 // agentPicker is a compact inline selector for a small set of agent names.

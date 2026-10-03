@@ -1,7 +1,7 @@
 package stores
 
 import (
-	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
+	"github.com/colonyops/hive/internal/platform/observe"
 )
 
 var tracer = observe.Tracer("/internal/app/data/stores")

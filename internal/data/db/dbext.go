@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"time"
 
-	_ "modernc.org/sqlite"
+	"github.com/colonyops/hive/internal/platform/sqlite"
 )
 
 // OpenOptions configures database connection settings.
@@ -34,8 +35,7 @@ type DB struct {
 // Open creates a new database connection with the given options.
 // The database file is created in the specified data directory.
 // Uses minimal connection pool (default 2) to prevent transaction deadlocks while
-// avoiding unnecessary connection overhead. WAL mode and busy_timeout
-// handle concurrent access at the SQLite level.
+// avoiding unnecessary connection overhead.
 func Open(dataDir string, opts OpenOptions) (*DB, error) {
 	// Apply defaults for zero values
 	if opts.MaxOpenConns == 0 {
@@ -48,31 +48,18 @@ func Open(dataDir string, opts OpenOptions) (*DB, error) {
 		opts.BusyTimeout = DefaultOpenOptions().BusyTimeout
 	}
 
-	dbPath := filepath.Join(dataDir, "hive.db")
-
-	// Open with pragmas for WAL mode, busy timeout, and foreign keys
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)&_pragma=foreign_keys(ON)", dbPath, opts.BusyTimeout)
-	conn, err := sql.Open("sqlite", dsn)
+	conn, err := sqlite.Open(context.Background(), filepath.Join(dataDir, "hive.db"), sqlite.Options{
+		MaxOpenConns: opts.MaxOpenConns,
+		MaxIdleConns: opts.MaxIdleConns,
+		BusyTimeout:  time.Duration(opts.BusyTimeout) * time.Millisecond,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to open database: %w", err)
+		return nil, err
 	}
-
-	// Configure connection pool - minimal connections for SQLite
-	conn.SetMaxOpenConns(opts.MaxOpenConns)
-	conn.SetMaxIdleConns(opts.MaxIdleConns)
-	conn.SetConnMaxLifetime(0) // Connections live forever
 
 	db := &DB{
 		conn:    conn,
 		queries: New(conn),
-	}
-
-	// Verify connectivity - fail fast for SQLite
-	if err := conn.PingContext(context.Background()); err != nil {
-		if closeErr := conn.Close(); closeErr != nil {
-			return nil, fmt.Errorf("failed to connect to database: %w (close also failed: %w)", err, closeErr)
-		}
-		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	// Initialize schema

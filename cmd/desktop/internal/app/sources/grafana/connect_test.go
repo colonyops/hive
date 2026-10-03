@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/grafana/client"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 func TestNormalizeStackURL(t *testing.T) {

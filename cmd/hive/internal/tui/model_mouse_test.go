@@ -14,12 +14,12 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
-	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 	"github.com/colonyops/hive/pkg/tmpl"
 )

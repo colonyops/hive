@@ -11,11 +11,11 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/platform/tmux/status"
 	"github.com/colonyops/hive/pkg/iojson"
 )
 
@@ -212,7 +212,7 @@ func (cmd *ExperimentalCmd) assessWatchCmd() *cli.Command {
 			}
 
 			tracker := status.NewTracker(assess.NewEngine(), opts)
-			capture := terminaltmux.TmuxCapture{}
+			capture := tmuxstatus.TmuxCapture{}
 			writer := c.Root().Writer
 			ticker := time.NewTicker(interval)
 			defer ticker.Stop()

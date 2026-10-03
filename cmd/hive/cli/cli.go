@@ -19,7 +19,6 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/doctor"
 	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/theme"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -33,7 +32,8 @@ import (
 	plugintmux "github.com/colonyops/hive/internal/hive/plugins/tmux"
 	"github.com/colonyops/hive/internal/hive/scripts"
 	"github.com/colonyops/hive/internal/hive/sweep"
-	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
+	"github.com/colonyops/hive/internal/platform/git"
+	"github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/buildinfo"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/logutils"
@@ -266,7 +266,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				svcLogger = log.With().Str("component", "hive").Logger()
 			)
 
-			tmuxClient := tmuxadapter.NewDefault(svcLogger.With().Str("component", "tmux").Logger())
+			tmuxClient := tmuxexec.NewDefault(svcLogger.With().Str("component", "tmux").Logger())
 			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, bus, exec, renderer, styles.CLIOutputStyler{}, svcLogger, os.Stdout, os.Stderr, tmuxClient)
 			termMgr := hive.NewTerminalManager(cfg, tmuxClient)
 

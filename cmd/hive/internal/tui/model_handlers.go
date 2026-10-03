@@ -21,12 +21,12 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/tasks"
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/pkg/tmpl"
 )

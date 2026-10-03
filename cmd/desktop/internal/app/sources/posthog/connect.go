@@ -11,9 +11,9 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/posthog/client"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/sourcehttp"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // Project is one project the connect flow can offer or has connected.

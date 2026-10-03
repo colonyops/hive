@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
+	"github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
 type fakeAgentWindows struct {

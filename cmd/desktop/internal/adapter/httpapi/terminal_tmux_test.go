@@ -16,13 +16,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
-	"github.com/colonyops/hive/internal/tmuxtest"
+	"github.com/colonyops/hive/internal/platform/tmux/control"
+	"github.com/colonyops/hive/internal/platform/tmuxtest"
 	"github.com/colonyops/hive/pkg/executil"
 )
 
 // These tests drive a real tmux server. Each one gets a server of its own and
-// its own session name, so they never see each other's. See internal/tmuxtest
+// its own session name, so they never see each other's. See internal/platform/tmuxtest
 // for how they are kept away from a developer's own.
 
 type tmuxFixture struct {

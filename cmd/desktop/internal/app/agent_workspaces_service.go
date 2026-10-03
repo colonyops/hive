@@ -20,11 +20,11 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/execenv"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/mcpcatalog"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/prompts"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/schedule"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
+	"github.com/colonyops/hive/internal/platform/execenv"
+	"github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
 const (

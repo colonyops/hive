@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
+	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/pkg/atomicfile"
 )
 

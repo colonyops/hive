@@ -11,11 +11,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/canonical"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/grafana/client"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 func TestIRMAlertsConfigValidate(t *testing.T) {

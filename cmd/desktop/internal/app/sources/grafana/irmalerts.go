@@ -9,11 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/canonical"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/grafana/client"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 type IRMAlertsConfig struct {

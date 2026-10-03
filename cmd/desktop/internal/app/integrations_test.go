@@ -6,11 +6,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	ghsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
 	grafana "github.com/colonyops/hive/cmd/desktop/internal/app/sources/grafana"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 func integrationsFor(t *testing.T, creds credentials.Store) map[string]Integration {

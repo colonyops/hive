@@ -44,7 +44,7 @@ individual choices; this document describes the shape everything fits into.
 > connector owns its HTTP client end to end (`sources/github/ghclient`) rather
 > than sharing a client with the CLI (ADR owned-github-client).
 >
-> Credentials are keyed by account: `app/credentials` stores a value per
+> Credentials are keyed by account: `platform/credentials` stores a value per
 > `Ref{Provider, Account}` in the OS keychain with a separate index of refs,
 > a source node names the account it fetches as, and lookup is generic while
 > acquisition stays with the connector. GitHub is one connector among them
@@ -72,7 +72,7 @@ individual choices; this document describes the shape everything fits into.
 > each spawns a process), and `/api/status` + `/api/version` as the plain-GET
 > liveness probe. The full REST + SSE product surface is still absent.
 >
-> Terminal mode is the second driving transport: `cmd/desktop/internal/app/tmuxcc` is a
+> Terminal mode is the second driving transport: `internal/platform/tmux/control` is a
 > transport-free tmux control-mode client with an App-owned lifecycle,
 > `app.TerminalsService` is the slug-keyed driving service, `httpapi` carries
 > both the REST control plane and the per-session binary WebSocket data plane on
@@ -188,10 +188,10 @@ column is the section that specifies it.
 | A new **streaming endpoint** (WebSocket/SSE) | Data-plane mount — raw handler at its own prefix, REST control plane beside it | [Terminal sessions](#terminal-sessions), ADR terminal-transport |
 | A new **event** | Observer — payload in core, degraded to a wake-up in `wailsui` | [Events](#events) |
 | A new **background subsystem** | One instance per process, App-owned lifecycle (plugs once unblocked) | [Background lifecycle](#background-lifecycle) |
-| A new **metric, span, or log field** | Package-level instrument via `app/observe` against the global provider; bounded attributes only; a span is a trigger or a wait; the SDK stays in `app/telemetry` | [Telemetry](#telemetry), ADR a-span-is-a-trigger-or-a-wait-and-its-count-per-trigger-is-bounded-by-configuration |
+| A new **metric, span, or log field** | Package-level instrument via `platform/observe` against the global provider; bounded attributes only; a span is a trigger or a wait; the SDK stays in `app/telemetry` | [Telemetry](#telemetry), ADR a-span-is-a-trigger-or-a-wait-and-its-count-per-trigger-is-bounded-by-configuration |
 | A new **scheduled/recurring launch** | Registry-free, One instance per process, App-owned lifecycle, Consumer-defined interfaces, Store | [Scheduled chats](#scheduled-chats), ADR scheduled-chats-are-declared-in-the-workspace-manifest-and-their-run-state-lives-in-sqlite |
 | A new **app mode** | Closed union over sibling active flags — never an `else` branch | [App modes](#app-modes) |
-| A new **persisted field** | Config-vs-data boundary; Value Object for anything secret-bearing. A secret-bearing field holds an `cmd/desktop/internal/app/secrets` reference, never a value | [Config versus data](#config-versus-data), [Credentials](#credentials) |
+| A new **persisted field** | Config-vs-data boundary; Value Object for anything secret-bearing. A secret-bearing field holds an `internal/platform/secrets` reference, never a value | [Config versus data](#config-versus-data), [Credentials](#credentials) |
 | A new **persisted entity** | Store, Unit of Work, Options struct, Consumer-defined interface | [Stores and services](#stores-and-services) |
 | An operation **spanning two domains** | Unit of Work — `db.Ctx(ctx)` to join the ambient transaction, never a second one | [Config versus data](#config-versus-data) |
 | A new **dependency on something outside** | Consumer-defined interface in the package that calls it | [Layers and the dependency rule](#layers-and-the-dependency-rule) |
@@ -679,7 +679,7 @@ streaming CLI or SSE consumer needs the delta.
 
 ### Credentials
 
-Secrets live in `app/credentials`, keyed by `Ref{Provider, Account}` and
+Secrets live in `platform/credentials`, keyed by `Ref{Provider, Account}` and
 stored in the OS keychain. Two constraints drive the design:
 
 - **Keychains do not enumerate.** `List()` needs a separate index of refs
@@ -1010,7 +1010,7 @@ and has to re-expose every capability the API grows
 `var meter = observe.Meter("/internal/app/yours")` with its instruments beside
 it — see `tmuxcc/metrics.go`.
 
-`cmd/desktop/internal/app/observe` carries the scope-name convention and nothing else:
+`internal/platform/observe` carries the scope-name convention and nothing else:
 `Tracer` and `Meter` prepend the module path and return the real API types,
 `Must` unwraps an instrument constructor, `RecordError` sets the error status,
 and `StartConditionalSpan` opens a span only when the context already has one —
@@ -1120,7 +1120,7 @@ is itself built over `appkit/httpclient`. Nothing constructs a bespoke
 
 What it deliberately does **not** own: response caching, poll cadence, and
 rate-limit cooldowns (source semantics — they stay in the provider, e.g.
-`github/feed`), credential resolution (already generic in `app/credentials`),
+`github/feed`), credential resolution (already generic in `platform/credentials`),
 and provider vocabulary such as GraphQL batching or an OAuth device flow.
 Retry, backoff, and pagination are absent until a second connector shows what
 they should look like — the package is an extraction from one implementation
@@ -1143,7 +1143,7 @@ apps' protected containers (ADR
 inherited** (ADR subprocess-environment). A desktop launch's environment is the launcher's —
 macOS gives an `.app` bundle `/usr/bin:/bin:/usr/sbin:/sbin` — and session hooks
 and shell actions are an open set of user commands, so no list of prefixes
-substitutes for asking. `cmd/desktop/internal/app/execenv` asks the login shell once per run
+substitutes for asking. `internal/platform/execenv` asks the login shell once per run
 (`$SHELL -ilc /usr/bin/env`, timed out, the answer kept whether or not it
 worked) and layers this process's PATH and the ADR tmux-discovery prefixes behind it; a
 probe that fails degrades to exactly what the app could reach before.
@@ -1246,7 +1246,7 @@ Terminal mode attaches one tmux control-mode client per Hive session, keyed by
 the session **slug** (the tmux session name). Four pieces, and the split between
 them is the constraint (ADR terminal-transport):
 
-- **`cmd/desktop/internal/app/tmuxcc`** — the protocol: line framer, `%begin`/`%end`/`%error`
+- **`internal/platform/tmux/control`** — the protocol: line framer, `%begin`/`%end`/`%error`
   command FIFO, notification dispatch, `%output` octal decode, one client per
   slug over `tmux -C attach`, and a per-session fan-out broker. **No transport
   and no UI** — it is driven over injectable process pipes, so it is testable
@@ -1551,7 +1551,7 @@ The session row renders liveness; activity belongs to the window row. Terminal
 mode polls that projection only while mounted, at Hive's configured tmux
 interval. The Hive anti-corruption layer drops captured pane content and
 provider errors before the Wails boundary. Status detection and Hive session
-lifecycle share `internal/integration/multiplexer/tmux`; Desktop's composition
+lifecycle share `internal/platform/tmux/exec`; Desktop's composition
 root configures its runner so both use the same resolved binary, environment,
 and tmux server socket as control-mode attaches.
 
@@ -1665,7 +1665,7 @@ load-bearing:
 - **`launch-session` is refused on a terminal target**, in `validateActions` via
   `TerminalCapable`, so the refusal lands when the catalog is authored.
 
-**Which tmux runs is `cmd/desktop/internal/app/tmuxbin`'s answer, not `$PATH`'s** (ADR
+**Which tmux runs is `internal/platform/tmux/bin`'s answer, not `$PATH`'s** (ADR
 0039). A desktop launch inherits no shell `$PATH`, so the resolver checks
 `paths.tmux`, then `$PATH`, then the prefixes package managers install
 into, and remembers only success — installing tmux does not need a relaunch.

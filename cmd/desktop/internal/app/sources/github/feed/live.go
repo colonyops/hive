@@ -13,10 +13,10 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/itemtext"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/sourcehttp"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // ErrNotAuthenticated is returned when no GitHub token is available.

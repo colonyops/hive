@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/gitea"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // giteaInstance wires a connected Gitea account against server, and returns the

@@ -4,9 +4,9 @@ import (
 	"context"
 	"sort"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // Integration is one card on the Integrations screen: a projection of the

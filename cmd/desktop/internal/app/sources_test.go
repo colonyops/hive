@@ -11,8 +11,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/execenv"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	execsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/exec"
@@ -23,6 +21,8 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/posthog"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/rss"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
+	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/internal/platform/execenv"
 )
 
 // testFetchers builds the per-account fetcher registry without touching the

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
@@ -14,6 +13,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sourcemark"
 	ghsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // FlowsService owns the flow definitions: the listing the picker renders,

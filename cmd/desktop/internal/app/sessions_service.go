@@ -20,7 +20,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/execenv"
+	"github.com/colonyops/hive/internal/platform/execenv"
 )
 
 // Job action ids label session jobs in the jobs UI.

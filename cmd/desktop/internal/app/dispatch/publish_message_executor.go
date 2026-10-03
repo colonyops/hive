@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
+	"github.com/colonyops/hive/internal/platform/observe"
 )
 
 type MessagePublisher interface {

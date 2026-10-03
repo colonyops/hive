@@ -6,8 +6,8 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/platform/workspace"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )

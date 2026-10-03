@@ -10,12 +10,12 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/platform/tmux/status"
 )
 
 // tmuxSender sends input to the pane under test. Production binds a resolved
@@ -140,7 +140,7 @@ func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target
 
 	tracker := status.NewTracker(assess.NewEngine(), opts)
 	sender := scenarioResolvedSender{input: app.Multiplexer, target: pane.Target}
-	log, runErr := runScenario(ctx, target, spec, sender, terminaltmux.TmuxCapture{}, paneExtra, tracker, scenarioWait(ctx, interval))
+	log, runErr := runScenario(ctx, target, spec, sender, tmuxstatus.TmuxCapture{}, paneExtra, tracker, scenarioWait(ctx, interval))
 	report := scoreScenario(spec, log)
 
 	enc := json.NewEncoder(w)

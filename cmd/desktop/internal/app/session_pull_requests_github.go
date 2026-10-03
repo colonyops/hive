@@ -3,10 +3,10 @@ package app
 import (
 	"context"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	ghsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // gitHubForge looks a branch's pull request up on github.com. GitHub

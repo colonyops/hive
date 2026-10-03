@@ -11,9 +11,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )

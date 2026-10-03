@@ -16,7 +16,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/observe"
+	"github.com/colonyops/hive/internal/platform/observe"
 )
 
 // EventLogStore owns event_log and consumer_offset; commit and replay use

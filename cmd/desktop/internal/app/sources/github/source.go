@@ -8,10 +8,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/feed"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // SourceKind is the inbox source_kind GitHub observations carry.

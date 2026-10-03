@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
@@ -27,6 +26,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/exec"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // seedRef is the account a seeded starter graph fetches as; seededCreds is a

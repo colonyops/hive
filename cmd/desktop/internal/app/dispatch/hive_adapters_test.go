@@ -12,7 +12,6 @@ import (
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/git"
 	coredb "github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/messaging"
@@ -20,7 +19,8 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	coreterminal "github.com/colonyops/hive/internal/domain/terminal"
 	hivesvc "github.com/colonyops/hive/internal/hive"
-	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
+	"github.com/colonyops/hive/internal/platform/git"
+	"github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
@@ -94,11 +94,11 @@ func newHiveSessionService(t *testing.T, cfg *config.Config, exec executil.Execu
 
 func newHiveSessionServiceOver(t *testing.T, store session.Store, cfg *config.Config, exec executil.Executor) *hivesvc.SessionService {
 	t.Helper()
-	runner, ok := exec.(tmuxadapter.Runner)
+	runner, ok := exec.(tmuxexec.Runner)
 	if !ok {
 		runner = noopTmuxRunner{}
 	}
-	tmuxClient := tmuxadapter.New(runner, zerolog.Nop())
+	tmuxClient := tmuxexec.New(runner, zerolog.Nop())
 	return hivesvc.NewSessionService(
 		store,
 		git.NewExecutor("git", exec),

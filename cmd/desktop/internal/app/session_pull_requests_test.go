@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
+	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

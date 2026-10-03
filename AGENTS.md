@@ -138,16 +138,14 @@ docs/               # hivedesktop.com (docs/docs/) and the contributor docs (see
 internal/           # Shared with Hive Desktop
 ├── core/
 │   ├── config/     # Configuration loading, validation, defaults
-│   ├── git/        # Git operations (clone, pull, status)
-│   ├── session/    # Session model and Store interface
-│   ├── hc/         # Honeycomb task model
-│   ├── messaging/  # Pub/sub messaging between agents
-│   └── terminal/   # Terminal status detection (tmux, assess rules)
+│   └── ...         # action, doctor, eventbus, theme
+├── domain/         # Pure models: session, hc, messaging, terminal status and assess rules
+├── platform/       # Drivers: git, tmux (exec, status, control, bin), proc, sqlite,
+│                   # execenv, credentials, secrets, observe, workspace, tmuxtest
 ├── data/           # hive.db: migrations, sqlc queries, stores
 ├── hive/           # Service layer - orchestrates all operations
 ├── sources/        # CLI-backed issue and PR sources (gh, tea)
-├── web/            # HTTP plumbing shared with cmd/desktop/devserver
-└── tmuxtest/       # tmux test helpers
+└── web/            # HTTP plumbing shared with cmd/desktop/devserver
 ```
 
 UI code goes below `cmd/hive/internal/`.

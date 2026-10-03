@@ -7,12 +7,12 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/colonyops/hive/internal/core/terminal/classifier"
-	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/platform/proc/classifier"
+	"github.com/colonyops/hive/internal/platform/tmux/status"
 )
 
 // DetectCmd classifies tmux panes for a hive session.
@@ -79,8 +79,8 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 
 	tmuxSessions := detectTmuxSessionNames(sess)
 
-	capture := terminaltmux.PaneCapture{Source: source}
-	cls := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher, terminaltmux.WithPaneSource(source)).Classifier()
+	capture := tmuxstatus.PaneCapture{Source: source}
+	cls := tmuxstatus.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher, tmuxstatus.WithPaneSource(source)).Classifier()
 	engine := assess.NewEngine()
 	out := detectOutput{Session: sess.Slug}
 	for _, pane := range panes {

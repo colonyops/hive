@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/rs/zerolog/log"
 )
 

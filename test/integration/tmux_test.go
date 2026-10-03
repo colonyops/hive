@@ -16,7 +16,7 @@ import (
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
-	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
+	"github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -109,7 +109,7 @@ func TestTmuxMetadataTargetUsedForRecycleAndDelete(t *testing.T) {
 }
 
 func TestTmuxTypedWindowKillAndMissingTargets(t *testing.T) {
-	client := tmuxadapter.NewDefault(zerolog.Nop())
+	client := tmuxexec.NewDefault(zerolog.Nop())
 	cleanupTmuxSession(t, "window-lifecycle")
 	out, err := exec.Command("tmux", "new-session", "-d", "-s", "window-lifecycle", "-n", "one").CombinedOutput()
 	require.NoError(t, err, "tmux new-session: %s", out)
@@ -169,7 +169,7 @@ func TestTmuxCapture(t *testing.T) {
 
 func TestTmuxInputPrimitives(t *testing.T) {
 	ctx := context.Background()
-	client := tmuxadapter.NewDefault(zerolog.Nop())
+	client := tmuxexec.NewDefault(zerolog.Nop())
 	target := multiplexer.Target{Session: "input-primitives", Window: "0", Pane: "0"}
 	cleanupTmuxSession(t, target.Session)
 	outputPath := filepath.Join(t.TempDir(), "literal.bin")
@@ -202,7 +202,7 @@ func TestTmuxInputPrimitives(t *testing.T) {
 
 func TestTmuxPasteIsByteExactAndCleansBuffer(t *testing.T) {
 	ctx := context.Background()
-	client := tmuxadapter.NewDefault(zerolog.Nop())
+	client := tmuxexec.NewDefault(zerolog.Nop())
 	target := multiplexer.Target{Session: "paste-primitives", Window: "0", Pane: "0"}
 	cleanupTmuxSession(t, target.Session)
 	outputPath := filepath.Join(t.TempDir(), "paste.bin")
@@ -432,7 +432,7 @@ rules:
 }
 
 func TestTmuxCreateSessionCleansPartialSession(t *testing.T) {
-	client := tmuxadapter.NewDefault(zerolog.Nop())
+	client := tmuxexec.NewDefault(zerolog.Nop())
 	name := "partial-cleanup"
 	cleanupTmuxSession(t, name)
 

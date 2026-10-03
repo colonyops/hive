@@ -3,7 +3,7 @@ package app
 import (
 	"github.com/colonyops/hive/pkg/executil"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/execenv"
+	"github.com/colonyops/hive/internal/platform/execenv"
 )
 
 // newEnvExecutor is Hive's shell executor running its children in the

@@ -20,13 +20,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
-	"github.com/colonyops/hive/internal/tmuxtest"
+	"github.com/colonyops/hive/internal/platform/tmux/control"
+	"github.com/colonyops/hive/internal/platform/tmuxtest"
 )
 
 // These tests drive a real tmux server: whether to attach or to offer a start
 // is a decision about what tmux is holding, and a faked one would only prove the
-// fake. See internal/tmuxtest for how they are kept away from a developer's own.
+// fake. See internal/platform/tmuxtest for how they are kept away from a developer's own.
 
 // privateTmux points every tmux command in the test — the service's included —
 // at a server of its own, and returns a runner for the fixture's commands.

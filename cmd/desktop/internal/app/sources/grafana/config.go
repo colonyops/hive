@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // MetricsConfig is a Grafana metrics source node's configuration. credential is

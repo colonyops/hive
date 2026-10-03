@@ -11,12 +11,12 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/core/git"
-	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/platform/git"
+	"github.com/colonyops/hive/internal/platform/workspace"
 	"github.com/colonyops/hive/pkg/kv"
 )
 

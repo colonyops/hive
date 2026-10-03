@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/terminal/classifier"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
+	"github.com/colonyops/hive/internal/platform/proc/classifier"
 	"github.com/stretchr/testify/assert"
 )
 

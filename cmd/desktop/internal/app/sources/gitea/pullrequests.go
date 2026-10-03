@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/gitea/giteaclient"
+	"github.com/colonyops/hive/internal/platform/credentials"
 )
 
 // PullRequests resolves a session branch's pull request on whichever connected
