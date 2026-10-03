@@ -106,6 +106,14 @@ export default defineConfig(
         'error',
         { object: 'window', property: 'localStorage', message: 'Use useStorage from @vueuse/core.' },
       ],
+      // The rule has no custom message: use the text, radius, and shadow
+      // tokens in src/components/ui/README.md ("Tokens") instead.
+      'vue/no-restricted-class': [
+        'error',
+        '/^([\\w-]+:)*text-\\[\\d/',
+        '/^([\\w-]+:)*rounded(-[a-z]{1,2})?-\\[/',
+        '/^([\\w-]+:)*shadow-\\[/',
+      ],
     },
   },
   {

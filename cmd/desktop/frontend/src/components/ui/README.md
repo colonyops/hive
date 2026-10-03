@@ -273,9 +273,9 @@ bar in a scoped style is not elevation and keeps its own `box-shadow`.
 | `shadow-modal`   | The command palette                                           |
 | `shadow-rail`    | A 2px inset left rail; pair it with a color (`shadow-accent`) |
 
-The lint reads static `class` attributes and literal strings in `:class`. It
-does not see a class built in a script constant or a computed, so keep those
-on the tokens by hand.
+The lint reads static `class` attributes and the string literals of a
+`:class` object or array. It does not see a ternary, a script constant, or
+a computed, so keep those on the tokens by hand.
 
 ## Adding a building block
 
