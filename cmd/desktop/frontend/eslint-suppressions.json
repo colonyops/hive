@@ -49,9 +49,6 @@
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 2
     },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 5
     }
@@ -79,17 +76,6 @@
   "src/components/CommandPalette.vue": {
     "@typescript-eslint/unbound-method": {
       "count": 6
-    }
-  },
-  "src/components/NewWindowMenu.vue": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
     }
   },
   "src/components/OnboardingScreen.vue": {
@@ -691,9 +677,6 @@
     }
   },
   "src/pipeline/nodes/sources.gitea/editor.vue": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "@typescript-eslint/no-unused-vars": {
       "count": 2
     },
@@ -712,9 +695,6 @@
     }
   },
   "src/pipeline/nodes/sources.github/editor.vue": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "vue/no-unused-properties": {
       "count": 1
     }
@@ -730,9 +710,6 @@
     }
   },
   "src/pipeline/nodes/sources.grafana_alerts/editor.vue": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "vue/no-unused-properties": {
       "count": 1
     }
@@ -748,9 +725,6 @@
     }
   },
   "src/pipeline/nodes/sources.grafana_irm_alerts/editor.vue": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "vue/no-unused-properties": {
       "count": 1
     }
@@ -766,9 +740,6 @@
     }
   },
   "src/pipeline/nodes/sources.grafana_metrics/editor.vue": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "vue/no-unused-properties": {
       "count": 1
     }
@@ -784,9 +755,6 @@
     }
   },
   "src/pipeline/nodes/sources.posthog_alerts/editor.vue": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "vue/no-unused-properties": {
       "count": 1
     }
@@ -802,9 +770,6 @@
     }
   },
   "src/pipeline/nodes/sources.posthog_errors/editor.vue": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "vue/no-unused-properties": {
       "count": 1
     }

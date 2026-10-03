@@ -11,8 +11,7 @@
 // is the workspace's whole management surface, so its sidebar row needs no
 // menu. Delete follows the sidebar folder dialog's shape: a quiet footer action
 // that expands into an InlineConfirm over a dimmed, inert form.
-import { computed, h, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { Component } from 'vue'
+import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
@@ -25,7 +24,7 @@ import IconPlus from '~icons/lucide/plus'
 import IconTrash2 from '~icons/lucide/trash-2'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
-import AgentIcon, { agentHasIcon } from './AgentIcon.vue'
+import { agentIcon } from '../lib/agentIcon'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import AppSwitch from './ui/AppSwitch.vue'
 import BaseBadge from './ui/BaseBadge.vue'
@@ -132,19 +131,6 @@ const selection = computed<string>({
     editingCommand.value = false
   },
 })
-
-// AppSelect takes a bare component, with no props to pass an agent through.
-// Memoized: a fresh component identity on every render remounts every row.
-const agentIcons = new Map<string, Component>()
-function agentIcon(agent: string): Component | undefined {
-  if (!agentHasIcon(agent)) return undefined
-  let icon = agentIcons.get(agent)
-  if (!icon) {
-    icon = markRaw(() => h(AgentIcon, { id: agent }))
-    agentIcons.set(agent, icon)
-  }
-  return icon
-}
 
 // A hive-seeded preset's label is its profile key, which is already the agent
 // when the profile just runs that CLI.

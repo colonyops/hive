@@ -10,6 +10,7 @@
 import { computed } from 'vue'
 import FormField from '../../../components/ui/FormField.vue'
 import {
+  CredentialField,
   GlobListField,
   IntervalField,
   NumberField,
@@ -18,7 +19,6 @@ import {
   ToggleField,
   type SelectOption,
 } from '../../fields'
-import { useIntegrations } from '../../../composables/useIntegrations'
 import { INVOLVING, ITEMS, STATES, type Config, type Involving, type Items, type Kind, type State } from './config'
 
 const props = defineProps<{ config: Config; errors?: string[] }>()
@@ -51,30 +51,6 @@ const INVOLVING_LABELS: Record<Involving, string> = {
 
 const isSearch = computed(() => props.config.kind === 'search')
 
-// The accounts actually connected, read from the same registry projection the
-// Integrations screen renders — so this cannot offer an account the app holds
-// no credential for.
-const { credentialRefsFor, loaded: integrationsLoaded } = useIntegrations()
-const connectedRefs = computed(() => credentialRefsFor('gitea'))
-
-const credentialOptions = computed<SelectOption[]>(() => {
-  const options: SelectOption[] = connectedRefs.value.map((ref) => ({ value: ref, label: ref }))
-  // A node can name an account that has since been disconnected. Dropping it
-  // from the list would silently rewrite the node's config on the next edit,
-  // so it stays selectable and says why it is wrong.
-  const current = props.config.credential
-  if (current && !connectedRefs.value.includes(current)) {
-    options.unshift({ value: current, label: `${current} — not connected` })
-  }
-  return options
-})
-
-const credentialHint = computed(() => {
-  if (!integrationsLoaded.value) return 'Loading connected accounts…'
-  if (connectedRefs.value.length === 0) return 'No Gitea instance is connected. Connect one in Settings ▸ Integrations.'
-  return 'The connected Gitea or Forgejo account to fetch as.'
-})
-
 const involving = computed<Involving[]>(() => props.config.involving ?? [])
 
 // One request per entry, so the cost of a union is worth stating where it is
@@ -86,8 +62,8 @@ const involvingHint = computed(() => {
   return `Items matching any of these. ${count} requests per poll — Gitea cannot combine them.`
 })
 
-function update(patch: Partial<Config>) {
-  emit('update:config', { ...props.config, ...patch })
+function update<K extends keyof Config>(key: K, value: Config[K]) {
+  emit('update:config', { ...props.config, [key]: value })
 }
 
 function updateKind(kind: string) {
@@ -115,33 +91,21 @@ function toggleInvolving(value: Involving, on: boolean) {
   const selected = new Set(involving.value)
   if (on) selected.add(value)
   else selected.delete(value)
-  update({ involving: INVOLVING.filter((entry) => selected.has(entry)) })
+  update(
+    'involving',
+    INVOLVING.filter((entry) => selected.has(entry)),
+  )
 }
 </script>
 
 <template>
   <div class="flex flex-col gap-4">
-    <!-- With nothing connected and nothing already set there is no valid
-         choice to offer, so the field stays a text input rather than an empty
-         dropdown the user cannot act on. -->
-    <SelectField
-      v-if="credentialOptions.length > 0"
-      label="Account"
-      :model-value="config.credential ?? ''"
-      :options="credentialOptions"
-      :hint="credentialHint"
+    <CredentialField
+      provider="gitea"
+      :model-value="config.credential"
+      hint="The connected Gitea or Forgejo account to fetch as."
       testid="sources.gitea-editor-credential"
-      @update:model-value="(credential: string) => update({ credential })"
-    />
-    <TextField
-      v-else
-      label="Account"
-      :model-value="config.credential ?? ''"
-      placeholder="gitea/git.example.com-octocat"
-      :hint="credentialHint"
-      monospace
-      testid="sources.gitea-editor-credential"
-      @update:model-value="(credential: string) => update({ credential })"
+      @update:model-value="update('credential', $event)"
     />
     <SelectField
       label="Kind"
@@ -157,14 +121,14 @@ function toggleInvolving(value: Involving, on: boolean) {
         :model-value="config.items ?? 'all'"
         :options="ITEM_OPTIONS"
         testid="sources.gitea-editor-items"
-        @update:model-value="(items: string) => update({ items: items as Items })"
+        @update:model-value="update('items', $event as Items)"
       />
       <SelectField
         label="State"
         :model-value="config.state ?? 'open'"
         :options="STATE_OPTIONS"
         testid="sources.gitea-editor-state"
-        @update:model-value="(state: string) => update({ state: state as State })"
+        @update:model-value="update('state', $event as State)"
       />
       <FormField label="Involving me" :hint="involvingHint" testid="sources.gitea-editor-involving">
         <div class="flex flex-col gap-2">
@@ -185,7 +149,7 @@ function toggleInvolving(value: Involving, on: boolean) {
         hint="Limit the search to one user's or organization's repositories."
         monospace
         testid="sources.gitea-editor-owner"
-        @update:model-value="(owner: string) => update({ owner: owner || undefined })"
+        @update:model-value="update('owner', $event || undefined)"
       />
       <GlobListField
         label="Labels"
@@ -193,7 +157,7 @@ function toggleInvolving(value: Involving, on: boolean) {
         placeholder="bug&#10;needs-review"
         hint="One label per line. An item carrying any of them matches."
         testid="sources.gitea-editor-labels"
-        @update:model-value="(labels: string[]) => update({ labels: labels.length > 0 ? labels : undefined })"
+        @update:model-value="update('labels', $event.length > 0 ? $event : undefined)"
       />
       <TextField
         label="Text"
@@ -201,7 +165,7 @@ function toggleInvolving(value: Involving, on: boolean) {
         placeholder="checkout flow"
         hint="Free-text search over title and body."
         testid="sources.gitea-editor-text"
-        @update:model-value="(text: string) => update({ text: text || undefined })"
+        @update:model-value="update('text', $event || undefined)"
       />
     </template>
 
@@ -211,12 +175,12 @@ function toggleInvolving(value: Involving, on: boolean) {
       :placeholder="isSearch ? '50 (max 100)' : '50 (max 50)'"
       hint="Max items per fetch. 0 uses the default (50)."
       testid="sources.gitea-editor-limit"
-      @update:model-value="(limit: number) => update({ limit: limit || undefined })"
+      @update:model-value="update('limit', $event || undefined)"
     />
     <IntervalField
       :model-value="config.interval"
       testid="sources.gitea-editor-interval"
-      @update:model-value="(interval?: string) => update({ interval })"
+      @update:model-value="update('interval', $event)"
     />
   </div>
 </template>

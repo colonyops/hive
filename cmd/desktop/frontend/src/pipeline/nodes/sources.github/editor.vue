@@ -4,8 +4,7 @@
 // "notifications" source drains the inbox — matching the backend
 // github.Config it round-trips to.
 import { computed } from 'vue'
-import { IntervalField, NumberField, SelectField, TextField, type SelectOption } from '../../fields'
-import { useIntegrations } from '../../../composables/useIntegrations'
+import { CredentialField, IntervalField, NumberField, SelectField, TextField, type SelectOption } from '../../fields'
 import type { Config, SourceKind } from './config'
 
 const props = defineProps<{ config: Config; errors?: string[] }>()
@@ -18,32 +17,8 @@ const KIND_OPTIONS: SelectOption[] = [
 
 const isSearch = computed(() => props.config.kind === 'search')
 
-// The accounts actually connected, read from the same registry projection the
-// Integrations screen renders — so this cannot offer an account the app holds
-// no credential for.
-const { credentialRefsFor, loaded: integrationsLoaded } = useIntegrations()
-const connectedRefs = computed(() => credentialRefsFor('github'))
-
-const credentialOptions = computed<SelectOption[]>(() => {
-  const options: SelectOption[] = connectedRefs.value.map((ref) => ({ value: ref, label: ref }))
-  // A node can name an account that has since been disconnected. Dropping it
-  // from the list would silently rewrite the node's config on the next edit,
-  // so it stays selectable and says why it is wrong.
-  const current = props.config.credential
-  if (current && !connectedRefs.value.includes(current)) {
-    options.unshift({ value: current, label: `${current} — not connected` })
-  }
-  return options
-})
-
-const credentialHint = computed(() => {
-  if (!integrationsLoaded.value) return 'Loading connected accounts…'
-  if (connectedRefs.value.length === 0) return 'No GitHub account is connected. Connect one in Settings ▸ Integrations.'
-  return 'The connected GitHub account to fetch as.'
-})
-
-function updateCredential(credential: string) {
-  emit('update:config', { ...props.config, credential })
+function update<K extends keyof Config>(key: K, value: Config[K]) {
+  emit('update:config', { ...props.config, [key]: value })
 }
 
 function updateKind(kind: string) {
@@ -52,39 +27,15 @@ function updateKind(kind: string) {
   if (kind === 'notifications') next.query = ''
   emit('update:config', next)
 }
-
-function updateQuery(query: string) {
-  emit('update:config', { ...props.config, query })
-}
-
-function updateLimit(limit: number) {
-  emit('update:config', { ...props.config, limit: limit || undefined })
-}
 </script>
 
 <template>
   <div class="flex flex-col gap-4">
-    <!-- With nothing connected and nothing already set there is no valid
-         choice to offer, so the field stays a text input rather than an empty
-         dropdown the user cannot act on. -->
-    <SelectField
-      v-if="credentialOptions.length > 0"
-      label="Account"
-      :model-value="config.credential ?? ''"
-      :options="credentialOptions"
-      :hint="credentialHint"
+    <CredentialField
+      provider="github"
+      :model-value="config.credential"
       testid="sources.github-editor-credential"
-      @update:model-value="updateCredential"
-    />
-    <TextField
-      v-else
-      label="Account"
-      :model-value="config.credential ?? ''"
-      placeholder="github/octocat"
-      :hint="credentialHint"
-      monospace
-      testid="sources.github-editor-credential"
-      @update:model-value="updateCredential"
+      @update:model-value="update('credential', $event)"
     />
     <SelectField
       label="Kind"
@@ -101,7 +52,7 @@ function updateLimit(limit: number) {
       hint="A GitHub search query. Costs one search request per poll."
       monospace
       testid="sources.github-editor-query"
-      @update:model-value="updateQuery"
+      @update:model-value="update('query', $event)"
     />
     <NumberField
       label="Limit"
@@ -109,12 +60,12 @@ function updateLimit(limit: number) {
       :placeholder="isSearch ? '50 (max 100)' : '50 (max 50)'"
       hint="Max items per fetch. 0 uses the default (50)."
       testid="sources.github-editor-limit"
-      @update:model-value="updateLimit"
+      @update:model-value="update('limit', $event || undefined)"
     />
     <IntervalField
       :model-value="config.interval"
       testid="sources.github-editor-interval"
-      @update:model-value="(interval?: string) => emit('update:config', { ...props.config, interval })"
+      @update:model-value="update('interval', $event)"
     />
   </div>
 </template>

@@ -10,6 +10,7 @@
 // pass an explicit `running: boolean` instead (see FlowsCanvas's
 // `runningNodeIds` prop); idle/ok/error classification falls back to the
 // latest completed run.
+import { relativeAgo } from '../../lib/age'
 import type { NodeRunRecord } from './wireFlow'
 
 export type RunStatus = 'idle' | 'running' | 'ok' | 'error'
@@ -61,8 +62,5 @@ export function ageLabel(endedAtMillis: number, now = Date.now()): string {
   if (ms < 1000) return 'just now'
   const s = Math.round(ms / 1000)
   if (s < 60) return `${s}s ago`
-  const m = Math.round(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.round(m / 60)
-  return `${h}h ago`
+  return relativeAgo(endedAtMillis, now)
 }

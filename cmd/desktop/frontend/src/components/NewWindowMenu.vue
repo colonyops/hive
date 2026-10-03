@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, h, markRaw, type Component } from 'vue'
+import { computed } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
-import AgentIcon, { agentIconID } from './AgentIcon.vue'
 import AppMenu from './ui/AppMenu.vue'
+import { agentIcon } from '../lib/agentIcon'
 import type { MenuEntry } from '../types/menu'
 
 const props = defineProps<{
@@ -15,18 +15,6 @@ const props = defineProps<{
   failed: boolean
 }>()
 const emit = defineEmits<{ close: []; terminal: []; agent: [profile: string]; retry: [] }>()
-
-const agentIcons = new Map<string, Component>()
-function agentIcon(agent: string): Component | undefined {
-  const id = agentIconID(agent)
-  if (!id) return undefined
-  let icon = agentIcons.get(id)
-  if (!icon) {
-    icon = markRaw(() => h(AgentIcon, { id }))
-    agentIcons.set(id, icon)
-  }
-  return icon
-}
 
 const entries = computed<MenuEntry[]>(() => [
   {

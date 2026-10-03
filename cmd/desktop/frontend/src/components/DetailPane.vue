@@ -16,7 +16,7 @@ import {
   kindStyle,
   presentationFor,
 } from '../lib/itemPresentation'
-import { relativeAge } from '../lib/age'
+import { relativeAge, relativeAgo } from '../lib/age'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
 import { externalMarkdownHref } from '../lib/markdownLinks'
 import IconEllipsisVertical from '~icons/lucide/ellipsis-vertical'
@@ -193,7 +193,7 @@ const {
         <p class="mt-[9px] text-xs text-text-3">
           <template v-if="itemByline"
             ><span class="text-text-2">{{ itemByline }}</span> · </template
-          >{{ relativeAge(item.lastEventAt) === 'now' ? 'now' : `${relativeAge(item.lastEventAt)} ago` }}
+          >{{ relativeAgo(item.lastEventAt) }}
         </p>
         <PullRequestMetadata :item="item" class="mt-3" />
         <!-- eslint-disable vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->

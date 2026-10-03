@@ -32,3 +32,8 @@ export function relativeAge(timestamp: number, now = Date.now()): string {
   if (days < 7) return `${days}d`
   return `${Math.floor(days / 7)}w`
 }
+
+export function relativeAgo(timestamp: number, now = Date.now()): string {
+  const age = relativeAge(timestamp, now)
+  return age === 'now' ? age : `${age} ago`
+}

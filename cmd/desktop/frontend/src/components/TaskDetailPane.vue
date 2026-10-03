@@ -23,7 +23,7 @@ import { useResizablePanel } from '../composables/useResizablePanel'
 import { useTasks } from '../stores/useTasks'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import { errorText } from '../lib/appError'
-import { relativeAge } from '../lib/age'
+import { relativeAgo } from '../lib/age'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
 import { externalMarkdownHref } from '../lib/markdownLinks'
 import { cascadeCount, checkpointBody, isCheckpoint, matchesTaskFilter, statusMeta } from '../lib/tasksPresentation'
@@ -42,11 +42,6 @@ const STATUS_OPTIONS: AppSelectOption[] = [
 
 const typeLabel = computed(() => (detail.value?.type === 'epic' ? 'Epic' : 'Task'))
 const bodyHtml = computed(() => (detail.value?.desc ? renderGithubMarkdown(detail.value.desc) : ''))
-
-function agoLabel(timestamp: number): string {
-  const label = relativeAge(timestamp)
-  return label === 'now' ? 'now' : `${label} ago`
-}
 
 function absoluteTime(iso: string): string {
   return new Date(iso).toLocaleString()
@@ -208,9 +203,9 @@ const {
             <span data-testid="task-detail-session">Session {{ sessionLabel }}</span>
           </template>
           <span>·</span>
-          <span :title="absoluteTime(detail.createdAt)">Created {{ agoLabel(Date.parse(detail.createdAt)) }}</span>
+          <span :title="absoluteTime(detail.createdAt)">Created {{ relativeAgo(Date.parse(detail.createdAt)) }}</span>
           <span>·</span>
-          <span :title="absoluteTime(detail.updatedAt)">Updated {{ agoLabel(Date.parse(detail.updatedAt)) }}</span>
+          <span :title="absoluteTime(detail.updatedAt)">Updated {{ relativeAgo(Date.parse(detail.updatedAt)) }}</span>
         </div>
 
         <div
@@ -302,7 +297,7 @@ const {
                   <IconBookmarkCheck class="size-3" />CHECKPOINT
                 </BaseBadge>
                 <span class="font-mono text-[10.5px] text-text-4" :title="absoluteTime(comment.createdAt)">{{
-                  agoLabel(Date.parse(comment.createdAt))
+                  relativeAgo(Date.parse(comment.createdAt))
                 }}</span>
               </div>
               <!-- eslint-disable vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
