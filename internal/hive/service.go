@@ -392,8 +392,6 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	return &sess, nil
 }
 
-// claimName checks name against active sessions' slugs and tmux names, either
-// of which addresses the tmux session.
 func (s *SessionService) claimName(ctx context.Context, name, exceptID, collisionSuffix string) (string, error) {
 	sessions, err := s.sessions.List(ctx)
 	if err != nil {

@@ -95,8 +95,6 @@ type NewSessionFormResult struct {
 
 // NewNewSessionForm creates a new session form with the given repos.
 // If preselectedRemote is non-empty, the matching repo will be pre-selected.
-// existingSlugs holds the slugs of existing sessions; a name is taken when its
-// slug is in it.
 // agentKeys, when non-empty, adds a compact agent selector at the top of the form.
 // The default agent (index 0 in agentKeys) is pre-selected; it is skipped in the
 // forward tab cycle and reachable via shift+tab from the repo field.

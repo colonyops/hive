@@ -17,7 +17,6 @@ const MaxNameLength = 60
 var (
 	nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
 
-	// Excludes ~ ^ * ? [ \ @, which are meaningless or harmful in branch names.
 	validName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9 _.:/\-]*$`)
 
 	// Letters that Unicode does not decompose into an ASCII base and a mark.

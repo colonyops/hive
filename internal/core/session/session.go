@@ -1,8 +1,6 @@
 // Package session defines session domain types and interfaces.
-//
-// A session's Name is what people read (ValidateName). Its Slug, Slugify(Name),
-// names the tmux session and clone directory, so uniqueness among active
-// sessions is checked on the slug. Generated names go through ToSessionName.
+// Active session names are unique by slug, which identifies their tmux session
+// and clone directory.
 package session
 
 import "time"
