@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/colonyops/hive/pkg/pathutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -167,7 +168,7 @@ func decodeAgents(node yaml.Node) (defaultAgent string, profiles []Profile) {
 // Inspect reports whether a workspace exists and counts its immediate Git
 // repositories.
 func Inspect(path string) Workspace {
-	expanded := ExpandTilde(path)
+	expanded := pathutil.ExpandHome(path)
 	w := Workspace{Path: path}
 	info, err := os.Stat(expanded)
 	if err != nil || !info.IsDir() {
@@ -211,23 +212,6 @@ func AgentOptions(ctx context.Context, lookPath LookPath) []AgentOption {
 	return options
 }
 
-// ExpandTilde replaces a leading ~ with the user's home directory, matching
-// how hive resolves a configured workspace at scan time. A path this app
-// cannot expand is returned unchanged so it fails as the literal it is.
-func ExpandTilde(path string) string {
-	if path != "~" && !strings.HasPrefix(path, "~/") {
-		return path
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return path
-	}
-	if path == "~" {
-		return home
-	}
-	return filepath.Join(home, path[2:])
-}
-
 // ErrWorkspaceIsRepo reports a chosen path that is itself a git repository.
 // It is the one validation failure worth its own message: picking a repo
 // instead of the folder that holds repos is the mistake people actually make,
@@ -242,7 +226,7 @@ func ValidateWorkspace(path string) error {
 	if trimmed == "" {
 		return invalid("choose a folder")
 	}
-	expanded := ExpandTilde(trimmed)
+	expanded := pathutil.ExpandHome(trimmed)
 	info, err := os.Stat(expanded)
 	if err != nil {
 		return invalid("that folder does not exist")

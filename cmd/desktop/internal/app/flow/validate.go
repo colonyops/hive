@@ -3,6 +3,8 @@ package flow
 import (
 	"fmt"
 	"strings"
+
+	"github.com/colonyops/hive/cmd/desktop/internal/app/slug"
 )
 
 // validateFlow checks node ids, per-node config (including cross-file refs),
@@ -19,8 +21,8 @@ func validateFlow(f *Flow, refs Refs) ([]string, error) {
 		if node.ID == "" {
 			return nil, fmt.Errorf("node: id is required")
 		}
-		if !validSlug(node.ID) {
-			return nil, fmt.Errorf("node %q: id is not a valid slug (lowercase letters, digits, hyphens, starting with a letter or digit, max %d chars)", node.ID, maxSlugLen)
+		if !slug.Valid(node.ID) {
+			return nil, fmt.Errorf("node %q: id is not a valid slug (lowercase letters, digits, hyphens, starting with a letter or digit, max %d chars)", node.ID, slug.MaxLen)
 		}
 		if _, dup := nodeByID[node.ID]; dup {
 			return nil, fmt.Errorf("node %q: duplicate node id", node.ID)

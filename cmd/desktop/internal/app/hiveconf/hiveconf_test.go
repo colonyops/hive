@@ -613,13 +613,3 @@ func TestCreateWritesTheHeaderOnceAndLeavesAnExistingFileAlone(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "agents:\n  default: pi\n", string(kept))
 }
-
-func TestExpandTildeResolvesAgainstHome(t *testing.T) {
-	home, err := os.UserHomeDir()
-	require.NoError(t, err)
-
-	assert.Equal(t, home, hiveconf.ExpandTilde("~"))
-	assert.Equal(t, filepath.Join(home, "code"), hiveconf.ExpandTilde("~/code"))
-	assert.Equal(t, "/abs/path", hiveconf.ExpandTilde("/abs/path"))
-	assert.True(t, strings.HasPrefix(hiveconf.ExpandTilde("~notauser/x"), "~"), "only this user's home expands")
-}

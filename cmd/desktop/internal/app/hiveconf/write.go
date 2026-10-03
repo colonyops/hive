@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/colonyops/hive/pkg/pathutil"
 	"gopkg.in/yaml.v3"
 )
 
@@ -66,7 +67,7 @@ func (e Edit) normalized() Edit {
 	seen := make(map[string]bool, len(e.Workspaces))
 	for _, w := range e.Workspaces {
 		trimmed := strings.TrimSpace(w)
-		key := filepath.Clean(ExpandTilde(trimmed))
+		key := filepath.Clean(pathutil.ExpandHome(trimmed))
 		if trimmed == "" || seen[key] {
 			continue
 		}

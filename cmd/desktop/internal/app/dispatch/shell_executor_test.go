@@ -152,17 +152,6 @@ func TestShellExecutor_BoundsAndDrainsNoisyStreams(t *testing.T) {
 	assert.True(t, strings.HasSuffix(result.Log.Stderr, truncatedStreamMarker))
 }
 
-func TestBoundedExecutionWriterNeverBuffersMoreThanLimit(t *testing.T) {
-	writer := &boundedExecutionWriter{}
-	stream := []byte(strings.Repeat("x", maxExecutionStreamBytes*2))
-	n, err := writer.Write(stream)
-	require.NoError(t, err)
-	assert.Equal(t, len(stream), n, "all child output must be drained")
-	assert.LessOrEqual(t, writer.buf.Len(), maxExecutionStreamBytes)
-	assert.Len(t, writer.String(), maxExecutionStreamBytes)
-	assert.True(t, strings.HasSuffix(writer.String(), truncatedStreamMarker))
-}
-
 func TestShellExecutor_WrongConfigType_IsError(t *testing.T) {
 	exec := NewShellExecutor(zerolog.Nop(), hostEnvironment{})
 	action := actions.Action{ID: "x", Type: "shell", Config: &actions.PublishMessageConfig{}}

@@ -10,6 +10,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/colonyops/hive/pkg/atomicfile"
 	"github.com/zalando/go-keyring"
 )
 
@@ -184,25 +185,7 @@ func (s *KeychainStore) writeIndex(refs []Ref) error {
 		return fmt.Errorf("credentials: encode ref index: %w", err)
 	}
 
-	tmp, err := os.CreateTemp(dir, ".credentials-*.json")
-	if err != nil {
-		return fmt.Errorf("credentials: create temp ref index: %w", err)
-	}
-	tmpName := tmp.Name()
-	defer func() { _ = os.Remove(tmpName) }() // no-op once the rename succeeds
-
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("credentials: chmod temp ref index: %w", err)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("credentials: write temp ref index: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("credentials: close temp ref index: %w", err)
-	}
-	if err := os.Rename(tmpName, s.indexPath); err != nil {
+	if err := atomicfile.Write(s.indexPath, data, 0o600); err != nil {
 		return fmt.Errorf("credentials: replace ref index: %w", err)
 	}
 	return nil

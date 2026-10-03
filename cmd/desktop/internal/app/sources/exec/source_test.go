@@ -179,20 +179,3 @@ func TestProduce_InheritsTheResolvedEnvironment(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.Equal(t, "yes", got[0].Key)
 }
-
-func TestExpandHome(t *testing.T) {
-	home, err := os.UserHomeDir()
-	require.NoError(t, err)
-
-	for _, tc := range []struct{ in, want string }{
-		{"", ""},
-		{"/tmp/x", "/tmp/x"},
-		{"~", home},
-		{"~/src", filepath.Join(home, "src")},
-		{"~notauser/src", "~notauser/src"},
-	} {
-		got, err := expandHome(tc.in)
-		require.NoErrorf(t, err, "expandHome(%q)", tc.in)
-		assert.Equalf(t, tc.want, got, "expandHome(%q)", tc.in)
-	}
-}

@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +34,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/scripts"
 	"github.com/colonyops/hive/internal/hive/sweep"
 	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
+	"github.com/colonyops/hive/pkg/buildinfo"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -43,7 +43,7 @@ import (
 var (
 	// Build information. Populated at build-time via -ldflags flag, which
 	// cmd/hive/.goreleaser.yml points at this package. When installed via
-	// `go install module@version`, resolvedBuildInfo reads these from
+	// `go install module@version`, buildinfo.Resolve reads these from
 	// runtime/debug.BuildInfo instead.
 
 	version = "dev"
@@ -52,44 +52,19 @@ var (
 )
 
 func build() string {
-	v, c, d := resolvedBuildInfo()
+	info := buildinfo.Resolve(version, commit, date)
 
-	short := c
-	if len(c) > 7 {
-		short = c[:7]
+	short := info.Commit
+	if len(short) > 7 {
+		short = short[:7]
 	}
 
-	return fmt.Sprintf("%s (%s) %s", v, short, d)
+	return fmt.Sprintf("%s (%s) %s", info.Version, short, info.Date)
 }
 
-func resolvedBuildInfo() (string, string, string) {
-	v, c, d := version, commit, date
-
-	// When installed via `go install module@version`, ldflags aren't set
-	// so version remains "dev". Fall back to runtime/debug.BuildInfo which
-	// Go populates automatically with the module version and VCS metadata.
-	if v != "dev" {
-		return v, c, d
-	}
-
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return v, c, d
-	}
-
-	if mv := info.Main.Version; mv != "" && mv != "(devel)" {
-		v = mv
-	}
-	for _, s := range info.Settings {
-		switch s.Key {
-		case "vcs.revision":
-			c = s.Value
-		case "vcs.time":
-			d = s.Value
-		}
-	}
-
-	return v, c, d
+func hiveBuildInfo() hive.BuildInfo {
+	info := buildinfo.Resolve(version, commit, date)
+	return hive.BuildInfo{Version: info.Version, Commit: info.Commit, Date: info.Date}
 }
 
 // isShellCompletion reports whether the process was invoked for shell
@@ -208,8 +183,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				return ctx, nil
 			}
 			if isInitCommand(os.Args) {
-				v, c, d := resolvedBuildInfo()
-				hiveApp.Build = hive.BuildInfo{Version: v, Commit: c, Date: d}
+				hiveApp.Build = hiveBuildInfo()
 				return ctx, nil
 			}
 
@@ -357,12 +331,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				pluginInfos,
 				svcLogger,
 			)
-			resolvedVersion, resolvedCommit, resolvedDate := resolvedBuildInfo()
-			hiveApp.Build = hive.BuildInfo{
-				Version: resolvedVersion,
-				Commit:  resolvedCommit,
-				Date:    resolvedDate,
-			}
+			hiveApp.Build = hiveBuildInfo()
 			hiveApp.Sources = hive.BuildSourceRegistry(cfg, exec, kvStore, svcLogger)
 
 			return ctx, nil

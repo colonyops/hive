@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/credentials"
+	"github.com/colonyops/hive/pkg/atomicfile"
 )
 
 // Store is a mutex-serialized JSON file of ref → binding.
@@ -92,11 +93,7 @@ func (s *Store[T]) write(entries map[string]T) error {
 	if err != nil {
 		return fmt.Errorf("%s: encode: %w", s.name, err)
 	}
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("%s: write temp: %w", s.name, err)
-	}
-	if err := os.Rename(tmp, s.path); err != nil {
+	if err := atomicfile.Write(s.path, data, 0o600); err != nil {
 		return fmt.Errorf("%s: replace: %w", s.name, err)
 	}
 	return nil

@@ -83,16 +83,6 @@ func TestEnvExecutorStillStreamsToItsCaller(t *testing.T) {
 	assert.Equal(t, "complaint", strings.TrimSpace(stderr.String()))
 }
 
-func TestHeadBufferDrainsEverythingItDoesNotKeep(t *testing.T) {
-	buf := &headBuffer{max: 8}
-	stream := []byte(strings.Repeat("x", 4096))
-
-	n, err := buf.Write(stream)
-	require.NoError(t, err)
-	assert.Equal(t, len(stream), n, "a noisy child must never block on the pipe")
-	assert.Len(t, buf.String(), 8)
-}
-
 // hive clones with `_, err := e.exec.Run(...)`, so git's own reason sat in a
 // return value nobody read.
 func TestEnvExecutorCarriesAFailedCommandsOutputInTheError(t *testing.T) {

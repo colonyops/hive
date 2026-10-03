@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
+	"github.com/colonyops/hive/pkg/pathutil"
 )
 
 // terminalDirectory answers the checkout a hive session's slug names. It
@@ -193,7 +193,11 @@ func (s *PopupTerminalsService) resolveDir(ctx context.Context, req OpenPopupTer
 		return s.terminalDir(ctx, slug)
 	}
 	if dir := strings.TrimSpace(req.Dir); dir != "" {
-		return expandHome(dir)
+		expanded, err := pathutil.ExpandHomeE(dir)
+		if err != nil {
+			return "", Wrap(err, KindInternal, "expanding %q", dir)
+		}
+		return expanded, nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -219,20 +223,6 @@ func (s *PopupTerminalsService) terminalDir(ctx context.Context, slug string) (s
 		return "", err
 	}
 	return s.directory.SessionDirectory(ctx, slug)
-}
-
-// expandHome resolves a leading `~`, which nothing else does: chdir takes a
-// path, not a shell word, so a launcher configured with `cwd: ~/src` would
-// otherwise fail on a directory that plainly exists.
-func expandHome(dir string) (string, error) {
-	if dir != "~" && !strings.HasPrefix(dir, "~/") {
-		return dir, nil
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", Wrap(err, KindInternal, "expanding %q", dir)
-	}
-	return filepath.Join(home, strings.TrimPrefix(dir, "~")), nil
 }
 
 // popupError classifies a ptyterm failure by sentinel rather than by message.

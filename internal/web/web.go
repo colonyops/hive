@@ -4,9 +4,10 @@ package web
 
 import (
 	"net/http"
-	"runtime/debug"
 
 	"github.com/hay-kot/httpkit/server"
+
+	"github.com/colonyops/hive/pkg/buildinfo"
 )
 
 // ErrorBody is the error wire shape: {kind, message}, with per-field detail
@@ -44,21 +45,8 @@ type Build struct {
 
 // ReadBuild reads the build identity from the running binary.
 func ReadBuild() Build {
-	var b Build
-	if info, ok := debug.ReadBuildInfo(); ok {
-		b.Go = info.GoVersion
-		for _, s := range info.Settings {
-			switch s.Key {
-			case "vcs.revision":
-				b.Revision = s.Value
-			case "vcs.modified":
-				b.Modified = s.Value == "true"
-			case "vcs.time":
-				b.Time = s.Value
-			}
-		}
-	}
-	return b
+	vcs := buildinfo.ReadVCS()
+	return Build{Revision: vcs.Revision, Modified: vcs.Modified, Time: vcs.Time, Go: vcs.GoVersion}
 }
 
 // VersionHandler serves {service, ...Build} so a caller can confirm which build

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/colonyops/hive/pkg/atomicfile"
 )
 
 func writeDotenvAtomic(path string, values map[string]string) error {
@@ -23,35 +25,14 @@ func writeDotenvAtomic(path string, values map[string]string) error {
 		output.WriteString(strconv.Quote(values[key]))
 		output.WriteByte('\n')
 	}
-	return writeFileAtomic(path, []byte(output.String()), ".launch-*.env")
+	return writeFileAtomic(path, []byte(output.String()))
 }
 
-func writeFileAtomic(path string, content []byte, tempPattern string) error {
+func writeFileAtomic(path string, content []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	file, err := os.CreateTemp(filepath.Dir(path), tempPattern)
-	if err != nil {
-		return fmt.Errorf("create temporary file for %s: %w", path, err)
-	}
-	temp := file.Name()
-	defer func() { _ = os.Remove(temp) }()
-	if err := file.Chmod(0o600); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if _, err := file.Write(content); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(temp, path); err != nil {
+	if err := atomicfile.Write(path, content, 0o600); err != nil {
 		return fmt.Errorf("replace %s: %w", path, err)
 	}
 	return nil

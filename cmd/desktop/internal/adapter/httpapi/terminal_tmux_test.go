@@ -18,6 +18,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
 	"github.com/colonyops/hive/internal/tmuxtest"
+	"github.com/colonyops/hive/pkg/executil"
 )
 
 // These tests drive a real tmux server. Each one gets a server of its own and
@@ -43,7 +44,7 @@ func startTmux(t *testing.T, slug string) *tmuxFixture {
 func (f *tmuxFixture) tmux(args ...string) string {
 	f.t.Helper()
 	cmd := exec.CommandContext(f.t.Context(), "tmux", append([]string{"-S", f.socket}, args...)...)
-	cmd.Env = tmuxtest.ScrubbedEnv()
+	cmd.Env = executil.WithoutEnv(nil, "TMUX", "TMUX_PANE")
 	out, err := cmd.CombinedOutput()
 	require.NoErrorf(f.t, err, "tmux %v: %s", args, out)
 	return string(out)

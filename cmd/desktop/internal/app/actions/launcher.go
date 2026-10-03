@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/icons"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/slug"
 )
 
 // Launcher is a named command that opens in the pop-up terminal (ADR ephemeral-popup-terminals),
@@ -42,8 +43,8 @@ func (l Launcher) Validate() error {
 	if l.ID == "" {
 		return fmt.Errorf("launcher: id is required")
 	}
-	if !validSlug(l.ID) {
-		return fmt.Errorf("launcher %q: id is not a valid slug (lowercase letters, digits, hyphens, starting with a letter or digit, max %d chars)", l.ID, maxSlugLen)
+	if !slug.Valid(l.ID) {
+		return fmt.Errorf("launcher %q: id is not a valid slug (lowercase letters, digits, hyphens, starting with a letter or digit, max %d chars)", l.ID, slug.MaxLen)
 	}
 	if l.Label == "" {
 		return fmt.Errorf("launcher %q: label is required", l.ID)

@@ -102,7 +102,7 @@ type Options struct {
 	Logger      zerolog.Logger
 	OnExit      func(slug, reason string)
 	// Environ is what tmux is spawned with, minus the client variables
-	// detachedEnv drops — execenv's resolved environment in the app, nil
+	// withoutTmuxClient drops — execenv's resolved environment in the app, nil
 	// meaning this process's own.
 	Environ []string
 

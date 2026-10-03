@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/colonyops/hive/pkg/executil"
 )
 
 var versionPattern = regexp.MustCompile(`(\d+)\.(\d+)`)
@@ -89,24 +91,9 @@ func Private(t *testing.T) string {
 	socket := filepath.Join(socketDir, "default")
 	t.Cleanup(func() {
 		kill := exec.Command("tmux", "-S", socket, "kill-server") //nolint:noctx // cleanup runs past the test context
-		kill.Env = ScrubbedEnv()
+		kill.Env = executil.WithoutEnv(nil, "TMUX", "TMUX_PANE")
 		_ = kill.Run()
 		_ = os.RemoveAll(dir)
 	})
 	return socket
-}
-
-// ScrubbedEnv drops $TMUX/$TMUX_PANE so a command cannot inherit a server from
-// the process running the test, matching what tmuxcc's detachedEnv does for the
-// control client.
-func ScrubbedEnv() []string {
-	env := os.Environ()
-	kept := env[:0]
-	for _, kv := range env {
-		if strings.HasPrefix(kv, "TMUX=") || strings.HasPrefix(kv, "TMUX_PANE=") {
-			continue
-		}
-		kept = append(kept, kv)
-	}
-	return kept
 }

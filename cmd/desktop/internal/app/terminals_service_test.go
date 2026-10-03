@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/pkg/executil"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -35,7 +36,7 @@ func privateTmux(t *testing.T) func(args ...string) error {
 
 	return func(args ...string) error {
 		cmd := exec.Command("tmux", append([]string{"-S", socket}, args...)...) //nolint:noctx // cleanup runs past the test context
-		cmd.Env = tmuxtest.ScrubbedEnv()
+		cmd.Env = executil.WithoutEnv(nil, "TMUX", "TMUX_PANE")
 		return cmd.Run()
 	}
 }

@@ -17,6 +17,8 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/pkg/atomicfile"
+	"github.com/colonyops/hive/pkg/pathutil"
 	"github.com/urfave/cli/v3"
 	"gopkg.in/yaml.v3"
 )
@@ -137,7 +139,7 @@ func aliasShellFor(rcFile string) string {
 // validateRCFile rejects empty paths, directories, and paths whose parent
 // directory does not exist. The file itself may not exist yet.
 func validateRCFile(s string) error {
-	path := expandTilde(strings.TrimSpace(s))
+	path := pathutil.ExpandHome(strings.TrimSpace(s))
 	if path == "" {
 		return fmt.Errorf("path is required")
 	}
@@ -430,23 +432,6 @@ func huhThemeTokyoNight(isDark bool) *huh.Styles {
 	return t
 }
 
-// expandTilde replaces a leading ~ or ~/ with the user's home directory.
-// Returns the path unchanged if ~ cannot be resolved or is not present.
-func expandTilde(path string) string {
-	if path == "~" {
-		if home, err := os.UserHomeDir(); err == nil {
-			return home
-		}
-		return path
-	}
-	if strings.HasPrefix(path, "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			return filepath.Join(home, path[2:])
-		}
-	}
-	return path
-}
-
 // dirSuggestions returns absolute paths of subdirectories matching the typed input.
 // A trailing slash in input lists contents of the expanded directory; otherwise it
 // lists siblings whose name starts with the basename of the expanded input.
@@ -455,7 +440,7 @@ func dirSuggestions(input string) []string {
 	if input == "" {
 		return nil
 	}
-	expanded := expandTilde(input)
+	expanded := pathutil.ExpandHome(input)
 
 	var dir, prefix string
 	if strings.HasSuffix(input, "/") {
@@ -488,7 +473,7 @@ func dirSuggestions(input string) []string {
 }
 
 func validateWorkspaceParent(s string) error {
-	path := expandTilde(s)
+	path := pathutil.ExpandHome(s)
 	info, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("path does not exist")
@@ -648,8 +633,8 @@ func (cmd *InitCmd) run(_ context.Context, _ *cli.Command) error {
 		}
 	}
 
-	workspace = expandTilde(workspace)
-	rcFile = expandTilde(strings.TrimSpace(rcFile))
+	workspace = pathutil.ExpandHome(workspace)
+	rcFile = pathutil.ExpandHome(strings.TrimSpace(rcFile))
 
 	// The chosen rc file may differ from the default checked above.
 	if needsAlias && doAlias && rcFile != "" {
@@ -744,12 +729,7 @@ func (cmd *InitCmd) applyConfigFile(cfgPath, agentName string, installed []strin
 		return stepResult{name: "Config file", status: statusFailed, detail: err.Error()}
 	}
 
-	tmp := cfgPath + ".tmp"
-	if err := os.WriteFile(tmp, []byte(rendered), 0o644); err != nil {
-		return stepResult{name: "Config file", status: statusFailed, detail: err.Error()}
-	}
-	if err := os.Rename(tmp, cfgPath); err != nil {
-		_ = os.Remove(tmp)
+	if err := atomicfile.Write(cfgPath, []byte(rendered), 0o644); err != nil {
 		return stepResult{name: "Config file", status: statusFailed, detail: err.Error()}
 	}
 	return stepResult{name: "Config file", status: statusDone, detail: "created " + cfgPath}

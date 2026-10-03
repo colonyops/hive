@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
+
+	"github.com/colonyops/hive/pkg/executil"
 )
 
 // process is the seam that makes the reader/exit/join logic testable without
@@ -30,7 +32,7 @@ type execProcess struct {
 
 	mu     sync.Mutex
 	cmd    *exec.Cmd
-	stderr *cappedBuffer
+	stderr *executil.HeadWriter
 
 	waitOnce sync.Once
 	waitErr  error
@@ -40,8 +42,8 @@ func newExecProcess(opts Options) process {
 	return &execProcess{
 		slug:   opts.Slug,
 		binary: opts.Binary,
-		env:    detachedEnv(opts.Environ),
-		stderr: &cappedBuffer{max: 4 << 10},
+		env:    withoutTmuxClient(opts.Environ),
+		stderr: &executil.HeadWriter{Max: 4 << 10},
 	}
 }
 
@@ -142,9 +144,9 @@ func inputTmux(ctx context.Context, binary string, env []string, stdin io.Reader
 		args = append([]string{"-S", socket}, args...)
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Env = detachedEnv(env)
+	cmd.Env = withoutTmuxClient(env)
 	cmd.Stdin = stdin
-	stderr := &cappedBuffer{max: 4 << 10}
+	stderr := &executil.HeadWriter{Max: 4 << 10}
 	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {
 		if msg := strings.TrimSpace(stderr.String()); msg != "" {
@@ -163,8 +165,8 @@ func outputTmux(ctx context.Context, binary string, env []string, args ...string
 		args = append([]string{"-S", socket}, args...)
 	}
 	cmd := exec.CommandContext(ctx, binary, args...)
-	cmd.Env = detachedEnv(env)
-	stderr := &cappedBuffer{max: 4 << 10}
+	cmd.Env = withoutTmuxClient(env)
+	stderr := &executil.HeadWriter{Max: 4 << 10}
 	cmd.Stderr = stderr
 	out, err := cmd.Output()
 	if err != nil {
@@ -191,9 +193,9 @@ func socketFromTMUX(v string) string {
 func RunnerEnviron(environ func(context.Context) []string) func(context.Context) []string {
 	return func(ctx context.Context) []string {
 		if environ == nil {
-			return detachedEnv(nil)
+			return withoutTmuxClient(nil)
 		}
-		return detachedEnv(environ(ctx))
+		return withoutTmuxClient(environ(ctx))
 	}
 }
 
@@ -207,47 +209,9 @@ func RunnerArgs(args []string) []string {
 	return append([]string{"-S", socket}, args...)
 }
 
-// detachedEnv drops base's tmux client variables so the command runs as an
-// independent client rather than nesting. A nil base is this process's own
+// withoutTmuxClient drops base's tmux client variables so the command runs as
+// an independent client rather than nesting. A nil base is this process's own
 // environment, which is what a caller outside the app's composition root gets.
-func detachedEnv(base []string) []string {
-	env := base
-	if env == nil {
-		env = os.Environ()
-	}
-	out := make([]string, 0, len(env))
-	for _, kv := range env {
-		if strings.HasPrefix(kv, "TMUX=") || strings.HasPrefix(kv, "TMUX_PANE=") {
-			continue
-		}
-		out = append(out, kv)
-	}
-	return out
-}
-
-// cappedBuffer keeps the first max bytes written to it, so a failed spawn can
-// report tmux's complaint without an unbounded sink. Write returns len(p)
-// past the cap so a noisy child never blocks on a full pipe.
-type cappedBuffer struct {
-	mu  sync.Mutex
-	buf []byte
-	max int
-}
-
-func (b *cappedBuffer) Write(p []byte) (int, error) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	if room := b.max - len(b.buf); room > 0 {
-		if len(p) < room {
-			room = len(p)
-		}
-		b.buf = append(b.buf, p[:room]...)
-	}
-	return len(p), nil
-}
-
-func (b *cappedBuffer) String() string {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return string(b.buf)
+func withoutTmuxClient(base []string) []string {
+	return executil.WithoutEnv(base, "TMUX", "TMUX_PANE")
 }

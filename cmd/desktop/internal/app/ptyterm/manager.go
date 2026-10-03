@@ -18,6 +18,8 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+
+	"github.com/colonyops/hive/pkg/executil"
 )
 
 const (
@@ -391,21 +393,11 @@ func title(command string, argv []string) string {
 
 // terminalEnv declares what the emulator on the far end of the socket can do.
 // xterm.js renders 256 colours and true colour, and a shell that is not told so
-// degrades its prompt for a terminal that is not this one.
+// degrades its prompt for a terminal that is not this one. Hive may itself have
+// been launched from inside tmux; inherited client variables would tell the
+// shell it is in a multiplexer that is not on the other end of this PTY.
 func terminalEnv(base []string) []string {
-	out := make([]string, 0, len(base)+3)
-	for _, kv := range base {
-		switch {
-		case strings.HasPrefix(kv, "TERM="), strings.HasPrefix(kv, "COLORTERM="), strings.HasPrefix(kv, "TERM_PROGRAM="):
-			continue
-		case strings.HasPrefix(kv, "TMUX="), strings.HasPrefix(kv, "TMUX_PANE="):
-			// Hive may itself have been launched from inside tmux; inherited
-			// client variables would tell the shell it is in a multiplexer that
-			// is not on the other end of this PTY.
-			continue
-		}
-		out = append(out, kv)
-	}
+	out := executil.WithoutEnv(base, "TERM", "COLORTERM", "TERM_PROGRAM", "TMUX", "TMUX_PANE")
 	return append(out, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=hive-desktop")
 }
 

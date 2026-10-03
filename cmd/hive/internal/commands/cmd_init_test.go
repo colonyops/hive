@@ -451,30 +451,6 @@ func TestRenderConfigTemplate(t *testing.T) {
 	}
 }
 
-// TestExpandTilde covers tilde expansion cases.
-func TestExpandTilde(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"~", home},
-		{"~/projects", filepath.Join(home, "projects")},
-		{"~/a/b/c", filepath.Join(home, "a/b/c")},
-		{"/abs/path", "/abs/path"},
-		{"relative/path", "relative/path"},
-		{"", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			assert.Equal(t, tt.want, expandTilde(tt.input))
-		})
-	}
-}
-
 func TestValidateWorkspaceParent(t *testing.T) {
 	t.Run("accepts parent directory", func(t *testing.T) {
 		parent := t.TempDir()

@@ -47,25 +47,6 @@ const maxDiagnosticBytes = 500
 // honouring the cancellation.
 const pipeWaitDelay = 500 * time.Millisecond
 
-type diagnosticBuffer struct {
-	bytes.Buffer
-}
-
-func (b *diagnosticBuffer) Write(p []byte) (int, error) {
-	originalLen := len(p)
-	remaining := maxDiagnosticBytes - b.Len()
-	if remaining <= 0 {
-		return originalLen, nil
-	}
-	if len(p) > remaining {
-		p = p[:remaining]
-	}
-	if _, err := b.Buffer.Write(p); err != nil {
-		return 0, err
-	}
-	return originalLen, nil
-}
-
 type execRunner struct {
 	binary      func(context.Context) (string, error)
 	environ     func(context.Context) []string
@@ -96,9 +77,9 @@ func (r execRunner) runCaptured(ctx context.Context, input io.Reader, args ...st
 	}
 	cmd.Stdin = input
 	var stdout bytes.Buffer
-	var stderr diagnosticBuffer
+	stderr := &executil.HeadWriter{Max: maxDiagnosticBytes}
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stderr = stderr
 	if err := cmd.Run(); err != nil {
 		diagnostics := stderr.Bytes()
 		if len(diagnostics) == 0 {
@@ -119,11 +100,11 @@ func (r execRunner) Interactive(ctx context.Context, streams multiplexer.AttachS
 	}
 	cmd.Stdin = streams.Stdin
 	cmd.Stdout = streams.Stdout
-	var diagnostics diagnosticBuffer
+	diagnostics := &executil.HeadWriter{Max: maxDiagnosticBytes}
 	if streams.Stderr == nil {
-		cmd.Stderr = &diagnostics
+		cmd.Stderr = diagnostics
 	} else {
-		cmd.Stderr = io.MultiWriter(streams.Stderr, &diagnostics)
+		cmd.Stderr = io.MultiWriter(streams.Stderr, diagnostics)
 	}
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() != nil {

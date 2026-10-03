@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
+	"github.com/colonyops/hive/pkg/atomicfile"
 )
 
 // Store serializes access to one settings.yaml and keeps environment overrides
@@ -110,28 +111,7 @@ func saveSettingsAt(path string, cfg Settings) error {
 		return fmt.Errorf("marshal desktop settings: %w", err)
 	}
 
-	file, err := os.CreateTemp(filepath.Dir(path), ".settings-*.yaml")
-	if err != nil {
-		return fmt.Errorf("create temporary desktop settings: %w", err)
-	}
-	tempPath := file.Name()
-	defer func() { _ = os.Remove(tempPath) }()
-	if err := file.Chmod(0o600); err != nil {
-		_ = file.Close()
-		return fmt.Errorf("chmod temporary desktop settings: %w", err)
-	}
-	if _, err := file.Write(data); err != nil {
-		_ = file.Close()
-		return fmt.Errorf("write temporary desktop settings: %w", err)
-	}
-	if err := file.Sync(); err != nil {
-		_ = file.Close()
-		return fmt.Errorf("sync temporary desktop settings: %w", err)
-	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close temporary desktop settings: %w", err)
-	}
-	if err := os.Rename(tempPath, path); err != nil {
+	if err := atomicfile.Write(path, data, 0o600); err != nil {
 		return fmt.Errorf("replace desktop settings: %w", err)
 	}
 	return nil

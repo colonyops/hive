@@ -128,7 +128,7 @@ func TestManagerRunsTheLocatedBinary(t *testing.T) {
 	require.Equal(t, []string{located}, attached)
 }
 
-// The control client gets the resolved environment too, and detachedEnv trims
+// The control client gets the resolved environment too, and withoutTmuxClient trims
 // only the client variables from it — an inherited PATH would otherwise be all
 // a Dock launch's attach has (ADR tmux-runs-in-the-resolved-environment).
 func TestManagerAttachRunsWithTheResolvedEnvironment(t *testing.T) {
@@ -144,7 +144,7 @@ func TestManagerAttachRunsWithTheResolvedEnvironment(t *testing.T) {
 			return []string{"PATH=/opt/homebrew/bin", "TMUX=/tmp/other,1,0", "TMUX_PANE=%9"}
 		},
 		newProcess: func(opts Options) process {
-			attached = detachedEnv(opts.Environ)
+			attached = withoutTmuxClient(opts.Environ)
 			return spawn(opts)
 		},
 	})

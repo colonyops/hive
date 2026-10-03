@@ -10,6 +10,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/schedule"
+	"github.com/colonyops/hive/pkg/atomicfile"
 )
 
 // This file is the manifest writer the Migration Notes reserved: it edits the
@@ -227,14 +228,8 @@ func encodeManifestDoc(doc *yaml.Node) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// writeFileAtomic writes via temp-file-then-rename so a crash mid-write never
-// leaves a half-written file for the watcher to load.
 func writeFileAtomic(path string, data []byte) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
-		return fmt.Errorf("write: %w", err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := atomicfile.Write(path, data, 0o600); err != nil {
 		return fmt.Errorf("replace: %w", err)
 	}
 	return nil

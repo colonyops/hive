@@ -6,8 +6,9 @@ package settings
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
+
+	"github.com/colonyops/hive/pkg/pathutil"
 )
 
 const (
@@ -77,12 +78,7 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 	if !dataOverride {
 		dataDir = b.DataDir
 		if dataDir == "" {
-			dataHome := os.Getenv("XDG_DATA_HOME")
-			if dataHome == "" {
-				home, _ := os.UserHomeDir()
-				dataHome = filepath.Join(home, ".local", "share")
-			}
-			dataDir = filepath.Join(dataHome, "hive")
+			dataDir = filepath.Join(pathutil.XDGDataHome(), "hive")
 		}
 	}
 
@@ -91,12 +87,7 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 	if !configOverride {
 		configDir = b.ConfigDir
 		if configDir == "" {
-			configHome := os.Getenv("XDG_CONFIG_HOME")
-			if configHome == "" {
-				home, _ := os.UserHomeDir()
-				configHome = filepath.Join(home, ".config")
-			}
-			configDir = filepath.Join(configHome, "hive", "desktop")
+			configDir = filepath.Join(pathutil.XDGConfigHome(), "hive", "desktop")
 		}
 	}
 
@@ -127,7 +118,7 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 	if agentWorkspacesDir == "" {
 		agentWorkspacesDir = filepath.Join(configDir, "workspaces")
 	} else {
-		agentWorkspacesDir = expandHome(agentWorkspacesDir)
+		agentWorkspacesDir = pathutil.ExpandHome(agentWorkspacesDir)
 	}
 
 	return Paths{
@@ -145,20 +136,6 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 		DataDirOverridden:    dataOverride || b.DataDir != "",
 		ConfigDirOverridden:  configOverride || b.ConfigDir != "",
 	}
-}
-
-// expandHome resolves a leading `~` in a configured agent-workspace root.
-// Every other Paths field is derived from XDG bases and is already absolute,
-// so this is the one place ResolvePaths needs it.
-func expandHome(dir string) string {
-	if dir != "~" && !strings.HasPrefix(dir, "~/") {
-		return dir
-	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return dir
-	}
-	return filepath.Join(home, strings.TrimPrefix(dir, "~"))
 }
 
 func envMockMode() string {
