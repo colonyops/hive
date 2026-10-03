@@ -11,8 +11,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
@@ -20,7 +20,7 @@ import (
 
 type SessionCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 
 	// per-subcommand flags
 	infoJSON bool
@@ -45,7 +45,7 @@ type SessionCmd struct {
 }
 
 // NewSessionCmd creates a new session command
-func NewSessionCmd(flags *Flags, app *hive.App) *SessionCmd {
+func NewSessionCmd(flags *Flags, app *app.App) *SessionCmd {
 	return &SessionCmd{flags: flags, app: app}
 }
 

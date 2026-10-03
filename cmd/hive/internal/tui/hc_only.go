@@ -9,16 +9,16 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/tasks"
-	act "github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/domain/hc"
 	corekv "github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 

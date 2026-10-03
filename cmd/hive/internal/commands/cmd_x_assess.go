@@ -10,6 +10,7 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
@@ -19,7 +20,7 @@ import (
 // trackerOptions resolves the debounce options the watch/replay/scenario
 // commands host their private trackers with: config-derived when the app has
 // one, library defaults otherwise (e.g. running outside a hive workspace).
-func trackerOptions(app *hive.App) status.Options {
+func trackerOptions(app *app.App) status.Options {
 	if app != nil && app.Config != nil {
 		return hive.StatusOptionsFromConfig(app.Config.Terminal.Status, app.Config.Tmux.PollInterval)
 	}

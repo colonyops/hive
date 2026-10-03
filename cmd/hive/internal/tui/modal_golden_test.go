@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/internal/core/theme"
+	"github.com/colonyops/hive/cmd/hive/internal/theme"
 	"github.com/colonyops/hive/internal/domain/terminal"
 )
 

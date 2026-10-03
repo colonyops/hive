@@ -14,14 +14,13 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/huh/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/internal/core/config"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/agent"
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/atomicfile"
 	"github.com/colonyops/hive/pkg/pathutil"
 	"github.com/urfave/cli/v3"
-	"gopkg.in/yaml.v3"
 )
 
 type agentTemplateData struct {
@@ -261,49 +260,16 @@ func appendTmuxBinding(configPath string) error {
 }
 
 // defaultConfigPath returns $XDG_CONFIG_HOME/hive/config.yaml.
-// This is the write-side counterpart to config.DefaultConfigPath which probes for existing files.
+// This is the write-side counterpart to hiveconfig.DefaultConfigPath, which probes for existing files.
 func defaultConfigPath() string {
-	return filepath.Join(config.DefaultConfigDir(), "config.yaml")
-}
-
-// toStringSlice serialises a []string as a YAML inline sequence using yaml.v3.
-// Example: []string{"--foo"} → `["--foo"]`, nil/empty → `[]`.
-func toStringSlice(ss []string) string {
-	if len(ss) == 0 {
-		return "[]"
-	}
-	node := &yaml.Node{
-		Kind:  yaml.SequenceNode,
-		Style: yaml.FlowStyle,
-	}
-	for _, s := range ss {
-		node.Content = append(node.Content, &yaml.Node{
-			Kind:  yaml.ScalarNode,
-			Value: s,
-		})
-	}
-	out, err := yaml.Marshal(node)
-	if err != nil {
-		return "[]"
-	}
-	return strings.TrimRight(string(out), "\n")
-}
-
-// toYAMLScalar serialises a string as a safe YAML scalar via yaml.v3.
-// Values containing YAML-significant characters (e.g. ": ") are quoted.
-func toYAMLScalar(s string) string {
-	out, err := yaml.Marshal(s)
-	if err != nil {
-		return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
-	}
-	return strings.TrimRight(string(out), "\n")
+	return filepath.Join(hiveconfig.DefaultConfigDir(), "config.yaml")
 }
 
 // renderConfigTemplate executes configTemplate with data and returns the rendered string.
 func renderConfigTemplate(data configTemplateData) (string, error) {
 	funcMap := template.FuncMap{
-		"toStringSlice": toStringSlice,
-		"toYAMLScalar":  toYAMLScalar,
+		"toStringSlice": hiveconfig.YAMLFlowSequence,
+		"toYAMLScalar":  hiveconfig.YAMLScalar,
 	}
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configTemplate)
 	if err != nil {
@@ -351,11 +317,11 @@ rules:
 
 // InitCmd implements the interactive setup wizard.
 type InitCmd struct {
-	app *hive.App
+	app *app.App
 }
 
 // NewInitCmd constructs an InitCmd.
-func NewInitCmd(_ *Flags, app *hive.App) *InitCmd {
+func NewInitCmd(_ *Flags, app *app.App) *InitCmd {
 	return &InitCmd{app: app}
 }
 
@@ -474,19 +440,20 @@ func dirSuggestions(input string) []string {
 	return result
 }
 
+// validateWorkspaceParent words hiveconfig.CheckWorkspace's result for the
+// init wizard's terminal prompt.
 func validateWorkspaceParent(s string) error {
-	path := pathutil.ExpandHome(s)
-	info, err := os.Stat(path)
-	if err != nil {
+	err := hiveconfig.CheckWorkspace(s)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, hiveconfig.ErrWorkspaceNotDir):
+		return fmt.Errorf("not a directory")
+	case errors.Is(err, hiveconfig.ErrWorkspaceIsRepo):
+		return fmt.Errorf("choose the parent folder that contains your repositories, not a git repository")
+	default:
 		return fmt.Errorf("path does not exist")
 	}
-	if !info.IsDir() {
-		return fmt.Errorf("not a directory")
-	}
-	if _, err := os.Stat(filepath.Join(path, ".git")); err == nil {
-		return fmt.Errorf("choose the parent folder that contains your repositories, not a git repository")
-	}
-	return nil
 }
 
 func printBanner() {
@@ -635,7 +602,7 @@ func (cmd *InitCmd) run(_ context.Context, _ *cli.Command) error {
 		}
 	}
 
-	workspace = pathutil.ExpandHome(workspace)
+	workspace = pathutil.ExpandHome(strings.TrimSpace(workspace))
 	rcFile = pathutil.ExpandHome(strings.TrimSpace(rcFile))
 
 	// The chosen rc file may differ from the default checked above.

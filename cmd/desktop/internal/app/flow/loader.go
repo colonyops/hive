@@ -12,7 +12,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
+	configmigrate "github.com/colonyops/hive/internal/config/migrate"
 )
 
 // LoadFlow parses and validates a single flows/*.yaml file. The flow's id is

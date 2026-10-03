@@ -136,7 +136,7 @@ Domain-Driven Design, (Go) an idiom specific to the language.
 | Pattern | Where it applies | The rule here |
 | --- | --- | --- |
 | **Ports & Adapters** / Hexagonal | the `app` ↔ `adapter` boundary | Driven ports (core → outside) get an interface defined in `app`. Driving ports (outside → core) get **no interface** — adapters depend on concrete types. See [the Go amendment](#the-go-amendment-to-hexagonal). |
-| **Facade** (GoF) — as Application Service | `app.App` | One entry point aggregating per-domain services, so a caller never cherry-picks raw dependencies. Mirrors the CLI's `internal/hive/app.go`: *"Commands and TUI consume App instead of cherry-picking raw dependencies."* |
+| **Facade** (GoF) — as Application Service | `app.App` | One entry point aggregating per-domain services, so a caller never cherry-picks raw dependencies. Mirrors the CLI's `cmd/hive/internal/app/app.go`: *"Commands and TUI consume App instead of cherry-picking raw dependencies."* |
 | **Store** (Repository, PoEAA) | `app/data/stores`, one type per persisted **aggregate root** | One aggregate's persistence behind hand-written domain types; it publishes nothing and knows nothing about `app.Error`. The placement rules and the transaction contract are in [Stores and services](#stores-and-services). |
 | **Adapter** (GoF) | `wailsui`, `httpapi`, `mcpsrv` | A bound method builds a request and calls a service. More than ~5 lines of logic means it belongs in `app`. Transport vocabulary — status codes, exit codes, wire encodings — stops here. |
 | **Error chain** (httpkit `errchain`) | every HTTP surface: `httpapi`, devserver control | Handlers are `func(w, r) error` behind one `web/mid.Errors` middleware that maps error types to responses exactly once — no handler writes a status inline. Input enters only through `web/extractors` (`Body` decode + the struct's criterio `Validate`). Per-resource `ctrl_*.go` files, routes registered in one place. See ADR http-handler-conventions. |
@@ -812,7 +812,7 @@ newer build wrote still starts this build and its updater
 
 `settings.yaml`, `flows/*.yaml`, and `actions.yml` each carry a top-level
 `version:` and are migrated forward in place at startup by
-`cmd/desktop/internal/app/configmigrate` (ADR yaml-config-migration) — a per-file, integer-versioned runner
+`internal/config/migrate` (ADR yaml-config-migration) — a per-file, integer-versioned runner
 distinct from the SQLite schema migrations (`internal/data/migrate`)
 that track applied versions in a table.
 
@@ -2469,7 +2469,7 @@ quality gate and the release CLI run it.
 These are deliberately unresolved; revisit when the relevant work starts.
 
 - **Command placement** — per-domain service methods with request structs
-  (current plan, matching the CLI's `internal/hive/app.go`) versus a flat
+  (current plan, matching the CLI's `cmd/hive/internal/app/app.go`) versus a flat
   `app/command` + `app/query` package that gives MCP and CLI generation one
   place to enumerate. The httpapi operations table (ADR self-describing-agent-api) is an
   adapter-local precedent for the enumeration side, not a resolution of where

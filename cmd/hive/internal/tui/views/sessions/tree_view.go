@@ -9,15 +9,15 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/cmd/hive/internal/kvcache"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/workspace"
-	"github.com/colonyops/hive/pkg/kv"
 )
 
 // Tree characters for rendering the session tree.
@@ -307,9 +307,9 @@ func CalculateColumnWidths(sessions []session.Session, gitBranches map[string]st
 // TreeDelegate handles rendering of tree items in the list.
 type TreeDelegate struct {
 	Styles           TreeDelegateStyles
-	GitStatuses      *kv.Store[string, GitStatus]
-	TerminalStatuses *kv.Store[string, hive.TerminalStatus]
-	PluginStatuses   map[string]*kv.Store[string, plugins.Status] // plugin name -> session ID -> status
+	GitStatuses      *kvcache.Store[string, GitStatus]
+	TerminalStatuses *kvcache.Store[string, hive.TerminalStatus]
+	PluginStatuses   map[string]*kvcache.Store[string, plugins.Status] // plugin name -> session ID -> status
 	ColumnWidths     *ColumnWidths
 	AnimationFrame   int  // Current frame for status animations
 	PreviewMode      bool // When true, show minimal info (session names only)

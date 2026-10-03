@@ -4,8 +4,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	act "github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
@@ -23,7 +24,7 @@ func (cmd *MsgCmd) messages() *hive.MessageService {
 
 type MsgCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 
 	// pub flags
 	pubTopics  []string
@@ -54,7 +55,7 @@ type MsgCmd struct {
 }
 
 // NewMsgCmd creates a new msg command.
-func NewMsgCmd(flags *Flags, app *hive.App) *MsgCmd {
+func NewMsgCmd(flags *Flags, app *app.App) *MsgCmd {
 	return &MsgCmd{flags: flags, app: app}
 }
 

@@ -7,21 +7,21 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/tui"
 	review "github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 )
 
 type ReviewCmd struct {
 	flags  *Flags
-	app    *hive.App
+	app    *app.App
 	file   string
 	latest bool
 }
 
 // NewReviewCmd creates a new review command.
-func NewReviewCmd(flags *Flags, app *hive.App) *ReviewCmd {
+func NewReviewCmd(flags *Flags, app *app.App) *ReviewCmd {
 	return &ReviewCmd{flags: flags, app: app}
 }
 

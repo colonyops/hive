@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/agent"
 	"github.com/colonyops/hive/pkg/pathutil"
 	"gopkg.in/yaml.v3"
@@ -135,7 +136,7 @@ func decodeAgents(node yaml.Node) (defaultAgent string, profiles []Profile) {
 		switch {
 		case key == "default":
 			defaultAgent = value.Value
-		case reservedAgentKeys[key]:
+		case config.IsReservedAgentKey(key):
 		default:
 			var p struct {
 				Command string   `yaml:"command"`
@@ -201,32 +202,4 @@ func AgentOptions(ctx context.Context, lookPath LookPath) []AgentOption {
 		options = append(options, AgentOption{AgentKind: kind, Installed: installed})
 	}
 	return options
-}
-
-// ErrWorkspaceIsRepo reports a chosen path that is itself a git repository.
-// It is the one validation failure worth its own message: picking a repo
-// instead of the folder that holds repos is the mistake people actually make,
-// and the resulting config finds nothing with no hint as to why.
-var ErrWorkspaceIsRepo = InvalidEditError{Reason: "that is a repository, not the folder that holds your repositories"}
-
-// ValidateWorkspace checks a path is usable as a workspace parent. It mirrors
-// `hive init`'s validateWorkspaceParent so the two tools reject the same
-// input.
-func ValidateWorkspace(path string) error {
-	trimmed := strings.TrimSpace(path)
-	if trimmed == "" {
-		return invalid("choose a folder")
-	}
-	expanded := pathutil.ExpandHome(trimmed)
-	info, err := os.Stat(expanded)
-	if err != nil {
-		return invalid("that folder does not exist")
-	}
-	if !info.IsDir() {
-		return invalid("that is a file, not a folder")
-	}
-	if _, err := os.Stat(filepath.Join(expanded, ".git")); err == nil {
-		return ErrWorkspaceIsRepo
-	}
-	return nil
 }

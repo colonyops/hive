@@ -12,10 +12,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui"
 	"github.com/colonyops/hive/internal/domain/hc"
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/timeutil"
@@ -27,11 +27,11 @@ import (
 // HoneycombCmd implements the hive hc command group.
 type HoneycombCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 }
 
 // NewHoneycombCmd creates a new hc command.
-func NewHoneycombCmd(flags *Flags, app *hive.App) *HoneycombCmd {
+func NewHoneycombCmd(flags *Flags, app *app.App) *HoneycombCmd {
 	return &HoneycombCmd{flags: flags, app: app}
 }
 

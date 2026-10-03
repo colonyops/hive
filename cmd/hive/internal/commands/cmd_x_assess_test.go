@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
 )
@@ -15,7 +15,7 @@ func TestAssessFileCmd_EmitsExpectedJSONShape(t *testing.T) {
 	var buf bytes.Buffer
 
 	flags := &Flags{}
-	cmd := NewExperimentalCmd(flags, &hive.App{})
+	cmd := NewExperimentalCmd(flags, &app.App{})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -50,7 +50,7 @@ func TestAssessFileCmd_MissingArgErrors(t *testing.T) {
 	var buf bytes.Buffer
 
 	flags := &Flags{}
-	cmd := NewExperimentalCmd(flags, &hive.App{})
+	cmd := NewExperimentalCmd(flags, &app.App{})
 
 	app := &cli.Command{
 		Name:   "hive",

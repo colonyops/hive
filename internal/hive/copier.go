@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/config"
 	"github.com/rs/zerolog"
 )
 

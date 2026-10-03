@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
+	configmigrate "github.com/colonyops/hive/internal/config/migrate"
 )
 
 func writeActionsFile(t *testing.T, dir, name, content string) string {

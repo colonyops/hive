@@ -5,7 +5,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"

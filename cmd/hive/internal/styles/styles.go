@@ -7,7 +7,7 @@ import (
 
 	lipgloss "charm.land/lipgloss/v2"
 
-	"github.com/colonyops/hive/internal/core/theme"
+	"github.com/colonyops/hive/cmd/hive/internal/theme"
 )
 
 // CurrentPalette holds the active theme palette.

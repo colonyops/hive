@@ -40,7 +40,7 @@ tui:
 
 ## Adding a Theme
 
-Add a new palette to `internal/core/theme/theme.go`:
+Add a new palette to `cmd/hive/internal/theme/theme.go`:
 
 ```go
 "my-theme": {

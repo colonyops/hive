@@ -3,10 +3,11 @@ package tui
 import (
 	"testing"
 
-	act "github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -744,7 +745,7 @@ func TestResolveWindowsAction_SameSession(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"Spawn": {
 			Help: "spawn windows",
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent", Command: "claude 'Do work in {{ .Path }}'", Focus: true},
 			},
 		},
@@ -773,7 +774,7 @@ func TestResolveWindowsAction_SameSessionWithSh(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"Review": {
 			Sh: "git fetch",
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent", Command: "claude"},
 			},
 		},
@@ -798,7 +799,7 @@ func TestResolveWindowsAction_NewSession(t *testing.T) {
 			Options: config.UserCommandOptions{
 				SessionName: "pr-{{ .Form.pr }}",
 			},
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "leader", Command: "claude"},
 			},
 			Form: []config.FormField{{Variable: "pr", Type: config.FormTypeText, Label: "PR"}},
@@ -826,7 +827,7 @@ func TestResolveWindowsAction_NewSessionInheritsRemote(t *testing.T) {
 				SessionName: "new-sess",
 				// Remote intentionally omitted — should inherit from selected session.
 			},
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent", Command: "claude"},
 			},
 		},
@@ -852,7 +853,7 @@ func TestResolveWindowsAction_NewSessionExplicitRemote(t *testing.T) {
 				SessionName: "new-sess",
 				Remote:      "https://github.com/other/repo",
 			},
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent", Command: "claude"},
 			},
 		},
@@ -875,7 +876,7 @@ func TestResolveWindowsAction_TemplateError(t *testing.T) {
 			Options: config.UserCommandOptions{
 				SessionName: "{{ .Invalid }}",
 			},
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent"},
 			},
 		},
@@ -1135,7 +1136,7 @@ func TestRenderWithFormData_WindowsWithFormValues(t *testing.T) {
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
 	commands := map[string]config.UserCommand{
 		"Spawn": {
-			Windows: []config.WindowConfig{
+			Windows: []hiveconfig.WindowConfig{
 				{Name: "agent", Command: "claude 'Review PR {{ .Form.pr }} in {{ .Path }}'"},
 			},
 			Form: []config.FormField{{Variable: "pr", Type: config.FormTypeText, Label: "PR"}},

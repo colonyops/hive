@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/colonyops/hive/internal/core/action"
+	"github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/executil"
 )

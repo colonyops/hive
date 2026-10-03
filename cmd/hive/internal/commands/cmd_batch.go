@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/validate"
 	"github.com/colonyops/hive/internal/hive"
@@ -17,12 +18,12 @@ import (
 
 type BatchCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 	fr    *iojson.FileReader[BatchInput]
 	agent string
 }
 
-func NewBatchCmd(flags *Flags, app *hive.App) *BatchCmd {
+func NewBatchCmd(flags *Flags, app *app.App) *BatchCmd {
 	return &BatchCmd{
 		flags: flags,
 		app:   app,

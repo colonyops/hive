@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"

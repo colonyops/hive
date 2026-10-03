@@ -144,7 +144,7 @@ func TestSaveRejectsAnEditThatWouldNotLoadAndLeavesTheRuntimeAlone(t *testing.T)
 	assert.Empty(t, after.Repositories, "and the runtime still serves the config it started with")
 }
 
-// hiveconf validates its owned keys, but only Hive's loader knows the rest of
+// config.ApplyEdit validates its owned keys, but only Hive's loader knows the rest of
 // the file. Here the process
 // environment forces an agent the edit is about to drop — the shape a terminal
 // launch with HIVE_DEFAULT_AGENT exported produces — and the write must be

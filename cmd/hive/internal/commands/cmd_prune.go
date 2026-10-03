@@ -5,17 +5,17 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/urfave/cli/v3"
 )
 
 type PruneCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 }
 
 // NewPruneCmd creates a new prune command
-func NewPruneCmd(flags *Flags, app *hive.App) *PruneCmd {
+func NewPruneCmd(flags *Flags, app *app.App) *PruneCmd {
 	return &PruneCmd{flags: flags, app: app}
 }
 

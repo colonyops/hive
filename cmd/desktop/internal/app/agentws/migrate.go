@@ -7,7 +7,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
+	configmigrate "github.com/colonyops/hive/internal/config/migrate"
 )
 
 // MigrateRoot migrates mcps.yaml and every workspace's agent-workspace.yaml

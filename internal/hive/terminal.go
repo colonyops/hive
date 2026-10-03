@@ -5,10 +5,10 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
-	"github.com/colonyops/hive/internal/platform/tmux/status"
+	tmuxstatus "github.com/colonyops/hive/internal/platform/tmux/status"
 )
 
 // NewTerminalManager builds the terminal integration manager from config.

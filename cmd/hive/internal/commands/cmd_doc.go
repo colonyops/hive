@@ -7,18 +7,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/urfave/cli/v3"
 )
 
 type DocCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 	all   bool
 }
 
-func NewDocCmd(flags *Flags, app *hive.App) *DocCmd {
+func NewDocCmd(flags *Flags, app *app.App) *DocCmd {
 	return &DocCmd{flags: flags, app: app}
 }
 

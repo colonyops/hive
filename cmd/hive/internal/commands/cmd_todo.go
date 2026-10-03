@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/todo"
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/rs/zerolog/log"
@@ -16,7 +16,7 @@ import (
 // TodoCmd implements the hive todo command group.
 type TodoCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 
 	// add flags
 	addTitle  string
@@ -31,7 +31,7 @@ type TodoCmd struct {
 }
 
 // NewTodoCmd creates a new todo command.
-func NewTodoCmd(flags *Flags, app *hive.App) *TodoCmd {
+func NewTodoCmd(flags *Flags, app *app.App) *TodoCmd {
 	return &TodoCmd{flags: flags, app: app}
 }
 

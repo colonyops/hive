@@ -1,6 +1,6 @@
 package review
 
-import "github.com/colonyops/hive/internal/core/action"
+import "github.com/colonyops/hive/cmd/hive/internal/action"
 
 // KeyResolver resolves keybindings to actions. Satisfied by the parent
 // package's KeybindingResolver. Exists to avoid an import cycle.

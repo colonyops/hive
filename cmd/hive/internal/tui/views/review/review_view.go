@@ -20,10 +20,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/shared"
-	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/data/stores"
 	corereview "github.com/colonyops/hive/internal/domain/review"
 )

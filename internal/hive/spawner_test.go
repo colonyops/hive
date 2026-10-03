@@ -3,7 +3,7 @@ package hive
 import (
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/stretchr/testify/assert"

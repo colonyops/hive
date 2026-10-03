@@ -9,8 +9,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	review "github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
-	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 )

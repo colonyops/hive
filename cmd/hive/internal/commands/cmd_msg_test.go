@@ -6,8 +6,9 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
@@ -17,13 +18,13 @@ func TestRunTopic_DefaultPrefix(t *testing.T) {
 	var buf bytes.Buffer
 
 	cfg := &config.Config{
-		Messaging: config.MessagingConfig{
+		Messaging: hiveconfig.MessagingConfig{
 			TopicPrefix: "agent",
 		},
 	}
 	flags := &Flags{}
 
-	cmd := NewMsgCmd(flags, &hive.App{Config: cfg})
+	cmd := NewMsgCmd(flags, &app.App{Config: cfg})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -48,13 +49,13 @@ func TestRunTopic_CustomPrefixFlag(t *testing.T) {
 	var buf bytes.Buffer
 
 	cfg := &config.Config{
-		Messaging: config.MessagingConfig{
+		Messaging: hiveconfig.MessagingConfig{
 			TopicPrefix: "agent",
 		},
 	}
 	flags := &Flags{}
 
-	cmd := NewMsgCmd(flags, &hive.App{Config: cfg})
+	cmd := NewMsgCmd(flags, &app.App{Config: cfg})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -78,13 +79,13 @@ func TestRunTopic_EmptyPrefixFlag(t *testing.T) {
 	var buf bytes.Buffer
 
 	cfg := &config.Config{
-		Messaging: config.MessagingConfig{
+		Messaging: hiveconfig.MessagingConfig{
 			TopicPrefix: "agent",
 		},
 	}
 	flags := &Flags{}
 
-	cmd := NewMsgCmd(flags, &hive.App{Config: cfg})
+	cmd := NewMsgCmd(flags, &app.App{Config: cfg})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -111,13 +112,13 @@ func TestRunTopic_EmptyConfigPrefix(t *testing.T) {
 	var buf bytes.Buffer
 
 	cfg := &config.Config{
-		Messaging: config.MessagingConfig{
+		Messaging: hiveconfig.MessagingConfig{
 			TopicPrefix: "", // Empty config prefix
 		},
 	}
 	flags := &Flags{}
 
-	cmd := NewMsgCmd(flags, &hive.App{Config: cfg})
+	cmd := NewMsgCmd(flags, &app.App{Config: cfg})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -145,13 +146,13 @@ func TestRunTopic_Uniqueness(t *testing.T) {
 		var buf bytes.Buffer
 
 		cfg := &config.Config{
-			Messaging: config.MessagingConfig{
+			Messaging: hiveconfig.MessagingConfig{
 				TopicPrefix: "agent",
 			},
 		}
 		flags := &Flags{}
 
-		cmd := NewMsgCmd(flags, &hive.App{Config: cfg})
+		cmd := NewMsgCmd(flags, &app.App{Config: cfg})
 
 		app := &cli.Command{
 			Name:   "hive",

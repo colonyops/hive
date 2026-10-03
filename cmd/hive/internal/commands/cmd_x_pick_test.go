@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
@@ -473,7 +473,7 @@ func TestApplyFilter_PartialMatch(t *testing.T) {
 // TestApplyFilter_StatusFilter's "filter approval also matches question").
 func TestPickCmd_RejectsQuestionStatusFilter(t *testing.T) {
 	flags := &Flags{}
-	cmd := NewExperimentalCmd(flags, &hive.App{})
+	cmd := NewExperimentalCmd(flags, &app.App{})
 
 	app := &cli.Command{Name: "hive"}
 	cmd.Register(app)

@@ -16,9 +16,9 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/rs/zerolog/log"
 
+	"github.com/colonyops/hive/cmd/hive/internal/sources"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/sources"
 )
 
 // Fixed dialog sizing: the modal's overall width/height are a deterministic

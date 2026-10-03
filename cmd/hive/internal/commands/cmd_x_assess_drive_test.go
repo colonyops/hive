@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
@@ -18,7 +18,7 @@ import (
 
 func TestAssessDriveCmd_MissingArgErrors(t *testing.T) {
 	flags := &Flags{}
-	cmd := NewExperimentalCmd(flags, &hive.App{})
+	cmd := NewExperimentalCmd(flags, &app.App{})
 
 	app := &cli.Command{Name: "hive"}
 	cmd.Register(app)

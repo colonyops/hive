@@ -5,8 +5,8 @@ import (
 
 	"github.com/charmbracelet/x/exp/golden"
 
+	"github.com/colonyops/hive/cmd/hive/internal/sources"
 	"github.com/colonyops/hive/internal/domain/terminal"
-	"github.com/colonyops/hive/internal/sources"
 )
 
 // goldenPicker builds a Picker in a deterministic state for golden

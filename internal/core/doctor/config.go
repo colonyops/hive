@@ -4,21 +4,22 @@ import (
 	"context"
 	"errors"
 
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/config"
 	"github.com/hay-kot/criterio"
 )
 
 // ConfigCheck validates the configuration file.
 type ConfigCheck struct {
-	config     *config.Config
-	configPath string
+	validate func() error
+	warnings []config.ValidationWarning
 }
 
-// NewConfigCheck creates a new configuration check.
-func NewConfigCheck(cfg *config.Config, configPath string) *ConfigCheck {
+// NewConfigCheck creates a configuration check. validate is the program's
+// whole-config validator; a nil validate reports the config as not loaded.
+func NewConfigCheck(validate func() error, warnings []config.ValidationWarning) *ConfigCheck {
 	return &ConfigCheck{
-		config:     cfg,
-		configPath: configPath,
+		validate: validate,
+		warnings: warnings,
 	}
 }
 
@@ -29,7 +30,7 @@ func (c *ConfigCheck) Name() string {
 func (c *ConfigCheck) Run(ctx context.Context) Result {
 	result := Result{Name: c.Name()}
 
-	if c.config == nil {
+	if c.validate == nil {
 		result.Items = append(result.Items, CheckItem{
 			Label:  "Config loaded",
 			Status: StatusFail,
@@ -38,8 +39,8 @@ func (c *ConfigCheck) Run(ctx context.Context) Result {
 		return result
 	}
 
-	err := c.config.ValidateDeep(c.configPath)
-	warnings := c.config.Warnings()
+	err := c.validate()
+	warnings := c.warnings
 
 	// If no errors and no warnings, report success
 	if err == nil && len(warnings) == 0 {

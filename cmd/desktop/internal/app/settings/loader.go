@@ -10,7 +10,7 @@ import (
 	env "github.com/caarlos0/env/v11"
 	"gopkg.in/yaml.v3"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
+	configmigrate "github.com/colonyops/hive/internal/config/migrate"
 	"github.com/colonyops/hive/pkg/atomicfile"
 )
 

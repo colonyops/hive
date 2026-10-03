@@ -10,12 +10,12 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
-	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/platform/tmux/status"
+	tmuxstatus "github.com/colonyops/hive/internal/platform/tmux/status"
 )
 
 // tmuxSender sends input to the pane under test. Production binds a resolved
@@ -110,7 +110,7 @@ func (cmd *ExperimentalCmd) assessScenarioCmd() *cli.Command {
 // plumbing. The safety dependencies are injected so refusal paths remain
 // testable without a real tmux server; real tmux interaction is exercised
 // only by hand inside `mise run cli:container`.
-func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target string, allowHost, intervalSet bool, interval time.Duration, app *hive.App, resolve socketPathResolver, isolated isolationDetector) error {
+func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target string, allowHost, intervalSet bool, interval time.Duration, app *app.App, resolve socketPathResolver, isolated isolationDetector) error {
 	if err := ensureContainerSafe(ctx, target, allowHost, resolve, isolated); err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func runAssessScenarioCmd(ctx context.Context, w io.Writer, scenarioPath, target
 // (HoldsForPolls-1) more times to build the hold-confirmation tail that
 // scoreScenario checks. If the state is never found, the window is exactly
 // WithinPolls polls long and the loop moves on — there is nothing to hold.
-func scenarioTrackerOptions(app *hive.App, intervalSet bool, interval time.Duration) (status.Options, time.Duration, error) {
+func scenarioTrackerOptions(app *app.App, intervalSet bool, interval time.Duration) (status.Options, time.Duration, error) {
 	opts := trackerOptions(app)
 	if intervalSet {
 		if interval <= 0 {

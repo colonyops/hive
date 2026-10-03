@@ -7,22 +7,22 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/platform/proc/classifier"
-	"github.com/colonyops/hive/internal/platform/tmux/status"
+	tmuxstatus "github.com/colonyops/hive/internal/platform/tmux/status"
 )
 
 // DetectCmd classifies tmux panes for a hive session.
 type DetectCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 }
 
 // NewDetectCmd creates a new detect command.
-func NewDetectCmd(flags *Flags, app *hive.App) *DetectCmd {
+func NewDetectCmd(flags *Flags, app *app.App) *DetectCmd {
 	return &DetectCmd{flags: flags, app: app}
 }
 

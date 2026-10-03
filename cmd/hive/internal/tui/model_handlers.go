@@ -14,20 +14,21 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/sources"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/command"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/sourcepicker"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/tasks"
-	act "github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/platform/git"
-	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -1854,7 +1855,7 @@ func osOpenCmd(uri string) *exec.Cmd {
 
 func renderCustomAction(tmplStr string, ref todo.Ref) (*exec.Cmd, error) {
 	renderer := tmpl.New(tmpl.Config{})
-	rendered, err := renderer.Render(tmplStr, config.ActionTemplateData{
+	rendered, err := renderer.Render(tmplStr, hiveconfig.ActionTemplateData{
 		Scheme: ref.Scheme(),
 		Value:  ref.Value(),
 		URI:    ref.String(),

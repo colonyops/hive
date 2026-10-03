@@ -11,10 +11,10 @@ import (
 
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/platform/tmux/status"
 	"github.com/colonyops/hive/pkg/iojson"
 )
@@ -47,7 +47,7 @@ func paneExtra(ctx context.Context, target string) (title string, inMode bool, e
 	return title, inMode, nil
 }
 
-func watchTrackerOptions(app *hive.App, intervalSet bool, interval time.Duration) (status.Options, time.Duration, error) {
+func watchTrackerOptions(app *app.App, intervalSet bool, interval time.Duration) (status.Options, time.Duration, error) {
 	opts := trackerOptions(app)
 	if !intervalSet {
 		interval = opts.PollInterval

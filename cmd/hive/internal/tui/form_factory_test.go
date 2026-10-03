@@ -3,12 +3,12 @@ package tui
 import (
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/kvcache"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/platform/workspace"
-	"github.com/colonyops/hive/pkg/kv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -163,7 +163,7 @@ func TestNewFormDialog(t *testing.T) {
 			{ID: "s2", Name: "beta", State: session.StateActive},
 			{ID: "s3", Name: "gamma", State: session.StateActive},
 		}
-		ts := kv.New[string, hive.TerminalStatus]()
+		ts := kvcache.New[string, hive.TerminalStatus]()
 		ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusActive})
 		ts.Set("s2", hive.TerminalStatus{Status: terminal.StatusMissing})
 		ts.Set("s3", hive.TerminalStatus{Status: terminal.StatusReady})

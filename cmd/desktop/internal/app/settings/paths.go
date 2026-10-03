@@ -8,12 +8,13 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/pkg/pathutil"
 )
 
 const (
 	EnvDataDir     = "HIVE_DESKTOP_DATA_DIR"
-	EnvHiveDataDir = "HIVE_DESKTOP_HIVE_DATA_DIR"
+	EnvHiveDataDir = config.EnvDesktopDataDir
 	EnvConfigDir   = "HIVE_DESKTOP_CONFIG_DIR"
 	EnvFlowsDir    = "HIVE_DESKTOP_FLOWS_DIR"
 	EnvActionsPath = "HIVE_DESKTOP_ACTIONS_PATH"
@@ -37,9 +38,10 @@ const (
 // repeatedly.
 type Paths struct {
 	DataDir string
-	// HiveDataDir holds hive.db, shared with the external hive CLI. It defaults
-	// to DataDir; dev overrides it to the installed hive data dir so sessions
-	// created in dev land in the real database while desktop state stays isolated.
+	// HiveDataDir holds hive.db, shared with the external hive CLI. It is
+	// HIVE_DESKTOP_HIVE_DATA_DIR, then HIVE_DATA_DIR, then DataDir. Dev sets the
+	// first to the installed hive data dir so sessions created in dev land in
+	// the real database while desktop state stays isolated.
 	HiveDataDir string
 	StateDir    string
 	ConfigDir   string
@@ -68,6 +70,11 @@ type ResolveOptions struct {
 	// AgentWorkspacesDir is settings' agent_workspaces.dir. Empty resolves to
 	// <ConfigDir>/workspaces; a leading `~` is expanded here.
 	AgentWorkspacesDir string
+	// Getenv reads the hive data dir variables. main passes the login shell's
+	// environment, where a user exports HIVE_DATA_DIR for the CLI. nil reads
+	// only HIVE_DESKTOP_HIVE_DATA_DIR from this process, so a test that
+	// isolates DataDir never reaches a HIVE_DATA_DIR in the developer's shell.
+	Getenv func(string) string
 }
 
 // ResolvePaths applies explicit environment overrides over bootstrap and
@@ -91,10 +98,13 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 		}
 	}
 
-	hiveDataDir, hiveEnv := os.LookupEnv(EnvHiveDataDir)
-	if !hiveEnv || hiveDataDir == "" {
-		hiveDataDir = dataDir
+	getenv := opts.Getenv
+	if getenv == nil {
+		getenv = desktopOnlyGetenv
 	}
+	// DataDir, not config.DefaultDataDir, is the fallback: an isolated desktop
+	// data dir keeps its hive.db beside it.
+	hiveDataDir := config.ResolveDataDir(getenv, dataDir)
 
 	stateDir := filepath.Join(dataDir, "desktop")
 	flowsDir := os.Getenv(EnvFlowsDir)
@@ -136,6 +146,13 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 		DataDirOverridden:    dataOverride || b.DataDir != "",
 		ConfigDirOverridden:  configOverride || b.ConfigDir != "",
 	}
+}
+
+func desktopOnlyGetenv(name string) string {
+	if name != EnvHiveDataDir {
+		return ""
+	}
+	return os.Getenv(name)
 }
 
 func envMockMode() string {

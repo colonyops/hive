@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
+	configmigrate "github.com/colonyops/hive/internal/config/migrate"
 	"github.com/colonyops/hive/internal/platform/secrets"
 )
 

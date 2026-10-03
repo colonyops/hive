@@ -14,26 +14,28 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/commands"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins/claude"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins/contextdir"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins/github"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins/lazygit"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins/neovim"
+	plugintmux "github.com/colonyops/hive/cmd/hive/internal/plugins/tmux"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/cmd/hive/internal/sweep"
+	"github.com/colonyops/hive/cmd/hive/internal/theme"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/core/doctor"
 	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/theme"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/plugins"
-	"github.com/colonyops/hive/internal/hive/plugins/claude"
-	"github.com/colonyops/hive/internal/hive/plugins/contextdir"
-	"github.com/colonyops/hive/internal/hive/plugins/github"
-	"github.com/colonyops/hive/internal/hive/plugins/lazygit"
-	"github.com/colonyops/hive/internal/hive/plugins/neovim"
-	plugintmux "github.com/colonyops/hive/internal/hive/plugins/tmux"
 	"github.com/colonyops/hive/internal/hive/scripts"
-	"github.com/colonyops/hive/internal/hive/sweep"
 	"github.com/colonyops/hive/internal/platform/git"
-	"github.com/colonyops/hive/internal/platform/tmux/exec"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/buildinfo"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/logutils"
@@ -62,9 +64,9 @@ func build() string {
 	return fmt.Sprintf("%s (%s) %s", info.Version, short, info.Date)
 }
 
-func hiveBuildInfo() hive.BuildInfo {
+func hiveBuildInfo() app.BuildInfo {
 	info := buildinfo.Resolve(version, commit, date)
-	return hive.BuildInfo{Version: info.Version, Commit: info.Commit, Date: info.Date}
+	return app.BuildInfo{Version: info.Version, Commit: info.Commit, Date: info.Date}
 }
 
 // isShellCompletion reports whether the process was invoked for shell
@@ -120,7 +122,7 @@ func Main() {
 
 	var (
 		logCloser   func()
-		hiveApp     = &hive.App{}
+		hiveApp     = &app.App{}
 		database    *db.DB
 		pluginMgr   *plugins.Manager
 		sweepCancel context.CancelFunc
@@ -163,15 +165,15 @@ Run 'hive new' to create a new session from the current repository.`,
 				Name:        "config",
 				Aliases:     []string{"c"},
 				Usage:       "path to config file",
-				Sources:     cli.EnvVars("HIVE_CONFIG"),
-				Value:       config.DefaultConfigPath(),
+				Sources:     cli.EnvVars(hiveconfig.EnvConfig),
+				Value:       hiveconfig.DefaultConfigPath(),
 				Destination: &flags.ConfigPath,
 			},
 			&cli.StringFlag{
 				Name:        "data-dir",
 				Usage:       "path to data directory",
-				Sources:     cli.EnvVars("HIVE_DATA_DIR"),
-				Value:       config.DefaultDataDir(),
+				Sources:     cli.EnvVars(hiveconfig.EnvDataDir),
+				Value:       hiveconfig.DefaultDataDir(),
 				Destination: &flags.DataDir,
 			},
 		},
@@ -267,8 +269,8 @@ Run 'hive new' to create a new session from the current repository.`,
 			)
 
 			tmuxClient := tmuxexec.NewDefault(svcLogger.With().Str("component", "tmux").Logger())
-			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, bus, exec, renderer, styles.CLIOutputStyler{}, svcLogger, os.Stdout, os.Stderr, tmuxClient)
-			termMgr := hive.NewTerminalManager(cfg, tmuxClient)
+			sessionSvc := hive.NewSessionService(sessionStore, gitExec, &cfg.Config, bus, exec, renderer, styles.CLIOutputStyler{}, svcLogger, os.Stdout, os.Stderr, tmuxClient)
+			termMgr := hive.NewTerminalManager(&cfg.Config, tmuxClient)
 
 			// Create all plugin instances, collect availability info for doctor,
 			// then register with the manager.
@@ -314,8 +316,9 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			// Populate the pre-allocated App struct (commands already hold a pointer to it)
-			*hiveApp = *hive.NewApp(
+			*hiveApp = *app.NewApp(
 				sessionSvc,
+				sessionStore,
 				msgStore,
 				todoStore,
 				hcStore,
@@ -332,7 +335,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				svcLogger,
 			)
 			hiveApp.Build = hiveBuildInfo()
-			hiveApp.Sources = hive.BuildSourceRegistry(cfg, exec, kvStore, svcLogger)
+			hiveApp.Sources = app.BuildSourceRegistry(cfg, exec, kvStore, svcLogger)
 
 			return ctx, nil
 		},

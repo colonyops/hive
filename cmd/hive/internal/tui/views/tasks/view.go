@@ -10,10 +10,10 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/rs/zerolog/log"
 
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/shared"
-	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/domain/hc"
 	corekv "github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/hive"

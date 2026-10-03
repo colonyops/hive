@@ -7,12 +7,12 @@ import (
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/kvcache"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/platform/workspace"
-	"github.com/colonyops/hive/pkg/kv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -94,7 +94,7 @@ func TestExpandWindowItems_NilTerminalStatuses(t *testing.T) {
 }
 
 func TestExpandWindowItems_ZeroWindows(t *testing.T) {
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusActive})
 	v := &View{terminalStatuses: ts}
 
@@ -104,7 +104,7 @@ func TestExpandWindowItems_ZeroWindows(t *testing.T) {
 }
 
 func TestExpandWindowItems_OneWindow(t *testing.T) {
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	ts.Set("s1", hive.TerminalStatus{
 		Windows: []hive.WindowStatus{{WindowIndex: "0", WindowName: "main"}},
 	})
@@ -116,7 +116,7 @@ func TestExpandWindowItems_OneWindow(t *testing.T) {
 }
 
 func TestExpandWindowItems_OneWindowMultiplePanes(t *testing.T) {
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	ts.Set("s1", hive.TerminalStatus{
 		Windows: []hive.WindowStatus{{
 			WindowIndex: "0",
@@ -147,7 +147,7 @@ func TestExpandWindowItems_OneWindowMultiplePanes(t *testing.T) {
 
 func TestRenderPreviewHeader_SelectedPaneUsesDisplayID(t *testing.T) {
 	sess := session.Session{ID: "abcd1234", Name: "my-session"}
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	ts.Set("s1", hive.TerminalStatus{Windows: []hive.WindowStatus{{
 		WindowIndex: "0",
 		WindowName:  "main",
@@ -170,7 +170,7 @@ func TestRenderPreviewHeader_SelectedPaneUsesDisplayID(t *testing.T) {
 }
 
 func TestExpandWindowItems_MultipleWindows(t *testing.T) {
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	ts.Set("s1", hive.TerminalStatus{
 		Windows: []hive.WindowStatus{
 			{WindowIndex: "0", WindowName: "claude"},
@@ -195,7 +195,7 @@ func TestExpandWindowItems_MultipleWindows(t *testing.T) {
 }
 
 func TestExpandWindowItems_NonSessionPassthrough(t *testing.T) {
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	v := &View{terminalStatuses: ts}
 
 	items := []list.Item{
@@ -208,15 +208,15 @@ func TestExpandWindowItems_NonSessionPassthrough(t *testing.T) {
 
 // --- applyFilter ---
 
-func newFilterTestView(sessions []session.Session, statusFilter terminal.Status, statuses *kv.Store[string, hive.TerminalStatus]) *View {
+func newFilterTestView(sessions []session.Session, statusFilter terminal.Status, statuses *kvcache.Store[string, hive.TerminalStatus]) *View {
 	delegate := NewTreeDelegate()
 	l := list.New([]list.Item{}, delegate, 80, 24)
 	columnWidths := &ColumnWidths{}
 	ts := statuses
 	if ts == nil {
-		ts = kv.New[string, hive.TerminalStatus]()
+		ts = kvcache.New[string, hive.TerminalStatus]()
 	}
-	gitStatuses := kv.New[string, GitStatus]()
+	gitStatuses := kvcache.New[string, GitStatus]()
 	// new(hive.SessionService) gives a zero-valued service whose Git() returns nil.
 	// applyFilter returns a tea.Cmd that captures the nil git client but never executes
 	// it in tests — so no nil-dereference occurs during the test.
@@ -277,7 +277,7 @@ func TestStatusMatchesFilter(t *testing.T) {
 }
 
 func TestApplyFilter_ApprovalFilterMatchesQuestion(t *testing.T) {
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusApproval})
 	ts.Set("s2", hive.TerminalStatus{Status: terminal.StatusQuestion})
 	ts.Set("s3", hive.TerminalStatus{Status: terminal.StatusReady})
@@ -300,7 +300,7 @@ func TestApplyFilter_ApprovalFilterMatchesQuestion(t *testing.T) {
 }
 
 func TestApplyFilter_StatusFilterMatches(t *testing.T) {
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusActive})
 	ts.Set("s2", hive.TerminalStatus{Status: terminal.StatusReady})
 
@@ -321,7 +321,7 @@ func TestApplyFilter_StatusFilterMatches(t *testing.T) {
 }
 
 func TestApplyFilter_StatusFilterNoMatches(t *testing.T) {
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusReady})
 
 	sessions := []session.Session{newSess("s1", "ready-session")}
@@ -338,7 +338,7 @@ func TestApplyFilter_StatusFilterNoMatches(t *testing.T) {
 }
 
 func TestApplyFilter_FilterThenClear(t *testing.T) {
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	ts.Set("s1", hive.TerminalStatus{Status: terminal.StatusActive})
 	ts.Set("s2", hive.TerminalStatus{Status: terminal.StatusReady})
 
@@ -363,7 +363,7 @@ func TestApplyFilter_FilterThenClear(t *testing.T) {
 }
 
 func TestApplyFilter_NoTerminalStatusExcluded(t *testing.T) {
-	ts := kv.New[string, hive.TerminalStatus]()
+	ts := kvcache.New[string, hive.TerminalStatus]()
 	// neither session has a terminal status entry
 
 	sessions := []session.Session{
@@ -409,8 +409,8 @@ func newViewWithTerminalMgr(sessions []session.Session) *View {
 		list:             l,
 		allSessions:      sessions,
 		groupBy:          config.GroupByRepo,
-		terminalStatuses: kv.New[string, hive.TerminalStatus](),
-		gitStatuses:      kv.New[string, GitStatus](),
+		terminalStatuses: kvcache.New[string, hive.TerminalStatus](),
+		gitStatuses:      kvcache.New[string, GitStatus](),
 		columnWidths:     &ColumnWidths{},
 		service:          new(hive.SessionService),
 		status:           hive.NewStatusService(mgr, 1),

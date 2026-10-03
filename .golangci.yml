@@ -89,8 +89,19 @@ linters:
               desc: *driver
             - pkg: github.com/colonyops/hive/internal/config
               desc: *driver
-            - pkg: github.com/colonyops/hive/internal/core/config
-              desc: *driver
+        config-is-data:
+          files:
+            - "**/internal/config/**"
+            - "!**/cmd/**"
+          deny:
+            - pkg: github.com/colonyops/hive/internal/hive
+              desc: &configdata config is data. It loads, validates and writes config.yaml and knows nothing of services, stores, drivers or the programs (docs/architecture.md, "Layers and the dependency rule").
+            - pkg: github.com/colonyops/hive/internal/data
+              desc: *configdata
+            - pkg: github.com/colonyops/hive/internal/platform
+              desc: *configdata
+            - pkg: github.com/colonyops/hive/internal/core
+              desc: *configdata
         core:
           files:
             - "**/cmd/desktop/internal/app/**"
@@ -154,6 +165,9 @@ linters:
           list-mode: lax
           allow:
             - github.com/colonyops/hive/internal/domain
+            # Engine config is data like domain (config-is-data keeps it so):
+            # the desktop reads its writer, migrations and data-dir resolver.
+            - github.com/colonyops/hive/internal/config
             # Desktop drivers that moved to platform, and the tmux test helper
             # that was never behind the seam.
             - github.com/colonyops/hive/internal/platform/credentials
@@ -177,8 +191,6 @@ linters:
             - pkg: github.com/colonyops/hive/internal/hive
               desc: *seam
             - pkg: github.com/colonyops/hive/internal/platform
-              desc: *seam
-            - pkg: github.com/colonyops/hive/internal/sources
               desc: *seam
         cli-no-desktop-deps:
           files:

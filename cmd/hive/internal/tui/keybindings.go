@@ -9,11 +9,11 @@ import (
 	"charm.land/bubbles/v2/key"
 	"github.com/rs/zerolog/log"
 
-	"github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 

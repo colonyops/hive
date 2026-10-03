@@ -16,14 +16,14 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
+	configmigrate "github.com/colonyops/hive/internal/config/migrate"
 	"github.com/colonyops/hive/internal/platform/execenv"
-	"github.com/colonyops/hive/internal/platform/tmux/control"
+	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 	"github.com/colonyops/hive/pkg/executil"
 )
 

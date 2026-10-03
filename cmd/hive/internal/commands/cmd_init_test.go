@@ -230,32 +230,6 @@ func TestDetectInstalledAgents(t *testing.T) {
 	})
 }
 
-// TestToStringSlice checks YAML inline sequence serialisation.
-func TestToStringSlice(t *testing.T) {
-	t.Run("nil input", func(t *testing.T) {
-		assert.Equal(t, "[]", toStringSlice(nil))
-	})
-
-	t.Run("empty slice", func(t *testing.T) {
-		assert.Equal(t, "[]", toStringSlice([]string{}))
-	})
-
-	t.Run("single flag", func(t *testing.T) {
-		result := toStringSlice([]string{"--foo"})
-		assert.True(t, strings.HasPrefix(result, "["), "expected opening bracket, got: %s", result)
-		assert.True(t, strings.HasSuffix(result, "]"), "expected closing bracket, got: %s", result)
-		assert.Contains(t, result, "--foo")
-	})
-
-	t.Run("multiple flags", func(t *testing.T) {
-		result := toStringSlice([]string{"--foo", "--bar"})
-		assert.True(t, strings.HasPrefix(result, "["), "expected opening bracket, got: %s", result)
-		assert.True(t, strings.HasSuffix(result, "]"), "expected closing bracket, got: %s", result)
-		assert.Contains(t, result, "--foo")
-		assert.Contains(t, result, "--bar")
-	})
-}
-
 // TestDefaultConfigPath checks XDG_CONFIG_HOME override and fallback.
 func TestDefaultConfigPath(t *testing.T) {
 	t.Run("XDG_CONFIG_HOME set", func(t *testing.T) {

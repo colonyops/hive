@@ -6,7 +6,7 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/platform/workspace"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
@@ -15,12 +15,12 @@ import (
 // WorkspaceCmd groups workspace management subcommands.
 type WorkspaceCmd struct {
 	flags  *Flags
-	app    *hive.App
+	app    *app.App
 	lsJSON bool
 }
 
 // NewWorkspaceCmd creates a new workspace command.
-func NewWorkspaceCmd(flags *Flags, app *hive.App) *WorkspaceCmd {
+func NewWorkspaceCmd(flags *Flags, app *app.App) *WorkspaceCmd {
 	return &WorkspaceCmd{flags: flags, app: app}
 }
 

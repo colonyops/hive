@@ -48,7 +48,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/rss"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/terminalimg"
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	coredb "github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -59,10 +59,10 @@ import (
 	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/execenv"
 	"github.com/colonyops/hive/internal/platform/git"
-	"github.com/colonyops/hive/internal/platform/tmux/bin"
-	"github.com/colonyops/hive/internal/platform/tmux/control"
-	"github.com/colonyops/hive/internal/platform/tmux/exec"
-	"github.com/colonyops/hive/internal/platform/tmux/status"
+	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
+	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
+	tmuxstatus "github.com/colonyops/hive/internal/platform/tmux/status"
 )
 
 // Config is everything App needs that it cannot resolve itself.
@@ -72,6 +72,9 @@ type Config struct {
 	Paths         settings.Paths
 	MockMode      string
 	Logger        zerolog.Logger
+	// ExecEnv is the login-shell environment main resolved the paths with,
+	// shared so the shell is probed once. nil builds one.
+	ExecEnv *execenv.Resolver
 
 	// CredentialKeyringService isolates development credentials from the installed app.
 	CredentialKeyringService string
@@ -307,7 +310,11 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 
 	a.pollInterval = cfg.Settings.Polling.Interval.Duration()
 	a.tmux = tmuxbin.NewResolver(cfg.Settings.Paths.Tmux)
-	a.execEnv = execenv.NewResolver(execenv.Options{Logger: cfg.Logger})
+	a.execEnv = cfg.ExecEnv
+	if a.execEnv == nil {
+		a.execEnv = execenv.NewResolver(execenv.Options{Logger: cfg.Logger})
+	}
+	a.execEnv.SetLogger(cfg.Logger)
 
 	// Mock modes get an in-memory credential store: a keychain read can
 	// prompt, and a fixture run that prompts is a fixture run that hangs.
@@ -1163,25 +1170,17 @@ type hiveConfigEnvironment interface {
 	Getenv(context.Context, string) string
 }
 
-// Hive keeps this list private. The ACL mirrors it so a Dock launch can honor
-// XDG_CONFIG_HOME from the login shell instead of probing the launcher's home.
-var hiveConfigNames = []string{"config.yaml", "config.yml", "hive.yaml", "hive.yml"}
-
+// XDG_CONFIG_HOME is read through env so a Dock launch honors the login
+// shell's value instead of probing the launcher's home.
 func resolveHiveConfigLocation(ctx context.Context, env hiveConfigEnvironment) HiveConfigLocation {
-	if path := env.Getenv(ctx, "HIVE_CONFIG"); path != "" {
+	if path := env.Getenv(ctx, config.EnvConfig); path != "" {
 		return HiveConfigLocation{Path: path, EnvironmentOverride: true}
 	}
 	configDir := config.DefaultConfigDir()
 	if configHome := env.Getenv(ctx, "XDG_CONFIG_HOME"); configHome != "" {
 		configDir = filepath.Join(configHome, "hive")
 	}
-	for _, name := range hiveConfigNames {
-		path := filepath.Join(configDir, name)
-		if _, err := os.Stat(path); err == nil {
-			return HiveConfigLocation{Path: path}
-		}
-	}
-	return HiveConfigLocation{Path: filepath.Join(configDir, hiveConfigNames[0])}
+	return HiveConfigLocation{Path: config.ConfigPathIn(configDir)}
 }
 
 func resolveHiveDefaultAgent(ctx context.Context, env hiveConfigEnvironment, configured string, profiles []string) string {

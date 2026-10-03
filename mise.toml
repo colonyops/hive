@@ -50,11 +50,11 @@ description = "Generate enum methods using go-enum"
 # templating it from a [vars] entry renders to a path that matches nothing, and
 # mise then silently reruns the task every time instead of erroring.
 sources = [
-  "internal/core/action/type.go",
+  "cmd/hive/internal/action/type.go",
   "internal/domain/hc/item.go",
   "internal/domain/notify/store.go",
   "internal/domain/todo/todo.go",
-  "internal/sources/backend.go",
+  "cmd/hive/internal/sources/backend.go",
   "cmd/desktop/internal/app/activity/activity.go",
   "cmd/desktop/internal/app/jobs/jobs.go",
   "cmd/desktop/internal/app/data/models/classify.go",
@@ -64,7 +64,7 @@ sources = [
   "cmd/desktop/internal/app/schedule/spec.go",
 ]
 outputs = { auto = true }
-run = "go-enum --nocase --names --marshal -f internal/core/action/type.go -f internal/domain/hc/item.go -f internal/domain/notify/store.go -f internal/domain/todo/todo.go -f internal/sources/backend.go -f cmd/desktop/internal/app/activity/activity.go -f cmd/desktop/internal/app/jobs/jobs.go -f cmd/desktop/internal/app/data/models/classify.go -f cmd/desktop/internal/app/flow/flow.go -f cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go -f cmd/desktop/internal/app/agentws/workspace.go -f cmd/desktop/internal/app/schedule/spec.go"
+run = "go-enum --nocase --names --marshal -f cmd/hive/internal/action/type.go -f internal/domain/hc/item.go -f internal/domain/notify/store.go -f internal/domain/todo/todo.go -f cmd/hive/internal/sources/backend.go -f cmd/desktop/internal/app/activity/activity.go -f cmd/desktop/internal/app/jobs/jobs.go -f cmd/desktop/internal/app/data/models/classify.go -f cmd/desktop/internal/app/flow/flow.go -f cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go -f cmd/desktop/internal/app/agentws/workspace.go -f cmd/desktop/internal/app/schedule/spec.go"
 
 [tasks."generate:sqlc"]
 description = "Generate both store layers (hive.db and the desktop pipeline) from sqlc.yaml"
@@ -134,7 +134,7 @@ mise run --force generate
 # git diff cannot see an untracked file, so a brand-new enum or query output
 # would pass unnoticed. The diff is against the index, not HEAD, so it also
 # answers correctly as a pre-commit hook.
-git add -N internal cmd/desktop/internal
+git add -N internal cmd/hive/internal cmd/desktop/internal
 git diff --exit-code -- '*_enum.go' '*.gen.go' 'internal/data/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' || {
   echo "Generated files are out of date. Run 'mise run generate' and commit the result." >&2
   exit 1

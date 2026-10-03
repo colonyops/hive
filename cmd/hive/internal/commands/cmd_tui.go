@@ -10,19 +10,19 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/cmd/hive/internal/tui"
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/hive"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/pkg/profiler"
 )
 
 type TuiCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 }
 
 // NewTuiCmd creates a new tui command
-func NewTuiCmd(flags *Flags, app *hive.App) *TuiCmd {
+func NewTuiCmd(flags *Flags, app *app.App) *TuiCmd {
 	return &TuiCmd{
 		flags: flags,
 		app:   app,
@@ -52,7 +52,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		warnings = append(warnings, "Not running inside tmux. Some features (preview, spawn) require tmux.")
 	}
 	if _, err := os.Stat(cmd.flags.ConfigPath); cmd.flags.ConfigPath == "" || os.IsNotExist(err) {
-		warnings = append(warnings, "No config file found. Expected location: "+config.DefaultConfigDir())
+		warnings = append(warnings, "No config file found. Expected location: "+hiveconfig.DefaultConfigDir())
 	}
 
 	// Start profiler server if enabled

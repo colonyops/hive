@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/config"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -27,7 +27,7 @@ func newTodoPanelService(t *testing.T) *hive.TodoService {
 	go bus.Start(ctx)
 	t.Cleanup(cancel)
 
-	cfg := config.DefaultConfig()
+	cfg := hiveconfig.DefaultConfig()
 	cfg.DataDir = t.TempDir()
 	return hive.NewTodoService(store, bus, &cfg, zerolog.Nop())
 }

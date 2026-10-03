@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -142,10 +143,10 @@ func TestBatchInput_JSON(t *testing.T) {
 
 func TestBatchCmd_validateAgents(t *testing.T) {
 	cmd := &BatchCmd{
-		app: &hive.App{
+		app: &app.App{
 			Config: &config.Config{
-				Agents: config.AgentsConfig{
-					Profiles: map[string]config.AgentProfile{
+				Agents: hiveconfig.AgentsConfig{
+					Profiles: map[string]hiveconfig.AgentProfile{
 						"claude": {},
 						"aider":  {},
 					},

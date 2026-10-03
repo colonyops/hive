@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	coredb "github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -20,7 +20,7 @@ import (
 	coreterminal "github.com/colonyops/hive/internal/domain/terminal"
 	hivesvc "github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/platform/git"
-	"github.com/colonyops/hive/internal/platform/tmux/exec"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"

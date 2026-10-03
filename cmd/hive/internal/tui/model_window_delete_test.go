@@ -3,8 +3,8 @@ package tui
 import (
 	"testing"
 
+	"github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
-	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/stretchr/testify/assert"
 )

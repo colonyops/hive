@@ -7,11 +7,11 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	lipgloss "charm.land/lipgloss/v2"
 
+	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components/form"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/sourcepicker"
-	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"

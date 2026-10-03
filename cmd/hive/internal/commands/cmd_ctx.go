@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/urfave/cli/v3"
 )
 
 type CtxCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 
 	// Shared flags
 	repo   string
@@ -25,7 +25,7 @@ type CtxCmd struct {
 }
 
 // NewCtxCmd creates a new ctx command.
-func NewCtxCmd(flags *Flags, app *hive.App) *CtxCmd {
+func NewCtxCmd(flags *Flags, app *app.App) *CtxCmd {
 	return &CtxCmd{flags: flags, app: app}
 }
 

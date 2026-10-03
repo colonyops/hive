@@ -18,30 +18,31 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/sources"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
+	"github.com/colonyops/hive/cmd/hive/internal/theme"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/sourcepicker"
-	act "github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/core/doctor"
 	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/theme"
 	corekv "github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/platform/git"
-	"github.com/colonyops/hive/internal/sources"
 
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/command"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/messages"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/tasks"
+	"github.com/colonyops/hive/cmd/hive/internal/updatecheck"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/plugins"
-	"github.com/colonyops/hive/internal/hive/updatecheck"
 
 	"github.com/colonyops/hive/pkg/tmpl"
 )
@@ -1775,7 +1776,7 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) defaultAgentKey() string {
-	if envDefault := os.Getenv(config.EnvDefaultAgent); envDefault != "" {
+	if envDefault := os.Getenv(hiveconfig.EnvDefaultAgent); envDefault != "" {
 		if _, ok := m.cfg.Agents.Profiles[envDefault]; ok {
 			return envDefault
 		}

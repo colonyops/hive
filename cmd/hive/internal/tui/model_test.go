@@ -16,11 +16,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/tasks"
-	act "github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -28,7 +30,6 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/plugins"
 )
 
 func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Model {
@@ -58,7 +59,7 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 	todoService := hive.NewTodoService(
 		stores.NewTodoStore(database),
 		tb.EventBus,
-		cfg,
+		&cfg.Config,
 		zerolog.New(io.Discard),
 	)
 
@@ -78,7 +79,7 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 }
 
 func TestWorkspaceRefreshCommandDoesNotRequireSelectedSession(t *testing.T) {
-	t.Setenv(config.EnvDefaultAgent, "")
+	t.Setenv(hiveconfig.EnvDefaultAgent, "")
 	root := t.TempDir()
 	m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
 		cfg.Workspaces = []string{root}
@@ -101,12 +102,12 @@ func TestOpenNewSessionFormReadsEnvironmentDefaultAgentAtOpen(t *testing.T) {
 	m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
 		cfg.Agents.AgentSelector = true
 		cfg.Agents.Default = "claude"
-		cfg.Agents.Profiles = map[string]config.AgentProfile{
+		cfg.Agents.Profiles = map[string]hiveconfig.AgentProfile{
 			"claude": {},
 			"pi":     {},
 		}
 	})
-	t.Setenv(config.EnvDefaultAgent, "pi")
+	t.Setenv(hiveconfig.EnvDefaultAgent, "pi")
 
 	model, _ := m.openNewSessionForm()
 	opened := model.(Model)
@@ -125,7 +126,7 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
   claude: {}
   pi: {}
 `), 0o600))
-	t.Setenv(config.EnvDefaultAgent, "pi")
+	t.Setenv(hiveconfig.EnvDefaultAgent, "pi")
 
 	cfg, err := config.Load(configPath, dataDir)
 	require.NoError(t, err)
@@ -143,7 +144,7 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 	todoService := hive.NewTodoService(
 		stores.NewTodoStore(database),
 		tb.EventBus,
-		cfg,
+		&cfg.Config,
 		zerolog.New(io.Discard),
 	)
 

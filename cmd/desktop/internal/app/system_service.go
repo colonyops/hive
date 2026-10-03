@@ -9,8 +9,8 @@ import (
 	"github.com/colonyops/hive/pkg/osopen"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
+	"github.com/colonyops/hive/internal/config"
 )
 
 // HiveConfigLocation is the Hive config path this process loaded and whether
@@ -133,7 +133,7 @@ func (s *SystemService) OpenHiveConfig(_ context.Context) error {
 	if path == "" {
 		return Errorf(KindInternal, "Hive config path is unavailable")
 	}
-	if err := hiveconf.Create(path); err != nil {
+	if err := config.CreateFile(path); err != nil {
 		return Wrap(err, KindInternal, "creating the Hive config")
 	}
 	return Wrap(s.openPath(path), KindInternal, "opening %s", path)

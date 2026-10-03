@@ -10,12 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
-	"github.com/colonyops/hive/internal/hive"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
@@ -53,7 +54,7 @@ func TestScenarioResolvedSenderSeparatesLiteralAndEnter(t *testing.T) {
 
 func TestAssessScenarioCmd_MissingArgErrors(t *testing.T) {
 	flags := &Flags{}
-	cmd := NewExperimentalCmd(flags, &hive.App{})
+	cmd := NewExperimentalCmd(flags, &app.App{})
 
 	app := &cli.Command{Name: "hive"}
 	cmd.Register(app)
@@ -118,7 +119,7 @@ func TestAssessScenarioCmdRejectsExplicitNonPositiveInterval(t *testing.T) {
 
 	for _, interval := range []string{"0s", "-1s"} {
 		t.Run(interval, func(t *testing.T) {
-			cmd := NewExperimentalCmd(&Flags{}, &hive.App{})
+			cmd := NewExperimentalCmd(&Flags{}, &app.App{})
 			app := &cli.Command{Name: "hive", Writer: io.Discard}
 			cmd.Register(app)
 
@@ -130,7 +131,7 @@ func TestAssessScenarioCmdRejectsExplicitNonPositiveInterval(t *testing.T) {
 }
 
 func TestScenarioTrackerOptionsDefaultsOnlyWhenIntervalUnset(t *testing.T) {
-	app := &hive.App{Config: &config.Config{Tmux: config.TmuxConfig{PollInterval: 275 * time.Millisecond}}}
+	app := &app.App{Config: &config.Config{Tmux: hiveconfig.TmuxConfig{PollInterval: 275 * time.Millisecond}}}
 
 	opts, interval, err := scenarioTrackerOptions(app, false, 0)
 	require.NoError(t, err)

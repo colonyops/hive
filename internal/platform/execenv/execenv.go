@@ -120,6 +120,15 @@ func NewResolver(opts Options) *Resolver {
 	return r
 }
 
+// SetLogger replaces the logger the probe reports to. A program that resolves
+// its startup paths before its final logger exists builds the Resolver early
+// and hands it the final logger here.
+func (r *Resolver) SetLogger(logger zerolog.Logger) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.logger = logger
+}
+
 // Path returns the PATH value subprocesses run with: what the login shell
 // reports, then what this process inherited, then the package-manager prefixes,
 // first occurrence winning. A probe that fails is not fatal — the inherited

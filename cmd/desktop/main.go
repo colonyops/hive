@@ -24,12 +24,13 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui"
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/report"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/telemetry"
+	configmigrate "github.com/colonyops/hive/internal/config/migrate"
 	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/internal/platform/execenv"
 	"github.com/colonyops/hive/internal/platform/observe"
 	"github.com/colonyops/hive/internal/platform/secrets"
 	"github.com/colonyops/hive/pkg/buildinfo"
@@ -80,17 +81,20 @@ func main() {
 	if err := cfg.UnknownKeys(); err != nil {
 		logger.Warn().Err(err).Msg("settings.yaml has keys this build ignores")
 	}
-	// Mock mode can select an isolated flows directory, so finalize the path
-	// snapshot only after settings and environment precedence are resolved.
-	initialLogPath := paths.LogFile
-	paths = settings.ResolvePaths(bootstrap, settings.ResolveOptions{
-		MockMode:           cfg.MockMode(),
-		AgentWorkspacesDir: cfg.AgentWorkspaces.Dir,
-	})
-
 	// Cancelled by shutdown rather than deferred: log.Fatal below would skip a
 	// defer, and shutdown is the one path both exits take.
 	ctx, cancel := context.WithCancel(context.Background())
+
+	// Mock mode can select an isolated flows directory, so finalize the path
+	// snapshot only after settings and environment precedence are resolved.
+	initialLogPath := paths.LogFile
+	// The resolver is shared with the app so the login shell is probed once.
+	execEnv := execenv.NewResolver(execenv.Options{Logger: logger})
+	paths = settings.ResolvePaths(bootstrap, settings.ResolveOptions{
+		MockMode:           cfg.MockMode(),
+		AgentWorkspacesDir: cfg.AgentWorkspaces.Dir,
+		Getenv:             func(name string) string { return execEnv.Getenv(ctx, name) },
+	})
 
 	build := buildinfo.Resolve(version, commit, date)
 	environment := telemetryEnvironment(build.Version)
@@ -197,6 +201,7 @@ func main() {
 		Paths:                    paths,
 		MockMode:                 cfg.MockMode(),
 		Logger:                   logger,
+		ExecEnv:                  execEnv,
 		CredentialKeyringService: os.Getenv(credentials.EnvKeyringService),
 		Notifier:                 ui.Notifier(),
 		Gate:                     ui.Gate(),

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/colonyops/hive/internal/hive/updatecheck"
+	"github.com/colonyops/hive/cmd/hive/internal/updatecheck"
 	"github.com/rs/zerolog/log"
 )
 

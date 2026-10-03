@@ -15,18 +15,18 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/rs/zerolog/log"
 
+	act "github.com/colonyops/hive/cmd/hive/internal/action"
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/kvcache"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	act "github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/workspace"
-	"github.com/colonyops/hive/pkg/kv"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -71,19 +71,19 @@ type View struct {
 	columnWidths *ColumnWidths
 
 	// Git integration
-	gitStatuses *kv.Store[string, GitStatus]
+	gitStatuses *kvcache.Store[string, GitStatus]
 	gitWorkers  int
 
 	// Terminal integration
 	status             *hive.StatusService
-	terminalStatuses   *kv.Store[string, hive.TerminalStatus]
+	terminalStatuses   *kvcache.Store[string, hive.TerminalStatus]
 	previewEnabled     bool
 	previewTemplates   *PreviewTemplates
 	currentTmuxSession string
 
 	// Plugin integration
 	pluginManager      *plugins.Manager
-	pluginStatuses     map[string]*kv.Store[string, plugins.Status]
+	pluginStatuses     map[string]*kvcache.Store[string, plugins.Status]
 	pluginResultsChan  <-chan plugins.Result
 	pluginPollInterval time.Duration
 
@@ -124,14 +124,14 @@ func New(opts ViewOpts) *View {
 	}
 	cfg := opts.Cfg
 
-	gitStatuses := kv.New[string, GitStatus]()
-	terminalStatuses := kv.New[string, hive.TerminalStatus]()
+	gitStatuses := kvcache.New[string, GitStatus]()
+	terminalStatuses := kvcache.New[string, hive.TerminalStatus]()
 	columnWidths := &ColumnWidths{}
 
-	pluginStatuses := make(map[string]*kv.Store[string, plugins.Status])
+	pluginStatuses := make(map[string]*kvcache.Store[string, plugins.Status])
 	for _, p := range opts.PluginManager.EnabledPlugins() {
 		if p.StatusProvider() != nil {
-			pluginStatuses[p.Name()] = kv.New[string, plugins.Status]()
+			pluginStatuses[p.Name()] = kvcache.New[string, plugins.Status]()
 		}
 	}
 
@@ -1585,17 +1585,17 @@ func (v *View) DiscoveredRepos() []workspace.DiscoveredRepo {
 }
 
 // TerminalStatuses returns the terminal status store.
-func (v *View) TerminalStatuses() *kv.Store[string, hive.TerminalStatus] {
+func (v *View) TerminalStatuses() *kvcache.Store[string, hive.TerminalStatus] {
 	return v.terminalStatuses
 }
 
 // GitStatuses returns the git status store.
-func (v *View) GitStatuses() *kv.Store[string, GitStatus] {
+func (v *View) GitStatuses() *kvcache.Store[string, GitStatus] {
 	return v.gitStatuses
 }
 
 // PluginStatuses returns the plugin status stores.
-func (v *View) PluginStatuses() map[string]*kv.Store[string, plugins.Status] {
+func (v *View) PluginStatuses() map[string]*kvcache.Store[string, plugins.Status] {
 	return v.pluginStatuses
 }
 

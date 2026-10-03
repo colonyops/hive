@@ -11,14 +11,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/cmd/hive/internal/config"
+	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
-	"github.com/colonyops/hive/internal/core/config"
+	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
-	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -99,7 +100,7 @@ func newMouseTestSessionService(t *testing.T) *hive.SessionService {
 	return hive.NewSessionService(
 		&mouseTestStore{},
 		&mouseTestGit{},
-		&config.Config{DataDir: t.TempDir(), GitPath: "git"},
+		&hiveconfig.Config{DataDir: t.TempDir(), GitPath: "git"},
 		tb.EventBus,
 		&executiltest.Exec{},
 		r,

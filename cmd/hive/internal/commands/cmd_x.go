@@ -1,18 +1,18 @@
 package commands
 
 import (
-	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/urfave/cli/v3"
 )
 
 // ExperimentalCmd implements the hive x command group.
 type ExperimentalCmd struct {
 	flags *Flags
-	app   *hive.App
+	app   *app.App
 }
 
 // NewExperimentalCmd creates a new experimental command group.
-func NewExperimentalCmd(flags *Flags, app *hive.App) *ExperimentalCmd {
+func NewExperimentalCmd(flags *Flags, app *app.App) *ExperimentalCmd {
 	return &ExperimentalCmd{flags: flags, app: app}
 }
 

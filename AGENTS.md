@@ -129,22 +129,26 @@ cmd/hive/
 ├── main.go         # The hive program
 ├── cli/            # Entry code that both main.go files run
 └── internal/       # CLI-only code
+    ├── app/        # Composition root: engine services plus CLI pieces
+    ├── config/     # CLI config sections (views, keybindings, user commands, TUI, plugins, sources)
+    ├── action/     # Keybinding action types
     ├── commands/   # CLI command handlers (urfave/cli/v3)
+    ├── plugins/    # Command packs and status providers
+    ├── sources/    # CLI-backed issue and PR sources (gh, tea)
     ├── styles/     # lipgloss styles
+    ├── theme/      # Color palettes
     └── tui/        # Bubble Tea TUI (tree view, modals, keybindings)
 cmd/desktop/        # Hive Desktop (see cmd/desktop/AGENTS.md)
 cmd/tools/          # adr, release
 docs/               # hivedesktop.com (docs/docs/) and the contributor docs (see docs/AGENTS.md)
 internal/           # Shared with Hive Desktop
-├── core/
-│   ├── config/     # Configuration loading, validation, defaults
-│   └── ...         # action, doctor, eventbus, theme
+├── config/         # Engine config: loading, validation, defaults, the YAML writer, migrate/
+├── core/           # doctor, eventbus
 ├── domain/         # Pure models: session, hc, messaging, terminal status and assess rules
 ├── platform/       # Drivers: git, tmux (exec, status, control, bin), proc, sqlite,
 │                   # execenv, credentials, secrets, observe, workspace, tmuxtest
 ├── data/           # hive.db: migrations, sqlc queries, stores
 ├── hive/           # Service layer - orchestrates all operations
-├── sources/        # CLI-backed issue and PR sources (gh, tea)
 └── web/            # HTTP plumbing shared with cmd/desktop/devserver
 ```
 
@@ -156,8 +160,9 @@ UI code goes below `cmd/hive/internal/`.
 | ------------------------------------------- | --------------------------------------------------- |
 | `cmd/hive/cli/cli.go`                       | CLI entry point, global flags, command registration |
 | `internal/hive/service.go`                  | Service layer - coordinates sessions, git, rules    |
-| `internal/core/config/config.go`            | Config structs, loading, defaults                   |
-| `internal/core/config/validate.go`          | Template data structs, validation                   |
+| `internal/config/config.go`                 | Engine config structs, loading, defaults            |
+| `internal/config/validate.go`               | Template data structs, validation                   |
+| `cmd/hive/internal/config/config.go`        | CLI config: views, keybindings, user commands       |
 | `cmd/hive/internal/tui/model.go`            | TUI model, update loop, view rendering              |
 | `cmd/hive/internal/tui/views/sessions/tree_view.go` | Session tree with status indicators         |
 | `internal/domain/terminal/assess/rules_*.go` | AI agent status detection rules                     |
@@ -295,7 +300,7 @@ spawn:
   - my-script {{ .Name | shq }} {{ .Path | shq }}
 ```
 
-Available variables vary by context - see `internal/core/config/validate.go` for `*TemplateData` structs.
+Available variables vary by context - see `internal/config/validate.go` for `*TemplateData` structs.
 
 #### Error Handling
 
@@ -306,10 +311,10 @@ Never silently discard errors. If an error cannot be presented to the user (e.g.
 The TUI dispatches keystrokes through three layers, in this order:
 
 1. **Layer 1: hardcoded, non-overridable** - `ctrl+c`, `esc`, `tab`, and `shift+tab` in normal-mode handling, plus modal-lifecycle dismissal keys (`esc` / `q`) inside dialogs and modals.
-2. **Layer 2: configurable via `KeybindingResolver`** - every other user-overridable key. Default bindings live in `defaultViewsConfig` (`internal/core/config/config_views.go`), and user config in `cfg.Views.{Global,Sessions,Tasks,Review}.Keybindings` overrides those defaults because `maps.Copy(merged, user)` overlays user values onto the merged map.
+2. **Layer 2: configurable via `KeybindingResolver`** - every other user-overridable key. Default bindings live in `defaultViewsConfig` (`cmd/hive/internal/config/config_views.go`), and user config in `cfg.Views.{Global,Sessions,Tasks,Review}.Keybindings` overrides those defaults because `maps.Copy(merged, user)` overlays user values onto the merged map.
 3. **Layer 3: bubbles list internals** - the underlying list component claims keys like `g`, `G`, `j`, `k`, `h`, `l`, `u`, `d`, `f`, `b`, `/`, `?`, `q`, and `esc`. This is intentionally out of scope for hive keybinding configuration: the resolver consumes configured bindings before the list sees them.
 
-When adding a new overridable key, do not add a new `if keyStr == "X"` block in view code. Register an `action.Type` in `internal/core/action/type.go`, add a default `UserCommand` in `defaultUserCommands` (`internal/core/config/config.go`), bind it in `defaultViewsConfig`, and dispatch it from `cmd/hive/internal/tui/model_handlers.go`.
+When adding a new overridable key, do not add a new `if keyStr == "X"` block in view code. Register an `action.Type` in `cmd/hive/internal/action/type.go`, add a default `UserCommand` in `defaultUserCommands` (`cmd/hive/internal/config/config.go`), bind it in `defaultViewsConfig`, and dispatch it from `cmd/hive/internal/tui/model_handlers.go`.
 
 #### Session States
 
