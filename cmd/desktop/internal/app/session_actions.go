@@ -9,6 +9,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
+	"github.com/colonyops/hive/internal/core/session"
 )
 
 // terminalFailureStderrBytes bounds the diagnostic tail a failed terminal
@@ -131,7 +132,7 @@ func (s *SessionsService) terminalActionContext(
 	if err != nil {
 		return actions.Action{}, dispatch.OutputData{}, err
 	}
-	if detail.State != dispatch.SessionStateActive {
+	if detail.State != string(session.StateActive) {
 		return actions.Action{}, dispatch.OutputData{}, Errorf(KindConflict, "session %q is %s, so there is no checkout left to run an action in", detail.Name, detail.State)
 	}
 	resolved, err := action.ResolveInputs(inputs)

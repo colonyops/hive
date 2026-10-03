@@ -751,7 +751,7 @@ func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) err
 	if err != nil {
 		return err
 	}
-	if detail.State != dispatch.SessionStateActive {
+	if detail.State != string(session.StateActive) {
 		return Errorf(KindConflict, "session %q is %s, so there is no checkout left to open a terminal in", detail.Name, detail.State)
 	}
 	// Hive spawns under the slug it derives from the name, so a record whose two
@@ -777,7 +777,7 @@ func (s *SessionsService) SessionDirectory(ctx context.Context, slug string) (st
 	if err != nil {
 		return "", err
 	}
-	if detail.State != dispatch.SessionStateActive {
+	if detail.State != string(session.StateActive) {
 		return "", Errorf(KindConflict, "session %q is %s, so there is no checkout left to open a terminal in", detail.Name, detail.State)
 	}
 	return detail.Path, nil

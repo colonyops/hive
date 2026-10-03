@@ -56,9 +56,6 @@ func (s *TasksService) SetTaskStatus(ctx context.Context, id, status string) err
 	if s.source == nil {
 		return Errorf(KindUnavailable, "tasks are unavailable")
 	}
-	if !validTaskStatus(status) {
-		return Errorf(KindInvalid, "unknown task status %q", status)
-	}
 	if err := s.source.SetTaskStatus(ctx, id, status); err != nil {
 		return s.classifyError(err, "setting status for task %q", id)
 	}
@@ -112,22 +109,13 @@ func (s *TasksService) TaskRepoKeys(ctx context.Context) ([]string, error) {
 	return keys, nil
 }
 
-// validTaskStatus checks status against the seam's closed vocabulary, so a
-// caller-supplied string only ever reaches hc as one of the four it accepts.
-func validTaskStatus(status string) bool {
-	switch status {
-	case dispatch.TaskStatusOpen, dispatch.TaskStatusInProgress, dispatch.TaskStatusDone, dispatch.TaskStatusCancelled:
-		return true
-	default:
-		return false
-	}
-}
-
-// classifyError maps a source failure to its Kind. dispatch.ErrTaskNotFound
-// is the only case the seam distinguishes; anything else is internal.
+// classifyError maps a source failure to its Kind.
 func (s *TasksService) classifyError(err error, format string, args ...any) error {
 	if errors.Is(err, dispatch.ErrTaskNotFound) {
 		return Wrap(err, KindNotFound, format, args...)
+	}
+	if errors.Is(err, dispatch.ErrInvalidTaskStatus) {
+		return Wrap(err, KindInvalid, format, args...)
 	}
 	return Wrap(err, KindInternal, format, args...)
 }

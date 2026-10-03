@@ -11,11 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
-	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/workspace"
@@ -613,26 +611,31 @@ func (s *SessionService) CheckSessionRisk(ctx context.Context, id string) (Sessi
 	if err != nil {
 		return SessionRisk{}, fmt.Errorf("get session: %w", err)
 	}
+	return s.CheckRisk(ctx, sess), nil
+}
+
+// CheckRisk is CheckSessionRisk for a session the caller has already read.
+func (s *SessionService) CheckRisk(ctx context.Context, sess session.Session) SessionRisk {
 	if sess.State != session.StateActive {
-		return SessionRisk{}, nil
+		return SessionRisk{}
 	}
 
 	clean, err := s.git.IsClean(ctx, sess.Path)
 	if err != nil {
-		s.log.Debug().Err(err).Str("session_id", id).Msg("failed to check git clean status")
+		s.log.Debug().Err(err).Str("session_id", sess.ID).Msg("failed to check git clean status")
 		clean = false // assume dirty on error to be safe
 	}
 
 	unpushed, err := s.git.HasUnpushedCommits(ctx, sess.Path)
 	if err != nil {
-		s.log.Debug().Err(err).Str("session_id", id).Msg("failed to check unpushed commits")
+		s.log.Debug().Err(err).Str("session_id", sess.ID).Msg("failed to check unpushed commits")
 		unpushed = true // assume risky on error, consistent with IsClean failure handling
 	}
 
 	return SessionRisk{
 		UncommittedChanges: !clean,
 		UnpushedCommits:    unpushed,
-	}, nil
+	}
 }
 
 // DeleteSession removes a session and its directory.
@@ -845,7 +848,7 @@ func (s *SessionService) ResolveSessionLaunchRepository(ctx context.Context, rem
 // DetectSession returns the session ID for the current working directory.
 // Returns empty string if not in a hive session.
 func (s *SessionService) DetectSession(ctx context.Context) (string, error) {
-	detector := messaging.NewSessionDetector(s.sessions)
+	detector := NewSessionDetector(s.sessions)
 	return detector.DetectSession(ctx)
 }
 
@@ -1138,16 +1141,24 @@ func (s *SessionService) enforceMaxRecycled(ctx context.Context, remote, cloneSt
 	return nil
 }
 
+// NewSessionRequest describes a Hive session to create before windows are
+// opened in it.
+type NewSessionRequest struct {
+	Name   string
+	Remote string
+	// ShCmd runs in the new session's directory after the clone and before
+	// windows open. A non-zero exit aborts window creation.
+	ShCmd string
+}
+
 // AddWindowsToTmuxSession adds windows to an existing tmux session.
-// It satisfies the command.WindowSpawner interface.
-func (s *SessionService) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []action.WindowSpec, background bool) error {
-	return s.spawner.AddWindowsToTmuxSession(ctx, tmuxName, workDir, renderedWindowsFromSpecs(windows), background)
+func (s *SessionService) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []multiplexer.WindowSpec, background bool) error {
+	return s.spawner.AddWindowsToTmuxSession(ctx, tmuxName, workDir, windows, background)
 }
 
 // CreateSessionWithWindows creates a new Hive session, optionally runs shCmd in its directory,
 // then opens tmux windows in it. Non-zero shCmd exit aborts window creation.
-// Satisfies the command.WindowSpawner interface.
-func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req action.NewSessionRequest, windows []action.WindowSpec, background bool) error {
+func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req NewSessionRequest, windows []multiplexer.WindowSpec, background bool) error {
 	sess, err := s.CreateSession(ctx, CreateOptions{
 		Name:      req.Name,
 		Remote:    req.Remote,
@@ -1173,25 +1184,11 @@ func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req actio
 	if err := s.spawner.tmux.CreateSession(ctx, multiplexer.SessionSpec{
 		Target:           SessionTarget(*sess),
 		WorkingDirectory: sess.Path,
-		Windows:          renderedWindowsFromSpecs(windows),
+		Windows:          windows,
 		Background:       background,
 	}); err != nil {
 		cleanup()
 		return fmt.Errorf("create tmux session: %w", err)
 	}
 	return nil
-}
-
-func renderedWindowsFromSpecs(windows []action.WindowSpec) []multiplexer.WindowSpec {
-	rendered := make([]multiplexer.WindowSpec, len(windows))
-	for i, w := range windows {
-		rendered[i] = multiplexer.WindowSpec{Name: w.Name, Command: w.Command, WorkingDirectory: w.Dir, Focus: w.Focus}
-		if len(w.Panes) > 0 {
-			rendered[i].Panes = make([]multiplexer.PaneSpec, len(w.Panes))
-			for j, p := range w.Panes {
-				rendered[i].Panes[j] = multiplexer.PaneSpec{Command: p.Command, WorkingDirectory: p.Dir, Size: p.Size, Split: multiplexer.SplitDirection(p.Split)}
-			}
-		}
-	}
-	return rendered
 }

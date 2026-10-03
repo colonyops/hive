@@ -19,17 +19,13 @@ const (
 	TaskStatusCancelled  = string(hc.StatusCancelled)
 )
 
-// TaskType mirrors hc's item type vocabulary. Values match hc.ItemType's own
-// strings.
-const (
-	TaskTypeEpic = string(hc.ItemTypeEpic)
-	TaskTypeTask = string(hc.ItemTypeTask)
-)
-
 // ErrTaskNotFound is the seam-local translation of hc.ErrNotFound, so a core
 // service can classify a missing task without importing the shared hc
 // package.
 var ErrTaskNotFound = errors.New("task not found")
+
+// ErrInvalidTaskStatus reports a status outside hc's vocabulary.
+var ErrInvalidTaskStatus = errors.New("invalid task status")
 
 // HoneycombManagement is the shared hc surface the desktop's tasks view
 // manages issues through. Every method matches hive's HoneycombService
@@ -183,7 +179,10 @@ func (h *HiveHoneycomb) TaskDetail(ctx context.Context, id string) (TaskDetail, 
 // actually changes the epic's status — hive.HoneycombService.UpdateItem's
 // own behavior, not reimplemented here.
 func (h *HiveHoneycomb) SetTaskStatus(ctx context.Context, id, status string) error {
-	s := hc.Status(status)
+	s, err := hc.ParseStatus(status)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidTaskStatus, err)
+	}
 	if _, err := h.tasks.UpdateItem(ctx, id, hc.ItemUpdate{Status: &s}); err != nil {
 		if errors.Is(err, hc.ErrNotFound) {
 			return fmt.Errorf("%w: %w", ErrTaskNotFound, err)

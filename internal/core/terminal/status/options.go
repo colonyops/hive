@@ -3,8 +3,6 @@ package status
 import (
 	"math"
 	"time"
-
-	"github.com/colonyops/hive/internal/core/config"
 )
 
 // defaultChurnWindow is how recently Assessment.AboveBox must have changed
@@ -77,31 +75,4 @@ func (o Options) effectivePolls(p ConfirmPolicy) int {
 		polls = 1
 	}
 	return polls
-}
-
-// OptionsFromConfig bridges the terminal: config section into Tracker
-// Options. It lives in this package (rather than config importing status)
-// because internal/core/config is meant to stay a dependency-light,
-// data-only package that many other packages import; status already sits
-// under internal/core/terminal and is naturally the consumer here.
-//
-// Missing's policy is deliberately not part of Options: the tmux
-// transport consumes config.TerminalConfirmConfig.Missing directly to decide
-// how many consecutive list-panes failures to tolerate before publishing
-// StatusMissing — that's a transport-level retry count, not a Tracker
-// debounce rule.
-func OptionsFromConfig(cfg config.TerminalStatusConfig, pollInterval time.Duration) Options {
-	opts := DefaultOptions()
-	opts.PollInterval = pollInterval
-	opts.ConfirmIdle = confirmPolicyFromConfig(cfg.Confirm.Idle)
-	opts.ConfirmApproval = confirmPolicyFromConfig(cfg.Confirm.Approval)
-	return opts
-}
-
-func confirmPolicyFromConfig(p config.ConfirmPolicyConfig) ConfirmPolicy {
-	return ConfirmPolicy{
-		Polls:         p.Polls,
-		MinDuration:   p.MinDuration,
-		StableContent: p.StableContent != nil && *p.StableContent,
-	}
 }

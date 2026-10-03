@@ -21,7 +21,7 @@ import (
 // one, library defaults otherwise (e.g. running outside a hive workspace).
 func trackerOptions(app *hive.App) status.Options {
 	if app != nil && app.Config != nil {
-		return status.OptionsFromConfig(app.Config.Terminal.Status, app.Config.Tmux.PollInterval)
+		return hive.StatusOptionsFromConfig(app.Config.Terminal.Status, app.Config.Tmux.PollInterval)
 	}
 	return status.DefaultOptions()
 }

@@ -1,6 +1,8 @@
 package hive
 
 import (
+	"time"
+
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/config"
@@ -24,7 +26,7 @@ func newTmuxIntegration(cfg *config.Config, source terminal.PaneSource) *termina
 	}
 
 	options = append(options,
-		terminaltmux.WithStatusOptions(status.OptionsFromConfig(cfg.Terminal.Status, cfg.Tmux.PollInterval)),
+		terminaltmux.WithStatusOptions(StatusOptionsFromConfig(cfg.Terminal.Status, cfg.Tmux.PollInterval)),
 		terminaltmux.WithMissingTolerance(cfg.Terminal.Status.Confirm.Missing.Polls),
 	)
 	if cfg.Tmux.CaptureRecording.Enabled {
@@ -37,4 +39,25 @@ func newTmuxIntegration(cfg *config.Config, source terminal.PaneSource) *termina
 		}
 	}
 	return terminaltmux.NewFromPreviewMatchers(cfg.Tmux.PreviewWindowMatcher, options...)
+}
+
+// StatusOptionsFromConfig maps the terminal.status config section onto the
+// status tracker's debounce options.
+//
+// Confirm.Missing is not part of status.Options: the tmux transport reads it
+// as a retry count for failed list-panes calls, not as a tracker rule.
+func StatusOptionsFromConfig(cfg config.TerminalStatusConfig, pollInterval time.Duration) status.Options {
+	opts := status.DefaultOptions()
+	opts.PollInterval = pollInterval
+	opts.ConfirmIdle = confirmPolicyFromConfig(cfg.Confirm.Idle)
+	opts.ConfirmApproval = confirmPolicyFromConfig(cfg.Confirm.Approval)
+	return opts
+}
+
+func confirmPolicyFromConfig(p config.ConfirmPolicyConfig) status.ConfirmPolicy {
+	return status.ConfirmPolicy{
+		Polls:         p.Polls,
+		MinDuration:   p.MinDuration,
+		StableContent: p.StableContent != nil && *p.StableContent,
+	}
 }

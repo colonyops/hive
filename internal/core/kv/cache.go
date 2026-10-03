@@ -2,7 +2,6 @@ package kv
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"time"
 
@@ -29,7 +28,7 @@ func NewCache[T any](store KV, namespace string, ttl time.Duration) *Cache[T] {
 func (c *Cache[T]) Get(ctx context.Context, key string) (T, bool) {
 	v, err := c.typed.Get(ctx, key)
 	if err != nil {
-		if !errors.Is(err, sql.ErrNoRows) {
+		if !errors.Is(err, ErrNotFound) {
 			log.Debug().Err(err).Str("key", key).Msg("kv cache: read failed")
 		}
 		var zero T

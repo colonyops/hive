@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,7 +45,11 @@ func TestKVStore_GetNotFound(t *testing.T) {
 
 	var v string
 	err := store.Get(ctx, "nonexistent", &v)
-	assert.ErrorIs(t, err, sql.ErrNoRows)
+	require.ErrorIs(t, err, kv.ErrNotFound)
+	require.NotErrorIs(t, err, sql.ErrNoRows, "the kv contract hides the storage error")
+
+	_, err = store.GetRaw(ctx, "nonexistent")
+	assert.ErrorIs(t, err, kv.ErrNotFound)
 }
 
 func TestKVStore_SetOverwrite(t *testing.T) {
@@ -125,7 +130,7 @@ func TestKVStore_TTLExpiry(t *testing.T) {
 	// Get should return not found (lazy expiry)
 	var v string
 	err := store.Get(ctx, "ephemeral", &v)
-	require.ErrorIs(t, err, sql.ErrNoRows)
+	require.ErrorIs(t, err, kv.ErrNotFound)
 
 	// Has should return false
 	has, err := store.Has(ctx, "ephemeral")
@@ -173,5 +178,5 @@ func TestKVStore_GetRawExpired(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	_, err := store.GetRaw(ctx, "temp")
-	assert.ErrorIs(t, err, sql.ErrNoRows)
+	assert.ErrorIs(t, err, kv.ErrNotFound)
 }

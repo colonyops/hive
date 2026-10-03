@@ -119,7 +119,7 @@ func (t *Tracker) Observe(key string, snap assess.Snapshot) (terminal.Status, as
 // StatusReady; any definite state — including idle — publishes immediately,
 // since there is no prior working state to protect yet.
 func (t *Tracker) observeFirst(ts *trackedState, assessment assess.Assessment) {
-	ts.published = mapDefiniteState(assessment.State)
+	ts.published = MapState(assessment.State)
 	// Seed the churn hash without flagging churn: lastChurnAt stays zero, so
 	// the very first poll never reads as a change from "nothing observed yet".
 	ts.contentHash = hashContent(normalizeContent(assessment.AboveBox))

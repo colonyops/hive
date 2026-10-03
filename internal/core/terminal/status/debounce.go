@@ -25,7 +25,7 @@ func (t *Tracker) applyTransition(ts *trackedState, state assess.State, now time
 		return
 	}
 
-	desired := mapDefiniteState(state)
+	desired := MapState(state)
 
 	if isApprovalTier(ts.published) {
 		if isApprovalTier(desired) {
@@ -50,7 +50,7 @@ func (t *Tracker) applyTransition(ts *trackedState, state assess.State, now time
 		}
 		t.confirmTransition(ts, terminal.StatusReady, t.opts.ConfirmIdle, now, contentHash)
 	default:
-		// mapDefiniteState never returns StatusMissing; defensive no-op
+		// MapState never returns StatusMissing; defensive no-op
 		// keeps this switch honest for the exhaustive lint gate.
 	}
 }
@@ -97,10 +97,10 @@ func isApprovalTier(s terminal.Status) bool {
 	return s == terminal.StatusApproval || s == terminal.StatusQuestion
 }
 
-// mapDefiniteState maps a non-unknown assess.State to the terminal.Status the
-// tracker publishes for it. Unknown is handled by callers before mapping,
-// except in first-observation, where it falls through to StatusReady.
-func mapDefiniteState(state assess.State) terminal.Status {
+// MapState maps an assess.State to the terminal.Status the tracker publishes
+// for it. Unknown maps to StatusReady; the tracker handles it before mapping
+// except on first observation.
+func MapState(state assess.State) terminal.Status {
 	switch state {
 	case assess.StateWorking:
 		return terminal.StatusActive

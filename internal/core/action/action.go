@@ -2,51 +2,25 @@ package action
 
 import "github.com/colonyops/hive/internal/core/multiplexer"
 
-// PaneSpec is a fully-rendered pane definition carried in a SpawnWindows action.
-type PaneSpec struct {
-	Command string
-	Dir     string
-	Size    string
-	Split   string
-}
-
-// WindowSpec is a fully-rendered window definition carried in a SpawnWindows action.
-// Fields mirror multiplexer.WindowSpec while keeping command payloads independent.
-type WindowSpec struct {
-	Name    string
-	Command string
-	Dir     string
-	Focus   bool
-	Panes   []PaneSpec
-}
-
-// NewSessionRequest carries parameters for creating a new Hive session before spawning windows.
-type NewSessionRequest struct {
-	Name   string // Rendered session name
-	Remote string // Remote URL; empty = inherit from selected session
-	// ShCmd is an optional shell command run in the new session's directory after the git clone
-	// and before windows are opened. Non-zero exit aborts window creation.
-	ShCmd string
-}
-
 // SpawnWindowsPayload is the execution payload for TypeSpawnWindows actions.
 type SpawnWindowsPayload struct {
-	// Optional sh: command to run before opening windows in same-session mode.
-	// For new-session mode, ShCmd lives on NewSession.ShCmd instead.
+	// ShCmd is an optional sh: command run before opening windows: in ShDir in
+	// same-session mode, in the new session's clone in new-session mode.
 	ShCmd string
-	ShDir string // Working directory for ShCmd (same-session mode only)
+	ShDir string
 
-	// Windows to open.
-	Windows []WindowSpec
+	Windows []multiplexer.WindowSpec
 
 	// Target for same-session mode (TmuxTarget = existing session's tmux name).
 	TmuxTarget string
 	SessionDir string // Working directory fallback for window dir resolution
 	Background bool
 
-	// New-session mode: if non-nil, a Hive session is created before windows are opened.
-	// ShCmd is NOT used in this mode; use NewSession.ShCmd instead.
-	NewSession *NewSessionRequest
+	// NewSession selects new-session mode: a Hive session named NewSessionName
+	// is cloned from NewSessionRemote before windows are opened.
+	NewSession       bool
+	NewSessionName   string
+	NewSessionRemote string
 }
 
 // Action represents a resolved keybinding or command action ready for execution.

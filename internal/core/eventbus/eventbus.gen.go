@@ -11,7 +11,6 @@ type Event string
 
 const (
 	EventAgentStatusChanged    Event = "agent.status-changed"
-	EventConfigReloaded        Event = "config.reloaded"
 	EventMessageReceived       Event = "message.received"
 	EventNotificationPublished Event = "notification.published"
 	EventRepoFocused           Event = "repo.focused"
@@ -21,8 +20,6 @@ const (
 	EventSessionRecycled       Event = "session.recycled"
 	EventSessionRenamed        Event = "session.renamed"
 	EventTodoCreated           Event = "todo.created"
-	EventTuiStarted            Event = "tui.started"
-	EventTuiStopped            Event = "tui.stopped"
 )
 
 // EventBus provides type-safe publish/subscribe for in-process events.
@@ -58,7 +55,6 @@ func New(size int) *EventBus {
 func newSubscribersMap() map[Event][]any {
 	return map[Event][]any{
 		EventAgentStatusChanged:    {},
-		EventConfigReloaded:        {},
 		EventMessageReceived:       {},
 		EventNotificationPublished: {},
 		EventRepoFocused:           {},
@@ -68,8 +64,6 @@ func newSubscribersMap() map[Event][]any {
 		EventSessionRecycled:       {},
 		EventSessionRenamed:        {},
 		EventTodoCreated:           {},
-		EventTuiStarted:            {},
-		EventTuiStopped:            {},
 	}
 }
 
@@ -123,30 +117,6 @@ func (bus *EventBus) SubscribeAgentStatusChanged(fn func(AgentStatusChangedPaylo
 	})
 	bus.mu.Unlock()
 	bus.runOnSubscribe(EventAgentStatusChanged)
-}
-
-// PublishConfigReloaded publishes a config.reloaded event.
-func (bus *EventBus) PublishConfigReloaded(payload ConfigReloadedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventConfigReloaded, payload: payload}:
-		bus.runOnPublish(EventConfigReloaded, payload)
-	default:
-		bus.runOnDrop(EventConfigReloaded, payload)
-	}
-}
-
-// SubscribeConfigReloaded registers a handler for config.reloaded events.
-func (bus *EventBus) SubscribeConfigReloaded(fn func(ConfigReloadedPayload)) {
-	bus.mu.Lock()
-	bus.subscribers[EventConfigReloaded] = append(bus.subscribers[EventConfigReloaded], func(v any) {
-		payload, ok := v.(ConfigReloadedPayload)
-		if !ok {
-			return
-		}
-		fn(payload)
-	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventConfigReloaded)
 }
 
 // PublishMessageReceived publishes a message.received event.
@@ -363,54 +333,6 @@ func (bus *EventBus) SubscribeTodoCreated(fn func(TodoCreatedPayload)) {
 	})
 	bus.mu.Unlock()
 	bus.runOnSubscribe(EventTodoCreated)
-}
-
-// PublishTuiStarted publishes a tui.started event.
-func (bus *EventBus) PublishTuiStarted(payload TUIStartedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventTuiStarted, payload: payload}:
-		bus.runOnPublish(EventTuiStarted, payload)
-	default:
-		bus.runOnDrop(EventTuiStarted, payload)
-	}
-}
-
-// SubscribeTuiStarted registers a handler for tui.started events.
-func (bus *EventBus) SubscribeTuiStarted(fn func(TUIStartedPayload)) {
-	bus.mu.Lock()
-	bus.subscribers[EventTuiStarted] = append(bus.subscribers[EventTuiStarted], func(v any) {
-		payload, ok := v.(TUIStartedPayload)
-		if !ok {
-			return
-		}
-		fn(payload)
-	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventTuiStarted)
-}
-
-// PublishTuiStopped publishes a tui.stopped event.
-func (bus *EventBus) PublishTuiStopped(payload TUIStoppedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventTuiStopped, payload: payload}:
-		bus.runOnPublish(EventTuiStopped, payload)
-	default:
-		bus.runOnDrop(EventTuiStopped, payload)
-	}
-}
-
-// SubscribeTuiStopped registers a handler for tui.stopped events.
-func (bus *EventBus) SubscribeTuiStopped(fn func(TUIStoppedPayload)) {
-	bus.mu.Lock()
-	bus.subscribers[EventTuiStopped] = append(bus.subscribers[EventTuiStopped], func(v any) {
-		payload, ok := v.(TUIStoppedPayload)
-		if !ok {
-			return
-		}
-		fn(payload)
-	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventTuiStopped)
 }
 
 // OnPublish registers a hook that fires after an event is successfully enqueued.

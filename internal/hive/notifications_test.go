@@ -1,4 +1,4 @@
-package eventbus_test
+package hive
 
 import (
 	"testing"
@@ -32,7 +32,7 @@ func latestNotificationPayload(tb *testbus.Bus, t *testing.T) eventbus.Notificat
 
 func TestNotificationRouter_SessionCorrupted(t *testing.T) {
 	tb := testbus.New(t)
-	eventbus.NewNotificationRouter(tb.EventBus).Register()
+	NewNotificationRouter(tb.EventBus).Register()
 
 	tb.PublishSessionCorrupted(eventbus.SessionCorruptedPayload{Session: &session.Session{Name: "alpha"}})
 	p := latestNotificationPayload(tb, t)
@@ -43,7 +43,7 @@ func TestNotificationRouter_SessionCorrupted(t *testing.T) {
 
 func TestNotificationRouter_SessionDeleted(t *testing.T) {
 	tb := testbus.New(t)
-	eventbus.NewNotificationRouter(tb.EventBus).Register()
+	NewNotificationRouter(tb.EventBus).Register()
 
 	tb.PublishSessionDeleted(eventbus.SessionDeletedPayload{SessionID: "sess-123"})
 	p := latestNotificationPayload(tb, t)
@@ -54,7 +54,7 @@ func TestNotificationRouter_SessionDeleted(t *testing.T) {
 
 func TestNotificationRouter_SessionRecycled(t *testing.T) {
 	tb := testbus.New(t)
-	eventbus.NewNotificationRouter(tb.EventBus).Register()
+	NewNotificationRouter(tb.EventBus).Register()
 
 	tb.PublishSessionRecycled(eventbus.SessionRecycledPayload{Session: &session.Session{Name: "beta"}})
 	p := latestNotificationPayload(tb, t)
@@ -65,7 +65,7 @@ func TestNotificationRouter_SessionRecycled(t *testing.T) {
 
 func TestNotificationRouter_MessageReceived(t *testing.T) {
 	tb := testbus.New(t)
-	eventbus.NewNotificationRouter(tb.EventBus).Register()
+	NewNotificationRouter(tb.EventBus).Register()
 
 	tb.PublishMessageReceived(eventbus.MessageReceivedPayload{Topic: "agent.test.inbox"})
 	p := latestNotificationPayload(tb, t)
@@ -76,7 +76,7 @@ func TestNotificationRouter_MessageReceived(t *testing.T) {
 
 func TestNotificationRouter_AgentStatusMissing_publishesWarning(t *testing.T) {
 	tb := testbus.New(t)
-	eventbus.NewNotificationRouter(tb.EventBus).Register()
+	NewNotificationRouter(tb.EventBus).Register()
 
 	tb.PublishAgentStatusChanged(eventbus.AgentStatusChangedPayload{
 		Session:   &session.Session{Name: "agent-a"},
@@ -91,7 +91,7 @@ func TestNotificationRouter_AgentStatusMissing_publishesWarning(t *testing.T) {
 
 func TestNotificationRouter_AgentStatusReady_doesNotPublish(t *testing.T) {
 	tb := testbus.New(t)
-	eventbus.NewNotificationRouter(tb.EventBus).Register()
+	NewNotificationRouter(tb.EventBus).Register()
 
 	tb.PublishAgentStatusChanged(eventbus.AgentStatusChangedPayload{
 		Session:   &session.Session{Name: "agent-a"},
@@ -104,7 +104,7 @@ func TestNotificationRouter_AgentStatusReady_doesNotPublish(t *testing.T) {
 
 func TestNotificationRouter_SessionCreated_doesNotPublish(t *testing.T) {
 	tb := testbus.New(t)
-	eventbus.NewNotificationRouter(tb.EventBus).Register()
+	NewNotificationRouter(tb.EventBus).Register()
 
 	tb.PublishSessionCreated(eventbus.SessionCreatedPayload{Session: &session.Session{Name: "created"}})
 	tb.AssertNotPublished(t, eventbus.EventNotificationPublished, 100*time.Millisecond)
@@ -112,7 +112,7 @@ func TestNotificationRouter_SessionCreated_doesNotPublish(t *testing.T) {
 
 func TestNotificationRouter_SessionRenamed_doesNotPublish(t *testing.T) {
 	tb := testbus.New(t)
-	eventbus.NewNotificationRouter(tb.EventBus).Register()
+	NewNotificationRouter(tb.EventBus).Register()
 
 	tb.PublishSessionRenamed(eventbus.SessionRenamedPayload{Session: &session.Session{Name: "new-name"}, OldName: "old-name"})
 	tb.AssertNotPublished(t, eventbus.EventNotificationPublished, 100*time.Millisecond)

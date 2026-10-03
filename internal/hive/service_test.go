@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
@@ -1091,7 +1090,7 @@ func TestCreateSessionWithWindows_RollbackOnRunShFailure(t *testing.T) {
 	}
 	svc := newTestService(t, store, cfg)
 
-	req := action.NewSessionRequest{
+	req := NewSessionRequest{
 		Name:   "test-session",
 		Remote: testRemote,
 		ShCmd:  "exit 1", // fails: directory won't exist since mockGit.Clone is a no-op

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -24,17 +25,17 @@ func NewKVStore(db *db.DB) *KVStore {
 }
 
 // Get retrieves and deserializes a value by key.
-// Returns an error wrapping sql.ErrNoRows if the key does not exist.
+// Returns an error wrapping kv.ErrNotFound if the key does not exist.
 // Expired entries are lazily deleted and treated as missing.
 func (s *KVStore) Get(ctx context.Context, key string, dest any) error {
 	row, err := s.db.Queries().KVGet(ctx, key)
 	if err != nil {
-		return fmt.Errorf("kv get %q: %w", key, err)
+		return fmt.Errorf("kv get %q: %w", key, notFound(err))
 	}
 
 	if s.isExpired(row) {
 		_ = s.db.Queries().KVDelete(ctx, key)
-		return fmt.Errorf("kv get %q: %w", key, sql.ErrNoRows)
+		return fmt.Errorf("kv get %q: %w", key, kv.ErrNotFound)
 	}
 
 	if err := json.Unmarshal(row.Value, dest); err != nil {
@@ -97,16 +98,16 @@ func (s *KVStore) ListKeys(ctx context.Context) ([]string, error) {
 }
 
 // GetRaw retrieves a raw KV entry with metadata.
-// Returns an error wrapping sql.ErrNoRows if the key does not exist.
+// Returns an error wrapping kv.ErrNotFound if the key does not exist.
 func (s *KVStore) GetRaw(ctx context.Context, key string) (kv.Entry, error) {
 	row, err := s.db.Queries().KVGetRaw(ctx, key)
 	if err != nil {
-		return kv.Entry{}, fmt.Errorf("kv get raw %q: %w", key, err)
+		return kv.Entry{}, fmt.Errorf("kv get raw %q: %w", key, notFound(err))
 	}
 
 	if s.isExpired(row) {
 		_ = s.db.Queries().KVDelete(ctx, key)
-		return kv.Entry{}, fmt.Errorf("kv get raw %q: %w", key, sql.ErrNoRows)
+		return kv.Entry{}, fmt.Errorf("kv get raw %q: %w", key, kv.ErrNotFound)
 	}
 
 	entry := kv.Entry{
@@ -155,4 +156,11 @@ func (s *KVStore) set(ctx context.Context, key string, value any, expiresAt sql.
 
 func (s *KVStore) isExpired(row db.KvStore) bool {
 	return row.ExpiresAt.Valid && row.ExpiresAt.Int64 < time.Now().UnixNano()
+}
+
+func notFound(err error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return kv.ErrNotFound
+	}
+	return err
 }

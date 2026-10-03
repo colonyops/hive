@@ -390,7 +390,7 @@ func New(deps Deps, opts Opts) Model {
 	}
 }
 
-// quit sets the quitting flag and emits tui.stopped.
+// quit sets the quitting flag and stops background work.
 func (m Model) quit() (Model, tea.Cmd) {
 	m.quitting = true
 	if m.sessionsView != nil {
@@ -399,18 +399,12 @@ func (m Model) quit() (Model, tea.Cmd) {
 	if m.modals.BgStreamCancel != nil {
 		m.modals.BgStreamCancel()
 	}
-	if m.bus != nil {
-		m.bus.PublishTuiStopped(eventbus.TUIStoppedPayload{})
-	}
 	return m, tea.Quit
 }
 
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
-	if m.bus != nil {
-		m.bus.PublishTuiStarted(eventbus.TUIStartedPayload{})
-	}
 	if m.notifyBuffer != nil {
 		cmds = append(cmds, m.notifyBuffer.WaitForSignal())
 	}

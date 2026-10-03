@@ -19,7 +19,6 @@ func TestRegisterDebugLogger(t *testing.T) {
 	tb.PublishSessionCreated(eventbus.SessionCreatedPayload{
 		Session: &session.Session{ID: "test", Name: "test"},
 	})
-	tb.PublishTuiStarted(eventbus.TUIStartedPayload{})
 	tb.PublishAgentStatusChanged(eventbus.AgentStatusChangedPayload{
 		Session: &session.Session{ID: "agent-test"},
 	})

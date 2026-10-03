@@ -63,7 +63,7 @@ func TestHiveHoneycombListTasksProjectsEveryField(t *testing.T) {
 		ParentID:  epic.ID,
 		SessionID: "",
 		Title:     "Task A",
-		Type:      TaskTypeTask,
+		Type:      string(hc.ItemTypeTask),
 		Status:    TaskStatusOpen,
 		Blocked:   false,
 		Depth:     1,
@@ -152,6 +152,20 @@ func TestHiveHoneycombTaskDetailAndSetStatusReportMissingIDs(t *testing.T) {
 
 	err = adapter.SetTaskStatus(ctx, "does-not-exist", TaskStatusDone)
 	require.ErrorIs(t, err, ErrTaskNotFound)
+}
+
+func TestHiveHoneycombSetTaskStatusRejectsUnknownStatus(t *testing.T) {
+	adapter, svc := newHiveHoneycombTasks(t)
+	ctx := t.Context()
+	item, err := svc.CreateItem(ctx, "acme/repo", hc.CreateItemInput{Title: "Epic", Type: hc.ItemTypeEpic})
+	require.NoError(t, err)
+
+	err = adapter.SetTaskStatus(ctx, item.ID, "archived")
+	require.ErrorIs(t, err, ErrInvalidTaskStatus)
+
+	got, err := svc.GetItem(ctx, item.ID)
+	require.NoError(t, err)
+	assert.Equal(t, hc.StatusOpen, got.Status)
 }
 
 func TestHiveHoneycombSetTaskStatusCascadesToChildrenVisibleOnRelist(t *testing.T) {

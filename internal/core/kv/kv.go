@@ -3,8 +3,12 @@ package kv
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 )
+
+// ErrNotFound is wrapped by Get and GetRaw when the key is missing or expired.
+var ErrNotFound = errors.New("kv: key not found")
 
 // Entry represents a raw KV entry with metadata.
 type Entry struct {
@@ -17,7 +21,7 @@ type Entry struct {
 
 // KV is the interface for a persistent key-value store.
 // Keys are strings, values are JSON-serializable.
-// Get on a missing key returns an error wrapping sql.ErrNoRows.
+// Get on a missing key returns an error wrapping ErrNotFound.
 type KV interface {
 	Get(ctx context.Context, key string, dest any) error
 	Set(ctx context.Context, key string, value any) error

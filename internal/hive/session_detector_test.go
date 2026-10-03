@@ -1,4 +1,4 @@
-package messaging
+package hive
 
 import (
 	"context"
@@ -9,40 +9,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// mockSessionStore implements session.Store for testing.
-type mockSessionStore struct {
-	sessions []session.Session
-}
-
-func (m *mockSessionStore) List(_ context.Context) ([]session.Session, error) {
-	return m.sessions, nil
-}
-
-func (m *mockSessionStore) Get(_ context.Context, id string) (session.Session, error) {
-	for _, s := range m.sessions {
-		if s.ID == id {
-			return s, nil
-		}
-	}
-	return session.Session{}, session.ErrNotFound
-}
-
-func (m *mockSessionStore) Save(_ context.Context, _ session.Session) error {
-	return nil
-}
-
-func (m *mockSessionStore) Delete(_ context.Context, _ string) error {
-	return nil
-}
-
 func TestSessionDetector_DetectSessionFromPath(t *testing.T) {
-	store := &mockSessionStore{
-		sessions: []session.Session{
-			{ID: "sess-1", Path: "/home/user/projects/foo", State: session.StateActive},
-			{ID: "sess-2", Path: "/home/user/projects/bar", State: session.StateActive},
-			{ID: "sess-3", Path: "/home/user/projects/foo/nested", State: session.StateActive},
-			{ID: "recycled", Path: "/home/user/projects/old", State: session.StateRecycled},
-		},
+	store := newMockStore()
+	for _, s := range []session.Session{
+		{ID: "sess-1", Path: "/home/user/projects/foo", State: session.StateActive},
+		{ID: "sess-2", Path: "/home/user/projects/bar", State: session.StateActive},
+		{ID: "sess-3", Path: "/home/user/projects/foo/nested", State: session.StateActive},
+		{ID: "recycled", Path: "/home/user/projects/old", State: session.StateRecycled},
+	} {
+		store.sessions[s.ID] = s
 	}
 
 	detector := NewSessionDetector(store)
@@ -100,7 +75,7 @@ func TestSessionDetector_DetectSessionFromPath(t *testing.T) {
 }
 
 func TestSessionDetector_EmptyStore(t *testing.T) {
-	store := &mockSessionStore{sessions: nil}
+	store := newMockStore()
 	detector := NewSessionDetector(store)
 	ctx := context.Background()
 

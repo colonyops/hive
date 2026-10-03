@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/colonyops/hive/internal/core/action"
+	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/hive"
 )
 
@@ -30,10 +31,10 @@ type TmuxOpener interface {
 // WindowSpawner handles window operations for SpawnWindows actions.
 type WindowSpawner interface {
 	// AddWindowsToTmuxSession adds windows to an existing tmux session.
-	AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []action.WindowSpec, background bool) error
+	AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []multiplexer.WindowSpec, background bool) error
 	// CreateSessionWithWindows creates a new Hive session, optionally runs shCmd in its directory,
 	// then opens windows in it. Non-zero shCmd exit aborts window creation.
-	CreateSessionWithWindows(ctx context.Context, req action.NewSessionRequest, windows []action.WindowSpec, background bool) error
+	CreateSessionWithWindows(ctx context.Context, req hive.NewSessionRequest, windows []multiplexer.WindowSpec, background bool) error
 }
 
 // Service creates command executors based on action type.

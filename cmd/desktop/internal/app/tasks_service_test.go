@@ -87,12 +87,11 @@ func TestTasksService_NilSourceIsUnavailable(t *testing.T) {
 func TestTasksService_SetTaskStatus_UnknownStatusIsInvalid(t *testing.T) {
 	t.Parallel()
 
-	fake := &fakeTaskSource{}
+	fake := &fakeTaskSource{statusErr: dispatch.ErrInvalidTaskStatus}
 	svc := newTasksService(fake)
 
 	err := svc.SetTaskStatus(t.Context(), "task-1", "archived")
 	assert.Equal(t, KindInvalid, KindOf(err))
-	assert.Empty(t, fake.statusCalls, "an invalid status must never reach the source")
 }
 
 func TestTasksService_SetTaskStatus_KnownStatusReachesSource(t *testing.T) {

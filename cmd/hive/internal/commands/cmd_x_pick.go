@@ -263,16 +263,9 @@ func (m *pickModel) applyFilter() {
 }
 
 // statusMatchesFilter reports whether a pane's status satisfies the
-// picker's string filter value. "approval" also matches StatusQuestion:
-// question renders at the approval tier. This mirrors
-// sessions.statusMatchesFilter as a separate copy — the picker's filter
-// value is a plain string (not a terminal.Status), and pulling in the TUI
-// package for one three-line predicate isn't worth the dependency.
+// picker's filter value. "approval" also matches question.
 func statusMatchesFilter(status terminal.Status, filter string) bool {
-	if string(status) == filter {
-		return true
-	}
-	return filter == string(terminal.StatusApproval) && status == terminal.StatusQuestion
+	return string(status) == filter || string(status.Simplified()) == filter
 }
 
 const maxRecents = 3

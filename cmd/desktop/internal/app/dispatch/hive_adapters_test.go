@@ -165,7 +165,7 @@ type fakeSessionWindowSource struct {
 	seen    []string
 }
 
-func (f *fakeSessionWindowSource) ListSessionWindows(_ context.Context, slugs []string) (map[string][]SessionWindowRef, error) {
+func (f *fakeSessionWindowSource) ListIndexedWindows(_ context.Context, slugs []string) (map[string][]SessionWindowRef, error) {
 	f.seen = slugs
 	return f.results, nil
 }

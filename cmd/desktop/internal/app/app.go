@@ -57,7 +57,6 @@ import (
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/multiplexer"
 	coreterminal "github.com/colonyops/hive/internal/core/terminal"
-	terminalstatus "github.com/colonyops/hive/internal/core/terminal/status"
 	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	coredb "github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -1278,7 +1277,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	a.launcher = dispatch.NewHiveSessionLauncher(built.sessions)
 	a.launcher.SetRecorder(a.Activity)
 	a.launcher.SetItemSessionLinker(a.Stores.ItemSessions, cfg.Logger)
-	a.sessions = dispatch.NewHiveSessionManager(built.sessions, built.statuses, hiveSessionWindowSource{terminals: a.terminals}, built.git, built.pollInterval)
+	a.sessions = dispatch.NewHiveSessionManager(built.sessions, built.statuses, a.terminals, built.git, built.pollInterval)
 	a.publisher = dispatch.NewHiveMessagePublisher(built.messages)
 	return nil
 }
@@ -1400,7 +1399,7 @@ func (a *App) buildHiveServices(hiveCfg *config.Config, database *coredb.DB, bus
 	if a.mock == "" {
 		statusOptions := []terminaltmux.Option{
 			terminaltmux.WithPaneSource(tmuxClient),
-			terminaltmux.WithStatusOptions(terminalstatus.OptionsFromConfig(hiveCfg.Terminal.Status, hiveCfg.Tmux.PollInterval)),
+			terminaltmux.WithStatusOptions(hive.StatusOptionsFromConfig(hiveCfg.Terminal.Status, hiveCfg.Tmux.PollInterval)),
 			terminaltmux.WithMissingTolerance(hiveCfg.Terminal.Status.Confirm.Missing.Polls),
 		}
 		if hiveCfg.Tmux.CaptureRecording.Enabled {

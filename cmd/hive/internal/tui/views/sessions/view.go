@@ -1272,10 +1272,7 @@ func (v *View) isCurrentTmuxSession(sess *session.Session) bool {
 // statusMatchesFilter reports whether a published status satisfies a filter
 // value. "approval" includes question: question renders at the approval tier.
 func statusMatchesFilter(status terminal.Status, filter terminal.Status) bool {
-	if status == filter {
-		return true
-	}
-	return filter == terminal.StatusApproval && status == terminal.StatusQuestion
+	return status == filter || status.Simplified() == filter
 }
 
 // handleFilterAction checks if the action is a filter action and updates the status filter.

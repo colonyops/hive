@@ -3,7 +3,6 @@
 package eventbus
 
 import (
-	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
@@ -17,7 +16,6 @@ import (
 var Events = map[string]any{
 	// Keep list sorted A-Z
 	"agent.status-changed":   AgentStatusChangedPayload{},
-	"config.reloaded":        ConfigReloadedPayload{},
 	"message.received":       MessageReceivedPayload{},
 	"notification.published": NotificationPublishedPayload{},
 	"repo.focused":           RepoFocusedPayload{},
@@ -27,8 +25,6 @@ var Events = map[string]any{
 	"session.recycled":       SessionRecycledPayload{},
 	"session.renamed":        SessionRenamedPayload{},
 	"todo.created":           TodoCreatedPayload{},
-	"tui.started":            TUIStartedPayload{},
-	"tui.stopped":            TUIStoppedPayload{},
 }
 
 // SessionCreatedPayload is emitted when a new session is created.
@@ -70,12 +66,6 @@ type MessageReceivedPayload struct {
 	Message *messaging.Message
 }
 
-// TUIStartedPayload is emitted when the TUI starts.
-type TUIStartedPayload struct{}
-
-// TUIStoppedPayload is emitted when the TUI stops.
-type TUIStoppedPayload struct{}
-
 // NotificationPublishedPayload is emitted when a user-facing notification is published.
 type NotificationPublishedPayload struct {
 	Level   notify.Level
@@ -90,9 +80,4 @@ type TodoCreatedPayload struct {
 // RepoFocusedPayload is emitted when the user focuses a repository in the TUI.
 type RepoFocusedPayload struct {
 	RepoKey string
-}
-
-// ConfigReloadedPayload is emitted when configuration is reloaded.
-type ConfigReloadedPayload struct {
-	Config *config.Config
 }

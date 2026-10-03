@@ -128,7 +128,7 @@ func TestDefaultMissingToleranceMatchesConfigDefault(t *testing.T) {
 	// Config-less constructions (New, test seams) fall back to
 	// defaultMissingTolerance while production reads the config default —
 	// the one defaults pair not already pinned by
-	// status.TestOptionsFromConfig_NoTerminalSectionMatchesDefaultOptions.
+	// hive.TestStatusOptionsFromConfig_NoTerminalSectionMatchesDefaultOptions.
 	cfg, err := config.Load("", t.TempDir())
 	require.NoError(t, err)
 	assert.Equal(t, defaultMissingTolerance, cfg.Terminal.Status.Confirm.Missing.Polls)

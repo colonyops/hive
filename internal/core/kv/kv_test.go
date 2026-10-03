@@ -2,7 +2,6 @@ package kv_test
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 	"time"
 
@@ -97,7 +96,7 @@ func TestTypedKV_TTL(t *testing.T) {
 	time.Sleep(5 * time.Millisecond)
 
 	_, err := typed.Get(ctx, "temp")
-	assert.ErrorIs(t, err, sql.ErrNoRows)
+	assert.ErrorIs(t, err, kv.ErrNotFound)
 }
 
 func TestTypedKV_StructValue(t *testing.T) {

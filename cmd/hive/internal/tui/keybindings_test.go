@@ -760,7 +760,7 @@ func TestResolveWindowsAction_SameSession(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)
-	assert.Nil(t, a.SpawnWindows.NewSession)
+	assert.False(t, a.SpawnWindows.NewSession)
 	assert.Equal(t, sess.Name, a.SpawnWindows.TmuxTarget)
 	assert.Equal(t, sess.Path, a.SpawnWindows.SessionDir)
 	require.Len(t, a.SpawnWindows.Windows, 1)
@@ -785,10 +785,9 @@ func TestResolveWindowsAction_SameSessionWithSh(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)
-	// Same-session: sh: goes to top-level ShCmd, not NewSession
 	assert.Equal(t, "git fetch", a.SpawnWindows.ShCmd)
 	assert.Equal(t, sess.Path, a.SpawnWindows.ShDir)
-	assert.Nil(t, a.SpawnWindows.NewSession)
+	assert.False(t, a.SpawnWindows.NewSession)
 }
 
 func TestResolveWindowsAction_NewSession(t *testing.T) {
@@ -813,11 +812,10 @@ func TestResolveWindowsAction_NewSession(t *testing.T) {
 
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)
-	require.NotNil(t, a.SpawnWindows.NewSession)
-	assert.Equal(t, "pr-123", a.SpawnWindows.NewSession.Name)
-	// sh: should be routed to NewSession.ShCmd in new-session mode
-	assert.Equal(t, "gh pr view 123", a.SpawnWindows.NewSession.ShCmd)
-	assert.Empty(t, a.SpawnWindows.ShCmd)
+	require.True(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, "pr-123", a.SpawnWindows.NewSessionName)
+	assert.Equal(t, "gh pr view 123", a.SpawnWindows.ShCmd)
+	assert.Empty(t, a.SpawnWindows.ShDir, "new-session mode runs sh: in the new clone, not the selected session")
 }
 
 func TestResolveWindowsAction_NewSessionInheritsRemote(t *testing.T) {
@@ -841,8 +839,8 @@ func TestResolveWindowsAction_NewSessionInheritsRemote(t *testing.T) {
 
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)
-	require.NotNil(t, a.SpawnWindows.NewSession)
-	assert.Equal(t, sess.Remote, a.SpawnWindows.NewSession.Remote,
+	require.True(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, sess.Remote, a.SpawnWindows.NewSessionRemote,
 		"new session should inherit selected session's remote when options.remote is omitted")
 }
 
@@ -865,8 +863,8 @@ func TestResolveWindowsAction_NewSessionExplicitRemote(t *testing.T) {
 	cmd := commands["NewWin"]
 	a := handler.ResolveUserCommand("NewWin", cmd, sess, nil, nil)
 
-	require.NotNil(t, a.SpawnWindows.NewSession)
-	assert.Equal(t, "https://github.com/other/repo", a.SpawnWindows.NewSession.Remote,
+	require.True(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, "https://github.com/other/repo", a.SpawnWindows.NewSessionRemote,
 		"explicit options.remote should override session remote")
 }
 

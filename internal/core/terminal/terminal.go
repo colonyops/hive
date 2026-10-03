@@ -18,6 +18,15 @@ const (
 	StatusMissing  Status = "missing"  // terminal session not found
 )
 
+// Simplified folds StatusQuestion into StatusApproval, for surfaces that show
+// a single user-blocked state.
+func (s Status) Simplified() Status {
+	if s == StatusQuestion {
+		return StatusApproval
+	}
+	return s
+}
+
 // SessionInfo holds information about a discovered terminal session.
 type SessionInfo struct {
 	Target       multiplexer.Target

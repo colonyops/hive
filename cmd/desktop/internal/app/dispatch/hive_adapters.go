@@ -13,11 +13,13 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/tmuxcc"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/assess"
+	terminalstatus "github.com/colonyops/hive/internal/core/terminal/status"
 	"github.com/colonyops/hive/internal/hive"
 )
 
@@ -41,14 +43,7 @@ const (
 // activity vocabulary has one user-blocked state.
 func ClassifyAgentScreen(agent, screen string) AgentActivityStatus {
 	assessment := assess.NewEngine().Assess(assess.Snapshot{Content: screen, Tool: strings.ToLower(agent)})
-	switch assessment.State {
-	case assess.StateWorking:
-		return AgentActivityActive
-	case assess.StateApproval, assess.StateQuestion:
-		return AgentActivityApproval
-	default:
-		return AgentActivityReady
-	}
+	return AgentActivityStatus(terminalstatus.MapState(assessment.State).Simplified())
 }
 
 type SessionCreator interface {
@@ -70,13 +65,9 @@ type SessionManagement interface {
 	DeleteSession(ctx context.Context, id string) error
 	RecycleSession(ctx context.Context, id string, w io.Writer) error
 	Prune(ctx context.Context, all bool) (int, error)
-	CheckSessionRisk(ctx context.Context, id string) (hive.SessionRisk, error)
+	CheckRisk(ctx context.Context, sess session.Session) hive.SessionRisk
 	OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error
 }
-
-// SessionStateActive is the one state with a live checkout behind it, and so the
-// only one whose terminal can be started or attached to.
-const SessionStateActive = string(session.StateActive)
 
 type sessionStatusSource interface {
 	Available() bool
@@ -85,14 +76,10 @@ type sessionStatusSource interface {
 
 // SessionWindowRef joins Hive's index-based activity result to the stable tmux
 // window id every desktop operation uses.
-type SessionWindowRef struct {
-	ID    string
-	Index string
-	Name  string
-}
+type SessionWindowRef = tmuxcc.IndexedWindow
 
 type sessionWindowSource interface {
-	ListSessionWindows(context.Context, []string) (map[string][]SessionWindowRef, error)
+	ListIndexedWindows(context.Context, []string) (map[string][]SessionWindowRef, error)
 }
 
 // SessionSummary is one session as the desktop's session list sees it. The
@@ -503,7 +490,7 @@ func (m *HiveSessionManager) SessionStatuses(ctx context.Context) (SessionStatus
 			if windowID := stableWindowID("", status.WindowName, refs); windowID != "" {
 				item.Windows = append(item.Windows, SessionWindowStatus{
 					WindowID: windowID,
-					Status:   desktopAgentStatus(status.Status),
+					Status:   string(status.Status.Simplified()),
 					Tool:     status.Tool,
 				})
 			}
@@ -515,7 +502,7 @@ func (m *HiveSessionManager) SessionStatuses(ctx context.Context) (SessionStatus
 			}
 			item.Windows = append(item.Windows, SessionWindowStatus{
 				WindowID: windowID,
-				Status:   desktopAgentStatus(window.Status),
+				Status:   string(window.Status.Simplified()),
 				Tool:     window.Tool,
 			})
 		}
@@ -532,7 +519,7 @@ func (m *HiveSessionManager) sessionWindows(ctx context.Context, sessions []*ses
 	for _, s := range sessions {
 		targets = append(targets, hive.SessionTarget(*s).Session)
 	}
-	return m.windows.ListSessionWindows(ctx, targets)
+	return m.windows.ListIndexedWindows(ctx, targets)
 }
 
 func stableWindowID(index, name string, refs []SessionWindowRef) string {
@@ -560,13 +547,6 @@ func stableWindowID(index, name string, refs []SessionWindowRef) string {
 		return refs[0].ID
 	}
 	return ""
-}
-
-func desktopAgentStatus(status terminal.Status) string {
-	if status == terminal.StatusQuestion {
-		return string(terminal.StatusApproval)
-	}
-	return string(status)
 }
 
 // RunningSessions reports which of ids currently have a live tmux session. It
@@ -646,10 +626,7 @@ func (m *HiveSessionManager) SessionRisk(ctx context.Context, id string) (Sessio
 	if err != nil {
 		return SessionRisk{}, fmt.Errorf("get hive session: %w", err)
 	}
-	risk, err := h.sessions.CheckSessionRisk(ctx, id)
-	if err != nil {
-		return SessionRisk{}, fmt.Errorf("check hive session risk: %w", err)
-	}
+	risk := h.sessions.CheckRisk(ctx, s)
 	return SessionRisk{
 		UncommittedChanges: risk.UncommittedChanges,
 		UnpushedCommits:    risk.UnpushedCommits,
