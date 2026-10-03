@@ -38,6 +38,8 @@ const props = withDefaults(
     size?: AppSelectSize
     testid?: string
     ariaLabel?: string
+    /** Lets a FormField label point at the trigger. */
+    id?: string
   }>(),
   { size: 'md' },
 )
@@ -296,6 +298,7 @@ onClickOutside(
   <div ref="root" class="relative" @keydown="onKeydown">
     <template v-if="editable">
       <input
+        :id="id"
         ref="editableInput"
         :value="text"
         type="text"
@@ -327,6 +330,7 @@ onClickOutside(
     </template>
     <button
       v-else
+      :id="id"
       ref="trigger"
       type="button"
       class="flex w-full items-center justify-between border bg-app text-left text-text outline-none disabled:cursor-not-allowed disabled:opacity-60"

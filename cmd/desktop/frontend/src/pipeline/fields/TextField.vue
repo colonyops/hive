@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import FieldRow from './FieldRow.vue'
+import FormField from '../../components/ui/FormField.vue'
 
 const props = defineProps<{
   label?: string
@@ -29,12 +29,13 @@ defineExpose({ focus })
 </script>
 
 <template>
-  <FieldRow :label="label" :hint="hint" :error="error" :testid="testid">
+  <FormField v-slot="{ id }" :label="label" :hint="hint" :error="error" :testid="testid">
     <!-- `trailing` holds an in-field affordance (e.g. a regenerate button).
          The input gains right padding only when the slot is filled, so
          fields without one keep their exact previous metrics. -->
     <div class="relative">
       <input
+        :id="id"
         ref="inputRef"
         type="text"
         :value="modelValue"
@@ -49,5 +50,5 @@ defineExpose({ focus })
         <slot name="trailing" />
       </div>
     </div>
-  </FieldRow>
+  </FormField>
 </template>

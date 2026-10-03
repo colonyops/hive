@@ -3,7 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { SessionLaunchOptions } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import type { SessionLaunchRepository } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 import RepositorySelect from '../../../components/RepositorySelect.vue'
-import { FieldRow, SelectField, TextField, TextareaField } from '../../fields'
+import FormField from '../../../components/ui/FormField.vue'
+import { SelectField, TextField, TextareaField } from '../../fields'
 import { ITEM_REMOTE, repoMode, type Config, type RepoMode } from './config'
 
 const props = defineProps<{ config: Config; errors?: string[] }>()
@@ -78,13 +79,13 @@ function set<K extends keyof Config>(key: K, value: Config[K]) {
       @update:model-value="setMode"
     />
 
-    <FieldRow
+    <FormField
       v-if="mode === 'item'"
       hint="Clones the repository the item belongs to, such as the pull request's. An item that names no repository fails the launch."
       :error="fieldError('repo')"
       testid="launch-session-node-editor-repo"
     />
-    <FieldRow
+    <FormField
       v-else-if="mode === 'configured'"
       hint="Every item launches in this repository. Pick a known checkout or type a remote URL."
       :error="fieldError('repo')"
@@ -96,7 +97,7 @@ function set<K extends keyof Config>(key: K, value: Config[K]) {
         testid="launch-session-node-editor-repo"
         @update:model-value="set('repo', $event)"
       />
-    </FieldRow>
+    </FormField>
     <TextField
       v-else
       :model-value="config.repo"

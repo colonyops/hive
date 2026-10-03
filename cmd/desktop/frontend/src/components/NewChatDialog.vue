@@ -5,6 +5,7 @@
 import { computed, ref, useId } from 'vue'
 import IconBot from '~icons/lucide/bot'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
+import FormField from './ui/FormField.vue'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
 import { useAutofocus } from '../composables/useAutofocus'
@@ -40,9 +41,9 @@ useAutofocus(nameInput)
 <template>
   <BaseModal title="New chat" :icon="IconBot" :width="440" testid="new-chat-dialog" @close="emit('close')">
     <form :id="formId" class="flex flex-col gap-3 px-5 py-4" @submit.prevent="submit">
-      <div class="flex flex-col gap-1.5 text-xs font-medium text-text-2">
-        Workspace
+      <FormField v-slot="{ id }" label="Workspace">
         <AppSelect
+          :id="id"
           v-model="workspace"
           :options="options"
           placeholder="No workspaces yet"
@@ -50,20 +51,23 @@ useAutofocus(nameInput)
           testid="new-chat-workspace"
           :disabled="!workspaces.length"
         />
-      </div>
-      <label class="flex flex-col gap-1.5 text-xs font-medium text-text-2"
-        >Name <span class="font-normal text-text-4">(optional)</span>
-        <input
-          ref="nameInput"
-          v-model="name"
-          autocapitalize="off"
-          autocorrect="off"
-          spellcheck="false"
-          placeholder="New Chat"
-          class="rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] text-text outline-none placeholder:text-text-4 focus:border-accent"
-          data-testid="new-chat-name"
-        />
-      </label>
+      </FormField>
+      <FormField>
+        <template #label>Name <span class="text-text-4">(optional)</span></template>
+        <template #default="{ id }">
+          <input
+            :id="id"
+            ref="nameInput"
+            v-model="name"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            placeholder="New Chat"
+            class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] text-text outline-none placeholder:text-text-4 focus:border-accent"
+            data-testid="new-chat-name"
+          />
+        </template>
+      </FormField>
       <p v-if="!workspaces.length" class="text-xs leading-relaxed text-text-3" data-testid="new-chat-no-workspaces">
         No workspaces yet. Author one under {{ root }}.
       </p>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import FieldRow from './FieldRow.vue'
+import FormField from '../../components/ui/FormField.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -26,8 +26,9 @@ function onInput(e: Event) {
 </script>
 
 <template>
-  <FieldRow :label="label" :hint="hint" :error="error" :testid="testid">
+  <FormField v-slot="{ id }" :label="label" :hint="hint" :error="error" :testid="testid">
     <textarea
+      :id="id"
       :value="modelValue"
       :rows="rows"
       :placeholder="placeholder"
@@ -36,5 +37,5 @@ function onInput(e: Event) {
       :data-testid="testid"
       @input="onInput"
     />
-  </FieldRow>
+  </FormField>
 </template>

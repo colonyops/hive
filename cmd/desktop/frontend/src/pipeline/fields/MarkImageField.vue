@@ -4,7 +4,7 @@
 // records the hash, so this field emits a hash and never a file. Backend access
 // goes through the `client` prop (defaulting to the generated Wails bindings) so
 // tests inject fakes instead of mocking module imports.
-import InlineError from '../../components/ui/InlineError.vue'
+import FormField from '../../components/ui/FormField.vue'
 import { ref, watch, type Component } from 'vue'
 import {
   MarkImages,
@@ -116,8 +116,12 @@ function remove(): void {
 </script>
 
 <template>
-  <div>
-    <div class="mb-1.5 text-[12px] text-text-2">Item image</div>
+  <FormField
+    label="Item image"
+    hint="Shown on this source's items instead of the icon. PNG, JPEG, GIF, or WebP."
+    :error="error"
+    :testid="testid"
+  >
     <div class="flex items-center gap-3">
       <div
         class="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-card bg-app"
@@ -149,9 +153,5 @@ function remove(): void {
         >
       </div>
     </div>
-    <p class="mt-1.5 text-[11.5px] text-text-4">
-      Shown on this source's items instead of the icon. PNG, JPEG, GIF, or WebP.
-    </p>
-    <InlineError v-if="error" :testid="`${testid}-error`" variant="line" class="mt-1.5" :message="error" />
-  </div>
+  </FormField>
 </template>

@@ -4,6 +4,7 @@ import { computed, ref, useId } from 'vue'
 import IconPlay from '~icons/lucide/play'
 import ActionInputFields from './ActionInputFields.vue'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
+import FormField from './ui/FormField.vue'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
 import RepositorySelect from './RepositorySelect.vue'
@@ -153,18 +154,18 @@ useSubmitShortcut(submit)
           Agent workspace
         </button>
       </div>
-      <div v-if="target === 'repository'" class="flex flex-col gap-1.5 text-xs font-medium text-text-2">
-        Repository
+      <FormField v-if="target === 'repository'" v-slot="{ id }" label="Repository">
         <RepositorySelect
+          :id="id"
           :model-value="repository"
           :repositories="options.repositories"
           testid="session-repository"
           @update:model-value="repository = $event"
         />
-      </div>
-      <div v-else class="flex flex-col gap-1.5 text-xs font-medium text-text-2">
-        Agent workspace
+      </FormField>
+      <FormField v-else v-slot="{ id }" label="Agent workspace">
         <AppSelect
+          :id="id"
           v-model="workspace"
           :options="workspaceOptions"
           searchable
@@ -173,30 +174,33 @@ useSubmitShortcut(submit)
           testid="session-workspace"
           :disabled="!workspaceOptions.length"
         />
-      </div>
-      <label class="flex flex-col gap-1.5 text-xs font-medium text-text-2"
-        >Session name
+      </FormField>
+      <FormField v-slot="{ id }" label="Session name">
         <input
+          :id="id"
           ref="nameInput"
           v-model="name"
           autocapitalize="off"
           autocorrect="off"
           spellcheck="false"
-          class="rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] text-text outline-none focus:border-accent"
+          class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] text-text outline-none focus:border-accent"
           placeholder="review-pr-123"
           data-testid="session-name"
         />
-      </label>
-      <div v-if="target === 'repository'" class="flex flex-col gap-1.5 text-xs font-medium text-text-2">
-        Agent <span class="font-normal text-text-4">(optional)</span>
-        <AppSelect
-          :model-value="agent"
-          :options="agentOptions"
-          testid="session-agent"
-          aria-label="Agent"
-          @update:model-value="agent = $event"
-        />
-      </div>
+      </FormField>
+      <FormField v-if="target === 'repository'">
+        <template #label>Agent <span class="text-text-4">(optional)</span></template>
+        <template #default="{ id }">
+          <AppSelect
+            :id="id"
+            :model-value="agent"
+            :options="agentOptions"
+            testid="session-agent"
+            aria-label="Agent"
+            @update:model-value="agent = $event"
+          />
+        </template>
+      </FormField>
       <ActionInputFields v-if="inputs.length" v-model="inputValues" :inputs="inputs" />
       <InlineError
         v-if="validationError || error"

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-// FieldRow chrome around the app-wide AppSelect listbox. Everything about the
+// FormField chrome around the app-wide AppSelect listbox. Everything about the
 // control itself — keyboard handling, popover placement, search, icons — lives
 // in AppSelect; this only adds the label/hint/error layout the field kit shares.
 import AppSelect, { type AppSelectOption } from '../../components/ui/AppSelect.vue'
-import FieldRow from './FieldRow.vue'
+import FormField from '../../components/ui/FormField.vue'
 
 export type SelectOption = AppSelectOption
 
@@ -24,8 +24,9 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 </script>
 
 <template>
-  <FieldRow :label="label" :hint="hint" :error="error" :testid="testid">
+  <FormField v-slot="{ id }" :label="label" :hint="hint" :error="error" :testid="testid">
     <AppSelect
+      :id="id"
       :model-value="modelValue"
       :options="options"
       :placeholder="placeholder"
@@ -36,5 +37,5 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
       :testid="testid"
       @update:model-value="emit('update:modelValue', $event)"
     />
-  </FieldRow>
+  </FormField>
 </template>

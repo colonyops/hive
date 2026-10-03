@@ -91,7 +91,7 @@ describe('SelectField', () => {
     expect(wrapper.get('[data-testid="sf"]').text()).toContain('Choose one')
   })
 
-  it('wraps the control in FieldRow chrome and labels it', () => {
+  it('wraps the control in FormField chrome and labels it', () => {
     const wrapper = mount(SelectField, {
       props: { modelValue: 'a', options, label: 'Kind', hint: 'pick one', testid: 'sf' },
     })

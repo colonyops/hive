@@ -32,9 +32,10 @@ import BaseBadge from './ui/BaseBadge.vue'
 import BaseButton from './ui/BaseButton.vue'
 import DrawerSheet from './ui/DrawerSheet.vue'
 import InlineConfirm from './ui/InlineConfirm.vue'
+import FormField from './ui/FormField.vue'
 import InlineError from './ui/InlineError.vue'
 import SettingsSection from './settings/SettingsSection.vue'
-import { CodeField, FieldRow, SelectField, TextField, TextareaField, type SelectOption } from '../pipeline/fields'
+import { CodeField, SelectField, TextField, TextareaField, type SelectOption } from '../pipeline/fields'
 import { useAgentSchedules } from '../composables/useAgentSchedules'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { timeLabel } from '../lib/activityPresentation'
@@ -1110,23 +1111,21 @@ onMounted(async () => {
             @input="onMinuteInput"
           />
         </div>
-        <div v-else-if="scheduleDraft.shape.kind !== 'custom'">
-          <div class="mb-1.5 text-[12.5px] text-text-2">Time</div>
+        <FormField v-else-if="scheduleDraft.shape.kind !== 'custom'" v-slot="{ id }" label="Time">
           <input
+            :id="id"
             type="time"
             step="60"
             :value="clock(scheduleDraft.shape.hour, scheduleDraft.shape.minute)"
             :disabled="busy"
-            aria-label="Time"
             class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
             data-testid="agent-workspace-editor-schedule-time"
             @input="onTimeInput"
           />
-        </div>
+        </FormField>
       </div>
 
-      <div v-if="scheduleDraft.shape.kind === 'weekly'">
-        <div class="mb-1.5 text-[12.5px] text-text-2">Days</div>
+      <FormField v-if="scheduleDraft.shape.kind === 'weekly'" label="Days">
         <div class="flex flex-wrap gap-1">
           <button
             v-for="day in WEEK_ORDER"
@@ -1146,7 +1145,7 @@ onMounted(async () => {
             {{ dayAbbreviation(day) }}
           </button>
         </div>
-      </div>
+      </FormField>
 
       <SelectField
         v-if="scheduleDraft.shape.kind === 'monthly'"
@@ -1286,12 +1285,14 @@ onMounted(async () => {
       </div>
 
       <div class="flex flex-col gap-3">
-        <FieldRow
+        <FormField
           v-if="creating"
+          v-slot="{ id }"
           label="Directory name"
           hint="A new directory under the workspace root, seeded with an AGENTS.md to shape."
         >
           <input
+            :id="id"
             ref="dirInput"
             v-model="dir"
             type="text"
@@ -1305,7 +1306,7 @@ onMounted(async () => {
             data-testid="agent-workspace-editor-dir"
             @keydown.enter="submit"
           />
-        </FieldRow>
+        </FormField>
         <TextField
           ref="nameInput"
           v-model="name"

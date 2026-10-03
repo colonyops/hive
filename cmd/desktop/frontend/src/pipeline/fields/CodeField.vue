@@ -12,7 +12,7 @@
 // up with the rendered tokens; scrolling the textarea (by wheel or by
 // typing past the visible area) re-syncs the other two's scrollTop/
 // scrollLeft in onScroll/onInput below.
-import InlineError from '../../components/ui/InlineError.vue'
+import FormField from '../../components/ui/FormField.vue'
 import { computed, ref } from 'vue'
 import { codeLineCount, highlightCode } from '../lib/highlightCode'
 
@@ -75,8 +75,7 @@ function onKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div>
-    <div v-if="label" class="mb-1.5 text-[12.5px] text-text-2">{{ label }}</div>
+  <FormField v-slot="{ id }" :label="label" :hint="hint" :error="error" :testid="testid">
     <div
       class="hv-code-shell flex overflow-hidden rounded-[9px] border border-row bg-app"
       :style="{ height: `${shellHeight}px` }"
@@ -98,6 +97,7 @@ function onKeydown(e: KeyboardEvent) {
         />
         <!-- eslint-enable vue/no-v-html -->
         <textarea
+          :id="id"
           :value="modelValue"
           :placeholder="placeholder"
           spellcheck="false"
@@ -109,21 +109,7 @@ function onKeydown(e: KeyboardEvent) {
         />
       </div>
     </div>
-    <InlineError
-      v-if="error"
-      :testid="testid ? `${testid}-error` : undefined"
-      variant="line"
-      class="mt-1.5 leading-relaxed"
-      :message="error"
-    />
-    <p
-      v-else-if="hint"
-      class="mt-1.5 text-xs leading-relaxed text-text-4"
-      :data-testid="testid ? `${testid}-hint` : undefined"
-    >
-      {{ hint }}
-    </p>
-  </div>
+  </FormField>
 </template>
 
 <style scoped>

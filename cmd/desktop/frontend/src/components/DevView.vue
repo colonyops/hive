@@ -14,7 +14,7 @@ import AppCheckbox from './ui/AppCheckbox.vue'
 import AppSelect from './ui/AppSelect.vue'
 import BaseButton from './ui/BaseButton.vue'
 import BaseCard from './ui/BaseCard.vue'
-import SettingsField from './settings/SettingsField.vue'
+import FormField from './ui/FormField.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsSection from './settings/SettingsSection.vue'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
@@ -318,7 +318,7 @@ useEscapeToClose(() => emit('close'))
                 class="mt-4 grid grid-cols-1 gap-4 @[420px]/notify-test:grid-cols-2"
                 data-testid="dev-notification-fields"
               >
-                <SettingsField
+                <FormField
                   label="Severity"
                   hint="Sets the toast accent and the banner's severity."
                   testid="dev-notification-severity-field"
@@ -332,9 +332,9 @@ useEscapeToClose(() => emit('close'))
                     aria-label="Notification severity"
                     @update:model-value="severity = $event as NotifySeverity"
                   />
-                </SettingsField>
+                </FormField>
 
-                <SettingsField label="Timing">
+                <FormField label="Timing">
                   <AppCheckbox
                     :model-value="delay"
                     label="Delay 3 seconds"
@@ -342,11 +342,10 @@ useEscapeToClose(() => emit('close'))
                     testid="dev-notification-delay"
                     @update:model-value="delay = $event"
                   />
-                </SettingsField>
+                </FormField>
               </div>
 
-              <div class="mt-4">
-                <div class="mb-1.5 text-[12.5px] text-text-2">Delivery channel</div>
+              <FormField label="Delivery channel" class="mt-4">
                 <div
                   class="flex flex-col gap-2"
                   role="radiogroup"
@@ -373,7 +372,7 @@ useEscapeToClose(() => emit('close'))
                     </span>
                   </label>
                 </div>
-              </div>
+              </FormField>
 
               <div
                 class="mt-4 flex flex-col items-stretch gap-2 @[420px]/notify-test:flex-row @[420px]/notify-test:items-center"

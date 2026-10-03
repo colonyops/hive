@@ -12,6 +12,7 @@ import { renderMarkdown, summarize } from '../lib/markdown'
 import AppSwitch from '../../components/ui/AppSwitch.vue'
 import BaseButton from '../../components/ui/BaseButton.vue'
 import DrawerSheet from '../../components/ui/DrawerSheet.vue'
+import FormField from '../../components/ui/FormField.vue'
 import { useAutofocus } from '../../composables/useAutofocus'
 import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import type { NodeTypeDefinition } from '../nodeType'
@@ -183,9 +184,9 @@ useAutofocus(nameRef)
       </div>
     </template>
 
-    <div>
-      <div class="mb-1.5 text-[12px] text-text-2">Name</div>
+    <FormField v-slot="{ id }" label="Name">
       <input
+        :id="id"
         ref="nameRef"
         v-model="name"
         type="text"
@@ -194,7 +195,7 @@ useAutofocus(nameRef)
         data-testid="node-editor-name"
         @keydown.enter="submit"
       />
-    </div>
+    </FormField>
 
     <component
       :is="def.editor"

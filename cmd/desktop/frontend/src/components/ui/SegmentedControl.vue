@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import SettingsField from '../settings/SettingsField.vue'
+import FormField from './FormField.vue'
 
 export interface SegmentedControlOption {
   value: string
@@ -24,7 +24,7 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
 </script>
 
 <template>
-  <SettingsField :label="label" :hint="hint" :testid="testid">
+  <FormField :label="label" :hint="hint" :testid="testid">
     <div
       class="gap-1 rounded-lg border border-row bg-app p-1"
       :class="props.columns ? 'grid' : 'flex'"
@@ -47,5 +47,5 @@ const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
         {{ opt.label }}
       </button>
     </div>
-  </SettingsField>
+  </FormField>
 </template>

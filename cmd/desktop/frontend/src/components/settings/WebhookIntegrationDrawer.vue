@@ -10,7 +10,7 @@ import IconRefresh from '~icons/lucide/refresh-cw'
 import AppSwitch from '../ui/AppSwitch.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import DrawerSheet from '../ui/DrawerSheet.vue'
-import SettingsField from './SettingsField.vue'
+import FormField from '../ui/FormField.vue'
 import { useClipboard } from '../../composables/useClipboard'
 import { useWebhookSettings } from '../../stores/useWebhookSettings'
 
@@ -137,9 +137,10 @@ onMounted(() => void reload())
         testid="webhook-settings-enabled"
       />
 
-      <SettingsField label="Port" :hint="portHint" testid="webhook-settings-port">
+      <FormField v-slot="{ id }" label="Port" :hint="portHint" testid="webhook-settings-port">
         <div class="flex items-center gap-2">
           <input
+            :id="id"
             v-model="port"
             type="number"
             inputmode="numeric"
@@ -163,12 +164,12 @@ onMounted(() => void reload())
             <IconRefresh class="size-[14px]" />
           </button>
         </div>
-      </SettingsField>
+      </FormField>
       <InlineError v-if="!portValid" testid="webhook-settings-port-error" variant="line" class="-mt-3">
         Enter 0 for automatic allocation or a whole number between 1024 and 65535.
       </InlineError>
 
-      <SettingsField
+      <FormField
         v-if="baseUrl"
         label="Base URL"
         hint="Each sources.webhook node appends its own path to this."
@@ -190,7 +191,7 @@ onMounted(() => void reload())
             {{ urlCopied ? 'Copied' : 'Copy' }}
           </BaseButton>
         </div>
-      </SettingsField>
+      </FormField>
 
       <p
         v-if="restartPending"

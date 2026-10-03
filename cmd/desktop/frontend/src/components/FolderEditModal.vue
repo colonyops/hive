@@ -7,6 +7,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import IconFolder from '~icons/lucide/folder'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
+import FormField from './ui/FormField.vue'
 import InlineConfirm from './ui/InlineConfirm.vue'
 import type { FeedFolder } from '../types/feed'
 import { seedRef } from '../lib/seedRef'
@@ -55,20 +56,25 @@ onMounted(async () => {
   >
     <!-- While a delete is pending the rename recedes: dimmed and inert, so the
          two states can't be misread for each other. -->
-    <div class="flex flex-col gap-1.5 px-5 py-4 transition-opacity" :class="{ 'opacity-45': confirming }">
-      <label for="folder-edit-name" class="text-xs text-text-3">Folder name</label>
+    <FormField
+      v-slot="{ id }"
+      label="Folder name"
+      :hint="insideHint"
+      testid="folder-edit"
+      class="px-5 py-4 transition-opacity"
+      :class="{ 'opacity-45': confirming }"
+    >
       <input
-        id="folder-edit-name"
+        :id="id"
         ref="inputRef"
         v-model="name"
         type="text"
         :disabled="confirming"
-        class="w-full rounded-lg border border-strong bg-raised px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
+        class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
         data-testid="folder-edit-name"
         @keydown.enter="submit"
       />
-      <span class="text-xs text-text-4" data-testid="folder-edit-inside">{{ insideHint }}</span>
-    </div>
+    </FormField>
 
     <InlineConfirm
       v-if="confirming"

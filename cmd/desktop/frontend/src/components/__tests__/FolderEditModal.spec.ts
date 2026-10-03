@@ -102,18 +102,18 @@ describe('FolderEditModal', () => {
 
   it('counts what is inside, singular, plural and empty', async () => {
     const one = mountModal()
-    expect(el('folder-edit-inside').textContent).toBe('1 feed inside')
+    expect(el('folder-edit-hint').textContent).toBe('1 feed inside')
     one.unmount()
 
     const two = mountModal({ ...work, feeds: [...work.feeds, { id: 'ui', name: 'UI', count: 0, newCount: 0 }] })
-    expect(el('folder-edit-inside').textContent).toBe('2 feeds inside')
+    expect(el('folder-edit-hint').textContent).toBe('2 feeds inside')
     el<HTMLButtonElement>('folder-edit-delete').click()
     await two.vm.$nextTick()
     expect(el('folder-delete-confirm-description').textContent).toContain('Its 2 feeds move to the top level')
     two.unmount()
 
     const empty = mountModal({ ...work, feeds: [] })
-    expect(el('folder-edit-inside').textContent).toBe('No feeds inside')
+    expect(el('folder-edit-hint').textContent).toBe('No feeds inside')
     el<HTMLButtonElement>('folder-edit-delete').click()
     await empty.vm.$nextTick()
     expect(el('folder-delete-confirm-description').textContent).toContain('folder is empty')

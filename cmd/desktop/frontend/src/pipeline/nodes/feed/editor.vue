@@ -2,6 +2,7 @@
 // A feed node's identity is still its node id — the fields here are purely
 // cosmetic sidebar presentation: the glyph shown in the tree and a hover
 // tooltip that explains the feed's context (handy for LLM-generated feeds).
+import FormField from '../../../components/ui/FormField.vue'
 import { SelectField } from '../../fields'
 import { defaultFeedIcon, feedIconOptions } from '../../../lib/feedIcons'
 import { descriptionMaxLen, type Config } from './config'
@@ -39,9 +40,9 @@ function setDescription(e: Event) {
       @update:model-value="setIcon"
     />
 
-    <div>
-      <div class="mb-1.5 text-[12px] text-text-2">Description</div>
+    <FormField v-slot="{ id }" label="Description">
       <textarea
+        :id="id"
         :value="config.description ?? ''"
         rows="3"
         :maxlength="descriptionMaxLen"
@@ -50,6 +51,6 @@ function setDescription(e: Event) {
         data-testid="feed-editor-description"
         @input="setDescription"
       />
-    </div>
+    </FormField>
   </div>
 </template>

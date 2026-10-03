@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // SegmentedControl's strip for a setting whose range is open rather than a
 // handful of named options, where it would need a button per rung.
-import SettingsField from './SettingsField.vue'
+import FormField from '../ui/FormField.vue'
 
 const props = defineProps<{
   label?: string
@@ -28,7 +28,7 @@ function nudge(delta: 1 | -1): void {
 </script>
 
 <template>
-  <SettingsField :label="label" :hint="hint" :testid="testid">
+  <FormField :label="label" :hint="hint" :testid="testid">
     <div
       class="flex items-center gap-1 rounded-lg border border-row bg-app p-1"
       role="group"
@@ -61,5 +61,5 @@ function nudge(delta: 1 | -1): void {
         +
       </button>
     </div>
-  </SettingsField>
+  </FormField>
 </template>

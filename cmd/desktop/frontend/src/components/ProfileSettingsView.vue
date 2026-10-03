@@ -4,6 +4,7 @@ import { computed, ref, watch } from 'vue'
 import IconSlidersHorizontal from '~icons/lucide/sliders-horizontal'
 import IconTrash2 from '~icons/lucide/trash-2'
 import AppSwitch from './ui/AppSwitch.vue'
+import FormField from './ui/FormField.vue'
 import BaseButton from './ui/BaseButton.vue'
 import SettingsLayout from './settings/SettingsLayout.vue'
 import SettingsPage from './settings/SettingsPage.vue'
@@ -174,32 +175,26 @@ async function onImageChange(event: Event): Promise<void> {
         </div>
 
         <form class="rounded-lg border border-border bg-raised p-4" @submit.prevent="submitRename">
-          <label for="profile-settings-name" class="text-[12.5px] text-text-3">Profile name</label>
-          <div class="mt-2 flex items-center gap-2.5">
-            <input
-              id="profile-settings-name"
-              v-model="name"
-              type="text"
-              class="min-w-0 flex-1 rounded-lg border border-strong bg-app px-3 py-2 text-[13.5px] text-text outline-none focus:border-accent disabled:opacity-60"
-              :disabled="props.renaming"
-              data-testid="profile-settings-name"
-            />
-            <BaseButton
-              type="submit"
-              size="sm"
-              :busy="props.renaming"
-              :disabled="!name.trim() || name.trim() === props.profile.name"
-              data-testid="profile-settings-save-name"
-              >{{ props.renaming ? 'Saving…' : 'Save' }}</BaseButton
-            >
-          </div>
-          <InlineError
-            v-if="props.renameError"
-            testid="profile-settings-rename-error"
-            variant="line"
-            class="mt-2"
-            :message="props.renameError"
-          />
+          <FormField v-slot="{ id }" label="Profile name" :error="props.renameError" testid="profile-settings-rename">
+            <div class="flex items-center gap-2.5">
+              <input
+                :id="id"
+                v-model="name"
+                type="text"
+                class="min-w-0 flex-1 rounded-lg border border-strong bg-app px-3 py-2 text-[13.5px] text-text outline-none focus:border-accent disabled:opacity-60"
+                :disabled="props.renaming"
+                data-testid="profile-settings-name"
+              />
+              <BaseButton
+                type="submit"
+                size="sm"
+                :busy="props.renaming"
+                :disabled="!name.trim() || name.trim() === props.profile.name"
+                data-testid="profile-settings-save-name"
+                >{{ props.renaming ? 'Saving…' : 'Save' }}</BaseButton
+              >
+            </div>
+          </FormField>
           <div class="mt-3 border-t border-border pt-3 text-xs text-text-3" data-testid="profile-settings-sources">
             {{ props.profile.sourceSummary }}
           </div>

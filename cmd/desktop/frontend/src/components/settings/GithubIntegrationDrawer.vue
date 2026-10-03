@@ -5,7 +5,7 @@ import { Browser } from '@wailsio/runtime'
 import IconGithub from '~icons/lucide/github'
 import BaseButton from '../ui/BaseButton.vue'
 import DrawerSheet from '../ui/DrawerSheet.vue'
-import SettingsField from './SettingsField.vue'
+import FormField from '../ui/FormField.vue'
 import { useGitHubConnection } from '../../composables/useGitHubConnection'
 import * as SettingsService from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
 
@@ -121,7 +121,7 @@ onMounted(() => void load())
       </div>
     </template>
 
-    <SettingsField label="Connection" testid="github-connection">
+    <FormField label="Connection" testid="github-connection">
       <div
         v-if="connected"
         class="flex items-center justify-between gap-3 rounded-lg border border-border bg-raised px-3 py-2.5"
@@ -217,7 +217,7 @@ onMounted(() => void load())
           >
         </div>
       </div>
-    </SettingsField>
+    </FormField>
     <InlineError
       v-if="connectError"
       testid="github-connection-error"
@@ -227,9 +227,10 @@ onMounted(() => void load())
     />
 
     <div class="mt-5">
-      <SettingsField label="Poll interval" :hint="minimumHint" testid="github-poll-interval">
+      <FormField v-slot="{ id }" label="Poll interval" :hint="minimumHint" testid="github-poll-interval">
         <div class="relative">
           <input
+            :id="id"
             v-model="pollIntervalSeconds"
             type="number"
             inputmode="numeric"
@@ -244,7 +245,7 @@ onMounted(() => void load())
             >seconds</span
           >
         </div>
-      </SettingsField>
+      </FormField>
     </div>
     <InlineError v-if="!valid" testid="github-poll-interval-error" variant="line" class="mt-2">
       Enter a whole number of at least {{ minPollIntervalSeconds }} seconds.

@@ -3,7 +3,7 @@
 // FeedEditorSheet's filter groups. Globs may contain commas via brace
 // expansion ("acme/{a,b}"), so lines are never comma-split.
 import { computed } from 'vue'
-import FieldRow from './FieldRow.vue'
+import FormField from '../../components/ui/FormField.vue'
 
 const props = defineProps<{
   label?: string
@@ -32,8 +32,9 @@ function onInput(e: Event) {
 </script>
 
 <template>
-  <FieldRow :label="label" :hint="hint" :error="error" :testid="testid">
+  <FormField v-slot="{ id }" :label="label" :hint="hint" :error="error" :testid="testid">
     <textarea
+      :id="id"
       :value="text"
       :rows="rows ?? 2"
       :placeholder="placeholder"
@@ -41,5 +42,5 @@ function onInput(e: Event) {
       :data-testid="testid"
       @input="onInput"
     />
-  </FieldRow>
+  </FormField>
 </template>

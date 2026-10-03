@@ -19,6 +19,7 @@ const props = defineProps<{
   modelValue: string
   repositories: SessionLaunchRepository[] | null | undefined
   testid?: string
+  id?: string
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
@@ -161,6 +162,7 @@ onClickOutside(
          the search box while open — rather than on this root, which would
          double-handle every key the search box lets bubble. -->
     <button
+      :id="id"
       ref="trigger"
       type="button"
       class="flex w-full items-center gap-2 rounded-lg border bg-app px-3 py-2.5 text-left text-[13.5px] text-text outline-none"

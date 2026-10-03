@@ -2,6 +2,7 @@
 // sources.exec has no runtime.ts: the command runs in Go, on the poll tick.
 import { computed } from 'vue'
 import BaseButton from '../../../components/ui/BaseButton.vue'
+import FormField from '../../../components/ui/FormField.vue'
 import { defaultExecSourceIcon, feedIconComponent, feedIconOptions } from '../../../lib/feedIcons'
 import {
   IntervalField,
@@ -110,8 +111,10 @@ const iconGlyph = computed(() => feedIconComponent(props.config.icon || defaultE
       @update:model-value="(cwd: string) => update({ cwd: cwd || undefined })"
     />
 
-    <div>
-      <div class="mb-1.5 text-[12px] text-text-2">Environment</div>
+    <FormField
+      label="Environment"
+      hint="Added to the environment the command inherits. Values are literal — nothing is expanded."
+    >
       <div v-for="(entry, index) in envEntries" :key="index" class="mb-2 flex items-center gap-2">
         <input
           type="text"
@@ -143,10 +146,7 @@ const iconGlyph = computed(() => feedIconComponent(props.config.icon || defaultE
       <BaseButton variant="secondary" size="sm" data-testid="sources.exec-editor-env-add" @click="addEnv">
         Add variable
       </BaseButton>
-      <p class="mt-1.5 text-[11.5px] text-text-4">
-        Added to the environment the command inherits. Values are literal — nothing is expanded.
-      </p>
-    </div>
+    </FormField>
 
     <SelectField
       label="Item icon"

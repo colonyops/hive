@@ -7,6 +7,7 @@ import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPlay from '~icons/lucide/play'
 import IconX from '~icons/lucide/x'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
+import FormField from './ui/FormField.vue'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
 import RepositorySelect from './RepositorySelect.vue'
@@ -185,18 +186,23 @@ useSubmitShortcut(submit)
       </div>
     </section>
     <form :id="formId" class="flex flex-col gap-3 px-5 py-4" @submit.prevent="submit">
-      <div v-if="target === 'repository'" class="flex flex-col gap-1.5 text-xs font-medium text-text-2">
-        Repository
+      <FormField v-if="target === 'repository'" v-slot="{ id }" label="Repository">
         <RepositorySelect
+          :id="id"
           :model-value="repository"
           :repositories="options.repositories"
           testid="new-session-repository"
           @update:model-value="repository = $event"
         />
-      </div>
-      <div v-else class="flex flex-col gap-1.5 text-xs font-medium text-text-2">
-        Agent workspace
+      </FormField>
+      <FormField
+        v-else
+        v-slot="{ id }"
+        label="Agent workspace"
+        :hint="workspaceOptions.length ? undefined : 'Create a workspace in Chats before starting one here.'"
+      >
         <AppSelect
+          :id="id"
           v-model="workspace"
           :options="workspaceOptions"
           searchable
@@ -205,45 +211,48 @@ useSubmitShortcut(submit)
           testid="new-session-workspace"
           :disabled="!workspaceOptions.length"
         />
-        <span v-if="!workspaceOptions.length" class="font-normal text-text-4"
-          >Create a workspace in Chats before starting one here.</span
-        >
-      </div>
-      <label class="flex flex-col gap-1.5 text-xs font-medium text-text-2"
-        >Session name
+      </FormField>
+      <FormField v-slot="{ id }" label="Session name">
         <!-- A session name slugs into a tmux name and a directory path, so the
              webview's text substitutions must not touch what was typed. -->
         <input
+          :id="id"
           ref="nameInput"
           v-model="name"
           autocapitalize="off"
           autocorrect="off"
           spellcheck="false"
-          class="rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] text-text outline-none focus:border-accent"
+          class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] text-text outline-none focus:border-accent"
           placeholder="review-pr-123"
           data-testid="new-session-name"
         />
-      </label>
-      <label class="flex flex-col gap-1.5 text-xs font-medium text-text-2"
-        >Prompt <span class="font-normal text-text-4">(optional)</span>
-        <textarea
-          v-model="prompt"
-          rows="6"
-          class="resize-y rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] leading-relaxed text-text outline-none focus:border-accent"
-          placeholder="Describe the task for the agent…"
-          data-testid="new-session-prompt"
-        />
-      </label>
-      <div v-if="target === 'repository'" class="flex flex-col gap-1.5 text-xs font-medium text-text-2">
-        Agent <span class="font-normal text-text-4">(optional)</span>
-        <AppSelect
-          :model-value="agent"
-          :options="agentOptions"
-          testid="new-session-agent"
-          aria-label="Agent"
-          @update:model-value="agent = $event"
-        />
-      </div>
+      </FormField>
+      <FormField>
+        <template #label>Prompt <span class="text-text-4">(optional)</span></template>
+        <template #default="{ id }">
+          <textarea
+            :id="id"
+            v-model="prompt"
+            rows="6"
+            class="w-full resize-y rounded-lg border border-strong bg-app px-3 py-2.5 text-[13px] leading-relaxed text-text outline-none focus:border-accent"
+            placeholder="Describe the task for the agent…"
+            data-testid="new-session-prompt"
+          />
+        </template>
+      </FormField>
+      <FormField v-if="target === 'repository'">
+        <template #label>Agent <span class="text-text-4">(optional)</span></template>
+        <template #default="{ id }">
+          <AppSelect
+            :id="id"
+            :model-value="agent"
+            :options="agentOptions"
+            testid="new-session-agent"
+            aria-label="Agent"
+            @update:model-value="agent = $event"
+          />
+        </template>
+      </FormField>
       <InlineError
         v-if="validationError || error"
         testid="new-session-error"

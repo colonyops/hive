@@ -8,8 +8,8 @@
 // no search syntax — its endpoint takes discrete parameters — so the fields
 // here are the whole vocabulary a search has.
 import { computed } from 'vue'
+import FormField from '../../../components/ui/FormField.vue'
 import {
-  FieldRow,
   GlobListField,
   IntervalField,
   NumberField,
@@ -166,7 +166,7 @@ function toggleInvolving(value: Involving, on: boolean) {
         testid="sources.gitea-editor-state"
         @update:model-value="(state: string) => update({ state: state as State })"
       />
-      <FieldRow label="Involving me" :hint="involvingHint" testid="sources.gitea-editor-involving">
+      <FormField label="Involving me" :hint="involvingHint" testid="sources.gitea-editor-involving">
         <div class="flex flex-col gap-2">
           <ToggleField
             v-for="option in INVOLVING"
@@ -177,7 +177,7 @@ function toggleInvolving(value: Involving, on: boolean) {
             @update:model-value="(on: boolean) => toggleInvolving(option, on)"
           />
         </div>
-      </FieldRow>
+      </FormField>
       <TextField
         label="Owner"
         :model-value="config.owner ?? ''"

@@ -5,7 +5,7 @@ import { Browser } from '@wailsio/runtime'
 import BaseButton from '../ui/BaseButton.vue'
 import DrawerSheet from '../ui/DrawerSheet.vue'
 import GiteaMark from '../marks/GiteaMark.vue'
-import SettingsField from './SettingsField.vue'
+import FormField from '../ui/FormField.vue'
 import { useGiteaConnection } from '../../composables/useGiteaConnection'
 import { useIntegrations } from '../../composables/useIntegrations'
 
@@ -80,7 +80,7 @@ async function onDisconnect(account: string) {
       </div>
     </template>
 
-    <SettingsField label="Connected accounts" testid="gitea-connected">
+    <FormField label="Connected accounts" testid="gitea-connected">
       <div v-if="connectedAccounts.length > 0" class="flex flex-col gap-2">
         <div
           v-for="account in connectedAccounts"
@@ -106,10 +106,10 @@ async function onDisconnect(account: string) {
       >
         No account connected
       </div>
-    </SettingsField>
+    </FormField>
 
     <div class="mt-5">
-      <SettingsField
+      <FormField
         label="Connect an instance"
         hint="The token is validated once and stored in your keychain; only the URL is written to disk."
         testid="gitea-connect"
@@ -169,7 +169,7 @@ async function onDisconnect(account: string) {
             >
           </div>
         </div>
-      </SettingsField>
+      </FormField>
     </div>
     <InlineError v-if="error" testid="gitea-connect-error" variant="line" class="mt-2" :message="error" />
 

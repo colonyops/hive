@@ -7,6 +7,7 @@ import { nextTick, onMounted, ref } from 'vue'
 import IconPencil from '~icons/lucide/pencil'
 import BaseButton from './ui/BaseButton.vue'
 import BaseModal from './ui/BaseModal.vue'
+import FormField from './ui/FormField.vue'
 import { seedRef } from '../lib/seedRef'
 
 const props = defineProps<{
@@ -41,22 +42,23 @@ onMounted(async () => {
     testid="chat-rename-dialog"
     @close="emit('close')"
   >
-    <div class="flex flex-col gap-1.5 px-5 py-4">
-      <label for="chat-rename-name" class="text-xs text-text-3">Chat name</label>
-      <input
-        id="chat-rename-name"
-        ref="inputRef"
-        v-model="draft"
-        type="text"
-        autocapitalize="off"
-        autocorrect="off"
-        spellcheck="false"
-        :disabled="busy"
-        class="w-full rounded-lg border border-strong bg-raised px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
-        data-testid="chat-rename-input"
-        @keydown.enter="submit"
-      />
-      <InlineError v-if="error" testid="chat-rename-error" class="mt-1" :message="error" />
+    <div class="px-5 py-4">
+      <FormField v-slot="{ id }" label="Chat name" testid="chat-rename">
+        <input
+          :id="id"
+          ref="inputRef"
+          v-model="draft"
+          type="text"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          :disabled="busy"
+          class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
+          data-testid="chat-rename-input"
+          @keydown.enter="submit"
+        />
+      </FormField>
+      <InlineError v-if="error" testid="chat-rename-error" class="mt-2.5" :message="error" />
     </div>
     <template #footer>
       <div class="flex-1" />
