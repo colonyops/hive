@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
 )
 
 // The pattern battery below is carried from the full-viewport StateTracker

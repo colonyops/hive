@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 )

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/rs/zerolog/log"
 )
 

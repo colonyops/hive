@@ -11,7 +11,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/core/notify"
+	"github.com/colonyops/hive/internal/domain/notify"
 )
 
 const (

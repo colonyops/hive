@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/todo"
+	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"

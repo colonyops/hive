@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/rs/zerolog"
 )
 

@@ -11,25 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/colonyops/hive/internal/domain/agent"
 	"github.com/colonyops/hive/pkg/pathutil"
 	"gopkg.in/yaml.v3"
 )
 
-// Keep names and order aligned with `hive init`. Unlisted profiles remain
-// supported and round-trip unchanged.
-var knownAgents = []AgentKind{
-	{Name: "claude", Label: "Claude Code", SkipPermissionFlags: []string{"--dangerously-skip-permissions"}},
-	{Name: "opencode", Label: "OpenCode", SkipPermissionFlags: []string{"--agent", "free-permissions-runner"}},
-	{Name: "codex", Label: "Codex", SkipPermissionFlags: []string{"--full-auto"}},
-	{Name: "copilot", Label: "GitHub Copilot"},
-	{Name: "cursor", Label: "Cursor"},
-	{Name: "amp", Label: "Amp"},
-	{Name: "pi", Label: "Pi"},
-}
-
-// AgentKind is one entry in the catalog: what the profile is called in the
-// config file, what to show a person, and the flags that turn off the agent's
-// own permission prompts.
+// AgentKind is the wire form of one agent.Known entry: what the profile is
+// called in the config file, what to show a person, and the flags that turn
+// off the agent's own permission prompts.
 type AgentKind struct {
 	Name  string `json:"name"`
 	Label string `json:"label"`
@@ -200,13 +189,15 @@ type LookPath func(ctx context.Context, name string) (string, error)
 // agents are not floated to the top, because a picker whose rows move between
 // launches is harder to use than one that does not.
 func AgentOptions(ctx context.Context, lookPath LookPath) []AgentOption {
-	options := make([]AgentOption, 0, len(knownAgents))
-	for _, kind := range knownAgents {
+	known := agent.Known()
+	options := make([]AgentOption, 0, len(known))
+	for _, a := range known {
 		installed := false
 		if lookPath != nil {
-			_, err := lookPath(ctx, kind.Name)
+			_, err := lookPath(ctx, a.Name)
 			installed = err == nil
 		}
+		kind := AgentKind{Name: a.Name, Label: a.Label, SkipPermissionFlags: a.SkipPermissionFlags}
 		options = append(options, AgentOption{AgentKind: kind, Installed: installed})
 	}
 	return options

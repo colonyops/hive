@@ -12,8 +12,8 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components/form"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/sourcepicker"
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/notify"
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/notify"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 )
 

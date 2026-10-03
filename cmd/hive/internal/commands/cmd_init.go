@@ -16,6 +16,7 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/domain/agent"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/atomicfile"
 	"github.com/colonyops/hive/pkg/pathutil"
@@ -50,12 +51,13 @@ type stepResult struct {
 	fixHint string
 }
 
-var knownAgents = []string{"claude", "opencode", "codex", "pi", "amp", "copilot", "cursor"}
-
-var agentFlagMap = map[string][]string{
-	"claude":   {"--dangerously-skip-permissions"},
-	"opencode": {"--agent", "free-permissions-runner"},
-	"codex":    {"--full-auto"},
+func knownAgentNames() []string {
+	known := agent.Known()
+	names := make([]string, len(known))
+	for i, a := range known {
+		names[i] = a.Name
+	}
+	return names
 }
 
 // detectInstalledAgents returns the subset of known agent names found on PATH,
@@ -552,7 +554,7 @@ func (cmd *InitCmd) run(_ context.Context, _ *cli.Command) error {
 	}
 	needsTmux := hasTmux && tmuxCfgPath != "" && !tmuxAlready
 
-	installed := detectInstalledAgents(knownAgents)
+	installed := detectInstalledAgents(knownAgentNames())
 	if len(installed) == 0 {
 		installed = []string{"claude"}
 	}
@@ -737,11 +739,12 @@ func (cmd *InitCmd) applyConfigFile(cfgPath, agentName string, installed []strin
 
 // flagsFor returns the skip-permissions flags for an agent when skipPerms is true,
 // or nil if the agent has no known flags or skipPerms is false.
-func flagsFor(agent string, skipPerms bool) []string {
+func flagsFor(name string, skipPerms bool) []string {
 	if !skipPerms {
 		return nil
 	}
-	return agentFlagMap[agent]
+	a, _ := agent.Lookup(name)
+	return a.SkipPermissionFlags
 }
 
 func printSummary(w io.Writer, results []stepResult) {

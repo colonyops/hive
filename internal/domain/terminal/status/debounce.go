@@ -3,8 +3,8 @@ package status
 import (
 	"time"
 
-	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
 )
 
 // applyTransition implements the debounce transition table for an existing

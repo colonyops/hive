@@ -10,7 +10,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/jsoncolor"
-	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/domain/kv"
 )
 
 // KVView is a two-column KV browser: searchable key list (left) + colorized JSON preview (right).

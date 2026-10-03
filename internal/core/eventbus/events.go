@@ -3,11 +3,11 @@
 package eventbus
 
 import (
-	"github.com/colonyops/hive/internal/core/messaging"
-	"github.com/colonyops/hive/internal/core/notify"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/todo"
+	"github.com/colonyops/hive/internal/domain/messaging"
+	"github.com/colonyops/hive/internal/domain/notify"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/domain/todo"
 )
 
 //go:generate gobusgen generate -p .Events

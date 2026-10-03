@@ -7,7 +7,7 @@ package db
 import (
 	"database/sql"
 
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 )
 
 type HcComment struct {

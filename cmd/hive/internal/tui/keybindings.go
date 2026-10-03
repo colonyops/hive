@@ -11,7 +11,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/pkg/tmpl"

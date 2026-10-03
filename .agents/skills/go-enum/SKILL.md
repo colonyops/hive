@@ -83,7 +83,7 @@ When a column stores an enum, the generated go-enum type satisfies `driver.Value
 overrides:
   - column: "hc_items.type"
     go_type:
-      import: "github.com/colonyops/hive/internal/core/hc"
+      import: "github.com/colonyops/hive/internal/domain/hc"
       type: "ItemType"
 ```
 

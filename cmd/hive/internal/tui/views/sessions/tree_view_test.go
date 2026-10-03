@@ -3,8 +3,8 @@ package sessions
 import (
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/workspace"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

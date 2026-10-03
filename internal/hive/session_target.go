@@ -1,8 +1,8 @@
 package hive
 
 import (
-	"github.com/colonyops/hive/internal/core/multiplexer"
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
 // SessionTarget resolves the actual multiplexer session name for a Hive session.

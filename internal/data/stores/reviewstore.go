@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/review"
 	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/google/uuid"
 )
 

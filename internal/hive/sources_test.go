@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/pkg/executil"
 )

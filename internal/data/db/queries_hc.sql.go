@@ -9,7 +9,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 )
 
 const addHCBlocker = `-- name: AddHCBlocker :exec

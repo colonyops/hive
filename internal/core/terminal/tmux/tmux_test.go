@@ -11,12 +11,12 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/multiplexer"
-	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/terminal/assess"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
 	"github.com/colonyops/hive/internal/core/terminal/process"
-	"github.com/colonyops/hive/internal/core/terminal/status"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

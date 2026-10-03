@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 )
 
 // Tree connector characters.

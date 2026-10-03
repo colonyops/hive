@@ -3,7 +3,7 @@ package tasks
 import (
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 )
 
 func TestFilterItems(t *testing.T) {

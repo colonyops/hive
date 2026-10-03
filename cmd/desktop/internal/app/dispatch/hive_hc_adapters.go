@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 )
 
 // TaskStatus mirrors hc's status vocabulary so the desktop's tasks view can

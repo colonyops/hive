@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
 // Plugin defines the interface for Hive plugins.

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 )
 
 // AddWindows adds windows to an existing tmux session.

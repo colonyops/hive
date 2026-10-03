@@ -59,6 +59,25 @@ linters:
               desc: Shared internal/ must not render. Put UI code below cmd/<artifact>/internal.
             - pkg: github.com/wailsapp
               desc: Shared internal/ must not depend on the desktop runtime.
+        domain-is-pure:
+          files:
+            - "**/internal/domain/**"
+            - "!**/cmd/**"
+          # Longer lax-mode allow matches override the internal deny.
+          list-mode: lax
+          allow:
+            - github.com/colonyops/hive/internal/domain
+          deny:
+            - pkg: github.com/colonyops/hive/internal
+              desc: domain imports only domain (docs/architecture.md, "Layers and the dependency rule").
+            - pkg: os/exec
+              desc: domain does no I/O; put drivers in internal/platform.
+            - pkg: net
+              desc: domain does no I/O; put drivers in internal/platform.
+            - pkg: database/sql
+              desc: domain does no I/O; persistence belongs in the store layer.
+            - pkg: github.com/fsnotify
+              desc: domain does no I/O; put watchers in internal/platform.
         core:
           files:
             - "**/cmd/desktop/internal/app/**"
@@ -116,11 +135,12 @@ linters:
             - "!**/cmd/desktop/internal/app/data/queries/dbext.go"
             - "!**/cmd/desktop/internal/app/data/queries/dbext_test.go"
             - "!**/cmd/desktop/internal/app/hiveconf/hiveconf_test.go"
-          # Longer lax-mode allow matches override the internal/core deny.
+          # Pure domain packages skip the seam (ADR
+          # pure-shared-domain-packages-are-imported-directly-services-and-stores-stay-behind-the-seam);
+          # domain-is-pure keeps them pure.
           list-mode: lax
           allow:
-            - github.com/colonyops/hive/internal/core/session
-            - github.com/colonyops/hive/internal/core/validate
+            - github.com/colonyops/hive/internal/domain
           deny:
             - pkg: github.com/colonyops/hive/internal/core
               desc: &seam |

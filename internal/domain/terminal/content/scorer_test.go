@@ -3,7 +3,7 @@ package content_test
 import (
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/terminal/content"
+	"github.com/colonyops/hive/internal/domain/terminal/content"
 	"github.com/stretchr/testify/assert"
 )
 

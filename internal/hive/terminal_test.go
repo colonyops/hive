@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/terminal/status"
+	"github.com/colonyops/hive/internal/domain/terminal/status"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

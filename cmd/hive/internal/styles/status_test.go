@@ -3,7 +3,7 @@ package styles
 import (
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/stretchr/testify/assert"
 )
 

@@ -591,7 +591,7 @@ type TerminalConfig struct {
 }
 
 // TerminalStatusConfig configures the Stage 2 debounce tracker
-// (internal/core/terminal/status.Tracker).
+// (internal/domain/terminal/status.Tracker).
 type TerminalStatusConfig struct {
 	Confirm TerminalConfirmConfig `json:"confirm" yaml:"confirm"`
 }

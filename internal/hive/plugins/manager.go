@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/rs/zerolog/log"
 )
 

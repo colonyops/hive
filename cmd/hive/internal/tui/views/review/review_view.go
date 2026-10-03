@@ -24,8 +24,8 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/shared"
 	act "github.com/colonyops/hive/internal/core/action"
-	corereview "github.com/colonyops/hive/internal/core/review"
 	"github.com/colonyops/hive/internal/data/stores"
+	corereview "github.com/colonyops/hive/internal/domain/review"
 )
 
 // ReviewFinalizedMsg is sent when review is finalized and copied to clipboard.

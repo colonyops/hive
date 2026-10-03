@@ -14,8 +14,8 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/shared"
 	act "github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/hc"
-	corekv "github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/domain/hc"
+	corekv "github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/hive"
 )
 

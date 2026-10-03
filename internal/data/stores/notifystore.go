@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/domain/notify"
 )
 
 // NotifyStore implements notify.Store using SQLite.

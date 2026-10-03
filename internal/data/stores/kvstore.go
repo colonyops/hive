@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/domain/kv"
 )
 
 // KVStore implements kv.KV using SQLite.

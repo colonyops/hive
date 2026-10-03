@@ -3,7 +3,7 @@ package assess_test
 import (
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/stretchr/testify/assert"
 )
 

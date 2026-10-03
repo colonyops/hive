@@ -1,7 +1,7 @@
 // Package status implements Stage 2 of the two-stage status assessment
 // engine: a stateful debounce tracker that turns per-poll assess.Assessment
 // values into stable, published terminal.Status values. See
-// internal/core/terminal/assess for Stage 1, the stateless engine this
+// internal/domain/terminal/assess for Stage 1, the stateless engine this
 // package consumes.
 package status
 
@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
 )
 
 // trackedState is the per-key published/candidate state machine.

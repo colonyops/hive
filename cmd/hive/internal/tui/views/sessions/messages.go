@@ -4,8 +4,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/workspace"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/plugins"
 )
 

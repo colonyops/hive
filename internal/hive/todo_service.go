@@ -7,7 +7,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/todo"
+	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/rs/zerolog"
 )
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 )
 
 // StatusFilter represents a filter for task status in the tree view.

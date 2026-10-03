@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 )
 
 // HasSession reports whether a tmux session exists.

@@ -11,8 +11,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

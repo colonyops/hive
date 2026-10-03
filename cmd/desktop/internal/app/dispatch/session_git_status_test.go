@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/git"
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

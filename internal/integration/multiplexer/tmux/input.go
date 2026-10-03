@@ -7,7 +7,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/pkg/randid"
 )
 

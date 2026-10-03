@@ -19,7 +19,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/hive"
 )
 

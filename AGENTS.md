@@ -162,7 +162,7 @@ UI code goes below `cmd/hive/internal/`.
 | `internal/core/config/validate.go`          | Template data structs, validation                   |
 | `cmd/hive/internal/tui/model.go`            | TUI model, update loop, view rendering              |
 | `cmd/hive/internal/tui/views/sessions/tree_view.go` | Session tree with status indicators         |
-| `internal/core/terminal/assess/rules_*.go` | AI agent status detection rules                     |
+| `internal/domain/terminal/assess/rules_*.go` | AI agent status detection rules                     |
 
 ### Development
 

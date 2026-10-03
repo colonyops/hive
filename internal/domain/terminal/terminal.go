@@ -4,7 +4,7 @@ package terminal
 import (
 	"context"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 )
 
 // Status represents the detected state of a terminal session.

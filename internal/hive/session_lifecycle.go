@@ -3,7 +3,7 @@ package hive
 import (
 	"context"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 )
 
 // SessionLifecycle manages existing multiplexer sessions and windows.

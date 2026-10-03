@@ -157,8 +157,12 @@ func TestAgentOptionsMarkWhatThisMachineCanRun(t *testing.T) {
 		return "", os.ErrNotExist
 	})
 
-	require.NotEmpty(t, options)
-	assert.Equal(t, "claude", options[0].Name, "the catalog keeps its order so the picker does not reshuffle between launches")
+	names := make([]string, len(options))
+	for i, option := range options {
+		names[i] = option.Name
+	}
+	assert.Equal(t, []string{"claude", "opencode", "codex", "pi", "amp", "copilot", "cursor"}, names,
+		"the picker follows hive init's order and does not reshuffle between launches")
 	for _, option := range options {
 		assert.Equal(t, option.Name == "opencode", option.Installed)
 	}

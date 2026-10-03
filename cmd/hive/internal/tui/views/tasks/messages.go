@@ -2,7 +2,7 @@ package tasks
 
 import (
 	"github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 )
 
 // RefreshTasksMsg signals the tasks view to reload its data.

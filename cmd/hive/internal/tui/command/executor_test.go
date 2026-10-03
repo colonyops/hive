@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/colonyops/hive/internal/core/action"
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

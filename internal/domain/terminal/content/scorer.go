@@ -4,7 +4,7 @@ package content
 import (
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal"
 )
 
 const (

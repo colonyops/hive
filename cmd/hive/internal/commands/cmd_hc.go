@@ -15,7 +15,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui"
 	"github.com/colonyops/hive/internal/core/git"
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/timeutil"

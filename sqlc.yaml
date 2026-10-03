@@ -17,11 +17,11 @@ sql:
         overrides:
           - column: "hc_items.status"
             go_type:
-              import: "github.com/colonyops/hive/internal/core/hc"
+              import: "github.com/colonyops/hive/internal/domain/hc"
               type: "Status"
           - column: "hc_items.type"
             go_type:
-              import: "github.com/colonyops/hive/internal/core/hc"
+              import: "github.com/colonyops/hive/internal/domain/hc"
               type: "ItemType"
   - engine: "sqlite"
     queries:

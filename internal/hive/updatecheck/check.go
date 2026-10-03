@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/domain/kv"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/mod/semver"
 )

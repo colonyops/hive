@@ -2,7 +2,7 @@ package hive
 
 import (
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/internal/sources/cliengine"
 	"github.com/colonyops/hive/internal/sources/ghcli"

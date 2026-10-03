@@ -11,14 +11,14 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/terminal/assess"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
-	"github.com/colonyops/hive/internal/core/terminal/content"
 	"github.com/colonyops/hive/internal/core/terminal/process"
-	"github.com/colonyops/hive/internal/core/terminal/status"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal/content"
+	"github.com/colonyops/hive/internal/domain/terminal/status"
 )
 
 // contentCheckInterval is the minimum time between Tier 3 content-capture

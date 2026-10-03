@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/sources"
 )
 

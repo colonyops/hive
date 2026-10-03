@@ -3,7 +3,7 @@ package assess
 import (
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal"
 )
 
 // rule is one prioritized detection rule.

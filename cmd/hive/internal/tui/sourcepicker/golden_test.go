@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/x/exp/golden"
 
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/sources"
 )
 

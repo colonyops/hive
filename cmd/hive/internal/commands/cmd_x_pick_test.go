@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -51,9 +51,9 @@ description = "Generate enum methods using go-enum"
 # mise then silently reruns the task every time instead of erroring.
 sources = [
   "internal/core/action/type.go",
-  "internal/core/hc/item.go",
-  "internal/core/notify/store.go",
-  "internal/core/todo/todo.go",
+  "internal/domain/hc/item.go",
+  "internal/domain/notify/store.go",
+  "internal/domain/todo/todo.go",
   "internal/sources/backend.go",
   "cmd/desktop/internal/app/activity/activity.go",
   "cmd/desktop/internal/app/jobs/jobs.go",
@@ -64,7 +64,7 @@ sources = [
   "cmd/desktop/internal/app/schedule/spec.go",
 ]
 outputs = { auto = true }
-run = "go-enum --nocase --names --marshal -f internal/core/action/type.go -f internal/core/hc/item.go -f internal/core/notify/store.go -f internal/core/todo/todo.go -f internal/sources/backend.go -f cmd/desktop/internal/app/activity/activity.go -f cmd/desktop/internal/app/jobs/jobs.go -f cmd/desktop/internal/app/data/models/classify.go -f cmd/desktop/internal/app/flow/flow.go -f cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go -f cmd/desktop/internal/app/agentws/workspace.go -f cmd/desktop/internal/app/schedule/spec.go"
+run = "go-enum --nocase --names --marshal -f internal/core/action/type.go -f internal/domain/hc/item.go -f internal/domain/notify/store.go -f internal/domain/todo/todo.go -f internal/sources/backend.go -f cmd/desktop/internal/app/activity/activity.go -f cmd/desktop/internal/app/jobs/jobs.go -f cmd/desktop/internal/app/data/models/classify.go -f cmd/desktop/internal/app/flow/flow.go -f cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go -f cmd/desktop/internal/app/agentws/workspace.go -f cmd/desktop/internal/app/schedule/spec.go"
 
 [tasks."generate:sqlc"]
 description = "Generate both store layers (hive.db and the desktop pipeline) from sqlc.yaml"

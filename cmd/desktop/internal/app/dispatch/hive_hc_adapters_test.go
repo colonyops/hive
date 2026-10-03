@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/hc"
 	coredb "github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/domain/hc"
 	hivesvc "github.com/colonyops/hive/internal/hive"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"

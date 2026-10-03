@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	"github.com/stretchr/testify/require"
 )
 
 // fixture mirrors the pattern in
-// internal/core/terminal/content/scorer_fixtures_test.go: a table of
+// internal/domain/terminal/content/scorer_fixtures_test.go: a table of
 // {name, expected..., purpose}, except content lives in a committed
 // testdata/<tool>/<scenario>.txt file instead of an inline string literal.
 type fixture struct {

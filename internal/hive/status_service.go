@@ -8,8 +8,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/terminal"
 )
 
 const terminalStatusTimeout = 2 * time.Second

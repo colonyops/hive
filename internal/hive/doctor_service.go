@@ -5,7 +5,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/doctor"
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
 // DoctorService runs health checks on the hive setup.

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/hc"
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/domain/hc"
+	"github.com/colonyops/hive/internal/domain/terminal"
 )
 
 func TestRenderDetailContent_WithBlockers(t *testing.T) {

@@ -9,8 +9,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/messaging"
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/messaging"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"

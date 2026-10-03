@@ -7,8 +7,8 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/theme"
+	"github.com/colonyops/hive/internal/domain/terminal"
 )
 
 func TestMain(m *testing.M) {

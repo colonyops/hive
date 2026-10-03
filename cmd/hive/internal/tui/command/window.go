@@ -3,7 +3,7 @@ package command
 import (
 	"context"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 )
 
 // WindowKiller kills one tmux window for KillWindow actions.

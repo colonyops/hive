@@ -1,6 +1,6 @@
 package styles
 
-import "github.com/colonyops/hive/internal/core/terminal"
+import "github.com/colonyops/hive/internal/domain/terminal"
 
 // Status indicator constants for session display.
 const (

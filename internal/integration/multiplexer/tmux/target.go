@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 )
 
 func renderSessionTarget(target multiplexer.Target) (string, error) {

@@ -6,8 +6,8 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

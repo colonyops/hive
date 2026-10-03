@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/colonyops/hive/internal/core/terminal/content"
+	"github.com/colonyops/hive/internal/domain/terminal/content"
 )
 
 func BenchmarkScorer_AgentContent(b *testing.B) {

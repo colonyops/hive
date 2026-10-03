@@ -3,7 +3,7 @@ package tasks
 import (
 	"sort"
 
-	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/domain/hc"
 )
 
 // TreeNode represents an item in the tree hierarchy.

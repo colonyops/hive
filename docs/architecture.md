@@ -143,7 +143,7 @@ Domain-Driven Design, (Go) an idiom specific to the language.
 | **Tool table** | `mcpsrv` | One file declares every MCP tool — name, title, description — and nothing else; the handler beside it is a thin call into `App`. Input schemas are *inferred from the handler's typed input struct*, never hand-written, so a tool cannot advertise a field its handler does not accept. A store type whose `jsonschema` tags were written for the OpenAPI reflector cannot be a tool's input or output type: the SDK's inferrer rejects a `WORD=`-prefixed tag, and `json.RawMessage` infers as an array. Declare an adapter-local type and convert at the seam. Three contracts hold across the whole surface, because an agent has no UI to disambiguate from: an id that resolves to nothing is `not_found` and never an empty collection; a mutation's answer is never a constant, so a caller can tell it happened; and a field whose size the *source* decides — an item payload, an event detail, a dry run's messages — is behind a `detail` argument that defaults to omitting it, with the level echoed on the answer. See ADR mcp-replaces-the-agent-facing-http-api. |
 | **Data-plane mount** | streaming surfaces on the loopback server: the terminal WebSocket | A surface that streams bytes is a raw `http.Handler` mounted at its own prefix via `App.MountAPI` — never a row in the errchain operations table, which cannot frame a hijacked socket. Its request/response half stays REST on `httpapi`; only what needs latency or backpressure rides the socket. It authenticates itself if it must, because the errchain surface around it is deliberately unauthenticated. See ADR terminal-transport. |
 | **Anti-Corruption Layer** (DDD) | the shared `internal/` seam | Declare a narrow local interface describing only what we need, let the shared concrete type satisfy it structurally, convert types at the seam. A signature change on the shared side then breaks one adapter file rather than the app. The idiom is `hive_adapters.go`. |
-| **Bounded Context** (DDD) | `app` vs the shared `internal/` | Two models that must not merge. `hive` is a separate product with its own vocabulary; its types stop at the ACL and never appear in an `app` signature. Pure domain primitives (`internal/core/session`, `internal/core/validate`) are the exception for functions, constants, and sentinel errors, which `app` calls directly (ADR pure-shared-domain-packages-are-imported-directly-services-and-stores-stay-behind-the-seam). |
+| **Bounded Context** (DDD) | `app` vs the shared `internal/` | Two models that must not merge. `hive` is a separate product with its own vocabulary; its types stop at the ACL and never appear in an `app` signature. Pure domain primitives (`internal/domain/*`) are the exception for functions, constants, and sentinel errors, which `app` calls directly (ADR pure-shared-domain-packages-are-imported-directly-services-and-stores-stay-behind-the-seam). |
 
 **Behaviour — how variation is handled**
 
@@ -259,8 +259,8 @@ in the same PR, with the CLI in mind.
 
 Pure domain primitives skip the wrapper. A package with no I/O, no
 configuration, no store, and no `internal/` imports beyond other primitives is
-imported directly; today that is `internal/core/session` and
-`internal/core/validate`. A wrapper with the same signature would isolate
+imported directly. Those are the packages under `internal/domain`, and the
+`domain-is-pure` lint rule keeps them that way. A wrapper with the same signature would isolate
 nothing, and the two programs must share one copy of rules such as session
 naming. The primitive's types still convert at the seam
 ([ADR](decisions/2026-10-02-pure-shared-domain-packages-are-imported-directly-services-and-stores-stay-behind-the-seam.md)).

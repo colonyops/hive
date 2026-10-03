@@ -18,10 +18,10 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	appstores "github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
-	"github.com/colonyops/hive/internal/core/messaging"
-	"github.com/colonyops/hive/internal/core/session"
 	coredb "github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/domain/messaging"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
 func TestStateResetHarnessUnavailableOutsideMockHarness(t *testing.T) {

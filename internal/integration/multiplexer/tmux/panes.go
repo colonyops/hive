@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 )
 
 const paneDelimiter = "|||"

@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
-	"github.com/colonyops/hive/internal/core/terminal/content"
 	"github.com/colonyops/hive/internal/core/terminal/process"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/terminal/content"
 )
 
 const (

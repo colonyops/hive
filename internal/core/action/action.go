@@ -1,6 +1,6 @@
 package action
 
-import "github.com/colonyops/hive/internal/core/multiplexer"
+import "github.com/colonyops/hive/internal/domain/multiplexer"
 
 // SpawnWindowsPayload is the execution payload for TypeSpawnWindows actions.
 type SpawnWindowsPayload struct {

@@ -23,7 +23,7 @@ func TestAssessFileCmd_EmitsExpectedJSONShape(t *testing.T) {
 	}
 	cmd.Register(app)
 
-	fixture := "../../../../internal/core/terminal/assess/testdata/claude/approval-permission-dialog.txt"
+	fixture := "../../../../internal/domain/terminal/assess/testdata/claude/approval-permission-dialog.txt"
 	require.NoError(t, app.Run(context.Background(), []string{"hive", "x", "assess", "file", fixture, "--tool", "claude"}))
 
 	var out map[string]any

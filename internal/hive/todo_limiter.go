@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/todo"
+	"github.com/colonyops/hive/internal/domain/todo"
 )
 
 // TodoLimiter enforces rate and capacity limits on todo creation.

@@ -12,7 +12,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/core/todo"
+	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/colonyops/hive/internal/hive"
 )
 

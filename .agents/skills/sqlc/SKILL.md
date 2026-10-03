@@ -69,11 +69,11 @@ When a column stores a domain enum, add an override in `sqlc.yaml` so the genera
 overrides:
   - column: "hc_items.status"
     go_type:
-      import: "github.com/colonyops/hive/internal/core/hc"
+      import: "github.com/colonyops/hive/internal/domain/hc"
       type: "Status"
   - column: "hc_items.type"
     go_type:
-      import: "github.com/colonyops/hive/internal/core/hc"
+      import: "github.com/colonyops/hive/internal/domain/hc"
       type: "ItemType"
 ```
 

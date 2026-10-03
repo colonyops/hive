@@ -5,7 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/domain/kv"
 )
 
 // kvKeysLoadedMsg is sent when KV keys are fetched.

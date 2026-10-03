@@ -25,10 +25,10 @@ import (
 	"github.com/colonyops/hive/internal/core/doctor"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
-	corekv "github.com/colonyops/hive/internal/core/kv"
-	"github.com/colonyops/hive/internal/core/notify"
-	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/theme"
+	corekv "github.com/colonyops/hive/internal/domain/kv"
+	"github.com/colonyops/hive/internal/domain/notify"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/sources"
 
 	"github.com/colonyops/hive/cmd/hive/internal/tui/command"

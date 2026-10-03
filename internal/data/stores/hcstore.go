@@ -8,8 +8,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/domain/hc"
 )
 
 // HCStore implements hc.Store using SQLite.

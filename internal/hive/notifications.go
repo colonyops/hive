@@ -4,8 +4,8 @@ import (
 	"fmt"
 
 	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/notify"
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/domain/notify"
+	"github.com/colonyops/hive/internal/domain/terminal"
 )
 
 // NotificationRouter maps domain events to user-facing notifications.

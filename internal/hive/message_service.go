@@ -7,7 +7,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/pkg/randid"
 )
 

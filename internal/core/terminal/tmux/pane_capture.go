@@ -3,8 +3,8 @@ package tmux
 import (
 	"context"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/terminal"
 )
 
 // PaneCapture adapts a terminal.PaneSource to classifier.ContentCapture.

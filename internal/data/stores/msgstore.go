@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/pkg/randid"
 )
 

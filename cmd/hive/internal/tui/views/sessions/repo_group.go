@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	"github.com/colonyops/hive/internal/core/git"
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/session"
 )
 
 // RepoGroup represents a repository with its associated sessions.

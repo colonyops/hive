@@ -10,9 +10,9 @@ import (
 
 	"github.com/urfave/cli/v3"
 
-	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/terminal/assess"
-	"github.com/colonyops/hive/internal/core/terminal/status"
+	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/domain/terminal/assess"
+	"github.com/colonyops/hive/internal/domain/terminal/status"
 	"github.com/colonyops/hive/internal/hive"
 )
 

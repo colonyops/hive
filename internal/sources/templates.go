@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 

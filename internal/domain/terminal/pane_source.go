@@ -3,7 +3,7 @@ package terminal
 import (
 	"context"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 )
 
 // PaneSource supplies pane discovery and capture to terminal status consumers.

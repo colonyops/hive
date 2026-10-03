@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/multiplexer"
-	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/session"
 	tmuxadapter "github.com/colonyops/hive/internal/integration/multiplexer/tmux"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"

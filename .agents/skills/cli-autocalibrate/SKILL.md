@@ -6,11 +6,11 @@ compatibility: claude
 
 # Autocalibrate: Tuning the Two-Stage Status Assessment Engine
 
-Hive detects agent status in two stages: `internal/core/terminal/assess` (Stage 1, stateless: pane content -> `assess.State`) feeds `internal/core/terminal/status` (Stage 2, stateful: debounces `assess.State` into a published `terminal.Status`). This skill is the closed loop for tuning both against a corpus of committed, deterministic recordings — never against live judgment calls that can't be replayed.
+Hive detects agent status in two stages: `internal/domain/terminal/assess` (Stage 1, stateless: pane content -> `assess.State`) feeds `internal/domain/terminal/status` (Stage 2, stateful: debounces `assess.State` into a published `terminal.Status`). This skill is the closed loop for tuning both against a corpus of committed, deterministic recordings — never against live judgment calls that can't be replayed.
 
 ## Corpus Layout
 
-- `internal/core/terminal/assess/testdata/<tool>/<scenario>.txt` — single-frame fixtures for Stage 1 rule classification. Table in `internal/core/terminal/assess/fixtures_test.go`.
+- `internal/domain/terminal/assess/testdata/<tool>/<scenario>.txt` — single-frame fixtures for Stage 1 rule classification. Table in `internal/domain/terminal/assess/fixtures_test.go`.
 - `test/calibration/sequences/<name>.jsonl` + `<name>.expected.json` — multi-frame recordings (the `{ts, content, title, inMode}` shape `hive x assess watch --record` produces) plus a sidecar of the published-status sequence `hive x assess replay` must reproduce exactly. Covers Stage 2 debounce timing (idle-confirmation delay, churn-as-working, approval immediacy, ...) that a single-frame fixture can't.
 - `test/calibration/scenarios/<name>.yaml` — step/expectation scripts for live, in-container runs against a real pane (`hive x assess scenario`). Not wired into `mise run cli:integration`; run by hand.
 
@@ -35,8 +35,8 @@ Hive detects agent status in two stages: `internal/core/terminal/assess` (Stage 
    This shows which rule fired (or didn't) and dumps the parsed regions (aboveBox, promptBoxBody, bottomLines, afterLastRule) so you can see exactly what the rule matcher saw. Compare "which rule fired" against "which rule should have fired."
 
 3. **Edit the rule sets or debounce options.**
-   - Stage 1 classification bugs (wrong state, wrong hold): `internal/core/terminal/assess/rules_claude.go`, `rules_codex.go`, `rules_generic.go`, `rules_common.go` (shared matchers).
-   - Stage 2 timing bugs (flapping, premature/late confirmation): `internal/core/terminal/status/options.go`'s `DefaultOptions()` (`ConfirmIdle`, `ConfirmApproval`, `ChurnWindow`) or `debounce.go`'s transition table.
+   - Stage 1 classification bugs (wrong state, wrong hold): `internal/domain/terminal/assess/rules_claude.go`, `rules_codex.go`, `rules_generic.go`, `rules_common.go` (shared matchers).
+   - Stage 2 timing bugs (flapping, premature/late confirmation): `internal/domain/terminal/status/options.go`'s `DefaultOptions()` (`ConfirmIdle`, `ConfirmApproval`, `ChurnWindow`) or `debounce.go`'s transition table.
 
 4. **Re-run everything — no regression trading.**
 
