@@ -1,3 +1,4 @@
+import { errorText } from '../lib/appError'
 import { ref } from 'vue'
 import {
   Preview,
@@ -9,10 +10,6 @@ import type {
   ReportPreview,
   ReportResult,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
 
 // The bundle half. It writes a file and stops: nothing here or in the backend
 // uploads it.
@@ -29,7 +26,7 @@ export function useReportProblem() {
     try {
       preview.value = await Preview()
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not build the report preview.')
     } finally {
       loading.value = false
     }
@@ -42,7 +39,7 @@ export function useReportProblem() {
       saved.value = await Save(input)
       return true
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not save the report.')
       return false
     } finally {
       saving.value = false
@@ -57,7 +54,7 @@ export function useReportProblem() {
     try {
       await OpenPath(saved.value.dir)
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not open the reports folder.')
     }
   }
 

@@ -1,3 +1,4 @@
+import { errorText } from '../lib/appError'
 import { computed, onMounted, ref } from 'vue'
 import {
   CancelDeviceFlow,
@@ -59,7 +60,7 @@ export function useGitHubConnection() {
       deviceFlow.value = await StartDeviceFlow()
       card.value = 'device'
     } catch (err) {
-      actionError.value = messageOf(err, 'Could not reach GitHub to start sign-in.')
+      actionError.value = errorText(err, 'Could not reach GitHub to start sign-in.')
     } finally {
       busy.value = false
     }
@@ -103,7 +104,7 @@ export function useGitHubConnection() {
     try {
       status.value = await SetToken(token)
     } catch (err) {
-      actionError.value = messageOf(err, 'GitHub rejected the token.')
+      actionError.value = errorText(err, 'GitHub rejected the token.')
     } finally {
       busy.value = false
     }
@@ -146,10 +147,4 @@ export function useGitHubConnection() {
     disconnect,
     reload,
   }
-}
-
-function messageOf(err: unknown, fallback: string): string {
-  if (err instanceof Error && err.message) return err.message
-  if (typeof err === 'string' && err) return err
-  return fallback
 }

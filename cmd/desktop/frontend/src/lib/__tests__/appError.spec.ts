@@ -57,7 +57,12 @@ describe('errorText', () => {
   it("falls back to the thrown message, then to the caller's wording", () => {
     expect(errorText(new Error('fetch failed'), 'fallback')).toBe('fetch failed')
     expect(errorText(new Error(''), 'fallback')).toBe('fallback')
-    expect(errorText('a string', 'fallback')).toBe('fallback')
+    expect(errorText('', 'fallback')).toBe('fallback')
+    expect(errorText({}, 'fallback')).toBe('fallback')
     expect(errorText(undefined, 'fallback')).toBe('fallback')
+  })
+
+  it('surfaces a string the runtime rejected with', () => {
+    expect(errorText('gitea: token is empty', 'fallback')).toBe('gitea: token is empty')
   })
 })

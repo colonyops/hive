@@ -1,3 +1,4 @@
+import { errorText } from '../lib/appError'
 import { ref } from 'vue'
 import {
   ChooseDirectory,
@@ -12,10 +13,6 @@ import {
   SetDataDir,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/systemservice'
 import type { SystemInfo } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
 
 // useSystemSettings reads the effective on-disk locations from the
 // SystemService and wraps the open/reveal actions and the point-only
@@ -36,7 +33,7 @@ export function useSystemSettings() {
     try {
       info.value = await Info()
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not load the system locations.')
     } finally {
       loading.value = false
     }
@@ -47,7 +44,7 @@ export function useSystemSettings() {
     try {
       await OpenPath(path)
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not open the path.')
     }
   }
 
@@ -56,7 +53,7 @@ export function useSystemSettings() {
     try {
       await RevealPath(path)
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not reveal the path.')
     }
   }
 
@@ -66,7 +63,7 @@ export function useSystemSettings() {
     try {
       await OpenHiveConfig()
     } catch (err) {
-      openError = errText(err)
+      openError = errorText(err, 'Could not open the hive config.')
     }
     await refresh()
     if (openError) error.value = openError
@@ -81,7 +78,7 @@ export function useSystemSettings() {
       restartRequired.value = true
       await refresh()
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not change the directory.')
     }
   }
 
@@ -92,7 +89,7 @@ export function useSystemSettings() {
       restartRequired.value = true
       await refresh()
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not reset the directory.')
     }
   }
 

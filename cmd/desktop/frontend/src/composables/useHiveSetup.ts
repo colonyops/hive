@@ -1,3 +1,4 @@
+import { errorText } from '../lib/appError'
 import { computed, ref } from 'vue'
 import {
   InspectWorkspace,
@@ -11,10 +12,6 @@ import type {
   Profile,
   Workspace,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf/models'
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
 
 function flagRunAt(flags: string[], run: string[], at: number): boolean {
   return run.every((flag, j) => flags[at + j] === flag)
@@ -111,7 +108,7 @@ export function useHiveSetup() {
       setup.value = next
       resetDraft(next)
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not load the hive setup.')
     } finally {
       loaded.value = true
     }
@@ -194,7 +191,7 @@ export function useHiveSetup() {
     try {
       chosen = await ChooseDirectory('Choose the folder that holds your repositories')
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not choose a folder.')
       return
     }
     if (!chosen) return
@@ -211,7 +208,7 @@ export function useHiveSetup() {
       const found = await InspectWorkspace(trimmed)
       workspaces.value = [...workspaces.value, toDraftWorkspace(found)]
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not inspect the folder.')
     } finally {
       inspecting.value--
     }
@@ -240,7 +237,7 @@ export function useHiveSetup() {
       resetDraft(next)
       return true
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not save the hive setup.')
       return false
     } finally {
       saving.value = false

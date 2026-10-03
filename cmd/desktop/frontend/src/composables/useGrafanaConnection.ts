@@ -1,3 +1,4 @@
+import { errorText } from '../lib/appError'
 import { ref } from 'vue'
 import {
   Connect,
@@ -23,7 +24,7 @@ export function useGrafanaConnection() {
       lastConnected.value = await Connect(url, token)
       return true
     } catch (err) {
-      error.value = messageOf(err, 'Grafana rejected the connection.')
+      error.value = errorText(err, 'Grafana rejected the connection.')
       return false
     } finally {
       busy.value = false
@@ -35,15 +36,9 @@ export function useGrafanaConnection() {
     try {
       await Disconnect(account)
     } catch (err) {
-      error.value = messageOf(err, 'Could not disconnect the stack.')
+      error.value = errorText(err, 'Could not disconnect the stack.')
     }
   }
 
   return { busy, error, lastConnected, connect, disconnect }
-}
-
-function messageOf(err: unknown, fallback: string): string {
-  if (err instanceof Error && err.message) return err.message
-  if (typeof err === 'string' && err) return err
-  return fallback
 }

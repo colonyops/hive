@@ -1,13 +1,10 @@
+import { errorText } from '../lib/appError'
 import { onScopeDispose, ref } from 'vue'
 import {
   EditorSettings as LoadEditorSettings,
   SetEditor,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
 import type { EditorChoice } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
 
 // The typed value is persisted this long after the last keystroke. The control
 // is a combobox, so every character emits; without this each one would be a
@@ -39,7 +36,7 @@ export function useEditorSettings() {
       persisted = settings.command
       choices.value = settings.choices ?? []
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not load the editor setting.')
     }
   }
 
@@ -50,7 +47,7 @@ export function useEditorSettings() {
       persisted = value
     } catch (err) {
       command.value = persisted
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not save the editor setting.')
     }
   }
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorText } from '../lib/appError'
 import { computed, onMounted, ref } from 'vue'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowUp from '~icons/lucide/arrow-up'
@@ -27,10 +28,6 @@ const defaultItemLimit = ref(3)
 const loaded = ref(false)
 const error = ref('')
 
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
-
 async function load(): Promise<void> {
   error.value = ''
   try {
@@ -41,7 +38,7 @@ async function load(): Promise<void> {
     pins.value = current ?? []
     choices.value = available ?? []
   } catch (err) {
-    error.value = errText(err)
+    error.value = errorText(err, 'Could not load the menu bar settings.')
   } finally {
     loaded.value = true
   }
@@ -59,7 +56,7 @@ async function save(next: MenuBarPin[]): Promise<void> {
     await SetPins(next)
   } catch (err) {
     if (saveVersion === version) pins.value = previous
-    error.value = errText(err)
+    error.value = errorText(err, 'Could not save the menu bar pins.')
   }
 }
 

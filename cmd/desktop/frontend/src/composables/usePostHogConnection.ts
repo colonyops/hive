@@ -1,3 +1,4 @@
+import { errorText } from '../lib/appError'
 import { ref } from 'vue'
 import {
   Connect,
@@ -27,7 +28,7 @@ export function usePostHogConnection() {
       return projects.value.length > 0
     } catch (err) {
       projects.value = []
-      error.value = messageOf(err, 'PostHog rejected the API key.')
+      error.value = errorText(err, 'PostHog rejected the API key.')
       return false
     } finally {
       busy.value = false
@@ -42,7 +43,7 @@ export function usePostHogConnection() {
       lastConnected.value = await Connect(url, token, projectID)
       return true
     } catch (err) {
-      error.value = messageOf(err, 'PostHog rejected the connection.')
+      error.value = errorText(err, 'PostHog rejected the connection.')
       return false
     } finally {
       busy.value = false
@@ -60,15 +61,9 @@ export function usePostHogConnection() {
     try {
       await Disconnect(account)
     } catch (err) {
-      error.value = messageOf(err, 'Could not disconnect the project.')
+      error.value = errorText(err, 'Could not disconnect the project.')
     }
   }
 
   return { busy, error, projects, lastConnected, loadProjects, connect, reset, disconnect }
-}
-
-function messageOf(err: unknown, fallback: string): string {
-  if (err instanceof Error && err.message) return err.message
-  if (typeof err === 'string' && err) return err
-  return fallback
 }

@@ -1,3 +1,4 @@
+import { errorText } from '../lib/appError'
 import { ref } from 'vue'
 import {
   Connect,
@@ -25,7 +26,7 @@ export function useGiteaConnection() {
       lastConnected.value = await Connect(url, token)
       return true
     } catch (err) {
-      error.value = messageOf(err, 'Gitea rejected the connection.')
+      error.value = errorText(err, 'Gitea rejected the connection.')
       return false
     } finally {
       busy.value = false
@@ -37,15 +38,9 @@ export function useGiteaConnection() {
     try {
       await Disconnect(account)
     } catch (err) {
-      error.value = messageOf(err, 'Could not disconnect the account.')
+      error.value = errorText(err, 'Could not disconnect the account.')
     }
   }
 
   return { busy, error, lastConnected, connect, disconnect }
-}
-
-function messageOf(err: unknown, fallback: string): string {
-  if (err instanceof Error && err.message) return err.message
-  if (typeof err === 'string' && err) return err
-  return fallback
 }

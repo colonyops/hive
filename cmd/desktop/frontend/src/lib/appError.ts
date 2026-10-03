@@ -52,10 +52,13 @@ export function appErrorMessage(error: unknown): string {
 
 /**
  * The fullest text available for a caught error: the core's message when the
- * call reached Go, the thrown message when it did not, and `fallback` when
- * neither says anything. For a surface that shows the user what went wrong —
- * still never for deciding what to do about it, which is the Kind's job.
+ * call reached Go, the thrown message (or thrown string) when it did not, and
+ * `fallback` when neither says anything. For a surface that shows the user
+ * what went wrong — still never for deciding what to do about it, which is
+ * the Kind's job.
  */
 export function errorText(error: unknown, fallback: string): string {
-  return appErrorMessage(error) || (error instanceof Error && error.message ? error.message : fallback)
+  const message = appErrorMessage(error) || (error instanceof Error ? error.message : '')
+  // The Wails runtime can reject with a bare string rather than an Error.
+  return message || (typeof error === 'string' && error) || fallback
 }

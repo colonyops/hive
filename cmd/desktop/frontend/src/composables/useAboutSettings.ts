@@ -1,3 +1,4 @@
+import { errorText } from '../lib/appError'
 import { computed, ref } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import { Build } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/systemservice'
@@ -14,10 +15,6 @@ import type {
 
 const docsURL = 'https://hivedesktop.com/getting-started/'
 const updatesDocURL = 'https://hivedesktop.com/configuration/settings/#updates'
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
 
 // useAboutSettings drives the About pane: which build is running, where it came
 // from, and the auto-update controls that replace it. autoUpdate mirrors the
@@ -43,7 +40,7 @@ export function useAboutSettings() {
       update.value = status
       autoUpdate.value = status.enabled
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not load the build info.')
     }
   }
 
@@ -58,7 +55,7 @@ export function useAboutSettings() {
       await SetEnabled(value)
     } catch (err) {
       autoUpdate.value = previous
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not save the auto-update setting.')
     }
   }
 
@@ -68,7 +65,7 @@ export function useAboutSettings() {
     try {
       update.value = await CheckNow()
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not check for updates.')
     } finally {
       checking.value = false
     }
@@ -79,7 +76,7 @@ export function useAboutSettings() {
     try {
       await Browser.OpenURL(await url())
     } catch (err) {
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not open the link.')
     }
   }
 

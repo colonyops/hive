@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorText } from '../lib/appError'
 import InlineError from './ui/InlineError.vue'
 import { useIntervalFn } from '@vueuse/core'
 import { computed, ref } from 'vue'
@@ -89,10 +90,6 @@ function testBody(selectedChannel: NotificationTestChannel): string {
   }
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
 // useNotify picks between a toast, an OS banner and Activity-only from settings
 // and focus, and returns none of that. Wrapping the two seams it already takes
 // as injectable dependencies reports where the notification actually went
@@ -120,7 +117,7 @@ async function deliverAuto(selectedSeverity: NotifySeverity, body: string): Prom
   try {
     await notify({ title: testTitle, body, severity: selectedSeverity, category: 'system', source: 'dev-view' })
   } catch (error) {
-    return { tone: 'error', text: `Notification failed: ${errorText(error)}` }
+    return { tone: 'error', text: `Notification failed: ${errorText(error, 'unknown error')}` }
   }
 
   switch (surfaced.at(-1)) {
@@ -131,7 +128,7 @@ async function deliverAuto(selectedSeverity: NotifySeverity, body: string): Prom
         ? { tone: 'ok', text: 'Recorded in Activity and shown as an in-app toast.' }
         : {
             tone: 'warn',
-            text: `Recorded in Activity. The system banner failed (${errorText(bannerError)}), so it fell back to an in-app toast.`,
+            text: `Recorded in Activity. The system banner failed (${errorText(bannerError, 'unknown error')}), so it fell back to an in-app toast.`,
           }
     default:
       return { tone: 'muted', text: 'Recorded in Activity only — notifications are switched off, so nothing surfaced.' }
@@ -162,7 +159,7 @@ async function deliver(
     })
     return { tone: 'ok', text: 'The OS accepted a system banner. Nothing was recorded in Activity.' }
   } catch (error) {
-    return { tone: 'error', text: `System banner failed: ${errorText(error)}` }
+    return { tone: 'error', text: `System banner failed: ${errorText(error, 'unknown error')}` }
   }
 }
 

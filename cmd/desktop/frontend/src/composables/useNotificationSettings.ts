@@ -1,3 +1,4 @@
+import { errorText } from '../lib/appError'
 import { ref, type Ref } from 'vue'
 import {
   NotificationSettings as GetNotificationSettings,
@@ -21,10 +22,6 @@ export type NotificationPermission = 'granted' | 'denied' | 'not-requested'
 export type NotificationDelivery = 'auto' | 'system' | 'app'
 
 export const notificationDeliveryModes: ReadonlyArray<NotificationDelivery> = ['auto', 'system', 'app']
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
 
 function toPermissionStatus(value: string): NotificationPermission {
   if (value === 'granted' || value === 'denied' || value === 'not-requested') return value
@@ -87,12 +84,12 @@ async function refresh(): Promise<void> {
           notificationSound.value = settingsResult.value.notificationSound
         }
       } else {
-        errors.push(errText(settingsResult.reason))
+        errors.push(errorText(settingsResult.reason, 'Could not load the notification settings.'))
       }
       if (permissionResult.status === 'fulfilled') {
         if (permissionVersion === permissionSnapshot) permission.value = toPermissionStatus(permissionResult.value)
       } else {
-        errors.push(errText(permissionResult.reason))
+        errors.push(errorText(permissionResult.reason, 'Could not read the notification permission.'))
       }
       if (errors.length > 0) error.value = errors.join('; ')
     } finally {
@@ -115,7 +112,7 @@ async function persist<T>(value: T, setting: Ref<T>): Promise<void> {
   } catch (err) {
     // Do not undo a newer toggle that happened while this request was pending.
     if (settingsVersion === version && setting.value === value) setting.value = previous
-    error.value = errText(err)
+    error.value = errorText(err, 'Could not save the notification settings.')
   }
 }
 
@@ -145,10 +142,10 @@ async function requestPermission(): Promise<void> {
     } catch (err) {
       // The request result is still the best available live state if querying
       // the OS immediately afterward is unavailable.
-      error.value = errText(err)
+      error.value = errorText(err, 'Could not read the notification permission.')
     }
   } catch (err) {
-    error.value = errText(err)
+    error.value = errorText(err, 'Could not request notification permission.')
   } finally {
     requestingPermission.value = false
   }
