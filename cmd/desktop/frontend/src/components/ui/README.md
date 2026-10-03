@@ -30,7 +30,7 @@ the table.
 | `DrawerSheet`        | A side sheet (editors, integration setup). Resizable unless `width` is set. | `ariaLabel`, `testid`, `width`, `storageKey`, `closeOnEscape`, `closeOnBackdrop`, `trapFocus`, `returnFocusTo`; emits `close`; `#header`, `#footer` |
 | `ConfirmationDialog` | A modal "are you sure" with optional detail rows.                           | `title`, `description`, `details`, `confirmLabel`, `busy`, `error`, `testid`; emits `confirm`, `cancel`                                             |
 | `InlineConfirm`      | A confirm that replaces a row or card in place, no overlay.                 | `title`, `description`, `confirmLabel`, `cancelLabel`, `busy`, `error`, `testid`; emits `confirm`, `cancel`                                         |
-| `InlineError`        | Any error message shown in a view, form, or sheet.                          | `message` (accepts `null`), `testid`; default slot                                                                                                  |
+| `InlineError`        | Any error message shown in a view, form, or sheet; renders `role="alert"`.  | `message` (accepts `null`), `variant` (`banner`, `line`), `testid`; default slot                                                                    |
 | `EmptyState`         | "Nothing here yet" text in a list or pane.                                  | `message`, `boxed`; default slot                                                                                                                    |
 | `ViewHeader`         | The title strip of a full-frame view (Settings, Activity, Dev).             | `#title` slot                                                                                                                                       |
 | `AppSelect`          | A dropdown or combobox.                                                     | `modelValue`, `options`, `placeholder`, `searchable`, `editable`, `disabled`, `size`, `testid`, `ariaLabel`                                         |
@@ -105,6 +105,12 @@ A labelled button is a `BaseButton`. An icon-only button may be a plain
 
 Do not style a red `<p>` or a grey "No items" line by hand. Pass a nullable
 error ref straight to `InlineError`'s `message` and gate it with `v-if`.
+
+`InlineError` has two forms. The default `banner` boxes the message; use it
+for a failure that belongs to a whole view, form, or sheet. `line` is bare
+text; use it under a field, inside a list row, or beside a button. Both use
+`text-severity-error` and nothing else: never `text-kind-issue` for an error.
+Pass spacing (`mt-2`, `px-3`) and `leading-relaxed` as a class.
 
 ### Test ids
 
