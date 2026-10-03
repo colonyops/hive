@@ -6,7 +6,7 @@
 // defaults to, and changing it never tears down a live pane nor hides another
 // workspace's chats. The one pane the shell itself draws is the zero
 // state: no PTY exists yet, so it says what a chat is and offers to start one,
-// which NewChatDialog then asks for. What is borrowed from
+// which the new-chat SessionLaunchDialog then asks for. What is borrowed from
 // TerminalMode.vue is narrower — the aside/main split, plus (since ADR agent-workspace-sessions-are-tmux-sessions)
 // the pane's xterm wiring itself: a session is a tmux session, addressed and
 // framed exactly like a hive one, just not discovered through hive.
@@ -25,7 +25,7 @@ import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
 import BaseButton from './ui/BaseButton.vue'
 import RenameDialog from './ui/RenameDialog.vue'
-import NewChatDialog from './NewChatDialog.vue'
+import SessionLaunchDialog from './SessionLaunchDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
@@ -280,9 +280,10 @@ function handleStartSessionIn(workspace: string): void {
   void startNewSession(workspace, DEFAULT_CHAT_NAME)
 }
 
-async function submitNewSession(input: { workspace: string; name: string }): Promise<void> {
+async function submitNewSession(input: { workspace?: string; name: string }): Promise<void> {
+  if (!input.workspace) return
   newSessionOpen.value = false
-  await startNewSession(input.workspace, input.name || DEFAULT_CHAT_NAME)
+  await startNewSession(input.workspace, input.name)
 }
 
 // Focus follows a new session, which also unfolds the workspace its row lands
@@ -1028,11 +1029,14 @@ onBeforeUnmount(() => {
       @delete="deleteWorkspaceFromEditor"
     />
 
-    <NewChatDialog
+    <SessionLaunchDialog
       v-if="newSessionOpen"
-      :workspaces="workspaces"
-      :initial-workspace="defaultWorkspaceDir"
-      :root="root"
+      :options="{ workspaces }"
+      :initial="{ workspace: defaultWorkspaceDir }"
+      workspace-only
+      :default-name="DEFAULT_CHAT_NAME"
+      :no-workspaces-hint="`No workspaces yet. Author one under ${root}.`"
+      testid="new-chat"
       @close="newSessionOpen = false"
       @submit="submitNewSession"
     />

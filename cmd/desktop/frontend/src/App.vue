@@ -10,8 +10,7 @@ import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import ActionInputsDialog from './components/ActionInputsDialog.vue'
-import CreateSessionDialog from './components/CreateSessionDialog.vue'
-import NewSessionDialog from './components/NewSessionDialog.vue'
+import SessionLaunchDialog from './components/SessionLaunchDialog.vue'
 import ConfirmationHost from './components/ui/ConfirmationHost.vue'
 import RenameDialog from './components/ui/RenameDialog.vue'
 import HubOverlay from './components/ui/HubOverlay.vue'
@@ -1183,13 +1182,7 @@ function cancelNewSessionDialog(): void {
   cancelNewSession()
 }
 
-async function submitNewSessionAndClearSelection(input: {
-  repository?: string
-  workspace?: string
-  name: string
-  prompt: string
-  agent?: string
-}): Promise<void> {
+async function submitNewSessionAndClearSelection(input: Parameters<typeof submitNewSession>[0]): Promise<void> {
   await submitNewSession(input)
   if (!newSessionOpen.value && creatingFromSelection.value) {
     creatingFromSelection.value = false
@@ -1911,13 +1904,15 @@ onUnmounted(cancelSequenceTimer)
       <DevBar v-if="devMode" />
       <SequenceHint />
     </div>
-    <CreateSessionDialog
+    <SessionLaunchDialog
       v-if="sessionLaunchAction && sessionLaunchOptions"
-      :action-label="sessionLaunchAction.label"
+      :action="sessionLaunchAction"
       :options="sessionLaunchOptions"
-      :inputs="sessionLaunchAction.inputs ?? []"
+      :initial="{ agent: sessionLaunchOptions.defaultAgent }"
       :busy="sessionLaunchBusy"
       :error="sessionLaunchError"
+      testid="create-session"
+      field-testid="session"
       @close="cancelSessionLaunch"
       @submit="submitSessionLaunch"
     />
@@ -1931,12 +1926,13 @@ onUnmounted(cancelSequenceTimer)
       @close="cancelActionInputs"
       @submit="submitActionInputs"
     />
-    <NewSessionDialog
+    <SessionLaunchDialog
       v-if="newSessionOpen && newSessionOptions"
       :key="newSessionFormKey"
       :options="newSessionOptions"
       :initial="newSessionInitial"
       :initial-target="newSessionInitialTarget"
+      with-prompt
       :busy="newSessionBusy"
       :error="newSessionError"
       :failure="newSessionFailure"

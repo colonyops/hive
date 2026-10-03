@@ -287,7 +287,7 @@ export function useNewSession() {
     repository?: string
     workspace?: string
     name: string
-    prompt: string
+    prompt?: string
     agent?: string
   }): Promise<void> {
     if (busy.value) return
@@ -301,7 +301,7 @@ export function useNewSession() {
         repository: input.repository ?? '',
         workspace: input.workspace ?? '',
         name: input.name,
-        prompt: input.prompt,
+        prompt: input.prompt ?? '',
         agent: input.agent ?? '',
         itemIds: [...itemIDs.value],
       })

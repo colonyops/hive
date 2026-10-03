@@ -81,16 +81,6 @@
       "count": 6
     }
   },
-  "src/components/CreateSessionDialog.vue": {
-    "no-useless-escape": {
-      "count": 1
-    }
-  },
-  "src/components/NewSessionDialog.vue": {
-    "no-useless-escape": {
-      "count": 1
-    }
-  },
   "src/components/NewWindowMenu.vue": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 2

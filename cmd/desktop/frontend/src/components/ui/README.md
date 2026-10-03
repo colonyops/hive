@@ -12,7 +12,7 @@ empty state, find the block below and use it.
   It takes props and slots, renders, and emits. It imports no store, no
   binding, and no feature module. Two unrelated views could use it.
 - **`components/`**: a feature component. It belongs to one surface of the
-  app (`FeedList`, `TerminalMode`, `CreateSessionDialog`) and may read
+  app (`FeedList`, `TerminalMode`, `SessionLaunchDialog`) and may read
   stores and call bindings.
 - **A feature folder** (`components/settings/`, `pipeline/`): components that
   only make sense inside that feature. `settings/` holds the Settings page
