@@ -2,6 +2,7 @@
 import { onClickOutside, useEventListener } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
 import AppMenu from './ui/AppMenu.vue'
+import SearchField from './ui/SearchField.vue'
 import FeedListItem from './FeedListItem.vue'
 import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
@@ -178,7 +179,7 @@ useEventListener(document, 'keydown', onDocumentKeydown)
 // Selected, not just focused: view.focus-search means "start a new search"
 // far more often than "edit the old one" — same call TerminalMode's own
 // filter field makes on the session-tree half of that command.
-const searchInput = ref<HTMLInputElement | null>(null)
+const searchInput = ref<{ select: () => void } | null>(null)
 function focusSearch(): void {
   searchInput.value?.select()
 }
@@ -204,18 +205,15 @@ watch(
     <!-- Top row: search + list-level All/Unread filter. No restated title —
          the sidebar already shows the active source. -->
     <header class="flex h-[46px] shrink-0 items-center gap-2.5 border-b border-border bg-pane px-3.5">
-      <label class="search-box">
-        <IconSearch class="size-[14px] shrink-0 text-text-3" />
-        <input
-          ref="searchInput"
-          :value="search"
-          type="text"
-          class="search-input"
-          placeholder="Search items, sources, people…"
-          data-testid="feed-search"
-          @input="emit('update:search', ($event.target as HTMLInputElement).value)"
-        />
-      </label>
+      <SearchField
+        ref="searchInput"
+        :model-value="search"
+        placeholder="Search items, sources, people…"
+        aria-label="Search items"
+        testid="feed-search"
+        class="min-w-0 flex-1"
+        @update:model-value="emit('update:search', $event)"
+      />
       <!-- Trash filters by disposition (ignored vs everything); feeds filter
            by unread. Trash carries no unread semantics. -->
       <div v-if="trash" class="segmented" role="group" aria-label="Filter">
@@ -615,33 +613,6 @@ watch(
 <style scoped>
 .feed-list {
   background: var(--color-list);
-}
-.search-box {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--color-strong);
-  border-radius: 8px;
-  background: var(--color-app);
-  padding: 6px 11px;
-}
-.search-box:focus-within {
-  border-color: var(--color-accent);
-}
-.search-input {
-  min-width: 0;
-  flex: 1;
-  border: none;
-  background: none;
-  color: var(--color-text);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  outline: none;
-}
-.search-input::placeholder {
-  color: var(--color-text-4);
 }
 .segmented {
   display: flex;

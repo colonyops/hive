@@ -731,7 +731,7 @@ describe('AgentsSidebar', () => {
     await field.setValue('nothing-matches-this')
     expect(wrapper.get('[data-testid="agents-sidebar-workspaces-empty"]').text()).toContain('nothing-matches-this')
 
-    await field.trigger('keydown.esc')
+    await field.trigger('keydown', { key: 'Escape' })
     expect(wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]')).toHaveLength(2)
   })
 

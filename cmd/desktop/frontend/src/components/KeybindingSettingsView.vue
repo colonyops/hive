@@ -15,12 +15,12 @@ import { useEventListener } from '@vueuse/core'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import IconPlus from '~icons/lucide/plus'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
-import IconSearch from '~icons/lucide/search'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
 import SettingsHeading from './settings/SettingsHeading.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import EmptyState from './ui/EmptyState.vue'
+import SearchField from './ui/SearchField.vue'
 import { commandById } from '../keybindings/catalog'
 import { comboFromEvent, formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { keymapRows, requestedEditorFilter, type KeymapRow } from '../keybindings/keymapRows'
@@ -156,18 +156,13 @@ onUnmounted(commitCapture)
       description="Rebind commands to your own keys. Bindings apply across the app; feed navigation keys work while the feed is open."
     >
       <template #actions>
-        <label
-          class="flex w-[220px] items-center gap-2 rounded-[7px] border border-card bg-app px-3 py-1.5 focus-within:border-accent"
-        >
-          <IconSearch class="size-[14px] shrink-0 text-text-3" />
-          <input
-            v-model="filter"
-            type="text"
-            class="min-w-0 flex-1 border-none bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-4"
-            placeholder="Filter shortcuts…"
-            data-testid="keybinding-filter"
-          />
-        </label>
+        <SearchField
+          v-model="filter"
+          placeholder="Filter shortcuts…"
+          aria-label="Filter shortcuts"
+          testid="keybinding-filter"
+          class="w-[220px]"
+        />
       </template>
     </SettingsHeading>
 

@@ -7,7 +7,7 @@
 // click-to-add — a single click landing a node with no control over
 // position was bad UX, so real drag-and-drop is the only way to add a node.
 import { computed, ref } from 'vue'
-import IconSearch from '~icons/lucide/search'
+import SearchField from '../../components/ui/SearchField.vue'
 import { palette } from '../registry'
 import { NODE_TYPE_MIME } from '../lib/dragTypes'
 import { summarize } from '../lib/markdown'
@@ -43,16 +43,13 @@ function onDragStart(e: DragEvent, type: string) {
 <template>
   <div class="flex h-full flex-col" data-testid="node-palette">
     <div class="flex h-11 shrink-0 items-center border-b border-row px-2.5" data-testid="palette-search-header">
-      <div class="flex h-8 w-full items-center gap-2 rounded-lg border border-strong bg-app px-2.5">
-        <IconSearch class="size-3.5 shrink-0 text-text-4" />
-        <input
-          v-model="query"
-          type="text"
-          placeholder="filter nodes…"
-          class="w-full min-w-0 bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-4"
-          data-testid="palette-search"
-        />
-      </div>
+      <SearchField
+        v-model="query"
+        placeholder="filter nodes…"
+        aria-label="Filter nodes"
+        testid="palette-search"
+        class="h-8 w-full"
+      />
     </div>
 
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto p-2.5">

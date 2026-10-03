@@ -49,6 +49,7 @@ import ConfirmationDialog from './ui/ConfirmationDialog.vue'
 import NewWindowMenu from './NewWindowMenu.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
+import SearchField from './ui/SearchField.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
 import SessionRenameDialog from './SessionRenameDialog.vue'
 import SessionRowMenu from './SessionRowMenu.vue'
@@ -327,19 +328,7 @@ const treeNote = computed<'' | 'empty' | 'no-matches'>(() => {
 // Transient, deliberately not stored: a filter restored at launch hides
 // sessions the user has no reason to suspect are there.
 const sessionFilter = ref('')
-const filterInput = ref<HTMLInputElement | null>(null)
-
-// Escape clears the field, and leaves it once there is nothing left to clear —
-// so it is never a keystroke that appears to do nothing. Keeping a filter and
-// walking what it left is the other way out: ↓ and Enter go to the tree without
-// touching the query.
-function escapeFilter(): void {
-  if (sessionFilter.value) {
-    sessionFilter.value = ''
-    return
-  }
-  focusTreeCursor()
-}
+const filterInput = ref<{ select: () => void } | null>(null)
 
 // The other axis the tree narrows on: the query picks a session by name, this
 // picks by whether tmux is holding one, and it cuts repositories as well as
@@ -2103,19 +2092,13 @@ onBeforeUnmount(() => {
           <!-- Flush in the bar rather than a boxed field: the sidebar resizes
                down to 180px, and a bordered input beside three controls leaves
                the bar looking like nothing but chrome. -->
-          <IconSearch class="size-3 shrink-0" :class="sessionFilter ? 'text-text-3' : 'text-text-4'" />
-          <input
+          <SearchField
             ref="filterInput"
             v-model="sessionFilter"
-            type="text"
-            placeholder="Filter…"
+            variant="bar"
             aria-label="Filter sessions"
-            class="min-w-0 flex-1 bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-4"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck="false"
-            data-testid="terminal-sessions-filter"
-            @keydown.esc.prevent="escapeFilter"
+            testid="terminal-sessions-filter"
+            @escape="focusTreeCursor"
             @keydown.down.prevent="focusTreeCursor"
             @keydown.enter.prevent="focusTreeCursor"
           />

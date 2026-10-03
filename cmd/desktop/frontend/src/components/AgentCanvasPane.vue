@@ -11,9 +11,9 @@ import IconChevronDown from '~icons/lucide/chevron-down'
 import IconCopy from '~icons/lucide/copy'
 import IconDownload from '~icons/lucide/download'
 import IconFileText from '~icons/lucide/file-text'
-import IconSearch from '~icons/lucide/search'
 import IconX from '~icons/lucide/x'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
+import SearchField from './ui/SearchField.vue'
 import { useAgentCanvas } from '../composables/useAgentCanvas'
 import { useCanvasTypography } from '../stores/useCanvasTypography'
 import { useClipboard } from '../composables/useClipboard'
@@ -58,19 +58,12 @@ const readerStyle = computed(() => ({
 }))
 
 const search = ref('')
-const searchInput = ref<HTMLInputElement | null>(null)
+const searchInput = ref<{ focus: () => void } | null>(null)
 watch(browsing, (open) => {
   if (!open) return
   search.value = ''
   void nextTick(() => searchInput.value?.focus())
 })
-
-// The Code sidebar filter's escape ladder: a first Esc clears the text, a
-// second leaves the browse view.
-function escapeSearch(): void {
-  if (search.value) search.value = ''
-  else browsing.value = false
-}
 
 // Copy is fetch-first (usePrompts' shape): the Go side renders the markdown
 // so copy and save can never disagree, and a failure before SetText is still
@@ -245,19 +238,13 @@ const {
       <!-- Flush in the bar, the Code sidebar's filter shape: a boxed field in
            a pane this narrow reads as chrome. -->
       <div class="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
-        <IconSearch class="size-3 shrink-0" :class="search ? 'text-text-3' : 'text-text-4'" />
-        <input
+        <SearchField
           ref="searchInput"
           v-model="search"
-          type="text"
-          placeholder="Filter…"
+          variant="bar"
           aria-label="Filter canvases"
-          class="min-w-0 flex-1 bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-4"
-          autocapitalize="off"
-          autocorrect="off"
-          spellcheck="false"
-          data-testid="agent-canvas-search"
-          @keydown.esc.prevent="escapeSearch"
+          testid="agent-canvas-search"
+          @escape="browsing = false"
         />
       </div>
       <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-2 pt-1">

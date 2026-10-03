@@ -37,12 +37,12 @@ import IconPlay from '~icons/lucide/play'
 import IconPlus from '~icons/lucide/plus'
 import IconPower from '~icons/lucide/power'
 import IconRotateCw from '~icons/lucide/rotate-cw'
-import IconSearch from '~icons/lucide/search'
 import IconTrash2 from '~icons/lucide/trash-2'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import AppMenu from './ui/AppMenu.vue'
 import ConfirmationDialog from './ui/ConfirmationDialog.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
+import SearchField from './ui/SearchField.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useResizablePanel } from '../composables/useResizablePanel'
@@ -165,7 +165,7 @@ const rootEl = ref<HTMLElement | null>(null)
 // carries all its chats, so typing a workspace name is how to narrow to it,
 // and otherwise a workspace survives on the chats of its own that matched.
 const filter = ref('')
-const filterInput = ref<HTMLInputElement | null>(null)
+const filterInput = ref<{ focus: () => void } | null>(null)
 
 const filteredTree = computed<WorkspaceNode[]>(() => {
   const query = filter.value.trim().toLowerCase()
@@ -186,13 +186,6 @@ const emptyNote = computed(() => {
   const query = filter.value.trim()
   return query ? `Nothing matches “${query}”.` : 'No workspaces yet. Create one from the list menu.'
 })
-
-// Escape clears the field, and leaves it once there is nothing left to clear,
-// so it is never a keystroke that appears to do nothing.
-function escapeFilter(): void {
-  if (filter.value) filter.value = ''
-  else rootEl.value?.focus()
-}
 
 // Expand/collapse is transient view state, not configuration — localStorage,
 // the same call the hub sidebar's folder collapse and the Code view's group
@@ -615,19 +608,13 @@ defineExpose({
          bordered field beside three controls leaves the bar looking like
          nothing but chrome. -->
     <div class="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3">
-      <IconSearch class="size-3 shrink-0" :class="filter ? 'text-text-3' : 'text-text-4'" />
-      <input
+      <SearchField
         ref="filterInput"
         v-model="filter"
-        type="text"
-        placeholder="Filter…"
+        variant="bar"
         aria-label="Filter workspaces and chats"
-        class="min-w-0 flex-1 bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-4"
-        autocapitalize="off"
-        autocorrect="off"
-        spellcheck="false"
-        data-testid="agents-sidebar-filter"
-        @keydown.esc.prevent="escapeFilter"
+        testid="agents-sidebar-filter"
+        @escape="rootEl?.focus()"
       />
       <!-- Doubles as the staleness indicator, as the Code view's does: both
            lists render from their last-good rows, and the spin is what says a

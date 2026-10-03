@@ -9,12 +9,12 @@
 // titlebar Activity icon.
 import { computed, onMounted, ref } from 'vue'
 import IconExternalLink from '~icons/lucide/external-link'
-import IconSearch from '~icons/lucide/search'
 import IconX from '~icons/lucide/x'
 import { useActivity } from '../stores/useActivity'
 import { useNewSession } from '../composables/useNewSession'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 import ViewHeader from './ui/ViewHeader.vue'
+import SearchField from './ui/SearchField.vue'
 import {
   ACTIVITY_FILTERS,
   activityLinks,
@@ -145,18 +145,13 @@ onMounted(() => {
         </button>
       </div>
       <div class="flex-1" />
-      <label
-        class="flex w-[230px] items-center gap-2 rounded-lg border border-strong bg-app px-2.5 py-1.5 focus-within:border-text-3"
-      >
-        <IconSearch class="size-3.5 shrink-0 text-text-4" />
-        <input
-          v-model="search"
-          type="text"
-          placeholder="Filter activity…"
-          class="min-w-0 flex-1 bg-transparent text-[12.5px] text-text placeholder:text-text-4 focus:outline-none"
-          data-testid="activity-search"
-        />
-      </label>
+      <SearchField
+        v-model="search"
+        placeholder="Filter activity…"
+        aria-label="Filter activity"
+        testid="activity-search"
+        class="w-[230px]"
+      />
     </div>
 
     <!-- ledger -->

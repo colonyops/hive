@@ -8,13 +8,13 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onKeyStroke } from '@vueuse/core'
 import IconEraser from '~icons/lucide/eraser'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
-import IconSearch from '~icons/lucide/search'
 import IconX from '~icons/lucide/x'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import ConfirmationDialog from './ui/ConfirmationDialog.vue'
 import TaskDetailPane from './TaskDetailPane.vue'
 import TaskTreeRow from './TaskTreeRow.vue'
 import ViewHeader from './ui/ViewHeader.vue'
+import SearchField from './ui/SearchField.vue'
 import { useClipboard } from '../composables/useClipboard'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { useToasts } from '../composables/useToasts'
@@ -285,18 +285,13 @@ onUnmounted(() => {
         />
       </div>
 
-      <label
-        class="flex w-[230px] items-center gap-2 rounded-lg border border-strong bg-app px-2.5 py-1.5 focus-within:border-text-3"
-      >
-        <IconSearch class="size-3.5 shrink-0 text-text-4" />
-        <input
-          v-model="search"
-          type="text"
-          placeholder="Filter tasks…"
-          class="min-w-0 flex-1 bg-transparent text-[12.5px] text-text placeholder:text-text-4 focus:outline-none"
-          data-testid="tasks-search"
-        />
-      </label>
+      <SearchField
+        v-model="search"
+        placeholder="Filter tasks…"
+        aria-label="Filter tasks"
+        testid="tasks-search"
+        class="w-[230px]"
+      />
 
       <div class="flex-1" />
 
