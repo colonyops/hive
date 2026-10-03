@@ -6,7 +6,7 @@ One repository, one Go module, four things in it:
 | --- | --- | --- |
 | `cmd/hive/` | The **hive CLI/TUI**: a tmux-native command center that runs coding agents in isolated git clones with live status, shared context, tasks, and inter-agent messaging. The root program (`main.go` keeps `go install github.com/colonyops/hive@latest` working). | This file |
 | `cmd/desktop/` | **Hive Desktop**, the Wails v3 app: an inbox that collects work into feeds, a Code area on the CLI's session engine, and agent chat workspaces. | [`cmd/desktop/AGENTS.md`](cmd/desktop/AGENTS.md) |
-| `internal/` | The packages both programs share: config, sessions, git, the `hive.db` stores, messaging, hc, terminal status, HTTP plumbing. | [`docs/architecture.md`](docs/architecture.md) |
+| `internal/` | The hive engine both programs run on, in layers: `domain` (pure models), `platform` (git, tmux, SQLite and other drivers), `store` (`hive.db`), `config` (the engine sections of `config.yaml`), and `hive` (the application services and `hive.Engine`). | [`docs/architecture.md`](docs/architecture.md) |
 | `docs/` | hivedesktop.com: the landing page and the product docs for both programs (Zensical; pages under `docs/docs/`). The contributor docs sit beside it: `docs/architecture.md`, `docs/decisions/`, `docs/distribution.md`. | [`docs/AGENTS.md`](docs/AGENTS.md) |
 | `cmd/tools/` | Development and release binaries that never ship: `adr` (decision records) and `release` (the one release run for every program: the changelog commands, the desktop publisher, and the tag and workflow dispatch that ship the CLI). | |
 
@@ -20,9 +20,11 @@ against. The document describes a **target state**; where the current code
 and the document disagree, the document wins for new work.
 
 Shared `internal/` must not import charm, Wails, or anything below `cmd/`.
-`cmd/hive` must not import the desktop program, and `cmd/desktop/internal/app`
-consumes the shared packages only through its seam. depguard fails the lint on
-a violation (`.golangci.yml`).
+Inside it, imports point down the layers: `hive` over `platform`, `store` and
+`config`, all of them over `domain`, and everything over `pkg/`. `cmd/hive`
+must not import the desktop program. depguard fails the lint on a violation
+(`.golangci.yml`); `docs/architecture.md`, "Layers and the dependency rule",
+has the rules.
 
 ## Comments
 
@@ -141,14 +143,14 @@ cmd/hive/
 cmd/desktop/        # Hive Desktop (see cmd/desktop/AGENTS.md)
 cmd/tools/          # adr, release
 docs/               # hivedesktop.com (docs/docs/) and the contributor docs (see docs/AGENTS.md)
-internal/           # Shared with Hive Desktop
-├── config/         # Engine config: loading, validation, defaults, the YAML writer, migrate/
-├── core/           # doctor, eventbus
-├── domain/         # Pure models: session, hc, messaging, terminal status and assess rules
+internal/           # The hive engine, shared with Hive Desktop
+├── domain/         # Pure models and ports: session, hc, messaging, terminal status and assess rules, agent
 ├── platform/       # Drivers: git, tmux (exec, status, control, bin), proc, sqlite,
 │                   # execenv, credentials, secrets, observe, workspace, tmuxtest
-├── data/           # hive.db: migrations, sqlc queries, stores
-├── hive/           # Service layer - orchestrates all operations
+├── store/          # hive.db: migrations, sqlc queries, stores
+├── config/         # Engine config: loading, validation, defaults, the YAML writer, migrate/
+├── hive/           # hive.Engine and one subpackage per service (session, status, hc,
+│                   # messaging, todo, gitstatus, doctor, events, ...)
 └── web/            # HTTP plumbing shared with cmd/desktop/devserver
 ```
 
@@ -159,7 +161,8 @@ UI code goes below `cmd/hive/internal/`.
 | File                                        | Purpose                                             |
 | ------------------------------------------- | --------------------------------------------------- |
 | `cmd/hive/cli/cli.go`                       | CLI entry point, global flags, command registration |
-| `internal/hive/service.go`                  | Service layer - coordinates sessions, git, rules    |
+| `internal/hive/engine.go`                   | `hive.Engine`: composes the services, `Reload`      |
+| `internal/hive/session/service.go`          | Session service - coordinates sessions, git, rules  |
 | `internal/config/config.go`                 | Engine config structs, loading, defaults            |
 | `internal/config/validate.go`               | Template data structs, validation                   |
 | `cmd/hive/internal/config/config.go`        | CLI config: views, keybindings, user commands       |

@@ -17,11 +17,9 @@ individual choices; this document describes the shape everything fits into.
 > and `context.Context` first on every core method.
 >
 > Several of those are enforced rather than reviewed: `depguard` fails a core
-> package that imports Wails or an adapter, and a second `depguard` rule fails
-> one that imports the shared hive packages outside a narrow, commented seam
-> allowlist (`app.go`, `dispatch/hive_adapters.go`,
-> `dispatch/hive_hc_adapters.go`, `data/queries/dbext.go`, and the tests that
-> exercise them); `forbidigo` fails `application.Get`,
+> package that imports Wails or an adapter, and one rule per shared layer
+> fails an import that points up the [layers](#layers-and-the-dependency-rule);
+> `forbidigo` fails `application.Get`,
 > `context.Background` or an `emit*` helper outside the adapter, `containedctx`
 > fails a stored request context, and `mise run desktop:check:bindings` fails a
 > service that moved without regenerating its bindings.
@@ -114,10 +112,10 @@ and the flow engine are process singletons; a second process running them
 would double-poll sources and re-execute actions. Adapters are therefore
 in-process callers of the same `App`, not clients over a wire.
 
-`hive` (the CLI/TUI in `cmd/hive`) is a **separate product in the same
-repository**. The desktop consumes the packages the two share under
-`internal/` and never extends the CLI itself. When this document says "CLI",
-it means a future surface of *this* binary.
+`hive` (the CLI/TUI in `cmd/hive`) is the other program in the same
+repository. Both run on the hive engine under `internal/`, and neither
+imports the other. When this document says "CLI", it means a future surface
+of *this* binary.
 
 ### Named patterns
 
@@ -142,8 +140,7 @@ Domain-Driven Design, (Go) an idiom specific to the language.
 | **Error chain** (httpkit `errchain`) | every HTTP surface: `httpapi`, devserver control | Handlers are `func(w, r) error` behind one `web/mid.Errors` middleware that maps error types to responses exactly once — no handler writes a status inline. Input enters only through `web/extractors` (`Body` decode + the struct's criterio `Validate`). Per-resource `ctrl_*.go` files, routes registered in one place. See ADR http-handler-conventions. |
 | **Tool table** | `mcpsrv` | One file declares every MCP tool — name, title, description — and nothing else; the handler beside it is a thin call into `App`. Input schemas are *inferred from the handler's typed input struct*, never hand-written, so a tool cannot advertise a field its handler does not accept. A store type whose `jsonschema` tags were written for the OpenAPI reflector cannot be a tool's input or output type: the SDK's inferrer rejects a `WORD=`-prefixed tag, and `json.RawMessage` infers as an array. Declare an adapter-local type and convert at the seam. Three contracts hold across the whole surface, because an agent has no UI to disambiguate from: an id that resolves to nothing is `not_found` and never an empty collection; a mutation's answer is never a constant, so a caller can tell it happened; and a field whose size the *source* decides — an item payload, an event detail, a dry run's messages — is behind a `detail` argument that defaults to omitting it, with the level echoed on the answer. See ADR mcp-replaces-the-agent-facing-http-api. |
 | **Data-plane mount** | streaming surfaces on the loopback server: the terminal WebSocket | A surface that streams bytes is a raw `http.Handler` mounted at its own prefix via `App.MountAPI` — never a row in the errchain operations table, which cannot frame a hijacked socket. Its request/response half stays REST on `httpapi`; only what needs latency or backpressure rides the socket. It authenticates itself if it must, because the errchain surface around it is deliberately unauthenticated. See ADR terminal-transport. |
-| **Anti-Corruption Layer** (DDD) | the shared `internal/` seam | Declare a narrow local interface describing only what we need, let the shared concrete type satisfy it structurally, convert types at the seam. A signature change on the shared side then breaks one adapter file rather than the app. The idiom is `hive_adapters.go`. |
-| **Bounded Context** (DDD) | `app` vs the shared `internal/` | Two models that must not merge. `hive` is a separate product with its own vocabulary; its types stop at the ACL and never appear in an `app` signature. Pure domain primitives (`internal/domain/*`) are the exception for functions, constants, and sentinel errors, which `app` calls directly (ADR pure-shared-domain-packages-are-imported-directly-services-and-stores-stay-behind-the-seam). |
+| **Shared Kernel** (DDD) | `internal/`, the hive engine | One model both programs run on. `app` calls `hive.Engine` and its services directly, and domain types (`session.Session`, `hc.Item`) may appear in any `app` signature. Where a transport needs another shape, the adapter converts (`wailsui`, `mcpsrv`), never `app`. A change here changes both programs, and CI builds and tests both. See [Layers and the dependency rule](#layers-and-the-dependency-rule) and ADR both-programs-run-on-one-layered-hive-engine. |
 
 **Behaviour — how variation is handled**
 
@@ -195,10 +192,10 @@ column is the section that specifies it.
 | A new **persisted entity** | Store, Unit of Work, Options struct, Consumer-defined interface | [Stores and services](#stores-and-services) |
 | An operation **spanning two domains** | Unit of Work — `db.Ctx(ctx)` to join the ambient transaction, never a second one | [Config versus data](#config-versus-data) |
 | A new **dependency on something outside** | Consumer-defined interface in the package that calls it | [Layers and the dependency rule](#layers-and-the-dependency-rule) |
-| Anything touching a **shared `internal/` package** | Anti-Corruption Layer, Bounded Context — wrap it; change it with the CLI in mind | [Layers and the dependency rule](#layers-and-the-dependency-rule) |
+| Anything touching a **shared `internal/` package** | Shared Kernel — put it in the layer its path names, import only downward, change it with the CLI in mind | [Layers and the dependency rule](#layers-and-the-dependency-rule) |
 | A new **outbound HTTP call from a source** | `sources/sourcehttp` over `appkit/httpclient` — never a bespoke client | [Source HTTP](#source-http) |
 | A new **command the app spawns on the user's behalf** | Resolved environment — `execenv` supplies `Cmd.Env` and resolves the binary; never the inherited PATH, and never a login shell in place of it | [Subprocess environment](#subprocess-environment) |
-| A change to the **external Hive config** | Anti-Corruption Layer; in-place `yaml.Node` edit (the `flow/yamldoc.go` pattern); `Rebind` so the running process sees it | [The external Hive config](#the-external-hive-config) |
+| A change to the **external Hive config** | In-place `yaml.Node` edit through `internal/config`'s writer; `hive.Engine.Reload` so the running process sees it | [The external Hive config](#the-external-hive-config) |
 | A **breaking config schema change** | Forward-only YAML migration runner (per-file `version:`, comment-not-preserving rewrite, backup under StateDir) | [Config versus data](#config-versus-data), ADR yaml-config-migration |
 
 If what you are building is not on this list, it is probably a service method
@@ -238,38 +235,70 @@ something has gone wrong.
 ## Layers and the dependency rule
 
 ```
-adapter/*  ──►  app/*  ──►  internal/*  (shared with the CLI; the seam)
-                  │
-                  └──►  appkit, stdlib, third-party
+desktop adapter/*  ──►  desktop app/*        cmd/hive/internal/*     programs
+                             │                     │
+                             └──────────┬──────────┘
+                                        ▼
+                                  internal/hive                        engine
+                                        ▼
+            internal/platform    internal/store    internal/config     drivers, hive.db, config
+                                        ▼
+                                 internal/domain                       models and ports
+                                        ▼
+                                      pkg/                             kit
 ```
 
-Dependencies point one way. `app` must never import `adapter`, Wails, or any
-transport package. An `app` package that needs something from the outside
-declares an interface and takes it as a constructor parameter.
+Dependencies point down. A program may import any shared layer, not only the
+engine: the desktop needs `platform/tmux/control` for terminal streaming and
+`platform/sqlite` for its own database. Nothing in `internal/` imports a
+program. Go's `internal` visibility keeps `cmd/hive/internal` and
+`cmd/desktop/internal` apart, and `cli-no-desktop-deps` keeps the CLI off the
+desktop's dependencies.
 
-The shared packages under `internal/` (config, sessions, git, the `hive.db`
-stores, hc, messaging) belong to both programs, and the CLI is their first
-consumer. The desktop does not spread their types through its core; it wraps
-them. The established wrapper idiom is in `hive_adapters.go`: declare a
-narrow local interface describing only what we need, let the shared concrete
-type satisfy it structurally, and convert types at the seam — so a signature
-change on the shared side breaks compilation at one adapter file rather than
-across the app. A change the desktop needs in a shared package is made there,
-in the same PR, with the CLI in mind.
+`internal/` is the hive engine both programs run on (ADR
+both-programs-run-on-one-layered-hive-engine). A package's path names its
+layer, and one `depguard` rule per layer matches the path, so a new package
+needs no lint edit:
 
-Pure domain primitives skip the wrapper. A package with no I/O, no
-configuration, no store, and no `internal/` imports beyond other primitives is
-imported directly. Those are the packages under `internal/domain`, and the
-`domain-is-pure` lint rule keeps them that way. A wrapper with the same signature would isolate
-nothing, and the two programs must share one copy of rules such as session
-naming. The primitive's types still convert at the seam
-([ADR](decisions/2026-10-02-pure-shared-domain-packages-are-imported-directly-services-and-stores-stay-behind-the-seam.md)).
+| Layer | Path | Holds | May import | Rule |
+| --- | --- | --- | --- | --- |
+| Kit | `pkg/` | Hive-agnostic helpers: `atomicfile`, `executil`, `pathutil`, `tmpl`, `buildinfo` | stdlib, third party | |
+| Domain | `internal/domain/` | Models, rules, enums, sentinel errors, and the ports the engine needs. No I/O, no config | `pkg/`, other `domain/*` | `domain-is-pure` |
+| Platform | `internal/platform/` | Drivers for one outside system each: git, tmux, SQLite, process inspection, the login-shell environment, credentials, secrets, the OTel API | `pkg/`, `domain/`, other `platform/*` | `platform-is-a-driver` |
+| Store | `internal/store/` | `hive.db`: sqlc output, migrations, one store per aggregate | `pkg/`, `domain/`, `platform/sqlite` | `store-is-persistence` |
+| Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer, versioned migration | `pkg/`, `domain/` | `config-is-data` |
+| Engine | `internal/hive/` | One subpackage per application service, the event bus, and `hive.Engine`, which composes them | everything above | |
+| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features, program-only config | any shared layer, their own tree | `core`, `cli-no-desktop-deps` |
+
+`shared-surface-free` keeps charm and Wails out of all of `internal/`.
+
+The engine takes its drivers as `hive.Ports` and builds the config-derived
+services on `New` and on each `Reload`. Engine subpackages never import the
+engine root, so the root composes them without a cycle. A service declares
+the ports it consumes, and `platform` and `store` satisfy them structurally,
+the [Go amendment](#the-go-amendment-to-hexagonal) applied to the engine.
+
+Inside the desktop, `adapter` imports `app` and `app` imports the shared
+layers; `app` never imports `adapter`, Wails, or any transport package. An
+`app` package that needs something from the outside declares an interface and
+takes it as a constructor parameter. Domain types cross freely into `app`
+signatures. Where a transport needs a different shape (camelCase JSON, a
+narrower tool schema) the adapter converts.
+
+A change the desktop needs in a shared package is made there, in the same PR,
+with the CLI in mind. A program still reads `internal/store` directly in a few
+places (the TUI review views, `sweep`); new code goes through an engine
+service.
 
 ## Directory structure
 
 ```
-cmd/hive/                         # the hive CLI/TUI, a separate program
+cmd/hive/                         # the hive CLI/TUI
   releasenotes/                   # the CLI's embedded changelog
+  internal/                       # CLI-only: app/ (composition root over
+                                  #   hive.Engine), config/ (the CLI sections of
+                                  #   config.yaml), commands/, tui/, action/,
+                                  #   theme/, plugins/, sources/, sweep/
 cmd/tools/                        # repo-wide tooling: adr, release
 main.go  go.mod                   # one module for every program
 
@@ -368,37 +397,22 @@ cmd/desktop/internal/
                                   #   frontmatter template and the naming rules
                                   #   a target agent enforces. Writing one is the
                                   #   workspace generator's (ADR skills-are-declared-by-a-workspace)
-    credentials/                  # Ref{Provider, Account}, Store, keychain, index
-    tmuxcc/                       # tmux control-mode client: line framer, command
-                                  #   FIFO, %output decode, one client per session
-                                  #   slug, fan-out broker — no transport, no UI
-    tmuxbin/                      # where the tmux binary is: paths.tmux, then
-                                  #   PATH, then package prefixes (ADR tmux-discovery)
+    hiveconf/                     # reads the external Hive config back as
+                                  #   written, not merged; writes go through
+                                  #   internal/config
     ptyterm/                      # ephemeral terminals: a PTY and the process on
                                   #   the far end, id-keyed, dying with the app —
                                   #   what the pop-up runs on (ADR ephemeral-popup-terminals)
-    execenv/                      # the environment the user's own commands run
-                                  #   in: the login shell's PATH, then this
-                                  #   process's, then those prefixes (ADR subprocess-environment),
-                                  #   plus the shell's other variables where
-                                  #   this process defines none (ADR a-subprocess-inherits-the-whole-shell-environment-not-just-its-path)
     jobs/  activity/              # domain types, enums, and consumer-defined
                                   #   Recorder ports; persistence lives in data/stores
     perf/                         # UI performance spans -> a size-capped JSONL
                                   #   file; development-gated, no aggregation
                                   #   and no dependencies (ADR ui-performance-spans-are-recorded-to-jsonl)
-    secrets/                      # config holds a reference (env:, file:,
-                                  #   op://) and this resolves it; a literal is
-                                  #   rejected (ADR config-holds-secret-references-not-secrets-and-1password-is-one-of-the-sources)
     telemetry/                    # the app's own metrics, logs and traces over
                                   #   OTLP, profiles over Pyroscope, and the local
                                   #   /metrics scrape; the only package that
                                   #   imports either telemetry SDK and owns their
                                   #   process-wide lifecycle
-    observe/                      # the OTel API surface every other package
-                                  #   calls: scope naming, Must, RecordError,
-                                  #   StartConditionalSpan. No SDK, no
-                                  #   abstraction (ADR a-package-declares-its-own-opentelemetry-instruments-against-the-global-provider)
     settings/                     # settings.yaml, paths, bootstrap pointer file
     data/                         # persistence boundary; no adapter import
       models/                     # hand-written domain types; no database import
@@ -438,20 +452,70 @@ cmd/desktop/internal/
                                   #   the loopback bind because nothing here spawns
                                   #   a process
 
-internal/                         # shared with the CLI (the seam)
-  core/  data/  hive/  sources/   # config, sessions, git, hive.db, hc, messaging, terminal status
+pkg/                              # kit: hive-agnostic helpers (atomicfile,
+                                  #   executil, pathutil, tmpl, buildinfo, ...)
+
+internal/                         # the hive engine both programs run on (see
+                                  #   Layers and the dependency rule)
+  domain/                         # pure models and ports: session, hc,
+                                  #   messaging, terminal (+ assess/, status/,
+                                  #   content/), multiplexer, agent (the one
+                                  #   agent catalog), kv, todo, notify, review,
+                                  #   validate
+  platform/                       # drivers, one outside system each
+    git/  workspace/              #   git commands; repository scan + fsnotify
+    tmux/                         #   exec/ (tmuxexec, one-shot commands),
+                                  #   status/ (tmuxstatus, pane status source),
+                                  #   control/ (tmuxcc, the control-mode client:
+                                  #   line framer, command FIFO, %output decode,
+                                  #   one client per slug, fan-out broker — no
+                                  #   transport, no UI), bin/ (tmuxbin, where the
+                                  #   binary is: paths.tmux, then PATH, then
+                                  #   package prefixes; ADR tmux-discovery)
+    proc/                         #   process inspection: process/, classifier/
+    sqlite/                       #   Open: DSN, pragmas, _txlock=immediate, pool;
+                                  #   hive.db and desktop-pipeline.db both use it
+    execenv/                      #   the environment the user's own commands run
+                                  #   in: the login shell's PATH, then this
+                                  #   process's, then those prefixes (ADR subprocess-environment),
+                                  #   plus the shell's other variables where
+                                  #   this process defines none (ADR a-subprocess-inherits-the-whole-shell-environment-not-just-its-path)
+    credentials/                  #   Ref{Provider, Account}, Store, keychain, index
+    secrets/                      #   config holds a reference (env:, file:,
+                                  #   op://) and this resolves it; a literal is
+                                  #   rejected (ADR config-holds-secret-references-not-secrets-and-1password-is-one-of-the-sources)
+    observe/                      #   the OTel API surface every other package
+                                  #   calls: scope naming, Must, RecordError,
+                                  #   StartConditionalSpan. No SDK, no
+                                  #   abstraction (ADR a-package-declares-its-own-opentelemetry-instruments-against-the-global-provider)
+    tmuxtest/                     #   real-tmux test helpers
+  store/                          # hive.db: one store per aggregate
+    db/                           #   sqlc output, migrations, the DB handle
+    migrate/                      #   the SQL migration runner
+  config/                         # the engine sections of config.yaml: load,
+                                  #   validate, paths (the data-dir resolver),
+                                  #   write.go (the comment-preserving writer
+                                  #   hive init and first run share)
+    migrate/                      #   versioned config migrations
+  hive/                           # the engine
+    engine.go                     #   hive.Engine: New(cfg, Ports), Reload(cfg),
+                                  #   one accessor per service
+    events/                       #   the domain event bus
+    session/  status/  hc/        #   one subpackage per application service
+    messaging/  repocontext/
+    todo/  gitstatus/  doctor/
   web/                            # HTTP plumbing shared with cmd/desktop/devserver
                                   #   (ADR http-handler-conventions): error wire shape, version
                                   #   handler; mid/ (error + logger middleware),
                                   #   extractors/ (Body/Query decode + validate)
-  releasenotes/                   # the changelog parser each program's embed feeds:
+  releasenotes/                   # release tooling, outside the layers: the
+                                  #   changelog parser each program's embed feeds:
                                   #   <version>.md per release, unreleased/ one file
                                   #   per change so concurrent branches never
                                   #   conflict. `mise run changelog:new` writes one;
                                   #   promotion collapses every program's at once
                                   #   (ADRs release-notes-ship-inside-the-binary,
                                   #   release-notes-accumulate-as-fragments)
-  tmuxtest/                       # real-tmux test helpers
 ```
 
 `cmd/tools/` and `cmd/desktop/{devtools,devserver}` hold developer tooling
@@ -651,8 +715,8 @@ Placement has four clauses:
 4. Whole-database maintenance stays on `queries.DB`.
 
 Every store call goes through `.Ctx(ctx)`, including reads, so it joins an
-ambient transaction. The database uses `_txlock=immediate` and has
-`MaxOpenConns: 2`; a nested `BEGIN IMMEDIATE` waits out `busy_timeout` for a
+ambient transaction. The database opens through `platform/sqlite.Open`, which
+sets `_txlock=immediate` for `hive.db` as well, and has `MaxOpenConns: 2`; a nested `BEGIN IMMEDIATE` waits out `busy_timeout` for a
 write lock its own caller holds and then fails with `SQLITE_BUSY`, so nothing
 opens a second transaction. `Compact` is the exception: SQLite cannot run
 `VACUUM` inside a transaction, so it runs on the pool. (ADR
@@ -878,15 +942,17 @@ Three rules hold for anything that touches this file:
 
 - **Own two keys, `workspaces` and `agents`, and nothing else.** A file with
   keys in it is edited through its parsed `yaml.Node` tree (the
-  `flow/yamldoc.go` pattern, in `cmd/desktop/internal/app/hiveconf`), so comments, key
+  `flow/yamldoc.go` pattern, in `internal/config/write.go`, which `hive init`
+  shares), so comments, key
   order, and keys this build does not know survive; the deprecated
   `repo_dirs` is the one key it retires, because hive reads it in place of an
   empty `workspaces`. A file this app creates, or one that exists with no keys
-  (the header `hiveconf.Create` leaves for a hand edit), is rendered from the
-  template, header included. Every write goes through `hiveconf`.
+  (the header `config.CreateFile` leaves for a hand edit), is rendered from the
+  template, header included. Every write goes through `config.ApplyEdit`;
+  `cmd/desktop/internal/app/hiveconf` only reads the file back.
 - **Validate before writing.** Hive fails the whole config when
   `agents.default` or a `rules[].agent` names no profile, so an invalid write
-  does not degrade the app, it stops the next launch. `hiveconf` checks the
+  does not degrade the app, it stops the next launch. The writer checks the
   keys it owns; the app then runs hive's own loader over the written candidate
   before the rename, so anything else hive would refuse is a rejected edit
   rather than a fatal launch. Writes are atomic, follow a symlinked config to
@@ -895,22 +961,26 @@ Three rules hold for anything that touches this file:
   chose. `config.Load` fills in defaults, and a default reported as a choice is
   how "they already have a config" becomes wrong.
 
-`App.ReloadHiveRuntime` makes a write take effect in the running process. The
-config-derived services — session launcher, session manager, message
-publisher, agent command set — are rebuilt by `buildHiveServices` and swapped
-into the `dispatch` adapters through `Rebind`; the database, the event bus and
-the honeycomb store are opened once and keep their startup settings
-(ADR the-hive-runtime-rebinds-on-a-config-write-instead-of-requiring-a-restart). A new
-config-derived dependency belongs in `hiveServices` and its `Rebind`, or it
-silently keeps serving the config the process started with.
+`App.ReloadHiveRuntime` makes a write take effect in the running process. It
+calls `hive.Engine.Reload`, which rebuilds every config-derived service and
+swaps the set in atomically; a failed reload keeps the old set. The database,
+the event bus and the honeycomb store are opened once and keep their startup
+settings (ADR the-hive-runtime-rebinds-on-a-config-write-instead-of-requiring-a-restart).
+A caller fetches a service per call (`engine.Sessions().X`) and never holds
+one, or it keeps serving the config the process started with. A new
+config-derived dependency belongs in the engine's service set.
 
 Two databases remain separate on purpose: `hive.db` is shared with the
 external `hive` CLI, and `desktop-pipeline.db` isolates desktop write traffic
 from it. Their locations resolve independently: `desktop-pipeline.db` follows
-`DataDir`, while `hive.db` follows `HiveDataDir` (defaulting to `DataDir`, so
-production is unchanged). Development sets `HIVE_DESKTOP_HIVE_DATA_DIR` to the
+`DataDir`, while `hive.db` follows `HiveDataDir`: `HIVE_DESKTOP_HIVE_DATA_DIR`,
+then the CLI's `HIVE_DATA_DIR`, then `DataDir`. Both variables are read from
+the login shell, so a Dock launch sees what the user exported for the CLI.
+Development sets `HIVE_DESKTOP_HIVE_DATA_DIR` to the
 installed hive data dir, so `hive.db` is shared in dev too while the desktop's
-own state stays worktree-isolated. ADR desktop-configuration records the configuration decision.
+own state stays worktree-isolated. ADR desktop-configuration records the
+configuration decision, and ADR both-programs-run-on-one-layered-hive-engine
+adds the `HIVE_DATA_DIR` fallback.
 
 ### Settings panes
 
@@ -1008,7 +1078,7 @@ fixes the attribute set at its own signature, forces allocations the API avoids,
 and has to re-expose every capability the API grows
 ([Don't Wrap OpenTelemetry](https://opentelemetry.io/blog/2026/dont-wrap-opentelemetry/)). The pattern is a package-level
 `var meter = observe.Meter("/internal/app/yours")` with its instruments beside
-it — see `tmuxcc/metrics.go`.
+it — see `internal/platform/tmux/control/metrics.go`.
 
 `internal/platform/observe` carries the scope-name convention and nothing else:
 `Tracer` and `Meter` prepend the module path and return the real API types,
@@ -1271,8 +1341,8 @@ them is the constraint (ADR terminal-transport):
   decided by a `has-session` probe, never by reading a dead control stream's
   message, and the frontend turns it into a panel offering to start. What a
   started session *contains* is hive's spawn configuration, reached through the
-  seam (`SessionsService.StartTmuxSession` → `HiveSessionManager.SpawnTmuxSession`
-  → hive's `OpenTmuxSession`, detached); a kill is tmux's alone and touches no
+  engine (`SessionsService.StartTmuxSession` → `hive.Engine.Sessions().OpenTmuxSession`,
+  detached); a kill is tmux's alone and touches no
   hive record, which is what separates it from delete and recycle. Anything that
   builds a session's windows here instead has to revisit that ADR.
 - **`cmd/desktop/internal/adapter/httpapi`** — the control plane as errchain operations
@@ -1568,9 +1638,10 @@ that gives the slug a second identity, or that makes something else the attach
 target, has to revisit that ADR rather than work around it.
 
 Session lifecycle (read, rename, delete, recycle, prune, and spawning the tmux
-session a slug names) reaches hive through `dispatch.HiveSessionManager`, a
-second seam type beside `HiveSessionLauncher`: launching is a dispatch action an
-output command holds, and it has no business holding a delete. Delete, recycle and prune run through
+session a slug names) reaches hive through `SessionsService`, which calls the
+engine's session service. Launching is separate: it is a dispatch action an
+output command holds (`dispatch.RepositoryLauncher`), and it has no business
+holding a delete. Delete, recycle and prune run through
 `jobs.Track` like `CreateSession` does — they do git and worktree work — so
 `jobs:updated` is what refreshes the list after the app's own work. The CLI
 writes the same `hive.db` from another process and has no way to signal this
@@ -2383,8 +2454,8 @@ ADR goja-script-runtime.
    in `App.Close`. No teardown branches in `main`. Plugs remains the target
    once appkit unblocks it — see [Background lifecycle](#background-lifecycle).
 9. **A shared `internal/` package serves both programs.** Change it with the
-   CLI in mind, keep it free of Wails and charm, and reach it from `app` only
-   through the seam.
+   CLI in mind, keep it free of Wails and charm, and put it in the layer its
+   path names (see [Layers and the dependency rule](#layers-and-the-dependency-rule)).
 
 ## Migration path
 

@@ -36,7 +36,13 @@ Hive Desktop and the hive CLI use separate configuration paths. They share Code 
 
 The hive CLI config honors `HIVE_CONFIG` and `XDG_CONFIG_HOME`. The Desktop config honors `HIVE_DESKTOP_CONFIG_DIR` and `XDG_CONFIG_HOME`. Hive Desktop reads the hive CLI configuration at startup, so restart it after editing that file.
 
-Session and task sharing also depends on the data root. The common default is `~/.local/share/hive/`. If you move it, point the hive CLI's `HIVE_DATA_DIR` and Hive Desktop's `HIVE_DESKTOP_HIVE_DATA_DIR` at the same directory. See the hive CLI [configuration reference](../../cli/configuration/index.md) and [repository rules](../../cli/configuration/rules.md).
+Session and task sharing also depends on the data root. The common default is `~/.local/share/hive/`. If you move it, set `HIVE_DATA_DIR` in your shell profile. The hive CLI uses it, and Hive Desktop reads it from your login shell, so it applies even when you open the app from the Dock. Hive Desktop picks the data root in this order:
+
+1. `HIVE_DESKTOP_HIVE_DATA_DIR`, for pointing only Hive Desktop somewhere else
+2. `HIVE_DATA_DIR`
+3. the Hive Desktop data root (`HIVE_DESKTOP_DATA_DIR`, or `~/.local/share/hive/`)
+
+See the hive CLI [configuration reference](../../cli/configuration/index.md) and [repository rules](../../cli/configuration/rules.md).
 
 Hive Desktop keeps these files under its config directory by default:
 

@@ -1,8 +1,7 @@
-// Package hiveconf reads and writes the external Hive CLI configuration shared
-// with the `hive` binary. It reports raw declarations rather than Hive's merged
-// defaults, so a fallback is never mistaken for a user choice (Bounded Context,
-// architecture.md). An absent file is valid but not usable for repository
-// sessions.
+// Package hiveconf reads the hive config file the `hive` binary shares. It
+// reports raw declarations rather than hive's merged defaults, so a fallback is
+// never mistaken for a user choice. An absent file is valid but not usable for
+// repository sessions.
 package hiveconf
 
 import (

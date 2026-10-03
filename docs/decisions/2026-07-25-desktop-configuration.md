@@ -114,3 +114,6 @@ Vite cannot accept an already-open listener.
   accepted cost is that dev runs the vendored hive SHA's migrations against the
   real database; keep the vendored SHA in step with the installed CLI. Setting
   the variable to the worktree data dir in `overrides.env` re-isolates it.
+- **Update (2026-10-03):** amended by ADR both-programs-run-on-one-layered-hive-engine.
+  The desktop now also reads the CLI's `HIVE_DATA_DIR`, from the login shell,
+  after `HIVE_DESKTOP_HIVE_DATA_DIR` and before its own data dir.

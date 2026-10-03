@@ -100,9 +100,7 @@ and each backend requires its CLI to be installed and authenticated:
 ¹ GitHub issues fetch the body via `gh issue view`; Gitea has no single-issue
 JSON view, so `tea` returns the body inline and the picker uses it directly.
 
-Built-ins are drivers (`cmd/hive/internal/sources/ghcli`, `cmd/hive/internal/sources/teacli`):
-per-forge argv builders and JSON parsers executed by a shared engine
-(`cmd/hive/internal/sources/cliengine`). Gitea's `tea` list output is thinner than
+Each built-in runs the forge's own CLI and parses its JSON output. Gitea's `tea` list output is thinner than
 GitHub's — it carries no CI rollup or review decision, so those card cells stay
 blank for Gitea PRs.
 

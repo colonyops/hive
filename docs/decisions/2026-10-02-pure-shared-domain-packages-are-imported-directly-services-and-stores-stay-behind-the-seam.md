@@ -1,7 +1,10 @@
 # Pure shared domain packages are imported directly; services and stores stay behind the seam
 
-- **Status:** accepted
+- **Status:** superseded by [both-programs-run-on-one-layered-hive-engine](2026-10-03-both-programs-run-on-one-layered-hive-engine.md)
 - **Date:** 2026-10-02
+
+> **Superseded (2026-10-03):** the seam is gone. `app` imports every shared
+> package by layer, and shared types appear in `app` signatures.
 
 ## Context
 
