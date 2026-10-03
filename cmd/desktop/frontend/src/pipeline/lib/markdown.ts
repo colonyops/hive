@@ -1,6 +1,5 @@
-// Tiny hand-rolled markdown -> HTML renderer for node help.md docs — same
-// posture as ../../lib/yamlHighlight.ts (no markdown npm dependency; see D2's
-// "Documentation" section). Supports just enough of the subset every
+// Tiny hand-rolled markdown -> HTML renderer for node help.md docs, with no
+// markdown npm dependency (see D2's "Documentation" section). Supports just enough of the subset every
 // help.md in this repo actually uses: headings, paragraphs, inline code,
 // fenced code blocks, bold, and unordered/ordered lists. Anything else
 // degrades to a plain paragraph — help.md authors are first-party/trusted

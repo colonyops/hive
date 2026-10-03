@@ -1,8 +1,8 @@
 // Display-only JS tokenizer for the function node's hand-rolled code overlay
 // (fields/CodeField.vue) — colors comments/strings/keywords well enough to
 // read at a glance, matching the --hv-code-* tokens. Not a real parser (a
-// small regex pass), same posture as lib/markdown.ts and
-// ../../lib/yamlHighlight.ts: a tiny hand-rolled renderer rather than a
+// small regex pass), same posture as lib/markdown.ts: a tiny hand-rolled
+// renderer rather than a
 // dependency (CodeMirror is blocked by the min-release-age policy — see
 // fields/CodeField.vue).
 //
