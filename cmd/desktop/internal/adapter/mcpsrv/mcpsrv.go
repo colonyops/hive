@@ -12,11 +12,9 @@
 // App.Close to unwind, and the shutdown hazard ADR terminal-transport records for the
 // terminal WebSocket does not arise.
 //
-// The tool set is reads and safe mutations only. Anything that spawns a
-// process — terminal and agent-workspace session control — stays on httpapi's
-// token-guarded terminal prefix, which is why this surface can keep the
-// unauthenticated-behind-loopback posture the REST API had (ADR terminal-transport,
-// ADR a-workspace-declares-its-own-authority).
+// The hive-desktop and hive-canvas servers spawn nothing and stay
+// unauthenticated behind loopback; hive-orchestrator authenticates every call
+// (ADR an-orchestration-workspace-drives-hive-sessions-through-a-token-checked-mcp-server).
 package mcpsrv
 
 import (

@@ -5,6 +5,19 @@
 // @ts-ignore: Unused imports
 import * as hiveconf$0 from "./hiveconf/models.js";
 
+export interface CreatedOrchestratorToken {
+    "id": number;
+    "name": string;
+
+    /**
+     * Hint is the token's last four characters.
+     */
+    "hint": string;
+    "createdAt": number;
+    "lastUsedAt": number;
+    "token": string;
+}
+
 /**
  * HiveSetup is the external Hive configuration as the first-run and settings
  * screens see it: what the file declares, what this machine could run, and

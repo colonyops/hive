@@ -58,8 +58,12 @@ individual choices; this document describes the shape everything fits into.
 > capabilities as tools over `app.App`, on the same single loopback `http`
 > server (on by default) that hosts the webhook listener (ADR agent-http-api). It is
 > stateless, so it holds nothing between requests and joins no lifecycle, and
-> it is unauthenticated behind the loopback bind because it spawns nothing
-> (ADR mcp-replaces-the-agent-facing-http-api). It replaced the REST control surface that preceded it, whose
+> its `hive-desktop` and `hive-canvas` servers are unauthenticated behind the
+> loopback bind because they spawn nothing
+> (ADR mcp-replaces-the-agent-facing-http-api). The `hive-orchestrator` server
+> starts and types into hive sessions, so it authenticates each tool call with
+> a session token or an access token
+> (ADR an-orchestration-workspace-drives-hive-sessions-through-a-token-checked-mcp-server). It replaced the REST control surface that preceded it, whose
 > routes and generated OpenAPI document are deleted rather than deprecated —
 > `tools/list`, inferred from the same Go types the handlers take, is what
 > makes it self-describing now.
@@ -465,9 +469,11 @@ cmd/desktop/internal/
                                   #   domain hold typed inputs and thin App calls;
                                   #   errors.go maps app.Kind once. Stateless, so
                                   #   no session outlives a request and there is no
-                                  #   lifecycle to unwind; unauthenticated behind
-                                  #   the loopback bind because nothing here spawns
-                                  #   a process
+                                  #   lifecycle to unwind; /mcp and /mcp/canvas
+                                  #   are unauthenticated behind the loopback bind
+                                  #   because they spawn nothing; /mcp/orchestrator
+                                  #   authenticates every tool call
+                                  #   (ADR an-orchestration-workspace-drives-hive-sessions-through-a-token-checked-mcp-server)
 
 pkg/                              # kit: hive-agnostic helpers (atomicfile,
                                   #   executil, pathutil, tmpl, buildinfo, ...)

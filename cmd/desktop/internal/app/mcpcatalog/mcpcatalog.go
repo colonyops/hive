@@ -29,6 +29,9 @@ type Server struct {
 	Env       map[string]string
 	URL       string
 	Headers   map[string]string
+	// BearerTokenEnv names the variable holding the bearer token; configs carry
+	// the name, never the value.
+	BearerTokenEnv string
 }
 
 // Descriptor declares one shipped MCP server type. Static data with no

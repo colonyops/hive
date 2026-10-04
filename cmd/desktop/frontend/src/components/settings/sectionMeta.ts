@@ -13,6 +13,7 @@ import IconSliders from '~icons/lucide/sliders-horizontal'
 import IconZap from '~icons/lucide/zap'
 import IconBoxes from '~icons/lucide/boxes'
 import IconActivity from '~icons/lucide/activity'
+import IconNetwork from '~icons/lucide/network'
 import type { ApplicationSettingsSection } from '../../router'
 
 // Keyed by section id and ordered by router.ts's applicationSettingsSections,
@@ -35,5 +36,6 @@ export const applicationSettingsSectionMeta: Record<
   menubar: { label: 'Menu bar', title: 'Menu bar', icon: IconPin },
   system: { label: 'System', title: 'System', icon: IconHardDrive },
   observability: { label: 'Observability', title: 'Observability', icon: IconActivity },
+  orchestrator: { label: 'Orchestrator', title: 'Orchestrator access', icon: IconNetwork },
   about: { label: 'About', title: 'About', icon: IconInfo },
 }

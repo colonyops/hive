@@ -142,6 +142,15 @@ type NodeRun struct {
 	DurMs     int64          `json:"dur_ms"`
 }
 
+type OrchestratorToken struct {
+	ID         int64         `json:"id"`
+	Name       string        `json:"name"`
+	TokenHash  string        `json:"token_hash"`
+	Hint       string        `json:"hint"`
+	CreatedAt  int64         `json:"created_at"`
+	LastUsedAt sql.NullInt64 `json:"last_used_at"`
+}
+
 type OutputCommand struct {
 	ID          int64          `json:"id"`
 	ActionID    string         `json:"action_id"`

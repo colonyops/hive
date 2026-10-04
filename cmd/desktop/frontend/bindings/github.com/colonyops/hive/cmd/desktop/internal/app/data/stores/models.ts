@@ -58,3 +58,15 @@ export interface NodeRunRecord {
     "durMs": number;
     "endedAt": number;
 }
+
+export interface OrchestratorToken {
+    "id": number;
+    "name": string;
+
+    /**
+     * Hint is the token's last four characters.
+     */
+    "hint": string;
+    "createdAt": number;
+    "lastUsedAt": number;
+}

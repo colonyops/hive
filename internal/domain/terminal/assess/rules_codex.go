@@ -80,35 +80,6 @@ func codexBarePromptRule(id string) rule {
 	}
 }
 
-// codexTrustDialogRule matches Codex's boot-time directory-trust dialog
-// ("Do you trust the contents of this directory? …" + numbered options +
-// "Press enter to continue"). Unlike every other dialog this engine parses,
-// Codex renders each visual section of this screen — the invoking command
-// line, the question, the options, the footer — separated by its own blank
-// line, so no single contiguous block contains the whole shape and
-// questionRule's promptBoxBody+abovePromptBox scoping (verified against the
-// real capture) never sees the question text at all. This rule instead
-// anchors on the dialog's own highly specific boot-time vocabulary within
-// bottomLines: safe despite the wider-than-contiguous-block scan because
-// the phrase exists only until the directory is trusted, after which
-// Codex's normal banner, tip, and prompt entirely replace this screen — by
-// then comfortably exceeding codexStatusWindowLines before the phrase
-// could ever reappear stale.
-func codexTrustDialogRule(id string) rule {
-	const trustDialogWindowLines = 12
-	const anchor = "Do you trust the contents of this directory?"
-	return rule{
-		id:    id,
-		state: StateQuestion,
-		match: func(r regions) (Signal, bool) {
-			if !strings.Contains(r.bottomLines(trustDialogWindowLines), anchor) {
-				return Signal{}, false
-			}
-			return Signal{RuleID: id, Region: "bottomLines", Matched: anchor}, true
-		},
-	}
-}
-
 // codexRules mirrors claudeRules' priority ordering (hold, approval,
 // question, working, idle); codex has no dedicated model-picker overlay.
 //
@@ -128,7 +99,7 @@ var codexRules = ruleSet{
 
 	phraseRule("codex/permission-dialog", StateApproval, codexApprovalPhrases),
 	questionRule("codex/question"),
-	codexTrustDialogRule("codex/trust-dialog"),
+	trustDialogRule("codex/trust-dialog", "Do you trust the contents of this directory?"),
 
 	spinnerShapeRule("codex/spinner-shape"),
 	tokenStatsRule("codex/token-stats"),

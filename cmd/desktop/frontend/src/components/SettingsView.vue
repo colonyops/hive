@@ -15,6 +15,7 @@ import AboutSettingsView from './AboutSettingsView.vue'
 import ActionSettingsView from './ActionSettingsView.vue'
 import AppearanceSettingsView from './AppearanceSettingsView.vue'
 import AgentsSettingsView from './AgentsSettingsView.vue'
+import OrchestratorSettingsView from './OrchestratorSettingsView.vue'
 import GeneralSettingsView from './GeneralSettingsView.vue'
 import HiveSettingsView from './HiveSettingsView.vue'
 import LauncherSettingsView from './LauncherSettingsView.vue'
@@ -65,7 +66,7 @@ const navGroups: Array<{ title: string; ids: readonly ApplicationSettingsSection
   { title: 'Preferences', ids: ['general', 'appearance', 'notifications', 'menubar', 'keybindings'] },
   { title: 'Inbox', ids: ['integrations', 'actions'] },
   { title: 'Code', ids: ['terminal', 'launchers', 'hive'] },
-  { title: 'Chats', ids: ['agents'] },
+  { title: 'Chats', ids: ['agents', 'orchestrator'] },
   { title: 'Advanced', ids: ['system', 'observability', 'about'] },
 ]
 const sectionTitle = computed(() => applicationSettingsSectionMeta[props.activeCategory].title)
@@ -213,6 +214,7 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
     <TerminalSettingsView v-else-if="props.activeCategory === 'terminal'" />
     <HiveSettingsView v-else-if="props.activeCategory === 'hive'" />
     <AgentsSettingsView v-else-if="props.activeCategory === 'agents'" />
+    <OrchestratorSettingsView v-else-if="props.activeCategory === 'orchestrator'" />
 
     <ActionSettingsView v-else-if="props.activeCategory === 'actions'" :known-types="props.knownFeedTypes" />
     <LauncherSettingsView v-else-if="props.activeCategory === 'launchers'" />

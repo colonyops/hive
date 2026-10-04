@@ -21,6 +21,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
+	"github.com/colonyops/hive/internal/hive/prompt"
 	"github.com/colonyops/hive/internal/hive/repocontext"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/session/scripts"
@@ -45,6 +46,8 @@ type Ports struct {
 	// PaneSource feeds terminal status. Nil disables status: Status and
 	// Terminal return nil.
 	PaneSource terminal.PaneSource
+	// PaneInput types into agent panes. Nil means Prompts returns nil.
+	PaneInput prompt.PaneInput
 	// DataDir holds the bundled scripts the renderer points spawn commands at.
 	DataDir string
 	// Styler, Stdout and Stderr shape hook and file-copy output. Nil means
@@ -76,6 +79,7 @@ type services struct {
 type Engine struct {
 	ports    Ports
 	hc       *hcsvc.Service
+	prompts  *prompt.Service
 	reloadMu sync.Mutex
 	current  atomic.Pointer[services]
 }
@@ -123,12 +127,24 @@ func New(cfg *config.Config, p Ports) (*Engine, error) {
 		ports: p,
 		hc:    hcsvc.NewService(p.Logger, store.NewHCStore(p.DB)),
 	}
+	if p.PaneInput != nil {
+		e.prompts = prompt.NewService(e.agentPanes, p.PaneInput)
+	}
 	built, err := e.build(cfg)
 	if err != nil {
 		return nil, err
 	}
 	e.current.Store(built)
 	return e, nil
+}
+
+// agentPanes returns an untyped nil without status: a nil *terminal.Manager
+// in the interface would pass the service's nil check and panic on use.
+func (e *Engine) agentPanes() prompt.AgentPaneFinder {
+	if term := e.Terminal(); term != nil {
+		return term
+	}
+	return nil
 }
 
 // Reload swaps in services built from cfg and publishes config.reloaded. A
@@ -207,6 +223,10 @@ func (e *Engine) Terminal() *terminal.Manager { return e.load().terminal }
 
 // Status returns the terminal status service, or nil without a PaneSource.
 func (e *Engine) Status() *statussvc.Service { return e.load().status }
+
+// Prompts returns the service that types into agent panes, or nil without a
+// PaneInput. It finds panes through the current Terminal, so Reload keeps it.
+func (e *Engine) Prompts() *prompt.Service { return e.prompts }
 
 // HC returns the honeycomb service. It reads no config, so Reload keeps it.
 func (e *Engine) HC() *hcsvc.Service { return e.hc }

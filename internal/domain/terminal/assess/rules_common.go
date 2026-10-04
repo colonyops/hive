@@ -266,3 +266,21 @@ func genericYesNoRule(id string) rule {
 		},
 	}
 }
+
+// trustDialogRule matches an agent's boot-time folder-trust dialog by its own
+// wording near the bottom of the screen. The dialog's sections are separated
+// by blank lines, so the contiguous-block scoping questionRule uses never sees
+// it whole. The wording is gone once the folder is trusted.
+func trustDialogRule(id, anchor string) rule {
+	const trustDialogWindowLines = 12
+	return rule{
+		id:    id,
+		state: StateQuestion,
+		match: func(r regions) (Signal, bool) {
+			if !strings.Contains(r.bottomLines(trustDialogWindowLines), anchor) {
+				return Signal{}, false
+			}
+			return Signal{RuleID: id, Region: "bottomLines", Matched: anchor}, true
+		},
+	}
+}

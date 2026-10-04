@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"slices"
 
 	"github.com/rs/zerolog"
 
@@ -43,7 +44,7 @@ func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessio
 	// Tags are presentational, for a reader inside hive, and are never read
 	// back. ItemSessionLinker writes the associations this app queries.
 	origins := uniqueKnownOrigins(req.Origins)
-	var tags []string
+	tags := slices.Clone(req.Tags)
 	for _, origin := range origins {
 		tags = append(tags, origin.ExternalID)
 	}

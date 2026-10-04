@@ -42,6 +42,8 @@ type SessionCmd struct {
 
 	recycleJSON  bool
 	recycleForce bool
+
+	drive sessionDriveFlags
 }
 
 // NewSessionCmd creates a new session command
@@ -69,6 +71,9 @@ Use 'hive session info' to get details about the current session.`,
 				cmd.updateCmd(),
 				cmd.deleteCmd(),
 				cmd.recycleCmd(),
+				cmd.peekCmd(),
+				cmd.sendCmd(),
+				cmd.keysCmd(),
 			},
 		},
 		// Top-level alias: "hive ls" -> "hive session list"

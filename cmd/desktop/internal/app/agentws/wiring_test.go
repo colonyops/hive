@@ -127,3 +127,27 @@ func TestHasConversationIsTrueWithoutAProbe(t *testing.T) {
 	assert.True(t, HasConversation("codex", "any-id"), "no probe means resume decides for itself")
 	assert.True(t, HasConversation("mystery-agent", "any-id"))
 }
+
+func TestRenderBearerTokenEnvNamesTheVariableNotItsValue(t *testing.T) {
+	t.Setenv("HIVE_AGENT_SESSION_TOKEN", "secret-value")
+	servers := map[string]mcpcatalog.Server{
+		"hive-orchestrator": {
+			Transport:      mcpcatalog.TransportHttp,
+			URL:            "http://127.0.0.1:1/mcp/orchestrator",
+			Headers:        map[string]string{"X-Extra": "1"},
+			BearerTokenEnv: "HIVE_AGENT_SESSION_TOKEN",
+		},
+	}
+
+	claude, err := renderMCPJSON(servers)
+	require.NoError(t, err)
+	assert.Contains(t, string(claude), `"Authorization": "Bearer ${HIVE_AGENT_SESSION_TOKEN:-}"`)
+	assert.Contains(t, string(claude), `"X-Extra": "1"`)
+	assert.NotContains(t, string(claude), "secret-value")
+	assert.NotContains(t, servers["hive-orchestrator"].Headers, "Authorization", "rendering must not mutate the catalogue entry")
+
+	codex, err := renderCodexTOML(servers)
+	require.NoError(t, err)
+	assert.Contains(t, string(codex), `bearer_token_env_var = "HIVE_AGENT_SESSION_TOKEN"`)
+	assert.NotContains(t, string(codex), "secret-value")
+}

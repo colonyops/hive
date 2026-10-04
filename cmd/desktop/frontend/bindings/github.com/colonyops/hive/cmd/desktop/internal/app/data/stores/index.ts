@@ -5,5 +5,6 @@ export type {
     FeedCount,
     InboxEvent,
     InboxItem,
-    NodeRunRecord
+    NodeRunRecord,
+    OrchestratorToken
 } from "./models.js";

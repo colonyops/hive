@@ -21,6 +21,7 @@ var claudeRules = ruleSet{
 	holdRule("claude/model-picker", "Select model"),
 
 	phraseRule("claude/permission-dialog", StateApproval, claudeApprovalPhrases),
+	trustDialogRule("claude/trust-dialog", "Yes, I trust this folder"),
 	questionRule("claude/question"),
 	liveDialogQuestionRule("claude/question-live-dialog"),
 

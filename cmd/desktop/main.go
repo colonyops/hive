@@ -249,6 +249,10 @@ func main() {
 	if core.MountAPI(mcpsrv.CanvasPathPrefix, mcpsrv.NewCanvas(core, logger, mcpsrv.Options{Version: build.Version}).Handler()) {
 		logger.Info().Str("path", mcpsrv.CanvasPathPrefix).Msg("canvas MCP server mounted")
 	}
+	// Authenticates per call (ADR an-orchestration-workspace-drives-hive-sessions-through-a-token-checked-mcp-server).
+	if core.MountAPI(mcpsrv.OrchestratorPathPrefix, mcpsrv.NewOrchestrator(core, logger, mcpsrv.Options{Version: version}).Handler()) {
+		logger.Info().Str("path", mcpsrv.OrchestratorPathPrefix).Msg("orchestrator MCP server mounted")
+	}
 	terminal := wailsui.TerminalTransport{}
 	popupTerminal := wailsui.PopupTerminalTransport{}
 	agents := wailsui.AgentsTransport{}

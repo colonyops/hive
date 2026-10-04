@@ -276,6 +276,9 @@ func detectRulePromptBox(lines []string) *promptBoxRegion {
 		if !isHorizontalRule(lines[i]) {
 			continue
 		}
+		if box := wrappedPromptBox(lines, i); box != nil {
+			return box
+		}
 		if !isBoxlessPromptBodyLine(lines[i-1]) {
 			continue
 		}
@@ -289,6 +292,37 @@ func detectRulePromptBox(lines []string) *promptBoxRegion {
 		}
 	}
 	return nil
+}
+
+// maxWrappedPromptLines bounds how far up a wrapped prompt is followed.
+const maxWrappedPromptLines = 12
+
+// wrappedPromptBox reads Claude Code's prompt when typed text wraps: a glyph
+// line, then lines indented two spaces, between two rules. Pi's glyph-less
+// prompt never wraps this way, so the one-line rule above still covers it.
+func wrappedPromptBox(lines []string, bottom int) *promptBoxRegion {
+	top := -1
+	for j := bottom - 1; j >= 0 && bottom-j <= maxWrappedPromptLines+1; j-- {
+		if isHorizontalRule(lines[j]) {
+			top = j
+			break
+		}
+	}
+	if top < 0 || bottom-top < 3 {
+		return nil
+	}
+	first := strings.TrimLeft(lines[top+1], " ")
+	if !strings.HasPrefix(first, "❯") {
+		return nil
+	}
+	body := []string{stripPromptGlyphLine(first)}
+	for _, line := range lines[top+2 : bottom] {
+		if !strings.HasPrefix(line, "  ") || strings.TrimSpace(line) == "" {
+			return nil
+		}
+		body = append(body, strings.TrimSpace(line))
+	}
+	return &promptBoxRegion{topIndex: top, bottomIndex: bottom, bodyLines: []string{strings.Join(body, " ")}}
 }
 
 // isBoxlessPromptBodyLine reports whether a line is a valid middle line for
@@ -353,4 +387,18 @@ func DumpRegions(content string) RegionDump {
 		BottomLines:   r.bottomLines(diagnosticBottomLines),
 		AfterLastRule: r.afterLastRule(),
 	}
+}
+
+// PromptInput returns unsubmitted input. ok is false when no input box is on
+// screen, which is not the same as an empty prompt.
+func PromptInput(content string) (text string, ok bool) {
+	r := computeRegions(normalizeContent(content))
+	if !r.hasPromptBox() {
+		return "", false
+	}
+	body := strings.TrimSpace(r.promptBoxBody())
+	if isPlaceholderPromptBody(body) {
+		return "", true
+	}
+	return strings.TrimSpace(strings.TrimPrefix(body, ">")), true
 }

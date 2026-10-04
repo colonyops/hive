@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -686,6 +687,41 @@ func (s *AgentWorkspacesService) EndOwnSession(ctx context.Context, token string
 	view := s.sessionViews(ctx, []stores.AgentSession{rec})[0]
 	go s.endAfter(context.WithoutCancel(ctx), delay, view)
 	return SessionEnding{Session: view, EndsAt: time.Now().Add(delay)}, nil
+}
+
+// OrchestratorCaller is a chat (Session, Workspace) or an access token (Token).
+// Only Authorize and AuthorizeOrchestrator make one that OrchestrationService
+// accepts.
+type OrchestratorCaller struct {
+	Session    int64
+	Token      int64
+	Name       string
+	Workspace  string
+	authorized bool
+}
+
+// AuthorizeOrchestrator requires the token's chat to be in a workspace that
+// declares the orchestrator server.
+func (s *AgentWorkspacesService) AuthorizeOrchestrator(ctx context.Context, token string) (OrchestratorCaller, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return OrchestratorCaller{}, Errorf(KindUnauthenticated, "a session token is required; the agent reads it from HIVE_AGENT_SESSION_TOKEN")
+	}
+	rec, err := s.sessions.GetByEndToken(ctx, token)
+	if stores.IsNotFound(err) {
+		return OrchestratorCaller{}, Errorf(KindUnauthenticated, "no session holds that token")
+	}
+	if err != nil {
+		return OrchestratorCaller{}, Wrap(err, KindInternal, "looking up the session a token names")
+	}
+	st, ok := s.store.Status(rec.Workspace)
+	if !ok || !st.Valid {
+		return OrchestratorCaller{}, Errorf(KindUnauthenticated, "workspace %q is not loaded", rec.Workspace)
+	}
+	if !slices.Contains(st.Workspace.MCPs, mcpcatalog.Orchestrator) {
+		return OrchestratorCaller{}, Errorf(KindUnauthenticated, "workspace %q does not declare the %s MCP server", rec.Workspace, mcpcatalog.Orchestrator)
+	}
+	return OrchestratorCaller{Session: rec.ID, Name: rec.Name, Workspace: rec.Workspace, authorized: true}, nil
 }
 
 // A scheduled chat that ended itself is what the Chats area is showing as

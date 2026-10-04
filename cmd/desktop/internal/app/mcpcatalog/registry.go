@@ -5,6 +5,8 @@ import (
 	"sort"
 )
 
+const Orchestrator = "hive-orchestrator"
+
 // registry is the shipped set, keyed by Descriptor.Type. Never init()
 // self-registration — gochecknoinits is enabled, and an explicit map is the
 // only form where the shipped set can be read off one file.
@@ -38,6 +40,16 @@ var registry = map[string]Descriptor{
 		Server:      Server{Transport: TransportHttp},
 		RuntimeURL:  true,
 		RuntimePath: "/mcp/canvas",
+	},
+	// Authenticated with the session token each workspace launch hands its process.
+	Orchestrator: {
+		Type:        Orchestrator,
+		Title:       "Hive Orchestrator",
+		Description: "Session control for an orchestrating agent: start hive sessions in repositories, read and type into their agents, answer their prompts, and wait on the message bus. Declaring it grants that control to the workspace.",
+		Stability:   StabilityExperimental,
+		Server:      Server{Transport: TransportHttp, BearerTokenEnv: "HIVE_AGENT_SESSION_TOKEN"},
+		RuntimeURL:  true,
+		RuntimePath: "/mcp/orchestrator",
 	},
 	"chrome-devtools": {
 		Type:        "chrome-devtools",

@@ -35,6 +35,8 @@ type LaunchSessionRequest struct {
 	// Origins are the inbox items the session is being created for. An empty
 	// slice means the session has no inbox item behind it.
 	Origins []models.ItemRef
+	// Tags label the session in hive, beside one per origin.
+	Tags []string
 }
 
 // SessionLauncher spawns a hive session for a launch-session action.

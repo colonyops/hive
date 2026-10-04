@@ -14,19 +14,20 @@ import (
 type Stores struct {
 	q *queries.DB
 
-	ActivityEvents  *ActivityEventStore
-	AgentSessions   *AgentSessionStore
-	EventLog        *EventLogStore
-	FeedClaims      *FeedClaimStore
-	InboxItems      *InboxItemStore
-	ItemSessions    *ItemSessionStore
-	Jobs            *JobStore
-	NodeKV          *NodeKVStore
-	NodeRuns        *NodeRunStore
-	OutputCommands  *OutputCommandStore
-	Schedules       *ScheduleStore
-	SourceHeads     *SourceHeadStore
-	WebhookCaptures *WebhookCaptureStore
+	ActivityEvents     *ActivityEventStore
+	AgentSessions      *AgentSessionStore
+	EventLog           *EventLogStore
+	FeedClaims         *FeedClaimStore
+	InboxItems         *InboxItemStore
+	ItemSessions       *ItemSessionStore
+	Jobs               *JobStore
+	NodeKV             *NodeKVStore
+	NodeRuns           *NodeRunStore
+	OutputCommands     *OutputCommandStore
+	OrchestratorTokens *OrchestratorTokenStore
+	Schedules          *ScheduleStore
+	SourceHeads        *SourceHeadStore
+	WebhookCaptures    *WebhookCaptureStore
 }
 
 type Options struct {
@@ -63,19 +64,20 @@ func New(q *queries.DB, opts Options) *Stores {
 	return &Stores{
 		q: q,
 
-		ActivityEvents:  NewActivityEventStore(q, opts),
-		AgentSessions:   NewAgentSessionStore(q, opts),
-		EventLog:        log,
-		FeedClaims:      claims,
-		InboxItems:      items,
-		ItemSessions:    sessions,
-		Jobs:            NewJobStore(q, opts),
-		NodeKV:          kv,
-		NodeRuns:        runs,
-		OutputCommands:  commands,
-		Schedules:       NewScheduleStore(q, opts),
-		SourceHeads:     heads,
-		WebhookCaptures: NewWebhookCaptureStore(q, opts),
+		ActivityEvents:     NewActivityEventStore(q, opts),
+		AgentSessions:      NewAgentSessionStore(q, opts),
+		EventLog:           log,
+		FeedClaims:         claims,
+		InboxItems:         items,
+		ItemSessions:       sessions,
+		Jobs:               NewJobStore(q, opts),
+		NodeKV:             kv,
+		NodeRuns:           runs,
+		OutputCommands:     commands,
+		OrchestratorTokens: NewOrchestratorTokenStore(q, opts),
+		Schedules:          NewScheduleStore(q, opts),
+		SourceHeads:        heads,
+		WebhookCaptures:    NewWebhookCaptureStore(q, opts),
 	}
 }
 

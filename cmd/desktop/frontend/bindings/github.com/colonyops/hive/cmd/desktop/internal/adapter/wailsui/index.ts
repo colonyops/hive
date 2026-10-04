@@ -15,6 +15,7 @@ import * as JobService from "./jobservice.js";
 import * as MenuBarService from "./menubarservice.js";
 import * as NotificationService from "./notificationservice.js";
 import * as ObservabilityService from "./observabilityservice.js";
+import * as OrchestrationService from "./orchestrationservice.js";
 import * as PerfService from "./perfservice.js";
 import * as PipelineService from "./pipelineservice.js";
 import * as PopupTerminalService from "./popupterminalservice.js";
@@ -46,6 +47,7 @@ export {
     MenuBarService,
     NotificationService,
     ObservabilityService,
+    OrchestrationService,
     PerfService,
     PipelineService,
     PopupTerminalService,

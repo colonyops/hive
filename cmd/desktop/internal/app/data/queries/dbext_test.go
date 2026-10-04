@@ -27,7 +27,7 @@ func TestOpen_FreshDB_AppliesBaseline(t *testing.T) {
 	for _, table := range []string{
 		"activity_event", "agent_workspace_session", "consumer_offset", "event_log", "feed_membership_claim",
 		"inbox_event", "inbox_item", "item_session", "job", "node_kv", "node_run", "output_command",
-		"item_chat", "schedule_cursor", "schedule_run", "source_head", "webhook_capture",
+		"item_chat", "orchestrator_token", "schedule_cursor", "schedule_run", "source_head", "webhook_capture",
 	} {
 		_, err := database.Conn().ExecContext(ctx, "SELECT 1 FROM "+table+" LIMIT 0")
 		require.NoError(t, err, "%s table should exist", table)
@@ -37,11 +37,11 @@ func TestOpen_FreshDB_AppliesBaseline(t *testing.T) {
 	require.NoError(t, err)
 	migrations, err := migrate.Load(sub)
 	require.NoError(t, err)
-	require.Len(t, migrations, 11)
+	require.Len(t, migrations, 12)
 
 	applied, err := migrate.AppliedVersions(ctx, database.Conn())
 	require.NoError(t, err)
-	assert.Equal(t, map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true, 9: true, 10: true, 11: true}, applied)
+	assert.Equal(t, map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true, 9: true, 10: true, 11: true, 12: true}, applied)
 }
 
 func TestMigration10PreservesExistingAgentWorkspaceTmuxNames(t *testing.T) {

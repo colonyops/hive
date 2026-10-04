@@ -21,6 +21,7 @@ export const applicationSettingsSections = [
   'launchers',
   'hive',
   'agents',
+  'orchestrator',
   'system',
   'observability',
   'about',

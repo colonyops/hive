@@ -71,6 +71,18 @@ A terminal multiplexer session that hosts a hive session. When you create a hive
 
 **Relationship**: Each hive session spawns a tmux session with the same name. The tmux session contains agent windows (matched by `tmux.preview_window_matcher` patterns) and a `shell` window. See the architecture diagram above.
 
+### Drive an agent from outside
+
+`hive session send`, `keys`, and `peek` drive a session's agent from another terminal or another agent. They find the agent's window themselves, so they work while the session's shell window is focused.
+
+```bash
+hive session peek fix-auth --json        # state, context use, and the end of the screen
+hive session send fix-auth "/review"     # type a prompt and submit it
+hive session keys fix-auth 1 Enter       # answer a permission prompt
+```
+
+`send` waits for the agent to finish showing the text, presses Enter once, and prints the screen after. If the text is still in the input box, run `keys <name> Enter`. `send` and `keys` type whatever the agent is showing, so peek first when a dialog may be open. Pass `-` as the text to read a multi-line prompt from stdin.
+
 ## Repository
 
 A git remote URL (e.g., `github.com/colonyops/hive`). Multiple sessions can be created from the same repository.

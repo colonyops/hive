@@ -219,6 +219,13 @@ var fixtures = []fixture{
 		purpose:       "codex stuck-idle regression (found live 2026-08-04): a longer post-turn transcript (multiple prior '›' turns, rule-delimited command output, a welcome banner) must not confuse the small bottomLines window into matching stale content — only the current bare '›' placeholder line drives idle.",
 	},
 	{
+		name:          "claude-trust-dialog",
+		file:          "claude/trust-dialog.txt",
+		tool:          "claude",
+		expectedState: assess.StateQuestion,
+		purpose:       "claude boot-time folder-trust dialog (found live 2026-10-04 in a fresh hive checkout): read as idle, so an orchestrator saw a session ready that had not taken its prompt; its default option exits the agent.",
+	},
+	{
 		name:          "codex-trust-dialog",
 		file:          "codex/trust-dialog.txt",
 		tool:          "codex",

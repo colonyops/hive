@@ -3,6 +3,7 @@ package agentws
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"sort"
@@ -139,6 +140,14 @@ func renderMCPJSON(servers map[string]mcpcatalog.Server) ([]byte, error) {
 			URL:     s.URL,
 			Headers: s.Headers,
 		}
+		if s.BearerTokenEnv != "" {
+			entry.Headers = maps.Clone(s.Headers)
+			if entry.Headers == nil {
+				entry.Headers = map[string]string{}
+			}
+			// The empty default keeps the server loadable outside Hive.
+			entry.Headers["Authorization"] = "Bearer ${" + s.BearerTokenEnv + ":-}"
+		}
 		if s.Transport == mcpcatalog.TransportHttp || s.Transport == mcpcatalog.TransportSse {
 			entry.Type = string(s.Transport)
 			entry.Command = ""
@@ -189,6 +198,9 @@ func renderCodexTOML(servers map[string]mcpcatalog.Server) ([]byte, error) {
 		}
 		if len(s.Headers) > 0 {
 			fmt.Fprintf(&buf, "headers = %s\n", tomlStringMap(s.Headers))
+		}
+		if s.BearerTokenEnv != "" {
+			fmt.Fprintf(&buf, "bearer_token_env_var = %s\n", tomlString(s.BearerTokenEnv))
 		}
 	}
 	return []byte(buf.String()), nil

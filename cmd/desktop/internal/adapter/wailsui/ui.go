@@ -176,6 +176,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		application.NewService(NewTerminalService(core.Terminals, core.Webhooks, opts.Terminal)),
 		application.NewService(NewPopupTerminalService(core.PopupTerminals, core.Webhooks, opts.PopupTerminal)),
 		application.NewService(NewAgentsService(core.AgentWorkspaces, core.Webhooks, opts.Agents)),
+		application.NewService(NewOrchestrationService(core.Orchestration)),
 		application.NewService(u.updater),
 	}
 	if u.native != nil {

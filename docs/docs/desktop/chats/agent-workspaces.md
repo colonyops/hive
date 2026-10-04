@@ -22,6 +22,8 @@ Hive creates a built-in workspace named **Hive**. Use it to configure flows, sou
 
 Open the workspace and describe the change you want. Its shipped skills know the local config paths and the app's current schemas. Its default command asks before making changes.
 
+Hive also adds an **Orchestrator** workspace for work that spans repositories. See [Orchestrator](orchestrator.md).
+
 ## Create a workspace
 
 Use **New workspace** in Chats. A workspace chooses:
@@ -100,6 +102,7 @@ Hive includes these MCP entries:
 
 - **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default.
 - **Hive Canvas** for durable Markdown, HTML, and links beside a chat.
+- **Hive Orchestrator** for starting and driving hive sessions in your repositories. See [Orchestrator](orchestrator.md).
 - **Playwright** for browser automation. It requires Node.js and a Playwright browser.
 - **Chrome DevTools** for a running Chrome browser. It requires Node.js 20.19 or newer and Chrome.
 
