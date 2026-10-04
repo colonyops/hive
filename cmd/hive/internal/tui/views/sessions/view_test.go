@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/config"
@@ -414,7 +416,7 @@ func newViewWithTerminalMgr(sessions []session.Session) *View {
 		gitStatuses:      kvcache.New[string, GitStatus](),
 		columnWidths:     &ColumnWidths{},
 		service:          new(sessionsvc.Service),
-		status:           statussvc.NewService(mgr, 1),
+		status:           statussvc.NewService(zerolog.Nop(), mgr, 1),
 		gitWorkers:       1,
 		cfg:              &config.Config{},
 	}
@@ -446,7 +448,7 @@ func TestHandleSessionsLoaded_NoTerminalPollWhenEmpty(t *testing.T) {
 
 func TestHandleWorkspaceWatcherStartedScansAfterWatchInstallation(t *testing.T) {
 	root := t.TempDir()
-	watcher, err := workspace.NewWatcher([]string{root})
+	watcher, err := workspace.NewWatcher(zerolog.Nop(), []string{root})
 	require.NoError(t, err)
 	t.Cleanup(func() { assert.NoError(t, watcher.Close()) })
 

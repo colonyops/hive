@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/colonyops/hive/internal/hive/events"
@@ -21,12 +23,12 @@ type Service struct {
 }
 
 // NewService creates a new Service.
-func NewService(store todo.Store, bus *events.EventBus, cfg *config.Config, logger zerolog.Logger) *Service {
+func NewService(logger zerolog.Logger, store todo.Store, bus *events.EventBus, cfg *config.Config) *Service {
 	return &Service{
 		store:   store,
 		limiter: NewLimiter(store, cfg.Todos.Limiter),
 		bus:     bus,
-		logger:  logger.With().Str("component", "todo").Logger(),
+		logger:  logutils.Component(logger, "todo"),
 	}
 }
 

@@ -66,7 +66,7 @@ func newTestGateway(notify func(Notification)) (*Gateway, *recordingWriter) {
 	if notify == nil {
 		notify = func(Notification) {}
 	}
-	return NewGateway(w, notify, testLogger()), w
+	return NewGateway(testLogger(), w, notify), w
 }
 
 func sendAsync(ctx context.Context, g *Gateway, cmd string) <-chan sendResult {
@@ -322,7 +322,7 @@ func TestLineScannerRefusesUnframeableInput(t *testing.T) {
 func TestSendFailsWhenStdinIsBroken(t *testing.T) {
 	t.Parallel()
 
-	g := NewGateway(&recordingWriter{err: errors.New("broken pipe")}, func(Notification) {}, testLogger())
+	g := NewGateway(testLogger(), &recordingWriter{err: errors.New("broken pipe")}, func(Notification) {})
 
 	_, err := g.Send(t.Context(), "list-windows")
 	require.Error(t, err)
@@ -358,7 +358,7 @@ func TestTrimEOLStripsCarriageReturn(t *testing.T) {
 
 func TestGatewayCapturesTheAttachPreambleError(t *testing.T) {
 	t.Parallel()
-	gw := NewGateway(io.Discard, func(Notification) {}, testLogger())
+	gw := NewGateway(testLogger(), io.Discard, func(Notification) {})
 
 	require.NoError(t, gw.Feed([]byte("%begin 100 0 0")))
 	require.NoError(t, gw.Feed([]byte("no server running on /private/tmp/tmux-501/default")))

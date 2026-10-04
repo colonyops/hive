@@ -57,7 +57,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 
 	// Start profiler server if enabled
 	if cmd.flags.ProfilerPort > 0 {
-		profServer := profiler.New(cmd.flags.ProfilerPort)
+		profServer := profiler.New(log.Logger, cmd.flags.ProfilerPort)
 		if err := profServer.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start profiler: %w", err)
 		}

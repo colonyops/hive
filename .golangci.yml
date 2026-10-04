@@ -59,6 +59,8 @@ linters:
               desc: Shared internal/ must not render. Put UI code below cmd/<artifact>/internal.
             - pkg: github.com/wailsapp
               desc: Shared internal/ must not depend on the desktop runtime.
+            - pkg: github.com/rs/zerolog/log
+              desc: Shared internal/ takes a zerolog.Logger as a parameter. Only the CLI assigns the global logger, so in the desktop it writes to stderr.
         domain-is-pure:
           files:
             - "**/internal/domain/**"

@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 // TitlePatternsFromConfig compiles config regex strings into TitlePatterns.
@@ -48,12 +48,12 @@ func cleanPatternName(pattern string) string {
 	return name
 }
 
-func TitlePatternsFromConfig(patterns []string, agentNames []string) []TitlePattern {
+func TitlePatternsFromConfig(logger zerolog.Logger, patterns []string, agentNames []string) []TitlePattern {
 	out := make([]TitlePattern, 0, len(patterns))
 	for _, pattern := range patterns {
 		compiled, err := regexp.Compile("(?i)" + pattern)
 		if err != nil {
-			log.Warn().Err(err).Str("pattern", pattern).Msg("skipping invalid terminal title pattern")
+			logger.Warn().Err(err).Str("pattern", pattern).Msg("skipping invalid terminal title pattern")
 			continue
 		}
 		out = append(out, TitlePattern{Pattern: compiled, Tool: inferTool(pattern, agentNames)})

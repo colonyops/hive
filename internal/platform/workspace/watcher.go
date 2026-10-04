@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/fsnotify/fsnotify"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/pkg/pathutil"
 )
@@ -24,10 +26,11 @@ type Watcher struct {
 	fs       *fsnotify.Watcher
 	roots    []string
 	debounce time.Duration
+	logger   zerolog.Logger
 }
 
 // NewWatcher creates a watcher for configured workspace directories.
-func NewWatcher(dirs []string) (*Watcher, error) {
+func NewWatcher(logger zerolog.Logger, dirs []string) (*Watcher, error) {
 	fsWatcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("create filesystem watcher: %w", err)
@@ -36,11 +39,12 @@ func NewWatcher(dirs []string) (*Watcher, error) {
 	w := &Watcher{
 		fs:       fsWatcher,
 		debounce: watcherDebounce,
+		logger:   logutils.Component(logger, "workspace-watcher"),
 	}
 	for _, dir := range dirs {
 		root, err := filepath.Abs(pathutil.ExpandHome(dir))
 		if err != nil {
-			log.Debug().Err(err).Str("dir", dir).Msg("failed to resolve workspace watch path")
+			w.logger.Debug().Err(err).Str("dir", dir).Msg("failed to resolve workspace watch path")
 			continue
 		}
 		w.roots = append(w.roots, filepath.Clean(root))
@@ -117,7 +121,7 @@ func (w *Watcher) refreshWatches() {
 		parent := nearestExistingDir(filepath.Dir(root))
 		if parent != "" {
 			if err := w.fs.Add(parent); err != nil {
-				log.Debug().Err(err).Str("dir", parent).Msg("failed to watch workspace ancestor directory")
+				w.logger.Debug().Err(err).Str("dir", parent).Msg("failed to watch workspace ancestor directory")
 			}
 		}
 
@@ -128,13 +132,13 @@ func (w *Watcher) refreshWatches() {
 		// kqueue opens descriptors for directory entries, so only non-repository
 		// children are watched for later .git creation.
 		if err := w.fs.Add(root); err != nil {
-			log.Debug().Err(err).Str("dir", root).Msg("failed to watch workspace directory")
+			w.logger.Debug().Err(err).Str("dir", root).Msg("failed to watch workspace directory")
 			continue
 		}
 
 		entries, err := os.ReadDir(root)
 		if err != nil {
-			log.Debug().Err(err).Str("dir", root).Msg("failed to inspect workspace directory for watches")
+			w.logger.Debug().Err(err).Str("dir", root).Msg("failed to inspect workspace directory for watches")
 			continue
 		}
 		for _, entry := range entries {
@@ -146,7 +150,7 @@ func (w *Watcher) refreshWatches() {
 				continue
 			}
 			if err := w.fs.Add(child); err != nil {
-				log.Debug().Err(err).Str("dir", child).Msg("failed to watch workspace child directory")
+				w.logger.Debug().Err(err).Str("dir", child).Msg("failed to watch workspace child directory")
 			}
 		}
 	}

@@ -801,7 +801,7 @@ func (v *View) applyFilter() tea.Cmd {
 		return nil
 	}
 	// refreshing is cleared when GitStatusBatchCompleteMsg is received
-	return FetchGitStatusBatch(gitstatus.NewService(v.service.Git(), v.gitWorkers), paths)
+	return FetchGitStatusBatch(gitstatus.NewService(log.Logger, v.service.Git(), v.gitWorkers), paths)
 }
 
 // rebuildWindowItems strips existing window sub-items from the list and re-expands
@@ -1370,7 +1370,7 @@ func (v *View) scanRepoDirs() tea.Cmd {
 	v.workspaceScanGeneration++
 	generation := v.workspaceScanGeneration
 	return func() tea.Msg {
-		repos, err := workspace.ScanRepoDirs(context.Background(), v.workspaces, v.service.Git())
+		repos, err := workspace.ScanRepoDirs(context.Background(), log.Logger, v.workspaces, v.service.Git())
 		if err != nil {
 			log.Warn().Err(err).Msg("repo directory scan encountered errors")
 		}
@@ -1380,7 +1380,7 @@ func (v *View) scanRepoDirs() tea.Cmd {
 
 func (v *View) startWorkspaceWatcher() tea.Cmd {
 	return func() tea.Msg {
-		watcher, err := workspace.NewWatcher(v.workspaces)
+		watcher, err := workspace.NewWatcher(log.Logger, v.workspaces)
 		return WorkspaceWatcherStartedMsg{Watcher: watcher, Err: err}
 	}
 }
@@ -1431,7 +1431,7 @@ func (v *View) RefreshGitStatuses() tea.Cmd {
 		return nil
 	}
 
-	return FetchGitStatusBatch(gitstatus.NewService(v.service.Git(), v.gitWorkers), paths)
+	return FetchGitStatusBatch(gitstatus.NewService(log.Logger, v.service.Git(), v.gitWorkers), paths)
 }
 
 // scheduleSessionRefresh returns a command that schedules the next session refresh.

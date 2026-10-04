@@ -1230,7 +1230,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	tmuxBinary := func(ctx context.Context) (string, error) {
 		return a.resolveTmuxBinary(ctx)
 	}
-	tmuxClient := tmuxexec.New(newTmuxRunner(tmuxBinary, a.execEnv.Environ), a.logger.With().Str("component", "tmux").Logger())
+	tmuxClient := tmuxexec.New(a.logger, newTmuxRunner(tmuxBinary, a.execEnv.Environ))
 	ports := hive.Ports{
 		DB:       database,
 		Bus:      bus,

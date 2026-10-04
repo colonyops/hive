@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/rs/zerolog"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 )
@@ -82,7 +84,7 @@ func NewUpdaterService(currentVersion string, enabled bool, interval time.Durati
 		currentVersion: currentVersion,
 		interval:       interval,
 		enabled:        enabled,
-		logger:         logger.With().Str("component", "updater").Logger(),
+		logger:         logutils.Component(logger, "updater"),
 		writeEnabled:   writeEnabled,
 	}
 }

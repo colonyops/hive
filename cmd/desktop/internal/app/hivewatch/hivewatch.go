@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/rs/zerolog"
 )
 
@@ -86,7 +88,7 @@ type Watcher struct {
 func New(interval time.Duration, logger zerolog.Logger, probes ...Probe) *Watcher {
 	return &Watcher{
 		interval: interval,
-		logger:   logger.With().Str("component", "hivewatch").Logger(),
+		logger:   logutils.Component(logger, "hivewatch"),
 		probes:   probes,
 		stop:     make(chan struct{}),
 		done:     make(chan struct{}),

@@ -119,7 +119,7 @@ func New(cfg *config.Config, p Ports) (*Engine, error) {
 
 	e := &Engine{
 		ports: p,
-		hc:    hcsvc.NewService(store.NewHCStore(p.DB), p.Logger.With().Str("component", "honeycomb").Logger()),
+		hc:    hcsvc.NewService(p.Logger, store.NewHCStore(p.DB)),
 	}
 	built, err := e.build(cfg)
 	if err != nil {
@@ -167,23 +167,22 @@ func (e *Engine) build(cfg *config.Config) (*services, error) {
 		AgentFlags:   profile.ShellFlags(),
 	})
 	gitExec := git.NewExecutor(cfg.GitPath, p.Executor)
-
 	set := &services{
 		cfg:      cfg,
 		renderer: renderer,
 		git:      gitExec,
 		sessions: sessionsvc.NewService(
-			store.NewSessionStore(p.DB), gitExec, cfg, p.Bus, p.Executor, renderer,
-			p.Styler, p.Logger, p.Stdout, p.Stderr, p.Mux,
+			p.Logger, store.NewSessionStore(p.DB), gitExec, cfg, p.Bus, p.Executor, renderer,
+			p.Styler, p.Stdout, p.Stderr, p.Mux,
 		),
 		messages:  msgsvc.NewService(store.NewMessageStore(p.DB, cfg.Messaging.MaxMessages), cfg, p.Bus),
-		context:   repocontext.NewService(cfg, gitExec),
-		todos:     todosvc.NewService(store.NewTodoStore(p.DB), p.Bus, cfg, p.Logger.With().Str("component", "todos").Logger()),
-		gitStatus: gitstatus.NewService(gitExec, cfg.Git.StatusWorkers),
+		context:   repocontext.NewService(p.Logger, cfg, gitExec),
+		todos:     todosvc.NewService(p.Logger, store.NewTodoStore(p.Logger, p.DB), p.Bus, cfg),
+		gitStatus: gitstatus.NewService(p.Logger, gitExec, cfg.Git.StatusWorkers),
 	}
 	if p.PaneSource != nil {
-		set.terminal = NewTerminalManager(cfg, p.PaneSource)
-		set.status = statussvc.NewService(set.terminal, cfg.Git.StatusWorkers)
+		set.terminal = NewTerminalManager(p.Logger, cfg, p.PaneSource)
+		set.status = statussvc.NewService(p.Logger, set.terminal, cfg.Git.StatusWorkers)
 	}
 	return set, nil
 }

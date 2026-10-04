@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/platform/proc/classifier"
 	"github.com/stretchr/testify/assert"
@@ -282,7 +284,7 @@ func TestClassify_WindowNamePiDoesNotMatchNonAgentPane(t *testing.T) {
 }
 
 func TestTitlePatternsFromConfig(t *testing.T) {
-	patterns := classifier.TitlePatternsFromConfig([]string{"(?i)claude", "[", "worker", "\\bpi\\b", "pipeline", "π"}, []string{testToolClaude})
+	patterns := classifier.TitlePatternsFromConfig(zerolog.Nop(), []string{"(?i)claude", "[", "worker", "\\bpi\\b", "pipeline", "π"}, []string{testToolClaude})
 	require.Len(t, patterns, 5)
 	assert.Equal(t, testToolClaude, patterns[0].Tool)
 	assert.True(t, patterns[0].Pattern.MatchString("Claude"))

@@ -99,6 +99,7 @@ func newMouseTestSessionService(t *testing.T) *sessionsvc.Service {
 	log := zerolog.New(io.Discard)
 	r := tmpl.New(tmpl.Config{})
 	return sessionsvc.NewService(
+		log,
 		&mouseTestStore{},
 		&mouseTestGit{},
 		&hiveconfig.Config{DataDir: t.TempDir(), GitPath: "git"},
@@ -106,7 +107,6 @@ func newMouseTestSessionService(t *testing.T) *sessionsvc.Service {
 		&executiltest.Exec{},
 		r,
 		sessionsvc.PlainStyler{},
-		log,
 		io.Discard,
 		io.Discard,
 		mouseTestMultiplexer{},
@@ -119,7 +119,7 @@ func newMouseTestSessionsView(t *testing.T) *sessions.View {
 	svc := newMouseTestSessionService(t)
 	cfg := &config.Config{}
 	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(nil, nil), testRenderer)
-	status := statussvc.NewService(terminal.NewManager(nil), 1)
+	status := statussvc.NewService(zerolog.Nop(), terminal.NewManager(nil), 1)
 	pm := plugins.NewManager(plugins.NewWorkerPool(0), plugins.NewCommandSet(nil, nil))
 	return sessions.New(sessions.ViewOpts{
 		Cfg:           cfg,

@@ -169,10 +169,10 @@ func TestTick_LogsAnOutageOnceAndItsRecovery(t *testing.T) {
 
 	var msgs []string
 	for line := range strings.Lines(buf.String()) {
-		var entry struct{ Level, Message, Probe, Component string }
+		var entry struct{ Level, Message, Probe, Cmp string }
 		require.NoError(t, json.Unmarshal([]byte(line), &entry))
 		require.Equal(t, "fake", entry.Probe)
-		require.Equal(t, "hivewatch", entry.Component)
+		require.Equal(t, "hivewatch", entry.Cmp)
 		msgs = append(msgs, entry.Level+": "+entry.Message)
 	}
 	require.Equal(t, []string{

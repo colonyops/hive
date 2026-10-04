@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +25,7 @@ func TestServer_StartAndShutdown(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := New(tt.port)
+			server := New(zerolog.Nop(), tt.port)
 
 			ctx := context.Background()
 			require.NoError(t, server.Start(ctx), "Start() error")
@@ -37,7 +39,7 @@ func TestServer_StartAndShutdown(t *testing.T) {
 }
 
 func TestServer_PprofEndpoints(t *testing.T) {
-	server := New(0)
+	server := New(zerolog.Nop(), 0)
 
 	ctx := context.Background()
 	require.NoError(t, server.Start(ctx), "Start() error")

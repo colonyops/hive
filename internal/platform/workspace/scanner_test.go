@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -66,7 +68,7 @@ func TestScanRepoDirs(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "somefile.txt"), []byte("test"), 0o644))
 
 	ctx := context.Background()
-	discovered, err := ScanRepoDirs(ctx, []string{tmpDir}, gitMock)
+	discovered, err := ScanRepoDirs(ctx, zerolog.Nop(), []string{tmpDir}, gitMock)
 	require.NoError(t, err)
 
 	assert.Len(t, discovered, 3)
@@ -84,14 +86,14 @@ func TestScanRepoDirs(t *testing.T) {
 
 func TestScanRepoDirs_EmptyDirs(t *testing.T) {
 	ctx := context.Background()
-	discovered, err := ScanRepoDirs(ctx, nil, &mockGit{})
+	discovered, err := ScanRepoDirs(ctx, zerolog.Nop(), nil, &mockGit{})
 	require.NoError(t, err)
 	assert.Empty(t, discovered)
 }
 
 func TestScanRepoDirs_NonexistentDir(t *testing.T) {
 	ctx := context.Background()
-	discovered, err := ScanRepoDirs(ctx, []string{"/nonexistent/path"}, &mockGit{})
+	discovered, err := ScanRepoDirs(ctx, zerolog.Nop(), []string{"/nonexistent/path"}, &mockGit{})
 	require.NoError(t, err)
 	assert.Empty(t, discovered)
 }
@@ -113,7 +115,7 @@ func TestScanRepoDirs_MultipleDirs(t *testing.T) {
 	gitMock.remotes[repo2] = "git@github.com:user/repo2.git"
 
 	ctx := context.Background()
-	discovered, err := ScanRepoDirs(ctx, []string{tmpDir1, tmpDir2}, gitMock)
+	discovered, err := ScanRepoDirs(ctx, zerolog.Nop(), []string{tmpDir1, tmpDir2}, gitMock)
 	require.NoError(t, err)
 
 	assert.Len(t, discovered, 2)

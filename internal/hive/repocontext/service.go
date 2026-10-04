@@ -9,22 +9,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/platform/git"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 // Service manages per-repository context directories.
 type Service struct {
 	config *config.Config
 	git    git.Git
+	logger zerolog.Logger
 }
 
 // NewService creates a new Service.
-func NewService(cfg *config.Config, gitClient git.Git) *Service {
+func NewService(logger zerolog.Logger, cfg *config.Config, gitClient git.Git) *Service {
 	return &Service{
 		config: cfg,
 		git:    gitClient,
+		logger: logutils.Component(logger, "repocontext"),
 	}
 }
 
@@ -126,7 +130,7 @@ func (c *Service) Prune(ctxDir string, olderThan time.Duration) (int, error) {
 		if info.ModTime().Before(cutoff) {
 			path := filepath.Join(ctxDir, entry.Name())
 			if err := os.RemoveAll(path); err != nil {
-				log.Warn().Err(err).Str("path", path).Msg("failed to remove context entry during prune")
+				c.logger.Warn().Err(err).Str("path", path).Msg("failed to remove context entry during prune")
 				continue
 			}
 			count++

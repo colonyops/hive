@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -54,7 +56,7 @@ func activeSession() session.Session {
 func TestReadSessionReportsTheCheckoutAndItsRemoteCoordinates(t *testing.T) {
 	t.Parallel()
 
-	svc := gitstatus.NewService(stubGit{branch: "feat/bar", clean: false, unpushed: true, additions: 42, deletions: 7}, 1)
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "feat/bar", clean: false, unpushed: true, additions: 42, deletions: 7}, 1)
 
 	got := svc.ReadSession(t.Context(), activeSession())
 	assert.Equal(t, gitstatus.Status{
@@ -69,7 +71,7 @@ func TestReadSessionReportsTheCheckoutAndItsRemoteCoordinates(t *testing.T) {
 func TestReadSessionReportsAFailedReadInsteadOfAssumingDirty(t *testing.T) {
 	t.Parallel()
 
-	svc := gitstatus.NewService(stubGit{branch: "feat/bar", cleanErr: errors.New("git status: exit 128")}, 1)
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "feat/bar", cleanErr: errors.New("git status: exit 128")}, 1)
 
 	got := svc.ReadSession(t.Context(), activeSession())
 	assert.False(t, got.Dirty)
@@ -83,7 +85,7 @@ func TestReadSessionReportsAFailedReadInsteadOfAssumingDirty(t *testing.T) {
 func TestReadSessionReportsNothingResolvedWhenBranchFails(t *testing.T) {
 	t.Parallel()
 
-	svc := gitstatus.NewService(stubGit{branchErr: errors.New("git branch: not a repository")}, 1)
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branchErr: errors.New("git branch: not a repository")}, 1)
 
 	got := svc.ReadSession(t.Context(), activeSession())
 	assert.False(t, got.Resolved)
@@ -96,7 +98,7 @@ func TestReadSessionReportsNothingResolvedWhenBranchFails(t *testing.T) {
 func TestReadSessionPrefersACheckoutFailureOverTheUnpushedOne(t *testing.T) {
 	t.Parallel()
 
-	svc := gitstatus.NewService(stubGit{
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{
 		branch:      "feat/bar",
 		unpushedErr: errors.New("no upstream"),
 		diffErr:     errors.New("git diff: exit 128"),
@@ -114,7 +116,7 @@ func TestReadSessionIsEmptyForASessionWithNoCheckout(t *testing.T) {
 
 	recycled := activeSession()
 	recycled.State = session.StateRecycled
-	svc := gitstatus.NewService(stubGit{branch: "feat/bar"}, 1)
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "feat/bar"}, 1)
 
 	assert.Equal(t, gitstatus.Status{}, svc.ReadSession(t.Context(), recycled))
 }
@@ -126,7 +128,7 @@ func TestReadSessionReportsCoordinatesForAnyHostedRemote(t *testing.T) {
 
 	elsewhere := activeSession()
 	elsewhere.Remote = "git@Gitea.Example.Test:acme/site.git"
-	svc := gitstatus.NewService(stubGit{branch: "feat/bar"}, 1)
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "feat/bar"}, 1)
 
 	got := svc.ReadSession(t.Context(), elsewhere)
 	assert.Equal(t, "feat/bar", got.Branch)
@@ -142,7 +144,7 @@ func TestReadSessionLeavesCoordinatesEmptyForAHostlessRemote(t *testing.T) {
 
 	local := activeSession()
 	local.Remote = "/srv/git/acme/site.git"
-	svc := gitstatus.NewService(stubGit{branch: "feat/bar"}, 1)
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "feat/bar"}, 1)
 
 	got := svc.ReadSession(t.Context(), local)
 	assert.Equal(t, "feat/bar", got.Branch)
@@ -173,7 +175,7 @@ func TestReadSessionAgainstARealCheckout(t *testing.T) {
 	runGit("checkout", "-qb", "feat/bar")
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("one\ntwo\nthree\n"), 0o600))
 
-	svc := gitstatus.NewService(git.NewExecutor("git", &executil.RealExecutor{}), 1)
+	svc := gitstatus.NewService(zerolog.Nop(), git.NewExecutor("git", &executil.RealExecutor{}), 1)
 	got := svc.ReadSession(t.Context(), session.Session{
 		ID: "s1", Path: dir, Remote: "https://github.com/acme/site", State: session.StateActive,
 	})
@@ -197,7 +199,7 @@ func TestReadBatchReadsEveryPathWithoutTheUnpushedCheckByDefault(t *testing.T) {
 	t.Parallel()
 
 	var unpushedCalls atomic.Int32
-	svc := gitstatus.NewService(stubGit{branch: "main", clean: true, additions: 3, unpushedHit: &unpushedCalls}, 2)
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branch: "main", clean: true, additions: 3, unpushedHit: &unpushedCalls}, 2)
 
 	got := svc.ReadBatch(t.Context(), []string{"/a", "/b", "/c"}, gitstatus.Options{})
 	require.Len(t, got, 3)
@@ -210,7 +212,7 @@ func TestReadBatchReadsEveryPathWithoutTheUnpushedCheckByDefault(t *testing.T) {
 func TestReadBatchKeepsAFailedPathsError(t *testing.T) {
 	t.Parallel()
 
-	svc := gitstatus.NewService(stubGit{branchErr: errors.New("not a repository")}, 0)
+	svc := gitstatus.NewService(zerolog.Nop(), stubGit{branchErr: errors.New("not a repository")}, 0)
 
 	got := svc.ReadBatch(t.Context(), []string{"/gone"}, gitstatus.Options{})
 	require.EqualError(t, got["/gone"].Err, "not a repository")

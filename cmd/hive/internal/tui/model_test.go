@@ -58,17 +58,17 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
 	pluginManager := plugins.NewManager(plugins.NewWorkerPool(0), commandSet)
 	todoService := todosvc.NewService(
-		store.NewTodoStore(database),
+		zerolog.New(io.Discard),
+		store.NewTodoStore(zerolog.Nop(), database),
 		tb.EventBus,
 		&cfg.Config,
-		zerolog.New(io.Discard),
 	)
 
 	m := New(Deps{
 		Config:        cfg,
 		Service:       newMouseTestSessionService(t),
 		Renderer:      testRenderer,
-		Status:        statussvc.NewService(terminal.NewManager(nil), 1),
+		Status:        statussvc.NewService(zerolog.Nop(), terminal.NewManager(nil), 1),
 		PluginManager: pluginManager,
 		CommandSet:    commandSet,
 		TodoService:   todoService,
@@ -143,17 +143,17 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
 	pluginManager := plugins.NewManager(plugins.NewWorkerPool(0), commandSet)
 	todoService := todosvc.NewService(
-		store.NewTodoStore(database),
+		zerolog.New(io.Discard),
+		store.NewTodoStore(zerolog.Nop(), database),
 		tb.EventBus,
 		&cfg.Config,
-		zerolog.New(io.Discard),
 	)
 
 	m := New(Deps{
 		Config:        cfg,
 		Service:       newMouseTestSessionService(t),
 		Renderer:      testRenderer,
-		Status:        statussvc.NewService(terminal.NewManager(nil), 1),
+		Status:        statussvc.NewService(zerolog.Nop(), terminal.NewManager(nil), 1),
 		PluginManager: pluginManager,
 		CommandSet:    commandSet,
 		TodoService:   todoService,

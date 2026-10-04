@@ -236,7 +236,7 @@ func Attach(ctx, lifetime context.Context, opts Options) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	c.gw = NewGateway(stdin, c.onNotification, c.log)
+	c.gw = NewGateway(c.log, stdin, c.onNotification)
 
 	lifeCtx, cancel := context.WithCancel(lifetime)
 	c.cancel = cancel

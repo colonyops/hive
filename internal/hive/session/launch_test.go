@@ -24,8 +24,8 @@ import (
 func newRealGitService(t *testing.T, cfg *config.Config) *Service {
 	t.Helper()
 	exec := &executil.RealExecutor{}
-	return NewService(newMockStore(), git.NewExecutor("git", exec), cfg, testbus.New(t).EventBus, exec,
-		tmpl.New(tmpl.Config{}), PlainStyler{}, zerolog.Nop(), io.Discard, io.Discard, testMultiplexer{})
+	return NewService(zerolog.Nop(), newMockStore(), git.NewExecutor("git", exec), cfg, testbus.New(t).EventBus, exec,
+		tmpl.New(tmpl.Config{}), PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
 }
 
 func runGit(t *testing.T, dir string, args ...string) {

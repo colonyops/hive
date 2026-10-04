@@ -80,7 +80,7 @@ func TestRenderTargets(t *testing.T) {
 func TestListPanesParsesEscapedFreeFormFields(t *testing.T) {
 	runner := &fakeRunner{results: []runnerResult{{stdout: `sess|||2|||1|||win\|\|\|name|||/tmp/a\|\|\|b|||42|||%7|||123|||title\|\|\|text|||hive-slug|||1
 `}}}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 
 	panes, err := client.ListPanes(context.Background())
 	require.NoError(t, err)
@@ -95,14 +95,14 @@ func TestListPanesParsesEscapedFreeFormFields(t *testing.T) {
 
 func TestListPanesRejectsMalformedRow(t *testing.T) {
 	runner := &fakeRunner{results: []runnerResult{{stdout: "bad|||row\n"}}}
-	_, err := New(runner, zerolog.Nop()).ListPanes(context.Background())
+	_, err := New(zerolog.Nop(), runner).ListPanes(context.Background())
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "expected 11 fields")
 }
 
 func TestSendLiteralAndNamedKeyUseSingleArgvTokens(t *testing.T) {
 	runner := &fakeRunner{}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	target := multiplexer.Target{Session: "s", Window: "0", Pane: "1"}
 
 	require.NoError(t, client.SendLiteral(context.Background(), target, `-- "x"; λ`))
@@ -116,7 +116,7 @@ func TestSendLiteralAndNamedKeyUseSingleArgvTokens(t *testing.T) {
 
 func TestPasteSuccessUsesBytePreservingFlagsAndReliesOnDeleteAfterPaste(t *testing.T) {
 	runner := &fakeRunner{}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	target := multiplexer.Target{Session: "s", Window: "0", Pane: "1"}
 
 	require.NoError(t, client.Paste(context.Background(), target, []byte("a\nb\tλ"), multiplexer.PasteOptions{}))
@@ -130,7 +130,7 @@ func TestPasteSuccessUsesBytePreservingFlagsAndReliesOnDeleteAfterPaste(t *testi
 
 func TestPasteRetriesWithoutSanitizationFlagForPreSanitizationTmux(t *testing.T) {
 	runner := &fakeRunner{results: []runnerResult{{}, {stderr: "command paste-buffer: unknown flag -S", err: assert.AnError}, {}}}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	target := multiplexer.Target{Session: "s", Window: "0", Pane: "1"}
 
 	require.NoError(t, client.Paste(context.Background(), target, []byte("data"), multiplexer.PasteOptions{}))
@@ -143,7 +143,7 @@ func TestPasteRetriesWithoutSanitizationFlagForPreSanitizationTmux(t *testing.T)
 func TestPasteLoadFailureDoesNotAttemptCleanup(t *testing.T) {
 	loadErr := errors.New("load failed")
 	runner := &fakeRunner{results: []runnerResult{{err: loadErr}}}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	target := multiplexer.Target{Session: "s", Window: "0", Pane: "1"}
 
 	err := client.Paste(context.Background(), target, []byte("data"), multiplexer.PasteOptions{})
@@ -156,7 +156,7 @@ func TestPasteCallerCancellationStillAttemptsCleanup(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	runner := &fakeRunner{results: []runnerResult{{}, {err: context.Canceled}, {}}}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	target := multiplexer.Target{Session: "s", Window: "0", Pane: "1"}
 
 	err := client.Paste(ctx, target, []byte("data"), multiplexer.PasteOptions{})
@@ -170,7 +170,7 @@ func TestPasteCleansBufferAndPreservesPrimaryError(t *testing.T) {
 	cleanup := errors.New("cleanup failed")
 	runner := &fakeRunner{results: []runnerResult{{}, {err: primary}, {err: cleanup}}}
 	var logs bytes.Buffer
-	client := New(runner, zerolog.New(&logs))
+	client := New(zerolog.New(&logs), runner)
 	target := multiplexer.Target{Session: "s", Window: "0", Pane: "1"}
 
 	err := client.Paste(context.Background(), target, []byte("a\nβ\x00"), multiplexer.PasteOptions{Bracketed: true})
@@ -189,7 +189,7 @@ func TestPasteCleansBufferAndPreservesPrimaryError(t *testing.T) {
 func TestCapturePaneOptions(t *testing.T) {
 	start, end := -20, 4
 	runner := &fakeRunner{results: []runnerResult{{stdout: "captured"}}}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 
 	got, err := client.CapturePane(context.Background(), multiplexer.Target{Session: "s", Window: "2", Pane: "1"}, multiplexer.CaptureOptions{
 		JoinWrappedLines: true,
@@ -203,7 +203,7 @@ func TestCapturePaneOptions(t *testing.T) {
 
 func TestCapturePaneUsesStableNativeTarget(t *testing.T) {
 	runner := &fakeRunner{results: []runnerResult{{stdout: "captured"}}}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 
 	_, err := client.CapturePane(context.Background(), multiplexer.Target{Pane: "%7"}, multiplexer.CaptureOptions{JoinWrappedLines: true})
 	require.NoError(t, err)
@@ -212,7 +212,7 @@ func TestCapturePaneUsesStableNativeTarget(t *testing.T) {
 
 func TestResolveTargetReturnsQualifiedPane(t *testing.T) {
 	runner := &fakeRunner{results: []runnerResult{{stdout: "work|||3|||2|||agent|||/repo|||42|||%7|||123|||title|||work|||0\n"}}}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 
 	pane, err := client.ResolveTarget(context.Background(), "%7")
 	require.NoError(t, err)
@@ -223,7 +223,7 @@ func TestResolveTargetReturnsQualifiedPane(t *testing.T) {
 
 func TestLifecycleCommandsUseRenderedTargets(t *testing.T) {
 	runner := &fakeRunner{}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	ctx := context.Background()
 
 	require.NoError(t, client.RenameSession(ctx, multiplexer.Target{Session: "old"}, "new"))
@@ -237,7 +237,7 @@ func TestLifecycleCommandsUseRenderedTargets(t *testing.T) {
 
 func TestCurrentSessionOutsideTmuxDoesNotRunCommand(t *testing.T) {
 	runner := &fakeRunner{}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	client.getenv = func(string) string { return "" }
 
 	target, err := client.CurrentSession(context.Background())
@@ -248,7 +248,7 @@ func TestCurrentSessionOutsideTmuxDoesNotRunCommand(t *testing.T) {
 
 func TestCurrentSessionInsideTmux(t *testing.T) {
 	runner := &fakeRunner{results: []runnerResult{{stdout: "work\n"}}}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	client.getenv = func(string) string { return "/tmp/tmux" }
 
 	target, err := client.CurrentSession(context.Background())

@@ -12,7 +12,7 @@ import (
 
 func TestCreateSessionCreatesPanesAndFocus(t *testing.T) {
 	runner := &fakeRunner{}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	client.getenv = func(string) string { return "" }
 	spec := multiplexer.SessionSpec{
 		Target:           multiplexer.Target{Session: "work"},
@@ -40,7 +40,7 @@ func TestCreateSessionCleansPartialSession(t *testing.T) {
 		{err: assert.AnError}, // split
 		{},                    // cleanup
 	}}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	err := client.CreateSession(context.Background(), multiplexer.SessionSpec{
 		Target: multiplexer.Target{Session: "work"}, Background: true,
 		Windows: []multiplexer.WindowSpec{{Name: "one", Panes: []multiplexer.PaneSpec{{}, {}}}},
@@ -51,7 +51,7 @@ func TestCreateSessionCleansPartialSession(t *testing.T) {
 
 func TestAttachOrSwitchUsesInteractiveStreamsOutsideTmux(t *testing.T) {
 	runner := &fakeRunner{}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	client.getenv = func(string) string { return "" }
 	target := multiplexer.Target{Session: "work", Window: "2", Pane: "1"}
 
@@ -65,7 +65,7 @@ func TestAttachOrSwitchUsesInteractiveStreamsOutsideTmux(t *testing.T) {
 func TestOpenExistingSessionModes(t *testing.T) {
 	t.Run("background does not attach", func(t *testing.T) {
 		runner := &fakeRunner{}
-		client := New(runner, zerolog.Nop())
+		client := New(zerolog.Nop(), runner)
 		spec := multiplexer.SessionSpec{Target: multiplexer.Target{Session: "work"}, Background: true}
 
 		require.NoError(t, client.OpenSession(context.Background(), spec, multiplexer.Target{}))
@@ -75,7 +75,7 @@ func TestOpenExistingSessionModes(t *testing.T) {
 
 	t.Run("inside tmux switches then selects qualified pane", func(t *testing.T) {
 		runner := &fakeRunner{}
-		client := New(runner, zerolog.Nop())
+		client := New(zerolog.Nop(), runner)
 		client.getenv = func(string) string { return "/tmp/tmux" }
 		spec := multiplexer.SessionSpec{Target: multiplexer.Target{Session: "work"}}
 		selection := multiplexer.Target{Session: "work", Window: "2", Pane: "1"}
@@ -90,7 +90,7 @@ func TestOpenExistingSessionModes(t *testing.T) {
 
 func TestAttachOrSwitchInsideTmux(t *testing.T) {
 	runner := &fakeRunner{}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	client.getenv = func(string) string { return "/tmp/tmux" }
 
 	require.NoError(t, client.AttachOrSwitch(context.Background(), multiplexer.Target{Session: "work"}, multiplexer.AttachStreams{}))
@@ -100,7 +100,7 @@ func TestAttachOrSwitchInsideTmux(t *testing.T) {
 
 func TestAddWindowsPreservesDirectoriesAndFocus(t *testing.T) {
 	runner := &fakeRunner{}
-	client := New(runner, zerolog.Nop())
+	client := New(zerolog.Nop(), runner)
 	windows := []multiplexer.WindowSpec{
 		{Name: "shell", Command: "bash", WorkingDirectory: "/repo/shell"},
 		{Name: "agent", WorkingDirectory: "/repo/agent", Focus: true, Panes: []multiplexer.PaneSpec{{Command: "pi"}, {Command: "tail", WorkingDirectory: "/repo/logs"}}},

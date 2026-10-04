@@ -8,7 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/colonyops/hive/pkg/logutils"
+
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/platform/git"
@@ -69,12 +71,13 @@ type Options struct {
 type Service struct {
 	git     Git
 	workers int
+	logger  zerolog.Logger
 }
 
 // NewService returns a Service that runs at most workers reads at once in a
 // batch. A workers value below one means one.
-func NewService(g Git, workers int) *Service {
-	return &Service{git: g, workers: max(workers, 1)}
+func NewService(logger zerolog.Logger, g Git, workers int) *Service {
+	return &Service{git: g, workers: max(workers, 1), logger: logutils.Component(logger, "gitstatus")}
 }
 
 // Read reads one checkout. A failed branch read stands for the whole status,
@@ -84,7 +87,7 @@ func (s *Service) Read(ctx context.Context, path string, opts Options) Status {
 
 	branch, err := s.git.Branch(ctx, path)
 	if err != nil {
-		log.Debug().Err(err).Str("path", path).Msg("git branch lookup failed")
+		s.logger.Debug().Err(err).Str("path", path).Msg("git branch lookup failed")
 		status.Err = err
 		return status
 	}
@@ -94,7 +97,7 @@ func (s *Service) Read(ctx context.Context, path string, opts Options) Status {
 	if clean, err := s.git.IsClean(ctx, path); err == nil {
 		status.Dirty = !clean
 	} else {
-		log.Debug().Err(err).Str("path", path).Msg("git clean check failed")
+		s.logger.Debug().Err(err).Str("path", path).Msg("git clean check failed")
 		status.Err = err
 	}
 	if opts.Unpushed {
@@ -107,7 +110,7 @@ func (s *Service) Read(ctx context.Context, path string, opts Options) Status {
 	if additions, deletions, err := s.git.DiffStats(ctx, path); err == nil {
 		status.Additions, status.Deletions = additions, deletions
 	} else {
-		log.Debug().Err(err).Str("path", path).Msg("git diff stats lookup failed")
+		s.logger.Debug().Err(err).Str("path", path).Msg("git diff stats lookup failed")
 		if status.Err == nil {
 			status.Err = err
 		}

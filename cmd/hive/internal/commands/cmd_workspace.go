@@ -6,6 +6,8 @@ import (
 	"os"
 	"text/tabwriter"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/platform/workspace"
 	"github.com/colonyops/hive/pkg/iojson"
@@ -67,7 +69,7 @@ func (cmd *WorkspaceCmd) runList(ctx context.Context, c *cli.Command) error {
 		return nil
 	}
 
-	repos, err := workspace.ScanRepoDirs(ctx, dirs, cmd.app.Sessions().Git())
+	repos, err := workspace.ScanRepoDirs(ctx, log.Logger, dirs, cmd.app.Sessions().Git())
 	if err != nil {
 		return fmt.Errorf("scan workspaces: %w", err)
 	}

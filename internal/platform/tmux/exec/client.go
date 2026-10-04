@@ -4,6 +4,8 @@ package tmuxexec
 import (
 	"os"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/rs/zerolog"
 )
 
@@ -15,15 +17,15 @@ type Client struct {
 }
 
 // New creates a tmux client.
-func New(runner Runner, log zerolog.Logger) *Client {
+func New(log zerolog.Logger, runner Runner) *Client {
 	if runner == nil {
 		runner = execRunner{}
 	}
-	return &Client{runner: runner, log: log, getenv: os.Getenv}
+	return &Client{runner: runner, log: logutils.Component(log, "tmux"), getenv: os.Getenv}
 }
 
 // NewDefault creates a client that invokes the tmux executable.
-func NewDefault(log zerolog.Logger) *Client { return New(execRunner{}, log) }
+func NewDefault(log zerolog.Logger) *Client { return New(log, execRunner{}) }
 
 // Available reports whether tmux is available.
 func (c *Client) Available() bool { return c != nil && c.runner != nil && c.runner.Available() }

@@ -86,7 +86,7 @@ type Gateway struct {
 // NewGateway wires a gateway over the control client's stdin. notify runs on
 // the reader goroutine in stream order and MUST NOT block: a pending command's
 // %end reply shares that goroutine.
-func NewGateway(stdin io.Writer, notify func(Notification), log zerolog.Logger) *Gateway {
+func NewGateway(log zerolog.Logger, stdin io.Writer, notify func(Notification)) *Gateway {
 	return &Gateway{w: stdin, notify: notify, log: log}
 }
 

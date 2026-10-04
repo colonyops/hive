@@ -230,7 +230,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				log.Debug().Msg("event bus stopped")
 			})
 
-			events.RegisterDebugLogger(bus, log.Logger)
+			events.RegisterDebugLogger(log.Logger, bus)
 			hive.NewNotificationRouter(bus).Register()
 
 			var (
@@ -238,7 +238,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				svcLogger = log.With().Str("component", "hive").Logger()
 			)
 
-			tmuxClient := tmuxexec.NewDefault(svcLogger.With().Str("component", "tmux").Logger())
+			tmuxClient := tmuxexec.NewDefault(svcLogger)
 			engine, err := hive.New(&cfg.Config, hive.Ports{
 				DB:         database,
 				Bus:        bus,

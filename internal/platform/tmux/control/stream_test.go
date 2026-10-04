@@ -32,7 +32,7 @@ func TestRecordedAttachStream(t *testing.T) {
 		exited     string
 	)
 	writer := &recordingWriter{}
-	gateway := NewGateway(writer, func(n Notification) {
+	gateway := NewGateway(testLogger(), writer, func(n Notification) {
 		switch v := n.(type) {
 		case OutputNotification:
 			if w, ok := ctrl.windowForPane(v.Pane); ok {
@@ -49,7 +49,7 @@ func TestRecordedAttachStream(t *testing.T) {
 			reconciles++
 		}
 		events = append(events, ctrl.apply(n)...)
-	}, testLogger())
+	})
 
 	// The recording contains the replies to the attach sequence, so those
 	// commands have to be in the FIFO for the guard blocks to pair up.

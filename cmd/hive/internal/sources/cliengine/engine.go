@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/colonyops/hive/cmd/hive/internal/sources"
 	"github.com/colonyops/hive/internal/domain/kv"
 )
@@ -106,7 +108,7 @@ func New(driver Driver, exec Executor, store kv.KV, opts Options) (*Source, erro
 		// round-trip through JSON storage without mutating Field value
 		// types (e.g. int -> float64). Namespaced by binary so the gh and
 		// tea backends for the same source id never collide.
-		cache: kv.NewCache[json.RawMessage](store, "sources."+cfg.ID+"."+cfg.Binary+".search", ttl),
+		cache: kv.NewCache[json.RawMessage](log.Logger, store, "sources."+cfg.ID+"."+cfg.Binary+".search", ttl),
 		limit: limit,
 	}, nil
 }

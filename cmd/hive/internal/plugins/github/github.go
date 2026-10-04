@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/plugins/pluglib"
@@ -26,7 +28,7 @@ type Plugin struct {
 func New(cfg config.GitHubPluginConfig, kvStore kv.KV) *Plugin {
 	p := &Plugin{cfg: cfg}
 	if kvStore != nil {
-		p.cache = kv.NewCache[prInfo](kvStore, "github.pr", p.StatusCacheDuration())
+		p.cache = kv.NewCache[prInfo](log.Logger, kvStore, "github.pr", p.StatusCacheDuration())
 	}
 	return p
 }

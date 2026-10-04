@@ -21,7 +21,7 @@ func newTodoPanelService(t *testing.T) *todosvc.Service {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
 
-	store := store.NewTodoStore(database)
+	store := store.NewTodoStore(zerolog.Nop(), database)
 	bus := events.New(16)
 	ctx, cancel := context.WithCancel(context.Background())
 	go bus.Start(ctx)
@@ -29,7 +29,7 @@ func newTodoPanelService(t *testing.T) *todosvc.Service {
 
 	cfg := hiveconfig.DefaultConfig()
 	cfg.DataDir = t.TempDir()
-	return todosvc.NewService(store, bus, &cfg, zerolog.Nop())
+	return todosvc.NewService(zerolog.Nop(), store, bus, &cfg)
 }
 
 func addHumanTodo(t *testing.T, svc *todosvc.Service, id, title string) todo.Todo {

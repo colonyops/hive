@@ -9,7 +9,7 @@ import (
 // RegisterDebugLogger registers bus hooks that log all event activity at debug level.
 // Uses OnPublish for event firing, OnDrop for buffer-full warnings, and OnPanic
 // for subscriber panic reporting.
-func RegisterDebugLogger(bus *EventBus, logger zerolog.Logger) {
+func RegisterDebugLogger(logger zerolog.Logger, bus *EventBus) {
 	bus.OnPublish(func(event Event, _ any) {
 		logger.Debug().Str("event", string(event)).Msg("event fired")
 	})

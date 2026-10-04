@@ -13,7 +13,7 @@ func TestRegisterDebugLogger(t *testing.T) {
 	tb := testbus.New(t)
 
 	// Register with a nop logger — verifies no panic.
-	events.RegisterDebugLogger(tb.EventBus, zerolog.Nop())
+	events.RegisterDebugLogger(zerolog.Nop(), tb.EventBus)
 
 	// Publish a few events to exercise all subscriber paths.
 	tb.PublishSessionCreated(events.SessionCreatedPayload{

@@ -122,7 +122,7 @@ func newTestServiceWithBus(t *testing.T, store session.Store, cfg *config.Config
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	return NewService(store, &mockGit{}, cfg, bus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+	return NewService(log, store, &mockGit{}, cfg, bus, &executiltest.Exec{}, renderer, PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
 }
 
 func TestRenameSession(t *testing.T) {
@@ -261,7 +261,7 @@ func TestCreateSession_SlugUsedAsTmuxName(t *testing.T) {
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
 	mux := &captureMultiplexer{capturedName: &capturedTmuxName}
-	svc := NewService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, mux)
+	svc := NewService(log, store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, io.Discard, io.Discard, mux)
 
 	sess, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:       "My Feature",
@@ -334,7 +334,7 @@ func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+	svc := NewService(log, store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:     "agent override",
@@ -365,7 +365,7 @@ func TestCreateSession_RuleAgentOverridesSpawnRenderer(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+	svc := NewService(log, store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:   "rule agent override",
@@ -396,7 +396,7 @@ func TestCreateSession_AgentKeyOverridesRuleAgent(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
-	svc := NewService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+	svc := NewService(log, store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
 
 	_, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:     "cli agent override",
@@ -1329,7 +1329,7 @@ func TestCreateSession_BranchTemplate(t *testing.T) {
 		}
 		log := zerolog.New(io.Discard)
 		renderer := tmpl.New(tmpl.Config{})
-		return NewService(store, gitImpl, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+		return NewService(log, store, gitImpl, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
 	}
 
 	t.Run("valid template uses rendered branch", func(t *testing.T) {
@@ -1405,6 +1405,7 @@ func TestCreateSession_ErrorIncludesDestinationAndStrategy(t *testing.T) {
 			Rules:   rules,
 		}
 		return NewService(
+			zerolog.New(io.Discard),
 			newMockStore(),
 			gitImpl,
 			cfg,
@@ -1412,7 +1413,6 @@ func TestCreateSession_ErrorIncludesDestinationAndStrategy(t *testing.T) {
 			&executiltest.Exec{},
 			tmpl.New(tmpl.Config{}),
 			PlainStyler{},
-			zerolog.New(io.Discard),
 			io.Discard,
 			io.Discard,
 			testMultiplexer{},
@@ -1529,7 +1529,7 @@ func TestCreateSession_DoesNotReuseRecycledWorktree(t *testing.T) {
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	svc := NewService(store, spy, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, log, io.Discard, io.Discard, testMultiplexer{})
+	svc := NewService(log, store, spy, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
 
 	sess, err := svc.CreateSession(context.Background(), CreateOptions{
 		Name:      "new-feature",

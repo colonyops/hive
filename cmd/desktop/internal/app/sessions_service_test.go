@@ -635,7 +635,7 @@ func spawnRule(cfg *config.Config) {
 
 func TestSessionsService_StartTmuxSessionSpawnsTheConfiguredWindowsDetached(t *testing.T) {
 	runner := &recordingTmux{absent: true}
-	h := newHiveHarness(t, engineOptions{cfg: spawnRule, mux: tmuxexec.New(runner, zerolog.Nop())})
+	h := newHiveHarness(t, engineOptions{cfg: spawnRule, mux: tmuxexec.New(zerolog.Nop(), runner)})
 	sess := reviewSession()
 	sess.Path = "/tmp/review-81"
 	h.save(t, sess)
@@ -654,7 +654,7 @@ func TestSessionsService_StartTmuxSessionSpawnsTheConfiguredWindowsDetached(t *t
 
 func TestSessionsService_StartTmuxSessionLeavesALiveSessionAlone(t *testing.T) {
 	runner := &recordingTmux{}
-	h := newHiveHarness(t, engineOptions{cfg: spawnRule, mux: tmuxexec.New(runner, zerolog.Nop())})
+	h := newHiveHarness(t, engineOptions{cfg: spawnRule, mux: tmuxexec.New(zerolog.Nop(), runner)})
 	sess := reviewSession()
 	sess.Path = "/tmp/review-81"
 	h.save(t, sess)

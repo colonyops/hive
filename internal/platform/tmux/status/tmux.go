@@ -9,7 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/colonyops/hive/pkg/logutils"
+
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
@@ -48,6 +50,7 @@ type Integration struct {
 	processReader      process.ProcessReader
 	source             terminal.PaneSource
 	capture            classifier.ContentCapture
+	logger             zerolog.Logger
 	beforePollGateLock func() // deterministic seam for refresh/GetStatus overlap tests
 }
 
@@ -134,6 +137,13 @@ func (sc *sessionCache) bestAgentPane() *cachedPane {
 // Option configures a tmux Integration.
 type Option func(*Integration)
 
+// WithLogger sets where the integration logs. The default discards.
+func WithLogger(logger zerolog.Logger) Option {
+	return func(integration *Integration) {
+		integration.logger = logutils.Component(logger, "tmux-status")
+	}
+}
+
 // WithPaneSource supplies tmux pane discovery and capture.
 func WithPaneSource(source terminal.PaneSource) Option {
 	return func(integration *Integration) {
@@ -174,7 +184,7 @@ func NewFromPreviewMatchers(previewMatchers []string, options ...Option) *Integr
 	}
 
 	agentNames := classifier.ToolNamesFromPatterns(previewMatchers)
-	integration.classifier = classifier.New(classifier.TitlePatternsFromConfig(previewMatchers, agentNames), reader, integration.capture, content.NewScorer())
+	integration.classifier = classifier.New(classifier.TitlePatternsFromConfig(integration.logger, previewMatchers, agentNames), reader, integration.capture, content.NewScorer())
 	return integration
 }
 
@@ -187,6 +197,7 @@ func newIntegration(reader process.ProcessReader) *Integration {
 		classCache:       classifier.NewCache(),
 		processReader:    reader,
 		missingTolerance: DefaultMissingTolerance,
+		logger:           zerolog.Nop(),
 	}
 }
 
@@ -211,7 +222,7 @@ func (t *Integration) Available() bool {
 func (t *Integration) RefreshCache(ctx context.Context) {
 	if !t.refreshMu.TryLock() {
 		// A refresh is already in progress; skip this cycle.
-		log.Debug().Msg("tmux RefreshCache skipped: previous refresh still running")
+		t.logger.Debug().Msg("tmux RefreshCache skipped: previous refresh still running")
 		return
 	}
 	defer t.refreshMu.Unlock()
@@ -228,7 +239,7 @@ func (t *Integration) RefreshCache(ctx context.Context) {
 	if err != nil {
 		if ctx.Err() != nil {
 			t.keepCacheFreshAfterCancellation()
-			log.Debug().Err(ctx.Err()).Msg("tmux RefreshCache canceled, preserving cache")
+			t.logger.Debug().Err(ctx.Err()).Msg("tmux RefreshCache canceled, preserving cache")
 			return
 		}
 		t.handleRefreshFailure(err)
@@ -411,7 +422,7 @@ func (t *Integration) handleRefreshFailure(err error) {
 	if failures < t.missingTolerance {
 		t.cacheTime = time.Now()
 		t.mu.Unlock()
-		log.Debug().Err(err).Int("failures", failures).Msg("tmux list-panes failed, serving stale cache")
+		t.logger.Debug().Err(err).Int("failures", failures).Msg("tmux list-panes failed, serving stale cache")
 		return
 	}
 
@@ -437,7 +448,7 @@ func (t *Integration) handleRefreshFailure(err error) {
 	t.mu.Unlock()
 
 	t.tracker.Prune(map[string]bool{})
-	log.Debug().Err(err).Int("failures", failures).Msg("tmux list-panes failed, clearing cache")
+	t.logger.Debug().Err(err).Int("failures", failures).Msg("tmux list-panes failed, clearing cache")
 }
 
 // lockPollGates quiesces pane observations without holding the cache lock.

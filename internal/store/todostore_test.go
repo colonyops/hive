@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/colonyops/hive/internal/store/db"
 	"github.com/stretchr/testify/assert"
@@ -33,7 +35,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 		td := newTestTodo("t1")
 
 		require.NoError(t, store.Create(ctx, td))
@@ -54,7 +56,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 		td := newTestTodo("t1")
 		td.Source = "custom"
 
@@ -68,7 +70,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 		td := newTestTodo("t1")
 		require.NoError(t, store.Create(ctx, td))
 
@@ -85,7 +87,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 		td := newTestTodo("t1")
 		require.NoError(t, store.Create(ctx, td))
 
@@ -102,7 +104,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 
 		now := time.Now()
 		for i, id := range []string{"t1", "t2", "t3"} {
@@ -126,7 +128,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 
 		now := time.Now()
 		for i, id := range []string{"t1", "t2", "t3"} {
@@ -149,7 +151,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 
 		td1 := newTestTodo("t1")
 		td1.SessionID = "sess-a"
@@ -169,7 +171,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 
 		td1 := newTestTodo("t1")
 		td1.URI = todo.MustParseRef("review://doc.md")
@@ -189,7 +191,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 
 		t1 := newTestTodo("t1")
 		t1.SessionID = "sess-a"
@@ -235,7 +237,7 @@ func TestTodoStore(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 		item, err := store.Get(ctx, "t-invalid")
 		require.NoError(t, err)
 		assert.Equal(t, todo.SourceSystem, item.Source)
@@ -248,7 +250,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 
 		count, err := store.CountPending(ctx)
 		require.NoError(t, err)
@@ -273,7 +275,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 
 		// Create one todo in each status
 		for _, id := range []string{"t1", "t2", "t3", "t4"} {
@@ -294,7 +296,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 
 		now := time.Now()
 		td := newTestTodo("t1")
@@ -320,7 +322,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 		require.NoError(t, store.Create(ctx, newTestTodo("t1")))
 
 		require.NoError(t, store.Delete(ctx, "t1"))
@@ -335,7 +337,7 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := NewTodoStore(database)
+		store := NewTodoStore(zerolog.Nop(), database)
 
 		items, err := store.List(ctx, todo.ListFilter{})
 		require.NoError(t, err)

@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/pathutil"
@@ -22,7 +22,7 @@ type DiscoveredRepo struct {
 // ScanRepoDirs scans parent directories for git repositories.
 // Each directory in dirs is expected to contain subdirectories that are git repos.
 // Repositories that fail to scan are silently skipped.
-func ScanRepoDirs(ctx context.Context, dirs []string, gitExec git.Git) ([]DiscoveredRepo, error) {
+func ScanRepoDirs(ctx context.Context, logger zerolog.Logger, dirs []string, gitExec git.Git) ([]DiscoveredRepo, error) {
 	var repos []DiscoveredRepo
 
 	for _, dir := range dirs {
@@ -30,7 +30,7 @@ func ScanRepoDirs(ctx context.Context, dirs []string, gitExec git.Git) ([]Discov
 
 		entries, err := os.ReadDir(dir)
 		if err != nil {
-			log.Debug().Err(err).Str("dir", dir).Msg("failed to read repo directory, skipping")
+			logger.Debug().Err(err).Str("dir", dir).Msg("failed to read repo directory, skipping")
 			continue
 		}
 

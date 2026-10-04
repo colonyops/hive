@@ -3,6 +3,8 @@ package hive
 import (
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
@@ -11,14 +13,14 @@ import (
 
 // NewTerminalManager builds the terminal integration manager from config.
 // tmux is always enabled; availability is checked lazily by the manager.
-func NewTerminalManager(cfg *config.Config, source terminal.PaneSource) *terminal.Manager {
+func NewTerminalManager(logger zerolog.Logger, cfg *config.Config, source terminal.PaneSource) *terminal.Manager {
 	mgr := terminal.NewManager([]string{"tmux"})
-	mgr.Register(newTmuxIntegration(cfg, source))
+	mgr.Register(newTmuxIntegration(logger, cfg, source))
 	return mgr
 }
 
-func newTmuxIntegration(cfg *config.Config, source terminal.PaneSource) *tmuxstatus.Integration {
-	options := []tmuxstatus.Option{tmuxstatus.WithPaneSource(source)}
+func newTmuxIntegration(logger zerolog.Logger, cfg *config.Config, source terminal.PaneSource) *tmuxstatus.Integration {
+	options := []tmuxstatus.Option{tmuxstatus.WithPaneSource(source), tmuxstatus.WithLogger(logger)}
 	if cfg == nil {
 		return tmuxstatus.NewFromPreviewMatchers(nil, options...)
 	}

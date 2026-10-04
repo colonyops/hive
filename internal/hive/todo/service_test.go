@@ -36,12 +36,12 @@ func newTestTodoService(t *testing.T) (*Service, todo.Store) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
 
-	store := store.NewTodoStore(database)
+	store := store.NewTodoStore(zerolog.Nop(), database)
 	bus := newTestBus(t)
 	cfg := newTestCfg()
 	logger := zerolog.Nop()
 
-	svc := NewService(store, bus, cfg, logger)
+	svc := NewService(logger, store, bus, cfg)
 	return svc, store
 }
 
@@ -53,7 +53,7 @@ func TestTodoLimiter(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := store.NewTodoStore(database)
+		store := store.NewTodoStore(zerolog.Nop(), database)
 		limiter := NewLimiter(store, config.TodosLimiterConfig{
 			MaxPending:          10,
 			RateLimitPerSession: 15 * time.Second,
@@ -74,7 +74,7 @@ func TestTodoLimiter(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := store.NewTodoStore(database)
+		store := store.NewTodoStore(zerolog.Nop(), database)
 		limiter := NewLimiter(store, config.TodosLimiterConfig{
 			MaxPending:          2,
 			RateLimitPerSession: 0,
@@ -106,7 +106,7 @@ func TestTodoLimiter(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := store.NewTodoStore(database)
+		store := store.NewTodoStore(zerolog.Nop(), database)
 		limiter := NewLimiter(store, config.TodosLimiterConfig{
 			MaxPending:          100,
 			RateLimitPerSession: 15 * time.Second,
@@ -136,7 +136,7 @@ func TestTodoLimiter(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := store.NewTodoStore(database)
+		store := store.NewTodoStore(zerolog.Nop(), database)
 		limiter := NewLimiter(store, config.TodosLimiterConfig{
 			MaxPending:          100,
 			RateLimitPerSession: 15 * time.Second,
@@ -191,13 +191,13 @@ func TestTodoService(t *testing.T) {
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
-		store := store.NewTodoStore(database)
+		store := store.NewTodoStore(zerolog.Nop(), database)
 		bus := newTestBus(t)
 
 		cfg := newTestCfg()
 		cfg.Todos.Limiter.MaxPending = 1
 
-		svc := NewService(store, bus, cfg, zerolog.Nop())
+		svc := NewService(zerolog.Nop(), store, bus, cfg)
 
 		td1, err := todo.NewAgentTodo("t1", "First", testSessionID, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)

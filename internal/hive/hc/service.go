@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/rs/zerolog"
 )
@@ -19,10 +21,10 @@ type Service struct {
 }
 
 // NewService creates a new Service.
-func NewService(store hc.Store, logger zerolog.Logger) *Service {
+func NewService(logger zerolog.Logger, store hc.Store) *Service {
 	return &Service{
 		store:  store,
-		logger: logger,
+		logger: logutils.Component(logger, "honeycomb"),
 	}
 }
 

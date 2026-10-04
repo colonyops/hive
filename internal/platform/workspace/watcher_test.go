@@ -6,12 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/stretchr/testify/require"
 )
 
 func TestWatcherDetectsRepositoryCreation(t *testing.T) {
 	root := t.TempDir()
-	watcher, err := NewWatcher([]string{root})
+	watcher, err := NewWatcher(zerolog.Nop(), []string{root})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, watcher.Close()) })
 
@@ -35,7 +37,7 @@ func TestWatcherDetectsGitMetadataCreationInExistingDirectory(t *testing.T) {
 	repo := filepath.Join(root, "existing-directory")
 	require.NoError(t, os.Mkdir(repo, 0o755))
 
-	watcher, err := NewWatcher([]string{root})
+	watcher, err := NewWatcher(zerolog.Nop(), []string{root})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, watcher.Close()) })
 
@@ -56,7 +58,7 @@ func TestWatcherDetectsWorkspaceRootRecreation(t *testing.T) {
 	root := filepath.Join(parent, "workspace")
 	require.NoError(t, os.Mkdir(root, 0o755))
 
-	watcher, err := NewWatcher([]string{root})
+	watcher, err := NewWatcher(zerolog.Nop(), []string{root})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, watcher.Close()) })
 
@@ -82,7 +84,7 @@ func TestWatcherDetectsWorkspaceRootRecreation(t *testing.T) {
 
 func TestWatcherDetectsInitiallyMissingWorkspaceRoot(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "workspace")
-	watcher, err := NewWatcher([]string{root})
+	watcher, err := NewWatcher(zerolog.Nop(), []string{root})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, watcher.Close()) })
 
@@ -100,7 +102,7 @@ func TestWatcherDetectsInitiallyMissingWorkspaceRoot(t *testing.T) {
 
 func TestWatcherDetectsWorkspaceRootWhenParentIsMissing(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "missing-parent", "workspace")
-	watcher, err := NewWatcher([]string{root})
+	watcher, err := NewWatcher(zerolog.Nop(), []string{root})
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, watcher.Close()) })
 
@@ -117,7 +119,7 @@ func TestWatcherDetectsWorkspaceRootWhenParentIsMissing(t *testing.T) {
 }
 
 func TestWatcherCloseUnblocksWait(t *testing.T) {
-	watcher, err := NewWatcher([]string{t.TempDir()})
+	watcher, err := NewWatcher(zerolog.Nop(), []string{t.TempDir()})
 	require.NoError(t, err)
 
 	stopped := make(chan error, 1)
@@ -137,7 +139,7 @@ func TestWatcherIgnoresWorkingTreeChanges(t *testing.T) {
 	repo := filepath.Join(root, "repo")
 	require.NoError(t, os.MkdirAll(filepath.Join(repo, ".git"), 0o755))
 
-	watcher, err := NewWatcher([]string{root})
+	watcher, err := NewWatcher(zerolog.Nop(), []string{root})
 	require.NoError(t, err)
 
 	changed := make(chan error, 1)

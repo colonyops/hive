@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +23,7 @@ func TestGroupPaneStatuses(t *testing.T) {
 		{WindowIndex: "1", WindowName: "main", PaneID: "%3", DetectedTool: "aider", PaneContent: "active"},
 	}
 
-	got := groupPaneStatuses(context.Background(), integration, "sess", infos)
+	got := NewService(zerolog.Nop(), nil, 1).groupPaneStatuses(context.Background(), integration, "sess", infos)
 
 	require.Len(t, got, 2)
 	assert.Equal(t, "0", got[0].WindowIndex)

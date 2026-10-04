@@ -8,16 +8,19 @@ import (
 	"net/http/pprof"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/colonyops/hive/pkg/logutils"
+
+	"github.com/rs/zerolog"
 )
 
 type Server struct {
 	httpServer *http.Server
 	listener   net.Listener
 	port       int
+	logger     zerolog.Logger
 }
 
-func New(port int) *Server {
+func New(logger zerolog.Logger, port int) *Server {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/debug/pprof/", pprof.Index)
@@ -30,7 +33,8 @@ func New(port int) *Server {
 		httpServer: &http.Server{
 			Handler: mux,
 		},
-		port: port,
+		port:   port,
+		logger: logutils.Component(logger, "profiler"),
 	}
 }
 
@@ -42,7 +46,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.listener = listener
 
 	actualPort := listener.Addr().(*net.TCPAddr).Port
-	log.Info().Int("port", actualPort).Msg("starting profiler server")
+	s.logger.Info().Int("port", actualPort).Msg("starting profiler server")
 
 	errChan := make(chan error, 1)
 	go func() {
@@ -67,6 +71,6 @@ func (s *Server) Addr() string {
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
-	log.Info().Msg("shutting down profiler server")
+	s.logger.Info().Msg("shutting down profiler server")
 	return s.httpServer.Shutdown(ctx)
 }

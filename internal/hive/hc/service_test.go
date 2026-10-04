@@ -206,7 +206,7 @@ func (f *fakeHCStore) Fingerprint(_ context.Context) (hc.Fingerprint, error) {
 }
 
 func newTestHoneycombService(store hc.Store) *Service {
-	return NewService(store, zerolog.Nop())
+	return NewService(zerolog.Nop(), store)
 }
 
 // ---------------------------------------------------------------------------

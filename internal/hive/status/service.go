@@ -7,7 +7,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/colonyops/hive/pkg/logutils"
+
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
@@ -51,15 +53,16 @@ type TerminalStatus struct {
 type Service struct {
 	term    *terminal.Manager
 	workers int
+	logger  zerolog.Logger
 }
 
 // NewService creates a Service. workers bounds the number of
 // concurrent per-session status fetches in FetchBatch.
-func NewService(term *terminal.Manager, workers int) *Service {
+func NewService(logger zerolog.Logger, term *terminal.Manager, workers int) *Service {
 	if workers < 1 {
 		workers = 1
 	}
-	return &Service{term: term, workers: workers}
+	return &Service{term: term, workers: workers, logger: logutils.Component(logger, "status")}
 }
 
 // Available reports whether any terminal integration is enabled and usable.
@@ -159,7 +162,7 @@ func (s *Service) fetchRoot(ctx context.Context, target RootRepoTarget) Terminal
 	metadata := map[string]string{terminal.SessionPathKey: target.Path}
 	info, integration, err := s.term.DiscoverSession(ctx, target.Name, metadata)
 	if err != nil {
-		log.Debug().Err(err).Str("repo", target.Name).Msg("root repo terminal discovery failed")
+		s.logger.Debug().Err(err).Str("repo", target.Name).Msg("root repo terminal discovery failed")
 		status.Error = err
 		return status
 	}
@@ -169,7 +172,7 @@ func (s *Service) fetchRoot(ctx context.Context, target RootRepoTarget) Terminal
 
 	termStatus, err := integration.GetStatus(ctx, info)
 	if err != nil {
-		log.Debug().Err(err).Str("repo", target.Name).Msg("root repo terminal status lookup failed")
+		s.logger.Debug().Err(err).Str("repo", target.Name).Msg("root repo terminal status lookup failed")
 		status.Error = err
 		return status
 	}
@@ -198,7 +201,7 @@ func (s *Service) FetchSession(ctx context.Context, sess *session.Session) Termi
 	// Try to discover terminal session
 	info, integration, err := s.term.DiscoverSession(ctx, sess.Slug, metadata)
 	if err != nil {
-		log.Debug().Err(err).Str("session", sess.Slug).Msg("terminal session discovery failed")
+		s.logger.Debug().Err(err).Str("session", sess.Slug).Msg("terminal session discovery failed")
 		status.Error = err
 		return status
 	}
@@ -210,7 +213,7 @@ func (s *Service) FetchSession(ctx context.Context, sess *session.Session) Termi
 	// Get status from integration
 	termStatus, err := integration.GetStatus(ctx, info)
 	if err != nil {
-		log.Debug().Err(err).Str("session", sess.Slug).Msg("terminal status lookup failed")
+		s.logger.Debug().Err(err).Str("session", sess.Slug).Msg("terminal status lookup failed")
 		status.Error = err
 		return status
 	}
@@ -228,9 +231,9 @@ func (s *Service) FetchSession(ctx context.Context, sess *session.Session) Termi
 	}
 	if allInfos != nil || discErr != nil {
 		if discErr != nil {
-			log.Debug().Err(discErr).Str("session", sess.Slug).Msg("multi-window discovery failed, using single-window mode")
+			s.logger.Debug().Err(discErr).Str("session", sess.Slug).Msg("multi-window discovery failed, using single-window mode")
 		} else if len(allInfos) > 0 {
-			windows := groupPaneStatuses(ctx, integration, sess.Slug, allInfos)
+			windows := s.groupPaneStatuses(ctx, integration, sess.Slug, allInfos)
 			if ShouldExposeWindows(windows) {
 				status.Windows = windows
 			}
@@ -240,13 +243,13 @@ func (s *Service) FetchSession(ctx context.Context, sess *session.Session) Termi
 	return status
 }
 
-func groupPaneStatuses(ctx context.Context, integration terminal.Integration, slug string, infos []*terminal.SessionInfo) []WindowStatus {
+func (s *Service) groupPaneStatuses(ctx context.Context, integration terminal.Integration, slug string, infos []*terminal.SessionInfo) []WindowStatus {
 	windows := make([]WindowStatus, 0, len(infos))
 	byWindow := make(map[string]int, len(infos))
 	for _, wi := range infos {
 		paneStatus, wErr := integration.GetStatus(ctx, wi)
 		if wErr != nil {
-			log.Debug().Err(wErr).Str("session", slug).Str("window", wi.WindowIndex).Str("pane", wi.PaneID).Msg("per-pane status failed, marking missing")
+			s.logger.Debug().Err(wErr).Str("session", slug).Str("window", wi.WindowIndex).Str("pane", wi.PaneID).Msg("per-pane status failed, marking missing")
 			paneStatus = terminal.StatusMissing
 		}
 

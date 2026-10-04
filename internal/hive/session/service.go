@@ -13,6 +13,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
@@ -120,6 +122,7 @@ type Service struct {
 
 // NewService creates a new Service.
 func NewService(
+	log zerolog.Logger,
 	sessions session.Store,
 	gitClient git.Git,
 	cfg *config.Config,
@@ -127,7 +130,6 @@ func NewService(
 	exec executil.Executor,
 	renderer *tmpl.Renderer,
 	styler OutputStyler,
-	log zerolog.Logger,
 	stdout, stderr io.Writer,
 	client Multiplexer,
 ) *Service {
@@ -142,14 +144,14 @@ func NewService(
 		config:     cfg,
 		bus:        bus,
 		executor:   exec,
-		log:        log,
+		log:        logutils.Component(log, "sessions"),
 		out:        out,
 		err:        err,
-		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, client, out, err),
+		spawner:    NewSpawner(logutils.Component(log, "spawner"), exec, renderer, client, out, err),
 		lifecycle:  client,
-		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
-		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, renderer, styler, out, err),
-		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), styler, out),
+		recycler:   NewRecycler(logutils.Component(log, "recycler"), exec, renderer),
+		hookRunner: NewHookRunner(logutils.Component(log, "hooks"), exec, renderer, styler, out, err),
+		fileCopier: NewFileCopier(logutils.Component(log, "copier"), styler, out),
 		renderer:   renderer,
 	}
 }
@@ -781,7 +783,7 @@ func (s *Service) DetectRemote(ctx context.Context, dir string) (string, error) 
 // coalesced so a local configured checkout wins over a Hive clone without
 // rewriting either configured URL.
 func (s *Service) SessionLaunchOptions(ctx context.Context) (LaunchOptions, error) {
-	workspaceRepos, err := workspace.ScanRepoDirs(ctx, s.config.Workspaces, s.git)
+	workspaceRepos, err := workspace.ScanRepoDirs(ctx, s.log, s.config.Workspaces, s.git)
 	if err != nil {
 		return LaunchOptions{}, fmt.Errorf("scan configured workspaces: %w", err)
 	}
