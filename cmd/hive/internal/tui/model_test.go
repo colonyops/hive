@@ -10,6 +10,8 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/colonyops/hive/internal/hive/gitstatus"
+
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog"
@@ -69,6 +71,7 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 		Service:       newMouseTestSessionService(t),
 		Renderer:      testRenderer,
 		Status:        statussvc.NewService(zerolog.Nop(), terminal.NewManager(nil), 1),
+		GitStatus:     gitstatus.NewService(zerolog.Nop(), nil, 1),
 		PluginManager: pluginManager,
 		CommandSet:    commandSet,
 		TodoService:   todoService,
@@ -154,6 +157,7 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 		Service:       newMouseTestSessionService(t),
 		Renderer:      testRenderer,
 		Status:        statussvc.NewService(zerolog.Nop(), terminal.NewManager(nil), 1),
+		GitStatus:     gitstatus.NewService(zerolog.Nop(), nil, 1),
 		PluginManager: pluginManager,
 		CommandSet:    commandSet,
 		TodoService:   todoService,

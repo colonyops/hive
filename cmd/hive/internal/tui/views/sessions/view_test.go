@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/hive/gitstatus"
+
 	"github.com/rs/zerolog"
 
 	"charm.land/bubbles/v2/list"
@@ -220,9 +222,8 @@ func newFilterTestView(sessions []session.Session, statusFilter terminal.Status,
 		ts = kvcache.New[string, statussvc.TerminalStatus]()
 	}
 	gitStatuses := kvcache.New[string, GitStatus]()
-	// new(sessionsvc.Service) gives a zero-valued service whose Git() returns nil.
-	// applyFilter returns a tea.Cmd that captures the nil git client but never executes
-	// it in tests — so no nil-dereference occurs during the test.
+	// applyFilter returns a tea.Cmd that captures the git status service, whose
+	// git client is nil here. No test executes that command.
 	return &View{
 		list:             l,
 		allSessions:      sessions,
@@ -232,7 +233,7 @@ func newFilterTestView(sessions []session.Session, statusFilter terminal.Status,
 		gitStatuses:      gitStatuses,
 		columnWidths:     columnWidths,
 		service:          new(sessionsvc.Service),
-		gitWorkers:       1,
+		gitStatus:        gitstatus.NewService(zerolog.Nop(), nil, 1),
 		cfg:              &config.Config{Views: config.ViewsConfig{Sessions: config.SessionsViewConfig{GroupBy: config.GroupByRepo}}},
 	}
 }
@@ -417,7 +418,7 @@ func newViewWithTerminalMgr(sessions []session.Session) *View {
 		columnWidths:     &ColumnWidths{},
 		service:          new(sessionsvc.Service),
 		status:           statussvc.NewService(zerolog.Nop(), mgr, 1),
-		gitWorkers:       1,
+		gitStatus:        gitstatus.NewService(zerolog.Nop(), nil, 1),
 		cfg:              &config.Config{},
 	}
 }

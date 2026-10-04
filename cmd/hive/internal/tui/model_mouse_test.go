@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/hive/gitstatus"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -126,6 +128,7 @@ func newMouseTestSessionsView(t *testing.T) *sessions.View {
 		Service:       svc,
 		Handler:       handler,
 		Status:        status,
+		GitStatus:     gitstatus.NewService(zerolog.Nop(), svc.Git(), 1),
 		PluginManager: pm,
 	})
 }

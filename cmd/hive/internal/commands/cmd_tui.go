@@ -85,6 +85,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		TodoService:   cmd.app.Todos(),
 		Bus:           cmd.app.Bus(),
 		Status:        cmd.app.Status(),
+		GitStatus:     cmd.app.GitStatus(),
 		PluginManager: cmd.app.Plugins,
 		CommandSet:    cmd.app.CommandSet,
 		DB:            cmd.app.DB(),

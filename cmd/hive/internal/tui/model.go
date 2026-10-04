@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/internal/hive/gitstatus"
+
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -85,6 +87,7 @@ type Deps struct {
 	Service       *sessionsvc.Service
 	Renderer      *tmpl.Renderer
 	Status        *statussvc.Service
+	GitStatus     *gitstatus.Service
 	PluginManager *plugins.Manager
 	CommandSet    *plugins.CommandSet
 	TodoService   *todosvc.Service
@@ -253,8 +256,8 @@ type todoCreatedMsg struct {
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
 func New(deps Deps, opts Opts) Model {
-	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.Status == nil || deps.PluginManager == nil || deps.CommandSet == nil || deps.TodoService == nil || deps.DB == nil {
-		panic("tui.New: Config, Service, Renderer, Status, PluginManager, CommandSet, TodoService, and DB are required")
+	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.Status == nil || deps.GitStatus == nil || deps.PluginManager == nil || deps.CommandSet == nil || deps.TodoService == nil || deps.DB == nil {
+		panic("tui.New: Config, Service, Renderer, Status, GitStatus, PluginManager, CommandSet, TodoService, and DB are required")
 	}
 	cfg := deps.Config
 	service := deps.Service
@@ -273,6 +276,7 @@ func New(deps Deps, opts Opts) Model {
 		Service:       service,
 		Handler:       handler,
 		Status:        deps.Status,
+		GitStatus:     deps.GitStatus,
 		PluginManager: deps.PluginManager,
 		LocalRemote:   opts.LocalRemote,
 		Workspaces:    cfg.Workspaces,

@@ -46,6 +46,7 @@ type ViewOpts struct {
 	Service       *sessionsvc.Service
 	Handler       KeyResolver
 	Status        *statussvc.Service
+	GitStatus     *gitstatus.Service
 	PluginManager *plugins.Manager
 
 	// Optional — nil disables the corresponding feature.
@@ -74,7 +75,7 @@ type View struct {
 
 	// Git integration
 	gitStatuses *kvcache.Store[string, GitStatus]
-	gitWorkers  int
+	gitStatus   *gitstatus.Service
 
 	// Terminal integration
 	status             *statussvc.Service
@@ -121,8 +122,8 @@ type View struct {
 // initialized here so the parent Model can pass them through ViewOpts without
 // constructing them itself.
 func New(opts ViewOpts) *View {
-	if opts.Cfg == nil || opts.Service == nil || opts.Handler == nil || opts.Status == nil || opts.PluginManager == nil {
-		panic("sessions.New: Cfg, Service, Handler, Status, and PluginManager are required")
+	if opts.Cfg == nil || opts.Service == nil || opts.Handler == nil || opts.Status == nil || opts.GitStatus == nil || opts.PluginManager == nil {
+		panic("sessions.New: Cfg, Service, Handler, Status, GitStatus, and PluginManager are required")
 	}
 	cfg := opts.Cfg
 
@@ -197,7 +198,7 @@ func New(opts ViewOpts) *View {
 		columnWidths: columnWidths,
 
 		gitStatuses: gitStatuses,
-		gitWorkers:  cfg.Git.StatusWorkers,
+		gitStatus:   opts.GitStatus,
 
 		status:             opts.Status,
 		terminalStatuses:   terminalStatuses,
@@ -801,7 +802,7 @@ func (v *View) applyFilter() tea.Cmd {
 		return nil
 	}
 	// refreshing is cleared when GitStatusBatchCompleteMsg is received
-	return FetchGitStatusBatch(gitstatus.NewService(log.Logger, v.service.Git(), v.gitWorkers), paths)
+	return FetchGitStatusBatch(v.gitStatus, paths)
 }
 
 // rebuildWindowItems strips existing window sub-items from the list and re-expands
@@ -1431,7 +1432,7 @@ func (v *View) RefreshGitStatuses() tea.Cmd {
 		return nil
 	}
 
-	return FetchGitStatusBatch(gitstatus.NewService(log.Logger, v.service.Git(), v.gitWorkers), paths)
+	return FetchGitStatusBatch(v.gitStatus, paths)
 }
 
 // scheduleSessionRefresh returns a command that schedules the next session refresh.
