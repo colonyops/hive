@@ -179,6 +179,45 @@ func (d *devtools) validatePaths() error {
 	return nil
 }
 
+// sharedHiveDataDir is the hive data dir a regular instance shares with the
+// installed app: the CLI's HIVE_DATA_DIR when the shell exports it, else the
+// installed data dir. Only HIVE_DATA_DIR is read from the environment: the
+// task environment can carry HIVE_DESKTOP_HIVE_DATA_DIR from an earlier
+// launch.env.
+func sharedHiveDataDir(installedDataDir string) (string, error) {
+	dir := os.Getenv(config.EnvDataDir)
+	if dir == "" {
+		return installedDataDir, nil
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("resolve %s: %w", config.EnvDataDir, err)
+	}
+	return abs, nil
+}
+
+// refreshHiveDataDir keeps a reused launch.env on the hive data dir the
+// installed app uses now. A developer can export or change HIVE_DATA_DIR after
+// the instance exists, and nothing else rewrites a valid launch.env.
+func (d *devtools) refreshHiveDataDir(launch map[string]string) error {
+	if d.blank {
+		return nil
+	}
+	installed, err := installedPaths()
+	if err != nil {
+		return err
+	}
+	want, err := sharedHiveDataDir(installed.DataDir)
+	if err != nil {
+		return err
+	}
+	if launch[settings.EnvHiveDataDir] == want {
+		return nil
+	}
+	launch[settings.EnvHiveDataDir] = want
+	return writeDotenvAtomic(d.launchPath, launch)
+}
+
 func (d *devtools) prepare(fresh bool) error {
 	if err := d.validatePaths(); err != nil {
 		return err
@@ -194,6 +233,9 @@ func (d *devtools) prepare(fresh bool) error {
 			// No launch.env to reuse: write one over the existing instance.
 		case err == nil:
 			if err := d.validateInstance(); err == nil {
+				if err := d.refreshHiveDataDir(launch); err != nil {
+					return err
+				}
 				if err := d.writeMCPConfig(launch); err != nil {
 					return err
 				}
@@ -224,14 +266,8 @@ func (d *devtools) prepare(fresh bool) error {
 		if err != nil {
 			return err
 		}
-		// The installed app follows the CLI's HIVE_DATA_DIR. Only that variable
-		// is read here: the task environment can carry
-		// HIVE_DESKTOP_HIVE_DATA_DIR from an earlier launch.env.
-		hiveDataDir = sourcePaths.DataDir
-		if dir := os.Getenv(config.EnvDataDir); dir != "" {
-			if hiveDataDir, err = filepath.Abs(dir); err != nil {
-				return fmt.Errorf("resolve %s: %w", config.EnvDataDir, err)
-			}
+		if hiveDataDir, err = sharedHiveDataDir(sourcePaths.DataDir); err != nil {
+			return err
 		}
 		if created {
 			if err := d.seedData(sourcePaths.DataDir, dataDir); err != nil {

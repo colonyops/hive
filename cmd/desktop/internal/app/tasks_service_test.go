@@ -219,5 +219,6 @@ func TestReadBlockersFailsOnAStoreError(t *testing.T) {
 	get := func(context.Context, string) (hc.Item, error) { return hc.Item{}, errors.New("database is locked") }
 
 	_, err := readBlockers(t.Context(), "hc-9", []string{"hc-1"}, get)
+	require.Error(t, err)
 	assert.Equal(t, KindInternal, KindOf(err))
 }

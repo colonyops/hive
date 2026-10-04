@@ -23,19 +23,30 @@ dev_mode:
   log_level: warn
   debounce: 1000
   ignore:
-    # A plain name matches any path component. A generic name would also hide
-    # shared code ("bin" matches internal/platform/tmux/bin), so those are
-    # patterns that match one directory.
+    # An entry is matched against the absolute path of a changed file: a plain
+    # name matches any one path component, and a pattern matches the whole
+    # path. A generic name is a pattern here, so "bin" does not hide
+    # internal/platform/tmux/bin.
+    #
+    # No entry names a directory that can hold a nested checkout
+    # (.claude/worktrees, .data): it would also match every file of a dev run
+    # inside that checkout, which would then never rebuild. The cost is that
+    # an edit in a nested checkout rebuilds this app too.
     dir:
       - .git
-      - .claude
-      - .data
       - node_modules
       - frontend
-      - docs
       - "*/cmd/desktop/bin/*"
       - "*/cmd/hive/*"
       - "*/cmd/tools/*"
+      - "*/docs/docs/*"
+      - "*/docs/site/*"
+      - "*/docs/.venv/*"
+      - "*/docs/.cache/*"
+      # Agent workspaces of the dev instance. An agent that writes a script
+      # there must not restart the app it runs in.
+      - "*/.hive-desktop/config/*"
+      - "*/.hive-desktop-onboarding/config/*"
     file:
       - .DS_Store
       - .gitignore

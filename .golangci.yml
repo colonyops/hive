@@ -179,6 +179,17 @@ linters:
           deny:
             - pkg: github.com/colonyops/hive/cmd/hive
               desc: The desktop must not import the CLI program.
+        # The devserver imports cmd/desktop/internal/web, so the package cannot
+        # depend on the app. Go's internal rule enforced that while it lived
+        # in shared internal/ (ADR http-handler-conventions).
+        desktop-web-is-plumbing:
+          files:
+            - "**/cmd/desktop/internal/web/**"
+          deny:
+            - pkg: github.com/colonyops/hive/cmd/desktop/internal/app
+              desc: web is HTTP plumbing the devserver shares. Kind mapping stays in the adapter that owns the vocabulary.
+            - pkg: github.com/colonyops/hive/cmd/desktop/internal/adapter
+              desc: web is HTTP plumbing the devserver shares. An adapter imports it, not the reverse.
         cli-no-desktop-deps:
           files:
             - "**/cmd/hive/**"

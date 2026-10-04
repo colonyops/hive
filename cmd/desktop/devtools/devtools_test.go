@@ -144,6 +144,27 @@ func TestPrepareFollowsTheCLIsHiveDataDir(t *testing.T) {
 	assert.Equal(t, cliData, launch[settings.EnvHiveDataDir])
 }
 
+// A valid launch.env is reused as it is, so a HIVE_DATA_DIR the developer
+// exports after the instance exists has to reach it on the next prepare. The
+// ports stay: a running dev app holds them.
+func TestPrepareReuseFollowsALaterHiveDataDir(t *testing.T) {
+	tools, sourceData, _ := testDevtools(t)
+	require.NoError(t, tools.prepare(false))
+	before, err := tools.readLaunchIfPresent()
+	require.NoError(t, err)
+	require.Equal(t, sourceData, before[settings.EnvHiveDataDir])
+
+	cliData := t.TempDir()
+	t.Setenv(config.EnvDataDir, cliData)
+	require.NoError(t, tools.prepare(false))
+
+	after, err := tools.readLaunchIfPresent()
+	require.NoError(t, err)
+	assert.Equal(t, cliData, after[settings.EnvHiveDataDir])
+	before[settings.EnvHiveDataDir] = cliData
+	assert.Equal(t, before, after, "nothing else in launch.env changes")
+}
+
 // A deleted .mcp.json comes back on the next prepare, from the ports the
 // reused launch.env already holds.
 func TestPrepareRewritesMissingMCPConfigOnReuse(t *testing.T) {
@@ -169,10 +190,13 @@ func TestPrepareOnboardingUsesBlankIsolatedState(t *testing.T) {
 	normalSentinel := filepath.Join(normal.instanceDir, "keep")
 	require.NoError(t, os.WriteFile(normalSentinel, []byte("keep"), 0o600))
 
+	// A blank instance never shares hive.db, whatever the shell exports.
+	t.Setenv(config.EnvDataDir, t.TempDir())
 	tools := newOnboardingDevtools(normal.worktree, zerolog.Nop())
 	tools.stderr = &bytes.Buffer{}
 	tools.stdout = &bytes.Buffer{}
 	require.NoError(t, tools.withLock(func() error { return tools.prepare(true) }))
+	require.NoError(t, tools.withLock(func() error { return tools.prepare(false) }), "a reuse keeps it isolated too")
 
 	// The blank instance writes no .mcp.json; the regular instance's stays.
 	normalLaunch, err := normal.readLaunchIfPresent()

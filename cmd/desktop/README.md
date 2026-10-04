@@ -408,7 +408,10 @@ device flow that grants after ~1.5s. `live` is the safe default.
 `build/config.yml` sets `dev_mode.root_path: ../..`. `wails3 dev` starts in
 `cmd/desktop/`, so Wails watches the repository root: the app rebuilds on a
 change to the shared `internal/` and `pkg/` packages as well as its own code.
-The ignore list in that file leaves out the CLI, the docs, and build output.
+The ignore list in that file leaves out the CLI, the docs, build output, and
+the dev instance's agent workspaces. It cannot leave out a checkout nested
+below this one (an agent worktree under `.claude/worktrees/`), so an edit there
+rebuilds this app too.
 
 ## Development and builds
 

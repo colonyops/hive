@@ -28,18 +28,18 @@ transport shape in its adapters (`wailsui`, `mcpsrv`), not at a seam in
 
 | Layer | Path | Holds | depguard rule |
 | --- | --- | --- | --- |
-| Kit | `pkg/` | Hive-agnostic helpers | none |
+| Kit | `pkg/` | Hive-agnostic helpers | `kit-is-hive-agnostic`: no `internal/`, no program, no charm or Wails |
 | Domain | `internal/domain/` | Models, rules, enums, ports. No I/O, no config | `domain-is-pure`: no other `internal/`, no `os/exec`, `net`, `database/sql`, fsnotify |
 | Platform | `internal/platform/` | Drivers for outside systems: git, tmux, SQLite, process inspection, execenv, credentials, secrets, observe | `platform-is-a-driver`: only `domain` and other `platform/*` |
 | Store | `internal/store/` | `hive.db` | `store-is-persistence`: only `domain` and `platform/sqlite` |
 | Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, write | `config-is-data`: only `domain` |
 | Engine | `internal/hive/` | One subpackage per application service, and `hive.Engine` | none beyond `shared-surface-free` |
-| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features and config | Go `internal` visibility; `cli-no-desktop-deps` |
+| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features and config | Go `internal` visibility; `cli-no-desktop-deps`, `desktop-no-cli-deps` |
 
-`shared-surface-free` keeps charm and Wails out of all of `internal/`.
-`hive.Engine` takes the drivers as `Ports` and rebuilds the config-derived
-services on `Reload`; both programs use it, so the desktop's per-adapter
-`Rebind` is gone.
+`shared-surface-free` keeps charm, Wails and both programs out of all of
+`internal/`. `hive.Engine` takes the drivers as `Ports` and rebuilds the
+config-derived services on `Reload`; both programs use it, so the desktop's
+per-adapter `Rebind` is gone.
 
 **Both databases open through `platform/sqlite.Open` with
 `_txlock=immediate`.** Every `hive.db` transaction writes, and two hc store

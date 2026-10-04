@@ -262,15 +262,16 @@ needs no lint edit:
 
 | Layer | Path | Holds | May import | Rule |
 | --- | --- | --- | --- | --- |
-| Kit | `pkg/` | Hive-agnostic helpers: `atomicfile`, `executil`, `pathutil`, `tmpl`, `buildinfo` | stdlib, third party | |
+| Kit | `pkg/` | Hive-agnostic helpers: `atomicfile`, `executil`, `pathutil`, `tmpl`, `buildinfo` | stdlib, third party except charm and Wails | `kit-is-hive-agnostic` |
 | Domain | `internal/domain/` | Models, rules, enums, sentinel errors, and the ports the engine needs. No I/O, no config | `pkg/`, other `domain/*` | `domain-is-pure` |
 | Platform | `internal/platform/` | Drivers for one outside system each: git, tmux, SQLite, process inspection, the login-shell environment, credentials, secrets, the OTel API | `pkg/`, `domain/`, other `platform/*` | `platform-is-a-driver` |
 | Store | `internal/store/` | `hive.db`: sqlc output, migrations, one store per aggregate | `pkg/`, `domain/`, `platform/sqlite` | `store-is-persistence` |
 | Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer | `pkg/`, `domain/` | `config-is-data` |
 | Engine | `internal/hive/` | One subpackage per application service, the event bus, and `hive.Engine`, which composes them | everything above | |
-| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features, program-only config | any shared layer, their own tree | `core`, `cli-no-desktop-deps` |
+| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features, program-only config | any shared layer, their own tree | `core`, `cli-no-desktop-deps`, `desktop-no-cli-deps` |
 
-`shared-surface-free` keeps charm and Wails out of all of `internal/`.
+`shared-surface-free` keeps charm, Wails and both programs out of all of
+`internal/`.
 
 The engine takes its drivers as `hive.Ports` and builds the config-derived
 services on `New` and on each `Reload`. Engine subpackages never import the
