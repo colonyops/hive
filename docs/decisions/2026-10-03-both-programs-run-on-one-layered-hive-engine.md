@@ -61,7 +61,7 @@ set both to one directory and sees no change.
   builds and tests both.
 - A new package needs no lint edit. Its path decides which rule applies.
 - Programs may still import `internal/store` directly. A
-  `programs-use-services` rule waits until the TUI review views and `sweep`
-  stop doing so.
+  `programs-use-services` rule waits until the CLI's KV store and `sweep`, and
+  the TUI's notification store and review views, stop doing so.
 - `HIVE_DESKTOP_HIVE_DATA_DIR` stays for development, where it points a
   worktree's desktop at a `hive.db` other than the shell's.

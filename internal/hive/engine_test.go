@@ -2,6 +2,7 @@ package hive_test
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/events/testbus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -184,6 +186,35 @@ func TestEngineCapsMessagesPerTopic(t *testing.T) {
 	kept, err := h.engine.Messages().Subscribe(t.Context(), "inbox", time.Time{})
 	require.NoError(t, err)
 	assert.Len(t, kept, 2)
+}
+
+type failingValidator struct{}
+
+func (failingValidator) ValidateDeep(string) error {
+	return errors.New("keybindings: unknown command")
+}
+func (failingValidator) Warnings() []config.ValidationWarning { return nil }
+
+// A program's config can have sections the engine does not read, so doctor
+// checks with the validator the program hands it.
+func TestEngineDoctorChecksWithTheProgramsValidator(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+
+	results := h.engine.Doctor(failingValidator{}, nil).RunChecks(t.Context(), "", false)
+
+	var details []string
+	for _, result := range results {
+		if result.Name != "Configuration" {
+			continue
+		}
+		for _, item := range result.Items {
+			if item.Status == doctor.StatusFail {
+				details = append(details, item.Detail)
+			}
+		}
+	}
+	require.Len(t, details, 1)
+	assert.Contains(t, details[0], "unknown command")
 }
 
 func TestEngineHoneycombSurvivesAReload(t *testing.T) {

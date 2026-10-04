@@ -16,7 +16,6 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/doctor"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
-	"github.com/colonyops/hive/internal/store"
 )
 
 // BuildInfo holds build-time metadata set by the main package.
@@ -74,7 +73,7 @@ func NewApp(
 		Engine:      engine,
 		Logger:      logger,
 		Config:      cfg,
-		Doctor:      doctor.NewService(store.NewSessionStore(engine.DB()), &cfg.Config, cfg, pluginInfos),
+		Doctor:      engine.Doctor(cfg, pluginInfos),
 		Multiplexer: multiplexer,
 		Plugins:     pluginMgr,
 		CommandSet:  commandSet,

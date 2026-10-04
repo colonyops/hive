@@ -289,9 +289,9 @@ camelCase `json` tags, and the adapters return it as is; only a domain type
 gets an adapter copy, because its own tags are the CLI's JSON contract.
 
 A change the desktop needs in a shared package is made there, in the same PR,
-with the CLI in mind. A program still reads `internal/store` directly in a few
-places (the TUI review views, `sweep`); new code goes through an engine
-service.
+with the CLI in mind. The CLI still reads `internal/store` directly in a few
+places (the KV store and its `sweep`, the TUI's notification store and review
+views); new code goes through an engine service.
 
 ## Directory structure
 

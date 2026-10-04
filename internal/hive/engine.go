@@ -11,6 +11,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/colonyops/hive/internal/hive/doctor"
+
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/config"
@@ -216,6 +218,14 @@ func (e *Engine) Context() *repocontext.Service { return e.load().context }
 func (e *Engine) Todos() *todosvc.Service { return e.load().todos }
 
 func (e *Engine) GitStatus() *gitstatus.Service { return e.load().gitStatus }
+
+// Doctor returns the health checks for the current config. validator checks
+// the program's whole config: a program whose config has sections the engine
+// does not read passes its own, so those sections are checked too. plugins is
+// what the program wants reported; the engine has none.
+func (e *Engine) Doctor(validator doctor.ConfigValidator, plugins []doctor.PluginInfo) *doctor.Service {
+	return doctor.NewService(store.NewSessionStore(e.ports.DB), e.load().cfg, validator, plugins)
+}
 
 func (e *Engine) Bus() *events.EventBus { return e.ports.Bus }
 
