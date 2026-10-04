@@ -148,9 +148,8 @@ func (e *Engine) Reload(cfg *config.Config) error {
 	return nil
 }
 
-// build holds no handle that needs closing: the services spawn per call, and
-// the capture recorder writes one file per capture. So a replaced set is
-// dropped, not closed.
+// build holds no handle that needs closing: the services spawn per call. So a
+// replaced set is dropped, not closed.
 func (e *Engine) build(cfg *config.Config) (*services, error) {
 	if cfg == nil {
 		return nil, errors.New("hive engine: config is required")

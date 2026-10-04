@@ -3,8 +3,6 @@ package hive
 import (
 	"time"
 
-	"github.com/rs/zerolog/log"
-
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/status"
@@ -29,15 +27,6 @@ func newTmuxIntegration(cfg *config.Config, source terminal.PaneSource) *tmuxsta
 		tmuxstatus.WithStatusOptions(StatusOptionsFromConfig(cfg.Terminal.Status, cfg.Tmux.PollInterval)),
 		tmuxstatus.WithMissingTolerance(cfg.Terminal.Status.Confirm.Missing.Polls),
 	)
-	if cfg.Tmux.CaptureRecording.Enabled {
-		recorder, err := tmuxstatus.NewJSONCaptureRecorder(cfg.TmuxCaptureRecordingsDir())
-		if err != nil {
-			log.Warn().Err(err).Msg("failed to enable tmux pane capture recording")
-		} else {
-			options = append(options, tmuxstatus.WithCaptureRecorder(recorder))
-			log.Info().Str("path", recorder.Dir()).Msg("tmux pane capture recording enabled; terminal contents are stored locally")
-		}
-	}
 	return tmuxstatus.NewFromPreviewMatchers(cfg.Tmux.PreviewWindowMatcher, options...)
 }
 

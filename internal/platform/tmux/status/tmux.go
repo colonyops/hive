@@ -48,7 +48,6 @@ type Integration struct {
 	processReader      process.ProcessReader
 	source             terminal.PaneSource
 	capture            classifier.ContentCapture
-	recorder           CaptureRecorder
 	beforePollGateLock func() // deterministic seam for refresh/GetStatus overlap tests
 }
 
@@ -134,13 +133,6 @@ func (sc *sessionCache) bestAgentPane() *cachedPane {
 
 // Option configures a tmux Integration.
 type Option func(*Integration)
-
-// WithCaptureRecorder records fresh agent-pane captures using recorder.
-func WithCaptureRecorder(recorder CaptureRecorder) Option {
-	return func(integration *Integration) {
-		integration.recorder = recorder
-	}
-}
 
 // WithPaneSource supplies tmux pane discovery and capture.
 func WithPaneSource(source terminal.PaneSource) Option {
@@ -693,7 +685,6 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	t.mu.Unlock()
 
 	var content string
-	freshCapture := false
 	switch {
 	case prevContent != "" && activity == lastCaptureActive:
 		content = prevContent
@@ -705,7 +696,6 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		if err != nil {
 			return terminal.StatusMissing, err
 		}
-		freshCapture = true
 		t.updatePaneState(sessionName, paneID, func(state *paneState) {
 			state.paneContent = content
 			state.lastCaptureActive = activity
@@ -732,22 +722,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		InMode:     inMode,
 		Generation: generation,
 	}
-	paneStatus, assessment := t.tracker.Observe(key, snap)
-
-	if freshCapture && t.recorder != nil {
-		if err := t.recorder.Record(CaptureObservation{
-			SessionName: sessionName,
-			PaneID:      paneID,
-			Tool:        tool,
-			Content:     content,
-			Status:      paneStatus,
-			RuleID:      assessment.RuleID,
-			Signals:     assessment.Signals,
-		}); err != nil {
-			log.Warn().Err(err).Str("pane_id", paneID).Msg("failed to record tmux pane capture")
-		}
-	}
-
+	paneStatus, _ := t.tracker.Observe(key, snap)
 	return paneStatus, nil
 }
 
