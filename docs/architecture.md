@@ -2178,8 +2178,9 @@ write path holds a link block and an html `href` to those three schemes.
 An agent in a **Code session** writes canvases through the same server
 (ADR a-code-session-s-canvases-belong-to-its-repository-and-live-in-the-hive-context-directory).
 The app does not own that launch, so it wires nothing: the user adds the
-server's address, which Settings ▸ Chats shows, to the agent's own MCP
-configuration. The tool's `session` argument is a string that is either a
+server's address to the agent's own MCP configuration. Settings ▸ MCP servers
+lists the app-hosted servers with their addresses and the setup for each
+agent, and the empty canvas pane in Code leads there. The tool's `session` argument is a string that is either a
 chat's record id or the caller's working directory, and
 `CanvasService.resolve` maps a directory to the active hive session whose
 checkout holds it (`Sessions().SessionAtPath`). That session's canvases

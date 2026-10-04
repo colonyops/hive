@@ -18,6 +18,7 @@ import AgentsSettingsView from './AgentsSettingsView.vue'
 import GeneralSettingsView from './GeneralSettingsView.vue'
 import HiveSettingsView from './HiveSettingsView.vue'
 import LauncherSettingsView from './LauncherSettingsView.vue'
+import McpSettingsView from './McpSettingsView.vue'
 import KeybindingSettingsView from './KeybindingSettingsView.vue'
 import SystemSettingsView from './SystemSettingsView.vue'
 import TerminalSettingsView from './TerminalSettingsView.vue'
@@ -64,7 +65,7 @@ const emit = defineEmits<{ close: []; 'select-category': [category: ApplicationS
 const navGroups: Array<{ title: string; ids: readonly ApplicationSettingsSection[] }> = [
   { title: 'Preferences', ids: ['general', 'appearance', 'notifications', 'menubar', 'keybindings'] },
   { title: 'Inbox', ids: ['integrations', 'actions'] },
-  { title: 'Code', ids: ['terminal', 'launchers', 'hive'] },
+  { title: 'Code', ids: ['terminal', 'launchers', 'hive', 'mcp'] },
   { title: 'Chats', ids: ['agents'] },
   { title: 'Advanced', ids: ['system', 'observability', 'about'] },
 ]
@@ -212,6 +213,7 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
 
     <TerminalSettingsView v-else-if="props.activeCategory === 'terminal'" />
     <HiveSettingsView v-else-if="props.activeCategory === 'hive'" />
+    <McpSettingsView v-else-if="props.activeCategory === 'mcp'" />
     <AgentsSettingsView v-else-if="props.activeCategory === 'agents'" />
 
     <ActionSettingsView v-else-if="props.activeCategory === 'actions'" :known-types="props.knownFeedTypes" />

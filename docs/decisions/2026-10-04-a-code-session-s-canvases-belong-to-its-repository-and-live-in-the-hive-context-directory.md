@@ -22,7 +22,8 @@ no folder of its own beside the session.
 **The user adds the server to the agent's own MCP configuration.** Hive never
 edits an agent's configuration outside a workspace. What it provides is a
 stable address: the loopback port is written to `settings.yaml` the first
-time it is allocated, and Settings ▸ Chats shows the address to copy.
+time it is allocated, and Settings ▸ MCP servers shows the address and the
+setup for each agent.
 
 **The `session` argument is a string, and it is one of two things.** A number
 is a chat's record id, as before. Anything else is the caller's absolute

@@ -111,13 +111,13 @@ Filter by status or repository, search by title or ID, and inspect epics, subtas
 
 ## Canvases
 
-An agent in a Code session can publish canvases the same way a chat does. Hive does not change your agent's configuration, so add the server yourself: copy its address from **Settings ▸ Chats ▸ Canvas for every agent** and add it to the agent's own MCP configuration as an HTTP server named `hive-canvas`. For Claude Code:
+An agent in a Code session can publish canvases the same way a chat does. Hive does not change your agent's configuration, so add the server yourself. **Settings ▸ MCP servers** shows the address of the Hive Canvas server and the command or config entry for Claude Code, Codex, and other agents. For Claude Code it is:
 
 ```bash
 claude mcp add --scope user --transport http hive-canvas http://127.0.0.1:<port>/mcp/canvas
 ```
 
-The address stays the same across restarts. The server needs the local HTTP server, which is enabled by default.
+The address stays the same across restarts. The server needs the local HTTP server, which is enabled by default. An empty canvas pane in Code links to the same settings page.
 
 Open the canvas pane beside a session with the right-panel button in the title bar. A session's canvases belong to its repository, so every session of that repository shows the same ones, and they remain after the session is deleted. They are stored under `canvases/` in the repository's hive context directory, which `hive ctx init` links into a checkout as `.hive`, and never in the checkout itself.
 

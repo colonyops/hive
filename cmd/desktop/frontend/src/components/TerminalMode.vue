@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, toRef } from 'vue'
+import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
 import AgentCanvasPane from './AgentCanvasPane.vue'
@@ -79,6 +80,13 @@ const {
   syncCanvasQuery,
 } = useTerminalCanvas(toRef(props, 'canvas'), active)
 
+// Hive does not configure a Code session's agent, so the empty pane leads to
+// the page that says how.
+const router = useRouter()
+function openMcpSettings(): void {
+  void router.push({ name: 'application-settings', params: { section: 'mcp' } })
+}
+
 const { prefetch: prefetchNewSession } = useNewSession()
 onMounted(prefetchNewSession)
 
@@ -127,6 +135,8 @@ const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, ca
         :workspace="canvasPane.workspace"
         :name="canvasName"
         :client="canvasClient"
+        :agent-setup="typeof canvasPane.session === 'string'"
+        @setup="openMcpSettings"
         @close="syncCanvasQuery(false)"
         @open-url="openLink"
         @pick="(name) => syncCanvasQuery(true, name)"

@@ -3817,6 +3817,20 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
 
+    // No agent client in this spec, so the pane reads no canvases: the state
+    // a session is in before its agent has the server.
+    it('leads from the empty pane to the MCP settings page', async () => {
+      const { wrapper, router } = await mountWithCanvas('/terminal/hive-fix-parser?canvas=1')
+
+      await wrapper.get('[data-testid="agent-canvas-setup-open"]').trigger('click')
+      await flushPromises()
+
+      expect(router.currentRoute.value.name).toBe('application-settings')
+      expect(router.currentRoute.value.params.section).toBe('mcp')
+
+      wrapper.unmount()
+    })
+
     it("asks for the full-page view on the session's repository", async () => {
       const { wrapper } = await mountWithCanvas('/terminal/hive-fix-parser?canvas=1')
 

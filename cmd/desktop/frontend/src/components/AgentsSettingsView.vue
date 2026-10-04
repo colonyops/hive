@@ -1,15 +1,13 @@
 <script setup lang="ts">
-// Chats settings: canvas presentation, the canvas server's address for agents
-// outside a workspace, and where the area's workspaces live. A workspace's
-// agent, launch command, and MCP servers belong to its manifest.
-import { computed, onMounted } from 'vue'
+// Chats settings: canvas presentation and where the area's workspaces live.
+// A workspace's agent, launch command, and MCP servers belong to its manifest.
+import { onMounted } from 'vue'
 import CanvasTypographyPreview from './settings/CanvasTypographyPreview.vue'
 import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsPathRow from './settings/SettingsPathRow.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
-import CopyButton from './ui/CopyButton.vue'
 import SegmentedControl from './ui/SegmentedControl.vue'
 import {
   canvasFontSizeLabels,
@@ -22,15 +20,9 @@ import {
   type CanvasLineSpacing,
 } from '../stores/useCanvasTypography'
 import { useSystemSettings } from '../composables/useSystemSettings'
-import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 
 const { info, error: locationsError, refresh: refreshLocations, openPath, revealPath } = useSystemSettings()
 const { fontSize, lineSpacing, setFontSize, setLineSpacing } = useCanvasTypography()
-
-// The shipped catalogue entry carries the live address, so this never restates
-// the port or the path.
-const { mcpCatalogue, reloadMCPCatalogue } = useAgentWorkspaces()
-const canvasServer = computed(() => mcpCatalogue.value.find((entry) => entry.shipped && entry.id === 'hive-canvas'))
 
 const fontSizeOptions = canvasFontSizes.map((value) => ({
   value,
@@ -52,7 +44,6 @@ function onLineSpacingChange(value: string): void {
 
 onMounted(() => {
   void refreshLocations()
-  void reloadMCPCatalogue()
 })
 </script>
 
@@ -87,31 +78,6 @@ onMounted(() => {
         />
       </SettingsRow>
       <div class="px-4 py-3.5"><CanvasTypographyPreview /></div>
-    </SettingsSection>
-
-    <SettingsSection
-      v-if="canvasServer"
-      title="Canvas for every agent"
-      description="A workspace that enables Hive Canvas is set up for you. Any other agent, such as the one a Code session runs, gets the canvas once you add this server to that agent's own MCP configuration. Hive does not edit it."
-      boxed
-    >
-      <SettingsRow
-        label="Server address"
-        :hint="
-          canvasServer.problem ||
-          'Add it as an HTTP MCP server named hive-canvas. A canvas written from a Code session belongs to the session\'s repository.'
-        "
-        testid="settings-canvas-server"
-      >
-        <div v-if="canvasServer.command" class="flex min-w-0 items-center gap-2">
-          <code
-            class="min-w-0 truncate rounded bg-chip px-1.5 py-0.5 font-mono text-caption text-text-2"
-            data-testid="settings-canvas-server-url"
-            >{{ canvasServer.command }}</code
-          >
-          <CopyButton :text="canvasServer.command" size="xs" data-testid="settings-canvas-server-copy" />
-        </div>
-      </SettingsRow>
     </SettingsSection>
 
     <SettingsSection

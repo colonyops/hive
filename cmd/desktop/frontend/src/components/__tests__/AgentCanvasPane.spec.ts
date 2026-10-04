@@ -220,6 +220,32 @@ describe('AgentCanvasPane', () => {
     expect(wrapper.emitted('open-page')).toEqual([['plan']])
   })
 
+  // Hive wires a workspace's agent itself. A Code session's agent is the
+  // user's to configure, so its empty pane says how.
+  it('offers agent setup on an empty pane only where it is asked to', async () => {
+    const inChats = await mountPane(fakeCanvasClient([], []))
+    expect(inChats.find('[data-testid="agent-canvas-setup"]').exists()).toBe(false)
+
+    const inCode = mount(AgentCanvasPane, {
+      props: {
+        session: 'abc123',
+        workspace: 'acme/site',
+        name: null,
+        client: fakeCanvasClient([], []),
+        agentSetup: true,
+      },
+    })
+    await flushPromises()
+    await inCode.get('[data-testid="agent-canvas-setup-open"]').trigger('click')
+    expect(inCode.emitted('setup')).toHaveLength(1)
+
+    const withCanvases = mount(AgentCanvasPane, {
+      props: { session: 'abc123', workspace: 'acme/site', name: null, client: fakeCanvasClient([]), agentSetup: true },
+    })
+    await flushPromises()
+    expect(withCanvases.find('[data-testid="agent-canvas-setup"]').exists()).toBe(false)
+  })
+
   it('shows the empty state when the workspace has no canvases', async () => {
     const wrapper = await mountPane(fakeCanvasClient([], []))
     expect(wrapper.find('[data-testid="agent-canvas-empty"]').exists()).toBe(true)

@@ -20,6 +20,7 @@ Settings shows or changes:
 - connected source accounts and the local webhook listener;
 - actions and quick terminals;
 - the agent workspace folder location;
+- the addresses of the MCP servers Hive hosts, and how to add one to your own agent;
 - the optional Hive CLI compatibility config;
 - diagnostics, updates, and release channels.
 

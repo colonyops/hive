@@ -9,6 +9,7 @@ import IconHardDrive from '~icons/lucide/hard-drive'
 import IconBell from '~icons/lucide/bell'
 import IconPin from '~icons/lucide/pin'
 import IconInfo from '~icons/lucide/info'
+import IconServer from '~icons/lucide/server'
 import IconSliders from '~icons/lucide/sliders-horizontal'
 import IconZap from '~icons/lucide/zap'
 import IconBoxes from '~icons/lucide/boxes'
@@ -31,6 +32,7 @@ export const applicationSettingsSectionMeta: Record<
   actions: { label: 'Actions', title: 'Actions', icon: IconPlay },
   launchers: { label: 'Quick terminals', title: 'Quick terminals', icon: IconZap },
   hive: { label: 'Hive CLI', title: 'Hive CLI', icon: IconBoxes },
+  mcp: { label: 'MCP servers', title: 'MCP servers', icon: IconServer },
   notifications: { label: 'Notifications', title: 'Notifications', icon: IconBell },
   menubar: { label: 'Menu bar', title: 'Menu bar', icon: IconPin },
   system: { label: 'System', title: 'System', icon: IconHardDrive },
