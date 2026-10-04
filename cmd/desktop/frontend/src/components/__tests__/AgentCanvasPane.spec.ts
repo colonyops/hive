@@ -193,6 +193,32 @@ describe('AgentCanvasPane', () => {
     expect(wrapper.emitted('open-url')).toEqual([['https://example.com/pr/1']])
   })
 
+  // A relative link is a reference to another canvas in the workspace. It pins
+  // that canvas through the route, the way a pick from the browse list does.
+  it('emits pick for a link that names another canvas, and nothing for an unknown name', async () => {
+    const wrapper = await mountPane(
+      fakeCanvasClient(
+        [block({ id: 'doc', body: '[the report](perf-report) and [a typo](perf-reprot)' })],
+        [meta({ name: 'plan' }), meta({ name: 'perf-report' })],
+      ),
+    )
+
+    const [known, unknown] = wrapper.findAll('[data-testid="agent-canvas-block-doc"] a')
+    await known.trigger('click')
+    await unknown.trigger('click')
+
+    expect(wrapper.emitted('pick')).toEqual([['perf-report']])
+    expect(wrapper.emitted('open-url')).toBeUndefined()
+  })
+
+  it('asks for the full-page view on the canvas it is showing', async () => {
+    const wrapper = await mountPane(fakeCanvasClient([]), 'plan')
+
+    await wrapper.get('[data-testid="agent-canvas-expand"]').trigger('click')
+
+    expect(wrapper.emitted('open-page')).toEqual([['plan']])
+  })
+
   it('shows the empty state when the workspace has no canvases', async () => {
     const wrapper = await mountPane(fakeCanvasClient([], []))
     expect(wrapper.find('[data-testid="agent-canvas-empty"]').exists()).toBe(true)

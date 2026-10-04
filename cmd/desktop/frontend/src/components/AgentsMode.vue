@@ -29,6 +29,7 @@ import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useAgentCanvasRoute } from '../composables/useAgentCanvasRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXtermPane'
+import type { CanvasScope } from '../lib/agentCanvas'
 import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentWorkspacesClient'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { isEditableTarget } from '../lib/isEditableTarget'
@@ -44,6 +45,7 @@ import '@xterm/xterm/css/xterm.css'
 const ACTIVITY_POLL_MS = 2000
 
 const props = defineProps<{ active?: boolean; sidebarCollapsed?: boolean }>()
+const emit = defineEmits<{ 'open-canvas-page': [scope: CanvasScope] }>()
 
 const {
   checking,
@@ -899,6 +901,7 @@ onBeforeUnmount(() => {
         @close="syncCanvasQuery(false)"
         @open-url="openLink"
         @pick="(name) => syncCanvasQuery(true, name)"
+        @open-page="(name) => emit('open-canvas-page', { workspace: paneWorkspaceDir, name, session: routeChatId })"
       />
     </div>
 

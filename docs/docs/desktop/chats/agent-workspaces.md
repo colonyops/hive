@@ -111,6 +111,8 @@ An agent with **Hive Canvas** enabled can publish named output beside its chat. 
 
 Use the canvas pane to search previous output, copy a canvas as Markdown, save it to a file, or open its links. Settings ▸ Chats changes text size and line spacing for every canvas. Copy and save keep the original Markdown.
 
+To read a canvas full page, use **Open full page** in the pane, pick the canvas in the command palette, or press <kbd>⌘⇧P</kbd> (Windows/Linux: <kbd>Ctrl+Shift+P</kbd>) or <kbd>g</kbd> then <kbd>v</kbd>. The full-page view opens over the current view and lists the workspace's canvases in a sidebar. A Markdown link whose target is the name of another canvas in the workspace opens that canvas in place. Press <kbd>Esc</kbd> or the shortcut again to go back.
+
 ## Use a chat in Code
 
 Pin a chat to the Code session tree when you want it beside repository terminals. It attaches to the same tmux session from either area. Unpinning it does not stop the agent.

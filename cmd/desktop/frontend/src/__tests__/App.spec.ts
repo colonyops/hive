@@ -3180,6 +3180,88 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('toggles the canvas overlay over the current route with mod+shift+P, and closes it on Escape', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    const canvasChord = { key: 'p', metaKey: true, shiftKey: true }
+
+    window.dispatchEvent(new KeyboardEvent('keydown', canvasChord))
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('feed')
+    expect(document.querySelector('[data-testid="canvas-overlay"]')).not.toBeNull()
+    expect(document.querySelector('[data-testid="canvas-page"]')).not.toBeNull()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', canvasChord))
+    await flushPromises()
+    expect(document.querySelector('[data-testid="canvas-overlay"]')).toBeNull()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', canvasChord))
+    await flushPromises()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(document.querySelector('[data-testid="canvas-overlay"]')).toBeNull()
+    expect(router.currentRoute.value.name).toBe('feed')
+
+    wrapper.unmount()
+  })
+
+  // No chat is open and the Chats area never mounted: a canvas row is a way
+  // to a canvas from anywhere, so it opens the full-page view, not the pane.
+  it('lists a canvas as a palette row under its workspace and opens it full page', async () => {
+    mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
+    const canvas = vi.fn().mockResolvedValue({
+      workspace: 'my-workspace',
+      name: 'perf-report',
+      title: 'Perf report',
+      session: 42,
+      createdAt: 1,
+      updatedAt: 1,
+      blocks: [{ id: 'doc', kind: 'markdown', title: '', body: 'p95 is 96ms', url: '', createdAt: 1, updatedAt: 1 }],
+    })
+    mocks.agentsClient = {
+      workspaces: vi.fn().mockResolvedValue({
+        root: '',
+        rootProblem: '',
+        available: true,
+        error: '',
+        editor: { command: '', title: '' },
+        presets: [],
+        workspaces: [{ dir: 'my-workspace', name: 'Travel', command: 'claude', mcps: [], skills: [], schedules: [] }],
+      }),
+      allSessions: vi.fn().mockResolvedValue([]),
+      canvases: vi.fn().mockResolvedValue([
+        {
+          workspace: 'my-workspace',
+          name: 'perf-report',
+          title: 'Perf report',
+          session: 42,
+          createdAt: 1,
+          updatedAt: 1,
+          blockCount: 1,
+        },
+      ]),
+      canvas,
+    } as unknown as AgentWorkspacesClient
+    const { wrapper, router } = await mountAppWithRouter()
+
+    const palette = useCommandPalette()
+    palette.toggle()
+    await flushPromises()
+    palette.query.value = ''
+    const row = palette.results.value.find((candidate) => candidate.id === 'canvas:my-workspace:perf-report')
+    expect(row?.title).toBe('Perf report')
+    expect(row?.group).toBe('Travel')
+    expect(row?.kind).toBe('canvas')
+
+    await palette.run(row!)
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('feed')
+    expect(canvas).toHaveBeenCalledWith('my-workspace', 'perf-report')
+    expect(document.querySelector('[data-testid="canvas-page-block-doc"]')?.textContent).toContain('p95 is 96ms')
+
+    wrapper.unmount()
+  })
+
   it('suppresses the tasks toggle while a different overlay is open, and while a confirm dialog is stacked inside it', async () => {
     const taskItem = {
       id: 't1',

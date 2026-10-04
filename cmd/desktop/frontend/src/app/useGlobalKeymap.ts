@@ -11,6 +11,7 @@ export interface GlobalKeymapDeps {
   paletteOpen: Ref<boolean>
   activityOpen: Ref<boolean>
   tasksOpen: Ref<boolean>
+  canvasOpen: Ref<boolean>
 }
 
 /**
@@ -19,16 +20,31 @@ export interface GlobalKeymapDeps {
  * its context, and an open overlay suppresses everything but the palette
  * toggle.
  */
-export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activityOpen, tasksOpen }: GlobalKeymapDeps) {
+export function useGlobalKeymap({
+  runCommand,
+  contextActive,
+  paletteOpen,
+  activityOpen,
+  tasksOpen,
+  canvasOpen,
+}: GlobalKeymapDeps) {
   const kb = useKeybindings()
 
   // Every dialog and drawer registers in openModalCount while mounted. The
-  // palette and the two hub overlays are not modals, so they are named here.
-  // Tasks is split out so tasks.toggle can close its own overlay while it stays
-  // suppressed under anything else.
+  // palette and the hub overlays are not modals, so they are named here. Tasks
+  // and Canvases are split out so each one's toggle can close its own overlay
+  // while it stays suppressed under anything else.
   const openModalCount = useOpenModalCount()
+  const toggledOverlays: Record<string, Ref<boolean>> = { 'tasks.toggle': tasksOpen, 'canvas.toggle': canvasOpen }
   const otherOverlayOpen = computed(() => paletteOpen.value || activityOpen.value || openModalCount.value > 0)
-  const anyOverlayOpen = computed(() => otherOverlayOpen.value || tasksOpen.value)
+  const anyOverlayOpen = computed(
+    () => otherOverlayOpen.value || Object.values(toggledOverlays).some((open) => open.value),
+  )
+
+  function closesOwnOverlay(id: string): boolean {
+    if (otherOverlayOpen.value || !toggledOverlays[id]?.value) return false
+    return Object.entries(toggledOverlays).every(([toggle, open]) => toggle === id || !open.value)
+  }
 
   // One timer at a time, for a sequence prefix that is also a complete binding
   // (Zed's prefix rule). Its fire goes through the same gate as a keystroke
@@ -49,12 +65,9 @@ export function useGlobalKeymap({ runCommand, contextActive, paletteOpen, activi
   function dispatchIfActive(id: string): boolean {
     const command = commandById.value.get(id)
     if (!command) return false
-    if (anyOverlayOpen.value && id !== 'palette.toggle') {
-      // A different modal (report, new-profile, a confirm stacked inside Tasks)
-      // still swallows tasks.toggle like any other command.
-      const closesTasksOverlay = id === 'tasks.toggle' && tasksOpen.value && !otherOverlayOpen.value
-      if (!closesTasksOverlay) return false
-    }
+    // A different modal (report, new-profile, a confirm stacked inside Tasks)
+    // still swallows an overlay's own toggle like any other command.
+    if (anyOverlayOpen.value && id !== 'palette.toggle' && !closesOwnOverlay(id)) return false
     if (!contextActive(command.context)) return false
     runCommand(id)
     return true

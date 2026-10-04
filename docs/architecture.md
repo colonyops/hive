@@ -1913,8 +1913,9 @@ Three rules govern it, and each is a consequence of that:
   — in two ways, which is the distinction to get right before adding to it.
 
   A command **pierces** when the catalog marks it `piercesPane`: it is claimed
-  on the binding alone, whatever modifiers it carries. The pop-up toggle and
-  `tasks.toggle`, because the combo that opens an overlay has to close it;
+  on the binding alone, whatever modifiers it carries. The pop-up toggle,
+  `tasks.toggle` and `canvas.toggle`, because the combo that opens an overlay
+  has to close it;
   `terminal.focus-sidebar` and `agents.focus-sidebar`, because reaching the list
   is the way back out — only that half of the focus pair, since the chord moving
   focus *into* a pane is unreachable from inside one; and
@@ -1990,12 +1991,12 @@ a scope switch. A row that cannot run where you stand is hidden, never shown
 disabled, matching the launcher palette row's own choice (ADR quick-terminal-launchers-are-session-scoped).
 And Go to is global: a row meant to be reachable from anywhere registers at
 the App level (`useAppPaletteRows`) off a module-scoped source
-(`useTerminalSessions`, `useAttachedTerminalWindows`, `useAgentSessionsAll`),
-never inside a lazily-mounted mode component, so it exists before that mode
+(`useTerminalSessions`, `useAttachedTerminalWindows`, `useAgentSessionsAll`,
+`useWorkspaceCanvases`), never inside a lazily-mounted mode component, so it exists before that mode
 has ever mounted. A row's title and group follow one more rule: a command row
 keeps its catalog verb title unchanged, since Settings › Keyboard reads the
-same string, while a dynamic object row (a feed, a chat, a session, a window,
-a settings section) is titled with the object's own name and grouped under
+same string, while a dynamic object row (a feed, a chat, a canvas, a session,
+a window, a settings section) is titled with the object's own name and grouped under
 its real container — rendering draws the nesting (the group header, or a
 `Container ›` prefix once a query narrows past it) rather than the title
 encoding a path or a verb (ADR palette-rows-name-objects-and-rendering-draws-the-path).
@@ -2159,6 +2160,20 @@ launch via `tmux new-session -e`. An app-hosted catalogue entry declares its
 mount as `Descriptor.RuntimePath`, joined with the live loopback base when the
 catalogue is rendered; a pinning test in `mcpsrv` keeps those paths agreeing
 with the adapter's constants.
+
+A canvas also opens **full page**: a hub overlay over whatever is on screen,
+like Tasks, with the workspace's listing in a sidebar and the reader beside
+it. `AgentCanvasReader` is the one renderer both surfaces mount, so a canvas
+cannot read differently in the pane and on the page; only the width differs.
+The overlay is not a route. Its scope (workspace, canvas name, preferred
+session) is state in `useHubOverlays`, set by the pane's own button, by a
+canvas row in the palette, or by `canvas.toggle`, which takes the scope from
+the chat on screen when it opens and otherwise keeps the canvas last read.
+Every link on a canvas resolves through `canvasLinkTarget`: `http`, `https`
+and `mailto` open outside the app, a relative reference that names a canvas
+in the same workspace opens that canvas in place, and anything else leads
+nowhere. Only a markdown body can carry such a reference today, because the
+write path holds a link block and an html `href` to those three schemes.
 
 An **html block** is the one place agent-authored markup reaches the webview
 (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).

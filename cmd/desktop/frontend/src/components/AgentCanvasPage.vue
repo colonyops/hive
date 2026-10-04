@@ -1,0 +1,163 @@
+<script setup lang="ts">
+// The full-page canvas view: one workspace's canvases read as a small wiki,
+// the listing in a sidebar and the pane's reader beside it. It opens in a
+// HubOverlay over whatever is on screen, like Tasks, and is read-only for the
+// pane's reason: canvas writes arrive only through the hive-canvas MCP tools.
+import { computed, onMounted, ref, watch } from 'vue'
+import IconX from '~icons/lucide/x'
+import AgentCanvasActions from './AgentCanvasActions.vue'
+import AgentCanvasBrowse from './AgentCanvasBrowse.vue'
+import AgentCanvasReader from './AgentCanvasReader.vue'
+import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
+import EmptyState from './ui/EmptyState.vue'
+import IconButton from './ui/IconButton.vue'
+import PanelResizeHandle from './ui/PanelResizeHandle.vue'
+import ViewHeader from './ui/ViewHeader.vue'
+import { useAgentCanvas } from '../composables/useAgentCanvas'
+import { useEscapeToClose } from '../composables/useEscapeToClose'
+import { useResizablePanel } from '../composables/useResizablePanel'
+import { useWailsEvent } from '../composables/useWailsEvent'
+import { relativeAge } from '../lib/age'
+import type { CanvasScope } from '../lib/agentCanvas'
+import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
+
+const props = defineProps<{ scope: CanvasScope }>()
+const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope': [scope: CanvasScope] }>()
+
+const { checking, available, reason, client, workspaces, workspacesLoaded, reloadWorkspaces } = useAgentWorkspaces()
+const { canvas, metas, shown, loading, error, show, wake } = useAgentCanvas(client)
+
+// Opened with no workspace in scope, outside Chats on a fresh launch, the view
+// lands on the first one rather than on nothing.
+const workspace = computed(() => props.scope.workspace || workspaces.value[0]?.dir || '')
+
+watch(
+  () => [workspace.value, props.scope.name, props.scope.session] as const,
+  ([dir, name, session]) => {
+    show(dir, name, session)
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  void reloadWorkspaces()
+})
+
+useWailsEvent('canvas:updated', () => wake())
+
+const workspaceOptions = computed<AppSelectOption[]>(() => {
+  const options = workspaces.value.map((ws) => ({ value: ws.dir, label: ws.name || ws.dir }))
+  // AppSelect draws an unmatched value as blank, and the scope can name a
+  // workspace the listing has not loaded yet.
+  if (workspace.value && !options.some((option) => option.value === workspace.value)) {
+    options.push({ value: workspace.value, label: workspace.value })
+  }
+  return options
+})
+
+function selectWorkspace(dir: string): void {
+  if (dir !== workspace.value) emit('update:scope', { workspace: dir, name: null, session: null })
+}
+
+function openCanvas(name: string): void {
+  emit('update:scope', { ...props.scope, workspace: workspace.value, name })
+}
+
+const title = computed(() => canvas.value?.title || shown.value || 'Canvases')
+
+const reader = ref<HTMLElement | null>(null)
+watch(shown, () => {
+  if (reader.value) reader.value.scrollTop = 0
+})
+
+const {
+  size: sidebarWidth,
+  startResize: startSidebarResize,
+  step: stepSidebar,
+} = useResizablePanel({
+  storageKey: 'hive.panel.canvas.sidebar',
+  defaultSize: 280,
+  min: 200,
+  max: 480,
+  edge: 'right',
+})
+
+useEscapeToClose(() => emit('close'))
+</script>
+
+<template>
+  <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="canvas-page">
+    <ViewHeader>
+      <template #title>
+        <span class="min-w-0 truncate text-body font-semibold text-text" data-testid="canvas-page-title">{{
+          title
+        }}</span>
+        <span v-if="canvas && shown" class="shrink-0 font-mono text-caption text-text-4"
+          >{{ shown }} · {{ relativeAge(canvas.updatedAt) }}</span
+        >
+        <div class="flex-1" />
+        <AgentCanvasActions
+          v-if="shown"
+          :workspace="workspace"
+          :name="shown"
+          :client="client"
+          size="lg"
+          testid="canvas-page"
+        />
+        <IconButton label="Close" :icon="IconX" size="lg" data-testid="canvas-page-close" @click="emit('close')" />
+      </template>
+    </ViewHeader>
+
+    <!-- The Chats area's own answer when this build cannot run it: there is no
+         client to read a canvas with. -->
+    <EmptyState v-if="!checking && !available" class="m-auto max-w-md" data-testid="canvas-page-unavailable">
+      {{ reason || 'Canvases are unavailable.' }}
+    </EmptyState>
+    <EmptyState
+      v-else-if="workspacesLoaded && !workspace"
+      class="m-auto"
+      message="No workspaces yet."
+      data-testid="canvas-page-no-workspaces"
+    />
+    <div v-else class="flex min-h-0 flex-1">
+      <aside
+        class="relative flex shrink-0 flex-col border-r border-border bg-sidebar"
+        :style="{ width: sidebarWidth + 'px' }"
+        data-testid="canvas-page-sidebar"
+      >
+        <div class="shrink-0 border-b border-border p-2">
+          <AppSelect
+            :model-value="workspace"
+            :options="workspaceOptions"
+            size="sm"
+            aria-label="Workspace"
+            testid="canvas-page-workspace"
+            @update:model-value="selectWorkspace"
+          />
+        </div>
+        <AgentCanvasBrowse :metas="metas" :shown="shown" testid="canvas-page" @pick="openCanvas" />
+        <PanelResizeHandle edge="right" name="canvas-sidebar" :start="startSidebarResize" :step="stepSidebar" />
+      </aside>
+
+      <div
+        ref="reader"
+        class="hive-scroll min-h-0 min-w-0 flex-1 overflow-y-auto bg-app"
+        data-testid="canvas-page-reader"
+      >
+        <!-- Wide enough for an html block laid out in columns, and no wider:
+             prose across the whole window does not read. -->
+        <div class="mx-auto w-full max-w-[1040px] px-10 py-8">
+          <AgentCanvasReader
+            :canvas="canvas"
+            :metas="metas"
+            :loading="loading"
+            :error="error"
+            testid="canvas-page"
+            @open-url="emit('open-url', $event)"
+            @open-canvas="openCanvas"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</template>

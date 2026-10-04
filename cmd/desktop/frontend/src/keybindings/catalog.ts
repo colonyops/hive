@@ -3,6 +3,7 @@ import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
 import IconArrowUp from '~icons/lucide/arrow-up'
+import IconBookOpen from '~icons/lucide/book-open'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconBug from '~icons/lucide/bug'
 import IconLifeBuoy from '~icons/lucide/life-buoy'
@@ -658,6 +659,19 @@ export const commandCatalog: BindableCommand[] = [
     // Pierces rather than escapes: Tasks is the overlay most often wanted from
     // inside a session, and a user who rebinds it to an alt chord gets nothing
     // through terminalEscapeCombo.
+    piercesPane: true,
+    scope: 'goto',
+  },
+  {
+    id: 'canvas.toggle',
+    title: 'Toggle Canvases',
+    group: 'View',
+    keywords: ['canvas', 'canvases', 'wiki', 'page', 'document', 'report'],
+    icon: IconBookOpen,
+    defaultCombos: ['mod+shift+p', 'g v'],
+    context: 'global',
+    // Pierces for Tasks' reason: the chat that wrote a canvas is a focused
+    // pane, and the chord that opens the view from there has to close it.
     piercesPane: true,
     scope: 'goto',
   },

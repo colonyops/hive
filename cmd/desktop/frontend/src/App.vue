@@ -60,8 +60,8 @@ const shellLoaded = computed(() => (profilesLoaded.value || !!profilesError.valu
 const appMode = useAppMode(feed, nav, onboardingActive, shellLoaded)
 const { mode, terminalActive, agentsActive, hubActive, terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
-const overlays = useHubOverlays(terminalActive)
-const { tasksOpen, activityOpen, terminalSessionRepoKey } = overlays
+const overlays = useHubOverlays(terminalActive, appMode.chatCanvasScope)
+const { tasksOpen, activityOpen, canvasOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
 const reveal = useReveal(nav, session, feed.showToast)
 const feedCommands = useFeedCommands(feed, confirmation)
@@ -80,7 +80,7 @@ const { runCommand, contextActive, popupTerminalMounted } = useAppCommands({
   focusFeedSearch: () => feedHub.value?.focusSearch(),
 })
 const palette = useCommandPalette()
-useGlobalKeymap({ runCommand, contextActive, paletteOpen: palette.open, activityOpen, tasksOpen })
+useGlobalKeymap({ runCommand, contextActive, paletteOpen: palette.open, activityOpen, tasksOpen, canvasOpen })
 
 const { unseenCount: unseenActivity } = useActivity()
 const { activeJobs, hasActive: jobsActive } = useJobs()
@@ -157,6 +157,7 @@ useWailsEvent('flows:updated', () => {
         v-show="agentsActive"
         :active="agentsActive"
         :sidebar-collapsed="agentsSidebarCollapsed"
+        @open-canvas-page="overlays.openCanvas"
       />
       <!-- The profile rail stays mounted across the feed, flows, and settings
            pages, so the flows canvas never strands the user. -->

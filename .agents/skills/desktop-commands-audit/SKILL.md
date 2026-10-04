@@ -148,7 +148,8 @@ A pane keeps every key it can use. Two flags take one back:
 - **`piercesPane`**, claimed on the binding alone, whatever modifiers it
   carries. Only for a chord the escape form cannot express (an `alt`
   binding), a combo that must *close* what it opened
-  (`terminal.popup.toggle`, `tasks.toggle`), or the half of a focus pair that
+  (`terminal.popup.toggle`, `tasks.toggle`, `canvas.toggle`), or the half of a
+  focus pair that
   reaches back out of a pane.
 
 Both are two-sided: the dispatcher acts on the chord **and** xterm's
@@ -159,7 +160,7 @@ neither flag.
 ### Sequences
 
 A binding is one combo or a space-separated sequence. Navigation to a place
-uses `g <x>` (`g i`, `g c`, `g a`, `g t`, `g s`). A sequence start never fires
+uses `g <x>` (`g i`, `g c`, `g a`, `g t`, `g v`, `g s`). A sequence start never fires
 over a focused pane, into an editable target, or under an overlay, and
 `resolve` stays single-step. Adding a `g <x>` means checking nothing else
 binds bare `x` in an overlapping context.
@@ -186,8 +187,8 @@ useCommands(computed(() => workspaces.value.map((w) => ({
 
 **Go-to rows are global.** A row meant to be reachable from anywhere
 registers at App level, in `useAppPaletteRows`, off a module-scoped source
-(`useTerminalSessions`, `useAttachedTerminalWindows`, `useAgentSessionsAll`),
-so it exists on a fresh launch before its mode has ever mounted. A row
+(`useTerminalSessions`, `useAttachedTerminalWindows`, `useAgentSessionsAll`,
+`useWorkspaceCanvases`), so it exists on a fresh launch before its mode has ever mounted. A row
 registered inside a lazily-mounted mode does not exist until the user visits
 that mode.
 

@@ -2,6 +2,8 @@ import { computed, ref, watch, type Ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Window } from '@wailsio/runtime'
 import { useAgentCanvasRoute } from '../composables/useAgentCanvasRoute'
+import type { CanvasScope } from '../lib/agentCanvas'
+import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 
 export type AppMode = 'hub' | 'terminal' | 'agents'
@@ -21,7 +23,8 @@ export function useAppMode(
   shellLoaded: Ref<boolean>,
 ) {
   const { route, router } = nav
-  const { routeChatId, canvasRequested, canvasUnseen, syncCanvasQuery } = useAgentCanvasRoute()
+  const { routeChatId, canvasRequested, canvasName, canvasUnseen, syncCanvasQuery } = useAgentCanvasRoute()
+  const { recents } = useAgentSessionsAll()
 
   const mode = computed<AppMode>(() => {
     if (route.name === 'terminal') return 'terminal'
@@ -135,6 +138,17 @@ export function useAppMode(
     else previewCollapsed.value = !previewCollapsed.value
   }
 
+  // What the canvas pane beside the open chat shows, or would show: the
+  // full-page view opens on the same canvas. A chat's workspace is its own and
+  // need not be the focused one, which is the fallback with no chat open.
+  const chatCanvasScope = computed<CanvasScope | null>(() => {
+    if (!agentsActive.value) return null
+    const session = routeChatId.value
+    const focused = typeof route.params.workspace === 'string' ? route.params.workspace : ''
+    const workspace = recents.value.find((chat) => chat.id === session)?.workspace ?? focused
+    return workspace ? { workspace, name: canvasName.value, session } : null
+  })
+
   // The hidden-inset title bar loses the native double-click-to-zoom, so it is
   // re-implemented here. Guarded for the non-Wails test and browser context.
   async function toggleMaximise(): Promise<void> {
@@ -167,6 +181,7 @@ export function useAppMode(
     canTogglePreview,
     previewUnseen,
     togglePreview,
+    chatCanvasScope,
     toggleMaximise,
   }
 }

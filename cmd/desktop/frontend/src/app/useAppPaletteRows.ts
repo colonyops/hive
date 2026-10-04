@@ -1,4 +1,5 @@
 import { computed, nextTick, watch } from 'vue'
+import IconFileText from '~icons/lucide/file-text'
 import IconGauge from '~icons/lucide/gauge'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconList from '~icons/lucide/list'
@@ -24,6 +25,7 @@ import { terminalSessionGroups, useTerminalSessions } from '../stores/useTermina
 import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
+import { useWorkspaceCanvases } from '../stores/useWorkspaceCanvases'
 import { useAttachedTerminalWindows } from '../composables/useAttachedTerminalWindows'
 import { applicationSettingsSections } from '../router'
 import { applicationSettingsSectionMeta } from '../components/settings/sectionMeta'
@@ -53,15 +55,16 @@ function contextLabel(context: CommandContext): string {
 /**
  * Registers every App-level palette row source for the app's lifetime:
  * catalog commands, mode switches, and the hub's own objects (profiles, feeds,
- * themes), plus the Go-to rows for sessions, windows, settings sections, and
- * chats that are global rather than tied to a lazily mounted mode.
+ * themes), plus the Go-to rows for sessions, windows, settings sections,
+ * chats, and canvases that are global rather than tied to a lazily mounted
+ * mode.
  */
 export function useAppPaletteRows(
   deps: AppCommandDeps,
   runCommand: (id: string) => void,
   contextActive: (context: CommandContext) => boolean,
 ): void {
-  const { feed, nav, appMode, shellLoaded, onboardingActive, openNewProfile } = deps
+  const { feed, nav, appMode, overlays, shellLoaded, onboardingActive, openNewProfile } = deps
   const { profiles, activeProfile, selectedItem, selectedItemIDs, actions, invokeAction } = feed
   const { router, devToolsEnabled, requestSelectProfile, navigateSidebar, flowsActive, openFlows } = nav
   const { mode, hubActive, onScreenSessionSlug } = appMode
@@ -102,6 +105,7 @@ export function useAppPaletteRows(
     for (const w of agentWorkspaces.value) map.set(w.dir, w.name)
     return map
   })
+  const { canvases, reload: reloadCanvases } = useWorkspaceCanvases()
 
   useCommands(
     computed(() => {
@@ -407,6 +411,22 @@ export function useAppPaletteRows(
         })
       }
 
+      // Canvas rows open full page, so one is reachable with no chat open.
+      // They sit in the chat rows' group: a workspace holds both.
+      for (const meta of canvases.value) {
+        cmds.push({
+          id: `canvas:${meta.workspace}:${meta.name}`,
+          title: meta.title || meta.name,
+          group: workspaceNameByDir.value.get(meta.workspace) || meta.workspace,
+          order: -2,
+          scope: 'goto',
+          kind: 'canvas',
+          keywords: ['canvas', meta.name],
+          icon: IconFileText,
+          run: () => overlays.openCanvas({ workspace: meta.workspace, name: meta.name, session: null }),
+        })
+      }
+
       return cmds
     }),
   )
@@ -459,16 +479,17 @@ export function useAppPaletteRows(
     return rows
   })
 
-  // Session, chat, and workspace rows are read from module singletons the
-  // sidebar trees keep warm elsewhere; a palette open is the moment they are
-  // about to be shown, so that is when staleness is worth paying to fix. All
-  // three reloads keep last-good rows on failure. Workspaces in particular can
+  // Session, chat, workspace, and canvas rows are read from module singletons
+  // the sidebar trees keep warm elsewhere; a palette open is the moment they
+  // are about to be shown, so that is when staleness is worth paying to fix.
+  // Every reload keeps last-good rows on failure. Workspaces in particular can
   // still be empty here on a fresh launch — the Agents area may never have
   // mounted — which is what the chat rows' dir → name join needs populated.
   watch(paletteOpen, (open) => {
     if (!open) return
     void reloadTerminalSessions()
     void reloadRecents()
-    void reloadWorkspaces()
+    // The canvas listing walks the workspace list, so it follows that reload.
+    void reloadWorkspaces().then(reloadCanvases)
   })
 }
