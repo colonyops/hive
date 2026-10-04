@@ -80,7 +80,7 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 	tmuxSessions := detectTmuxSessionNames(sess)
 
 	capture := tmuxstatus.PaneCapture{Source: source}
-	cls := tmuxstatus.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher, tmuxstatus.WithPaneSource(source)).Classifier()
+	cls := tmuxstatus.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher, tmuxstatus.WithPaneSource(source), tmuxstatus.WithLogger(cmd.app.Logger)).Classifier()
 	engine := assess.NewEngine()
 	out := detectOutput{Session: sess.Slug}
 	for _, pane := range panes {

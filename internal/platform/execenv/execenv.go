@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/rs/zerolog"
 )
 
@@ -108,7 +110,7 @@ type Resolver struct {
 }
 
 func NewResolver(opts Options) *Resolver {
-	r := &Resolver{logger: opts.Logger, shell: opts.Shell, timeout: opts.Timeout, probe: opts.Probe}
+	r := &Resolver{logger: logutils.Component(opts.Logger, "execenv"), shell: opts.Shell, timeout: opts.Timeout, probe: opts.Probe}
 	if r.shell == "" {
 		r.shell = os.Getenv("SHELL")
 	}
@@ -127,7 +129,7 @@ func NewResolver(opts Options) *Resolver {
 func (r *Resolver) SetLogger(logger zerolog.Logger) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.logger = logger
+	r.logger = logutils.Component(logger, "execenv")
 }
 
 // Path returns the PATH value subprocesses run with: what the login shell

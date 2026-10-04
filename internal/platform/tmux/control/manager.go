@@ -9,6 +9,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/platform/observe"
@@ -85,7 +87,7 @@ func NewManager(ctx context.Context, opts ManagerOptions) *Manager {
 	lifetime, cancel := context.WithCancel(ctx)
 
 	m := &Manager{
-		log:         opts.Logger,
+		log:         logutils.Component(opts.Logger, "tmux-control"),
 		locate:      opts.Binary,
 		environ:     opts.Environ,
 		probe:       opts.versionProbe,
