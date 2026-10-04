@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -57,6 +58,22 @@ func (e *LaunchError) Error() string {
 
 func (e *LaunchError) Unwrap() error { return e.Err }
 
+// createOptions is what a launch asks CreateSession for. The session is always
+// detached: a launch comes from a program that has no terminal to attach.
+func (req LaunchRequest) createOptions(repo LaunchRepository, progress io.Writer) CreateOptions {
+	return CreateOptions{
+		Name:            req.Name,
+		Prompt:          req.Prompt,
+		Remote:          repo.Remote,
+		Source:          repo.Source,
+		AgentKey:        req.Agent,
+		Background:      true,
+		CollisionSuffix: req.CollisionSuffix,
+		Tags:            uniqueTags(req.Tags),
+		Progress:        progress,
+	}
+}
+
 // CreateFromRequest creates a detached session for req. It prefers a
 // configured local checkout whose remote is equivalent to req.Repo, so the
 // session copies files from it.
@@ -73,17 +90,7 @@ func (s *Service) CreateFromRequest(ctx context.Context, req LaunchRequest) (ses
 	// CreateSessionError names the operation that failed but not the steps
 	// before it, which the progress log keeps.
 	progress := &progressLog{}
-	sess, err := s.CreateSession(ctx, CreateOptions{
-		Name:            req.Name,
-		Prompt:          req.Prompt,
-		Remote:          repo.Remote,
-		Source:          repo.Source,
-		AgentKey:        req.Agent,
-		Background:      true,
-		CollisionSuffix: req.CollisionSuffix,
-		Tags:            uniqueTags(req.Tags),
-		Progress:        progress,
-	})
+	sess, err := s.CreateSession(ctx, req.createOptions(repo, progress))
 	if err != nil {
 		if errors.Is(err, session.ErrDuplicateName) {
 			return session.Session{}, err

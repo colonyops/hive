@@ -296,9 +296,13 @@ func TestSessionsService_CreateSessionResolvesTheLaunchAgent(t *testing.T) {
 // Resolving the agent reads the profiles off the config, so the click that
 // starts a session never pays for SessionLaunchOptions' workspace scan.
 func TestSessionsService_CreateSessionRunsNoSubprocessToResolveTheAgent(t *testing.T) {
+	// The workspace holds a repository, because a scan of an empty one runs
+	// no subprocess either.
+	workspace := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(workspace, "repo", ".git"), 0o755))
 	h := newHiveHarness(t, engineOptions{cfg: func(cfg *config.Config) {
 		withAgents("claude", "codex")(cfg)
-		cfg.Workspaces = []string{t.TempDir()}
+		cfg.Workspaces = []string{workspace}
 	}})
 	svc := newSessionsService(SessionsDeps{Launcher: &fakeSessionLauncher{}, Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 	svc.defaultAgentEnv = defaultAgentFunc(func(context.Context) string { return "codex" })
@@ -534,6 +538,34 @@ func TestSessionsService_PruneRunsAsAJobAndDeletesEveryRecycledSession(t *testin
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	assert.Equal(t, "s1", got[0].ID)
+}
+
+// The delete and recycle confirmations warn about unsaved work, so the risk of
+// a live checkout has to reach the caller. A checkout that git cannot read
+// counts as dirty.
+func TestSessionsService_SessionRiskReportsUnsavedWork(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		responses []executiltest.Response // git status, then the unpushed count
+		want      SessionRisk
+	}{
+		{"dirty with unpushed commits", []executiltest.Response{{Out: []byte(" M README.md\n")}, {Out: []byte("2\n")}}, SessionRisk{UncommittedChanges: true, UnpushedCommits: true}},
+		{"clean and pushed", []executiltest.Response{{}, {Out: []byte("0\n")}}, SessionRisk{}},
+		{"unreadable checkout", []executiltest.Response{{Err: errors.New("not a git repository")}, {Out: []byte("0\n")}}, SessionRisk{UncommittedChanges: true}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHiveHarness(t, engineOptions{})
+			h.exec.Responses = tt.responses
+			sess := reviewSession()
+			sess.Path = "/tmp/review-81"
+			h.save(t, sess)
+			svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
+
+			risk, err := svc.SessionRisk(t.Context(), "s1")
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, risk)
+		})
+	}
 }
 
 func TestSessionsService_SessionRiskCarriesTheWorktreeRecycleWarning(t *testing.T) {

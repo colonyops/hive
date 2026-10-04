@@ -78,25 +78,35 @@ func (s *TasksService) TaskDetail(ctx context.Context, id string) (TaskDetail, e
 		return TaskDetail{}, classifyTaskError(err, "reading task %q", id)
 	}
 
-	blockers := make([]TaskBlocker, 0, len(item.BlockerIDs))
-	for _, blockerID := range item.BlockerIDs {
-		blocker, err := tasks.GetItem(ctx, blockerID)
-		if err != nil {
-			if errors.Is(err, hc.ErrNotFound) {
-				// The blocker item is gone, but the edge is not this read's to
-				// fix: surface the ID with no title.
-				blockers = append(blockers, TaskBlocker{ID: blockerID})
-				continue
-			}
-			return TaskDetail{}, Wrap(err, KindInternal, "reading blocker %q of task %q", blockerID, id)
-		}
-		blockers = append(blockers, TaskBlocker{ID: blocker.ID, Title: blocker.Title, Status: string(blocker.Status)})
+	blockers, err := readBlockers(ctx, id, item.BlockerIDs, tasks.GetItem)
+	if err != nil {
+		return TaskDetail{}, err
 	}
 	taskComments := make([]TaskComment, 0, len(comments))
 	for _, c := range comments {
 		taskComments = append(taskComments, TaskComment{ID: c.ID, Message: c.Message, CreatedAt: c.CreatedAt})
 	}
 	return TaskDetail{Item: item, Blockers: blockers, Comments: taskComments}, nil
+}
+
+// readBlockers titles each blocker of task id. A blocker can be deleted between
+// the read of the task and the read of the blocker (the CLI writes the same
+// hive.db), and the edge is not this read's to fix: that blocker keeps its ID
+// and has no title.
+func readBlockers(ctx context.Context, id string, blockerIDs []string, get func(context.Context, string) (hc.Item, error)) ([]TaskBlocker, error) {
+	blockers := make([]TaskBlocker, 0, len(blockerIDs))
+	for _, blockerID := range blockerIDs {
+		blocker, err := get(ctx, blockerID)
+		if errors.Is(err, hc.ErrNotFound) {
+			blockers = append(blockers, TaskBlocker{ID: blockerID})
+			continue
+		}
+		if err != nil {
+			return nil, Wrap(err, KindInternal, "reading blocker %q of task %q", blockerID, id)
+		}
+		blockers = append(blockers, TaskBlocker{ID: blocker.ID, Title: blocker.Title, Status: string(blocker.Status)})
+	}
+	return blockers, nil
 }
 
 // SetTaskStatus sets id's status. A terminal status on an epic cascades to

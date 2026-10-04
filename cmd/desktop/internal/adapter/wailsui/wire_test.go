@@ -80,6 +80,14 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 	}
 }
 
+// Slug is the tmux target the frontend attaches with and Repo is the remote,
+// so a swapped field breaks attach with every key still present.
+func TestSessionSummaryOfMapsEachField(t *testing.T) {
+	s := session.Session{ID: "s1", Name: "review 81", Slug: "review-81", Remote: "acme/site", Path: "/repos/site", State: session.StateRecycled}
+
+	assert.Equal(t, SessionSummary{ID: "s1", Name: "review 81", Slug: "review-81", Repo: "acme/site", State: "recycled"}, sessionSummaryOf(s))
+}
+
 func TestSessionDetailOfReadsTheWorktreeBranch(t *testing.T) {
 	s := session.Session{ID: "s1", Name: "review 81", Slug: "review-81", Remote: "acme/site", State: session.StateActive, CloneStrategy: session.CloneStrategyWorktree}
 	s.SetMeta(session.MetaWorktreeBranch, "hive/review-81")

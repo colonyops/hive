@@ -1,6 +1,9 @@
 package app
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -194,5 +197,27 @@ func TestTasksService_StoreFailuresAreInternal(t *testing.T) {
 	_, err = svc.TaskRepoKeys(t.Context())
 	assert.Equal(t, KindInternal, KindOf(err))
 	_, err = svc.PruneTasks(t.Context(), 1, "repo", false)
+	assert.Equal(t, KindInternal, KindOf(err))
+}
+
+func TestReadBlockersKeepsTheIDOfAVanishedBlocker(t *testing.T) {
+	items := map[string]hc.Item{"hc-1": {ID: "hc-1", Title: "JWT middleware", Status: hc.StatusOpen}}
+	get := func(_ context.Context, id string) (hc.Item, error) {
+		item, ok := items[id]
+		if !ok {
+			return hc.Item{}, fmt.Errorf("get item %q: %w", id, hc.ErrNotFound)
+		}
+		return item, nil
+	}
+
+	got, err := readBlockers(t.Context(), "hc-9", []string{"hc-1", "hc-gone"}, get)
+	require.NoError(t, err)
+	assert.Equal(t, []TaskBlocker{{ID: "hc-1", Title: "JWT middleware", Status: "open"}, {ID: "hc-gone"}}, got)
+}
+
+func TestReadBlockersFailsOnAStoreError(t *testing.T) {
+	get := func(context.Context, string) (hc.Item, error) { return hc.Item{}, errors.New("database is locked") }
+
+	_, err := readBlockers(t.Context(), "hc-9", []string{"hc-1"}, get)
 	assert.Equal(t, KindInternal, KindOf(err))
 }

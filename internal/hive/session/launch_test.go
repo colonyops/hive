@@ -103,6 +103,30 @@ func TestCreateFromRequestReportsWhyACloneWasRefused(t *testing.T) {
 	assert.NoDirExists(t, failure.Destination)
 }
 
+// CreateSession reads these options and nothing else from a launch, so a field
+// that falls out of the mapping changes the session with no error.
+func TestLaunchRequestMapsOntoCreateOptions(t *testing.T) {
+	progress := &progressLog{}
+	req := LaunchRequest{
+		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://github.com/colonyops/hive.git",
+		CollisionSuffix: "7", Tags: []string{"acme/repo#1", "", "acme/repo#1"},
+	}
+
+	got := req.createOptions(LaunchRepository{Remote: "git@github.com:colonyops/hive.git", Source: "/work/hive"}, progress)
+
+	assert.Equal(t, CreateOptions{
+		Name:            "review-pr-1",
+		Prompt:          "Review this",
+		Remote:          "git@github.com:colonyops/hive.git",
+		Source:          "/work/hive",
+		AgentKey:        "claude",
+		Background:      true,
+		CollisionSuffix: "7",
+		Tags:            []string{"acme/repo#1"},
+		Progress:        progress,
+	}, got)
+}
+
 func TestCreateFromRequestPrefersAnEquivalentConfiguredCheckout(t *testing.T) {
 	workspaceDir := filepath.Join(t.TempDir(), "workspaces")
 	checkout := filepath.Join(workspaceDir, "hive")

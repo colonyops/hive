@@ -29,17 +29,10 @@ type Options struct {
 // could never succeed. IMMEDIATE takes the write lock up front, so a second
 // writer waits on busy_timeout instead of failing.
 func Open(ctx context.Context, path string, opts Options) (*sql.DB, error) {
-	return open(ctx, dataSourceName(path, "immediate", opts.BusyTimeout), opts)
-}
-
-func dataSourceName(path, txlock string, busyTimeout time.Duration) string {
-	return fmt.Sprintf(
-		"file:%s?_txlock=%s&_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)&_pragma=foreign_keys(ON)",
-		path, txlock, busyTimeout.Milliseconds(),
+	dsn := fmt.Sprintf(
+		"file:%s?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)&_pragma=foreign_keys(ON)",
+		path, opts.BusyTimeout.Milliseconds(),
 	)
-}
-
-func open(ctx context.Context, dsn string, opts Options) (*sql.DB, error) {
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)

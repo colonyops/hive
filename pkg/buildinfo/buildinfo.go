@@ -19,12 +19,12 @@ type Info struct {
 // Go toolchain records, keeping each stamped value the toolchain has no
 // substitute for.
 func Resolve(version, commit, date string) Info {
-	info := Info{Version: version, Commit: commit, Date: date}
-	if version != devVersion {
-		return info
-	}
 	vcs, ok := read()
-	if !ok {
+	return resolve(Info{Version: version, Commit: commit, Date: date}, vcs, ok)
+}
+
+func resolve(info Info, vcs VCS, stamped bool) Info {
+	if info.Version != devVersion || !stamped {
 		return info
 	}
 	if vcs.ModuleVersion != "" && vcs.ModuleVersion != "(devel)" {
