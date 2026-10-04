@@ -42,7 +42,14 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
     for (const id of pinnedIds.value) {
       const session = byID.get(id)
       if (session?.slug)
-        out.push({ id: session.slug, name: session.name, slug: session.slug, repo: '', state: 'active' })
+        out.push({
+          id: session.slug,
+          name: session.name,
+          slug: session.slug,
+          repo: '',
+          state: 'active',
+          canvasOwner: '',
+        })
     }
     return out
   })

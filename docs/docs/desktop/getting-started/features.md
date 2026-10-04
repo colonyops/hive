@@ -151,7 +151,7 @@ The Chats area gives ongoing agent work a durable home outside a repository sess
 
     ---
 
-    Let agents publish durable Markdown, HTML, and links beside a chat, then read them full page, search, copy, or export the result.
+    Let agents publish durable Markdown, HTML, and links beside a chat or a Code session, then read them full page, search, copy, or export the result.
 
 -   :lucide-panel-left-open:{ .lg .middle } __Code integration__
 

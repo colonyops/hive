@@ -45,6 +45,7 @@ const agents = vi.hoisted(() => ({
   workspaces: vi.fn(),
   canvas: vi.fn(),
   canvases: vi.fn(),
+  canvasRepositories: vi.fn(),
   canvasMarkdown: vi.fn(),
   exportCanvas: vi.fn(),
 }))
@@ -58,6 +59,7 @@ vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => ({
     workspaces: agents.workspaces,
     canvas: agents.canvas,
     canvases: agents.canvases,
+    canvasRepositories: agents.canvasRepositories,
     canvasMarkdown: agents.canvasMarkdown,
     exportCanvas: agents.exportCanvas,
   }),
@@ -73,6 +75,7 @@ function meta(overrides: Partial<WorkspaceCanvasMeta>): WorkspaceCanvasMeta {
     name: 'plan',
     title: '',
     session: 7,
+    hiveSession: '',
     createdAt: 1,
     updatedAt: 1,
     blockCount: 1,
@@ -83,6 +86,10 @@ function meta(overrides: Partial<WorkspaceCanvasMeta>): WorkspaceCanvasMeta {
 const listings: Record<string, WorkspaceCanvasMeta[]> = {
   'web-app': [meta({ name: 'plan', title: 'The Plan' }), meta({ name: 'perf-report', session: 9 })],
   docs: [meta({ workspace: 'docs', name: 'handbook', title: 'Handbook' })],
+  'acme/site': [
+    meta({ workspace: 'acme/site', name: 'runbook', session: 0, hiveSession: 'def456', updatedAt: 9 }),
+    meta({ workspace: 'acme/site', name: 'handbook', session: 0, hiveSession: 'abc123', updatedAt: 2 }),
+  ],
 }
 const bodies: Record<string, CanvasBlock[]> = {
   plan: [block({ id: 'doc', body: '# Plan\n\nSee [the report](perf-report) or [the PR](https://example.com/pr/1).' })],
@@ -129,6 +136,7 @@ describe('AgentCanvasPage', () => {
         { dir: 'docs', name: 'Docs' },
       ],
     })
+    agents.canvasRepositories.mockResolvedValue(['acme/site'])
     agents.canvases.mockImplementation((workspace: string) => Promise.resolve(listings[workspace] ?? []))
     agents.canvas.mockImplementation((workspace: string, name: string) =>
       Promise.resolve({
@@ -229,6 +237,28 @@ describe('AgentCanvasPage', () => {
 
     expect(scope.value).toEqual({ workspace: 'docs', name: null, session: null })
     expect(agents.canvas).toHaveBeenLastCalledWith('docs', 'handbook')
+
+    wrapper.unmount()
+  })
+
+  it("reads a repository's canvases when it is opened from a Code session", async () => {
+    const { wrapper } = await mountPage({ workspace: 'acme/site', session: 'abc123' })
+
+    expect(agents.canvases).toHaveBeenCalledWith('acme/site')
+    expect(agents.canvas).toHaveBeenCalledWith('acme/site', 'handbook')
+    expect(wrapper.get('[data-testid="canvas-page-workspace"]').text()).toContain('acme/site')
+
+    wrapper.unmount()
+  })
+
+  it('offers the repositories that hold a canvas beside the workspaces', async () => {
+    const { wrapper, scope } = await mountPage()
+
+    await chooseOption(wrapper, 'canvas-page-workspace', 'acme/site')
+    await flushPromises()
+
+    expect(scope.value).toEqual({ workspace: 'acme/site', name: null, session: null })
+    expect(agents.canvas).toHaveBeenLastCalledWith('acme/site', 'runbook')
 
     wrapper.unmount()
   })

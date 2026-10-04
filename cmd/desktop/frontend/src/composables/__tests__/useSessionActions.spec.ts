@@ -14,7 +14,14 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => mocks)
 
-const session: SessionSummary = { id: 's1', name: 'review 81', slug: 'review-81', repo: 'acme/site', state: 'active' }
+const session: SessionSummary = {
+  id: 's1',
+  name: 'review 81',
+  slug: 'review-81',
+  repo: 'acme/site',
+  state: 'active',
+  canvasOwner: '',
+}
 
 const noRisk = { uncommittedChanges: false, unpushedCommits: false, recycleDeletes: false }
 

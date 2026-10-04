@@ -856,6 +856,12 @@ func (s *Service) DetectSession(ctx context.Context) (string, error) {
 	return detector.DetectSession(ctx)
 }
 
+// SessionAtPath returns the active session whose checkout holds path, and
+// false when path is inside none.
+func (s *Service) SessionAtPath(ctx context.Context, path string) (session.Session, bool, error) {
+	return NewDetector(s.sessions).SessionAtPath(ctx, path)
+}
+
 // killSessionTarget kills the session's tmux session. Best-effort: the tmux
 // session may never have been created or may already be gone.
 func (s *Service) killSessionTarget(ctx context.Context, sess session.Session) {

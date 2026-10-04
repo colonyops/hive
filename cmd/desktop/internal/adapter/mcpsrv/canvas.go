@@ -46,8 +46,8 @@ func (ctrl *CanvasController) Server() *mcp.Server {
 		Name:    canvasServerName,
 		Title:   "Hive Canvas",
 		Version: version,
-		Description: "The workspace's canvases: named surfaces of markdown, html and link blocks shown to the user " +
-			"in a pane beside the conversation. Put blocks, revise them in place, and read back what is showing.",
+		Description: "Canvases: named surfaces of markdown, html and link blocks shown to the user in a pane beside " +
+			"the chat or Code session. Put blocks, revise them in place, and read back what is showing.",
 	}, nil)
 	ctrl.register(srv)
 	return srv

@@ -1,5 +1,6 @@
 import { ref, shallowRef, watch } from 'vue'
 import type { Ref, ShallowRef } from 'vue'
+import type { CanvasAuthor } from '../lib/agentCanvas'
 import type { AgentWorkspacesClient, WorkspaceCanvas, WorkspaceCanvasMeta } from '../lib/agentWorkspacesClient'
 
 function message(error: unknown, fallback: string): string {
@@ -14,8 +15,8 @@ function message(error: unknown, fallback: string): string {
  * a newer request's.
  *
  * The shown canvas is the requested name when the route carries one, else a
- * default from the listing: the open chat's most recent canvas, falling back
- * to the workspace's most recent.
+ * default from the listing: the most recent canvas of the open chat or Code
+ * session, falling back to the owner's most recent.
  */
 export function useAgentCanvas(client: Ref<AgentWorkspacesClient | null>) {
   const canvas: ShallowRef<WorkspaceCanvas | null> = shallowRef(null)
@@ -23,7 +24,7 @@ export function useAgentCanvas(client: Ref<AgentWorkspacesClient | null>) {
   const shown: Ref<string | null> = ref(null)
   const workspace = ref('')
   const requested: Ref<string | null> = ref(null)
-  const preferSession: Ref<number | null> = ref(null)
+  const preferSession: Ref<CanvasAuthor | null> = ref(null)
   const loading = ref(false)
   const error = ref('')
   let generation = 0
@@ -31,7 +32,8 @@ export function useAgentCanvas(client: Ref<AgentWorkspacesClient | null>) {
   let running = false
 
   function defaultName(listed: WorkspaceCanvasMeta[]): string | null {
-    const own = listed.find((meta) => meta.session === preferSession.value)
+    const prefer = preferSession.value
+    const own = prefer ? listed.find((meta) => meta.session === prefer || meta.hiveSession === prefer) : undefined
     return own?.name ?? listed[0]?.name ?? null
   }
 
@@ -77,10 +79,11 @@ export function useAgentCanvas(client: Ref<AgentWorkspacesClient | null>) {
   }
 
   /**
-   * Points the pane at a workspace's canvases: name pins one, null lets the
-   * default win, and session is the open chat the default prefers.
+   * Points the pane at an owner's canvases: name pins one, null lets the
+   * default win, and session is the open chat or Code session the default
+   * prefers.
    */
-  function show(dir: string, name: string | null, session: number | null): void {
+  function show(dir: string, name: string | null, session: CanvasAuthor | null): void {
     workspace.value = dir
     requested.value = name
     preferSession.value = session

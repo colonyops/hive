@@ -33,15 +33,22 @@ func (d *Detector) DetectSession(ctx context.Context) (string, error) {
 // DetectSessionFromPath returns the session ID for the given path.
 // Returns empty string if the path is not within a hive session, or an error if detection fails.
 func (d *Detector) DetectSessionFromPath(ctx context.Context, path string) (string, error) {
+	sess, _, err := d.SessionAtPath(ctx, path)
+	return sess.ID, err
+}
+
+// SessionAtPath returns the active session whose checkout holds path, and
+// false when path is inside none.
+func (d *Detector) SessionAtPath(ctx context.Context, path string) (session.Session, bool, error) {
 	sessions, err := d.store.List(ctx)
 	if err != nil {
-		return "", fmt.Errorf("list sessions: %w", err)
+		return session.Session{}, false, fmt.Errorf("list sessions: %w", err)
 	}
 
 	// Clean and normalize the path
 	path, err = filepath.Abs(path)
 	if err != nil {
-		return "", fmt.Errorf("get absolute path: %w", err)
+		return session.Session{}, false, fmt.Errorf("get absolute path: %w", err)
 	}
 	path = filepath.Clean(path)
 
@@ -65,7 +72,7 @@ func (d *Detector) DetectSessionFromPath(ctx context.Context, path string) (stri
 		}
 	}
 
-	return bestMatch.ID, nil
+	return bestMatch, bestMatchLen > 0, nil
 }
 
 // isSubpath returns true if child is a subdirectory of parent.

@@ -15,12 +15,13 @@ import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import { useAgentCanvas } from '../composables/useAgentCanvas'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import { useWailsEvent } from '../composables/useWailsEvent'
+import type { CanvasAuthor } from '../lib/agentCanvas'
 import type { AgentWorkspacesClient } from '../lib/agentWorkspacesClient'
 
 const props = defineProps<{
-  /** The open chat, whose most recent canvas is the default pick. */
-  session: number
-  /** The open chat's workspace, whose canvases fill the picker. */
+  /** The open chat or Code session, whose most recent canvas is the default pick. */
+  session: CanvasAuthor
+  /** The owner whose canvases fill the picker: the chat's workspace, or the session's repository. */
   workspace: string
   /** The route-pinned canvas name; null lets the default win. */
   name: string | null

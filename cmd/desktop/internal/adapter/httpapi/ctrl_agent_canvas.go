@@ -26,24 +26,28 @@ type agentCanvasBlock struct {
 	UpdatedAt int64  `json:"updatedAt"`
 }
 
+// Workspace is the canvas's owner key in every type here: a workspace's
+// directory name, or owner/repo for a repository's canvases.
 type agentCanvasView struct {
-	Workspace string             `json:"workspace"`
-	Name      string             `json:"name"`
-	Title     string             `json:"title"`
-	Session   int64              `json:"session"`
-	CreatedAt int64              `json:"createdAt"`
-	UpdatedAt int64              `json:"updatedAt"`
-	Blocks    []agentCanvasBlock `json:"blocks"`
+	Workspace   string             `json:"workspace"`
+	Name        string             `json:"name"`
+	Title       string             `json:"title"`
+	Session     int64              `json:"session"`
+	HiveSession string             `json:"hiveSession"`
+	CreatedAt   int64              `json:"createdAt"`
+	UpdatedAt   int64              `json:"updatedAt"`
+	Blocks      []agentCanvasBlock `json:"blocks"`
 }
 
 type agentCanvasMeta struct {
-	Workspace  string `json:"workspace"`
-	Name       string `json:"name"`
-	Title      string `json:"title"`
-	Session    int64  `json:"session"`
-	CreatedAt  int64  `json:"createdAt"`
-	UpdatedAt  int64  `json:"updatedAt"`
-	BlockCount int    `json:"blockCount"`
+	Workspace   string `json:"workspace"`
+	Name        string `json:"name"`
+	Title       string `json:"title"`
+	Session     int64  `json:"session"`
+	HiveSession string `json:"hiveSession"`
+	CreatedAt   int64  `json:"createdAt"`
+	UpdatedAt   int64  `json:"updatedAt"`
+	BlockCount  int    `json:"blockCount"`
 }
 
 type agentCanvasRequest struct {
@@ -66,7 +70,7 @@ func (ctrl *Controller) AgentCanvas(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
-	c, err := ctrl.core.Canvas.GetForWorkspace(r.Context(), body.Workspace, body.Name)
+	c, err := ctrl.core.Canvas.GetForOwner(r.Context(), body.Workspace, body.Name)
 	if err != nil {
 		return err
 	}
@@ -91,18 +95,35 @@ func (ctrl *Controller) AgentCanvasList(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return err
 	}
-	metas, err := ctrl.core.Canvas.ListForWorkspace(r.Context(), body.Workspace)
+	metas, err := ctrl.core.Canvas.ListForOwner(r.Context(), body.Workspace)
 	if err != nil {
 		return err
 	}
 	views := make([]agentCanvasMeta, 0, len(metas))
 	for _, m := range metas {
 		views = append(views, agentCanvasMeta{
-			Workspace: m.Workspace, Name: m.Name, Title: m.Title, Session: m.Session,
+			Workspace: m.Workspace, Name: m.Name, Title: m.Title, Session: m.Session, HiveSession: m.HiveSession,
 			CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt, BlockCount: m.BlockCount,
 		})
 	}
 	return server.JSON(w, http.StatusOK, agentCanvasListResponse{Canvases: views})
+}
+
+type agentCanvasRepositoriesResponse struct {
+	Repositories []string `json:"repositories"`
+}
+
+// AgentCanvasRepositories lists the repositories that hold a canvas, by owner
+// key, so the full-page view can offer them beside the workspaces.
+func (ctrl *Controller) AgentCanvasRepositories(w http.ResponseWriter, r *http.Request) error {
+	if _, err := terminalBody[struct{}](ctrl, w, r); err != nil {
+		return err
+	}
+	keys, err := ctrl.core.Canvas.Repositories(r.Context())
+	if err != nil {
+		return err
+	}
+	return server.JSON(w, http.StatusOK, agentCanvasRepositoriesResponse{Repositories: keys})
 }
 
 type agentCanvasMarkdownResponse struct {
@@ -116,7 +137,7 @@ func (ctrl *Controller) AgentCanvasMarkdown(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		return err
 	}
-	markdown, err := ctrl.core.Canvas.MarkdownForWorkspace(r.Context(), body.Workspace, body.Name)
+	markdown, err := ctrl.core.Canvas.MarkdownForOwner(r.Context(), body.Workspace, body.Name)
 	if err != nil {
 		return err
 	}
@@ -148,7 +169,7 @@ func (ctrl *Controller) AgentCanvasExport(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		return err
 	}
-	if err := ctrl.core.Canvas.ExportForWorkspace(r.Context(), body.Workspace, body.Name, body.Path); err != nil {
+	if err := ctrl.core.Canvas.ExportForOwner(r.Context(), body.Workspace, body.Name, body.Path); err != nil {
 		return err
 	}
 	return server.JSON(w, http.StatusOK, agentCanvasExportResponse{Path: body.Path})
@@ -163,7 +184,7 @@ func toAgentCanvasView(c canvas.Canvas) agentCanvasView {
 		})
 	}
 	return agentCanvasView{
-		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session,
+		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Blocks: blocks,
 	}
 }

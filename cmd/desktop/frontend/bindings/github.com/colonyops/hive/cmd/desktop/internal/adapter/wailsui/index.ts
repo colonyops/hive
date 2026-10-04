@@ -70,6 +70,7 @@ export type {
     AppearanceSettings,
     BuildInfo,
     CanvasToggle,
+    CanvasWrite,
     DevToolsInfo,
     EditorChoice,
     EditorSettings,

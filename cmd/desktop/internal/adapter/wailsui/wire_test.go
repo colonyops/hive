@@ -44,7 +44,7 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		v    any
 		want []string
 	}{
-		{"SessionSummary", SessionSummary{}, sorted("id", "name", "slug", "repo", "state")},
+		{"SessionSummary", SessionSummary{}, sorted("id", "name", "slug", "repo", "state", "canvasOwner")},
 		{"SessionDetail", SessionDetail{}, sorted("id", "name", "slug", "repo", "state", "path", "cloneStrategy", "worktreeBranch", "tags", "createdAt", "updatedAt")},
 		{"SessionRisk", app.SessionRisk{}, sorted("uncommittedChanges", "unpushedCommits", "recycleDeletes")},
 		{"SessionGitStatus", SessionGitStatus{}, sorted("path", "branch", "dirty", "unpushed", "additions", "deletions", "host", "owner", "repo", "resolved", "error")},
@@ -83,9 +83,12 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 // Slug is the tmux target the frontend attaches with and Repo is the remote,
 // so a swapped field breaks attach with every key still present.
 func TestSessionSummaryOfMapsEachField(t *testing.T) {
-	s := session.Session{ID: "s1", Name: "review 81", Slug: "review-81", Remote: "acme/site", Path: "/repos/site", State: session.StateRecycled}
+	s := session.Session{ID: "s1", Name: "review 81", Slug: "review-81", Remote: "git@github.com:acme/site.git", Path: "/repos/site", State: session.StateRecycled}
 
-	assert.Equal(t, SessionSummary{ID: "s1", Name: "review 81", Slug: "review-81", Repo: "acme/site", State: "recycled"}, sessionSummaryOf(s))
+	assert.Equal(t, SessionSummary{
+		ID: "s1", Name: "review 81", Slug: "review-81", Repo: "git@github.com:acme/site.git", State: "recycled",
+		CanvasOwner: "acme/site",
+	}, sessionSummaryOf(s))
 }
 
 func TestSessionDetailOfReadsTheWorktreeBranch(t *testing.T) {

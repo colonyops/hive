@@ -1605,7 +1605,14 @@ describe('App', () => {
     it('runs a session attach row by pushing /terminal/:slug', async () => {
       const { wrapper, router } = await mountAppWithRouter()
       vi.mocked(ListSessions).mockResolvedValueOnce([
-        { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
+        {
+          id: '1',
+          name: 'fix the parser',
+          slug: 'hive-fix-parser',
+          repo: 'hay-kot/hive',
+          state: 'active',
+          canvasOwner: 'hay-kot/hive',
+        },
       ])
       await useTerminalSessions().reload()
 
@@ -3228,12 +3235,14 @@ describe('App', () => {
         workspaces: [{ dir: 'my-workspace', name: 'Travel', command: 'claude', mcps: [], skills: [], schedules: [] }],
       }),
       allSessions: vi.fn().mockResolvedValue([]),
+      canvasRepositories: vi.fn().mockResolvedValue([]),
       canvases: vi.fn().mockResolvedValue([
         {
           workspace: 'my-workspace',
           name: 'perf-report',
           title: 'Perf report',
           session: 42,
+          hiveSession: '',
           createdAt: 1,
           updatedAt: 1,
           blockCount: 1,
@@ -3259,6 +3268,61 @@ describe('App', () => {
     expect(canvas).toHaveBeenCalledWith('my-workspace', 'perf-report')
     expect(document.querySelector('[data-testid="canvas-page-block-doc"]')?.textContent).toContain('p95 is 96ms')
 
+    wrapper.unmount()
+  })
+
+  // A hive session's canvases belong to its repository, so the title bar's
+  // right toggle and the full-page view both work from Code with no chat.
+  it('opens the canvas beside a Code session from the title bar, and the full page on its repository', async () => {
+    mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
+    const canvases = vi.fn().mockResolvedValue([])
+    mocks.agentsClient = {
+      workspaces: vi.fn().mockResolvedValue({
+        root: '',
+        rootProblem: '',
+        available: true,
+        error: '',
+        editor: { command: '', title: '' },
+        presets: [],
+        workspaces: [],
+      }),
+      allSessions: vi.fn().mockResolvedValue([]),
+      canvasRepositories: vi.fn().mockResolvedValue([]),
+      canvases,
+    } as unknown as AgentWorkspacesClient
+    vi.mocked(ListSessions).mockResolvedValue([
+      {
+        id: 's1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'git@github.com:hay-kot/hive.git',
+        state: 'active',
+        canvasOwner: 'hay-kot/hive',
+      },
+    ])
+    const { wrapper, router } = await mountAppWithRouter()
+
+    // The scratch terminal has no checkout, so it has no canvas to toggle.
+    await router.push('/terminal/Scratch')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('disabled')).toBeDefined()
+
+    await router.push('/terminal/hive-fix-parser')
+    await flushPromises()
+    await vi.waitFor(() =>
+      expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('disabled')).toBeUndefined(),
+    )
+    await wrapper.get('[data-testid="titlebar-toggle-preview"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.canvas).toBe('1')
+    expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', metaKey: true, shiftKey: true }))
+    await flushPromises()
+    expect(document.querySelector('[data-testid="canvas-overlay"]')).not.toBeNull()
+    expect(canvases).toHaveBeenCalledWith('hay-kot/hive')
+
+    vi.mocked(ListSessions).mockResolvedValue([])
     wrapper.unmount()
   })
 

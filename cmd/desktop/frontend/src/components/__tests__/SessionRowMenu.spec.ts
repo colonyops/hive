@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest'
 import SessionRowMenu from '../SessionRowMenu.vue'
 import type { SessionSummary } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
-const session: SessionSummary = { id: 's1', name: 'review 81', slug: 'review-81', repo: 'acme/site', state: 'active' }
+const session: SessionSummary = {
+  id: 's1',
+  name: 'review 81',
+  slug: 'review-81',
+  repo: 'acme/site',
+  state: 'active',
+  canvasOwner: 'acme/site',
+}
 
 function mountMenu(props: Partial<InstanceType<typeof SessionRowMenu>['$props']> = {}) {
   return mount(SessionRowMenu, { props: { session, ...props } })

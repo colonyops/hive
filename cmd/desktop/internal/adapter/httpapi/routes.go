@@ -231,6 +231,11 @@ func (ctrl *Controller) agentOperations() []Op {
 			Errors: agentErrors(""),
 		},
 		{
+			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/repositories", Summary: "List the repositories that hold a canvas, as owner/repo keys. A hive session's canvases belong to its repository and live in hive's context directory, so they outlive the session; the key is what the other canvas routes take as workspace.",
+			Request: struct{}{}, Response: agentCanvasRepositoriesResponse{}, Handler: ctrl.AgentCanvasRepositories,
+			Errors: agentErrors(""),
+		},
+		{
 			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/markdown", Summary: "Render one canvas as a standalone markdown document, for the pane's copy-to-clipboard action. A name nothing was written under is 404 — exporting nothing is a mistake worth surfacing.",
 			Request: agentCanvasRequest{}, Response: agentCanvasMarkdownResponse{}, Handler: ctrl.AgentCanvasMarkdown,
 			Errors: agentErrors("no such canvas"),

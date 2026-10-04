@@ -2175,6 +2175,27 @@ in the same workspace opens that canvas in place, and anything else leads
 nowhere. Only a markdown body can carry such a reference today, because the
 write path holds a link block and an html `href` to those three schemes.
 
+An agent in a **Code session** writes canvases through the same server
+(ADR a-code-session-s-canvases-belong-to-its-repository-and-live-in-the-hive-context-directory).
+The app does not own that launch, so it wires nothing: the user adds the
+server's address, which Settings ▸ Chats shows, to the agent's own MCP
+configuration. The tool's `session` argument is a string that is either a
+chat's record id or the caller's working directory, and
+`CanvasService.resolve` maps a directory to the active hive session whose
+checkout holds it (`Sessions().SessionAtPath`). That session's canvases
+belong to its repository and are filed in hive's context directory,
+`<context root>/<owner>/<repo>/canvases/`, never in the checkout;
+`repocontext.Prune` skips the directory by name. The owner key `owner/repo`
+travels in the field a workspace name does, and `canvas.Store` tells the two
+apart by the slash. `canvas.Author` records which chat or hive session wrote
+a canvas first, and the two canvas events carry that author. The frontend
+reaches a session's owner as `SessionSummary.canvasOwner`. The pane in Code
+is the Chats pane, `AgentCanvasPane`, mounted beside the pane column and
+riding `?canvas` on the terminal route (`useTerminalCanvas`), so the title
+bar's right toggle, a reload and `open_canvas` behave the same in both
+areas. Code's own route writes rebuild the query, so that composable puts
+`?canvas` back after any write that was not a close.
+
 An **html block** is the one place agent-authored markup reaches the webview
 (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).
 `cmd/desktop/internal/app/canvas/html.go` declares the element and attribute allowlists

@@ -17,6 +17,8 @@ export interface TerminalSessionRow {
   slug: string
   repo: string
   state: string
+  /** The owner key of the session's canvases, its repository as owner/repo. Empty for a row with none. */
+  canvasOwner: string
 }
 
 /**
@@ -114,7 +116,14 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
     try {
       const declared = await Scratch()
       if (!declared?.slug) return
-      scratch.value = { id: declared.slug, name: declared.name, slug: declared.slug, repo: '', state: 'active' }
+      scratch.value = {
+        id: declared.slug,
+        name: declared.name,
+        slug: declared.slug,
+        repo: '',
+        state: 'active',
+        canvasOwner: '',
+      }
     } catch {
       // Terminal mode reports its own unavailability; a missing scratch row is
       // not worth failing the session list over.

@@ -53,10 +53,11 @@ func registerEvents() struct{} {
 	// frontend, via ActivityService.Record) appends to the activity log. The
 	// Activity view re-reads its latest page and advances its unseen marker.
 	application.RegisterEvent[int64]("activity:appended")
-	// canvas:updated carries the session id whose canvas an agent just wrote.
-	// Canvas content is stored state, so the pane re-reads the canvas it is
-	// showing on receipt; coalescing can drop an id but never content.
-	application.RegisterEvent[int64]("canvas:updated")
+	// canvas:updated carries the chat or hive session whose canvas an agent
+	// just wrote. Canvas content is stored state, so the pane re-reads the
+	// canvas it is showing on receipt; coalescing can drop an author but never
+	// content.
+	application.RegisterEvent[CanvasWrite]("canvas:updated")
 	// canvas:toggle carries an agent's ask to open or close the canvas pane
 	// beside its chat. Pane visibility is UI intent, not state to re-read, so
 	// the payload is the whole message; coalescing keeps only the latest ask,
@@ -136,10 +137,10 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 			trayStale()
 		}),
 		events.Subscribe(ctx, bus, "wailsui.canvas", events.Coalesce(), func(_ context.Context, e events.CanvasUpdated) {
-			emitCanvasUpdated(e.Session)
+			emitCanvasUpdated(CanvasWrite{Session: e.Session, HiveSession: e.HiveSession})
 		}),
 		events.Subscribe(ctx, bus, "wailsui.canvas-toggle", events.Coalesce(), func(_ context.Context, e events.CanvasToggleRequested) {
-			emitCanvasToggle(CanvasToggle{Session: e.Session, Name: e.Name, Open: e.Open})
+			emitCanvasToggle(CanvasToggle{Session: e.Session, HiveSession: e.HiveSession, Name: e.Name, Open: e.Open})
 		}),
 		events.Subscribe(ctx, bus, "wailsui.schedules", events.Coalesce(), func(_ context.Context, e events.SchedulesUpdated) {
 			emitSchedulesUpdated(e.Workspace)
@@ -200,21 +201,30 @@ func emitActivityAppended(id int64) {
 	}
 }
 
-// emitCanvasUpdated pushes the canvas:updated wake-up (carrying the session
-// id whose canvas changed) to the frontend after an agent's canvas write.
-// Safe to call from any goroutine once the app is running.
-func emitCanvasUpdated(session int64) {
+// CanvasWrite is the canvas:updated payload: the author of the write, a chat
+// (Session) or a hive session (HiveSession), never both.
+type CanvasWrite struct {
+	Session     int64  `json:"session"`
+	HiveSession string `json:"hiveSession"`
+}
+
+// emitCanvasUpdated pushes the canvas:updated wake-up to the frontend after
+// an agent's canvas write. Safe to call from any goroutine once the app is
+// running.
+func emitCanvasUpdated(write CanvasWrite) {
 	if app := application.Get(); app != nil {
-		app.Event.Emit("canvas:updated", session)
+		app.Event.Emit("canvas:updated", write)
 	}
 }
 
-// CanvasToggle is the canvas:toggle payload: which chat's pane to open or
-// close, and the canvas to pin when opening (empty leaves the pane's pick).
+// CanvasToggle is the canvas:toggle payload: whose pane to open or close, a
+// chat's or a hive session's, and the canvas to pin when opening (empty
+// leaves the pane's pick).
 type CanvasToggle struct {
-	Session int64  `json:"session"`
-	Name    string `json:"name"`
-	Open    bool   `json:"open"`
+	Session     int64  `json:"session"`
+	HiveSession string `json:"hiveSession"`
+	Name        string `json:"name"`
+	Open        bool   `json:"open"`
 }
 
 func emitCanvasToggle(toggle CanvasToggle) {

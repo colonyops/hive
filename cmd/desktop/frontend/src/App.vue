@@ -60,7 +60,7 @@ const shellLoaded = computed(() => (profilesLoaded.value || !!profilesError.valu
 const appMode = useAppMode(feed, nav, onboardingActive, shellLoaded)
 const { mode, terminalActive, agentsActive, hubActive, terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
-const overlays = useHubOverlays(terminalActive, appMode.chatCanvasScope)
+const overlays = useHubOverlays(terminalActive, appMode.viewCanvasScope)
 const { tasksOpen, activityOpen, canvasOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
 const reveal = useReveal(nav, session, feed.showToast)
@@ -149,6 +149,8 @@ useWailsEvent('flows:updated', () => {
         v-show="terminalActive"
         :active="terminalActive"
         :sidebar-collapsed="terminalSidebarCollapsed"
+        :canvas="appMode.codeCanvas.value"
+        @open-canvas-page="overlays.openCanvas"
         @open-tasks="overlays.toggleTasks"
         @session-repo-key="terminalSessionRepoKey = $event"
       />

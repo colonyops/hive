@@ -1,9 +1,12 @@
 <script setup lang="ts">
-// The full-page canvas view: one workspace's canvases read as a small wiki,
-// the listing in a sidebar and the pane's reader beside it. It opens in a
+// The full-page canvas view: one owner's canvases read as a small wiki, the
+// listing in a sidebar and the pane's reader beside it. An owner is an agent
+// workspace or a repository whose Code sessions wrote canvases. It opens in a
 // HubOverlay over whatever is on screen, like Tasks, and is read-only for the
 // pane's reason: canvas writes arrive only through the hive-canvas MCP tools.
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
+import IconCode from '~icons/lucide/code'
+import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconX from '~icons/lucide/x'
 import AgentCanvasActions from './AgentCanvasActions.vue'
 import AgentCanvasBrowse from './AgentCanvasBrowse.vue'
@@ -18,7 +21,7 @@ import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { relativeAge } from '../lib/age'
-import type { CanvasScope } from '../lib/agentCanvas'
+import { isRepositoryCanvasOwner, type CanvasScope } from '../lib/agentCanvas'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 
 const props = defineProps<{ scope: CanvasScope }>()
@@ -27,9 +30,22 @@ const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope':
 const { checking, available, reason, client, workspaces, workspacesLoaded, reloadWorkspaces } = useAgentWorkspaces()
 const { canvas, metas, shown, loading, error, show, wake } = useAgentCanvas(client)
 
-// Opened with no workspace in scope, outside Chats on a fresh launch, the view
-// lands on the first one rather than on nothing.
-const workspace = computed(() => props.scope.workspace || workspaces.value[0]?.dir || '')
+// The repositories that hold a canvas. A failed read keeps the last list: the
+// picker is a way to move, and the canvas on screen does not depend on it.
+const repositories = shallowRef<string[]>([])
+async function reloadRepositories(): Promise<void> {
+  if (!client.value) return
+  try {
+    repositories.value = await client.value.canvasRepositories()
+  } catch {
+    // Kept as it was.
+  }
+}
+watch(client, () => void reloadRepositories(), { immediate: true })
+
+// Opened with no owner in scope, outside Chats and Code on a fresh launch, the
+// view lands on the first one rather than on nothing.
+const workspace = computed(() => props.scope.workspace || workspaces.value[0]?.dir || repositories.value[0] || '')
 
 watch(
   () => [workspace.value, props.scope.name, props.scope.session] as const,
@@ -43,14 +59,24 @@ onMounted(() => {
   void reloadWorkspaces()
 })
 
-useWailsEvent('canvas:updated', () => wake())
+useWailsEvent('canvas:updated', () => {
+  wake()
+  void reloadRepositories()
+})
 
 const workspaceOptions = computed<AppSelectOption[]>(() => {
-  const options = workspaces.value.map((ws) => ({ value: ws.dir, label: ws.name || ws.dir }))
-  // AppSelect draws an unmatched value as blank, and the scope can name a
-  // workspace the listing has not loaded yet.
+  const options = [
+    ...workspaces.value.map((ws) => ({ value: ws.dir, label: ws.name || ws.dir, icon: IconMessagesSquare })),
+    ...repositories.value.map((key) => ({ value: key, label: key, icon: IconCode })),
+  ]
+  // AppSelect draws an unmatched value as blank, and the scope can name an
+  // owner neither listing holds yet: a repository with no canvas so far.
   if (workspace.value && !options.some((option) => option.value === workspace.value)) {
-    options.push({ value: workspace.value, label: workspace.value })
+    options.push({
+      value: workspace.value,
+      label: workspace.value,
+      icon: isRepositoryCanvasOwner(workspace.value) ? IconCode : IconMessagesSquare,
+    })
   }
   return options
 })
@@ -116,7 +142,7 @@ useEscapeToClose(() => emit('close'))
     <EmptyState
       v-else-if="workspacesLoaded && !workspace"
       class="m-auto"
-      message="No workspaces yet."
+      message="No workspaces or repositories with canvases yet."
       data-testid="canvas-page-no-workspaces"
     />
     <div v-else class="flex min-h-0 flex-1">
@@ -130,7 +156,7 @@ useEscapeToClose(() => emit('close'))
             :model-value="workspace"
             :options="workspaceOptions"
             size="sm"
-            aria-label="Workspace"
+            aria-label="Workspace or repository"
             testid="canvas-page-workspace"
             @update:model-value="selectWorkspace"
           />

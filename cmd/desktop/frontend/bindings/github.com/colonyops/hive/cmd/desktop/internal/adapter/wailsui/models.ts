@@ -126,13 +126,24 @@ export interface BuildInfo {
 }
 
 /**
- * CanvasToggle is the canvas:toggle payload: which chat's pane to open or
- * close, and the canvas to pin when opening (empty leaves the pane's pick).
+ * CanvasToggle is the canvas:toggle payload: whose pane to open or close, a
+ * chat's or a hive session's, and the canvas to pin when opening (empty
+ * leaves the pane's pick).
  */
 export interface CanvasToggle {
     "session": number;
+    "hiveSession": string;
     "name": string;
     "open": boolean;
+}
+
+/**
+ * CanvasWrite is the canvas:updated payload: the author of the write, a chat
+ * (Session) or a hive session (HiveSession), never both.
+ */
+export interface CanvasWrite {
+    "session": number;
+    "hiveSession": string;
 }
 
 /**
@@ -504,12 +515,17 @@ export interface SessionGitStatus {
     "error": string;
 }
 
+/**
+ * CanvasOwner is the key the session's canvases are filed under, its
+ * repository as owner/repo, or empty when the remote names neither.
+ */
 export interface SessionSummary {
     "id": string;
     "name": string;
     "slug": string;
     "repo": string;
     "state": string;
+    "canvasOwner": string;
 }
 
 /**

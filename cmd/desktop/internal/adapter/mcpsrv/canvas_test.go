@@ -3,6 +3,7 @@ package mcpsrv_test
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -49,13 +50,15 @@ func testCanvasSession(t *testing.T) (*app.App, *mcp.ClientSession) {
 	return core, session
 }
 
-func seedAgentSession(t *testing.T, core *app.App, workspace, name string) int64 {
+// seedAgentSession answers the record id as a chat's agent passes it: the
+// text of HIVE_AGENT_SESSION.
+func seedAgentSession(t *testing.T, core *app.App, workspace, name string) string {
 	t.Helper()
 	rec, err := core.Stores.AgentSessions.Create(t.Context(), stores.AgentSessionCreate{
 		Workspace: workspace, Name: name, Agent: "claude",
 	})
 	require.NoError(t, err)
-	return rec.ID
+	return strconv.FormatInt(rec.ID, 10)
 }
 
 type canvasView struct {
@@ -131,7 +134,7 @@ func TestCanvasRoundTrip(t *testing.T) {
 	assert.Equal(t, "demo", wrote.Workspace)
 	assert.Equal(t, "plan", wrote.Name)
 	assert.Equal(t, "The Plan", wrote.Title)
-	assert.Equal(t, id, wrote.Session, "the creating chat is recorded")
+	assert.Equal(t, id, strconv.FormatInt(wrote.Session, 10), "the creating chat is recorded")
 	assert.Equal(t, 1, wrote.BlockCount)
 	require.NotNil(t, wrote.Block, "a single-block write echoes the stored block")
 	assert.Equal(t, "status", wrote.Block.ID)
@@ -223,7 +226,7 @@ func TestCanvasToolErrors(t *testing.T) {
 	core, session := testCanvasSession(t)
 	id := seedAgentSession(t, core, "demo", "chat")
 
-	text := callErr(t, session, "read_canvas", map[string]any{"session": 999, "canvas": "plan"})
+	text := callErr(t, session, "read_canvas", map[string]any{"session": "999", "canvas": "plan"})
 	assert.Contains(t, text, "not_found")
 
 	text = callErr(t, session, "read_canvas", map[string]any{"session": id, "canvas": "ghost"})

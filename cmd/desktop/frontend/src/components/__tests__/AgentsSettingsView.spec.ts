@@ -37,8 +37,24 @@ vi.mock(
   () => settingsBindings,
 )
 
+const agents = vi.hoisted(() => ({ Available: vi.fn(), getAgentsEndpoint: vi.fn(), mcpCatalogue: vi.fn() }))
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/agentsservice', () => ({
+  Available: agents.Available,
+}))
+vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/agentWorkspacesClient')>()),
+  getAgentsEndpoint: agents.getAgentsEndpoint,
+  createAgentWorkspacesClient: () => ({ mcpCatalogue: agents.mcpCatalogue }),
+}))
+
 beforeEach(() => {
   vi.clearAllMocks()
+  agents.Available.mockResolvedValue({ available: true, reason: '' })
+  agents.getAgentsEndpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://x', token: 't' })
+  agents.mcpCatalogue.mockResolvedValue([
+    { id: 'hive-desktop', shipped: true, transport: 'http', command: 'http://127.0.0.1:4821/mcp', problem: '' },
+    { id: 'hive-canvas', shipped: true, transport: 'http', command: 'http://127.0.0.1:4821/mcp/canvas', problem: '' },
+  ])
   settingsBindings.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' })
   settingsBindings.SetCanvasFontSize.mockResolvedValue(undefined)
   settingsBindings.SetCanvasLineSpacing.mockResolvedValue(undefined)
@@ -86,5 +102,35 @@ describe('AgentsSettingsView', () => {
 
     await wrapper.get('[data-testid="agents-workspace-root-reveal"]').trigger('click')
     expect(mocks.RevealPath).toHaveBeenCalledWith(WORKSPACES)
+  })
+
+  // The address is what a user pastes into an agent's own MCP configuration;
+  // the app never writes it there.
+  it('shows the canvas server address to copy into another agent', async () => {
+    const wrapper = mount(AgentsSettingsView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="settings-canvas-server-url"]').text()).toBe('http://127.0.0.1:4821/mcp/canvas')
+
+    await wrapper.get('[data-testid="settings-canvas-server-copy"]').trigger('click')
+    await flushPromises()
+    expect(mocks.SetText).toHaveBeenCalledWith('http://127.0.0.1:4821/mcp/canvas')
+  })
+
+  it('says why when the server has no address', async () => {
+    agents.mcpCatalogue.mockResolvedValue([
+      {
+        id: 'hive-canvas',
+        shipped: true,
+        transport: 'http',
+        command: '',
+        problem: 'The local HTTP server is disabled.',
+      },
+    ])
+    const wrapper = mount(AgentsSettingsView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="settings-canvas-server"]').text()).toContain('The local HTTP server is disabled.')
+    expect(wrapper.find('[data-testid="settings-canvas-server-copy"]').exists()).toBe(false)
   })
 })

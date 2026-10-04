@@ -3775,4 +3775,56 @@ describe('TerminalMode', () => {
       wrapper.unmount()
     })
   })
+
+  // App.vue resolves whose canvases the attached session reads and hands it
+  // down; the mode's part is the pane beside the terminal and the route query
+  // that opens it.
+  describe('canvas pane', () => {
+    const canvas = { workspace: 'hay-kot/hive', session: '1' }
+
+    async function mountWithCanvas(path: string) {
+      mocks.useTerminalWindows.mockReturnValue(fakeSession())
+      const router = createAppRouter(createMemoryHistory())
+      await router.push(path)
+      await router.isReady()
+      const wrapper = mount(TerminalMode, {
+        props: { canvas },
+        global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
+      })
+      await flushPromises()
+      return { wrapper, router }
+    }
+
+    it('stays closed until the route asks for it', async () => {
+      const { wrapper } = await mountWithCanvas('/terminal/hive-fix-parser')
+
+      expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('opens beside the session and closes back to the terminal alone', async () => {
+      const { wrapper, router } = await mountWithCanvas('/terminal/hive-fix-parser?canvas=1')
+
+      expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(true)
+
+      await wrapper.get('[data-testid="agent-canvas-close"]').trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.query.canvas).toBeUndefined()
+      expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
+      expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it("asks for the full-page view on the session's repository", async () => {
+      const { wrapper } = await mountWithCanvas('/terminal/hive-fix-parser?canvas=1')
+
+      await wrapper.get('[data-testid="agent-canvas-expand"]').trigger('click')
+
+      expect(wrapper.emitted('open-canvas-page')).toEqual([[{ workspace: 'hay-kot/hive', session: '1', name: null }]])
+
+      wrapper.unmount()
+    })
+  })
 })

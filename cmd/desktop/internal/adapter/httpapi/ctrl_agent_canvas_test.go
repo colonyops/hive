@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -36,7 +37,7 @@ func TestAgentCanvasReadsOverTheWire(t *testing.T) {
 	require.NotNil(t, view.Blocks, "blocks is never null on the wire")
 	assert.Empty(t, view.Blocks, "a name nothing was written under answers empty, not an error")
 
-	_, err = h.core.Canvas.PutBlock(t.Context(), rec.ID, "plan", "The Plan", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "hello"})
+	_, err = h.core.Canvas.PutBlock(t.Context(), strconv.FormatInt(rec.ID, 10), "plan", "The Plan", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "hello"})
 	require.NoError(t, err)
 
 	resp = h.post(t, AgentWorkspacesPathPrefix+"canvas", testToken, agentCanvasRequest{Workspace: "demo", Name: "plan"})
@@ -84,4 +85,20 @@ func TestAgentCanvasReadsOverTheWire(t *testing.T) {
 	written, err := os.ReadFile(dest)
 	require.NoError(t, err)
 	assert.Equal(t, md.Markdown, string(written))
+}
+
+func TestAgentCanvasRepositoriesOverTheWire(t *testing.T) {
+	h := newAgentHarness(t)
+
+	resp := h.post(t, AgentWorkspacesPathPrefix+"canvas/repositories", "", struct{}{})
+	_ = resp.Body.Close()
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+	resp = h.post(t, AgentWorkspacesPathPrefix+"canvas/repositories", testToken, struct{}{})
+	defer func() { _ = resp.Body.Close() }()
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var body agentCanvasRepositoriesResponse
+	require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+	require.NotNil(t, body.Repositories, "repositories is never null on the wire")
+	assert.Empty(t, body.Repositories)
 }

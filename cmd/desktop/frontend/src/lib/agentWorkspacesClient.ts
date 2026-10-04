@@ -210,23 +210,30 @@ export interface CanvasBlock {
   updatedAt: number
 }
 
-/** One named canvas in a workspace, blocks in display order. `session` is the chat that created it. */
+/**
+ * One named canvas, blocks in display order. `workspace` is its owner key: a
+ * workspace's directory name, or `owner/repo` for a repository's canvases.
+ * `session` is the chat that created it and `hiveSession` the hive session;
+ * one of the two is empty.
+ */
 export interface WorkspaceCanvas {
   workspace: string
   name: string
   title: string
   session: number
+  hiveSession: string
   createdAt: number
   updatedAt: number
   blocks: CanvasBlock[]
 }
 
-/** One row of a workspace's canvas listing — metadata only, for the picker. */
+/** One row of an owner's canvas listing — metadata only, for the picker. */
 export interface WorkspaceCanvasMeta {
   workspace: string
   name: string
   title: string
   session: number
+  hiveSession: string
   createdAt: number
   updatedAt: number
   blockCount: number
@@ -360,8 +367,10 @@ export interface AgentWorkspacesClient {
   deleteSession(id: number): Promise<void>
   /** One canvas by workspace and name; a name nothing was written under answers empty. */
   canvas(workspace: string, name: string): Promise<WorkspaceCanvas>
-  /** A workspace's canvases, most recently updated first — metadata only. */
+  /** An owner's canvases, most recently updated first — metadata only. */
   canvases(workspace: string): Promise<WorkspaceCanvasMeta[]>
+  /** The owner key of every repository that holds a canvas. */
+  canvasRepositories(): Promise<string[]>
   /** One canvas rendered as a standalone markdown document — the copy action. */
   canvasMarkdown(workspace: string, name: string): Promise<string>
   /** Write one canvas's markdown rendering to an absolute path from the save dialog. */
@@ -517,6 +526,10 @@ export function createAgentWorkspacesClient(endpoint: AgentsEndpoint): AgentWork
     async canvases(workspace) {
       const body = await post<{ canvases: WorkspaceCanvasMeta[] | null }>('/canvases', { workspace })
       return body?.canvases ?? []
+    },
+    async canvasRepositories() {
+      const body = await post<{ repositories: string[] | null }>('/canvas/repositories', {})
+      return body?.repositories ?? []
     },
     async canvasMarkdown(workspace, name) {
       const body = await post<{ markdown: string }>('/canvas/markdown', { workspace, name })

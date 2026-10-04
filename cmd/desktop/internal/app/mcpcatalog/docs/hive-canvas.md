@@ -1,8 +1,8 @@
 # Hive Canvas
 
-The `hive-canvas` MCP server is the chat's output surface: its tools put
-content in front of the user in a pane beside the conversation, in the Agents
-area, while the session keeps running. It is the difference between describing
+The `hive-canvas` MCP server is an agent's output surface: its tools put
+content in front of the user in a pane beside the conversation, in a chat or
+in a Code session, while the session keeps running. It is the difference between describing
 a document in terminal scrollback and handing the user one to read
 (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
 
@@ -12,11 +12,14 @@ canvas without granting the app-control tool set, and the other way around.
 
 ## What a canvas is
 
-A canvas is a named artifact in the workspace: an ordered list of blocks,
-saved as `canvases/<name>.json` in the workspace folder. A chat can make as
-many as it needs — name them by artifact (`release-notes`, `perf-report`),
-give each a display title, and they outlive the conversation that made them.
-Blocks are:
+A canvas is a named artifact: an ordered list of blocks, saved as
+`canvases/<name>.json`. A chat's canvases belong to its workspace and sit in
+the workspace folder. A hive session's belong to its repository and sit in
+the repository's hive context directory, the one a checkout links as `.hive`,
+never in the checkout itself. Every chat of a workspace, and every session of
+a repository, sees the same canvases. Make as many as you need — name them by
+artifact (`release-notes`, `perf-report`), give each a display title, and
+they outlive the conversation that made them. Blocks are:
 
 - **markdown** — a title (optional) and a body, rendered as GitHub-flavored
   markdown. Raw HTML in the body is escaped, not rendered.
@@ -231,10 +234,13 @@ point.
   Open when something is finished and worth looking at, not on every write —
   a write while the pane is closed already lights an unseen dot.
 
-Every tool takes a `session` id naming the calling chat. Hive sets it in the
-launched process's environment as `HIVE_AGENT_SESSION`; a chat launched
-before canvas support existed does not have the variable until it is
-relaunched.
+Every tool takes a `session` naming the caller, and it is one of two things.
+In a Hive chat it is the `HIVE_AGENT_SESSION` environment variable, which
+Hive sets in the launched process; a chat launched before canvas support
+existed does not have the variable until it is relaunched. Anywhere else it
+is the absolute path of your working directory: Hive finds the hive session
+whose checkout holds it, and files the canvas under that session's
+repository. A directory inside no hive session is `not_found`.
 
 ## Launch
 
@@ -248,7 +254,15 @@ http://127.0.0.1:<port>/mcp/canvas
 The port is allocated at startup, so this entry carries **no URL in the
 registry** — the live address is resolved when the catalogue is rendered
 (`Descriptor.RuntimeURL`), and the catalogue reports a problem instead when
-the loopback server is disabled.
+the loopback server is disabled. The first allocated port is written to
+`settings.yaml` as `http.port`, so the address stays the same across
+restarts.
+
+A workspace that lists `hive-canvas` gets this address in its generated MCP
+configuration. Any other agent, such as the one a hive session runs, reaches
+the same server once the user adds the address to that agent's own MCP
+configuration. Hive never edits an agent's configuration outside a workspace.
 
 The server requires no token. It sits behind the loopback bind, spawns no
-processes, and writes only under the workspace's `canvases/` directory.
+processes, and writes only under a `canvases/` directory: the workspace's, or
+the repository's in hive's context directory.

@@ -4,9 +4,30 @@ import type { TerminalSessionRow } from '../../../stores/useTerminalSessions'
 import type { TerminalModeContext } from '../terminalModeContext'
 import { attachedSessionCommands } from '../useTerminalCommands'
 
-const hive: TerminalSessionRow = { id: '1', name: 'parser', slug: 'parser', repo: 'r', state: 'active' }
-const scratch: TerminalSessionRow = { id: 's', name: 'Scratch', slug: 'scratch', repo: '', state: 'active' }
-const chat: TerminalSessionRow = { id: 'c', name: 'chat', slug: 'agentws-1', repo: '', state: 'active' }
+const hive: TerminalSessionRow = {
+  id: '1',
+  name: 'parser',
+  slug: 'parser',
+  repo: 'r',
+  state: 'active',
+  canvasOwner: '',
+}
+const scratch: TerminalSessionRow = {
+  id: 's',
+  name: 'Scratch',
+  slug: 'scratch',
+  repo: '',
+  state: 'active',
+  canvasOwner: '',
+}
+const chat: TerminalSessionRow = {
+  id: 'c',
+  name: 'chat',
+  slug: 'agentws-1',
+  repo: '',
+  state: 'active',
+  canvasOwner: '',
+}
 
 function context(running: boolean): TerminalModeContext {
   return {

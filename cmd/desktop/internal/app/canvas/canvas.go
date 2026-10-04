@@ -1,9 +1,10 @@
-// Package canvas owns the canvas files inside a workspace folder: one JSON
-// file per canvas at <root>/<workspace>/canvases/<name>.json, where root is
-// the agent-workspace root. A canvas is a named artifact a chat produced —
-// it lives beside the workspace's authored files, is browsable in place, and
-// outlives the chat that made it
-// (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
+// Package canvas owns the canvas files: one JSON file per canvas at
+// <owner dir>/canvases/<name>.json. A canvas is a named artifact an agent
+// produced. It belongs to an owner that outlives its author: a chat's canvas
+// to the agent workspace, in the workspace folder, and a hive session's to
+// the repository, in the repository's hive context directory
+// (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry,
+// ADR a-code-session-s-canvases-belong-to-its-repository-and-live-in-the-hive-context-directory).
 package canvas
 
 import (
@@ -22,9 +23,10 @@ import (
 	"github.com/colonyops/hive/pkg/atomicfile"
 )
 
-// ErrInvalidWorkspace reports a workspace value that is not a single local
-// path component. The store is a leaf, so it re-checks what
-// validWorkspaceDir already enforced above it rather than importing anything.
+// ErrInvalidWorkspace reports an owner that is neither a single local path
+// component (a workspace) nor two of them joined by a slash (a repository).
+// The store is a leaf, so it re-checks what validWorkspaceDir already
+// enforced above it rather than importing anything.
 var ErrInvalidWorkspace = errors.New("canvas: invalid workspace name")
 
 // ErrInvalidName reports a canvas name outside the slug rule below.
@@ -45,10 +47,10 @@ const (
 	KindHTML     = "html"
 )
 
-// canvasesDirName is the app-owned directory inside a workspace folder.
-// The workspace generator reconciles only its own subtrees, so nothing else
-// ever writes or prunes here.
-const canvasesDirName = "canvases"
+// DirName is the app-owned directory inside an owner's folder. The workspace
+// generator reconciles only its own subtrees and hive's context prune skips
+// this name, so nothing else ever writes or prunes here.
+const DirName = "canvases"
 
 const maxNameLength = 100
 
@@ -74,29 +76,46 @@ type Block struct {
 	UpdatedAt int64  `json:"updatedAt"`
 }
 
-// Canvas is one named surface, blocks in display order. Session is the chat
-// that created it — provenance for labeling, never authorization: a canvas
-// belongs to its workspace, not to the chat.
+// Canvas is one named surface, blocks in display order. Workspace is the
+// owner key: a workspace's directory name, or RepositoryOwner's "owner/repo".
+// Session and HiveSession are the chat or the hive session that created it —
+// provenance for labeling, never authorization: a canvas belongs to its
+// owner, not to its author.
 type Canvas struct {
-	Workspace string  `json:"workspace"`
-	Name      string  `json:"name"`
-	Title     string  `json:"title,omitempty"`
-	Session   int64   `json:"session"`
-	CreatedAt int64   `json:"createdAt"`
-	UpdatedAt int64   `json:"updatedAt"`
-	Blocks    []Block `json:"blocks"`
+	Workspace   string  `json:"workspace"`
+	Name        string  `json:"name"`
+	Title       string  `json:"title,omitempty"`
+	Session     int64   `json:"session"`
+	HiveSession string  `json:"hiveSession,omitempty"`
+	CreatedAt   int64   `json:"createdAt"`
+	UpdatedAt   int64   `json:"updatedAt"`
+	Blocks      []Block `json:"blocks"`
+}
+
+// Author is who wrote a canvas first: a chat by its record id, or a hive
+// session by its id. Exactly one is set.
+type Author struct {
+	Session     int64
+	HiveSession string
+}
+
+// RepositoryOwner is the owner key of a repository's canvases. A workspace's
+// key is one path component, so the slash keeps the two apart.
+func RepositoryOwner(owner, repo string) string {
+	return owner + "/" + repo
 }
 
 // Meta is one row of a workspace listing: everything the pane's picker needs
 // without loading block content.
 type Meta struct {
-	Workspace  string `json:"workspace"`
-	Name       string `json:"name"`
-	Title      string `json:"title,omitempty"`
-	Session    int64  `json:"session"`
-	CreatedAt  int64  `json:"createdAt"`
-	UpdatedAt  int64  `json:"updatedAt"`
-	BlockCount int    `json:"blockCount"`
+	Workspace   string `json:"workspace"`
+	Name        string `json:"name"`
+	Title       string `json:"title,omitempty"`
+	Session     int64  `json:"session"`
+	HiveSession string `json:"hiveSession,omitempty"`
+	CreatedAt   int64  `json:"createdAt"`
+	UpdatedAt   int64  `json:"updatedAt"`
+	BlockCount  int    `json:"blockCount"`
 }
 
 // Markdown renders a canvas as one standalone document: the canvas title as
@@ -134,17 +153,29 @@ func Markdown(c Canvas) string {
 	return b.String()
 }
 
-// Store reads and writes canvas files under the agent-workspace root. The
-// mutex serializes read-modify-write cycles; the MCP server and the HTTP
-// reads run in this one process, so no cross-process coordination is needed.
-type Store struct {
-	root string
-	mu   sync.Mutex
-	now  func() time.Time
+// Roots locates canvases on disk by what owns them.
+type Roots struct {
+	// Workspaces is the agent-workspace root. A workspace's canvases sit in
+	// its folder there.
+	Workspaces string
+	// Repositories answers hive's context root, under which a repository's
+	// canvases sit at <owner>/<repo>. It is asked per call because hive's
+	// config can move the root while the app runs. Nil, or an empty answer,
+	// refuses repository owners.
+	Repositories func() string
 }
 
-func NewStore(root string) *Store {
-	return &Store{root: root, now: time.Now}
+// Store reads and writes canvas files under Roots. The mutex serializes
+// read-modify-write cycles; the MCP server and the HTTP reads run in this one
+// process, so no cross-process coordination is needed.
+type Store struct {
+	roots Roots
+	mu    sync.Mutex
+	now   func() time.Time
+}
+
+func NewStore(roots Roots) *Store {
+	return &Store{roots: roots, now: time.Now}
 }
 
 // Load returns one canvas, reporting false without error when none has ever
@@ -160,10 +191,10 @@ func (s *Store) Load(workspace, name string) (Canvas, bool, error) {
 // canvas on the first: an id already on the canvas is replaced in place,
 // keeping its position and CreatedAt; a new id appends. A non-empty before
 // names an existing block id every written block is instead placed ahead of
-// — an existing id then moves there, still keeping its CreatedAt. session is
+// — an existing id then moves there, still keeping its CreatedAt. author is
 // recorded at creation and never changes; a non-empty title replaces the
 // stored one. Returns the canvas after the write.
-func (s *Store) Upsert(workspace, name string, session int64, title, before string, blocks ...Block) (Canvas, error) {
+func (s *Store) Upsert(workspace, name string, author Author, title, before string, blocks ...Block) (Canvas, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -173,7 +204,10 @@ func (s *Store) Upsert(workspace, name string, session int64, title, before stri
 	}
 	nowMillis := s.now().UnixMilli()
 	if !ok {
-		c = Canvas{Workspace: workspace, Name: name, Session: session, CreatedAt: nowMillis, Blocks: []Block{}}
+		c = Canvas{
+			Workspace: workspace, Name: name, Session: author.Session, HiveSession: author.HiveSession,
+			CreatedAt: nowMillis, Blocks: []Block{},
+		}
 	}
 	if title != "" {
 		c.Title = title
@@ -279,10 +313,11 @@ func (s *Store) List(workspace string) ([]Meta, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !validWorkspace(workspace) {
-		return nil, fmt.Errorf("%w: %q", ErrInvalidWorkspace, workspace)
+	dir, err := s.dir(workspace)
+	if err != nil {
+		return nil, err
 	}
-	entries, err := os.ReadDir(filepath.Join(s.root, workspace, canvasesDirName))
+	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
 		return []Meta{}, nil
 	}
@@ -304,7 +339,7 @@ func (s *Store) List(workspace string) ([]Meta, error) {
 			continue
 		}
 		metas = append(metas, Meta{
-			Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session,
+			Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
 			CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, BlockCount: len(c.Blocks),
 		})
 	}
@@ -375,17 +410,101 @@ func (s *Store) write(c Canvas) error {
 }
 
 func (s *Store) path(workspace, name string) (string, error) {
-	if !validWorkspace(workspace) {
-		return "", fmt.Errorf("%w: %q", ErrInvalidWorkspace, workspace)
+	dir, err := s.dir(workspace)
+	if err != nil {
+		return "", err
 	}
 	if !validName(name) {
 		return "", fmt.Errorf("%w: %q", ErrInvalidName, name)
 	}
-	return filepath.Join(s.root, workspace, canvasesDirName, name+".json"), nil
+	return filepath.Join(dir, name+".json"), nil
+}
+
+// dir is the canvases directory of one owner. The repository layout is
+// hive's own (config.RepoContextDir), restated because this package imports
+// nothing; a test in the app package holds the two together.
+func (s *Store) dir(owner string) (string, error) {
+	repoOwner, repo, isRepository := strings.Cut(owner, "/")
+	if !isRepository {
+		if !validWorkspace(owner) {
+			return "", fmt.Errorf("%w: %q", ErrInvalidWorkspace, owner)
+		}
+		return filepath.Join(s.roots.Workspaces, owner, DirName), nil
+	}
+	root := s.repositoriesRoot()
+	if root == "" || !validWorkspace(repoOwner) || !validWorkspace(repo) {
+		return "", fmt.Errorf("%w: %q", ErrInvalidWorkspace, owner)
+	}
+	return filepath.Join(root, repoOwner, repo, DirName), nil
+}
+
+func (s *Store) repositoriesRoot() string {
+	if s.roots.Repositories == nil {
+		return ""
+	}
+	return s.roots.Repositories()
+}
+
+// Repositories returns the owner key of every repository that holds a
+// canvas, sorted. A repository whose sessions are all gone still lists: its
+// canvases outlive them.
+func (s *Store) Repositories() ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	root := s.repositoriesRoot()
+	if root == "" {
+		return []string{}, nil
+	}
+	owners, err := subdirectories(root)
+	if err != nil {
+		return nil, fmt.Errorf("canvas: list repositories: %w", err)
+	}
+	keys := []string{}
+	for _, owner := range owners {
+		repos, err := subdirectories(filepath.Join(root, owner))
+		if err != nil {
+			return nil, fmt.Errorf("canvas: list repositories: %w", err)
+		}
+		for _, repo := range repos {
+			entries, err := os.ReadDir(filepath.Join(root, owner, repo, DirName))
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				return nil, fmt.Errorf("canvas: list repositories: %w", err)
+			}
+			holdsCanvas := slices.ContainsFunc(entries, func(entry os.DirEntry) bool {
+				_, ok := nameFromFilename(entry.Name())
+				return ok
+			})
+			if holdsCanvas {
+				keys = append(keys, RepositoryOwner(owner, repo))
+			}
+		}
+	}
+	sort.Strings(keys)
+	return keys, nil
+}
+
+// subdirectories names the directories inside dir, following a link to one.
+// A dir that does not exist has none.
+func subdirectories(dir string) ([]string, error) {
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, entry := range entries {
+		if info, err := os.Stat(filepath.Join(dir, entry.Name())); err == nil && info.IsDir() {
+			names = append(names, entry.Name())
+		}
+	}
+	return names, nil
 }
 
 // validWorkspace is the one-path-component rule validWorkspaceDir enforces
-// above this package.
+// above this package. A repository key is held to it one component at a time.
 func validWorkspace(dir string) bool {
 	if dir == "" || dir == "." {
 		return false

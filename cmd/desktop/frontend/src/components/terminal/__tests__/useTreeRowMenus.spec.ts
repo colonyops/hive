@@ -2,8 +2,15 @@ import { describe, expect, it } from 'vitest'
 import type { TerminalSessionRow } from '../../../stores/useTerminalSessions'
 import { useTreeRowMenus, windowMenuKey } from '../useTreeRowMenus'
 
-const row: TerminalSessionRow = { id: '1', name: 'parser', slug: 'parser', repo: 'r', state: 'active' }
-const scratch: TerminalSessionRow = { id: 's', name: 'scratch', slug: 'scratch', repo: '', state: 'active' }
+const row: TerminalSessionRow = { id: '1', name: 'parser', slug: 'parser', repo: 'r', state: 'active', canvasOwner: '' }
+const scratch: TerminalSessionRow = {
+  id: 's',
+  name: 'scratch',
+  slug: 'scratch',
+  repo: '',
+  state: 'active',
+  canvasOwner: '',
+}
 
 function setup() {
   return useTreeRowMenus({ windowMenuAllowed: (candidate) => candidate !== scratch })

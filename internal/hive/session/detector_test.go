@@ -104,3 +104,21 @@ func TestIsSubpath(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionDetector_SessionAtPath(t *testing.T) {
+	store := newMockStore()
+	store.sessions["sess-1"] = session.Session{ID: "sess-1", Name: "fix-login", Path: "/home/user/projects/foo", State: session.StateActive}
+	store.sessions["recycled"] = session.Session{ID: "recycled", Path: "/home/user/projects/old", State: session.StateRecycled}
+	detector := NewDetector(store)
+
+	sess, ok, err := detector.SessionAtPath(context.Background(), "/home/user/projects/foo/src")
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, "fix-login", sess.Name)
+
+	for _, path := range []string{"/home/user/projects/old", "/home/user/projects"} {
+		_, ok, err = detector.SessionAtPath(context.Background(), path)
+		require.NoError(t, err)
+		assert.False(t, ok, path)
+	}
+}

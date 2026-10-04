@@ -109,6 +109,20 @@ Open **Tasks** from the Code status bar, the command palette, or its configured 
 
 Filter by status or repository, search by title or ID, and inspect epics, subtasks, blockers, comments, checkpoints, and linked sessions. You can change task status, follow blocker links, and prune completed work from the Tasks toolbar.
 
+## Canvases
+
+An agent in a Code session can publish canvases the same way a chat does. Hive does not change your agent's configuration, so add the server yourself: copy its address from **Settings ▸ Chats ▸ Canvas for every agent** and add it to the agent's own MCP configuration as an HTTP server named `hive-canvas`. For Claude Code:
+
+```bash
+claude mcp add --scope user --transport http hive-canvas http://127.0.0.1:<port>/mcp/canvas
+```
+
+The address stays the same across restarts. The server needs the local HTTP server, which is enabled by default.
+
+Open the canvas pane beside a session with the right-panel button in the title bar. A session's canvases belong to its repository, so every session of that repository shows the same ones, and they remain after the session is deleted. They are stored under `canvases/` in the repository's hive context directory, which `hive ctx init` links into a checkout as `.hive`, and never in the checkout itself.
+
+The pane, the full-page view, copy, and save work as they do in [Chats](../chats/agent-workspaces.md#canvases). A scratch terminal has no canvases.
+
 ## Appearance
 
 **Settings ▸ Terminal** controls the terminal font, size, weight, line height, letter spacing, visible windows, and status bar. <kbd>⌘+</kbd> and <kbd>⌘-</kbd> step the text size by 2px from a terminal without opening Settings, up to 64px, and <kbd>⌘0</kbd> puts it back to 13px. On Linux, use <kbd>Ctrl+Shift</kbd> with the same keys.

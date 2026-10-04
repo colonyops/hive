@@ -15,7 +15,7 @@ declare module "@wailsio/runtime" {
             "actions:updated": string;
             "activity:appended": number;
             "canvas:toggle": wailsui$0.CanvasToggle;
-            "canvas:updated": number;
+            "canvas:updated": wailsui$0.CanvasWrite;
             "connection:updated": string;
             "flows:updated": string;
             "inbox:updated": string;

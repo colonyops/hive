@@ -29,7 +29,7 @@ import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useAgentCanvasRoute } from '../composables/useAgentCanvasRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXtermPane'
-import type { CanvasScope } from '../lib/agentCanvas'
+import { canvasEventAuthor, type CanvasScope } from '../lib/agentCanvas'
 import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentWorkspacesClient'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { isEditableTarget } from '../lib/isEditableTarget'
@@ -321,8 +321,8 @@ watch(
 // right-panel toggle. This view keeps the two Wails listeners, which are its
 // own: both are answers about the chat it has on screen.
 useWailsEvent('canvas:updated', (event) => {
-  const payload = Array.isArray(event.data) ? event.data[0] : event.data
-  noteCanvasWrite(Number(payload))
+  const author = canvasEventAuthor(event.data)
+  if (typeof author === 'number') noteCanvasWrite(author)
 })
 // Viewing a chat with its pane open clears its dot.
 watch([canvasVisible, routeChatId], ([visible, id]) => {
@@ -334,8 +334,8 @@ watch([canvasVisible, routeChatId], ([visible, id]) => {
 // from a different chat — its write already lights the unseen dot there.
 useWailsEvent('canvas:toggle', (event) => {
   const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
-    { session: number; name: string; open: boolean } | undefined
-  if (!payload || Number(payload.session) !== routeChatId.value) return
+    { name: string; open: boolean } | undefined
+  if (!payload || canvasEventAuthor(payload) !== routeChatId.value) return
   syncCanvasQuery(payload.open, payload.name || undefined)
 })
 

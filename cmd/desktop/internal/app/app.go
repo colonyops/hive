@@ -463,9 +463,13 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.Observability = newObservabilityService(cfg.SettingsStore, cfg.Settings.Telemetry, cfg.TelemetryRuntime)
 	a.DevTools = newDevToolsService(cfg.Settings.Development.DevTools.Enabled)
 	a.Canvas = newCanvasService(CanvasDeps{
-		Store:    canvas.NewStore(cfg.Paths.AgentWorkspacesDir),
-		Sessions: a.Stores.AgentSessions,
-		Events:   a.Events,
+		Store: canvas.NewStore(canvas.Roots{
+			Workspaces:   cfg.Paths.AgentWorkspacesDir,
+			Repositories: a.hiveContextDir,
+		}),
+		Sessions:     a.Stores.AgentSessions,
+		HiveSessions: hiveSessionsAtPath{a},
+		Events:       a.Events,
 	})
 	a.AgentWorkspaces = newAgentWorkspacesService(AgentWorkspacesDeps{
 		Store:           a.agentWorkspaceStore,
@@ -1257,6 +1261,27 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		a.Stores.ItemSessions, a.Activity, cfg.Logger,
 	)
 	return nil
+}
+
+// hiveContextDir is hive's context root as the engine's current config has it.
+// It is empty until the engine starts, which refuses repository canvases
+// rather than filing them under a root that is about to change.
+func (a *App) hiveContextDir() string {
+	if a.hive == nil {
+		return ""
+	}
+	return a.hive.Config().ContextDir()
+}
+
+// hiveSessionsAtPath reads the engine on each call, because it starts after
+// the services are built and a reload replaces its session service.
+type hiveSessionsAtPath struct{ app *App }
+
+func (h hiveSessionsAtPath) SessionAtPath(ctx context.Context, path string) (session.Session, bool, error) {
+	if h.app.hive == nil {
+		return session.Session{}, false, nil
+	}
+	return h.app.hive.Sessions().SessionAtPath(ctx, path)
 }
 
 // Reloads re-resolve HIVE_CONFIG because it can change between calls, and

@@ -25,7 +25,7 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 			"docs first, since an unknown tag, class or attribute is refused rather than dropped) or link (title and url " +
 			"required; http, https or mailto only). Answers with the canvas metadata and the stored block; read_canvas " +
 			"returns the full surface. The pane does not open by itself: a write while " +
-			"it is closed lights an unseen dot on the chat's toggle — use open_canvas when the result deserves the " +
+			"it is closed lights an unseen dot on the pane's toggle — use open_canvas when the result deserves the " +
 			"user's attention now. Writing a first layout of several blocks? put_blocks does it in one call.",
 	}, ctrl.PutBlock)
 
@@ -57,7 +57,7 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:  "delete_canvas",
 		Title: "Delete a canvas",
-		Description: "Remove one canvas entirely — its file is deleted from the workspace and it leaves the pane's " +
+		Description: "Remove one canvas entirely — its file is deleted and it leaves the pane's " +
 			"picker. A name that does not exist is not_found. Only delete a canvas you made obsolete yourself; the user " +
 			"may be keeping the others.",
 	}, ctrl.DeleteCanvas)
@@ -74,8 +74,8 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:  "open_canvas",
 		Title: "Open the canvas pane",
-		Description: "Ask Hive to open the canvas pane beside this chat, optionally pinned to one canvas by name (the " +
-			"name must exist — put_block first). It applies only while the user is viewing this chat; it never pulls " +
+		Description: "Ask Hive to open the canvas pane beside this chat or Code session, optionally pinned to one canvas by name " +
+			"(the name must exist — put_block first). It applies only while the user is viewing it; it never pulls " +
 			"them away from something else, and a write while the pane is closed already shows an unseen dot. Open when " +
 			"you finish something worth looking at, not on every write.",
 	}, ctrl.OpenCanvas)
@@ -83,31 +83,32 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:  "close_canvas",
 		Title: "Close the canvas pane",
-		Description: "Ask Hive to close the canvas pane beside this chat, returning the full width to the " +
-			"conversation. Like open_canvas it applies only while the user is viewing this chat. The canvases " +
+		Description: "Ask Hive to close the canvas pane beside this chat or Code session, returning the full width to the " +
+			"conversation. Like open_canvas it applies only while the user is viewing it. The canvases " +
 			"themselves are untouched — this is the pane, not the content.",
 	}, ctrl.CloseCanvas)
 
 	mcp.AddTool(srv, &mcp.Tool{
 		Name:  "list_canvases",
-		Title: "List the workspace's canvases",
-		Description: "List every canvas in this chat's workspace, most recently updated first: name, title, block count " +
-			"and which chat created it. Canvases outlive the chats that made them, so this may include artifacts from " +
-			"earlier conversations — read one before assuming it is yours to overwrite.",
+		Title: "List the canvases",
+		Description: "List every canvas where yours are kept — this chat's workspace, or the repository of this hive " +
+			"session — most recently updated first: name, title, block count and which chat or session created it. " +
+			"Canvases outlive what made them, so this may include artifacts from earlier conversations — read one " +
+			"before assuming it is yours to overwrite.",
 	}, ctrl.ListCanvases)
 }
 
 type canvasSessionInput struct {
-	Session int64 `json:"session" jsonschema:"The chat session calling the tool. Read it from this process's HIVE_AGENT_SESSION environment variable — Hive set it when it launched this chat. Never guess or reuse another value. If the variable is unset, say so instead of calling."`
+	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
 }
 
 type canvasNameInput struct {
-	Session int64  `json:"session" jsonschema:"The chat session calling the tool. Read it from this process's HIVE_AGENT_SESSION environment variable — Hive set it when it launched this chat. Never guess or reuse another value. If the variable is unset, say so instead of calling."`
+	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
 	Canvas  string `json:"canvas"  jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
 }
 
 type putBlockInput struct {
-	Session     int64  `json:"session"               jsonschema:"The chat session calling the tool. Read it from this process's HIVE_AGENT_SESSION environment variable — Hive set it when it launched this chat. Never guess or reuse another value. If the variable is unset, say so instead of calling."`
+	Session     string `json:"session"               jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
 	Canvas      string `json:"canvas"                jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
 	CanvasTitle string `json:"canvasTitle,omitempty" jsonschema:"Display title for the whole canvas, shown in the pane's picker. Set it on the canvas's first write; a later non-empty value renames, empty leaves the stored title unchanged."`
 	Before      string `json:"before,omitempty"      jsonschema:"An existing block id to place this block ahead of — inserting a new id there, or moving a reused one (its createdAt survives the move). Omit to keep a reused id's position or append a new one."`
@@ -127,14 +128,14 @@ type batchBlockInput struct {
 }
 
 type putBlocksInput struct {
-	Session     int64             `json:"session"               jsonschema:"The chat session calling the tool. Read it from this process's HIVE_AGENT_SESSION environment variable — Hive set it when it launched this chat. Never guess or reuse another value. If the variable is unset, say so instead of calling."`
+	Session     string            `json:"session"               jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
 	Canvas      string            `json:"canvas"                jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
 	CanvasTitle string            `json:"canvasTitle,omitempty" jsonschema:"Display title for the whole canvas, shown in the pane's picker. Set it on the canvas's first write; a later non-empty value renames, empty leaves the stored title unchanged."`
 	Blocks      []batchBlockInput `json:"blocks"                jsonschema:"The blocks to write, applied in order (50 max per call)."`
 }
 
 type removeBlockInput struct {
-	Session int64  `json:"session" jsonschema:"The chat session calling the tool. Read it from this process's HIVE_AGENT_SESSION environment variable — Hive set it when it launched this chat. Never guess or reuse another value. If the variable is unset, say so instead of calling."`
+	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
 	Canvas  string `json:"canvas"  jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
 	ID      string `json:"id"      jsonschema:"The id of the block to remove, as given to put_block."`
 }
@@ -150,22 +151,24 @@ type canvasBlock struct {
 }
 
 type canvasResult struct {
-	Workspace string        `json:"workspace"       jsonschema:"The workspace this canvas belongs to."`
-	Name      string        `json:"name"`
-	Title     string        `json:"title,omitempty"`
-	Session   int64         `json:"session"         jsonschema:"The chat that created this canvas."`
-	CreatedAt int64         `json:"createdAt"`
-	UpdatedAt int64         `json:"updatedAt"`
-	Blocks    []canvasBlock `json:"blocks"          jsonschema:"Every block, in display order."`
+	Workspace   string        `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, or owner/repo for a hive session's repository."`
+	Name        string        `json:"name"`
+	Title       string        `json:"title,omitempty"`
+	Session     int64         `json:"session"               jsonschema:"The chat that created this canvas, or 0."`
+	HiveSession string        `json:"hiveSession,omitempty" jsonschema:"The hive session that created this canvas, when no chat did."`
+	CreatedAt   int64         `json:"createdAt"`
+	UpdatedAt   int64         `json:"updatedAt"`
+	Blocks      []canvasBlock `json:"blocks"                jsonschema:"Every block, in display order."`
 }
 
 type canvasMetaResult struct {
-	Name       string `json:"name"`
-	Title      string `json:"title,omitempty"`
-	Session    int64  `json:"session"         jsonschema:"The chat that created this canvas."`
-	CreatedAt  int64  `json:"createdAt"`
-	UpdatedAt  int64  `json:"updatedAt"`
-	BlockCount int    `json:"blockCount"`
+	Name        string `json:"name"`
+	Title       string `json:"title,omitempty"`
+	Session     int64  `json:"session"               jsonschema:"The chat that created this canvas, or 0."`
+	HiveSession string `json:"hiveSession,omitempty" jsonschema:"The hive session that created this canvas, when no chat did."`
+	CreatedAt   int64  `json:"createdAt"`
+	UpdatedAt   int64  `json:"updatedAt"`
+	BlockCount  int    `json:"blockCount"`
 }
 
 // canvasWriteResult is what a mutation answers: the canvas metadata rather
@@ -173,18 +176,19 @@ type canvasMetaResult struct {
 // surface into the agent's context. Block carries the stored block for a
 // single-block write; read_canvas returns the full surface.
 type canvasWriteResult struct {
-	Workspace  string       `json:"workspace"`
-	Name       string       `json:"name"`
-	Title      string       `json:"title,omitempty"`
-	Session    int64        `json:"session"         jsonschema:"The chat that created this canvas."`
-	CreatedAt  int64        `json:"createdAt"`
-	UpdatedAt  int64        `json:"updatedAt"`
-	BlockCount int          `json:"blockCount"`
-	Block      *canvasBlock `json:"block,omitempty" jsonschema:"The block as stored, echoed for a single-block write."`
+	Workspace   string       `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, or owner/repo for a hive session's repository."`
+	Name        string       `json:"name"`
+	Title       string       `json:"title,omitempty"`
+	Session     int64        `json:"session"               jsonschema:"The chat that created this canvas, or 0."`
+	HiveSession string       `json:"hiveSession,omitempty" jsonschema:"The hive session that created this canvas, when no chat did."`
+	CreatedAt   int64        `json:"createdAt"`
+	UpdatedAt   int64        `json:"updatedAt"`
+	BlockCount  int          `json:"blockCount"`
+	Block       *canvasBlock `json:"block,omitempty"       jsonschema:"The block as stored, echoed for a single-block write."`
 }
 
 type canvasListResult struct {
-	Canvases []canvasMetaResult `json:"canvases" jsonschema:"Every canvas in the workspace, most recently updated first."`
+	Canvases []canvasMetaResult `json:"canvases" jsonschema:"Every canvas the owner holds, most recently updated first."`
 }
 
 type deleteCanvasResult struct {
@@ -192,12 +196,12 @@ type deleteCanvasResult struct {
 }
 
 type openCanvasInput struct {
-	Session int64  `json:"session"          jsonschema:"The chat session calling the tool. Read it from this process's HIVE_AGENT_SESSION environment variable — Hive set it when it launched this chat. Never guess or reuse another value. If the variable is unset, say so instead of calling."`
+	Session string `json:"session"          jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
 	Canvas  string `json:"canvas,omitempty" jsonschema:"Canvas to pin the pane to, by name; must exist. Omit to open on the pane's own pick."`
 }
 
 type paneResult struct {
-	Requested string `json:"requested" jsonschema:"The request handed to the UI: open or close. Delivery is best-effort — it applies only while the user is viewing this chat, and there is no acknowledgment either way."`
+	Requested string `json:"requested" jsonschema:"The request handed to the UI: open or close. Delivery is best-effort — it applies only while the user is viewing this chat or session, and there is no acknowledgment either way."`
 }
 
 func (ctrl *CanvasController) PutBlock(ctx context.Context, _ *mcp.CallToolRequest, in putBlockInput) (*mcp.CallToolResult, canvasWriteResult, error) {
@@ -275,7 +279,7 @@ func (ctrl *CanvasController) ListCanvases(ctx context.Context, _ *mcp.CallToolR
 	out := canvasListResult{Canvases: make([]canvasMetaResult, 0, len(metas))}
 	for _, m := range metas {
 		out.Canvases = append(out.Canvases, canvasMetaResult{
-			Name: m.Name, Title: m.Title, Session: m.Session,
+			Name: m.Name, Title: m.Title, Session: m.Session, HiveSession: m.HiveSession,
 			CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt, BlockCount: m.BlockCount,
 		})
 	}
@@ -284,7 +288,7 @@ func (ctrl *CanvasController) ListCanvases(ctx context.Context, _ *mcp.CallToolR
 
 func canvasWriteResultFrom(c canvas.Canvas, blockID string) canvasWriteResult {
 	res := canvasWriteResult{
-		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session,
+		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, BlockCount: len(c.Blocks),
 	}
 	for _, b := range c.Blocks {
@@ -308,7 +312,7 @@ func canvasResultFrom(c canvas.Canvas) canvasResult {
 		})
 	}
 	return canvasResult{
-		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session,
+		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Blocks: blocks,
 	}
 }

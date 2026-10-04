@@ -7,7 +7,7 @@ import { useTasks } from '../stores/useTasks'
  * navigating away from it (hay-kot/hive-desktop#441), so they are overlays,
  * not routes. A title-bar icon or a command toggles each one.
  */
-export function useHubOverlays(terminalActive: Ref<boolean>, chatCanvasScope: Ref<CanvasScope | null>) {
+export function useHubOverlays(terminalActive: Ref<boolean>, viewCanvasScope: Ref<CanvasScope | null>) {
   const tasksOpen = ref(false)
   const activityOpen = ref(false)
   const canvasOpen = ref(false)
@@ -37,9 +37,9 @@ export function useHubOverlays(terminalActive: Ref<boolean>, chatCanvasScope: Re
     canvasOpen.value = true
   }
 
-  // Tasks' rule: only an opening toggle follows the chat on screen.
+  // Tasks' rule: only an opening toggle follows the chat or session on screen.
   function toggleCanvas(): void {
-    if (!canvasOpen.value && chatCanvasScope.value) canvasScope.value = chatCanvasScope.value
+    if (!canvasOpen.value && viewCanvasScope.value) canvasScope.value = viewCanvasScope.value
     canvasOpen.value = !canvasOpen.value
   }
 

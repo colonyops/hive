@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   getAgentsEndpoint: vi.fn(),
   workspaces: vi.fn(),
   canvases: vi.fn(),
+  canvasRepositories: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/agentsservice', () => ({
@@ -15,7 +16,11 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/agentWorkspacesClient')>()),
   getAgentsEndpoint: mocks.getAgentsEndpoint,
-  createAgentWorkspacesClient: () => ({ workspaces: mocks.workspaces, canvases: mocks.canvases }),
+  createAgentWorkspacesClient: () => ({
+    workspaces: mocks.workspaces,
+    canvases: mocks.canvases,
+    canvasRepositories: mocks.canvasRepositories,
+  }),
 }))
 
 function workspaceList(...dirs: string[]) {
@@ -34,6 +39,7 @@ describe('useWorkspaceCanvases', () => {
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
     mocks.getAgentsEndpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://x', token: 't' })
     mocks.workspaces.mockResolvedValue(workspaceList('web-app', 'docs'))
+    mocks.canvasRepositories.mockResolvedValue(['acme/site'])
     mocks.canvases.mockImplementation((workspace: string) =>
       Promise.resolve(workspace === 'web-app' ? [{ workspace, name: 'plan' }] : [{ workspace, name: 'perf-report' }]),
     )
@@ -44,15 +50,16 @@ describe('useWorkspaceCanvases', () => {
     expect(mocks.Available).not.toHaveBeenCalled()
   })
 
-  it("lists every workspace's canvases in one list", async () => {
+  it("lists every workspace's and repository's canvases in one list", async () => {
     await useAgentWorkspaces().reloadWorkspaces()
     const all = useWorkspaceCanvases()
 
     await all.reload()
 
-    expect(all.canvases.value.map((meta) => `${meta.workspace}/${meta.name}`)).toEqual([
-      'web-app/plan',
-      'docs/perf-report',
+    expect(all.canvases.value.map((meta) => `${meta.workspace}:${meta.name}`)).toEqual([
+      'web-app:plan',
+      'docs:perf-report',
+      'acme/site:perf-report',
     ])
   })
 
@@ -64,7 +71,7 @@ describe('useWorkspaceCanvases', () => {
 
     await all.reload()
 
-    expect(all.canvases.value).toHaveLength(2)
+    expect(all.canvases.value).toHaveLength(3)
     expect(all.error.value).toBe('control plane down')
   })
 

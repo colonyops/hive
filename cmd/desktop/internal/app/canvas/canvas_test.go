@@ -14,7 +14,7 @@ import (
 // millisecond per call, so every mutation gets a distinct, ordered stamp.
 func testStore(t *testing.T) *Store {
 	t.Helper()
-	s := NewStore(t.TempDir())
+	s := NewStore(Roots{Workspaces: t.TempDir()})
 	var tick int64
 	s.now = func() time.Time {
 		tick++
@@ -33,7 +33,7 @@ func TestLoadAbsentIsNotAnError(t *testing.T) {
 func TestUpsertAppendsThenUpdatesInPlace(t *testing.T) {
 	s := testStore(t)
 
-	c, err := s.Upsert("ws", "plan", 1, "The Plan", "", Block{ID: "plan", Kind: KindMarkdown, Body: "v1"})
+	c, err := s.Upsert("ws", "plan", Author{Session: 1}, "The Plan", "", Block{ID: "plan", Kind: KindMarkdown, Body: "v1"})
 	require.NoError(t, err)
 	require.Len(t, c.Blocks, 1)
 	created := c.Blocks[0].CreatedAt
@@ -42,12 +42,12 @@ func TestUpsertAppendsThenUpdatesInPlace(t *testing.T) {
 	assert.Equal(t, int64(1), c.Session)
 	assert.Equal(t, "The Plan", c.Title)
 
-	c, err = s.Upsert("ws", "plan", 1, "", "", Block{ID: "result", Kind: KindLink, Title: "PR", URL: "https://example.com"})
+	c, err = s.Upsert("ws", "plan", Author{Session: 1}, "", "", Block{ID: "result", Kind: KindLink, Title: "PR", URL: "https://example.com"})
 	require.NoError(t, err)
 	require.Len(t, c.Blocks, 2)
 	assert.Equal(t, "The Plan", c.Title, "an empty title leaves the stored one")
 
-	c, err = s.Upsert("ws", "plan", 2, "Revised", "", Block{ID: "plan", Kind: KindMarkdown, Body: "v2"})
+	c, err = s.Upsert("ws", "plan", Author{Session: 2}, "Revised", "", Block{ID: "plan", Kind: KindMarkdown, Body: "v2"})
 	require.NoError(t, err)
 	require.Len(t, c.Blocks, 2)
 	assert.Equal(t, "plan", c.Blocks[0].ID, "an updated block keeps its position")
@@ -65,35 +65,35 @@ func TestUpsertAppendsThenUpdatesInPlace(t *testing.T) {
 
 func TestUpsertBeforeAnchorInsertsAndMoves(t *testing.T) {
 	s := testStore(t)
-	_, err := s.Upsert("ws", "plan", 1, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "a"})
+	_, err := s.Upsert("ws", "plan", Author{Session: 1}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "a"})
 	require.NoError(t, err)
-	c, err := s.Upsert("ws", "plan", 1, "", "", Block{ID: "b", Kind: KindMarkdown, Body: "b"})
+	c, err := s.Upsert("ws", "plan", Author{Session: 1}, "", "", Block{ID: "b", Kind: KindMarkdown, Body: "b"})
 	require.NoError(t, err)
 	created := c.Blocks[1].CreatedAt
 
-	c, err = s.Upsert("ws", "plan", 1, "", "a", Block{ID: "intro", Kind: KindMarkdown, Body: "i"})
+	c, err = s.Upsert("ws", "plan", Author{Session: 1}, "", "a", Block{ID: "intro", Kind: KindMarkdown, Body: "i"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"intro", "a", "b"}, blockIDs(c), "a new block inserts before the anchor")
 
-	c, err = s.Upsert("ws", "plan", 1, "", "intro", Block{ID: "b", Kind: KindMarkdown, Body: "b2"})
+	c, err = s.Upsert("ws", "plan", Author{Session: 1}, "", "intro", Block{ID: "b", Kind: KindMarkdown, Body: "b2"})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"b", "intro", "a"}, blockIDs(c), "a reused id moves before the anchor")
 	assert.Equal(t, created, c.Blocks[0].CreatedAt, "a moved block keeps its CreatedAt")
 	assert.Equal(t, "b2", c.Blocks[0].Body)
 
-	_, err = s.Upsert("ws", "plan", 1, "", "ghost", Block{ID: "x", Kind: KindMarkdown, Body: "x"})
+	_, err = s.Upsert("ws", "plan", Author{Session: 1}, "", "ghost", Block{ID: "x", Kind: KindMarkdown, Body: "x"})
 	require.ErrorIs(t, err, ErrAnchorNotFound)
 	c, _, err = s.Load("ws", "plan")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"b", "intro", "a"}, blockIDs(c), "a rejected anchor writes nothing")
 
-	_, err = s.Upsert("ws", "plan", 1, "", "b", Block{ID: "b", Kind: KindMarkdown, Body: "b3"})
+	_, err = s.Upsert("ws", "plan", Author{Session: 1}, "", "b", Block{ID: "b", Kind: KindMarkdown, Body: "b3"})
 	require.ErrorIs(t, err, ErrAnchorNotFound, "a block cannot anchor before itself")
 }
 
 func TestUpsertBatchIsOneWrite(t *testing.T) {
 	s := testStore(t)
-	c, err := s.Upsert("ws", "plan", 1, "The Plan", "",
+	c, err := s.Upsert("ws", "plan", Author{Session: 1}, "The Plan", "",
 		Block{ID: "a", Kind: KindMarkdown, Body: "a"},
 		Block{ID: "b", Kind: KindMarkdown, Body: "b"},
 		Block{ID: "c", Kind: KindLink, Title: "PR", URL: "https://example.com"},
@@ -113,7 +113,7 @@ func blockIDs(c Canvas) []string {
 
 func TestRemove(t *testing.T) {
 	s := testStore(t)
-	_, err := s.Upsert("ws", "plan", 1, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	_, err := s.Upsert("ws", "plan", Author{Session: 1}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 	require.NoError(t, err)
 
 	c, removed, err := s.Remove("ws", "plan", "a")
@@ -131,7 +131,7 @@ func TestRemove(t *testing.T) {
 
 func TestClearKeepsTheCanvas(t *testing.T) {
 	s := testStore(t)
-	first, err := s.Upsert("ws", "plan", 1, "The Plan", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	first, err := s.Upsert("ws", "plan", Author{Session: 1}, "The Plan", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 	require.NoError(t, err)
 
 	c, err := s.Clear("ws", "plan")
@@ -151,11 +151,11 @@ func TestClearKeepsTheCanvas(t *testing.T) {
 
 func TestListOrdersByUpdatedAtDesc(t *testing.T) {
 	s := testStore(t)
-	_, err := s.Upsert("ws", "plan", 1, "The Plan", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	_, err := s.Upsert("ws", "plan", Author{Session: 1}, "The Plan", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 	require.NoError(t, err)
-	_, err = s.Upsert("ws", "report", 2, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	_, err = s.Upsert("ws", "report", Author{Session: 2}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 	require.NoError(t, err)
-	_, err = s.Upsert("ws", "plan", 1, "", "", Block{ID: "b", Kind: KindMarkdown, Body: "y"})
+	_, err = s.Upsert("ws", "plan", Author{Session: 1}, "", "", Block{ID: "b", Kind: KindMarkdown, Body: "y"})
 	require.NoError(t, err)
 
 	metas, err := s.List("ws")
@@ -173,7 +173,7 @@ func TestListOrdersByUpdatedAtDesc(t *testing.T) {
 
 func TestDeleteReportsExistence(t *testing.T) {
 	s := testStore(t)
-	_, err := s.Upsert("ws", "plan", 1, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	_, err := s.Upsert("ws", "plan", Author{Session: 1}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 	require.NoError(t, err)
 
 	existed, err := s.Delete("ws", "plan")
@@ -220,7 +220,7 @@ func TestMarkdownEmitsSanitizedHTMLBlocks(t *testing.T) {
 func TestInvalidWorkspaceRefused(t *testing.T) {
 	s := testStore(t)
 	for _, dir := range []string{"", ".", "..", "a/b", "../escape"} {
-		_, err := s.Upsert(dir, "plan", 1, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+		_, err := s.Upsert(dir, "plan", Author{Session: 1}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 		require.ErrorIs(t, err, ErrInvalidWorkspace, "dir %q", dir)
 		_, err = s.List(dir)
 		require.ErrorIs(t, err, ErrInvalidWorkspace, "dir %q", dir)
@@ -234,20 +234,20 @@ func TestInvalidNameRefused(t *testing.T) {
 		long[i] = 'a'
 	}
 	for _, name := range []string{"", ".", "..", "a/b", "../escape", ".hidden", "-plan", "plan-", "Report", "has space", string(long)} {
-		_, err := s.Upsert("ws", name, 1, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+		_, err := s.Upsert("ws", name, Author{Session: 1}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 		require.ErrorIs(t, err, ErrInvalidName, "name %q", name)
 	}
 	for _, name := range []string{"plan", "release-notes", "perf.report", "a", "v2_draft"} {
-		_, err := s.Upsert("ws", name, 1, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+		_, err := s.Upsert("ws", name, Author{Session: 1}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 		require.NoError(t, err, "name %q", name)
 	}
 }
 
 func TestCorruptFileIsAnErrorNotABlankCanvas(t *testing.T) {
 	s := testStore(t)
-	_, err := s.Upsert("ws", "plan", 1, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	_, err := s.Upsert("ws", "plan", Author{Session: 1}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(s.root, "ws", canvasesDirName, "plan.json"), []byte("{not json"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(s.roots.Workspaces, "ws", DirName, "plan.json"), []byte("{not json"), 0o600))
 
 	_, _, err = s.Load("ws", "plan")
 	require.Error(t, err)
@@ -257,12 +257,12 @@ func TestCorruptFileIsAnErrorNotABlankCanvas(t *testing.T) {
 
 func TestWritesLeaveNoTempFiles(t *testing.T) {
 	s := testStore(t)
-	_, err := s.Upsert("ws", "plan", 1, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	_, err := s.Upsert("ws", "plan", Author{Session: 1}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 	require.NoError(t, err)
 	_, err = s.Clear("ws", "plan")
 	require.NoError(t, err)
 
-	entries, err := os.ReadDir(filepath.Join(s.root, "ws", canvasesDirName))
+	entries, err := os.ReadDir(filepath.Join(s.roots.Workspaces, "ws", DirName))
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	assert.Equal(t, "plan.json", entries[0].Name())
@@ -270,4 +270,73 @@ func TestWritesLeaveNoTempFiles(t *testing.T) {
 	metas, err := s.List("ws")
 	require.NoError(t, err)
 	assert.Len(t, metas, 1, "a stray non-canvas file must not break the listing")
+}
+
+func testRepositoryStore(t *testing.T) (*Store, string) {
+	t.Helper()
+	context := t.TempDir()
+	return NewStore(Roots{Workspaces: t.TempDir(), Repositories: func() string { return context }}), context
+}
+
+func TestRepositoryCanvasesSitUnderTheContextRoot(t *testing.T) {
+	s, context := testRepositoryStore(t)
+	owner := RepositoryOwner("acme", "site")
+
+	c, err := s.Upsert(owner, "plan", Author{HiveSession: "abc123"}, "The Plan", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	require.NoError(t, err)
+	assert.Equal(t, "acme/site", c.Workspace)
+	assert.Equal(t, "abc123", c.HiveSession)
+	assert.Zero(t, c.Session)
+	require.FileExists(t, filepath.Join(context, "acme", "site", DirName, "plan.json"))
+
+	metas, err := s.List(owner)
+	require.NoError(t, err)
+	require.Len(t, metas, 1)
+	assert.Equal(t, "abc123", metas[0].HiveSession)
+
+	// The same name under a workspace is a different canvas.
+	_, found, err := s.Load("acme", "plan")
+	require.NoError(t, err)
+	assert.False(t, found)
+}
+
+func TestRepositoryKeyIsHeldToTwoLocalComponents(t *testing.T) {
+	s, _ := testRepositoryStore(t)
+	for _, owner := range []string{"acme/site/extra", "../site", "acme/..", "/site", "acme/", "acme/."} {
+		_, err := s.Upsert(owner, "plan", Author{HiveSession: "abc123"}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+		require.ErrorIs(t, err, ErrInvalidWorkspace, "owner %q", owner)
+	}
+}
+
+func TestRepositoryOwnerIsRefusedWithNoContextRoot(t *testing.T) {
+	for name, roots := range map[string]Roots{
+		"no resolver": {Workspaces: t.TempDir()},
+		"empty root":  {Workspaces: t.TempDir(), Repositories: func() string { return "" }},
+	} {
+		s := NewStore(roots)
+		_, err := s.List(RepositoryOwner("acme", "site"))
+		require.ErrorIs(t, err, ErrInvalidWorkspace, name)
+		keys, err := s.Repositories()
+		require.NoError(t, err, name)
+		assert.Empty(t, keys, name)
+	}
+}
+
+func TestRepositoriesListsEveryRepositoryHoldingACanvas(t *testing.T) {
+	s, context := testRepositoryStore(t)
+	for _, owner := range []string{RepositoryOwner("zed", "editor"), RepositoryOwner("acme", "site")} {
+		_, err := s.Upsert(owner, "plan", Author{HiveSession: "abc123"}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+		require.NoError(t, err)
+	}
+	_, err := s.Upsert(RepositoryOwner("acme", "site"), "notes", Author{HiveSession: "abc123"}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	require.NoError(t, err)
+	// A context directory with no canvases, and one whose only file is not a
+	// canvas, are not repositories with canvases.
+	require.NoError(t, os.MkdirAll(filepath.Join(context, "acme", "docs", "plans"), 0o700))
+	require.NoError(t, os.MkdirAll(filepath.Join(context, "acme", "api", DirName), 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(context, "acme", "api", DirName, "Notes.json"), []byte("{}"), 0o600))
+
+	keys, err := s.Repositories()
+	require.NoError(t, err)
+	assert.Equal(t, []string{"acme/site", "zed/editor"}, keys)
 }

@@ -23,8 +23,15 @@ describe('useTerminalSessions', () => {
 
   it('loads every session the list carries, whatever its state', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'old work', slug: 'old-work', repo: 'hay-kot/hive', state: 'recycled' },
+      {
+        id: '1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'hay-kot/hive',
+        state: 'active',
+        canvasOwner: '',
+      },
+      { id: '2', name: 'old work', slug: 'old-work', repo: 'hay-kot/hive', state: 'recycled', canvasOwner: '' },
     ])
     const { sessions, loading, reload } = useTerminalSessions()
 
@@ -47,7 +54,14 @@ describe('useTerminalSessions', () => {
 
   it('surfaces a listing failure and keeps the last-good rows', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
+      {
+        id: '1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'hay-kot/hive',
+        state: 'active',
+        canvasOwner: '',
+      },
     ])
     const { sessions, error, reload } = useTerminalSessions()
     await reload()
@@ -70,13 +84,27 @@ describe('useTerminalSessions', () => {
     await reload()
     await reload()
 
-    expect(scratch.value).toEqual({ id: 'Scratch', name: 'Terminals', slug: 'Scratch', repo: '', state: 'active' })
+    expect(scratch.value).toEqual({
+      id: 'Scratch',
+      name: 'Terminals',
+      slug: 'Scratch',
+      repo: '',
+      state: 'active',
+      canvasOwner: '',
+    })
     expect(mocks.Scratch).toHaveBeenCalledTimes(1)
   })
 
   it('lists the sessions anyway when the scratch terminal cannot be read', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'fix the parser', slug: 'hive-fix-parser', repo: 'hay-kot/hive', state: 'active' },
+      {
+        id: '1',
+        name: 'fix the parser',
+        slug: 'hive-fix-parser',
+        repo: 'hay-kot/hive',
+        state: 'active',
+        canvasOwner: '',
+      },
     ])
     mocks.Scratch.mockRejectedValue(new Error('the terminal is unavailable'))
     const { sessions, scratch, error, reload } = useTerminalSessions()
@@ -102,6 +130,7 @@ describe('sessionRepository', () => {
         slug: 'hive-fix-parser',
         repo: 'https://github.com/hay-kot/hive.git',
         state: 'active',
+        canvasOwner: '',
       },
     ])
     const { reload, sessionRepository } = useTerminalSessions()
@@ -111,7 +140,9 @@ describe('sessionRepository', () => {
   })
 
   it('is empty for an unknown slug, no slug, and a session without a remote', async () => {
-    mocks.ListSessions.mockResolvedValue([{ id: '1', name: 'scratch', slug: 'scratch', repo: '', state: 'active' }])
+    mocks.ListSessions.mockResolvedValue([
+      { id: '1', name: 'scratch', slug: 'scratch', repo: '', state: 'active', canvasOwner: '' },
+    ])
     const { reload, sessionRepository } = useTerminalSessions()
     await reload()
 
@@ -123,7 +154,7 @@ describe('sessionRepository', () => {
 
 describe('groupTerminalSessions', () => {
   function row(name: string, repo: string): TerminalSessionRow {
-    return { id: name, name, slug: `slug-${name}`, repo, state: 'active' }
+    return { id: name, name, slug: `slug-${name}`, repo, state: 'active', canvasOwner: '' }
   }
 
   it('groups by remote with readable names, both levels alphabetical', () => {
@@ -146,7 +177,7 @@ describe('groupTerminalSessions', () => {
 
 describe('terminalSessionGroups', () => {
   function row(name: string, repo: string): TerminalSessionRow {
-    return { id: name, name, slug: `slug-${name}`, repo, state: 'active' }
+    return { id: name, name, slug: `slug-${name}`, repo, state: 'active', canvasOwner: '' }
   }
 
   it('pins the scratch terminal above the repositories, in a section of its own', () => {

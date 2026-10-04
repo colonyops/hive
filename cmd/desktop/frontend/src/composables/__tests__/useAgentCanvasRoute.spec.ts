@@ -146,4 +146,35 @@ describe('useAgentCanvasRoute', () => {
     second.clearCanvasUnseen(7)
     expect(first.canvasUnseen.value).toBe(false)
   })
+
+  // Code rides the same query on its own route, so the title bar's toggle and
+  // a reload reach its pane the way they reach the Chats one.
+  it('opens and closes the canvas on the terminal route, keeping the session and window', async () => {
+    const { api, router } = await mountAt('/terminal/fix-login?window=%402')
+    expect(api.canvasRequested.value).toBe(false)
+
+    api.syncCanvasQuery(true)
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('terminal')
+    expect(router.currentRoute.value.params.slug).toBe('fix-login')
+    expect(router.currentRoute.value.query).toEqual({ window: '@2', canvas: '1' })
+    expect(api.canvasRequested.value).toBe(true)
+    expect(api.canvasVisible.value).toBe(false)
+
+    api.syncCanvasQuery(false)
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ window: '@2' })
+  })
+
+  it('keeps an unseen mark per author, chat or hive session', async () => {
+    const { api } = await mountAt('/terminal/fix-login')
+
+    api.markCanvasUnseen('abc123')
+    expect(api.isCanvasUnseen('abc123')).toBe(true)
+    expect(api.isCanvasUnseen('def456')).toBe(false)
+    expect(api.isCanvasUnseen(null)).toBe(false)
+
+    api.clearCanvasUnseen('abc123')
+    expect(api.isCanvasUnseen('abc123')).toBe(false)
+  })
 })

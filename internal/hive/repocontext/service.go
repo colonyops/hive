@@ -107,6 +107,11 @@ func (c *Service) CreateSymlink(ctxDir string) (bool, error) {
 	return false, nil
 }
 
+// CanvasesDirName is the entry Hive Desktop keeps a repository's canvases in.
+// Prune leaves it alone: a canvas is durable output, and the age of its
+// directory says nothing about whether it is still wanted.
+const CanvasesDirName = "canvases"
+
 // Prune deletes files in the context directory older than the given duration.
 // Returns the number of files removed.
 func (c *Service) Prune(ctxDir string, olderThan time.Duration) (int, error) {
@@ -122,6 +127,9 @@ func (c *Service) Prune(ctxDir string, olderThan time.Duration) (int, error) {
 
 	count := 0
 	for _, entry := range entries {
+		if entry.Name() == CanvasesDirName {
+			continue
+		}
 		info, err := entry.Info()
 		if err != nil {
 			continue

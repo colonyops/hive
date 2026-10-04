@@ -46,6 +46,7 @@ function meta(overrides: Partial<WorkspaceCanvasMeta>): WorkspaceCanvasMeta {
     name: 'plan',
     title: '',
     session: 7,
+    hiveSession: '',
     createdAt: 1,
     updatedAt: 1,
     blockCount: 1,
@@ -234,6 +235,27 @@ describe('AgentCanvasPane', () => {
     await mountPane(client)
 
     expect(vi.mocked(client.canvas)).toHaveBeenCalledWith('web-app', 'plan')
+  })
+
+  // In Code the pane's session is a hive session, and its canvases are the
+  // repository's: the default prefers the one this session wrote.
+  it("defaults to the hive session's own canvas among its repository's", async () => {
+    const client = fakeCanvasClient(
+      [],
+      [
+        meta({ workspace: 'acme/site', name: 'other', session: 0, hiveSession: 'def456', updatedAt: 5 }),
+        meta({ workspace: 'acme/site', name: 'plan', session: 0, hiveSession: 'abc123', updatedAt: 3 }),
+      ],
+    )
+    const wrapper = mount(AgentCanvasPane, {
+      props: { session: 'abc123', workspace: 'acme/site', name: null, client },
+    })
+    await flushPromises()
+
+    expect(vi.mocked(client.canvases)).toHaveBeenCalledWith('acme/site')
+    expect(vi.mocked(client.canvas)).toHaveBeenCalledWith('acme/site', 'plan')
+
+    wrapper.unmount()
   })
 
   it('pins the route-named canvas and lists canvases by title in the browse view', async () => {
