@@ -323,6 +323,10 @@ cmd/desktop/                      # Wails app package — stays `main`, stays he
 
 cmd/desktop/internal/
   devproxy/                       # the address-and-health contract devserver and devtools share
+  web/                            # HTTP plumbing httpapi and devserver share
+                                  #   (ADR http-handler-conventions): error wire shape, version
+                                  #   handler; mid/ (error + logger middleware),
+                                  #   extractors/ (Body/Query decode + validate)
   app/                            # THE CORE. No Wails, no transport, no globals.
     app.go                        # App facade
     errors.go                     # Error{Kind, Msg, Err}; Kind enum
@@ -507,10 +511,6 @@ internal/                         # the hive engine both programs run on (see
     session/  status/  hc/        #   one subpackage per application service
     messaging/  repocontext/
     todo/  gitstatus/  doctor/
-  web/                            # HTTP plumbing shared with cmd/desktop/devserver
-                                  #   (ADR http-handler-conventions): error wire shape, version
-                                  #   handler; mid/ (error + logger middleware),
-                                  #   extractors/ (Body/Query decode + validate)
   releasenotes/                   # release tooling, outside the layers: the
                                   #   changelog parser each program's embed feeds:
                                   #   <version>.md per release, unreleased/ one file

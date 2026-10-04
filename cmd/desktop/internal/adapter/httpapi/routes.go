@@ -8,8 +8,8 @@ import (
 	"github.com/hay-kot/httpkit/errchain"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
-	"github.com/colonyops/hive/internal/web"
-	"github.com/colonyops/hive/internal/web/mid"
+	"github.com/colonyops/hive/cmd/desktop/internal/web"
+	"github.com/colonyops/hive/cmd/desktop/internal/web/mid"
 )
 
 // Op is one HTTP operation. The operations table is what the mux is built

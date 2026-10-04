@@ -13,8 +13,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
+	"github.com/colonyops/hive/cmd/desktop/internal/web/extractors"
 	"github.com/colonyops/hive/internal/platform/tmux/control"
-	"github.com/colonyops/hive/internal/web/extractors"
 )
 
 const (

@@ -7,7 +7,7 @@ import (
 	"github.com/hay-kot/criterio"
 	"github.com/hay-kot/httpkit/server"
 
-	"github.com/colonyops/hive/internal/web/extractors"
+	"github.com/colonyops/hive/cmd/desktop/internal/web/extractors"
 )
 
 // The vocabulary is deliberately GitHub's own, not an invented one. The

@@ -4,7 +4,7 @@ import (
 	"mime/multipart"
 	"net/http"
 
-	"github.com/colonyops/hive/internal/web"
+	"github.com/colonyops/hive/cmd/desktop/internal/web"
 )
 
 // Files leaves at most 1 MiB in memory; callers remove the form's temporary

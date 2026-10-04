@@ -49,6 +49,10 @@ modeled on recipinned, whose httpkit-based structure is the reference.
    middleware), and `extractors/`. It must not import `internal/app`: the
    devserver consumes it, and Kind mapping stays in the adapter that owns the
    vocabulary.
+   **Update (2026-10-03):** the package moved to `cmd/desktop/internal/web`.
+   Only the desktop's HTTP adapter and its devserver import it, and shared
+   `internal/` is the engine both programs run on (ADR
+   both-programs-run-on-one-layered-hive-engine).
 
 ## Consequences
 

@@ -30,7 +30,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
-	"github.com/colonyops/hive/internal/web"
+	"github.com/colonyops/hive/cmd/desktop/internal/web"
 )
 
 // PathPrefix is where App mounts this handler on the webhook listener.

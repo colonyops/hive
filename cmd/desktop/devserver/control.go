@@ -8,8 +8,8 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/devproxy"
-	"github.com/colonyops/hive/internal/web"
-	"github.com/colonyops/hive/internal/web/mid"
+	"github.com/colonyops/hive/cmd/desktop/internal/web"
+	"github.com/colonyops/hive/cmd/desktop/internal/web/mid"
 )
 
 // Control is the devserver's own API: everything that drives the simulation,

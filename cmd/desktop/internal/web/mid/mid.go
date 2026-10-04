@@ -10,7 +10,7 @@ import (
 	"github.com/hay-kot/httpkit/server"
 	"github.com/rs/zerolog"
 
-	"github.com/colonyops/hive/internal/web"
+	"github.com/colonyops/hive/cmd/desktop/internal/web"
 )
 
 // Mapper translates one API's own error types to a response; the first mapper

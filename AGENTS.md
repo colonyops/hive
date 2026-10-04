@@ -148,10 +148,9 @@ internal/           # The hive engine, shared with Hive Desktop
 ├── platform/       # Drivers: git, tmux (exec, status, control, bin), proc, sqlite,
 │                   # execenv, credentials, secrets, observe, workspace, tmuxtest
 ├── store/          # hive.db: migrations, sqlc queries, stores
-├── config/         # Engine config: loading, validation, defaults, the YAML writer, migrate/
-├── hive/           # hive.Engine and one subpackage per service (session, status, hc,
-│                   # messaging, todo, gitstatus, doctor, events, ...)
-└── web/            # HTTP plumbing shared with cmd/desktop/devserver
+├── config/         # Engine config: loading, validation, defaults, the YAML writer
+└── hive/           # hive.Engine and one subpackage per service (session, status, hc,
+                    # messaging, todo, gitstatus, doctor, events, ...)
 ```
 
 UI code goes below `cmd/hive/internal/`.

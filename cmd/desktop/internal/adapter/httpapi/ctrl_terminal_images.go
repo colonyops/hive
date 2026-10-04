@@ -6,7 +6,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/terminalimg"
-	"github.com/colonyops/hive/internal/web/extractors"
+	"github.com/colonyops/hive/cmd/desktop/internal/web/extractors"
 	"github.com/hay-kot/httpkit/server"
 )
 
