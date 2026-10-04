@@ -251,6 +251,19 @@ describe('AgentCanvasPage', () => {
     wrapper.unmount()
   })
 
+  it('offers agent setup for a repository with no canvases, and not for a workspace', async () => {
+    const repo = await mountPage({ workspace: 'acme/empty', session: 'abc123' })
+    const setup = repo.wrapper.findComponent(AgentCanvasPage)
+    await repo.wrapper.get('[data-testid="canvas-page-setup-open"]').trigger('click')
+    expect(setup.emitted('setup')).toHaveLength(1)
+    repo.wrapper.unmount()
+
+    agents.canvases.mockResolvedValue([])
+    const workspace = await mountPage({ workspace: 'web-app' })
+    expect(workspace.wrapper.find('[data-testid="canvas-page-setup"]').exists()).toBe(false)
+    workspace.wrapper.unmount()
+  })
+
   it('offers the repositories that hold a canvas beside the workspaces', async () => {
     const { wrapper, scope } = await mountPage()
 

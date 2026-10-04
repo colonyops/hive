@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onClickOutside } from '@vueuse/core'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import IconActivity from '~icons/lucide/activity'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
@@ -56,8 +56,8 @@ import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedCon
 // shown as a pulsing amber dot. sidebarCollapsed drives the panel-toggle glyph;
 // canToggleSidebar disables the toggle in views with no left panel (settings,
 // flows, onboarding). previewCollapsed/canTogglePreview are the same pair for
-// the right-hand pane — the detail preview in Inbox, the canvas in Chats.
-// previewUnseen is that pane's attention dot: in Chats an agent wrote to a
+// the right-hand pane — the detail preview in Inbox, the canvas in Chats and
+// Code. previewUnseen is that pane's attention dot: an agent wrote to a
 // canvas that is not on screen. updateAvailable renders a click-to-install chip in
 // the right cluster, independent of profileName so it can show during
 // onboarding too.
@@ -106,6 +106,7 @@ const modeOptions: SegmentedControlOption<'hub' | 'terminal' | 'agents'>[] = [
   { value: 'agents', label: 'Chats', title: 'Chats' },
 ]
 const modeIcons = { hub: IconInbox, terminal: IconCode, agents: IconMessagesSquare }
+const rightPane = computed(() => (props.mode === 'terminal' || props.mode === 'agents' ? 'canvas' : 'preview'))
 const jobsRoot = ref<HTMLElement | null>(null)
 const jobsOpen = ref(false)
 
@@ -286,7 +287,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       </IconButton>
       <IconButton
         v-if="profileName"
-        :label="previewCollapsed ? 'Show preview' : 'Hide preview'"
+        :label="`${previewCollapsed ? 'Show' : 'Hide'} ${rightPane}`"
         :icon="previewCollapsed ? IconPanelRightOpen : IconPanelRightClose"
         size="lg"
         class="relative ml-1"

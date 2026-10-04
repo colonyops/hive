@@ -27,6 +27,7 @@ export function useAgentCanvas(client: Ref<AgentWorkspacesClient | null>) {
   const preferSession: Ref<CanvasAuthor | null> = ref(null)
   const loading = ref(false)
   const error = ref('')
+  let listedDir = ''
   let generation = 0
   let queued = false
   let running = false
@@ -49,10 +50,23 @@ export function useAgentCanvas(client: Ref<AgentWorkspacesClient | null>) {
     loading.value = true
     try {
       const listed = dir && client.value ? await client.value.canvases(dir) : []
+      // A pinned name that was listed and no longer is was deleted, so the
+      // default takes over. A name never listed stays pinned and blank: an
+      // agent can open a canvas before its first write.
+      const pinned = requested.value
+      if (
+        pinned &&
+        dir === listedDir &&
+        metas.value.some((meta) => meta.name === pinned) &&
+        !listed.some((meta) => meta.name === pinned)
+      ) {
+        requested.value = null
+      }
       const name = requested.value ?? defaultName(listed)
       const loaded = dir && name && client.value ? await client.value.canvas(dir, name) : null
       if (token === generation) {
         metas.value = listed
+        listedDir = dir
         shown.value = name
         canvas.value = loaded
         error.value = ''

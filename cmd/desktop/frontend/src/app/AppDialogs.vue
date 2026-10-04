@@ -58,6 +58,11 @@ const { pendingNavigation, unsavedChangesBusy } = nav
 const { tasksOpen, activityOpen, canvasOpen, canvasScope } = overlays
 const { newProfileOpen } = profileActions
 const flowsSession = useFlowsSession()
+
+function openMcpSettings(): void {
+  canvasOpen.value = false
+  nav.selectApplicationSettingsSection('mcp')
+}
 const { open: reportDialogOpen } = useReportDialog()
 const { current: appError, dismissError } = useErrorDialog()
 
@@ -154,7 +159,12 @@ onMounted(() => {
     <TasksView @close="tasksOpen = false" />
   </HubOverlay>
   <HubOverlay v-if="canvasOpen" label="Canvases" testid="canvas-overlay" @close="canvasOpen = false">
-    <AgentCanvasPage v-model:scope="canvasScope" @close="canvasOpen = false" @open-url="feed.openUrl" />
+    <AgentCanvasPage
+      v-model:scope="canvasScope"
+      @close="canvasOpen = false"
+      @open-url="feed.openUrl"
+      @setup="openMcpSettings"
+    />
   </HubOverlay>
   <HubOverlay v-if="activityOpen" label="Activity" testid="activity-overlay" @close="activityOpen = false">
     <ActivityView

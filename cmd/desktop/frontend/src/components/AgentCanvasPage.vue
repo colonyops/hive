@@ -12,6 +12,7 @@ import AgentCanvasActions from './AgentCanvasActions.vue'
 import AgentCanvasBrowse from './AgentCanvasBrowse.vue'
 import AgentCanvasReader from './AgentCanvasReader.vue'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
+import BaseButton from './ui/BaseButton.vue'
 import EmptyState from './ui/EmptyState.vue'
 import IconButton from './ui/IconButton.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
@@ -25,7 +26,7 @@ import { isRepositoryCanvasOwner, type CanvasScope } from '../lib/agentCanvas'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 
 const props = defineProps<{ scope: CanvasScope }>()
-const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope': [scope: CanvasScope] }>()
+const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope': [scope: CanvasScope]; setup: [] }>()
 
 const { checking, available, reason, client, workspaces, workspacesLoaded, reloadWorkspaces } = useAgentWorkspaces()
 const { canvas, metas, shown, loading, error, show, wake } = useAgentCanvas(client)
@@ -90,6 +91,11 @@ function openCanvas(name: string): void {
 }
 
 const title = computed(() => canvas.value?.title || shown.value || 'Canvases')
+
+// The pane's reason: Hive wires a workspace's agent, never a Code session's.
+const offerSetup = computed(
+  () => isRepositoryCanvasOwner(workspace.value) && !metas.value.length && !loading.value && !error.value,
+)
 
 const reader = ref<HTMLElement | null>(null)
 watch(shown, () => {
@@ -182,6 +188,15 @@ useEscapeToClose(() => emit('close'))
             @open-url="emit('open-url', $event)"
             @open-canvas="openCanvas"
           />
+          <div v-if="offerSetup" class="mt-3 flex flex-col items-start gap-2" data-testid="canvas-page-setup">
+            <p class="text-xs leading-relaxed text-text-3">
+              An agent in a Code session of this repository can write here once its own MCP configuration lists the Hive
+              Canvas server.
+            </p>
+            <BaseButton variant="secondary" size="xs" data-testid="canvas-page-setup-open" @click="emit('setup')">
+              Set up an agent
+            </BaseButton>
+          </div>
         </div>
       </div>
     </div>

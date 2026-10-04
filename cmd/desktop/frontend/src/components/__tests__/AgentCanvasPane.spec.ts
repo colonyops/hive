@@ -300,6 +300,28 @@ describe('AgentCanvasPane', () => {
     expect(wrapper.get('[data-testid="agent-canvas-browse-perf-report"]').attributes('aria-current')).toBe('true')
   })
 
+  it('falls back to the default when the pinned canvas is deleted', async () => {
+    const client = fakeCanvasClient([], [meta({ name: 'plan', session: 7 }), meta({ name: 'perf-report', session: 9 })])
+    await mountPane(client, 'perf-report')
+
+    vi.mocked(client.canvases).mockResolvedValue([meta({ name: 'plan', session: 7 })])
+    wailsEvents.fire('canvas:updated', 9)
+    await flushPromises()
+
+    expect(vi.mocked(client.canvas)).toHaveBeenLastCalledWith('web-app', 'plan')
+  })
+
+  // open_canvas can name a canvas before the agent's first write to it.
+  it('keeps a pinned name that was never listed', async () => {
+    const client = fakeCanvasClient([], [meta({ name: 'plan' })])
+    await mountPane(client, 'draft')
+
+    wailsEvents.fire('canvas:updated', 7)
+    await flushPromises()
+
+    expect(vi.mocked(client.canvas)).toHaveBeenLastCalledWith('web-app', 'draft')
+  })
+
   it('emits pick from the browse view instead of switching locally', async () => {
     const client = fakeCanvasClient(
       [],

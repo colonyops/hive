@@ -2964,12 +2964,12 @@ describe('App', () => {
 
     const toggle = wrapper.get('[data-testid="titlebar-toggle-preview"]')
     expect(toggle.attributes('disabled')).toBeUndefined()
-    expect(toggle.attributes('aria-label')).toBe('Show preview')
+    expect(toggle.attributes('aria-label')).toBe('Show canvas')
 
     await toggle.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBe('1')
-    expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Hide preview')
+    expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Hide canvas')
 
     await wrapper.get('[data-testid="titlebar-toggle-preview"]').trigger('click')
     await flushPromises()
