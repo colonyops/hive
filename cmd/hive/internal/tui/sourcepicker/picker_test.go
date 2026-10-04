@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
@@ -90,7 +92,7 @@ func newTestPicker(fake *fakeTUISource, manifest sources.Manifest, scope string,
 		Manifest:  manifest,
 		Templates: sources.TemplateConfig{},
 	}}
-	return New(tabs, manifest.ID, scope, "", w, h)
+	return New(zerolog.Nop(), tabs, manifest.ID, scope, "", w, h)
 }
 
 // drainPicker synchronously executes cmd and feeds resulting message(s) back
@@ -352,7 +354,7 @@ func TestPicker_MarksAcrossTabs(t *testing.T) {
 		{ID: "prs", Source: newFakeTUISource(m1, []sources.Item{{ID: "p1", Title: "PR one"}}), Manifest: m1},
 		{ID: "issues", Source: newFakeTUISource(m2, []sources.Item{{ID: "i1", Title: "Issue one"}}), Manifest: m2},
 	}
-	p := New(tabs, "prs", "", "", 80, 24)
+	p := New(zerolog.Nop(), tabs, "prs", "", "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	p = pressSpace(t, p)
@@ -530,7 +532,7 @@ func TestPicker_TabSwitching(t *testing.T) {
 		{ID: "prs", Source: fake1, Manifest: m1},
 		{ID: "issues", Source: fake2, Manifest: m2},
 	}
-	p := New(tabs, "prs", "", "", 80, 24)
+	p := New(zerolog.Nop(), tabs, "prs", "", "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	assert.Equal(t, 0, p.activeTab)
@@ -570,7 +572,7 @@ func TestPicker_TabBarRendering(t *testing.T) {
 		{ID: "prs", Source: newFakeTUISource(m1, nil), Manifest: m1},
 		{ID: "issues", Source: newFakeTUISource(m2, nil), Manifest: m2},
 	}
-	p := New(tabs, "prs", "owner/repo", "", 80, 24)
+	p := New(zerolog.Nop(), tabs, "prs", "owner/repo", "", 80, 24)
 
 	bar := terminal.StripANSI(p.renderTabBar())
 	assert.Contains(t, bar, "Pull Requests")

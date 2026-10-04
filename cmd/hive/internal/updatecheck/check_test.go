@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/store"
 	"github.com/colonyops/hive/internal/store/db"
@@ -53,7 +55,7 @@ func TestCheckerCheck(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := newTestKVStore(t)
-			checker := New(store, nil)
+			checker := New(zerolog.Nop(), store, nil)
 
 			if tt.cachedTag != "" {
 				cacheRelease(t, store, checker, tt.cachedTag)
@@ -85,7 +87,7 @@ func TestCheckerCheck_NilCheckerAndNilStore(t *testing.T) {
 	require.NoError(t, err)
 	assert.Nil(t, result)
 
-	checker := New(nil, nil)
+	checker := New(zerolog.Nop(), nil, nil)
 	result, err = checker.Check(context.Background(), "v1.0.0")
 	require.NoError(t, err)
 	assert.Nil(t, result)
@@ -93,7 +95,7 @@ func TestCheckerCheck_NilCheckerAndNilStore(t *testing.T) {
 
 func TestCheckerCheck_CacheEntryExpires(t *testing.T) {
 	store := newTestKVStore(t)
-	checker := New(store, nil)
+	checker := New(zerolog.Nop(), store, nil)
 
 	cache := kv.Scoped[ReleaseInfo](store, "update-check")
 	err := cache.SetTTL(context.Background(), checker.cacheKey, ReleaseInfo{TagName: "v1.0.0"}, time.Millisecond)

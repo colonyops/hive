@@ -9,12 +9,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/cmd/hive/internal/sources"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
@@ -104,7 +106,8 @@ func (t *tabState) isMarked(id string) bool {
 // Each tab corresponds to a registered source (PRs, issues, etc.) with
 // lazy initialization and per-tab result caching.
 type Picker struct {
-	gen int64
+	logger zerolog.Logger
+	gen    int64
 
 	tabs      []tabState
 	activeTab int
@@ -144,7 +147,7 @@ type Result struct {
 // New constructs a tabbed picker. initialTab selects the initially active
 // tab by source ID; if not found the first tab is used. dir is the local repo
 // working directory sources run their CLI in (empty when no local checkout).
-func New(tabSources []TabSource, initialTab, scope, dir string, width, height int) Picker {
+func New(logger zerolog.Logger, tabSources []TabSource, initialTab, scope, dir string, width, height int) Picker {
 	input := textinput.New()
 	input.Placeholder = "search..."
 	input.Prompt = "/ "
@@ -170,6 +173,7 @@ func New(tabSources []TabSource, initialTab, scope, dir string, width, height in
 	}
 
 	p := Picker{
+		logger:        logutils.Component(logger, "tui.sourcepicker"),
 		gen:           sourcePickerGen.Add(1),
 		tabs:          tabs,
 		activeTab:     activeIdx,
@@ -454,7 +458,7 @@ func (p Picker) toggleMark() Picker {
 		}
 	}
 	if p.totalMarked() >= maxMarkedItems {
-		log.Debug().Int("max", maxMarkedItems).Msg("source picker: mark limit reached")
+		p.logger.Debug().Int("max", maxMarkedItems).Msg("source picker: mark limit reached")
 		return p
 	}
 	tab.marked = append(tab.marked, item)
@@ -527,7 +531,7 @@ func (p Picker) openCurrentItemURL() tea.Cmd {
 	}
 	return func() tea.Msg {
 		if err := browserOpenCmd(uri).Run(); err != nil {
-			log.Debug().Err(err).Str("uri", uri).Msg("source picker: open url failed")
+			p.logger.Debug().Err(err).Str("uri", uri).Msg("source picker: open url failed")
 		}
 		return nil
 	}

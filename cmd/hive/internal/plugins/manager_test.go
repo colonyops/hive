@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/stretchr/testify/assert"
@@ -27,7 +29,7 @@ func (p *mockPlugin) StatusProvider() StatusProvider          { return nil }
 
 func TestManager_InitAll_SeedsStaticPluginSlots(t *testing.T) {
 	set := NewCommandSet(nil, nil)
-	mgr := NewManager(NewWorkerPool(0), set)
+	mgr := NewManager(zerolog.Nop(), NewWorkerPool(0), set)
 
 	stub := &mockPlugin{
 		name: "stub",
@@ -46,7 +48,7 @@ func TestManager_InitAll_SeedsStaticPluginSlots(t *testing.T) {
 
 func TestManager_InitAll_SkipsPluginsWithNilCommands(t *testing.T) {
 	set := NewCommandSet(nil, nil)
-	mgr := NewManager(NewWorkerPool(0), set)
+	mgr := NewManager(zerolog.Nop(), NewWorkerPool(0), set)
 
 	mgr.Register(&mockPlugin{name: "empty", commands: nil})
 
@@ -75,7 +77,7 @@ func (p *initUpdatingPlugin) StatusProvider() StatusProvider          { return n
 
 func TestManager_InitAll_SeedsCommandsObservedAfterInit(t *testing.T) {
 	set := NewCommandSet(nil, nil)
-	mgr := NewManager(NewWorkerPool(0), set)
+	mgr := NewManager(zerolog.Nop(), NewWorkerPool(0), set)
 
 	mgr.Register(&initUpdatingPlugin{
 		name:     "self",

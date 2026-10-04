@@ -43,7 +43,7 @@ func addHumanTodo(t *testing.T, svc *todosvc.Service, id, title string) todo.Tod
 
 func newTestTodoPanel(t *testing.T, svc *todosvc.Service) *TodoPanel {
 	t.Helper()
-	return NewTodoPanel(svc, 120, 40)
+	return NewTodoPanel(zerolog.Nop(), svc, 120, 40)
 }
 
 // --- ReopenCurrent ---

@@ -11,7 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
+
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
@@ -120,6 +121,8 @@ func Main() {
 
 	var (
 		logCloser   func()
+		logger      zerolog.Logger
+		cliLog      zerolog.Logger
 		hiveApp     = &app.App{}
 		database    *db.DB
 		pluginMgr   *plugins.Manager
@@ -188,16 +191,17 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			// Always log to a file; use explicit path or default to <datadir>/hive.log
-			logger, closer, err := logutils.New(flags.LogLevel, flags.ResolvedLogFile())
+			l, closer, err := logutils.New(flags.LogLevel, flags.ResolvedLogFile())
 			if err != nil {
 				return ctx, fmt.Errorf("setup logger: %w", err)
 			}
-			log.Logger = logger
+			logger = l
+			cliLog = logutils.Component(l, "cli")
 			logCloser = closer
 
 			// Extract bundled scripts (non-fatal on failure)
 			if err := scripts.EnsureExtracted(flags.DataDir, version); err != nil {
-				log.Warn().Err(err).Msg("failed to extract bundled scripts")
+				cliLog.Warn().Err(err).Msg("failed to extract bundled scripts")
 			}
 
 			cfg, err := config.Load(flags.ConfigPath, flags.DataDir)
@@ -219,7 +223,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			sweepCtx, cancel := context.WithCancel(context.Background())
 			sweepCancel = cancel
 			bgWg.Go(func() {
-				sweep.Start(sweepCtx, kvStore, 5*time.Minute)
+				sweep.Start(sweepCtx, logger, kvStore, 5*time.Minute)
 			})
 
 			bus := events.New(64)
@@ -227,18 +231,14 @@ Run 'hive new' to create a new session from the current repository.`,
 			busCancel = cancel
 			bgWg.Go(func() {
 				bus.Start(busCtx)
-				log.Debug().Msg("event bus stopped")
+				cliLog.Debug().Msg("event bus stopped")
 			})
 
-			events.RegisterDebugLogger(log.Logger, bus)
+			events.RegisterDebugLogger(logger, bus)
 			hive.NewNotificationRouter(bus).Register()
 
-			var (
-				exec      = &executil.RealExecutor{}
-				svcLogger = log.With().Str("component", "hive").Logger()
-			)
-
-			tmuxClient := tmuxexec.NewDefault(svcLogger)
+			exec := &executil.RealExecutor{}
+			tmuxClient := tmuxexec.NewDefault(logger)
 			engine, err := hive.New(&cfg.Config, hive.Ports{
 				DB:         database,
 				Bus:        bus,
@@ -249,7 +249,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				Styler:     styles.CLIOutputStyler{},
 				Stdout:     os.Stdout,
 				Stderr:     os.Stderr,
-				Logger:     svcLogger,
+				Logger:     logger,
 			})
 			if err != nil {
 				return ctx, err
@@ -270,7 +270,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
 
 			allPlugins := []configuredPlugin{
-				{plugin: github.New(cfg.Plugins.GitHub, kvStore), disabled: isDisabled(cfg.Plugins.GitHub.Enabled)},
+				{plugin: github.New(logger, cfg.Plugins.GitHub, kvStore), disabled: isDisabled(cfg.Plugins.GitHub.Enabled)},
 				{plugin: lazygit.New(cfg.Plugins.LazyGit), disabled: isDisabled(cfg.Plugins.LazyGit.Enabled)},
 				{plugin: neovim.New(cfg.Plugins.Neovim), disabled: isDisabled(cfg.Plugins.Neovim.Enabled)},
 				{plugin: contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir), disabled: isDisabled(cfg.Plugins.ContextDir.Enabled)},
@@ -288,20 +288,20 @@ Run 'hive new' to create a new session from the current repository.`,
 				}
 			}
 
-			pluginMgr = plugins.NewManager(shellPool, commandSet)
+			pluginMgr = plugins.NewManager(logger, shellPool, commandSet)
 			for _, candidate := range allPlugins {
 				pluginMgr.Register(candidate.plugin)
 			}
 
 			// Initialize plugins (errors are logged but don't stop startup)
 			if err := pluginMgr.InitAll(ctx); err != nil {
-				log.Warn().Err(err).Msg("plugin initialization error")
+				cliLog.Warn().Err(err).Msg("plugin initialization error")
 			}
 
 			// Populate the pre-allocated App struct (commands already hold a pointer to it)
-			*hiveApp = *app.NewApp(engine, cfg, tmuxClient, pluginMgr, commandSet, kvStore, pluginInfos)
+			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, kvStore, pluginInfos)
 			hiveApp.Build = hiveBuildInfo()
-			hiveApp.Sources = app.BuildSourceRegistry(cfg, exec, kvStore, svcLogger)
+			hiveApp.Sources = app.BuildSourceRegistry(logger, cfg, exec, kvStore)
 
 			return ctx, nil
 		},
@@ -323,7 +323,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			// Close database connection
 			if database != nil {
 				if err := database.Close(); err != nil {
-					log.Error().Err(err).Msg("failed to close database")
+					cliLog.Error().Err(err).Msg("failed to close database")
 					return err
 				}
 			}

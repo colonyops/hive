@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/domain/terminal"
 )
@@ -20,7 +22,7 @@ func TestRenderDetailContent_WithBlockers(t *testing.T) {
 		{ID: "hc-blk1", Title: "Blocker Task", Status: hc.StatusInProgress, Type: hc.ItemTypeTask, EpicID: "hc-epic1"},
 	}
 
-	content := renderDetailContent(item, nil, blockers, 80)
+	content := renderDetailContent(zerolog.Nop(), item, nil, blockers, 80)
 	plain := terminal.StripANSI(content)
 
 	if !strings.Contains(plain, "Blockers (1)") {
@@ -44,7 +46,7 @@ func TestRenderDetailContent_BlockedByChildren(t *testing.T) {
 		Blocked: true,
 	}
 
-	content := renderDetailContent(item, nil, nil, 80)
+	content := renderDetailContent(zerolog.Nop(), item, nil, nil, 80)
 	plain := terminal.StripANSI(content)
 
 	if !strings.Contains(plain, "Blocked by open children") {
@@ -61,7 +63,7 @@ func TestRenderDetailContent_NotBlockedNoSection(t *testing.T) {
 		EpicID: "hc-epic1",
 	}
 
-	content := renderDetailContent(item, nil, nil, 80)
+	content := renderDetailContent(zerolog.Nop(), item, nil, nil, 80)
 	plain := terminal.StripANSI(content)
 
 	if strings.Contains(plain, "Blockers") {

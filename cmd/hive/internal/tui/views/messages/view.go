@@ -10,12 +10,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
@@ -55,6 +57,7 @@ var builderPool = sync.Pool{
 
 // View is the Bubble Tea sub-model for the messages tab.
 type View struct {
+	logger       zerolog.Logger
 	ctrl         *Controller
 	msgStore     *msgsvc.Service
 	lastPollTime time.Time
@@ -75,8 +78,9 @@ type View struct {
 }
 
 // New creates a new messages View.
-func New(msgStore *msgsvc.Service, topicFilter, copyCommand string, splitRatio int) *View {
+func New(logger zerolog.Logger, msgStore *msgsvc.Service, topicFilter, copyCommand string, splitRatio int) *View {
 	return &View{
+		logger:          logutils.Component(logger, "tui.messages"),
 		ctrl:            NewController(),
 		msgStore:        msgStore,
 		topicFilter:     topicFilter,
@@ -194,7 +198,7 @@ func (v *View) HelpSections() []components.HelpDialogSection {
 
 func (v *View) handleMessagesLoaded(msg messagesLoadedMsg) tea.Cmd {
 	if msg.err != nil {
-		log.Error().Err(msg.err).Msg("failed to load messages")
+		v.logger.Error().Err(msg.err).Msg("failed to load messages")
 		return nil
 	}
 	if len(msg.messages) > 0 {
@@ -647,7 +651,7 @@ func (v *View) updatePreviewContent() {
 		contentWidth = 60
 	}
 
-	rendered := renderMarkdown(sel.Payload, contentWidth)
+	rendered := v.renderMarkdown(sel.Payload, contentWidth)
 	v.viewport.SetContent(rendered)
 	v.viewport.SetYOffset(0)
 }
@@ -792,7 +796,7 @@ func renderFallbackLine(msg *messaging.Message, selected bool, senderW, topicW, 
 // Markdown rendering
 // --------------------------------------------------------------------
 
-func renderMarkdown(payload string, width int) string {
+func (v *View) renderMarkdown(payload string, width int) string {
 	style := styles.GlamourStyle()
 	noMargin := uint(0)
 	style.Document.Margin = &noMargin
@@ -802,13 +806,13 @@ func renderMarkdown(payload string, width int) string {
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to create markdown renderer, showing raw content")
+		v.logger.Debug().Err(err).Msg("failed to create markdown renderer, showing raw content")
 		return payload
 	}
 
 	rendered, err := renderer.Render(payload)
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to render markdown, showing raw content")
+		v.logger.Debug().Err(err).Msg("failed to render markdown, showing raw content")
 		return payload
 	}
 

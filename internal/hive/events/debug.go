@@ -3,6 +3,8 @@ package events
 import (
 	"fmt"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/rs/zerolog"
 )
 
@@ -10,6 +12,7 @@ import (
 // Uses OnPublish for event firing, OnDrop for buffer-full warnings, and OnPanic
 // for subscriber panic reporting.
 func RegisterDebugLogger(logger zerolog.Logger, bus *EventBus) {
+	logger = logutils.Component(logger, "events")
 	bus.OnPublish(func(event Event, _ any) {
 		logger.Debug().Str("event", string(event)).Msg("event fired")
 	})

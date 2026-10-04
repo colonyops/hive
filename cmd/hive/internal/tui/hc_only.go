@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	act "github.com/colonyops/hive/cmd/hive/internal/action"
@@ -24,6 +26,7 @@ import (
 
 // HoneycombOnlyOptions configures the honeycomb-only TUI.
 type HoneycombOnlyOptions struct {
+	Logger    zerolog.Logger
 	Honeycomb *hcsvc.Service
 	RepoKey   string
 	Config    *config.Config
@@ -60,10 +63,10 @@ func NewHoneycombOnly(opts HoneycombOnlyOptions) HoneycombOnlyModel {
 	// Standalone honeycomb mode bypasses the plugin manager. Build a CommandSet
 	// directly so the resolver has a canonical registry to query.
 	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
-	handler := NewKeybindingResolver(viewKBs, commandSet, opts.Renderer)
+	handler := NewKeybindingResolver(opts.Logger, viewKBs, commandSet, opts.Renderer)
 	handler.SetActiveView(ViewTasks)
 
-	tasksView := tasks.New(opts.Honeycomb, opts.RepoKey, handler, opts.KVStore, cfg.Views.Tasks.SplitRatio)
+	tasksView := tasks.New(opts.Logger, opts.Honeycomb, opts.RepoKey, handler, opts.KVStore, cfg.Views.Tasks.SplitRatio)
 	toastCtrl := NewToastController()
 	return HoneycombOnlyModel{
 		tasksView:       tasksView,

@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/rs/zerolog/log"
 
 	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
@@ -33,6 +35,7 @@ const headerLines = 2
 
 // View is the Bubble Tea sub-model for the tasks tab.
 type View struct {
+	logger zerolog.Logger
 	svc    *hcsvc.Service
 	width  int
 	height int
@@ -64,8 +67,9 @@ type View struct {
 }
 
 // New creates a new tasks View.
-func New(svc *hcsvc.Service, repoKey string, handler KeyResolver, kvStore corekv.KV, splitRatio int) *View {
+func New(logger zerolog.Logger, svc *hcsvc.Service, repoKey string, handler KeyResolver, kvStore corekv.KV, splitRatio int) *View {
 	return &View{
+		logger:       logutils.Component(logger, "tui.tasks"),
 		svc:          svc,
 		repoKey:      repoKey,
 		handler:      handler,
@@ -103,7 +107,7 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 
 	case commentsLoadedMsg:
 		if msg.err != nil {
-			log.Debug().Err(msg.err).Str("item_id", msg.itemID).Msg("tasks: failed to load comments")
+			v.logger.Debug().Err(msg.err).Str("item_id", msg.itemID).Msg("tasks: failed to load comments")
 			return nil
 		}
 		v.comments[msg.itemID] = msg.comments
@@ -115,11 +119,11 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 
 	case blockersLoadedMsg:
 		if msg.err != nil {
-			log.Warn().Err(msg.err).Str("item_id", msg.itemID).Msg("tasks: failed to load blockers")
+			v.logger.Warn().Err(msg.err).Str("item_id", msg.itemID).Msg("tasks: failed to load blockers")
 			return nil
 		}
 		if msg.partial {
-			log.Warn().Str("item_id", msg.itemID).Msg("tasks: blockers partially loaded; skipping cache")
+			v.logger.Warn().Str("item_id", msg.itemID).Msg("tasks: blockers partially loaded; skipping cache")
 			return nil
 		}
 		v.blockers[msg.itemID] = msg.blockers
@@ -375,7 +379,7 @@ func (v *View) saveFilter() {
 		return
 	}
 	if err := v.kvStore.Set(context.Background(), kvFilterKey, int(v.statusFilter)); err != nil {
-		log.Debug().Err(err).Msg("failed to persist tasks filter")
+		v.logger.Debug().Err(err).Msg("failed to persist tasks filter")
 	}
 }
 
@@ -487,7 +491,7 @@ func (v *View) loadBlockers(itemID string) tea.Cmd {
 		for _, bid := range blockerIDs {
 			b, err := svc.GetItem(context.Background(), bid)
 			if err != nil {
-				log.Warn().Err(err).Str("blocker_id", bid).Msg("tasks: failed to fetch blocker item")
+				v.logger.Warn().Err(err).Str("blocker_id", bid).Msg("tasks: failed to fetch blocker item")
 				partial = true
 				continue
 			}
@@ -570,7 +574,7 @@ func (v *View) updateViewportContent() tea.Cmd {
 	width := contentWidth
 
 	return func() tea.Msg {
-		content := renderDetailContent(&item, comments, blockers, width)
+		content := renderDetailContent(v.logger, &item, comments, blockers, width)
 		return contentRenderedMsg{key: key, content: content}
 	}
 }

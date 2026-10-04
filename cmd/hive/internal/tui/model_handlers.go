@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"github.com/rs/zerolog/log"
 
 	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/cmd/hive/internal/config"
@@ -78,7 +79,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKVKeysLoaded(msg kvKeysLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		log.Debug().Err(msg.err).Msg("failed to load kv keys")
+		m.logger.Debug().Err(msg.err).Msg("failed to load kv keys")
 		return m, nil
 	}
 	m.kvView.SetKeys(msg.keys)
@@ -91,7 +92,7 @@ func (m Model) handleKVKeysLoaded(msg kvKeysLoadedMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKVEntryLoaded(msg kvEntryLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		log.Debug().Err(msg.err).Msg("failed to load kv entry")
+		m.logger.Debug().Err(msg.err).Msg("failed to load kv entry")
 		m.kvView.SetPreview(nil)
 		return m, nil
 	}
@@ -137,7 +138,7 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 	}
 	if action.Type == act.TypeTodoPanel {
 		m.state = stateShowingTodos
-		m.modals.ShowTodoPanel(m.todoService)
+		m.modals.ShowTodoPanel(m.baseLogger, m.todoService)
 		if failures := m.modals.TodoPanel.AcknowledgeErrorCount(); failures > 0 {
 			return m, m.notifyError("failed to acknowledge %d todo(s)", failures)
 		}
@@ -356,7 +357,7 @@ func (m Model) handleGlobalAction(a Action) (tea.Model, tea.Cmd) {
 		return m.showHiveDoctor()
 	case act.TypeNotifications:
 		m.state = stateShowingNotifications
-		m.modals.ShowNotifications(m.notifyStore)
+		m.modals.ShowNotifications(m.baseLogger, m.notifyStore)
 		return m, nil
 	case act.TypeSetTheme:
 		return m, nil
@@ -369,7 +370,7 @@ func (m Model) handleGlobalAction(a Action) (tea.Model, tea.Cmd) {
 		// Review renders its own help overlay, so the global help modal stays out of the way here.
 		return m, nil
 	default:
-		log.Warn().Str("type", string(a.Type)).Msg("unhandled action type")
+		m.logger.Warn().Str("type", string(a.Type)).Msg("unhandled action type")
 		return m, nil
 	}
 }
@@ -482,7 +483,7 @@ func (m Model) handleReviewCommandPalette() (tea.Model, tea.Cmd) {
 
 func (m Model) handleRenameComplete(msg renameCompleteMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		log.Error().Err(msg.err).Msg("rename failed")
+		m.logger.Error().Err(msg.err).Msg("rename failed")
 		m.state = stateNormal
 		m.notifyErrorf("rename failed: %v", msg.err)
 		return m, nil
@@ -492,7 +493,7 @@ func (m Model) handleRenameComplete(msg renameCompleteMsg) (tea.Model, tea.Cmd) 
 
 func (m Model) handleSetGroupComplete(msg setGroupCompleteMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		log.Error().Err(msg.err).Msg("set group failed")
+		m.logger.Error().Err(msg.err).Msg("set group failed")
 		m.state = stateNormal
 		return m, m.notifyError("set group failed: %v", msg.err)
 	}
@@ -588,7 +589,7 @@ func (m Model) handleReviewAction(msg review.ActionRequestMsg) (tea.Model, tea.C
 
 func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
-		log.Error().Err(msg.err).Msg("action failed")
+		m.logger.Error().Err(msg.err).Msg("action failed")
 		m.state = stateNormal
 		m.modals.Pending = Action{}
 		m.notifyErrorf("action failed: %v", msg.err)
@@ -803,7 +804,7 @@ func (m Model) handleDrainNotifications(_ drainNotificationsMsg) (tea.Model, tea
 		}
 
 		if _, err := m.notifyStore.Save(context.Background(), n); err != nil {
-			log.Error().Err(err).Str("message", n.Message).Msg("failed to persist notification")
+			m.logger.Error().Err(err).Str("message", n.Message).Msg("failed to persist notification")
 		}
 
 		m.toastController.Push(n)
@@ -887,7 +888,7 @@ func (m Model) openSourcePicker(sourceID string, scope sourcePickerScope) (tea.M
 	}
 
 	m.pendingSourceScope = scope
-	picker := sourcepicker.New(tabs, sourceID, scope.Search, scope.Source, m.width, m.height)
+	picker := sourcepicker.New(m.baseLogger, tabs, sourceID, scope.Search, scope.Source, m.width, m.height)
 	m.state = stateSourcePicker
 	m.modals.SourcePicker = &picker
 	return m, picker.Init()
@@ -967,7 +968,7 @@ func (m Model) handleSourceSelection(results []sourcepicker.Result) (tea.Model, 
 // is optional: sources without the capability fall back to the item's inline
 // "body" field, and fetch failures degrade the same way (with a log) rather
 // than blocking session creation.
-func fetchSourceDetail(ctx context.Context, result sourcepicker.Result, scope, dir string) sources.Detail {
+func fetchSourceDetail(ctx context.Context, logger zerolog.Logger, result sourcepicker.Result, scope, dir string) sources.Detail {
 	if !result.Manifest.Capabilities.FetchDetail || result.Source == nil {
 		return detailFromBodyField(result.Item)
 	}
@@ -978,7 +979,7 @@ func fetchSourceDetail(ctx context.Context, result sourcepicker.Result, scope, d
 		Dir:   dir,
 	})
 	if err != nil {
-		log.Warn().Err(err).Str("source", result.SourceID).Str("item", result.Item.ID).
+		logger.Warn().Err(err).Str("source", result.SourceID).Str("item", result.Item.ID).
 			Msg("source picker: fetch detail failed; creating session without detail")
 		return detailFromBodyField(result.Item)
 	}
@@ -1068,7 +1069,7 @@ func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.
 			firstErr = err
 		}
 		streamLine(ctx, out, fmt.Sprintf("[%d/%d] failed: %v", i+1, len(results), err))
-		log.Warn().Err(err).Str("source", result.SourceID).Str("item", result.Item.ID).
+		m.logger.Warn().Err(err).Str("source", result.SourceID).Str("item", result.Item.ID).
 			Msg("source picker: session create failed")
 	}
 
@@ -1090,7 +1091,7 @@ func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.
 // creation output onto the shared stream. It returns the created session's
 // ID and name.
 func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Result, scope sourcePickerScope, out chan<- string) (id, name string, err error) {
-	detail := fetchSourceDetail(ctx, result, scope.Search, scope.Source)
+	detail := fetchSourceDetail(ctx, m.logger, result, scope.Search, scope.Source)
 
 	rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, detail)
 	if err != nil {
@@ -1243,7 +1244,7 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 				var err error
 				actionCmd, err = renderCustomAction(action, item.URI)
 				if err != nil {
-					log.Warn().Err(err).Str("scheme", item.URI.Scheme()).Msg("failed to render custom action")
+					m.logger.Warn().Err(err).Str("scheme", item.URI.Scheme()).Msg("failed to render custom action")
 					return m, m.notifyError("render action: %v", err)
 				}
 			} else {
@@ -1309,7 +1310,7 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 		ctx := context.Background()
 		items, err := m.todoService.List(ctx, todo.ListFilter{})
 		if err != nil {
-			log.Warn().Err(err).Msg("failed to list todos for auto-complete")
+			m.logger.Warn().Err(err).Msg("failed to list todos for auto-complete")
 			return todoAutoCompleteResultMsg{failed: -1}
 		}
 		failed := 0
@@ -1324,7 +1325,7 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 				if p != "" && (item.URI.Value() == p || strings.HasSuffix(p, "/"+item.URI.Value()) || strings.HasSuffix(item.URI.Value(), "/"+p)) {
 					if _, err := m.todoService.Complete(ctx, item.ID); err != nil {
 						failed++
-						log.Warn().Err(err).Str("id", item.ID).Msg("failed to auto-complete todo")
+						m.logger.Warn().Err(err).Str("id", item.ID).Msg("failed to auto-complete todo")
 					}
 					break
 				}
@@ -1334,12 +1335,12 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 		// Inline count refresh instead of calling loadTodoCounts()()
 		pending, err := m.todoService.CountPending(ctx)
 		if err != nil {
-			log.Warn().Err(err).Msg("failed to load todo pending count after auto-complete")
+			m.logger.Warn().Err(err).Msg("failed to load todo pending count after auto-complete")
 			return todoAutoCompleteResultMsg{failed: failed}
 		}
 		open, err := m.todoService.CountOpen(ctx)
 		if err != nil {
-			log.Warn().Err(err).Msg("failed to load todo open count after auto-complete")
+			m.logger.Warn().Err(err).Msg("failed to load todo open count after auto-complete")
 			return todoAutoCompleteResultMsg{failed: failed}
 		}
 		return todoAutoCompleteResultMsg{pendingCount: pending, openCount: open, failed: failed}
@@ -1603,9 +1604,9 @@ func (m Model) openRepoHeader(name, remote, repoPath string) (tea.Model, tea.Cmd
 	if action.Exit {
 		exec, err := m.cmdService.CreateExecutor(action)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to create executor for repo open")
+			m.logger.Error().Err(err).Msg("failed to create executor for repo open")
 		} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
-			log.Error().Err(err).Msg("repo open command failed")
+			m.logger.Error().Err(err).Msg("repo open command failed")
 		}
 		return m.quit()
 	}
@@ -1622,7 +1623,7 @@ func (m Model) refreshSessions() tea.Cmd {
 func (m Model) switchTmuxSession(name string) tea.Cmd {
 	return func() tea.Msg {
 		if err := m.service.SwitchTmuxSession(context.Background(), name); err != nil {
-			log.Debug().Err(err).Str("session", name).Msg("tmux switch-client failed")
+			m.logger.Debug().Err(err).Str("session", name).Msg("tmux switch-client failed")
 		}
 		return nil
 	}

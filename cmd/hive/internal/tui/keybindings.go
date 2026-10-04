@@ -6,8 +6,10 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/key"
-	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/cmd/hive/internal/config"
@@ -38,6 +40,7 @@ func docTemplateValue(doc *DocTemplateData) DocTemplateData {
 // KeybindingResolver resolves keybindings to actions via UserCommands.
 // It handles resolution only - execution is handled by the command.Service.
 type KeybindingResolver struct {
+	logger                 zerolog.Logger
 	viewKeybindings        map[string]map[string]config.Keybinding // view name -> key -> binding
 	effectiveKeybindings   map[string]config.Keybinding            // merged global + active view
 	commandSet             *plugins.CommandSet
@@ -53,11 +56,13 @@ type KeybindingResolver struct {
 // call, so mutations from any goroutine become visible immediately without
 // rebuilding the resolver.
 func NewKeybindingResolver(
+	logger zerolog.Logger,
 	viewKeybindings map[string]map[string]config.Keybinding,
 	commandSet *plugins.CommandSet,
 	renderer *tmpl.Renderer,
 ) *KeybindingResolver {
 	r := &KeybindingResolver{
+		logger:          logutils.Component(logger, "tui.keybindings"),
 		viewKeybindings: viewKeybindings,
 		commandSet:      commandSet,
 		renderer:        renderer,
@@ -250,7 +255,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 	if !cmdExists {
 		// Command reference is invalid - validation should catch this,
 		// but log and return gracefully for debugging
-		log.Warn().Str("key", key).Str("cmd", kb.Cmd).Msg("keybinding references unknown command")
+		h.logger.Warn().Str("key", key).Str("cmd", kb.Cmd).Msg("keybinding references unknown command")
 		return Action{}, false
 	}
 
@@ -323,7 +328,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			// Surface template error instead of masking it
 			a.Type = action.TypeShell
 			a.Err = fmt.Errorf("template error in command %q: %w", kb.Cmd, err)
-			log.Warn().Str("key", key).Str("cmd", kb.Cmd).Err(err).Msg("template rendering failed")
+			h.logger.Warn().Str("key", key).Str("cmd", kb.Cmd).Err(err).Msg("template rendering failed")
 			return a, true
 		}
 
@@ -347,7 +352,7 @@ func (h *KeybindingResolver) ResolveAction(key string) (Action, bool) {
 
 	cmd, cmdExists := h.commandSet.Lookup(kb.Cmd)
 	if !cmdExists {
-		log.Warn().Str("key", key).Str("cmd", kb.Cmd).Msg("keybinding references unknown command")
+		h.logger.Warn().Str("key", key).Str("cmd", kb.Cmd).Msg("keybinding references unknown command")
 		return Action{}, false
 	}
 
@@ -507,7 +512,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 	if err != nil {
 		a.Type = action.TypeShell
 		a.Err = fmt.Errorf("template error in command %q: %w", name, err)
-		log.Warn().Str("command", name).Err(err).Msg("template rendering failed")
+		h.logger.Warn().Str("command", name).Err(err).Msg("template rendering failed")
 		return a
 	}
 

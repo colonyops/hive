@@ -13,12 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/rs/zerolog/log"
 
 	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/cmd/hive/internal/config"
@@ -82,6 +84,9 @@ const (
 
 // Deps holds all external dependencies for the TUI Model.
 type Deps struct {
+	// Logger carries no cmp label. The model and each view add their own.
+	Logger zerolog.Logger
+
 	// Required; nil causes a panic at construction time.
 	Config        *config.Config
 	Service       *sessionsvc.Service
@@ -113,6 +118,8 @@ type Opts struct {
 
 // Model is the main Bubble Tea model for the TUI.
 type Model struct {
+	logger         zerolog.Logger
+	baseLogger     zerolog.Logger // no cmp label; handed to the components the model creates later
 	cfg            *config.Config
 	service        *sessionsvc.Service
 	cmdService     *command.Service
@@ -261,6 +268,7 @@ func New(deps Deps, opts Opts) Model {
 	}
 	cfg := deps.Config
 	service := deps.Service
+	logger := logutils.Component(deps.Logger, "tui")
 
 	viewKBs := map[string]map[string]config.Keybinding{
 		"global":   cfg.Views.Global.Keybindings,
@@ -268,10 +276,11 @@ func New(deps Deps, opts Opts) Model {
 		"tasks":    cfg.Views.Tasks.Keybindings,
 		"review":   cfg.Views.Review.Keybindings,
 	}
-	handler := NewKeybindingResolver(viewKBs, deps.CommandSet, deps.Renderer)
+	handler := NewKeybindingResolver(deps.Logger, viewKBs, deps.CommandSet, deps.Renderer)
 	cmdService := command.NewService(service, service, service, service, service, service)
 
 	sessionsView := sessions.New(sessions.ViewOpts{
+		Logger:        deps.Logger,
 		Cfg:           cfg,
 		Service:       service,
 		Handler:       handler,
@@ -302,7 +311,7 @@ func New(deps Deps, opts Opts) Model {
 	s.Spinner = spinner.Dot
 	s.Style = styles.TextPrimaryStyle
 
-	msgView := messages.New(deps.MsgStore, "*", cfg.CopyCommand, cfg.Views.Messages.SplitRatio)
+	msgView := messages.New(deps.Logger, deps.MsgStore, "*", cfg.CopyCommand, cfg.Views.Messages.SplitRatio)
 
 	kvView := NewKVView()
 
@@ -318,7 +327,7 @@ func New(deps Deps, opts Opts) Model {
 		}
 	}
 
-	tasksView := tasks.New(deps.Honeycomb, repoKey, handler, deps.KVStore, cfg.Views.Tasks.SplitRatio)
+	tasksView := tasks.New(deps.Logger, deps.Honeycomb, repoKey, handler, deps.KVStore, cfg.Views.Tasks.SplitRatio)
 	if contextDir == "" {
 		contextDir = cfg.SharedContextDir()
 		docs, _ = review.DiscoverDocuments(contextDir)
@@ -329,7 +338,7 @@ func New(deps Deps, opts Opts) Model {
 		reviewStore = store.NewReviewStore(deps.DB)
 	}
 
-	reviewView := review.New(docs, contextDir, reviewStore, handler, cfg.Views.Review.SplitRatioOrDefault(30))
+	reviewView := review.New(deps.Logger, docs, contextDir, reviewStore, handler, cfg.Views.Review.SplitRatioOrDefault(30))
 	reviewView.SetRepoKey(repoKey)
 
 	notifyStore := store.NewNotifyStore(deps.DB)
@@ -353,7 +362,7 @@ func New(deps Deps, opts Opts) Model {
 			select {
 			case ch <- payload:
 			default:
-				log.Debug().Str("todo_id", payload.Todo.ID).Msg("todo event dropped: channel buffer full")
+				logger.Debug().Str("todo_id", payload.Todo.ID).Msg("todo event dropped: channel buffer full")
 			}
 		})
 		todoCh = ch
@@ -362,9 +371,11 @@ func New(deps Deps, opts Opts) Model {
 	// Sessions tab is active by default
 	sessionsView.SetActive(true)
 
-	updateChecker := updatecheck.New(deps.KVStore, nil)
+	updateChecker := updatecheck.New(deps.Logger, deps.KVStore, nil)
 
 	return Model{
+		logger:          logger,
+		baseLogger:      deps.Logger,
 		cfg:             cfg,
 		service:         service,
 		cmdService:      cmdService,
@@ -452,7 +463,7 @@ func (m Model) Init() tea.Cmd {
 		}
 	}
 	if m.cfg.TUI.UpdateChecker && m.updateChecker != nil && m.buildInfo.Version != "" {
-		cmds = append(cmds, checkForUpdate(m.updateChecker, m.buildInfo.Version))
+		cmds = append(cmds, checkForUpdate(m.logger, m.updateChecker, m.buildInfo.Version))
 	}
 	// Load initial todo counts and start polling + event listening
 	cmds = append(cmds, m.loadTodoCounts(), scheduleTodoPollTick())
@@ -493,12 +504,12 @@ func (m Model) loadTodoCounts() tea.Cmd {
 		ctx := context.Background()
 		pending, err := m.todoService.CountPending(ctx)
 		if err != nil {
-			log.Debug().Err(err).Msg("failed to load todo pending count")
+			m.logger.Debug().Err(err).Msg("failed to load todo pending count")
 			return todoCountLoadFailedMsg{}
 		}
 		open, err := m.todoService.CountOpen(ctx)
 		if err != nil {
-			log.Debug().Err(err).Msg("failed to load todo open count")
+			m.logger.Debug().Err(err).Msg("failed to load todo open count")
 			return todoCountLoadFailedMsg{}
 		}
 		return todoCountUpdatedMsg{pendingCount: pending, openCount: open}
@@ -653,7 +664,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			m.publishNotificationf(notify.LevelError, "Action failed: %v", msg.Err)
 		} else if _, err := m.todoService.Complete(context.Background(), msg.TodoID); err != nil {
-			log.Warn().Err(err).Str("id", msg.TodoID).Msg("failed to complete todo after action")
+			m.logger.Warn().Err(err).Str("id", msg.TodoID).Msg("failed to complete todo after action")
 			m.publishNotificationf(notify.LevelWarning, "Action opened but todo not completed: %v", err)
 		} else {
 			m.publishNotificationf(notify.LevelInfo, "Action completed")
@@ -978,9 +989,9 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	if action.Exit {
 		exec, err := m.cmdService.CreateExecutor(action)
 		if err != nil {
-			log.Error().Str("command", action.Key).Err(err).Msg("failed to create executor before exit")
+			m.logger.Error().Str("command", action.Key).Err(err).Msg("failed to create executor before exit")
 		} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
-			log.Error().Str("command", action.Key).Err(err).Msg("command failed before exit")
+			m.logger.Error().Str("command", action.Key).Err(err).Msg("command failed before exit")
 		}
 		return m.quit()
 	}
@@ -1215,7 +1226,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 		// Notifications doesn't require a session
 		if entry.Command.Action == act.TypeNotifications {
 			m.state = stateShowingNotifications
-			m.modals.ShowNotifications(m.notifyStore)
+			m.modals.ShowNotifications(m.baseLogger, m.notifyStore)
 			return m, nil
 		}
 
@@ -1241,7 +1252,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 		// TodoPanel doesn't require a session
 		if entry.Command.Action == act.TypeTodoPanel {
 			m.state = stateShowingTodos
-			m.modals.ShowTodoPanel(m.todoService)
+			m.modals.ShowTodoPanel(m.baseLogger, m.todoService)
 			if failures := m.modals.TodoPanel.AcknowledgeErrorCount(); failures > 0 {
 				m.notifyErrorf("failed to acknowledge %d todo(s)", failures)
 				return m, nil
@@ -2073,13 +2084,13 @@ func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
 				SessionID: sess.ID,
 			})
 			if err != nil {
-				log.Error().Err(err).Str("session", sess.ID).Msg("failed to create delete executor")
+				m.logger.Error().Err(err).Str("session", sess.ID).Msg("failed to create delete executor")
 				errs = append(errs, err)
 				continue
 			}
 
 			if err := command.ExecuteSync(context.Background(), exec); err != nil {
-				log.Error().Err(err).Str("session", sess.ID).Msg("failed to delete recycled session")
+				m.logger.Error().Err(err).Str("session", sess.ID).Msg("failed to delete recycled session")
 				errs = append(errs, err)
 			}
 		}

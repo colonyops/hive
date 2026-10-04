@@ -5,8 +5,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/domain/session"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -23,6 +25,7 @@ type Manager struct {
 	plugins    map[string]Plugin
 	pool       *WorkerPool
 	commandSet *CommandSet
+	logger     zerolog.Logger
 	mu         sync.RWMutex
 
 	// Background worker state
@@ -46,8 +49,9 @@ type Manager struct {
 // refreshes. commandSet is the canonical command registry the manager seeds
 // plugin slots into during InitAll; the manager does not own or expose it —
 // callers keep the reference for lookups.
-func NewManager(pool *WorkerPool, commandSet *CommandSet) *Manager {
+func NewManager(logger zerolog.Logger, pool *WorkerPool, commandSet *CommandSet) *Manager {
 	return &Manager{
+		logger:         logutils.Component(logger, "plugins"),
 		plugins:        make(map[string]Plugin),
 		pool:           pool,
 		commandSet:     commandSet,
@@ -63,7 +67,7 @@ func NewManager(pool *WorkerPool, commandSet *CommandSet) *Manager {
 // Plugins that are not available (missing dependencies) are silently skipped.
 func (m *Manager) Register(p Plugin) {
 	if !p.Available() {
-		log.Debug().Str("plugin", p.Name()).Msg("plugin not available, skipping")
+		m.logger.Debug().Str("plugin", p.Name()).Msg("plugin not available, skipping")
 		return
 	}
 
@@ -71,7 +75,7 @@ func (m *Manager) Register(p Plugin) {
 	m.plugins[p.Name()] = p
 	m.mu.Unlock()
 
-	log.Debug().Str("plugin", p.Name()).Msg("plugin registered")
+	m.logger.Debug().Str("plugin", p.Name()).Msg("plugin registered")
 }
 
 // InitAll initializes all registered plugins. Errors are logged but do not
@@ -83,7 +87,7 @@ func (m *Manager) InitAll(ctx context.Context) error {
 
 	for name, p := range m.plugins {
 		if err := p.Init(ctx); err != nil {
-			log.Warn().Err(err).Str("plugin", name).Msg("plugin initialization failed")
+			m.logger.Warn().Err(err).Str("plugin", name).Msg("plugin initialization failed")
 			continue
 		}
 		if m.commandSet == nil {
@@ -106,7 +110,7 @@ func (m *Manager) CloseAll() {
 
 	for name, p := range m.plugins {
 		if err := p.Close(); err != nil {
-			log.Warn().Err(err).Str("plugin", name).Msg("plugin close failed")
+			m.logger.Warn().Err(err).Str("plugin", name).Msg("plugin close failed")
 		}
 	}
 }
@@ -136,7 +140,7 @@ func (m *Manager) StartBackgroundWorker(ctx context.Context, pollInterval time.D
 	defer m.workerStartMu.Unlock()
 
 	if m.workerStarted {
-		log.Warn().Msg("background workers already started")
+		m.logger.Warn().Msg("background workers already started")
 		output := make(chan Result, defaultResultBufferSize)
 		go m.resultForwarder(ctx, output)
 		return output
@@ -161,7 +165,7 @@ func (m *Manager) StartBackgroundWorker(ctx context.Context, pollInterval time.D
 	output := make(chan Result, defaultResultBufferSize)
 	go m.resultForwarder(ctx, output)
 
-	log.Debug().
+	m.logger.Debug().
 		Int("workers", m.workerCount).
 		Dur("pollInterval", pollInterval).
 		Msg("background workers started")
@@ -184,7 +188,7 @@ func (m *Manager) UpdateSessions(sessions []*session.Session) {
 	// Trigger immediate refresh (non-blocking)
 	select {
 	case m.refreshTrigger <- struct{}{}:
-		log.Debug().Int("sessions", len(sessions)).Msg("refresh triggered (sessions changed)")
+		m.logger.Debug().Int("sessions", len(sessions)).Msg("refresh triggered (sessions changed)")
 	default:
 		// Refresh already pending
 	}
@@ -230,7 +234,7 @@ func (m *Manager) Stop() {
 	close(m.results)
 
 	m.workerStarted = false
-	log.Debug().Msg("background workers stopped")
+	m.logger.Debug().Msg("background workers stopped")
 }
 
 // scheduler runs the polling loop that enqueues jobs.
@@ -280,7 +284,7 @@ func (m *Manager) enqueueAllJobs(ctx context.Context) {
 		return
 	}
 
-	log.Debug().
+	m.logger.Debug().
 		Int("plugins", len(statusPlugins)).
 		Int("sessions", len(sessions)).
 		Msg("enqueueing plugin fetch jobs")
@@ -305,16 +309,16 @@ func (m *Manager) enqueueAllJobs(ctx context.Context) {
 func (m *Manager) worker(ctx context.Context, id int) {
 	defer m.wg.Done()
 
-	log.Debug().Int("workerID", id).Msg("worker started")
+	m.logger.Debug().Int("workerID", id).Msg("worker started")
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debug().Int("workerID", id).Msg("worker stopping (context cancelled)")
+			m.logger.Debug().Int("workerID", id).Msg("worker stopping (context cancelled)")
 			return
 		case job, ok := <-m.jobs:
 			if !ok {
-				log.Debug().Int("workerID", id).Msg("worker stopping (channel closed)")
+				m.logger.Debug().Int("workerID", id).Msg("worker stopping (channel closed)")
 				return
 			}
 			m.processJob(ctx, job)
@@ -369,7 +373,7 @@ func (m *Manager) processJob(ctx context.Context, job Job) {
 	})
 	if err != nil {
 		// Context cancelled while waiting for pool
-		log.Debug().
+		m.logger.Debug().
 			Str("plugin", job.PluginName).
 			Str("session", job.SessionID).
 			Msg("job cancelled while waiting for pool")
@@ -418,7 +422,7 @@ func (m *Manager) RefreshAllStatus(ctx context.Context, sessions []*session.Sess
 	}
 	m.mu.RUnlock()
 
-	log.Debug().Int("pluginCount", len(plugins)).Msg("RefreshAllStatus starting")
+	m.logger.Debug().Int("pluginCount", len(plugins)).Msg("RefreshAllStatus starting")
 
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -433,11 +437,11 @@ func (m *Manager) RefreshAllStatus(ctx context.Context, sessions []*session.Sess
 		go func(plugin Plugin, provider StatusProvider) {
 			defer wg.Done()
 
-			log.Debug().Str("plugin", plugin.Name()).Msg("plugin RefreshStatus starting")
+			m.logger.Debug().Str("plugin", plugin.Name()).Msg("plugin RefreshStatus starting")
 			statuses, err := provider.RefreshStatus(ctx, sessions, m.pool)
-			log.Debug().Str("plugin", plugin.Name()).Int("count", len(statuses)).Msg("plugin RefreshStatus complete")
+			m.logger.Debug().Str("plugin", plugin.Name()).Int("count", len(statuses)).Msg("plugin RefreshStatus complete")
 			if err != nil {
-				log.Debug().Err(err).Str("plugin", plugin.Name()).Msg("status refresh failed")
+				m.logger.Debug().Err(err).Str("plugin", plugin.Name()).Msg("status refresh failed")
 				return
 			}
 
@@ -448,7 +452,7 @@ func (m *Manager) RefreshAllStatus(ctx context.Context, sessions []*session.Sess
 	}
 
 	wg.Wait()
-	log.Debug().Int("resultCount", len(results)).Msg("RefreshAllStatus complete")
+	m.logger.Debug().Int("resultCount", len(results)).Msg("RefreshAllStatus complete")
 	return results
 }
 

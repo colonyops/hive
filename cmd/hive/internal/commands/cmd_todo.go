@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/todo"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
-	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 )
 
@@ -155,7 +156,8 @@ func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 	// Auto-detect session ID (best-effort)
 	sessionID, err := cmd.app.Sessions().DetectSession(ctx)
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to detect session for todo")
+		logger := logutils.Component(cmd.app.Logger, "cli.todo")
+		logger.Debug().Err(err).Msg("failed to detect session for todo")
 	}
 
 	// Determine URI

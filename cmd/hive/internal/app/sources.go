@@ -7,6 +7,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/sources/ghcli"
 	"github.com/colonyops/hive/cmd/hive/internal/sources/teacli"
 	"github.com/colonyops/hive/internal/domain/kv"
+	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/rs/zerolog"
 )
 
@@ -40,7 +41,8 @@ func builtinSources(cfg *config.Config) []builtinSource {
 // BuildSourceRegistry constructs the sources.Registry from cfg, registering a
 // per-backend source for each enabled builtin. Registration failures are
 // logged and the offending entry is skipped rather than failing startup.
-func BuildSourceRegistry(cfg *config.Config, exec cliengine.Executor, kvStore kv.KV, logger zerolog.Logger) *sources.Registry {
+func BuildSourceRegistry(logger zerolog.Logger, cfg *config.Config, exec cliengine.Executor, kvStore kv.KV) *sources.Registry {
+	log := logutils.Component(logger, "sources")
 	registry := sources.NewRegistry()
 
 	opts := cliengine.Options{
@@ -55,13 +57,13 @@ func BuildSourceRegistry(cfg *config.Config, exec cliengine.Executor, kvStore kv
 		templates := sourceTemplateConfig(builtin.config.Templates)
 		for backend, driver := range builtin.drivers {
 			driverCfg := driver.Config()
-			source, err := cliengine.New(driver, exec, kvStore, opts)
+			source, err := cliengine.New(logger, driver, exec, kvStore, opts)
 			if err != nil {
-				logger.Warn().Err(err).Str("source", driverCfg.ID).Str("backend", backend.String()).Msg("sources: failed to construct builtin source")
+				log.Warn().Err(err).Str("source", driverCfg.ID).Str("backend", backend.String()).Msg("sources: failed to construct builtin source")
 				continue
 			}
 			if err := registry.Register(driverCfg.ID, backend, source, templates, driverCfg.DisplayName); err != nil {
-				logger.Warn().Err(err).Str("source", driverCfg.ID).Str("backend", backend.String()).Msg("sources: failed to register builtin source")
+				log.Warn().Err(err).Str("source", driverCfg.ID).Str("backend", backend.String()).Msg("sources: failed to register builtin source")
 			}
 		}
 	}

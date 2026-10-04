@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"github.com/colonyops/hive/cmd/hive/internal/app"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/validate"
@@ -12,7 +14,6 @@ import (
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/hay-kot/criterio"
-	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 )
 
@@ -106,7 +107,7 @@ Log entries are written to the shared hive log file, tagged with a
 func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 	batchID := randid.Generate(6)
 
-	logger := log.With().Str("batch", batchID).Logger()
+	logger := logutils.Component(cmd.app.Logger, "cli.batch").With().Str("batch", batchID).Logger()
 
 	logger.Info().Msg("starting batch processing")
 

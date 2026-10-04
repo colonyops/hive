@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -33,7 +35,7 @@ func newTestKV(t *testing.T) kv.KV {
 
 func newSource(t *testing.T, driver cliengine.Driver, exec *executiltest.Exec) *cliengine.Source {
 	t.Helper()
-	c, err := cliengine.New(driver, exec, newTestKV(t), cliengine.Options{})
+	c, err := cliengine.New(zerolog.Nop(), driver, exec, newTestKV(t), cliengine.Options{})
 	require.NoError(t, err)
 	return c
 }

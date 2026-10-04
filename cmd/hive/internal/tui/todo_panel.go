@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/viewport"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
@@ -39,6 +41,7 @@ var todoFilterLabels = [...]string{
 
 // TodoPanel displays an interactive list of todo items.
 type TodoPanel struct {
+	logger   zerolog.Logger
 	service  *todosvc.Service
 	viewport viewport.Model
 	allItems []todo.Todo // unfiltered list from store
@@ -51,7 +54,7 @@ type TodoPanel struct {
 }
 
 // NewTodoPanel creates a new interactive todo panel modal.
-func NewTodoPanel(service *todosvc.Service, width, height int) *TodoPanel {
+func NewTodoPanel(logger zerolog.Logger, service *todosvc.Service, width, height int) *TodoPanel {
 	modalWidth := calcTodoPanelWidth(width)
 	modalHeight := min(height-todoPanelMargin, todoPanelMaxHeight)
 	contentHeight := modalHeight - todoPanelChrome
@@ -62,6 +65,7 @@ func NewTodoPanel(service *todosvc.Service, width, height int) *TodoPanel {
 	)
 
 	p := &TodoPanel{
+		logger:   logutils.Component(logger, "tui.todos"),
 		service:  service,
 		viewport: vp,
 		width:    width,
@@ -76,7 +80,7 @@ func NewTodoPanel(service *todosvc.Service, width, height int) *TodoPanel {
 func (p *TodoPanel) loadItems() {
 	items, err := p.service.List(context.Background(), todo.ListFilter{})
 	if err != nil {
-		log.Error().Err(err).Msg("failed to load todo items")
+		p.logger.Error().Err(err).Msg("failed to load todo items")
 		p.allItems = nil
 		p.items = nil
 		p.viewport.SetContent(styles.TextErrorStyle.Render(fmt.Sprintf("failed to load todos: %v", err)))
@@ -312,7 +316,7 @@ func (p *TodoPanel) acknowledgeAll() {
 		if item.Status == todo.StatusPending {
 			if _, err := p.service.Acknowledge(context.Background(), item.ID); err != nil {
 				p.ackErrs++
-				log.Warn().Err(err).Str("id", item.ID).Msg("failed to auto-acknowledge todo")
+				p.logger.Warn().Err(err).Str("id", item.ID).Msg("failed to auto-acknowledge todo")
 			}
 		}
 	}

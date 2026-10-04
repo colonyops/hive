@@ -120,9 +120,9 @@ func newMouseTestSessionsView(t *testing.T) *sessions.View {
 	t.Helper()
 	svc := newMouseTestSessionService(t)
 	cfg := &config.Config{}
-	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(nil, nil), testRenderer)
+	handler := NewKeybindingResolver(zerolog.Nop(), nil, plugins.NewCommandSet(nil, nil), testRenderer)
 	status := statussvc.NewService(zerolog.Nop(), terminal.NewManager(nil), 1)
-	pm := plugins.NewManager(plugins.NewWorkerPool(0), plugins.NewCommandSet(nil, nil))
+	pm := plugins.NewManager(zerolog.Nop(), plugins.NewWorkerPool(0), plugins.NewCommandSet(nil, nil))
 	return sessions.New(sessions.ViewOpts{
 		Cfg:           cfg,
 		Service:       svc,
@@ -138,7 +138,7 @@ func newMouseTestSessionsView(t *testing.T) *sessions.View {
 // handleKey doesn't dereference a nil pointer when dispatching Enter on a double-click.
 func newBaseMouseModel(t *testing.T) Model {
 	t.Helper()
-	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(map[string]config.UserCommand{}, nil), testRenderer)
+	handler := NewKeybindingResolver(zerolog.Nop(), nil, plugins.NewCommandSet(map[string]config.UserCommand{}, nil), testRenderer)
 	return Model{
 		cfg:             &config.Config{},
 		activeView:      ViewSessions,

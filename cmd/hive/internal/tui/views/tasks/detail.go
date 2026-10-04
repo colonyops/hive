@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	lipgloss "charm.land/lipgloss/v2"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
@@ -29,7 +31,7 @@ func renderDetailHeader(item *hc.Item, node *TreeNode, width int) string {
 }
 
 // renderDetailContent renders the scrollable content: title + description + blockers + comments.
-func renderDetailContent(item *hc.Item, comments []hc.Comment, blockers []hc.Item, width int) string {
+func renderDetailContent(logger zerolog.Logger, item *hc.Item, comments []hc.Comment, blockers []hc.Item, width int) string {
 	if item == nil {
 		return ""
 	}
@@ -43,7 +45,7 @@ func renderDetailContent(item *hc.Item, comments []hc.Comment, blockers []hc.Ite
 	// Description (rendered as markdown via glamour)
 	if item.Desc != "" {
 		b.WriteString("\n")
-		b.WriteString(shared.RenderMarkdown(item.Desc, width))
+		b.WriteString(shared.RenderMarkdown(logger, item.Desc, width))
 	} else {
 		b.WriteString("\n")
 		b.WriteString(styles.TextMutedStyle.Render("No description"))
@@ -95,7 +97,7 @@ func renderDetailContent(item *hc.Item, comments []hc.Comment, blockers []hc.Ite
 			if checkpoint, ok := strings.CutPrefix(msg, "CHECKPOINT:"); ok {
 				msg = strings.TrimSpace(checkpoint)
 			}
-			rendered := shared.RenderMarkdown(msg, bodyWidth)
+			rendered := shared.RenderMarkdown(logger, msg, bodyWidth)
 			for _, line := range strings.Split(rendered, "\n") {
 				fmt.Fprintf(&b, "   %s\n", line)
 			}

@@ -5,6 +5,8 @@ package app
 import (
 	"context"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/sources"
@@ -40,6 +42,9 @@ type Multiplexer interface {
 type App struct {
 	*hive.Engine
 
+	// Logger carries no cmp label. A command or component adds its own.
+	Logger zerolog.Logger
+
 	// Config is the CLI config. It shadows Engine.Config, and its embedded
 	// engine half is the config the engine was built from.
 	Config      *config.Config
@@ -56,6 +61,7 @@ type App struct {
 // validates the whole CLI config, so `hive doctor` keeps reporting errors in
 // sections only the CLI reads.
 func NewApp(
+	logger zerolog.Logger,
 	engine *hive.Engine,
 	cfg *config.Config,
 	multiplexer Multiplexer,
@@ -66,6 +72,7 @@ func NewApp(
 ) *App {
 	return &App{
 		Engine:      engine,
+		Logger:      logger,
 		Config:      cfg,
 		Doctor:      doctor.NewService(store.NewSessionStore(engine.DB()), &cfg.Config, cfg, pluginInfos),
 		Multiplexer: multiplexer,

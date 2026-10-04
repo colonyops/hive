@@ -58,7 +58,7 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 
 	tb := testbus.New(t)
 	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
-	pluginManager := plugins.NewManager(plugins.NewWorkerPool(0), commandSet)
+	pluginManager := plugins.NewManager(zerolog.Nop(), plugins.NewWorkerPool(0), commandSet)
 	todoService := todosvc.NewService(
 		zerolog.New(io.Discard),
 		store.NewTodoStore(zerolog.Nop(), database),
@@ -144,7 +144,7 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 
 	tb := testbus.New(t)
 	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
-	pluginManager := plugins.NewManager(plugins.NewWorkerPool(0), commandSet)
+	pluginManager := plugins.NewManager(zerolog.Nop(), plugins.NewWorkerPool(0), commandSet)
 	todoService := todosvc.NewService(
 		zerolog.New(io.Discard),
 		store.NewTodoStore(zerolog.Nop(), database),

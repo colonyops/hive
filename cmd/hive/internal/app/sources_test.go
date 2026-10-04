@@ -72,7 +72,7 @@ func TestBuildSourceRegistry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &config.Config{Sources: tt.cfg}
-			registry := BuildSourceRegistry(cfg, &executil.RealExecutor{}, newSourcesTestKV(t), zerolog.Nop())
+			registry := BuildSourceRegistry(zerolog.Nop(), cfg, &executil.RealExecutor{}, newSourcesTestKV(t))
 			require.NotNil(t, registry)
 
 			ids := registry.IDs()
@@ -84,7 +84,7 @@ func TestBuildSourceRegistry(t *testing.T) {
 
 func TestBuildSourceRegistryRegistersBothBackends(t *testing.T) {
 	cfg := &config.Config{Sources: config.SourcesConfig{}}
-	registry := BuildSourceRegistry(cfg, &executil.RealExecutor{}, newSourcesTestKV(t), zerolog.Nop())
+	registry := BuildSourceRegistry(zerolog.Nop(), cfg, &executil.RealExecutor{}, newSourcesTestKV(t))
 
 	for _, backend := range []sources.Backend{sources.BackendGithub, sources.BackendGitea} {
 		entries := registry.All(backend)

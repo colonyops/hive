@@ -4,14 +4,16 @@ import (
 	"context"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/store"
 )
 
 // Start launches a background goroutine that periodically sweeps expired KV entries.
 // It blocks until the context is cancelled.
-func Start(ctx context.Context, kvStore *store.KVStore, interval time.Duration) {
+func Start(ctx context.Context, logger zerolog.Logger, kvStore *store.KVStore, interval time.Duration) {
+	logger = logutils.Component(logger, "sweep")
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -21,7 +23,7 @@ func Start(ctx context.Context, kvStore *store.KVStore, interval time.Duration) 
 			return
 		case <-ticker.C:
 			if err := kvStore.SweepExpired(ctx); err != nil {
-				log.Debug().Err(err).Msg("kv sweep failed")
+				logger.Debug().Err(err).Msg("kv sweep failed")
 			}
 		}
 	}

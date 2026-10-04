@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/viewport"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
@@ -24,6 +26,7 @@ const (
 
 // NotificationModal displays a scrollable history of notifications.
 type NotificationModal struct {
+	logger   zerolog.Logger
 	store    notify.Store
 	viewport viewport.Model
 	width    int
@@ -31,7 +34,7 @@ type NotificationModal struct {
 }
 
 // NewNotificationModal creates a modal showing notification history.
-func NewNotificationModal(store notify.Store, width, height int) *NotificationModal {
+func NewNotificationModal(logger zerolog.Logger, store notify.Store, width, height int) *NotificationModal {
 	if store == nil {
 		panic("tui.NewNotificationModal: store is required")
 	}
@@ -46,6 +49,7 @@ func NewNotificationModal(store notify.Store, width, height int) *NotificationMo
 	)
 
 	m := &NotificationModal{
+		logger:   logutils.Component(logger, "tui.notifications"),
 		store:    store,
 		viewport: vp,
 		width:    width,
@@ -59,7 +63,7 @@ func NewNotificationModal(store notify.Store, width, height int) *NotificationMo
 func (m *NotificationModal) refreshContent() {
 	history, err := m.store.List(context.Background())
 	if err != nil {
-		log.Error().Err(err).Msg("failed to load notification history")
+		m.logger.Error().Err(err).Msg("failed to load notification history")
 		m.viewport.SetContent(styles.TextErrorStyle.Render(fmt.Sprintf("failed to load notifications: %v", err)))
 		return
 	}

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -75,7 +77,7 @@ func newStub(t *testing.T, exec cliengine.Executor, store kv.KV, opts cliengine.
 	if store == nil {
 		store = newTestKV(t)
 	}
-	c, err := cliengine.New(stubDriver{id: "issues", binary: "stub"}, exec, store, opts)
+	c, err := cliengine.New(zerolog.Nop(), stubDriver{id: "issues", binary: "stub"}, exec, store, opts)
 	require.NoError(t, err)
 	return c
 }
@@ -83,13 +85,13 @@ func newStub(t *testing.T, exec cliengine.Executor, store kv.KV, opts cliengine.
 func TestNewValidation(t *testing.T) {
 	exec := &executiltest.Exec{}
 
-	_, err := cliengine.New(stubDriver{binary: "stub"}, exec, newTestKV(t), cliengine.Options{})
+	_, err := cliengine.New(zerolog.Nop(), stubDriver{binary: "stub"}, exec, newTestKV(t), cliengine.Options{})
 	require.Error(t, err, "missing id")
 
-	_, err = cliengine.New(stubDriver{id: "issues"}, exec, newTestKV(t), cliengine.Options{})
+	_, err = cliengine.New(zerolog.Nop(), stubDriver{id: "issues"}, exec, newTestKV(t), cliengine.Options{})
 	require.Error(t, err, "missing binary")
 
-	_, err = cliengine.New(stubDriver{id: "issues", binary: "stub"}, exec, nil, cliengine.Options{})
+	_, err = cliengine.New(zerolog.Nop(), stubDriver{id: "issues", binary: "stub"}, exec, nil, cliengine.Options{})
 	require.Error(t, err, "missing kv store")
 }
 
@@ -108,13 +110,13 @@ func TestOptionsOverrideDefaults(t *testing.T) {
 func TestManifestReflectsDetailCapability(t *testing.T) {
 	store := newTestKV(t)
 
-	plain, err := cliengine.New(stubDriver{id: "prs", binary: "stub"}, &executiltest.Exec{}, store, cliengine.Options{})
+	plain, err := cliengine.New(zerolog.Nop(), stubDriver{id: "prs", binary: "stub"}, &executiltest.Exec{}, store, cliengine.Options{})
 	require.NoError(t, err)
 	m, err := plain.Initialize(context.Background())
 	require.NoError(t, err)
 	assert.False(t, m.Capabilities.FetchDetail)
 
-	detail, err := cliengine.New(stubDetailDriver{stubDriver{id: "issues", binary: "stub"}}, &executiltest.Exec{}, store, cliengine.Options{})
+	detail, err := cliengine.New(zerolog.Nop(), stubDetailDriver{stubDriver{id: "issues", binary: "stub"}}, &executiltest.Exec{}, store, cliengine.Options{})
 	require.NoError(t, err)
 	m, err = detail.Initialize(context.Background())
 	require.NoError(t, err)
@@ -219,9 +221,9 @@ func TestCacheIsolatedPerBinary(t *testing.T) {
 	ghExec := &executiltest.Exec{Responses: []executiltest.Response{{Out: []byte(`[{"id":"1","title":"gh item"}]`)}}}
 	teaExec := &executiltest.Exec{Responses: []executiltest.Response{{Out: []byte(`[{"id":"2","title":"tea item"}]`)}}}
 
-	gh, err := cliengine.New(stubDriver{id: "issues", binary: "gh"}, ghExec, store, cliengine.Options{})
+	gh, err := cliengine.New(zerolog.Nop(), stubDriver{id: "issues", binary: "gh"}, ghExec, store, cliengine.Options{})
 	require.NoError(t, err)
-	tea, err := cliengine.New(stubDriver{id: "issues", binary: "tea"}, teaExec, store, cliengine.Options{})
+	tea, err := cliengine.New(zerolog.Nop(), stubDriver{id: "issues", binary: "tea"}, teaExec, store, cliengine.Options{})
 	require.NoError(t, err)
 	ctx := context.Background()
 
@@ -248,7 +250,7 @@ func TestFetchDetailRejectsNonNumericID(t *testing.T) {
 	for _, id := range []string{"", "--web", "-1", "0", "+1x"} {
 		t.Run(id, func(t *testing.T) {
 			exec := &executiltest.Exec{}
-			c, err := cliengine.New(stubDetailDriver{stubDriver{id: "issues", binary: "stub"}}, exec, newTestKV(t), cliengine.Options{})
+			c, err := cliengine.New(zerolog.Nop(), stubDetailDriver{stubDriver{id: "issues", binary: "stub"}}, exec, newTestKV(t), cliengine.Options{})
 			require.NoError(t, err)
 
 			_, err = c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: id, Scope: "o/r"})
@@ -260,7 +262,7 @@ func TestFetchDetailRejectsNonNumericID(t *testing.T) {
 
 func TestFetchDetailSuccess(t *testing.T) {
 	exec := &executiltest.Exec{Responses: []executiltest.Response{{Out: []byte("body markdown")}}}
-	c, err := cliengine.New(stubDetailDriver{stubDriver{id: "issues", binary: "stub"}}, exec, newTestKV(t), cliengine.Options{})
+	c, err := cliengine.New(zerolog.Nop(), stubDetailDriver{stubDriver{id: "issues", binary: "stub"}}, exec, newTestKV(t), cliengine.Options{})
 	require.NoError(t, err)
 
 	detail, err := c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: "7", Scope: "o/r", Dir: "/repo"})

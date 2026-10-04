@@ -8,7 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
@@ -25,10 +26,10 @@ type Plugin struct {
 
 // New creates a new GitHub plugin.
 // If kvStore is non-nil, PR status is cached in the persistent KV store.
-func New(cfg config.GitHubPluginConfig, kvStore kv.KV) *Plugin {
+func New(logger zerolog.Logger, cfg config.GitHubPluginConfig, kvStore kv.KV) *Plugin {
 	p := &Plugin{cfg: cfg}
 	if kvStore != nil {
-		p.cache = kv.NewCache[prInfo](log.Logger, kvStore, "github.pr", p.StatusCacheDuration())
+		p.cache = kv.NewCache[prInfo](logutils.Component(logger, "plugins.github"), kvStore, "github.pr", p.StatusCacheDuration())
 	}
 	return p
 }

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	tea "charm.land/bubbletea/v2"
 	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	review "github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
@@ -17,6 +19,7 @@ import (
 
 // ReviewOnlyOptions configures the review-only TUI.
 type ReviewOnlyOptions struct {
+	Logger      zerolog.Logger
 	Documents   []review.Document
 	InitialDoc  *review.Document
 	ContextDir  string // Directory for saving feedback files (e.g., context directory)
@@ -42,7 +45,7 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	store := store.NewReviewStore(opts.DB)
 
 	// Create review view
-	reviewView := review.New(opts.Documents, opts.ContextDir, store, nil, 0)
+	reviewView := review.New(opts.Logger, opts.Documents, opts.ContextDir, store, nil, 0)
 
 	// When opening with a specific document, hide the tree so the document
 	// gets full-width focus. The user can toggle the tree with V to navigate.

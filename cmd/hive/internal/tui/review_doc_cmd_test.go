@@ -4,6 +4,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
@@ -21,7 +23,7 @@ func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
 		received.Add(1)
 	})
 
-	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(map[string]config.UserCommand{}, nil), testRenderer)
+	handler := NewKeybindingResolver(zerolog.Nop(), nil, plugins.NewCommandSet(map[string]config.UserCommand{}, nil), testRenderer)
 	m := &Model{
 		activeView:      ViewSessions,
 		reviewView:      nil,
@@ -54,11 +56,11 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 			Type:    review.DocTypeResearch,
 		},
 	}
-	reviewView := review.New(docs, "/test", nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), docs, "/test", nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	// Create a minimal handler for testing
-	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(map[string]config.UserCommand{}, nil), testRenderer)
+	handler := NewKeybindingResolver(zerolog.Nop(), nil, plugins.NewCommandSet(map[string]config.UserCommand{}, nil), testRenderer)
 
 	m := &Model{
 		activeView: ViewSessions,
@@ -92,7 +94,7 @@ func TestOpenDocument(t *testing.T) {
 			Type:    review.DocTypeResearch,
 		},
 	}
-	reviewView := review.New(docs, "/test", nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), docs, "/test", nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	tests := []struct {
@@ -160,7 +162,7 @@ func TestOpenDocument_SuffixMatch(t *testing.T) {
 			Type:    review.DocTypeResearch,
 		},
 	}
-	reviewView := review.New(docs, "/real/context/owner/repo", nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), docs, "/real/context/owner/repo", nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	tests := []struct {

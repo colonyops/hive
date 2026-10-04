@@ -9,6 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	tea "charm.land/bubbletea/v2"
 	"charm.land/glamour/v2"
 	lipgloss "charm.land/lipgloss/v2"
@@ -19,7 +22,6 @@ import (
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/timeutil"
-	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
 )
@@ -66,6 +68,7 @@ func (cmd *HoneycombCmd) run(ctx context.Context, c *cli.Command) error {
 		Config:    cmd.app.Config,
 		KVStore:   cmd.app.KV,
 		Renderer:  cmd.app.Renderer(),
+		Logger:    cmd.app.Logger,
 	}
 	m := tui.NewHoneycombOnly(opts)
 	if _, err := tea.NewProgram(m).Run(); err != nil {
@@ -74,10 +77,15 @@ func (cmd *HoneycombCmd) run(ctx context.Context, c *cli.Command) error {
 	return nil
 }
 
+func (cmd *HoneycombCmd) logger() *zerolog.Logger {
+	logger := logutils.Component(cmd.app.Logger, "cli.hc")
+	return &logger
+}
+
 func (cmd *HoneycombCmd) detectSession(ctx context.Context) string {
 	sessionID, err := cmd.app.Sessions().DetectSession(ctx)
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to detect session for hc")
+		cmd.logger().Debug().Err(err).Msg("failed to detect session for hc")
 	}
 	return sessionID
 }
@@ -85,7 +93,7 @@ func (cmd *HoneycombCmd) detectSession(ctx context.Context) string {
 func (cmd *HoneycombCmd) detectRepoKey(ctx context.Context) string {
 	url, err := cmd.app.Sessions().Git().RemoteURL(ctx, ".")
 	if err != nil {
-		log.Debug().Err(err).Msg("failed to get remote URL for hc")
+		cmd.logger().Debug().Err(err).Msg("failed to get remote URL for hc")
 		return ""
 	}
 	owner, repoName := git.ExtractOwnerRepo(url)
@@ -156,7 +164,7 @@ Examples:
 		Action: func(ctx context.Context, c *cli.Command) error {
 			repoKey := cmd.detectRepoKey(ctx)
 			if repoKey == "" {
-				log.Warn().Msg("could not detect repo key; items will not be scoped to a repository")
+				cmd.logger().Warn().Msg("could not detect repo key; items will not be scoped to a repository")
 			}
 
 			if c.NArg() == 0 {
@@ -463,7 +471,7 @@ Examples:
 			if item.EpicID != "" {
 				epic, err := cmd.app.HC().GetItem(ctx, item.EpicID)
 				if err != nil {
-					log.Debug().Err(err).Str("epic_id", item.EpicID).Msg("failed to resolve epic title")
+					cmd.logger().Debug().Err(err).Str("epic_id", item.EpicID).Msg("failed to resolve epic title")
 				} else {
 					epicTitle = epic.Title
 				}
@@ -473,7 +481,7 @@ Examples:
 			for _, blockerID := range item.BlockerIDs {
 				b, err := cmd.app.HC().GetItem(ctx, blockerID)
 				if err != nil {
-					log.Debug().Err(err).Str("blocker_id", blockerID).Msg("failed to fetch blocker item")
+					cmd.logger().Debug().Err(err).Str("blocker_id", blockerID).Msg("failed to fetch blocker item")
 					continue
 				}
 				blockers = append(blockers, b)

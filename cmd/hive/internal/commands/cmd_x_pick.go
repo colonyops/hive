@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
@@ -21,7 +23,6 @@ import (
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/iojson"
-	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 )
 
@@ -552,7 +553,8 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			var items []pickItem
 			var currentSlug string
 			if current, currentErr := cmd.app.Sessions().CurrentSession(ctx); currentErr != nil {
-				log.Debug().Err(currentErr).Msg("tmux session detection failed")
+				logger := logutils.Component(cmd.app.Logger, "cli.pick")
+				logger.Debug().Err(currentErr).Msg("tmux session detection failed")
 			} else {
 				currentSlug = current.Session
 			}

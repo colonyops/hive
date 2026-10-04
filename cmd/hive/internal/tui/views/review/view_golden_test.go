@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/cmd/hive/internal/tui/testutil"
 )
 
@@ -27,7 +29,7 @@ func TestView_ListMode(t *testing.T) {
 		},
 	}
 
-	view := New(docs, "", nil, nil, 0)
+	view := New(zerolog.Nop(), docs, "", nil, nil, 0)
 	view.SetSize(80, 24)
 
 	output := view.View()
@@ -59,7 +61,7 @@ func TestView_DocumentMode(t *testing.T) {
 		Content: testContent,
 	}
 
-	view := New([]Document{doc}, "", nil, nil, 0)
+	view := New(zerolog.Nop(), []Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 24)
 
 	// Load the document to enter fullscreen mode

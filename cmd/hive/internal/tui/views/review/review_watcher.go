@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/fsnotify/fsnotify"
-	"github.com/rs/zerolog/log"
 )
 
 // DocumentChangeMsg is sent when documents change on disk.
@@ -18,19 +19,21 @@ type DocumentChangeMsg struct {
 
 // DocumentWatcher watches a directory for document changes.
 type DocumentWatcher struct {
+	logger      zerolog.Logger
 	watcher     *fsnotify.Watcher
 	contextDir  string
 	debounceDur time.Duration
 }
 
 // NewDocumentWatcher creates a new document watcher.
-func NewDocumentWatcher(contextDir string) (*DocumentWatcher, error) {
+func NewDocumentWatcher(logger zerolog.Logger, contextDir string) (*DocumentWatcher, error) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, err
 	}
 
 	w := &DocumentWatcher{
+		logger:      logger,
 		watcher:     watcher,
 		contextDir:  contextDir,
 		debounceDur: 100 * time.Millisecond,
@@ -61,7 +64,7 @@ func (w *DocumentWatcher) Start() tea.Cmd {
 					continue
 				}
 
-				log.Debug().
+				w.logger.Debug().
 					Str("path", event.Name).
 					Str("operation", event.Op.String()).
 					Msg("review: file system event")
@@ -99,7 +102,7 @@ func (w *DocumentWatcher) Start() tea.Cmd {
 					return nil
 				}
 				// Log error but continue watching
-				log.Error().
+				w.logger.Error().
 					Err(err).
 					Msg("review: file watcher error")
 			}

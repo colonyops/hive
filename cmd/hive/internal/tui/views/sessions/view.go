@@ -8,12 +8,14 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/rs/zerolog/log"
 
 	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	"github.com/colonyops/hive/cmd/hive/internal/config"
@@ -41,6 +43,9 @@ var builderPool = sync.Pool{
 
 // ViewOpts configures a new sessions View.
 type ViewOpts struct {
+	// Logger carries no cmp label. The view adds its own.
+	Logger zerolog.Logger
+
 	// Required — nil causes a panic at construction time.
 	Cfg           *config.Config
 	Service       *sessionsvc.Service
@@ -66,6 +71,9 @@ type View struct {
 	cfg     *config.Config
 	service *sessionsvc.Service
 	bus     *events.EventBus
+
+	logger     zerolog.Logger
+	baseLogger zerolog.Logger // no cmp label; the workspace watcher adds its own
 
 	// List and tree rendering
 	list         list.Model
@@ -126,6 +134,7 @@ func New(opts ViewOpts) *View {
 		panic("sessions.New: Cfg, Service, Handler, Status, GitStatus, and PluginManager are required")
 	}
 	cfg := opts.Cfg
+	logger := logutils.Component(opts.Logger, "tui.sessions")
 
 	gitStatuses := kvcache.New[string, GitStatus]()
 	terminalStatuses := kvcache.New[string, statussvc.TerminalStatus]()
@@ -172,7 +181,7 @@ func New(opts ViewOpts) *View {
 	cancelCurrent()
 	currentTmux := currentTarget.Session
 	if currentErr != nil {
-		log.Debug().Err(currentErr).Msg("tmux session detection failed")
+		logger.Debug().Err(currentErr).Msg("tmux session detection failed")
 	}
 
 	previewTemplates := ParsePreviewTemplates(
@@ -186,6 +195,8 @@ func New(opts ViewOpts) *View {
 	}
 
 	return &View{
+		logger:      logger,
+		baseLogger:  opts.Logger,
 		localRemote: opts.LocalRemote,
 		groupBy:     cfg.Views.Sessions.GroupBy,
 		cfg:         cfg,
@@ -287,7 +298,7 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 
 func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 	if msg.err != nil {
-		log.Error().Err(msg.err).Msg("failed to load sessions")
+		v.logger.Error().Err(msg.err).Msg("failed to load sessions")
 		return ErrorCmd(fmt.Errorf("failed to load sessions: %w", msg.err))
 	}
 	v.allSessions = msg.sessions
@@ -298,7 +309,7 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 			sessions[i] = &v.allSessions[i]
 		}
 		v.pluginManager.UpdateSessions(sessions)
-		log.Debug().Int("sessionCount", len(sessions)).Msg("updated plugin manager sessions")
+		v.logger.Debug().Int("sessionCount", len(sessions)).Msg("updated plugin manager sessions")
 	}
 	// Immediately fetch terminal status so newly created sessions are detected
 	// without waiting for the next scheduled poll tick (up to 1500ms delay).
@@ -322,7 +333,7 @@ func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) 
 	if v.terminalStatuses != nil {
 		for sessionID, newStatus := range msg.Results {
 			if newStatus.Error != nil {
-				log.Debug().Err(newStatus.Error).Str("sessionID", sessionID).Msg("terminal status update contains error")
+				v.logger.Debug().Err(newStatus.Error).Str("sessionID", sessionID).Msg("terminal status update contains error")
 			}
 		}
 
@@ -380,20 +391,20 @@ func (v *View) rootRepoTargets() []statussvc.RootRepoTarget {
 
 func (v *View) handlePluginWorkerStarted(msg pluginWorkerStartedMsg) tea.Cmd {
 	v.pluginResultsChan = msg.resultsChan
-	log.Debug().Msg("plugin background worker started")
-	return listenForPluginResult(v.pluginResultsChan)
+	v.logger.Debug().Msg("plugin background worker started")
+	return listenForPluginResult(v.logger, v.pluginResultsChan)
 }
 
 func (v *View) handlePluginStatusUpdate(msg pluginStatusUpdateMsg) tea.Cmd {
 	if msg.Err != nil {
-		log.Warn().
+		v.logger.Warn().
 			Err(msg.Err).
 			Str("plugin", msg.PluginName).
 			Str("session", msg.SessionID).
 			Msg("plugin status update failed")
 	} else if store, ok := v.pluginStatuses[msg.PluginName]; ok {
 		store.Set(msg.SessionID, msg.Status)
-		log.Debug().
+		v.logger.Debug().
 			Str("plugin", msg.PluginName).
 			Str("session", msg.SessionID).
 			Str("label", msg.Status.Label).
@@ -401,7 +412,7 @@ func (v *View) handlePluginStatusUpdate(msg pluginStatusUpdateMsg) tea.Cmd {
 	}
 	v.treeDelegate.PluginStatuses = v.pluginStatuses
 	v.list.SetDelegate(v.treeDelegate)
-	return listenForPluginResult(v.pluginResultsChan)
+	return listenForPluginResult(v.logger, v.pluginResultsChan)
 }
 
 func (v *View) handleReposDiscovered(msg RepositoriesDiscoveredMsg) tea.Cmd {
@@ -424,7 +435,7 @@ func (v *View) handleReposDiscovered(msg RepositoriesDiscoveredMsg) tea.Cmd {
 
 func (v *View) handleWorkspaceWatcherStarted(msg WorkspaceWatcherStartedMsg) tea.Cmd {
 	if msg.Err != nil {
-		log.Warn().Err(msg.Err).Msg("failed to start workspace watcher; use WorkspaceRefresh to rescan manually")
+		v.logger.Warn().Err(msg.Err).Msg("failed to start workspace watcher; use WorkspaceRefresh to rescan manually")
 		return v.scanRepoDirs()
 	}
 	v.workspaceWatcher = msg.Watcher
@@ -439,7 +450,7 @@ func (v *View) handleWorkspaceChanged(msg WorkspaceChangedMsg) tea.Cmd {
 		return nil
 	}
 
-	log.Warn().Err(msg.Err).Msg("workspace watcher stopped; use WorkspaceRefresh to rescan manually")
+	v.logger.Warn().Err(msg.Err).Msg("workspace watcher stopped; use WorkspaceRefresh to rescan manually")
 	if v.workspaceWatcher != nil {
 		_ = v.workspaceWatcher.Close()
 		v.workspaceWatcher = nil
@@ -1371,9 +1382,9 @@ func (v *View) scanRepoDirs() tea.Cmd {
 	v.workspaceScanGeneration++
 	generation := v.workspaceScanGeneration
 	return func() tea.Msg {
-		repos, err := workspace.ScanRepoDirs(context.Background(), log.Logger, v.workspaces, v.service.Git())
+		repos, err := workspace.ScanRepoDirs(context.Background(), v.logger, v.workspaces, v.service.Git())
 		if err != nil {
-			log.Warn().Err(err).Msg("repo directory scan encountered errors")
+			v.logger.Warn().Err(err).Msg("repo directory scan encountered errors")
 		}
 		return RepositoriesDiscoveredMsg{Repositories: repos, Generation: generation, Err: err}
 	}
@@ -1381,7 +1392,7 @@ func (v *View) scanRepoDirs() tea.Cmd {
 
 func (v *View) startWorkspaceWatcher() tea.Cmd {
 	return func() tea.Msg {
-		watcher, err := workspace.NewWatcher(log.Logger, v.workspaces)
+		watcher, err := workspace.NewWatcher(v.baseLogger, v.workspaces)
 		return WorkspaceWatcherStartedMsg{Watcher: watcher, Err: err}
 	}
 }
@@ -1522,7 +1533,7 @@ func (v *View) Close() {
 		return
 	}
 	if err := v.workspaceWatcher.Close(); err != nil && !errors.Is(err, workspace.ErrWatcherClosed) {
-		log.Debug().Err(err).Msg("failed to close workspace watcher")
+		v.logger.Debug().Err(err).Msg("failed to close workspace watcher")
 	}
 	v.workspaceWatcher = nil
 }
@@ -1740,14 +1751,14 @@ func IsFilterAction(t act.Type) bool {
 }
 
 // listenForPluginResult returns a command that waits for the next plugin result.
-func listenForPluginResult(ch <-chan plugins.Result) tea.Cmd {
+func listenForPluginResult(logger zerolog.Logger, ch <-chan plugins.Result) tea.Cmd {
 	if ch == nil {
 		return nil
 	}
 	return func() tea.Msg {
 		result, ok := <-ch
 		if !ok {
-			log.Debug().Msg("plugin results channel closed")
+			logger.Debug().Msg("plugin results channel closed")
 			return nil
 		}
 		return pluginStatusUpdateMsg{

@@ -6,8 +6,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+
 	tea "charm.land/bubbletea/v2"
-	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
@@ -55,9 +56,11 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		warnings = append(warnings, "No config file found. Expected location: "+hiveconfig.DefaultConfigDir())
 	}
 
+	logger := logutils.Component(cmd.app.Logger, "cli.tui")
+
 	// Start profiler server if enabled
 	if cmd.flags.ProfilerPort > 0 {
-		profServer := profiler.New(log.Logger, cmd.flags.ProfilerPort)
+		profServer := profiler.New(cmd.app.Logger, cmd.flags.ProfilerPort)
 		if err := profServer.Start(ctx); err != nil {
 			return fmt.Errorf("failed to start profiler: %w", err)
 		}
@@ -65,10 +68,10 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			if err := profServer.Shutdown(shutdownCtx); err != nil {
-				log.Error().Err(err).Msg("failed to shutdown profiler server")
+				logger.Error().Err(err).Msg("failed to shutdown profiler server")
 			}
 		}()
-		log.Info().
+		logger.Info().
 			Str("url", fmt.Sprintf("http://%s/debug/pprof/", profServer.Addr())).
 			Msg("profiler endpoint available")
 	}
@@ -79,6 +82,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	source, _ := os.Getwd()
 
 	deps := tui.Deps{
+		Logger:        cmd.app.Logger,
 		Config:        cmd.app.Config,
 		Service:       cmd.app.Sessions(),
 		MsgStore:      cmd.app.Messages(),

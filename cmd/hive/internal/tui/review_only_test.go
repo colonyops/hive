@@ -3,6 +3,8 @@ package tui
 import (
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/store/db"
@@ -99,7 +101,7 @@ func TestReviewOnly_CtrlCAlwaysQuits(t *testing.T) {
 
 // TestReviewView_HasActiveEditor verifies the HasActiveEditor method.
 func TestReviewView_HasActiveEditor(t *testing.T) {
-	v := review.New([]review.Document{}, "", nil, nil, 0)
+	v := review.New(zerolog.Nop(), []review.Document{}, "", nil, nil, 0)
 
 	assert.False(t, v.HasActiveEditor(), "Should have no active editor initially")
 }

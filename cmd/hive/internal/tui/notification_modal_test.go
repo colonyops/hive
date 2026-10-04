@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/stretchr/testify/assert"
@@ -59,7 +61,7 @@ func saveNotification(store *stubStore, level notify.Level, message string) {
 
 func TestNotificationModal_empty_history(t *testing.T) {
 	store := &stubStore{}
-	m := NewNotificationModal(store, 100, 40)
+	m := NewNotificationModal(zerolog.Nop(), store, 100, 40)
 
 	content := m.viewport.View()
 	assert.Contains(t, content, "No notifications")
@@ -72,7 +74,7 @@ func TestNotificationModal_populated_history(t *testing.T) {
 	saveNotification(store, notify.LevelError, "second message")
 	saveNotification(store, notify.LevelWarning, "third message")
 
-	m := NewNotificationModal(store, 100, 40)
+	m := NewNotificationModal(zerolog.Nop(), store, 100, 40)
 	content := m.viewport.View()
 
 	assert.Contains(t, content, "first message")
@@ -85,7 +87,7 @@ func TestNotificationModal_history_error(t *testing.T) {
 		listErr: errors.New("db connection failed"),
 	}
 
-	m := NewNotificationModal(store, 100, 40)
+	m := NewNotificationModal(zerolog.Nop(), store, 100, 40)
 	content := m.viewport.View()
 
 	assert.Contains(t, content, "failed to load notifications")
@@ -97,7 +99,7 @@ func TestNotificationModal_Clear_removes_notifications(t *testing.T) {
 
 	saveNotification(store, notify.LevelInfo, "will be cleared")
 
-	m := NewNotificationModal(store, 100, 40)
+	m := NewNotificationModal(zerolog.Nop(), store, 100, 40)
 	require.Contains(t, m.viewport.View(), "will be cleared")
 
 	err := m.Clear()
@@ -111,7 +113,7 @@ func TestNotificationModal_Clear_returns_store_error(t *testing.T) {
 		clearErr: errors.New("clear failed"),
 	}
 
-	m := NewNotificationModal(store, 100, 40)
+	m := NewNotificationModal(zerolog.Nop(), store, 100, 40)
 	err := m.Clear()
 
 	require.Error(t, err)
@@ -120,7 +122,7 @@ func TestNotificationModal_Clear_returns_store_error(t *testing.T) {
 
 func TestNotificationModal_nil_store_panics(t *testing.T) {
 	assert.Panics(t, func() {
-		_ = NewNotificationModal(nil, 100, 40)
+		_ = NewNotificationModal(zerolog.Nop(), nil, 100, 40)
 	})
 }
 

@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 
+	"github.com/rs/zerolog"
+
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	lipgloss "charm.land/lipgloss/v2"
@@ -185,8 +187,8 @@ func (mc *ModalCoordinator) ShowHelp(title string, sections []components.HelpDia
 }
 
 // ShowNotifications creates and displays the notification modal.
-func (mc *ModalCoordinator) ShowNotifications(store notify.Store) {
-	mc.Notification = NewNotificationModal(store, mc.width, mc.height)
+func (mc *ModalCoordinator) ShowNotifications(logger zerolog.Logger, store notify.Store) {
+	mc.Notification = NewNotificationModal(logger, store, mc.width, mc.height)
 }
 
 // ShowConfirm creates and displays the confirmation modal.
@@ -220,8 +222,8 @@ func (mc *ModalCoordinator) DismissInfo() {
 }
 
 // ShowTodoPanel creates and displays the todo action panel.
-func (mc *ModalCoordinator) ShowTodoPanel(service *todosvc.Service) {
-	mc.TodoPanel = NewTodoPanel(service, mc.width, mc.height)
+func (mc *ModalCoordinator) ShowTodoPanel(logger zerolog.Logger, service *todosvc.Service) {
+	mc.TodoPanel = NewTodoPanel(logger, service, mc.width, mc.height)
 }
 
 // DismissTodoPanel closes the todo panel.

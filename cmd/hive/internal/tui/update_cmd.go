@@ -3,23 +3,24 @@ package tui
 import (
 	"context"
 
+	"github.com/rs/zerolog"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/updatecheck"
-	"github.com/rs/zerolog/log"
 )
 
 type updateAvailableMsg struct {
 	result *updatecheck.Result
 }
 
-func checkForUpdate(checker *updatecheck.Checker, currentVersion string) tea.Cmd {
+func checkForUpdate(logger zerolog.Logger, checker *updatecheck.Checker, currentVersion string) tea.Cmd {
 	return func() tea.Msg {
 		if checker == nil {
 			return nil
 		}
 		result, err := checker.Check(context.Background(), currentVersion)
 		if err != nil {
-			log.Debug().Err(err).Msg("update check failed")
+			logger.Debug().Err(err).Msg("update check failed")
 			return nil
 		}
 		if result == nil {

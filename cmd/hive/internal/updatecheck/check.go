@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/domain/kv"
-	"github.com/rs/zerolog/log"
 	"golang.org/x/mod/semver"
 )
 
@@ -27,6 +29,7 @@ type Result struct {
 
 // Checker resolves latest releases and compares them against the current build.
 type Checker struct {
+	logger                 zerolog.Logger
 	cache                  *kv.TypedKV[ReleaseInfo]
 	client                 *http.Client
 	cacheTTL               time.Duration
@@ -36,7 +39,7 @@ type Checker struct {
 }
 
 // New creates a new update checker bound to a KV store.
-func New(kvStore kv.KV, client *http.Client) *Checker {
+func New(logger zerolog.Logger, kvStore kv.KV, client *http.Client) *Checker {
 	cacheTTL := 24 * time.Hour
 	cacheNamespace := "update-check"
 	cacheKey := "latest"
@@ -48,6 +51,7 @@ func New(kvStore kv.KV, client *http.Client) *Checker {
 	}
 
 	c := &Checker{
+		logger:        logutils.Component(logger, "updatecheck"),
 		client:        client,
 		cacheTTL:      cacheTTL,
 		cacheKey:      cacheKey,
@@ -70,19 +74,19 @@ func (c *Checker) Check(ctx context.Context, currentVersion string) (*Result, er
 
 	normalizedCurrent, ok := normalizeVersion(currentVersion)
 	if !ok {
-		log.Debug().Str("version", currentVersion).Msg("update check: invalid current version")
+		c.logger.Debug().Str("version", currentVersion).Msg("update check: invalid current version")
 		return nil, nil
 	}
 
 	release, err := c.getLatestRelease(ctx)
 	if err != nil {
-		log.Debug().Err(err).Msg("update check: failed to get latest release")
+		c.logger.Debug().Err(err).Msg("update check: failed to get latest release")
 		return nil, nil
 	}
 
 	normalizedLatest, ok := normalizeVersion(release.TagName)
 	if !ok {
-		log.Debug().Str("tag", release.TagName).Msg("update check: invalid release tag")
+		c.logger.Debug().Str("tag", release.TagName).Msg("update check: invalid release tag")
 		return nil, nil
 	}
 
@@ -104,7 +108,7 @@ func (c *Checker) getLatestRelease(ctx context.Context) (ReleaseInfo, error) {
 	}
 
 	if err := c.cache.SetTTL(ctx, c.cacheKey, info, c.cacheTTL); err != nil {
-		log.Debug().Err(err).Msg("update check: failed to cache release")
+		c.logger.Debug().Err(err).Msg("update check: failed to cache release")
 	}
 
 	return info, nil
@@ -142,7 +146,7 @@ func (c *Checker) defaultFetchLatestReleaseJSON(ctx context.Context) ([]byte, er
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
-			log.Debug().Err(err).Msg("update check: close latest release response body")
+			c.logger.Debug().Err(err).Msg("update check: close latest release response body")
 		}
 	}()
 

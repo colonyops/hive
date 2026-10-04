@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/rs/zerolog"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -87,27 +89,27 @@ func TestFetchSourceDetail(t *testing.T) {
 
 	t.Run("fetches when capable and item has no detail", func(t *testing.T) {
 		result := sourcepickerResult(stubSource{id: "issues", detail: body}, capable)
-		got := fetchSourceDetail(ctx, result, "o/r", "")
+		got := fetchSourceDetail(ctx, zerolog.Nop(), result, "o/r", "")
 		assert.Equal(t, body, got)
 	})
 
 	t.Run("no capability falls back to body field", func(t *testing.T) {
 		result := sourcepickerResult(stubSource{id: "prs", detail: body}, sources.Manifest{})
 		result.Item.Fields = map[string]any{"body": "field body"}
-		got := fetchSourceDetail(ctx, result, "o/r", "")
+		got := fetchSourceDetail(ctx, zerolog.Nop(), result, "o/r", "")
 		require.NotNil(t, got.Markdown)
 		assert.Equal(t, "field body", got.Markdown.Content, "sources without detail capability use the body field")
 	})
 
 	t.Run("no capability and no body field yields empty detail", func(t *testing.T) {
 		result := sourcepickerResult(stubSource{id: "prs", detail: body}, sources.Manifest{})
-		got := fetchSourceDetail(ctx, result, "o/r", "")
+		got := fetchSourceDetail(ctx, zerolog.Nop(), result, "o/r", "")
 		assert.Equal(t, sources.Detail{}, got)
 	})
 
 	t.Run("fetch failure degrades to empty detail", func(t *testing.T) {
 		result := sourcepickerResult(stubSource{id: "issues", detailErr: assert.AnError}, capable)
-		got := fetchSourceDetail(ctx, result, "o/r", "")
+		got := fetchSourceDetail(ctx, zerolog.Nop(), result, "o/r", "")
 		assert.Equal(t, sources.Detail{}, got, "detail errors must not block session creation")
 	})
 }
