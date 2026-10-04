@@ -2,6 +2,8 @@ package session
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/colonyops/hive/internal/domain/session"
@@ -121,4 +123,27 @@ func TestSessionDetector_SessionAtPath(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, ok, path)
 	}
+}
+
+func TestSessionDetector_SessionAtPathThroughSymlink(t *testing.T) {
+	root := t.TempDir()
+	checkout := filepath.Join(root, "repos", "foo")
+	require.NoError(t, os.MkdirAll(filepath.Join(checkout, "src"), 0o755))
+	link := filepath.Join(root, "link")
+	require.NoError(t, os.Symlink(checkout, link))
+
+	store := newMockStore()
+	store.sessions["sess-1"] = session.Session{ID: "sess-1", Path: checkout, State: session.StateActive}
+	detector := NewDetector(store)
+
+	sess, ok, err := detector.SessionAtPath(context.Background(), filepath.Join(link, "src"))
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, "sess-1", sess.ID)
+
+	store.sessions["sess-1"] = session.Session{ID: "sess-1", Path: link, State: session.StateActive}
+	sess, ok, err = detector.SessionAtPath(context.Background(), checkout)
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, "sess-1", sess.ID)
 }

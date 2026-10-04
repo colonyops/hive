@@ -50,7 +50,7 @@ func (d *Detector) SessionAtPath(ctx context.Context, path string) (session.Sess
 	if err != nil {
 		return session.Session{}, false, fmt.Errorf("get absolute path: %w", err)
 	}
-	path = filepath.Clean(path)
+	path = resolveSymlinks(path)
 
 	// Find the longest matching session path (most specific match)
 	var bestMatch session.Session
@@ -61,7 +61,7 @@ func (d *Detector) SessionAtPath(ctx context.Context, path string) (session.Sess
 			continue
 		}
 
-		sessPath := filepath.Clean(sess.Path)
+		sessPath := resolveSymlinks(sess.Path)
 
 		// Check if path equals or is within the session path
 		if path == sessPath || isSubpath(sessPath, path) {
@@ -73,6 +73,16 @@ func (d *Detector) SessionAtPath(ctx context.Context, path string) (session.Sess
 	}
 
 	return bestMatch, bestMatchLen > 0, nil
+}
+
+// resolveSymlinks compares paths by where they lead: a shell reports the
+// logical working directory, which differs from a session's stored path when
+// either goes through a link. A path that does not exist is only cleaned.
+func resolveSymlinks(path string) string {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved
+	}
+	return filepath.Clean(path)
 }
 
 // isSubpath returns true if child is a subdirectory of parent.
