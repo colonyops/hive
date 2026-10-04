@@ -97,6 +97,7 @@ type Resolver struct {
 	mu       sync.Mutex
 	path     string
 	env      map[string]string
+	probeErr error
 	resolved bool
 
 	// environ is the merge Environ last built, from environFrom. tmux is spawned
@@ -155,6 +156,16 @@ func (r *Resolver) Getenv(ctx context.Context, name string) string {
 	return r.env[name]
 }
 
+// ProbeErr returns why the login shell did not answer, or nil when it answered
+// or was not asked yet. Getenv returns "" for a variable in both cases, so a
+// caller that falls back on "" uses this to tell an unset variable from a
+// shell that could not be read.
+func (r *Resolver) ProbeErr() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.probeErr
+}
+
 func (r *Resolver) resolveLocked(ctx context.Context) {
 	if r.resolved {
 		return
@@ -176,6 +187,7 @@ func (r *Resolver) resolveLocked(ctx context.Context) {
 	}
 
 	r.env = env
+	r.probeErr = err
 	r.path = join(env["PATH"], inherited, strings.Join(SearchDirs(), string(os.PathListSeparator)))
 	r.resolved = true
 	r.logger.Debug().Ctx(ctx).Str("path", r.path).Msg("subprocess PATH")

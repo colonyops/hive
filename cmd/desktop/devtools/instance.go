@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/internal/config"
+
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/devproxy"
 	"github.com/colonyops/hive/internal/platform/credentials"
@@ -222,7 +224,15 @@ func (d *devtools) prepare(fresh bool) error {
 		if err != nil {
 			return err
 		}
+		// The installed app follows the CLI's HIVE_DATA_DIR. Only that variable
+		// is read here: the task environment can carry
+		// HIVE_DESKTOP_HIVE_DATA_DIR from an earlier launch.env.
 		hiveDataDir = sourcePaths.DataDir
+		if dir := os.Getenv(config.EnvDataDir); dir != "" {
+			if hiveDataDir, err = filepath.Abs(dir); err != nil {
+				return fmt.Errorf("resolve %s: %w", config.EnvDataDir, err)
+			}
+		}
 		if created {
 			if err := d.seedData(sourcePaths.DataDir, dataDir); err != nil {
 				return err

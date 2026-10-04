@@ -981,9 +981,12 @@ from it. Their locations resolve independently: `desktop-pipeline.db` follows
 `DataDir`, while `hive.db` follows `HiveDataDir`: `HIVE_DESKTOP_HIVE_DATA_DIR`,
 then the CLI's `HIVE_DATA_DIR`, then `DataDir`. Both variables are read from
 the login shell, so a Dock launch sees what the user exported for the CLI.
-Development sets `HIVE_DESKTOP_HIVE_DATA_DIR` to the
-installed hive data dir, so `hive.db` is shared in dev too while the desktop's
-own state stays worktree-isolated. ADR desktop-configuration records the
+A login shell that cannot be read hides `HIVE_DATA_DIR`: the app falls back to
+`DataDir` for that run and logs a warning that names the directory.
+Development sets `HIVE_DESKTOP_HIVE_DATA_DIR` to the hive data dir the
+installed app uses (the shell's `HIVE_DATA_DIR`, else the installed `DataDir`),
+so `hive.db` is shared in dev too while the desktop's own state stays
+worktree-isolated. ADR desktop-configuration records the
 configuration decision, and ADR both-programs-run-on-one-layered-hive-engine
 adds the `HIVE_DATA_DIR` fallback.
 

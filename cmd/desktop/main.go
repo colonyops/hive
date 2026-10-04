@@ -149,6 +149,7 @@ func main() {
 			Str("version", build.Version).
 			Msg("telemetry enabled")
 	}
+	settings.LogHiveDataDir(logger, paths, execEnv.ProbeErr())
 
 	settingsStore = settings.NewStore(paths.SettingsPath)
 	backupDir = filepath.Join(paths.StateDir, "migration-backups")

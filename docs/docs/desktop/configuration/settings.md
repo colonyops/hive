@@ -42,6 +42,8 @@ Session and task sharing also depends on the data root. The common default is `~
 2. `HIVE_DATA_DIR`
 3. the Hive Desktop data root (`HIVE_DESKTOP_DATA_DIR`, or `~/.local/share/hive/`)
 
+Hive Desktop logs the data root it picked at startup. If your login shell fails or takes more than a few seconds to start, the app cannot read `HIVE_DATA_DIR` for that run. It falls back to its own data root, so your sessions and tasks look missing until the next launch, and it logs a warning that names the directory it used.
+
 See the hive CLI [configuration reference](../../cli/configuration/index.md) and [repository rules](../../cli/configuration/rules.md).
 
 Hive Desktop keeps these files under its config directory by default:

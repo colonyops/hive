@@ -102,6 +102,25 @@ func TestPathRemembersAFailedProbe(t *testing.T) {
 	assert.Equal(t, int64(1), probes.Load())
 }
 
+// Getenv answers "" for an unset variable and for a shell that could not be
+// read. A caller that falls back on "" has to tell the two apart.
+func TestProbeErrSeparatesAFailedProbeFromAnUnsetVariable(t *testing.T) {
+	t.Setenv("HIVE_TEST_UNSET", "")
+	probeErr := errors.New("shell timed out")
+	failed := NewResolver(Options{Shell: "/bin/zsh", Probe: func(context.Context, string) (map[string]string, error) {
+		return nil, probeErr
+	}})
+	require.NoError(t, failed.ProbeErr(), "nothing asked the shell yet")
+	assert.Empty(t, failed.Getenv(t.Context(), "HIVE_TEST_UNSET"))
+	require.ErrorIs(t, failed.ProbeErr(), probeErr)
+
+	answered := NewResolver(Options{Shell: "/bin/zsh", Probe: func(context.Context, string) (map[string]string, error) {
+		return map[string]string{"PATH": "/usr/bin"}, nil
+	}})
+	assert.Empty(t, answered.Getenv(t.Context(), "HIVE_TEST_UNSET"))
+	assert.NoError(t, answered.ProbeErr())
+}
+
 // Cancelling session creation must not be recorded as the shell's answer, so
 // the probe runs on a context of its own.
 func TestProbeOutlivesACancelledCaller(t *testing.T) {

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/colonyops/hive/internal/config"
+
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/devproxy"
 	"github.com/colonyops/hive/internal/platform/credentials"
@@ -29,6 +31,7 @@ func testDevtools(t *testing.T) (*devtools, string, string) {
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	t.Setenv(settings.EnvDataDir, "")
 	t.Setenv(settings.EnvConfigDir, "")
+	t.Setenv(config.EnvDataDir, "")
 	tools := newDevtools(root, zerolog.Nop())
 	tools.stderr = &bytes.Buffer{}
 	tools.stdout = &bytes.Buffer{}
@@ -126,6 +129,19 @@ func TestPrepareReuseFreshAndReset(t *testing.T) {
 	assert.NoDirExists(t, tools.instanceDir)
 	assert.NoFileExists(t, tools.launchPath)
 	assert.NoFileExists(t, tools.mcpPath)
+}
+
+// The installed app follows the CLI's HIVE_DATA_DIR, so the dev instance has to
+// follow it too. Otherwise it reads a hive.db that nothing else writes.
+func TestPrepareFollowsTheCLIsHiveDataDir(t *testing.T) {
+	tools, _, _ := testDevtools(t)
+	cliData := t.TempDir()
+	t.Setenv(config.EnvDataDir, cliData)
+
+	require.NoError(t, tools.prepare(false))
+	launch, err := tools.readLaunchIfPresent()
+	require.NoError(t, err)
+	assert.Equal(t, cliData, launch[settings.EnvHiveDataDir])
 }
 
 // A deleted .mcp.json comes back on the next prepare, from the ports the

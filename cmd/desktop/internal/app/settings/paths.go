@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/pkg/pathutil"
 )
@@ -146,6 +148,21 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 		DataDirOverridden:    dataOverride || b.DataDir != "",
 		ConfigDirOverridden:  configOverride || b.ConfigDir != "",
 	}
+}
+
+// LogHiveDataDir records which hive.db this run opens. probeErr is why the
+// login shell could not be read, if it could not. A failed probe hides a
+// HIVE_DATA_DIR that the user exports from a shell startup file, so the app
+// falls back to its own data dir and can open a different hive.db than the
+// run before did.
+func LogHiveDataDir(logger zerolog.Logger, paths Paths, probeErr error) {
+	inProcess := os.Getenv(EnvHiveDataDir) != "" || os.Getenv(config.EnvDataDir) != ""
+	if probeErr != nil && !inProcess {
+		logger.Warn().Err(probeErr).Str("hive_data_dir", paths.HiveDataDir).
+			Msg("login shell environment unavailable, so HIVE_DATA_DIR was not read; hive.db is in the desktop data dir for this run")
+		return
+	}
+	logger.Info().Str("hive_data_dir", paths.HiveDataDir).Msg("resolved the hive data dir")
 }
 
 func desktopOnlyGetenv(name string) string {
