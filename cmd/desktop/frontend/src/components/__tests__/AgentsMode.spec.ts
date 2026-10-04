@@ -595,6 +595,19 @@ describe('AgentsMode', () => {
     field.remove()
   })
 
+  it("focuses the picked chat's workspace", async () => {
+    const client = fakeClient()
+    const other = { ...chatRow, id: 9, workspace: 'docs', name: 'Second', terminalId: 'agentws-9' }
+    client.resumeSession.mockResolvedValue({ ...other, windowId: 'w9', cols: 80, rows: 24, resumeAttempted: true })
+    const { wrapper, router } = await mountWithOpenChat(client)
+
+    wrapper.findComponent(AgentsSidebar).vm.$emit('select-session', other)
+    await flushPromises()
+
+    expect(router.currentRoute.value.params.workspace).toBe('docs')
+    expect(router.currentRoute.value.query.chat).toBe('9')
+  })
+
   it('focuses the newly attached pane when nothing editable holds focus', async () => {
     const client = fakeClient()
     const other = { ...chatRow, id: 9, name: 'Second', terminalId: 'agentws-9' }
