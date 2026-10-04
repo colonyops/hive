@@ -27,7 +27,7 @@ a credential.
 ```bash
 mise run desktop:dev           # Wails with this worktree's launch.env
 mise run desktop:serve         # headless HTTP build on :8080 — the agent UI loop
-mise run desktop:test          # frontend vitest + the desktop's Go packages
+mise run desktop:test          # frontend vitest + the desktop's and the shared Go packages
 mise run desktop:frontend:lint # ESLint (type-aware); see "Frontend lint and format"
 mise run desktop:bindings      # regenerate TS bindings after a Wails service change
 mise run desktop:e2e           # Docker-only Playwright gate

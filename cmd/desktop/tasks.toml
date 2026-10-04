@@ -116,9 +116,9 @@ description = "Verify the desktop's SQLite migrations are ordered and released h
 run = "./cmd/desktop/scripts/check-migration-order.sh"
 
 ["desktop:test"]
-description = "Run the desktop slice: frontend vitest + the app's Go packages"
+description = "Run the desktop slice: frontend vitest + the app's Go packages and the shared packages it runs on"
 depends = ["desktop:frontend:test"]
-run = "go test ./cmd/desktop/..."
+run = "go test ./cmd/desktop/... ./internal/... ./pkg/..."
 
 ["desktop:e2e"]
 description = "Run desktop e2e tests in the pinned Docker/Playwright environment"

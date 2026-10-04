@@ -405,8 +405,10 @@ e.g. to test another registration. The GitHub REST client is desktop-owned:
 `feed` starts authenticated, while `onboarding` starts signed out with a fake
 device flow that grants after ~1.5s. `live` is the safe default.
 
-`build/config.yml` keeps `dev_mode.root_path: .`; when `wails3 dev` is started
-from `cmd/desktop/`, Wails watches `cmd/desktop/` rather than the whole repository.
+`build/config.yml` sets `dev_mode.root_path: ../..`. `wails3 dev` starts in
+`cmd/desktop/`, so Wails watches the repository root: the app rebuilds on a
+change to the shared `internal/` and `pkg/` packages as well as its own code.
+The ignore list in that file leaves out the CLI, the docs, and build output.
 
 ## Development and builds
 

@@ -38,7 +38,7 @@ linters:
       rules:
         main:
           deny:
-            - pkg: io/util
+            - pkg: io/ioutil
               desc: |
                 Deprecated: As of Go 1.16, the same functionality is now provided by
                 package io or package os, and those implementations should be
@@ -61,6 +61,8 @@ linters:
               desc: Shared internal/ must not render. Put UI code below cmd/<artifact>/internal.
             - pkg: github.com/wailsapp
               desc: Shared internal/ must not depend on the desktop runtime.
+            - pkg: github.com/colonyops/hive/cmd
+              desc: Shared internal/ must not import a program.
         domain-is-pure:
           files:
             - "**/internal/domain/**"
@@ -155,6 +157,28 @@ linters:
               desc: |
                 An exporter is wired once, in cmd/desktop/internal/app/telemetry.
                 See docs/architecture.md, "Telemetry".
+        kit-is-hive-agnostic:
+          files:
+            - "**/pkg/**"
+            - "!**/cmd/**"
+            - "!**/internal/**"
+          deny:
+            - pkg: github.com/colonyops/hive/internal
+              desc: pkg/ sits below every layer and must not import the engine.
+            - pkg: github.com/colonyops/hive/cmd
+              desc: pkg/ must not import a program.
+            - pkg: charm.land
+              desc: pkg/ must not render.
+            - pkg: github.com/charmbracelet
+              desc: pkg/ must not render.
+            - pkg: github.com/wailsapp
+              desc: pkg/ must not depend on the desktop runtime.
+        desktop-no-cli-deps:
+          files:
+            - "**/cmd/desktop/**"
+          deny:
+            - pkg: github.com/colonyops/hive/cmd/hive
+              desc: The desktop must not import the CLI program.
         cli-no-desktop-deps:
           files:
             - "**/cmd/hive/**"
@@ -211,9 +235,10 @@ linters:
     generated: lax
     rules:
       # The linters Hive Desktop adopted beyond the shared set apply to the
-      # desktop program only. The CLI and the shared packages keep the set
+      # desktop program and to the drivers that moved out of it into
+      # internal/platform. The CLI and the other shared packages keep the set
       # they were written against.
-      - path-except: (^|/)cmd/desktop/
+      - path-except: (^|/)(cmd/desktop|internal/platform/(tmux/(control|bin)|execenv|credentials|secrets|observe))/
         linters: [containedctx, contextcheck, forbidigo, forcetypeassert, interfacebloat, modernize, noctx, sqlclosecheck, usetesting]
       # forbidigo has no per-rule path filter, so the scope of its rules is
       # carved here. The adapter and package main are where application.Get,

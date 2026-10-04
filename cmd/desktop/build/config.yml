@@ -14,18 +14,28 @@ info:
   comments: ""
   version: "0.1.0"
 
-# root_path is the repo root so the watcher sees internal/** and cmd/**;
-# executes set `dir: desktop` to run the build from the app package.
+# root_path is the repo root, so the watcher sees the shared internal/** the
+# app runs on as well as cmd/desktop/**. It resolves against the directory
+# `wails3 dev` runs in (cmd/desktop), and each execute's dir resolves against
+# root_path.
 dev_mode:
-  root_path: ..
+  root_path: ../..
   log_level: warn
   debounce: 1000
   ignore:
+    # A plain name matches any path component. A generic name would also hide
+    # shared code ("bin" matches internal/platform/tmux/bin), so those are
+    # patterns that match one directory.
     dir:
       - .git
+      - .claude
+      - .data
       - node_modules
       - frontend
-      - bin
+      - docs
+      - "*/cmd/desktop/bin/*"
+      - "*/cmd/hive/*"
+      - "*/cmd/tools/*"
     file:
       - .DS_Store
       - .gitignore
@@ -38,11 +48,11 @@ dev_mode:
     git_ignore: true
   executes:
     - cmd: wails3 build DEV=true
-      dir: desktop
+      dir: cmd/desktop
       type: blocking
     - cmd: wails3 task common:dev:frontend
-      dir: desktop
+      dir: cmd/desktop
       type: background
     - cmd: wails3 task run
-      dir: desktop
+      dir: cmd/desktop
       type: primary
