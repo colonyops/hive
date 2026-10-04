@@ -308,6 +308,14 @@ Available variables vary by context - see `internal/config/validate.go` for `*Te
 
 Never silently discard errors. If an error cannot be presented to the user (e.g., in background polling, cache refresh, or TUI status fetching), log it at an appropriate level (`debug` for expected/transient failures, `warn` for configuration problems). Prefer degraded behavior with logging over silent fallbacks — for example, show a `StatusMissing` indicator instead of dropping an item from the UI.
 
+#### Logging
+
+No program assigns the zerolog global logger, and depguard denies its import. Pass a `zerolog.Logger` down instead:
+
+- The logger is the first parameter, or the second when the first is a `context.Context`.
+- A component labels its own logger with `logutils.Component(logger, "name")`, which adds `cmp=name`. Give a component a logger that has no `cmp` label yet: zerolog appends fields, so a second label repeats the key.
+- A plain function logs with its caller's logger and adds no label.
+
 #### Keybinding Precedence
 
 The TUI dispatches keystrokes through three layers, in this order:

@@ -1,4 +1,4 @@
-// Package migrate upgrades an older on-disk config document to the
+// Package configmigrate upgrades an older on-disk config document to the
 // version the running build expects, forward-only and one step per version.
 // It operates on the file's own top-level `version:` field, not a tracking
 // table, and it works on raw bytes BEFORE the typed decoders in

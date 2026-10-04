@@ -1,6 +1,6 @@
 # Typed desktop configuration and worktree-local development instances
 
-- **Status:** accepted
+- **Status:** accepted; the hive data dir variable is amended by [ADR both-programs-run-on-one-layered-hive-engine](2026-10-03-both-programs-run-on-one-layered-hive-engine.md)
 - **Date:** 2026-07-25
 
 ## Context

@@ -3,7 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-10-03
 - **Supersedes:** [pure-shared-domain-packages-are-imported-directly-services-and-stores-stay-behind-the-seam](2026-10-02-pure-shared-domain-packages-are-imported-directly-services-and-stores-stay-behind-the-seam.md)
-- **Amends:** [desktop-configuration](2026-07-25-desktop-configuration.md) (the hive data dir variable)
+- **Amends:** [desktop-configuration](2026-07-25-desktop-configuration.md) (the hive data dir variable), [the-hive-runtime-rebinds-on-a-config-write-instead-of-requiring-a-restart](2026-09-20-the-hive-runtime-rebinds-on-a-config-write-instead-of-requiring-a-restart.md) (`Engine.Reload` replaces `Rebind`)
 
 ## Context
 

@@ -32,6 +32,6 @@
 //   - PickerModal: Document selection tree
 //   - ModalState: Coordinates modal lifecycle and rendering
 //
-// Sessions persist comments to a database (via stores.ReviewStore) and are tied
+// Sessions persist comments to a database (via store.ReviewStore) and are tied
 // to document content hashes. This allows reviews to be resumed across TUI invocations.
 package review

@@ -12,6 +12,9 @@ import (
 // same directory, syncs it, and renames it over path, so a crash leaves
 // either the old file or the new one. The parent directory must exist.
 //
+// perm is the exact mode of the new file. The umask does not narrow it, as it
+// would for os.WriteFile.
+//
 // The temporary file is hidden and ends in .tmp, so a directory watcher that
 // skips dotfiles or matches on extension never loads it.
 func Write(path string, data []byte, perm fs.FileMode) (err error) {

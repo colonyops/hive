@@ -725,7 +725,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	// itself is a debounce signal (an idle candidate must see N consecutive
 	// confirming observations), and the tracker's per-generation idempotence
 	// guards against the double GetStatus call per pane that
-	// hive.StatusService's FetchSession/groupPaneStatuses pairing makes.
+	// status.Service's FetchSession/groupPaneStatuses pairing makes.
 	snap := assess.Snapshot{
 		Content:    content,
 		Title:      paneTitle,

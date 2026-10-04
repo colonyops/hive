@@ -134,7 +134,7 @@ Domain-Driven Design, (Go) an idiom specific to the language.
 | Pattern | Where it applies | The rule here |
 | --- | --- | --- |
 | **Ports & Adapters** / Hexagonal | the `app` ↔ `adapter` boundary | Driven ports (core → outside) get an interface defined in `app`. Driving ports (outside → core) get **no interface** — adapters depend on concrete types. See [the Go amendment](#the-go-amendment-to-hexagonal). |
-| **Facade** (GoF) — as Application Service | `app.App` | One entry point aggregating per-domain services, so a caller never cherry-picks raw dependencies. Mirrors the CLI's `cmd/hive/internal/app/app.go`: *"Commands and TUI consume App instead of cherry-picking raw dependencies."* |
+| **Facade** (GoF) — as Application Service | `app.App` | One entry point aggregating per-domain services, so a caller never cherry-picks raw dependencies. Mirrors the CLI's `cmd/hive/internal/app/app.go`: *"App is the central entry point for all hive operations."* |
 | **Store** (Repository, PoEAA) | `app/data/stores`, one type per persisted **aggregate root** | One aggregate's persistence behind hand-written domain types; it publishes nothing and knows nothing about `app.Error`. The placement rules and the transaction contract are in [Stores and services](#stores-and-services). |
 | **Adapter** (GoF) | `wailsui`, `httpapi`, `mcpsrv` | A bound method builds a request and calls a service. More than ~5 lines of logic means it belongs in `app`. Transport vocabulary — status codes, exit codes, wire encodings — stops here. |
 | **Error chain** (httpkit `errchain`) | every HTTP surface: `httpapi`, devserver control | Handlers are `func(w, r) error` behind one `web/mid.Errors` middleware that maps error types to responses exactly once — no handler writes a status inline. Input enters only through `web/extractors` (`Body` decode + the struct's criterio `Validate`). Per-resource `ctrl_*.go` files, routes registered in one place. See ADR http-handler-conventions. |
@@ -277,6 +277,14 @@ services on `New` and on each `Reload`. Engine subpackages never import the
 engine root, so the root composes them without a cycle. A service declares
 the ports it consumes, and `platform` and `store` satisfy them structurally,
 the [Go amendment](#the-go-amendment-to-hexagonal) applied to the engine.
+
+Loggers are passed down, never global: depguard denies the zerolog global
+logger in the whole module, because no program assigns it. A `zerolog.Logger`
+is the first parameter of what takes one, or the second after a
+`context.Context`. A component labels the logger it is given with
+`logutils.Component`, which adds `cmp=<name>`, so one filter narrows a log to
+one component. The engine and the programs hand out a logger with no `cmp`
+label, because zerolog appends fields and a second label would repeat the key.
 
 Inside the desktop, `adapter` imports `app` and `app` imports the shared
 layers; `app` never imports `adapter`, Wails, or any transport package. An
@@ -1627,8 +1635,9 @@ state: `SessionSummary.State` remains active/recycled/corrupted, while
 and active/approval/ready/missing agent activity keyed by stable tmux window id.
 The session row renders liveness; activity belongs to the window row. Terminal
 mode polls that projection only while mounted, at Hive's configured tmux
-interval. The Hive anti-corruption layer drops captured pane content and
-provider errors before the Wails boundary. Status detection and Hive session
+interval. `SessionsService.SessionStatuses` projects hive's status onto window
+ids and drops captured pane content and provider errors before the Wails
+boundary. Status detection and Hive session
 lifecycle share `internal/platform/tmux/exec`; Desktop's composition
 root configures its runner so both use the same resolved binary, environment,
 and tmux server socket as control-mode attaches.
