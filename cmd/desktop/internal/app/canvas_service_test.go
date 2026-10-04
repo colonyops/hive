@@ -196,6 +196,17 @@ func TestCanvasPutBlockValidation(t *testing.T) {
 	signals.requireNoUpdates(t, "a refused write never notifies")
 }
 
+func TestCanvasTitlesDecodeHTMLEntities(t *testing.T) {
+	svc, _ := testCanvasService(t)
+
+	c, err := svc.PutBlock(t.Context(), "1", "plan", "Rice &amp; Peppers", "", canvas.Block{
+		ID: "a", Kind: canvas.KindLink, Title: "Q&amp;A &lt;draft&gt;", URL: "https://example.com",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Rice & Peppers", c.Title)
+	assert.Equal(t, "Q&A <draft>", c.Blocks[0].Title)
+}
+
 // A silently stripped tag is the one failure an agent cannot see, so the
 // error names it. How a block looks is the agent's own business, so styling
 // it never reaches this path.

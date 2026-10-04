@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"html"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -128,6 +129,7 @@ func (s *CanvasService) putBlocks(ctx context.Context, session string, name, tit
 	if err != nil {
 		return canvas.Canvas{}, err
 	}
+	title = plainTitle(title)
 	if len(title) > maxCanvasTitleLength {
 		return canvas.Canvas{}, Errorf(KindInvalid, "canvas title is too long (%d chars max)", maxCanvasTitleLength)
 	}
@@ -370,8 +372,16 @@ func (s *CanvasService) notify(ctx context.Context, author canvas.Author) {
 	s.events.Publish(ctx, events.CanvasUpdated{Session: author.Session, HiveSession: author.HiveSession})
 }
 
+// plainTitle decodes HTML entities. A title is plain text on every surface,
+// and agents often escape one as if it were markup, so "&amp;" would show
+// as written.
+func plainTitle(title string) string {
+	return html.UnescapeString(title)
+}
+
 func validateBlock(b *canvas.Block) error {
 	b.ID = strings.TrimSpace(b.ID)
+	b.Title = plainTitle(b.Title)
 	if b.ID == "" {
 		return Errorf(KindInvalid, "a block needs an id")
 	}
