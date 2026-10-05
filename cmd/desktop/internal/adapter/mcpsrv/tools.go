@@ -40,14 +40,14 @@ const (
 // written for a model rather than for a person reading a reference: what the
 // tool answers, what it will not do, and what a surprising answer means.
 func (ctrl *Controller) register(srv *mcp.Server) {
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "get_status",
 		Title: "Desktop status",
 		Description: "Report the running build and whether the webhook listener is up, on which host and port. " +
 			"Use this first to confirm the app is reachable and to discover the webhook base URL a push should go to.",
 	}, ctrl.GetStatus)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "list_profiles",
 		Title: "List profiles",
 		Description: "List every profile with its load status and whether it has an avatar. " +
@@ -55,7 +55,7 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"A profile whose flow file does not parse still lists, with valid=false.",
 	}, ctrl.ListProfiles)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "get_flow",
 		Title: "Read a profile's flow",
 		Description: "Return one profile's graph: every node with its id, type and config, and the wires between them. " +
@@ -63,14 +63,14 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"A profile whose flow file does not parse still answers, with valid=false and the load error.",
 	}, ctrl.GetFlow)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "list_feeds",
 		Title: "List feeds",
 		Description: "List the feeds a profile's graph declares, with their total, unread and archived counts. " +
 			"A declared feed nothing has landed in yet still lists, at zero — so an empty feed and a feed id that does not exist are different answers.",
 	}, ctrl.ListFeeds)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "list_inbox",
 		Title: "List inbox items",
 		Description: "List a profile's inbox items, optionally scoped to one feed or resolved by the source's own external id. " +
@@ -80,7 +80,7 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"by feed, by externalId or with limit.",
 	}, ctrl.ListInbox)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "list_inbox_item_events",
 		Title: "List an inbox item's events",
 		Description: "List one inbox item's lifecycle events, resolved by itemId or by an externalId that matches exactly one item. " +
@@ -88,7 +88,7 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"Each event's own detail is source-specific raw JSON and is omitted unless detail is full.",
 	}, ctrl.ListInboxItemEvents)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "list_item_sessions",
 		Title: "List the hive sessions an inbox item started",
 		Description: "List the hive sessions one inbox item created, newest first, each with the state hive reports for it now; " +
@@ -96,59 +96,59 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"Links to sessions hive no longer has are dropped as a side effect of this read, but only when hive answered — a failed listing drops nothing.",
 	}, ctrl.ListItemSessions)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "list_actions",
 		Title: "List the action catalog",
 		Description: "List the action catalog with the actions.yml it was loaded from and whether that file currently parses. " +
 			"An invalid edit leaves the previous catalog in effect and reports its error here, so this is how to confirm an edit actually loaded.",
 	}, ctrl.ListActions)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "refresh_sources",
 		Title: "Force a source refresh",
 		Description: "Force one producer tick across all sources, dropping fetch caches. " +
 			"Returns aggregate totals rather than a per-source breakdown. Use it after changing a flow or pushing a test event instead of waiting for the next poll.",
 	}, ctrl.RefreshSources)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:        "create_profile",
 		Title:       "Create a profile",
 		Description: "Create a profile, seeded with the starter graph when exactly one GitHub account is connected and empty otherwise.",
 	}, ctrl.CreateProfile)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "delete_profile",
 		Title: "Delete a profile",
 		Description: "Delete a profile, its flow files, its avatar, and its inbox state. This is not reversible. " +
 			"An id that matches no profile is not_found — nothing is ever reported as deleted that was not.",
 	}, ctrl.DeleteProfile)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:        "get_profile_image",
 		Title:       "Read a profile's avatar",
 		Description: "Return a profile's avatar as a PNG image. A profile with no avatar is not_found — its rail falls back to a letter chip.",
 	}, ctrl.GetProfileImage)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "set_profile_image",
 		Title: "Set a profile's avatar",
 		Description: "Set a profile's avatar from base64-encoded image bytes (PNG, JPEG, GIF or WebP — the format is sniffed, so no media type is needed). " +
 			"The image is normalized to a 128x128 PNG.",
 	}, ctrl.SetProfileImage)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:        "clear_profile_image",
 		Title:       "Clear a profile's avatar",
 		Description: "Clear a profile's avatar so its rail reverts to the letter chip.",
 	}, ctrl.ClearProfileImage)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:        "get_node_image",
 		Title:       "Read a source node's feed mark",
 		Description: "Return a source node's feed-mark image as a PNG. A node with no mark is not_found — its items fall back to the node's glyph.",
 	}, ctrl.GetNodeImage)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "set_node_image",
 		Title: "Set a source node's feed mark",
 		Description: "Set a source node's feed-mark image from base64-encoded image bytes (PNG, JPEG, GIF or WebP). " +
@@ -156,13 +156,13 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"Webhook and command sources carry a mark; other node types are rejected.",
 	}, ctrl.SetNodeImage)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:        "clear_node_image",
 		Title:       "Clear a source node's feed mark",
 		Description: "Clear a source node's feed-mark image so its items revert to the node's icon.",
 	}, ctrl.ClearNodeImage)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "execute_flow",
 		Title: "Dry-run a flow",
 		Description: "Dry-run a flow against input you supply and report what every node did, committing nothing — no feed membership, " +
@@ -180,7 +180,7 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"Prefer this over deploying an edit and waiting for a poll.",
 	}, ctrl.ExecuteFlow)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "list_workspaces",
 		Title: "List agent workspaces",
 		Description: "List every agent workspace with its command template, whether that command carries a permission bypass (danger), and its schedule ids. " +
@@ -188,14 +188,14 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"with problem set; it refuses schedule writes until the file is fixed.",
 	}, ctrl.ListWorkspaces)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "list_schedules",
 		Title: "List a workspace's scheduled chats",
 		Description: "List one workspace's schedules in manifest order, each with when it fires next and its newest run whatever the outcome. " +
 			"A workspace that does not exist is not_found; one whose manifest does not parse is invalid, with the reason.",
 	}, ctrl.ListSchedules)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "put_schedule",
 		Title: "Create or update a scheduled chat",
 		Description: "Create or update one schedule in a workspace's agent-workspace.yaml. A new id is appended and needs cron and prompt. " +
@@ -205,14 +205,14 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"A new or re-timed schedule never fires for a time before it existed.",
 	}, ctrl.PutSchedule)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "remove_schedule",
 		Title: "Remove a scheduled chat",
 		Description: "Delete one schedule from a workspace's agent-workspace.yaml. Its run history stays readable through schedule_runs. " +
 			"An id that matches no schedule is not_found; nothing is ever reported as removed that was not.",
 	}, ctrl.RemoveSchedule)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "preview_schedule",
 		Title: "Dry-run a schedule edit",
 		Description: "Report the next occurrences a cron expression produces and the prompt template rendered against sample data, both with a previous run " +
@@ -220,7 +220,7 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"A cron or template that does not parse comes back in cronError or promptError rather than as a failed call. Use it before put_schedule.",
 	}, ctrl.PreviewSchedule)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "schedule_runs",
 		Title: "Read a schedule's run history",
 		Description: "List one schedule's runs, newest first: what each honored, why it ran, whether it launched a chat, and any error. " +

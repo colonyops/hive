@@ -44,7 +44,7 @@ panel filters on both.
 | Terminal | Is terminal output keeping up?                    | `tmux.stream.*` (`internal/platform/tmux/control`), `terminal.attach` spans                                                    |
 | Sources  | Why is my feed stale, and am I near a rate limit? | `ingest.tick` and `ingest.source <kind>` spans, `source.*` and otelhttp metrics (`cmd/desktop/internal/app/sources/...`)        |
 | Logs     | What went wrong?                                  | The zerolog bridge, as `service_name="hive-desktop"`                                                                |
-| Traces   | What triggered work, and how long did it take?    | Root spans, error spans, and HTTP spans with no trigger above them                                                  |
+| Traces   | What triggered work, and how long did it take?    | Root spans (including `mcp.tool <name>`, one per agent tool call), error spans, and HTTP spans with no trigger above them |
 | Profiles | Where do CPU and memory go in the code?           | Pyroscope CPU, heap-in-use, and allocation profiles                                                                 |
 
 ## From instrument to query

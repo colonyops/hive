@@ -12,7 +12,7 @@ import (
 // Controller.register: metadata only, thin handlers, descriptions written for
 // a model.
 func (ctrl *CanvasController) register(srv *mcp.Server) {
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "put_block",
 		Title: "Put a canvas block",
 		Description: "Create or replace one block on a named canvas. The first put_block under a new canvas name creates " +
@@ -29,7 +29,7 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 			"user's attention now. Writing a first layout of several blocks? put_blocks does it in one call.",
 	}, ctrl.PutBlock)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "put_blocks",
 		Title: "Put a batch of canvas blocks",
 		Description: "Write several blocks to one canvas in a single atomic call — one write, one pane render, so an " +
@@ -38,14 +38,14 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 			"with the canvas metadata. For revising one block, prefer put_block.",
 	}, ctrl.PutBlocks)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "remove_block",
 		Title: "Remove a canvas block",
 		Description: "Remove one block by the id you gave it in put_block, and answer with the canvas metadata that " +
 			"remains. An id that is not on the canvas is not_found — nothing is ever reported removed that was not there.",
 	}, ctrl.RemoveBlock)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "clear_canvas",
 		Title: "Clear a canvas",
 		Description: "Remove every block from one canvas at once and answer with its now-empty metadata. The canvas, its " +
@@ -54,7 +54,7 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 			"discarding the canvas itself.",
 	}, ctrl.ClearCanvas)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "delete_canvas",
 		Title: "Delete a canvas",
 		Description: "Remove one canvas entirely — its file is deleted and it leaves the pane's " +
@@ -62,7 +62,7 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 			"may be keeping the others.",
 	}, ctrl.DeleteCanvas)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "read_canvas",
 		Title: "Read a canvas",
 		Description: "Read one canvas exactly as the user sees it: every block in order, with your ids, kinds and " +
@@ -71,7 +71,7 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 			"a long conversation instead of assuming what you last wrote.",
 	}, ctrl.ReadCanvas)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "open_canvas",
 		Title: "Open the canvas pane",
 		Description: "Ask Hive to open the canvas pane beside this chat or Code session, optionally pinned to one canvas by name " +
@@ -81,7 +81,7 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 			"the full-page canvas view.",
 	}, ctrl.OpenCanvas)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "close_canvas",
 		Title: "Close the canvas pane",
 		Description: "Ask Hive to close the canvas pane beside this chat or Code session, returning the full width to the " +
@@ -89,7 +89,7 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 			"themselves are untouched — this is the pane, not the content.",
 	}, ctrl.CloseCanvas)
 
-	mcp.AddTool(srv, &mcp.Tool{
+	addTool(srv, &mcp.Tool{
 		Name:  "list_canvases",
 		Title: "List the canvases",
 		Description: "List every canvas where yours are kept — this chat's workspace, or the repository of this hive " +
