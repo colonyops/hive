@@ -31,7 +31,7 @@ describe('useTerminalSessionAge', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.AppearanceSettings.mockResolvedValue({
-      terminalShowSessionAge: false,
+      terminalShowSessionAge: true,
       terminalSessionAgeThresholdDays: defaultTerminalSessionAgeThresholdDays,
     })
     mocks.SetTerminalSessionAge.mockResolvedValue(undefined)
@@ -41,15 +41,15 @@ describe('useTerminalSessionAge', () => {
     const setting = useTerminalSessionAge()
     await flushPromises()
 
-    setting.setEnabled(true)
+    setting.setEnabled(false)
     setting.setThresholdDays(7)
     await flushPromises()
 
-    expect(setting.enabled.value).toBe(true)
+    expect(setting.enabled.value).toBe(false)
     expect(setting.thresholdDays.value).toBe(7)
     expect(mocks.SetTerminalSessionAge.mock.calls).toEqual([
-      [true, defaultTerminalSessionAgeThresholdDays],
-      [true, 7],
+      [false, defaultTerminalSessionAgeThresholdDays],
+      [false, 7],
     ])
   })
 })

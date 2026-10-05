@@ -26,7 +26,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
     terminalFontWeightBold: 0,
     terminalShowWindows: true,
     terminalPoolSize: 3,
-    terminalShowSessionAge: false,
+    terminalShowSessionAge: true,
     terminalSessionAgeThresholdDays: 5,
   }),
   Fonts: mocks.Fonts,
@@ -122,22 +122,22 @@ describe('TerminalSettingsView', () => {
     expect(mocks.SetTerminalShowWindows).toHaveBeenCalledWith(false)
   })
 
-  it('enables session age badges and changes their threshold', async () => {
+  it('disables session age badges and changes their threshold', async () => {
     const wrapper = mount(TerminalSettingsView)
     await flushPromises()
 
     const toggle = wrapper.get('[data-testid="settings-terminal-session-age"]')
-    expect(toggle.attributes('aria-checked')).toBe('false')
+    expect(toggle.attributes('aria-checked')).toBe('true')
 
     await toggle.trigger('click')
     await wrapper.get('[data-testid="settings-terminal-session-age-threshold-increase"]').trigger('click')
     await flushPromises()
 
-    expect(toggle.attributes('aria-checked')).toBe('true')
+    expect(toggle.attributes('aria-checked')).toBe('false')
     expect(wrapper.get('[data-testid="settings-terminal-session-age-threshold-value"]').text()).toBe('6 days')
     expect(mocks.SetTerminalSessionAge.mock.calls).toEqual([
-      [true, 5],
-      [true, 6],
+      [false, 5],
+      [false, 6],
     ])
   })
 

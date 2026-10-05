@@ -97,7 +97,7 @@ editor:
 agent_workspaces:
   dir: ""
 appearance:
-  terminal_show_session_age: false
+  terminal_show_session_age: true
   terminal_session_age_threshold_days: 5
 ```
 
@@ -106,7 +106,7 @@ appearance:
 - `paths.tmux` accepts an absolute path when Hive cannot find tmux.
 - `editor.command` accepts an executable name or absolute path without arguments.
 - `agent_workspaces.dir` changes where Chats workspaces are stored.
-- `appearance.terminal_show_session_age` shows a whole-day age badge in the Code sidebar after `terminal_session_age_threshold_days` days. The threshold accepts 1 through 365.
+- `appearance.terminal_show_session_age` shows a whole-day age badge in the Code sidebar after `terminal_session_age_threshold_days` days. It defaults to on with a five-day threshold. The threshold accepts 1 through 365.
 
 Every scalar setting can be overridden for one launch with an environment variable based on its YAML path. For example, `polling.interval` becomes `HIVE_DESKTOP_POLLING_INTERVAL`.
 

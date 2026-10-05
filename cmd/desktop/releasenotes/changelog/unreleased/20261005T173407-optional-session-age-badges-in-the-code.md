@@ -2,4 +2,4 @@
 kind: added
 ---
 
-**Optional session age badges** in the Code sidebar, with a configurable age threshold in Settings > Terminal.
+**Session age badges** in the Code sidebar, enabled after five days by default with a configurable threshold in Settings > Terminal.

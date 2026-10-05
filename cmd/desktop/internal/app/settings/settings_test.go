@@ -36,7 +36,7 @@ func TestDefaultSettingsAreSafe(t *testing.T) {
 	assert.Equal(t, MockLive, cfg.Development.Mocks.Mode)
 	assert.False(t, cfg.Development.Pprof.Enabled)
 	assert.True(t, cfg.Appearance.TerminalShowStatusBar, "the session status bar ships on")
-	assert.False(t, cfg.Appearance.TerminalShowSessionAge, "session age badges are opt-in")
+	assert.True(t, cfg.Appearance.TerminalShowSessionAge, "session age badges ship on")
 	assert.Equal(t, DefaultTerminalSessionAgeThresholdDays, cfg.Appearance.TerminalSessionAgeThresholdDays)
 }
 

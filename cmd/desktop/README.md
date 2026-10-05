@@ -198,7 +198,7 @@ appearance:
   terminal_show_windows: true # list every active session's windows in the terminal sidebar
   terminal_show_status_bar: true # give the attached session a bar carrying its checkout's git and pull-request state (ADR session-git-and-pull-request-status-is-computed-in-app-not-shelled-out-to-hive-or-gh)
   terminal_pool_size: 3 # sessions kept attached for instant switching (1-6, ADR terminal-attach-pool)
-  terminal_show_session_age: false # show an age badge on old sessions in the Code sidebar
+  terminal_show_session_age: true # show an age badge on old sessions in the Code sidebar
   terminal_session_age_threshold_days: 5 # whole days since creation before the badge appears (1-365)
 profiles:
   order: [] # flow ids, top of the rail first; ids left out sort alphabetically

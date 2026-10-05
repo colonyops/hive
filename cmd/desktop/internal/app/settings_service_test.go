@@ -192,7 +192,7 @@ func TestSettingsServiceAppearanceSettingsDefaultsToUnset(t *testing.T) {
 	require.True(t, got.TerminalShowWindows, "the terminal window listing ships on")
 	require.True(t, got.TerminalShowStatusBar, "the session status bar ships on")
 	require.Equal(t, 3, got.TerminalPoolSize, "the attach pool ships at three sessions")
-	require.False(t, got.TerminalShowSessionAge, "session age badges are opt-in")
+	require.True(t, got.TerminalShowSessionAge, "session age badges ship on")
 	require.Equal(t, settings.DefaultTerminalSessionAgeThresholdDays, got.TerminalSessionAgeThresholdDays)
 }
 

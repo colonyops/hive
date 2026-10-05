@@ -35,7 +35,7 @@ export function sessionAgeDays(createdAt: string | undefined, thresholdDays: num
 
 export const useTerminalSessionAge = defineStore('terminalSessionAge', () => {
   const setting = usePersistedSetting<TerminalSessionAgeSetting>({
-    initial: { enabled: false, thresholdDays: defaultTerminalSessionAgeThresholdDays },
+    initial: { enabled: true, thresholdDays: defaultTerminalSessionAgeThresholdDays },
     read: async () => {
       const current = await GetAppearanceSettings()
       return {

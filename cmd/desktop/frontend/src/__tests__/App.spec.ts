@@ -197,7 +197,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
     terminalFontWeightBold: 0,
     terminalShowWindows: true,
     terminalPoolSize: 3,
-    terminalShowSessionAge: false,
+    terminalShowSessionAge: true,
     terminalSessionAgeThresholdDays: 5,
   }),
   Fonts: vi.fn().mockResolvedValue({ all: [], monospace: [] }),

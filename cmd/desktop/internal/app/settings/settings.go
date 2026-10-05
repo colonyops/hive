@@ -377,6 +377,7 @@ func DefaultSettings() Settings {
 			TerminalShowWindows:             true,
 			TerminalShowStatusBar:           true,
 			TerminalPoolSize:                3,
+			TerminalShowSessionAge:          true,
 			TerminalSessionAgeThresholdDays: DefaultTerminalSessionAgeThresholdDays,
 		},
 		HTTP:            HTTPSettings{Enabled: true, Host: "127.0.0.1", Port: 0},

@@ -336,7 +336,7 @@ describe('TerminalMode', () => {
       terminalShowWindows: true,
       terminalShowStatusBar: false,
       terminalPoolSize: 3,
-      terminalShowSessionAge: false,
+      terminalShowSessionAge: true,
       terminalSessionAgeThresholdDays: 5,
     })
     mocks.EditorSettings.mockResolvedValue({ command: 'zed', title: 'Zed', choices: [] })
