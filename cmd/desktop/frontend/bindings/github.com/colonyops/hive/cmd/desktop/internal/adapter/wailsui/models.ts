@@ -86,6 +86,13 @@ export interface AppearanceSettings {
     "terminalPoolSize": number;
 
     /**
+     * TerminalShowSessionAge controls age badges in the Code sidebar. The
+     * threshold is measured in whole days from the session's creation time.
+     */
+    "terminalShowSessionAge": boolean;
+    "terminalSessionAgeThresholdDays": number;
+
+    /**
      * Canvas typography is stored as preset names. The frontend owns the maps
      * from those names to CSS values and heals unknown values.
      */
@@ -527,6 +534,7 @@ export interface SessionSummary {
     "repo": string;
     "state": string;
     "canvasOwner": string;
+    "createdAt": string;
 }
 
 /**

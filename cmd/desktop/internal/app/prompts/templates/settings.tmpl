@@ -34,6 +34,8 @@ appearance:
   terminal_show_windows: true # list every active session's windows in the terminal sidebar
   terminal_show_status_bar: true # git and pull-request state above the attached session
   terminal_pool_size: 3   # sessions kept attached for instant switching (1-6)
+  terminal_show_session_age: false # show age badges on old sessions in the Code sidebar
+  terminal_session_age_threshold_days: 5 # whole days since creation before a badge appears (1-365)
 
 profiles:                 # the profile rail
   order:                  # flow ids, top of the rail first. Ids left out sort
@@ -111,6 +113,7 @@ development:
 - Multiple YAML documents, invalid closed-set values, unsafe listener hosts, and invalid ports are rejected.
 - `version` is written and migrated by the app. Do not add or edit it.
 - `polling.interval` below 60s is rejected.
+- `appearance.terminal_session_age_threshold_days` must be between 1 and 365.
 - Durations are strings like `5m`; a bare number is not seconds.
 - `http` is on by default. `development.pprof` defaults off. Configured listener hosts must be loopback.
 - `telemetry.enabled` requires `telemetry.endpoint`, `telemetry.instance_id` and `telemetry.token`, and the endpoint must be https. It is the one URL setting that is deliberately not loopback-only.

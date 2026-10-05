@@ -36,6 +36,8 @@ func TestDefaultSettingsAreSafe(t *testing.T) {
 	assert.Equal(t, MockLive, cfg.Development.Mocks.Mode)
 	assert.False(t, cfg.Development.Pprof.Enabled)
 	assert.True(t, cfg.Appearance.TerminalShowStatusBar, "the session status bar ships on")
+	assert.False(t, cfg.Appearance.TerminalShowSessionAge, "session age badges are opt-in")
+	assert.Equal(t, DefaultTerminalSessionAgeThresholdDays, cfg.Appearance.TerminalSessionAgeThresholdDays)
 }
 
 // The graduated features' gate is gone from the struct; the migration drops
@@ -73,6 +75,18 @@ func TestTerminalStatusBarOffAtCurrentVersionIsKept(t *testing.T) {
 	cfg, err := LoadSettings()
 	require.NoError(t, err)
 	assert.False(t, cfg.Appearance.TerminalShowStatusBar)
+}
+
+func TestTerminalSessionAgeThresholdValidation(t *testing.T) {
+	for _, days := range []int{MinTerminalSessionAgeThresholdDays - 1, MaxTerminalSessionAgeThresholdDays + 1} {
+		cfg := DefaultSettings()
+		cfg.Appearance.TerminalSessionAgeThresholdDays = days
+		require.ErrorContains(t, cfg.Validate(), "appearance.terminal_session_age_threshold_days")
+	}
+
+	cfg := DefaultSettings()
+	cfg.Appearance.TerminalSessionAgeThresholdDays = MaxTerminalSessionAgeThresholdDays
+	require.NoError(t, cfg.Validate())
 }
 
 func TestProfilesOrderRoundTrips(t *testing.T) {

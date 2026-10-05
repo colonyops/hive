@@ -74,21 +74,23 @@ func (s *SettingsService) SetKeybindings(_ context.Context, overrides map[string
 // values are opaque here: the frontend owns each valid set and heals unknown
 // values, so "" means "nothing persisted" rather than an error.
 type AppearanceSettings struct {
-	Theme                  string
-	FontFamily             string
-	MonoFontFamily         string
-	TerminalFontSizePx     int
-	TerminalFontFamily     string
-	TerminalFontWeight     int
-	TerminalFontWeightBold int
-	TerminalLineHeight     float64
-	TerminalLetterSpacing  int
-	TerminalShowWindows    bool
-	TerminalShowStatusBar  bool
-	TerminalPoolSize       int
-	CanvasFontSize         string
-	CanvasLineSpacing      string
-	CanvasPageWidth        string
+	Theme                           string
+	FontFamily                      string
+	MonoFontFamily                  string
+	TerminalFontSizePx              int
+	TerminalFontFamily              string
+	TerminalFontWeight              int
+	TerminalFontWeightBold          int
+	TerminalLineHeight              float64
+	TerminalLetterSpacing           int
+	TerminalShowWindows             bool
+	TerminalShowStatusBar           bool
+	TerminalPoolSize                int
+	TerminalShowSessionAge          bool
+	TerminalSessionAgeThresholdDays int
+	CanvasFontSize                  string
+	CanvasLineSpacing               string
+	CanvasPageWidth                 string
 }
 
 func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error) {
@@ -97,21 +99,23 @@ func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error
 		return AppearanceSettings{}, Wrap(err, KindInternal, "reading settings")
 	}
 	return AppearanceSettings{
-		Theme:                  cfg.Appearance.Theme,
-		FontFamily:             cfg.Appearance.FontFamily,
-		MonoFontFamily:         cfg.Appearance.MonoFontFamily,
-		TerminalFontSizePx:     settings.TerminalFontSizePx(cfg.Appearance.TerminalFontSize),
-		TerminalFontFamily:     cfg.Appearance.TerminalFontFamily,
-		TerminalFontWeight:     cfg.Appearance.TerminalFontWeight,
-		TerminalFontWeightBold: cfg.Appearance.TerminalFontWeightBold,
-		TerminalLineHeight:     cfg.Appearance.TerminalLineHeight,
-		TerminalLetterSpacing:  cfg.Appearance.TerminalLetterSpacing,
-		TerminalShowWindows:    cfg.Appearance.TerminalShowWindows,
-		TerminalShowStatusBar:  cfg.Appearance.TerminalShowStatusBar,
-		TerminalPoolSize:       cfg.Appearance.TerminalPoolSize,
-		CanvasFontSize:         cfg.Appearance.CanvasFontSize,
-		CanvasLineSpacing:      cfg.Appearance.CanvasLineSpacing,
-		CanvasPageWidth:        cfg.Appearance.CanvasPageWidth,
+		Theme:                           cfg.Appearance.Theme,
+		FontFamily:                      cfg.Appearance.FontFamily,
+		MonoFontFamily:                  cfg.Appearance.MonoFontFamily,
+		TerminalFontSizePx:              settings.TerminalFontSizePx(cfg.Appearance.TerminalFontSize),
+		TerminalFontFamily:              cfg.Appearance.TerminalFontFamily,
+		TerminalFontWeight:              cfg.Appearance.TerminalFontWeight,
+		TerminalFontWeightBold:          cfg.Appearance.TerminalFontWeightBold,
+		TerminalLineHeight:              cfg.Appearance.TerminalLineHeight,
+		TerminalLetterSpacing:           cfg.Appearance.TerminalLetterSpacing,
+		TerminalShowWindows:             cfg.Appearance.TerminalShowWindows,
+		TerminalShowStatusBar:           cfg.Appearance.TerminalShowStatusBar,
+		TerminalPoolSize:                cfg.Appearance.TerminalPoolSize,
+		TerminalShowSessionAge:          cfg.Appearance.TerminalShowSessionAge,
+		TerminalSessionAgeThresholdDays: cfg.Appearance.TerminalSessionAgeThresholdDays,
+		CanvasFontSize:                  cfg.Appearance.CanvasFontSize,
+		CanvasLineSpacing:               cfg.Appearance.CanvasLineSpacing,
+		CanvasPageWidth:                 cfg.Appearance.CanvasPageWidth,
 	}, nil
 }
 
@@ -202,6 +206,15 @@ func (s *SettingsService) SetTerminalShowStatusBar(_ context.Context, show bool)
 func (s *SettingsService) SetTerminalPoolSize(_ context.Context, size int) error {
 	_, err := s.store.Update(func(current *settings.Settings) error {
 		current.Appearance.TerminalPoolSize = size
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
+}
+
+func (s *SettingsService) SetTerminalSessionAge(_ context.Context, enabled bool, thresholdDays int) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Appearance.TerminalShowSessionAge = enabled
+		current.Appearance.TerminalSessionAgeThresholdDays = thresholdDays
 		return nil
 	})
 	return Wrap(err, KindInternal, "saving settings")

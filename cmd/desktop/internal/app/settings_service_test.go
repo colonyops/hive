@@ -192,6 +192,8 @@ func TestSettingsServiceAppearanceSettingsDefaultsToUnset(t *testing.T) {
 	require.True(t, got.TerminalShowWindows, "the terminal window listing ships on")
 	require.True(t, got.TerminalShowStatusBar, "the session status bar ships on")
 	require.Equal(t, 3, got.TerminalPoolSize, "the attach pool ships at three sessions")
+	require.False(t, got.TerminalShowSessionAge, "session age badges are opt-in")
+	require.Equal(t, settings.DefaultTerminalSessionAgeThresholdDays, got.TerminalSessionAgeThresholdDays)
 }
 
 func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing.T) {
@@ -208,6 +210,7 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 	require.NoError(t, service.SetCanvasPageWidth(t.Context(), "full"))
 	require.NoError(t, service.SetTerminalShowWindows(t.Context(), false))
 	require.NoError(t, service.SetTerminalPoolSize(t.Context(), 5))
+	require.NoError(t, service.SetTerminalSessionAge(t.Context(), true, 7))
 
 	got, err := settings.LoadSettings()
 	require.NoError(t, err)
@@ -218,6 +221,8 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 	require.Equal(t, "full", got.Appearance.CanvasPageWidth)
 	require.False(t, got.Appearance.TerminalShowWindows)
 	require.Equal(t, 5, got.Appearance.TerminalPoolSize)
+	require.True(t, got.Appearance.TerminalShowSessionAge)
+	require.Equal(t, 7, got.Appearance.TerminalSessionAgeThresholdDays)
 	require.Equal(t, 5*time.Minute, got.Polling.Interval.Duration())
 	require.False(t, got.Updates.Enabled)
 
@@ -230,6 +235,8 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 	require.Equal(t, "full", roundTripped.CanvasPageWidth)
 	require.False(t, roundTripped.TerminalShowWindows)
 	require.Equal(t, 5, roundTripped.TerminalPoolSize)
+	require.True(t, roundTripped.TerminalShowSessionAge)
+	require.Equal(t, 7, roundTripped.TerminalSessionAgeThresholdDays)
 }
 
 func TestSettingsServiceTerminalFontSizeReadsALegacyName(t *testing.T) {

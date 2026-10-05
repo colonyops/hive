@@ -10,6 +10,7 @@ const session: SessionSummary = {
   repo: 'acme/site',
   state: 'active',
   canvasOwner: 'acme/site',
+  createdAt: '2026-10-01T12:00:00Z',
 }
 
 function mountMenu(props: Partial<InstanceType<typeof SessionRowMenu>['$props']> = {}) {

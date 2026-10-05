@@ -124,6 +124,10 @@ export function SetTerminalPoolSize(size: number): $CancellablePromise<void> {
     return $Call.ByID(3334784753, size);
 }
 
+export function SetTerminalSessionAge(enabled: boolean, thresholdDays: number): $CancellablePromise<void> {
+    return $Call.ByID(1787640393, enabled, thresholdDays);
+}
+
 export function SetTerminalShowStatusBar(show: boolean): $CancellablePromise<void> {
     return $Call.ByID(1260520894, show);
 }

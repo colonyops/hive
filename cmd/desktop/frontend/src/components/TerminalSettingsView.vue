@@ -25,6 +25,11 @@ import {
 import { TERMINAL_FONT } from '../lib/terminalFaces'
 import { loadInstalledFonts, useInstalledFonts } from '../composables/useInstalledFonts'
 import { terminalPoolSizes, useTerminalPoolSize } from '../stores/useTerminalPoolSize'
+import {
+  maxTerminalSessionAgeThresholdDays,
+  minTerminalSessionAgeThresholdDays,
+  useTerminalSessionAge,
+} from '../stores/useTerminalSessionAge'
 import { useTerminalStatusBar } from '../stores/useTerminalStatusBar'
 import { useTerminalShowWindows } from '../stores/useTerminalShowWindows'
 
@@ -50,6 +55,15 @@ const { monospace: fontFamilies } = useInstalledFonts()
 const { showWindows, setShowWindows } = useTerminalShowWindows()
 const { showStatusBar, setShowStatusBar } = useTerminalStatusBar()
 const { poolSize, setPoolSize } = useTerminalPoolSize()
+const {
+  enabled: showSessionAge,
+  thresholdDays: sessionAgeThresholdDays,
+  setEnabled: setShowSessionAge,
+  setThresholdDays: setSessionAgeThresholdDays,
+} = useTerminalSessionAge()
+const sessionAgeThresholdLabel = computed(
+  () => `${sessionAgeThresholdDays.value} ${sessionAgeThresholdDays.value === 1 ? 'day' : 'days'}`,
+)
 
 // The bundled face leads the list whether or not it is also installed
 // system-wide, so the shipped default is always the first thing offered.
@@ -207,6 +221,29 @@ onMounted(() => {
           aria-label="Session status bar"
           testid="settings-terminal-show-status-bar"
           @update:model-value="setShowStatusBar"
+        />
+      </SettingsRow>
+      <SettingsRow
+        label="Session age badges"
+        hint="Mark Hive sessions in the Code sidebar once they reach the configured age. Scratch terminals and pinned chats are not marked."
+      >
+        <AppSwitch
+          :model-value="showSessionAge"
+          aria-label="Session age badges"
+          testid="settings-terminal-session-age"
+          @update:model-value="setShowSessionAge"
+        />
+      </SettingsRow>
+      <SettingsRow label="Show after" hint="Age is measured in whole days from when the session was created.">
+        <SettingsStepper
+          :model-value="sessionAgeThresholdDays"
+          :display="sessionAgeThresholdLabel"
+          :min="minTerminalSessionAgeThresholdDays"
+          :max="maxTerminalSessionAgeThresholdDays"
+          :step="1"
+          aria-label="Session age threshold"
+          testid="settings-terminal-session-age-threshold"
+          @update:model-value="setSessionAgeThresholdDays"
         />
       </SettingsRow>
       <SettingsRow

@@ -127,7 +127,9 @@ An agent outside any chat or Code session, such as one you start in a plain term
 
 ## Appearance
 
-**Settings ▸ Terminal** controls the terminal font, size, weight, line height, letter spacing, visible windows, and status bar. <kbd>⌘+</kbd> and <kbd>⌘-</kbd> step the text size by 2px from a terminal without opening Settings, up to 64px, and <kbd>⌘0</kbd> puts it back to 13px. On Linux, use <kbd>Ctrl+Shift</kbd> with the same keys.
+**Settings ▸ Terminal** controls the terminal font, size, weight, line height, letter spacing, visible windows, status bar, and session age badges. Age badges are optional and appear once a Hive session reaches the configured number of whole days since creation. Scratch terminals and pinned chats do not get one.
+
+<kbd>⌘+</kbd> and <kbd>⌘-</kbd> step the text size by 2px from a terminal without opening Settings, up to 64px, and <kbd>⌘0</kbd> puts it back to 13px. On Linux, use <kbd>Ctrl+Shift</kbd> with the same keys.
 
 ## Shared tmux sizing
 

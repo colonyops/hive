@@ -11,6 +11,7 @@ const hive: TerminalSessionRow = {
   repo: 'r',
   state: 'active',
   canvasOwner: '',
+  createdAt: '',
 }
 const scratch: TerminalSessionRow = {
   id: 's',
@@ -19,6 +20,7 @@ const scratch: TerminalSessionRow = {
   repo: '',
   state: 'active',
   canvasOwner: '',
+  createdAt: '',
 }
 const chat: TerminalSessionRow = {
   id: 'c',
@@ -27,6 +29,7 @@ const chat: TerminalSessionRow = {
   repo: '',
   state: 'active',
   canvasOwner: '',
+  createdAt: '',
 }
 
 function context(running: boolean): TerminalModeContext {

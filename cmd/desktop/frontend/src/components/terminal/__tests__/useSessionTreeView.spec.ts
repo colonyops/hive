@@ -4,7 +4,7 @@ import type { TerminalSessionGroup, TerminalSessionRow } from '../../../stores/u
 import { useSessionTreeView } from '../useSessionTreeView'
 
 function row(id: string, name: string, repo = 'github.com/acme/site'): TerminalSessionRow {
-  return { id, name, slug: `${name}-${id}`, repo, state: 'active', canvasOwner: '' }
+  return { id, name, slug: `${name}-${id}`, repo, state: 'active', canvasOwner: '', createdAt: '' }
 }
 
 const parser = row('1', 'parser')

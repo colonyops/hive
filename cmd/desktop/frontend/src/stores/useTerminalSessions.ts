@@ -19,6 +19,8 @@ export interface TerminalSessionRow {
   state: string
   /** The owner key of the session's canvases, its repository as owner/repo. Empty for a row with none. */
   canvasOwner: string
+  /** Empty for scratch terminals and pinned chats, which have no Hive creation time. */
+  createdAt: string
 }
 
 /**
@@ -123,6 +125,7 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
         repo: '',
         state: 'active',
         canvasOwner: '',
+        createdAt: '',
       }
     } catch {
       // Terminal mode reports its own unavailability; a missing scratch row is

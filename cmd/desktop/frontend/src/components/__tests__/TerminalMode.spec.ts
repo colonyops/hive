@@ -97,6 +97,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SetTerminalFontSize: mocks.SetTerminalFontSize,
   SetTerminalShowWindows: vi.fn(),
   SetTerminalShowStatusBar: vi.fn(),
+  SetTerminalSessionAge: vi.fn(),
   SetTerminalPoolSize: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
@@ -335,6 +336,8 @@ describe('TerminalMode', () => {
       terminalShowWindows: true,
       terminalShowStatusBar: false,
       terminalPoolSize: 3,
+      terminalShowSessionAge: false,
+      terminalSessionAgeThresholdDays: 5,
     })
     mocks.EditorSettings.mockResolvedValue({ command: 'zed', title: 'Zed', choices: [] })
     mocks.SessionGitStatus.mockResolvedValue({
@@ -411,6 +414,46 @@ describe('TerminalMode', () => {
     expect(rows[1].attributes('data-attached')).toBe('true')
     expect(wrapper.findAll('[data-testid="terminal-window-row"]').map((row) => row.text())).toEqual(['agent', 'shell'])
     expect(wrapper.findAll('[data-testid="terminal-pane"]')).toHaveLength(2)
+  })
+
+  it('marks sessions that have reached the configured age', async () => {
+    const day = 24 * 60 * 60 * 1000
+    mocks.ListSessions.mockResolvedValue([
+      {
+        id: '1',
+        name: 'old session',
+        slug: 'old-session',
+        repo: 'hay-kot/hive',
+        state: 'active',
+        createdAt: new Date(Date.now() - 6 * day).toISOString(),
+      },
+      {
+        id: '2',
+        name: 'recent session',
+        slug: 'recent-session',
+        repo: 'hay-kot/hive',
+        state: 'active',
+        createdAt: new Date(Date.now() - 2 * day).toISOString(),
+      },
+    ])
+    mocks.AppearanceSettings.mockResolvedValue({
+      theme: '',
+      terminalFontSizePx: 13,
+      terminalShowWindows: true,
+      terminalShowStatusBar: false,
+      terminalPoolSize: 3,
+      terminalShowSessionAge: true,
+      terminalSessionAgeThresholdDays: 5,
+    })
+    mocks.useTerminalWindows.mockReturnValue(fakeSession())
+
+    const { wrapper } = await mountAt()
+    const old = wrapper.get('[data-testid="terminal-session-row"][data-slug="old-session"]')
+    const recent = wrapper.get('[data-testid="terminal-session-row"][data-slug="recent-session"]')
+
+    expect(old.get('[data-testid="terminal-session-age"]').text()).toBe('6d')
+    expect(old.get('[data-testid="terminal-session-age"]').attributes('title')).toContain('6 days old')
+    expect(recent.find('[data-testid="terminal-session-age"]').exists()).toBe(false)
   })
 
   it('shows session liveness on sessions and agent activity on windows with icons', async () => {

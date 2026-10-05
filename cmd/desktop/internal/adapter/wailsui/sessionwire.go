@@ -11,18 +11,19 @@ import (
 // CanvasOwner is the key the session's canvases are filed under, its
 // repository as owner/repo, or empty when the remote names neither.
 type SessionSummary struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Slug        string `json:"slug"`
-	Repo        string `json:"repo"`
-	State       string `json:"state"`
-	CanvasOwner string `json:"canvasOwner"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Slug        string    `json:"slug"`
+	Repo        string    `json:"repo"`
+	State       string    `json:"state"`
+	CanvasOwner string    `json:"canvasOwner"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 func sessionSummaryOf(s session.Session) SessionSummary {
 	return SessionSummary{
 		ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, State: string(s.State),
-		CanvasOwner: app.CanvasOwnerForRemote(s.Remote),
+		CanvasOwner: app.CanvasOwnerForRemote(s.Remote), CreatedAt: s.CreatedAt,
 	}
 }
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, proxyRefs, ref, toRef, watch } from 'vue'
+import { useNow } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconChevronsDownUp from '~icons/lucide/chevrons-down-up'
@@ -13,6 +14,7 @@ import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
 import IconButton from '../ui/IconButton.vue'
 import AppMenu from '../ui/AppMenu.vue'
+import BaseBadge from '../ui/BaseBadge.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import InlineError from '../ui/InlineError.vue'
 import Kbd from '../ui/Kbd.vue'
@@ -28,6 +30,7 @@ import { useResizablePanel } from '../../composables/useResizablePanel'
 import { useSelectionRail } from '../../composables/useSelectionRail'
 import { moveId, type OrderDropTarget } from '../../lib/listOrder'
 import { terminalTreeFocused } from '../../lib/terminalTree'
+import { sessionAgeDays, useTerminalSessionAge } from '../../stores/useTerminalSessionAge'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { MenuEntry } from '../../types/menu'
 import { useTerminalModeContext } from './terminalModeContext'
@@ -38,6 +41,21 @@ const { openBlank: openNewSession } = useNewSession()
 const menus = proxyRefs(useTreeRowMenus({ windowMenuAllowed: ops.rowHasWindowActions }))
 const sidebarEl = toRef(nav, 'root')
 const filterInput = toRef(nav, 'filterInput')
+const { enabled: showSessionAge, thresholdDays: sessionAgeThresholdDays } = useTerminalSessionAge()
+const now = useNow({ interval: 60_000 })
+const sessionAgeBadges = computed<Record<string, { days: number; title: string }>>(() => {
+  if (!showSessionAge.value) return {}
+  const badges: Record<string, { days: number; title: string }> = {}
+  for (const row of tree.activeSessions) {
+    const days = sessionAgeDays(row.createdAt, sessionAgeThresholdDays.value, now.value.getTime())
+    if (days === null || !row.createdAt) continue
+    badges[row.id] = {
+      days,
+      title: `Created ${new Date(row.createdAt).toLocaleString()}; ${days} ${days === 1 ? 'day' : 'days'} old`,
+    }
+  }
+  return badges
+})
 
 const sidebarMenuEntries = computed<MenuEntry[]>(() => [
   {
@@ -403,6 +421,16 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     <span class="min-w-0 flex-1 truncate text-body" :class="{ 'text-text-3': tree.rowIdle(row) }">{{
                       row.name
                     }}</span>
+                    <BaseBadge
+                      v-if="sessionAgeBadges[row.id]"
+                      tone="accent"
+                      class="shrink-0 px-1.5 py-0.5 font-mono text-micro leading-none"
+                      :title="sessionAgeBadges[row.id].title"
+                      :aria-label="`${sessionAgeBadges[row.id].days} ${sessionAgeBadges[row.id].days === 1 ? 'day' : 'days'} old`"
+                      data-testid="terminal-session-age"
+                    >
+                      {{ sessionAgeBadges[row.id].days }}d
+                    </BaseBadge>
                     <!-- AppMenu anchors to the positioned row so its panel spans it; the grid
                          overlap keeps this slot from becoming a positioning ancestor. -->
                     <div class="row-trailing" data-testid="terminal-session-trailing" @click.stop>

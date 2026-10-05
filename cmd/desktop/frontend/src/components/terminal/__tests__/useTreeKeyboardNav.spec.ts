@@ -5,8 +5,24 @@ import type { TerminalSessionGroup, TerminalSessionRow } from '../../../stores/u
 import type { TreeWindowRow } from '../useTerminalTree'
 import { useTreeKeyboardNav } from '../useTreeKeyboardNav'
 
-const running = { id: '1', name: 'running', slug: 'running', repo: 'r', state: 'active', canvasOwner: '' }
-const idle = { id: '2', name: 'idle', slug: 'idle', repo: 'r', state: 'active', canvasOwner: '' }
+const running = {
+  id: '1',
+  name: 'running',
+  slug: 'running',
+  repo: 'r',
+  state: 'active',
+  canvasOwner: '',
+  createdAt: '',
+}
+const idle = {
+  id: '2',
+  name: 'idle',
+  slug: 'idle',
+  repo: 'r',
+  state: 'active',
+  canvasOwner: '',
+  createdAt: '',
+}
 
 function win(windowId: string, active = false): TreeWindowRow {
   return { windowId, name: windowId, active, live: true, indicator: null }

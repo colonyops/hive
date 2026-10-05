@@ -71,6 +71,10 @@ type AppearanceSettings struct {
 	// for instant switching (ADR terminal-attach-pool). Carried verbatim; the frontend heals
 	// anything outside 1-6 to the default, 3.
 	TerminalPoolSize int `json:"terminalPoolSize"`
+	// TerminalShowSessionAge controls age badges in the Code sidebar. The
+	// threshold is measured in whole days from the session's creation time.
+	TerminalShowSessionAge          bool `json:"terminalShowSessionAge"`
+	TerminalSessionAgeThresholdDays int  `json:"terminalSessionAgeThresholdDays"`
 	// Canvas typography is stored as preset names. The frontend owns the maps
 	// from those names to CSS values and heals unknown values.
 	CanvasFontSize    string `json:"canvasFontSize"`
@@ -106,21 +110,23 @@ func (s *SettingsService) AppearanceSettings(ctx context.Context) (AppearanceSet
 		return AppearanceSettings{}, err
 	}
 	return AppearanceSettings{
-		Theme:                  current.Theme,
-		FontFamily:             current.FontFamily,
-		MonoFontFamily:         current.MonoFontFamily,
-		TerminalFontSizePx:     current.TerminalFontSizePx,
-		TerminalFontFamily:     current.TerminalFontFamily,
-		TerminalFontWeight:     current.TerminalFontWeight,
-		TerminalFontWeightBold: current.TerminalFontWeightBold,
-		TerminalLineHeight:     current.TerminalLineHeight,
-		TerminalLetterSpacing:  current.TerminalLetterSpacing,
-		TerminalShowWindows:    current.TerminalShowWindows,
-		TerminalShowStatusBar:  current.TerminalShowStatusBar,
-		TerminalPoolSize:       current.TerminalPoolSize,
-		CanvasFontSize:         current.CanvasFontSize,
-		CanvasLineSpacing:      current.CanvasLineSpacing,
-		CanvasPageWidth:        current.CanvasPageWidth,
+		Theme:                           current.Theme,
+		FontFamily:                      current.FontFamily,
+		MonoFontFamily:                  current.MonoFontFamily,
+		TerminalFontSizePx:              current.TerminalFontSizePx,
+		TerminalFontFamily:              current.TerminalFontFamily,
+		TerminalFontWeight:              current.TerminalFontWeight,
+		TerminalFontWeightBold:          current.TerminalFontWeightBold,
+		TerminalLineHeight:              current.TerminalLineHeight,
+		TerminalLetterSpacing:           current.TerminalLetterSpacing,
+		TerminalShowWindows:             current.TerminalShowWindows,
+		TerminalShowStatusBar:           current.TerminalShowStatusBar,
+		TerminalPoolSize:                current.TerminalPoolSize,
+		TerminalShowSessionAge:          current.TerminalShowSessionAge,
+		TerminalSessionAgeThresholdDays: current.TerminalSessionAgeThresholdDays,
+		CanvasFontSize:                  current.CanvasFontSize,
+		CanvasLineSpacing:               current.CanvasLineSpacing,
+		CanvasPageWidth:                 current.CanvasPageWidth,
 	}, nil
 }
 
@@ -186,6 +192,10 @@ func (s *SettingsService) SetTerminalShowStatusBar(ctx context.Context, show boo
 
 func (s *SettingsService) SetTerminalPoolSize(ctx context.Context, size int) error {
 	return s.settings.SetTerminalPoolSize(ctx, size)
+}
+
+func (s *SettingsService) SetTerminalSessionAge(ctx context.Context, enabled bool, thresholdDays int) error {
+	return s.settings.SetTerminalSessionAge(ctx, enabled, thresholdDays)
 }
 
 func (s *SettingsService) SetCanvasFontSize(ctx context.Context, size string) error {

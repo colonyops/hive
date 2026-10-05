@@ -5,7 +5,7 @@ import type { TerminalClient } from '../../lib/terminalClient'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 
 function row(slug: string): TerminalSessionRow {
-  return { id: slug, name: slug, slug, repo: 'owner/repo', state: 'active', canvasOwner: '' }
+  return { id: slug, name: slug, slug, repo: 'owner/repo', state: 'active', canvasOwner: '', createdAt: '' }
 }
 
 // One deferred listing per sweep, so a sweep can be held open while more

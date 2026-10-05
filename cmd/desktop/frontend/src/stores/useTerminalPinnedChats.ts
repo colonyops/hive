@@ -49,6 +49,7 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
           repo: '',
           state: 'active',
           canvasOwner: '',
+          createdAt: '',
         })
     }
     return out

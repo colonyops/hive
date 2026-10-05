@@ -18,7 +18,10 @@ import (
 const settingsFileName = "settings.yaml"
 
 const (
-	MinPollInterval = 60 * time.Second
+	MinPollInterval                        = 60 * time.Second
+	DefaultTerminalSessionAgeThresholdDays = 5
+	MinTerminalSessionAgeThresholdDays     = 1
+	MaxTerminalSessionAgeThresholdDays     = 365
 	// MaxDebugPause prevents a stale development setting from making startup
 	// appear permanently hung while still allowing deliberate crash-window tests.
 	MaxDebugPause = 10 * time.Minute
@@ -119,6 +122,10 @@ type Appearance struct {
 	// is carried verbatim and healed by the frontend: anything outside 1-6 reads
 	// as the default, 3.
 	TerminalPoolSize int `yaml:"terminal_pool_size" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_POOL_SIZE"`
+	// TerminalShowSessionAge marks old Hive sessions in the terminal sidebar.
+	// The threshold is measured in whole days from the session's creation time.
+	TerminalShowSessionAge          bool `yaml:"terminal_show_session_age"           env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_SHOW_SESSION_AGE"`
+	TerminalSessionAgeThresholdDays int  `yaml:"terminal_session_age_threshold_days" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_SESSION_AGE_THRESHOLD_DAYS"`
 	// CanvasFontSize, CanvasLineSpacing and CanvasPageWidth are preset names
 	// interpreted by the frontend. Empty takes the shipped defaults.
 	CanvasFontSize    string `yaml:"canvas_font_size,omitempty"    env:"HIVE_DESKTOP_APPEARANCE_CANVAS_FONT_SIZE"`
@@ -362,11 +369,16 @@ type Settings struct {
 
 func DefaultSettings() Settings {
 	return Settings{
-		Version:         configmigrate.SettingsSet.Current,
-		Polling:         PollingSettings{Interval: Duration(5 * time.Minute)},
-		Updates:         UpdateSettings{Enabled: true},
-		Notifications:   NotificationSettings{Enabled: true, Delivery: DeliveryAuto, Sound: true},
-		Appearance:      Appearance{TerminalShowWindows: true, TerminalShowStatusBar: true, TerminalPoolSize: 3},
+		Version:       configmigrate.SettingsSet.Current,
+		Polling:       PollingSettings{Interval: Duration(5 * time.Minute)},
+		Updates:       UpdateSettings{Enabled: true},
+		Notifications: NotificationSettings{Enabled: true, Delivery: DeliveryAuto, Sound: true},
+		Appearance: Appearance{
+			TerminalShowWindows:             true,
+			TerminalShowStatusBar:           true,
+			TerminalPoolSize:                3,
+			TerminalSessionAgeThresholdDays: DefaultTerminalSessionAgeThresholdDays,
+		},
 		HTTP:            HTTPSettings{Enabled: true, Host: "127.0.0.1", Port: 0},
 		Telemetry:       TelemetrySettings{Enabled: false},
 		AgentWorkspaces: AgentWorkspacesSettings{SessionEndDelay: Duration(10 * time.Second)},
@@ -437,6 +449,9 @@ func (s Settings) Validate() error {
 	}
 	if s.Paths.Tmux != "" && !filepath.IsAbs(s.Paths.Tmux) {
 		return fmt.Errorf("paths.tmux must be an absolute path")
+	}
+	if s.Appearance.TerminalSessionAgeThresholdDays < MinTerminalSessionAgeThresholdDays || s.Appearance.TerminalSessionAgeThresholdDays > MaxTerminalSessionAgeThresholdDays {
+		return fmt.Errorf("appearance.terminal_session_age_threshold_days must be between %d and %d", MinTerminalSessionAgeThresholdDays, MaxTerminalSessionAgeThresholdDays)
 	}
 	if err := s.MenuBar.Validate(); err != nil {
 		return err

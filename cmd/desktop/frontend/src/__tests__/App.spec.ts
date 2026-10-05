@@ -197,6 +197,8 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
     terminalFontWeightBold: 0,
     terminalShowWindows: true,
     terminalPoolSize: 3,
+    terminalShowSessionAge: false,
+    terminalSessionAgeThresholdDays: 5,
   }),
   Fonts: vi.fn().mockResolvedValue({ all: [], monospace: [] }),
   SetTheme: vi.fn(),
@@ -205,6 +207,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   SetTerminalFontWeights: vi.fn(),
   SetTerminalShowWindows: vi.fn(),
   SetTerminalPoolSize: vi.fn(),
+  SetTerminalSessionAge: vi.fn(),
 }))
 
 vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/notificationservice', () => ({
@@ -1612,6 +1615,7 @@ describe('App', () => {
           repo: 'hay-kot/hive',
           state: 'active',
           canvasOwner: 'hay-kot/hive',
+          createdAt: '2026-10-01T12:00:00Z',
         },
       ])
       await useTerminalSessions().reload()
@@ -3298,6 +3302,7 @@ describe('App', () => {
         repo: 'git@github.com:hay-kot/hive.git',
         state: 'active',
         canvasOwner: 'hay-kot/hive',
+        createdAt: '2026-10-01T12:00:00Z',
       },
     ])
     const { wrapper, router } = await mountAppWithRouter()

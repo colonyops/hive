@@ -58,7 +58,15 @@ describe('useTerminalPinnedChats', () => {
     togglePin(7)
 
     expect(rows.value).toEqual([
-      { id: 'agentws-7', name: 'api-refactor', slug: 'agentws-7', repo: '', state: 'active', canvasOwner: '' },
+      {
+        id: 'agentws-7',
+        name: 'api-refactor',
+        slug: 'agentws-7',
+        repo: '',
+        state: 'active',
+        canvasOwner: '',
+        createdAt: '',
+      },
     ])
     expect(slugs.value.has('agentws-7')).toBe(true)
   })

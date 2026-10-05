@@ -30,8 +30,17 @@ describe('useTerminalSessions', () => {
         repo: 'hay-kot/hive',
         state: 'active',
         canvasOwner: '',
+        createdAt: '2026-10-01T12:00:00Z',
       },
-      { id: '2', name: 'old work', slug: 'old-work', repo: 'hay-kot/hive', state: 'recycled', canvasOwner: '' },
+      {
+        id: '2',
+        name: 'old work',
+        slug: 'old-work',
+        repo: 'hay-kot/hive',
+        state: 'recycled',
+        canvasOwner: '',
+        createdAt: '2026-09-01T12:00:00Z',
+      },
     ])
     const { sessions, loading, reload } = useTerminalSessions()
 
@@ -91,6 +100,7 @@ describe('useTerminalSessions', () => {
       repo: '',
       state: 'active',
       canvasOwner: '',
+      createdAt: '',
     })
     expect(mocks.Scratch).toHaveBeenCalledTimes(1)
   })
@@ -141,7 +151,7 @@ describe('sessionRepository', () => {
 
   it('is empty for an unknown slug, no slug, and a session without a remote', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'scratch', slug: 'scratch', repo: '', state: 'active', canvasOwner: '' },
+      { id: '1', name: 'scratch', slug: 'scratch', repo: '', state: 'active', canvasOwner: '', createdAt: '' },
     ])
     const { reload, sessionRepository } = useTerminalSessions()
     await reload()
@@ -154,7 +164,7 @@ describe('sessionRepository', () => {
 
 describe('groupTerminalSessions', () => {
   function row(name: string, repo: string): TerminalSessionRow {
-    return { id: name, name, slug: `slug-${name}`, repo, state: 'active', canvasOwner: '' }
+    return { id: name, name, slug: `slug-${name}`, repo, state: 'active', canvasOwner: '', createdAt: '' }
   }
 
   it('groups by remote with readable names, both levels alphabetical', () => {
@@ -177,7 +187,7 @@ describe('groupTerminalSessions', () => {
 
 describe('terminalSessionGroups', () => {
   function row(name: string, repo: string): TerminalSessionRow {
-    return { id: name, name, slug: `slug-${name}`, repo, state: 'active', canvasOwner: '' }
+    return { id: name, name, slug: `slug-${name}`, repo, state: 'active', canvasOwner: '', createdAt: '' }
   }
 
   it('pins the scratch terminal above the repositories, in a section of its own', () => {
