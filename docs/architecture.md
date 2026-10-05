@@ -2018,7 +2018,10 @@ MCP tools — durable output, neither reconciled nor regenerated, described
 later in this section. ADR workspace-directories-are-generated-and-disposable is the contract behind that
 split: generated output is disposable, never drift-tracked, and a hand edit to
 it is silently replaced on the next open, because Hive owns this whole
-subtree. This is the only installer: nothing writes a skill into an agent's
+subtree. The two skills trees are the exception: Hive owns only the skill
+directories it installed, recorded in each tree's `.hive-installed`, and an
+agent may write skills of its own beside them
+(ADR agents-write-their-own-skills-into-a-workspace). This is the only installer: nothing writes a skill into an agent's
 home directory (ADR skills-are-declared-by-a-workspace). `Generate` **reconciles** each of its owned trees to exactly what it
 computes rather than clearing and rewriting: a file no longer in the target
 set is removed, an emptied directory is pruned, and a file already present is

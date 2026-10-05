@@ -1,6 +1,6 @@
 # Workspace directories are generated and disposable
 
-- **Status:** accepted
+- **Status:** accepted; the two skills trees are amended by [ADR agents-write-their-own-skills-into-a-workspace](2026-10-05-agents-write-their-own-skills-into-a-workspace.md), where Hive owns only the skills it installed
 - **Date:** 2026-08-03
 
 ## Context

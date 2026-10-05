@@ -16,6 +16,7 @@ const (
 	sharedDirName        = ".shared"
 	skillsDirName        = "skills"
 	skillFileName        = "SKILL.md"
+	installedListName    = ".hive-installed"
 )
 
 // WorkspaceStatus is one workspace directory's load outcome, keyed by the

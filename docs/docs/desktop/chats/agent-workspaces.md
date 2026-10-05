@@ -86,6 +86,8 @@ Each workspace has an `agent-workspace.yaml` manifest and an `AGENTS.md` instruc
 
 A workspace selects skill packages, such as the built-in `hive` package. Packages can include shipped skills and custom skills from the shared workspace folder.
 
+A skill that only one workspace needs does not have to go in the shared folder. Write it, or ask the workspace's agent to write it, into the workspace's `.claude/skills/<name>/SKILL.md` (or `.agents/skills/` for agents that read that folder). Hive keeps it when the workspace opens and only replaces skills that its packages install. A package skill with the same name overwrites it.
+
 The built-in Hive package covers:
 
 - flows and sources;

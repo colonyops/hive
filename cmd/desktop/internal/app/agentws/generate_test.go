@@ -234,6 +234,94 @@ func TestGenerateRemovesASkillNoLongerDeclared(t *testing.T) {
 	assert.NoDirExists(t, filepath.Join(dir, ".agents", "skills", "hive-mcp"))
 }
 
+// TestGenerateLeavesSkillsItDidNotInstall: an agent in the workspace writes
+// its own skills into the same trees Hive installs into, and a reopen must
+// neither delete them nor stop removing the skills Hive itself dropped.
+func TestGenerateLeavesSkillsItDidNotInstall(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	in := GenerateInput{
+		Dir: dir, Workspace: testWorkspace(),
+		Servers: map[string]mcpcatalog.Server{},
+		Skills:  []RenderedSkill{{Slug: "hive-mcp", Body: "# MCP\n"}, {Slug: "hive-flows", Body: "# Flows\n"}},
+	}
+	_, err := Generate(in)
+	require.NoError(t, err)
+
+	for _, tree := range []string{".claude", ".agents"} {
+		writeFile(t, filepath.Join(dir, tree, "skills", "weekly-report", skillFileName), "# mine\n")
+		writeFile(t, filepath.Join(dir, tree, "skills", "weekly-report", "template.md"), "# template\n")
+		writeFile(t, filepath.Join(dir, tree, "skills", "hive-mcp", "stray.md"), "# stray\n")
+	}
+
+	in.Skills = []RenderedSkill{{Slug: "hive-mcp", Body: "# MCP\n"}}
+	_, err = Generate(in)
+	require.NoError(t, err)
+
+	for _, tree := range []string{".claude", ".agents"} {
+		skills := filepath.Join(dir, tree, "skills")
+		assert.FileExists(t, filepath.Join(skills, "weekly-report", skillFileName))
+		assert.FileExists(t, filepath.Join(skills, "weekly-report", "template.md"))
+		assert.NoDirExists(t, filepath.Join(skills, "hive-flows"), "a skill Hive installed and dropped is removed")
+		assert.FileExists(t, filepath.Join(skills, "hive-mcp", skillFileName))
+		assert.NoFileExists(t, filepath.Join(skills, "hive-mcp", "stray.md"), "a skill Hive installed stays Hive-owned")
+	}
+
+	in.Skills = nil
+	_, err = Generate(in)
+	require.NoError(t, err)
+	assert.FileExists(t, filepath.Join(dir, ".claude", "skills", "weekly-report", skillFileName))
+	assert.NoFileExists(t, filepath.Join(dir, ".claude", "skills", installedListName))
+}
+
+// TestGenerateKeepsASpacedSlugWhole: a shared skill directory may carry a
+// space, and reading the list back must not split it into slugs that name
+// an agent's skill.
+func TestGenerateKeepsASpacedSlugWhole(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+
+	in := GenerateInput{
+		Dir: dir, Workspace: testWorkspace(),
+		Servers: map[string]mcpcatalog.Server{},
+		Skills:  []RenderedSkill{{Slug: "weekly report", Body: "# Weekly\n"}},
+	}
+	_, err := Generate(in)
+	require.NoError(t, err)
+	writeFile(t, filepath.Join(dir, ".claude", "skills", "report", skillFileName), "# mine\n")
+
+	_, err = Generate(in)
+	require.NoError(t, err)
+	assert.FileExists(t, filepath.Join(dir, ".claude", "skills", "report", skillFileName))
+
+	in.Skills = nil
+	_, err = Generate(in)
+	require.NoError(t, err)
+	assert.NoDirExists(t, filepath.Join(dir, ".claude", "skills", "weekly report"))
+	assert.FileExists(t, filepath.Join(dir, ".claude", "skills", "report", skillFileName))
+}
+
+// TestGenerateWithNoInstalledListRemovesNothing: a tree written before Hive
+// recorded what it installed cannot tell its skills from an agent's, so it
+// keeps every directory rather than guessing.
+func TestGenerateWithNoInstalledListRemovesNothing(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, ".claude", "skills", "unknown", skillFileName), "# ?\n")
+
+	in := GenerateInput{
+		Dir: dir, Workspace: testWorkspace(),
+		Servers: map[string]mcpcatalog.Server{},
+		Skills:  []RenderedSkill{{Slug: "hive-mcp", Body: "# MCP\n"}},
+	}
+	_, err := Generate(in)
+	require.NoError(t, err)
+
+	assert.FileExists(t, filepath.Join(dir, ".claude", "skills", "unknown", skillFileName))
+	assert.FileExists(t, filepath.Join(dir, ".claude", "skills", "hive-mcp", skillFileName))
+}
+
 // TestGenerateInstallsExactlyWhatItIsHanded is the generator's half of the
 // package contract: it expands no pattern and reads no directory of its own,
 // so a shared skill no enabled package selected never lands in the tree.
