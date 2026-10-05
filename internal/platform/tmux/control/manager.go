@@ -296,10 +296,10 @@ func (m *Manager) RenameSessionIfPresent(ctx context.Context, from, to string) (
 	if err := m.Available(ctx); err != nil {
 		return false, nil
 	}
-	if _, err := m.oneShot(ctx, "has-session", "-t", from); err != nil {
+	if _, err := m.oneShot(ctx, "has-session", "-t", "="+from); err != nil {
 		return false, nil
 	}
-	if _, err := m.oneShot(ctx, "rename-session", "-t", from, to); err != nil {
+	if _, err := m.oneShot(ctx, "rename-session", "-t", "="+from, to); err != nil {
 		return false, fmt.Errorf("tmuxcc: rename session %s to %s: %w", from, to, err)
 	}
 	if mc, ok := m.managed(from); ok {
@@ -326,7 +326,7 @@ func (m *Manager) NewWindow(ctx context.Context, slug string) (string, error) {
 	if !exists {
 		return "", fmt.Errorf("%w: %s is not running", ErrNotAttached, slug)
 	}
-	lines, err := m.oneShot(ctx, "new-window", "-t", slug, "-c", currentPathFormat, "-P", "-F", "#{window_id}")
+	lines, err := m.oneShot(ctx, "new-window", "-t", "="+slug+":", "-c", currentPathFormat, "-P", "-F", "#{window_id}")
 	if err != nil {
 		return "", fmt.Errorf("tmuxcc: new window in %s: %w", slug, err)
 	}
@@ -352,7 +352,7 @@ func (m *Manager) CurrentPath(ctx context.Context, slug string) (string, error) 
 	if !exists {
 		return "", fmt.Errorf("%w: %s is not running", ErrNotAttached, slug)
 	}
-	lines, err := m.oneShot(ctx, "display-message", "-p", "-t", slug, currentPathFormat)
+	lines, err := m.oneShot(ctx, "display-message", "-p", "-t", "="+slug+":", currentPathFormat)
 	if err != nil {
 		return "", fmt.Errorf("tmuxcc: current path of %s: %w", slug, err)
 	}
@@ -378,7 +378,7 @@ func (m *Manager) HasSession(ctx context.Context, slug string) (bool, error) {
 	if err := m.Available(ctx); err != nil {
 		return false, err
 	}
-	_, err := m.oneShot(ctx, "has-session", "-t", slug)
+	_, err := m.oneShot(ctx, "has-session", "-t", "="+slug)
 	return err == nil, nil
 }
 
@@ -396,7 +396,7 @@ func (m *Manager) KillSession(ctx context.Context, slug string) (bool, error) {
 		_ = mc.client.Close(ctx)
 		m.remove(slug, mc.gen)
 	}
-	if _, err := m.oneShot(ctx, "kill-session", "-t", slug); err != nil {
+	if _, err := m.oneShot(ctx, "kill-session", "-t", "="+slug); err != nil {
 		return false, fmt.Errorf("tmuxcc: kill session %s: %w", slug, err)
 	}
 	return true, nil

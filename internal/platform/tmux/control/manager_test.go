@@ -571,8 +571,8 @@ func TestManagerRenameSessionRenamesTheLiveSession(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, renamed)
 	require.Equal(t, [][]string{
-		{"has-session", "-t", "hive-demo"},
-		{"rename-session", "-t", "hive-demo", "hive-demo-2"},
+		{"has-session", "-t", "=hive-demo"},
+		{"rename-session", "-t", "=hive-demo", "hive-demo-2"},
 	}, cmds.calls)
 	require.Equal(t, []string{"/opt/homebrew/bin/tmux", "/opt/homebrew/bin/tmux"}, cmds.binaries,
 		"one-shot commands must run the discovered tmux, not whatever $PATH says")
@@ -774,8 +774,8 @@ func TestManagerNewWindowWithoutAClient(t *testing.T) {
 	_, err := m.NewWindow(t.Context(), "hive-demo")
 	require.NoError(t, err)
 	require.Equal(t, [][]string{
-		{"has-session", "-t", "hive-demo"},
-		{"new-window", "-t", "hive-demo", "-c", "#{pane_current_path}", "-P", "-F", "#{window_id}"},
+		{"has-session", "-t", "=hive-demo"},
+		{"new-window", "-t", "=hive-demo:", "-c", "#{pane_current_path}", "-P", "-F", "#{window_id}"},
 	}, cmds.calls)
 }
 
@@ -788,7 +788,7 @@ func TestManagerNewCommandWindowPreservesCommandAndDirectory(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "@7", id)
 	require.Equal(t, [][]string{
-		{"has-session", "-t", "hive-demo"},
+		{"has-session", "-t", "=hive-demo"},
 		{"new-window", "-t", "=hive-demo:", "-c", "/work/shared checkout", "-n", "codex", "-P", "-F", "#{window_id}", "--", resolveLoginShell(), "-l", "-c", command},
 	}, cmds.calls)
 }
@@ -812,8 +812,8 @@ func TestManagerCurrentPathReadsTheActivePane(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "/work/checkout", dir)
 	require.Equal(t, [][]string{
-		{"has-session", "-t", "hive-demo"},
-		{"display-message", "-p", "-t", "hive-demo", "#{pane_current_path}"},
+		{"has-session", "-t", "=hive-demo"},
+		{"display-message", "-p", "-t", "=hive-demo:", "#{pane_current_path}"},
 	}, cmds.calls)
 }
 
@@ -849,7 +849,7 @@ func TestManagerHasSessionProbesTmux(t *testing.T) {
 	exists, err := newTestManager(t, nil, ManagerOptions{runTmux: present.run}).HasSession(t.Context(), "hive-demo")
 	require.NoError(t, err)
 	require.True(t, exists)
-	require.Equal(t, [][]string{{"has-session", "-t", "hive-demo"}}, present.calls)
+	require.Equal(t, [][]string{{"has-session", "-t", "=hive-demo"}}, present.calls)
 
 	// A server that is not running, or has no such session, is what the caller
 	// is asking about — not a failure to report.
@@ -890,7 +890,7 @@ func TestManagerKillSessionDropsTheClientWithTheSession(t *testing.T) {
 	killed, err := m.KillSession(t.Context(), "hive-demo")
 	require.NoError(t, err)
 	require.True(t, killed)
-	require.Equal(t, [][]string{{"kill-session", "-t", "hive-demo"}}, cmds.calls,
+	require.Equal(t, [][]string{{"kill-session", "-t", "=hive-demo"}}, cmds.calls,
 		"the live client answers the existence probe, so only the kill reaches tmux")
 	// Dropped synchronously: the child exits on its own moments later, and a
 	// re-attach in between must not be handed the dying client.
@@ -907,7 +907,7 @@ func TestManagerKillSessionTreatsAnAbsentSessionAsNothingToDo(t *testing.T) {
 	killed, err := m.KillSession(t.Context(), "hive-demo")
 	require.NoError(t, err)
 	require.False(t, killed)
-	require.Equal(t, [][]string{{"has-session", "-t", "hive-demo"}}, cmds.calls, "nothing is killed for a session that is not there")
+	require.Equal(t, [][]string{{"has-session", "-t", "=hive-demo"}}, cmds.calls, "nothing is killed for a session that is not there")
 }
 
 func TestManagerHasSessionValidatesInput(t *testing.T) {

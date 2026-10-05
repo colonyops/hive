@@ -66,15 +66,15 @@ func (r *fakeRunner) next() ([]byte, []byte, error) {
 func TestRenderTargets(t *testing.T) {
 	session, err := renderSessionTarget(multiplexer.Target{Session: "work"})
 	require.NoError(t, err)
-	assert.Equal(t, "work", session)
+	assert.Equal(t, "=work", session)
 
 	window, err := renderWindowTarget(multiplexer.Target{Session: "work", Window: "2"})
 	require.NoError(t, err)
-	assert.Equal(t, "work:2", window)
+	assert.Equal(t, "=work:2", window)
 
 	pane, err := renderPaneTarget(multiplexer.Target{Session: "work", Window: "2", Pane: "1"})
 	require.NoError(t, err)
-	assert.Equal(t, "work:2.1", pane)
+	assert.Equal(t, "=work:2.1", pane)
 }
 
 func TestListPanesParsesEscapedFreeFormFields(t *testing.T) {
@@ -110,8 +110,8 @@ func TestSendLiteralAndNamedKeyUseSingleArgvTokens(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, client.SendKey(context.Background(), target, key))
 
-	assert.Equal(t, []string{"send-keys", "-t", "s:0.1", "-l", "--", `-- "x"; λ`}, runner.calls[0].args)
-	assert.Equal(t, []string{"send-keys", "-t", "s:0.1", "--", "C-c"}, runner.calls[1].args)
+	assert.Equal(t, []string{"send-keys", "-t", "=s:0.1", "-l", "--", `-- "x"; λ`}, runner.calls[0].args)
+	assert.Equal(t, []string{"send-keys", "-t", "=s:0.1", "--", "C-c"}, runner.calls[1].args)
 }
 
 func TestPasteSuccessUsesBytePreservingFlagsAndReliesOnDeleteAfterPaste(t *testing.T) {
@@ -198,7 +198,7 @@ func TestCapturePaneOptions(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "captured", got)
-	assert.Equal(t, []string{"capture-pane", "-p", "-t", "s:2.1", "-J", "-S", "-20", "-E", "4"}, runner.calls[0].args)
+	assert.Equal(t, []string{"capture-pane", "-p", "-t", "=s:2.1", "-J", "-S", "-20", "-E", "4"}, runner.calls[0].args)
 }
 
 func TestCapturePaneUsesStableNativeTarget(t *testing.T) {
@@ -230,9 +230,9 @@ func TestLifecycleCommandsUseRenderedTargets(t *testing.T) {
 	require.NoError(t, client.KillSession(ctx, multiplexer.Target{Session: "new"}))
 	require.NoError(t, client.KillWindow(ctx, multiplexer.Target{Session: "new", Window: "2"}))
 
-	assert.Equal(t, []string{"rename-session", "-t", "old", "new"}, runner.calls[0].args)
-	assert.Equal(t, []string{"kill-session", "-t", "new"}, runner.calls[1].args)
-	assert.Equal(t, []string{"kill-window", "-t", "new:2"}, runner.calls[2].args)
+	assert.Equal(t, []string{"rename-session", "-t", "=old", "new"}, runner.calls[0].args)
+	assert.Equal(t, []string{"kill-session", "-t", "=new"}, runner.calls[1].args)
+	assert.Equal(t, []string{"kill-window", "-t", "=new:2"}, runner.calls[2].args)
 }
 
 func TestCurrentSessionOutsideTmuxDoesNotRunCommand(t *testing.T) {

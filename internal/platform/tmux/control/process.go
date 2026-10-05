@@ -56,7 +56,7 @@ func (p *execProcess) Start(context.Context) (io.Writer, io.Reader, error) {
 	// names — which outranks TMUX_TMPDIR for those commands but not for our
 	// scrubbed client. Passing that socket explicitly keeps attach and create
 	// pointed at the same server; outside tmux both resolve identically.
-	args := []string{"-C", "attach", "-t", p.slug}
+	args := []string{"-C", "attach", "-t", "=" + p.slug}
 	if socket := socketFromTMUX(os.Getenv("TMUX")); socket != "" {
 		args = append([]string{"-S", socket}, args...)
 	}

@@ -675,9 +675,9 @@ func TestSessionsService_StartTmuxSessionSpawnsTheConfiguredWindowsDetached(t *t
 
 	require.NoError(t, svc.StartTmuxSession(t.Context(), "review-81"))
 
-	assert.Contains(t, runner.runs, []string{"tmux", "has-session", "-t", "review-81"})
+	assert.Contains(t, runner.runs, []string{"tmux", "has-session", "-t", "=review-81"})
 	assert.Contains(t, runner.runs, []string{"tmux", "new-session", "-d", "-s", "review-81", "-n", "agent", "-c", "/tmp/review-81", "--", "sh", "-c", "run review-81"})
-	assert.Contains(t, runner.runs, []string{"tmux", "new-window", "-t", "review-81", "-n", "shell", "-c", "/tmp/review-81"})
+	assert.Contains(t, runner.runs, []string{"tmux", "new-window", "-t", "=review-81:", "-n", "shell", "-c", "/tmp/review-81"})
 	for _, run := range runner.runs {
 		assert.NotContains(t, run, "attach-session", "the desktop attaches over control mode; the spawn must stay detached")
 		assert.NotContains(t, run, "switch-client")
@@ -693,7 +693,7 @@ func TestSessionsService_StartTmuxSessionLeavesALiveSessionAlone(t *testing.T) {
 	svc := newSessionsService(SessionsDeps{Hive: h.engine})
 
 	require.NoError(t, svc.StartTmuxSession(t.Context(), "review-81"))
-	assert.Equal(t, [][]string{{"tmux", "has-session", "-t", "review-81"}}, runner.runs,
+	assert.Equal(t, [][]string{{"tmux", "has-session", "-t", "=review-81"}}, runner.runs,
 		"a session tmux already holds is not respawned, so every cold attach can ask for one")
 }
 

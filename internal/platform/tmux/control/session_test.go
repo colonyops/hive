@@ -5,6 +5,7 @@ package tmuxcc
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,7 +32,7 @@ func (f *fakeSessionCommands) run(_ context.Context, _ string, env []string, arg
 	}
 	switch args[0] {
 	case "has-session":
-		if f.present[args[2]] {
+		if f.present[strings.TrimPrefix(args[2], "=")] {
 			return nil, nil
 		}
 		return nil, errors.New("can't find session")
@@ -60,7 +61,7 @@ func TestManagerNewSessionCreatesADetachedSession(t *testing.T) {
 
 	require.NoError(t, m.NewSession(t.Context(), "agentws-1", "/work/dir", "claude --resume 'abc'", nil))
 	require.Equal(t, [][]string{
-		{"has-session", "-t", "agentws-1"},
+		{"has-session", "-t", "=agentws-1"},
 		{"new-session", "-d", "-s", "agentws-1", "-c", "/work/dir", "--", resolveLoginShell(), "-l", "-c", "claude --resume 'abc'"},
 	}, cmds.calls)
 }
@@ -73,7 +74,7 @@ func TestManagerNewSessionOpensAnInteractiveShellForAnEmptyCommand(t *testing.T)
 
 	require.NoError(t, m.NewSession(t.Context(), "agentws-1", "/work/dir", "", nil))
 	require.Equal(t, [][]string{
-		{"has-session", "-t", "agentws-1"},
+		{"has-session", "-t", "=agentws-1"},
 		{"new-session", "-d", "-s", "agentws-1", "-c", "/work/dir", "--", resolveLoginShell(), "-l"},
 	}, cmds.calls)
 }
@@ -108,7 +109,7 @@ func TestManagerNewSessionSetsSessionEnvironment(t *testing.T) {
 	env := []string{"HIVE_AGENT_SESSION=7", "HIVE_AGENT_WORKSPACE=/work/dir"}
 	require.NoError(t, m.NewSession(t.Context(), "agentws-7", "/work/dir", "claude", env))
 	require.Equal(t, [][]string{
-		{"has-session", "-t", "agentws-7"},
+		{"has-session", "-t", "=agentws-7"},
 		{
 			"new-session", "-d", "-s", "agentws-7", "-c", "/work/dir",
 			"-e", "HIVE_AGENT_SESSION=7", "-e", "HIVE_AGENT_WORKSPACE=/work/dir",
@@ -147,7 +148,7 @@ func TestManagerCapturePaneJoinsWrappedLines(t *testing.T) {
 	screen, err := m.CapturePane(t.Context(), "agentws-1")
 	require.NoError(t, err)
 	require.Equal(t, "line one\nline two", screen)
-	require.Equal(t, [][]string{{"capture-pane", "-t", "agentws-1", "-p", "-J"}}, cmds.calls)
+	require.Equal(t, [][]string{{"capture-pane", "-t", "=agentws-1:", "-p", "-J"}}, cmds.calls)
 }
 
 func TestManagerSessionNamesFiltersByPrefix(t *testing.T) {
