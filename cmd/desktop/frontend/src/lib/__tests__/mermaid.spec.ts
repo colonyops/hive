@@ -19,6 +19,16 @@ const palette: MermaidPalette = {
   fontFamily: 'Inter, sans-serif',
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 describe('renderMermaid', () => {
   beforeEach(() => {
     mermaid.initialize.mockClear()
@@ -58,5 +68,48 @@ describe('renderMermaid', () => {
       }),
     )
     expect(mermaid.render).toHaveBeenCalledWith(expect.stringMatching(/^hive-mermaid-/), 'flowchart LR\nA --> B')
+  })
+
+  it('serializes concurrent renders so each palette stays with its diagram', async () => {
+    const firstRender = deferred<{ svg: string }>()
+    const lightPalette = { ...palette, background: '#ffffff', darkMode: false }
+    mermaid.render
+      .mockImplementationOnce(() => firstRender.promise)
+      .mockResolvedValueOnce({ svg: '<svg id="second" />' })
+
+    const first = renderMermaid('flowchart LR\nA --> B', palette)
+    const second = renderMermaid('flowchart LR\nC --> D', lightPalette)
+
+    await vi.waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(1))
+    expect(mermaid.initialize).toHaveBeenCalledTimes(1)
+    expect(mermaid.initialize).toHaveBeenLastCalledWith(
+      expect.objectContaining({ themeVariables: expect.objectContaining({ background: '#101318', darkMode: true }) }),
+    )
+
+    firstRender.resolve({ svg: '<svg id="first" />' })
+
+    await expect(first).resolves.toBe('<svg id="first" />')
+    await expect(second).resolves.toBe('<svg id="second" />')
+    expect(mermaid.initialize).toHaveBeenCalledTimes(2)
+    expect(mermaid.initialize).toHaveBeenLastCalledWith(
+      expect.objectContaining({ themeVariables: expect.objectContaining({ background: '#ffffff', darkMode: false }) }),
+    )
+  })
+
+  it('continues the render queue after a diagram fails', async () => {
+    const failedRender = deferred<{ svg: string }>()
+    mermaid.render
+      .mockImplementationOnce(() => failedRender.promise)
+      .mockResolvedValueOnce({ svg: '<svg id="recovered" />' })
+
+    const failed = renderMermaid('not a diagram', palette).catch((error: unknown) => error)
+    const recovered = renderMermaid('flowchart LR\nA --> B', palette)
+
+    await vi.waitFor(() => expect(mermaid.render).toHaveBeenCalledTimes(1))
+    failedRender.reject(new Error('parse failed'))
+
+    await expect(failed).resolves.toEqual(new Error('parse failed'))
+    await expect(recovered).resolves.toBe('<svg id="recovered" />')
+    expect(mermaid.render).toHaveBeenCalledTimes(2)
   })
 })

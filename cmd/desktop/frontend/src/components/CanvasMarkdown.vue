@@ -18,10 +18,10 @@ function followLink(event: MouseEvent) {
   const target = event.target
   if (!(target instanceof Element)) return
   const anchor = target.closest('a')
-  const href = anchor?.getAttribute('href')
-  if (!href) return
+  if (!anchor) return
   event.preventDefault()
-  emit('follow', href)
+  const href = anchor.getAttribute('href')
+  if (href) emit('follow', href)
 }
 </script>
 
