@@ -292,7 +292,7 @@
   font-variant-numeric: tabular-nums;
 }
 .hv-stat-label {
-  color: var(--color-text-4);
+  color: var(--color-text-3);
   font-size: 0.778em;
   font-weight: 500;
   text-transform: uppercase;
@@ -316,12 +316,12 @@
 }
 .hv-stat-unit {
   margin-left: 0.3em;
-  color: var(--color-text-3);
+  color: var(--color-text-2);
   font-size: 0.6em;
   font-weight: 500;
 }
 .hv-stat-sub {
-  color: var(--color-text-3);
+  color: var(--color-text-2);
   font-size: 0.889em;
 }
 .hv-kv {
