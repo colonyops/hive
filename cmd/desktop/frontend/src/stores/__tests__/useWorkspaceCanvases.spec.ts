@@ -41,7 +41,13 @@ describe('useWorkspaceCanvases', () => {
     mocks.workspaces.mockResolvedValue(workspaceList('web-app', 'docs'))
     mocks.canvasRepositories.mockResolvedValue(['acme/site'])
     mocks.canvases.mockImplementation((workspace: string) =>
-      Promise.resolve(workspace === 'web-app' ? [{ workspace, name: 'plan' }] : [{ workspace, name: 'perf-report' }]),
+      Promise.resolve(
+        workspace === 'web-app'
+          ? [{ workspace, name: 'plan' }]
+          : workspace === '@global'
+            ? []
+            : [{ workspace, name: 'perf-report' }],
+      ),
     )
   })
 
@@ -50,7 +56,7 @@ describe('useWorkspaceCanvases', () => {
     expect(mocks.Available).not.toHaveBeenCalled()
   })
 
-  it("lists every workspace's and repository's canvases in one list", async () => {
+  it("lists every workspace's, repository's and the global owner's canvases in one list", async () => {
     await useAgentWorkspaces().reloadWorkspaces()
     const all = useWorkspaceCanvases()
 
@@ -61,6 +67,7 @@ describe('useWorkspaceCanvases', () => {
       'docs:perf-report',
       'acme/site:perf-report',
     ])
+    expect(mocks.canvases).toHaveBeenCalledWith('@global')
   })
 
   it('keeps the last-good rows and reports a failed read', async () => {

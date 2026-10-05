@@ -300,6 +300,24 @@ func TestRepositoryCanvasesSitUnderTheContextRoot(t *testing.T) {
 	assert.False(t, found)
 }
 
+func TestGlobalCanvasesSitUnderTheGlobalRoot(t *testing.T) {
+	global := t.TempDir()
+	s := NewStore(Roots{Workspaces: t.TempDir(), Global: global})
+
+	c, err := s.Upsert(GlobalOwner, "plan", Author{}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	require.NoError(t, err)
+	assert.Equal(t, GlobalOwner, c.Workspace)
+	assert.Zero(t, c.Session)
+	assert.Empty(t, c.HiveSession)
+	require.FileExists(t, filepath.Join(global, DirName, "plan.json"))
+}
+
+func TestGlobalOwnerIsRefusedWithNoGlobalRoot(t *testing.T) {
+	s := NewStore(Roots{Workspaces: t.TempDir()})
+	_, err := s.List(GlobalOwner)
+	require.ErrorIs(t, err, ErrInvalidWorkspace)
+}
+
 func TestRepositoryKeyIsHeldToTwoLocalComponents(t *testing.T) {
 	s, _ := testRepositoryStore(t)
 	for _, owner := range []string{"acme/site/extra", "../site", "acme/..", "/site", "acme/", "acme/."} {

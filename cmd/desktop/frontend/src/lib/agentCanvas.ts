@@ -13,6 +13,10 @@ export interface CanvasScope {
   session: CanvasAuthor | null
 }
 
+/** The owner key every agent outside a chat and a hive session writes to. */
+export const globalCanvasOwner = '@global'
+export const globalCanvasOwnerLabel = 'Global'
+
 /** A repository's owner key holds a slash, which a workspace directory cannot. */
 export function isRepositoryCanvasOwner(owner: string): boolean {
   return owner.includes('/')

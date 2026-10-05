@@ -77,7 +77,8 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 		Description: "Ask Hive to open the canvas pane beside this chat or Code session, optionally pinned to one canvas by name " +
 			"(the name must exist — put_block first). It applies only while the user is viewing it; it never pulls " +
 			"them away from something else, and a write while the pane is closed already shows an unseen dot. Open when " +
-			"you finish something worth looking at, not on every write.",
+			"you finish something worth looking at, not on every write. A global canvas has no pane; the user reads it in " +
+			"the full-page canvas view.",
 	}, ctrl.OpenCanvas)
 
 	mcp.AddTool(srv, &mcp.Tool{
@@ -99,16 +100,16 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 }
 
 type canvasSessionInput struct {
-	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
+	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
 }
 
 type canvasNameInput struct {
-	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
+	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
 	Canvas  string `json:"canvas"  jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
 }
 
 type putBlockInput struct {
-	Session     string `json:"session"               jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
+	Session     string `json:"session"               jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
 	Canvas      string `json:"canvas"                jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
 	CanvasTitle string `json:"canvasTitle,omitempty" jsonschema:"Display title for the whole canvas, shown in the pane's picker. Set it on the canvas's first write; a later non-empty value renames, empty leaves the stored title unchanged."`
 	Before      string `json:"before,omitempty"      jsonschema:"An existing block id to place this block ahead of — inserting a new id there, or moving a reused one (its createdAt survives the move). Omit to keep a reused id's position or append a new one."`
@@ -128,14 +129,14 @@ type batchBlockInput struct {
 }
 
 type putBlocksInput struct {
-	Session     string            `json:"session"               jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
+	Session     string            `json:"session"               jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
 	Canvas      string            `json:"canvas"                jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
 	CanvasTitle string            `json:"canvasTitle,omitempty" jsonschema:"Display title for the whole canvas, shown in the pane's picker. Set it on the canvas's first write; a later non-empty value renames, empty leaves the stored title unchanged."`
 	Blocks      []batchBlockInput `json:"blocks"                jsonschema:"The blocks to write, applied in order (50 max per call)."`
 }
 
 type removeBlockInput struct {
-	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
+	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
 	Canvas  string `json:"canvas"  jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
 	ID      string `json:"id"      jsonschema:"The id of the block to remove, as given to put_block."`
 }
@@ -151,7 +152,7 @@ type canvasBlock struct {
 }
 
 type canvasResult struct {
-	Workspace   string        `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, or owner/repo for a hive session's repository."`
+	Workspace   string        `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, owner/repo for a hive session's repository, or @global."`
 	Name        string        `json:"name"`
 	Title       string        `json:"title,omitempty"`
 	Session     int64         `json:"session"               jsonschema:"The chat that created this canvas, or 0."`
@@ -176,7 +177,7 @@ type canvasMetaResult struct {
 // surface into the agent's context. Block carries the stored block for a
 // single-block write; read_canvas returns the full surface.
 type canvasWriteResult struct {
-	Workspace   string       `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, or owner/repo for a hive session's repository."`
+	Workspace   string       `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, owner/repo for a hive session's repository, or @global."`
 	Name        string       `json:"name"`
 	Title       string       `json:"title,omitempty"`
 	Session     int64        `json:"session"               jsonschema:"The chat that created this canvas, or 0."`
@@ -196,7 +197,7 @@ type deleteCanvasResult struct {
 }
 
 type openCanvasInput struct {
-	Session string `json:"session"          jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. Anywhere else it is the absolute path of your working directory, which names the hive session you run in. Never guess or reuse another value; with neither, say so instead of calling."`
+	Session string `json:"session"          jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
 	Canvas  string `json:"canvas,omitempty" jsonschema:"Canvas to pin the pane to, by name; must exist. Omit to open on the pane's own pick."`
 }
 

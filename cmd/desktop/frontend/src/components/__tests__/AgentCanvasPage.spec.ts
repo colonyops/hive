@@ -294,6 +294,18 @@ describe('AgentCanvasPage', () => {
     wrapper.unmount()
   })
 
+  it('offers the global canvases that agents outside every session share', async () => {
+    const { wrapper, scope } = await mountPage()
+
+    await chooseOption(wrapper, 'canvas-page-workspace', '@global')
+    await flushPromises()
+
+    expect(scope.value).toEqual({ workspace: '@global', name: null, session: null })
+    expect(agents.canvases).toHaveBeenCalledWith('@global')
+
+    wrapper.unmount()
+  })
+
   it('falls back to the first workspace when it is opened with none', async () => {
     const { wrapper } = await mountPage({ workspace: '', session: null })
 

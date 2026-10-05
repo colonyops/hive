@@ -199,6 +199,9 @@ func (s *CanvasService) SetPaneOpen(ctx context.Context, session string, name st
 	if err != nil {
 		return err
 	}
+	if caller.owner == canvas.GlobalOwner {
+		return Errorf(KindInvalid, "a global canvas has no pane to open or close; the user reads it in the full-page canvas view")
+	}
 	if open && name != "" {
 		if _, err := s.Get(ctx, session, name); err != nil {
 			return err
@@ -312,13 +315,26 @@ func (s *CanvasService) Repositories(_ context.Context) ([]string, error) {
 	return keys, Wrap(err, KindInternal, "listing repositories with canvases")
 }
 
-// resolve reads the tool's session argument, which is one of two things. A
-// number is a chat's record id, what HIVE_AGENT_SESSION carries. Anything
-// else is the caller's working directory: hive puts no id in a session's
-// environment, and an agent the user wired up by hand has only where it runs
+// canvasGlobalSession is the session argument of an agent outside any chat
+// or hive session.
+const canvasGlobalSession = "global"
+
+// resolve reads the tool's session argument. A number is a chat's record id,
+// what HIVE_AGENT_SESSION carries. "global" is an agent outside any session.
+// Anything else is the caller's working directory: hive puts no id in a
+// session's environment, and an agent the user wired up by hand has only
+// where it runs
 // (ADR a-code-session-s-canvases-belong-to-its-repository-and-live-in-the-hive-context-directory).
+//
+// A directory inside no session stays not_found rather than falling back to
+// global: until the hive engine starts, every directory is inside no session,
+// and a session's agent would file its canvases where its pane never looks
+// (ADR agents-outside-every-session-share-one-global-canvas-owner).
 func (s *CanvasService) resolve(ctx context.Context, session string) (canvasCaller, error) {
 	session = strings.TrimSpace(session)
+	if session == canvasGlobalSession {
+		return canvasCaller{owner: canvas.GlobalOwner}, nil
+	}
 	if id, err := strconv.ParseInt(session, 10, 64); err == nil {
 		rec, err := s.sessions.Get(ctx, id)
 		if stores.IsNotFound(err) {
@@ -331,7 +347,7 @@ func (s *CanvasService) resolve(ctx context.Context, session string) (canvasCall
 	}
 	if !filepath.IsAbs(session) {
 		return canvasCaller{}, Errorf(KindInvalid,
-			"session %q is neither a chat's HIVE_AGENT_SESSION nor the absolute path of a working directory", session)
+			"session %q is not a chat's HIVE_AGENT_SESSION, the absolute path of a working directory, or global", session)
 	}
 	if s.hiveSessions == nil {
 		return canvasCaller{}, Errorf(KindUnavailable, "hive sessions are not available in this build")
@@ -342,7 +358,7 @@ func (s *CanvasService) resolve(ctx context.Context, session string) (canvasCall
 	}
 	if !ok {
 		return canvasCaller{}, Errorf(KindNotFound,
-			"no hive session's checkout holds %q; pass HIVE_AGENT_SESSION from a Hive chat, or the working directory of a hive session", session)
+			"no hive session's checkout holds %q; pass HIVE_AGENT_SESSION from a Hive chat, the working directory of a hive session, or global outside both", session)
 	}
 	owner := CanvasOwnerForRemote(sess.Remote)
 	if owner == "" {

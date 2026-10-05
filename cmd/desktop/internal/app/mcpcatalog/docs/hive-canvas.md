@@ -16,8 +16,10 @@ A canvas is a named artifact: an ordered list of blocks, saved as
 `canvases/<name>.json`. A chat's canvases belong to its workspace and sit in
 the workspace folder. A hive session's belong to its repository and sit in
 the repository's hive context directory, the one a checkout links as `.hive`,
-never in the checkout itself. Every chat of a workspace, and every session of
-a repository, sees the same canvases. Make as many as you need — name them by
+never in the checkout itself. An agent outside both writes to one global
+namespace that every such agent shares, kept in Hive's data directory. Every
+chat of a workspace, and every session of a repository, sees the same
+canvases. Make as many as you need — name them by
 artifact (`release-notes`, `perf-report`), give each a display title, and
 they outlive the conversation that made them. Blocks are:
 
@@ -247,13 +249,17 @@ point.
   Open when something is finished and worth looking at, not on every write —
   a write while the pane is closed already lights an unseen dot.
 
-Every tool takes a `session` naming the caller, and it is one of two things.
+Every tool takes a `session` naming the caller, and it is one of three things.
 In a Hive chat it is the `HIVE_AGENT_SESSION` environment variable, which
 Hive sets in the launched process; a chat launched before canvas support
 existed does not have the variable until it is relaunched. Anywhere else it
 is the absolute path of your working directory: Hive finds the hive session
 whose checkout holds it, and files the canvas under that session's
-repository. A directory inside no hive session is `not_found`.
+repository. Outside a chat and a hive session it is the word `global`, and
+the canvas is filed in the global namespace. A directory inside no hive
+session is `not_found`, not global: pass `global` yourself. A global canvas
+has no pane, so `open_canvas` and `close_canvas` refuse it; the user reads it
+in the full-page canvas view.
 
 ## Launch
 

@@ -2188,8 +2188,13 @@ belong to its repository and are filed in hive's context directory,
 `<context root>/<owner>/<repo>/canvases/`, never in the checkout;
 `repocontext.Prune` skips the directory by name. The owner key `owner/repo`
 travels in the field a workspace name does, and `canvas.Store` tells the two
-apart by the slash. `canvas.Author` records which chat or hive session wrote
-a canvas first, and the two canvas events carry that author. The frontend
+apart by the slash. An agent outside every session passes `global`, which
+files its canvases under the owner key `@global` in the desktop data
+directory; a directory inside no session stays `not_found` rather than
+falling back to it
+(ADR agents-outside-every-session-share-one-global-canvas-owner).
+`canvas.Author` records which chat or hive session wrote a canvas first, and
+the two canvas events carry that author; a global write records neither. The frontend
 reaches a session's owner as `SessionSummary.canvasOwner`. The pane in Code
 is the Chats pane, `AgentCanvasPane`, mounted beside the pane column and
 riding `?canvas` on the terminal route (`useTerminalCanvas`), so the title

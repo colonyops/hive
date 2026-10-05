@@ -466,6 +466,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Store: canvas.NewStore(canvas.Roots{
 			Workspaces:   cfg.Paths.AgentWorkspacesDir,
 			Repositories: a.hiveContextDir,
+			Global:       cfg.Paths.DataDir,
 		}),
 		Sessions:     a.Stores.AgentSessions,
 		HiveSessions: hiveSessionsAtPath{a},

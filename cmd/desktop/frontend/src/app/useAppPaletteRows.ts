@@ -25,6 +25,7 @@ import { terminalSessionGroups, useTerminalSessions } from '../stores/useTermina
 import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
+import { globalCanvasOwner, globalCanvasOwnerLabel } from '../lib/agentCanvas'
 import { useWorkspaceCanvases } from '../stores/useWorkspaceCanvases'
 import { useAttachedTerminalWindows } from '../composables/useAttachedTerminalWindows'
 import { applicationSettingsSections } from '../router'
@@ -417,7 +418,9 @@ export function useAppPaletteRows(
         cmds.push({
           id: `canvas:${meta.workspace}:${meta.name}`,
           title: meta.title || meta.name,
-          group: workspaceNameByDir.value.get(meta.workspace) || meta.workspace,
+          group:
+            workspaceNameByDir.value.get(meta.workspace) ||
+            (meta.workspace === globalCanvasOwner ? globalCanvasOwnerLabel : meta.workspace),
           order: -2,
           scope: 'goto',
           kind: 'canvas',

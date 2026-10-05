@@ -93,11 +93,17 @@ type Canvas struct {
 }
 
 // Author is who wrote a canvas first: a chat by its record id, or a hive
-// session by its id. Exactly one is set.
+// session by its id. At most one is set; neither is an agent outside both,
+// writing to GlobalOwner.
 type Author struct {
 	Session     int64
 	HiveSession string
 }
+
+// GlobalOwner is the owner key shared by every agent that runs outside a chat
+// and outside a hive session. The @ keeps it out of the workspace names hive
+// creates.
+const GlobalOwner = "@global"
 
 // RepositoryOwner is the owner key of a repository's canvases. A workspace's
 // key is one path component, so the slash keeps the two apart.
@@ -163,6 +169,9 @@ type Roots struct {
 	// config can move the root while the app runs. Nil, or an empty answer,
 	// refuses repository owners.
 	Repositories func() string
+	// Global holds GlobalOwner's canvases directory. Empty refuses the
+	// global owner.
+	Global string
 }
 
 // Store reads and writes canvas files under Roots. The mutex serializes
@@ -424,6 +433,12 @@ func (s *Store) path(workspace, name string) (string, error) {
 // hive's own (config.RepoContextDir), restated because this package imports
 // nothing; a test in the app package holds the two together.
 func (s *Store) dir(owner string) (string, error) {
+	if owner == GlobalOwner {
+		if s.roots.Global == "" {
+			return "", fmt.Errorf("%w: %q", ErrInvalidWorkspace, owner)
+		}
+		return filepath.Join(s.roots.Global, DirName), nil
+	}
 	repoOwner, repo, isRepository := strings.Cut(owner, "/")
 	if !isRepository {
 		if !validWorkspace(owner) {

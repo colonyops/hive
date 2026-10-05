@@ -6,6 +6,7 @@
 // pane's reason: canvas writes arrive only through the hive-canvas MCP tools.
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import IconCode from '~icons/lucide/code'
+import IconGlobe from '~icons/lucide/globe'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconX from '~icons/lucide/x'
 import AgentCanvasActions from './AgentCanvasActions.vue'
@@ -22,7 +23,12 @@ import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { relativeAge } from '../lib/age'
-import { isRepositoryCanvasOwner, type CanvasScope } from '../lib/agentCanvas'
+import {
+  globalCanvasOwner,
+  globalCanvasOwnerLabel,
+  isRepositoryCanvasOwner,
+  type CanvasScope,
+} from '../lib/agentCanvas'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useCanvasSettings } from '../stores/useCanvasSettings'
 
@@ -71,6 +77,7 @@ const workspaceOptions = computed<AppSelectOption[]>(() => {
   const options = [
     ...workspaces.value.map((ws) => ({ value: ws.dir, label: ws.name || ws.dir, icon: IconMessagesSquare })),
     ...repositories.value.map((key) => ({ value: key, label: key, icon: IconCode })),
+    { value: globalCanvasOwner, label: globalCanvasOwnerLabel, icon: IconGlobe },
   ]
   // AppSelect draws an unmatched value as blank, and the scope can name an
   // owner neither listing holds yet: a repository with no canvas so far.

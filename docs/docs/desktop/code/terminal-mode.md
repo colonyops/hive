@@ -123,6 +123,8 @@ Open the canvas pane beside a session with the right-panel button in the title b
 
 The pane, the full-page view, copy, and save work as they do in [Chats](../chats/agent-workspaces.md#canvases). A scratch terminal has no canvases.
 
+An agent outside any chat or Code session, such as one you start in a plain terminal, can still write canvases: it passes `global` as its session, and every such agent shares one set of global canvases. They have no pane. Read them in the full-page view by picking **Global** in its owner picker, or find one by name in the command palette.
+
 ## Appearance
 
 **Settings ▸ Terminal** controls the terminal font, size, weight, line height, letter spacing, visible windows, and status bar. <kbd>⌘+</kbd> and <kbd>⌘-</kbd> step the text size by 2px from a terminal without opening Settings, up to 64px, and <kbd>⌘0</kbd> puts it back to 13px. On Linux, use <kbd>Ctrl+Shift</kbd> with the same keys.

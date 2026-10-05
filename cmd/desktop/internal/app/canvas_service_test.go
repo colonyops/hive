@@ -454,7 +454,11 @@ func testHiveCanvasService(t *testing.T, sessions ...session.Session) (*CanvasSe
 	t.Cleanup(cancel)
 	contextRoot := t.TempDir()
 	svc := newCanvasService(CanvasDeps{
-		Store:        canvas.NewStore(canvas.Roots{Workspaces: t.TempDir(), Repositories: func() string { return contextRoot }}),
+		Store: canvas.NewStore(canvas.Roots{
+			Workspaces:   t.TempDir(),
+			Repositories: func() string { return contextRoot },
+			Global:       t.TempDir(),
+		}),
 		Sessions:     fakeCanvasSessions{1: {ID: 1, Workspace: "ws", Name: "chat", Agent: "claude"}},
 		HiveSessions: fakeHiveSessions(sessions),
 		Events:       bus,
@@ -523,7 +527,8 @@ func TestCanvasSessionArgumentThatResolvesToNothing(t *testing.T) {
 	block := canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "x"}
 
 	_, err := svc.PutBlock(ctx, "/somewhere/else", "plan", "", "", block)
-	assert.Equal(t, KindNotFound, KindOf(err), "a directory in no checkout")
+	assert.Equal(t, KindNotFound, KindOf(err), "a directory in no checkout is not filed as global")
+	require.ErrorContains(t, err, "global", "the error names the way out")
 
 	_, err = svc.PutBlock(ctx, "site-abc123", "plan", "", "", block)
 	assert.Equal(t, KindInvalid, KindOf(err), "neither a chat id nor an absolute path")
@@ -533,6 +538,29 @@ func TestCanvasSessionArgumentThatResolvesToNothing(t *testing.T) {
 
 	_, err = svc.PutBlock(ctx, " 1 ", "plan", "", "", block)
 	require.NoError(t, err, "a chat id still resolves, as HIVE_AGENT_SESSION carries it")
+}
+
+func TestAgentsOutsideEverySessionShareTheGlobalCanvases(t *testing.T) {
+	svc, _, updates := testHiveCanvasService(t, siteSession)
+	ctx := t.Context()
+
+	c, err := svc.PutBlock(ctx, "global", "notes", "Notes", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "x"})
+	require.NoError(t, err)
+	assert.Equal(t, canvas.GlobalOwner, c.Workspace)
+	assert.Zero(t, c.Session)
+	assert.Empty(t, c.HiveSession)
+
+	_, err = svc.PutBlock(ctx, " global ", "notes", "", "", canvas.Block{ID: "b", Kind: canvas.KindMarkdown, Body: "y"})
+	require.NoError(t, err, "a second global agent writes to the same canvas")
+
+	metas, err := svc.ListForOwner(ctx, canvas.GlobalOwner)
+	require.NoError(t, err)
+	require.Len(t, metas, 1)
+	assert.Equal(t, 2, metas[0].BlockCount)
+	require.Eventually(t, func() bool { return len(updates()) == 2 }, 2*time.Second, 5*time.Millisecond, "global writes still wake the readers")
+
+	err = svc.SetPaneOpen(ctx, "global", "notes", true)
+	assert.Equal(t, KindInvalid, KindOf(err), "a global canvas has no pane")
 }
 
 func TestCanvasPaneToggleNamesTheHiveSession(t *testing.T) {
