@@ -175,6 +175,8 @@ var htmlClasses = []string{
 	"hv-cols-2",
 	"hv-cols-3",
 	"hv-cols-4",
+	"hv-cols-5",
+	"hv-cols-6",
 	// Containers.
 	"hv-card",
 	"hv-panel",
@@ -183,6 +185,9 @@ var htmlClasses = []string{
 	"hv-stat",
 	"hv-stat-value",
 	"hv-stat-label",
+	"hv-stat-card",
+	"hv-stat-unit",
+	"hv-stat-sub",
 	"hv-kv",
 	// Emphasis.
 	"hv-badge",
@@ -194,7 +199,7 @@ var htmlClasses = []string{
 	"hv-arrow",
 	"hv-dashed",
 	"hv-label",
-	// Tones, for hv-callout, hv-badge and the diagram roles.
+	// Tones, for hv-callout, hv-badge, hv-stat-card and the diagram roles.
 	"hv-info",
 	"hv-success",
 	"hv-warn",

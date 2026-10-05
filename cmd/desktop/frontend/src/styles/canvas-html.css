@@ -230,6 +230,21 @@
 .hv-cols-4 {
   --hv-cols: 4;
 }
+.hv-cols-5 {
+  --hv-cols: 5;
+}
+.hv-cols-6 {
+  --hv-cols: 6;
+}
+
+/* Five or six columns stop fitting a figure well before the single-column
+   threshold below, so they pass through three on the way down. */
+@container (max-width: 45em) {
+  .hv-cols-5,
+  .hv-cols-6 {
+    --hv-cols: 3;
+  }
+}
 
 /* The pane is user-resizable down to 300px, where any multi-column grid is
    unreadable. The em threshold grows with the reader's text size, so larger
@@ -282,6 +297,32 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+/* initial resets a tone inherited from an enclosing callout, so a card is
+   neutral unless a tone class sits on the card itself. */
+.hv-stat-card {
+  --hv-tone: initial;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--hv-tone, var(--color-border)) 45%, var(--color-border));
+  border-radius: 8px;
+  background: var(--color-raised);
+}
+.hv-stat-card .hv-stat-value {
+  color: var(--hv-tone, var(--color-text));
+}
+.hv-stat-unit {
+  margin-left: 0.3em;
+  color: var(--color-text-3);
+  font-size: 0.6em;
+  font-weight: 500;
+}
+.hv-stat-sub {
+  color: var(--color-text-3);
+  font-size: 0.889em;
 }
 .hv-kv {
   display: grid;
@@ -381,8 +422,8 @@
   stroke-dasharray: 5 4;
 }
 
-/* Tones for hv-callout, hv-badge and the diagram roles. These must stay after
-   the two components: they carry the same specificity, so source order is the
+/* Tones for hv-callout, hv-badge, hv-stat-card and the diagram roles. These
+   must stay after the components: they carry the same specificity, so source order is the
    only thing that lets `class="hv-badge hv-error"` win over the component's
    own default tone. */
 .hv-info {

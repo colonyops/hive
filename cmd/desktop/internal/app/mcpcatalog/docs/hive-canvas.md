@@ -77,22 +77,28 @@ and `alt` on `img`, `colspan`/`rowspan` and `scope` on cells, `open` on
 ### Classes
 
 **Layout** — `hv-stack` (vertical, evenly spaced), `hv-row` (horizontal,
-wraps), `hv-grid` with one of `hv-cols-2`, `hv-cols-3`, `hv-cols-4` (equal
-columns; they collapse to one when the pane is narrow, so pick for the
-content, not for a width you cannot see).
+wraps), `hv-grid` with one of `hv-cols-2`, `hv-cols-3`, `hv-cols-4`, `hv-cols-5`,
+`hv-cols-6` (equal columns; they collapse to one when the pane is narrow, and
+five or six drop to three first, so pick for the content, not for a width you
+cannot see).
 
 **Containers** — `hv-card` (a bordered, raised box: one unit of content),
 `hv-panel` (a flat tinted region: a grouped aside), `hv-callout` (a
 left-ruled block for something the reader must not miss).
 
-**Data** — `hv-stat` wrapping an `hv-stat-value` and an `hv-stat-label` is one
-tile; `hv-kv` on a `<dl>` lays its `<dt>`/`<dd>` pairs out as an aligned
+**Data** — `hv-stat-card` is one figure tile: it holds an `hv-stat-value`, an
+`hv-stat-label`, and optionally an `hv-stat-sub` (a secondary line: "0 of 2",
+"confirmed on main"). Put an `hv-stat-unit` inside the value for a unit smaller
+than the figure ("125 days"). A tone on the card colours the figure and its
+border; reserve one for the number that needs attention. `hv-stat` is the
+same layout without the card chrome or tone, for a figure inside a container
+of your own. `hv-kv` on a `<dl>` lays its `<dt>`/`<dd>` pairs out as an aligned
 key/value table.
 
 **Emphasis** — `hv-badge` (an inline pill), `hv-muted` (de-emphasised text),
 `hv-mono` (monospace, for ids, shas and figures).
 
-**Tones**, for `hv-callout`, `hv-badge` and the diagram roles — `hv-info`,
+**Tones**, for `hv-callout`, `hv-badge`, `hv-stat-card` and the diagram roles — `hv-info`,
 `hv-success`, `hv-warn`, `hv-error`, `hv-accent`. Without one, each is
 neutral.
 
@@ -136,18 +142,25 @@ rather than a write. A tone on the element — or on a `g` around a whole path
 A row of stat tiles:
 
 ```html
-<div class="hv-grid hv-cols-3">
-  <div class="hv-card hv-stat">
+<div class="hv-grid hv-cols-4">
+  <div class="hv-stat-card">
     <span class="hv-stat-value">1,284</span>
     <span class="hv-stat-label">Requests</span>
   </div>
-  <div class="hv-card hv-stat">
-    <span class="hv-stat-value">98.2%</span>
-    <span class="hv-stat-label">Success</span>
-  </div>
-  <div class="hv-card hv-stat">
-    <span class="hv-stat-value">412ms</span>
+  <div class="hv-stat-card">
+    <span class="hv-stat-value">412<span class="hv-stat-unit">ms</span></span>
+    <span class="hv-stat-sub">was 530ms last week</span>
     <span class="hv-stat-label">p95</span>
+  </div>
+  <div class="hv-stat-card hv-success">
+    <span class="hv-stat-value">2</span>
+    <span class="hv-stat-sub">of 2 approvals</span>
+    <span class="hv-stat-label">Reviews</span>
+  </div>
+  <div class="hv-stat-card hv-error">
+    <span class="hv-stat-value">1<span class="hv-stat-unit">critical</span></span>
+    <span class="hv-stat-sub">confirmed on main</span>
+    <span class="hv-stat-label">Unpatched</span>
   </div>
 </div>
 ```
