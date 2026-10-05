@@ -27,6 +27,30 @@
   contain: layout;
 }
 
+/* Canvas surfaces, derived from the theme so every palette gets them. The
+   reader's own chrome (block titles, link blocks, markdown bodies) shares
+   them, so they sit on the reader root as well as on each html block.
+
+   A card sits on the theme's raised surface; a panel is a step further
+   toward the theme's card ink, which reads as a recess in a light theme and
+   a lift in a dark one. --color-border alone is too faint against the raised
+   surface in the dark palettes, so the card border leans toward the text
+   colour. */
+.hv-html,
+.canvas-reader {
+  --hv-surface-card: var(--color-raised);
+  --hv-surface-panel: color-mix(in oklab, var(--color-card) 45%, var(--color-raised));
+  --hv-surface-border: color-mix(in oklab, var(--color-text) 8%, var(--color-border));
+  --hv-surface-rule: var(--color-border);
+  --hv-surface-shadow: inset 0 1px 0 rgb(255 255 255 / 0.045), 0 1px 2px rgb(0 0 0 / 0.18);
+  --hv-ink-muted: var(--color-text-3);
+}
+
+/* Toned text is the tone pulled toward the theme's text colour. Several
+   light palettes reuse the dark palettes' severity colours, and a raw amber
+   figure on white does not read; the pull darkens it there and only softens
+   it in a dark theme. Borders, dots and washes keep the raw tone. */
+
 /* Base elements, so an agent that names no class at all still gets a
    readable document. */
 .hv-html h1,
@@ -107,7 +131,7 @@
   margin: 3px 0;
 }
 .hv-html li::marker {
-  color: var(--color-text-4);
+  color: var(--hv-ink-muted);
 }
 .hv-html dl {
   margin: 8px 0;
@@ -129,18 +153,19 @@
 .hv-html code,
 .hv-html kbd,
 .hv-html samp {
-  padding: 1.5px 6px;
-  border-radius: 5px;
-  background: var(--color-card);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--hv-surface-panel);
+  color: var(--color-text);
   font-family: var(--font-mono);
-  font-size: 0.86em;
+  font-size: 0.893em;
 }
 .hv-html pre {
   margin: 10px 0;
   padding: 12px 14px;
   overflow-x: auto;
-  border-radius: 7px;
-  background: var(--color-card);
+  border-radius: 6px;
+  background: var(--hv-surface-panel);
   line-height: calc(var(--hv-line-height) * 0.91);
 }
 .hv-html pre code {
@@ -152,31 +177,37 @@
   margin: 10px 0;
   overflow-x: auto;
   border-collapse: collapse;
-  font-size: 0.95em;
+  font-size: 0.929em;
 }
 .hv-html th,
 .hv-html td {
-  padding: 5px 11px;
-  border: 1px solid var(--color-border);
+  padding: 7px 14px 7px 0;
+  border-bottom: 1px solid var(--hv-surface-rule);
   text-align: left;
 }
 .hv-html th {
-  background: var(--color-card);
-  color: var(--color-text);
-  font-weight: 650;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  border-bottom-color: var(--hv-surface-border);
+  color: var(--hv-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.846em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 .hv-html caption {
   padding-bottom: 6px;
-  color: var(--color-text-4);
+  color: var(--hv-ink-muted);
   font-size: 0.9em;
   text-align: left;
 }
 .hv-html details {
   margin: 10px 0;
-  padding: 8px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 7px;
-  background: var(--color-card);
+  padding: 10px 14px;
+  border: 1px solid var(--hv-surface-border);
+  border-radius: 8px;
+  background: var(--hv-surface-card);
 }
 .hv-html summary {
   cursor: pointer;
@@ -196,7 +227,7 @@
 }
 .hv-html figcaption {
   margin-top: 4px;
-  color: var(--color-text-4);
+  color: var(--hv-ink-muted);
   font-size: 0.86em;
 }
 
@@ -217,7 +248,7 @@
 }
 .hv-grid {
   display: grid;
-  gap: 10px;
+  gap: 12px;
   margin: 10px 0;
   grid-template-columns: repeat(var(--hv-cols, 2), minmax(0, 1fr));
 }
@@ -257,46 +288,64 @@
 
 /* Containers. */
 .hv-card {
-  padding: 10px 12px;
-  border: 1px solid var(--color-border);
+  padding: 14px 16px;
+  border: 1px solid var(--hv-surface-border);
   border-radius: 8px;
-  background: var(--color-raised);
+  background: var(--hv-surface-card);
+  box-shadow: var(--hv-surface-shadow);
 }
 .hv-panel {
-  padding: 10px 12px;
+  padding: 14px 16px;
   border-radius: 8px;
-  background: var(--color-card);
+  background: var(--hv-surface-panel);
 }
 .hv-callout {
-  --hv-tone: var(--color-text-3);
+  --hv-tone: initial;
   margin: 10px 0;
-  padding: 8px 12px;
-  border-left: 3px solid var(--hv-tone);
-  border-radius: 0 7px 7px 0;
-  background: color-mix(in srgb, var(--hv-tone) 8%, transparent);
+  padding: 12px 16px;
+  border-left: 2px solid var(--hv-tone, var(--hv-ink-muted));
+  border-radius: 0 6px 6px 0;
+  background: color-mix(in oklab, var(--hv-tone, var(--hv-surface-panel)) 7%, var(--color-app));
   color: var(--color-text-2);
 }
+.hv-callout:not(.hv-info, .hv-success, .hv-warn, .hv-error, .hv-accent) {
+  background: var(--hv-surface-panel);
+}
+.hv-callout strong,
+.hv-callout b {
+  color: var(--color-text);
+}
 
-/* Data. */
+/* Data. A stat's label renders first whatever the DOM order, so the
+   documented order (value, sub, label) and the label-first order an agent
+   might write both come out the same. */
 .hv-stat {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 .hv-stat-value {
   color: var(--color-text);
-  font-size: 1.407em;
-  font-weight: 650;
-  line-height: calc(var(--hv-line-height) * 0.73);
+  font-size: 1.571em;
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 .hv-stat-label {
-  color: var(--color-text-3);
-  font-size: 0.778em;
+  order: -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--hv-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.786em;
   font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 /* initial resets a tone inherited from an enclosing callout, so a card is
    neutral unless a tone class sits on the card itself. */
@@ -305,62 +354,90 @@
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
-  border: 1px solid color-mix(in srgb, var(--hv-tone, var(--color-border)) 45%, var(--color-border));
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in oklab, var(--hv-tone, var(--hv-surface-border)) 32%, var(--hv-surface-border));
   border-radius: 8px;
-  background: var(--color-raised);
+  background: color-mix(in oklab, var(--hv-tone, var(--hv-surface-card)) 5%, var(--hv-surface-card));
+  box-shadow: var(--hv-surface-shadow);
 }
 .hv-stat-card .hv-stat-value {
-  color: var(--hv-tone, var(--color-text));
+  color: color-mix(in oklab, var(--hv-tone, var(--color-text)) 72%, var(--color-text));
+  font-size: 2em;
+  letter-spacing: -0.025em;
+}
+.hv-stat-card .hv-stat-label::before {
+  content: "";
+  display: none;
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--hv-tone);
+}
+.hv-stat-card:is(.hv-info, .hv-success, .hv-warn, .hv-error, .hv-accent) .hv-stat-label::before {
+  display: block;
 }
 .hv-stat-unit {
-  margin-left: 0.3em;
-  color: var(--color-text-2);
-  font-size: 0.6em;
+  margin-left: 4px;
+  color: var(--hv-ink-muted);
+  font-size: 0.5em;
   font-weight: 500;
+  letter-spacing: 0;
+}
+.hv-stat .hv-stat-unit {
+  font-size: 0.591em;
 }
 .hv-stat-sub {
-  color: var(--color-text-2);
-  font-size: 0.889em;
+  color: var(--hv-ink-muted);
+  font-size: 0.929em;
+  line-height: 1.4;
 }
 .hv-kv {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 4px 14px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 9px 24px;
   margin: 10px 0;
 }
 .hv-kv dt {
-  color: var(--color-text-3);
+  color: var(--hv-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.857em;
+  line-height: 1.6;
 }
 .hv-kv dd {
   min-width: 0;
   margin: 0;
   color: var(--color-text);
+  overflow-wrap: anywhere;
 }
 
 /* Emphasis. */
 .hv-badge {
-  --hv-tone: var(--color-text-3);
+  --hv-tone: initial;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--hv-tone) 35%, transparent);
-  background: color-mix(in srgb, var(--hv-tone) 14%, transparent);
-  color: var(--hv-tone);
-  font-size: 0.815em;
-  font-weight: 600;
-  line-height: calc(var(--hv-line-height) * 1.03);
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--hv-tone) 14%, transparent);
+  color: color-mix(in oklab, var(--hv-tone) 72%, var(--color-text));
+  font-family: var(--font-mono);
+  font-size: 0.821em;
+  font-weight: 500;
   white-space: nowrap;
 }
+.hv-badge:not(.hv-info, .hv-success, .hv-warn, .hv-error, .hv-accent) {
+  background: var(--hv-surface-panel);
+  box-shadow: inset 0 0 0 1px var(--hv-surface-border);
+  color: var(--color-text-2);
+}
 .hv-muted {
-  color: var(--color-text-4);
+  color: var(--hv-ink-muted);
 }
 .hv-mono {
   font-family: var(--font-mono);
-  font-size: 0.9em;
+  font-size: 0.893em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -400,22 +477,22 @@
    on the element, or on a <g> around a whole path — and otherwise from the
    ink that role reads best in. */
 .hv-html svg .hv-node {
-  fill: var(--color-raised);
+  fill: color-mix(in oklab, var(--hv-tone, var(--hv-surface-panel)) 10%, var(--hv-surface-panel));
   stroke: currentColor;
-  color: var(--hv-tone, var(--color-border));
+  color: var(--hv-tone, var(--hv-surface-border));
 }
 .hv-html svg .hv-edge {
   fill: none;
   stroke: currentColor;
-  color: var(--hv-tone, var(--color-text-4));
+  color: var(--hv-tone, var(--hv-ink-muted));
 }
 .hv-html svg .hv-arrow {
   fill: currentColor;
   stroke: none;
-  color: var(--hv-tone, var(--color-text-4));
+  color: var(--hv-tone, var(--hv-ink-muted));
 }
 .hv-html svg .hv-label {
-  color: var(--hv-tone, var(--color-text));
+  color: color-mix(in oklab, var(--hv-tone, var(--color-text)) 72%, var(--color-text));
   font-weight: 600;
 }
 .hv-html svg .hv-dashed {
@@ -423,9 +500,9 @@
 }
 
 /* Tones for hv-callout, hv-badge, hv-stat-card and the diagram roles. These
-   must stay after the components: they carry the same specificity, so source order is the
-   only thing that lets `class="hv-badge hv-error"` win over the component's
-   own default tone. */
+   must stay after the components: they carry the same specificity, so source
+   order is the only thing that lets `class="hv-badge hv-error"` win over the
+   component's own reset to no tone. */
 .hv-info {
   --hv-tone: var(--color-severity-info);
 }

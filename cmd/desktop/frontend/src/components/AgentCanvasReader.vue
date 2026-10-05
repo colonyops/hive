@@ -4,6 +4,7 @@
 import { computed } from 'vue'
 import EmptyState from './ui/EmptyState.vue'
 import InlineError from './ui/InlineError.vue'
+import IconArrowUpRight from '~icons/lucide/arrow-up-right'
 import { useCanvasSettings } from '../stores/useCanvasSettings'
 import { canvasLinkTarget } from '../lib/agentCanvas'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
@@ -63,7 +64,7 @@ function onBodyClick(event: MouseEvent): void {
         :data-testid="`${testid}-block-${block.id}`"
       >
         <template v-if="block.kind === 'markdown' || block.kind === 'html'">
-          <h2 v-if="block.title" class="canvas-block-title mb-2 font-semibold text-text">{{ block.title }}</h2>
+          <h2 v-if="block.title" class="canvas-block-title">{{ block.title }}</h2>
           <!-- eslint-disable vue/no-v-html -- markdown goes through renderGithubMarkdown; html blocks arrive sanitized by canvas.SanitizeHTML in Go -->
           <div
             class="canvas-reading-body text-text-2"
@@ -81,8 +82,11 @@ function onBodyClick(event: MouseEvent): void {
           :title="block.url"
           @click="follow(block.url)"
         >
-          <span class="canvas-link-title truncate text-accent underline underline-offset-2">{{ block.title }}</span>
-          <span class="canvas-link-url truncate font-mono text-text-4">{{ block.url }}</span>
+          <span class="canvas-link-text">
+            <span class="canvas-link-title">{{ block.title }}</span>
+            <span class="canvas-link-url">{{ block.url }}</span>
+          </span>
+          <IconArrowUpRight class="canvas-link-arrow" aria-hidden="true" />
         </button>
       </article>
     </template>
@@ -116,10 +120,17 @@ function onBodyClick(event: MouseEvent): void {
 .canvas-block:first-child {
   padding-top: 0;
 }
-.canvas-block-title,
-.canvas-link-title {
-  font-size: 1em;
-  line-height: var(--hv-line-height);
+/* A block title is an eyebrow over its body, in the voice of the app's
+   section headers, so it never competes with the body's own headings. */
+.canvas-block-title {
+  margin-bottom: 10px;
+  color: var(--hv-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.786em;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
 }
 .canvas-reading-body {
   font-size: var(--hv-font-size);
@@ -150,21 +161,81 @@ function onBodyClick(event: MouseEvent): void {
 .canvas-reading-body.markdown-body :deep(pre) {
   line-height: calc(var(--hv-line-height) * 0.91);
 }
+.canvas-reading-body.markdown-body :deep(:not(pre) > code) {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--hv-surface-panel);
+  color: var(--color-text);
+  font-size: 0.893em;
+}
+.canvas-reading-body.markdown-body :deep(th),
+.canvas-reading-body.markdown-body :deep(td) {
+  padding: 7px 14px 7px 0;
+  border: 0;
+  border-bottom: 1px solid var(--hv-surface-rule);
+  background: transparent;
+}
+.canvas-reading-body.markdown-body :deep(th) {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  border-bottom-color: var(--hv-surface-border);
+  color: var(--hv-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.846em;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.canvas-reading-body.markdown-body :deep(tr) {
+  background: transparent;
+}
 .canvas-link {
   display: flex;
   width: 100%;
   min-width: 0;
   cursor: pointer;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--hv-surface-border);
+  border-radius: 8px;
+  background: var(--hv-surface-card);
+  box-shadow: var(--hv-surface-shadow);
+  color: var(--color-text);
   text-align: left;
+  transition: background-color 150ms ease;
 }
-.canvas-link:hover span:first-child {
-  text-decoration-thickness: 2px;
+.canvas-link:hover,
+.canvas-link:focus-visible {
+  background: color-mix(in oklab, var(--hv-surface-panel) 60%, var(--hv-surface-card));
+}
+.canvas-link-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+.canvas-link-title {
+  font-weight: 500;
+  line-height: 1.4;
 }
 .canvas-link-url {
-  font-size: 0.778em;
-  line-height: var(--hv-line-height);
+  overflow: hidden;
+  color: var(--hv-ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.857em;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvas-link-arrow {
+  flex-shrink: 0;
+  color: var(--hv-ink-muted);
+  transition: color 150ms ease;
+}
+.canvas-link:hover .canvas-link-arrow,
+.canvas-link:focus-visible .canvas-link-arrow {
+  color: var(--color-text);
 }
 </style>

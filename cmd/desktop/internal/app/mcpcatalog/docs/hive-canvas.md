@@ -91,7 +91,8 @@ left-ruled block for something the reader must not miss).
 **Data** — `hv-stat-card` is one figure tile: it holds an `hv-stat-value`, an
 `hv-stat-label`, and optionally an `hv-stat-sub` (a secondary line: "0 of 2",
 "confirmed on main"). Put an `hv-stat-unit` inside the value for a unit smaller
-than the figure ("125 days"). A tone on the card colours the figure and its
+than the figure ("125 days"). The label always renders above the figure,
+whatever order you write the parts in. A tone on the card colours the figure and its
 border; reserve one for the number that needs attention. `hv-stat` is the
 same layout without the card chrome or tone, for a figure inside a container
 of your own. `hv-kv` on a `<dl>` lays its `<dt>`/`<dd>` pairs out as an aligned
