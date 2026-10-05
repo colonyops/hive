@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useCanvasTypography } from '../../stores/useCanvasTypography'
+import { useCanvasSettings } from '../../stores/useCanvasSettings'
 
-const { fontSizePx, lineHeight } = useCanvasTypography()
+const { fontSizePx, lineHeight } = useCanvasSettings()
 const previewStyle = computed(() => ({
   '--hv-font-size': `${fontSizePx.value}px`,
   '--hv-line-height': String(lineHeight.value),

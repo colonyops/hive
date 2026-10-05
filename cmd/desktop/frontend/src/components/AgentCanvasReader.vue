@@ -4,7 +4,7 @@
 import { computed } from 'vue'
 import EmptyState from './ui/EmptyState.vue'
 import InlineError from './ui/InlineError.vue'
-import { useCanvasTypography } from '../stores/useCanvasTypography'
+import { useCanvasSettings } from '../stores/useCanvasSettings'
 import { canvasLinkTarget } from '../lib/agentCanvas'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
 import type { CanvasBlock, WorkspaceCanvas, WorkspaceCanvasMeta } from '../lib/agentWorkspacesClient'
@@ -20,7 +20,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'open-url': [url: string]; 'open-canvas': [name: string] }>()
 
-const { fontSizePx, lineHeight } = useCanvasTypography()
+const { fontSizePx, lineHeight } = useCanvasSettings()
 const readerStyle = computed(() => ({
   '--hv-font-size': `${fontSizePx.value}px`,
   '--hv-line-height': String(lineHeight.value),

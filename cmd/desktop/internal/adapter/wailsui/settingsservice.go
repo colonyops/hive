@@ -75,6 +75,7 @@ type AppearanceSettings struct {
 	// from those names to CSS values and heals unknown values.
 	CanvasFontSize    string `json:"canvasFontSize"`
 	CanvasLineSpacing string `json:"canvasLineSpacing"`
+	CanvasPageWidth   string `json:"canvasPageWidth"`
 }
 
 // KeybindingSettings carries keyboard shortcut overrides keyed by command id.
@@ -119,6 +120,7 @@ func (s *SettingsService) AppearanceSettings(ctx context.Context) (AppearanceSet
 		TerminalPoolSize:       current.TerminalPoolSize,
 		CanvasFontSize:         current.CanvasFontSize,
 		CanvasLineSpacing:      current.CanvasLineSpacing,
+		CanvasPageWidth:        current.CanvasPageWidth,
 	}, nil
 }
 
@@ -192,6 +194,10 @@ func (s *SettingsService) SetCanvasFontSize(ctx context.Context, size string) er
 
 func (s *SettingsService) SetCanvasLineSpacing(ctx context.Context, spacing string) error {
 	return s.settings.SetCanvasLineSpacing(ctx, spacing)
+}
+
+func (s *SettingsService) SetCanvasPageWidth(ctx context.Context, width string) error {
+	return s.settings.SetCanvasPageWidth(ctx, width)
 }
 
 func (s *SettingsService) NotificationSettings(ctx context.Context) (NotificationSettings, error) {

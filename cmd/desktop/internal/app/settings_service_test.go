@@ -188,6 +188,7 @@ func TestSettingsServiceAppearanceSettingsDefaultsToUnset(t *testing.T) {
 	require.Equal(t, settings.DefaultTerminalFontSizePx, got.TerminalFontSizePx)
 	require.Empty(t, got.CanvasFontSize)
 	require.Empty(t, got.CanvasLineSpacing)
+	require.Empty(t, got.CanvasPageWidth)
 	require.True(t, got.TerminalShowWindows, "the terminal window listing ships on")
 	require.True(t, got.TerminalShowStatusBar, "the session status bar ships on")
 	require.Equal(t, 3, got.TerminalPoolSize, "the attach pool ships at three sessions")
@@ -204,6 +205,7 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 	require.NoError(t, service.SetTerminalFontSize(t.Context(), 14))
 	require.NoError(t, service.SetCanvasFontSize(t.Context(), "xl"))
 	require.NoError(t, service.SetCanvasLineSpacing(t.Context(), "relaxed"))
+	require.NoError(t, service.SetCanvasPageWidth(t.Context(), "full"))
 	require.NoError(t, service.SetTerminalShowWindows(t.Context(), false))
 	require.NoError(t, service.SetTerminalPoolSize(t.Context(), 5))
 
@@ -213,6 +215,7 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 	require.Equal(t, 14, got.Appearance.TerminalFontSize)
 	require.Equal(t, "xl", got.Appearance.CanvasFontSize)
 	require.Equal(t, "relaxed", got.Appearance.CanvasLineSpacing)
+	require.Equal(t, "full", got.Appearance.CanvasPageWidth)
 	require.False(t, got.Appearance.TerminalShowWindows)
 	require.Equal(t, 5, got.Appearance.TerminalPoolSize)
 	require.Equal(t, 5*time.Minute, got.Polling.Interval.Duration())
@@ -224,6 +227,7 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 	require.Equal(t, 14, roundTripped.TerminalFontSizePx, "one appearance setter must not clobber the other field")
 	require.Equal(t, "xl", roundTripped.CanvasFontSize)
 	require.Equal(t, "relaxed", roundTripped.CanvasLineSpacing)
+	require.Equal(t, "full", roundTripped.CanvasPageWidth)
 	require.False(t, roundTripped.TerminalShowWindows)
 	require.Equal(t, 5, roundTripped.TerminalPoolSize)
 }

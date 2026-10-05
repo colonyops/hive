@@ -119,10 +119,11 @@ type Appearance struct {
 	// is carried verbatim and healed by the frontend: anything outside 1-6 reads
 	// as the default, 3.
 	TerminalPoolSize int `yaml:"terminal_pool_size" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_POOL_SIZE"`
-	// CanvasFontSize and CanvasLineSpacing are preset names interpreted by the
-	// frontend. Empty takes the shipped defaults.
+	// CanvasFontSize, CanvasLineSpacing and CanvasPageWidth are preset names
+	// interpreted by the frontend. Empty takes the shipped defaults.
 	CanvasFontSize    string `yaml:"canvas_font_size,omitempty"    env:"HIVE_DESKTOP_APPEARANCE_CANVAS_FONT_SIZE"`
 	CanvasLineSpacing string `yaml:"canvas_line_spacing,omitempty" env:"HIVE_DESKTOP_APPEARANCE_CANVAS_LINE_SPACING"`
+	CanvasPageWidth   string `yaml:"canvas_page_width,omitempty"   env:"HIVE_DESKTOP_APPEARANCE_CANVAS_PAGE_WIDTH"`
 }
 
 // ProfileSettings configures the profile rail. Order names flow ids in the

@@ -60,6 +60,10 @@ export function SetCanvasLineSpacing(spacing: string): $CancellablePromise<void>
     return $Call.ByID(3911754413, spacing);
 }
 
+export function SetCanvasPageWidth(width: string): $CancellablePromise<void> {
+    return $Call.ByID(2718406111, width);
+}
+
 /**
  * SetEditor persists the editor command; empty clears it.
  */

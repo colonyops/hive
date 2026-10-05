@@ -88,6 +88,7 @@ type AppearanceSettings struct {
 	TerminalPoolSize       int
 	CanvasFontSize         string
 	CanvasLineSpacing      string
+	CanvasPageWidth        string
 }
 
 func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error) {
@@ -110,6 +111,7 @@ func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error
 		TerminalPoolSize:       cfg.Appearance.TerminalPoolSize,
 		CanvasFontSize:         cfg.Appearance.CanvasFontSize,
 		CanvasLineSpacing:      cfg.Appearance.CanvasLineSpacing,
+		CanvasPageWidth:        cfg.Appearance.CanvasPageWidth,
 	}, nil
 }
 
@@ -216,6 +218,14 @@ func (s *SettingsService) SetCanvasFontSize(_ context.Context, size string) erro
 func (s *SettingsService) SetCanvasLineSpacing(_ context.Context, spacing string) error {
 	_, err := s.store.Update(func(current *settings.Settings) error {
 		current.Appearance.CanvasLineSpacing = spacing
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
+}
+
+func (s *SettingsService) SetCanvasPageWidth(_ context.Context, width string) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Appearance.CanvasPageWidth = width
 		return nil
 	})
 	return Wrap(err, KindInternal, "saving settings")

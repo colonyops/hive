@@ -27,21 +27,8 @@ vi.mock('@wailsio/runtime', () => ({
   Clipboard: { SetText: mocks.SetText },
 }))
 
-const settingsBindings = vi.hoisted(() => ({
-  AppearanceSettings: vi.fn(),
-  SetCanvasFontSize: vi.fn(),
-  SetCanvasLineSpacing: vi.fn(),
-}))
-vi.mock(
-  '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice',
-  () => settingsBindings,
-)
-
 beforeEach(() => {
   vi.clearAllMocks()
-  settingsBindings.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' })
-  settingsBindings.SetCanvasFontSize.mockResolvedValue(undefined)
-  settingsBindings.SetCanvasLineSpacing.mockResolvedValue(undefined)
   mocks.Info.mockResolvedValue({
     dataDir: { path: '/home/u/.local/share/hive', exists: true, overridden: false },
     configDir: { path: '/home/u/.config/hive/desktop', exists: true, overridden: false },
@@ -54,25 +41,6 @@ beforeEach(() => {
 })
 
 describe('AgentsSettingsView', () => {
-  it('changes the global canvas text size and line spacing', async () => {
-    settingsBindings.AppearanceSettings.mockResolvedValue({ canvasFontSize: 'small', canvasLineSpacing: 'compact' })
-    const wrapper = mount(AgentsSettingsView)
-    await flushPromises()
-
-    expect(wrapper.get('[data-testid="settings-canvas-font-size-small"]').attributes('aria-pressed')).toBe('true')
-    expect(wrapper.get('[data-testid="settings-canvas-line-spacing-compact"]').attributes('aria-pressed')).toBe('true')
-
-    await wrapper.get('[data-testid="settings-canvas-font-size-xl"]').trigger('click')
-    await wrapper.get('[data-testid="settings-canvas-line-spacing-relaxed"]').trigger('click')
-    await flushPromises()
-
-    expect(settingsBindings.SetCanvasFontSize).toHaveBeenCalledWith('xl')
-    expect(settingsBindings.SetCanvasLineSpacing).toHaveBeenCalledWith('relaxed')
-    const previewStyle = (wrapper.get('[data-testid="settings-canvas-preview-content"]').element as HTMLElement).style
-    expect(previewStyle.getPropertyValue('--hv-font-size')).toBe('18px')
-    expect(previewStyle.getPropertyValue('--hv-line-height')).toBe('1.85')
-  })
-
   // The sidebar's root-unavailable message points here, so the resolved root
   // has to be readable from this pane.
   it('shows the resolved workspace root and opens it', async () => {

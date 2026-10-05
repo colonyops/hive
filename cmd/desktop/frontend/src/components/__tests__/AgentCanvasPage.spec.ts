@@ -33,6 +33,7 @@ const settingsBindings = vi.hoisted(() => ({
   AppearanceSettings: vi.fn(),
   SetCanvasFontSize: vi.fn(),
   SetCanvasLineSpacing: vi.fn(),
+  SetCanvasPageWidth: vi.fn(),
 }))
 vi.mock(
   '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice',
@@ -161,6 +162,23 @@ describe('AgentCanvasPage', () => {
     expect(wrapper.get('[data-testid="canvas-page-browse-plan"]').attributes('aria-current')).toBe('true')
     expect(wrapper.get('[data-testid="canvas-page-browse-perf-report"]').attributes('aria-current')).toBeUndefined()
 
+    wrapper.unmount()
+  })
+
+  it('lays the canvas out at the narrow measure until the setting says otherwise', async () => {
+    const { wrapper } = await mountPage()
+    expect(wrapper.get('[data-testid="canvas-page-measure"]').classes()).toContain('max-w-3xl')
+    wrapper.unmount()
+  })
+
+  it('lets the full-page width setting widen the measure', async () => {
+    settingsBindings.AppearanceSettings.mockResolvedValue({
+      canvasFontSize: '',
+      canvasLineSpacing: '',
+      canvasPageWidth: 'full',
+    })
+    const { wrapper } = await mountPage()
+    expect(wrapper.get('[data-testid="canvas-page-measure"]').classes()).toContain('max-w-none')
     wrapper.unmount()
   })
 

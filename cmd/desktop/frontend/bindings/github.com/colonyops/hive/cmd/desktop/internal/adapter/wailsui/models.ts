@@ -91,6 +91,7 @@ export interface AppearanceSettings {
      */
     "canvasFontSize": string;
     "canvasLineSpacing": string;
+    "canvasPageWidth": string;
 }
 
 /**
