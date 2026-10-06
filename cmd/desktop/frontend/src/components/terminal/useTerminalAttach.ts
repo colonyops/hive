@@ -36,6 +36,14 @@ export function useTerminalAttach(options: {
   )
   const routeWindow = computed(() => (typeof route.query.window === 'string' ? route.query.window : ''))
 
+  function terminalQuery(slug: string, window = ''): Record<string, string> {
+    const query: Record<string, string> = {}
+    if (window) query.window = window
+    const canvas = route.name === 'terminal' ? route.query.canvas : undefined
+    if (canvas !== undefined) query.canvas = slug === routeSlug.value && typeof canvas === 'string' ? canvas : '1'
+    return query
+  }
+
   // Entering bare /terminal re-attaches this instead of landing on the picker.
   const restore = useStorage('hive.terminal.restore', { slug: '', window: '' })
 
@@ -111,7 +119,7 @@ export function useTerminalAttach(options: {
     if (!slug || route.name !== 'terminal' || route.params.slug !== slug) return
     restore.value = { slug, window: windowId }
     if (windowId && routeWindow.value !== windowId) {
-      void router.replace({ name: 'terminal', params: { slug }, query: { window: windowId } })
+      void router.replace({ name: 'terminal', params: { slug }, query: terminalQuery(slug, windowId) })
     }
   })
 
@@ -138,7 +146,7 @@ export function useTerminalAttach(options: {
       return
     }
     restore.value = { slug: renamed.slug, window: '' }
-    void router.replace({ name: 'terminal', params: { slug: renamed.slug } })
+    void router.replace({ name: 'terminal', params: { slug: renamed.slug }, query: terminalQuery(renamed.slug) })
   })
 
   // The App-level palette's window rows read this projection rather than
@@ -182,12 +190,18 @@ export function useTerminalAttach(options: {
       else current.value?.focusActive()
       return
     }
-    void router.push({ name: 'terminal', params: { slug } })
+    void router.push({ name: 'terminal', params: { slug }, query: terminalQuery(slug) })
   }
 
   async function goToWindow(row: TerminalSessionRow, win: TreeWindowRow): Promise<void> {
     if (win.live && row.slug === activeSlug.value) await current.value?.select(win.windowId)
-    else void router.push({ name: 'terminal', params: { slug: row.slug }, query: { window: win.windowId } })
+    else {
+      void router.push({
+        name: 'terminal',
+        params: { slug: row.slug },
+        query: terminalQuery(row.slug, win.windowId),
+      })
+    }
   }
 
   function closeSession(): void {
@@ -220,7 +234,7 @@ export function useTerminalAttach(options: {
     // Nothing the sweep watches moved when a resume created the tmux session.
     if (tree.chatSlugs.value.has(slug)) tree.sweepListings()
     if (slug !== activeSlug.value) {
-      void router.push({ name: 'terminal', params: { slug } })
+      void router.push({ name: 'terminal', params: { slug }, query: terminalQuery(slug) })
       return
     }
     const pooled = pool.pool.get(slug)

@@ -2218,6 +2218,18 @@ policy of its own. `renderGithubMarkdown` is untouched — it is shared with
 untrusted GitHub bodies and stays as strict as they require, which is why an
 html block renders under its own `.hv-html` scope instead.
 
+A top-level **`mermaid` fence in a markdown block** renders as a diagram. The
+canvas reader splits these fences from the markdown it sends through the shared
+GitHub renderer, so other uses of that renderer still show Mermaid as code. The
+frontend loads Mermaid only when a canvas contains a diagram, serializes renders
+because Mermaid's configuration is process-global, and redraws when the app
+theme changes. Each SVG uses its `viewBox` as an unbounded pan-and-zoom plane;
+the viewport fits the diagram on load and caps tall diagrams instead of making
+the document absorb their full height. Rendering uses `securityLevel: strict`,
+disables HTML labels and interactive links, and limits source size and edge
+count. A parse failure stays local to that fence, and canvas Markdown export
+preserves the original source.
+
 **The allowlists bound what a block can reach, and nothing else**
 (ADR a-canvas-html-block-is-restricted-by-what-it-can-reach-not-by-how-it-looks).
 A name is refused when it executes, navigates, loads a document, or parses

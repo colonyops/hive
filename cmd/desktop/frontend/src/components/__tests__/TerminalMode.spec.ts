@@ -3826,7 +3826,8 @@ describe('TerminalMode', () => {
     const canvas = { workspace: 'hay-kot/hive', session: '1' }
 
     async function mountWithCanvas(path: string) {
-      mocks.useTerminalWindows.mockReturnValue(fakeSession())
+      const session = fakeSession()
+      mocks.useTerminalWindows.mockReturnValue(session)
       const router = createAppRouter(createMemoryHistory())
       await router.push(path)
       await router.isReady()
@@ -3835,7 +3836,7 @@ describe('TerminalMode', () => {
         global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
       })
       await flushPromises()
-      return { wrapper, router }
+      return { wrapper, router, session }
     }
 
     it('stays closed until the route asks for it', async () => {
@@ -3856,6 +3857,23 @@ describe('TerminalMode', () => {
       expect(router.currentRoute.value.query.canvas).toBeUndefined()
       expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
       expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)
+
+      wrapper.unmount()
+    })
+
+    it('keeps the pane mounted while the active terminal window changes', async () => {
+      const { wrapper, router, session } = await mountWithCanvas(
+        '/terminal/hive-fix-parser?canvas=mermaid-architecture',
+      )
+      const pane = wrapper.get('[data-testid="agent-canvas-pane"]').element
+      const visited: Array<Record<string, unknown>> = []
+      router.afterEach((to) => visited.push({ ...to.query }))
+
+      session.activeWindowId.value = '@2'
+      await flushPromises()
+
+      expect(visited).toEqual([{ window: '@2', canvas: 'mermaid-architecture' }])
+      expect(wrapper.get('[data-testid="agent-canvas-pane"]').element).toBe(pane)
 
       wrapper.unmount()
     })

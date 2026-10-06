@@ -37,10 +37,9 @@ export function useTerminalCanvas(target: Ref<TerminalCanvasTarget | null>, acti
     { immediate: true },
   )
 
-  // Code's own route writes rebuild the query: the active window's mirror, a
-  // rename, a switch to another session. A close changes nothing but ?canvas,
-  // so any other write that drops it gets it back, with the pinned name only
-  // while the session is the same one.
+  // A route write outside useTerminalAttach can still rebuild the query. A
+  // close changes nothing but ?canvas, so any other write that drops it gets
+  // it back, with the pinned name only while the session is the same one.
   watch(
     () => ({
       slug: route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : '',

@@ -26,6 +26,11 @@ vi.mock('@wailsio/runtime', () => ({
   Dialogs: { SaveFile: runtime.saveFile },
 }))
 
+const mermaid = vi.hoisted(() => ({
+  render: vi.fn().mockResolvedValue('<svg viewBox="0 0 100 40"><text>Request</text></svg>'),
+}))
+vi.mock('../../lib/mermaid', () => ({ renderMermaid: mermaid.render }))
+
 const settingsBindings = vi.hoisted(() => ({
   AppearanceSettings: vi.fn(),
   SetCanvasFontSize: vi.fn(),
@@ -82,6 +87,7 @@ describe('AgentCanvasPane', () => {
     settingsBindings.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' })
     settingsBindings.SetCanvasFontSize.mockResolvedValue(undefined)
     settingsBindings.SetCanvasLineSpacing.mockResolvedValue(undefined)
+    mermaid.render.mockReset().mockResolvedValue('<svg viewBox="0 0 100 40"><text>Request</text></svg>')
   })
 
   // Agent-authored markdown is untrusted: raw HTML must arrive escaped, never
@@ -119,6 +125,45 @@ describe('AgentCanvasPane', () => {
     expect(rendered.find('.hv-stat-value').text()).toBe('42')
     expect(rendered.classes()).not.toContain('markdown-body')
     expect(wrapper.get('[data-testid="agent-canvas-block-stats"] h2').text()).toBe('Run')
+  })
+
+  it('renders a fenced Mermaid diagram in markdown as a themed SVG', async () => {
+    const wrapper = await mountPane(
+      fakeCanvasClient([block({ id: 'flow', title: 'Request path', body: '```mermaid\nflowchart LR\nA --> B\n```' })]),
+    )
+
+    expect(mermaid.render).toHaveBeenCalledWith(
+      'flowchart LR\nA --> B\n',
+      expect.objectContaining({ darkMode: true, text: '#e9edf4', accent: '#f5b23f' }),
+    )
+    const diagram = wrapper.get('[data-testid="agent-canvas-block-flow-mermaid-0"]')
+    const fittedViewBox = diagram.get('svg').attributes('viewBox')
+    expect(diagram.get('[data-testid="agent-canvas-block-flow-mermaid-0-viewport"]').attributes('style')).toContain(
+      'height: 220px',
+    )
+    expect(diagram.text()).toContain('Request')
+
+    await diagram.get('[data-testid="agent-canvas-block-flow-mermaid-0-zoom-in"]').trigger('click')
+    expect(diagram.get('[data-testid="agent-canvas-block-flow-mermaid-0-zoom"]').text()).toBe('125%')
+    expect(diagram.get('svg').attributes('viewBox')).not.toBe(fittedViewBox)
+
+    await diagram.get('[data-testid="agent-canvas-block-flow-mermaid-0-fit"]').trigger('click')
+    expect(diagram.get('[data-testid="agent-canvas-block-flow-mermaid-0-zoom"]').text()).toBe('100%')
+    expect(diagram.get('svg').attributes('viewBox')).toBe(fittedViewBox)
+    expect(wrapper.get('[data-testid="agent-canvas-block-flow"] h2').text()).toBe('Request path')
+  })
+
+  it('shows a Mermaid parse error without breaking the surrounding markdown', async () => {
+    mermaid.render.mockRejectedValueOnce(new Error('Parse error on line 2\nmore detail'))
+    const wrapper = await mountPane(
+      fakeCanvasClient([block({ id: 'flow', body: 'Before\n\n```mermaid\nnot a diagram\n```\n\nAfter' })]),
+    )
+
+    expect(wrapper.get('[data-testid="agent-canvas-block-flow-mermaid-1-error"]').text()).toBe(
+      'Could not render Mermaid diagram: Parse error on line 2',
+    )
+    expect(wrapper.get('[data-testid="agent-canvas-block-flow"]').text()).toContain('Before')
+    expect(wrapper.get('[data-testid="agent-canvas-block-flow"]').text()).toContain('After')
   })
 
   it('applies the global canvas reading settings to markdown and html without pane controls', async () => {

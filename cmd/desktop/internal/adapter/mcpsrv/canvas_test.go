@@ -169,11 +169,12 @@ func TestCanvasRoundTrip(t *testing.T) {
 	call(t, session, "put_blocks", map[string]any{
 		"session": id, "canvas": "report", "blocks": []map[string]any{
 			{"id": "a", "kind": "markdown", "body": "x"},
-			{"id": "b", "kind": "link", "title": "The PR", "url": "https://example.com/pr/1"},
+			{"id": "b", "kind": "markdown", "body": "```mermaid\nflowchart LR\nA --> B\n```"},
+			{"id": "c", "kind": "link", "title": "The PR", "url": "https://example.com/pr/1"},
 		},
 	}, &wrote)
 	assert.Equal(t, "report", wrote.Name)
-	assert.Equal(t, 2, wrote.BlockCount)
+	assert.Equal(t, 3, wrote.BlockCount)
 	assert.Nil(t, wrote.Block, "a batch echoes no single block")
 	call(t, session, "list_canvases", map[string]any{"session": id}, &listed)
 	require.Len(t, listed.Canvases, 2)

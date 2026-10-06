@@ -161,3 +161,32 @@ export function renderGithubMarkdown(src: string): string {
   if (!src.trim()) return ''
   return md.render(src)
 }
+
+export type CanvasMarkdownPart = { kind: 'html'; html: string } | { kind: 'mermaid'; source: string }
+
+function isTopLevelMermaidFence(token: Token): boolean {
+  return token.type === 'fence' && token.level === 0 && token.info.trim().toLowerCase() === 'mermaid'
+}
+
+export function renderCanvasMarkdown(src: string): CanvasMarkdownPart[] {
+  if (!src.trim()) return []
+
+  const env = {}
+  const tokens = md.parse(src, env)
+  const parts: CanvasMarkdownPart[] = []
+  let htmlStart = 0
+
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index]
+    if (!isTopLevelMermaidFence(token)) continue
+
+    const html = md.renderer.render(tokens.slice(htmlStart, index), md.options, env)
+    if (html) parts.push({ kind: 'html', html })
+    parts.push({ kind: 'mermaid', source: token.content })
+    htmlStart = index + 1
+  }
+
+  const html = md.renderer.render(tokens.slice(htmlStart), md.options, env)
+  if (html) parts.push({ kind: 'html', html })
+  return parts
+}

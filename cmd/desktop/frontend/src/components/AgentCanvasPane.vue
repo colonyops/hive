@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// A workspace's canvases: agent-written markdown, html and link blocks,
+// A workspace's canvases: agent-written markdown, Mermaid, html and link blocks,
 // read-only in the webview — writes arrive only through the hive-canvas MCP
 // tools, so this pane re-reads on canvas:updated rather than ever mutating
 // (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).

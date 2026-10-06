@@ -2,13 +2,13 @@
 // One canvas rendered block by block. The pane and the full-page view share
 // it, so a canvas reads the same in both and only the width differs.
 import { computed } from 'vue'
+import CanvasMarkdown from './CanvasMarkdown.vue'
 import EmptyState from './ui/EmptyState.vue'
 import InlineError from './ui/InlineError.vue'
 import IconArrowUpRight from '~icons/lucide/arrow-up-right'
 import { useCanvasSettings } from '../stores/useCanvasSettings'
 import { canvasLinkTarget } from '../lib/agentCanvas'
-import { renderGithubMarkdown } from '../lib/githubMarkdown'
-import type { CanvasBlock, WorkspaceCanvas, WorkspaceCanvasMeta } from '../lib/agentWorkspacesClient'
+import type { WorkspaceCanvas, WorkspaceCanvasMeta } from '../lib/agentWorkspacesClient'
 
 const props = defineProps<{
   canvas: WorkspaceCanvas | null
@@ -26,15 +26,6 @@ const readerStyle = computed(() => ({
   '--hv-font-size': `${fontSizePx.value}px`,
   '--hv-line-height': String(lineHeight.value),
 }))
-
-// Both body kinds are safe for v-html, by two different routes. Markdown goes
-// through renderGithubMarkdown, which escapes raw HTML and drops unsafe link
-// schemes. An html block already arrived sanitized: canvas.SanitizeHTML runs on
-// the Go read path, so there is exactly one policy and the reader holds none of
-// it (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).
-function renderBody(block: CanvasBlock): string {
-  return block.kind === 'html' ? block.body : renderGithubMarkdown(block.body)
-}
 
 const canvasNames = computed(() => new Set(props.metas.map((meta) => meta.name)))
 
@@ -65,13 +56,21 @@ function onBodyClick(event: MouseEvent): void {
       >
         <template v-if="block.kind === 'markdown' || block.kind === 'html'">
           <h2 v-if="block.title" class="canvas-block-title">{{ block.title }}</h2>
-          <!-- eslint-disable vue/no-v-html -- markdown goes through renderGithubMarkdown; html blocks arrive sanitized by canvas.SanitizeHTML in Go -->
+          <CanvasMarkdown
+            v-if="block.kind === 'markdown'"
+            class="canvas-reading-body text-text-2 markdown-body"
+            :style="readerStyle"
+            :source="block.body"
+            :testid="`${testid}-block-${block.id}`"
+            @follow="follow"
+          />
+          <!-- eslint-disable vue/no-v-html -- html blocks arrive sanitized by canvas.SanitizeHTML in Go -->
           <div
-            class="canvas-reading-body text-text-2"
-            :class="block.kind === 'html' ? 'hv-html' : 'markdown-body'"
+            v-else
+            class="canvas-reading-body text-text-2 hv-html"
             :style="readerStyle"
             @click="onBodyClick"
-            v-html="renderBody(block)"
+            v-html="block.body"
           />
           <!-- eslint-enable vue/no-v-html -->
         </template>

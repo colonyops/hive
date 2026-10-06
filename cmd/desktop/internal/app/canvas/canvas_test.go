@@ -205,6 +205,11 @@ func TestMarkdownRendersTitleBlocksAndLinks(t *testing.T) {
 		"no canvas title means no heading")
 }
 
+func TestMarkdownPreservesMermaidFence(t *testing.T) {
+	body := "Before\n\n```mermaid\nflowchart LR\nA --> B\n```\n\nAfter"
+	assert.Equal(t, body+"\n", Markdown(Canvas{Blocks: []Block{{Kind: KindMarkdown, Body: body}}}))
+}
+
 // An export leaves the app, so it carries the sanitized markup rather than
 // what the agent wrote — the file is opened elsewhere, by something with no
 // policy of its own.

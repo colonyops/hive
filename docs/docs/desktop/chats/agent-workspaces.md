@@ -101,7 +101,7 @@ The built-in Hive package covers:
 Hive includes these MCP entries:
 
 - **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default.
-- **Hive Canvas** for durable Markdown, HTML, and links beside a chat.
+- **Hive Canvas** for durable Markdown, Mermaid diagrams, HTML, and links beside a chat.
 - **Playwright** for browser automation. It requires Node.js and a Playwright browser.
 - **Chrome DevTools** for a running Chrome browser. It requires Node.js 20.19 or newer and Chrome.
 
@@ -109,9 +109,9 @@ You can add HTTP, SSE, and stdio servers to the shared MCP library, then enable 
 
 ## Canvases
 
-An agent with **Hive Canvas** enabled can publish named output beside its chat. Canvases remain available after the chat ends and can contain Markdown, sanitized HTML, and links.
+An agent with **Hive Canvas** enabled can publish named output beside its chat. Canvases remain available after the chat ends and can contain Markdown, Mermaid diagrams, sanitized HTML, and links. Use a standalone `mermaid` fence inside a Markdown block. Mermaid diagrams follow the current theme. Drag a diagram to pan, use its controls to zoom or fit it, or hold Control/Command while scrolling to zoom around the pointer. An invalid diagram shows an error in place without hiding the rest of the canvas.
 
-Use the canvas pane to search previous output, copy a canvas as Markdown, save it to a file, or open its links. **Settings ▸ Canvas** changes text size and line spacing for every canvas, in Chats and in Code. Copy and save keep the original Markdown.
+Use the canvas pane to search previous output, copy a canvas as Markdown, save it to a file, or open its links. **Settings ▸ Canvas** changes text size and line spacing for every canvas, in Chats and in Code. Copy and save preserve Mermaid source in a fenced `mermaid` block.
 
 To read a canvas full page, use **Open full page** in the pane, pick the canvas in the command palette, or press <kbd>⌘⇧P</kbd> (Windows/Linux: <kbd>Ctrl+Shift+P</kbd>) or <kbd>g</kbd> then <kbd>v</kbd>. The full-page view opens over the current view and lists the workspace's canvases in a sidebar. Its picker also lists the repositories whose [Code sessions wrote canvases](../code/terminal-mode.md#canvases). A Markdown link whose target is the name of another canvas in the workspace opens that canvas in place. The text runs at a narrow reading width by default. Change it under **Text width** in Settings ▸ Canvas: **Wide** fits HTML laid out in columns, and **Full** runs to the edges of the view. Press <kbd>Esc</kbd> or <kbd>⌘⇧P</kbd> again to go back. A <kbd>g</kbd> sequence does not start while the view is open. A repository with no canvases yet links to the setup in **Settings ▸ MCP servers**.
 

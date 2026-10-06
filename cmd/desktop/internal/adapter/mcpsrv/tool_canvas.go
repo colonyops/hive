@@ -21,8 +21,9 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 			"keeping its position, while a new id appends at the end — stable ids are how you revise a status line " +
 			"instead of stacking copies; before places or moves a block ahead of an existing one instead. kind is " +
 			"markdown (body required, title optional; rendered as GitHub-flavored markdown with raw HTML escaped, not " +
-			"rendered), html (body required; semantic markup laid out with the app's hv- classes — read the hive-canvas " +
-			"docs first, since an unknown tag, class or attribute is refused rather than dropped) or link (title and url " +
+			"rendered; a standalone fenced mermaid code block renders as a diagram), html (body required; semantic markup " +
+			"laid out with the app's hv- classes — read the hive-canvas docs first, since an unknown tag, class or attribute is " +
+			"refused rather than dropped) or link (title and url " +
 			"required; http, https or mailto only). Answers with the canvas metadata and the stored block; read_canvas " +
 			"returns the full surface. The pane does not open by itself: a write while " +
 			"it is closed lights an unseen dot on the pane's toggle — use open_canvas when the result deserves the " +
@@ -116,7 +117,7 @@ type putBlockInput struct {
 	ID          string `json:"id"                    jsonschema:"Your name for the block. Reusing an id updates that block in place; a new id appends."`
 	Kind        string `json:"kind"                  jsonschema:"markdown, html or link."`
 	Title       string `json:"title,omitempty"       jsonschema:"Heading shown above a markdown or html body (optional); the visible text of a link (required)."`
-	Body        string `json:"body,omitempty"        jsonschema:"The markdown source of a markdown block, or the markup of an html block."`
+	Body        string `json:"body,omitempty"        jsonschema:"The markdown source of a markdown block, which may include standalone fenced mermaid diagrams, or the markup of an html block."`
 	URL         string `json:"url,omitempty"         jsonschema:"The target of a link block; http, https or mailto only."`
 }
 
@@ -124,7 +125,7 @@ type batchBlockInput struct {
 	ID    string `json:"id"              jsonschema:"Your name for the block. Reusing an id updates that block in place; a new id appends."`
 	Kind  string `json:"kind"            jsonschema:"markdown, html or link."`
 	Title string `json:"title,omitempty" jsonschema:"Heading shown above a markdown or html body (optional); the visible text of a link (required)."`
-	Body  string `json:"body,omitempty"  jsonschema:"The markdown source of a markdown block, or the markup of an html block."`
+	Body  string `json:"body,omitempty"  jsonschema:"The markdown source of a markdown block, which may include standalone fenced mermaid diagrams, or the markup of an html block."`
 	URL   string `json:"url,omitempty"   jsonschema:"The target of a link block; http, https or mailto only."`
 }
 

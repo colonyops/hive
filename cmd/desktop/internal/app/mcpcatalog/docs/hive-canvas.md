@@ -24,7 +24,8 @@ artifact (`release-notes`, `perf-report`), give each a display title, and
 they outlive the conversation that made them. Blocks are:
 
 - **markdown** — a title (optional) and a body, rendered as GitHub-flavored
-  markdown. Raw HTML in the body is escaped, not rendered.
+  markdown. Raw HTML in the body is escaped, not rendered. A standalone
+  `mermaid` fence renders as a diagram that follows the app theme.
 - **html** — a title (optional) and a body of markup, for layout markdown
   cannot express: a row of stat tiles, a two-column comparison, a card grid,
   or a drawn diagram. See [Writing an html block](#writing-an-html-block).
@@ -34,6 +35,30 @@ they outlive the conversation that made them. Blocks are:
 Block ids are the agent's own: reusing an id updates that block in place,
 which is how a status line is revised instead of duplicated; a `before`
 anchor places or moves a block ahead of an existing one.
+
+## Writing a Mermaid diagram
+
+Put a standalone `mermaid` fence inside a markdown block:
+
+````markdown
+```mermaid
+flowchart LR
+  Poller --> Store
+  Store -. re-read .-> Poller
+```
+````
+
+Hive renders diagrams with Mermaid's strict security mode. Diagram scripts,
+HTML labels and interactive links stay disabled. A diagram that does not parse
+shows an error in place without breaking the surrounding markdown. Theme
+changes redraw the diagram with the current canvas colours.
+
+Each diagram sits in a pan-and-zoom viewport. Drag to pan, use the controls to
+zoom or fit the whole diagram, or hold Control/Command while scrolling to zoom
+around the pointer.
+
+Copy and save preserve the source fence, so Markdown viewers with Mermaid
+support can render the exported diagram too.
 
 ## Writing an html block
 

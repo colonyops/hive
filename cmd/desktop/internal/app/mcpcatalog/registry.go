@@ -33,7 +33,7 @@ var registry = map[string]Descriptor{
 	"hive-canvas": {
 		Type:        "hive-canvas",
 		Title:       "Hive Canvas",
-		Description: "Canvases beside a chat or a Code session: named surfaces of markdown, html and link blocks, saved as files and shown to the user while the conversation keeps running.",
+		Description: "Canvases beside a chat or a Code session: named surfaces of markdown with Mermaid diagrams, html and link blocks, saved as files and shown to the user while the conversation keeps running.",
 		Stability:   StabilityStable,
 		Server:      Server{Transport: TransportHttp},
 		RuntimeURL:  true,

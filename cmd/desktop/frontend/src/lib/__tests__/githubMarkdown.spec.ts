@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { renderGithubMarkdown } from '../githubMarkdown'
+import { renderCanvasMarkdown, renderGithubMarkdown } from '../githubMarkdown'
 
 describe('renderGithubMarkdown', () => {
   it('returns an empty string for blank input', () => {
@@ -104,5 +104,26 @@ describe('renderGithubMarkdown', () => {
     const html = renderGithubMarkdown('[click](javascript:alert(1))')
     expect(html).not.toMatch(/href=["']?javascript:/i)
     expect(html).not.toContain('<a ')
+  })
+})
+
+describe('renderCanvasMarkdown', () => {
+  it('splits standalone Mermaid fences from surrounding markdown', () => {
+    expect(renderCanvasMarkdown('Before\n\n```mermaid\nflowchart LR\nA --> B\n```\n\nAfter')).toEqual([
+      { kind: 'html', html: '<p>Before</p>\n' },
+      { kind: 'mermaid', source: 'flowchart LR\nA --> B\n' },
+      { kind: 'html', html: '<p>After</p>\n' },
+    ])
+  })
+
+  it('leaves non-Mermaid and nested fences as code', () => {
+    const parts = renderCanvasMarkdown('```js\nconst x = 1\n```\n\n> ```mermaid\n> A --> B\n> ```')
+    expect(parts).toHaveLength(1)
+    expect(parts[0]).toMatchObject({ kind: 'html' })
+    expect((parts[0] as { html: string }).html).toContain('language-mermaid')
+  })
+
+  it('does not change the shared GitHub markdown renderer', () => {
+    expect(renderGithubMarkdown('```mermaid\nA --> B\n```')).toContain('language-mermaid')
   })
 })
