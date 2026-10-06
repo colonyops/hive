@@ -37,7 +37,7 @@ func (p *Plugin) Close() error                 { return nil }
 func (p *Plugin) Commands() map[string]config.UserCommand {
 	return map[string]config.UserCommand{
 		"NeovimOpen": {
-			Sh:     `tmux new-window -t "{{ .Name }}" -c "{{ .Path }}" nvim`,
+			Sh:     `tmux new-window -t {{ printf "=%s:" .Name | shq }} -c "{{ .Path }}" nvim`,
 			Help:   "open neovim in new window in session's tmux session",
 			Silent: true,
 			Scope:  []string{"sessions"},

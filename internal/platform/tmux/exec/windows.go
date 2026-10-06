@@ -9,10 +9,10 @@ import (
 
 // AddWindows adds windows to an existing tmux session.
 func (c *Client) AddWindows(ctx context.Context, target multiplexer.Target, windows []multiplexer.WindowSpec) error {
-	name, err := renderSessionTarget(target)
-	if err != nil {
+	if err := target.ValidateSession(); err != nil {
 		return err
 	}
+	name := target.Session
 	c.suppressInteractiveHooks(ctx, name)
 	for _, window := range windows {
 		if err := c.createWindow(ctx, name, "", window); err != nil {
@@ -23,7 +23,7 @@ func (c *Client) AddWindows(ctx context.Context, target multiplexer.Target, wind
 		if !window.Focus {
 			continue
 		}
-		if _, _, err := c.runner.Capture(ctx, "select-window", "-t", name+":"+window.Name); err != nil {
+		if _, _, err := c.runner.Capture(ctx, "select-window", "-t", "="+name+":"+window.Name); err != nil {
 			return fmt.Errorf("tmux select-window %q: %w", window.Name, err)
 		}
 		break
@@ -44,17 +44,17 @@ func (c *Client) KillWindow(ctx context.Context, target multiplexer.Target) erro
 }
 
 func (c *Client) createWindow(ctx context.Context, sessionName, sessionDir string, window multiplexer.WindowSpec) error {
-	args := []string{"new-window", "-t", sessionName, "-n", window.Name}
+	args := []string{"new-window", "-t", "=" + sessionName + ":", "-n", window.Name}
 	args = appendInitialPaneArgs(args, window, sessionDir)
 	if _, _, err := c.runner.Capture(ctx, args...); err != nil {
 		return fmt.Errorf("tmux new-window %q: %w", window.Name, err)
 	}
-	c.tagPanesWithSession(ctx, sessionName+":"+window.Name, sessionName)
+	c.tagPanesWithSession(ctx, "="+sessionName+":"+window.Name, sessionName)
 	return c.splitAdditionalPanes(ctx, sessionName, sessionDir, window)
 }
 
 func (c *Client) splitAdditionalPanes(ctx context.Context, sessionName, sessionDir string, window multiplexer.WindowSpec) error {
-	target := sessionName + ":" + window.Name
+	target := "=" + sessionName + ":" + window.Name
 	for _, pane := range additionalPanes(window) {
 		args := splitPaneArgs(target, pane, windowDir(window, sessionDir))
 		if _, _, err := c.runner.Capture(ctx, args...); err != nil {

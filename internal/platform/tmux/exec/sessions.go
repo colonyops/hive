@@ -28,10 +28,10 @@ func (c *Client) HasSession(ctx context.Context, target multiplexer.Target) (boo
 
 // CreateSession creates a tmux session from a declarative specification.
 func (c *Client) CreateSession(ctx context.Context, spec multiplexer.SessionSpec) error {
-	name, err := renderSessionTarget(spec.Target)
-	if err != nil {
+	if err := spec.Target.ValidateSession(); err != nil {
 		return err
 	}
+	name := spec.Target.Session
 	if len(spec.Windows) == 0 {
 		return fmt.Errorf("tmux: at least one window is required")
 	}
@@ -49,12 +49,12 @@ func (c *Client) CreateSession(ctx context.Context, spec multiplexer.SessionSpec
 		if !partial {
 			return
 		}
-		if _, _, cleanupErr := c.runner.Capture(context.WithoutCancel(ctx), "kill-session", "-t", name); cleanupErr != nil {
+		if _, _, cleanupErr := c.runner.Capture(context.WithoutCancel(ctx), "kill-session", "-t", "="+name); cleanupErr != nil {
 			c.log.Debug().Err(cleanupErr).Str("session", name).Msg("failed to clean up partial tmux session")
 		}
 	}()
 
-	c.tagPanesWithSession(ctx, name, name)
+	c.tagPanesWithSession(ctx, "="+name+":", name)
 	c.suppressInteractiveHooks(ctx, name)
 	if err := c.splitAdditionalPanes(ctx, name, spec.WorkingDirectory, first); err != nil {
 		return err
@@ -72,7 +72,7 @@ func (c *Client) CreateSession(ctx context.Context, spec multiplexer.SessionSpec
 			break
 		}
 	}
-	if _, _, err := c.runner.Capture(ctx, "select-window", "-t", name+":"+focusName); err != nil {
+	if _, _, err := c.runner.Capture(ctx, "select-window", "-t", "="+name+":"+focusName); err != nil {
 		return fmt.Errorf("tmux select-window: %w", err)
 	}
 	partial = false
@@ -176,7 +176,7 @@ func (c *Client) selectTarget(ctx context.Context, target multiplexer.Target) {
 		stdout, _, err := c.runner.Capture(ctx, "display-message", "-p", "-t", target.Pane, "#{session_name}:#{window_index}")
 		if err == nil {
 			if window := string(bytes.TrimSpace(stdout)); window != "" {
-				_, _, _ = c.runner.Capture(ctx, "select-window", "-t", window)
+				_, _, _ = c.runner.Capture(ctx, "select-window", "-t", "="+window)
 			}
 		}
 		_, _, _ = c.runner.Capture(ctx, "select-pane", "-t", target.Pane)
@@ -221,7 +221,7 @@ func (c *Client) tagPanesWithSession(ctx context.Context, target, slug string) {
 // non-fatal; the worst case is the old blocking behaviour.
 func (c *Client) suppressInteractiveHooks(ctx context.Context, session string) {
 	for _, hook := range []string{"after-new-window", "after-split-window"} {
-		if _, _, err := c.runner.Capture(ctx, "set-hook", "-t", session, hook, ""); err != nil {
+		if _, _, err := c.runner.Capture(ctx, "set-hook", "-t", "="+session, hook, ""); err != nil {
 			c.log.Debug().Err(err).Str("hook", hook).Msg("failed to suppress hook")
 		}
 	}

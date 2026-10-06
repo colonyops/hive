@@ -90,7 +90,7 @@ func (m *Manager) CapturePane(ctx context.Context, name string) (string, error) 
 	if err := m.Available(ctx); err != nil {
 		return "", err
 	}
-	lines, err := m.oneShot(ctx, "capture-pane", "-t", name, "-p", "-J")
+	lines, err := m.oneShot(ctx, "capture-pane", "-t", "="+name+":", "-p", "-J")
 	if err != nil {
 		return "", fmt.Errorf("tmuxcc: capture pane %s: %w", name, err)
 	}

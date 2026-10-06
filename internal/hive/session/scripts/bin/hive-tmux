@@ -21,15 +21,15 @@ attach_or_switch() {
     local session=$1
     local window=${2:-}
     if [ -n "${TMUX:-}" ]; then
-        tmux switch-client -t "$session"
+        tmux switch-client -t "=$session"
         if [ -n "$window" ]; then
-            tmux select-window -t "$session:$window"
+            tmux select-window -t "=$session:$window"
         fi
     else
         if [ -n "$window" ]; then
-            tmux attach-session -t "$session:$window"
+            tmux attach-session -t "=$session:$window"
         else
-            tmux attach-session -t "$session"
+            tmux attach-session -t "=$session"
         fi
     fi
 }
@@ -45,7 +45,7 @@ WORKDIR="${2:-$PWD}"
 PROMPT="${3:-}"
 WINDOW="${4:-}"
 
-if tmux has-session -t "$SESSION" 2>/dev/null; then
+if tmux has-session -t "=$SESSION" 2>/dev/null; then
     # Session exists
     if [ "$BACKGROUND" = false ]; then
         attach_or_switch "$SESSION" "$WINDOW"
@@ -58,8 +58,8 @@ else
     else
         tmux new-session -d -s "$SESSION" -n "$AGENT_WINDOW" -c "$WORKDIR" -- $AGENT_CMD $AGENT_FLAGS
     fi
-    tmux new-window -t "$SESSION" -n shell -c "$WORKDIR"
-    tmux select-window -t "$SESSION:$AGENT_WINDOW"
+    tmux new-window -t "=$SESSION:" -n shell -c "$WORKDIR"
+    tmux select-window -t "=$SESSION:$AGENT_WINDOW"
 
     if [ "$BACKGROUND" = false ]; then
         attach_or_switch "$SESSION"

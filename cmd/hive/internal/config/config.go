@@ -385,7 +385,7 @@ var defaultUserCommands = map[string]UserCommand{
 	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
-{{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
+{{ agentSend }} {{ printf "=%s" .Name | shq }}:claude {{ $.Form.message | shq }}
 {{ end }}`,
 		Form: []FormField{
 			{

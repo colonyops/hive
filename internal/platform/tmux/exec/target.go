@@ -12,14 +12,14 @@ func renderSessionTarget(target multiplexer.Target) (string, error) {
 	if err := target.ValidateSession(); err != nil {
 		return "", err
 	}
-	return target.Session, nil
+	return "=" + target.Session, nil
 }
 
 func renderWindowTarget(target multiplexer.Target) (string, error) {
 	if err := target.ValidateWindow(); err != nil {
 		return "", err
 	}
-	return target.Session + ":" + target.Window, nil
+	return "=" + target.Session + ":" + target.Window, nil
 }
 
 func renderPaneTarget(target multiplexer.Target) (string, error) {
@@ -29,7 +29,7 @@ func renderPaneTarget(target multiplexer.Target) (string, error) {
 	if target.Session == "" && target.Window == "" {
 		return target.Pane, nil
 	}
-	return target.Session + ":" + target.Window + "." + target.Pane, nil
+	return "=" + target.Session + ":" + target.Window + "." + target.Pane, nil
 }
 
 // ResolveTarget resolves a tmux target into a qualified pane.
