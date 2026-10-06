@@ -972,7 +972,7 @@ func TestRecycleSession_KillsPersistedTargetAndClearsIt(t *testing.T) {
 	assert.Empty(t, recycled.GetMeta(session.MetaTmuxSession), "a reused clone must target its new slug, not the killed tmux session")
 }
 
-func TestCreateSession_RecycledSessionKeepsPath(t *testing.T) {
+func TestCreateSession_RecycledSessionKeepsPathAndResetsAge(t *testing.T) {
 	store := newMockStore()
 	cfg := &config.Config{
 		DataDir: t.TempDir(),
@@ -982,13 +982,16 @@ func TestCreateSession_RecycledSessionKeepsPath(t *testing.T) {
 
 	recycledPath := filepath.Join(cfg.ReposDir(), "repo-x7k2qp")
 
+	previousCreatedAt := time.Date(2024, time.January, 2, 3, 4, 5, 0, time.UTC)
 	recycled := session.Session{
-		ID:     "abc123",
-		Name:   "old-name",
-		Slug:   "old-name",
-		State:  session.StateRecycled,
-		Path:   recycledPath,
-		Remote: "https://github.com/example/repo.git",
+		ID:        "abc123",
+		Name:      "old-name",
+		Slug:      "old-name",
+		State:     session.StateRecycled,
+		Path:      recycledPath,
+		Remote:    "https://github.com/example/repo.git",
+		CreatedAt: previousCreatedAt,
+		UpdatedAt: previousCreatedAt.Add(time.Hour),
 	}
 	require.NoError(t, store.Save(context.Background(), recycled))
 
@@ -1002,6 +1005,9 @@ func TestCreateSession_RecycledSessionKeepsPath(t *testing.T) {
 	assert.Equal(t, recycledPath, sess.Path, "path must not change on reactivation")
 	assert.Equal(t, "new-name", sess.Name)
 	assert.Equal(t, session.StateActive, sess.State)
+	assert.Equal(t, previousCreatedAt, sess.CreatedAt)
+	assert.True(t, sess.ActivatedAt().After(previousCreatedAt), "reactivation starts a new session age")
+	assert.True(t, sess.ActivatedAt().Equal(sess.UpdatedAt))
 }
 
 func TestCreateSession_DuplicateNameRejected(t *testing.T) {

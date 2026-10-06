@@ -51,7 +51,7 @@ const sessionAgeBadges = computed<Record<string, { days: number; title: string }
     if (days === null || !row.createdAt) continue
     badges[row.id] = {
       days,
-      title: `Created ${new Date(row.createdAt).toLocaleString()}; ${days} ${days === 1 ? 'day' : 'days'} old`,
+      title: `Started ${new Date(row.createdAt).toLocaleString()}; ${days} ${days === 1 ? 'day' : 'days'} old`,
     }
   }
   return badges

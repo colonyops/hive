@@ -8,8 +8,8 @@ import (
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 )
 
-// CanvasOwner is the key the session's canvases are filed under, its
-// repository as owner/repo, or empty when the remote names neither.
+// SessionSummary is the session row shown in Code. CreatedAt starts with the
+// current logical session even when Hive reuses an older clone record.
 type SessionSummary struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
@@ -23,7 +23,7 @@ type SessionSummary struct {
 func sessionSummaryOf(s session.Session) SessionSummary {
 	return SessionSummary{
 		ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, State: string(s.State),
-		CanvasOwner: app.CanvasOwnerForRemote(s.Remote), CreatedAt: s.CreatedAt,
+		CanvasOwner: app.CanvasOwnerForRemote(s.Remote), CreatedAt: s.ActivatedAt(),
 	}
 }
 

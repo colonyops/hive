@@ -452,7 +452,7 @@ describe('TerminalMode', () => {
     const recent = wrapper.get('[data-testid="terminal-session-row"][data-slug="recent-session"]')
 
     expect(old.get('[data-testid="terminal-session-age"]').text()).toBe('6d')
-    expect(old.get('[data-testid="terminal-session-age"]').attributes('title')).toContain('6 days old')
+    expect(old.get('[data-testid="terminal-session-age"]').attributes('title')).toMatch(/^Started .*; 6 days old$/)
     expect(recent.find('[data-testid="terminal-session-age"]').exists()).toBe(false)
   })
 

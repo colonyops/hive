@@ -24,9 +24,10 @@ const (
 )
 
 // Metadata keys for session organization.
-const (
-	MetaGroup = "group" // user-assigned group for tree view grouping
-)
+const MetaGroup = "group" // user-assigned group for tree view grouping
+
+// Metadata keys for session lifecycle.
+const MetaActivatedAt = "activated_at" // start of the current active lifecycle
 
 // Clone strategy constants.
 const (
@@ -80,6 +81,27 @@ func (s *Session) InboxTopic() string {
 // CanRecycle returns true if the session can be marked for recycling.
 func (s *Session) CanRecycle() bool {
 	return s.State == StateActive
+}
+
+// MarkActive starts a new active lifecycle while retaining the reusable clone.
+func (s *Session) MarkActive(now time.Time) {
+	s.State = StateActive
+	s.SetMeta(MetaActivatedAt, now.UTC().Format(time.RFC3339Nano))
+	s.UpdatedAt = now
+}
+
+// ActivatedAt returns when the current active lifecycle started. Sessions from
+// before activation tracking use UpdatedAt because reuse already refreshed it.
+func (s *Session) ActivatedAt() time.Time {
+	if s.State == StateActive {
+		if activatedAt, err := time.Parse(time.RFC3339Nano, s.GetMeta(MetaActivatedAt)); err == nil {
+			return activatedAt
+		}
+		if s.UpdatedAt.After(s.CreatedAt) {
+			return s.UpdatedAt
+		}
+	}
+	return s.CreatedAt
 }
 
 // MarkRecycled transitions the session to the recycled state.

@@ -271,9 +271,8 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		sess = *recyclable
 		sess.Name = opts.Name
 		sess.Slug = slug
-		sess.State = session.StateActive
 		sess.Tags = opts.Tags
-		sess.UpdatedAt = time.Now()
+		sess.MarkActive(time.Now())
 	} else {
 		// Create new session (either no recyclable found or it was corrupted)
 		sessID := opts.SessionID
@@ -300,12 +299,11 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 			Slug:          slug,
 			Path:          path,
 			Remote:        remote,
-			State:         session.StateActive,
 			CloneStrategy: cloneStrategy,
 			Tags:          opts.Tags,
 			CreatedAt:     now,
-			UpdatedAt:     now,
 		}
+		sess.MarkActive(now)
 
 		if cloneStrategy == config.CloneStrategyWorktree {
 			bareDir, err := s.ensureBareClone(ctx, remote, progress)

@@ -35,6 +35,34 @@ func TestSession_CanRecycle(t *testing.T) {
 	}
 }
 
+func TestSession_MarkActive(t *testing.T) {
+	createdAt := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	activatedAt := createdAt.Add(time.Hour)
+	s := Session{State: StateRecycled, CreatedAt: createdAt}
+
+	s.MarkActive(activatedAt)
+
+	assert.Equal(t, StateActive, s.State)
+	assert.Equal(t, createdAt, s.CreatedAt)
+	assert.Equal(t, activatedAt, s.UpdatedAt)
+	assert.True(t, activatedAt.Equal(s.ActivatedAt()))
+
+	s.UpdatedAt = activatedAt.Add(time.Hour)
+	assert.True(t, activatedAt.Equal(s.ActivatedAt()), "later metadata changes must not reset session age")
+}
+
+func TestSession_ActivatedAtFallsBackForExistingSessions(t *testing.T) {
+	createdAt := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(time.Hour)
+
+	active := Session{State: StateActive, CreatedAt: createdAt, UpdatedAt: updatedAt}
+	assert.True(t, updatedAt.Equal(active.ActivatedAt()), "legacy reuse refreshed UpdatedAt")
+
+	recycled := Session{State: StateRecycled, CreatedAt: createdAt, UpdatedAt: updatedAt}
+	recycled.SetMeta(MetaActivatedAt, updatedAt.Format(time.RFC3339Nano))
+	assert.True(t, createdAt.Equal(recycled.ActivatedAt()), "recycling is not an activation")
+}
+
 func TestSession_MarkRecycled(t *testing.T) {
 	now := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
 	s := Session{

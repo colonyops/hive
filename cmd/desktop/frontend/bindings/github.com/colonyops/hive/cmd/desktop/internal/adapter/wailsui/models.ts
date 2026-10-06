@@ -524,8 +524,8 @@ export interface SessionGitStatus {
 }
 
 /**
- * CanvasOwner is the key the session's canvases are filed under, its
- * repository as owner/repo, or empty when the remote names neither.
+ * SessionSummary is the session row shown in Code. CreatedAt starts with the
+ * current logical session even when Hive reuses an older clone record.
  */
 export interface SessionSummary {
     "id": string;

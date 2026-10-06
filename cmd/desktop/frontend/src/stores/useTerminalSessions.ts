@@ -19,7 +19,7 @@ export interface TerminalSessionRow {
   state: string
   /** The owner key of the session's canvases, its repository as owner/repo. Empty for a row with none. */
   canvasOwner: string
-  /** Empty for scratch terminals and pinned chats, which have no Hive creation time. */
+  /** Start of the current Hive session lifecycle. Empty for scratch terminals and pinned chats. */
   createdAt: string
 }
 

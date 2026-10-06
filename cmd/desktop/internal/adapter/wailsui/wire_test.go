@@ -93,6 +93,18 @@ func TestSessionSummaryOfMapsEachField(t *testing.T) {
 	}, sessionSummaryOf(s))
 }
 
+func TestSessionSummaryOfUsesTheCurrentActivation(t *testing.T) {
+	createdAt := time.Date(2026, time.July, 1, 12, 0, 0, 0, time.UTC)
+	activatedAt := time.Date(2026, time.October, 1, 12, 0, 0, 0, time.UTC)
+	s := session.Session{State: session.StateActive, CreatedAt: createdAt, UpdatedAt: activatedAt}
+
+	assert.Equal(t, activatedAt, sessionSummaryOf(s).CreatedAt)
+
+	s.MarkActive(activatedAt)
+	s.UpdatedAt = activatedAt.Add(time.Hour)
+	assert.True(t, activatedAt.Equal(sessionSummaryOf(s).CreatedAt))
+}
+
 func TestSessionDetailOfReadsTheWorktreeBranch(t *testing.T) {
 	s := session.Session{ID: "s1", Name: "review 81", Slug: "review-81", Remote: "acme/site", State: session.StateActive, CloneStrategy: session.CloneStrategyWorktree}
 	s.SetMeta(session.MetaWorktreeBranch, "hive/review-81")
