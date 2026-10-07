@@ -16,16 +16,11 @@ const testDebounce = 100 * time.Millisecond
 
 func isYAML(path string) bool { return strings.HasSuffix(path, ".yaml") }
 
-func startWatcher(t *testing.T, dir string) (*Watcher, <-chan struct{}) {
+func startWatcher(t *testing.T, dir string, opts ...Option) (*Watcher, <-chan struct{}) {
 	t.Helper()
 	changed := make(chan struct{}, 16)
-	w, err := New(Config{
-		Dir:       dir,
-		Match:     isYAML,
-		Debounce:  testDebounce,
-		OnChange:  func() { changed <- struct{}{} },
-		Component: "test-watcher",
-	}, zerolog.Nop())
+	opts = append([]Option{WithDebounce(testDebounce), WithComponent("test-watcher")}, opts...)
+	w, err := New(dir, isYAML, func() { changed <- struct{}{} }, zerolog.Nop(), opts...)
 	require.NoError(t, err)
 	w.Start()
 	t.Cleanup(w.Close)
@@ -117,6 +112,44 @@ func TestWatcherDebounceResetsOnEachEvent(t *testing.T) {
 	assertNoChange(t, changed)
 }
 
+func TestWatcherIgnoresSubdirectoriesByDefault(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "ws")
+	require.NoError(t, os.Mkdir(sub, 0o700))
+	_, changed := startWatcher(t, dir)
+
+	require.NoError(t, os.WriteFile(filepath.Join(sub, "a.yaml"), []byte("v: 1\n"), 0o600))
+	assertNoChange(t, changed)
+}
+
+func TestWatcherWithSubdirectories(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	existing := filepath.Join(dir, "existing")
+	require.NoError(t, os.Mkdir(existing, 0o700))
+	_, changed := startWatcher(t, dir, WithSubdirectories())
+
+	require.NoError(t, os.WriteFile(filepath.Join(existing, "a.yaml"), []byte("v: 1\n"), 0o600))
+	waitForChange(t, changed)
+
+	// A new subdirectory changes the watch set, which calls back by itself.
+	added := filepath.Join(dir, "added")
+	require.NoError(t, os.Mkdir(added, 0o700))
+	waitForChange(t, changed)
+
+	require.NoError(t, os.WriteFile(filepath.Join(added, "a.yaml"), []byte("v: 1\n"), 0o600))
+	waitForChange(t, changed)
+
+	// Files two levels down stay out of reach.
+	deep := filepath.Join(added, "deep")
+	require.NoError(t, os.Mkdir(deep, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(deep, "a.yaml"), []byte("v: 1\n"), 0o600))
+	assertNoChange(t, changed)
+}
+
 func TestWatcherCloseStopsDeliveryAndIsIdempotent(t *testing.T) {
 	t.Parallel()
 
@@ -133,7 +166,7 @@ func TestWatcherCloseStopsDeliveryAndIsIdempotent(t *testing.T) {
 func TestWatcherCloseWithoutStart(t *testing.T) {
 	t.Parallel()
 
-	w, err := New(Config{Dir: t.TempDir(), Match: isYAML, Debounce: testDebounce, OnChange: func() {}, Component: "test-watcher"}, zerolog.Nop())
+	w, err := New(t.TempDir(), isYAML, func() {}, zerolog.Nop())
 	require.NoError(t, err)
 	w.Close()
 	w.Close()
@@ -145,7 +178,7 @@ func TestNewErrorNamesComponentAndDir(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "occupied")
 	require.NoError(t, os.WriteFile(file, nil, 0o600))
 
-	_, err := New(Config{Dir: file, Match: isYAML, Debounce: testDebounce, OnChange: func() {}, Component: "test-watcher"}, zerolog.Nop())
+	_, err := New(file, isYAML, func() {}, zerolog.Nop(), WithComponent("test-watcher"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "test-watcher")
 	assert.Contains(t, err.Error(), file)

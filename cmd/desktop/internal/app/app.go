@@ -265,7 +265,7 @@ type App struct {
 	paths                  settings.Paths
 	flowsWatcher           *dirwatch.Watcher
 	actionsWatcher         *dirwatch.Watcher
-	agentWorkspacesWatcher *agentws.Watcher
+	agentWorkspacesWatcher *dirwatch.Watcher
 	hiveWatcher            *hivewatch.Watcher
 	hiveBusCancel          context.CancelFunc
 }

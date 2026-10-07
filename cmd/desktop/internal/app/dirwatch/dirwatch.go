@@ -1,15 +1,17 @@
-// Package dirwatch runs a callback when matching files in one flat directory
-// change on disk.
+// Package dirwatch runs a callback when matching files in a directory change
+// on disk.
 //
-// It watches the directory rather than the files: editors and atomic writers
+// It watches directories rather than files: editors and atomic writers
 // replace a file by rename, which silently drops a watch registered on the
 // file itself, and a directory watch also sees a file that does not exist yet.
-// fsnotify is not recursive, so nothing below the directory is seen.
+// fsnotify is not recursive, so nothing deeper than the watched directories is
+// seen.
 package dirwatch
 
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,25 +22,48 @@ import (
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
-const relevantOps = fsnotify.Create | fsnotify.Write | fsnotify.Rename | fsnotify.Remove
+const (
+	relevantOps   = fsnotify.Create | fsnotify.Write | fsnotify.Rename | fsnotify.Remove
+	structuralOps = fsnotify.Create | fsnotify.Rename | fsnotify.Remove
+)
 
-type Config struct {
-	// Dir is created if missing, then watched.
-	Dir string
-	// Match reports whether an event path inside Dir is worth a callback.
-	Match func(path string) bool
-	// Debounce coalesces a burst of events (an editor's write+rename+chmod, a
-	// git checkout) into one callback, Debounce after the last of them.
-	Debounce time.Duration
-	OnChange func()
-	// Component labels the watcher's log lines.
-	Component string
+type options struct {
+	debounce  time.Duration
+	component string
+	subdirs   bool
+}
+
+type Option func(*options)
+
+// WithDebounce sets how long the watcher waits after the last matching event
+// before it calls back, so a burst (an editor's write+rename+chmod, a git
+// checkout) becomes one callback. The default is 250ms.
+func WithDebounce(d time.Duration) Option {
+	return func(o *options) { o.debounce = d }
+}
+
+// WithComponent labels the watcher's log lines and errors. The default is
+// "dirwatch".
+func WithComponent(name string) Option {
+	return func(o *options) { o.component = name }
+}
+
+// WithSubdirectories also watches each immediate subdirectory of the root,
+// and keeps that set in step as subdirectories appear and disappear. A change
+// to the set calls back even when no matching file event follows: a directory
+// moved in with its files already inside produces no event for those files.
+func WithSubdirectories() Option {
+	return func(o *options) { o.subdirs = true }
 }
 
 type Watcher struct {
-	cfg     Config
-	logger  zerolog.Logger
-	watcher *fsnotify.Watcher
+	root     string
+	match    func(path string) bool
+	onChange func()
+	opts     options
+	logger   zerolog.Logger
+	watcher  *fsnotify.Watcher
+	watched  map[string]bool
 
 	started  atomic.Bool
 	stopOnce sync.Once
@@ -46,26 +71,41 @@ type Watcher struct {
 	done     chan struct{}
 }
 
-// New creates and watches cfg.Dir. Events are not delivered until Start.
-func New(cfg Config, logger zerolog.Logger) (*Watcher, error) {
-	if err := os.MkdirAll(cfg.Dir, 0o700); err != nil {
-		return nil, fmt.Errorf("%s: create %s: %w", cfg.Component, cfg.Dir, err)
+// New creates root if it is missing and watches it. match reports whether an
+// event path is worth a callback. Events are not delivered until Start.
+func New(root string, match func(path string) bool, onChange func(), logger zerolog.Logger, opts ...Option) (*Watcher, error) {
+	o := options{debounce: 250 * time.Millisecond, component: "dirwatch"}
+	for _, opt := range opts {
+		opt(&o)
 	}
-	watcher, err := fsnotify.NewWatcher()
+
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return nil, fmt.Errorf("%s: create %s: %w", o.component, root, err)
+	}
+	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
-		return nil, fmt.Errorf("%s: start watcher: %w", cfg.Component, err)
+		return nil, fmt.Errorf("%s: start watcher: %w", o.component, err)
 	}
-	if err := watcher.Add(cfg.Dir); err != nil {
-		_ = watcher.Close()
-		return nil, fmt.Errorf("%s: watch %s: %w", cfg.Component, cfg.Dir, err)
+	if err := fsw.Add(root); err != nil {
+		_ = fsw.Close()
+		return nil, fmt.Errorf("%s: watch %s: %w", o.component, root, err)
 	}
-	return &Watcher{
-		cfg:     cfg,
-		logger:  logutils.Component(logger, cfg.Component).With().Str("dir", cfg.Dir).Logger(),
-		watcher: watcher,
-		stop:    make(chan struct{}),
-		done:    make(chan struct{}),
-	}, nil
+
+	w := &Watcher{
+		root:     root,
+		match:    match,
+		onChange: onChange,
+		opts:     o,
+		logger:   logutils.Component(logger, o.component).With().Str("dir", root).Logger(),
+		watcher:  fsw,
+		watched:  map[string]bool{},
+		stop:     make(chan struct{}),
+		done:     make(chan struct{}),
+	}
+	if o.subdirs {
+		w.resync()
+	}
+	return w, nil
 }
 
 // Start runs the watch loop in a goroutine until Close.
@@ -77,7 +117,7 @@ func (w *Watcher) Start() {
 }
 
 // Close stops the watcher and waits for an in-flight callback to return. It
-// is safe to call more than once, but not from inside OnChange.
+// is safe to call more than once, but not from inside the callback.
 func (w *Watcher) Close() {
 	w.stopOnce.Do(func() {
 		close(w.stop)
@@ -93,7 +133,7 @@ func (w *Watcher) Close() {
 func (w *Watcher) run() {
 	defer close(w.done)
 
-	debounce := time.NewTimer(w.cfg.Debounce)
+	debounce := time.NewTimer(w.opts.debounce)
 	debounce.Stop()
 	defer debounce.Stop()
 
@@ -105,17 +145,74 @@ func (w *Watcher) run() {
 			if !ok {
 				return
 			}
-			if event.Op&relevantOps == 0 || !w.cfg.Match(event.Name) {
-				continue
+			if w.handle(event) {
+				debounce.Reset(w.opts.debounce)
 			}
-			debounce.Reset(w.cfg.Debounce)
 		case err, ok := <-w.watcher.Errors:
 			if !ok {
 				return
 			}
 			w.logger.Warn().Err(err).Msg("watch error")
 		case <-debounce.C:
-			w.cfg.OnChange()
+			w.onChange()
 		}
 	}
+}
+
+func (w *Watcher) handle(event fsnotify.Event) bool {
+	if event.Op&relevantOps == 0 {
+		return false
+	}
+	changed := w.match(event.Name)
+	if w.opts.subdirs && event.Op&structuralOps != 0 && filepath.Dir(event.Name) == w.root && w.resync() {
+		changed = true
+	}
+	return changed
+}
+
+// resync reconciles the subdirectory watches with the directories on disk and
+// reports whether the set changed. When the root itself is gone it drops every
+// watch rather than retrying.
+func (w *Watcher) resync() bool {
+	entries, err := os.ReadDir(w.root)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			w.logger.Warn().Err(err).Msg("root read failed")
+		}
+		changed := len(w.watched) > 0
+		for dir := range w.watched {
+			_ = w.watcher.Remove(dir)
+		}
+		clear(w.watched)
+		return changed
+	}
+
+	current := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			current[filepath.Join(w.root, entry.Name())] = true
+		}
+	}
+
+	changed := false
+	for dir := range w.watched {
+		if current[dir] {
+			continue
+		}
+		_ = w.watcher.Remove(dir)
+		delete(w.watched, dir)
+		changed = true
+	}
+	for dir := range current {
+		if w.watched[dir] {
+			continue
+		}
+		if err := w.watcher.Add(dir); err != nil {
+			w.logger.Warn().Err(err).Str("subdir", dir).Msg("subdirectory watch failed")
+			continue
+		}
+		w.watched[dir] = true
+		changed = true
+	}
+	return changed
 }

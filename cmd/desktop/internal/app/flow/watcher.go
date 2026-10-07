@@ -3,7 +3,6 @@ package flow
 import (
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog"
 
@@ -14,13 +13,7 @@ import (
 // so edits made outside the app, and the app's own SaveFlow/SaveLayout
 // writes, apply live.
 func NewFlowsWatcher(dir string, onChange func(), logger zerolog.Logger) (*dirwatch.Watcher, error) {
-	return dirwatch.New(dirwatch.Config{
-		Dir:       dir,
-		Match:     isFlowFile,
-		Debounce:  250 * time.Millisecond,
-		OnChange:  onChange,
-		Component: "flows-watcher",
-	}, logger)
+	return dirwatch.New(dir, isFlowFile, onChange, logger, dirwatch.WithComponent("flows-watcher"))
 }
 
 // isFlowFile reports whether name (as delivered by fsnotify — a path inside

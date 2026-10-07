@@ -2,7 +2,6 @@ package actions
 
 import (
 	"path/filepath"
-	"time"
 
 	"github.com/rs/zerolog"
 
@@ -13,11 +12,6 @@ import (
 // edits made outside the app apply live.
 func NewActionsWatcher(path string, onChange func(), logger zerolog.Logger) (*dirwatch.Watcher, error) {
 	name := filepath.Base(path)
-	return dirwatch.New(dirwatch.Config{
-		Dir:       filepath.Dir(path),
-		Match:     func(p string) bool { return filepath.Base(p) == name },
-		Debounce:  250 * time.Millisecond,
-		OnChange:  onChange,
-		Component: "actions-watcher",
-	}, logger)
+	isActionsFile := func(p string) bool { return filepath.Base(p) == name }
+	return dirwatch.New(filepath.Dir(path), isActionsFile, onChange, logger, dirwatch.WithComponent("actions-watcher"))
 }
