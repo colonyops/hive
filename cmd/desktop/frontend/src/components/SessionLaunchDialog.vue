@@ -176,6 +176,7 @@ useSubmitShortcut(submit)
     :icon="IconPlay"
     :width="520"
     :busy="busy"
+    :close-on-backdrop="false"
     :testid="`${testid}-dialog`"
     @close="emit('close')"
   >

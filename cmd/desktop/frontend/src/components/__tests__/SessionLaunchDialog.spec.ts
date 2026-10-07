@@ -223,6 +223,14 @@ describe('SessionLaunchDialog: new session', () => {
     expect(wrapper.emitted('close')).toBeUndefined()
   })
 
+  it('stays open on a backdrop click and closes only from the close button', async () => {
+    const wrapper = mountNew()
+    await wrapper.get('[data-testid="new-session-dialog-backdrop"]').trigger('click')
+    expect(wrapper.emitted('close')).toBeUndefined()
+    await wrapper.get('[data-testid="new-session-dialog-close"]').trigger('click')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+  })
+
   it('keeps the dialog open and reports invalid names locally', async () => {
     const wrapper = mountNew()
     await wrapper.get('[data-testid="new-session-name"]').setValue('bad@name')
