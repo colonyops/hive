@@ -224,7 +224,7 @@ func TestSessionsService_ItemChatsListsLinkedChats(t *testing.T) {
 	links := &fakeItemSessionStore{
 		refs: map[int64]models.ItemRef{7: {ProfileID: "p", SourceKind: "github", ExternalID: "acme/site#81"}},
 		chats: map[string][]stores.ItemChat{"acme/site#81": {
-			{ChatID: 9, Workspace: "triage", Name: "launch-p-triage-acme-site-81", CreatedAt: 200},
+			{ChatID: "0199bd91-c4a8-7ddd-a016-e7ab276038c2", Workspace: "triage", Name: "launch-p-triage-acme-site-81", CreatedAt: 200},
 		}},
 	}
 
@@ -232,7 +232,7 @@ func TestSessionsService_ItemChatsListsLinkedChats(t *testing.T) {
 	views, err := itemSessionsService(h, nil, links).ItemChats(t.Context(), 7)
 	require.NoError(t, err)
 	require.Len(t, views, 1)
-	assert.Equal(t, int64(9), views[0].ID)
+	assert.Equal(t, "0199bd91-c4a8-7ddd-a016-e7ab276038c2", views[0].ID)
 	assert.Equal(t, "triage", views[0].Workspace)
 	assert.Equal(t, int64(200), views[0].CreatedAt.UnixMilli())
 

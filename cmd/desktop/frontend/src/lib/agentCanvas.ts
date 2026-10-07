@@ -1,5 +1,5 @@
 /** Who wrote a canvas: a chat by its record id, or a hive session by its id. */
-export type CanvasAuthor = number | string
+export type CanvasAuthor = string
 
 /**
  * Which canvas a canvas surface is pointed at. `workspace` is the owner key: a
@@ -29,8 +29,7 @@ export function isRepositoryCanvasOwner(owner: string): boolean {
 export function canvasEventAuthor(data: unknown): CanvasAuthor | null {
   const payload = (Array.isArray(data) ? data[0] : data) as { session?: unknown; hiveSession?: unknown } | undefined
   if (typeof payload?.hiveSession === 'string' && payload.hiveSession) return payload.hiveSession
-  const session = Number(payload?.session)
-  return Number.isInteger(session) && session > 0 ? session : null
+  return typeof payload?.session === 'string' && payload.session ? payload.session : null
 }
 
 export type CanvasLinkTarget = { kind: 'url'; url: string } | { kind: 'canvas'; name: string }

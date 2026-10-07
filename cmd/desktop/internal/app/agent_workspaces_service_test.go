@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -249,7 +248,7 @@ func TestLaunchWorkspaceSessionCarriesPromptIntoDetachedChat(t *testing.T) {
 	chats, err := svc.itemLinks.ListChats(t.Context(), origin)
 	require.NoError(t, err)
 	require.Len(t, chats, 1, "the launch links its chat to the originating item")
-	assert.Equal(t, outcome.ID, strconv.FormatInt(chats[0].ChatID, 10))
+	assert.Equal(t, outcome.ID, chats[0].ChatID)
 	assert.NotEmpty(t, outcome.ID)
 	assert.NotEmpty(t, outcome.Slug)
 	assert.Equal(t, 1, liveAgentSessionCount(t, svc))
@@ -734,7 +733,7 @@ func TestDeleteWorkspaceRemovesTheDirectoryAndTheRecords(t *testing.T) {
 	}))
 	_, err = svc.schedules.InsertRun(t.Context(), stores.ScheduleRun{
 		Workspace: "demo", ScheduleID: "weekly", ScheduleName: "weekly",
-		ScheduledFor: 100, StartedAt: 100, Reason: "due", Status: "launched", SessionID: 1,
+		ScheduledFor: 100, StartedAt: 100, Reason: "due", Status: "launched", SessionID: "0199bd90-0c0d-7a13-8ea9-bf75daf96029",
 	})
 	require.NoError(t, err)
 
@@ -831,7 +830,7 @@ func TestRenameSession(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, KindInvalid, KindOf(err))
 
-	err = svc.RenameSession(t.Context(), 999999, "ghost")
+	err = svc.RenameSession(t.Context(), "00000000-0000-0000-0000-000000000000", "ghost")
 	require.Error(t, err)
 	assert.Equal(t, KindNotFound, KindOf(err))
 }
@@ -1454,7 +1453,7 @@ func TestResizeSessionResizesTheLiveTerminal(t *testing.T) {
 		return len(windows) > 0 && windows[0].Width == 120
 	}, 3*time.Second, 25*time.Millisecond, "the size vote must reach the tmux window")
 
-	err = svc.ResizeSession(t.Context(), started.ID+999, 80, 24)
+	err = svc.ResizeSession(t.Context(), "00000000-0000-0000-0000-000000000000", 80, 24)
 	require.Error(t, err)
 }
 

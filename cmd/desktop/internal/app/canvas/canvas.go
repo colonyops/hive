@@ -16,6 +16,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -85,7 +86,7 @@ type Canvas struct {
 	Workspace   string  `json:"workspace"`
 	Name        string  `json:"name"`
 	Title       string  `json:"title,omitempty"`
-	Session     int64   `json:"session"`
+	Session     string  `json:"session"`
 	HiveSession string  `json:"hiveSession,omitempty"`
 	CreatedAt   int64   `json:"createdAt"`
 	UpdatedAt   int64   `json:"updatedAt"`
@@ -96,8 +97,35 @@ type Canvas struct {
 // session by its id. At most one is set; neither is an agent outside both,
 // writing to GlobalOwner.
 type Author struct {
-	Session     int64
+	Session     string
 	HiveSession string
+}
+
+// UnmarshalJSON accepts numeric chat ids written before chats moved to UUIDs.
+// They remain provenance only; a later write keeps the original author.
+func (c *Canvas) UnmarshalJSON(data []byte) error {
+	type alias Canvas
+	decoded := struct {
+		Session json.RawMessage `json:"session"`
+		*alias
+	}{alias: (*alias)(c)}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	if len(decoded.Session) == 0 || string(decoded.Session) == "null" {
+		return nil
+	}
+	if err := json.Unmarshal(decoded.Session, &c.Session); err == nil {
+		return nil
+	}
+	var legacy int64
+	if err := json.Unmarshal(decoded.Session, &legacy); err != nil {
+		return fmt.Errorf("decode canvas session: %w", err)
+	}
+	if legacy > 0 {
+		c.Session = strconv.FormatInt(legacy, 10)
+	}
+	return nil
 }
 
 // GlobalOwner is the owner key shared by every agent that runs outside a chat
@@ -117,7 +145,7 @@ type Meta struct {
 	Workspace   string `json:"workspace"`
 	Name        string `json:"name"`
 	Title       string `json:"title,omitempty"`
-	Session     int64  `json:"session"`
+	Session     string `json:"session"`
 	HiveSession string `json:"hiveSession,omitempty"`
 	CreatedAt   int64  `json:"createdAt"`
 	UpdatedAt   int64  `json:"updatedAt"`

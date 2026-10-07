@@ -18,11 +18,11 @@ import (
 // needs tmux, which this harness has no use for otherwise, so the DTO mappers
 // are what get pinned.
 func TestAgentViewsCarryTheScheduleFields(t *testing.T) {
-	session, err := json.Marshal(toAgentSessionView(app.SessionView{ID: 1, ScheduleID: "weekly"}))
+	session, err := json.Marshal(toAgentSessionView(app.SessionView{ID: "0199bd8f-e6a8-74e2-a10b-3d717cf6abf5", ScheduleID: "weekly"}))
 	require.NoError(t, err)
 	assert.Contains(t, string(session), `"scheduleId":"weekly"`)
 
-	byHand, err := json.Marshal(toAgentSessionView(app.SessionView{ID: 2}))
+	byHand, err := json.Marshal(toAgentSessionView(app.SessionView{ID: "0199bd8f-f306-713f-a745-79173c8ea605"}))
 	require.NoError(t, err)
 	assert.Contains(t, string(byHand), `"scheduleId":""`, "a chat a person started names no schedule")
 

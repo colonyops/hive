@@ -12,7 +12,7 @@ import type { TerminalSessionRow } from './useTerminalSessions'
 // Pin order is insertion order, deliberately: the list is the user's, and
 // re-sorting it on activity would move a row out from under the pointer.
 export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
-  const pinnedIds = useStorage<number[]>('hive.terminal.sidebar.pinned-chats', [])
+  const pinnedIds = useStorage<string[]>('hive.terminal.sidebar.pinned-chats', [])
 
   // A chat is not a hive session, so nothing prunes its pin when the chat is
   // deleted. The listing is what says it went away — but only once it has
@@ -21,12 +21,30 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
   // every pin. The listing keeps its last-good rows on failure, so a failed
   // revalidation cannot look like a deletion here.
   const { recents, recentsLoaded } = useAgentSessionsAll()
-  watch([recents, recentsLoaded], ([sessions, loaded]) => {
-    if (!loaded || !pinnedIds.value.length) return
-    const live = new Set(sessions.map((session) => session.id))
-    const kept = pinnedIds.value.filter((id) => live.has(id))
-    if (kept.length !== pinnedIds.value.length) pinnedIds.value = kept
-  })
+  watch(
+    [recents, recentsLoaded],
+    ([sessions, loaded]) => {
+      if (!loaded || !pinnedIds.value.length) return
+      const canonicalByID = new Map<string, string>()
+      for (const session of sessions) {
+        canonicalByID.set(session.id, session.id)
+        if (session.legacyId) canonicalByID.set(session.legacyId, session.id)
+      }
+      const seen = new Set<string>()
+      const kept: string[] = []
+      for (const storedID of pinnedIds.value) {
+        const canonicalID = canonicalByID.get(String(storedID))
+        if (canonicalID && !seen.has(canonicalID)) {
+          kept.push(canonicalID)
+          seen.add(canonicalID)
+        }
+      }
+      if (kept.length !== pinnedIds.value.length || kept.some((id, index) => id !== pinnedIds.value[index])) {
+        pinnedIds.value = kept
+      }
+    },
+    { immediate: true },
+  )
 
   /**
    * The pinned chats as sidebar rows, in pin order. A chat's slug is the tmux
@@ -57,11 +75,11 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
 
   const slugs = computed(() => new Set(rows.value.map((row) => row.slug)))
 
-  function isPinned(id: number): boolean {
+  function isPinned(id: string): boolean {
     return pinnedIds.value.includes(id)
   }
 
-  function togglePin(id: number): void {
+  function togglePin(id: string): void {
     pinnedIds.value = isPinned(id) ? pinnedIds.value.filter((pinned) => pinned !== id) : [...pinnedIds.value, id]
   }
 

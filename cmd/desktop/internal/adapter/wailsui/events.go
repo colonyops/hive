@@ -204,7 +204,7 @@ func emitActivityAppended(id int64) {
 // CanvasWrite is the canvas:updated payload: the author of the write, a chat
 // (Session) or a hive session (HiveSession), never both.
 type CanvasWrite struct {
-	Session     int64  `json:"session"`
+	Session     string `json:"session"`
 	HiveSession string `json:"hiveSession"`
 }
 
@@ -221,7 +221,7 @@ func emitCanvasUpdated(write CanvasWrite) {
 // chat's or a hive session's, and the canvas to pin when opening (empty
 // leaves the pane's pick).
 type CanvasToggle struct {
-	Session     int64  `json:"session"`
+	Session     string `json:"session"`
 	HiveSession string `json:"hiveSession"`
 	Name        string `json:"name"`
 	Open        bool   `json:"open"`

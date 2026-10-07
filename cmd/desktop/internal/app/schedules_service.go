@@ -40,18 +40,18 @@ type ScheduleView struct {
 
 // RunView timestamps are unix ms; SessionID is nil when the run launched no chat.
 type RunView struct {
-	ID           int64  `json:"id"`
-	Workspace    string `json:"workspace"`
-	ScheduleID   string `json:"scheduleId"`
-	ScheduleName string `json:"scheduleName"`
-	ScheduledFor int64  `json:"scheduledFor"`
-	StartedAt    int64  `json:"startedAt"`
-	Reason       string `json:"reason"`
-	Status       string `json:"status"`
-	Missed       int    `json:"missed"`
-	SessionID    *int64 `json:"sessionId"`
-	Prompt       string `json:"prompt"`
-	Error        string `json:"error"`
+	ID           int64   `json:"id"`
+	Workspace    string  `json:"workspace"`
+	ScheduleID   string  `json:"scheduleId"`
+	ScheduleName string  `json:"scheduleName"`
+	ScheduledFor int64   `json:"scheduledFor"`
+	StartedAt    int64   `json:"startedAt"`
+	Reason       string  `json:"reason"`
+	Status       string  `json:"status"`
+	Missed       int     `json:"missed"`
+	SessionID    *string `json:"sessionId"`
+	Prompt       string  `json:"prompt"`
+	Error        string  `json:"error"`
 }
 
 type PreviewRequest struct {
@@ -289,7 +289,7 @@ func runView(run schedule.Run) RunView {
 		Prompt:       run.Prompt,
 		Error:        run.Error,
 	}
-	if run.SessionID != 0 {
+	if run.SessionID != "" {
 		sessionID := run.SessionID
 		view.SessionID = &sessionID
 	}

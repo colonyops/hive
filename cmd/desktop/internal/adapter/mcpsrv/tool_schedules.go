@@ -49,15 +49,15 @@ type scheduleView struct {
 }
 
 type scheduleRunView struct {
-	ID           int64  `json:"id"`
-	ScheduleID   string `json:"scheduleId"`
-	ScheduledFor string `json:"scheduledFor"      jsonschema:"RFC 3339, local time: the occurrence this run honored."`
-	StartedAt    string `json:"startedAt"`
-	Reason       string `json:"reason"            jsonschema:"due, catch_up, or manual."`
-	Status       string `json:"status"            jsonschema:"launched, skipped, or failed."`
-	Missed       int    `json:"missed"            jsonschema:"How many earlier occurrences were folded into this run."`
-	Session      *int64 `json:"session,omitempty" jsonschema:"The chat the run launched. Absent when it launched none, and once that chat has ended: a scheduled chat deletes itself when its task is done."`
-	Error        string `json:"error,omitempty"`
+	ID           int64   `json:"id"`
+	ScheduleID   string  `json:"scheduleId"`
+	ScheduledFor string  `json:"scheduledFor"      jsonschema:"RFC 3339, local time: the occurrence this run honored."`
+	StartedAt    string  `json:"startedAt"`
+	Reason       string  `json:"reason"            jsonschema:"due, catch_up, or manual."`
+	Status       string  `json:"status"            jsonschema:"launched, skipped, or failed."`
+	Missed       int     `json:"missed"            jsonschema:"How many earlier occurrences were folded into this run."`
+	Session      *string `json:"session,omitempty" jsonschema:"The chat the run launched. Absent when it launched none, and once that chat has ended: a scheduled chat deletes itself when its task is done."`
+	Error        string  `json:"error,omitempty"`
 }
 
 // The optional fields are pointers so an omitted field can be told from one

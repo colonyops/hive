@@ -793,7 +793,7 @@ describe('App', () => {
       if (url.endsWith('/api/terminal/agents/sessions/first-run')) {
         return new Response(
           JSON.stringify({
-            id: 7,
+            id: '7',
             workspace: 'hive',
             name: 'Getting started',
             agent: 'claude',
@@ -1774,7 +1774,7 @@ describe('App', () => {
       mocks.agentsClient = {
         allSessions: vi.fn().mockResolvedValue([
           {
-            id: 42,
+            id: '42',
             workspace: 'my-workspace',
             name: 'Chat about the bug',
             agent: 'claude',
@@ -1858,7 +1858,7 @@ describe('App', () => {
         }),
         allSessions: vi.fn().mockResolvedValue([
           {
-            id: 42,
+            id: '42',
             workspace: 'my-workspace',
             name: 'Chat about the bug',
             agent: 'claude',

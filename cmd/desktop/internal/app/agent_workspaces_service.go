@@ -3,12 +3,10 @@ package app
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -248,7 +246,8 @@ type WorkspaceView struct {
 
 // SessionView is one row of a workspace's session list.
 type SessionView struct {
-	ID           int64  `json:"id"`
+	ID           string `json:"id"`
+	LegacyID     string `json:"legacyId"`
 	Workspace    string `json:"workspace"`
 	Name         string `json:"name"`
 	Agent        string `json:"agent"`
@@ -291,15 +290,14 @@ type SessionView struct {
 	// it treats a launch as failed does not depend on a notice's wording.
 	ExitedEarly bool `json:"exitedEarly"`
 	// ScheduleID is a column on the session record rather than a lookup in the
-	// run history: session ids are reused after a delete and the history is
-	// pruned, so a derivation would mislabel or lose it.
+	// run history because history is pruned and cannot remain the authority.
 	ScheduleID string `json:"scheduleId"`
 }
 
 // SessionActivityItem is one live session's detected activity, keyed by
 // session id so the caller does not have to re-derive a tmux session name.
 type SessionActivityItem struct {
-	ID int64 `json:"id"`
+	ID string `json:"id"`
 	// Status is one of terminal.Status's simplified values: ready, active, or
 	// approval -- approval is the highest-urgency state.
 	Status string `json:"status"`
@@ -549,11 +547,11 @@ func (s *AgentWorkspacesService) LaunchWorkspaceSession(ctx context.Context, req
 	// retry that opens a second one.
 	for _, origin := range req.Origins {
 		if err := s.itemLinks.LinkChat(ctx, view.ID, origin); err != nil {
-			s.logger.Warn().Ctx(ctx).Err(err).Int64("chat_id", view.ID).Str("external_id", origin.ExternalID).Msg("linking chat to an inbox item")
+			s.logger.Warn().Ctx(ctx).Err(err).Str("chat_id", view.ID).Str("external_id", origin.ExternalID).Msg("linking chat to an inbox item")
 		}
 	}
 	return dispatch.SessionExecutionOutcome{
-		ID: strconv.FormatInt(view.ID, 10), Name: view.Name, Slug: view.Slug,
+		ID: view.ID, Name: view.Name, Slug: view.Slug,
 	}, nil
 }
 
@@ -718,16 +716,16 @@ func (s *AgentWorkspacesService) endAfter(ctx context.Context, delay time.Durati
 		// Deleted by hand in the meantime; there is nothing left to do.
 		return
 	case err != nil:
-		s.logger.Warn().Err(err).Int64("session", view.ID).Msg("a chat asked to end itself but could not be deleted")
+		s.logger.Warn().Err(err).Str("session", view.ID).Msg("a chat asked to end itself but could not be deleted")
 		return
 	}
-	s.logger.Info().Int64("session", view.ID).Msg("a chat ended itself")
+	s.logger.Info().Str("session", view.ID).Msg("a chat ended itself")
 	if view.ScheduleID != "" {
 		s.events.Publish(ctx, events.SchedulesUpdated{Workspace: view.Workspace})
 	}
 }
 
-func (s *AgentWorkspacesService) SessionLive(ctx context.Context, id int64) (bool, error) {
+func (s *AgentWorkspacesService) SessionLive(ctx context.Context, id string) (bool, error) {
 	rec, err := s.getSession(ctx, id)
 	if KindOf(err) == KindNotFound {
 		return false, nil
@@ -737,7 +735,7 @@ func (s *AgentWorkspacesService) SessionLive(ctx context.Context, id int64) (boo
 	}
 	alive, err := s.terminals.HasSession(ctx, sessionName(rec))
 	if err != nil {
-		return false, terminalError(err, "checking session %d", id)
+		return false, terminalError(err, "checking session %q", id)
 	}
 	return alive, nil
 }
@@ -750,15 +748,15 @@ func (s *AgentWorkspacesService) SessionLive(ctx context.Context, id int64) (boo
 // persisted a conversation for (closed before its first message) also
 // relaunches fresh, silently, instead of dying on the agent's own
 // unknown-session error.
-func (s *AgentWorkspacesService) getSession(ctx context.Context, id int64) (stores.AgentSession, error) {
+func (s *AgentWorkspacesService) getSession(ctx context.Context, id string) (stores.AgentSession, error) {
 	rec, err := s.sessions.Get(ctx, id)
 	if stores.IsNotFound(err) {
-		return stores.AgentSession{}, Errorf(KindNotFound, "session %d not found", id)
+		return stores.AgentSession{}, Errorf(KindNotFound, "session %q not found", id)
 	}
-	return rec, Wrap(err, KindInternal, "loading session %d", id)
+	return rec, Wrap(err, KindInternal, "loading session %q", id)
 }
 
-func (s *AgentWorkspacesService) ResumeSession(ctx context.Context, id int64, cols, rows int) (SessionView, error) {
+func (s *AgentWorkspacesService) ResumeSession(ctx context.Context, id string, cols, rows int) (SessionView, error) {
 	rec, err := s.getSession(ctx, id)
 	if err != nil {
 		return SessionView{}, err
@@ -778,7 +776,7 @@ func (s *AgentWorkspacesService) ResumeSession(ctx context.Context, id int64, co
 			return SessionView{}, Wrap(err, KindInternal, "recording session %q as opened", rec.Name)
 		}
 		return SessionView{
-			ID: rec.ID, Workspace: rec.Workspace, Name: rec.Name, Agent: rec.Agent,
+			ID: rec.ID, LegacyID: rec.LegacyID, Workspace: rec.Workspace, Name: rec.Name, Agent: rec.Agent,
 			LastOpenedAt: rec.LastOpenedAt, Slug: name, TerminalID: name, WindowID: window.ID, PaneID: window.ActivePane,
 			Cols: window.Width, Rows: window.Height,
 			ResumeAttempted: true,
@@ -833,7 +831,7 @@ func (s *AgentWorkspacesService) ResumeSession(ctx context.Context, id int64, co
 
 // CloseSession ends a session's live tmux session and reports whether there
 // was one running. The record is untouched, so it still lists afterward.
-func (s *AgentWorkspacesService) CloseSession(ctx context.Context, id int64) (bool, error) {
+func (s *AgentWorkspacesService) CloseSession(ctx context.Context, id string) (bool, error) {
 	rec, err := s.getSession(ctx, id)
 	if err != nil {
 		return false, err
@@ -848,22 +846,23 @@ func (s *AgentWorkspacesService) CloseSession(ctx context.Context, id int64) (bo
 // RenameSession sets a session's display name. Purely a record edit: the
 // tmux session name comes from an immutable terminal id, so a live terminal keeps running
 // under the same name.
-func (s *AgentWorkspacesService) RenameSession(ctx context.Context, id int64, name string) error {
+func (s *AgentWorkspacesService) RenameSession(ctx context.Context, id, name string) error {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return Errorf(KindInvalid, "a session needs a name")
 	}
-	if _, err := s.getSession(ctx, id); err != nil {
+	rec, err := s.getSession(ctx, id)
+	if err != nil {
 		return err
 	}
-	return Wrap(s.sessions.Rename(ctx, id, name), KindInternal, "renaming session %d", id)
+	return Wrap(s.sessions.Rename(ctx, rec.ID, name), KindInternal, "renaming session %q", id)
 }
 
 // DeleteSession ends any live tmux session, then removes the record. The
 // session is killed first: its name lives on the record, so deleting the
 // record around a live one would orphan a running agent no UI could
 // address again until it happened to be found by name.
-func (s *AgentWorkspacesService) DeleteSession(ctx context.Context, id int64) error {
+func (s *AgentWorkspacesService) DeleteSession(ctx context.Context, id string) error {
 	rec, err := s.getSession(ctx, id)
 	if err != nil {
 		return err
@@ -871,7 +870,7 @@ func (s *AgentWorkspacesService) DeleteSession(ctx context.Context, id int64) er
 	if _, err := s.terminals.KillSession(ctx, sessionName(rec)); err != nil {
 		return terminalError(err, "closing session %q", rec.Name)
 	}
-	if err := s.sessions.Delete(ctx, id); err != nil {
+	if err := s.sessions.Delete(ctx, rec.ID); err != nil {
 		return Wrap(err, KindInternal, "deleting session %q", rec.Name)
 	}
 	return nil
@@ -1496,7 +1495,7 @@ func (s *AgentWorkspacesService) savedView(ctx context.Context, dir string) (Wor
 // same refresh-client vote the Code view's panes cast. tmux answers over the
 // stream with a window 'layout-changed' event, which is what actually sets
 // the pane's grid; see AgentsMode's resize wiring.
-func (s *AgentWorkspacesService) ResizeSession(ctx context.Context, id int64, cols, rows int) error {
+func (s *AgentWorkspacesService) ResizeSession(ctx context.Context, id string, cols, rows int) error {
 	rec, err := s.getSession(ctx, id)
 	if err != nil {
 		return err
@@ -1542,7 +1541,7 @@ func (s *AgentWorkspacesService) launchTerminal(ctx context.Context, rec stores.
 	// The token and the URL are what let it end its own chat
 	// (ADR a-scheduled-chat-ends-itself-through-a-capability-token-its-launch-handed-it).
 	env := []string{
-		fmt.Sprintf("HIVE_AGENT_SESSION=%d", rec.ID),
+		"HIVE_AGENT_SESSION=" + rec.ID,
 		"HIVE_AGENT_WORKSPACE=" + opts.dir,
 	}
 	if rec.EndToken != "" {
@@ -1560,7 +1559,7 @@ func (s *AgentWorkspacesService) launchTerminal(ctx context.Context, rec stores.
 	}
 
 	view := SessionView{
-		ID: rec.ID, Workspace: rec.Workspace, Name: rec.Name, Agent: rec.Agent,
+		ID: rec.ID, LegacyID: rec.LegacyID, Workspace: rec.Workspace, Name: rec.Name, Agent: rec.Agent,
 		LastOpenedAt: rec.LastOpenedAt, Slug: name, ResumeAttempted: opts.resumeAttempted,
 		ScheduleID: rec.ScheduleID,
 	}
@@ -1749,7 +1748,7 @@ func (s *AgentWorkspacesService) sessionViews(ctx context.Context, records []sto
 			live = name
 		}
 		views = append(views, SessionView{
-			ID: rec.ID, Workspace: rec.Workspace, Name: rec.Name, Agent: rec.Agent,
+			ID: rec.ID, LegacyID: rec.LegacyID, Workspace: rec.Workspace, Name: rec.Name, Agent: rec.Agent,
 			LastOpenedAt: rec.LastOpenedAt, Slug: name, TerminalID: live,
 			ScheduleID: rec.ScheduleID,
 		})

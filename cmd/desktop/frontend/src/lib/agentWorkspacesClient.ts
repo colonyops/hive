@@ -143,7 +143,9 @@ export interface SkillPackagesPayload {
 
 /** One row of a workspace's session list. */
 export interface AgentSession {
-  id: number
+  id: string
+  /** Numeric ID from before the UUID migration, present only on migrated chats. */
+  legacyId?: string
   workspace: string
   name: string
   agent: string
@@ -180,7 +182,7 @@ export interface AgentSession {
 
 /** One live session's detected activity — ready, active, or approval. */
 export interface AgentSessionActivity {
-  id: number
+  id: string
   status: 'ready' | 'active' | 'approval' | string
 }
 
@@ -220,7 +222,7 @@ export interface WorkspaceCanvas {
   workspace: string
   name: string
   title: string
-  session: number
+  session: string
   hiveSession: string
   createdAt: number
   updatedAt: number
@@ -232,7 +234,7 @@ export interface WorkspaceCanvasMeta {
   workspace: string
   name: string
   title: string
-  session: number
+  session: string
   hiveSession: string
   createdAt: number
   updatedAt: number
@@ -310,7 +312,7 @@ export interface StartSessionRequest {
 }
 
 export interface ResumeSessionRequest {
-  id: number
+  id: string
   cols?: number
   rows?: number
 }
@@ -354,17 +356,17 @@ export interface AgentWorkspacesClient {
   /** Polled while the area is active; '' spans every workspace. Omits a session with no live tmux session. */
   activity(workspace: string): Promise<AgentSessionActivity[]>
   /** Votes a size for a live session's pane; tmux answers with a window 'layout-changed' frame on the stream. */
-  resizeSession(id: number, cols: number, rows: number): Promise<void>
+  resizeSession(id: string, cols: number, rows: number): Promise<void>
   /** Sets a session's display name; the live terminal, if any, is untouched. */
-  renameSession(id: number, name: string): Promise<void>
+  renameSession(id: string, name: string): Promise<void>
   /** Every session across every workspace, newest first in stable creation order. */
   allSessions(): Promise<AgentSession[]>
   startSession(request: StartSessionRequest): Promise<AgentSession>
   /** Opens the seeded Hive workspace on the interview that ends first run; detached, so route to it to attach. */
   startFirstRunChat(): Promise<AgentSession>
   resumeSession(request: ResumeSessionRequest): Promise<AgentSession>
-  closeSession(id: number): Promise<{ closed: boolean }>
-  deleteSession(id: number): Promise<void>
+  closeSession(id: string): Promise<{ closed: boolean }>
+  deleteSession(id: string): Promise<void>
   /** One canvas by workspace and name; a name nothing was written under answers empty. */
   canvas(workspace: string, name: string): Promise<WorkspaceCanvas>
   /** An owner's canvases, most recently updated first — metadata only. */

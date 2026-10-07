@@ -139,7 +139,7 @@ export interface BuildInfo {
  * leaves the pane's pick).
  */
 export interface CanvasToggle {
-    "session": number;
+    "session": string;
     "hiveSession": string;
     "name": string;
     "open": boolean;
@@ -150,7 +150,7 @@ export interface CanvasToggle {
  * (Session) or a hive session (HiveSession), never both.
  */
 export interface CanvasWrite {
-    "session": number;
+    "session": string;
     "hiveSession": string;
 }
 

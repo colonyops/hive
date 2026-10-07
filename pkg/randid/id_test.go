@@ -4,8 +4,17 @@ import (
 	"regexp"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestUUIDv7(t *testing.T) {
+	id := UUIDv7()
+	parsed, err := uuid.Parse(id)
+	require.NoError(t, err)
+	assert.Equal(t, uuid.Version(7), parsed.Version())
+}
 
 func TestGenerate(t *testing.T) {
 	tests := []struct {

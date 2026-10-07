@@ -128,25 +128,25 @@ func scheduleRunFromRecord(rec stores.ScheduleRun) schedule.Run {
 // a scheduled run gets the regenerated artifacts and the same session cap.
 type scheduleLauncher struct{ workspaces *AgentWorkspacesService }
 
-func (l scheduleLauncher) Launch(ctx context.Context, req schedule.LaunchRequest) (int64, error) {
+func (l scheduleLauncher) Launch(ctx context.Context, req schedule.LaunchRequest) (string, error) {
 	view, err := l.workspaces.StartScheduledSession(ctx, StartScheduledSession{
 		Workspace: req.Workspace, ScheduleID: req.ScheduleID, ScheduleName: req.ScheduleName,
 		Name: req.Name, Prompt: req.Prompt,
 	})
 	if err != nil {
-		return 0, err
+		return "", err
 	}
 	// An interactive launch shows an early exit as a notice on a pane the user
 	// is already looking at. A scheduled one has no pane, so the same fact has
 	// to reach the run history as a failure -- a CLI that is not on PATH, or a
 	// flag it rejected, is not a chat that ran.
 	if view.ExitedEarly {
-		return 0, Errorf(KindInternal, "%s", view.Notice)
+		return "", Errorf(KindInternal, "%s", view.Notice)
 	}
 	return view.ID, nil
 }
 
-func (l scheduleLauncher) SessionLive(ctx context.Context, sessionID int64) (bool, error) {
+func (l scheduleLauncher) SessionLive(ctx context.Context, sessionID string) (bool, error) {
 	return l.workspaces.SessionLive(ctx, sessionID)
 }
 
@@ -174,8 +174,8 @@ func scheduleRunDetail(run schedule.Run) string {
 	if run.Missed > 0 {
 		parts = append(parts, fmt.Sprintf("%d missed", run.Missed))
 	}
-	if run.SessionID != 0 {
-		parts = append(parts, fmt.Sprintf("chat %d", run.SessionID))
+	if run.SessionID != "" {
+		parts = append(parts, fmt.Sprintf("chat %s", run.SessionID))
 	}
 	if run.Error != "" {
 		parts = append(parts, run.Error)

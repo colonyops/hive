@@ -32,7 +32,7 @@ type agentCanvasView struct {
 	Workspace   string             `json:"workspace"`
 	Name        string             `json:"name"`
 	Title       string             `json:"title"`
-	Session     int64              `json:"session"`
+	Session     string             `json:"session"`
 	HiveSession string             `json:"hiveSession"`
 	CreatedAt   int64              `json:"createdAt"`
 	UpdatedAt   int64              `json:"updatedAt"`
@@ -43,7 +43,7 @@ type agentCanvasMeta struct {
 	Workspace   string `json:"workspace"`
 	Name        string `json:"name"`
 	Title       string `json:"title"`
-	Session     int64  `json:"session"`
+	Session     string `json:"session"`
 	HiveSession string `json:"hiveSession"`
 	CreatedAt   int64  `json:"createdAt"`
 	UpdatedAt   int64  `json:"updatedAt"`

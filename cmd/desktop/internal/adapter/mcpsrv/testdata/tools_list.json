@@ -664,7 +664,7 @@
                     "description": "The chat the run launched. Absent when it launched none, and once that chat has ended: a scheduled chat deletes itself when its task is done.",
                     "type": [
                       "null",
-                      "integer"
+                      "string"
                     ]
                   },
                   "startedAt": {
@@ -952,7 +952,7 @@
               "description": "The chat the run launched. Absent when it launched none, and once that chat has ended: a scheduled chat deletes itself when its task is done.",
               "type": [
                 "null",
-                "integer"
+                "string"
               ]
             },
             "startedAt": {
@@ -1125,7 +1125,7 @@
                 "description": "The chat the run launched. Absent when it launched none, and once that chat has ended: a scheduled chat deletes itself when its task is done.",
                 "type": [
                   "null",
-                  "integer"
+                  "string"
                 ]
               },
               "startedAt": {

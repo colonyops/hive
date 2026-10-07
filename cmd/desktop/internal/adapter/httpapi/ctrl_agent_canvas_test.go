@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,7 +36,7 @@ func TestAgentCanvasReadsOverTheWire(t *testing.T) {
 	require.NotNil(t, view.Blocks, "blocks is never null on the wire")
 	assert.Empty(t, view.Blocks, "a name nothing was written under answers empty, not an error")
 
-	_, err = h.core.Canvas.PutBlock(t.Context(), strconv.FormatInt(rec.ID, 10), "plan", "The Plan", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "hello"})
+	_, err = h.core.Canvas.PutBlock(t.Context(), rec.ID, "plan", "The Plan", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "hello"})
 	require.NoError(t, err)
 
 	resp = h.post(t, AgentWorkspacesPathPrefix+"canvas", testToken, agentCanvasRequest{Workspace: "demo", Name: "plan"})

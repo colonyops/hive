@@ -7,13 +7,14 @@ package queries
 
 import (
 	"context"
+	"database/sql"
 )
 
 const deleteAgentWorkspaceSession = `-- name: DeleteAgentWorkspaceSession :exec
 DELETE FROM agent_workspace_session WHERE id = ?
 `
 
-func (q *Queries) DeleteAgentWorkspaceSession(ctx context.Context, id int64) error {
+func (q *Queries) DeleteAgentWorkspaceSession(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteAgentWorkspaceSession, id)
 	return err
 }
@@ -28,14 +29,15 @@ func (q *Queries) DeleteAgentWorkspaceSessionsByWorkspace(ctx context.Context, w
 }
 
 const getAgentWorkspaceSession = `-- name: GetAgentWorkspaceSession :one
-SELECT id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session WHERE id = ?
+SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session WHERE id = ?
 `
 
-func (q *Queries) GetAgentWorkspaceSession(ctx context.Context, id int64) (AgentWorkspaceSession, error) {
+func (q *Queries) GetAgentWorkspaceSession(ctx context.Context, id string) (AgentWorkspaceSession, error) {
 	row := q.db.QueryRowContext(ctx, getAgentWorkspaceSession, id)
 	var i AgentWorkspaceSession
 	err := row.Scan(
 		&i.ID,
+		&i.LegacyID,
 		&i.Workspace,
 		&i.Name,
 		&i.Agent,
@@ -50,7 +52,7 @@ func (q *Queries) GetAgentWorkspaceSession(ctx context.Context, id int64) (Agent
 }
 
 const getAgentWorkspaceSessionByEndToken = `-- name: GetAgentWorkspaceSessionByEndToken :one
-SELECT id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session WHERE end_token = ? AND end_token <> ''
+SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session WHERE end_token = ? AND end_token <> ''
 `
 
 // The session a launch handed this token to. An empty token matches nothing:
@@ -60,6 +62,30 @@ func (q *Queries) GetAgentWorkspaceSessionByEndToken(ctx context.Context, endTok
 	var i AgentWorkspaceSession
 	err := row.Scan(
 		&i.ID,
+		&i.LegacyID,
+		&i.Workspace,
+		&i.Name,
+		&i.Agent,
+		&i.AgentSessionID,
+		&i.CreatedAt,
+		&i.LastOpenedAt,
+		&i.ScheduleID,
+		&i.EndToken,
+		&i.TerminalID,
+	)
+	return i, err
+}
+
+const getAgentWorkspaceSessionByLegacyID = `-- name: GetAgentWorkspaceSessionByLegacyID :one
+SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session WHERE legacy_id = ?
+`
+
+func (q *Queries) GetAgentWorkspaceSessionByLegacyID(ctx context.Context, legacyID sql.NullInt64) (AgentWorkspaceSession, error) {
+	row := q.db.QueryRowContext(ctx, getAgentWorkspaceSessionByLegacyID, legacyID)
+	var i AgentWorkspaceSession
+	err := row.Scan(
+		&i.ID,
+		&i.LegacyID,
 		&i.Workspace,
 		&i.Name,
 		&i.Agent,
@@ -74,12 +100,13 @@ func (q *Queries) GetAgentWorkspaceSessionByEndToken(ctx context.Context, endTok
 }
 
 const insertAgentWorkspaceSession = `-- name: InsertAgentWorkspaceSession :one
-INSERT INTO agent_workspace_session (workspace, name, agent, agent_session_id, terminal_id, created_at, last_opened_at, schedule_id, end_token)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id
+INSERT INTO agent_workspace_session (id, workspace, name, agent, agent_session_id, terminal_id, created_at, last_opened_at, schedule_id, end_token)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id
 `
 
 type InsertAgentWorkspaceSessionParams struct {
+	ID             string `json:"id"`
 	Workspace      string `json:"workspace"`
 	Name           string `json:"name"`
 	Agent          string `json:"agent"`
@@ -93,6 +120,7 @@ type InsertAgentWorkspaceSessionParams struct {
 
 func (q *Queries) InsertAgentWorkspaceSession(ctx context.Context, arg InsertAgentWorkspaceSessionParams) (AgentWorkspaceSession, error) {
 	row := q.db.QueryRowContext(ctx, insertAgentWorkspaceSession,
+		arg.ID,
 		arg.Workspace,
 		arg.Name,
 		arg.Agent,
@@ -106,6 +134,7 @@ func (q *Queries) InsertAgentWorkspaceSession(ctx context.Context, arg InsertAge
 	var i AgentWorkspaceSession
 	err := row.Scan(
 		&i.ID,
+		&i.LegacyID,
 		&i.Workspace,
 		&i.Name,
 		&i.Agent,
@@ -120,9 +149,9 @@ func (q *Queries) InsertAgentWorkspaceSession(ctx context.Context, arg InsertAge
 }
 
 const listAgentWorkspaceSessions = `-- name: ListAgentWorkspaceSessions :many
-SELECT id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session
+SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session
 WHERE workspace = ?
-ORDER BY id DESC
+ORDER BY rowid DESC
 `
 
 // One workspace's sessions, newest record first. Creation order on purpose,
@@ -139,6 +168,7 @@ func (q *Queries) ListAgentWorkspaceSessions(ctx context.Context, workspace stri
 		var i AgentWorkspaceSession
 		if err := rows.Scan(
 			&i.ID,
+			&i.LegacyID,
 			&i.Workspace,
 			&i.Name,
 			&i.Agent,
@@ -163,8 +193,8 @@ func (q *Queries) ListAgentWorkspaceSessions(ctx context.Context, workspace stri
 }
 
 const listAllAgentWorkspaceSessions = `-- name: ListAllAgentWorkspaceSessions :many
-SELECT id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session
-ORDER BY id DESC
+SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session
+ORDER BY rowid DESC
 `
 
 // Every session across every workspace, newest record first: the same
@@ -180,6 +210,7 @@ func (q *Queries) ListAllAgentWorkspaceSessions(ctx context.Context) ([]AgentWor
 		var i AgentWorkspaceSession
 		if err := rows.Scan(
 			&i.ID,
+			&i.LegacyID,
 			&i.Workspace,
 			&i.Name,
 			&i.Agent,
@@ -209,7 +240,7 @@ UPDATE agent_workspace_session SET name = ? WHERE id = ?
 
 type RenameAgentWorkspaceSessionParams struct {
 	Name string `json:"name"`
-	ID   int64  `json:"id"`
+	ID   string `json:"id"`
 }
 
 func (q *Queries) RenameAgentWorkspaceSession(ctx context.Context, arg RenameAgentWorkspaceSessionParams) error {
@@ -223,7 +254,7 @@ UPDATE agent_workspace_session SET agent_session_id = ? WHERE id = ?
 
 type SetAgentWorkspaceSessionAgentIDParams struct {
 	AgentSessionID string `json:"agent_session_id"`
-	ID             int64  `json:"id"`
+	ID             string `json:"id"`
 }
 
 // The only write to agent_session_id after the insert: a resume that falls
@@ -240,8 +271,8 @@ UPDATE agent_workspace_session SET last_opened_at = ? WHERE id = ?
 `
 
 type TouchAgentWorkspaceSessionParams struct {
-	LastOpenedAt int64 `json:"last_opened_at"`
-	ID           int64 `json:"id"`
+	LastOpenedAt int64  `json:"last_opened_at"`
+	ID           string `json:"id"`
 }
 
 func (q *Queries) TouchAgentWorkspaceSession(ctx context.Context, arg TouchAgentWorkspaceSessionParams) error {

@@ -48,7 +48,8 @@ type agentWorkspaceView struct {
 
 // agentSessionView is one row of a workspace's session list.
 type agentSessionView struct {
-	ID           int64  `json:"id"`
+	ID           string `json:"id"`
+	LegacyID     string `json:"legacyId"`
 	Workspace    string `json:"workspace"`
 	Name         string `json:"name"`
 	Agent        string `json:"agent"`
@@ -116,7 +117,7 @@ func toAgentWorkspaceViews(in []app.WorkspaceView) []agentWorkspaceView {
 
 func toAgentSessionView(s app.SessionView) agentSessionView {
 	return agentSessionView{
-		ID: s.ID, Workspace: s.Workspace, Name: s.Name, Agent: s.Agent, LastOpenedAt: s.LastOpenedAt,
+		ID: s.ID, LegacyID: s.LegacyID, Workspace: s.Workspace, Name: s.Name, Agent: s.Agent, LastOpenedAt: s.LastOpenedAt,
 		Slug: s.Slug, TerminalID: s.TerminalID, WindowID: s.WindowID, PaneID: s.PaneID, Cols: s.Cols, Rows: s.Rows,
 		ResumeAttempted: s.ResumeAttempted, Notice: s.Notice, ScheduleID: s.ScheduleID,
 	}
@@ -626,13 +627,13 @@ func (ctrl *Controller) AgentSessionStartFirstRun(w http.ResponseWriter, r *http
 }
 
 type agentSessionResumeRequest struct {
-	ID   int64 `json:"id"`
-	Cols int   `json:"cols"`
-	Rows int   `json:"rows"`
+	ID   string `json:"id"`
+	Cols int    `json:"cols"`
+	Rows int    `json:"rows"`
 }
 
 func (b agentSessionResumeRequest) Validate() error {
-	return criterio.Run("id", b.ID, criterio.Positive[int64]())
+	return criterio.Run("id", b.ID, criterio.Required)
 }
 
 // AgentSessionResume reattaches a session's live terminal if it still has
@@ -652,11 +653,11 @@ func (ctrl *Controller) AgentSessionResume(w http.ResponseWriter, r *http.Reques
 }
 
 type agentSessionIDRequest struct {
-	ID int64 `json:"id"`
+	ID string `json:"id"`
 }
 
 func (b agentSessionIDRequest) Validate() error {
-	return criterio.Run("id", b.ID, criterio.Positive[int64]())
+	return criterio.Run("id", b.ID, criterio.Required)
 }
 
 type agentSessionCloseResponse struct {
@@ -678,13 +679,13 @@ func (ctrl *Controller) AgentSessionClose(w http.ResponseWriter, r *http.Request
 }
 
 type agentSessionRenameRequest struct {
-	ID   int64  `json:"id"`
+	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
 func (b agentSessionRenameRequest) Validate() error {
 	return criterio.ValidateStruct(
-		criterio.Run("id", b.ID, criterio.Positive[int64]()),
+		criterio.Run("id", b.ID, criterio.Required),
 		criterio.Run("name", b.Name, criterio.Required),
 	)
 }
@@ -713,7 +714,7 @@ type agentSessionActivityRequest struct {
 func (b agentSessionActivityRequest) Validate() error { return nil }
 
 type agentSessionActivityItem struct {
-	ID     int64  `json:"id"`
+	ID     string `json:"id"`
 	Status string `json:"status"`
 }
 
@@ -746,14 +747,14 @@ func (ctrl *Controller) AgentSessionActivity(w http.ResponseWriter, r *http.Requ
 // tmux answers over the stream with a window 'layout-changed' event, and that
 // event is what sets the pane's grid.
 type agentSessionResizeRequest struct {
-	ID   int64 `json:"id"`
-	Cols int   `json:"cols"`
-	Rows int   `json:"rows"`
+	ID   string `json:"id"`
+	Cols int    `json:"cols"`
+	Rows int    `json:"rows"`
 }
 
 func (b agentSessionResizeRequest) Validate() error {
 	return criterio.ValidateStruct(
-		criterio.Run("id", b.ID, criterio.Positive[int64]()),
+		criterio.Run("id", b.ID, criterio.Required),
 		criterio.Run("cols", b.Cols, criterio.Positive[int]()),
 		criterio.Run("rows", b.Rows, criterio.Positive[int]()),
 	)

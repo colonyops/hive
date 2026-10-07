@@ -3,6 +3,7 @@ package schedule
 import (
 	"context"
 	"errors"
+	"fmt"
 	"maps"
 	"slices"
 	"strings"
@@ -202,7 +203,7 @@ type fakeLauncher struct {
 	mu       sync.Mutex
 	requests []LaunchRequest
 	nextID   int64
-	live     map[int64]bool
+	live     map[string]bool
 	err      error
 
 	// awaitQuit holds Launch until the scheduler's context is cancelled, which
@@ -213,31 +214,31 @@ type fakeLauncher struct {
 }
 
 func newFakeLauncher() *fakeLauncher {
-	return &fakeLauncher{live: map[int64]bool{}}
+	return &fakeLauncher{live: map[string]bool{}}
 }
 
-func (f *fakeLauncher) Launch(ctx context.Context, req LaunchRequest) (int64, error) {
+func (f *fakeLauncher) Launch(ctx context.Context, req LaunchRequest) (string, error) {
 	f.mu.Lock()
 	await, failOnQuit := f.awaitQuit, f.failOnQuit
 	f.mu.Unlock()
 	if await {
 		<-ctx.Done()
 		if failOnQuit {
-			return 0, ctx.Err()
+			return "", ctx.Err()
 		}
 	}
 
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.err != nil {
-		return 0, f.err
+		return "", f.err
 	}
 	f.requests = append(f.requests, req)
 	f.nextID++
-	return f.nextID, nil
+	return fmt.Sprint(f.nextID), nil
 }
 
-func (f *fakeLauncher) SessionLive(_ context.Context, sessionID int64) (bool, error) {
+func (f *fakeLauncher) SessionLive(_ context.Context, sessionID string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.live[sessionID], nil
@@ -281,7 +282,7 @@ func TestSchedulerFiresAtTheDueTime(t *testing.T) {
 		assert.Equal(t, StatusLaunched, runs[0].Status)
 		assert.Equal(t, ReasonDue, runs[0].Reason)
 		assert.Equal(t, 0, runs[0].Missed)
-		assert.Equal(t, int64(1), runs[0].SessionID)
+		assert.Equal(t, "1", runs[0].SessionID)
 
 		requests := launcher.allRequests()
 		require.Len(t, requests, 1)
@@ -405,8 +406,8 @@ func TestPassSkipsWhileThePreviousChatIsStillRunning(t *testing.T) {
 
 	spec := hourlySpec()
 	h := duePass(t, spec, nil)
-	h.store.seedRun(Run{Workspace: spec.Workspace, ScheduleID: spec.ID, Status: StatusLaunched, SessionID: 7})
-	h.launcher.live[7] = true
+	h.store.seedRun(Run{Workspace: spec.Workspace, ScheduleID: spec.ID, Status: StatusLaunched, SessionID: "chat-7"})
+	h.launcher.live["chat-7"] = true
 
 	require.NoError(t, h.scheduler.pass(t.Context()))
 
@@ -445,7 +446,7 @@ func TestPassRecordsALaunchFailure(t *testing.T) {
 	runs := h.store.allRuns()
 	require.Len(t, runs, 1)
 	assert.Equal(t, StatusFailed, runs[0].Status)
-	assert.Equal(t, int64(0), runs[0].SessionID)
+	assert.Empty(t, runs[0].SessionID)
 	assert.Contains(t, runs[0].Error, "tmux is not installed")
 }
 
@@ -477,7 +478,7 @@ func TestPassRendersThePromptWithTheLastRunAndWorkspaceName(t *testing.T) {
 		OnRun: func(run Run) { seen = append(seen, run) },
 	})
 	h.store.seedRun(Run{
-		Workspace: spec.Workspace, ScheduleID: spec.ID, Status: StatusLaunched, SessionID: 4,
+		Workspace: spec.Workspace, ScheduleID: spec.ID, Status: StatusLaunched, SessionID: "chat-4",
 		ScheduledFor: at(8, 0),
 	})
 
@@ -537,7 +538,7 @@ func TestStopRecordsAChatItAlreadyLaunched(t *testing.T) {
 		runs := store.allRuns()
 		require.Len(t, runs, 1)
 		assert.Equal(t, StatusLaunched, runs[0].Status)
-		assert.Equal(t, int64(1), runs[0].SessionID)
+		assert.Equal(t, "1", runs[0].SessionID)
 
 		cursor, ok := store.allCursors()[storeKey("product", "hourly")]
 		require.True(t, ok)

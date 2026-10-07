@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/uuid"
+
 	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
@@ -30,7 +32,7 @@ const (
 // with: the session record is the authority on which workspace a canvas
 // belongs to, so an agent never names the workspace itself.
 type canvasSessionResolver interface {
-	Get(ctx context.Context, id int64) (stores.AgentSession, error)
+	Get(ctx context.Context, id string) (stores.AgentSession, error)
 }
 
 // canvasHiveSessions is the same authority for an agent in a hive session:
@@ -319,8 +321,9 @@ func (s *CanvasService) Repositories(_ context.Context) ([]string, error) {
 // or hive session.
 const canvasGlobalSession = "global"
 
-// resolve reads the tool's session argument. A number is a chat's record id,
-// what HIVE_AGENT_SESSION carries. "global" is an agent outside any session.
+// resolve reads the tool's session argument. A UUID is a chat's record id;
+// a positive integer is a migrated chat's legacy alias. HIVE_AGENT_SESSION
+// carries one of those values. "global" is an agent outside any session.
 // Anything else is the caller's working directory: hive puts no id in a
 // session's environment, and an agent the user wired up by hand has only
 // where it runs
@@ -335,19 +338,22 @@ func (s *CanvasService) resolve(ctx context.Context, session string) (canvasCall
 	if session == canvasGlobalSession {
 		return canvasCaller{owner: canvas.GlobalOwner}, nil
 	}
-	if id, err := strconv.ParseInt(session, 10, 64); err == nil {
-		rec, err := s.sessions.Get(ctx, id)
+	if !filepath.IsAbs(session) {
+		if _, err := uuid.Parse(session); err != nil {
+			legacyID, legacyErr := strconv.ParseInt(session, 10, 64)
+			if legacyErr != nil || legacyID <= 0 {
+				return canvasCaller{}, Errorf(KindInvalid,
+					"session %q is not a chat's HIVE_AGENT_SESSION, the absolute path of a working directory, or global", session)
+			}
+		}
+		rec, err := s.sessions.Get(ctx, session)
 		if stores.IsNotFound(err) {
-			return canvasCaller{}, Errorf(KindNotFound, "session %d not found", id)
+			return canvasCaller{}, Errorf(KindNotFound, "session %q not found", session)
 		}
 		if err != nil {
-			return canvasCaller{}, Wrap(err, KindInternal, "loading session %d", id)
+			return canvasCaller{}, Wrap(err, KindInternal, "loading session %q", session)
 		}
-		return canvasCaller{owner: rec.Workspace, author: canvas.Author{Session: id}}, nil
-	}
-	if !filepath.IsAbs(session) {
-		return canvasCaller{}, Errorf(KindInvalid,
-			"session %q is not a chat's HIVE_AGENT_SESSION, the absolute path of a working directory, or global", session)
+		return canvasCaller{owner: rec.Workspace, author: canvas.Author{Session: rec.ID}}, nil
 	}
 	if s.hiveSessions == nil {
 		return canvasCaller{}, Errorf(KindUnavailable, "hive sessions are not available in this build")

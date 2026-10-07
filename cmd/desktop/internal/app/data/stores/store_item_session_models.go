@@ -26,7 +26,7 @@ func mapItemSessionFromDB(row queries.ItemSession) ItemSession {
 
 // ItemChat is an agent workspace chat opened for an inbox item.
 type ItemChat struct {
-	ChatID    int64  `json:"chatId"`
+	ChatID    string `json:"chatId"`
 	Workspace string `json:"workspace"`
 	Name      string `json:"name"`
 	CreatedAt int64  `json:"createdAt"`

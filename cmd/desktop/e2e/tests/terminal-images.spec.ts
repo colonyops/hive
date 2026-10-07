@@ -16,7 +16,7 @@ const windowState = {
   layout: { paneId: '%1', x: 0, y: 0, width: 100, height: 30, cells: [] },
 }
 const workspace = { dir: 'images', name: 'Images', command: 'claude', mcps: [], skills: [], schedules: [], problem: '', danger: false, notice: '' }
-const session = { id: 42, name: 'Image chat', workspace: 'images', agent: 'claude', lastOpenedAt: 0, slug: 'agentws-42', terminalId: 'agentws-42', windowId: '@1', paneId: '%1', cols: 100, rows: 30, resumeAttempted: false, notice: '', scheduleId: '' }
+const session = { id: '42', name: 'Image chat', workspace: 'images', agent: 'claude', lastOpenedAt: 0, slug: 'agentws-42', terminalId: 'agentws-42', windowId: '@1', paneId: '%1', cols: 100, rows: 30, resumeAttempted: false, notice: '', scheduleId: '' }
 
 async function terminalFixture(page: Page) {
   const pastes: { slug: string; paneId: string; text: string }[] = []

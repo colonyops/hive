@@ -211,7 +211,7 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
     void router.push({ name: 'terminal', params: { slug } })
   }
 
-  function openItemChat(workspace: string, id: number): void {
+  function openItemChat(workspace: string, id: string): void {
     void router.push({ name: 'agents', params: { workspace }, query: { chat: String(id) } })
   }
 

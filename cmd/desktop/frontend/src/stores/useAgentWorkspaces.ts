@@ -232,17 +232,17 @@ export const useAgentWorkspaces = defineStore('agentWorkspaces', () => {
     return await requireClient().resumeSession(request)
   }
 
-  async function closeSession(id: number): Promise<boolean> {
+  async function closeSession(id: string): Promise<boolean> {
     if (!client.value) return false
     const result = await client.value.closeSession(id)
     return result.closed
   }
 
-  async function renameSession(id: number, name: string): Promise<void> {
+  async function renameSession(id: string, name: string): Promise<void> {
     await requireClient().renameSession(id, name)
   }
 
-  async function deleteSession(id: number): Promise<void> {
+  async function deleteSession(id: string): Promise<void> {
     if (!client.value) return
     await client.value.deleteSession(id)
   }

@@ -50,7 +50,7 @@ func TestScheduleStoreAdapterRoundTripsTimes(t *testing.T) {
 		Workspace: "demo", ScheduleID: "weekly", ScheduleName: "Weekly summary",
 		ScheduledFor: scheduledFor, StartedAt: startedAt,
 		Reason: schedule.ReasonCatchUp, Missed: 2, Status: schedule.StatusLaunched,
-		SessionID: 42, Prompt: "summarize",
+		SessionID: "0199bd91-eb60-71f3-805c-a991226462b2", Prompt: "summarize",
 	})
 	require.NoError(t, err)
 	assert.NotZero(t, stored.ID, "the store assigns the id")
@@ -59,7 +59,7 @@ func TestScheduleStoreAdapterRoundTripsTimes(t *testing.T) {
 	assert.Equal(t, schedule.ReasonCatchUp, stored.Reason)
 	assert.Equal(t, schedule.StatusLaunched, stored.Status)
 	assert.Equal(t, 2, stored.Missed)
-	assert.Equal(t, int64(42), stored.SessionID)
+	assert.Equal(t, "0199bd91-eb60-71f3-805c-a991226462b2", stored.SessionID)
 
 	last, ok, err := adapter.LastLaunchedRun(t.Context(), "demo", "weekly")
 	require.NoError(t, err)

@@ -2113,12 +2113,16 @@ share the same limit. A failed launch removes the file; a successful launch
 leaves cleanup to the instruction because the agent can read it after the
 launch call has returned.
 
-A chat record has three separate identities. Its numeric row id addresses the
+A chat record has three separate identities. Its UUIDv7 row id addresses the
 HTTP and canvas APIs. Its agent session id addresses the CLI's conversation and
 can rotate on a fresh relaunch. Its immutable eight-character `terminal_id`
 addresses tmux as `agentws-<terminal_id>` and is random because isolated app
 databases share the machine-wide tmux namespace
-(ADR agent-workspace-tmux-sessions-use-persisted-random-ids). Existing records keep their old numeric suffix after migration.
+(ADR agent-workspace-tmux-sessions-use-persisted-random-ids). Migrated records
+keep their numeric row id as a legacy alias, so an agent that stayed running
+across the app restart can keep using the old `HIVE_AGENT_SESSION` in its
+environment. Session listings expose the alias only to migrate saved routes and
+pins. Every operation response and new event carries the canonical UUIDv7.
 
 There is no `agent:` field. The label the activity classifier, the resume
 probe and the bounded-MCP notice key on is `AgentFor(command)` — the first
@@ -2399,7 +2403,7 @@ a calendar-style form that compiles to cron on the way out.
 `lastRun`. `name` is the manifest's own, empty when there is none, and the
 client falls back to the id so the editor never writes the id back as a name.
 `SessionView.scheduleId` is a column the launch writes, not a derivation from
-`schedule_run`, because session ids are reused and history is pruned.
+`schedule_run`, because run history is pruned independently of the chat.
 
 A scheduled chat ends itself: every launch mints a token, stores it on the
 session row, and hands the process `HIVE_AGENT_SESSION_TOKEN` and

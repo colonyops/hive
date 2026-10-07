@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -22,18 +21,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type fakeCanvasSessions map[int64]stores.AgentSession
+type fakeCanvasSessions map[string]stores.AgentSession
 
-func (f fakeCanvasSessions) Get(_ context.Context, id int64) (stores.AgentSession, error) {
+func (f fakeCanvasSessions) Get(_ context.Context, id string) (stores.AgentSession, error) {
 	rec, ok := f[id]
 	if !ok {
-		return stores.AgentSession{}, stores.NotFoundError{Entity: "agent_workspace_session", Key: strconv.FormatInt(id, 10)}
+		return stores.AgentSession{}, stores.NotFoundError{Entity: "agent_workspace_session", Key: id}
 	}
 	return rec, nil
 }
 
 type canvasToggle struct {
-	session int64
+	session string
 	name    string
 	open    bool
 }
@@ -44,11 +43,11 @@ type canvasToggle struct {
 type canvasSignals struct {
 	bus     *events.Bus
 	mu      sync.Mutex
-	updates []int64
+	updates []string
 	toggles []canvasToggle
 }
 
-func (s *canvasSignals) addUpdate(session int64) {
+func (s *canvasSignals) addUpdate(session string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.updates = append(s.updates, session)
@@ -60,10 +59,10 @@ func (s *canvasSignals) addToggle(tg canvasToggle) {
 	s.toggles = append(s.toggles, tg)
 }
 
-func (s *canvasSignals) Updates() []int64 {
+func (s *canvasSignals) Updates() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return append([]int64(nil), s.updates...)
+	return append([]string(nil), s.updates...)
 }
 
 func (s *canvasSignals) Toggles() []canvasToggle {
@@ -75,7 +74,7 @@ func (s *canvasSignals) Toggles() []canvasToggle {
 // waitUpdates polls until exactly n updates have been recorded. Publish hands
 // off to the bus subscriber's own goroutine, so a test asserting a positive
 // count has to wait rather than read signals.Updates() synchronously.
-func (s *canvasSignals) waitUpdates(t *testing.T, n int) []int64 {
+func (s *canvasSignals) waitUpdates(t *testing.T, n int) []string {
 	t.Helper()
 	require.Eventually(t, func() bool { return len(s.Updates()) == n }, 2*time.Second, 5*time.Millisecond)
 	return s.Updates()
@@ -93,10 +92,10 @@ func (s *canvasSignals) waitToggles(t *testing.T, n int) []canvasToggle {
 // which a synchronous read of Updates() could never guarantee.
 func (s *canvasSignals) requireNoUpdates(t *testing.T, msg string) {
 	t.Helper()
-	const sentinel = int64(-1)
+	const sentinel = "sentinel"
 	s.bus.Publish(t.Context(), events.CanvasUpdated{Session: sentinel})
 	require.Eventually(t, func() bool { return slices.Contains(s.Updates(), sentinel) }, 2*time.Second, 5*time.Millisecond)
-	assert.Equal(t, []int64{sentinel}, s.Updates(), msg)
+	assert.Equal(t, []string{sentinel}, s.Updates(), msg)
 }
 
 func testCanvasService(t *testing.T) (*CanvasService, *canvasSignals) {
@@ -104,7 +103,7 @@ func testCanvasService(t *testing.T) (*CanvasService, *canvasSignals) {
 	bus := newTestBus(t)
 	signals := &canvasSignals{bus: bus}
 	sessions := fakeCanvasSessions{
-		1: {ID: 1, Workspace: "ws", Name: "chat", Agent: "claude"},
+		"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"},
 	}
 	cancelUpdated := events.Subscribe(t.Context(), bus, "test.canvas-updated", events.Buffer(64), func(_ context.Context, e events.CanvasUpdated) {
 		signals.addUpdate(e.Session)
@@ -241,7 +240,7 @@ func TestCanvasHTMLIsSanitizedOnTheWayOutNotIn(t *testing.T) {
 
 	// Written straight to the store: validateBlock would have refused this,
 	// which is exactly why the read path cannot rely on it.
-	_, err := svc.store.Upsert("ws", "plan", canvas.Author{Session: 1}, "", "", canvas.Block{
+	_, err := svc.store.Upsert("ws", "plan", canvas.Author{Session: "1"}, "", "", canvas.Block{
 		ID: "a", Kind: canvas.KindHTML, Body: `<p class="hv-muted">ok</p><script>alert(1)</script>`,
 	})
 	require.NoError(t, err)
@@ -330,7 +329,7 @@ func TestCanvasMutationsNotify(t *testing.T) {
 
 	updates := signals.waitUpdates(t, 5)
 	for _, update := range updates {
-		assert.Equal(t, int64(1), update)
+		assert.Equal(t, "1", update)
 	}
 }
 
@@ -363,9 +362,9 @@ func TestCanvasSetPaneOpen(t *testing.T) {
 	assert.Equal(t, KindNotFound, KindOf(err))
 
 	assert.Equal(t, []canvasToggle{
-		{1, "", true},
-		{1, "plan", true},
-		{1, "", false},
+		{"1", "", true},
+		{"1", "plan", true},
+		{"1", "", false},
 	}, signals.waitToggles(t, 3))
 	signals.waitUpdates(t, 1)
 }
@@ -420,7 +419,7 @@ func TestCanvasListForOwner(t *testing.T) {
 	require.Len(t, metas, 1)
 	assert.Equal(t, "plan", metas[0].Name)
 	assert.Equal(t, "The Plan", metas[0].Title)
-	assert.Equal(t, int64(1), metas[0].Session)
+	assert.Equal(t, "1", metas[0].Session)
 
 	fromSession, err := svc.List(ctx, "1")
 	require.NoError(t, err)
@@ -459,7 +458,7 @@ func testHiveCanvasService(t *testing.T, sessions ...session.Session) (*CanvasSe
 			Repositories: func() string { return contextRoot },
 			Global:       t.TempDir(),
 		}),
-		Sessions:     fakeCanvasSessions{1: {ID: 1, Workspace: "ws", Name: "chat", Agent: "claude"}},
+		Sessions:     fakeCanvasSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
 		HiveSessions: fakeHiveSessions(sessions),
 		Events:       bus,
 	})
@@ -485,7 +484,7 @@ func TestCanvasFromAHiveSessionIsFiledUnderItsRepository(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "acme/site", c.Workspace)
 	assert.Equal(t, "abc123", c.HiveSession)
-	assert.Zero(t, c.Session)
+	assert.Empty(t, c.Session)
 	require.FileExists(t, filepath.Join(contextRoot, "acme", "site", canvas.DirName, "plan.json"))
 
 	require.Eventually(t, func() bool { return len(updates()) == 1 }, 2*time.Second, 5*time.Millisecond)
@@ -547,7 +546,7 @@ func TestAgentsOutsideEverySessionShareTheGlobalCanvases(t *testing.T) {
 	c, err := svc.PutBlock(ctx, "global", "notes", "Notes", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "x"})
 	require.NoError(t, err)
 	assert.Equal(t, canvas.GlobalOwner, c.Workspace)
-	assert.Zero(t, c.Session)
+	assert.Empty(t, c.Session)
 	assert.Empty(t, c.HiveSession)
 
 	_, err = svc.PutBlock(ctx, " global ", "notes", "", "", canvas.Block{ID: "b", Kind: canvas.KindMarkdown, Body: "y"})

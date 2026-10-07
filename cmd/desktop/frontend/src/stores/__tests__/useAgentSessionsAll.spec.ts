@@ -21,7 +21,7 @@ describe('useAgentSessionsAll', () => {
     vi.clearAllMocks()
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
     mocks.getAgentsEndpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://x', token: 't' })
-    mocks.allSessions.mockResolvedValue([{ id: 1, name: 'one' }])
+    mocks.allSessions.mockResolvedValue([{ id: '1', name: 'one' }])
   })
 
   it('reads every session through the shared client', async () => {
@@ -30,7 +30,7 @@ describe('useAgentSessionsAll', () => {
 
     await all.reload()
 
-    expect(all.recents.value.map((row) => row.id)).toEqual([1])
+    expect(all.recents.value.map((row) => row.id)).toEqual(['1'])
     expect(all.recentsLoaded.value).toBe(true)
     expect(all.recentsError.value).toBeNull()
   })
@@ -42,7 +42,7 @@ describe('useAgentSessionsAll', () => {
 
     await all.reload()
 
-    expect(all.recents.value.map((row) => row.id)).toEqual([1])
+    expect(all.recents.value.map((row) => row.id)).toEqual(['1'])
     expect(all.recentsError.value).toBe('control plane down')
   })
 

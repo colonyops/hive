@@ -19,9 +19,10 @@ vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => ({
   createAgentWorkspacesClient: () => ({ allSessions: mocks.allSessions }),
 }))
 
-function chat(id: number, name: string, terminalId = ''): AgentSession {
+function chat(id: string, name: string, terminalId = '', legacyId = ''): AgentSession {
   return {
     id,
+    ...(legacyId ? { legacyId } : {}),
     workspace: 'demo',
     name,
     agent: 'claude',
@@ -52,10 +53,10 @@ describe('useTerminalPinnedChats', () => {
   })
 
   it('turns a pinned chat into a sidebar row keyed on the slug the core declared', async () => {
-    await listed([chat(7, 'api-refactor', 'agentws-7')])
+    await listed([chat('7', 'api-refactor', 'agentws-7')])
     const { togglePin, rows, slugs } = useTerminalPinnedChats()
 
-    togglePin(7)
+    togglePin('7')
 
     expect(rows.value).toEqual([
       {
@@ -74,45 +75,56 @@ describe('useTerminalPinnedChats', () => {
   // A stopped chat carries no terminalId, and it is exactly the chat a pin is
   // most useful for — the row has to exist for the pane to offer a resume.
   it('rows a pinned chat that is not running', async () => {
-    await listed([chat(7, 'api-refactor')])
+    await listed([chat('7', 'api-refactor')])
     const { togglePin, rows } = useTerminalPinnedChats()
 
-    togglePin(7)
+    togglePin('7')
 
     expect(rows.value.map((row) => row.slug)).toEqual(['agentws-7'])
   })
 
   it('keeps pin order rather than the listing’s', async () => {
-    await listed([chat(1, 'first'), chat(2, 'second'), chat(3, 'third')])
+    await listed([chat('1', 'first'), chat('2', 'second'), chat('3', 'third')])
     const { togglePin, rows } = useTerminalPinnedChats()
 
-    togglePin(3)
-    togglePin(1)
+    togglePin('3')
+    togglePin('1')
 
     expect(rows.value.map((row) => row.name)).toEqual(['third', 'first'])
   })
 
   it('unpins by slug, which is what the Code view’s rows are keyed on', async () => {
-    await listed([chat(7, 'api-refactor')])
+    await listed([chat('7', 'api-refactor')])
     const { togglePin, unpinSlug, isPinned } = useTerminalPinnedChats()
-    togglePin(7)
+    togglePin('7')
 
     unpinSlug('agentws-7')
 
-    expect(isPinned(7)).toBe(false)
+    expect(isPinned('7')).toBe(false)
   })
 
   it('drops a pin whose chat the listing no longer carries', async () => {
-    await listed([chat(7, 'api-refactor'), chat(8, 'docs-pass')])
+    await listed([chat('7', 'api-refactor'), chat('8', 'docs-pass')])
     const { togglePin, pinnedIds } = useTerminalPinnedChats()
-    togglePin(7)
-    togglePin(8)
+    togglePin('7')
+    togglePin('8')
     await nextTick()
 
-    await listed([chat(8, 'docs-pass')])
+    await listed([chat('8', 'docs-pass')])
     await nextTick()
 
-    expect(pinnedIds.value).toEqual([8])
+    expect(pinnedIds.value).toEqual(['8'])
+  })
+
+  it('migrates a persisted numeric pin to the chat UUID', async () => {
+    const id = '0199bd92-cc5f-7c61-9185-7423813c9c12'
+    localStorage.setItem('hive.terminal.sidebar.pinned-chats', JSON.stringify([7]))
+
+    await listed([chat(id, 'api-refactor', '', '7')])
+    const { pinnedIds } = useTerminalPinnedChats()
+    await nextTick()
+
+    expect(pinnedIds.value).toEqual([id])
   })
 
   // The pin set outlives a run; the listing does not. Pruning against a list
@@ -121,12 +133,12 @@ describe('useTerminalPinnedChats', () => {
   it('does not prune before the listing has loaded', async () => {
     mocks.Available.mockResolvedValue({ available: false, reason: 'gated off' })
     const { togglePin, pinnedIds } = useTerminalPinnedChats()
-    togglePin(7)
+    togglePin('7')
     await nextTick()
 
     await useAgentSessionsAll().reload()
     await nextTick()
 
-    expect(pinnedIds.value).toEqual([7])
+    expect(pinnedIds.value).toEqual(['7'])
   })
 })

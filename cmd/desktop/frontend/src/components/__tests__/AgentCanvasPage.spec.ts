@@ -75,7 +75,7 @@ function meta(overrides: Partial<WorkspaceCanvasMeta>): WorkspaceCanvasMeta {
     workspace: 'web-app',
     name: 'plan',
     title: '',
-    session: 7,
+    session: '7',
     hiveSession: '',
     createdAt: 1,
     updatedAt: 1,
@@ -85,11 +85,11 @@ function meta(overrides: Partial<WorkspaceCanvasMeta>): WorkspaceCanvasMeta {
 }
 
 const listings: Record<string, WorkspaceCanvasMeta[]> = {
-  'web-app': [meta({ name: 'plan', title: 'The Plan' }), meta({ name: 'perf-report', session: 9 })],
+  'web-app': [meta({ name: 'plan', title: 'The Plan' }), meta({ name: 'perf-report', session: '9' })],
   docs: [meta({ workspace: 'docs', name: 'handbook', title: 'Handbook' })],
   'acme/site': [
-    meta({ workspace: 'acme/site', name: 'runbook', session: 0, hiveSession: 'def456', updatedAt: 9 }),
-    meta({ workspace: 'acme/site', name: 'handbook', session: 0, hiveSession: 'abc123', updatedAt: 2 }),
+    meta({ workspace: 'acme/site', name: 'runbook', session: '', hiveSession: 'def456', updatedAt: 9 }),
+    meta({ workspace: 'acme/site', name: 'handbook', session: '', hiveSession: 'abc123', updatedAt: 2 }),
   ],
 }
 const bodies: Record<string, CanvasBlock[]> = {
@@ -100,7 +100,7 @@ const bodies: Record<string, CanvasBlock[]> = {
 
 // The view is controlled: AppDialogs owns the scope and hands back each change.
 async function mountPage(initial: Partial<CanvasScope> = {}) {
-  const scope = ref<CanvasScope>({ workspace: 'web-app', name: null, session: 7, ...initial })
+  const scope = ref<CanvasScope>({ workspace: 'web-app', name: null, session: '7', ...initial })
   const host = defineComponent({
     emits: ['close', 'open-url'],
     setup(_, { emit }) {
@@ -144,7 +144,7 @@ describe('AgentCanvasPage', () => {
         workspace,
         name,
         title: '',
-        session: 7,
+        session: '7',
         createdAt: 1,
         updatedAt: 1,
         blocks: bodies[name] ?? [],
@@ -197,7 +197,7 @@ describe('AgentCanvasPage', () => {
     await wrapper.get('[data-testid="canvas-page-browse-perf-report"]').trigger('click')
     await flushPromises()
 
-    expect(scope.value).toEqual({ workspace: 'web-app', name: 'perf-report', session: 7 })
+    expect(scope.value).toEqual({ workspace: 'web-app', name: 'perf-report', session: '7' })
     expect(wrapper.find('[data-testid="canvas-page-block-stats"]').exists()).toBe(true)
     expect(wrapper.emitted('close')).toBeUndefined()
 

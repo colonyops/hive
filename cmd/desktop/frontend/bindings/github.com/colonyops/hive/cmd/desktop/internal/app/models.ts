@@ -79,7 +79,7 @@ export interface Integration {
  * ItemChatView is an agent workspace chat an inbox item opened.
  */
 export interface ItemChatView {
-    "id": number;
+    "id": string;
     "workspace": string;
     "name": string;
     "createdAt": string;

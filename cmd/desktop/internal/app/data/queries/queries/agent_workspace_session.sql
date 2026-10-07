@@ -4,14 +4,17 @@
 -- the pointer.
 SELECT * FROM agent_workspace_session
 WHERE workspace = ?
-ORDER BY id DESC;
+ORDER BY rowid DESC;
 
 -- name: GetAgentWorkspaceSession :one
 SELECT * FROM agent_workspace_session WHERE id = ?;
 
+-- name: GetAgentWorkspaceSessionByLegacyID :one
+SELECT * FROM agent_workspace_session WHERE legacy_id = ?;
+
 -- name: InsertAgentWorkspaceSession :one
-INSERT INTO agent_workspace_session (workspace, name, agent, agent_session_id, terminal_id, created_at, last_opened_at, schedule_id, end_token)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO agent_workspace_session (id, workspace, name, agent, agent_session_id, terminal_id, created_at, last_opened_at, schedule_id, end_token)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetAgentWorkspaceSessionByEndToken :one
@@ -42,4 +45,4 @@ DELETE FROM agent_workspace_session WHERE workspace = ?;
 -- Every session across every workspace, newest record first: the same
 -- stable creation order the scoped list uses.
 SELECT * FROM agent_workspace_session
-ORDER BY id DESC;
+ORDER BY rowid DESC;

@@ -2,7 +2,9 @@ package stores
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
+	"errors"
+	"strconv"
 	"time"
 
 	"github.com/colonyops/hive/pkg/randid"
@@ -32,9 +34,16 @@ func (s *AgentSessionStore) ListAll(ctx context.Context) ([]AgentSession, error)
 }
 
 // A missing session returns NotFoundError.
-func (s *AgentSessionStore) Get(ctx context.Context, id int64) (AgentSession, error) {
-	row, err := s.q.Ctx(ctx).GetAgentWorkspaceSession(ctx, id)
-	return s.mapper.Err(row, errTransformQueryOne("agent_workspace_session", fmt.Sprint(id), err))
+func (s *AgentSessionStore) Get(ctx context.Context, id string) (AgentSession, error) {
+	q := s.q.Ctx(ctx)
+	row, err := q.GetAgentWorkspaceSession(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		legacyID, parseErr := strconv.ParseInt(id, 10, 64)
+		if parseErr == nil && legacyID > 0 {
+			row, err = q.GetAgentWorkspaceSessionByLegacyID(ctx, sql.NullInt64{Int64: legacyID, Valid: true})
+		}
+	}
+	return s.mapper.Err(row, errTransformQueryOne("agent_workspace_session", id, err))
 }
 
 func (s *AgentSessionStore) Create(ctx context.Context, in AgentSessionCreate) (AgentSession, error) {
@@ -42,8 +51,9 @@ func (s *AgentSessionStore) Create(ctx context.Context, in AgentSessionCreate) (
 	if in.TerminalID == "" {
 		in.TerminalID = randid.Generate(8)
 	}
+	id := randid.UUIDv7()
 	row, err := s.q.Ctx(ctx).InsertAgentWorkspaceSession(ctx, queries.InsertAgentWorkspaceSessionParams{
-		Workspace: in.Workspace, Name: in.Name, Agent: in.Agent, AgentSessionID: in.AgentSessionID,
+		ID: id, Workspace: in.Workspace, Name: in.Name, Agent: in.Agent, AgentSessionID: in.AgentSessionID,
 		TerminalID: in.TerminalID, CreatedAt: now, LastOpenedAt: now, ScheduleID: in.ScheduleID, EndToken: in.EndToken,
 	})
 	return s.mapper.Err(row, wrap("creating agent workspace session", err))
@@ -58,7 +68,7 @@ func (s *AgentSessionStore) GetByEndToken(ctx context.Context, token string) (Ag
 }
 
 // LastOpenedAt controls session ordering.
-func (s *AgentSessionStore) Touch(ctx context.Context, id, at int64) error {
+func (s *AgentSessionStore) Touch(ctx context.Context, id string, at int64) error {
 	return wrap("touching agent workspace session", s.q.Ctx(ctx).TouchAgentWorkspaceSession(ctx, queries.TouchAgentWorkspaceSessionParams{
 		LastOpenedAt: at,
 		ID:           id,
@@ -68,7 +78,7 @@ func (s *AgentSessionStore) Touch(ctx context.Context, id, at int64) error {
 // SetAgentID records the id a resume-that-fell-back-to-fresh now runs
 // under, so a later resume of this same record addresses the conversation
 // actually running rather than the one it replaced.
-func (s *AgentSessionStore) SetAgentID(ctx context.Context, id int64, agentSessionID string) error {
+func (s *AgentSessionStore) SetAgentID(ctx context.Context, id, agentSessionID string) error {
 	return wrap("setting agent workspace session agent id", s.q.Ctx(ctx).SetAgentWorkspaceSessionAgentID(ctx, queries.SetAgentWorkspaceSessionAgentIDParams{
 		AgentSessionID: agentSessionID,
 		ID:             id,
@@ -76,7 +86,7 @@ func (s *AgentSessionStore) SetAgentID(ctx context.Context, id int64, agentSessi
 }
 
 // Display names do not affect the immutable terminal id.
-func (s *AgentSessionStore) Rename(ctx context.Context, id int64, name string) error {
+func (s *AgentSessionStore) Rename(ctx context.Context, id, name string) error {
 	return wrap("renaming agent workspace session", s.q.Ctx(ctx).RenameAgentWorkspaceSession(ctx, queries.RenameAgentWorkspaceSessionParams{
 		Name: name,
 		ID:   id,
@@ -84,7 +94,7 @@ func (s *AgentSessionStore) Rename(ctx context.Context, id int64, name string) e
 }
 
 // Callers must close the live terminal first to avoid orphaning its agent.
-func (s *AgentSessionStore) Delete(ctx context.Context, id int64) error {
+func (s *AgentSessionStore) Delete(ctx context.Context, id string) error {
 	return wrap("deleting agent workspace session", s.q.Ctx(ctx).DeleteAgentWorkspaceSession(ctx, id))
 }
 

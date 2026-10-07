@@ -86,7 +86,7 @@ type ItemSessionView struct {
 
 // ItemChatView is an agent workspace chat an inbox item opened.
 type ItemChatView struct {
-	ID        int64     `json:"id"`
+	ID        string    `json:"id"`
 	Workspace string    `json:"workspace"`
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"createdAt"`

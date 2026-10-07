@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -37,11 +38,11 @@ func TestOpen_FreshDB_AppliesBaseline(t *testing.T) {
 	require.NoError(t, err)
 	migrations, err := migrate.Load(sub)
 	require.NoError(t, err)
-	require.Len(t, migrations, 11)
+	require.Len(t, migrations, 12)
 
 	applied, err := migrate.AppliedVersions(ctx, database.Conn())
 	require.NoError(t, err)
-	assert.Equal(t, map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true, 9: true, 10: true, 11: true}, applied)
+	assert.Equal(t, map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true, 9: true, 10: true, 11: true, 12: true}, applied)
 }
 
 func TestMigration10PreservesExistingAgentWorkspaceTmuxNames(t *testing.T) {
@@ -61,10 +62,51 @@ func TestMigration10PreservesExistingAgentWorkspaceTmuxNames(t *testing.T) {
 		VALUES ('demo', 'existing', 'claude', 'conversation', 1, 1)`)
 	require.NoError(t, err)
 
-	require.NoError(t, migrate.Apply(ctx, conn, migrations[9:]))
+	require.NoError(t, migrate.Apply(ctx, conn, migrations[9:10]))
 	var terminalID string
 	require.NoError(t, conn.QueryRowContext(ctx, `SELECT terminal_id FROM agent_workspace_session WHERE id = 1`).Scan(&terminalID))
 	assert.Equal(t, "1", terminalID, "the migrated tmux name remains agentws-1")
+}
+
+func TestMigration12RekeysAgentWorkspaceReferences(t *testing.T) {
+	ctx := t.Context()
+	conn, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "migration.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	sub, err := migrationsSub()
+	require.NoError(t, err)
+	migrations, err := migrate.Load(sub)
+	require.NoError(t, err)
+	require.NoError(t, migrate.EnsureTable(ctx, conn))
+	require.NoError(t, migrate.Apply(ctx, conn, migrations[:11]))
+
+	_, err = conn.ExecContext(ctx, `INSERT INTO agent_workspace_session
+		(workspace, name, agent, agent_session_id, terminal_id, created_at, last_opened_at, schedule_id, end_token)
+		VALUES ('demo', 'existing', 'claude', 'conversation', 'terminal', 1, 1, 'daily', 'token')`)
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, `INSERT INTO schedule_run
+		(workspace, schedule_id, schedule_name, scheduled_for, started_at, reason, status, session_id, prompt)
+		VALUES ('demo', 'daily', 'Daily', 1, 1, 'due', 'launched', 1, 'prompt')`)
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, `INSERT INTO item_chat
+		(chat_id, profile_id, source_kind, source_scope, external_id, created_at)
+		VALUES (1, 'profile', 'github', 'owner/repo', '1', 1)`)
+	require.NoError(t, err)
+
+	require.NoError(t, migrate.Apply(ctx, conn, migrations[11:]))
+
+	var sessionID, runSessionID, chatID string
+	var legacyID int64
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT id, legacy_id FROM agent_workspace_session`).Scan(&sessionID, &legacyID))
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT session_id FROM schedule_run`).Scan(&runSessionID))
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT chat_id FROM item_chat`).Scan(&chatID))
+	parsedID, err := uuid.Parse(sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, uuid.Version(7), parsedID.Version())
+	assert.Equal(t, int64(1), legacyID)
+	assert.Equal(t, sessionID, runSessionID)
+	assert.Equal(t, sessionID, chatID)
 }
 
 func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {

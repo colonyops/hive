@@ -2334,7 +2334,7 @@ describe('TerminalMode', () => {
   describe('pinned agent chats', () => {
     const CHAT_SLUG = 'agentws-7'
     const chat = {
-      id: 7,
+      id: '7',
       workspace: 'demo',
       name: 'api-refactor',
       agent: 'claude',
@@ -2508,7 +2508,7 @@ describe('TerminalMode', () => {
       await wrapper.get('[data-testid="terminal-start-session"]').trigger('click')
       await flushPromises()
 
-      expect(mocks.resumeSession).toHaveBeenCalledWith({ id: 7 })
+      expect(mocks.resumeSession).toHaveBeenCalledWith({ id: '7' })
       expect(start).not.toHaveBeenCalled()
       wrapper.unmount()
     })

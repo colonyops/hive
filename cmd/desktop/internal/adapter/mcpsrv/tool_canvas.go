@@ -156,7 +156,7 @@ type canvasResult struct {
 	Workspace   string        `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, owner/repo for a hive session's repository, or @global."`
 	Name        string        `json:"name"`
 	Title       string        `json:"title,omitempty"`
-	Session     int64         `json:"session"               jsonschema:"The chat that created this canvas, or 0."`
+	Session     string        `json:"session"               jsonschema:"The chat UUID that created this canvas, or empty."`
 	HiveSession string        `json:"hiveSession,omitempty" jsonschema:"The hive session that created this canvas, when no chat did."`
 	CreatedAt   int64         `json:"createdAt"`
 	UpdatedAt   int64         `json:"updatedAt"`
@@ -166,7 +166,7 @@ type canvasResult struct {
 type canvasMetaResult struct {
 	Name        string `json:"name"`
 	Title       string `json:"title,omitempty"`
-	Session     int64  `json:"session"               jsonschema:"The chat that created this canvas, or 0."`
+	Session     string `json:"session"               jsonschema:"The chat UUID that created this canvas, or empty."`
 	HiveSession string `json:"hiveSession,omitempty" jsonschema:"The hive session that created this canvas, when no chat did."`
 	CreatedAt   int64  `json:"createdAt"`
 	UpdatedAt   int64  `json:"updatedAt"`
@@ -181,7 +181,7 @@ type canvasWriteResult struct {
 	Workspace   string       `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, owner/repo for a hive session's repository, or @global."`
 	Name        string       `json:"name"`
 	Title       string       `json:"title,omitempty"`
-	Session     int64        `json:"session"               jsonschema:"The chat that created this canvas, or 0."`
+	Session     string       `json:"session"               jsonschema:"The chat UUID that created this canvas, or empty."`
 	HiveSession string       `json:"hiveSession,omitempty" jsonschema:"The hive session that created this canvas, when no chat did."`
 	CreatedAt   int64        `json:"createdAt"`
 	UpdatedAt   int64        `json:"updatedAt"`

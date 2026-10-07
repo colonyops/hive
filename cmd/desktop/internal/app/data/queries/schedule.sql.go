@@ -72,17 +72,17 @@ RETURNING id, workspace, schedule_id, schedule_name, scheduled_for, started_at, 
 `
 
 type InsertScheduleRunParams struct {
-	Workspace    string        `json:"workspace"`
-	ScheduleID   string        `json:"schedule_id"`
-	ScheduleName string        `json:"schedule_name"`
-	ScheduledFor int64         `json:"scheduled_for"`
-	StartedAt    int64         `json:"started_at"`
-	Reason       string        `json:"reason"`
-	Missed       int64         `json:"missed"`
-	Status       string        `json:"status"`
-	SessionID    sql.NullInt64 `json:"session_id"`
-	Prompt       string        `json:"prompt"`
-	Error        string        `json:"error"`
+	Workspace    string         `json:"workspace"`
+	ScheduleID   string         `json:"schedule_id"`
+	ScheduleName string         `json:"schedule_name"`
+	ScheduledFor int64          `json:"scheduled_for"`
+	StartedAt    int64          `json:"started_at"`
+	Reason       string         `json:"reason"`
+	Missed       int64          `json:"missed"`
+	Status       string         `json:"status"`
+	SessionID    sql.NullString `json:"session_id"`
+	Prompt       string         `json:"prompt"`
+	Error        string         `json:"error"`
 }
 
 func (q *Queries) InsertScheduleRun(ctx context.Context, arg InsertScheduleRunParams) (ScheduleRun, error) {

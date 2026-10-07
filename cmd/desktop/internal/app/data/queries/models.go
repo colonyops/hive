@@ -20,16 +20,17 @@ type ActivityEvent struct {
 }
 
 type AgentWorkspaceSession struct {
-	ID             int64  `json:"id"`
-	Workspace      string `json:"workspace"`
-	Name           string `json:"name"`
-	Agent          string `json:"agent"`
-	AgentSessionID string `json:"agent_session_id"`
-	CreatedAt      int64  `json:"created_at"`
-	LastOpenedAt   int64  `json:"last_opened_at"`
-	ScheduleID     string `json:"schedule_id"`
-	EndToken       string `json:"end_token"`
-	TerminalID     string `json:"terminal_id"`
+	ID             string        `json:"id"`
+	LegacyID       sql.NullInt64 `json:"legacy_id"`
+	Workspace      string        `json:"workspace"`
+	Name           string        `json:"name"`
+	Agent          string        `json:"agent"`
+	AgentSessionID string        `json:"agent_session_id"`
+	CreatedAt      int64         `json:"created_at"`
+	LastOpenedAt   int64         `json:"last_opened_at"`
+	ScheduleID     string        `json:"schedule_id"`
+	EndToken       string        `json:"end_token"`
+	TerminalID     string        `json:"terminal_id"`
 }
 
 type ConsumerOffset struct {
@@ -90,7 +91,7 @@ type InboxItem struct {
 }
 
 type ItemChat struct {
-	ChatID      int64  `json:"chat_id"`
+	ChatID      string `json:"chat_id"`
 	ProfileID   string `json:"profile_id"`
 	SourceKind  string `json:"source_kind"`
 	SourceScope string `json:"source_scope"`
@@ -169,18 +170,18 @@ type ScheduleCursor struct {
 }
 
 type ScheduleRun struct {
-	ID           int64         `json:"id"`
-	Workspace    string        `json:"workspace"`
-	ScheduleID   string        `json:"schedule_id"`
-	ScheduleName string        `json:"schedule_name"`
-	ScheduledFor int64         `json:"scheduled_for"`
-	StartedAt    int64         `json:"started_at"`
-	Reason       string        `json:"reason"`
-	Missed       int64         `json:"missed"`
-	Status       string        `json:"status"`
-	SessionID    sql.NullInt64 `json:"session_id"`
-	Prompt       string        `json:"prompt"`
-	Error        string        `json:"error"`
+	ID           int64          `json:"id"`
+	Workspace    string         `json:"workspace"`
+	ScheduleID   string         `json:"schedule_id"`
+	ScheduleName string         `json:"schedule_name"`
+	ScheduledFor int64          `json:"scheduled_for"`
+	StartedAt    int64          `json:"started_at"`
+	Reason       string         `json:"reason"`
+	Missed       int64          `json:"missed"`
+	Status       string         `json:"status"`
+	SessionID    sql.NullString `json:"session_id"`
+	Prompt       string         `json:"prompt"`
+	Error        string         `json:"error"`
 }
 
 type SourceHead struct {
