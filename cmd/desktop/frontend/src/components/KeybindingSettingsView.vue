@@ -263,7 +263,8 @@ onUnmounted(commitCapture)
   justify-content: center;
   min-width: 26px;
   height: 25px;
-  padding: 0 9px;
+  /* letter-spacing also trails the last glyph; the right padding gives it back. */
+  padding: 0 calc(9px - 0.15em) 0 9px;
   border: 1px solid var(--color-strong);
   border-bottom-width: 2px;
   border-radius: var(--radius-md);
@@ -272,6 +273,7 @@ onUnmounted(commitCapture)
   font-size: var(--text-small);
   font-weight: 500;
   line-height: 1;
+  letter-spacing: 0.15em;
   color: var(--color-text);
 }
 .combo-conflict .keycap {
