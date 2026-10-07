@@ -497,6 +497,8 @@ internal/                         # the hive engine both programs run on (see
                                   #   process's, then those prefixes (ADR subprocess-environment),
                                   #   plus the shell's other variables where
                                   #   this process defines none (ADR a-subprocess-inherits-the-whole-shell-environment-not-just-its-path)
+    promptfile/                   #   oversized agent prompts written privately
+                                  #   outside argv, with a bounded read-and-delete instruction
     credentials/                  #   Ref{Provider, Account}, Store, keychain, index
     secrets/                      #   config holds a reference (env:, file:,
                                   #   op://) and this resolves it; a literal is
@@ -2101,6 +2103,15 @@ of the launch line; `Resolve` renders it and wraps it in
 line already runs under `$SHELL -l -c`. Template source is folded onto one
 line before parsing, never after rendering, so a newline inside an
 interpolated value stays part of the quoted word `shq` produced.
+
+A prompt over 32 KiB never reaches that line as one process argument.
+`internal/platform/promptfile` writes the full text to a private OS temporary
+file and replaces `.Prompt` with a bounded instruction to read and delete that
+file. Repository sessions and workspace chats prepare the prompt at their two
+launch boundaries, so interactive forms, actions, flow launches, and schedules
+share the same limit. A failed launch removes the file; a successful launch
+leaves cleanup to the instruction because the agent can read it after the
+launch call has returned.
 
 A chat record has three separate identities. Its numeric row id addresses the
 HTTP and canvas APIs. Its agent session id addresses the CLI's conversation and

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/internal/platform/execenv"
+	"github.com/colonyops/hive/internal/platform/promptfile"
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 	"github.com/colonyops/hive/pkg/executil"
 )
@@ -257,6 +259,37 @@ func TestLaunchWorkspaceSessionCarriesPromptIntoDetachedChat(t *testing.T) {
 	}, time.Second, 10*time.Millisecond)
 	_, err = os.Stat(filepath.Join(root, "demo", ".mcp.json"))
 	require.NoError(t, err, "a launch refreshes generated workspace files")
+}
+
+func TestLaunchWorkspaceSessionPassesOversizedPromptThroughTempFile(t *testing.T) {
+	isolateConfig(t)
+	root := t.TempDir()
+	capture := filepath.Join(t.TempDir(), "prompt")
+	agent := filepath.Join(t.TempDir(), "codex")
+	require.NoError(t, os.WriteFile(agent, []byte("#!/bin/sh\nprintf '%s' \"$2\" > "+capture+"\nexec cat\n"), 0o755))
+	writeAgentWorkspaceManifest(t, root, "demo", agentWorkspaceYAML("Demo", agent+agentws.PromptTail, ""))
+	svc := newTestAgentWorkspacesService(t, root, map[string]string{"codex": agent})
+	prompt := strings.Repeat("large prompt\n", promptfile.ThresholdBytes/13+1)
+
+	_, err := svc.LaunchWorkspaceSession(t.Context(), dispatch.LaunchWorkspaceSessionRequest{
+		Workspace: "demo", Name: "alert", Prompt: prompt,
+	})
+	require.NoError(t, err)
+
+	var instruction string
+	require.Eventually(t, func() bool {
+		got, readErr := os.ReadFile(capture)
+		instruction = string(got)
+		return readErr == nil && instruction != ""
+	}, time.Second, 10*time.Millisecond)
+	_, rest, ok := strings.Cut(instruction, "`")
+	require.True(t, ok, instruction)
+	path, _, ok := strings.Cut(rest, "`")
+	require.True(t, ok, instruction)
+	t.Cleanup(func() { require.NoError(t, os.Remove(path)) })
+	written, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, prompt, string(written))
 }
 
 func TestStartSessionUsesTheResolvedWorkspaceSnapshot(t *testing.T) {

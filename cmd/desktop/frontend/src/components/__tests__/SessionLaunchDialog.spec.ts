@@ -67,6 +67,20 @@ describe('SessionLaunchDialog: new session', () => {
     ])
   })
 
+  it('warns when the prompt will be passed through a temporary file', async () => {
+    const wrapper = mountNew({
+      options: { ...options, promptFileThresholdBytes: 5 },
+      initial: { ...blank, prompt: 'ååå' },
+    })
+
+    expect(wrapper.get('[data-testid="new-session-prompt-file-warning"]').text()).toContain(
+      'write it to a temporary file',
+    )
+
+    await wrapper.get('[data-testid="new-session-prompt"]').setValue('12345')
+    expect(wrapper.find('[data-testid="new-session-prompt-file-warning"]').exists()).toBe(false)
+  })
+
   it('picks a repository through the shared selector', async () => {
     const wrapper = mountNew({
       options: {

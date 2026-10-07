@@ -12,6 +12,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/platform/promptfile"
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
@@ -161,11 +162,12 @@ func TestSessionsService_SessionLaunchOptions(t *testing.T) {
 	got, err := svc.SessionLaunchOptions(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, dispatch.SessionLaunchOptions{
-		Repositories:      []dispatch.SessionLaunchRepository{{Name: "hive", Repository: "https://github.com/colonyops/hive.git"}},
-		DefaultRepository: "https://github.com/colonyops/hive.git",
-		Workspaces:        workspaceOptions,
-		Agents:            []string{"claude"},
-		DefaultAgent:      "claude",
+		Repositories:             []dispatch.SessionLaunchRepository{{Name: "hive", Repository: "https://github.com/colonyops/hive.git"}},
+		DefaultRepository:        "https://github.com/colonyops/hive.git",
+		Workspaces:               workspaceOptions,
+		Agents:                   []string{"claude"},
+		DefaultAgent:             "claude",
+		PromptFileThresholdBytes: promptfile.ThresholdBytes,
 	}, got)
 }
 

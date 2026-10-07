@@ -27,6 +27,8 @@ In selection mode, choose items and use **Copy contents** to copy one readable b
 
 Select **Create session** to open one editable New Session form with context from every selected item. Choose **Repository** for a coding session or **Agent workspace** for a chat that does not need a checkout. A repository session appears in each selected item's detail pane. An agent workspace chat appears in Chats, receives the same generated prompt, and appears in each selected item's detail pane.
 
+A prompt larger than 32 KiB shows a warning in the form. Hive writes the full text to a private temporary file and asks the agent to read and delete it instead of passing the text as a command argument.
+
 Selections remain active while you search, filter, sort, copy, or cancel the New Session form. Use **Cancel selection** to clear them.
 
 ## The app areas

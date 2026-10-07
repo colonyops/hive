@@ -28,11 +28,12 @@ type SessionLaunchWorkspace struct {
 
 // SessionLaunchOptions is the narrow DTO used by the session launch dialog.
 type SessionLaunchOptions struct {
-	Repositories      []SessionLaunchRepository `json:"repositories"`
-	DefaultRepository string                    `json:"defaultRepository"`
-	Workspaces        []SessionLaunchWorkspace  `json:"workspaces"`
-	Agents            []string                  `json:"agents"`
-	DefaultAgent      string                    `json:"defaultAgent"`
+	Repositories             []SessionLaunchRepository `json:"repositories"`
+	DefaultRepository        string                    `json:"defaultRepository"`
+	Workspaces               []SessionLaunchWorkspace  `json:"workspaces"`
+	Agents                   []string                  `json:"agents"`
+	DefaultAgent             string                    `json:"defaultAgent"`
+	PromptFileThresholdBytes int                       `json:"promptFileThresholdBytes"`
 }
 
 type SessionInvocationInput struct {
