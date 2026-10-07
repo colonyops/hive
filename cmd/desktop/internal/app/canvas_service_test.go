@@ -254,6 +254,37 @@ func TestCanvasHTMLIsSanitizedOnTheWayOutNotIn(t *testing.T) {
 	assert.Contains(t, stored.Blocks[0].Body, "<script>", "read_canvas shows the agent what it wrote")
 }
 
+func TestCanvasReadsReportAMigratedChatByItsUUID(t *testing.T) {
+	const chatID = "0199bd92-cc5f-7c61-9185-7423813c9c12"
+	svc, _ := testCanvasService(t)
+	migrated := stores.AgentSession{ID: chatID, LegacyID: "7", Workspace: "ws", Name: "migrated", Agent: "claude"}
+	svc.sessions = fakeCanvasSessions{"7": migrated, chatID: migrated}
+	ctx := t.Context()
+
+	for _, author := range []string{"7", "8"} {
+		_, err := svc.store.Upsert("ws", "by-"+author, canvas.Author{Session: author}, "", "", canvas.Block{
+			ID: "a", Kind: canvas.KindMarkdown, Body: "x",
+		})
+		require.NoError(t, err)
+	}
+
+	shown, err := svc.GetForOwner(ctx, "ws", "by-7")
+	require.NoError(t, err)
+	assert.Equal(t, chatID, shown.Session)
+
+	read, err := svc.Get(ctx, chatID, "by-7")
+	require.NoError(t, err)
+	assert.Equal(t, chatID, read.Session)
+
+	metas, err := svc.ListForOwner(ctx, "ws")
+	require.NoError(t, err)
+	authors := map[string]string{}
+	for _, meta := range metas {
+		authors[meta.Name] = meta.Session
+	}
+	assert.Equal(t, map[string]string{"by-7": chatID, "by-8": "8"}, authors, "a deleted chat keeps its old number")
+}
+
 func TestCanvasPutBlocks(t *testing.T) {
 	svc, signals := testCanvasService(t)
 	ctx := t.Context()

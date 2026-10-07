@@ -85,9 +85,17 @@ func TestMigration12RekeysAgentWorkspaceReferences(t *testing.T) {
 		(workspace, name, agent, agent_session_id, terminal_id, created_at, last_opened_at, schedule_id, end_token)
 		VALUES ('demo', 'existing', 'claude', 'conversation', 'terminal', 1, 1, 'daily', 'token')`)
 	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, `INSERT INTO agent_workspace_session
+		(workspace, name, agent, agent_session_id, terminal_id, created_at, last_opened_at)
+		VALUES ('demo', 'by hand', 'claude', 'other', 'manual', 2, 2)`)
+	require.NoError(t, err)
 	_, err = conn.ExecContext(ctx, `INSERT INTO schedule_run
-		(workspace, schedule_id, schedule_name, scheduled_for, started_at, reason, status, session_id, prompt)
-		VALUES ('demo', 'daily', 'Daily', 1, 1, 'due', 'launched', 1, 'prompt')`)
+		(id, workspace, schedule_id, schedule_name, scheduled_for, started_at, reason, status, session_id, prompt)
+		VALUES (1, 'demo', 'daily', 'Daily', 1, 1, 'due', 'launched', 1, 'prompt'),
+		       (2, 'demo', 'weekly', 'Weekly', 1, 1, 'due', 'launched', 2, 'prompt'),
+		       (3, 'demo', 'weekly', 'Weekly', 2, 2, 'due', 'launched', NULL, 'prompt')`)
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, `DELETE FROM schedule_run WHERE id = 3`)
 	require.NoError(t, err)
 	_, err = conn.ExecContext(ctx, `INSERT INTO item_chat
 		(chat_id, profile_id, source_kind, source_scope, external_id, created_at)
@@ -98,8 +106,8 @@ func TestMigration12RekeysAgentWorkspaceReferences(t *testing.T) {
 
 	var sessionID, runSessionID, chatID string
 	var legacyID int64
-	require.NoError(t, conn.QueryRowContext(ctx, `SELECT id, legacy_id FROM agent_workspace_session`).Scan(&sessionID, &legacyID))
-	require.NoError(t, conn.QueryRowContext(ctx, `SELECT session_id FROM schedule_run`).Scan(&runSessionID))
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT id, legacy_id FROM agent_workspace_session WHERE legacy_id = 1`).Scan(&sessionID, &legacyID))
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT session_id FROM schedule_run WHERE id = 1`).Scan(&runSessionID))
 	require.NoError(t, conn.QueryRowContext(ctx, `SELECT chat_id FROM item_chat`).Scan(&chatID))
 	parsedID, err := uuid.Parse(sessionID)
 	require.NoError(t, err)
@@ -107,6 +115,14 @@ func TestMigration12RekeysAgentWorkspaceReferences(t *testing.T) {
 	assert.Equal(t, int64(1), legacyID)
 	assert.Equal(t, sessionID, runSessionID)
 	assert.Equal(t, sessionID, chatID)
+
+	var reusedRunSessionID sql.NullString
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT session_id FROM schedule_run WHERE id = 2`).Scan(&reusedRunSessionID))
+	assert.False(t, reusedRunSessionID.Valid, "a run must not keep a link to a chat of another schedule")
+
+	var runSeq int64
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT seq FROM sqlite_sequence WHERE name = 'schedule_run'`).Scan(&runSeq))
+	assert.Equal(t, int64(3), runSeq, "the run id counter keeps its high-water mark")
 }
 
 func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {

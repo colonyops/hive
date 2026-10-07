@@ -151,12 +151,13 @@ func (q *Queries) InsertAgentWorkspaceSession(ctx context.Context, arg InsertAge
 const listAgentWorkspaceSessions = `-- name: ListAgentWorkspaceSessions :many
 SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session
 WHERE workspace = ?
-ORDER BY rowid DESC
+ORDER BY created_at DESC, id DESC
 `
 
 // One workspace's sessions, newest record first. Creation order on purpose,
 // not last_opened_at: resuming a chat must not reshuffle the sidebar under
-// the pointer.
+// the pointer. The id breaks ties because UUIDv7 ids are time-ordered; the
+// implicit rowid is no order key, since VACUUM may renumber it.
 func (q *Queries) ListAgentWorkspaceSessions(ctx context.Context, workspace string) ([]AgentWorkspaceSession, error) {
 	rows, err := q.db.QueryContext(ctx, listAgentWorkspaceSessions, workspace)
 	if err != nil {
@@ -194,7 +195,7 @@ func (q *Queries) ListAgentWorkspaceSessions(ctx context.Context, workspace stri
 
 const listAllAgentWorkspaceSessions = `-- name: ListAllAgentWorkspaceSessions :many
 SELECT id, legacy_id, workspace, name, agent, agent_session_id, created_at, last_opened_at, schedule_id, end_token, terminal_id FROM agent_workspace_session
-ORDER BY rowid DESC
+ORDER BY created_at DESC, id DESC
 `
 
 // Every session across every workspace, newest record first: the same

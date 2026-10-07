@@ -98,7 +98,7 @@ func (s *CanvasService) Get(ctx context.Context, session string, name string) (c
 	if !ok {
 		return canvas.Canvas{}, Errorf(KindNotFound, "no canvas named %q in this workspace", name)
 	}
-	return c, nil
+	return s.withCanonicalAuthor(ctx, c)
 }
 
 // PutBlock creates or replaces one block, creating the canvas on its first
@@ -156,7 +156,7 @@ func (s *CanvasService) putBlocks(ctx context.Context, session string, name, tit
 		return canvas.Canvas{}, s.storeError(err, name)
 	}
 	s.notify(ctx, caller.author)
-	return c, nil
+	return s.withCanonicalAuthor(ctx, c)
 }
 
 // RemoveBlock deletes one block by id and returns the canvas that remains.
@@ -173,7 +173,7 @@ func (s *CanvasService) RemoveBlock(ctx context.Context, session string, name, b
 		return canvas.Canvas{}, Errorf(KindNotFound, "no block %q on canvas %q", blockID, name)
 	}
 	s.notify(ctx, caller.author)
-	return c, nil
+	return s.withCanonicalAuthor(ctx, c)
 }
 
 // Clear removes every block at once; the canvas, its title and its file
@@ -188,7 +188,7 @@ func (s *CanvasService) Clear(ctx context.Context, session string, name string) 
 		return canvas.Canvas{}, s.storeError(err, name)
 	}
 	s.notify(ctx, caller.author)
-	return c, nil
+	return s.withCanonicalAuthor(ctx, c)
 }
 
 // SetPaneOpen asks the UI to open or close the canvas pane beside the
@@ -249,7 +249,7 @@ func (s *CanvasService) List(ctx context.Context, session string) ([]canvas.Meta
 // agent source and the app's own webview, so the frontend never has to hold
 // a policy of its own
 // (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).
-func (s *CanvasService) GetForOwner(_ context.Context, dir, name string) (canvas.Canvas, error) {
+func (s *CanvasService) GetForOwner(ctx context.Context, dir, name string) (canvas.Canvas, error) {
 	c, ok, err := s.store.Load(dir, name)
 	if err != nil {
 		return canvas.Canvas{}, s.storeError(err, name)
@@ -262,7 +262,7 @@ func (s *CanvasService) GetForOwner(_ context.Context, dir, name string) (canvas
 			c.Blocks[i].Body = canvas.SanitizeHTML(b.Body)
 		}
 	}
-	return c, nil
+	return s.withCanonicalAuthor(ctx, c)
 }
 
 // MarkdownForOwner renders one canvas as a standalone markdown document
@@ -299,7 +299,7 @@ func (s *CanvasService) ExportForOwner(ctx context.Context, dir, name, path stri
 // ListForOwner returns an owner's canvas metadata, most recently updated
 // first. A canvas whose creating chat or session is gone still lists — the
 // artifact outlives what produced it.
-func (s *CanvasService) ListForOwner(_ context.Context, dir string) ([]canvas.Meta, error) {
+func (s *CanvasService) ListForOwner(ctx context.Context, dir string) ([]canvas.Meta, error) {
 	metas, err := s.store.List(dir)
 	if err != nil {
 		if errors.Is(err, canvas.ErrInvalidWorkspace) {
@@ -307,7 +307,45 @@ func (s *CanvasService) ListForOwner(_ context.Context, dir string) ([]canvas.Me
 		}
 		return nil, Wrap(err, KindInternal, "listing canvases for workspace %q", dir)
 	}
+	resolved := map[string]string{}
+	for i := range metas {
+		legacy := metas[i].Session
+		canonical, ok := resolved[legacy]
+		if !ok {
+			if canonical, err = s.canonicalAuthor(ctx, legacy); err != nil {
+				return nil, err
+			}
+			resolved[legacy] = canonical
+		}
+		metas[i].Session = canonical
+	}
 	return metas, nil
+}
+
+// canonicalAuthor maps a numeric chat id that a canvas file stored before
+// chats moved to UUIDs onto the chat's UUID, so a pane matches the canvas to
+// the chat that wrote it. A chat deleted since then keeps the old number.
+func (s *CanvasService) canonicalAuthor(ctx context.Context, session string) (string, error) {
+	if legacyID, err := strconv.ParseInt(session, 10, 64); err != nil || legacyID <= 0 {
+		return session, nil
+	}
+	rec, err := s.sessions.Get(ctx, session)
+	if stores.IsNotFound(err) {
+		return session, nil
+	}
+	if err != nil {
+		return "", Wrap(err, KindInternal, "loading the chat that wrote a canvas")
+	}
+	return rec.ID, nil
+}
+
+func (s *CanvasService) withCanonicalAuthor(ctx context.Context, c canvas.Canvas) (canvas.Canvas, error) {
+	session, err := s.canonicalAuthor(ctx, c.Session)
+	if err != nil {
+		return canvas.Canvas{}, err
+	}
+	c.Session = session
+	return c, nil
 }
 
 // Repositories returns the owner key of every repository that holds a

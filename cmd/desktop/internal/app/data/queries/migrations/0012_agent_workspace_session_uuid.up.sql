@@ -66,8 +66,21 @@ SELECT run.id, run.workspace, run.schedule_id, run.schedule_name,
        run.scheduled_for, run.started_at, run.reason, run.missed, run.status,
        id_map.new_id, run.prompt, run.error
 FROM schedule_run AS run
-LEFT JOIN agent_workspace_session_id_map AS id_map ON id_map.old_id = run.session_id
+-- A run whose numeric chat id was already reused points at a chat of another
+-- schedule, or at one started by hand. Drop that link: it would otherwise make
+-- the scheduler skip every occurrence while the unrelated chat stays live.
+LEFT JOIN agent_workspace_session AS session
+    ON session.id = run.session_id
+   AND session.workspace = run.workspace
+   AND session.schedule_id = run.schedule_id
+LEFT JOIN agent_workspace_session_id_map AS id_map ON id_map.old_id = session.id
 ORDER BY run.id;
+
+-- The copy leaves the counter at the highest surviving id. Carry over the old
+-- high-water mark so the ids of pruned runs are not handed out again.
+UPDATE sqlite_sequence
+SET seq = max(seq, coalesce((SELECT seq FROM sqlite_sequence WHERE name = 'schedule_run'), 0))
+WHERE name = 'schedule_run_v12';
 
 CREATE TABLE item_chat_v12 (
     chat_id      TEXT NOT NULL REFERENCES agent_workspace_session_v12(id) ON DELETE CASCADE,
@@ -95,6 +108,8 @@ ALTER TABLE agent_workspace_session_v12 RENAME TO agent_workspace_session;
 ALTER TABLE schedule_run_v12 RENAME TO schedule_run;
 ALTER TABLE item_chat_v12 RENAME TO item_chat;
 
+-- An empty INSERT ... SELECT still creates a counter row. A fresh database has
+-- none, and a state reset compares against one.
 DELETE FROM sqlite_sequence WHERE name = 'schedule_run' AND seq = 0;
 
 CREATE INDEX idx_agent_workspace_session_workspace
