@@ -1,4 +1,4 @@
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:7c7b2c966bc9ee8cedfeef67e0e279108992c77681fa595db4a9d65c06ccc587
 
 # Everything above the final hive COPY is stable and stays cached across
 # rebuilds. Keep the binary copy last so only that layer is invalidated.
