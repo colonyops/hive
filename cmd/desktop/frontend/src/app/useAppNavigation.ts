@@ -30,7 +30,6 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
 
   const flowsActive = computed(() => route.name === 'flows')
   const devActive = computed(() => devToolsEnabled.value && route.name === 'dev')
-  const applicationSettingsActive = computed(() => route.name === 'application-settings')
   const profileSettingsActive = computed(() => route.name === 'profile-settings')
   // router.ts already rejects an unknown :section, so an unrecognized one here
   // is the absent-param case.
@@ -277,7 +276,6 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
     devToolsEnabled,
     flowsActive,
     devActive,
-    applicationSettingsActive,
     profileSettingsActive,
     applicationSettingsSection,
     profileSettingsSection,

@@ -88,6 +88,7 @@ test('scopes shown-in-detail actions to PR and issue items', async ({ page }) =>
 })
 
 test('creates, edits, and deletes through the slideover and common confirmation dialog', async ({ page }) => {
+  await page.getByTestId('titlebar-menu').click()
   await page.getByTestId('application-settings').click()
   await page.getByTestId('settings-category-actions').click()
   await expect(page.getByTestId('actions-settings')).toBeVisible()
@@ -118,6 +119,7 @@ test('drag-reorders the catalog and honors that order in settings, the detail pa
   const moved = action(state.runId, 'failed-shell')
   const first = action(state.runId, 'pr')
   const inDetail = [first, action(state.runId, 'message'), action(state.runId, 'template-launch')]
+  await page.getByTestId('titlebar-menu').click()
   await page.getByTestId('application-settings').click()
   await page.getByTestId('settings-category-actions').click()
   // rowIds snapshots through evaluateAll, which does not auto-wait, so one
@@ -147,6 +149,7 @@ test('drag-reorders the catalog and honors that order in settings, the detail pa
 test('external malformed actions keep last-good catalog and recover after repair', async ({ page }) => {
   const state = await smoke(page)
   const original = await readFile(state.actionsPath, 'utf8')
+  await page.getByTestId('titlebar-menu').click()
   await page.getByTestId('application-settings').click()
   await page.getByTestId('settings-category-actions').click()
   await expect(page.getByTestId('action-row-' + action(state.runId, 'pr'))).toBeVisible()

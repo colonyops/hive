@@ -351,6 +351,11 @@ function terminalOnScreen(wrapper: VueWrapper): boolean {
 }
 
 // Same shape as terminalOnScreen: the Agents area is mount-once/v-show too.
+async function openApplicationSettings(wrapper: VueWrapper): Promise<void> {
+  await wrapper.get('[data-testid="titlebar-menu"]').trigger('click')
+  await wrapper.get('[data-testid="application-settings"]').trigger('click')
+}
+
 function agentsOnScreen(wrapper: VueWrapper): boolean {
   const mode = wrapper.find('[data-testid="agents-mode"]')
   return mode.exists() && !(mode.attributes('style') ?? '').includes('display: none')
@@ -2196,7 +2201,7 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('opens profile settings from the sidebar gear and application settings from the rail', async () => {
+  it('opens profile settings from the sidebar gear and application settings from the title bar', async () => {
     const wrapper = await mountApp()
 
     await wrapper.find('[data-testid="sidebar-open-settings"]').trigger('click')
@@ -2208,12 +2213,15 @@ describe('App', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
-    await wrapper.find('[data-testid="application-settings"]').trigger('click')
+    await openApplicationSettings(wrapper)
     await flushPromises()
 
     expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="profile-settings-view"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="profile-tile"]').exists()).toBe(true)
+    // Application settings are not a page of the Inbox: no profile rail, and
+    // no mode segment pressed.
+    expect(wrapper.find('[data-testid="profile-tile"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="titlebar-mode-hub"]').attributes('aria-pressed')).toBe('false')
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
@@ -2222,10 +2230,28 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('closes application settings back to the area it was opened from', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+
+    await wrapper.get('[data-testid="titlebar-mode-agents"]').trigger('click')
+    await vi.waitFor(() => expect(agentsOnScreen(wrapper)).toBe(true))
+    await openApplicationSettings(wrapper)
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('application-settings')
+    expect(agentsOnScreen(wrapper)).toBe(false)
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('agents')
+    expect(agentsOnScreen(wrapper)).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it('uses route history for settings pages and categories', async () => {
     const { wrapper, router } = await mountAppWithRouter()
 
-    await wrapper.find('[data-testid="application-settings"]').trigger('click')
+    await openApplicationSettings(wrapper)
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('application-settings')
     expect(wrapper.find('[data-testid="settings-general"]').exists()).toBe(true)
@@ -2252,7 +2278,7 @@ describe('App', () => {
   it('uses mouse back and forward buttons for route history', async () => {
     const { wrapper, router } = await mountAppWithRouter()
 
-    await wrapper.find('[data-testid="application-settings"]').trigger('click')
+    await openApplicationSettings(wrapper)
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('application-settings')
 
@@ -2278,7 +2304,7 @@ describe('App', () => {
   it('suppresses Backspace history navigation outside editable fields', async () => {
     const { wrapper, router } = await mountAppWithRouter()
 
-    await wrapper.find('[data-testid="application-settings"]').trigger('click')
+    await openApplicationSettings(wrapper)
     await flushPromises()
     const routeBefore = router.currentRoute.value.fullPath
 
@@ -3033,7 +3059,7 @@ describe('App', () => {
 
     // Start somewhere other than the feed so "back to the hub" is observable
     // as "back to where the hub was", not "back to the default feed".
-    await router.push({ name: 'application-settings', params: { section: 'integrations' } })
+    await router.push({ name: 'profile-settings', params: { profileId: 'personal', section: 'danger' } })
     await flushPromises()
 
     await wrapper.get('[data-testid="titlebar-mode-terminal"]').trigger('click')
@@ -3042,8 +3068,8 @@ describe('App', () => {
     // The Inbox toggle lands on the page that mode was left on, not the feed.
     await wrapper.get('[data-testid="titlebar-mode-hub"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.name).toBe('application-settings')
-    expect(router.currentRoute.value.params.section).toBe('integrations')
+    expect(router.currentRoute.value.name).toBe('profile-settings')
+    expect(router.currentRoute.value.params.section).toBe('danger')
 
     // Activity is reachable from inside terminal mode without toggling first.
     // It is an overlay (#441), so it opens over the terminal rather than

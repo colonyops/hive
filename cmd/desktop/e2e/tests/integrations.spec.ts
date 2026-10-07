@@ -10,6 +10,7 @@ test('lists one card per registered connector, with the mock account connected',
   await page.goto('/')
   await expect(page.getByTestId('feed-item')).toHaveCount(6)
 
+  await page.getByTestId('titlebar-menu').click()
   await page.getByTestId('application-settings').click()
   await page.getByTestId('settings-category-integrations').click()
   await expect(page.getByTestId('settings-integrations')).toBeVisible()
@@ -42,6 +43,7 @@ test('lists one card per registered connector, with the mock account connected',
 
 test('the removed placeholder integrations are gone', async ({ page }) => {
   await page.goto('/')
+  await page.getByTestId('titlebar-menu').click()
   await page.getByTestId('application-settings').click()
   await page.getByTestId('settings-category-integrations').click()
   await expect(page.getByTestId('settings-integrations')).toBeVisible()
@@ -55,6 +57,7 @@ test('the removed placeholder integrations are gone', async ({ page }) => {
 
 test('opens the GitHub drawer and offers to disconnect the connected account', async ({ page }) => {
   await page.goto('/')
+  await page.getByTestId('titlebar-menu').click()
   await page.getByTestId('application-settings').click()
   await page.getByTestId('settings-category-integrations').click()
 

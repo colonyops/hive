@@ -16,8 +16,8 @@ useEscapeToClose(close)
     Two query containers scope every settings page's responsive behaviour (hay-kot/hive-desktop#35).
     They are declared once here so views inherit the breakpoints instead of each
     re-solving them, and a container query — not a viewport `md:` — is the right
-    tool: these panes are far narrower than the window (profile rail + this nav
-    take ~260px), so only the container tracks the space a control actually has.
+    tool: these panes are far narrower than the window (this nav
+    takes ~200px), so only the container tracks the space a control actually has.
 
       `settings` — this whole row. Below 700px the nav collapses to an icon rail.
       `pane`     — the content column. Rows read @[…]/pane: to stack below ~600px.

@@ -97,14 +97,4 @@ describe('ProfileRail', () => {
     await tiles[1].trigger('keydown', { key: 'ArrowUp' })
     expect(wrapper.emitted('reorder')).toHaveLength(1)
   })
-
-  it('shows one application settings action at the bottom', async () => {
-    const wrapper = mount(ProfileRail, { props: { profiles, activeProfileId: 'personal' } })
-
-    expect(wrapper.find('[data-testid="application-settings"]').attributes('aria-label')).toBe('Application settings')
-    expect(wrapper.text()).not.toContain('hy')
-
-    await wrapper.find('[data-testid="application-settings"]').trigger('click')
-    expect(wrapper.emitted('open-settings')).toHaveLength(1)
-  })
 })

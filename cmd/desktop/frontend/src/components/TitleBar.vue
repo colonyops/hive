@@ -32,7 +32,7 @@ import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedCon
 //            (min-[860px]) the mode segments drop their labels to icons.
 //   right  — status chips, then the command-palette launcher (compact, width
 //            clamped to the window so it gives way before the tabs do), then
-//            app-level utilities (Activity) as one icon run, then the
+//            app-level utilities (Activity, Views) as one icon run, then the
 //            preview (right-panel) toggle bracketing the far
 //            edge. Panel toggles are the only things at the extremes, so they
 //            read as the frame; new utilities append to the icon run.
@@ -50,7 +50,8 @@ import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedCon
 // no toggle, no history, no palette.
 // mode is the app-level Inbox|Code|Chats switch. A segment is never disabled,
 // because an unavailable terminal or Chats area explains itself inside the
-// mode.
+// mode. Settings is an area too, but not a peer of the three: it is reached
+// from the Views menu, and while it is open no segment is selected.
 // errorCount (8d) is the count of the active flow's nodes whose last run
 // failed. activityActive marks the Activity icon on when the audit-log page is
 // open; unseenActivity (6d) is the number of events since it was last opened,
@@ -64,7 +65,7 @@ import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedCon
 // onboarding too.
 const props = defineProps<{
   profileName?: string
-  mode?: 'hub' | 'terminal' | 'agents'
+  mode?: 'hub' | 'terminal' | 'agents' | 'settings'
   activityActive?: boolean
   actionRunsActive?: boolean
   errorCount?: number
@@ -185,7 +186,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
         size="sm"
         class="ml-1.5 shrink-0"
         style="--wails-draggable: no-drag"
-        :model-value="mode"
+        :model-value="mode === 'settings' ? undefined : mode"
         :options="modeOptions"
         aria-label="App mode"
         testid="titlebar-mode"
@@ -297,7 +298,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       </IconButton>
       <TitleBarMenu
         v-if="profileName"
-        :active="actionRunsActive"
+        :active="actionRunsActive || mode === 'settings'"
         @run-command="(commandId) => emit('run-command', commandId)"
       />
       <IconButton
