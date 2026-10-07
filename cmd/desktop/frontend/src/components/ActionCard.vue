@@ -7,6 +7,7 @@ import type { ActionRunView } from '../../bindings/github.com/colonyops/hive/cmd
 
 const props = defineProps<{ action: ActionView; pending?: boolean; run?: ActionRunView }>()
 const view = computed(() => actionTypeMeta(props.action.type))
+const active = computed(() => props.run?.status === 'pending' || props.run?.status === 'running')
 const emit = defineEmits<{ run: [] }>()
 </script>
 
@@ -16,16 +17,25 @@ const emit = defineEmits<{ run: [] }>()
       class="action-row-btn"
       :data-id="action.id"
       data-testid="action-card"
-      :disabled="pending"
+      :disabled="pending || active"
       :title="view.label"
       @click="emit('run')"
     >
       <span class="action-row-icon" :style="{ color: view.color }"><AppIcon :name="view.icon" class="size-3.5" /></span>
       <span class="action-row-label">{{ action.label }}</span>
-      <span v-if="pending" class="action-row-pending" data-testid="run-action">Running…</span>
+      <span v-if="pending" class="action-row-pending" data-testid="run-action">Starting…</span>
+      <span v-else-if="active" class="action-row-pending" data-testid="run-action">
+        {{ run?.status === 'pending' ? 'Queued…' : 'Running…' }}
+      </span>
     </button>
-    <details v-if="run && run.status !== 'done'" class="action-failure" data-testid="action-failure">
-      <summary class="cursor-pointer">{{ run.error || 'Action failed' }}</summary>
+    <details
+      v-if="run && (run.status === 'failed' || run.status === 'cancelled')"
+      class="action-failure"
+      data-testid="action-failure"
+    >
+      <summary class="cursor-pointer">
+        {{ run.error || (run.status === 'cancelled' ? 'Action cancelled' : 'Action failed') }}
+      </summary>
       <dl class="mt-2 space-y-1 font-mono text-caption text-text-3">
         <div>
           <dt class="inline text-severity-error">status:</dt>

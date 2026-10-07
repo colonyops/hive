@@ -19,13 +19,8 @@ const (
 	truncatedStreamMarker   = "\n... (truncated)"
 )
 
-// shellKillGrace bounds how long Run blocks after the command's context is
-// cancelled (timeout hit). CommandContext SIGKILLs `sh`, but a descendant it
-// spawned (e.g. `sleep`) can inherit the stdout/stderr pipe and keep it open,
-// which would otherwise make Wait block on the copy goroutine until that
-// grandchild exits on its own. WaitDelay force-closes the pipes shortly after
-// the kill so a timed-out command returns promptly instead of running its full
-// duration.
+// shellKillGrace lets an owned process group exit after cancellation before
+// the executor escalates to SIGKILL.
 const shellKillGrace = 2 * time.Second
 
 // ExecEnvironment supplies the environment a spawned command runs in. A shell
@@ -95,8 +90,7 @@ func runShell(ctx context.Context, env ExecEnvironment, spanName string, cmd she
 		runCtx, cancel = context.WithTimeout(ctx, cmd.Timeout)
 		defer cancel()
 	}
-	proc := exec.CommandContext(runCtx, "sh", "-c", cmd.Command)
-	proc.WaitDelay = shellKillGrace
+	proc := exec.CommandContext(context.WithoutCancel(runCtx), "sh", "-c", cmd.Command)
 	proc.Dir = cmd.Dir
 	environ := env.Environ(runCtx)
 	for k, v := range cmd.Env {
@@ -108,7 +102,7 @@ func runShell(ctx context.Context, env ExecEnvironment, spanName string, cmd she
 	stdout := &executil.HeadWriter{Max: maxExecutionStreamBytes + 1}
 	stderr := &executil.HeadWriter{Max: maxExecutionStreamBytes + 1}
 	proc.Stdout, proc.Stderr = stdout, stderr
-	err = proc.Run()
+	err = runShellProcess(runCtx, proc)
 	return ExecutionLog{Stdout: boundExecutionStream(stdout.String()), Stderr: boundExecutionStream(stderr.String())}, err
 }
 

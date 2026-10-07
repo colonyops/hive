@@ -129,6 +129,8 @@ Use `targets` to choose where an action appears:
 
 `item` is the default target. `session` and `window` add the action to row menus in Code. A `launch-session` action only supports item targets.
 
+Item actions run independently. A long shell action stays **Running** until its command exits, while later manual and flow actions can continue. Use the Action jobs menu to open its run details or cancel it. Hiding the window leaves it running; quitting Hive cancels it. Shell actions capture output but do not provide terminal input.
+
 A flow runs its named action for every routed item, regardless of `applies_to`. Flow actions cannot use the clipboard. A `launch-session` flow action needs `repo_template` or `workspace`, and required inputs need defaults.
 
 A manual `launch-session` action with neither fixed target opens a dialog where

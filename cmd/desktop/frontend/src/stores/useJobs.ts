@@ -11,7 +11,7 @@ import { useResource } from './useResource'
 const TRAILING_READ_INTERVAL_MS = 500
 
 function isTerminal(job: Job): boolean {
-  return job.status === 'done' || job.status === 'failed'
+  return job.status === 'done' || job.status === 'failed' || job.status === 'cancelled'
 }
 
 export const useJobs = defineStore('jobs', () => {

@@ -16,4 +16,6 @@ type Recorder interface {
 	Done(ctx context.Context, id int64)
 	// Fail marks a job failed with a reason.
 	Fail(ctx context.Context, id int64, reason string)
+	// Cancel marks a job cancelled with a reason.
+	Cancel(ctx context.Context, id int64, reason string)
 }

@@ -29,10 +29,20 @@ describe('ActionCard', () => {
     expect(wrapper.emitted('run')).toHaveLength(1)
   })
 
-  it('shows a pending indicator and disables the row while running', () => {
+  it('shows a starting indicator while the invocation is accepted', () => {
     const wrapper = mountAction({ pending: true })
 
+    expect(wrapper.get('[data-testid="run-action"]').text()).toContain('Starting')
+    expect(wrapper.get('[data-testid="action-card"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('shows a running command without rendering it as a failure', () => {
+    const wrapper = mount(ActionCard, {
+      props: { action: baseAction, run: { commandId: 42, status: 'running' } },
+    })
+
     expect(wrapper.get('[data-testid="run-action"]').text()).toContain('Running')
+    expect(wrapper.find('[data-testid="action-failure"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="action-card"]').attributes('disabled')).toBeDefined()
   })
 

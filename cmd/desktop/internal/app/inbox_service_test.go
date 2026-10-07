@@ -26,6 +26,13 @@ func newTestWorker(db *queries.DB, actionStore dispatch.ActionLister, d *dispatc
 	return dispatch.NewWorker(stores.New(db, stores.Options{}).OutputCommands, actionStore, d, interval, logger)
 }
 
+func waitForTestWorker(t *testing.T, worker *dispatch.Worker) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
+	defer cancel()
+	require.NoError(t, worker.WaitIdle(ctx))
+}
+
 func newTestInboxService(db *queries.DB, actionStore *actions.ActionStore, worker *dispatch.Worker) *InboxService {
 	st := stores.New(db, stores.Options{})
 	return newInboxService(InboxDeps{Items: st.InboxItems, Commands: st.OutputCommands, NodeRuns: st.NodeRuns, Catalog: actionStore, Worker: worker})
@@ -156,6 +163,7 @@ func TestPipelineService_ActionViewsAndInvocationUseActionStore(t *testing.T) {
 
 	_, err = service.InvokeAction(t.Context(), InvokeActionRequest{ActionID: "review-pr", ItemID: prID, Input: dispatch.ActionInvocationInput{}})
 	require.NoError(t, err)
+	waitForTestWorker(t, worker)
 	assert.Equal(t, 1, executor.calls)
 	assert.Equal(t, "pr-1", executor.data.Key)
 	assert.Equal(t, "Fix it", executor.data.Payload["title"])
@@ -166,6 +174,7 @@ func TestPipelineService_ActionViewsAndInvocationUseActionStore(t *testing.T) {
 	rerun, err := service.InvokeAction(t.Context(), InvokeActionRequest{ActionID: "review-pr", ItemID: prID, Input: dispatch.ActionInvocationInput{Rerun: true}})
 	require.NoError(t, err)
 	assert.False(t, rerun.ConfirmationRequired)
+	waitForTestWorker(t, worker)
 	assert.Equal(t, 2, executor.calls)
 	_, err = service.InvokeAction(t.Context(), InvokeActionRequest{ActionID: "review-pr", ItemID: issueID, Input: dispatch.ActionInvocationInput{}})
 	require.Error(t, err)
@@ -274,6 +283,7 @@ func TestPipelineService_ActionViewsAndInvokeAreCapabilityGatedNotSourceGated(t 
 
 		_, err = service.InvokeAction(t.Context(), InvokeActionRequest{ActionID: "deploy-repo", ItemID: itemID, Input: dispatch.ActionInvocationInput{}})
 		require.NoError(t, err)
+		waitForTestWorker(t, worker)
 		assert.Equal(t, "hook-1", executor.data.Key)
 	})
 
@@ -330,6 +340,10 @@ func TestPipelineService_AttemptedFailureReturnsPersistedActionRun(t *testing.T)
 
 	view, err := service.InvokeAction(t.Context(), InvokeActionRequest{ActionID: "review-pr", ItemID: prID, Input: dispatch.ActionInvocationInput{}})
 	require.NoError(t, err)
+	assert.Equal(t, "running", view.Status)
+	waitForTestWorker(t, worker)
+	view, err = service.ActionRun(t.Context(), view.CommandID)
+	require.NoError(t, err)
 	assert.Equal(t, "failed", view.Status)
 	assert.Equal(t, "side effect failed", view.Error)
 	assert.Equal(t, "partial stdout", view.Stdout)
@@ -356,6 +370,9 @@ func TestPipelineService_ActionRunSurvivesDatabaseReopen(t *testing.T) {
 	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 	view, err := newTestInboxService(db, actionStore, worker).InvokeAction(t.Context(), InvokeActionRequest{ActionID: "review-pr", ItemID: prID})
 	require.NoError(t, err)
+	waitForTestWorker(t, worker)
+	view, err = newTestInboxService(db, actionStore, worker).ActionRun(t.Context(), view.CommandID)
+	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
 	reopened, err := queries.Open(t.Context(), dir, queries.DefaultOpenOptions())
@@ -381,6 +398,7 @@ func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing
 
 	_, err = service.InvokeAction(t.Context(), InvokeActionRequest{ActionID: "review-pr", ItemID: prID, Input: dispatch.ActionInvocationInput{}})
 	require.NoError(t, err)
+	waitForTestWorker(t, worker)
 	require.Equal(t, []dispatch.LaunchSessionRequest{{
 		Name: "review-pr-pr-1", Prompt: "Review Fix it", Repo: "git@example/repo.git", CollisionSuffix: "1",
 		Origins: []models.ItemRef{{ProfileID: "p", SourceKind: "github", ExternalID: "pr-1"}},
@@ -486,6 +504,7 @@ actions:
 		Input:    dispatch.ActionInvocationInput{Inputs: map[string]string{"reason": "flapping"}},
 	})
 	require.NoError(t, err)
+	waitForTestWorker(t, worker)
 	require.Equal(t, 1, executor.calls)
 	assert.Equal(t, map[string]string{"reason": "flapping", "window": "1h"}, executor.data.Inputs)
 }

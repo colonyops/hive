@@ -17,13 +17,25 @@ const (
 
 // JobService persists jobs and implements jobs.Recorder for background work.
 type JobService struct {
-	store  *stores.JobStore
-	events *events.Bus
-	log    zerolog.Logger
+	store         *stores.JobStore
+	events        *events.Bus
+	log           zerolog.Logger
+	cancelCommand func(int64) bool
 }
 
 func newJobService(store *stores.JobStore, bus *events.Bus, logger zerolog.Logger) *JobService {
 	return &JobService{store: store, events: bus, log: logger}
+}
+
+func (s *JobService) setCommandCanceller(cancel func(int64) bool) {
+	s.cancelCommand = cancel
+}
+
+func (s *JobService) CancelCommand(_ context.Context, commandID int64) error {
+	if s.cancelCommand == nil || !s.cancelCommand(commandID) {
+		return Errorf(KindConflict, "action run %d is not running", commandID)
+	}
+	return nil
 }
 
 // List defaults limits outside 1..1000 to 200.
@@ -95,6 +107,11 @@ func (s *JobService) Done(ctx context.Context, id int64) {
 // A zero ID is a no-op.
 func (s *JobService) Fail(ctx context.Context, id int64, reason string) {
 	s.setStatus(ctx, id, jobs.JobStatusFailed, reason)
+}
+
+// A zero ID is a no-op.
+func (s *JobService) Cancel(ctx context.Context, id int64, reason string) {
+	s.setStatus(ctx, id, jobs.JobStatusCancelled, reason)
 }
 
 // Track starts fn asynchronously on a context detached from caller

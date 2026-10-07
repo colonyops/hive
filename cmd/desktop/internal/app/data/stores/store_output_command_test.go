@@ -2,6 +2,7 @@ package stores
 
 import (
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +11,14 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 )
+
+func claimNextTestCommand(t *testing.T, st *Stores) OutputCommand {
+	t.Helper()
+	row, found, err := st.OutputCommands.ClaimNextAutomatic(t.Context(), 0, "test-claim")
+	require.NoError(t, err)
+	require.True(t, found)
+	return row
+}
 
 func enqueueTestCommand(t *testing.T, st *Stores, actionID, key string) {
 	t.Helper()
@@ -59,7 +68,7 @@ func TestConfirm_KeepsTheRoutedOriginAndFillsAMissingOne(t *testing.T) {
 		}},
 	}))
 	other := models.ItemRef{ProfileID: "q", SourceKind: "webhook", ExternalID: "other"}
-	claimed, _, err := st.OutputCommands.Confirm(ctx, "review-pr", "oc-1", []byte(`{"v":1}`), other)
+	claimed, _, err := st.OutputCommands.Confirm(ctx, "review-pr", "oc-1", []byte(`{"v":1}`), other, "claim-1")
 	require.NoError(t, err)
 	assert.Equal(t, routed, claimed.ItemRef(), "a confirm never overwrites the origin the flow recorded")
 
@@ -67,7 +76,7 @@ func TestConfirm_KeepsTheRoutedOriginAndFillsAMissingOne(t *testing.T) {
 	_, err = db.Conn().ExecContext(ctx,
 		`INSERT INTO output_command (action_id, key, payload, status, created_at) VALUES ('shell-it', 'oc-2', CAST('{}' AS BLOB), 'pending', 1)`)
 	require.NoError(t, err)
-	filled, _, err := st.OutputCommands.Confirm(ctx, "shell-it", "oc-2", []byte(`{"v":1}`), routed)
+	filled, _, err := st.OutputCommands.Confirm(ctx, "shell-it", "oc-2", []byte(`{"v":1}`), routed, "claim-2")
 	require.NoError(t, err)
 	assert.Equal(t, routed, filled.ItemRef())
 }
@@ -76,7 +85,7 @@ func TestRecoverInterruptedOutputCommands_JoinsTransaction(t *testing.T) {
 	st, db := openTestStores(t)
 	ctx := t.Context()
 
-	command, created, err := st.OutputCommands.Confirm(ctx, "review", "item-1", []byte(`{}`), models.ItemRef{})
+	command, created, err := st.OutputCommands.Confirm(ctx, "review", "item-1", []byte(`{}`), models.ItemRef{}, "claim")
 	require.NoError(t, err)
 	require.True(t, created)
 	job, err := st.Jobs.Insert(ctx, JobCreate{Status: "queued", Label: "Review"})
@@ -135,18 +144,18 @@ func TestConfirmOutputCommandDeduplicatesExistingCommand(t *testing.T) {
 	ctx := t.Context()
 
 	enqueueTestCommand(t, st, "action-a", "k1")
-	row, created, err := st.OutputCommands.Confirm(ctx, "action-a", "k1", []byte(`{"v":2}`), models.ItemRef{})
+	row, created, err := st.OutputCommands.Confirm(ctx, "action-a", "k1", []byte(`{"v":2}`), models.ItemRef{}, "claim")
 	require.NoError(t, err)
 	assert.True(t, created, "confirmation atomically claims the pending command")
 	assert.Equal(t, "running", row.Status)
 	assert.JSONEq(t, `{"v":1}`, string(row.Payload), "the queued payload remains authoritative")
-	existing, created, err := st.OutputCommands.Confirm(ctx, "action-a", "k1", []byte(`{"v":3}`), models.ItemRef{})
+	existing, created, err := st.OutputCommands.Confirm(ctx, "action-a", "k1", []byte(`{"v":3}`), models.ItemRef{}, "other-claim")
 	require.NoError(t, err)
 	assert.False(t, created, "a running command cannot be claimed twice")
 	assert.Equal(t, row.ID, existing.ID, "the existing command is returned for confirmation UX")
-	require.NoError(t, st.OutputCommands.MarkDone(ctx, row.ID))
+	require.NoError(t, st.OutputCommands.Complete(ctx, row.ID, row.ClaimToken, "", "", ""))
 
-	rerun, err := st.OutputCommands.Rerun(ctx, "action-a", "k1", []byte(`{"v":4}`), models.ItemRef{})
+	rerun, err := st.OutputCommands.Rerun(ctx, "action-a", "k1", []byte(`{"v":4}`), models.ItemRef{}, "rerun-claim")
 	require.NoError(t, err)
 	assert.NotEqual(t, row.ID, rerun.ID)
 	assert.True(t, rerun.IsRerun)
@@ -158,7 +167,7 @@ func TestConfirmOutputCommandDeduplicatesExistingCommand(t *testing.T) {
 func TestRerunOutputCommandRequiresPriorRun(t *testing.T) {
 	st, _ := openTestStores(t)
 
-	_, err := st.OutputCommands.Rerun(t.Context(), "action-a", "missing", []byte(`{}`), models.ItemRef{})
+	_, err := st.OutputCommands.Rerun(t.Context(), "action-a", "missing", []byte(`{}`), models.ItemRef{}, "claim")
 	require.Error(t, err)
 	assert.True(t, IsNotFound(err))
 }
@@ -167,9 +176,9 @@ func TestRerunOutputCommandRejectsActivePriorRun(t *testing.T) {
 	st, _ := openTestStores(t)
 	enqueueTestCommand(t, st, "action-a", "active")
 
-	_, err := st.OutputCommands.Rerun(t.Context(), "action-a", "active", []byte(`{}`), models.ItemRef{})
+	_, err := st.OutputCommands.Rerun(t.Context(), "action-a", "active", []byte(`{}`), models.ItemRef{}, "claim")
 	require.Error(t, err)
-	assert.True(t, IsNotFound(err))
+	assert.ErrorIs(t, err, ErrOutputCommandActive)
 }
 
 func TestMarkOutputCommandDone_ExcludesFromRunnable(t *testing.T) {
@@ -177,36 +186,30 @@ func TestMarkOutputCommandDone_ExcludesFromRunnable(t *testing.T) {
 	ctx := t.Context()
 
 	enqueueTestCommand(t, st, "action-a", "k1")
+	claimed := claimNextTestCommand(t, st)
+	require.NoError(t, st.OutputCommands.Complete(ctx, claimed.ID, claimed.ClaimToken, "", "", ""))
+
 	rows, err := st.OutputCommands.ListRunnableAfter(ctx, 0, 10)
-	require.NoError(t, err)
-	require.Len(t, rows, 1)
-
-	require.NoError(t, st.OutputCommands.MarkDone(ctx, rows[0].ID))
-
-	rows, err = st.OutputCommands.ListRunnableAfter(ctx, 0, 10)
 	require.NoError(t, err)
 	assert.Empty(t, rows)
 }
 
-func TestRetryOutputCommand_IncrementsAttemptsAndStaysRunnable(t *testing.T) {
+func TestRequeueOutputCommandStaysRunnableAndCountsClaims(t *testing.T) {
 	st, _ := openTestStores(t)
 	ctx := t.Context()
 
 	enqueueTestCommand(t, st, "action-a", "k1")
+	claimed := claimNextTestCommand(t, st)
+	require.NoError(t, st.OutputCommands.Requeue(ctx, claimed.ID, claimed.ClaimToken, "boom", "", "", 0))
+
 	rows, err := st.OutputCommands.ListRunnableAfter(ctx, 0, 10)
-	require.NoError(t, err)
-	require.Len(t, rows, 1)
-	id := rows[0].ID
-
-	require.NoError(t, st.OutputCommands.Retry(ctx, id, "boom"))
-
-	rows, err = st.OutputCommands.ListRunnableAfter(ctx, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, rows, 1, "retried command stays runnable")
 	assert.Equal(t, int64(1), rows[0].Attempts)
 	assert.Equal(t, "boom", rows[0].LastError)
 
-	require.NoError(t, st.OutputCommands.Retry(ctx, id, "boom again"))
+	claimed = claimNextTestCommand(t, st)
+	require.NoError(t, st.OutputCommands.Requeue(ctx, claimed.ID, claimed.ClaimToken, "boom again", "", "", 0))
 	rows, err = st.OutputCommands.ListRunnableAfter(ctx, 0, 10)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
@@ -216,12 +219,12 @@ func TestRetryOutputCommand_IncrementsAttemptsAndStaysRunnable(t *testing.T) {
 func TestMarkOutputCommandDoneClearsPreviousFailure(t *testing.T) {
 	st, _ := openTestStores(t)
 	enqueueTestCommand(t, st, "action-a", "k1")
-	rows, err := st.OutputCommands.ListRunnableAfter(t.Context(), 0, 1)
-	require.NoError(t, err)
-	require.NoError(t, st.OutputCommands.Retry(t.Context(), rows[0].ID, "first failure", "old stdout", "old stderr"))
-	require.NoError(t, st.OutputCommands.MarkDone(t.Context(), rows[0].ID, `{"message":{"topic":"agent.inbox"}}`, "new stdout", ""))
+	claimed := claimNextTestCommand(t, st)
+	require.NoError(t, st.OutputCommands.Requeue(t.Context(), claimed.ID, claimed.ClaimToken, "first failure", "old stdout", "old stderr", 0))
+	claimed = claimNextTestCommand(t, st)
+	require.NoError(t, st.OutputCommands.Complete(t.Context(), claimed.ID, claimed.ClaimToken, `{"message":{"topic":"agent.inbox"}}`, "new stdout", ""))
 
-	row, err := st.OutputCommands.Get(t.Context(), rows[0].ID)
+	row, err := st.OutputCommands.Get(t.Context(), claimed.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "done", row.Status)
 	assert.Empty(t, row.LastError, "successful retry must not retain stale failure")
@@ -233,12 +236,11 @@ func TestMarkOutputCommandDoneClearsPreviousFailure(t *testing.T) {
 func TestOutputCommandPersistenceBoundsStreams(t *testing.T) {
 	st, _ := openTestStores(t)
 	enqueueTestCommand(t, st, "action-a", "k1")
-	rows, err := st.OutputCommands.ListRunnableAfter(t.Context(), 0, 1)
-	require.NoError(t, err)
+	claimed := claimNextTestCommand(t, st)
 	noisy := strings.Repeat("x", maxOutputCommandStreamBytes+1)
-	require.NoError(t, st.OutputCommands.MarkFailed(t.Context(), rows[0].ID, "failed", noisy, noisy))
+	require.NoError(t, st.OutputCommands.Fail(t.Context(), claimed.ID, claimed.ClaimToken, "failed", noisy, noisy))
 
-	row, err := st.OutputCommands.Get(t.Context(), rows[0].ID)
+	row, err := st.OutputCommands.Get(t.Context(), claimed.ID)
 	require.NoError(t, err)
 	assert.Len(t, row.Stdout, maxOutputCommandStreamBytes)
 	assert.Len(t, row.Stderr, maxOutputCommandStreamBytes)
@@ -252,17 +254,15 @@ func TestExecutionResultAndLogsPersistAcrossReopenBeforeDone(t *testing.T) {
 	require.NoError(t, err)
 	st := New(db, Options{})
 	enqueueTestCommand(t, st, "action-a", "k1")
-	rows, err := st.OutputCommands.ListRunnableAfter(t.Context(), 0, 1)
-	require.NoError(t, err)
-	require.Len(t, rows, 1)
-	require.NoError(t, st.OutputCommands.MarkDone(t.Context(), rows[0].ID, `{"message":{"topic":"agent.inbox"}}`, "stdout", "stderr"))
+	claimed := claimNextTestCommand(t, st)
+	require.NoError(t, st.OutputCommands.Complete(t.Context(), claimed.ID, claimed.ClaimToken, `{"message":{"topic":"agent.inbox"}}`, "stdout", "stderr"))
 	require.NoError(t, db.Close())
 
 	db, err = queries.Open(t.Context(), dir, queries.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	st = New(db, Options{})
-	row, err := st.OutputCommands.Get(t.Context(), rows[0].ID)
+	row, err := st.OutputCommands.Get(t.Context(), claimed.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "done", row.Status)
 	assert.JSONEq(t, `{"message":{"topic":"agent.inbox"}}`, row.ResultJSON)
@@ -275,14 +275,12 @@ func TestMarkOutputCommandFailed_ExcludesFromRunnable(t *testing.T) {
 	ctx := t.Context()
 
 	enqueueTestCommand(t, st, "action-a", "k1")
+	claimed := claimNextTestCommand(t, st)
+	id := claimed.ID
+
+	require.NoError(t, st.OutputCommands.Fail(ctx, id, claimed.ClaimToken, "gave up", "", ""))
+
 	rows, err := st.OutputCommands.ListRunnableAfter(ctx, 0, 10)
-	require.NoError(t, err)
-	require.Len(t, rows, 1)
-	id := rows[0].ID
-
-	require.NoError(t, st.OutputCommands.MarkFailed(ctx, id, "gave up"))
-
-	rows, err = st.OutputCommands.ListRunnableAfter(ctx, 0, 10)
 	require.NoError(t, err)
 	assert.Empty(t, rows)
 
@@ -293,6 +291,46 @@ func TestMarkOutputCommandFailed_ExcludesFromRunnable(t *testing.T) {
 	).Scan(&status, &lastErr))
 	assert.Equal(t, "failed", status)
 	assert.Equal(t, "gave up", lastErr)
+}
+
+func TestOutputCommandClaimsAreAtomic(t *testing.T) {
+	st, _ := openTestStores(t)
+	enqueueTestCommand(t, st, "action-a", "k1")
+	enqueueTestCommand(t, st, "action-a", "k2")
+
+	type claimResult struct {
+		id    int64
+		found bool
+		err   error
+	}
+	var wg sync.WaitGroup
+	results := make(chan claimResult, 2)
+	for _, token := range []string{"claim-a", "claim-b"} {
+		wg.Go(func() {
+			row, found, err := st.OutputCommands.ClaimNextAutomatic(t.Context(), 0, token)
+			results <- claimResult{id: row.ID, found: found, err: err}
+		})
+	}
+	wg.Wait()
+	close(results)
+	claimed := make(map[int64]struct{})
+	for result := range results {
+		require.NoError(t, result.err)
+		require.True(t, result.found)
+		claimed[result.id] = struct{}{}
+	}
+	assert.Len(t, claimed, 2)
+}
+
+func TestOutputCommandTerminalTransitionRejectsStaleClaim(t *testing.T) {
+	st, _ := openTestStores(t)
+	enqueueTestCommand(t, st, "action-a", "k1")
+	claimed := claimNextTestCommand(t, st)
+	require.NoError(t, st.OutputCommands.Complete(t.Context(), claimed.ID, claimed.ClaimToken, "", "", ""))
+	require.ErrorContains(t,
+		st.OutputCommands.Complete(t.Context(), claimed.ID, claimed.ClaimToken, "", "", ""),
+		"stale claim",
+	)
 }
 
 func TestOutputCommandStore_CountNonterminalForAction(t *testing.T) {
@@ -307,12 +345,9 @@ func TestOutputCommandStore_CountNonterminalForAction(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(2), count)
 
-	rows, err := st.OutputCommands.ListRunnableAfter(ctx, 0, 10)
-	require.NoError(t, err)
-	for _, row := range rows {
-		if row.ActionID == "action-a" {
-			require.NoError(t, st.OutputCommands.MarkDone(ctx, row.ID))
-		}
+	for range 3 {
+		claimed := claimNextTestCommand(t, st)
+		require.NoError(t, st.OutputCommands.Complete(ctx, claimed.ID, claimed.ClaimToken, "", "", ""))
 	}
 
 	count, err = st.OutputCommands.CountNonterminalForAction(ctx, "action-a")

@@ -14,7 +14,7 @@ const DefaultLingerWindow = 4 * time.Second
 
 // JobStatus is a job's lifecycle stage.
 //
-// ENUM(queued, running, done, failed)
+// ENUM(queued, running, done, failed, cancelled)
 type JobStatus string
 
 // Job is one action-run lifecycle row. ID, CreatedAt, and UpdatedAt are
@@ -43,6 +43,8 @@ func StepFor(status JobStatus) string {
 		return "Completed"
 	case JobStatusFailed:
 		return "Failed"
+	case JobStatusCancelled:
+		return "Cancelled"
 	default:
 		return ""
 	}

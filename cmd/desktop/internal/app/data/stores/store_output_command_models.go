@@ -6,22 +6,26 @@ import (
 )
 
 type OutputCommand struct {
-	ID          int64
-	ActionID    string
-	Key         string
-	Payload     []byte
-	Status      string
-	Attempts    int64
-	LastError   string
-	ResultJSON  string
-	Stdout      string
-	Stderr      string
-	CreatedAt   int64
-	IsRerun     bool
-	ProfileID   string
-	SourceKind  string
-	SourceScope string
-	ExternalID  string
+	ID           int64
+	ActionID     string
+	Key          string
+	Payload      []byte
+	Status       string
+	Attempts     int64
+	LastError    string
+	ResultJSON   string
+	Stdout       string
+	Stderr       string
+	CreatedAt    int64
+	IsRerun      bool
+	ProfileID    string
+	SourceKind   string
+	SourceScope  string
+	ExternalID   string
+	DispatchLane string
+	ClaimToken   string
+	ClaimedAt    int64
+	NotBefore    int64
 }
 
 // Commands without an inbox origin return a zero ItemRef, for which Known is
@@ -37,5 +41,6 @@ func mapOutputCommandFromDB(row queries.OutputCommand) OutputCommand {
 		ResultJSON: row.ResultJson.String, Stdout: row.Stdout.String, Stderr: row.Stderr.String,
 		CreatedAt: row.CreatedAt, IsRerun: row.IsRerun != 0,
 		ProfileID: row.ProfileID, SourceKind: row.SourceKind, SourceScope: row.SourceScope, ExternalID: row.ExternalID,
+		DispatchLane: row.DispatchLane, ClaimToken: row.ClaimToken, ClaimedAt: row.ClaimedAt, NotBefore: row.NotBefore,
 	}
 }

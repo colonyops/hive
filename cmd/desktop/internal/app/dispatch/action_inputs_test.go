@@ -77,6 +77,7 @@ func TestWorker_AutomaticRunResolvesDeclaredDefaults(t *testing.T) {
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"notify-oncall": action},
 		NewDispatcher(map[string]Executor{"publish-message": exec}), 0, zerolog.Nop())
 	worker.Tick(t.Context())
+	waitForWorker(t, worker)
 
 	require.Equal(t, 1, exec.callCount())
 	assert.Equal(t, map[string]string{"severity": "page"}, exec.calls[0].Inputs)
@@ -97,6 +98,9 @@ func TestWorker_ConfirmThreadsCollectedInputsToTheExecutor(t *testing.T) {
 	view, err := worker.Confirm(t.Context(), "ignore", "item-1", []byte(`{"title":"Fix bug"}`), models.ItemRef{},
 		ActionInvocationInput{Inputs: map[string]string{"reason": "flapping"}})
 	require.NoError(t, err)
+	assert.Equal(t, "running", view.Status)
+	waitForWorker(t, worker)
+	view = worker.view(t.Context(), view.CommandID)
 	assert.Equal(t, "done", view.Status)
 	require.Equal(t, 1, exec.callCount())
 	assert.Equal(t, map[string]string{"reason": "flapping"}, exec.calls[0].Inputs)

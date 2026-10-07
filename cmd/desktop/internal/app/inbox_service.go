@@ -304,6 +304,12 @@ func (s *InboxService) RenderClipboardAction(ctx context.Context, actionID strin
 // prior run is the caller asking for something that cannot exist yet, not a
 // failure of ours — which is why the store had to start wrapping sql.ErrNoRows.
 func (s *InboxService) confirmError(err error, actionID string) error {
+	if errors.Is(err, dispatch.ErrDispatchBusy) {
+		return Wrap(err, KindConflict, "action %q cannot start because the manual action limit is reached", actionID)
+	}
+	if errors.Is(err, stores.ErrOutputCommandActive) {
+		return Wrap(err, KindConflict, "action %q is already running", actionID)
+	}
 	if stores.IsNotFound(err) {
 		return Wrap(err, KindInvalid, "action %q has no completed run to repeat", actionID)
 	}

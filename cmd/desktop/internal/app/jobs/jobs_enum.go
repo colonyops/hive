@@ -19,6 +19,8 @@ const (
 	JobStatusDone JobStatus = "done"
 	// JobStatusFailed is a JobStatus of type failed.
 	JobStatusFailed JobStatus = "failed"
+	// JobStatusCancelled is a JobStatus of type cancelled.
+	JobStatusCancelled JobStatus = "cancelled"
 )
 
 var ErrInvalidJobStatus = fmt.Errorf("not a valid JobStatus, try [%s]", strings.Join(_JobStatusNames, ", "))
@@ -28,6 +30,7 @@ var _JobStatusNames = []string{
 	string(JobStatusRunning),
 	string(JobStatusDone),
 	string(JobStatusFailed),
+	string(JobStatusCancelled),
 }
 
 // JobStatusNames returns a list of possible string values of JobStatus.
@@ -50,10 +53,11 @@ func (x JobStatus) IsValid() bool {
 }
 
 var _JobStatusValue = map[string]JobStatus{
-	"queued":  JobStatusQueued,
-	"running": JobStatusRunning,
-	"done":    JobStatusDone,
-	"failed":  JobStatusFailed,
+	"queued":    JobStatusQueued,
+	"running":   JobStatusRunning,
+	"done":      JobStatusDone,
+	"failed":    JobStatusFailed,
+	"cancelled": JobStatusCancelled,
 }
 
 // ParseJobStatus attempts to convert a string to a JobStatus.

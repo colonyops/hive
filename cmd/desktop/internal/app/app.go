@@ -487,6 +487,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Logger:          cfg.Logger,
 	})
 	a.outputs = a.buildOutputWorker(cfg)
+	a.Jobs.setCommandCanceller(a.outputs.Cancel)
 	a.Inbox = newInboxService(InboxDeps{Items: a.Stores.InboxItems, Commands: a.Stores.OutputCommands, NodeRuns: a.Stores.NodeRuns, Catalog: a.actionStore, Worker: a.outputs})
 	a.MenuBar = newMenuBarService(MenuBarDeps{
 		Settings: cfg.SettingsStore,
@@ -712,6 +713,16 @@ func (a *App) Close() error {
 	if a.scheduler != nil {
 		a.scheduler.Stop()
 	}
+	if a.producer != nil {
+		a.producer.Stop()
+	}
+	if a.outputs != nil {
+		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(a.ctx), 3*time.Second)
+		if stopErr := a.outputs.Stop(stopCtx); stopErr != nil {
+			a.logger.Warn().Err(stopErr).Msg("action dispatch shutdown")
+		}
+		cancel()
+	}
 
 	// Before the webhook listener: a terminal WebSocket has hijacked its
 	// connection, which http.Server.Shutdown neither tracks nor closes, so the
@@ -746,12 +757,8 @@ func (a *App) Close() error {
 		}
 		cancel()
 	}
-	if a.producer != nil {
-		a.producer.Stop()
-	}
 	a.engine.Stop()
 	a.retention.Stop()
-	a.outputs.Stop()
 	if a.flowsWatcher != nil {
 		a.flowsWatcher.Close()
 	}

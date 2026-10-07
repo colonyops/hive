@@ -1,4 +1,4 @@
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onScopeDispose, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Browser, Window } from '@wailsio/runtime'
 import {
@@ -139,6 +139,7 @@ export function useFeedState() {
   const actionError = ref<string | null>(null)
   const actionRunsByItem = ref<Record<number, Record<string, ActionRunView>>>({})
   const actionRunGenerations = new Map<string, number>()
+  const actionRunPolls = new Map<string, ReturnType<typeof setTimeout>>()
   const actionRunIDs = loadActionRunIDs()
   const pendingAction = computed(() =>
     selectedId.value
@@ -865,6 +866,56 @@ export function useFeedState() {
     }
   }
 
+  async function refreshActionRun(itemID: number, actionID: string, commandID: number): Promise<void> {
+    try {
+      const run = await ActionRun(commandID)
+      const current = actionRunsByItem.value[itemID]?.[actionID]
+      if (current?.commandId !== commandID) return
+      setActionRun(itemID, actionID, run)
+      const wasActive = current.status === 'pending' || current.status === 'running'
+      if (wasActive && run.status === 'done') await notifyActionSuccess(actionID, run)
+      else if (wasActive && (run.status === 'failed' || run.status === 'cancelled')) {
+        await notify({
+          title: run.error || (run.status === 'cancelled' ? 'Action cancelled' : 'The action did not complete.'),
+          severity: run.status === 'cancelled' ? 'info' : 'error',
+          category: 'action',
+        })
+      }
+    } catch (error) {
+      console.warn('Unable to refresh action run', error)
+    }
+  }
+
+  async function pollActionRun(itemID: number, actionID: string, commandID: number): Promise<void> {
+    const key = actionKey(itemID, actionID)
+    actionRunPolls.delete(key)
+    await refreshActionRun(itemID, actionID, commandID)
+    const current = actionRunsByItem.value[itemID]?.[actionID]
+    if (current?.commandId === commandID && (current.status === 'pending' || current.status === 'running'))
+      scheduleActionRunPoll(itemID, actionID, commandID)
+  }
+
+  function scheduleActionRunPoll(itemID: number, actionID: string, commandID: number): void {
+    const key = actionKey(itemID, actionID)
+    const existing = actionRunPolls.get(key)
+    if (existing) clearTimeout(existing)
+    actionRunPolls.set(
+      key,
+      setTimeout(() => void pollActionRun(itemID, actionID, commandID), 500),
+    )
+  }
+
+  async function refreshSelectedActionRuns(): Promise<void> {
+    const item = selectedItem.value
+    if (!item) return
+    await Promise.all(
+      actions.value.map(async (action) => {
+        const commandID = actionRunIDs[item.id]?.[action.id]
+        if (commandID) await refreshActionRun(item.id, action.id, commandID)
+      }),
+    )
+  }
+
   async function selectItem(id: number) {
     selectedId.value = id
     const item = selectedItem.value
@@ -1109,6 +1160,23 @@ export function useFeedState() {
     await refresh()
   }
 
+  async function notifyActionSuccess(actionID: string, run: ActionRunView): Promise<void> {
+    const label = actions.value.find((action) => action.id === actionID)?.label ?? actionID
+    if (run.result?.session)
+      await notify({
+        title: `Created session ${run.result.session.name} (${run.result.session.id})`,
+        severity: 'success',
+        category: 'session',
+      })
+    else if (run.result?.message)
+      await notify({
+        title: `Published message to ${run.result.message.topic} as ${run.result.message.sender}`,
+        severity: 'success',
+        category: 'action',
+      })
+    else await notify({ title: `${label} completed`, severity: 'success', category: 'action' })
+  }
+
   async function runAction(actionID: string, input: Record<string, unknown> = {}, item = selectedItem.value) {
     if (!item) return false
     const key = actionKey(item.id, actionID)
@@ -1129,25 +1197,16 @@ export function useFeedState() {
         return false
       }
       setActionRun(item.id, actionID, run)
+      if (run.status === 'pending' || run.status === 'running') {
+        scheduleActionRunPoll(item.id, actionID, run.commandId)
+        return true
+      }
       if (run.status !== 'done') {
         actionError.value = run.error || 'The action did not complete.'
         await notify({ title: actionError.value, severity: 'error', category: 'action' })
         return false
       }
-      const label = actions.value.find((action) => action.id === actionID)?.label ?? actionID
-      if (run.result?.session)
-        await notify({
-          title: `Created session ${run.result.session.name} (${run.result.session.id})`,
-          severity: 'success',
-          category: 'session',
-        })
-      else if (run.result?.message)
-        await notify({
-          title: `Published message to ${run.result.message.topic} as ${run.result.message.sender}`,
-          severity: 'success',
-          category: 'action',
-        })
-      else await notify({ title: `${label} completed`, severity: 'success', category: 'action' })
+      await notifyActionSuccess(actionID, run)
       return true
     } catch (error) {
       console.warn('Unable to invoke action', error)
@@ -1387,6 +1446,11 @@ export function useFeedState() {
   // it back. Subscribing here too would race that commit and could read
   // stale inbox rows.
 
+  onScopeDispose(() => {
+    for (const timer of actionRunPolls.values()) clearTimeout(timer)
+    actionRunPolls.clear()
+  })
+
   onMounted(() => {
     // A flows/*.yaml change (create/delete/edit) reshapes the profiles list.
     useWailsEvent('flows:updated', () => {
@@ -1395,6 +1459,9 @@ export function useFeedState() {
     useWailsEvent('actions:updated', () => {
       void loadActions(selectedItem.value)
       void loadSelectionActions()
+    })
+    useWailsEvent('jobs:updated', () => {
+      void refreshSelectedActionRuns()
     })
     void loadProfiles()
   })

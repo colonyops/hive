@@ -79,7 +79,7 @@ func TestRerunOutputCommand_NoPriorRunUnwraps(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	_, err = stores.New(db, stores.Options{}).OutputCommands.Rerun(t.Context(), "review-pr", "item-1", nil, models.ItemRef{})
+	_, err = stores.New(db, stores.Options{}).OutputCommands.Rerun(t.Context(), "review-pr", "item-1", nil, models.ItemRef{}, "claim")
 	require.Error(t, err)
 	require.ErrorIs(t, err, sql.ErrNoRows)
 	assert.True(t, stores.IsNotFound(err))
