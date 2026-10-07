@@ -383,6 +383,30 @@ func TestPipelineService_ActionRunSurvivesDatabaseReopen(t *testing.T) {
 	assert.Equal(t, view, afterRestart)
 }
 
+func TestPipelineService_ActionRunLocationResolvesTheOriginatingItem(t *testing.T) {
+	actionStore := configuredActionStore(t)
+	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
+	worker := newTestWorker(db, actionStore, dispatch.NewDispatcher(map[string]dispatch.Executor{
+		"shell": &recordingActionExecutor{},
+	}), 0, zerolog.Nop())
+	service := newTestInboxService(db, actionStore, worker)
+	itemID := insertActionItem(t, db, "item-key-is-not-a-row-id", "Item", "Try it")
+	st := stores.New(db, stores.Options{})
+	require.NoError(t, st.FeedClaims.Upsert(t.Context(), models.FeedClaim{
+		ProfileID: "p", FeedID: "p/demo", ItemID: itemID, SourceID: "source:p/demo",
+	}))
+
+	view, err := service.InvokeAction(t.Context(), InvokeActionRequest{ActionID: "triage-any", ItemID: itemID})
+	require.NoError(t, err)
+	location, err := service.ActionRunLocation(t.Context(), view.CommandID)
+	require.NoError(t, err)
+	assert.Equal(t, ActionRunLocation{ItemID: itemID, ProfileID: "p", FeedID: "p/demo"}, location)
+	waitForTestWorker(t, worker)
+}
+
 func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing.T) {
 	actionStore := configuredActionStore(t)
 	db, err := queries.Open(t.Context(), t.TempDir(), queries.DefaultOpenOptions())

@@ -40,6 +40,7 @@ const props = defineProps<{
   chats?: ItemChatView[]
   pendingAction?: string | null
   actionRuns?: Record<string, ActionRunView>
+  openedActionRunId?: number | null
   sourceIcons?: Record<string, string>
   sourceImages?: Record<string, string>
 }>()
@@ -230,6 +231,7 @@ const {
               :action="action"
               :pending="pendingAction === action.id"
               :run="actionRuns?.[action.id]"
+              :expanded="actionRuns?.[action.id]?.commandId === openedActionRunId"
               @run="emit('run-action', action.id)"
             />
           </div>

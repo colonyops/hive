@@ -46,6 +46,22 @@ describe('ActionCard', () => {
     expect(wrapper.get('[data-testid="action-card"]').attributes('disabled')).toBeDefined()
   })
 
+  it('opens persisted successful command output when requested from the jobs list', () => {
+    const wrapper = mount(ActionCard, {
+      props: {
+        action: baseAction,
+        expanded: true,
+        run: { commandId: 42, status: 'done', stdout: 'finished quickly' },
+      },
+    })
+
+    const details = wrapper.get('[data-testid="action-run-details"]')
+    expect(details.attributes('open')).toBeDefined()
+    expect(details.text()).toContain('Action completed')
+    expect(details.text()).toContain('finished quickly')
+    expect(details.text()).toContain('run:42')
+  })
+
   it('displays persisted failed command diagnostics', () => {
     const wrapper = mount(ActionCard, {
       props: {

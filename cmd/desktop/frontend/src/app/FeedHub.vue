@@ -51,6 +51,7 @@ const {
   actions,
   pendingAction,
   actionRuns,
+  openedActionRunID,
 } = feed
 const flowsSession = useFlowsSession()
 const { openFromItem: openNewSessionFromItem } = useNewSession()
@@ -171,6 +172,7 @@ defineExpose({ focusSearch: () => feedList.value?.focusSearch() })
       :chats="itemChats"
       :pending-action="pendingAction"
       :action-runs="actionRuns"
+      :opened-action-run-id="openedActionRunID"
       :source-icons="sourceIcons"
       :source-images="sourceImages"
       @run-action="feed.invokeAction"

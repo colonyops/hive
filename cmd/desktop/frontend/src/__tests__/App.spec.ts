@@ -60,6 +60,7 @@ const mocks = vi.hoisted(() => ({
   ToggleIgnored: vi.fn(),
   Events: vi.fn(),
   ActionRun: vi.fn(),
+  ActionRunLocation: vi.fn(),
   SessionLaunchOptions: vi.fn(),
   CreateSession: vi.fn(),
   FailedSessionDraft: vi.fn(),
@@ -156,6 +157,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   ToggleIgnored: mocks.ToggleIgnored,
   Events: mocks.Events,
   ActionRun: mocks.ActionRun,
+  ActionRunLocation: mocks.ActionRunLocation,
   NewSessionDraft: mocks.NewSessionDraft,
   ActionViews: mocks.ActionViews,
   InvokeAction: mocks.InvokeAction,
@@ -459,6 +461,7 @@ describe('App', () => {
     mocks.FeedCounts.mockResolvedValue([{ feedId: 'personal/desktop', total: 1, unread: 0, archived: 0 }])
     mocks.Events.mockResolvedValue([])
     mocks.ActionRun.mockResolvedValue({ commandId: 1, status: 'done' })
+    mocks.ActionRunLocation.mockResolvedValue({ itemId: 1, profileId: 'personal', feedId: 'personal/desktop' })
     mocks.SessionLaunchOptions.mockResolvedValue({
       repositories: [],
       defaultRepository: '',

@@ -340,6 +340,38 @@ func (s *InboxService) ActionRun(ctx context.Context, commandID int64) (dispatch
 	return view, nil
 }
 
+type ActionRunLocation struct {
+	ItemID    int64  `json:"itemId"`
+	ProfileID string `json:"profileId"`
+	FeedID    string `json:"feedId,omitempty"`
+}
+
+func (s *InboxService) ActionRunLocation(ctx context.Context, commandID int64) (ActionRunLocation, error) {
+	row, err := s.commands.Get(ctx, commandID)
+	if err != nil {
+		if stores.IsNotFound(err) {
+			return ActionRunLocation{}, Wrap(err, KindNotFound, "action run %d not found", commandID)
+		}
+		return ActionRunLocation{}, Wrap(err, KindInternal, "reading action run %d", commandID)
+	}
+	ref := row.ItemRef()
+	if !ref.Known() {
+		return ActionRunLocation{}, Errorf(KindNotFound, "action run %d has no inbox item", commandID)
+	}
+	itemID, err := s.items.IDByExternalID(ctx, ref.ProfileID, ref.SourceKind, ref.SourceScope, ref.ExternalID)
+	if err != nil {
+		return ActionRunLocation{}, Wrap(err, KindInternal, "resolving the item for action run %d", commandID)
+	}
+	if itemID == 0 {
+		return ActionRunLocation{}, Errorf(KindNotFound, "the item for action run %d no longer exists", commandID)
+	}
+	feedID, err := s.items.FeedIDForItem(ctx, ref.ProfileID, itemID)
+	if err != nil {
+		return ActionRunLocation{}, Wrap(err, KindInternal, "resolving the feed for action run %d", commandID)
+	}
+	return ActionRunLocation{ItemID: itemID, ProfileID: ref.ProfileID, FeedID: feedID}, nil
+}
+
 // decodeItem reads and decodes one inbox item, classifying the two ways it
 // can fail: the row is gone, or its payload is not a canonical item.
 func (s *InboxService) decodeItem(ctx context.Context, itemID int64) (dispatch.DecodedActionItem, error) {

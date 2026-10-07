@@ -138,6 +138,7 @@ export function useFeedState() {
   const pendingActionKeys = ref<Record<string, boolean>>({})
   const actionError = ref<string | null>(null)
   const actionRunsByItem = ref<Record<number, Record<string, ActionRunView>>>({})
+  const openedActionRunID = ref<number | null>(null)
   const actionRunGenerations = new Map<string, number>()
   const actionRunPolls = new Map<string, ReturnType<typeof setTimeout>>()
   const actionRunIDs = loadActionRunIDs()
@@ -917,6 +918,7 @@ export function useFeedState() {
   }
 
   async function selectItem(id: number) {
+    openedActionRunID.value = null
     selectedId.value = id
     const item = selectedItem.value
     await loadActions(item)
@@ -932,6 +934,7 @@ export function useFeedState() {
     try {
       const run = await ActionRun(commandID)
       setActionRun(itemID, actionID, run)
+      openedActionRunID.value = commandID
       return true
     } catch (error) {
       console.warn('Unable to open action run', error)
@@ -1505,6 +1508,7 @@ export function useFeedState() {
     pendingAction,
     actionError,
     actionRuns,
+    openedActionRunID,
     sessionLaunchAction,
     sessionLaunchOptions,
     sessionLaunchBusy,
