@@ -55,10 +55,11 @@ Hive Desktop keeps these files under its config directory by default:
 | Flows | `flows/` |
 | Actions | `actions.yml` |
 | Agent workspaces | `workspaces/` |
-| Application data and logs | `~/.local/share/hive/desktop/` |
+| Desktop application data | `~/.local/share/hive/desktop/` |
+| Shared CLI and Desktop log | `<Hive data root>/hive.log` |
 | Account tokens | OS keychain |
 
-Set `HIVE_DESKTOP_CONFIG_DIR` or `HIVE_DESKTOP_DATA_DIR` to move the config or data root. You can also move the flow, action, and workspace paths separately.
+Set `HIVE_DESKTOP_CONFIG_DIR` or `HIVE_DESKTOP_DATA_DIR` to move the config or Desktop data root. You can also move the flow, action, and workspace paths separately. The shared log follows the Hive data root described above, not a separate Desktop data-root override when `HIVE_DATA_DIR` or `HIVE_DESKTOP_HIVE_DATA_DIR` selects another location. Settings ▸ Hive CLI and Settings ▸ System show the effective paths.
 
 A `settings.yaml` key this version does not know, for example one a newer version wrote into a synced config directory, does not stop the app. Startup logs a warning naming the key and ignores it, so the in-app updater stays available. Saving settings from that version drops the key.
 

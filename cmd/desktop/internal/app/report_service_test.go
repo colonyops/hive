@@ -24,7 +24,7 @@ func testPaths(t *testing.T) settings.Paths {
 		SettingsPath: filepath.Join(dir, "settings.yaml"),
 		ActionsPath:  filepath.Join(dir, "actions.yml"),
 		FlowsDir:     filepath.Join(dir, "flows"),
-		LogFile:      filepath.Join(dir, "desktop.log"),
+		LogFile:      filepath.Join(dir, "hive.log"),
 	}
 }
 

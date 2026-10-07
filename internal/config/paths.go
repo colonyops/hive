@@ -54,6 +54,11 @@ func DefaultDataDir() string {
 	return filepath.Join(pathutil.XDGDataHome(), "hive")
 }
 
+// LogFilePath returns the shared CLI and Desktop log path in dataDir.
+func LogFilePath(dataDir string) string {
+	return filepath.Join(dataDir, "hive.log")
+}
+
 // ResolveDataDir returns the hive data directory the environment names:
 // EnvDesktopDataDir, then EnvDataDir, then fallback. getenv is a parameter
 // because a desktop launched from the Dock reads these from the login shell,

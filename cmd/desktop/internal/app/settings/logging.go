@@ -10,12 +10,10 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/platform/observe"
+	"github.com/colonyops/hive/pkg/logutils"
 )
 
-const (
-	logFileName = "desktop.log"
-	EnvLogLevel = "HIVE_DESKTOP_LOG_LEVEL"
-)
+const EnvLogLevel = "HIVE_DESKTOP_LOG_LEVEL"
 
 // ResolveLogLevel validates the process log-level override once at startup.
 func ResolveLogLevel() (zerolog.Level, error) {
@@ -36,27 +34,25 @@ func ResolveLogLevel() (zerolog.Level, error) {
 // encoded JSON event, not the console rendering — which is the seam a log
 // bridge attaches to, since a zerolog.Hook sees only level and message. An
 // extra arm must not fail the write or block.
-func NewLogger(path string, level zerolog.Level, extra ...io.Writer) (zerolog.Logger, func(), error) {
+func NewLogger(serviceName, path string, level zerolog.Level, extra ...io.Writer) (zerolog.Logger, func(), error) {
 	stderr := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}
 	build := func(writers ...io.Writer) zerolog.Logger {
 		// Installed unconditionally: the hook adds nothing to an event with no
 		// span, and whether the ids mean anything is telemetry's business.
-		return zerolog.New(zerolog.MultiLevelWriter(writers...)).
+		logger := zerolog.New(zerolog.MultiLevelWriter(writers...)).
 			With().Timestamp().Logger().
 			Level(level).
 			Hook(observe.TraceHook)
+		return logutils.Service(logger, serviceName)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return build(append([]io.Writer{stderr}, extra...)...), func() {}, fmt.Errorf("create desktop log dir: %w", err)
+		return build(append([]io.Writer{stderr}, extra...)...), func() {}, fmt.Errorf("create log dir: %w", err)
 	}
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
-		return build(append([]io.Writer{stderr}, extra...)...), func() {}, fmt.Errorf("open desktop log file: %w", err)
+		return build(append([]io.Writer{stderr}, extra...)...), func() {}, fmt.Errorf("open log file: %w", err)
 	}
 	fileW := zerolog.ConsoleWriter{Out: f, NoColor: true, TimeFormat: time.RFC3339}
 	l := build(append([]io.Writer{fileW, stderr}, extra...)...)
 	return l, func() { _ = f.Close() }, nil
 }
-
-// LogFile is retained for tests and e2e helpers; runtime uses Paths.LogFile.
-func LogFile() string { return defaultPaths().LogFile }

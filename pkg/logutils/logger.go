@@ -10,13 +10,13 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// New returns a new logger.
+// New returns a logger carrying serviceName on every event.
 //
 // If file is set, logs are written to that file in console format.
 // If file is empty, logs are written to stdout in JSON format.
 //
 // The level parameter can be one of: debug, info, warn, error, fatal.
-func New(level string, file string) (zerolog.Logger, func(), error) {
+func New(serviceName, level, file string) (zerolog.Logger, func(), error) {
 	closer := func() {}
 
 	lvl, err := zerolog.ParseLevel(level)
@@ -49,5 +49,5 @@ func New(level string, file string) (zerolog.Logger, func(), error) {
 		Logger().
 		Level(lvl)
 
-	return l, closer, nil
+	return Service(l, serviceName), closer, nil
 }

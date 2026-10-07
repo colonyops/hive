@@ -114,6 +114,25 @@ onMounted(() => {
       </div>
     </SettingsSection>
 
+    <SettingsSection
+      v-if="info"
+      title="Shared Hive data"
+      description="Hive Desktop and the Hive CLI use this directory for sessions, task coordination, context, and logs."
+      boxed
+    >
+      <SettingsPathRow
+        label="Hive data directory"
+        hint="HIVE_DESKTOP_HIVE_DATA_DIR or HIVE_DATA_DIR selects this location."
+        icon="folder"
+        tone="accent"
+        :path="info.hiveDataDir.path"
+        :exists="info.hiveDataDir.exists"
+        testid="hive-data-dir"
+        @open="openPath(info.hiveDataDir.path)"
+        @reveal="revealPath(info.hiveDataDir.path)"
+      />
+    </SettingsSection>
+
     <SettingsSection v-if="info" title="Configuration file" description="The same file the hive CLI reads." boxed>
       <SettingsPathRow
         label="Hive CLI config"

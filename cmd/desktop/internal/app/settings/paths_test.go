@@ -80,6 +80,7 @@ func TestHiveDataDirOverrideKeepsDesktopStateIsolated(t *testing.T) {
 	assert.Equal(t, hive, paths.HiveDataDir, "hive.db follows the override")
 	assert.Equal(t, data, paths.DataDir)
 	assert.Equal(t, filepath.Join(data, "desktop"), paths.StateDir, "desktop state stays under the isolated data dir")
+	assert.Equal(t, filepath.Join(hive, "hive.log"), paths.LogFile, "the CLI and Desktop share the hive data directory log")
 }
 
 func TestAgentWorkspacesRootResolution(t *testing.T) {

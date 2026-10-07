@@ -82,7 +82,7 @@ nodes:
 
 	write(filepath.Join(flows, "main.ui.yaml"), "should: be skipped\n")
 
-	write(filepath.Join(dir, "desktop.log"),
+	write(filepath.Join(dir, "hive.log"),
 		"2026-07-27 INFO starting up\n"+
 			"2026-07-27 DEBUG using token ghp_CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC now\n")
 
@@ -90,7 +90,7 @@ nodes:
 		SettingsPath: filepath.Join(dir, "settings.yaml"),
 		ActionsPath:  filepath.Join(dir, "actions.yml"),
 		FlowsDir:     flows,
-		LogFile:      filepath.Join(dir, "desktop.log"),
+		LogFile:      filepath.Join(dir, "hive.log"),
 	}
 }
 
@@ -174,7 +174,7 @@ func TestAssembleMissingConfigIsNotFatal(t *testing.T) {
 		SettingsPath: "/nonexistent/settings.yaml",
 		ActionsPath:  "/nonexistent/actions.yml",
 		FlowsDir:     "/nonexistent/flows",
-		LogFile:      "/nonexistent/desktop.log",
+		LogFile:      "/nonexistent/hive.log",
 	}, Build{Version: "1.0.0"})
 
 	bundle := a.Assemble("rpt_test", time.Now().UTC(), Options{

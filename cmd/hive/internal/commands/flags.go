@@ -1,6 +1,6 @@
 package commands
 
-import "path/filepath"
+import "github.com/colonyops/hive/internal/config"
 
 type Flags struct {
 	LogLevel     string
@@ -16,5 +16,5 @@ func (f *Flags) ResolvedLogFile() string {
 	if f.LogFile != "" {
 		return f.LogFile
 	}
-	return filepath.Join(f.DataDir, "hive.log")
+	return config.LogFilePath(f.DataDir)
 }

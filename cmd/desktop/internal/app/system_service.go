@@ -83,6 +83,7 @@ type PathInfo struct {
 type SystemInfo struct {
 	DataDir         PathInfo
 	ConfigDir       PathInfo
+	HiveDataDir     PathInfo
 	LogFile         PathInfo
 	Database        PathInfo
 	AgentWorkspaces PathInfo
@@ -96,6 +97,7 @@ func (s *SystemService) Info(context.Context) SystemInfo {
 	return SystemInfo{
 		DataDir:         pathInfo(s.paths.DataDir, s.paths.DataDirOverridden),
 		ConfigDir:       pathInfo(s.paths.ConfigDir, s.paths.ConfigDirOverridden),
+		HiveDataDir:     pathInfo(s.paths.HiveDataDir, false),
 		LogFile:         pathInfo(s.paths.LogFile, false),
 		Database:        pathInfo(queries.DatabasePath(s.paths.StateDir), false),
 		AgentWorkspaces: pathInfo(s.paths.AgentWorkspacesDir, false),
@@ -194,6 +196,7 @@ func (s *SystemService) checkAllowed(path string) error {
 	allowed := map[string]struct{}{
 		filepath.Clean(s.paths.DataDir):                        {},
 		filepath.Clean(s.paths.ConfigDir):                      {},
+		filepath.Clean(s.paths.HiveDataDir):                    {},
 		filepath.Clean(s.paths.LogFile):                        {},
 		filepath.Clean(queries.DatabasePath(s.paths.StateDir)): {},
 		filepath.Clean(s.paths.AgentWorkspacesDir):             {},
