@@ -30,6 +30,9 @@ type RetentionPolicy struct {
 	// output_command rows to retain. Launch commands whose item still exists
 	// are kept regardless.
 	TerminalOutputCommandLimit int64
+	// ActionRunLogCommandLimit is the number of newest commands whose run log
+	// is retained. A command that can still run keeps its log regardless.
+	ActionRunLogCommandLimit int64
 	// ActivityEventLimit is the total number of newest activity_event rows to
 	// retain for the Activity view's audit history.
 	ActivityEventLimit int64
@@ -48,6 +51,7 @@ func DefaultRetentionPolicy() RetentionPolicy {
 	return RetentionPolicy{
 		NodeRunLimit:                   10_000,
 		TerminalOutputCommandLimit:     2_000,
+		ActionRunLogCommandLimit:       200,
 		ActivityEventLimit:             5_000,
 		JobLimit:                       2_000,
 		ArchivedItemRetention:          90 * 24 * time.Hour,
@@ -77,6 +81,9 @@ func (db *DB) Prune(ctx context.Context, policy RetentionPolicy) error {
 	}
 	if policy.TerminalOutputCommandLimit < 0 {
 		return fmt.Errorf("terminal output command retention limit must not be negative")
+	}
+	if policy.ActionRunLogCommandLimit < 0 {
+		return fmt.Errorf("action run log retention limit must not be negative")
 	}
 	if policy.ActivityEventLimit < 0 {
 		return fmt.Errorf("activity event retention limit must not be negative")
@@ -113,6 +120,9 @@ func (db *DB) Prune(ctx context.Context, policy RetentionPolicy) error {
 		}
 		if err := tx.PruneTerminalOutputCommands(ctx, policy.TerminalOutputCommandLimit); err != nil {
 			return fmt.Errorf("pruning terminal output commands: %w", err)
+		}
+		if err := tx.PruneActionRunLogs(ctx, policy.ActionRunLogCommandLimit); err != nil {
+			return fmt.Errorf("pruning action run logs: %w", err)
 		}
 		if err := tx.PruneActivityEvents(ctx, policy.ActivityEventLimit); err != nil {
 			return fmt.Errorf("pruning activity events: %w", err)

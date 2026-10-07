@@ -8,6 +8,15 @@ import (
 	"database/sql"
 )
 
+type ActionRunLog struct {
+	ID        int64  `json:"id"`
+	CommandID int64  `json:"command_id"`
+	Attempt   int64  `json:"attempt"`
+	Stream    string `json:"stream"`
+	Text      string `json:"text"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 type ActivityEvent struct {
 	ID        int64  `json:"id"`
 	CreatedAt int64  `json:"created_at"`
@@ -164,6 +173,7 @@ type OutputCommand struct {
 	ClaimToken   string         `json:"claim_token"`
 	ClaimedAt    int64          `json:"claimed_at"`
 	NotBefore    int64          `json:"not_before"`
+	FinishedAt   int64          `json:"finished_at"`
 }
 
 type ScheduleCursor struct {

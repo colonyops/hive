@@ -15,6 +15,7 @@ import IconSearch from '~icons/lucide/search'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
 import JobsPopover from './JobsPopover.vue'
+import TitleBarMenu from './TitleBarMenu.vue'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
 import IconButton from './ui/IconButton.vue'
 import Kbd from './ui/Kbd.vue'
@@ -65,6 +66,7 @@ const props = defineProps<{
   profileName?: string
   mode?: 'hub' | 'terminal' | 'agents'
   activityActive?: boolean
+  actionRunsActive?: boolean
   errorCount?: number
   unseenActivity?: number
   jobsActive?: boolean
@@ -87,6 +89,8 @@ const emit = defineEmits<{
   'open-error-node': []
   'open-activity': []
   'open-job-run': [commandId: number]
+  'open-job-log': [commandId: number]
+  'run-command': [commandId: string]
   'open-update': []
   'toggle-sidebar': []
   'toggle-preview': []
@@ -246,6 +250,12 @@ function onTitlebarDblclick(event: MouseEvent): void {
               emit('open-job-run', commandId)
             }
           "
+          @open-log="
+            (commandId) => {
+              jobsOpen = false
+              emit('open-job-log', commandId)
+            }
+          "
         />
       </div>
       <button
@@ -285,6 +295,11 @@ function onTitlebarDblclick(event: MouseEvent): void {
           data-testid="titlebar-activity-unseen"
         />
       </IconButton>
+      <TitleBarMenu
+        v-if="profileName"
+        :active="actionRunsActive"
+        @run-command="(commandId) => emit('run-command', commandId)"
+      />
       <IconButton
         v-if="profileName"
         :label="`${previewCollapsed ? 'Show' : 'Hide'} ${rightPane}`"

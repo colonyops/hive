@@ -163,6 +163,10 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   InvokeAction: mocks.InvokeAction,
   NodeRuns: mocks.NodeRuns,
 }))
+vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/actionrunservice', () => ({
+  List: vi.fn().mockResolvedValue([]),
+  Log: vi.fn().mockResolvedValue({ lines: [], nextAfterId: 0, more: false }),
+}))
 vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
   SessionLaunchOptions: mocks.SessionLaunchOptions,
   CreateSession: mocks.CreateSession,
@@ -3214,6 +3218,38 @@ describe('App', () => {
     await flushPromises()
     expect(document.querySelector('[data-testid="canvas-overlay"]')).toBeNull()
     expect(router.currentRoute.value.name).toBe('feed')
+
+    wrapper.unmount()
+  })
+
+  it('opens action runs from its palette row, its g l sequence, and the title bar menu', async () => {
+    const { wrapper } = await mountAppWithRouter()
+    const overlay = () => document.querySelector('[data-testid="action-runs-overlay"]')
+    const { results, query } = useCommandPalette()
+    query.value = ''
+    const row = results.value.find((cmd) => cmd.id === 'action-runs.toggle')
+    expect(row?.title).toBe('Toggle Action runs')
+    expect(row?.hint).toBe(formatCombo('g l'))
+
+    await row?.run()
+    await flushPromises()
+    expect(overlay()).not.toBeNull()
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
+    expect(overlay()).toBeNull()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'l' }))
+    await flushPromises()
+    expect(overlay()).not.toBeNull()
+    document.querySelector<HTMLButtonElement>('[data-testid="action-runs-close"]')?.click()
+    await flushPromises()
+    expect(overlay()).toBeNull()
+
+    await wrapper.get('[data-testid="titlebar-menu"]').trigger('click')
+    await wrapper.get('[data-testid="titlebar-menu-action-runs"]').trigger('click')
+    await flushPromises()
+    expect(overlay()).not.toBeNull()
 
     wrapper.unmount()
   })

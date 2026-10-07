@@ -11,6 +11,43 @@ export interface ActionRunLocation {
     "feedId"?: string;
 }
 
+export interface ActionRunLogLine {
+    "id": number;
+    "attempt": number;
+    "stream": string;
+    "text": string;
+    "at": number;
+}
+
+/**
+ * ActionRunLogPage is one read of a run's log. NextAfterID is what the next
+ * read passes to continue; More reports lines past this page.
+ */
+export interface ActionRunLogPage {
+    "lines": ActionRunLogLine[] | null;
+    "nextAfterId": number;
+    "more": boolean;
+}
+
+export interface ActionRunSummary {
+    "id": number;
+    "actionId": string;
+    "label": string;
+    "type"?: string;
+    "status": string;
+    "attempts": number;
+    "lane": string;
+    "rerun": boolean;
+    "key": string;
+    "createdAt": number;
+    "startedAt"?: number;
+    "finishedAt"?: number;
+    "error"?: string;
+    "profileId"?: string;
+    "itemId"?: number;
+    "itemTitle"?: string;
+}
+
 /**
  * HiveSetup is the external Hive configuration as the first-run and settings
  * screens see it: what the file declares, what this machine could run, and

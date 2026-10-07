@@ -230,12 +230,15 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
   const { activeJobs } = useJobs()
   async function openJobRun(commandID: number): Promise<void> {
     const job = activeJobs.value.find((candidate) => candidate.commandId === commandID)
-    if (!job) return
+    if (job) await openActionRunItem(commandID, job.actionId)
+  }
+
+  async function openActionRunItem(commandID: number, actionID: string): Promise<void> {
     try {
       const location = await ActionRunLocation(commandID)
       const query: Record<string, string> = {
         item: String(location.itemId),
-        action: job.actionId,
+        action: actionID,
         run: String(commandID),
       }
       if (location.feedId) query.feed = location.feedId
@@ -296,5 +299,6 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
     openItemSession,
     openItemChat,
     openJobRun,
+    openActionRunItem,
   }
 }

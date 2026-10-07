@@ -280,6 +280,255 @@
     "title": "Dry-run a flow"
   },
   {
+    "description": "Return one action run, its result, and its log: the stdout and stderr of any process it ran, interleaved in order, plus system lines describing each step (the command line, a session created, a message published, exit codes, retries, cancellation). Every line carries its attempt number, so automatic retries read as separate attempts. By default it returns the last 500 lines, which is where a failure explains itself; pass afterId to read forward from a line, and follow nextAfterId while more is true to read the rest. A running run's log grows, so read again with the last nextAfterId to follow it. Each attempt keeps at most 512 KiB of output, and only the newest 200 runs keep their logs.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "afterId": {
+          "description": "Read log lines after this line id, oldest first. Omit to read the tail instead.",
+          "type": "integer"
+        },
+        "id": {
+          "description": "The run id, from list_action_runs.",
+          "type": "integer"
+        },
+        "lines": {
+          "description": "Maximum log lines to return; defaults to 500, at most 10000.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "type": "object"
+    },
+    "name": "get_action_run",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "log": {
+          "additionalProperties": false,
+          "properties": {
+            "lines": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "at": {
+                    "type": "integer"
+                  },
+                  "attempt": {
+                    "type": "integer"
+                  },
+                  "id": {
+                    "type": "integer"
+                  },
+                  "stream": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id",
+                  "attempt",
+                  "stream",
+                  "text",
+                  "at"
+                ],
+                "type": "object"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "more": {
+              "type": "boolean"
+            },
+            "nextAfterId": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "lines",
+            "nextAfterId",
+            "more"
+          ],
+          "type": "object"
+        },
+        "result": {
+          "additionalProperties": false,
+          "properties": {
+            "commandId": {
+              "type": "integer"
+            },
+            "confirmationRequired": {
+              "type": "boolean"
+            },
+            "error": {
+              "type": "string"
+            },
+            "result": {
+              "additionalProperties": false,
+              "properties": {
+                "clipboard": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "message": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "sender": {
+                      "type": "string"
+                    },
+                    "topic": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "topic",
+                    "sender"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                },
+                "session": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "id": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "slug": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name"
+                  ],
+                  "type": [
+                    "null",
+                    "object"
+                  ]
+                }
+              },
+              "type": [
+                "null",
+                "object"
+              ]
+            },
+            "status": {
+              "type": "string"
+            },
+            "stderr": {
+              "type": "string"
+            },
+            "stdout": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "commandId",
+            "status"
+          ],
+          "type": "object"
+        },
+        "run": {
+          "additionalProperties": false,
+          "properties": {
+            "actionId": {
+              "type": "string"
+            },
+            "attempts": {
+              "type": "integer"
+            },
+            "createdAt": {
+              "type": "integer"
+            },
+            "error": {
+              "type": "string"
+            },
+            "finishedAt": {
+              "type": "integer"
+            },
+            "id": {
+              "type": "integer"
+            },
+            "itemId": {
+              "type": "integer"
+            },
+            "itemTitle": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "lane": {
+              "type": "string"
+            },
+            "profileId": {
+              "type": "string"
+            },
+            "rerun": {
+              "type": "boolean"
+            },
+            "startedAt": {
+              "type": "integer"
+            },
+            "status": {
+              "type": "string"
+            },
+            "type": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "actionId",
+            "label",
+            "status",
+            "attempts",
+            "lane",
+            "rerun",
+            "key",
+            "createdAt"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "run",
+        "result",
+        "log"
+      ],
+      "type": "object"
+    },
+    "title": "Read an action run and its log"
+  },
+  {
     "description": "Return one profile's graph: every node with its id, type and config, and the wires between them. This is where node ids come from — execute_flow's nodeId and the node-image tools take them. A profile whose flow file does not parse still answers, with valid=false and the load error.",
     "inputSchema": {
       "additionalProperties": false,
@@ -388,6 +637,113 @@
       "type": "object"
     },
     "title": "Desktop status"
+  },
+  {
+    "description": "List action runs newest first: every durable execution of an actions.yml action, whether run from an item's detail pane or by a flow action node, with its status, attempts, lane (manual or automatic), timestamps, last error and the inbox item it ran against. status and actionId filter the page after it is read, so page back with before when a filtered page comes back short. Notify and launch nodes are not actions.yml actions and are not listed. Actions run from a terminal session or window are not durable and never appear here. Use get_action_run to read what a run printed.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "actionId": {
+          "description": "Keep only runs of this action id.",
+          "type": "string"
+        },
+        "before": {
+          "description": "Return runs with an id below this one, to page back; omit for the newest.",
+          "type": "integer"
+        },
+        "limit": {
+          "description": "Maximum runs to read; defaults to 100, at most 500.",
+          "type": "integer"
+        },
+        "status": {
+          "description": "Keep only runs in this status: pending, running, done, failed or cancelled.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "list_action_runs",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "runs": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "actionId": {
+                "type": "string"
+              },
+              "attempts": {
+                "type": "integer"
+              },
+              "createdAt": {
+                "type": "integer"
+              },
+              "error": {
+                "type": "string"
+              },
+              "finishedAt": {
+                "type": "integer"
+              },
+              "id": {
+                "type": "integer"
+              },
+              "itemId": {
+                "type": "integer"
+              },
+              "itemTitle": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "lane": {
+                "type": "string"
+              },
+              "profileId": {
+                "type": "string"
+              },
+              "rerun": {
+                "type": "boolean"
+              },
+              "startedAt": {
+                "type": "integer"
+              },
+              "status": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "actionId",
+              "label",
+              "status",
+              "attempts",
+              "lane",
+              "rerun",
+              "key",
+              "createdAt"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        }
+      },
+      "required": [
+        "runs"
+      ],
+      "type": "object"
+    },
+    "title": "List action runs"
   },
   {
     "description": "List the action catalog with the actions.yml it was loaded from and whether that file currently parses. An invalid edit leaves the previous catalog in effect and reports its error here, so this is how to confirm an edit actually loaded.",

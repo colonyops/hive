@@ -14,6 +14,7 @@ import (
 type Stores struct {
 	q *queries.DB
 
+	ActionRuns      *ActionRunStore
 	ActivityEvents  *ActivityEventStore
 	AgentSessions   *AgentSessionStore
 	EventLog        *EventLogStore
@@ -63,6 +64,7 @@ func New(q *queries.DB, opts Options) *Stores {
 	return &Stores{
 		q: q,
 
+		ActionRuns:      NewActionRunStore(q, opts),
 		ActivityEvents:  NewActivityEventStore(q, opts),
 		AgentSessions:   NewAgentSessionStore(q, opts),
 		EventLog:        log,

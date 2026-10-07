@@ -104,6 +104,27 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 	}, ctrl.ListActions)
 
 	addTool(srv, &mcp.Tool{
+		Name:  "list_action_runs",
+		Title: "List action runs",
+		Description: "List action runs newest first: every durable execution of an actions.yml action, whether run from an item's detail pane or by a flow action node, " +
+			"with its status, attempts, lane (manual or automatic), timestamps, last error and the inbox item it ran against. " +
+			"status and actionId filter the page after it is read, so page back with before when a filtered page comes back short. " +
+			"Notify and launch nodes are not actions.yml actions and are not listed. Actions run from a terminal session or window are not durable and never appear here. " +
+			"Use get_action_run to read what a run printed.",
+	}, ctrl.ListActionRuns)
+
+	addTool(srv, &mcp.Tool{
+		Name:  "get_action_run",
+		Title: "Read an action run and its log",
+		Description: "Return one action run, its result, and its log: the stdout and stderr of any process it ran, interleaved in order, " +
+			"plus system lines describing each step (the command line, a session created, a message published, exit codes, retries, cancellation). " +
+			"Every line carries its attempt number, so automatic retries read as separate attempts. " +
+			"By default it returns the last 500 lines, which is where a failure explains itself; pass afterId to read forward from a line, " +
+			"and follow nextAfterId while more is true to read the rest. A running run's log grows, so read again with the last nextAfterId to follow it. " +
+			"Each attempt keeps at most 512 KiB of output, and only the newest 200 runs keep their logs.",
+	}, ctrl.GetActionRun)
+
+	addTool(srv, &mcp.Tool{
 		Name:  "refresh_sources",
 		Title: "Force a source refresh",
 		Description: "Force one producer tick across all sources, dropping fetch caches. " +

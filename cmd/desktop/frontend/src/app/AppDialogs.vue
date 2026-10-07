@@ -2,6 +2,7 @@
 import { onMounted } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import ActionInputsDialog from '../components/ActionInputsDialog.vue'
+import ActionRunsView from '../components/ActionRunsView.vue'
 import ActivityView from '../components/ActivityView.vue'
 import AgentCanvasPage from '../components/AgentCanvasPage.vue'
 import CommandPalette from '../components/CommandPalette.vue'
@@ -55,7 +56,7 @@ const {
   createProfileError,
 } = feed
 const { pendingNavigation, unsavedChangesBusy } = nav
-const { tasksOpen, activityOpen, canvasOpen, canvasScope } = overlays
+const { tasksOpen, activityOpen, canvasOpen, canvasScope, actionRunsOpen, actionRunsRunId } = overlays
 const { newProfileOpen } = profileActions
 const flowsSession = useFlowsSession()
 
@@ -164,6 +165,18 @@ onMounted(() => {
       @close="canvasOpen = false"
       @open-url="feed.openUrl"
       @setup="openMcpSettings"
+    />
+  </HubOverlay>
+  <HubOverlay v-if="actionRunsOpen" label="Action runs" testid="action-runs-overlay" @close="actionRunsOpen = false">
+    <ActionRunsView
+      :initial-run-id="actionRunsRunId"
+      @close="actionRunsOpen = false"
+      @open-item="
+        (commandId, actionId) => {
+          actionRunsOpen = false
+          nav.openActionRunItem(commandId, actionId)
+        }
+      "
     />
   </HubOverlay>
   <HubOverlay v-if="activityOpen" label="Activity" testid="activity-overlay" @close="activityOpen = false">

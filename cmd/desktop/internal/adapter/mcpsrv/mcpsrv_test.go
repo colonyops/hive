@@ -149,6 +149,7 @@ func TestToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"get_status", "list_profiles", "get_flow", "list_feeds", "list_inbox",
 		"list_inbox_item_events", "list_item_sessions", "list_actions", "refresh_sources",
+		"list_action_runs", "get_action_run",
 		"create_profile", "delete_profile",
 		"get_profile_image", "set_profile_image", "clear_profile_image",
 		"get_node_image", "set_node_image", "clear_node_image",

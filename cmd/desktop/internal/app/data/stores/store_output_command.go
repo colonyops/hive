@@ -102,14 +102,14 @@ func (s *OutputCommandStore) Get(ctx context.Context, id int64) (OutputCommand, 
 
 func (s *OutputCommandStore) Complete(ctx context.Context, id int64, claimToken, resultJSON, stdout, stderr string) error {
 	rows, err := s.q.Ctx(ctx).CompleteClaimedOutputCommand(ctx, queries.CompleteClaimedOutputCommandParams{
-		ID: id, ClaimToken: claimToken, ResultJson: null(resultJSON), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
+		FinishedAt: s.now().UnixMilli(), ID: id, ClaimToken: claimToken, ResultJson: null(resultJSON), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
 	})
 	return claimedTransition("completing", id, rows, err)
 }
 
 func (s *OutputCommandStore) Fail(ctx context.Context, id int64, claimToken, lastErr, stdout, stderr string) error {
 	rows, err := s.q.Ctx(ctx).FailClaimedOutputCommand(ctx, queries.FailClaimedOutputCommandParams{
-		ID: id, ClaimToken: claimToken, LastError: null(lastErr), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
+		FinishedAt: s.now().UnixMilli(), ID: id, ClaimToken: claimToken, LastError: null(lastErr), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
 	})
 	return claimedTransition("failing", id, rows, err)
 }
@@ -124,7 +124,7 @@ func (s *OutputCommandStore) Requeue(ctx context.Context, id int64, claimToken, 
 
 func (s *OutputCommandStore) Cancel(ctx context.Context, id int64, claimToken, reason, stdout, stderr string) error {
 	rows, err := s.q.Ctx(ctx).CancelClaimedOutputCommand(ctx, queries.CancelClaimedOutputCommandParams{
-		ID: id, ClaimToken: claimToken, LastError: null(reason), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
+		FinishedAt: s.now().UnixMilli(), ID: id, ClaimToken: claimToken, LastError: null(reason), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
 	})
 	return claimedTransition("cancelling", id, rows, err)
 }

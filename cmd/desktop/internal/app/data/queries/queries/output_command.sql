@@ -14,7 +14,7 @@ LIMIT ?;
 -- name: ClaimNextAutomaticOutputCommand :one
 UPDATE output_command
 SET status = 'running', claim_token = sqlc.arg(claim_token), claimed_at = sqlc.arg(claimed_at),
-    attempts = attempts + 1
+    attempts = attempts + 1, finished_at = 0
 WHERE id = (
     SELECT oc.id FROM output_command oc
     WHERE oc.status = 'pending' AND oc.dispatch_lane = 'automatic'
@@ -37,6 +37,7 @@ ON CONFLICT DO UPDATE SET
     dispatch_lane = 'manual',
     claim_token = excluded.claim_token,
     claimed_at = excluded.claimed_at,
+    finished_at = 0,
     profile_id = CASE WHEN output_command.profile_id <> '' AND output_command.external_id <> ''
                       THEN output_command.profile_id ELSE excluded.profile_id END,
     source_kind = CASE WHEN output_command.profile_id <> '' AND output_command.external_id <> ''
@@ -79,7 +80,7 @@ SELECT * FROM output_command WHERE id = ?;
 
 -- name: CompleteClaimedOutputCommand :execrows
 UPDATE output_command
-SET status = 'done', claim_token = '', last_error = NULL, result_json = ?, stdout = ?, stderr = ?
+SET status = 'done', claim_token = '', finished_at = ?, last_error = NULL, result_json = ?, stdout = ?, stderr = ?
 WHERE id = ? AND status = 'running' AND claim_token = ?;
 
 -- name: RequeueClaimedOutputCommand :execrows
@@ -90,12 +91,12 @@ WHERE id = ? AND status = 'running' AND claim_token = ?;
 
 -- name: FailClaimedOutputCommand :execrows
 UPDATE output_command
-SET status = 'failed', claim_token = '', last_error = ?, stdout = ?, stderr = ?
+SET status = 'failed', claim_token = '', finished_at = ?, last_error = ?, stdout = ?, stderr = ?
 WHERE id = ? AND status = 'running' AND claim_token = ?;
 
 -- name: CancelClaimedOutputCommand :execrows
 UPDATE output_command
-SET status = 'cancelled', claim_token = '', last_error = ?, stdout = ?, stderr = ?
+SET status = 'cancelled', claim_token = '', finished_at = ?, last_error = ?, stdout = ?, stderr = ?
 WHERE id = ? AND status = 'running' AND claim_token = ?;
 
 -- name: PruneTerminalOutputCommands :exec

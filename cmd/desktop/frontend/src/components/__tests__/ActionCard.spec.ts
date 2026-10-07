@@ -46,38 +46,35 @@ describe('ActionCard', () => {
     expect(wrapper.get('[data-testid="action-card"]').attributes('disabled')).toBeDefined()
   })
 
-  it('opens persisted successful command output when requested from the jobs list', () => {
+  it('links a finished run to its log without an outcome line', async () => {
     const wrapper = mount(ActionCard, {
-      props: {
-        action: baseAction,
-        expanded: true,
-        run: { commandId: 42, status: 'done', stdout: 'finished quickly' },
-      },
+      props: { action: baseAction, run: { commandId: 42, status: 'done', stdout: 'finished quickly' } },
     })
 
-    const details = wrapper.get('[data-testid="action-run-details"]')
-    expect(details.attributes('open')).toBeDefined()
-    expect(details.text()).toContain('Action completed')
-    expect(details.text()).toContain('finished quickly')
-    expect(details.text()).toContain('run:42')
+    expect(wrapper.find('[data-testid="action-failure"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('finished quickly')
+    const link = wrapper.get('[data-testid="action-open-log"]')
+    expect(link.text()).toBe('View log')
+    await link.trigger('click')
+    expect(wrapper.emitted('open-log')).toEqual([[42]])
   })
 
-  it('displays persisted failed command diagnostics', () => {
+  it('shows the failure reason beside the log link', () => {
     const wrapper = mount(ActionCard, {
       props: {
         action: baseAction,
-        run: {
-          commandId: 42,
-          status: 'failed',
-          error: 'command exited 1',
-          stdout: 'partial output',
-          stderr: 'bad input',
-        },
+        run: { commandId: 42, status: 'failed', error: 'command exited 1', stderr: 'bad input' },
       },
     })
 
-    expect(wrapper.get('[data-testid="action-failure"]').text()).toContain('command exited 1')
-    expect(wrapper.get('[data-testid="action-stdout"]').text()).toContain('partial output')
-    expect(wrapper.get('[data-testid="action-stderr"]').text()).toContain('bad input')
+    expect(wrapper.get('[data-testid="action-failure"]').text()).toBe('command exited 1')
+    expect(wrapper.text()).not.toContain('bad input')
+    expect(wrapper.get('[data-testid="action-open-log"]').text()).toBe('View log')
+  })
+
+  it('offers the live log while a run is in flight', () => {
+    const wrapper = mount(ActionCard, { props: { action: baseAction, run: { commandId: 42, status: 'running' } } })
+
+    expect(wrapper.get('[data-testid="action-open-log"]').text()).toBe('View live log')
   })
 })

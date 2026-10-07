@@ -3,6 +3,7 @@ import IconCheck from '~icons/lucide/check'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconClock3 from '~icons/lucide/clock-3'
 import IconExternalLink from '~icons/lucide/external-link'
+import IconSquareTerminal from '~icons/lucide/square-terminal'
 import IconX from '~icons/lucide/x'
 import { Cancel } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/jobservice'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
@@ -10,7 +11,7 @@ import IconButton from './ui/IconButton.vue'
 import Spinner from './ui/Spinner.vue'
 
 defineProps<{ jobs: readonly Job[] }>()
-const emit = defineEmits<{ 'open-run': [commandId: number] }>()
+const emit = defineEmits<{ 'open-run': [commandId: number]; 'open-log': [commandId: number] }>()
 
 function statusClasses(status: string): string {
   if (status === 'failed') return 'border-severity-error-border bg-severity-error-tint text-severity-error'
@@ -74,8 +75,15 @@ async function cancel(commandId: number): Promise<void> {
             @click="cancel(job.commandId)"
           />
           <IconButton
-            :label="`Open action run for ${job.label || job.actionId}`"
-            tooltip="Open action run"
+            :label="`View log for ${job.label || job.actionId}`"
+            tooltip="View log"
+            :icon="IconSquareTerminal"
+            :data-testid="`job-open-log-${job.id}`"
+            @click="emit('open-log', job.commandId)"
+          />
+          <IconButton
+            :label="`Open item for ${job.label || job.actionId}`"
+            tooltip="Open item"
             :icon="IconExternalLink"
             :data-testid="`job-open-run-${job.id}`"
             @click="emit('open-run', job.commandId)"

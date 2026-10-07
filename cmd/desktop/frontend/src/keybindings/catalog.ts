@@ -27,6 +27,7 @@ import IconRotateCcw from '~icons/lucide/rotate-ccw'
 import IconSearch from '~icons/lucide/search'
 import IconSettings from '~icons/lucide/settings'
 import IconSquareCheckBig from '~icons/lucide/square-check-big'
+import IconSquareTerminal from '~icons/lucide/square-terminal'
 import IconSquarePlus from '~icons/lucide/square-plus'
 import IconSquareSplitHorizontal from '~icons/lucide/square-split-horizontal'
 import IconSquareSplitVertical from '~icons/lucide/square-split-vertical'
@@ -660,6 +661,16 @@ export const commandCatalog: BindableCommand[] = [
     // inside a session, and a user who rebinds it to an alt chord gets nothing
     // through terminalEscapeCombo.
     piercesPane: true,
+    scope: 'goto',
+  },
+  {
+    id: 'action-runs.toggle',
+    title: 'Toggle Action runs',
+    group: 'View',
+    keywords: ['actions', 'runs', 'jobs', 'logs', 'output', 'stdout', 'debug'],
+    icon: IconSquareTerminal,
+    defaultCombos: ['g l'],
+    context: 'global',
     scope: 'goto',
   },
   {

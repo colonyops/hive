@@ -7,6 +7,9 @@ export {
 
 export type {
     ActionRunLocation,
+    ActionRunLogLine,
+    ActionRunLogPage,
+    ActionRunSummary,
     HiveSetup,
     HiveSetupRequest,
     Integration,

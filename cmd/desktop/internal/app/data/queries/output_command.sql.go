@@ -12,11 +12,12 @@ import (
 
 const cancelClaimedOutputCommand = `-- name: CancelClaimedOutputCommand :execrows
 UPDATE output_command
-SET status = 'cancelled', claim_token = '', last_error = ?, stdout = ?, stderr = ?
+SET status = 'cancelled', claim_token = '', finished_at = ?, last_error = ?, stdout = ?, stderr = ?
 WHERE id = ? AND status = 'running' AND claim_token = ?
 `
 
 type CancelClaimedOutputCommandParams struct {
+	FinishedAt int64          `json:"finished_at"`
 	LastError  sql.NullString `json:"last_error"`
 	Stdout     sql.NullString `json:"stdout"`
 	Stderr     sql.NullString `json:"stderr"`
@@ -26,6 +27,7 @@ type CancelClaimedOutputCommandParams struct {
 
 func (q *Queries) CancelClaimedOutputCommand(ctx context.Context, arg CancelClaimedOutputCommandParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, cancelClaimedOutputCommand,
+		arg.FinishedAt,
 		arg.LastError,
 		arg.Stdout,
 		arg.Stderr,
@@ -41,7 +43,7 @@ func (q *Queries) CancelClaimedOutputCommand(ctx context.Context, arg CancelClai
 const claimNextAutomaticOutputCommand = `-- name: ClaimNextAutomaticOutputCommand :one
 UPDATE output_command
 SET status = 'running', claim_token = ?1, claimed_at = ?2,
-    attempts = attempts + 1
+    attempts = attempts + 1, finished_at = 0
 WHERE id = (
     SELECT oc.id FROM output_command oc
     WHERE oc.status = 'pending' AND oc.dispatch_lane = 'automatic'
@@ -50,7 +52,7 @@ WHERE id = (
     LIMIT 1
 )
 AND status = 'pending'
-RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before
+RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before, finished_at
 `
 
 type ClaimNextAutomaticOutputCommandParams struct {
@@ -83,17 +85,19 @@ func (q *Queries) ClaimNextAutomaticOutputCommand(ctx context.Context, arg Claim
 		&i.ClaimToken,
 		&i.ClaimedAt,
 		&i.NotBefore,
+		&i.FinishedAt,
 	)
 	return i, err
 }
 
 const completeClaimedOutputCommand = `-- name: CompleteClaimedOutputCommand :execrows
 UPDATE output_command
-SET status = 'done', claim_token = '', last_error = NULL, result_json = ?, stdout = ?, stderr = ?
+SET status = 'done', claim_token = '', finished_at = ?, last_error = NULL, result_json = ?, stdout = ?, stderr = ?
 WHERE id = ? AND status = 'running' AND claim_token = ?
 `
 
 type CompleteClaimedOutputCommandParams struct {
+	FinishedAt int64          `json:"finished_at"`
 	ResultJson sql.NullString `json:"result_json"`
 	Stdout     sql.NullString `json:"stdout"`
 	Stderr     sql.NullString `json:"stderr"`
@@ -103,6 +107,7 @@ type CompleteClaimedOutputCommandParams struct {
 
 func (q *Queries) CompleteClaimedOutputCommand(ctx context.Context, arg CompleteClaimedOutputCommandParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, completeClaimedOutputCommand,
+		arg.FinishedAt,
 		arg.ResultJson,
 		arg.Stdout,
 		arg.Stderr,
@@ -127,6 +132,7 @@ ON CONFLICT DO UPDATE SET
     dispatch_lane = 'manual',
     claim_token = excluded.claim_token,
     claimed_at = excluded.claimed_at,
+    finished_at = 0,
     profile_id = CASE WHEN output_command.profile_id <> '' AND output_command.external_id <> ''
                       THEN output_command.profile_id ELSE excluded.profile_id END,
     source_kind = CASE WHEN output_command.profile_id <> '' AND output_command.external_id <> ''
@@ -136,7 +142,7 @@ ON CONFLICT DO UPDATE SET
     external_id = CASE WHEN output_command.profile_id <> '' AND output_command.external_id <> ''
                        THEN output_command.external_id ELSE excluded.external_id END
 WHERE output_command.status = 'pending'
-RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before
+RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before, finished_at
 `
 
 type ConfirmOutputCommandParams struct {
@@ -187,6 +193,7 @@ func (q *Queries) ConfirmOutputCommand(ctx context.Context, arg ConfirmOutputCom
 		&i.ClaimToken,
 		&i.ClaimedAt,
 		&i.NotBefore,
+		&i.FinishedAt,
 	)
 	return i, err
 }
@@ -238,11 +245,12 @@ func (q *Queries) EnqueueOutputCommand(ctx context.Context, arg EnqueueOutputCom
 
 const failClaimedOutputCommand = `-- name: FailClaimedOutputCommand :execrows
 UPDATE output_command
-SET status = 'failed', claim_token = '', last_error = ?, stdout = ?, stderr = ?
+SET status = 'failed', claim_token = '', finished_at = ?, last_error = ?, stdout = ?, stderr = ?
 WHERE id = ? AND status = 'running' AND claim_token = ?
 `
 
 type FailClaimedOutputCommandParams struct {
+	FinishedAt int64          `json:"finished_at"`
 	LastError  sql.NullString `json:"last_error"`
 	Stdout     sql.NullString `json:"stdout"`
 	Stderr     sql.NullString `json:"stderr"`
@@ -252,6 +260,7 @@ type FailClaimedOutputCommandParams struct {
 
 func (q *Queries) FailClaimedOutputCommand(ctx context.Context, arg FailClaimedOutputCommandParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, failClaimedOutputCommand,
+		arg.FinishedAt,
 		arg.LastError,
 		arg.Stdout,
 		arg.Stderr,
@@ -265,7 +274,7 @@ func (q *Queries) FailClaimedOutputCommand(ctx context.Context, arg FailClaimedO
 }
 
 const getLatestOutputCommandForAction = `-- name: GetLatestOutputCommandForAction :one
-SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before FROM output_command
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before, finished_at FROM output_command
 WHERE action_id = ? AND key = ?
 ORDER BY id DESC
 LIMIT 1
@@ -300,12 +309,13 @@ func (q *Queries) GetLatestOutputCommandForAction(ctx context.Context, arg GetLa
 		&i.ClaimToken,
 		&i.ClaimedAt,
 		&i.NotBefore,
+		&i.FinishedAt,
 	)
 	return i, err
 }
 
 const getOutputCommand = `-- name: GetOutputCommand :one
-SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before FROM output_command WHERE id = ?
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before, finished_at FROM output_command WHERE id = ?
 `
 
 func (q *Queries) GetOutputCommand(ctx context.Context, id int64) (OutputCommand, error) {
@@ -332,12 +342,13 @@ func (q *Queries) GetOutputCommand(ctx context.Context, id int64) (OutputCommand
 		&i.ClaimToken,
 		&i.ClaimedAt,
 		&i.NotBefore,
+		&i.FinishedAt,
 	)
 	return i, err
 }
 
 const listRunnableOutputCommandsAfter = `-- name: ListRunnableOutputCommandsAfter :many
-SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before FROM output_command
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before, finished_at FROM output_command
 WHERE status = 'pending' AND dispatch_lane = 'automatic' AND id > ?
 ORDER BY id ASC
 LIMIT ?
@@ -378,6 +389,7 @@ func (q *Queries) ListRunnableOutputCommandsAfter(ctx context.Context, arg ListR
 			&i.ClaimToken,
 			&i.ClaimedAt,
 			&i.NotBefore,
+			&i.FinishedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -466,7 +478,7 @@ AND NOT EXISTS (
     WHERE action_id = ?1 AND key = ?2
       AND status IN ('pending', 'running')
 )
-RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before
+RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at, is_rerun, profile_id, source_kind, source_scope, external_id, dispatch_lane, claim_token, claimed_at, not_before, finished_at
 `
 
 type RerunOutputCommandParams struct {
@@ -517,6 +529,7 @@ func (q *Queries) RerunOutputCommand(ctx context.Context, arg RerunOutputCommand
 		&i.ClaimToken,
 		&i.ClaimedAt,
 		&i.NotBefore,
+		&i.FinishedAt,
 	)
 	return i, err
 }

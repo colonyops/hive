@@ -26,6 +26,7 @@ type OutputCommand struct {
 	ClaimToken   string
 	ClaimedAt    int64
 	NotBefore    int64
+	FinishedAt   int64
 }
 
 // Commands without an inbox origin return a zero ItemRef, for which Known is
@@ -42,5 +43,6 @@ func mapOutputCommandFromDB(row queries.OutputCommand) OutputCommand {
 		CreatedAt: row.CreatedAt, IsRerun: row.IsRerun != 0,
 		ProfileID: row.ProfileID, SourceKind: row.SourceKind, SourceScope: row.SourceScope, ExternalID: row.ExternalID,
 		DispatchLane: row.DispatchLane, ClaimToken: row.ClaimToken, ClaimedAt: row.ClaimedAt, NotBefore: row.NotBefore,
+		FinishedAt: row.FinishedAt,
 	}
 }
