@@ -30,7 +30,7 @@ useAutofocus(panel)
     >
       <div
         ref="panel"
-        class="flex h-[88vh] w-[min(1600px,96vw)] flex-col overflow-hidden rounded-xl border border-strong bg-pane text-text shadow-2xl"
+        class="flex h-[88vh] w-[min(1600px,96vw)] flex-col overflow-hidden rounded-xl border border-strong bg-pane text-text shadow-2xl outline-none"
         role="dialog"
         :aria-label="label"
         aria-modal="true"

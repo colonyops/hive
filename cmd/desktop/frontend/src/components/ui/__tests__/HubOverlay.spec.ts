@@ -95,6 +95,9 @@ describe('HubOverlay', () => {
     const wrapper = mountTasks()
     await flushPromises()
     expect(document.activeElement).toBe(el('tasks-overlay'))
+    // Focus parks on the panel only to keep keys out of a terminal behind it,
+    // so the panel draws no focus ring of its own.
+    expect(el('tasks-overlay').classList).toContain('outline-none')
 
     wrapper.unmount()
     await flushPromises()
