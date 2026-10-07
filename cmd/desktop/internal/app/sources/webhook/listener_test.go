@@ -58,7 +58,7 @@ func newWebhookTestListener(t *testing.T, instances Instances) (*Listener, *quer
 }
 
 func readForConsumer(db *queries.DB, ctx context.Context, consumer string, limit int) ([]models.Msg, error) {
-	return stores.New(db, stores.Options{}).EventLog.ReadForConsumer(ctx, consumer, limit)
+	return stores.New(db, stores.Options{}).EventLog.ReadForConsumer(ctx, consumer, limit, models.RoutedTopics{All: true})
 }
 
 func postHook(t *testing.T, handler http.Handler, path, body string, headers map[string]string) *httptest.ResponseRecorder {

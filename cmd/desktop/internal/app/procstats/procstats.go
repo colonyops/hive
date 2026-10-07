@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"github.com/shirou/gopsutil/v4/process"
+
+	hiveproc "github.com/colonyops/hive/internal/platform/proc/process"
 )
 
 // maxProcesses bounds a walk of the process tree. A terminal-heavy session can
@@ -136,25 +138,33 @@ func (s *Sampler) Sample(ctx context.Context) (Stats, error) {
 		Go:        readGoRuntime(),
 	}
 
+	// gopsutil's ChildrenWithContext builds every process on the machine for
+	// each node it expands, so the tree is walked over one table read instead.
+	tree := hiveproc.NewSnapshotReader(hiveproc.OSReader{})
 	seen := map[int32]bool{s.pid: true}
-	queue := []*process.Process{self}
+	queue := []int32{s.pid}
 	for len(queue) > 0 && len(stats.Children) < maxProcesses {
-		children, err := queue[0].ChildrenWithContext(ctx)
+		children, err := tree.Children(int(queue[0]))
 		queue = queue[1:]
 		if err != nil {
 			continue
 		}
-		for _, child := range children {
-			if seen[child.Pid] {
+		for _, childPID := range children {
+			pid := int32(childPID)
+			if seen[pid] {
 				continue
 			}
-			seen[child.Pid] = true
+			seen[pid] = true
 			if len(stats.Children) >= maxProcesses {
 				stats.ChildrenTruncated = true
 				break
 			}
+			child, err := process.NewProcessWithContext(ctx, pid)
+			if err != nil {
+				continue
+			}
 			stats.Children = append(stats.Children, s.read(ctx, child, now))
-			queue = append(queue, child)
+			queue = append(queue, pid)
 		}
 	}
 

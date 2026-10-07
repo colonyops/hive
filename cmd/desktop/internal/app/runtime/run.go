@@ -405,6 +405,23 @@ func (r *Runner) acceptsEntry(node *flow.Node, msg models.Msg) bool {
 	return msg.Topic == "source:"+r.flow.ID+"/"+node.ID
 }
 
+// routedTopics is the set of topics acceptsEntry can accept, so the log read
+// can skip the payloads of every message this flow will only discard.
+func (r *Runner) routedTopics() models.RoutedTopics {
+	routed := models.RoutedTopics{Topics: []string{}}
+	for _, id := range r.graph.Entries() {
+		node := r.graph.Node(id)
+		if node == nil {
+			continue
+		}
+		if !behaviors[node.Type].relay {
+			return models.RoutedTopics{All: true}
+		}
+		routed.Topics = append(routed.Topics, "source:"+r.flow.ID+"/"+node.ID)
+	}
+	return routed
+}
+
 // clonePayload gives a branch its own copy of a payload. Fan-out is the only
 // place it is needed: one downstream branch rewriting a payload must never be
 // visible to a sibling.

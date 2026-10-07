@@ -150,7 +150,7 @@ func TestEveryStoreMethodJoinsTheAmbientTransaction(t *testing.T) {
 			return err
 		}},
 		{"EventLogStore.ReadForConsumer", func(ctx context.Context) error {
-			_, err := st.EventLog.ReadForConsumer(ctx, "flow-1", 10)
+			_, err := st.EventLog.ReadForConsumer(ctx, "flow-1", 10, models.RoutedTopics{All: true})
 			return err
 		}},
 		{"EventLogStore.ConsumerOffset", func(ctx context.Context) error {

@@ -16,8 +16,8 @@ import (
 
 type LogStore interface {
 	// ReadForConsumer returns the next page after a consumer's committed
-	// offset.
-	ReadForConsumer(ctx context.Context, consumer string, limit int) ([]models.Msg, error)
+	// offset, with payloads only for the routed topics.
+	ReadForConsumer(ctx context.Context, consumer string, limit int, routed models.RoutedTopics) ([]models.Msg, error)
 	// TailOffset is the log's high-water mark, the point a replay
 	// fast-forwards its consumer to.
 	TailOffset(ctx context.Context) (int64, error)
@@ -335,7 +335,7 @@ func (e *Engine) drain(ctx context.Context) {
 // pump reads one page for a flow, runs it, and commits. It reports whether
 // there was anything to do.
 func (e *Engine) pump(ctx context.Context, id string, runner *Runner) (bool, error) {
-	batch, err := e.opts.Log.ReadForConsumer(ctx, id, e.opts.PageSize)
+	batch, err := e.opts.Log.ReadForConsumer(ctx, id, e.opts.PageSize, runner.routedTopics())
 	if err != nil {
 		return false, fmt.Errorf("reading the log: %w", err)
 	}

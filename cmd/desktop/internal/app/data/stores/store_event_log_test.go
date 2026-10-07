@@ -62,10 +62,40 @@ func TestReadForConsumer_ResumesFromPersistedOffset(t *testing.T) {
 	}
 	require.NoError(t, st.EventLog.Commit(ctx, models.CommitBatch{Consumer: "flow-1", UpToOffset: 2}))
 
-	msgs, err := st.EventLog.ReadForConsumer(ctx, "flow-1", 500)
+	msgs, err := st.EventLog.ReadForConsumer(ctx, "flow-1", 500, models.RoutedTopics{All: true})
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "3", msgs[0].ID)
+}
+
+func TestReadForConsumer_LoadsPayloadsOnlyForRoutedTopics(t *testing.T) {
+	st, _ := openTestStores(t)
+	ctx := t.Context()
+
+	_, err := st.EventLog.AppendSnapshot(ctx, "source:mine/a", "github", "", []models.SnapshotItem{{Key: "k", Payload: []byte(`{"n":1}`)}})
+	require.NoError(t, err)
+	_, err = st.EventLog.AppendSnapshot(ctx, "source:other/a", "github", "", []models.SnapshotItem{{Key: "k", Payload: []byte(`{"n":2}`)}})
+	require.NoError(t, err)
+	_, err = st.EventLog.Append(ctx, "source:other/a", "k", []byte(`{"n":3}`))
+	require.NoError(t, err)
+
+	msgs, err := st.EventLog.ReadForConsumer(ctx, "mine", 10, models.RoutedTopics{Topics: []string{"source:mine/a"}})
+	require.NoError(t, err)
+	require.Len(t, msgs, 3, "unrouted messages still come back so the consumer can move past them")
+
+	assert.Equal(t, []models.SnapshotItem{{Key: "k", Payload: []byte(`{"n":1}`)}}, msgs[0].Snapshot)
+	for _, msg := range msgs[1:] {
+		assert.Equal(t, "source:other/a", msg.Topic)
+		assert.Nil(t, msg.Payload)
+		assert.Nil(t, msg.Snapshot)
+	}
+
+	msgs, err = st.EventLog.ReadForConsumer(ctx, "mine", 10, models.RoutedTopics{Topics: []string{}})
+	require.NoError(t, err)
+	require.Len(t, msgs, 3)
+	for _, msg := range msgs {
+		assert.Nil(t, msg.Payload)
+	}
 }
 
 func TestListLatestSnapshots_ReturnsLatestSnapshotPerOwnedSource(t *testing.T) {

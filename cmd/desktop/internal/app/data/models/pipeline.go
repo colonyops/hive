@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 )
 
@@ -38,6 +39,18 @@ type Msg struct {
 	SourceKind    string
 	SourceScope   string
 	OccurrenceKey string `json:"OccurrenceKey,omitempty"`
+}
+
+// RoutedTopics is the set of topics a consumer routes into its graph. All
+// covers every topic, which a flow needs when an entry node accepts messages
+// from any source.
+type RoutedTopics struct {
+	All    bool
+	Topics []string
+}
+
+func (r RoutedTopics) Has(topic string) bool {
+	return r.All || slices.Contains(r.Topics, topic)
 }
 
 // SnapshotItem is one current source item carried by a successful source
