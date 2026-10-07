@@ -47,7 +47,7 @@ function schedule(overrides: Partial<AgentSchedule> = {}): AgentSchedule {
 
 const recentFixtures: AgentSession[] = [
   {
-    id: 2,
+    id: '2',
     workspace: 'demo-b',
     name: 'b-session',
     agent: 'codex',
@@ -63,7 +63,7 @@ const recentFixtures: AgentSession[] = [
     scheduleId: '',
   },
   {
-    id: 1,
+    id: '1',
     workspace: 'demo-a',
     name: 'a-session',
     agent: 'claude',
@@ -177,7 +177,7 @@ describe('AgentsSidebar', () => {
   // lives on the route and the sidebar only ever moves it — so a header that
   // drew it would read as a row stuck lit from an earlier visit.
   it('draws no mark for the focused workspace; only the open chat is marked', async () => {
-    const wrapper = await mountSidebar({ selectedWorkspace: 'demo-b', openSessionId: 2 })
+    const wrapper = await mountSidebar({ selectedWorkspace: 'demo-b', openSessionId: '2' })
     const workspaceRows = wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]')
     expect(workspaceRows[1].attributes('data-focused')).toBe('true')
     expect(workspaceRows[1].classes()).toEqual(workspaceRows[0].classes())
@@ -190,7 +190,7 @@ describe('AgentsSidebar', () => {
   })
 
   it("accents the open chat's row, and nothing else's", async () => {
-    const wrapper = await mountSidebar({ openSessionId: 2 })
+    const wrapper = await mountSidebar({ openSessionId: '2' })
     const rows = wrapper.findAll('[data-testid="agents-sidebar-session-row"]')
     expect(rows[1].attributes('data-open')).toBe('true')
     expect(rows[1].classes()).toContain('sidebar-entry-selected')
@@ -199,7 +199,7 @@ describe('AgentsSidebar', () => {
   })
 
   it("lands the Code view's traveling rail on the open chat, and only there", async () => {
-    const wrapper = await mountSidebar({ openSessionId: 2 })
+    const wrapper = await mountSidebar({ openSessionId: '2' })
     expect(wrapper.get('[data-testid="agents-sidebar-session-rail"]').attributes('data-shown')).toBe('true')
     // One rail for the tree: a second on the focused workspace would read as
     // two competing selections in one column.
@@ -254,13 +254,13 @@ describe('AgentsSidebar', () => {
   })
 
   it('opens a workspace holding the chat the pane has attached', async () => {
-    const wrapper = await mountSidebar({ openSessionId: 1 }, {})
+    const wrapper = await mountSidebar({ openSessionId: '1' }, {})
     const rows = wrapper.findAll('[data-testid="agents-sidebar-workspace-row"]')
     expect(rows[0].attributes('data-expanded')).toBe('true')
   })
 
   it('the chevron folds a workspace, and the fold outlives the default and is persisted', async () => {
-    const wrapper = await mountSidebar({ openSessionId: 2 }, {})
+    const wrapper = await mountSidebar({ openSessionId: '2' }, {})
     const toggles = wrapper.findAll('[data-testid="agents-sidebar-workspace-toggle"]')
     await toggles[1].trigger('click')
 

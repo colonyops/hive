@@ -3,7 +3,6 @@ package mcpsrv_test
 import (
 	"fmt"
 	"path/filepath"
-	"strconv"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -58,14 +57,14 @@ func seedAgentSession(t *testing.T, core *app.App, workspace, name string) strin
 		Workspace: workspace, Name: name, Agent: "claude",
 	})
 	require.NoError(t, err)
-	return strconv.FormatInt(rec.ID, 10)
+	return rec.ID
 }
 
 type canvasView struct {
 	Workspace string `json:"workspace"`
 	Name      string `json:"name"`
 	Title     string `json:"title"`
-	Session   int64  `json:"session"`
+	Session   string `json:"session"`
 	Blocks    []struct {
 		ID    string `json:"id"`
 		Kind  string `json:"kind"`
@@ -79,7 +78,7 @@ type canvasListView struct {
 	Canvases []struct {
 		Name       string `json:"name"`
 		Title      string `json:"title"`
-		Session    int64  `json:"session"`
+		Session    string `json:"session"`
 		BlockCount int    `json:"blockCount"`
 	} `json:"canvases"`
 }
@@ -90,7 +89,7 @@ type canvasWriteView struct {
 	Workspace  string `json:"workspace"`
 	Name       string `json:"name"`
 	Title      string `json:"title"`
-	Session    int64  `json:"session"`
+	Session    string `json:"session"`
 	BlockCount int    `json:"blockCount"`
 	Block      *struct {
 		ID   string `json:"id"`
@@ -134,7 +133,7 @@ func TestCanvasRoundTrip(t *testing.T) {
 	assert.Equal(t, "demo", wrote.Workspace)
 	assert.Equal(t, "plan", wrote.Name)
 	assert.Equal(t, "The Plan", wrote.Title)
-	assert.Equal(t, id, strconv.FormatInt(wrote.Session, 10), "the creating chat is recorded")
+	assert.Equal(t, id, wrote.Session, "the creating chat is recorded")
 	assert.Equal(t, 1, wrote.BlockCount)
 	require.NotNil(t, wrote.Block, "a single-block write echoes the stored block")
 	assert.Equal(t, "status", wrote.Block.ID)

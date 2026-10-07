@@ -207,7 +207,7 @@ const workspaceRows = [
 // A chat row as the cross-workspace listing reports it: terminalId set means
 // the listing's tmux probe found the session alive.
 const chatRow = {
-  id: 7,
+  id: '7',
   workspace: 'web-app',
   name: 'New Chat',
   agent: 'claude',
@@ -245,7 +245,7 @@ function fakeClient(editor = { command: 'zed', title: 'Zed' }) {
     allSessions: vi.fn().mockResolvedValue([]),
     activity: vi.fn().mockResolvedValue([]),
     startSession: vi.fn().mockResolvedValue({
-      id: 7,
+      id: '7',
       workspace: 'web-app',
       name: 'New Chat',
       agent: 'claude',
@@ -272,7 +272,7 @@ function fakeClient(editor = { command: 'zed', title: 'Zed' }) {
       workspace: 'web-app',
       name: 'plan',
       title: '',
-      session: 7,
+      session: '7',
       createdAt: 0,
       updatedAt: 0,
       blocks: [],
@@ -484,7 +484,7 @@ describe('AgentsMode', () => {
     wrapper.findComponent(AgentsSidebar).vm.$emit('close-session', { ...chatRow })
     await flushPromises()
 
-    expect(client.closeSession).toHaveBeenCalledWith(7)
+    expect(client.closeSession).toHaveBeenCalledWith('7')
     expect(router.currentRoute.value.query.chat).toBeUndefined()
   })
 
@@ -506,8 +506,22 @@ describe('AgentsMode', () => {
     mocks.createAgentWorkspacesClient.mockReturnValue(client)
     const { wrapper } = await mountAgentsMode('/workspaces/web-app?chat=7')
 
-    expect(client.resumeSession).toHaveBeenCalledWith({ id: 7 })
+    expect(client.resumeSession).toHaveBeenCalledWith({ id: '7' })
     expect(wrapper.get('[data-testid="agents-pane-statusbar-workspace"]').text()).toBe('Web App')
+  })
+
+  it('reattaches and canonicalizes a routed chat that still uses its legacy numeric ID', async () => {
+    const id = '0199bd92-cc5f-7c61-9185-7423813c9c12'
+    const migrated = { ...chatRow, id, legacyId: '7' }
+    const client = fakeClient()
+    client.allSessions.mockResolvedValue([migrated])
+    client.resumeSession.mockResolvedValue({ ...migrated, windowId: 'w7', cols: 80, rows: 24, resumeAttempted: true })
+    mocks.createAgentWorkspacesClient.mockReturnValue(client)
+
+    const { router } = await mountAgentsMode('/workspaces/web-app?chat=7')
+
+    expect(client.resumeSession).toHaveBeenCalledWith({ id })
+    expect(router.currentRoute.value.query.chat).toBe(id)
   })
 
   // ResumeSession relaunches a dead session, and a relaunch must stay a
@@ -526,7 +540,7 @@ describe('AgentsMode', () => {
   // holding: the live pane is torn down and the named chat attached.
   it('switches the live pane to another routed chat when that one is live', async () => {
     const client = fakeClient()
-    const other = { ...chatRow, id: 9, name: 'Second', terminalId: 'agentws-9' }
+    const other = { ...chatRow, id: '9', name: 'Second', terminalId: 'agentws-9' }
     client.allSessions.mockResolvedValue([other])
     client.resumeSession.mockResolvedValue({ ...other, windowId: 'w9', cols: 80, rows: 24, resumeAttempted: true })
     const { router } = await mountWithOpenChat(client)
@@ -534,7 +548,7 @@ describe('AgentsMode', () => {
     await router.push({ name: 'agents', params: { workspace: 'web-app' }, query: { chat: '9', canvas: '1' } })
     await flushPromises()
 
-    expect(client.resumeSession).toHaveBeenCalledWith({ id: 9 })
+    expect(client.resumeSession).toHaveBeenCalledWith({ id: '9' })
     expect(router.currentRoute.value.query.chat).toBe('9')
   })
 
@@ -543,7 +557,7 @@ describe('AgentsMode', () => {
   // a chat that is still running.
   it('keeps the live chat in the route when the routed chat is dead', async () => {
     const client = fakeClient()
-    client.allSessions.mockResolvedValue([{ ...chatRow, id: 9, name: 'Second', terminalId: '' }])
+    client.allSessions.mockResolvedValue([{ ...chatRow, id: '9', name: 'Second', terminalId: '' }])
     const { router } = await mountWithOpenChat(client)
 
     await router.push({ name: 'agents', params: { workspace: 'web-app' }, query: { chat: '9', canvas: '1' } })
@@ -570,7 +584,7 @@ describe('AgentsMode', () => {
   // is what started this very launch (#434 follow-up).
   it('does not steal focus from an editable field a launch resolves under', async () => {
     const client = fakeClient()
-    const other = { ...chatRow, id: 9, name: 'Second', terminalId: 'agentws-9' }
+    const other = { ...chatRow, id: '9', name: 'Second', terminalId: 'agentws-9' }
     let resolveResume: ((session: typeof other) => void) | undefined
     client.resumeSession.mockImplementation(
       () =>
@@ -597,7 +611,7 @@ describe('AgentsMode', () => {
 
   it("focuses the picked chat's workspace", async () => {
     const client = fakeClient()
-    const other = { ...chatRow, id: 9, workspace: 'docs', name: 'Second', terminalId: 'agentws-9' }
+    const other = { ...chatRow, id: '9', workspace: 'docs', name: 'Second', terminalId: 'agentws-9' }
     client.resumeSession.mockResolvedValue({ ...other, windowId: 'w9', cols: 80, rows: 24, resumeAttempted: true })
     const { wrapper, router } = await mountWithOpenChat(client)
 
@@ -610,7 +624,7 @@ describe('AgentsMode', () => {
 
   it('focuses the newly attached pane when nothing editable holds focus', async () => {
     const client = fakeClient()
-    const other = { ...chatRow, id: 9, name: 'Second', terminalId: 'agentws-9' }
+    const other = { ...chatRow, id: '9', name: 'Second', terminalId: 'agentws-9' }
     client.resumeSession.mockResolvedValue({ ...other, windowId: 'w9', cols: 80, rows: 24, resumeAttempted: true })
     const { wrapper } = await mountWithOpenChat(client)
 
@@ -727,7 +741,7 @@ describe('AgentsMode', () => {
   it('still resumes the session on a retry click after a failed attach left it idle', async () => {
     const client = fakeClient()
     client.startSession.mockResolvedValue({
-      id: 7,
+      id: '7',
       workspace: 'web-app',
       name: 'New Chat',
       agent: 'claude',
@@ -747,7 +761,7 @@ describe('AgentsMode', () => {
     wrapper.findComponent(AgentsSidebar).vm.$emit('select-session', { ...chatRow })
     await flushPromises()
 
-    expect(client.resumeSession).toHaveBeenCalledWith({ id: 7 })
+    expect(client.resumeSession).toHaveBeenCalledWith({ id: '7' })
   })
 
   // A schedule firing at 09:00 starts a chat nobody clicked for: the tree
@@ -779,7 +793,7 @@ describe('AgentsMode', () => {
   it('reports the launch notice when a session exits before it can be attached', async () => {
     const client = fakeClient()
     client.startSession.mockResolvedValue({
-      id: 7,
+      id: '7',
       workspace: 'web-app',
       name: 'New Chat',
       agent: 'claude',
@@ -872,16 +886,16 @@ describe('AgentsMode', () => {
   it('opens and closes the pane on canvas:toggle for the open chat only', async () => {
     const { wrapper, router } = await mountWithOpenChat()
 
-    wailsEvents.fire('canvas:toggle', { session: 99, name: '', open: true })
+    wailsEvents.fire('canvas:toggle', { session: '99', name: '', open: true })
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBeUndefined()
 
-    wailsEvents.fire('canvas:toggle', { session: 7, name: 'plan', open: true })
+    wailsEvents.fire('canvas:toggle', { session: '7', name: 'plan', open: true })
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBe('plan')
     expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(true)
 
-    wailsEvents.fire('canvas:toggle', { session: 7, name: '', open: false })
+    wailsEvents.fire('canvas:toggle', { session: '7', name: '', open: false })
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBeUndefined()
     expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)

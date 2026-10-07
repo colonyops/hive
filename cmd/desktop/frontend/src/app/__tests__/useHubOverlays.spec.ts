@@ -48,14 +48,14 @@ describe('useHubOverlays', () => {
   })
 
   it("opens Canvases on the chat's canvas, and only an opening toggle moves the scope", () => {
-    const chat = ref<CanvasScope | null>({ workspace: 'web-app', name: 'plan', session: 7 })
+    const chat = ref<CanvasScope | null>({ workspace: 'web-app', name: 'plan', session: '7' })
     const overlays = useHubOverlays(ref(false), chat)
 
     overlays.toggleCanvas()
     expect(overlays.canvasOpen.value).toBe(true)
-    expect(overlays.canvasScope.value).toEqual({ workspace: 'web-app', name: 'plan', session: 7 })
+    expect(overlays.canvasScope.value).toEqual({ workspace: 'web-app', name: 'plan', session: '7' })
 
-    chat.value = { workspace: 'docs', name: null, session: 9 }
+    chat.value = { workspace: 'docs', name: null, session: '9' }
     overlays.toggleCanvas()
     expect(overlays.canvasOpen.value).toBe(false)
     expect(overlays.canvasScope.value.workspace).toBe('web-app')

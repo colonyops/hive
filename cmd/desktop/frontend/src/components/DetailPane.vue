@@ -54,7 +54,7 @@ const emit = defineEmits<{
   'copy-contents': []
   'create-session': [target: 'repository' | 'workspace']
   'open-session': [slug: string]
-  'open-chat': [workspace: string, id: number]
+  'open-chat': [workspace: string, id: string]
   edit: []
 }>()
 

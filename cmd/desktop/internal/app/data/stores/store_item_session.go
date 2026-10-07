@@ -62,7 +62,7 @@ func (s *ItemSessionStore) Unlink(ctx context.Context, sessionIDs []string) erro
 
 // LinkChat records that an agent workspace chat was opened for an item.
 // Deleting the chat removes the link with it.
-func (s *ItemSessionStore) LinkChat(ctx context.Context, chatID int64, ref models.ItemRef) error {
+func (s *ItemSessionStore) LinkChat(ctx context.Context, chatID string, ref models.ItemRef) error {
 	if !ref.Known() {
 		return nil
 	}

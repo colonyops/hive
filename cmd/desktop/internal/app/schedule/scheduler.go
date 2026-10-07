@@ -33,8 +33,8 @@ type Run struct {
 	Reason       Reason
 	Missed       int
 	Status       Status
-	// SessionID is 0 when the run launched no chat.
-	SessionID int64
+	// SessionID is empty when the run launched no chat.
+	SessionID string
 	Prompt    string
 	Error     string
 }
@@ -79,8 +79,8 @@ type LaunchRequest struct {
 }
 
 type Launcher interface {
-	Launch(ctx context.Context, req LaunchRequest) (int64, error)
-	SessionLive(ctx context.Context, sessionID int64) (bool, error)
+	Launch(ctx context.Context, req LaunchRequest) (string, error)
+	SessionLive(ctx context.Context, sessionID string) (bool, error)
 }
 
 // Options configure a Scheduler. Source, Store and Launcher are required.
@@ -309,7 +309,7 @@ func (s *Scheduler) execute(ctx context.Context, spec Spec, decision Decision, n
 	}
 
 	live := false
-	if hasLast && last.SessionID != 0 {
+	if hasLast && last.SessionID != "" {
 		if live, err = s.opts.Launcher.SessionLive(ctx, last.SessionID); err != nil {
 			return Run{}, false, fmt.Errorf("checking the previous run's chat: %w", err)
 		}

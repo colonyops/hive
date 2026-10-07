@@ -29,7 +29,7 @@ async function mountAt(path: string): Promise<{ api: Api; router: Router }> {
 describe('useAgentCanvasRoute', () => {
   it('reads the open chat and canvas off the route', async () => {
     const { api } = await mountAt('/workspaces/web-app?chat=7&canvas=plan')
-    expect(api.routeChatId.value).toBe(7)
+    expect(api.routeChatId.value).toBe('7')
     expect(api.canvasRequested.value).toBe(true)
     expect(api.canvasVisible.value).toBe(true)
     expect(api.canvasName.value).toBe('plan')
@@ -98,13 +98,13 @@ describe('useAgentCanvasRoute', () => {
     const { api, router } = await mountAt('/workspaces/web-app?chat=7')
     expect(api.canvasUnseen.value).toBe(false)
 
-    api.noteCanvasWrite(9)
+    api.noteCanvasWrite('9')
     expect(api.canvasUnseen.value).toBe(false)
 
-    api.noteCanvasWrite(7)
+    api.noteCanvasWrite('7')
     expect(api.canvasUnseen.value).toBe(true)
 
-    api.clearCanvasUnseen(7)
+    api.clearCanvasUnseen('7')
     expect(api.canvasUnseen.value).toBe(false)
 
     // The write to 9 was remembered, so switching to it lights its own dot.
@@ -115,22 +115,20 @@ describe('useAgentCanvasRoute', () => {
 
   it('ignores a write while that chat has its canvas on screen', async () => {
     const { api } = await mountAt('/workspaces/web-app?chat=7&canvas=1')
-    api.noteCanvasWrite(7)
+    api.noteCanvasWrite('7')
     expect(api.canvasUnseen.value).toBe(false)
   })
 
   it('ignores a write with no usable session id', async () => {
     const { api } = await mountAt('/workspaces/web-app?chat=7')
-    api.noteCanvasWrite(Number.NaN)
-    api.noteCanvasWrite(0)
-    api.noteCanvasWrite(-3)
+    api.noteCanvasWrite('')
     expect(api.canvasUnseen.value).toBe(false)
   })
 
   // The set is module state so the title bar and AgentsMode read one truth.
   it('shares the unseen set across callers', async () => {
     const { api: first, router } = await mountAt('/workspaces/web-app?chat=7')
-    first.noteCanvasWrite(7)
+    first.noteCanvasWrite('7')
 
     let second!: Api
     const Host = defineComponent({
@@ -143,7 +141,7 @@ describe('useAgentCanvasRoute', () => {
     await flushPromises()
 
     expect(second.canvasUnseen.value).toBe(true)
-    second.clearCanvasUnseen(7)
+    second.clearCanvasUnseen('7')
     expect(first.canvasUnseen.value).toBe(false)
   })
 

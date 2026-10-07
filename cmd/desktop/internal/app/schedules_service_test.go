@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -30,18 +31,18 @@ type fakeScheduleLauncher struct {
 	err      error
 }
 
-func (f *fakeScheduleLauncher) Launch(_ context.Context, req schedule.LaunchRequest) (int64, error) {
+func (f *fakeScheduleLauncher) Launch(_ context.Context, req schedule.LaunchRequest) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.err != nil {
-		return 0, f.err
+		return "", f.err
 	}
 	f.launched = append(f.launched, req)
 	f.nextID++
-	return f.nextID, nil
+	return fmt.Sprint(f.nextID), nil
 }
 
-func (f *fakeScheduleLauncher) SessionLive(context.Context, int64) (bool, error) {
+func (f *fakeScheduleLauncher) SessionLive(context.Context, string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.live, nil
@@ -187,7 +188,7 @@ func TestSchedulesServiceRunNowRecordsAManualRun(t *testing.T) {
 	assert.Equal(t, "launched", run.Status)
 	assert.Equal(t, "Summarize Demo.", run.Prompt, "the workspace name comes from the manifest, not the directory")
 	require.NotNil(t, run.SessionID)
-	assert.Equal(t, int64(1), *run.SessionID)
+	assert.Equal(t, "1", *run.SessionID)
 
 	requests := f.launcher.requests()
 	require.Len(t, requests, 1)
@@ -216,7 +217,7 @@ func TestSchedulesServiceRunsAnswerForARemovedSchedule(t *testing.T) {
 			_, err := f.stores.Schedules.InsertRun(t.Context(), stores.ScheduleRun{
 				Workspace: "demo", ScheduleID: id, ScheduleName: id,
 				ScheduledFor: int64(1_000 + i*10 + n), StartedAt: int64(1_000 + i*10 + n),
-				Reason: "due", Status: "launched", SessionID: int64(1 + n),
+				Reason: "due", Status: "launched", SessionID: fmt.Sprintf("chat-%d", 1+n),
 			})
 			require.NoError(t, err)
 		}
@@ -275,7 +276,7 @@ func TestSchedulesServiceRunsDropAChatThatWasDeleted(t *testing.T) {
 	require.NoError(t, err)
 	for _, run := range []stores.ScheduleRun{
 		{Workspace: "demo", ScheduleID: "alpha", ScheduleName: "alpha", ScheduledFor: 100, StartedAt: 100, Reason: "due", Status: "launched", SessionID: chat.ID},
-		{Workspace: "demo", ScheduleID: "alpha", ScheduleName: "alpha", ScheduledFor: 200, StartedAt: 200, Reason: "due", Status: "launched", SessionID: chat.ID + 1000},
+		{Workspace: "demo", ScheduleID: "alpha", ScheduleName: "alpha", ScheduledFor: 200, StartedAt: 200, Reason: "due", Status: "launched", SessionID: "00000000-0000-0000-0000-000000000000"},
 	} {
 		_, err := f.stores.Schedules.InsertRun(t.Context(), run)
 		require.NoError(t, err)

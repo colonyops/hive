@@ -20,8 +20,8 @@ type ScheduleRef struct {
 }
 
 // ScheduleRun is one execution attempt. ScheduledFor and StartedAt are unix
-// milliseconds; SessionID is 0 when the run launched no chat, which the table
-// stores as NULL. ID is assigned on insert.
+// milliseconds; SessionID is empty when the run launched no chat, which the
+// table stores as NULL. ID is assigned on insert.
 type ScheduleRun struct {
 	ID           int64
 	Workspace    string
@@ -32,7 +32,7 @@ type ScheduleRun struct {
 	Reason       string
 	Missed       int
 	Status       string
-	SessionID    int64
+	SessionID    string
 	Prompt       string
 	Error        string
 }
@@ -42,9 +42,9 @@ func mapScheduleCursorFromDB(row queries.ScheduleCursor) ScheduleCursor {
 }
 
 func mapScheduleRunFromDB(row queries.ScheduleRun) ScheduleRun {
-	var sessionID int64
+	var sessionID string
 	if row.SessionID.Valid {
-		sessionID = row.SessionID.Int64
+		sessionID = row.SessionID.String
 	}
 	return ScheduleRun{
 		ID: row.ID, Workspace: row.Workspace, ScheduleID: row.ScheduleID, ScheduleName: row.ScheduleName,

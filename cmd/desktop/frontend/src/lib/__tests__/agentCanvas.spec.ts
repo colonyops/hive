@@ -27,12 +27,12 @@ describe('canvasLinkTarget', () => {
 
 describe('canvasEventAuthor', () => {
   it('names the chat or the hive session an event carries', () => {
-    expect(canvasEventAuthor({ session: 7, hiveSession: '' })).toBe(7)
-    expect(canvasEventAuthor({ session: 0, hiveSession: 'abc123' })).toBe('abc123')
-    expect(canvasEventAuthor([{ session: 7, hiveSession: '' }])).toBe(7)
+    expect(canvasEventAuthor({ session: 'chat-7', hiveSession: '' })).toBe('chat-7')
+    expect(canvasEventAuthor({ session: '', hiveSession: 'abc123' })).toBe('abc123')
+    expect(canvasEventAuthor([{ session: 'chat-7', hiveSession: '' }])).toBe('chat-7')
   })
 
-  it.each([undefined, null, {}, { session: 0, hiveSession: '' }, { session: 'x' }])('names nobody for %j', (data) => {
+  it.each([undefined, null, {}, { session: '', hiveSession: '' }, { session: 7 }])('names nobody for %j', (data) => {
     expect(canvasEventAuthor(data)).toBeNull()
   })
 })

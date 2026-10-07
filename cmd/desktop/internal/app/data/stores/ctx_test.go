@@ -15,7 +15,7 @@ import (
 type ctxFixture struct {
 	itemID      int64
 	commandID   int64
-	agentSessID int64
+	agentSessID string
 }
 
 func seedCtxFixture(t *testing.T, st *Stores, db *queries.DB) ctxFixture {

@@ -115,14 +115,14 @@ describe('DetailPane', () => {
   })
 
   it('lists linked chats and opens one by workspace and id', async () => {
-    const chats = [{ id: 9, workspace: 'incident-triage', name: 'Triage alert', createdAt: new Date().toISOString() }]
+    const chats = [{ id: '9', workspace: 'incident-triage', name: 'Triage alert', createdAt: new Date().toISOString() }]
     const wrapper = mount(DetailPane, { props: { item, actions, chats } })
     const rows = wrapper.get('[data-testid="item-chats"]')
     expect(rows.text()).toContain('Triage alert')
     expect(rows.text()).toContain('incident-triage')
 
     await wrapper.get('[data-testid="item-chat-9"]').trigger('click')
-    expect(wrapper.emitted('open-chat')).toEqual([['incident-triage', 9]])
+    expect(wrapper.emitted('open-chat')).toEqual([['incident-triage', '9']])
   })
 
   it('omits the chats section for an item that opened none', () => {

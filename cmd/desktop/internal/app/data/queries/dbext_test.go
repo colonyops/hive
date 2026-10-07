@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/internal/platform/sqlite"
 	"github.com/colonyops/hive/internal/store/migrate"
 )
 
@@ -37,11 +39,11 @@ func TestOpen_FreshDB_AppliesBaseline(t *testing.T) {
 	require.NoError(t, err)
 	migrations, err := migrate.Load(sub)
 	require.NoError(t, err)
-	require.Len(t, migrations, 11)
+	require.Len(t, migrations, 12)
 
 	applied, err := migrate.AppliedVersions(ctx, database.Conn())
 	require.NoError(t, err)
-	assert.Equal(t, map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true, 9: true, 10: true, 11: true}, applied)
+	assert.Equal(t, map[int]bool{1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true, 9: true, 10: true, 11: true, 12: true}, applied)
 }
 
 func TestMigration10PreservesExistingAgentWorkspaceTmuxNames(t *testing.T) {
@@ -61,10 +63,86 @@ func TestMigration10PreservesExistingAgentWorkspaceTmuxNames(t *testing.T) {
 		VALUES ('demo', 'existing', 'claude', 'conversation', 1, 1)`)
 	require.NoError(t, err)
 
-	require.NoError(t, migrate.Apply(ctx, conn, migrations[9:]))
+	require.NoError(t, migrate.Apply(ctx, conn, migrations[9:10]))
 	var terminalID string
 	require.NoError(t, conn.QueryRowContext(ctx, `SELECT terminal_id FROM agent_workspace_session WHERE id = 1`).Scan(&terminalID))
 	assert.Equal(t, "1", terminalID, "the migrated tmux name remains agentws-1")
+}
+
+func TestMigration12RekeysAgentWorkspaceReferences(t *testing.T) {
+	ctx := t.Context()
+	conn, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "migration.db"), sqlite.Options{
+		MaxOpenConns: 2,
+		MaxIdleConns: 2,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	var foreignKeys int
+	require.NoError(t, conn.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&foreignKeys))
+	require.Equal(t, 1, foreignKeys)
+
+	sub, err := migrationsSub()
+	require.NoError(t, err)
+	migrations, err := migrate.Load(sub)
+	require.NoError(t, err)
+	require.NoError(t, migrate.EnsureTable(ctx, conn))
+	require.NoError(t, migrate.Apply(ctx, conn, migrations[:11]))
+
+	_, err = conn.ExecContext(ctx, `INSERT INTO agent_workspace_session
+		(workspace, name, agent, agent_session_id, terminal_id, created_at, last_opened_at, schedule_id, end_token)
+		VALUES ('demo', 'existing', 'claude', 'conversation', 'terminal', 1, 1, 'daily', 'token')`)
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, `INSERT INTO agent_workspace_session
+		(workspace, name, agent, agent_session_id, terminal_id, created_at, last_opened_at)
+		VALUES ('demo', 'by hand', 'claude', 'other', 'manual', 2, 2)`)
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, `INSERT INTO schedule_run
+		(id, workspace, schedule_id, schedule_name, scheduled_for, started_at, reason, status, session_id, prompt)
+		VALUES (1, 'demo', 'daily', 'Daily', 1, 1, 'due', 'launched', 1, 'prompt'),
+		       (2, 'demo', 'weekly', 'Weekly', 1, 1, 'due', 'launched', 2, 'prompt'),
+		       (3, 'demo', 'weekly', 'Weekly', 2, 2, 'due', 'launched', NULL, 'prompt')`)
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, `DELETE FROM schedule_run WHERE id = 3`)
+	require.NoError(t, err)
+	_, err = conn.ExecContext(ctx, `INSERT INTO item_chat
+		(chat_id, profile_id, source_kind, source_scope, external_id, created_at)
+		VALUES (1, 'profile', 'github', 'owner/repo', '1', 1)`)
+	require.NoError(t, err)
+
+	require.NoError(t, migrate.Apply(ctx, conn, migrations[11:]))
+
+	var sessionID, runSessionID, chatID string
+	var legacyID int64
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT id, legacy_id FROM agent_workspace_session WHERE legacy_id = 1`).Scan(&sessionID, &legacyID))
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT session_id FROM schedule_run WHERE id = 1`).Scan(&runSessionID))
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT chat_id FROM item_chat`).Scan(&chatID))
+	parsedID, err := uuid.Parse(sessionID)
+	require.NoError(t, err)
+	assert.Equal(t, uuid.Version(7), parsedID.Version())
+	assert.Equal(t, int64(1), legacyID)
+	assert.Equal(t, sessionID, runSessionID)
+	assert.Equal(t, sessionID, chatID)
+
+	var reusedRunSessionID sql.NullString
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT session_id FROM schedule_run WHERE id = 2`).Scan(&reusedRunSessionID))
+	assert.False(t, reusedRunSessionID.Valid, "a run must not keep a link to a chat of another schedule")
+
+	var runSeq int64
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT seq FROM sqlite_sequence WHERE name = 'schedule_run'`).Scan(&runSeq))
+	assert.Equal(t, int64(3), runSeq, "the run id counter keeps its high-water mark")
+
+	require.NoError(t, conn.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&foreignKeys))
+	require.Equal(t, 1, foreignKeys)
+	var violations int
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT count(*) FROM pragma_foreign_key_check`).Scan(&violations))
+	assert.Zero(t, violations)
+
+	_, err = conn.ExecContext(ctx, `DELETE FROM agent_workspace_session WHERE id = ?`, sessionID)
+	require.NoError(t, err)
+	var links int
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT count(*) FROM item_chat`).Scan(&links))
+	assert.Zero(t, links, "deleting a migrated chat still cascades to its inbox links")
 }
 
 func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {

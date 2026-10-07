@@ -7,8 +7,8 @@ import (
 )
 
 type agentSessionEndResponse struct {
-	Session int64 `json:"session"`
-	EndsAt  int64 `json:"endsAt"`
+	Session string `json:"session"`
+	EndsAt  int64  `json:"endsAt"`
 }
 
 // AgentSessionEnd ends the calling chat's own session. The bearer is the token

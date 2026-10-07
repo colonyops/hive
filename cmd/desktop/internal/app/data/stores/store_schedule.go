@@ -87,9 +87,9 @@ func (s *ScheduleStore) PruneCursors(ctx context.Context, workspaces []string, k
 func (s *ScheduleStore) InsertRun(ctx context.Context, run ScheduleRun) (ScheduleRun, error) {
 	var inserted queries.ScheduleRun
 	err := s.q.WithinTx(ctx, func(ctx context.Context, q *queries.DB) error {
-		var sessionID sql.NullInt64
-		if run.SessionID != 0 {
-			sessionID = sql.NullInt64{Int64: run.SessionID, Valid: true}
+		var sessionID sql.NullString
+		if run.SessionID != "" {
+			sessionID = sql.NullString{String: run.SessionID, Valid: true}
 		}
 		row, err := q.InsertScheduleRun(ctx, queries.InsertScheduleRunParams{
 			Workspace: run.Workspace, ScheduleID: run.ScheduleID, ScheduleName: run.ScheduleName,

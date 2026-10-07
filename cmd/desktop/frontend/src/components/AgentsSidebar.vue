@@ -64,11 +64,11 @@ const props = withDefaults(
      */
     selectedWorkspace?: string
     /** The chat currently attached to the pane, for highlighting its row. */
-    openSessionId?: number | null
+    openSessionId?: string | null
     /** True while AgentsMode is launching a chat into the pane. */
     startingSession?: boolean
     /** Per-chat activity status ('approval' | 'active' | 'ready') across every workspace. */
-    sessionActivity?: Record<number, string>
+    sessionActivity?: Record<string, string>
   }>(),
   {
     active: false,
@@ -301,10 +301,10 @@ function nextScheduleLine(workspace: AgentWorkspace): string {
 // alert while it waits on approval. Any other live chat gets the green liveness
 // dot (ready-and-waiting is still live) and an idle chat a hollow ring the same
 // size, so live-vs-idle is always stated rather than implied by absence.
-const sessionIndicators = computed<Record<number, StatusIndicator>>(() => {
-  const out: Record<number, StatusIndicator> = {}
+const sessionIndicators = computed<Record<string, StatusIndicator>>(() => {
+  const out: Record<string, StatusIndicator> = {}
   for (const [id, status] of Object.entries(props.sessionActivity)) {
-    if (status === 'active' || status === 'approval') out[Number(id)] = activityIndicator(status)
+    if (status === 'active' || status === 'approval') out[id] = activityIndicator(status)
   }
   return out
 })
@@ -457,7 +457,7 @@ function onSessionMenuSelect(session: AgentSession, id: string): void {
 
 // ── Inline chat rename ────────────────────────────────────────────────────
 // Same idiom as the Code view's tmux window rename (TerminalMode.vue).
-const renamingSessionId = ref<number | null>(null)
+const renamingSessionId = ref<string | null>(null)
 const renameDraft = ref('')
 
 function startRename(session: AgentSession): void {

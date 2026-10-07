@@ -65,11 +65,11 @@ func TestScheduleStoreInsertRunRoundTripsWithTheAssignedID(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
 		status    string
-		sessionID int64
+		sessionID string
 		wantNull  bool
 	}{
-		{name: "a launched run keeps its chat id", status: "launched", sessionID: 7},
-		{name: "a run with no chat stores NULL, not 0", status: "skipped", wantNull: true},
+		{name: "a launched run keeps its chat id", status: "launched", sessionID: "94bad1a6-753b-4199-9a14-971a92f90a80"},
+		{name: "a run with no chat stores NULL, not an empty string", status: "skipped", wantNull: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			st, db := openTestStores(t)
@@ -92,7 +92,7 @@ func TestScheduleStoreInsertRunRoundTripsWithTheAssignedID(t *testing.T) {
 			var raw any
 			require.NoError(t, db.Conn().QueryRowContext(ctx, `SELECT session_id FROM schedule_run WHERE id = ?`, run.ID).Scan(&raw))
 			if tt.wantNull {
-				assert.Nil(t, raw, "session 0 must not read back as a chat id")
+				assert.Nil(t, raw, "an empty session must not read back as a chat id")
 			} else {
 				assert.NotNil(t, raw)
 			}

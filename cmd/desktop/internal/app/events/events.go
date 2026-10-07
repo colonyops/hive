@@ -61,7 +61,7 @@ type AgentWorkspacesUpdated struct{ Count int }
 // author, and a pane re-reads its owner's canvases. The author is a chat
 // (Session) or a hive session (HiveSession), never both.
 type CanvasUpdated struct {
-	Session     int64
+	Session     string
 	HiveSession string
 }
 
@@ -71,7 +71,7 @@ type CanvasUpdated struct {
 // pins one canvas when opening; empty leaves the pane's own pick. The asker
 // is a chat (Session) or a hive session (HiveSession), never both.
 type CanvasToggleRequested struct {
-	Session     int64
+	Session     string
 	HiveSession string
 	Name        string
 	Open        bool

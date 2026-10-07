@@ -50,7 +50,7 @@ function meta(overrides: Partial<WorkspaceCanvasMeta>): WorkspaceCanvasMeta {
     workspace: 'web-app',
     name: 'plan',
     title: '',
-    session: 7,
+    session: '7',
     hiveSession: '',
     createdAt: 1,
     updatedAt: 1,
@@ -64,7 +64,7 @@ function fakeCanvasClient(blocks: CanvasBlock[], metas: WorkspaceCanvasMeta[] = 
     canvas: vi
       .fn()
       .mockImplementation((workspace: string, name: string) =>
-        Promise.resolve({ workspace, name, title: '', session: 7, createdAt: 1, updatedAt: 1, blocks }),
+        Promise.resolve({ workspace, name, title: '', session: '7', createdAt: 1, updatedAt: 1, blocks }),
       ),
     canvases: vi.fn().mockResolvedValue(metas),
     canvasMarkdown: vi.fn().mockResolvedValue('# The Plan\n\nhello\n'),
@@ -74,7 +74,7 @@ function fakeCanvasClient(blocks: CanvasBlock[], metas: WorkspaceCanvasMeta[] = 
 
 async function mountPane(client: AgentWorkspacesClient, name: string | null = null) {
   const wrapper = mount(AgentCanvasPane, {
-    props: { session: 7, workspace: 'web-app', name, client },
+    props: { session: '7', workspace: 'web-app', name, client },
   })
   await flushPromises()
   return wrapper
@@ -301,7 +301,7 @@ describe('AgentCanvasPane', () => {
   it("defaults to the open chat's canvas", async () => {
     const client = fakeCanvasClient(
       [],
-      [meta({ name: 'other-report', session: 9, updatedAt: 5 }), meta({ name: 'plan', session: 7, updatedAt: 3 })],
+      [meta({ name: 'other-report', session: '9', updatedAt: 5 }), meta({ name: 'plan', session: '7', updatedAt: 3 })],
     )
     await mountPane(client)
 
@@ -314,8 +314,8 @@ describe('AgentCanvasPane', () => {
     const client = fakeCanvasClient(
       [],
       [
-        meta({ workspace: 'acme/site', name: 'other', session: 0, hiveSession: 'def456', updatedAt: 5 }),
-        meta({ workspace: 'acme/site', name: 'plan', session: 0, hiveSession: 'abc123', updatedAt: 3 }),
+        meta({ workspace: 'acme/site', name: 'other', session: '', hiveSession: 'def456', updatedAt: 5 }),
+        meta({ workspace: 'acme/site', name: 'plan', session: '', hiveSession: 'abc123', updatedAt: 3 }),
       ],
     )
     const wrapper = mount(AgentCanvasPane, {
@@ -332,7 +332,7 @@ describe('AgentCanvasPane', () => {
   it('pins the route-named canvas and lists canvases by title in the browse view', async () => {
     const client = fakeCanvasClient(
       [],
-      [meta({ name: 'plan', title: 'The Plan', session: 7 }), meta({ name: 'perf-report', title: '', session: 9 })],
+      [meta({ name: 'plan', title: 'The Plan', session: '7' }), meta({ name: 'perf-report', title: '', session: '9' })],
     )
     const wrapper = await mountPane(client, 'perf-report')
 
@@ -346,10 +346,13 @@ describe('AgentCanvasPane', () => {
   })
 
   it('falls back to the default when the pinned canvas is deleted', async () => {
-    const client = fakeCanvasClient([], [meta({ name: 'plan', session: 7 }), meta({ name: 'perf-report', session: 9 })])
+    const client = fakeCanvasClient(
+      [],
+      [meta({ name: 'plan', session: '7' }), meta({ name: 'perf-report', session: '9' })],
+    )
     await mountPane(client, 'perf-report')
 
-    vi.mocked(client.canvases).mockResolvedValue([meta({ name: 'plan', session: 7 })])
+    vi.mocked(client.canvases).mockResolvedValue([meta({ name: 'plan', session: '7' })])
     wailsEvents.fire('canvas:updated', 9)
     await flushPromises()
 
@@ -370,7 +373,7 @@ describe('AgentCanvasPane', () => {
   it('emits pick from the browse view instead of switching locally', async () => {
     const client = fakeCanvasClient(
       [],
-      [meta({ name: 'plan', title: 'The Plan', session: 7 }), meta({ name: 'perf-report', session: 9 })],
+      [meta({ name: 'plan', title: 'The Plan', session: '7' }), meta({ name: 'perf-report', session: '9' })],
     )
     const wrapper = await mountPane(client)
 

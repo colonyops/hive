@@ -106,7 +106,7 @@ const missingSkillsNotice = computed(() => {
 const paneHost = ref<HTMLElement | null>(null)
 const pane = useXtermPane(paneHost, voteSize)
 const { term } = pane
-const openSessionId = ref<number | null>(null)
+const openSessionId = ref<string | null>(null)
 const paneStatus = ref<'idle' | 'opening' | 'live'>('idle')
 const paneError = ref('')
 const paneWorkspaceDir = ref('')
@@ -176,7 +176,7 @@ watch(
 // every session at once, the way the Code view's status poll covers its whole
 // tree. Off-screen, nothing polls: capture-pane is real tmux work per live
 // session.
-const sessionActivity = ref<Record<number, string>>({})
+const sessionActivity = ref<Record<string, string>>({})
 let activityTimer: ReturnType<typeof setTimeout> | undefined
 let activityGeneration = 0
 
@@ -285,7 +285,7 @@ async function resumeRow(session: AgentSession): Promise<void> {
 // one, and a relaunch must stay a deliberate click on the row, never a side
 // effect of a reload. The beat between listing and resuming is an accepted
 // race.
-function syncChatQuery(id: number | null): void {
+function syncChatQuery(id: string | null): void {
   if (route.name !== 'agents') return
   const next = id === null ? undefined : String(id)
   if ((typeof route.query.chat === 'string' ? route.query.chat : undefined) === next) return
@@ -319,7 +319,7 @@ watch(
 // own: both are answers about the chat it has on screen.
 useWailsEvent('canvas:updated', (event) => {
   const author = canvasEventAuthor(event.data)
-  if (typeof author === 'number') noteCanvasWrite(author)
+  if (author !== null) noteCanvasWrite(author)
 })
 // Viewing a chat with its pane open clears its dot.
 watch([canvasVisible, routeChatId], ([visible, id]) => {
@@ -336,12 +336,12 @@ useWailsEvent('canvas:toggle', (event) => {
   syncCanvasQuery(payload.open, payload.name || undefined)
 })
 
-async function resumeChatFromRoute(id: number): Promise<void> {
+async function resumeChatFromRoute(id: string): Promise<void> {
   await ready()
   if (!available.value) return
   await reloadRecents()
   if (routeChatId.value !== id || openSessionId.value === id || paneStatus.value === 'opening') return
-  const session = recents.value.find((row) => row.id === id)
+  const session = recents.value.find((row) => row.id === id || row.legacyId === id)
   if (!session?.terminalId) {
     // The route named a chat that cannot be attached, so the query goes back
     // to naming whatever the pane actually holds. Clearing it outright would
@@ -451,7 +451,7 @@ function openRenameSession(session: AgentSession): void {
   renamingSession.value = session
 }
 
-async function renameSessionTo(id: number, name: string): Promise<void> {
+async function renameSessionTo(id: string, name: string): Promise<void> {
   await renameSession(id, name)
   void reloadRecents()
 }

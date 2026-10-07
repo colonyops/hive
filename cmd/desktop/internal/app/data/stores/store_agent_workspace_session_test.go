@@ -3,12 +3,13 @@ package stores
 import (
 	"testing"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAgentSessionStore(t *testing.T) {
-	st, _ := openTestStores(t)
+	st, db := openTestStores(t)
 	ctx := t.Context()
 
 	t.Run("CreateGetRoundTrip", func(t *testing.T) {
@@ -16,7 +17,11 @@ func TestAgentSessionStore(t *testing.T) {
 			Workspace: "demo", Name: "first pass", Agent: "claude", AgentSessionID: "sess-1",
 		})
 		require.NoError(t, err)
-		assert.NotZero(t, created.ID)
+		assert.NotEmpty(t, created.ID)
+		parsedID, err := uuid.Parse(created.ID)
+		require.NoError(t, err)
+		assert.Equal(t, uuid.Version(7), parsedID.Version())
+		assert.Empty(t, created.LegacyID)
 		assert.Equal(t, "demo", created.Workspace)
 		assert.Equal(t, "first pass", created.Name)
 		assert.Equal(t, "claude", created.Agent)
@@ -29,8 +34,21 @@ func TestAgentSessionStore(t *testing.T) {
 		assert.Equal(t, created, got)
 	})
 
+	t.Run("GetAcceptsAMigratedLegacyID", func(t *testing.T) {
+		const canonicalID = "0199bd92-cc5f-7c61-9185-7423813c9c12"
+		_, err := db.Conn().ExecContext(ctx, `INSERT INTO agent_workspace_session
+			(id, legacy_id, workspace, name, agent, terminal_id, created_at, last_opened_at)
+			VALUES (?, 42, 'demo', 'migrated', 'claude', 'legacy-terminal', 1, 1)`, canonicalID)
+		require.NoError(t, err)
+
+		got, err := st.AgentSessions.Get(ctx, "42")
+		require.NoError(t, err)
+		assert.Equal(t, canonicalID, got.ID)
+		assert.Equal(t, "42", got.LegacyID)
+	})
+
 	t.Run("GetMissingIsNotFound", func(t *testing.T) {
-		_, err := st.AgentSessions.Get(ctx, 999999)
+		_, err := st.AgentSessions.Get(ctx, "00000000-0000-0000-0000-000000000000")
 		assert.True(t, IsNotFound(err))
 	})
 
@@ -56,7 +74,7 @@ func TestAgentSessionStore(t *testing.T) {
 		assert.Equal(t, "minted-later", got.AgentSessionID)
 	})
 
-	t.Run("Delete", func(t *testing.T) {
+	t.Run("DeleteDoesNotReuseID", func(t *testing.T) {
 		created, err := st.AgentSessions.Create(ctx, AgentSessionCreate{Workspace: "demo", Name: "delete me", Agent: "claude"})
 		require.NoError(t, err)
 
@@ -65,6 +83,9 @@ func TestAgentSessionStore(t *testing.T) {
 		assert.True(t, IsNotFound(err), "a deleted session is not found")
 
 		require.NoError(t, st.AgentSessions.Delete(ctx, created.ID))
+		replacement, err := st.AgentSessions.Create(ctx, AgentSessionCreate{Workspace: "demo", Name: "replacement", Agent: "claude"})
+		require.NoError(t, err)
+		assert.NotEqual(t, created.ID, replacement.ID)
 	})
 
 	t.Run("ListIsNewestRecordFirstAndScopedToOneWorkspace", func(t *testing.T) {

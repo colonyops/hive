@@ -27,18 +27,18 @@ type agentScheduleView struct {
 }
 
 type agentScheduleRunView struct {
-	ID           int64  `json:"id"`
-	Workspace    string `json:"workspace"`
-	ScheduleID   string `json:"scheduleId"`
-	ScheduleName string `json:"scheduleName"`
-	ScheduledFor int64  `json:"scheduledFor"`
-	StartedAt    int64  `json:"startedAt"`
-	Reason       string `json:"reason"`
-	Status       string `json:"status"`
-	Missed       int    `json:"missed"`
-	SessionID    *int64 `json:"sessionId"`
-	Prompt       string `json:"prompt"`
-	Error        string `json:"error"`
+	ID           int64   `json:"id"`
+	Workspace    string  `json:"workspace"`
+	ScheduleID   string  `json:"scheduleId"`
+	ScheduleName string  `json:"scheduleName"`
+	ScheduledFor int64   `json:"scheduledFor"`
+	StartedAt    int64   `json:"startedAt"`
+	Reason       string  `json:"reason"`
+	Status       string  `json:"status"`
+	Missed       int     `json:"missed"`
+	SessionID    *string `json:"sessionId"`
+	Prompt       string  `json:"prompt"`
+	Error        string  `json:"error"`
 }
 
 func toAgentScheduleView(s app.ScheduleView) agentScheduleView {

@@ -44,7 +44,7 @@ ON CONFLICT (chat_id, profile_id, source_kind, source_scope, external_id) DO NOT
 `
 
 type LinkItemChatParams struct {
-	ChatID      int64  `json:"chat_id"`
+	ChatID      string `json:"chat_id"`
 	ProfileID   string `json:"profile_id"`
 	SourceKind  string `json:"source_kind"`
 	SourceScope string `json:"source_scope"`
@@ -80,7 +80,7 @@ type ListItemChatsParams struct {
 }
 
 type ListItemChatsRow struct {
-	ChatID    int64  `json:"chat_id"`
+	ChatID    string `json:"chat_id"`
 	Workspace string `json:"workspace"`
 	Name      string `json:"name"`
 	CreatedAt int64  `json:"created_at"`

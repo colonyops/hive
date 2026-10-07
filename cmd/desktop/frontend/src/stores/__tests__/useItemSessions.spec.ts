@@ -88,13 +88,13 @@ describe('useItemSessions', () => {
   it('loads the item’s chats alongside its sessions, each failing on its own', async () => {
     mocks.ItemSessions.mockRejectedValue(new Error('hive.db locked'))
     mocks.ItemChats.mockResolvedValue([
-      { id: 9, workspace: 'triage', name: 'chat', createdAt: new Date(0).toISOString() },
+      { id: '9', workspace: 'triage', name: 'chat', createdAt: new Date(0).toISOString() },
     ])
     const s = useItemSessions()
     await s.load(7)
     expect(mocks.ItemChats).toHaveBeenCalledWith(7)
     expect(s.sessions.value).toEqual([])
-    expect(s.chats.value.map((chat) => chat.id)).toEqual([9])
+    expect(s.chats.value.map((chat) => chat.id)).toEqual(['9'])
 
     await s.load(null)
     expect(s.chats.value).toEqual([])

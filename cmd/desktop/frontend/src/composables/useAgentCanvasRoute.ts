@@ -26,8 +26,7 @@ export function useAgentCanvasRoute() {
   const routeChatId = computed(() => {
     if (route.name !== 'agents') return null
     const raw = route.query.chat
-    const id = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number.NaN
-    return Number.isInteger(id) && id > 0 ? id : null
+    return typeof raw === 'string' && raw ? raw : null
   })
 
   const onCanvasRoute = computed(() => route.name === 'agents' || route.name === 'terminal')
@@ -53,8 +52,8 @@ export function useAgentCanvasRoute() {
 
   const canvasUnseen = computed(() => routeChatId.value !== null && unseenCanvasAuthors.has(routeChatId.value))
 
-  function noteCanvasWrite(session: number): void {
-    if (!Number.isInteger(session) || session <= 0) return
+  function noteCanvasWrite(session: string): void {
+    if (!session) return
     if (canvasVisible.value && session === routeChatId.value) return
     unseenCanvasAuthors.add(session)
   }
