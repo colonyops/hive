@@ -134,7 +134,9 @@ are point-only — existing data is not moved — and take effect after a restar
 The pointer remains at its fixed XDG location so the app can find the config
 root after it moves. By default, Hive Desktop and the CLI append to the shared
 log file; `service_name=hive-desktop` and `service_name=hive-cli` identify each
-source.
+source. The log follows the Hive data directory selected by
+`HIVE_DESKTOP_HIVE_DATA_DIR`, `HIVE_DATA_DIR`, or the Desktop data directory
+fallback. Settings ▸ Hive CLI shows the effective Hive data directory.
 
 ## Hive CLI compatibility config
 

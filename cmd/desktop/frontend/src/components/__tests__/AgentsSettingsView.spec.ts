@@ -32,6 +32,7 @@ beforeEach(() => {
   mocks.Info.mockResolvedValue({
     dataDir: { path: '/home/u/.local/share/hive', exists: true, overridden: false },
     configDir: { path: '/home/u/.config/hive/desktop', exists: true, overridden: false },
+    hiveDataDir: { path: '/home/u/.local/share/hive', exists: true, overridden: false },
     logFile: { path: '/home/u/.local/share/hive/hive.log', exists: true, overridden: false },
     database: { path: '/home/u/.local/share/hive/desktop/desktop-pipeline.db', exists: true, overridden: false },
     agentWorkspaces: { path: WORKSPACES, exists: true, overridden: false },

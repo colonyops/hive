@@ -51,11 +51,12 @@ type PathInfo struct {
 
 // SystemInfo is the full set of locations the settings screens show.
 type SystemInfo struct {
-	DataDir    PathInfo `json:"dataDir"`
-	ConfigDir  PathInfo `json:"configDir"`
-	LogFile    PathInfo `json:"logFile"`
-	Database   PathInfo `json:"database"`
-	HiveConfig PathInfo `json:"hiveConfig"`
+	DataDir     PathInfo `json:"dataDir"`
+	ConfigDir   PathInfo `json:"configDir"`
+	HiveDataDir PathInfo `json:"hiveDataDir"`
+	LogFile     PathInfo `json:"logFile"`
+	Database    PathInfo `json:"database"`
+	HiveConfig  PathInfo `json:"hiveConfig"`
 	// AgentWorkspaces is the agent-workspace root, shown on the Agents pane
 	// rather than with the other locations: it is where the Agents area keeps
 	// its workspaces, not part of the install.
@@ -69,6 +70,7 @@ func (s *SystemService) Info(ctx context.Context) SystemInfo {
 	return SystemInfo{
 		DataDir:         pathInfo(info.DataDir),
 		ConfigDir:       pathInfo(info.ConfigDir),
+		HiveDataDir:     pathInfo(info.HiveDataDir),
 		LogFile:         pathInfo(info.LogFile),
 		Database:        pathInfo(info.Database),
 		AgentWorkspaces: pathInfo(info.AgentWorkspaces),

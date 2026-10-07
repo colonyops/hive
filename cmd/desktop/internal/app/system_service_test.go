@@ -33,6 +33,7 @@ func TestSystemServiceInfo(t *testing.T) {
 
 	require.Equal(t, dataRoot, info.DataDir.Path)
 	require.Equal(t, settings.ConfigDir(), info.ConfigDir.Path)
+	require.Equal(t, dataRoot, info.HiveDataDir.Path)
 	require.Equal(t, filepath.Join(dataRoot, "hive.log"), info.LogFile.Path)
 	require.Equal(t, filepath.Join(dataRoot, "desktop", "desktop-pipeline.db"), info.Database.Path)
 	// The data/config directories are on defaults here, so nothing is overridden.
@@ -103,8 +104,9 @@ func TestSystemServiceCheckAllowed(t *testing.T) {
 	hiveConfig := filepath.Join(t.TempDir(), "config.yaml")
 	s := newSystemService(systemOptions{HiveConfig: staticHiveConfig(HiveConfigLocation{Path: hiveConfig})})
 
-	require.NoError(t, s.checkAllowed(settings.DataDir()))
-	require.NoError(t, s.checkAllowed(settings.LogFile()))
+	require.NoError(t, s.checkAllowed(s.paths.DataDir))
+	require.NoError(t, s.checkAllowed(s.paths.HiveDataDir))
+	require.NoError(t, s.checkAllowed(s.paths.LogFile))
 	// The report dialog shows a saved bundle through OpenPath rather than
 	// through a reveal of its own.
 	require.NoError(t, s.checkAllowed(settings.ReportsDir()))

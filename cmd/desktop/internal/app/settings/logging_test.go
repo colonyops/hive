@@ -14,11 +14,10 @@ import (
 
 func TestCLIAndDesktopLoggersAppendToSameFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hive.log")
-	desktopLogger, closeDesktop, err := NewLogger(path, zerolog.InfoLevel)
+	desktopLogger, closeDesktop, err := NewLogger(logutils.ServiceNameDesktop, path, zerolog.InfoLevel)
 	require.NoError(t, err)
-	cliLogger, closeCLI, err := logutils.New("info", path)
+	cliLogger, closeCLI, err := logutils.New(logutils.ServiceNameCLI, "info", path)
 	require.NoError(t, err)
-	cliLogger = logutils.Service(cliLogger, "hive-cli")
 
 	desktopLogger.Info().Msg("desktop started")
 	cliLogger.Info().Msg("cli started")

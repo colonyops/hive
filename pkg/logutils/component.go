@@ -7,6 +7,11 @@ const (
 	ComponentKey = "cmp"
 	// ServiceNameKey distinguishes programs that write to the shared log file.
 	ServiceNameKey = "service_name"
+
+	// ServiceNameCLI identifies the hive CLI.
+	ServiceNameCLI = "hive-cli"
+	// ServiceNameDesktop identifies Hive Desktop.
+	ServiceNameDesktop = "hive-desktop"
 )
 
 // Component returns logger with the component label set to name. Give it a

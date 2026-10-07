@@ -34,6 +34,7 @@ import (
 	"github.com/colonyops/hive/internal/platform/observe"
 	"github.com/colonyops/hive/internal/platform/secrets"
 	"github.com/colonyops/hive/pkg/buildinfo"
+	"github.com/colonyops/hive/pkg/logutils"
 )
 
 //go:embed all:frontend/dist
@@ -63,7 +64,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	logger, logCloser, logErr := settings.NewLogger(paths.LogFile, level)
+	logger, logCloser, logErr := settings.NewLogger(logutils.ServiceNameDesktop, paths.LogFile, level)
 	if logErr != nil {
 		logger.Warn().Err(logErr).Msg("log file unavailable; logging to stderr only")
 	}
@@ -132,7 +133,7 @@ func main() {
 
 	if paths.LogFile != initialLogPath || len(tel.LogWriters()) > 0 {
 		logCloser()
-		logger, logCloser, logErr = settings.NewLogger(paths.LogFile, level, tel.LogWriters()...)
+		logger, logCloser, logErr = settings.NewLogger(logutils.ServiceNameDesktop, paths.LogFile, level, tel.LogWriters()...)
 		if logErr != nil {
 			logger.Warn().Err(logErr).Msg("log file unavailable; logging to stderr only")
 		}

@@ -40,6 +40,7 @@ function info(exists: boolean, overridden = false) {
   return {
     dataDir: { path: '/home/u/.local/share/hive', exists: true, overridden: false },
     configDir: { path: '/home/u/.config/hive/desktop', exists: true, overridden: false },
+    hiveDataDir: { path: '/home/u/.local/share/hive', exists: true, overridden: false },
     logFile: { path: '/home/u/.local/share/hive/hive.log', exists: true, overridden: false },
     database: { path: '/home/u/.local/share/hive/desktop/desktop-pipeline.db', exists: true, overridden: false },
     agentWorkspaces: { path: '/home/u/.config/hive/desktop/workspaces', exists: true, overridden: false },
@@ -107,6 +108,7 @@ describe('HiveSettingsView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('does not require or invoke a separately installed Hive CLI')
+    expect(wrapper.get('[data-testid="hive-data-dir-path"]').text()).toBe('/home/u/.local/share/hive')
     const notice = wrapper.get('[data-testid="hive-restart-notice"]').text()
     expect(notice).toContain('Edit this file in your own editor')
     expect(notice).toContain('restart the app')

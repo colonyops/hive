@@ -191,11 +191,11 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			// Always log to a file; use explicit path or default to <datadir>/hive.log
-			l, closer, err := logutils.New(flags.LogLevel, flags.ResolvedLogFile())
+			l, closer, err := logutils.New(logutils.ServiceNameCLI, flags.LogLevel, flags.ResolvedLogFile())
 			if err != nil {
 				return ctx, fmt.Errorf("setup logger: %w", err)
 			}
-			logger = logutils.Service(l, "hive-cli")
+			logger = l
 			cliLog = logutils.Component(logger, "cli")
 			logCloser = closer
 

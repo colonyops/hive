@@ -123,11 +123,16 @@ See [Terminal mode](../code/terminal-mode.md#shared-tmux-sizing).
 Open **Settings ▸ System** and select **Report a problem**. Hive opens a new issue at [github.com/colonyops/hive/issues](https://github.com/colonyops/hive/issues) with your version and platform filled in. Nothing from your machine is attached. Describe the problem and paste the log lines that show it.
 
 Hive Desktop and the CLI share the default log file. The `service_name` field
-identifies `hive-desktop` or `hive-cli` on each line.
+identifies `hive-desktop` or `hive-cli` on each line. Open **Settings ▸ System ▸
+Shared log file** to see the effective path. By default it is:
 
 ```text
 ~/.local/share/hive/hive.log
 ```
+
+The file follows the Hive data directory, including `HIVE_DATA_DIR` and
+`HIVE_DESKTOP_HIVE_DATA_DIR` overrides. It does not follow a separate Desktop
+data-directory override.
 
 ## Save a diagnostic bundle
 

@@ -20,7 +20,7 @@ mise run desktop:dev   # already routed through it
 
 Launching devserver when one is already running is not an error — the second process **stands by**, retrying the port every `--standby-poll` (2s), and takes over the moment the live one stops. So `mise run desktop:devserver` is safe to run from anywhere without checking first, and closing whichever session happened to start the proxy does not leave the other worktrees without one. A foreign process on the port is still fatal: waiting on it would leave instances pointed at something that is not a proxy.
 
-Nothing preflights the proxy. If it is not running, GitHub calls fail as transport errors in the desktop log, same as any other GitHub failure.
+Nothing preflights the proxy. If it is not running, GitHub calls fail as transport errors in the shared `hive.log` with `service_name=hive-desktop`, same as any other GitHub failure.
 
 `solo up` runs both tabs from the checked-in `.solo.yml`.
 

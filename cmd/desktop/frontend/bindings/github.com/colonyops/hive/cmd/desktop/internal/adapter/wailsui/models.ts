@@ -543,6 +543,7 @@ export interface SessionSummary {
 export interface SystemInfo {
     "dataDir": PathInfo;
     "configDir": PathInfo;
+    "hiveDataDir": PathInfo;
     "logFile": PathInfo;
     "database": PathInfo;
     "hiveConfig": PathInfo;

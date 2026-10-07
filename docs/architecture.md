@@ -283,8 +283,9 @@ Loggers are passed down, never global: depguard denies the zerolog global
 logger in the whole module, because no program assigns it. A `zerolog.Logger`
 is the first parameter of what takes one, or the second after a
 `context.Context`. Both programs default to `<hive-data-dir>/hive.log`; their
-root loggers carry `service_name=hive-cli` or `service_name=hive-desktop` so a
-reader can split the shared stream. A component labels the logger it is given
+composition roots inject `hive-cli` or `hive-desktop` when they construct the
+root logger, which carries that value as `service_name` so a reader can split
+the shared stream. A component labels the logger it is given
 with `logutils.Component`, which adds `cmp=<name>`, so one filter narrows a log
 to one component. The engine and the programs hand out a logger with no `cmp`
 label, because zerolog appends fields and a second label would repeat the key.

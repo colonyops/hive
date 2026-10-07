@@ -39,6 +39,7 @@ function info(overrides: Record<string, unknown> = {}) {
   return {
     dataDir: { path: DATA, exists: true, overridden: false },
     configDir: { path: '/home/u/.config/hive/desktop', exists: true, overridden: false },
+    hiveDataDir: { path: DATA, exists: true, overridden: false },
     logFile: { path: LOG, exists: false, overridden: false },
     database: { path: DB, exists: true, overridden: false },
     agentWorkspaces: { path: '/home/u/.config/hive/desktop/workspaces', exists: true, overridden: false },
@@ -60,6 +61,8 @@ describe('SystemSettingsView', () => {
 
     expect(wrapper.find('[data-testid="system-data-dir-path"]').text()).toBe(DATA)
     expect(wrapper.find('[data-testid="system-database-path"]').text()).toContain('desktop-pipeline.db')
+    expect(wrapper.text()).toContain('Shared Hive data and logs may use another location')
+    expect(wrapper.text()).toContain('Hive Desktop and the CLI append here')
     expect(wrapper.find('[data-testid="system-data-dir-reset"]').exists()).toBe(false)
   })
 

@@ -96,13 +96,13 @@ onMounted(() => {
 
     <SettingsSection
       v-if="info"
-      title="Storage locations"
-      description="Point Hive at a different folder. Existing data isn't moved; a new location applies after restart."
+      title="Desktop storage"
+      description="Point Hive Desktop app state at a different folder. Existing data isn't moved; a new location applies after restart."
       boxed
     >
       <SettingsPathRow
-        label="Data directory"
-        hint="Desktop state, logs, and the databases live here."
+        label="Desktop data directory"
+        hint="Desktop app state and its database live here. Shared Hive data and logs may use another location."
         icon="folder"
         tone="accent"
         :path="info.dataDir.path"
@@ -139,7 +139,8 @@ onMounted(() => {
       boxed
     >
       <SettingsPathRow
-        label="Log file"
+        label="Shared log file"
+        hint="Hive Desktop and the CLI append here; service_name identifies each one."
         icon="log"
         :path="info.logFile.path"
         :exists="info.logFile.exists"

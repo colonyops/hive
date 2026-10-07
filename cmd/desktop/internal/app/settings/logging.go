@@ -13,10 +13,7 @@ import (
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
-const (
-	desktopServiceName = "hive-desktop"
-	EnvLogLevel        = "HIVE_DESKTOP_LOG_LEVEL"
-)
+const EnvLogLevel = "HIVE_DESKTOP_LOG_LEVEL"
 
 // ResolveLogLevel validates the process log-level override once at startup.
 func ResolveLogLevel() (zerolog.Level, error) {
@@ -37,7 +34,7 @@ func ResolveLogLevel() (zerolog.Level, error) {
 // encoded JSON event, not the console rendering — which is the seam a log
 // bridge attaches to, since a zerolog.Hook sees only level and message. An
 // extra arm must not fail the write or block.
-func NewLogger(path string, level zerolog.Level, extra ...io.Writer) (zerolog.Logger, func(), error) {
+func NewLogger(serviceName, path string, level zerolog.Level, extra ...io.Writer) (zerolog.Logger, func(), error) {
 	stderr := zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}
 	build := func(writers ...io.Writer) zerolog.Logger {
 		// Installed unconditionally: the hook adds nothing to an event with no
@@ -46,7 +43,7 @@ func NewLogger(path string, level zerolog.Level, extra ...io.Writer) (zerolog.Lo
 			With().Timestamp().Logger().
 			Level(level).
 			Hook(observe.TraceHook)
-		return logutils.Service(logger, desktopServiceName)
+		return logutils.Service(logger, serviceName)
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return build(append([]io.Writer{stderr}, extra...)...), func() {}, fmt.Errorf("create log dir: %w", err)
@@ -59,6 +56,3 @@ func NewLogger(path string, level zerolog.Level, extra ...io.Writer) (zerolog.Lo
 	l := build(append([]io.Writer{fileW, stderr}, extra...)...)
 	return l, func() { _ = f.Close() }, nil
 }
-
-// LogFile is retained for tests and e2e helpers; runtime uses Paths.LogFile.
-func LogFile() string { return defaultPaths().LogFile }
