@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/internal/platform/sqlite"
 	"github.com/colonyops/hive/internal/store/migrate"
 )
 
@@ -70,9 +71,16 @@ func TestMigration10PreservesExistingAgentWorkspaceTmuxNames(t *testing.T) {
 
 func TestMigration12RekeysAgentWorkspaceReferences(t *testing.T) {
 	ctx := t.Context()
-	conn, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "migration.db"))
+	conn, err := sqlite.Open(ctx, filepath.Join(t.TempDir(), "migration.db"), sqlite.Options{
+		MaxOpenConns: 2,
+		MaxIdleConns: 2,
+	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
+
+	var foreignKeys int
+	require.NoError(t, conn.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&foreignKeys))
+	require.Equal(t, 1, foreignKeys)
 
 	sub, err := migrationsSub()
 	require.NoError(t, err)
@@ -123,6 +131,18 @@ func TestMigration12RekeysAgentWorkspaceReferences(t *testing.T) {
 	var runSeq int64
 	require.NoError(t, conn.QueryRowContext(ctx, `SELECT seq FROM sqlite_sequence WHERE name = 'schedule_run'`).Scan(&runSeq))
 	assert.Equal(t, int64(3), runSeq, "the run id counter keeps its high-water mark")
+
+	require.NoError(t, conn.QueryRowContext(ctx, `PRAGMA foreign_keys`).Scan(&foreignKeys))
+	require.Equal(t, 1, foreignKeys)
+	var violations int
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT count(*) FROM pragma_foreign_key_check`).Scan(&violations))
+	assert.Zero(t, violations)
+
+	_, err = conn.ExecContext(ctx, `DELETE FROM agent_workspace_session WHERE id = ?`, sessionID)
+	require.NoError(t, err)
+	var links int
+	require.NoError(t, conn.QueryRowContext(ctx, `SELECT count(*) FROM item_chat`).Scan(&links))
+	assert.Zero(t, links, "deleting a migrated chat still cascades to its inbox links")
 }
 
 func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {

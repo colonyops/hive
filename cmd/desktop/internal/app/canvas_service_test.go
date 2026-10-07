@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -261,20 +262,33 @@ func TestCanvasReadsReportAMigratedChatByItsUUID(t *testing.T) {
 	svc.sessions = fakeCanvasSessions{"7": migrated, chatID: migrated}
 	ctx := t.Context()
 
-	for _, author := range []string{"7", "8"} {
-		_, err := svc.store.Upsert("ws", "by-"+author, canvas.Author{Session: author}, "", "", canvas.Block{
-			ID: "a", Kind: canvas.KindMarkdown, Body: "x",
-		})
-		require.NoError(t, err)
+	root := t.TempDir()
+	svc.store = canvas.NewStore(canvas.Roots{Workspaces: root})
+	dir := filepath.Join(root, "ws", canvas.DirName)
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	for _, author := range []int{7, 8} {
+		// Use the pre-UUID file format, not today's string-valued serializer.
+		data := fmt.Sprintf(`{
+			"workspace":"ws", "name":"by-%d", "title":"Legacy canvas", "session":%d,
+			"createdAt":1, "updatedAt":2,
+			"blocks":[{"id":"a", "kind":"markdown", "body":"x", "createdAt":1, "updatedAt":2}]
+		}`, author, author)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("by-%d.json", author)), []byte(data), 0o600))
 	}
 
 	shown, err := svc.GetForOwner(ctx, "ws", "by-7")
 	require.NoError(t, err)
-	assert.Equal(t, chatID, shown.Session)
+	assert.Equal(t, canvas.Canvas{
+		Workspace: "ws", Name: "by-7", Title: "Legacy canvas", Session: chatID,
+		CreatedAt: 1, UpdatedAt: 2,
+		Blocks: []canvas.Block{{ID: "a", Kind: canvas.KindMarkdown, Body: "x", CreatedAt: 1, UpdatedAt: 2}},
+	}, shown)
 
-	read, err := svc.Get(ctx, chatID, "by-7")
-	require.NoError(t, err)
-	assert.Equal(t, chatID, read.Session)
+	for _, id := range []string{chatID, "7"} {
+		read, err := svc.Get(ctx, id, "by-7")
+		require.NoError(t, err)
+		assert.Equal(t, shown, read)
+	}
 
 	metas, err := svc.ListForOwner(ctx, "ws")
 	require.NoError(t, err)
