@@ -51,6 +51,7 @@ beforeEach(async () => {
       activityOpen,
       tasksOpen,
       canvasOpen,
+      actionRunsOpen: ref(false),
     }),
   )
 })

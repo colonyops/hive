@@ -3,7 +3,6 @@ package dispatch
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -450,8 +449,6 @@ func TestWorker_ConfirmFailureReturnsPersistedDiagnostics(t *testing.T) {
 	view = worker.view(t.Context(), view.CommandID)
 	assert.Equal(t, "failed", view.Status)
 	assert.Equal(t, "boom", view.Error)
-	assert.Equal(t, "partial output", view.Stdout)
-	assert.Equal(t, "failure output", view.Stderr)
 	assert.Equal(t, []string{"Begin", "Running", "Fail"}, recorder.calls)
 	assert.Equal(t, "boom", recorder.reason)
 }
@@ -478,21 +475,6 @@ func TestWorker_DoesNotRetryInterruptedInteractiveCommandAfterReopen(t *testing.
 	require.NoError(t, err)
 	assert.Equal(t, "failed", row.Status)
 	assert.Contains(t, row.LastError, "interrupted")
-}
-
-func TestWorker_BoundsExecutorDiagnosticsBeforePersistence(t *testing.T) {
-	db := openTestPipelineDB(t)
-	noisy := strings.Repeat("x", maxExecutionStreamBytes+1)
-	exec := &fakeExecutor{result: ExecutionResult{Log: ExecutionLog{Stdout: noisy, Stderr: noisy}}}
-	worker := NewWorker(testOutputCommands(db), fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
-	view, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`), models.ItemRef{}, ActionInvocationInput{})
-	require.NoError(t, err)
-	waitForWorker(t, worker)
-	view = worker.view(t.Context(), view.CommandID)
-	assert.Len(t, view.Stdout, maxExecutionStreamBytes)
-	assert.Len(t, view.Stderr, maxExecutionStreamBytes)
-	assert.True(t, strings.HasSuffix(view.Stdout, truncatedStreamMarker))
-	assert.True(t, strings.HasSuffix(view.Stderr, truncatedStreamMarker))
 }
 
 func TestWorker_BadPayload_FailsWithoutCallingExecutor(t *testing.T) {

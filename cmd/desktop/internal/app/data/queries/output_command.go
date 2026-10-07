@@ -24,6 +24,7 @@ const interruptedOutputCommandError = "interrupted: application stopped while ac
 // Open runs this at startup before any store exists, and it writes both job
 // and output_command rows, so it lives on DB (placement clause 4).
 func (db *DB) RecoverInterruptedOutputCommands(ctx context.Context) error {
+	now := time.Now().UnixMilli()
 	return db.WithinTx(ctx, func(ctx context.Context, tx *DB) error {
 		if _, err := tx.querier().ExecContext(ctx, `
 		UPDATE job
@@ -31,13 +32,19 @@ func (db *DB) RecoverInterruptedOutputCommands(ctx context.Context) error {
 		WHERE (status = 'queued' AND command_id IS NULL)
 			OR (status = 'running'
 				AND command_id IN (SELECT id FROM output_command WHERE status = 'running'))`,
-			interruptedOutputCommandError, time.Now().UnixMilli()); err != nil {
+			interruptedOutputCommandError, now); err != nil {
 			return wrap("recovering interrupted jobs", err)
 		}
 		if _, err := tx.querier().ExecContext(ctx, `
+		INSERT INTO action_run_log (command_id, attempt, stream, text, created_at)
+		SELECT id, attempts, 'system', ?, ? FROM output_command WHERE status = 'running'`,
+			interruptedOutputCommandError, now); err != nil {
+			return wrap("logging interrupted output commands", err)
+		}
+		if _, err := tx.querier().ExecContext(ctx, `
 		UPDATE output_command
-		SET status = 'failed', claim_token = '', last_error = ?
-		WHERE status = 'running'`, interruptedOutputCommandError); err != nil {
+		SET status = 'failed', claim_token = '', last_error = ?, finished_at = ?
+		WHERE status = 'running'`, interruptedOutputCommandError, now); err != nil {
 			return wrap("recovering interrupted output commands", err)
 		}
 		return nil

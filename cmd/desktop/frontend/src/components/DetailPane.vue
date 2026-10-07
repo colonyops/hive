@@ -40,12 +40,12 @@ const props = defineProps<{
   chats?: ItemChatView[]
   pendingAction?: string | null
   actionRuns?: Record<string, ActionRunView>
-  openedActionRunId?: number | null
   sourceIcons?: Record<string, string>
   sourceImages?: Record<string, string>
 }>()
 const emit = defineEmits<{
   'run-action': [actionId: string]
+  'open-run-log': [commandId: number]
   'open-browser': []
   'open-url': [url: string]
   'set-unread': [unread: boolean]
@@ -231,8 +231,8 @@ const {
               :action="action"
               :pending="pendingAction === action.id"
               :run="actionRuns?.[action.id]"
-              :expanded="actionRuns?.[action.id]?.commandId === openedActionRunId"
               @run="emit('run-action', action.id)"
+              @open-log="(commandId) => emit('open-run-log', commandId)"
             />
           </div>
         </template>

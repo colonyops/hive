@@ -59,6 +59,9 @@ keybindings:               # sparse overrides keyed by command id
 paths:
   tmux: ""                 # absolute path to a tmux binary; empty discovers one
 
+retention:
+  action_runs: 100         # finished action runs kept, each with its full log (1-10000)
+
 editor:
   command: ""              # single-word CLI launcher "Open in editor" actions run
                            # on a directory (zed, code, cursor, subl, or a path);
@@ -120,6 +123,7 @@ development:
 - `telemetry.host_id` is optional. When set, it becomes the OpenTelemetry `host.id` resource attribute and the `host_id` profile label. Use a stable unique id for the machine, not the OTLP `instance_id` username. Hive generates a new OpenTelemetry `service.instance.id` for each launch.
 - `telemetry.token` must be a reference (`env:`, `file:`, `op://`), never a pasted credential; a literal is a validation error. `telemetry.endpoint` and `telemetry.instance_id` accept either a reference or a written-out value, so one secret can hold a whole destination. Prefer `file:` or `op://` for an installed app, since a launched .app inherits almost no environment.
 - `profiles.order` never has to be exhaustive: name only the profiles whose position matters. Dragging a tile in the rail rewrites the whole key; editing it here takes effect on the next launch.
+- `retention.action_runs` must be between 1 and 10000; omit it for the default of 100. Each run keeps its whole log, up to 8 MiB per attempt, so a large value is a disk-size choice. A change takes effect on the next launch.
 - `menu_bar.feeds` names feeds by id, `<profile id>/<feed node id>`. A pin naming no feed is skipped. Settings ▸ Menu bar rewrites the whole list; a hand edit shows up on the next menu refresh.
 - `keybindings` has its own command-id vocabulary. Read the ids off Settings ▸ Keyboard rather than guessing them. A binding can be a single combo (`j`) or a space-separated sequence of combos pressed in order (`g i`).
 {{template "task" .}}

@@ -18,6 +18,7 @@ const props = defineProps<{
   githubConnected: boolean
 }>()
 const previewCollapsed = defineModel<boolean>('previewCollapsed', { required: true })
+const emit = defineEmits<{ 'open-run-log': [commandId: number] }>()
 
 // The composables' result objects keep their identity for App's lifetime.
 // eslint-disable-next-line vue/no-setup-props-reactivity-loss
@@ -51,7 +52,6 @@ const {
   actions,
   pendingAction,
   actionRuns,
-  openedActionRunID,
 } = feed
 const flowsSession = useFlowsSession()
 const { openFromItem: openNewSessionFromItem } = useNewSession()
@@ -172,7 +172,6 @@ defineExpose({ focusSearch: () => feedList.value?.focusSearch() })
       :chats="itemChats"
       :pending-action="pendingAction"
       :action-runs="actionRuns"
-      :opened-action-run-id="openedActionRunID"
       :source-icons="sourceIcons"
       :source-images="sourceImages"
       @run-action="feed.invokeAction"
@@ -187,6 +186,7 @@ defineExpose({ focusSearch: () => feedList.value?.focusSearch() })
       @open-session="nav.openItemSession"
       @open-chat="nav.openItemChat"
       @edit="nav.selectApplicationSettingsSection('actions')"
+      @open-run-log="(commandId) => emit('open-run-log', commandId)"
     />
   </section>
   <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">

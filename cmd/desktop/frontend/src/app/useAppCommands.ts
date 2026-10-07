@@ -125,6 +125,7 @@ export function useAppCommands(deps: AppCommandDeps) {
     'report.bundle': report.openBundleDialog,
     'tasks.toggle': overlays.toggleTasks,
     'canvas.toggle': overlays.toggleCanvas,
+    'action-runs.toggle': () => overlays.toggleActionRuns(),
     'terminal.popup.toggle': togglePopupTerminal,
     'terminal.toggle-sidebar': appMode.toggleSidebar,
     'terminal.focus-sidebar': () => revealSidebar(terminalSidebarCollapsed, focusTerminalTree),

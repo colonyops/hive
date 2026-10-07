@@ -12,6 +12,7 @@ export interface GlobalKeymapDeps {
   activityOpen: Ref<boolean>
   tasksOpen: Ref<boolean>
   canvasOpen: Ref<boolean>
+  actionRunsOpen: Ref<boolean>
 }
 
 /**
@@ -27,6 +28,7 @@ export function useGlobalKeymap({
   activityOpen,
   tasksOpen,
   canvasOpen,
+  actionRunsOpen,
 }: GlobalKeymapDeps) {
   const kb = useKeybindings()
 
@@ -35,7 +37,11 @@ export function useGlobalKeymap({
   // and Canvases are split out so each one's toggle can close its own overlay
   // while it stays suppressed under anything else.
   const openModalCount = useOpenModalCount()
-  const toggledOverlays: Record<string, Ref<boolean>> = { 'tasks.toggle': tasksOpen, 'canvas.toggle': canvasOpen }
+  const toggledOverlays: Record<string, Ref<boolean>> = {
+    'tasks.toggle': tasksOpen,
+    'canvas.toggle': canvasOpen,
+    'action-runs.toggle': actionRunsOpen,
+  }
   const otherOverlayOpen = computed(() => paletteOpen.value || activityOpen.value || openModalCount.value > 0)
   const anyOverlayOpen = computed(
     () => otherOverlayOpen.value || Object.values(toggledOverlays).some((open) => open.value),

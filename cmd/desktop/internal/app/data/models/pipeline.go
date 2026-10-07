@@ -95,6 +95,10 @@ func NotifyActionTarget(actionID string) (string, bool) {
 	return target, ok && target != ""
 }
 
+// IsCatalogActionID reports whether an action id names an actions.yml entry
+// rather than a notify or launch node.
+func IsCatalogActionID(actionID string) bool { return !strings.Contains(actionID, ":") }
+
 // LaunchActionPrefix is NotifyActionPrefix's counterpart for launch nodes.
 const LaunchActionPrefix = "launch:"
 

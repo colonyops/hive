@@ -171,7 +171,7 @@ func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {
 	}
 
 	err := database.Prune(ctx, RetentionPolicy{
-		NodeRunLimit: 2, TerminalOutputCommandLimit: 2, JobLimit: 2,
+		NodeRunLimit: 2, ActionRunLimit: 2, JobLimit: 2,
 	})
 	require.NoError(t, err)
 
@@ -217,7 +217,7 @@ func TestPrune_KeepsLaunchCommandsWhileTheirItemExists(t *testing.T) {
 	enqueue(models.LaunchActionID("flow/gone-launch"), "gone", "gone")
 	enqueue("action", "newest", "")
 
-	require.NoError(t, database.Prune(ctx, RetentionPolicy{TerminalOutputCommandLimit: 1}))
+	require.NoError(t, database.Prune(ctx, RetentionPolicy{ActionRunLimit: 1}))
 
 	var actionIDs []string
 	rows, err := database.Conn().QueryContext(ctx, `SELECT action_id FROM output_command ORDER BY id`)
@@ -230,6 +230,37 @@ func TestPrune_KeepsLaunchCommandsWhileTheirItemExists(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []string{models.LaunchActionID("flow/live-launch"), "action"}, actionIDs)
+}
+
+func TestPrune_BoundsActionRunsApartFromNodeCommands(t *testing.T) {
+	database := openTestDB(t)
+	ctx := t.Context()
+	insert := func(actionID string, n int) {
+		t.Helper()
+		for i := range n {
+			_, err := database.Conn().ExecContext(ctx, `
+				INSERT INTO output_command (action_id, key, payload, status, created_at)
+				VALUES (?, ?, X'7B7D', 'done', 1)`, actionID, fmt.Sprint(i))
+			require.NoError(t, err)
+		}
+	}
+	insert("deploy", 3)
+	insert(models.NotifyActionID("flow/notify"), 5)
+
+	require.NoError(t, database.Prune(ctx, RetentionPolicy{ActionRunLimit: 2, NodeCommandLimit: 1}))
+
+	counts := map[string]int{}
+	rows, err := database.Conn().QueryContext(ctx, `SELECT action_id, COUNT(*) FROM output_command GROUP BY action_id`)
+	require.NoError(t, err)
+	defer func() { require.NoError(t, rows.Close()) }()
+	for rows.Next() {
+		var actionID string
+		var n int
+		require.NoError(t, rows.Scan(&actionID, &n))
+		counts[actionID] = n
+	}
+	require.NoError(t, rows.Err())
+	assert.Equal(t, map[string]int{"deploy": 2, models.NotifyActionID("flow/notify"): 1}, counts)
 }
 
 func TestPrune_RejectsNegativeJobLimit(t *testing.T) {

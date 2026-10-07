@@ -2,7 +2,9 @@ package dispatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"time"
@@ -101,9 +103,45 @@ func runShell(ctx context.Context, env ExecEnvironment, spanName string, cmd she
 	// that fit exactly from output that overflowed.
 	stdout := &executil.HeadWriter{Max: maxExecutionStreamBytes + 1}
 	stderr := &executil.HeadWriter{Max: maxExecutionStreamBytes + 1}
-	proc.Stdout, proc.Stderr = stdout, stderr
+	runLog := RunLogFrom(ctx)
+	proc.Stdout, proc.Stderr = io.MultiWriter(stdout, runLog.Stdout()), io.MultiWriter(stderr, runLog.Stderr())
+	runLog.Systemf("%s", shellCommandLine(cmd))
+	started := time.Now()
 	err = runShellProcess(runCtx, proc)
+	runLog.Systemf("%s", shellExitLine(err, time.Since(started), cmd.Timeout))
 	return ExecutionLog{Stdout: boundExecutionStream(stdout.String()), Stderr: boundExecutionStream(stderr.String())}, err
+}
+
+func shellCommandLine(cmd shellCommand) string {
+	lines := strings.Split(cmd.Command, "\n")
+	for i := range lines {
+		if i == 0 {
+			lines[i] = "$ " + lines[i]
+		} else {
+			lines[i] = "  " + lines[i]
+		}
+	}
+	if cmd.Dir != "" {
+		lines = append(lines, "in "+cmd.Dir)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func shellExitLine(err error, elapsed, timeout time.Duration) string {
+	took := formatRunDuration(elapsed)
+	var exitErr *exec.ExitError
+	switch {
+	case err == nil:
+		return "Process exited with code 0 after " + took
+	case errors.Is(err, context.DeadlineExceeded):
+		return fmt.Sprintf("Process stopped: timed out after %s", formatRunDuration(timeout))
+	case errors.Is(err, context.Canceled):
+		return "Process stopped after " + took + ": cancelled"
+	case errors.As(err, &exitErr) && exitErr.ExitCode() >= 0:
+		return fmt.Sprintf("Process exited with code %d after %s", exitErr.ExitCode(), took)
+	default:
+		return fmt.Sprintf("Process failed after %s: %v", took, err)
+	}
 }
 
 // shellWorkingDir resolves the directory the command runs in. A configured
@@ -119,4 +157,11 @@ func shellWorkingDir(cfg *actions.ShellConfig, data OutputData) string {
 		return data.Session.Path
 	}
 	return ""
+}
+
+func boundExecutionStream(stream string) string {
+	if len(stream) <= maxExecutionStreamBytes {
+		return stream
+	}
+	return stream[:maxExecutionStreamBytes-len(truncatedStreamMarker)] + truncatedStreamMarker
 }

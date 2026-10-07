@@ -45,10 +45,14 @@ func (e *PublishMessageExecutor) Execute(ctx context.Context, action actions.Act
 	if payload == "" {
 		return ExecutionResult{}, fmt.Errorf("publish-message: message_template rendered blank payload")
 	}
+	runLog := RunLogFrom(ctx)
+	runLog.Systemf("Publishing message to %s as %s", cfg.Topic, MessageSender)
+	runLog.Systemf("%s", indentLines(payload))
 	topic, err := e.publish(ctx, payload, cfg.Topic)
 	if err != nil {
 		return ExecutionResult{Attempted: true}, err
 	}
+	runLog.Systemf("Published to %s", topic)
 	return ExecutionResult{Attempted: true, Outcome: &ExecutionOutcome{Message: &MessageExecutionOutcome{Topic: topic, Sender: MessageSender}}}, nil
 }
 

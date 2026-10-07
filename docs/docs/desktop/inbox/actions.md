@@ -129,7 +129,15 @@ Use `targets` to choose where an action appears:
 
 `item` is the default target. `session` and `window` add the action to row menus in Code. A `launch-session` action only supports item targets.
 
-Item actions run independently. A long shell action stays **Running** until its command exits, while later manual and flow actions can continue. Use the Action jobs menu to open its run details or cancel it. Hiding the window leaves it running; quitting Hive cancels it. Shell actions capture output but do not provide terminal input.
+Item actions run independently. A long shell action stays **Running** until its command exits, while later manual and flow actions can continue. Hiding the window leaves it running; quitting Hive cancels it. Shell actions capture output but do not provide terminal input.
+
+## Read what a run did
+
+**Action runs** lists every run of an `actions.yml` action, newest first, whether you started it from an item or a flow started it. Open it from the views menu in the title bar, with <kbd>g</kbd> then <kbd>l</kbd>, from the command palette, from **View log** on an item's action, or from the jobs menu.
+
+Select a run to read its log: the command line, its stdout and stderr in the order they were written, and the exit status. A session launch or a published message logs the steps it took instead. A running action's log updates as it runs, and you can cancel it from there. Automatic retries appear as separate attempts.
+
+Hive keeps the newest 100 finished runs with their full logs; change that with `retention.action_runs` in `settings.yaml`. A single attempt that writes more than 8 MiB is truncated there. Notify and launch nodes, and actions run from a terminal session or window, do not appear here.
 
 A flow runs its named action for every routed item, regardless of `applies_to`. Flow actions cannot use the clipboard. A `launch-session` flow action needs `repo_template` or `workspace`, and required inputs need defaults.
 

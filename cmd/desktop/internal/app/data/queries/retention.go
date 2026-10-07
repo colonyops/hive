@@ -26,10 +26,14 @@ type RetentionPolicy struct {
 	EventLogSnapshotsPerTopicLimit int64
 	// NodeRunLimit is the total number of newest node_run rows to retain.
 	NodeRunLimit int64
-	// TerminalOutputCommandLimit is the number of newest done/failed
-	// output_command rows to retain. Launch commands whose item still exists
-	// are kept regardless.
-	TerminalOutputCommandLimit int64
+	// ActionRunLimit is the number of newest finished runs of actions.yml
+	// actions to retain, each with its log. settings.yaml's
+	// retention.action_runs sets it.
+	ActionRunLimit int64
+	// NodeCommandLimit is the number of newest finished commands of notify and
+	// launch nodes to retain. Launch commands whose item still exists are kept
+	// regardless.
+	NodeCommandLimit int64
 	// ActivityEventLimit is the total number of newest activity_event rows to
 	// retain for the Activity view's audit history.
 	ActivityEventLimit int64
@@ -42,14 +46,19 @@ type RetentionPolicy struct {
 	EventPerItemLimit int64
 }
 
+// DefaultActionRunLimit is retention.action_runs when settings.yaml leaves it
+// unset.
+const DefaultActionRunLimit = 100
+
 // DefaultRetentionPolicy keeps enough recent history for the desktop's debug
 // views while bounding SQLite growth from long-running pipelines.
 func DefaultRetentionPolicy() RetentionPolicy {
 	return RetentionPolicy{
 		NodeRunLimit:                   10_000,
-		TerminalOutputCommandLimit:     2_000,
-		ActivityEventLimit:             5_000,
-		JobLimit:                       2_000,
+		ActionRunLimit:                 DefaultActionRunLimit,
+		NodeCommandLimit:               2_000,
+		ActivityEventLimit:             1_000,
+		JobLimit:                       200,
 		ArchivedItemRetention:          90 * 24 * time.Hour,
 		EventPerItemLimit:              500,
 		EventLogSnapshotsPerTopicLimit: 3,
@@ -75,8 +84,11 @@ func (db *DB) Prune(ctx context.Context, policy RetentionPolicy) error {
 	if policy.NodeRunLimit < 0 {
 		return fmt.Errorf("node run retention limit must not be negative")
 	}
-	if policy.TerminalOutputCommandLimit < 0 {
-		return fmt.Errorf("terminal output command retention limit must not be negative")
+	if policy.ActionRunLimit < 0 {
+		return fmt.Errorf("action run retention limit must not be negative")
+	}
+	if policy.NodeCommandLimit < 0 {
+		return fmt.Errorf("node command retention limit must not be negative")
 	}
 	if policy.ActivityEventLimit < 0 {
 		return fmt.Errorf("activity event retention limit must not be negative")
@@ -111,8 +123,11 @@ func (db *DB) Prune(ctx context.Context, policy RetentionPolicy) error {
 		if err := tx.PruneNodeRuns(ctx, policy.NodeRunLimit); err != nil {
 			return fmt.Errorf("pruning node runs: %w", err)
 		}
-		if err := tx.PruneTerminalOutputCommands(ctx, policy.TerminalOutputCommandLimit); err != nil {
-			return fmt.Errorf("pruning terminal output commands: %w", err)
+		if err := tx.PruneTerminalActionRuns(ctx, policy.ActionRunLimit); err != nil {
+			return fmt.Errorf("pruning action runs: %w", err)
+		}
+		if err := tx.PruneTerminalNodeCommands(ctx, policy.NodeCommandLimit); err != nil {
+			return fmt.Errorf("pruning node commands: %w", err)
 		}
 		if err := tx.PruneActivityEvents(ctx, policy.ActivityEventLimit); err != nil {
 			return fmt.Errorf("pruning activity events: %w", err)

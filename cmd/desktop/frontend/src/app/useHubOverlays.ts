@@ -3,7 +3,7 @@ import type { CanvasScope } from '../lib/agentCanvas'
 import { useTasks } from '../stores/useTasks'
 
 /**
- * Tasks, Activity and Canvases open over whatever is on screen rather than
+ * Tasks, Activity, Action runs and Canvases open over whatever is on screen rather than
  * navigating away from it (hay-kot/hive-desktop#441), so they are overlays,
  * not routes. A title-bar icon or a command toggles each one.
  */
@@ -11,6 +11,8 @@ export function useHubOverlays(terminalActive: Ref<boolean>, viewCanvasScope: Re
   const tasksOpen = ref(false)
   const activityOpen = ref(false)
   const canvasOpen = ref(false)
+  const actionRunsOpen = ref(false)
+  const actionRunsRunId = ref<number | null>(null)
   const { setRepoKey } = useTasks()
   // TerminalMode reports the attached session's owner/repo continuously, so
   // every way of opening Tasks scopes to it the same way.
@@ -32,6 +34,18 @@ export function useHubOverlays(terminalActive: Ref<boolean>, viewCanvasScope: Re
     activityOpen.value = !activityOpen.value
   }
 
+  // A plain toggle opens on the newest run rather than the last one linked.
+  function toggleActionRuns(): void {
+    if (!actionRunsOpen.value) actionRunsRunId.value = null
+    actionRunsOpen.value = !actionRunsOpen.value
+  }
+
+  // Opening on a run selects it, even over an already-open viewer.
+  function openActionRuns(runId?: number): void {
+    if (runId) actionRunsRunId.value = runId
+    actionRunsOpen.value = true
+  }
+
   function openCanvas(scope: CanvasScope): void {
     canvasScope.value = scope
     canvasOpen.value = true
@@ -48,6 +62,10 @@ export function useHubOverlays(terminalActive: Ref<boolean>, viewCanvasScope: Re
     activityOpen,
     canvasOpen,
     canvasScope,
+    actionRunsOpen,
+    actionRunsRunId,
+    toggleActionRuns,
+    openActionRuns,
     terminalSessionRepoKey,
     toggleTasks,
     toggleActivity,

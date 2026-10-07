@@ -13,11 +13,6 @@ import (
 
 var ErrOutputCommandActive = errors.New("output command is already active")
 
-const (
-	maxOutputCommandStreamBytes  = 64 * 1024
-	outputCommandTruncatedMarker = "\n... (truncated)"
-)
-
 type OutputCommandStore struct {
 	q   *queries.DB
 	now func() time.Time
@@ -100,31 +95,30 @@ func (s *OutputCommandStore) Get(ctx context.Context, id int64) (OutputCommand, 
 	return mapOutputCommandFromDB(row), nil
 }
 
-func (s *OutputCommandStore) Complete(ctx context.Context, id int64, claimToken, resultJSON, stdout, stderr string) error {
+func (s *OutputCommandStore) Complete(ctx context.Context, id int64, claimToken, resultJSON string) error {
 	rows, err := s.q.Ctx(ctx).CompleteClaimedOutputCommand(ctx, queries.CompleteClaimedOutputCommandParams{
-		ID: id, ClaimToken: claimToken, ResultJson: null(resultJSON), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
+		FinishedAt: s.now().UnixMilli(), ID: id, ClaimToken: claimToken, ResultJson: null(resultJSON),
 	})
 	return claimedTransition("completing", id, rows, err)
 }
 
-func (s *OutputCommandStore) Fail(ctx context.Context, id int64, claimToken, lastErr, stdout, stderr string) error {
+func (s *OutputCommandStore) Fail(ctx context.Context, id int64, claimToken, lastErr string) error {
 	rows, err := s.q.Ctx(ctx).FailClaimedOutputCommand(ctx, queries.FailClaimedOutputCommandParams{
-		ID: id, ClaimToken: claimToken, LastError: null(lastErr), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
+		FinishedAt: s.now().UnixMilli(), ID: id, ClaimToken: claimToken, LastError: null(lastErr),
 	})
 	return claimedTransition("failing", id, rows, err)
 }
 
-func (s *OutputCommandStore) Requeue(ctx context.Context, id int64, claimToken, lastErr, stdout, stderr string, delay time.Duration) error {
+func (s *OutputCommandStore) Requeue(ctx context.Context, id int64, claimToken, lastErr string, delay time.Duration) error {
 	rows, err := s.q.Ctx(ctx).RequeueClaimedOutputCommand(ctx, queries.RequeueClaimedOutputCommandParams{
 		ID: id, ClaimToken: claimToken, NotBefore: s.now().Add(delay).UnixMilli(), LastError: null(lastErr),
-		Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
 	})
 	return claimedTransition("requeueing", id, rows, err)
 }
 
-func (s *OutputCommandStore) Cancel(ctx context.Context, id int64, claimToken, reason, stdout, stderr string) error {
+func (s *OutputCommandStore) Cancel(ctx context.Context, id int64, claimToken, reason string) error {
 	rows, err := s.q.Ctx(ctx).CancelClaimedOutputCommand(ctx, queries.CancelClaimedOutputCommandParams{
-		ID: id, ClaimToken: claimToken, LastError: null(reason), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
+		FinishedAt: s.now().UnixMilli(), ID: id, ClaimToken: claimToken, LastError: null(reason),
 	})
 	return claimedTransition("cancelling", id, rows, err)
 }
@@ -142,11 +136,4 @@ func claimedTransition(verb string, id, rows int64, err error) error {
 func (s *OutputCommandStore) CountNonterminalForAction(ctx context.Context, actionID string) (int64, error) {
 	count, err := s.q.Ctx(ctx).CountNonterminalCommandsForAction(ctx, actionID)
 	return count, wrap("counting nonterminal output commands", err)
-}
-
-func boundOutputCommandStream(stream string) string {
-	if len(stream) <= maxOutputCommandStreamBytes {
-		return stream
-	}
-	return stream[:maxOutputCommandStreamBytes-len(outputCommandTruncatedMarker)] + outputCommandTruncatedMarker
 }

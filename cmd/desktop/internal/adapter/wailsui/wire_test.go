@@ -69,7 +69,7 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		{"TaskComment", app.TaskComment{}, sorted("id", "message", "createdAt")},
 		{"ActionInvocationInput", dispatch.ActionInvocationInput{Session: &dispatch.SessionInvocationInput{}, Inputs: map[string]string{"k": "v"}, Rerun: true}, sorted("session", "inputs", "rerun")},
 		{"SessionInvocationInput", dispatch.SessionInvocationInput{Repository: "r", Workspace: "w", Agent: "a"}, sorted("name", "repository", "workspace", "agent")},
-		{"ActionRunView", dispatch.ActionRunView{Result: &dispatch.ExecutionOutcome{}, Error: "e", Stdout: "o", Stderr: "e", ConfirmationRequired: true}, sorted("commandId", "status", "result", "error", "stdout", "stderr", "confirmationRequired")},
+		{"ActionRunView", dispatch.ActionRunView{Result: &dispatch.ExecutionOutcome{}, Error: "e", ConfirmationRequired: true}, sorted("commandId", "status", "result", "error", "confirmationRequired")},
 		{"ExecutionOutcome", dispatch.ExecutionOutcome{Session: &dispatch.SessionExecutionOutcome{}, Message: &dispatch.MessageExecutionOutcome{}, Clipboard: &dispatch.ClipboardExecutionOutcome{}}, sorted("session", "message", "clipboard")},
 		{"SessionExecutionOutcome", dispatch.SessionExecutionOutcome{Slug: "s", Path: "p"}, sorted("id", "name", "slug", "path")},
 		{"MessageExecutionOutcome", dispatch.MessageExecutionOutcome{}, sorted("topic", "sender")},

@@ -145,15 +145,23 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 	if data.Origin.Known() {
 		origins = []models.ItemRef{data.Origin}
 	}
+	runLog := RunLogFrom(ctx)
 	var outcome SessionExecutionOutcome
 	if workspace != "" {
+		runLog.Systemf("Starting chat %q in workspace %s", name, workspace)
 		outcome, err = e.launchWorkspace(ctx, LaunchWorkspaceSessionRequest{Workspace: workspace, Name: name, Prompt: prompt, Origins: origins})
 	} else {
+		if agent != "" {
+			runLog.Systemf("Creating session %q from %s with agent %s", name, repo, agent)
+		} else {
+			runLog.Systemf("Creating session %q from %s with the default agent", name, repo)
+		}
 		outcome, err = e.launchRepository(ctx, LaunchSessionRequest{Name: name, Prompt: prompt, Agent: agent, Repo: repo, CollisionSuffix: collisionSuffix, Origins: origins})
 	}
 	if err != nil {
 		return ExecutionResult{Attempted: true}, err
 	}
+	runLog.Systemf("%s", launchedLine(outcome))
 	result := ExecutionResult{Attempted: true, Outcome: &ExecutionOutcome{Session: &outcome}}
 	if repo != "" {
 		result.Log = e.runPostHook(ctx, action, cfg, data, repo, outcome)
@@ -214,8 +222,10 @@ func (e *LaunchSessionExecutor) runPostHook(
 		return ExecutionLog{}
 	}
 	logger := e.logger.With().Str("action_id", action.ID).Str("session_id", outcome.ID).Logger()
+	runLog := RunLogFrom(ctx)
 	failed := func(err error) ExecutionLog {
 		logger.Warn().Ctx(ctx).Err(err).Msg("launch-session: post hook failed")
+		runLog.Systemf("Post hook failed: %v", err)
 		return ExecutionLog{Stderr: "post_hook: " + err.Error()}
 	}
 	if e.env == nil {
@@ -239,6 +249,7 @@ func (e *LaunchSessionExecutor) runPostHook(
 	if timeout == 0 {
 		timeout = defaultPostHookTimeout
 	}
+	runLog.Systemf("Running post hook")
 	log, err := runShell(ctx, e.env, "dispatch.post-hook", shellCommand{Command: command, Dir: outcome.Path, Timeout: timeout})
 	if err != nil {
 		logger.Warn().Ctx(ctx).Err(err).Msg("launch-session: post hook failed")
@@ -247,4 +258,12 @@ func (e *LaunchSessionExecutor) runPostHook(
 	}
 	logger.Info().Ctx(ctx).Msg("launch-session: post hook ran")
 	return log
+}
+
+func launchedLine(outcome SessionExecutionOutcome) string {
+	line := fmt.Sprintf("Created %q (%s)", outcome.Name, outcome.ID)
+	if outcome.Path != "" {
+		line += " at " + outcome.Path
+	}
+	return line
 }

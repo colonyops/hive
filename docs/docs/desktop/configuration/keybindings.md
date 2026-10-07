@@ -21,6 +21,7 @@ The command palette at <kbd>⌘K</kbd> can run commands with or without a shortc
 | Go to Inbox | <kbd>g</kbd> then <kbd>i</kbd> |
 | Go to Code | <kbd>g</kbd> then <kbd>c</kbd> |
 | Go to Chats | <kbd>g</kbd> then <kbd>a</kbd> |
+| Show or hide action runs | <kbd>g</kbd> then <kbd>l</kbd> |
 | Refresh a feed | <kbd>r</kbd> |
 | Move through feed items | <kbd>j</kbd>/<kbd>k</kbd> |
 | Open an item | <kbd>o</kbd> or <kbd>Enter</kbd> |

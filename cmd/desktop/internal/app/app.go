@@ -109,6 +109,7 @@ type App struct {
 	Integrations *IntegrationsService
 	Activity     *ActivityService
 	Jobs         *JobService
+	ActionRuns   *ActionRunsService
 	Prompts      *PromptsService
 	Skills       *SkillsService
 	Report       *ReportService
@@ -407,7 +408,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	// no connection callback to drop its cache on.
 	a.rssFetchers = rss.NewFetchers(cfg.Logger)
 
-	a.retention = ingest.NewMaintenance(db, queries.DefaultRetentionPolicy(), ingest.DefaultRetentionInterval, cfg.Logger)
+	a.retention = ingest.NewMaintenance(db, retentionPolicy(cfg.Settings.Retention), ingest.DefaultRetentionInterval, cfg.Logger)
 	a.scripts = runtime.NewScriptRegistry()
 	a.scripts.Register(js.New(runtime.NewScriptPool(0)))
 	a.engine = a.buildEngine(cfg.Logger)
@@ -488,6 +489,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	})
 	a.outputs = a.buildOutputWorker(cfg)
 	a.Jobs.setCommandCanceller(a.outputs.Cancel)
+	a.ActionRuns = newActionRunsService(a.Stores.ActionRuns, dispatch.NewFlowActions(a.flowStore, a.actionStore))
 	a.Inbox = newInboxService(InboxDeps{Items: a.Stores.InboxItems, Commands: a.Stores.OutputCommands, NodeRuns: a.Stores.NodeRuns, Catalog: a.actionStore, Worker: a.outputs})
 	a.MenuBar = newMenuBarService(MenuBarDeps{
 		Settings: cfg.SettingsStore,
@@ -1098,7 +1100,18 @@ func (a *App) buildOutputWorker(cfg Config) *dispatch.Worker {
 	worker := dispatch.NewWorker(a.Stores.OutputCommands, dispatch.NewFlowActions(a.flowStore, a.actionStore), a.dispatcher, dispatch.DefaultOutputWorkerInterval, cfg.Logger)
 	worker.SetRecorder(a.Activity)
 	worker.SetJobRecorder(a.Jobs)
+	worker.SetRunLogSink(a.Stores.ActionRuns)
 	return worker
+}
+
+// retentionPolicy applies retention.action_runs over the defaults. It is read
+// once at startup, like polling.interval, so a change needs a restart.
+func retentionPolicy(r settings.RetentionSettings) queries.RetentionPolicy {
+	policy := queries.DefaultRetentionPolicy()
+	if r.ActionRuns > 0 {
+		policy.ActionRunLimit = int64(r.ActionRuns)
+	}
+	return policy
 }
 
 // observedNotifier decorates the adapter's delivery port so the core learns

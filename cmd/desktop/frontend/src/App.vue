@@ -61,7 +61,7 @@ const appMode = useAppMode(feed, nav, onboardingActive, shellLoaded)
 const { mode, terminalActive, agentsActive, hubActive, terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
 const overlays = useHubOverlays(terminalActive, appMode.viewCanvasScope)
-const { tasksOpen, activityOpen, canvasOpen, terminalSessionRepoKey } = overlays
+const { tasksOpen, activityOpen, canvasOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
 const reveal = useReveal(nav, session, feed.showToast)
 const feedCommands = useFeedCommands(feed, confirmation)
@@ -80,7 +80,15 @@ const { runCommand, contextActive, popupTerminalMounted } = useAppCommands({
   focusFeedSearch: () => feedHub.value?.focusSearch(),
 })
 const palette = useCommandPalette()
-useGlobalKeymap({ runCommand, contextActive, paletteOpen: palette.open, activityOpen, tasksOpen, canvasOpen })
+useGlobalKeymap({
+  runCommand,
+  contextActive,
+  paletteOpen: palette.open,
+  activityOpen,
+  tasksOpen,
+  canvasOpen,
+  actionRunsOpen,
+})
 
 const { unseenCount: unseenActivity } = useActivity()
 const { activeJobs, hasActive: jobsActive } = useJobs()
@@ -109,6 +117,7 @@ useWailsEvent('flows:updated', () => {
         :profile-name="onboardingActive ? undefined : (activeProfile?.name ?? 'Loading')"
         :mode="mode"
         :activity-active="activityOpen"
+        :action-runs-active="actionRunsOpen"
         :error-count="reveal.errorCount.value"
         :unseen-activity="unseenActivity"
         :jobs-active="jobsActive"
@@ -129,6 +138,8 @@ useWailsEvent('flows:updated', () => {
         @open-error-node="reveal.openErrorNode"
         @open-activity="overlays.toggleActivity"
         @open-job-run="nav.openJobRun"
+        @open-job-log="overlays.openActionRuns"
+        @run-command="runCommand"
         @open-update="update.openUpdate"
         @toggle-sidebar="appMode.toggleSidebar"
         @toggle-preview="appMode.togglePreview"
@@ -209,6 +220,7 @@ useWailsEvent('flows:updated', () => {
           :detail="itemDetail"
           :sidebar-collapsed="feedSidebarCollapsed"
           :github-connected="github.connected.value"
+          @open-run-log="overlays.openActionRuns"
         />
       </div>
       <DevBar v-if="devMode" />

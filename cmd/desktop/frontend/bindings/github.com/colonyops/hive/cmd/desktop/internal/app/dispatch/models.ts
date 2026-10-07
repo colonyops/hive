@@ -22,8 +22,6 @@ export interface ActionRunView {
     "status": string;
     "result"?: ExecutionOutcome | null;
     "error"?: string;
-    "stdout"?: string;
-    "stderr"?: string;
     "confirmationRequired"?: boolean;
 }
 

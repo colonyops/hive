@@ -346,8 +346,6 @@ func TestPipelineService_AttemptedFailureReturnsPersistedActionRun(t *testing.T)
 	require.NoError(t, err)
 	assert.Equal(t, "failed", view.Status)
 	assert.Equal(t, "side effect failed", view.Error)
-	assert.Equal(t, "partial stdout", view.Stdout)
-	assert.Equal(t, "partial stderr", view.Stderr)
 
 	afterNavigation, err := service.ActionRun(t.Context(), view.CommandID)
 	require.NoError(t, err)

@@ -562,3 +562,19 @@ func TestStoreSerializesConcurrentMutations(t *testing.T) {
 	assert.Equal(t, "dark", persisted.Appearance.Theme)
 	assert.Equal(t, 24567, persisted.HTTP.Port)
 }
+
+func TestRetentionActionRunsBounds(t *testing.T) {
+	for _, tt := range []struct {
+		runs    int
+		wantErr bool
+	}{{0, false}, {1, false}, {MaxActionRunRetention, false}, {-1, true}, {MaxActionRunRetention + 1, true}} {
+		cfg := DefaultSettings()
+		cfg.Retention.ActionRuns = tt.runs
+		err := cfg.Validate()
+		if tt.wantErr {
+			assert.ErrorContains(t, err, "retention.action_runs", "runs=%d", tt.runs)
+		} else {
+			assert.NoError(t, err, "runs=%d", tt.runs)
+		}
+	}
+}

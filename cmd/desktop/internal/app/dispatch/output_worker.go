@@ -99,10 +99,10 @@ type OutputCommandStore interface {
 	Confirm(context.Context, string, string, []byte, models.ItemRef, string) (stores.OutputCommand, bool, error)
 	Rerun(context.Context, string, string, []byte, models.ItemRef, string) (stores.OutputCommand, error)
 	Get(context.Context, int64) (stores.OutputCommand, error)
-	Complete(context.Context, int64, string, string, string, string) error
-	Fail(context.Context, int64, string, string, string, string) error
-	Requeue(context.Context, int64, string, string, string, string, time.Duration) error
-	Cancel(context.Context, int64, string, string, string, string) error
+	Complete(context.Context, int64, string, string) error
+	Fail(context.Context, int64, string, string) error
+	Requeue(context.Context, int64, string, string, time.Duration) error
+	Cancel(context.Context, int64, string, string) error
 }
 
 type Worker struct {
@@ -115,6 +115,7 @@ type Worker struct {
 	logger      zerolog.Logger
 	recorder    activity.Recorder
 	jobRecorder jobs.Recorder
+	runLogs     RunLogSink
 
 	manualSlots chan struct{}
 	autoSlots   chan struct{}
@@ -140,6 +141,7 @@ func NewWorker(db OutputCommandStore, as ActionLister, d *Dispatcher, interval t
 
 func (w *Worker) SetRecorder(r activity.Recorder) { w.recorder = r }
 func (w *Worker) SetJobRecorder(r jobs.Recorder)  { w.jobRecorder = r }
+func (w *Worker) SetRunLogSink(s RunLogSink)      { w.runLogs = s }
 
 func (w *Worker) record(ctx context.Context, e activity.Event) {
 	if w.recorder != nil {
@@ -380,7 +382,7 @@ func (w *Worker) launch(ctx context.Context, row stores.OutputCommand, action ac
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), outputCleanupTimeout)
 		defer cleanupCancel()
 		const reason = "Action cancelled because Hive Desktop is stopping"
-		if err := w.db.Cancel(cleanupCtx, row.ID, row.ClaimToken, reason, "", ""); err != nil {
+		if err := w.db.Cancel(cleanupCtx, row.ID, row.ClaimToken, reason); err != nil {
 			w.logger.Error().Err(err).Int64("command_id", row.ID).Msg("output worker: cancelling unstarted command")
 			return
 		}
@@ -408,19 +410,38 @@ func (w *Worker) run(ctx context.Context, row stores.OutputCommand, action actio
 	logger := w.jobLogger(jobID, row.ActionID)
 	logger.Debug().Int64("command_id", row.ID).Msg("output worker: job running")
 
+	var runLog *RunLog
+	if models.IsCatalogActionID(row.ActionID) {
+		runLog = newRunLog(ctx, w.runLogs, row.ID, row.Attempts, logger)
+	}
+	runLog.Systemf("%s", runLogHeader(row, action, manual))
+	started := time.Now()
+
 	var result ExecutionResult
 	var execErr error
 	if action.Type == "" {
 		execErr = fmt.Errorf("unknown action %q", row.ActionID)
 	} else {
-		result, execErr = w.execute(ctx, row, action, input, logger)
+		result, execErr = w.execute(WithRunLog(ctx, runLog), row, action, input, logger)
 	}
+	elapsed := formatRunDuration(time.Since(started))
+	switch {
+	case ctx.Err() != nil:
+		runLog.Systemf("Cancelled after %s", elapsed)
+	case execErr != nil && failureIsTerminal(row, result, manual):
+		runLog.Systemf("Failed after %s: %v", elapsed, execErr)
+	case execErr != nil:
+		runLog.Systemf("Attempt %d failed after %s: %v\nRetrying in %s", row.Attempts, elapsed, execErr, formatRunDuration(w.retryDelay))
+	default:
+		runLog.Systemf("Completed in %s", elapsed)
+	}
+	runLog.Close(ctx)
 
 	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), outputCleanupTimeout)
 	defer cancel()
 	if ctx.Err() != nil {
 		reason := "Action cancelled"
-		if err := w.db.Cancel(cleanupCtx, row.ID, row.ClaimToken, reason, boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); err != nil {
+		if err := w.db.Cancel(cleanupCtx, row.ID, row.ClaimToken, reason); err != nil {
 			logger.Error().Err(err).Msg("output worker: cancelling command")
 			return
 		}
@@ -448,11 +469,8 @@ func (w *Worker) run(ctx context.Context, row stores.OutputCommand, action actio
 }
 
 func (w *Worker) finishFailure(ctx context.Context, row stores.OutputCommand, action actions.Action, result ExecutionResult, execErr error, jobID int64, manual bool, logger zerolog.Logger) {
-	stdout := boundExecutionStream(result.Log.Stdout)
-	stderr := boundExecutionStream(result.Log.Stderr)
-	terminal := manual || result.Attempted || row.Attempts >= MaxOutputCommandAttempts
-	if terminal {
-		if err := w.db.Fail(ctx, row.ID, row.ClaimToken, execErr.Error(), stdout, stderr); err != nil {
+	if failureIsTerminal(row, result, manual) {
+		if err := w.db.Fail(ctx, row.ID, row.ClaimToken, execErr.Error()); err != nil {
 			logger.Error().Err(err).Msg("output worker: mark failed")
 			return
 		}
@@ -465,11 +483,40 @@ func (w *Worker) finishFailure(ctx context.Context, row stores.OutputCommand, ac
 		w.record(ctx, activity.ActionFailed(label, execErr.Error()))
 		return
 	}
-	if err := w.db.Requeue(ctx, row.ID, row.ClaimToken, execErr.Error(), stdout, stderr, w.retryDelay); err != nil {
+	if err := w.db.Requeue(ctx, row.ID, row.ClaimToken, execErr.Error(), w.retryDelay); err != nil {
 		logger.Error().Err(err).Msg("output worker: retry")
 		return
 	}
 	logger.Debug().Err(execErr).Msg("output worker: command scheduled for retry")
+}
+
+// A manual run and an attempted side effect never retry: the first had a
+// person behind it, and the second may already have happened.
+func failureIsTerminal(row stores.OutputCommand, result ExecutionResult, manual bool) bool {
+	return manual || result.Attempted || row.Attempts >= MaxOutputCommandAttempts
+}
+
+func runLogHeader(row stores.OutputCommand, action actions.Action, manual bool) string {
+	lane := "automatic"
+	if manual {
+		lane = "manual"
+	}
+	kind := action.Type
+	if kind == "" {
+		kind = "unknown type"
+	}
+	header := fmt.Sprintf("Started %s (%s, %s, attempt %d)", actionLabel(action), kind, lane, row.Attempts)
+	if row.IsRerun {
+		header += ", rerun"
+	}
+	return header
+}
+
+func formatRunDuration(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	}
+	return d.Round(100 * time.Millisecond).String()
 }
 
 func automaticActionActivity(action actions.Action, row stores.OutputCommand) activity.Event {
@@ -527,23 +574,10 @@ func (w *Worker) view(ctx context.Context, id int64) ActionRunView {
 	return actionRunView(row)
 }
 
-func boundExecutionStream(stream string) string {
-	if len(stream) <= maxExecutionStreamBytes {
-		return stream
-	}
-	return stream[:maxExecutionStreamBytes-len(truncatedStreamMarker)] + truncatedStreamMarker
-}
-
 func actionRunView(row stores.OutputCommand) ActionRunView {
 	view := ActionRunView{CommandID: row.ID, Status: row.Status}
 	if row.LastError != "" {
 		view.Error = row.LastError
-	}
-	if row.Stdout != "" {
-		view.Stdout = row.Stdout
-	}
-	if row.Stderr != "" {
-		view.Stderr = row.Stderr
 	}
 	if row.ResultJSON != "" {
 		_ = json.Unmarshal([]byte(row.ResultJSON), &view.Result)
@@ -556,5 +590,5 @@ func (w *Worker) done(ctx context.Context, row stores.OutputCommand, result Exec
 	if err != nil {
 		return err
 	}
-	return w.db.Complete(ctx, row.ID, row.ClaimToken, string(raw), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr))
+	return w.db.Complete(ctx, row.ID, row.ClaimToken, string(raw))
 }
