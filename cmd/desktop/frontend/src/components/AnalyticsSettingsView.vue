@@ -11,7 +11,7 @@ import { useErrorDialog } from '../composables/useErrorDialog'
 import { errorText } from '../lib/appError'
 import AppSwitch from './ui/AppSwitch.vue'
 import BaseButton from './ui/BaseButton.vue'
-import BaseCard from './ui/BaseCard.vue'
+import StatCard from './ui/StatCard.vue'
 import ConfirmationHost from './ui/ConfirmationHost.vue'
 import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
@@ -117,32 +117,31 @@ onMounted(() => {
       title="Last 90 days"
       description="UTC capture times. Counts update after a flush, which can take up to 10 seconds."
     >
-      <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <BaseCard class="flex-col items-start rounded-xl border border-card bg-raised">
-          <div class="text-small text-text-2">CLI commands</div>
-          <div class="text-display tabular-nums text-text" data-testid="analytics-cli-count">
-            {{ summary?.counts.cliCommands ?? 0 }}
-          </div>
-          <div class="text-caption text-text-3">Completed, including failures</div>
-        </BaseCard>
-        <BaseCard class="flex-col items-start rounded-xl border border-card bg-raised">
-          <div class="text-small text-text-2">Hive sessions created</div>
-          <div class="text-display tabular-nums text-text" data-testid="analytics-session-count">
-            {{ summary?.counts.hiveSessions ?? 0 }}
-          </div>
-          <div class="text-caption text-text-3">Successful creates from CLI and Desktop</div>
-        </BaseCard>
-        <BaseCard class="flex-col items-start rounded-xl border border-card bg-raised">
-          <div class="text-small text-text-2">Desktop terminal starts</div>
-          <div class="text-display tabular-nums text-text" data-testid="analytics-terminal-count">
-            {{ summary?.counts.terminalStarts ?? 0 }}
-          </div>
-          <div class="text-caption text-text-3">New starts, not existing terminals</div>
-        </BaseCard>
+      <template #actions>
+        <BaseButton variant="secondary" size="xs" :busy="loading" data-testid="analytics-refresh" @click="refresh">
+          Refresh counts
+        </BaseButton>
+      </template>
+      <div class="grid grid-cols-1 gap-3 @[440px]/pane:grid-cols-2 @[720px]/pane:grid-cols-3">
+        <StatCard
+          label="CLI commands"
+          :value="summary?.counts.cliCommands ?? 0"
+          hint="Completed, including failures"
+          value-testid="analytics-cli-count"
+        />
+        <StatCard
+          label="Hive sessions created"
+          :value="summary?.counts.hiveSessions ?? 0"
+          hint="Successful creates from CLI and Desktop"
+          value-testid="analytics-session-count"
+        />
+        <StatCard
+          label="Desktop terminal starts"
+          :value="summary?.counts.terminalStarts ?? 0"
+          hint="New starts, not existing terminals"
+          value-testid="analytics-terminal-count"
+        />
       </div>
-      <BaseButton variant="secondary" :busy="loading" data-testid="analytics-refresh" @click="refresh"
-        >Refresh counts</BaseButton
-      >
     </SettingsSection>
     <SettingsSection
       title="History"

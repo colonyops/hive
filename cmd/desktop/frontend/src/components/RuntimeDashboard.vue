@@ -7,6 +7,7 @@ import { useRuntimeStats } from '../composables/useRuntimeStats'
 import { formatBytes, formatBytesParts } from '../lib/bytes'
 import SettingsSection from './settings/SettingsSection.vue'
 import SparkLine from './ui/SparkLine.vue'
+import StatCard from './ui/StatCard.vue'
 
 const { stats, rssHistory, cpuHistory, error, start, stop } = useRuntimeStats()
 const { stats: frames } = useFrameStats()
@@ -87,57 +88,36 @@ onUnmounted(() => {
 
     <div v-if="stats" class="flex flex-col gap-3">
       <div class="grid grid-cols-1 gap-3 @[440px]/pane:grid-cols-2 @[720px]/pane:grid-cols-3">
-        <div
-          class="flex flex-col overflow-hidden rounded-xl border border-card bg-raised"
-          data-testid="observability-runtime-memory"
+        <StatCard
+          label="Memory"
+          :value="formatBytesParts(stats.totalRssBytes).value"
+          :unit="` ${formatBytesParts(stats.totalRssBytes).unit}`"
+          hint="resident"
+          testid="observability-runtime-memory"
         >
-          <div class="flex flex-col gap-1.5 px-4 pb-3 pt-4">
-            <div class="flex items-center justify-between gap-3">
-              <span class="font-mono text-micro font-semibold uppercase tracking-[.14em] text-text-3">Memory</span>
-              <span class="font-mono text-caption tabular-nums text-text-4">peak {{ formatBytes(peakRSS) }}</span>
-            </div>
-            <div class="font-mono text-display font-semibold leading-none tabular-nums text-text">
-              {{ formatBytesParts(stats.totalRssBytes).value }}
-              <span class="text-lead font-medium text-text-3">{{ formatBytesParts(stats.totalRssBytes).unit }}</span>
-            </div>
-            <div class="text-small text-text-3">resident</div>
-          </div>
+          <template #detail>peak {{ formatBytes(peakRSS) }}</template>
           <SparkLine :values="rssHistory" class="h-14 text-accent" />
-        </div>
-        <div
-          class="flex flex-col overflow-hidden rounded-xl border border-card bg-raised"
-          data-testid="observability-runtime-cpu"
+        </StatCard>
+        <StatCard
+          label="CPU"
+          :value="stats.totalCpuPercent.toFixed(1)"
+          unit="%"
+          hint="of one core"
+          testid="observability-runtime-cpu"
         >
-          <div class="flex flex-col gap-1.5 px-4 pb-3 pt-4">
-            <div class="flex items-center justify-between gap-3">
-              <span class="font-mono text-micro font-semibold uppercase tracking-[.14em] text-text-3">CPU</span>
-              <span class="font-mono text-caption tabular-nums text-text-4">peak {{ peakCPU.toFixed(1) }}%</span>
-            </div>
-            <div class="font-mono text-display font-semibold leading-none tabular-nums text-text">
-              {{ stats.totalCpuPercent.toFixed(1) }}<span class="text-lead font-medium text-text-3">%</span>
-            </div>
-            <div class="text-small text-text-3">of one core</div>
-          </div>
+          <template #detail>peak {{ peakCPU.toFixed(1) }}%</template>
           <SparkLine :values="cpuHistory" class="h-14 text-severity-info" />
-        </div>
-        <div
-          class="flex flex-col overflow-hidden rounded-xl border border-card bg-raised"
-          data-testid="observability-runtime-frames"
+        </StatCard>
+        <StatCard
+          label="Frames"
+          :value="frames.fps.toFixed(0)"
+          unit=" fps"
+          :hint="`${frames.dropped} dropped in 10s`"
+          testid="observability-runtime-frames"
         >
-          <div class="flex flex-col gap-1.5 px-4 pb-3 pt-4">
-            <div class="flex items-center justify-between gap-3">
-              <span class="font-mono text-micro font-semibold uppercase tracking-[.14em] text-text-3">Frames</span>
-              <span class="font-mono text-caption tabular-nums text-text-4"
-                >worst {{ frames.worstFrameMs.toFixed(0) }}ms</span
-              >
-            </div>
-            <div class="font-mono text-display font-semibold leading-none tabular-nums text-text">
-              {{ frames.fps.toFixed(0) }}<span class="text-lead font-medium text-text-3"> fps</span>
-            </div>
-            <div class="text-small tabular-nums text-text-3">{{ frames.dropped }} dropped in 10s</div>
-          </div>
+          <template #detail>worst {{ frames.worstFrameMs.toFixed(0) }}ms</template>
           <SparkLine :values="frames.buckets" class="h-14 text-severity-warning" />
-        </div>
+        </StatCard>
       </div>
 
       <div

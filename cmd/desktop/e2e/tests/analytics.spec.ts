@@ -9,6 +9,9 @@ test('Analytics is reachable from the palette and controls local history', async
   await page.getByTestId('command-palette-input').press('Enter')
   await expect(page.getByTestId('settings-analytics')).toBeVisible()
   await expect(page.getByTestId('analytics-enabled')).toBeEnabled()
+  const refreshWidth = await page.getByTestId('analytics-refresh').evaluate((el) => el.getBoundingClientRect().width)
+  const pageWidth = await page.getByTestId('settings-analytics').evaluate((el) => el.getBoundingClientRect().width)
+  expect(refreshWidth).toBeLessThan(pageWidth / 2)
   const enabled = page.getByTestId('analytics-enabled')
   const original = await enabled.getAttribute('aria-checked')
   try {
