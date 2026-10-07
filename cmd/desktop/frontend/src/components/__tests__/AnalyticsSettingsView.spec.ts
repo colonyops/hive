@@ -3,7 +3,8 @@ import { mount, flushPromises } from '@vue/test-utils'
 import AnalyticsSettingsView from '../AnalyticsSettingsView.vue'
 import { resetErrorDialogForTests, useErrorDialog } from '../../composables/useErrorDialog'
 
-const mocks = vi.hoisted(() => ({ Summary: vi.fn(), SetEnabled: vi.fn(), Clear: vi.fn() }))
+const mocks = vi.hoisted(() => ({ Summary: vi.fn(), SetEnabled: vi.fn(), Clear: vi.fn(), SetText: vi.fn() }))
+vi.mock('@wailsio/runtime', () => ({ Clipboard: { SetText: mocks.SetText } }))
 vi.mock(
   '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/analyticsservice',
   () => mocks,
@@ -11,6 +12,7 @@ vi.mock(
 
 function summary(overrides = {}) {
   return {
+    installationId: 'a1542fca-60ec-4e33-aaf5-b68da9a9551b',
     counts: { cliCommands: 0, hiveSessions: 0, terminalStarts: 0 },
     enabled: true,
     effectiveEnabled: true,
@@ -28,12 +30,33 @@ beforeEach(() => {
   mocks.Summary.mockResolvedValue(summary())
   mocks.SetEnabled.mockResolvedValue(undefined)
   mocks.Clear.mockResolvedValue(undefined)
+  mocks.SetText.mockResolvedValue(undefined)
 })
 afterEach(() => {
   document.body.innerHTML = ''
 })
 
 describe('AnalyticsSettingsView', () => {
+  it('copies the installation UUID without additional text', async () => {
+    const wrapper = mount(AnalyticsSettingsView)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="analytics-identity"]').text()).toBe(summary().installationId)
+    await wrapper.get('[data-testid="analytics-identity-copy"]').trigger('click')
+    await flushPromises()
+    expect(mocks.SetText).toHaveBeenCalledWith(summary().installationId)
+    expect(wrapper.get('[data-testid="analytics-identity-copy"]').text()).toBe('Copied')
+    wrapper.unmount()
+  })
+
+  it('does not offer a copy action before local history exists', async () => {
+    mocks.Summary.mockResolvedValue(summary({ installationId: '' }))
+    const wrapper = mount(AnalyticsSettingsView)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="analytics-identity"]').text()).toBe('Not created yet')
+    expect(wrapper.find('[data-testid="analytics-identity-copy"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it('shows empty history and the three flushed counts after refresh', async () => {
     const wrapper = mount(AnalyticsSettingsView)
     await flushPromises()
@@ -66,12 +89,15 @@ describe('AnalyticsSettingsView', () => {
     await wrapper.get('[data-testid="analytics-clear"]').trigger('click')
     await flushPromises()
     expect(mocks.Clear).not.toHaveBeenCalled()
+    const newIdentity = '88d6f153-260d-4906-905e-28b9332ae6f6'
+    mocks.Summary.mockResolvedValue(summary({ installationId: newIdentity }))
     const dialog = document.querySelector('[data-testid="analytics-clear-confirmation-confirm"]') as HTMLElement
     expect(dialog).not.toBeNull()
     dialog.click()
     await flushPromises()
     expect(mocks.Clear).toHaveBeenCalledOnce()
     expect(mocks.Summary).toHaveBeenCalledTimes(2)
+    expect(wrapper.get('[data-testid="analytics-identity"]').text()).toBe(newIdentity)
     wrapper.unmount()
   })
 

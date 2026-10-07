@@ -52,6 +52,7 @@ export interface ActionRunSummary {
 }
 
 export interface AnalyticsSummary {
+    "installationId": string;
     "counts": usageanalytics$0.Summary;
     "enabled": boolean;
     "effectiveEnabled": boolean;

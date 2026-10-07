@@ -124,20 +124,25 @@ func (s *Store) Summary(ctx context.Context, now time.Time) (Summary, error) {
 	return result, nil
 }
 
-// ReadSummary does not create or migrate history when collection is disabled.
-func ReadSummary(ctx context.Context, dataDir string, now time.Time) (Summary, error) {
+// ReadSummary returns recent counts and the installation UUID without creating or migrating history.
+func ReadSummary(ctx context.Context, dataDir string, now time.Time) (Summary, string, error) {
 	path := filepath.Join(dataDir, Filename)
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return Summary{}, nil
+		return Summary{}, "", nil
 	} else if err != nil {
-		return Summary{}, err
+		return Summary{}, "", err
 	}
 	db, err := sqlite.Open(ctx, path, options(true))
 	if err != nil {
-		return Summary{}, err
+		return Summary{}, "", err
 	}
 	defer func() { _ = db.Close() }()
-	return (&Store{db: db}).Summary(ctx, now)
+	summary, err := (&Store{db: db}).Summary(ctx, now)
+	if err != nil {
+		return Summary{}, "", err
+	}
+	meta, err := queries.New(db).Metadata(ctx)
+	return summary, meta.InstallationID, err
 }
 
 // Clear serializes the capture cutoff with every writer, including other processes.

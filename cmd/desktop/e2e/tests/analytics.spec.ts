@@ -12,6 +12,10 @@ test('Analytics is reachable from the palette and controls local history', async
   const refreshWidth = await page.getByTestId('analytics-refresh').evaluate((el) => el.getBoundingClientRect().width)
   const pageWidth = await page.getByTestId('settings-analytics').evaluate((el) => el.getBoundingClientRect().width)
   expect(refreshWidth).toBeLessThan(pageWidth / 2)
+  const identity = page.getByTestId('analytics-identity')
+  await expect(identity).toHaveText(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)
+  await expect(page.getByTestId('analytics-identity-copy')).toBeEnabled()
+  const originalIdentity = await identity.textContent()
   const enabled = page.getByTestId('analytics-enabled')
   const original = await enabled.getAttribute('aria-checked')
   try {
@@ -30,6 +34,7 @@ test('Analytics is reachable from the palette and controls local history', async
     await expect(page.getByTestId('analytics-cli-count')).toHaveText('0')
     await expect(page.getByTestId('analytics-session-count')).toHaveText('0')
     await expect(page.getByTestId('analytics-terminal-count')).toHaveText('0')
+    await expect(identity).not.toHaveText(originalIdentity ?? '')
     await page.screenshot({ path: `screenshots/analytics-${testInfo.project.name}.png`, fullPage: true })
   } finally {
     if (await enabled.getAttribute('aria-checked') !== original) await enabled.click()

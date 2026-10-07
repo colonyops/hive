@@ -21,7 +21,7 @@ func TestUsageCommandsFlushBeforeExitAndShareSessionRecorder(t *testing.T) {
 	require.NoError(t, err)
 	_, err = h.RunStdout("session", "show", "missing")
 	require.Error(t, err)
-	counts, err := store.ReadSummary(t.Context(), h.DataDir(), time.Now())
+	counts, _, err := store.ReadSummary(t.Context(), h.DataDir(), time.Now())
 	require.NoError(t, err)
 	require.EqualValues(t, 3, counts.CLICommands)
 	require.EqualValues(t, 1, counts.HiveSessions)

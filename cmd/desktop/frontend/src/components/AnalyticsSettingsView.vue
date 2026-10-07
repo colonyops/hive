@@ -13,6 +13,7 @@ import AppSwitch from './ui/AppSwitch.vue'
 import BaseButton from './ui/BaseButton.vue'
 import StatCard from './ui/StatCard.vue'
 import ConfirmationHost from './ui/ConfirmationHost.vue'
+import CopyButton from './ui/CopyButton.vue'
 import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsSection from './settings/SettingsSection.vue'
@@ -148,6 +149,20 @@ onMounted(() => {
       description="Only bounded event properties are stored. No repository names, paths, prompts, arguments, or terminal content."
       boxed
     >
+      <SettingsRow label="Installation ID">
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="break-all font-mono text-small text-text-2" data-testid="analytics-identity">
+            {{ summary?.installationId || 'Not created yet' }}
+          </span>
+          <CopyButton
+            v-if="summary?.installationId"
+            :text="summary.installationId"
+            label="Copy"
+            size="xs"
+            data-testid="analytics-identity-copy"
+          />
+        </div>
+      </SettingsRow>
       <SettingsRow
         label="90-day retention"
         hint="Old rows are removed at startup and daily while collection is enabled. Disabling collection preserves history."

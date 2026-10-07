@@ -97,7 +97,7 @@ func TestCommandAfterFlushesAndBeforeFailureCloses(t *testing.T) {
 		} else {
 			require.NoError(t, err)
 		}
-		counts, err := store.ReadSummary(t.Context(), dir, time.Now())
+		counts, _, err := store.ReadSummary(t.Context(), dir, time.Now())
 		require.NoError(t, err)
 		if beforeFailure {
 			require.Zero(t, counts.CLICommands)

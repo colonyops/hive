@@ -66,6 +66,8 @@ func TestAnalyticsSettingsRestartDisabledReadAndClear(t *testing.T) {
 	require.False(t, summary.Enabled)
 	require.False(t, summary.Active)
 	require.EqualValues(t, 1, summary.Counts.TerminalStarts)
+	require.NotEmpty(t, summary.InstallationID)
+	originalIdentity := summary.InstallationID
 	require.NoError(t, core.Analytics.SetEnabled(t.Context(), true))
 	summary, err = core.Analytics.Summary(t.Context())
 	require.NoError(t, err)
@@ -81,6 +83,8 @@ func TestAnalyticsSettingsRestartDisabledReadAndClear(t *testing.T) {
 	summary, err = core.Analytics.Summary(t.Context())
 	require.NoError(t, err)
 	require.Zero(t, summary.Counts.TerminalStarts)
+	require.NotEmpty(t, summary.InstallationID)
+	require.NotEqual(t, originalIdentity, summary.InstallationID)
 }
 
 func TestClearRejectsQueuedEventsFromThisAndOtherProcesses(t *testing.T) {
@@ -98,8 +102,11 @@ func TestClearRejectsQueuedEventsFromThisAndOtherProcesses(t *testing.T) {
 
 func TestMissingHistoryClearCreatesNothing(t *testing.T) {
 	core, _ := newAnalyticsApp(t, false)
+	summary, err := core.Analytics.Summary(t.Context())
+	require.NoError(t, err)
+	require.Empty(t, summary.InstallationID)
 	require.NoError(t, core.Analytics.Clear(t.Context()))
-	_, err := os.Stat(filepath.Join(core.hiveDataDir, "usage-analytics.db"))
+	_, err = os.Stat(filepath.Join(core.hiveDataDir, "usage-analytics.db"))
 	require.True(t, os.IsNotExist(err))
 }
 

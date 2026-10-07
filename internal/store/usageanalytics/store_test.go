@@ -56,8 +56,9 @@ func TestTwoWritersDedupClearAndReopen(t *testing.T) {
 	require.NoError(t, a.db.QueryRowContext(t.Context(), "SELECT installation_id FROM usage_event").Scan(&installation))
 	require.Equal(t, after.InstallationID, installation)
 	require.NoError(t, b.Close())
-	history, err := ReadSummary(t.Context(), dir, time.Now())
+	history, identity, err := ReadSummary(t.Context(), dir, time.Now())
 	require.NoError(t, err)
+	require.Equal(t, after.InstallationID, identity)
 	require.Equal(t, Summary{HiveSessions: 1}, history)
 }
 
@@ -82,8 +83,9 @@ func TestConcurrentFirstOpen(t *testing.T) {
 
 func TestRetentionAndMissingRead(t *testing.T) {
 	dir := t.TempDir()
-	history, err := ReadSummary(t.Context(), dir, time.Now())
+	history, identity, err := ReadSummary(t.Context(), dir, time.Now())
 	require.NoError(t, err)
+	require.Empty(t, identity)
 	require.Equal(t, Summary{}, history)
 	_, err = os.Stat(filepath.Join(dir, Filename))
 	require.True(t, os.IsNotExist(err))

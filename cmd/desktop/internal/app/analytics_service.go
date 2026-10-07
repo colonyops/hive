@@ -13,6 +13,7 @@ import (
 )
 
 type AnalyticsSummary struct {
+	InstallationID      string        `json:"installationId"`
 	Counts              store.Summary `json:"counts"`
 	Enabled             bool          `json:"enabled"`
 	EffectiveEnabled    bool          `json:"effectiveEnabled"`
@@ -36,13 +37,13 @@ func (s *AnalyticsService) Summary(ctx context.Context) (AnalyticsSummary, error
 	if err != nil {
 		return AnalyticsSummary{}, Wrap(err, KindInternal, "read analytics configuration")
 	}
-	counts, err := store.ReadSummary(ctx, s.dataDir, time.Now().UTC())
+	counts, installationID, err := store.ReadSummary(ctx, s.dataDir, time.Now().UTC())
 	if err != nil {
 		return AnalyticsSummary{}, Wrap(err, KindInternal, "read usage history")
 	}
 	enabled := cfg.Analytics.CollectionEnabled()
 	effective := enabled && !s.environmentDisabled
-	return AnalyticsSummary{Counts: counts, Enabled: enabled, EffectiveEnabled: s.startupEnabled, Active: s.recorder.Active(), RestartNeeded: effective != s.startupEnabled, EnvironmentOverride: s.environmentDisabled, RetentionDays: store.RetentionDays}, nil
+	return AnalyticsSummary{InstallationID: installationID, Counts: counts, Enabled: enabled, EffectiveEnabled: s.startupEnabled, Active: s.recorder.Active(), RestartNeeded: effective != s.startupEnabled, EnvironmentOverride: s.environmentDisabled, RetentionDays: store.RetentionDays}, nil
 }
 
 func (s *AnalyticsService) SetEnabled(ctx context.Context, enabled bool) error {

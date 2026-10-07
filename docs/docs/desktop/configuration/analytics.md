@@ -19,7 +19,7 @@ Click **Refresh counts** after an operation. Writes run in the background and ca
 
 Local collection is on by default. Nothing is exported. Events contain bounded command identifiers, outcomes, durations, clone strategies, checkout reuse, or terminal kinds. They do not contain repository names, paths, branches, prompts, raw arguments, account details, or terminal output.
 
-History lives in `usage-analytics.db` beside the shared `hive.db`. Both programs must use the same [Hive data root](settings.md#configuration-files) to share counts. The analytics database has its own random installation identifier, independent of operational telemetry.
+History lives in `usage-analytics.db` beside the shared `hive.db`. Both programs must use the same [Hive data root](settings.md#configuration-files) to share counts. The analytics database has its own random installation identifier, independent of operational telemetry. The page shows this shared UUID and lets you copy it. If no local history exists, no identifier is created just to display one.
 
 The collection switch edits only analytics settings in the [external Hive CLI configuration](settings.md#hive-cli-compatibility-config). Restart Desktop after changing it. A CLI process uses the setting from its next invocation; already-running processes keep their startup setting.
 
