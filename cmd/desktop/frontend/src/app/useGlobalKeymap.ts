@@ -93,38 +93,95 @@ export function useGlobalKeymap({
     if (open) resetSequence()
   })
 
-  function onKeydown(e: KeyboardEvent): void {
-    if (isTerminalTarget(e.target) && !kb.recording.value && !anyOverlayOpen.value) {
-      // `piercesPane` commands are claimed on the binding alone: an overlay's
-      // own combo has to close it, reaching the list is the pane's way out,
-      // and window jumps are wanted from inside the window being left. A
-      // launcher pierces for the pop-up's reason, but answers to its context
-      // so its chord falls through with no terminal attached (ADR
-      // quick-terminal-launchers-are-session-scoped).
-      const id = kb.resolve(comboFromEvent(e) ?? '')
-      const pierces = !!id && (commandPiercesPane(id) || launcherActionID(id) !== null)
-      if (id && pierces && contextActive(commandById.value.get(id)?.context ?? 'global')) {
+  // A command resolves only where it applies, so ⌘F reaches terminal.find over
+  // a pane and Focus search everywhere else.
+  function applies(id: string): boolean {
+    const context = commandById.value.get(id)?.context
+    return context !== 'terminal-pane' || contextActive(context)
+  }
+
+  // Shared with the pane: a sequence step either dispatches, extends the
+  // pending sequence, or is swallowed. Returns false for 'pass', which leaves
+  // the key to the caller.
+  function applySequenceStep(e: KeyboardEvent, combo: string, allowStart: boolean): boolean {
+    const transition = kb.stepSequence(kb.pendingSequence.value, combo)
+    switch (transition.kind) {
+      case 'run':
+        resetSequence()
+        if (dispatchIfActive(transition.commandId)) e.preventDefault()
+        return true
+      case 'extend': {
+        // Only a sequence's start is barred from editable fields and overlays;
+        // whatever opened either has already cleared a pending one. A barred
+        // start falls through: the combo may also be a complete binding in its
+        // own right (Zed's prefix rule).
+        if (kb.pendingSequence.value === null && !allowStart) return false
+        cancelSequenceTimer()
+        kb.pendingSequence.value = transition.pending
+        e.preventDefault()
+        if (transition.deferredCommandId) armSequenceTimer(transition.deferredCommandId)
+        return true
+      }
+      case 'swallow':
         resetSequence()
         e.preventDefault()
-        runCommand(id)
-        return
-      }
-      // `escapesPane` commands fire over a pane only on modifiers a terminal
-      // cannot use: a bare Ctrl+K stays readline's kill-to-end-of-line.
-      const escaped = kb.resolve(terminalEscapeCombo(e) ?? '')
-      const command = escaped ? commandById.value.get(escaped) : undefined
-      if (escaped && command?.escapesPane && contextActive(command.context)) {
+        return true
+      case 'pass':
+        if (kb.pendingSequence.value) resetSequence()
+        return false
+    }
+  }
+
+  // A focused pane owns every key a terminal can use, so the keymap only sees
+  // the escape chord (⌘ on macOS, Ctrl+Shift elsewhere), the keys after one
+  // that starts a sequence, and `piercesPane` bindings. That is what keeps a
+  // bare `g` reaching the shell while ⌘G I can still leave the pane.
+  function onPaneKeydown(e: KeyboardEvent): void {
+    if (kb.recording.value || anyOverlayOpen.value) {
+      resetSequence()
+      return
+    }
+
+    // Only a sequence the pane started can continue there: one begun with a
+    // bare key elsewhere has nothing to do with what is typed into the shell.
+    if (kb.pendingSequence.value && !kb.paneSequencePending()) resetSequence()
+    if (kb.pendingSequence.value) {
+      const step = terminalEscapeCombo(e) ?? comboFromEvent(e)
+      if (!step) return
+      // xterm declined every key while the sequence was pending, so one that
+      // does not continue it is dropped rather than typed.
+      if (applySequenceStep(e, step, false)) {
         e.preventDefault()
-        runCommand(escaped)
         return
       }
     }
 
-    // A focused terminal owns every key so tmux prefixes reach the pane. It
-    // cannot host a pending sequence either: the pane would swallow whatever
-    // completes it.
+    // `piercesPane` commands are claimed on the binding alone: an overlay's
+    // own combo has to close it, reaching the list is the pane's way out,
+    // and window jumps are wanted from inside the window being left. A
+    // launcher pierces for the pop-up's reason, but answers to its context
+    // so its chord falls through with no terminal attached (ADR
+    // quick-terminal-launchers-are-session-scoped).
+    const pierced = kb.resolve(comboFromEvent(e) ?? '', applies)
+    if (pierced && (commandPiercesPane(pierced) || launcherActionID(pierced) !== null)) {
+      if (contextActive(commandById.value.get(pierced)?.context ?? 'global')) {
+        resetSequence()
+        e.preventDefault()
+        runCommand(pierced)
+        return
+      }
+    }
+
+    const escaped = terminalEscapeCombo(e)
+    if (!escaped) return
+    if (applySequenceStep(e, escaped, true)) return
+    const id = kb.resolve(escaped, applies)
+    if (id && dispatchIfActive(id)) e.preventDefault()
+  }
+
+  function onKeydown(e: KeyboardEvent): void {
     if (isTerminalTarget(e.target)) {
-      resetSequence()
+      onPaneKeydown(e)
       return
     }
 
@@ -135,35 +192,10 @@ export function useGlobalKeymap({
     const combo = comboFromEvent(e)
     if (!combo) return
 
-    const transition = kb.stepSequence(kb.pendingSequence.value, combo)
-    switch (transition.kind) {
-      case 'run':
-        resetSequence()
-        if (dispatchIfActive(transition.commandId)) e.preventDefault()
-        return
-      case 'extend': {
-        // Only a sequence's start is barred from editable fields and overlays;
-        // whatever opened either has already cleared a pending one. A barred
-        // start falls through: the combo may also be a complete binding in its
-        // own right (Zed's prefix rule).
-        const isStart = kb.pendingSequence.value === null
-        if (isStart && (isEditableTarget(e.target) || anyOverlayOpen.value)) break
-        cancelSequenceTimer()
-        kb.pendingSequence.value = transition.pending
-        e.preventDefault()
-        if (transition.deferredCommandId) armSequenceTimer(transition.deferredCommandId)
-        return
-      }
-      case 'swallow':
-        resetSequence()
-        e.preventDefault()
-        return
-      case 'pass':
-        if (kb.pendingSequence.value) resetSequence()
-        break
-    }
+    const allowStart = !isEditableTarget(e.target) && !anyOverlayOpen.value
+    if (applySequenceStep(e, combo, allowStart)) return
 
-    const id = kb.resolve(combo)
+    const id = kb.resolve(combo, applies)
     if (!id) return
 
     const mods = combo.split('+')

@@ -1,6 +1,6 @@
 # Keybindings are chord sequences, not a leader key
 
-- **Status:** accepted
+- **Status:** accepted; the rule that a sequence never starts over a terminal pane is narrowed by [a-binding-that-starts-with-the-primary-modifier-works-from-a-terminal-pane](2026-10-07-a-binding-that-starts-with-the-primary-modifier-works-from-a-terminal-pane.md)
 - **Date:** 2026-08-29
 
 ## Context

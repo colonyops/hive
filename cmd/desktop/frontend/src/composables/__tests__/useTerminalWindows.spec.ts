@@ -1675,15 +1675,45 @@ describe('useTerminalWindows', () => {
     expect(second.calls.at(-1)).toMatchObject({ term: 'panic' })
   })
 
-  it('opens the find bar from the pane and keeps the combo off the wire', async () => {
-    const { session, socket } = await attached()
+  // terminal.find opens the bar from App.vue's dispatcher; the pane only has to
+  // leave the chord alone, and keep readline's Ctrl+F.
+  it('keeps the find chord off the wire', async () => {
+    const { socket } = await attached()
     const term = xterm.FakeTerminal.instances[0]
 
     expect(term.press({ key: 'f', ctrlKey: true })).toBe(true)
-    expect(session.search.value.open).toBe(false)
-
     expect(term.press({ key: 'f', metaKey: true })).toBe(false)
-    expect(session.search.value.open).toBe(true)
+    expect(term.press({ key: 'F', ctrlKey: true, shiftKey: true })).toBe(false)
+    expect(socket.sent).toHaveLength(0)
+  })
+
+  it('declines an escape chord only once something is bound to it', async () => {
+    const { socket } = await attached()
+    const term = xterm.FakeTerminal.instances[0]
+    const keys = useKeybindings()
+
+    expect(term.press({ key: 'i', metaKey: true })).toBe(true)
+
+    keys.addBinding('view.go-inbox', 'mod+i')
+    expect(term.press({ key: 'i', metaKey: true })).toBe(false)
+    expect(term.press({ key: 'i' })).toBe(true)
+    expect(socket.sent).toHaveLength(0)
+  })
+
+  // The pane cannot tell whether the key after ⌘G finishes the binding, so it
+  // declines every key while the sequence is pending.
+  it('declines the keys of a sequence the escape chord starts', async () => {
+    const { socket } = await attached()
+    const term = xterm.FakeTerminal.instances[0]
+    const keys = useKeybindings()
+    keys.addBinding('view.go-inbox', 'mod+g i')
+
+    expect(term.press({ key: 'g', metaKey: true })).toBe(false)
+    keys.pendingSequence.value = { steps: ['mod+g'], continuations: [{ step: 'i', commandId: 'view.go-inbox' }] }
+    expect(term.press({ key: 'i' })).toBe(false)
+
+    keys.clearPendingSequence()
+    expect(term.press({ key: 'i' })).toBe(true)
     expect(socket.sent).toHaveLength(0)
   })
 

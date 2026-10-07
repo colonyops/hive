@@ -226,6 +226,7 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
         paneMayAutoFocus.value = true
         void current.value?.focusPane(direction)
       },
+      find: (): void => current.value?.openSearch(),
     }),
   )
   onBeforeUnmount(() => setTerminalTreeHandles(null))

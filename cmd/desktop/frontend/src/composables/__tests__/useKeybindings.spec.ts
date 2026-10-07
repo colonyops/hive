@@ -264,6 +264,27 @@ describe('formatCombo', () => {
   })
 })
 
+describe('formatTerminalCombo', () => {
+  it('spells an escape chord the way a pane takes it', async () => {
+    const { formatTerminalCombo } = await import('../useKeybindings')
+    expect(formatTerminalCombo('view.go-inbox', 'mod+i', true)).toBe('⌘I')
+    expect(formatTerminalCombo('view.go-inbox', 'mod+i', false)).toBe('Ctrl+Shift+I')
+    expect(formatTerminalCombo('view.go-inbox', 'mod+g enter', false)).toBe('Ctrl+Shift+G ↵')
+  })
+
+  it('returns null for a binding a pane keeps', async () => {
+    const { formatTerminalCombo } = await import('../useKeybindings')
+    expect(formatTerminalCombo('view.go-inbox', 'g i', true)).toBeNull()
+    expect(formatTerminalCombo('view.go-inbox', 'alt+i', true)).toBeNull()
+    expect(formatTerminalCombo('report.open', 'mod+shift+b', false)).toBeNull()
+  })
+
+  it('spells a piercing binding as it is', async () => {
+    const { formatTerminalCombo } = await import('../useKeybindings')
+    expect(formatTerminalCombo('terminal.focus-pane-left', 'mod+alt+arrowleft', true)).toBe('⌘⌥←')
+  })
+})
+
 describe('canonicalizeCombo', () => {
   it('collapses and orders modifiers into the single spelling', async () => {
     const { canonicalizeCombo } = await import('../useKeybindings')
@@ -356,6 +377,22 @@ describe('effective keymap', () => {
     kb.addBinding('feed.refresh', 'j')
     expect(kb.conflicts('j').sort()).toEqual(['feed.next', 'feed.refresh'])
     expect(kb.conflicts('j', 'feed.refresh')).toEqual(['feed.next'])
+  })
+
+  it('resolves a terminal-pane command first, only where it applies', async () => {
+    const { useKeybindings } = await import('../useKeybindings')
+    const kb = useKeybindings()
+    expect(kb.resolve('mod+f')).toBe('terminal.find')
+    expect(kb.resolve('mod+f', (id) => id !== 'terminal.find')).toBe('view.focus-search')
+  })
+
+  it('does not report a terminal-pane command as a conflict', async () => {
+    const { useKeybindings } = await import('../useKeybindings')
+    const kb = useKeybindings()
+    expect(kb.conflicts('mod+f', 'view.focus-search')).toEqual([])
+    expect(kb.conflicts('mod+f', 'terminal.find')).toEqual([])
+    kb.addBinding('feed.refresh', 'mod+f')
+    expect(kb.conflicts('mod+f', 'view.focus-search')).toEqual(['feed.refresh'])
   })
 })
 

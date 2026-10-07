@@ -3,7 +3,7 @@ import {
   KeybindingSettings as GetKeybindingSettings,
   SetKeybindingSettings,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
-import { commands, defaultCombosFor } from '../keybindings/catalog'
+import { commandPiercesPane, commands, defaultCombosFor, launcherActionID } from '../keybindings/catalog'
 
 // The frontend keybinding layer. Pure normalization (comboFromEvent /
 // formatCombo) is separate from the effective keymap so both are unit-testable
@@ -246,15 +246,13 @@ export function comboFromEvent(e: KeyboardEvent): string | null {
  * qualify: Cmd on macOS, Ctrl+Shift elsewhere. comboFromEvent cannot make that
  * call on its own — it collapses Meta and Ctrl into one `mod` token, so `mod+k`
  * cannot tell ⌘K from Ctrl+K, and Ctrl+K is readline's kill-to-end-of-line.
- * Same split useTerminalWindows' isSearchCombo makes for ⌘F, for the same
- * reason.
  *
  * The Shift is dropped from the Ctrl form before resolving: on a platform
  * without Cmd, Ctrl+Shift is how a terminal emulator spells an app chord
  * (Ctrl+Shift+C is ⌘C), so it stands in for Cmd rather than being part of the
  * combo — which is what lets one configured `mod+k` match on both platforms.
  * It also means a `mod+shift+<key>` binding can never be reached from a pane
- * there, which is why the catalog carries `ctrlDefaultCombos` for the escaping
+ * there, which is why the catalog carries `ctrlDefaultCombos` for the terminal
  * commands whose macOS chord is shifted.
  */
 export function terminalEscapeCombo(e: KeyboardEvent): string | null {
@@ -309,6 +307,30 @@ function formatStep(combo: string, isMac: boolean): string {
   const mods = parts.slice(0, -1).map((m) => formatModifier(m, isMac))
   const keyLabel = KEY_SYMBOLS[key] ?? (key.length === 1 ? key.toUpperCase() : capitalize(key))
   return isMac ? [...mods, keyLabel].join('') : [...mods, keyLabel].join('+')
+}
+
+/**
+ * How to press `binding` for command `id` from a focused terminal pane, or null
+ * when a pane keeps the keys. Mirrors the pane path in useGlobalKeymap: a
+ * piercing command fires on its binding as-is, anything else only when the
+ * first step takes the escape form — ⌘ on macOS, Ctrl+Shift elsewhere.
+ */
+export function formatTerminalCombo(id: string, binding: string, isMac: boolean = detectMac()): string | null {
+  const steps = canonicalizeBinding(binding).split(' ')
+  if (!steps[0]) return null
+  if (steps.length === 1 && (commandPiercesPane(id, isMac) || launcherActionID(id) !== null)) {
+    return formatCombo(binding, isMac)
+  }
+  const first = steps[0].split('+')
+  if (!first.includes('mod')) return null
+  if (isMac && first.includes('alt')) return null
+  if (!isMac) {
+    // The escape drops the Shift it needs, so a shifted first step resolves as
+    // its unshifted twin and cannot be reached this way.
+    if (first.includes('shift')) return null
+    steps[0] = canonicalizeCombo(`shift+${steps[0]}`)
+  }
+  return formatCombo(steps.join(' '), isMac)
 }
 
 function capitalize(value: string): string {
@@ -409,6 +431,12 @@ function clearPendingSequence(): void {
   pendingSequence.value = null
 }
 
+// A pane can only start a sequence on the escape chord, so a pending one whose
+// first step has no `mod` began somewhere else.
+function paneSequencePending(): boolean {
+  return pendingSequence.value?.steps[0]?.split('+').includes('mod') ?? false
+}
+
 const effectiveBindings = computed<Record<string, string[]>>(() => {
   const result: Record<string, string[]> = {}
   for (const command of commands.value) {
@@ -418,16 +446,23 @@ const effectiveBindings = computed<Record<string, string[]>>(() => {
   return result
 })
 
-// binding → command id. Catalog order makes resolution deterministic when two
-// commands share a binding (the conflict is surfaced in the settings UI). A
-// multi-step binding is keyed by its full space-joined string, so this alone
-// cannot match a sequence's first step — that is what keeps `resolve` from
-// firing early on `g` while `g i` is still pending.
-const exactBindings = computed<Map<string, string>>(() => {
-  const map = new Map<string, string>()
-  for (const command of commands.value) {
+// binding → the command ids that claim it, in resolution order. Catalog order
+// decides between commands that share a binding (the conflict is surfaced in
+// the settings UI), except that a `terminal-pane` command goes first: it shares
+// its binding with a broader command on purpose (⌘F with Focus search) and has
+// to win while a pane has focus. A multi-step binding is keyed by its full
+// space-joined string, so this alone cannot match a sequence's first step —
+// that is what keeps `resolve` from firing early on `g` while `g i` is pending.
+const exactBindings = computed<Map<string, string[]>>(() => {
+  const map = new Map<string, string[]>()
+  const ordered = [...commands.value].sort(
+    (a, b) => Number(b.context === 'terminal-pane') - Number(a.context === 'terminal-pane'),
+  )
+  for (const command of ordered) {
     for (const binding of effectiveBindings.value[command.id]) {
-      if (!map.has(binding)) map.set(binding, command.id)
+      const ids = map.get(binding)
+      if (ids) ids.push(command.id)
+      else map.set(binding, [command.id])
     }
   }
   return map
@@ -460,9 +495,13 @@ function combosFor(id: string): string[] {
   return effectiveBindings.value[id] ?? []
 }
 
-/** Resolves a single-step combo only — a sequence's first step never matches. */
-function resolve(combo: string): string | null {
-  return exactBindings.value.get(combo) ?? null
+/**
+ * Resolves a single-step combo only — a sequence's first step never matches.
+ * With `applies`, the first claiming command it accepts; without, the first.
+ */
+function resolve(combo: string, applies?: (id: string) => boolean): string | null {
+  const ids = exactBindings.value.get(combo) ?? []
+  return (applies ? ids.find(applies) : ids[0]) ?? null
 }
 
 function setCombos(id: string, combos: string[]): void {
@@ -502,14 +541,18 @@ function isOverridden(id: string): boolean {
 /**
  * Command ids (other than excludeId) that also bind `binding`. A binding that
  * only prefixes another (`g` vs. `g i`) is not a conflict — the Zed rule makes
- * both functional — so this checks exact-string equality only.
+ * both functional — so this checks exact-string equality only. Nor is a
+ * `terminal-pane` command sharing a binding with any other: it resolves first
+ * while a pane has focus, and the other keeps the binding everywhere else.
  */
 function conflicts(binding: string, excludeId?: string): string[] {
   const canon = canonicalizeBinding(binding)
   if (!canon) return []
+  const ownContext = commands.value.find((command) => command.id === excludeId)?.context
   const ids: string[] = []
   for (const command of commands.value) {
     if (command.id === excludeId) continue
+    if (ownContext && (ownContext === 'terminal-pane') !== (command.context === 'terminal-pane')) continue
     if (effectiveBindings.value[command.id].includes(canon)) ids.push(command.id)
   }
   return ids
@@ -537,11 +580,11 @@ export function stepSequence(pending: PendingSequence | null, combo: string): Se
     return {
       kind: 'extend',
       pending: { steps, continuations },
-      deferredCommandId: exactBindings.value.get(joined) ?? null,
+      deferredCommandId: exactBindings.value.get(joined)?.[0] ?? null,
     }
   }
 
-  const commandId = exactBindings.value.get(joined)
+  const commandId = exactBindings.value.get(joined)?.[0]
   if (commandId) return pending ? { kind: 'run', commandId } : { kind: 'pass' }
 
   if (!pending) return { kind: 'pass' }
@@ -568,5 +611,6 @@ export function useKeybindings() {
     /** Module state; the hint pill reads this to know what's pending. */
     pendingSequence,
     clearPendingSequence,
+    paneSequencePending,
   }
 }

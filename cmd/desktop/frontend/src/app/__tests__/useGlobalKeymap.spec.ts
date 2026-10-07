@@ -297,6 +297,85 @@ describe('useGlobalKeymap over a focused terminal', () => {
     expect(kb.pendingSequence.value).toBeNull()
   })
 
+  it('hands the shell every key of a bare word', () => {
+    const pane = terminal()
+
+    const events = ['g', 'i', 't'].map((key) => press(key, {}, pane))
+
+    expect(runCommand).not.toHaveBeenCalled()
+    expect(events.some((event) => event.defaultPrevented)).toBe(false)
+  })
+
+  it("runs a user's escape chord, but not the same key without it", () => {
+    const kb = m.useKeybindings()
+    kb.addBinding('view.go-inbox', 'mod+i')
+    kb.addBinding('view.go-chats', 'alt+a')
+    const pane = terminal()
+
+    const event = press('i', { metaKey: true }, pane)
+    expect(runCommand).toHaveBeenCalledWith('view.go-inbox')
+    expect(event.defaultPrevented).toBe(true)
+
+    runCommand.mockReset()
+    press('a', { altKey: true }, pane)
+    press('i', {}, pane)
+    expect(runCommand).not.toHaveBeenCalled()
+  })
+
+  it('reaches an escape chord as Ctrl+Shift where mod is Ctrl, leaving Ctrl alone to the shell', () => {
+    m.useKeybindings().addBinding('view.go-inbox', 'mod+i')
+    const pane = terminal()
+
+    const plain = press('i', { ctrlKey: true }, pane)
+    expect(runCommand).not.toHaveBeenCalled()
+    expect(plain.defaultPrevented).toBe(false)
+
+    press('I', { ctrlKey: true, shiftKey: true }, pane)
+    expect(runCommand).toHaveBeenCalledWith('view.go-inbox')
+  })
+
+  it('runs a sequence the escape chord starts', () => {
+    const kb = m.useKeybindings()
+    kb.addBinding('view.go-inbox', 'mod+g i')
+    const pane = terminal()
+
+    expect(press('g', { metaKey: true }, pane).defaultPrevented).toBe(true)
+    expect(kb.pendingSequence.value?.steps).toEqual(['mod+g'])
+
+    const second = press('i', {}, pane)
+    expect(runCommand).toHaveBeenCalledWith('view.go-inbox')
+    expect(second.defaultPrevented).toBe(true)
+    expect(kb.pendingSequence.value).toBeNull()
+  })
+
+  it('drops a key that does not continue the sequence', () => {
+    const kb = m.useKeybindings()
+    kb.addBinding('view.go-inbox', 'mod+g i')
+    const pane = terminal()
+
+    press('g', { metaKey: true }, pane)
+    const stray = press('x', {}, pane)
+
+    expect(runCommand).not.toHaveBeenCalled()
+    expect(stray.defaultPrevented).toBe(true)
+    expect(kb.pendingSequence.value).toBeNull()
+  })
+
+  it('gives ⌘F to terminal.find over a Code pane and to Focus search elsewhere', () => {
+    const pane = terminal()
+
+    activeContexts.add('terminal-pane')
+    press('f', { metaKey: true }, pane)
+    expect(runCommand).toHaveBeenLastCalledWith('terminal.find')
+
+    activeContexts.delete('terminal-pane')
+    press('f', { metaKey: true }, pane)
+    expect(runCommand).toHaveBeenLastCalledWith('view.focus-search')
+
+    press('f', { metaKey: true })
+    expect(runCommand).toHaveBeenLastCalledWith('view.focus-search')
+  })
+
   it('lets a piercing command through, but not under an overlay', () => {
     const pane = terminal()
     press('t', tasksChord, pane)

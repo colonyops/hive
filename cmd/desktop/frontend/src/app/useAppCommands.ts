@@ -15,6 +15,8 @@ import { focusAgentsFilter, focusAgentsList, focusAgentsPane } from '../lib/agen
 import {
   closeTerminalPane,
   closeTerminalWindow,
+  codePaneFocused,
+  findInTerminal,
   focusTerminalFilter,
   focusTerminalPane,
   focusTerminalPaneDirection,
@@ -144,6 +146,7 @@ export function useAppCommands(deps: AppCommandDeps) {
     'terminal.split-down': () => splitTerminalPane('vertical'),
     'terminal.close-pane': closeTerminalPane,
     'terminal.zoom-pane': zoomTerminalPane,
+    'terminal.find': findInTerminal,
     'terminal.text-size-increase': () => terminalFont.stepFontSize(1),
     'terminal.text-size-decrease': () => terminalFont.stepFontSize(-1),
     'terminal.text-size-reset': terminalFont.resetFontSize,
@@ -190,6 +193,8 @@ export function useAppCommands(deps: AppCommandDeps) {
       // no more terminal to work with than the feed does.
       case 'terminal-session':
         return terminalActive.value && !!onScreenSessionSlug.value
+      case 'terminal-pane':
+        return terminalActive.value && !!onScreenSessionSlug.value && codePaneFocused()
       case 'agents':
         return agentsActive.value
       case 'sidebar':

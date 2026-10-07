@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/xterm'
-import { claimsShiftEnter } from '../terminalKeys'
+import { useKeybindings } from '../../composables/useKeybindings'
+import { appClaimsPaneKey, claimsShiftEnter } from '../terminalKeys'
 
 // The bytes Pi reads for Shift+Enter (#538): its tui.input.newLine binding is
 // the CSI u modified-enter, and a plain CR is Enter.
@@ -77,5 +78,46 @@ describe('claimsShiftEnter', () => {
 
     expect(claimsShiftEnter(term, keyEvent('keydown', { shiftKey: true, isComposing: true }))).toBe(false)
     expect(sent()).toBe('')
+  })
+})
+
+describe('appClaimsPaneKey', () => {
+  const keys = useKeybindings()
+  const down = (init: KeyboardEventInit): KeyboardEvent => new KeyboardEvent('keydown', init)
+
+  afterEach(() => {
+    keys.clearAll()
+    keys.clearPendingSequence()
+  })
+
+  it('claims an escape chord once something is bound to it, or starts with it', () => {
+    expect(appClaimsPaneKey(down({ key: 'i', metaKey: true }))).toBe(false)
+
+    keys.addBinding('view.go-inbox', 'mod+i')
+    expect(appClaimsPaneKey(down({ key: 'i', metaKey: true }))).toBe(true)
+    expect(appClaimsPaneKey(down({ key: 'I', ctrlKey: true, shiftKey: true }))).toBe(true)
+
+    keys.addBinding('view.go-chats', 'mod+g a')
+    expect(appClaimsPaneKey(down({ key: 'g', metaKey: true }))).toBe(true)
+  })
+
+  it('leaves bare keys and plain Ctrl to the shell', () => {
+    keys.addBinding('view.go-inbox', 'mod+i')
+    expect(appClaimsPaneKey(down({ key: 'g' }))).toBe(false)
+    expect(appClaimsPaneKey(down({ key: 'i', ctrlKey: true }))).toBe(false)
+  })
+
+  it('claims every key while a sequence the pane started is pending, and none for one begun elsewhere', () => {
+    keys.pendingSequence.value = { steps: ['mod+g'], continuations: [] }
+    expect(appClaimsPaneKey(down({ key: 'x' }))).toBe(true)
+
+    keys.pendingSequence.value = { steps: ['g'], continuations: [] }
+    expect(appClaimsPaneKey(down({ key: 'x' }))).toBe(false)
+  })
+
+  it('claims a piercing binding whatever its modifiers', () => {
+    expect(appClaimsPaneKey(down({ key: 't', altKey: true }))).toBe(false)
+    keys.addBinding('tasks.toggle', 'alt+t')
+    expect(appClaimsPaneKey(down({ key: 't', altKey: true }))).toBe(true)
   })
 })

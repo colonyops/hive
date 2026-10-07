@@ -1,4 +1,10 @@
 import type { Terminal } from '@xterm/xterm'
+import { comboFromEvent, terminalEscapeCombo, useKeybindings } from '../composables/useKeybindings'
+import { commandPiercesPane } from '../keybindings/catalog'
+
+// The keymap is a module singleton with no lifecycle of its own, so it is read
+// once here rather than per keystroke.
+const keymap = useKeybindings()
 
 // Enter is code point 13 and the modifier field is 1 plus the Shift bit: the
 // kitty keyboard protocol's form for a modified key that has no legacy
@@ -29,4 +35,22 @@ export function claimsShiftEnter(term: Terminal, event: KeyboardEvent): boolean 
 function isShiftEnter(event: KeyboardEvent): boolean {
   if (event.key !== 'Enter' || !event.shiftKey || event.isComposing) return false
   return !event.ctrlKey && !event.altKey && !event.metaKey
+}
+
+/**
+ * Whether App.vue's dispatcher takes this key over a focused pane, so a custom
+ * key handler can decline it and xterm does not also write it: every key while
+ * a sequence the pane started is pending, the escape chord when it is bound or
+ * starts a binding, and a binding of a command that pierces the pane. Resolved
+ * against the live keymap, so a rebind moves both sides together.
+ */
+export function appClaimsPaneKey(event: KeyboardEvent): boolean {
+  if (keymap.paneSequencePending()) return true
+  const escaped = terminalEscapeCombo(event)
+  if (escaped && (keymap.resolve(escaped) || keymap.stepSequence(null, escaped).kind === 'extend')) return true
+  // Ctrl+2 through Ctrl+7 are control characters on a platform without
+  // Command, and an alt chord is a meta escape the shell would read as a
+  // readline command.
+  const id = keymap.resolve(comboFromEvent(event) ?? '')
+  return !!id && commandPiercesPane(id)
 }

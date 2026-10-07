@@ -1550,7 +1550,7 @@ dispatched from App.vue through `lib/terminalTree`'s handles like every other
 `terminal.*` command — so they answer from the session tree and from a focused
 pane alike, and rebinding them is an ordinary settings change. Two things they
 do not share with the numbered jumps: they **escape** a pane rather than pierce
-it (see Pop-up terminals), and next/prev **wrap**, where the tree's own walk
+it, like every ⌘ binding (see Pop-up terminals), and next/prev **wrap**, where the tree's own walk
 clamps — a session's windows are a ring in every terminal emulator, and there is
 nowhere else for "next" to go from the last one. A window this view created
 takes focus when tmux announces it; one another client opened does not, because
@@ -1950,35 +1950,42 @@ Three rules govern it, and each is a consequence of that:
   Ctrl these take a readline chord away from the pane, which is the price of a
   chord that has to work from inside one.
 
-  A command **escapes** when the catalog marks it `escapesPane`: it is claimed
-  through `terminalEscapeCombo`, which takes Command chords and Ctrl+Shift where
-  there is no Command, dropping that Shift so one configured combo matches on
-  both. The palette and the active-sidebar toggle are two, because they are ways
-  back out of a pane, and so is the window lifecycle — `terminal.new-window`,
-  `-close-window`, `-next-window`, `-prev-window`. That is what leaves a bare Ctrl+K as readline's
-  kill-to-end-of-line and Ctrl+T as its transpose-chars while ⌘K and ⌘T are the
-  app's. A shifted binding therefore cannot escape where `mod` is Ctrl, so an
-  escaping command whose macOS chord is shifted carries `ctrlDefaultCombos`, an
-  unshifted default for that platform (`terminal.split-down`: ⌘⇧D, Ctrl+Shift+O).
-  Prefer escaping: piercing is for a chord the escape form cannot carry.
-  A command can combine `escapesPane` with `piercesPane: 'non-mac'` when its
-  Windows/Linux default must use bare Ctrl while macOS keeps Ctrl for the pane.
-  An alt chord is the case that forces it — `terminalEscapeCombo` qualifies only
-  Command and Ctrl+Shift, so a user who binds `alt+t` to a command that merely
-  escapes gets nothing. Widening the escape chord to accept alt was rejected:
-  it would hand every alt binding to the app and take readline's meta chords and
-  tmux's alt bindings away from the shell for anyone who has one, where the flag
-  keeps the blast radius to the command that asked. Anything added either way
+  Every other command **escapes**: any binding whose first step uses `mod` is
+  claimed through `terminalEscapeCombo`, which takes Command chords and
+  Ctrl+Shift where there is no Command, dropping that Shift so one configured
+  combo matches on both (ADR a-binding-that-starts-with-the-primary-modifier-works-from-a-terminal-pane).
+  There is no per-command opt-in: a user who binds ⌘I to Go to Inbox gets it
+  from a pane without anything in the catalog changing. That is what leaves a
+  bare Ctrl+K as readline's kill-to-end-of-line and Ctrl+T as its
+  transpose-chars while ⌘K and ⌘T are the app's. A shifted binding cannot
+  escape where `mod` is Ctrl, so a terminal command whose macOS chord is shifted
+  carries `ctrlDefaultCombos`, an unshifted default for that platform
+  (`terminal.split-down`: ⌘⇧D, Ctrl+Shift+O). Prefer escaping: piercing is for
+  a chord the escape form cannot carry. `piercesPane: 'non-mac'` covers a
+  Windows/Linux default that must use bare Ctrl while macOS keeps Ctrl for the
+  pane. An alt chord never escapes — `terminalEscapeCombo` qualifies only
+  Command and Ctrl+Shift. Widening it to accept alt was rejected: it would hand
+  every alt binding to the app and take readline's meta chords and tmux's alt
+  bindings away from the shell for anyone who has one. Anything that pierces
   has to answer why a pane may not have the key.
+
+  A `terminal-pane` command claims its chord only while one of the Code view's
+  panes has focus, and resolves ahead of every other command there:
+  `terminal.find` takes ⌘F over a pane, and `view.focus-search` keeps it
+  everywhere else.
 
   Both are two-sided: the dispatcher must act on the chord *and* xterm's
   `attachCustomKeyEventHandler` must decline it, or the pane writes it to tmux
-  as well. Both sides resolve through the live keymap, so a rebind moves them
+  as well. Every emulator declines through the same check,
+  `appClaimsPaneKey` in `lib/terminalKeys.ts`. Both sides resolve through the live keymap, so a rebind moves them
   together.
 - **A sequence start answers to the same rule as a bare chord.** It never
-  fires over a focused pane, into an editable target, or under an overlay,
-  and `resolve` stays single-step — it can never match a sequence's first
-  step, so neither pierce nor escape can claim one out from under it (ADR keybindings-are-chord-sequences-not-a-leader-key).
+  fires into an editable target or under an overlay, and over a focused pane
+  it starts only on the escape chord: ⌘G I works from a pane, `g i` does not.
+  While a sequence the pane started is pending, xterm declines every key, and
+  a key that does not continue it is dropped, as it is anywhere else. A
+  pending sequence that began outside the pane is cleared by the first key the
+  pane sees (ADR keybindings-are-chord-sequences-not-a-leader-key, ADR a-binding-that-starts-with-the-primary-modifier-works-from-a-terminal-pane).
 - **A pane takes focus for the mouse, not for the arrows.** `paneMayAutoFocus`
   gates the automatic `term.focus()` calls — the ones on attach, on reveal, and
   on a window switch — because walking the session tree past a session is not an

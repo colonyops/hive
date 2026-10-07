@@ -22,20 +22,14 @@ import { claimAtlasRenderer } from '../lib/terminalRenderer'
 import { TerminalOutputWriter } from '../lib/terminalOutput'
 import { installTerminalImages } from '../lib/terminalImages'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
-import { claimsShiftEnter } from '../lib/terminalKeys'
+import { appClaimsPaneKey, claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { scrolledOffTail } from '../lib/terminalTail'
 import { paneMayAutoFocus } from '../lib/terminalTree'
-import { commandEscapesPane, commandPiercesPane } from '../keybindings/catalog'
-import { comboFromEvent, terminalEscapeCombo, useKeybindings } from './useKeybindings'
 import { searchHighlightColors } from '../lib/terminalTheme'
 import { resizeTerminalPreservingViewport } from '../lib/terminalViewport'
 import { useTerminalFont } from '../stores/useTerminalFont'
 import { createTerminal, loadTerminalFont, watchTerminalAppearance } from './useXtermPane'
-
-// The keymap is a module singleton with no lifecycle of its own, so the pane's
-// key handlers read it once here rather than calling in per keystroke.
-const keymap = useKeybindings()
 
 /**
  * 'ended' is terminal: this view has no stream any more — whether or not the
@@ -337,17 +331,11 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     term.resize(grid?.cols || unreportedSize().cols, grid?.rows || unreportedSize().rows)
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       if (event.type !== 'keydown') return !claimsShiftEnter(term, event)
-      if (isSearchCombo(event)) {
-        openSearch()
-        return false
-      }
       // These fire from App.vue's window listener, which runs after this one.
-      // Returning false only stops xterm from *also* sending the chord to the
-      // pane — Ctrl+Shift+K would otherwise arrive as 0x0B.
-      if (escapesPane(event)) return false
-      // Prevent pane-navigation chords from also reaching tmux as arrow escapes
-      // or control characters.
-      if (piercesPane(event)) return false
+      // Returning false only stops xterm from *also* sending the key to the
+      // pane — Ctrl+Shift+K would otherwise arrive as 0x0B, and the `i` of
+      // ⌘G I as text.
+      if (appClaimsPaneKey(event)) return false
       // After the chords: a rebind can put a piercing command on shift+enter.
       return !claimsShiftEnter(term, event)
     })
@@ -1193,33 +1181,6 @@ function applyOrder<T extends { windowId: string }>(tabs: T[], order: string[]):
   return [...tabs].sort(
     (a, b) => (rank.get(a.windowId) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.windowId) ?? Number.MAX_SAFE_INTEGER),
   )
-}
-
-// The commands App.vue runs over a focused pane on the escape chord — the
-// palette and the window lifecycle — so the pane must not consume them as well.
-function escapesPane(event: KeyboardEvent): boolean {
-  const id = keymap.resolve(terminalEscapeCombo(event) ?? '')
-  return !!id && commandEscapesPane(id)
-}
-
-// The commands App.vue runs over a focused pane on the binding alone. Declining
-// them here is only about keeping xterm from *also* writing them to tmux —
-// Ctrl+2 through Ctrl+7 are control characters on a platform without Command,
-// and an alt chord is a meta escape the shell would read as a readline command.
-// Resolved against the live keymap rather than matched literally, so a rebind
-// moves both sides together.
-function piercesPane(event: KeyboardEvent): boolean {
-  const id = keymap.resolve(comboFromEvent(event) ?? '')
-  return !!id && commandPiercesPane(id)
-}
-
-// Cmd+F on macOS, Ctrl+Shift+F everywhere else — the convention every terminal
-// emulator settled on, and for the reason they settled on it: a bare Ctrl+F is
-// readline's forward-char and belongs to the pane, not to us.
-function isSearchCombo(event: KeyboardEvent): boolean {
-  if (event.key !== 'f' && event.key !== 'F') return false
-  if (event.ctrlKey) return event.shiftKey && !event.metaKey
-  return event.metaKey && !event.altKey
 }
 
 function message(error: unknown, fallback: string): string {
