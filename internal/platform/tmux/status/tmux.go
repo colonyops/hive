@@ -27,6 +27,14 @@ import (
 // classification attempts for the same pane during RefreshCache.
 const contentCheckInterval = 5 * time.Second
 
+// processSnapshotMaxAge is how long consecutive refreshes share one process
+// table read. Non-agent panes are reclassified on every refresh, and on
+// darwin each read copies the whole kernel process table, which dominated the
+// desktop's allocations at a 1.5s poll. The cost is that an agent a wrapper
+// spawns as a child can take this long to be seen; an agent that becomes the
+// foreground process changes the pane fingerprint and is seen at once.
+const processSnapshotMaxAge = 5 * time.Second
+
 // DefaultMissingTolerance is how many consecutive list-panes failures this
 // integration tolerates (serving the stale cache) before publishing
 // StatusMissing. Production wiring overrides it via WithMissingTolerance from
@@ -48,6 +56,7 @@ type Integration struct {
 	classifier         *classifier.Classifier
 	classCache         *classifier.Cache
 	processReader      process.ProcessReader
+	snapshots          *process.SnapshotCache
 	source             terminal.PaneSource
 	capture            classifier.ContentCapture
 	logger             zerolog.Logger
@@ -196,6 +205,7 @@ func newIntegration(reader process.ProcessReader) *Integration {
 		contentLimiters:  make(map[string]*terminal.RateLimiter),
 		classCache:       classifier.NewCache(),
 		processReader:    reader,
+		snapshots:        process.NewSnapshotCache(processSnapshotMaxAge),
 		missingTolerance: DefaultMissingTolerance,
 		logger:           zerolog.Nop(),
 	}
@@ -227,9 +237,7 @@ func (t *Integration) RefreshCache(ctx context.Context) {
 	}
 	defer t.refreshMu.Unlock()
 
-	// Build a process-tree snapshot once for this refresh cycle so all pane
-	// classifications share one OS call instead of one per pane.
-	snapshotCls := t.classifier.WithReader(process.NewSnapshotReader(t.processReader))
+	snapshotCls := t.classifier.WithReader(t.snapshots.Reader(t.processReader))
 
 	if t.source == nil {
 		t.handleRefreshFailure(fmt.Errorf("tmux pane source is unavailable"))

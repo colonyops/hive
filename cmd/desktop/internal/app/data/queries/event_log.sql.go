@@ -8,6 +8,7 @@ package queries
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const appendEvent = `-- name: AppendEvent :one
@@ -229,6 +230,82 @@ func (q *Queries) ReadEventsFrom(ctx context.Context, arg ReadEventsFromParams) 
 	items := []EventLog{}
 	for rows.Next() {
 		var i EventLog
+		if err := rows.Scan(
+			&i.Offset,
+			&i.Topic,
+			&i.Key,
+			&i.Payload,
+			&i.Snapshot,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.OccurrenceKey,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const readRoutedEventsFrom = `-- name: ReadRoutedEventsFrom :many
+SELECT "offset", topic, "key",
+    CAST(CASE WHEN topic IN (/*SLICE:topics*/?) THEN payload ELSE X'' END AS BLOB) AS payload,
+    snapshot, source_kind, source_scope, occurrence_key, created_at
+FROM event_log
+WHERE "offset" > ?
+ORDER BY "offset" ASC
+LIMIT ?
+`
+
+type ReadRoutedEventsFromParams struct {
+	Topics []string `json:"topics"`
+	Offset int64    `json:"offset"`
+	Limit  int64    `json:"limit"`
+}
+
+type ReadRoutedEventsFromRow struct {
+	Offset        int64          `json:"offset"`
+	Topic         string         `json:"topic"`
+	Key           string         `json:"key"`
+	Payload       []byte         `json:"payload"`
+	Snapshot      int64          `json:"snapshot"`
+	SourceKind    string         `json:"source_kind"`
+	SourceScope   string         `json:"source_scope"`
+	OccurrenceKey sql.NullString `json:"occurrence_key"`
+	CreatedAt     int64          `json:"created_at"`
+}
+
+// Rows on topics outside the routed set come back with an empty payload: the
+// consumer only discards them, and every flow reading every other flow's
+// source snapshots dominated the desktop's allocations.
+func (q *Queries) ReadRoutedEventsFrom(ctx context.Context, arg ReadRoutedEventsFromParams) ([]ReadRoutedEventsFromRow, error) {
+	query := readRoutedEventsFrom
+	var queryParams []interface{}
+	if len(arg.Topics) > 0 {
+		for _, v := range arg.Topics {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:topics*/?", strings.Repeat(",?", len(arg.Topics))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:topics*/?", "NULL", 1)
+	}
+	queryParams = append(queryParams, arg.Offset)
+	queryParams = append(queryParams, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReadRoutedEventsFromRow{}
+	for rows.Next() {
+		var i ReadRoutedEventsFromRow
 		if err := rows.Scan(
 			&i.Offset,
 			&i.Topic,

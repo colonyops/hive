@@ -73,10 +73,12 @@ func (s *EventLogStore) AppendSnapshot(ctx context.Context, topic, sourceKind, s
 // nextOffset is the last returned offset, or the input offset for an empty
 // page.
 func (s *EventLogStore) ReadFrom(ctx context.Context, offset int64, limit int) ([]models.Msg, int64, error) {
-	rows, err := s.q.Ctx(ctx).ReadEventsFrom(ctx, queries.ReadEventsFromParams{
-		Offset: offset,
-		Limit:  int64(limit),
-	})
+	return s.readFrom(ctx, offset, limit, models.RoutedTopics{All: true})
+}
+
+// Messages on topics outside routed carry no payload and no snapshot.
+func (s *EventLogStore) readFrom(ctx context.Context, offset int64, limit int, routed models.RoutedTopics) ([]models.Msg, int64, error) {
+	rows, err := s.readRows(ctx, offset, limit, routed)
 	if err != nil {
 		return nil, offset, fmt.Errorf("reading events from offset %d: %w", offset, err)
 	}
@@ -94,7 +96,9 @@ func (s *EventLogStore) ReadFrom(ctx context.Context, offset int64, limit int) (
 			SourceScope:   row.SourceScope,
 			OccurrenceKey: row.OccurrenceKey.String,
 		}
-		if row.Snapshot != 0 {
+		if !routed.Has(row.Topic) {
+			msg.Payload = nil
+		} else if row.Snapshot != 0 {
 			if err := json.Unmarshal(row.Payload, &msg.Snapshot); err != nil {
 				return nil, offset, fmt.Errorf("decoding source snapshot at offset %d: %w", row.Offset, err)
 			}
@@ -106,14 +110,33 @@ func (s *EventLogStore) ReadFrom(ctx context.Context, offset int64, limit int) (
 	return msgs, nextOffset, nil
 }
 
+func (s *EventLogStore) readRows(ctx context.Context, offset int64, limit int, routed models.RoutedTopics) ([]queries.EventLog, error) {
+	if routed.All {
+		return s.q.Ctx(ctx).ReadEventsFrom(ctx, queries.ReadEventsFromParams{Offset: offset, Limit: int64(limit)})
+	}
+	rows, err := s.q.Ctx(ctx).ReadRoutedEventsFrom(ctx, queries.ReadRoutedEventsFromParams{
+		Topics: routed.Topics,
+		Offset: offset,
+		Limit:  int64(limit),
+	})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]queries.EventLog, len(rows))
+	for i, row := range rows {
+		out[i] = queries.EventLog(row)
+	}
+	return out, nil
+}
+
 // Reads resume from the consumer's last successful commit, including after
 // runtime restarts.
-func (s *EventLogStore) ReadForConsumer(ctx context.Context, consumer string, limit int) ([]models.Msg, error) {
+func (s *EventLogStore) ReadForConsumer(ctx context.Context, consumer string, limit int, routed models.RoutedTopics) ([]models.Msg, error) {
 	offset, err := s.ConsumerOffset(ctx, consumer)
 	if err != nil {
 		return nil, err
 	}
-	msgs, _, err := s.ReadFrom(ctx, offset, limit)
+	msgs, _, err := s.readFrom(ctx, offset, limit, routed)
 	return msgs, err
 }
 

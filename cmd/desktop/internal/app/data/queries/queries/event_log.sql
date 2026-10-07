@@ -12,6 +12,18 @@ WHERE "offset" > ?
 ORDER BY "offset" ASC
 LIMIT ?;
 
+-- name: ReadRoutedEventsFrom :many
+-- Rows on topics outside the routed set come back with an empty payload: the
+-- consumer only discards them, and every flow reading every other flow's
+-- source snapshots dominated the desktop's allocations.
+SELECT "offset", topic, "key",
+    CAST(CASE WHEN topic IN (sqlc.slice(topics)) THEN payload ELSE X'' END AS BLOB) AS payload,
+    snapshot, source_kind, source_scope, occurrence_key, created_at
+FROM event_log
+WHERE "offset" > ?
+ORDER BY "offset" ASC
+LIMIT ?;
+
 -- name: GetConsumerOffset :one
 SELECT * FROM consumer_offset
 WHERE consumer = ?;
