@@ -342,13 +342,12 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
               data-testid="terminal-scratch-heading"
               :data-slug="row.slug"
               :aria-expanded="view.expansion.expanded(group)"
-              :title="row.slug"
               @click="view.expansion.toggle(group)"
               @keydown.enter.self.prevent="view.expansion.toggle(group)"
               @keydown.space.self.prevent="view.expansion.toggle(group)"
               @contextmenu.prevent="menus.toggleRow(row, $event)"
             >
-              <span class="min-w-0 truncate text-body text-text">{{ group.name }}</span>
+              <span class="min-w-0 truncate text-body text-text" :title="row.slug">{{ group.name }}</span>
               <component
                 :is="view.expansion.expanded(group) ? IconChevronDown : IconChevronRight"
                 class="ml-auto size-3 shrink-0 text-text-4"
@@ -412,19 +411,21 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     :data-slug="row.slug"
                     :data-tree-key="`s:${row.id}`"
                     :data-attached="row.slug === pool.activeSlug"
-                    :title="row.slug"
                     @click="nav.clickSession(row)"
                     @keydown.enter.self.prevent="nav.enterSession(row)"
                     @keydown.space.self.prevent="nav.enterSession(row)"
                     @contextmenu.prevent="menus.toggleRow(row, $event)"
                   >
-                    <span class="min-w-0 flex-1 truncate text-body" :class="{ 'text-text-3': tree.rowIdle(row) }">{{
-                      row.name
-                    }}</span>
+                    <span
+                      class="min-w-0 flex-1 truncate text-body"
+                      :class="{ 'text-text-3': tree.rowIdle(row) }"
+                      :title="row.slug"
+                      >{{ row.name }}</span
+                    >
                     <BaseBadge
                       v-if="sessionAgeBadges[row.id]"
                       tone="accent"
-                      class="shrink-0 px-1.5 py-0.5 font-mono text-micro leading-none"
+                      class="session-age shrink-0 px-1.5 py-0.5 font-mono text-micro leading-none"
                       :title="sessionAgeBadges[row.id].title"
                       :aria-label="`${sessionAgeBadges[row.id].days} ${sessionAgeBadges[row.id].days === 1 ? 'day' : 'days'} old`"
                       data-testid="terminal-session-age"
@@ -841,12 +842,31 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
   transition: none;
 }
 
+/* The badge sits over the trailing cells left empty at rest and gives way to
+   the controls hover reveals. 40px is both cells plus the status dot's inset,
+   so its right edge lines up with the dots on other rows; a running row keeps
+   its dot and the badge stops 6px short of it. */
+.session-age {
+  margin-right: -40px;
+  position: relative;
+  z-index: 1;
+  transition: opacity 0.15s ease;
+}
+.session-row:has(.row-status) .session-age {
+  margin-right: -24px;
+}
+.session-row:is(:hover, .menu-open, :has(.row-trailing:focus-within)) .session-age {
+  opacity: 0;
+  pointer-events: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tree-enter-active,
   .tree-leave-active,
   .tree-move,
   .tree-expand-enter-active,
-  .tree-expand-leave-active {
+  .tree-expand-leave-active,
+  .session-age {
     transition: none;
   }
 }
