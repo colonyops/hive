@@ -122,10 +122,11 @@ See [Terminal mode](../code/terminal-mode.md#shared-tmux-sizing).
 
 Open **Settings ▸ System** and select **Report a problem**. Hive opens a new issue at [github.com/colonyops/hive/issues](https://github.com/colonyops/hive/issues) with your version and platform filled in. Nothing from your machine is attached. Describe the problem and paste the log lines that show it.
 
-The default log path is:
+Hive Desktop and the CLI share the default log file. The `service_name` field
+identifies `hive-desktop` or `hive-cli` on each line.
 
 ```text
-~/.local/share/hive/desktop/desktop.log
+~/.local/share/hive/hive.log
 ```
 
 ## Save a diagnostic bundle
@@ -134,7 +135,7 @@ Use this only when a maintainer asks for one. Open **Settings ▸ System** and s
 
 The bundle always holds build and system details. Logs, settings, flows, and actions are separate switches, and all four start off. Switch on what the maintainer asks for.
 
-Tokens, secrets, and API keys are removed from everything the bundle holds. Names are not. A log tail names your home directory, repositories, and branches, and flows name the orgs and hosts they poll.
+Tokens, secrets, and API keys are removed from everything the bundle holds. Names are not. The shared log tail can include CLI entries and names your home directory, repositories, and branches. Flows name the orgs and hosts they poll.
 
 **Do not attach a bundle to a GitHub issue.** Issues are public. Send the file through the private channel the maintainer gives you.
 

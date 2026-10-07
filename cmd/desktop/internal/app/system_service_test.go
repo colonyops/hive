@@ -33,7 +33,7 @@ func TestSystemServiceInfo(t *testing.T) {
 
 	require.Equal(t, dataRoot, info.DataDir.Path)
 	require.Equal(t, settings.ConfigDir(), info.ConfigDir.Path)
-	require.Equal(t, filepath.Join(dataRoot, "desktop", "desktop.log"), info.LogFile.Path)
+	require.Equal(t, filepath.Join(dataRoot, "hive.log"), info.LogFile.Path)
 	require.Equal(t, filepath.Join(dataRoot, "desktop", "desktop-pipeline.db"), info.Database.Path)
 	// The data/config directories are on defaults here, so nothing is overridden.
 	require.False(t, info.DataDir.Overridden)

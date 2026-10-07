@@ -282,9 +282,11 @@ the [Go amendment](#the-go-amendment-to-hexagonal) applied to the engine.
 Loggers are passed down, never global: depguard denies the zerolog global
 logger in the whole module, because no program assigns it. A `zerolog.Logger`
 is the first parameter of what takes one, or the second after a
-`context.Context`. A component labels the logger it is given with
-`logutils.Component`, which adds `cmp=<name>`, so one filter narrows a log to
-one component. The engine and the programs hand out a logger with no `cmp`
+`context.Context`. Both programs default to `<hive-data-dir>/hive.log`; their
+root loggers carry `service_name=hive-cli` or `service_name=hive-desktop` so a
+reader can split the shared stream. A component labels the logger it is given
+with `logutils.Component`, which adds `cmp=<name>`, so one filter narrows a log
+to one component. The engine and the programs hand out a logger with no `cmp`
 label, because zerolog appends fields and a second label would repeat the key.
 
 Inside the desktop, `adapter` imports `app` and `app` imports the shared
@@ -902,7 +904,10 @@ and `config_dir`; explicit `HIVE_DESKTOP_DATA_DIR` and
 `HIVE_DESKTOP_CONFIG_DIR` values win, then bootstrap, then XDG defaults.
 `cmd/desktop/main.go` derives one immutable `settings.Paths` snapshot — data and
 config roots plus state, flows, actions, settings, credential-index and log
-locations — and injects it. Runtime services do not re-read path environment variables.
+locations — and injects it. `LogFile` follows `HiveDataDir`, not the desktop
+state directory, so both programs append to the same file even when the
+desktop keeps its own database elsewhere. Runtime services do not re-read path
+environment variables.
 `XDG_*`, Wails framework variables, credential secrets, build/release inputs,
 and the CLI's own variables remain outside the desktop settings namespace.
 

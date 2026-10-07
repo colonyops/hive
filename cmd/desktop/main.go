@@ -65,7 +65,7 @@ func main() {
 	}
 	logger, logCloser, logErr := settings.NewLogger(paths.LogFile, level)
 	if logErr != nil {
-		logger.Warn().Err(logErr).Msg("desktop log file unavailable; logging to stderr only")
+		logger.Warn().Err(logErr).Msg("log file unavailable; logging to stderr only")
 	}
 
 	backupDir := filepath.Join(paths.StateDir, "migration-backups")
@@ -134,7 +134,7 @@ func main() {
 		logCloser()
 		logger, logCloser, logErr = settings.NewLogger(paths.LogFile, level, tel.LogWriters()...)
 		if logErr != nil {
-			logger.Warn().Err(logErr).Msg("desktop log file unavailable; logging to stderr only")
+			logger.Warn().Err(logErr).Msg("log file unavailable; logging to stderr only")
 		}
 	}
 	switch {

@@ -32,7 +32,7 @@ vi.mock('@wailsio/runtime', () => ({
 }))
 
 const DATA = '/home/u/.local/share/hive'
-const LOG = '/home/u/.local/share/hive/desktop/desktop.log'
+const LOG = '/home/u/.local/share/hive/hive.log'
 const DB = '/home/u/.local/share/hive/desktop/desktop-pipeline.db'
 
 function info(overrides: Record<string, unknown> = {}) {

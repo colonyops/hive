@@ -143,7 +143,7 @@ func ResolvePaths(b Bootstrap, opts ResolveOptions) Paths {
 		AgentWorkspacesDir:   agentWorkspacesDir,
 		SettingsPath:         filepath.Join(configDir, settingsFileName),
 		CredentialsIndexPath: filepath.Join(stateDir, "credentials.json"),
-		LogFile:              filepath.Join(stateDir, logFileName),
+		LogFile:              config.LogFilePath(hiveDataDir),
 		ReportsDir:           filepath.Join(dataDir, "reports"),
 		DataDirOverridden:    dataOverride || b.DataDir != "",
 		ConfigDirOverridden:  configOverride || b.ConfigDir != "",

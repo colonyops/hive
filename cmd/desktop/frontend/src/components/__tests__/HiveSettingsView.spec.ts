@@ -40,7 +40,7 @@ function info(exists: boolean, overridden = false) {
   return {
     dataDir: { path: '/home/u/.local/share/hive', exists: true, overridden: false },
     configDir: { path: '/home/u/.config/hive/desktop', exists: true, overridden: false },
-    logFile: { path: '/home/u/.local/share/hive/desktop/desktop.log', exists: true, overridden: false },
+    logFile: { path: '/home/u/.local/share/hive/hive.log', exists: true, overridden: false },
     database: { path: '/home/u/.local/share/hive/desktop/desktop-pipeline.db', exists: true, overridden: false },
     agentWorkspaces: { path: '/home/u/.config/hive/desktop/workspaces', exists: true, overridden: false },
     hiveConfig: { path: CONFIG, exists, overridden },

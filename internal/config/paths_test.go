@@ -9,6 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestLogFilePath(t *testing.T) {
+	assert.Equal(t, filepath.Join("data", "hive.log"), LogFilePath("data"))
+}
+
 func TestResolveDataDir(t *testing.T) {
 	tests := []struct {
 		name string

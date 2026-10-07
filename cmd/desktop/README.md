@@ -122,7 +122,7 @@ event-log offsets, queued output commands) stays in the data dir's `desktop/`
 subdirectory.
 
 The **System** settings screen (gear → System) surfaces these locations — the
-data directory, config directory, log file (`<data-dir>/desktop/desktop.log`),
+data directory, config directory, shared log file (`<hive-data-dir>/hive.log`),
 and pipeline database (`<data-dir>/desktop/desktop-pipeline.db`) — each with
 copy-path, open-in-default-app, and reveal-in-file-manager actions. It can also
 point the data and config directories at a different folder (e.g. an
@@ -132,7 +132,9 @@ iCloud-synced directory): the choice is written to
 pointer, then XDG defaults, and injects one immutable path snapshot. Overrides
 are point-only — existing data is not moved — and take effect after a restart.
 The pointer remains at its fixed XDG location so the app can find the config
-root after it moves.
+root after it moves. By default, Hive Desktop and the CLI append to the shared
+log file; `service_name=hive-desktop` and `service_name=hive-cli` identify each
+source.
 
 ## Hive CLI compatibility config
 

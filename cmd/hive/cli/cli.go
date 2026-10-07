@@ -195,8 +195,8 @@ Run 'hive new' to create a new session from the current repository.`,
 			if err != nil {
 				return ctx, fmt.Errorf("setup logger: %w", err)
 			}
-			logger = l
-			cliLog = logutils.Component(l, "cli")
+			logger = logutils.Service(l, "hive-cli")
+			cliLog = logutils.Component(logger, "cli")
 			logCloser = closer
 
 			// Extract bundled scripts (non-fatal on failure)
