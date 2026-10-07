@@ -11,28 +11,19 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Options selects the sinks and identity of a root logger.
 type Options struct {
-	// Service is written as service_name on every event.
 	Service string
 	Level   zerolog.Level
-	// File, when set, appends console-format lines without color to that path,
-	// creating it and its parent directory as needed.
-	File string
-	// Console, when set, receives colored console-format lines.
+	File    string
 	Console io.Writer
-	// JSON writers receive each encoded JSON event as is. A writer must not
-	// fail the write or block.
+	// JSON writers must not block.
 	JSON  []io.Writer
 	Hooks []zerolog.Hook
 }
 
-// NewRoot builds a program's root logger and returns a cleanup that closes the
-// file it opened. The cleanup is safe to call more than once.
-//
-// When File cannot be opened, NewRoot returns the error together with a usable
-// logger over the remaining sinks, so the caller decides whether to continue.
-// A logger with no sinks discards every event.
+// NewRoot builds a program's root logger. When File cannot be opened it
+// returns the error and a logger over the remaining sinks. The cleanup is safe
+// to call more than once.
 func NewRoot(opts Options) (zerolog.Logger, func(), error) {
 	var (
 		writers []io.Writer
