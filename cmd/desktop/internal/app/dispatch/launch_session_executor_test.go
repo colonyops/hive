@@ -19,6 +19,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/platform/promptfile"
 )
 
 // fakeSessionLauncher records every LaunchSession call.
@@ -276,6 +277,45 @@ func TestRepositoryLauncher_PropagatesServiceFailure(t *testing.T) {
 	creator := &fakeSessionCreator{err: errors.New("tmux unavailable")}
 	_, err := repositoryLauncher(creator, nil).LaunchSession(t.Context(), LaunchSessionRequest{Name: "review-pr-1"})
 	require.ErrorIs(t, err, creator.err)
+}
+
+func TestRepositoryLauncher_PassesOversizedPromptThroughTempFile(t *testing.T) {
+	creator := &fakeSessionCreator{}
+	prompt := strings.Repeat("large prompt\n", promptfile.ThresholdBytes/13+1)
+
+	_, err := repositoryLauncher(creator, nil).LaunchSession(t.Context(), LaunchSessionRequest{
+		Name: "review-pr-1", Prompt: prompt, Repo: "r",
+	})
+	require.NoError(t, err)
+	require.Len(t, creator.calls, 1)
+
+	path := promptPathFromInstruction(t, creator.calls[0].Prompt)
+	t.Cleanup(func() { require.NoError(t, os.Remove(path)) })
+	written, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Equal(t, prompt, string(written))
+}
+
+func TestRepositoryLauncher_RemovesPromptFileWhenLaunchFails(t *testing.T) {
+	creator := &fakeSessionCreator{err: errors.New("tmux unavailable")}
+	prompt := strings.Repeat("x", promptfile.ThresholdBytes+1)
+
+	_, err := repositoryLauncher(creator, nil).LaunchSession(t.Context(), LaunchSessionRequest{
+		Name: "review-pr-1", Prompt: prompt, Repo: "r",
+	})
+	require.ErrorIs(t, err, creator.err)
+	path := promptPathFromInstruction(t, creator.calls[0].Prompt)
+	_, statErr := os.Stat(path)
+	require.ErrorIs(t, statErr, os.ErrNotExist)
+}
+
+func promptPathFromInstruction(t *testing.T, instruction string) string {
+	t.Helper()
+	_, rest, ok := strings.Cut(instruction, "`")
+	require.True(t, ok, instruction)
+	path, _, ok := strings.Cut(rest, "`")
+	require.True(t, ok, instruction)
+	return path
 }
 
 // fakeItemSessionLinker records the association the launcher persists.

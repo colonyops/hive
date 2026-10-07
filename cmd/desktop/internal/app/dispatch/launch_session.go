@@ -2,6 +2,7 @@ package dispatch
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/rs/zerolog"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/platform/promptfile"
 )
 
 // SessionCreator is satisfied by *sessionsvc.Service.
@@ -40,6 +42,19 @@ func NewRepositoryLauncher(sessions func() SessionCreator, links ItemSessionLink
 }
 
 func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessionRequest) (SessionExecutionOutcome, error) {
+	prepared, err := promptfile.Prepare(req.Prompt)
+	if err != nil {
+		return SessionExecutionOutcome{}, fmt.Errorf("prepare session prompt: %w", err)
+	}
+	keepPromptFile := false
+	defer func() {
+		if !keepPromptFile {
+			if err := prepared.Remove(); err != nil {
+				l.logger.Warn().Ctx(ctx).Err(err).Msg("removing prompt temp file after failed session launch")
+			}
+		}
+	}()
+
 	// Tags are presentational, for a reader inside hive, and are never read
 	// back. ItemSessionLinker writes the associations this app queries.
 	origins := uniqueKnownOrigins(req.Origins)
@@ -49,7 +64,7 @@ func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessio
 	}
 	s, err := l.sessions().CreateFromRequest(ctx, sessionsvc.LaunchRequest{
 		Name:            req.Name,
-		Prompt:          req.Prompt,
+		Prompt:          prepared.Prompt,
 		Agent:           req.Agent,
 		Repo:            req.Repo,
 		CollisionSuffix: req.CollisionSuffix,
@@ -58,6 +73,7 @@ func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessio
 	if err != nil {
 		return SessionExecutionOutcome{}, err
 	}
+	keepPromptFile = true
 	// The session exists either way, so a failed link is logged rather than
 	// returned: reporting the launch as failed would be a lie, and would
 	// invite a retry that creates a second session.

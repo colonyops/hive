@@ -4,6 +4,7 @@ import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCode from '~icons/lucide/code'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconPlay from '~icons/lucide/play'
+import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
 import ActionInputFields from './ActionInputFields.vue'
 import RepositorySelect from './RepositorySelect.vue'
@@ -106,6 +107,10 @@ const validationError = ref('')
 const nameInput = ref<{ focus: () => void } | null>(null)
 
 const needsPrompt = computed(() => !!props.action || prompt.value.trim() !== '')
+const promptUsesTempFile = computed(() => {
+  const threshold = props.options.promptFileThresholdBytes ?? 0
+  return threshold > 0 && new TextEncoder().encode(prompt.value).byteLength > threshold
+})
 const selectedWorkspace = computed(() => props.options.workspaces?.find((item) => item.dir === workspace.value))
 const canSubmit = computed(() => {
   const selectedTarget = target.value === 'repository' ? repository.value : workspace.value
@@ -281,6 +286,17 @@ useSubmitShortcut(submit)
           />
         </template>
       </FormField>
+      <p
+        v-if="withPrompt && promptUsesTempFile"
+        class="flex items-start gap-1.5 text-caption leading-relaxed text-severity-warning"
+        :data-testid="`${fieldId}-prompt-file-warning`"
+      >
+        <IconTriangleAlert class="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+        <span>
+          This prompt is too large to pass directly. Hive will write it to a temporary file and ask the agent to read
+          and delete it.
+        </span>
+      </p>
       <FormField v-if="target === 'repository'">
         <template #label>Agent <span class="text-text-4">(optional)</span></template>
         <template #default="{ id }">

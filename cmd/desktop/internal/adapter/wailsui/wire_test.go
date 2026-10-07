@@ -58,7 +58,7 @@ func TestFrontendTypesKeepTheirFieldNames(t *testing.T) {
 		{"SessionPullRequest", app.SessionPullRequest{}, sorted("status", "number", "title", "state", "isDraft", "url", "reviewDecision", "checks", "additions", "deletions", "cached")},
 		{"SessionLaunchRepository", dispatch.SessionLaunchRepository{}, sorted("name", "repository")},
 		{"SessionLaunchWorkspace", dispatch.SessionLaunchWorkspace{}, sorted("dir", "name", "supportsPrompt")},
-		{"SessionLaunchOptions", dispatch.SessionLaunchOptions{}, sorted("repositories", "defaultRepository", "workspaces", "agents", "defaultAgent")},
+		{"SessionLaunchOptions", dispatch.SessionLaunchOptions{}, sorted("repositories", "defaultRepository", "workspaces", "agents", "defaultAgent", "promptFileThresholdBytes")},
 		{"CreateSessionRequest", dispatch.CreateSessionRequest{Repository: "r", Workspace: "w", Agent: "a", ItemIDs: []int64{1}}, sorted("repository", "workspace", "name", "prompt", "agent", "itemIds")},
 		{"SessionDraft", dispatch.SessionDraft{Repository: "r", Workspace: "w", Agent: "a", ItemIDs: []int64{1}, Failure: &dispatch.SessionCreateFailure{}}, sorted("repository", "workspace", "name", "prompt", "agent", "itemIds", "failure")},
 		{"SessionCreateFailure", dispatch.SessionCreateFailure{}, sorted("reason", "step", "output", "cloneStrategy", "destination", "leftoverCheckout", "at")},

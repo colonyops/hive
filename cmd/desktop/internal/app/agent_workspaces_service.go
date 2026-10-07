@@ -27,6 +27,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
 	terminalstatus "github.com/colonyops/hive/internal/domain/terminal/status"
 	"github.com/colonyops/hive/internal/platform/execenv"
+	"github.com/colonyops/hive/internal/platform/promptfile"
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 )
 
@@ -571,9 +572,22 @@ func (s *AgentWorkspacesService) startSession(ctx context.Context, ws agentws.Wo
 	if strings.TrimSpace(req.Prompt) != "" && !agentws.SupportsPrompt(ws.Command) {
 		return SessionView{}, promptlessCommandError("start a chat with an opening prompt")
 	}
+	prepared, err := promptfile.Prepare(req.Prompt)
+	if err != nil {
+		return SessionView{}, Wrap(err, KindInternal, "preparing the prompt for workspace %q", ws.Dir)
+	}
+	keepPromptFile := false
+	defer func() {
+		if !keepPromptFile {
+			if err := prepared.Remove(); err != nil {
+				s.logger.Warn().Ctx(ctx).Err(err).Str("workspace", ws.Dir).Msg("removing prompt temp file after failed chat launch")
+			}
+		}
+	}()
+
 	workspaceDir := filepath.Join(s.store.Root(), ws.Dir)
 	agentSessionID := uuid.NewString()
-	line, err := agentws.Resolve(resolvedFor(ws, workspaceDir), agentSessionID, false, req.Prompt)
+	line, err := agentws.Resolve(resolvedFor(ws, workspaceDir), agentSessionID, false, prepared.Prompt)
 	if err != nil {
 		return SessionView{}, agentLaunchError(err, ws.Dir)
 	}
@@ -589,10 +603,15 @@ func (s *AgentWorkspacesService) startSession(ctx context.Context, ws agentws.Wo
 		return SessionView{}, Wrap(err, KindInternal, "creating session %q", req.Name)
 	}
 
-	return s.launchTerminal(ctx, rec, terminalLaunch{
+	view, err := s.launchTerminal(ctx, rec, terminalLaunch{
 		dir: workspaceDir, line: line, cols: req.Cols, rows: req.Rows,
 		resumeAttempted: true, detached: req.Detached,
 	})
+	if err != nil {
+		return SessionView{}, err
+	}
+	keepPromptFile = true
+	return view, nil
 }
 
 // StartScheduledSession regenerates the workspace first, as Open does for the

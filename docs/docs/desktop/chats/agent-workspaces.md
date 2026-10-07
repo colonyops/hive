@@ -42,7 +42,9 @@ as a shell-quoted argument. Keep this suffix from the shipped presets:
 ```
 
 Hive refuses a prompted launch if the custom command drops `.Prompt` or
-interpolates it without `shq`.
+interpolates it without `shq`. For prompts larger than 32 KiB, `.Prompt` is a
+short instruction to read and delete a private temporary file containing the
+full text.
 
 **Full** presets bypass the agent's approval checks. Use them only when you trust the workspace instructions and every enabled tool.
 

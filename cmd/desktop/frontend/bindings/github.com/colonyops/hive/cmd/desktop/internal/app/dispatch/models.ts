@@ -154,6 +154,7 @@ export interface SessionLaunchOptions {
     "workspaces": SessionLaunchWorkspace[] | null;
     "agents": string[] | null;
     "defaultAgent": string;
+    "promptFileThresholdBytes": number;
 }
 
 /**

@@ -23,6 +23,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/execenv"
+	"github.com/colonyops/hive/internal/platform/promptfile"
 	"github.com/colonyops/hive/pkg/osopen"
 )
 
@@ -225,10 +226,11 @@ func (s *SessionsService) SessionLaunchOptions(ctx context.Context) (dispatch.Se
 		return dispatch.SessionLaunchOptions{}, Wrap(err, KindInternal, "resolving session launch options")
 	}
 	opts := dispatch.SessionLaunchOptions{
-		DefaultRepository: options.DefaultRepository,
-		Workspaces:        s.SessionLaunchWorkspaces(ctx),
-		Agents:            options.Agents,
-		DefaultAgent:      options.DefaultAgent,
+		DefaultRepository:        options.DefaultRepository,
+		Workspaces:               s.SessionLaunchWorkspaces(ctx),
+		Agents:                   options.Agents,
+		DefaultAgent:             options.DefaultAgent,
+		PromptFileThresholdBytes: promptfile.ThresholdBytes,
 	}
 	for _, repo := range options.Repositories {
 		opts.Repositories = append(opts.Repositories, dispatch.SessionLaunchRepository{Name: repo.Name, Repository: repo.Remote})
