@@ -228,6 +228,14 @@ describe('TitleBar', () => {
     expect(wrapper.get('[data-testid="titlebar-mode-hub"]').attributes('aria-pressed')).toBe('false')
   })
 
+  it('presses no mode segment while settings are open', () => {
+    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', mode: 'settings' } })
+
+    for (const segment of ['hub', 'terminal', 'agents']) {
+      expect(wrapper.get(`[data-testid="titlebar-mode-${segment}"]`).attributes('aria-pressed')).toBe('false')
+    }
+  })
+
   it('renders all three segments', async () => {
     const wrapper = mount(TitleBar, { props: { profileName: 'Triage', mode: 'agents' } })
     const hub = wrapper.get('[data-testid="titlebar-mode-hub"]')

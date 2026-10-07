@@ -4,6 +4,7 @@ test('persists notification preferences from application settings', async ({ pag
   await page.goto('/')
   await expect(page.getByTestId('feed-item')).toHaveCount(6)
 
+  await page.getByTestId('titlebar-menu').click()
   await page.getByTestId('application-settings').click()
   await page.getByTestId('settings-category-notifications').click()
   await expect(page.getByTestId('notification-settings')).toBeVisible()

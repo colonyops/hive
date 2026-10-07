@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // The title bar's overflow menu: views and pages that open over whatever is on
-// screen. Each entry is a palette command, so the menu, the palette and the
+// screen, then the application settings, which answer to every mode. Each entry is a palette command, so the menu, the palette and the
 // keymap stay one surface and a rebound key shows up here as its hint.
 import { computed, ref } from 'vue'
 import IconBookOpen from '~icons/lucide/book-open'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconListTodo from '~icons/lucide/list-todo'
+import IconSettings from '~icons/lucide/settings'
 import IconSquareTerminal from '~icons/lucide/square-terminal'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import type { MenuEntry } from '../types/menu'
@@ -48,6 +49,15 @@ const entries = computed<MenuEntry[]>(() => [
     icon: IconBookOpen,
     kbd: kbdFor('canvas.toggle'),
     testid: 'titlebar-menu-canvases',
+  },
+  { kind: 'separator' },
+  {
+    kind: 'action',
+    id: 'settings.open',
+    label: 'Settings',
+    icon: IconSettings,
+    kbd: kbdFor('settings.open'),
+    testid: 'application-settings',
   },
 ])
 

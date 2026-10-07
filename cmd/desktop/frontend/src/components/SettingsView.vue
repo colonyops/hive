@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// Application-wide settings, opened from the persistent profile rail.
+// Application-wide settings: an area of their own, opened from the title bar.
 // Only settings backed by real behavior or explicitly marked future
 // integrations belong here.
 import { computed, ref, watch } from 'vue'

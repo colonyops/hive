@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import IconPause from '~icons/lucide/pause'
 import IconPlus from '~icons/lucide/plus'
-import IconSettings from '~icons/lucide/settings'
 import { dropClass, dropEdge, useDragReorder } from '../composables/useDragReorder'
 import { moveId, type OrderDropTarget } from '../lib/listOrder'
 import type { Profile } from '../types/feed'
@@ -12,7 +11,6 @@ const props = defineProps<{ profiles: Profile[]; activeProfileId: string }>()
 const emit = defineEmits<{
   select: [profileId: string]
   add: []
-  'open-settings': []
   reorder: [profileIds: string[]]
 }>()
 
@@ -101,14 +99,6 @@ function onKeydown(e: KeyboardEvent, id: string): void {
       class="border-dashed"
       data-testid="profile-add"
       @click="emit('add')"
-    />
-    <div class="flex-1" />
-    <IconButton
-      label="Application settings"
-      :icon="IconSettings"
-      size="xl"
-      data-testid="application-settings"
-      @click="emit('open-settings')"
     />
   </aside>
 </template>

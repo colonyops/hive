@@ -52,13 +52,13 @@ const github = useGitHubConnection()
 const confirmation = useConfirmation()
 
 const nav = useAppNavigation(feed, session)
-const { router, flowsActive, devActive, applicationSettingsActive, profileSettingsActive } = nav
+const { router, flowsActive, devActive, profileSettingsActive } = nav
 const profileActions = useProfileActions(feed, nav, confirmation, github)
 const onboarding = useOnboarding(feed, github, router)
 const { active: onboardingActive, screen: onboardingScreen } = onboarding
 const shellLoaded = computed(() => (profilesLoaded.value || !!profilesError.value) && onboarding.loaded.value)
 const appMode = useAppMode(feed, nav, onboardingActive, shellLoaded)
-const { mode, terminalActive, agentsActive, hubActive, terminalMounted, agentsMounted } = appMode
+const { mode, terminalActive, agentsActive, hubActive, settingsActive, terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
 const overlays = useHubOverlays(terminalActive, appMode.viewCanvasScope)
 const { tasksOpen, activityOpen, canvasOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
@@ -172,8 +172,15 @@ useWailsEvent('flows:updated', () => {
         :sidebar-collapsed="agentsSidebarCollapsed"
         @open-canvas-page="overlays.openCanvas"
       />
-      <!-- The profile rail stays mounted across the feed, flows, and settings
-           pages, so the flows canvas never strands the user. -->
+      <SettingsView
+        v-if="settingsActive"
+        :active-category="nav.applicationSettingsSection.value"
+        :known-feed-types="knownFeedTypes"
+        @close="appMode.closeSettings"
+        @select-category="nav.selectApplicationSettingsSection"
+      />
+      <!-- The profile rail stays mounted across the feed, flows, and profile
+           settings pages, so the flows canvas never strands the user. -->
       <div v-if="hubActive" class="flex min-h-0 flex-1">
         <ProfileRail
           :profiles="profiles"
@@ -181,16 +188,8 @@ useWailsEvent('flows:updated', () => {
           @select="nav.requestSelectProfile"
           @add="profileActions.openNewProfile"
           @reorder="feed.reorderProfiles"
-          @open-settings="nav.openSettings('application')"
         />
         <DevView v-if="devActive" @close="nav.openFeed()" />
-        <SettingsView
-          v-else-if="applicationSettingsActive"
-          :active-category="nav.applicationSettingsSection.value"
-          :known-feed-types="knownFeedTypes"
-          @close="nav.openFeed()"
-          @select-category="nav.selectApplicationSettingsSection"
-        />
         <ProfileSettingsView
           v-else-if="profileSettingsActive && activeProfile"
           :profile="activeProfile"

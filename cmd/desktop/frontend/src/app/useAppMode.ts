@@ -7,12 +7,13 @@ import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 
-export type AppMode = 'hub' | 'terminal' | 'agents'
+export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings'
 
 /**
  * Which area owns the frame under the title bar, and that frame's panel chrome.
- * Inbox (the hub) is the feed, flows, and settings; Code is terminal mode;
- * Chats is the agents area. Terminal and agents are routes, so the title bar
+ * Inbox (the hub) is the feed, flows, and profile settings; Code is terminal
+ * mode; Chats is the agents area. Application settings answer to the whole
+ * app, so they are an area of their own rather than a page of the Inbox. Terminal and agents are routes, so the title bar
  * stays live inside them and history restores where each was left. A relaunch
  * lands on the hub, so none attaches a tmux client or an agent session
  * unprompted.
@@ -32,6 +33,7 @@ export function useAppMode(
   const mode = computed<AppMode>(() => {
     if (route.name === 'terminal') return 'terminal'
     if (route.name === 'agents') return 'agents'
+    if (route.name === 'application-settings') return 'settings'
     return 'hub'
   })
   // Each area is its own positive case rather than "not terminal", so a deep
@@ -40,6 +42,7 @@ export function useAppMode(
   const terminalActive = shown('terminal')
   const agentsActive = shown('agents')
   const hubActive = shown('hub')
+  const settingsActive = shown('settings')
 
   // Mounted on first entry and then only hidden (ADR
   // terminal-mode-is-hidden-not-unmounted): both hold live PTYs and xterm
@@ -64,12 +67,16 @@ export function useAppMode(
   // attach a tmux control client unconditionally.
   let lastHubPath = ''
   let lastTerminalPath = ''
+  // Where closing settings returns to: the last page of any other area.
+  let lastOutsideSettingsPath = ''
   const lastAgentsPath = useStorage('hive.mode.agents.path', '')
   if (!lastAgentsPath.value.startsWith('/workspaces')) lastAgentsPath.value = ''
   watch(
     () => route.fullPath,
     (path) => {
       if (!route.name) return
+      if (route.name === 'application-settings') return
+      lastOutsideSettingsPath = path
       if (route.name === 'terminal') lastTerminalPath = path
       else if (route.name === 'agents') lastAgentsPath.value = path
       else lastHubPath = path
@@ -82,6 +89,10 @@ export function useAppMode(
     if (next === 'terminal') void router.push(lastTerminalPath || { name: 'terminal' })
     else if (next === 'agents') void router.push(lastAgentsPath.value || { name: 'agents' })
     else void router.push(lastHubPath || { name: 'feed' })
+  }
+
+  function closeSettings(): void {
+    void router.push(lastOutsideSettingsPath || { name: 'feed' })
   }
 
   // The URL is the attach state, so it is also which session is on screen.
@@ -100,7 +111,7 @@ export function useAppMode(
       !onboardingActive.value &&
       !terminalActive.value &&
       !agentsActive.value &&
-      !nav.applicationSettingsActive.value &&
+      !settingsActive.value &&
       !nav.profileSettingsActive.value &&
       !nav.flowsActive.value &&
       !nav.devActive.value &&
@@ -186,6 +197,8 @@ export function useAppMode(
     terminalActive,
     agentsActive,
     hubActive,
+    settingsActive,
+    closeSettings,
     terminalMounted,
     agentsMounted,
     onScreenSessionSlug,
