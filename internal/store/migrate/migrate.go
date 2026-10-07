@@ -181,6 +181,15 @@ func applyMigration(ctx context.Context, conn *sql.DB, version int, name, upSQL 
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Another process can finish this migration after AppliedVersions reads it.
+	var applied bool
+	if err := tx.QueryRowContext(ctx, "SELECT EXISTS (SELECT 1 FROM schema_migrations WHERE version = ?)", version).Scan(&applied); err != nil {
+		return fmt.Errorf("check migration under write lock: %w", err)
+	}
+	if applied {
+		return tx.Commit()
+	}
+
 	if _, err := tx.ExecContext(ctx, upSQL); err != nil {
 		return fmt.Errorf("executing SQL: %w", err)
 	}

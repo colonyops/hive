@@ -1,6 +1,14 @@
 version: "2"
 sql:
   - engine: "sqlite"
+    queries: "internal/store/usageanalytics/queries"
+    schema: "internal/store/usageanalytics/migrations/*.up.sql"
+    gen:
+      go:
+        package: "queries"
+        out: "internal/store/usageanalytics/queries"
+        emit_empty_slices: true
+  - engine: "sqlite"
     queries:
       - "internal/store/db/queries/queries.sql"
       - "internal/store/db/queries/queries_hc.sql"

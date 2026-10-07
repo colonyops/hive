@@ -39,6 +39,7 @@ type Multiplexer interface {
 // engine, whose accessors (Sessions, Messages, HC, ...) commands and the TUI
 // call per use, and adds what only the CLI has.
 type App struct {
+	Analytics sessionsvc.Recorder
 	*hive.Engine
 
 	// Logger carries no cmp label. A command or component adds its own.

@@ -420,7 +420,11 @@ func nodeFor(mapping *yaml.Node, key string) *yaml.Node {
 func setNode(mapping *yaml.Node, key string, value *yaml.Node) {
 	for i := 0; i+1 < len(mapping.Content); i += 2 {
 		if mapping.Content[i].Value == key {
-			value.Anchor = mapping.Content[i+1].Anchor
+			previous := mapping.Content[i+1]
+			value.Anchor = previous.Anchor
+			value.HeadComment = previous.HeadComment
+			value.LineComment = previous.LineComment
+			value.FootComment = previous.FootComment
 			mapping.Content[i+1] = value
 			return
 		}

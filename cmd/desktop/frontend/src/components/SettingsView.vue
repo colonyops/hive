@@ -25,6 +25,7 @@ import SystemSettingsView from './SystemSettingsView.vue'
 import TerminalSettingsView from './TerminalSettingsView.vue'
 import NotificationSettingsView from './NotificationSettingsView.vue'
 import MenuBarSettingsView from './MenuBarSettingsView.vue'
+import AnalyticsSettingsView from './AnalyticsSettingsView.vue'
 import ObservabilitySettingsView from './ObservabilitySettingsView.vue'
 import GithubIntegrationDrawer from './settings/GithubIntegrationDrawer.vue'
 import GrafanaIntegrationDrawer from './settings/GrafanaIntegrationDrawer.vue'
@@ -68,7 +69,7 @@ const navGroups: Array<{ title: string; ids: readonly ApplicationSettingsSection
   { title: 'Inbox', ids: ['integrations', 'actions'] },
   { title: 'Code', ids: ['terminal', 'launchers', 'hive', 'mcp'] },
   { title: 'Chats', ids: ['agents'] },
-  { title: 'Advanced', ids: ['system', 'observability', 'about'] },
+  { title: 'Advanced', ids: ['system', 'analytics', 'observability', 'about'] },
 ]
 const sectionTitle = computed(() => applicationSettingsSectionMeta[props.activeCategory].title)
 
@@ -221,6 +222,7 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
     <ActionSettingsView v-else-if="props.activeCategory === 'actions'" :known-types="props.knownFeedTypes" />
     <LauncherSettingsView v-else-if="props.activeCategory === 'launchers'" />
 
+    <AnalyticsSettingsView v-else-if="props.activeCategory === 'analytics'" />
     <ObservabilitySettingsView v-else-if="props.activeCategory === 'observability'" />
     <SystemSettingsView v-else-if="props.activeCategory === 'system'" />
     <AboutSettingsView v-else-if="props.activeCategory === 'about'" />

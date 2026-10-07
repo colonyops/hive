@@ -26,7 +26,7 @@ of two writers.
 
 Ask for the two values as the first step of first run, and write them: which
 agents can start a session, and which parent folders hold the repositories
-they run in. First run is the only writer. Settings ▸ Hive CLI keeps pointing
+they run in. First run is the only writer of session setup. Settings ▸ Hive CLI keeps pointing
 at the file and the hive documentation: a surface that edits the config after
 first run needs a strategy for the whole file, not a second form over two keys
 of it, and that strategy is not designed yet.
@@ -39,7 +39,12 @@ all. A usable config is confirmed on screen and adopted unchanged.
 Read the file's own YAML to decide that, never hive's merged config, so hive's
 `claude` fallback is not mistaken for a choice the user made.
 
-Own two keys and no others. Creating a file renders a commented template
+First run owns `workspaces` and `agents`. Settings ▸ Analytics separately owns
+`analytics.enabled` and `analytics.local.enabled`, through an analytics-only
+node-tree edit. It must not use the setup editor, which reconciles entire
+workspace and agent lists. Both writers preserve unrelated keys and comments,
+validate the candidate with Hive's loader, and replace the symlink target
+atomically. Analytics collection uses startup settings and requires a restart. Creating a file renders a commented template
 holding only those two keys; `hive init`'s template also writes `version`,
 `tmux` and `rules`. Editing an existing file edits its parsed node tree in
 place (the `flow/yamldoc.go` pattern), so comments, key order, unknown keys,
@@ -57,7 +62,7 @@ a Dock launch's resolved PATH is not the one the user sees in their terminal.
 
 - A first run ends with a session launcher that has something in it.
 - The desktop is now a writer of a file another product owns. Every write is
-  atomic and scoped to `workspaces` and `agents`; a rejected edit writes
+  atomic and scoped to session setup or the analytics collection gates; a rejected edit writes
   nothing.
 - Adding a key to the editor means extending `hiveconf.Edit`, its validation,
   and — if it feeds a service — `hiveServices` and the `Rebind` calls in

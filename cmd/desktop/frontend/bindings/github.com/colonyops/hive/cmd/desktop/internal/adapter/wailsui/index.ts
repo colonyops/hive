@@ -5,6 +5,7 @@ import * as ActionRunService from "./actionrunservice.js";
 import * as ActionsService from "./actionsservice.js";
 import * as ActivityService from "./activityservice.js";
 import * as AgentsService from "./agentsservice.js";
+import * as AnalyticsService from "./analyticsservice.js";
 import * as DevToolsService from "./devtoolsservice.js";
 import * as FlowsService from "./flowsservice.js";
 import * as GitHubService from "./githubservice.js";
@@ -37,6 +38,7 @@ export {
     ActionsService,
     ActivityService,
     AgentsService,
+    AnalyticsService,
     DevToolsService,
     FlowsService,
     GitHubService,

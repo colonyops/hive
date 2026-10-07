@@ -159,6 +159,15 @@ Hive Desktop resolves both `HIVE_CONFIG` and `HIVE_DEFAULT_AGENT` through the
 user's login-shell environment so a Dock launch sees the same exported values
 as a terminal.
 
+Settings ▸ Analytics shows local counts for completed CLI commands, successful
+Hive session creations, and new Desktop terminal starts. Both programs write
+`usage-analytics.db` beside the shared `hive.db`. Collection defaults to on and
+exports nothing. The page edits only `analytics.enabled` and
+`analytics.local.enabled` in the external Hive config, reports restart and
+`HIVE_ANALYTICS_ENABLED=false` overrides, and confirms a shared-history clear.
+Disabled collection keeps readable history and runs no writer or retention.
+See the [analytics guide](../../docs/docs/desktop/configuration/analytics.md).
+
 ## Desktop settings
 
 `settings.yaml` is decoded into a nested typed schema. Resolution is

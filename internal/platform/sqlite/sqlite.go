@@ -5,13 +5,16 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
-	_ "modernc.org/sqlite"
+	driver "modernc.org/sqlite"
+	"modernc.org/sqlite/lib"
 )
 
 type Options struct {
+	ReadOnly     bool
 	MaxOpenConns int
 	MaxIdleConns int
 	BusyTimeout  time.Duration
@@ -30,9 +33,12 @@ type Options struct {
 // writer waits on busy_timeout instead of failing.
 func Open(ctx context.Context, path string, opts Options) (*sql.DB, error) {
 	dsn := fmt.Sprintf(
-		"file:%s?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)&_pragma=foreign_keys(ON)",
+		"file:%s?_txlock=immediate&_pragma=busy_timeout(%d)&_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)",
 		path, opts.BusyTimeout.Milliseconds(),
 	)
+	if opts.ReadOnly {
+		dsn += "&mode=ro"
+	}
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -42,11 +48,34 @@ func Open(ctx context.Context, path string, opts Options) (*sql.DB, error) {
 	conn.SetMaxIdleConns(opts.MaxIdleConns)
 	conn.SetConnMaxLifetime(0)
 
-	if err := conn.PingContext(ctx); err != nil {
+	if err := ping(ctx, conn, opts.BusyTimeout); err != nil {
 		if closeErr := conn.Close(); closeErr != nil {
 			return nil, fmt.Errorf("failed to connect to database: %w (close also failed: %w)", err, closeErr)
 		}
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 	return conn, nil
+}
+
+func ping(ctx context.Context, conn *sql.DB, timeout time.Duration) error {
+	if timeout <= 0 {
+		return conn.PingContext(ctx)
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	for {
+		err := conn.PingContext(ctx)
+		var sqliteErr *driver.Error
+		// Switching a newly opened connection to WAL can fail before busy_timeout waits.
+		if !errors.As(err, &sqliteErr) || (sqliteErr.Code()&0xff != sqlite3.SQLITE_BUSY && sqliteErr.Code()&0xff != sqlite3.SQLITE_LOCKED) {
+			return err
+		}
+		timer := time.NewTimer(25 * time.Millisecond)
+		select {
+		case <-timer.C:
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		}
+	}
 }

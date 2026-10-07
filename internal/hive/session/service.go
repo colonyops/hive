@@ -18,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
+	"github.com/colonyops/hive/internal/domain/usageanalytics"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/platform/workspace"
@@ -102,7 +103,14 @@ func (s *switchWriter) set(w io.Writer) io.Writer {
 }
 
 // Service orchestrates hive session operations.
+type Recorder interface {
+	Record(context.Context, usageanalytics.Event)
+}
+
+type Options struct{ Analytics Recorder }
+
 type Service struct {
+	analytics  Recorder
 	sessions   session.Store
 	git        git.Git
 	config     *config.Config
@@ -132,13 +140,19 @@ func NewService(
 	styler OutputStyler,
 	stdout, stderr io.Writer,
 	client Multiplexer,
+	options ...Options,
 ) *Service {
+	var recorder Recorder = usageanalytics.Noop{}
+	if len(options) > 0 && options[0].Analytics != nil {
+		recorder = options[0].Analytics
+	}
 	out := &switchWriter{w: stdout}
 	err := &switchWriter{w: stderr}
 	if client == nil {
 		panic("session.NewService: multiplexer is required")
 	}
 	return &Service{
+		analytics:  recorder,
 		sessions:   sessions,
 		git:        gitClient,
 		config:     cfg,
@@ -387,6 +401,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	writeProgressf(progress, "Session created: %s", sess.Name)
 	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("session created")
 
+	s.analytics.Record(ctx, usageanalytics.SessionCreated(cloneStrategy, recyclable != nil))
 	s.bus.PublishSessionCreated(events.SessionCreatedPayload{Session: &sess})
 
 	return &sess, nil

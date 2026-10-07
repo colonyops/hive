@@ -33,6 +33,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/session/scripts"
+	usageanalyticssvc "github.com/colonyops/hive/internal/hive/usageanalytics"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/internal/store"
 	"github.com/colonyops/hive/internal/store/db"
@@ -120,6 +121,7 @@ func Main() {
 	ctx := context.Background()
 
 	var (
+		analytics   *usageanalyticssvc.Service
 		logCloser   func()
 		logger      zerolog.Logger
 		cliLog      zerolog.Logger
@@ -237,9 +239,14 @@ Run 'hive new' to create a new session from the current repository.`,
 			events.RegisterDebugLogger(logger, bus)
 			hive.NewNotificationRouter(bus).Register()
 
+			analytics = usageanalyticssvc.New(ctx, logger, usageanalyticssvc.Options{
+				Enabled: cfg.Analytics.CollectionEnabled() && !hiveconfig.AnalyticsEnvironmentDisabled(os.Getenv(hiveconfig.EnvAnalyticsEnabled)),
+				DataDir: flags.DataDir, Surface: "cli", AppVersion: hiveBuildInfo().Version,
+			})
 			exec := &executil.RealExecutor{}
 			tmuxClient := tmuxexec.NewDefault(logger)
 			engine, err := hive.New(&cfg.Config, hive.Ports{
+				Analytics:  analytics,
 				DB:         database,
 				Bus:        bus,
 				Executor:   exec,
@@ -300,12 +307,16 @@ Run 'hive new' to create a new session from the current repository.`,
 
 			// Populate the pre-allocated App struct (commands already hold a pointer to it)
 			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, kvStore, pluginInfos)
+			hiveApp.Analytics = analytics
 			hiveApp.Build = hiveBuildInfo()
 			hiveApp.Sources = app.BuildSourceRegistry(logger, cfg, exec, kvStore)
 
 			return ctx, nil
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
+			if analytics != nil {
+				analytics.Close()
+			}
 			if busCancel != nil {
 				busCancel()
 			}
@@ -358,6 +369,8 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewWorkspaceCmd(flags, hiveApp).Register(app)
 	app = commands.NewInitCmd(flags, hiveApp).Register(app)
 	app = commands.NewExperimentalCmd(flags, hiveApp).Register(app)
+
+	commands.InstrumentCommands(app, hiveApp)
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)

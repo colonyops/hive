@@ -51,6 +51,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	hiveevents "github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/session/scripts"
+	usageanalyticssvc "github.com/colonyops/hive/internal/hive/usageanalytics"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/execenv"
 	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
@@ -98,6 +99,7 @@ type App struct {
 	MenuBar    *MenuBarService
 	System     *SystemService
 	HiveConfig *HiveConfigService
+	Analytics  *AnalyticsService
 	Webhooks   *WebhookService
 	GitHub     *GitHubService
 	Gitea      *GiteaService
@@ -210,7 +212,8 @@ type App struct {
 	hive     *hive.Engine
 	launcher *dispatch.RepositoryLauncher
 
-	hiveDataDir string
+	hiveDataDir    string
+	usageAnalytics *usageanalyticssvc.Service
 	// reloadMu serializes ReloadHiveRuntime, so the engine, the agent command
 	// lines and the config location of one reload land together.
 	reloadMu sync.Mutex
@@ -292,6 +295,13 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		ctx:           runCtx,
 		cancel:        cancel,
 	}
+
+	constructed := false
+	defer func() {
+		if !constructed && a.usageAnalytics != nil {
+			a.usageAnalytics.Close()
+		}
+	}()
 
 	a.pollInterval = cfg.Settings.Polling.Interval.Duration()
 	a.tmux = tmuxbin.NewResolver(cfg.Settings.Paths.Tmux)
@@ -513,7 +523,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		EditorCommand:   a.Settings,
 		DefaultAgentEnv: defaultAgentEnvReader{env: a.execEnv},
 	})
-	a.Terminals = newTerminalsService(TerminalsDeps{Manager: a.terminals, Starter: a.Sessions, Home: os.UserHomeDir, Logger: cfg.Logger})
+	a.Terminals = newTerminalsService(TerminalsDeps{Analytics: a.usageAnalytics, Manager: a.terminals, Starter: a.Sessions, Home: os.UserHomeDir, Logger: cfg.Logger})
 	a.PopupTerminals = newPopupTerminalsService(PopupTerminalsDeps{Manager: a.popupTerminals, Terminals: a.Terminals, Directory: a.Sessions, Catalog: a.actionStore})
 	a.Tasks = newTasksService(a.hive)
 
@@ -532,6 +542,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	// running loop is the workspace editor's, not a route of its own.
 	a.AgentWorkspaces.OnSchedulesChanged = func(string) { a.scheduler.Reload() }
 
+	constructed = true
 	return a, nil
 }
 
@@ -624,6 +635,7 @@ func (a *App) Start(ctx context.Context) error {
 	// delivery or a test harness can append, there is a runner ready to route
 	// it — no window in which a wake-up has nothing to wake.
 	if err := a.engine.Start(ctx); err != nil {
+		a.usageAnalytics.Close()
 		return fmt.Errorf("start flow engine: %w", err)
 	}
 	if a.producer != nil {
@@ -779,6 +791,10 @@ func (a *App) Close() error {
 		if closeErr := a.Perf.Close(); closeErr != nil {
 			a.logger.Warn().Err(closeErr).Msg("close perf recorder")
 		}
+	}
+
+	if a.usageAnalytics != nil {
+		a.usageAnalytics.Close()
 	}
 
 	if a.hiveBusCancel != nil {
@@ -1248,6 +1264,11 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("open hive action database: %w", err)
 	}
 
+	environmentDisabled := config.AnalyticsEnvironmentDisabled(a.execEnv.Getenv(ctx, config.EnvAnalyticsEnabled))
+	enabled := hiveCfg.Analytics.CollectionEnabled() && !environmentDisabled
+	a.usageAnalytics = usageanalyticssvc.New(ctx, a.logger, usageanalyticssvc.Options{Enabled: enabled, DataDir: dataDir, Surface: "desktop", AppVersion: cfg.Build.Version})
+	a.Analytics = &AnalyticsService{dataDir: dataDir, location: a.HiveConfigLocation, environmentDisabled: environmentDisabled, startupEnabled: enabled, recorder: a.usageAnalytics}
+
 	bus := hiveevents.New(64)
 	busCtx, cancel := context.WithCancel(ctx)
 	go bus.Start(busCtx)
@@ -1257,12 +1278,13 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	}
 	tmuxClient := tmuxexec.New(a.logger, newTmuxRunner(tmuxBinary, a.execEnv.Environ))
 	ports := hive.Ports{
-		DB:       database,
-		Bus:      bus,
-		Executor: newEnvExecutor(a.execEnv),
-		Mux:      hiveMultiplexer{Client: tmuxClient, renamer: a.terminals},
-		DataDir:  dataDir,
-		Logger:   a.logger,
+		Analytics: a.usageAnalytics,
+		DB:        database,
+		Bus:       bus,
+		Executor:  newEnvExecutor(a.execEnv),
+		Mux:       hiveMultiplexer{Client: tmuxClient, renamer: a.terminals},
+		DataDir:   dataDir,
+		Logger:    a.logger,
 	}
 	// Mock modes have no tmux to read, so status stays off.
 	if a.mock == "" {

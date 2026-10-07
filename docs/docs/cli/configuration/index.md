@@ -70,6 +70,21 @@ Use environment overrides for machine-specific paths and defaults without mainta
 | `HIVE_CONTEXT_BASE_DIR` | `context.base_dir`  | Supports the same path rules as config     |
 | `HIVE_GIT_PATH`         | `git_path`          | Git executable path for this machine       |
 
+## Local usage analytics
+
+Local usage collection defaults to on. Both programs write `usage-analytics.db` beside `hive.db`. The Desktop [Analytics page](../../desktop/configuration/analytics.md) shows counts and can clear the shared history.
+
+To disable collection, add this to `config.yaml`:
+
+```yaml
+analytics:
+  enabled: false
+```
+
+`analytics.local.enabled: false` also disables the local collector. `HIVE_ANALYTICS_ENABLED=false` disables it for one invocation without editing the file. Disabled collection preserves history and opens no analytics writer.
+
+Only registered command identifiers, outcomes, bounded durations, and successful session creation properties are collected. Help, completion, `hive init`, and the no-subcommand TUI do not count as commands. Raw arguments and user content are never recorded. See [Analytics](../../desktop/configuration/analytics.md) for privacy, retention, and clear behavior.
+
 ## Agents
 
 Agent profiles define the AI tools available for spawning in sessions. The `default` key selects which profile to use when creating a new session unless a matching rule sets `agent`, the session is created with `--agent`, or `HIVE_DEFAULT_AGENT` is set.

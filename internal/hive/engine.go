@@ -17,6 +17,7 @@ import (
 
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/terminal"
+	"github.com/colonyops/hive/internal/domain/usageanalytics"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
@@ -36,6 +37,7 @@ import (
 // Ports are the drivers and process-lived handles a program gives the engine.
 // None of them is rebuilt on Reload.
 type Ports struct {
+	Analytics sessionsvc.Recorder
 	// DB is hive.db, opened with OpenDB. The program closes it.
 	DB *db.DB
 	// Bus is the event bus. The program starts and stops it.
@@ -109,6 +111,9 @@ func New(cfg *config.Config, p Ports) (*Engine, error) {
 	case p.Mux == nil:
 		return nil, errors.New("hive engine: Mux is required")
 	}
+	if p.Analytics == nil {
+		p.Analytics = usageanalytics.Noop{}
+	}
 	if p.Styler == nil {
 		p.Styler = sessionsvc.PlainStyler{}
 	}
@@ -175,7 +180,7 @@ func (e *Engine) build(cfg *config.Config) (*services, error) {
 		git:      gitExec,
 		sessions: sessionsvc.NewService(
 			p.Logger, store.NewSessionStore(p.DB), gitExec, cfg, p.Bus, p.Executor, renderer,
-			p.Styler, p.Stdout, p.Stderr, p.Mux,
+			p.Styler, p.Stdout, p.Stderr, p.Mux, sessionsvc.Options{Analytics: p.Analytics},
 		),
 		messages:  msgsvc.NewService(store.NewMessageStore(p.DB, cfg.Messaging.MaxMessages), cfg, p.Bus),
 		context:   repocontext.NewService(p.Logger, cfg, gitExec),

@@ -1,0 +1,35 @@
+import { expect, test } from './fixtures.js'
+
+test('Analytics is reachable from the palette and controls local history', async ({ page }, testInfo) => {
+  await page.goto('/')
+  await expect(page.getByTestId('feed-item')).toHaveCount(6)
+  await page.keyboard.press('Meta+k')
+  await page.getByTestId('command-palette-input').fill('Analytics')
+  await expect(page.getByTestId('command-palette-command-title').first()).toHaveText('Analytics')
+  await page.getByTestId('command-palette-input').press('Enter')
+  await expect(page.getByTestId('settings-analytics')).toBeVisible()
+  await expect(page.getByTestId('analytics-enabled')).toBeEnabled()
+  const enabled = page.getByTestId('analytics-enabled')
+  const original = await enabled.getAttribute('aria-checked')
+  try {
+    await enabled.click()
+    await expect(enabled).toHaveAttribute('aria-checked', original === 'true' ? 'false' : 'true')
+    await expect(page.getByTestId('analytics-restart')).toBeVisible()
+    await expect(page.getByTestId('analytics-status')).toContainText('History remains readable')
+    await page.getByTestId('analytics-clear').click()
+    await expect(page.getByTestId('analytics-clear-confirmation')).toBeVisible()
+    await page.getByTestId('analytics-clear-confirmation-cancel').click()
+    await expect(page.getByTestId('analytics-clear-confirmation')).toBeHidden()
+    await page.getByTestId('analytics-clear').click()
+    await page.getByTestId('analytics-clear-confirmation-confirm').click()
+    await expect(page.getByTestId('analytics-clear-confirmation')).toBeHidden()
+    await page.getByTestId('analytics-refresh').click()
+    await expect(page.getByTestId('analytics-cli-count')).toHaveText('0')
+    await expect(page.getByTestId('analytics-session-count')).toHaveText('0')
+    await expect(page.getByTestId('analytics-terminal-count')).toHaveText('0')
+    await page.screenshot({ path: `screenshots/analytics-${testInfo.project.name}.png`, fullPage: true })
+  } finally {
+    if (await enabled.getAttribute('aria-checked') !== original) await enabled.click()
+    await expect(enabled).toHaveAttribute('aria-checked', original ?? 'true')
+  }
+})

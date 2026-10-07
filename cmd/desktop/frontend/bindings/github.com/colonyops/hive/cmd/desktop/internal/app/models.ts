@@ -4,6 +4,9 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as hiveconf$0 from "./hiveconf/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as usageanalytics$0 from "../../../../internal/store/usageanalytics/models.js";
 
 export interface ActionRunLocation {
     "itemId": number;
@@ -46,6 +49,16 @@ export interface ActionRunSummary {
     "profileId"?: string;
     "itemId"?: number;
     "itemTitle"?: string;
+}
+
+export interface AnalyticsSummary {
+    "counts": usageanalytics$0.Summary;
+    "enabled": boolean;
+    "effectiveEnabled": boolean;
+    "active": boolean;
+    "restartNeeded": boolean;
+    "environmentOverride": boolean;
+    "retentionDays": number;
 }
 
 /**

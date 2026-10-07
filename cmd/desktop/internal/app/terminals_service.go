@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/colonyops/hive/internal/domain/usageanalytics"
 	"github.com/colonyops/hive/internal/platform/observe"
 	"github.com/colonyops/hive/internal/platform/tmux/control"
 )
@@ -47,10 +48,15 @@ type ScratchTerminal struct {
 // TerminalsService is the slug-keyed driving service both the HTTP and the
 // Wails adapter call. It holds no token, base URL or stream path: what the
 // terminal is reached over is the adapter's, not the core's (ADR terminal-transport).
+type analyticsRecorder interface {
+	Record(context.Context, usageanalytics.Event)
+}
+
 type TerminalsService struct {
-	manager *tmuxcc.Manager
-	starter terminalStarter
-	home    func() (string, error)
+	analytics analyticsRecorder
+	manager   *tmuxcc.Manager
+	starter   terminalStarter
+	home      func() (string, error)
 	// foreground answers whether a pid holds its terminal's foreground process
 	// group. It is a field so a test can drive the answer without arranging the
 	// process states it stands for.
@@ -59,14 +65,18 @@ type TerminalsService struct {
 }
 
 type TerminalsDeps struct {
-	Manager *tmuxcc.Manager
-	Starter terminalStarter
-	Home    func() (string, error)
-	Logger  zerolog.Logger
+	Analytics analyticsRecorder
+	Manager   *tmuxcc.Manager
+	Starter   terminalStarter
+	Home      func() (string, error)
+	Logger    zerolog.Logger
 }
 
 func newTerminalsService(d TerminalsDeps) *TerminalsService {
-	return &TerminalsService{manager: d.Manager, starter: d.Starter, home: d.Home, foreground: processForeground, log: d.Logger}
+	if d.Analytics == nil {
+		d.Analytics = usageanalytics.Noop{}
+	}
+	return &TerminalsService{analytics: d.Analytics, manager: d.Manager, starter: d.Starter, home: d.Home, foreground: processForeground, log: d.Logger}
 }
 
 // Scratch declares the scratch terminal. It is a constant rather than a probe:
@@ -144,11 +154,13 @@ func (s *TerminalsService) Start(ctx context.Context, slug string) (bool, error)
 		return false, nil
 	}
 	if slug == ScratchSlug {
-		return true, s.startScratch(ctx)
-	}
-	if err := s.starter.StartTmuxSession(ctx, slug); err != nil {
+		if err := s.startScratch(ctx); err != nil {
+			return false, err
+		}
+	} else if err := s.starter.StartTmuxSession(ctx, slug); err != nil {
 		return false, err
 	}
+	s.analytics.Record(ctx, usageanalytics.TerminalStarted(slug == ScratchSlug))
 	return true, nil
 }
 

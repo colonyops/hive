@@ -35,6 +35,7 @@ const (
 // Config holds the engine configuration. Decoding is not strict, so a file
 // that also carries CLI-only sections loads without error.
 type Config struct {
+	Analytics           AnalyticsConfig `json:"analytics"             yaml:"analytics"`
 	Git                 GitConfig       `json:"git"                   yaml:"git"`
 	GitPath             string          `json:"git_path"              yaml:"git_path"`
 	Rules               []Rule          `json:"rules"                 yaml:"rules"`
@@ -262,7 +263,9 @@ var DefaultRecycleCommands = []string{
 
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() Config {
+	enabled, localEnabled := true, true
 	return Config{
+		Analytics: AnalyticsConfig{Enabled: &enabled, Local: AnalyticsLocalConfig{Enabled: &localEnabled}},
 		Git: GitConfig{
 			StatusWorkers: 3,
 		},
@@ -344,6 +347,12 @@ func (c *Config) Complete(dataDir string) {
 // applyDefaults sets default values for any unset configuration options.
 func (c *Config) applyDefaults() {
 	defaults := DefaultConfig()
+	if c.Analytics.Enabled == nil {
+		c.Analytics.Enabled = defaults.Analytics.Enabled
+	}
+	if c.Analytics.Local.Enabled == nil {
+		c.Analytics.Local.Enabled = defaults.Analytics.Local.Enabled
+	}
 	if c.Git.StatusWorkers == 0 {
 		c.Git.StatusWorkers = defaults.Git.StatusWorkers
 	}

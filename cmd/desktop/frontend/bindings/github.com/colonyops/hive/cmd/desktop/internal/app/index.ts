@@ -10,6 +10,7 @@ export type {
     ActionRunLogLine,
     ActionRunLogPage,
     ActionRunSummary,
+    AnalyticsSummary,
     HiveSetup,
     HiveSetupRequest,
     Integration,

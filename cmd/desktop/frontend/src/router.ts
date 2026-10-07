@@ -24,6 +24,7 @@ export const applicationSettingsSections = [
   'mcp',
   'agents',
   'system',
+  'analytics',
   'observability',
   'about',
 ] as const

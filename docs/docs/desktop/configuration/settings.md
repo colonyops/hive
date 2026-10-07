@@ -22,7 +22,7 @@ Settings shows or changes:
 - the agent workspace folder location;
 - the addresses of the MCP servers Hive hosts, and how to add one to your own agent;
 - the optional Hive CLI compatibility config;
-- diagnostics, updates, and release channels.
+- [local usage analytics](analytics.md), diagnostics, updates, and release channels.
 
 The app validates changes before saving them.
 
@@ -74,7 +74,7 @@ If you use the Hive CLI, Desktop also reads its optional configuration file at s
 
 First run asks for the two settings Hive Desktop needs from that file — the agents a session can start with, and the parent folders holding your repositories — and writes them; see [Set up your agent and code](../getting-started/agent-and-repos.md). Everything else in the file is left as written: rules, tmux settings, keybindings, user commands, and any agent profile with a command of its own.
 
-Change any of it later by editing the file yourself, then restarting Hive Desktop. The hive CLI [configuration reference](../../cli/configuration/index.md) describes every key.
+Change session configuration later by editing the file yourself, then restarting Hive Desktop. **Settings ▸ Analytics** can separately edit the shared collection switches; see [Analytics](analytics.md). The hive CLI [configuration reference](../../cli/configuration/index.md) describes every key.
 
 **Settings ▸ Hive CLI** shows the exact path selected at startup, and lets you copy it, open or reveal an existing file, or create a missing one and open it. It also tells you when the file no longer parses, which is worth checking after a hand edit.
 

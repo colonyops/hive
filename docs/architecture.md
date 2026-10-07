@@ -957,12 +957,11 @@ session dialog's repository list from `workspaces` and its agent list from
 `agents`, and neither has a useful default — an absent file means an empty
 repository list and an invented `claude` profile.
 
-First run therefore asks for those two values and writes them, and is the only
-thing that writes them
+First run therefore asks for those two values and writes them
 (ADR hive-desktop-writes-the-hive-config-during-first-run-instead-of-requiring-a-hand-written-one).
 Three rules hold for anything that touches this file:
 
-- **Own two keys, `workspaces` and `agents`, and nothing else.** A file with
+- **First run owns `workspaces` and `agents`; Analytics owns only its collection gates.** The Analytics switch uses `config.SetAnalyticsEnabled`, never the whole setup edit. It preserves unrelated keys and comments, validates with Hive's loader, and follows symlinks before an atomic replacement. Collection changes require each process to restart. A file with
   keys in it is edited through its parsed `yaml.Node` tree (the
   `flow/yamldoc.go` pattern, in `internal/config/write.go`, which `hive init`
   shares), so comments, key
@@ -992,7 +991,7 @@ A caller fetches a service per call (`engine.Sessions().X`) and never holds
 one, or it keeps serving the config the process started with. A new
 config-derived dependency belongs in the engine's service set.
 
-Two databases remain separate on purpose: `hive.db` is shared with the
+Product databases remain separate on purpose: `hive.db` is shared with the
 external `hive` CLI, and `desktop-pipeline.db` isolates desktop write traffic
 from it. Their locations resolve independently: `desktop-pipeline.db` follows
 `DataDir`, while `hive.db` follows `HiveDataDir`: `HIVE_DESKTOP_HIVE_DATA_DIR`,
@@ -1007,6 +1006,31 @@ worktree-isolated. ADR desktop-configuration records the
 configuration decision, and ADR both-programs-run-on-one-layered-hive-engine
 adds the `HIVE_DATA_DIR` fallback.
 
+### Local usage analytics
+
+Product usage is separate from operational telemetry. One process-owned
+`internal/hive/usageanalytics.Service` receives typed events through narrow,
+consumer-defined `Record` ports. It enters the shared engine through `hive.Ports`
+and survives reload. Desktop passes the same recorder to terminal services.
+Disabled collection is resource-free; startup failures degrade to a no-op.
+
+The sole sink owns `<HiveDataDir>/usage-analytics.db`, its independent migrations
+and sqlc queries under `internal/store/usageanalytics`. One bounded queue holds
+128 events, writes batches of 32 or every ten seconds, and waits at most 25 ms
+under pressure. Shutdown cancels in-flight work then flushes with a fresh
+two-second deadline. Retention removes 90-day-old rows in chunks at startup and
+daily while enabled. Read-only history queries do not create an absent database.
+
+Only CLI command completions, successful Hive session creations, and new Desktop
+terminal starts are recorded. The closed event catalog accepts no arbitrary
+properties or user content. CLI actions resolve the facade's recorder at execution
+time; its `After` hook flushes before closing resources. Desktop closes its
+recorder after producers stop. AnalyticsService exposes three counts, startup
+collection status, pending restart and environment overrides, and confirmed clear.
+Clear commits a capture-time cutoff and a new installation ID in one transaction;
+every batch checks that cutoff and reads the current ID under the same write lock.
+Another process's older pending batch cannot restore cleared history.
+
 ### Settings panes
 
 Application settings are sectioned by **the surface a value changes**, not by
@@ -1018,7 +1042,7 @@ kind, and the nav groups are the app's own modes (ADR settings-sections-name-the
 | Inbox | Integrations · Actions |
 | Code | Terminal · Quick terminals · Hive CLI |
 | Chats | Chats |
-| Advanced | System · Observability · About |
+| Advanced | System · Analytics · Observability · About |
 
 A value one surface uses lives on that surface's pane; a value several use lives
 in **General** (the editor command); **Observability** is runtime cost and the
@@ -1027,8 +1051,8 @@ the problem reporter; **About** is the running build. **Hive CLI**
 is the compatibility boundary for the included Hive runtime: it shows the exact
 external Hive config loaded at startup, reports one that would not parse, and
 creates or opens that file without making it required. It does not edit it —
-first run is the only writer, and a change made later is a hand edit plus a
-restart
+first run writes session setup, and a change to that setup later is a hand edit plus a
+restart. Analytics is a separate, scoped writer of the collection gates
 (ADR hive-desktop-writes-the-hive-config-during-first-run-instead-of-requiring-a-hand-written-one). There is no
 leftover group — a section that fits nowhere means the grouping is wrong. A
 ships-dark opt-in, if one is ever reintroduced, is a posture rather than a
