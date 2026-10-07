@@ -6,6 +6,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -191,7 +192,15 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			// Always log to a file; use explicit path or default to <datadir>/hive.log
-			l, closer, err := logutils.New(logutils.ServiceNameCLI, flags.LogLevel, flags.ResolvedLogFile())
+			level, err := zerolog.ParseLevel(flags.LogLevel)
+			if err != nil {
+				return ctx, fmt.Errorf("setup logger: %w", err)
+			}
+			logOpts := logutils.Options{Service: logutils.ServiceNameCLI, Level: level, File: flags.ResolvedLogFile()}
+			if logOpts.File == "" {
+				logOpts.JSON = []io.Writer{os.Stdout}
+			}
+			l, closer, err := logutils.NewRoot(logOpts)
 			if err != nil {
 				return ctx, fmt.Errorf("setup logger: %w", err)
 			}

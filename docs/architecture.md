@@ -282,10 +282,13 @@ the [Go amendment](#the-go-amendment-to-hexagonal) applied to the engine.
 Loggers are passed down, never global: depguard denies the zerolog global
 logger in the whole module, because no program assigns it. A `zerolog.Logger`
 is the first parameter of what takes one, or the second after a
-`context.Context`. Both programs default to `<hive-data-dir>/hive.log`; their
-composition roots inject `hive-cli` or `hive-desktop` when they construct the
-root logger, which carries that value as `service_name` so a reader can split
-the shared stream. A component labels the logger it is given
+`context.Context`. Both programs build their root logger with
+`logutils.NewRoot`, the one construction point for the shared output contract,
+and default to `<hive-data-dir>/hive.log`. Each composition root picks its
+sinks and hooks in `logutils.Options`, and decides whether a log file it
+cannot open is fatal: `NewRoot` returns the error beside a logger over the
+remaining sinks. The roots inject `hive-cli` or `hive-desktop`, which the root
+logger carries as `service_name` so a reader can split the shared stream. A component labels the logger it is given
 with `logutils.Component`, which adds `cmp=<name>`, so one filter narrows a log
 to one component. The engine and the programs hand out a logger with no `cmp`
 label, because zerolog appends fields and a second label would repeat the key.

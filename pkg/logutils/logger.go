@@ -5,49 +5,74 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog"
 )
 
-// New returns a logger carrying serviceName on every event.
+// Options selects the sinks and identity of a root logger.
+type Options struct {
+	// Service is written as service_name on every event.
+	Service string
+	Level   zerolog.Level
+	// File, when set, appends console-format lines without color to that path,
+	// creating it and its parent directory as needed.
+	File string
+	// Console, when set, receives colored console-format lines.
+	Console io.Writer
+	// JSON writers receive each encoded JSON event as is. A writer must not
+	// fail the write or block.
+	JSON  []io.Writer
+	Hooks []zerolog.Hook
+}
+
+// NewRoot builds a program's root logger and returns a cleanup that closes the
+// file it opened. The cleanup is safe to call more than once.
 //
-// If file is set, logs are written to that file in console format.
-// If file is empty, logs are written to stdout in JSON format.
-//
-// The level parameter can be one of: debug, info, warn, error, fatal.
-func New(serviceName, level, file string) (zerolog.Logger, func(), error) {
-	closer := func() {}
+// When File cannot be opened, NewRoot returns the error together with a usable
+// logger over the remaining sinks, so the caller decides whether to continue.
+// A logger with no sinks discards every event.
+func NewRoot(opts Options) (zerolog.Logger, func(), error) {
+	var (
+		writers []io.Writer
+		cleanup = func() {}
+		fileErr error
+	)
 
-	lvl, err := zerolog.ParseLevel(level)
-	if err != nil {
-		return zerolog.Logger{}, closer, err
-	}
-
-	var writer io.Writer = os.Stdout
-	if file != "" {
-		logsDir := filepath.Dir(file)
-		if err := os.MkdirAll(logsDir, 0o755); err != nil {
-			return zerolog.Logger{}, closer, fmt.Errorf("create logs dir: %w", err)
-		}
-
-		osFile, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if opts.File != "" {
+		f, err := openAppend(opts.File)
 		if err != nil {
-			return zerolog.Logger{}, closer, err
-		}
-		closer = func() { _ = osFile.Close() }
-		writer = zerolog.ConsoleWriter{
-			Out:        osFile,
-			NoColor:    true,
-			TimeFormat: time.RFC3339,
+			fileErr = err
+		} else {
+			cleanup = sync.OnceFunc(func() { _ = f.Close() })
+			writers = append(writers, zerolog.ConsoleWriter{Out: f, NoColor: true, TimeFormat: time.RFC3339})
 		}
 	}
+	if opts.Console != nil {
+		writers = append(writers, zerolog.ConsoleWriter{Out: opts.Console, TimeFormat: time.RFC3339})
+	}
+	writers = append(writers, opts.JSON...)
 
-	l := zerolog.New(writer).
-		With().
-		Timestamp().
-		Logger().
-		Level(lvl)
+	out := io.Discard
+	if len(writers) > 0 {
+		out = zerolog.MultiLevelWriter(writers...)
+	}
 
-	return Service(l, serviceName), closer, nil
+	logger := zerolog.New(out).With().Timestamp().Logger().Level(opts.Level)
+	for _, h := range opts.Hooks {
+		logger = logger.Hook(h)
+	}
+	return Service(logger, opts.Service), cleanup, fileErr
+}
+
+func openAppend(path string) (*os.File, error) {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return nil, fmt.Errorf("create log dir: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, fmt.Errorf("open log file: %w", err)
+	}
+	return f, nil
 }

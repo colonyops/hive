@@ -1,6 +1,8 @@
 package settings
 
 import (
+	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,7 +18,11 @@ func TestCLIAndDesktopLoggersAppendToSameFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hive.log")
 	desktopLogger, closeDesktop, err := NewLogger(logutils.ServiceNameDesktop, path, zerolog.InfoLevel)
 	require.NoError(t, err)
-	cliLogger, closeCLI, err := logutils.New(logutils.ServiceNameCLI, "info", path)
+	cliLogger, closeCLI, err := logutils.NewRoot(logutils.Options{
+		Service: logutils.ServiceNameCLI,
+		Level:   zerolog.InfoLevel,
+		File:    path,
+	})
 	require.NoError(t, err)
 
 	desktopLogger.Info().Msg("desktop started")
@@ -30,6 +36,23 @@ func TestCLIAndDesktopLoggersAppendToSameFile(t *testing.T) {
 	assert.Contains(t, string(lines), "service_name=hive-cli")
 	assert.Contains(t, string(lines), "desktop started")
 	assert.Contains(t, string(lines), "cli started")
+}
+
+func TestNewLoggerKeepsTelemetryArmWhenFileUnavailable(t *testing.T) {
+	blocker := filepath.Join(t.TempDir(), "not-a-dir")
+	require.NoError(t, os.WriteFile(blocker, nil, 0o600))
+
+	var telemetry bytes.Buffer
+	logger, closeLogger, err := NewLogger(logutils.ServiceNameDesktop, filepath.Join(blocker, "hive.log"), zerolog.InfoLevel, &telemetry)
+	require.Error(t, err)
+	defer closeLogger()
+
+	logger.Info().Msg("still running")
+
+	var event map[string]string
+	require.NoError(t, json.Unmarshal(telemetry.Bytes(), &event))
+	assert.Equal(t, logutils.ServiceNameDesktop, event[logutils.ServiceNameKey])
+	assert.Equal(t, "still running", event["message"])
 }
 
 func TestResolveLogLevel(t *testing.T) {
