@@ -292,7 +292,7 @@ function formatModifier(mod: string, isMac: boolean): string {
 
 /**
  * Human-readable label for a binding — `⌘K` on macOS, `Ctrl+K` elsewhere. A
- * sequence renders each step in order, space-joined: `G I`, `⌘K ⌘S`.
+ * sequence renders each step in order, space-joined: `g i`, `⌘K ⌘S`.
  */
 export function formatCombo(binding: string, isMac: boolean = detectMac()): string {
   const canon = canonicalizeBinding(binding)
@@ -307,7 +307,10 @@ function formatStep(combo: string, isMac: boolean): string {
   const parts = combo.split('+')
   const key = parts[parts.length - 1]
   const mods = parts.slice(0, -1).map((m) => formatModifier(m, isMac))
-  const keyLabel = KEY_SYMBOLS[key] ?? (key.length === 1 ? key.toUpperCase() : capitalize(key))
+  // A bare letter stays lowercase so `j` does not read as Shift+J; with a
+  // modifier it takes the keycap form (`⌘K`, `⇧G`).
+  const letter = mods.length ? key.toUpperCase() : key
+  const keyLabel = KEY_SYMBOLS[key] ?? (key.length === 1 ? letter : capitalize(key))
   return isMac ? [...mods, keyLabel].join('') : [...mods, keyLabel].join('+')
 }
 

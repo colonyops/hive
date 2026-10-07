@@ -27,7 +27,7 @@ describe('SequenceHint', () => {
 
     expect(wrapper.find('[data-testid="sequence-hint"]').exists()).toBe(true)
     const steps = wrapper.findAll('[data-testid="sequence-hint-step"]').map((el) => el.text())
-    expect(steps).toEqual(['G'])
+    expect(steps).toEqual(['g'])
 
     wrapper.unmount()
   })
@@ -44,9 +44,9 @@ describe('SequenceHint', () => {
 
     const continuations = wrapper.findAll('[data-testid="sequence-hint-continuation"]')
     expect(continuations).toHaveLength(2)
-    expect(continuations[0].find('[data-testid="sequence-hint-continuation-key"]').text()).toBe('I')
+    expect(continuations[0].find('[data-testid="sequence-hint-continuation-key"]').text()).toBe('i')
     expect(continuations[0].find('[data-testid="sequence-hint-continuation-title"]').text()).toBe('Go to Inbox')
-    expect(continuations[1].find('[data-testid="sequence-hint-continuation-key"]').text()).toBe('C')
+    expect(continuations[1].find('[data-testid="sequence-hint-continuation-key"]').text()).toBe('c')
     expect(continuations[1].find('[data-testid="sequence-hint-continuation-title"]').text()).toBe('Go to Code')
 
     wrapper.unmount()

@@ -26,7 +26,7 @@ describe('KeybindingSettingsView', () => {
     const wrapper = mount(KeybindingSettingsView)
     const next = row(wrapper, 'feed.next')
     const chips = next.findAll('[data-testid="keybinding-combo"]').map((c) => c.text())
-    expect(chips.some((t) => t.includes('J'))).toBe(true)
+    expect(chips.some((t) => t.includes('j'))).toBe(true)
     expect(chips.some((t) => t.includes('↓'))).toBe(true)
   })
 
@@ -85,7 +85,7 @@ describe('KeybindingSettingsView', () => {
 
     expect(kb.combosFor('window.hide')).toEqual(['h'])
     expect(kb.recording.value).toBe(false)
-    expect(row(wrapper, 'window.hide').text()).toContain('H')
+    expect(row(wrapper, 'window.hide').text()).toContain('h')
   })
 
   it('captures a two-step sequence and commits it as one binding on the pause', async () => {
@@ -96,7 +96,7 @@ describe('KeybindingSettingsView', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'g' }))
     await nextTick()
     expect(kb.combosFor('window.hide')).toEqual([]) // first step pending
-    expect(row(wrapper, 'window.hide').get('[data-testid="keybinding-capture"]').text()).toContain('G')
+    expect(row(wrapper, 'window.hide').get('[data-testid="keybinding-capture"]').text()).toContain('g')
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'x' }))
     await nextTick()

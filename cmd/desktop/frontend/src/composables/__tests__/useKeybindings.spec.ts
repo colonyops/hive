@@ -243,16 +243,16 @@ describe('formatCombo', () => {
     expect(formatCombo('mod+shift+k', false)).toBe('Ctrl+Shift+K')
   })
 
-  it('renders named keys with symbols and bare letters uppercased', async () => {
+  it('renders named keys with symbols and bare letters lowercase', async () => {
     const { formatCombo } = await import('../useKeybindings')
     expect(formatCombo('arrowdown', true)).toBe('↓')
-    expect(formatCombo('j', true)).toBe('J')
+    expect(formatCombo('j', true)).toBe('j')
     expect(formatCombo('enter', false)).toBe('↵')
   })
 
   it('renders a sequence step by step, space-joined', async () => {
     const { formatCombo } = await import('../useKeybindings')
-    expect(formatCombo('g i', true)).toBe('G I')
+    expect(formatCombo('g i', true)).toBe('g i')
     expect(formatCombo('mod+k mod+s', true)).toBe('⌘K ⌘S')
     expect(formatCombo('mod+k mod+s', false)).toBe('Ctrl+K Ctrl+S')
   })
