@@ -106,7 +106,7 @@ export interface BindableCommand {
    * useKeybindings.terminalEscapeCombo); this is for a chord that cannot take
    * that form, and it takes the chord away from the shell outright, so `alt+t`
    * stops being readline's transpose-words. `non-mac` limits this policy to
-   * Windows/Linux, preserving Control on macOS.
+   * Linux, preserving Control on macOS.
    */
   piercesPane?: boolean | 'non-mac'
 }

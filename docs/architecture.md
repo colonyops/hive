@@ -1962,7 +1962,7 @@ Three rules govern it, and each is a consequence of that:
   carries `ctrlDefaultCombos`, an unshifted default for that platform
   (`terminal.split-down`: ⌘⇧D, Ctrl+Shift+O). Prefer escaping: piercing is for
   a chord the escape form cannot carry. `piercesPane: 'non-mac'` covers a
-  Windows/Linux default that must use bare Ctrl while macOS keeps Ctrl for the
+  Linux default that must use bare Ctrl while macOS keeps Ctrl for the
   pane. An alt chord never escapes — `terminalEscapeCombo` qualifies only
   Command and Ctrl+Shift. Widening it to accept alt was rejected: it would hand
   every alt binding to the app and take readline's meta chords and tmux's alt
