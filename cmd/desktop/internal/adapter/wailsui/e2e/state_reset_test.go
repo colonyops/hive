@@ -96,7 +96,7 @@ func TestStateResetRestoresFreshlySeededBaseline(t *testing.T) {
 	command, created, err := st.OutputCommands.Confirm(ctx, "smoke-shell", "pr2841", []byte(`{}`), models.ItemRef{}, "claim")
 	require.NoError(t, err)
 	require.True(t, created)
-	require.NoError(t, st.OutputCommands.Complete(ctx, command.ID, command.ClaimToken, `{"ok":true}`, "out", "err"))
+	require.NoError(t, st.OutputCommands.Complete(ctx, command.ID, command.ClaimToken, `{"ok":true}`))
 	_, err = st.ActivityEvents.Append(ctx, appstores.ActivityEventCreate{Category: "action", Severity: "info", Title: "mutated"})
 	require.NoError(t, err)
 	_, err = st.Jobs.Insert(ctx, appstores.JobCreate{Status: "done", Label: "mutated"})

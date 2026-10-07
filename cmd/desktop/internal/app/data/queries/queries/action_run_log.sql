@@ -15,19 +15,6 @@ WHERE command_id = ?
 ORDER BY id DESC
 LIMIT 1 OFFSET ?;
 
--- name: PruneActionRunLogs :exec
--- Keeps the logs of the newest commands that have any, and of every command
--- that can still run.
-DELETE FROM action_run_log
-WHERE command_id NOT IN (
-    SELECT command_id FROM (
-        SELECT DISTINCT l.command_id FROM action_run_log l
-        ORDER BY l.command_id DESC
-        LIMIT ?
-    )
-)
-AND command_id NOT IN (SELECT id FROM output_command WHERE status IN ('pending', 'running'));
-
 -- name: ListActionRuns :many
 -- Only actions.yml actions: an authored id is a slug, and the synthetic ids of
 -- notify and launch nodes are the only ones that contain a colon.

@@ -91,7 +91,5 @@ type ActionRunView struct {
 	Status               string            `json:"status"`
 	Result               *ExecutionOutcome `json:"result,omitempty"`
 	Error                string            `json:"error,omitempty"`
-	Stdout               string            `json:"stdout,omitempty"`
-	Stderr               string            `json:"stderr,omitempty"`
 	ConfirmationRequired bool              `json:"confirmationRequired,omitempty"`
 }

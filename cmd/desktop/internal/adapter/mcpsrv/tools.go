@@ -121,7 +121,8 @@ func (ctrl *Controller) register(srv *mcp.Server) {
 			"Every line carries its attempt number, so automatic retries read as separate attempts. " +
 			"By default it returns the last 500 lines, which is where a failure explains itself; pass afterId to read forward from a line, " +
 			"and follow nextAfterId while more is true to read the rest. A running run's log grows, so read again with the last nextAfterId to follow it. " +
-			"Each attempt keeps at most 512 KiB of output, and only the newest 200 runs keep their logs.",
+			"Each attempt keeps up to 8 MiB of output, and a run's log is kept for as long as the run is (the newest 100 finished runs by default, " +
+			"set by retention.action_runs in settings.yaml).",
 	}, ctrl.GetActionRun)
 
 	addTool(srv, &mcp.Tool{

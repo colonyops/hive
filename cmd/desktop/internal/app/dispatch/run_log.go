@@ -19,7 +19,7 @@ const (
 	RunLogStderr = "stderr"
 	RunLogSystem = "system"
 
-	maxRunLogAttemptBytes = 512 * 1024
+	maxRunLogAttemptBytes = 8 * 1024 * 1024
 	maxRunLogLineBytes    = 16 * 1024
 	runLogFlushInterval   = 250 * time.Millisecond
 	runLogWriteTimeout    = 3 * time.Second

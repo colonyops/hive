@@ -29,7 +29,7 @@ func TestActionRunToolsReadTheRunAndItsLog(t *testing.T) {
 	}
 	lines = append(lines, stores.NewActionRunLogLine{Stream: "stderr", Text: "boom", At: time.UnixMilli(3)})
 	require.NoError(t, core.Stores.ActionRuns.AppendLog(t.Context(), run.ID, 1, lines))
-	require.NoError(t, commands.Fail(t.Context(), run.ID, "claim", "exit status 1", "", "boom"))
+	require.NoError(t, commands.Fail(t.Context(), run.ID, "claim", "exit status 1"))
 
 	var listed struct {
 		Runs []app.ActionRunSummary `json:"runs"`

@@ -1051,7 +1051,7 @@ describe('App', () => {
   // the way Code groups a session's operations under the session.
   it('offers the selected item\u2019s configured actions, under the item\u2019s own reference', async () => {
     mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review PR', type: 'shell', inputs: [] }])
-    mocks.InvokeAction.mockResolvedValue({ commandId: 7, status: 'completed', stdout: '', stderr: '' })
+    mocks.InvokeAction.mockResolvedValue({ commandId: 7, status: 'completed' })
     mocks.ListByFeed.mockResolvedValue(inboxItems())
     const wrapper = await mountApp()
     await wrapper.findAll('[data-testid="feed-item"]')[0]!.trigger('click')

@@ -408,7 +408,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	// no connection callback to drop its cache on.
 	a.rssFetchers = rss.NewFetchers(cfg.Logger)
 
-	a.retention = ingest.NewMaintenance(db, queries.DefaultRetentionPolicy(), ingest.DefaultRetentionInterval, cfg.Logger)
+	a.retention = ingest.NewMaintenance(db, a.retentionPolicy, ingest.DefaultRetentionInterval, cfg.Logger)
 	a.scripts = runtime.NewScriptRegistry()
 	a.scripts.Register(js.New(runtime.NewScriptPool(0)))
 	a.engine = a.buildEngine(cfg.Logger)
@@ -1102,6 +1102,22 @@ func (a *App) buildOutputWorker(cfg Config) *dispatch.Worker {
 	worker.SetJobRecorder(a.Jobs)
 	worker.SetRunLogSink(a.Stores.ActionRuns)
 	return worker
+}
+
+// retentionPolicy reads settings.yaml on every retention pass, so an edited
+// retention.action_runs applies within one interval without a reload hook. An
+// unreadable file keeps the defaults rather than skipping the pass.
+func (a *App) retentionPolicy() queries.RetentionPolicy {
+	policy := queries.DefaultRetentionPolicy()
+	current, err := a.settingsStore.Effective()
+	if err != nil {
+		a.logger.Warn().Err(err).Msg("retention: reading settings failed; using default limits")
+		return policy
+	}
+	if n := current.Retention.ActionRuns; n > 0 {
+		policy.ActionRunLimit = int64(n)
+	}
+	return policy
 }
 
 // observedNotifier decorates the adapter's delivery port so the core learns

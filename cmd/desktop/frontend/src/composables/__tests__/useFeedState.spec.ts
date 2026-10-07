@@ -818,10 +818,9 @@ describe('useFeedState', () => {
       commandId: 18,
       status: 'failed',
       error: 'command exited 1',
-      stderr: 'bad input',
     })
     await get().invokeAction('review')
-    expect(get().actionRuns.value.review).toMatchObject({ commandId: 18, status: 'failed', stderr: 'bad input' })
+    expect(get().actionRuns.value.review).toMatchObject({ commandId: 18, status: 'failed', error: 'command exited 1' })
     expect(mocks.notify).toHaveBeenCalledWith({ title: 'command exited 1', severity: 'error', category: 'action' })
   })
 
@@ -1056,11 +1055,11 @@ describe('useFeedState', () => {
     mocks.ActionViews.mockResolvedValue([
       { id: 'review', label: 'Review', type: 'shell', showInDetail: true, requiresSessionInput: false },
     ])
-    mocks.ActionRun.mockResolvedValue({ commandId: 41, status: 'failed', stderr: 'details' })
+    mocks.ActionRun.mockResolvedValue({ commandId: 41, status: 'failed', error: 'details' })
     const get = mountState()
     await flushPromises()
     expect(mocks.ActionRun).toHaveBeenCalledWith(41)
-    expect(get().actionRuns.value.review?.stderr).toBe('details')
+    expect(get().actionRuns.value.review?.error).toBe('details')
     await get().selectItem(2)
     await flushPromises()
     expect(get().actionRuns.value.review).toBeUndefined()

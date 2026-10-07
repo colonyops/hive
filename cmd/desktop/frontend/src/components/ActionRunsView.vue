@@ -20,7 +20,6 @@ import {
   Log,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/actionrunservice'
 import { Cancel } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/jobservice'
-import { ActionRun } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
 import type {
   ActionRunLogLine,
   ActionRunSummary,
@@ -73,7 +72,6 @@ const now = ref(Date.now())
 const lines = ref<ActionRunLogLine[]>([])
 const logLoaded = ref(false)
 const logError = ref<string | null>(null)
-const fallback = ref<{ stdout: string; stderr: string } | null>(null)
 const cancelling = ref(false)
 const { copy, copied } = useClipboard()
 const logEl = ref<HTMLElement | null>(null)
@@ -121,7 +119,6 @@ async function readLog(reset: boolean): Promise<void> {
     logCursor = 0
     logLoaded.value = false
     logError.value = null
-    fallback.value = null
   }
   const generation = logGeneration
   const follow = reset || nearBottom()
@@ -141,20 +138,7 @@ async function readLog(reset: boolean): Promise<void> {
   } finally {
     if (generation === logGeneration) logLoaded.value = true
   }
-  if (!lines.value.length && selected.value && !runIsActive(selected.value.status)) await loadFallback(id, generation)
   if (follow) await scrollToBottom()
-}
-
-// A run from before run logs existed still has its bounded stdout and stderr
-// on the command record.
-async function loadFallback(id: number, generation: number): Promise<void> {
-  try {
-    const run = await ActionRun(id)
-    if (generation !== logGeneration) return
-    fallback.value = run.stdout || run.stderr ? { stdout: run.stdout ?? '', stderr: run.stderr ?? '' } : null
-  } catch (error) {
-    console.warn('Unable to read action run output', error)
-  }
 }
 
 function select(id: number): void {
@@ -478,17 +462,6 @@ function statusIconClass(status: string): string {
                   <span class="log-text">{{ line.text || ' ' }}</span>
                 </div>
               </template>
-            </template>
-            <template v-else-if="fallback">
-              <div class="px-5 pb-2 text-text-4">This run predates run logs. Its recorded output:</div>
-              <div v-for="(text, i) in fallback.stdout.split('\n')" :key="`o${i}`" class="log-line log-stdout">
-                <span class="log-n">{{ i + 1 }}</span
-                ><span class="log-time" /><span class="log-text">{{ text || ' ' }}</span>
-              </div>
-              <div v-for="(text, i) in fallback.stderr.split('\n')" :key="`e${i}`" class="log-line log-stderr">
-                <span class="log-n">{{ i + 1 }}</span
-                ><span class="log-time" /><span class="log-text">{{ text || ' ' }}</span>
-              </div>
             </template>
             <div v-else-if="runIsActive(selected.status)" class="px-5 py-6 text-text-4">Waiting for output…</div>
             <div v-else class="px-5 py-6 text-text-4" data-testid="action-run-log-empty">This run wrote no output.</div>

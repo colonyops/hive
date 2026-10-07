@@ -137,7 +137,7 @@ Item actions run independently. A long shell action stays **Running** until its 
 
 Select a run to read its log: the command line, its stdout and stderr in the order they were written, and the exit status. A session launch or a published message logs the steps it took instead. A running action's log updates as it runs, and you can cancel it from there. Automatic retries appear as separate attempts.
 
-Each attempt keeps up to 512 KiB of output, and the newest 200 runs keep their logs. Notify and launch nodes, and actions run from a terminal session or window, do not appear here.
+Hive keeps the newest 100 finished runs with their full logs; change that with `retention.action_runs` in `settings.yaml`. A single attempt that writes more than 8 MiB is truncated there. Notify and launch nodes, and actions run from a terminal session or window, do not appear here.
 
 A flow runs its named action for every routed item, regardless of `applies_to`. Flow actions cannot use the clipboard. A `launch-session` flow action needs `repo_template` or `workspace`, and required inputs need defaults.
 

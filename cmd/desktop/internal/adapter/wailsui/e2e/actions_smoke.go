@@ -189,11 +189,15 @@ func readActionSmokeSnapshot(ctx context.Context, core, pipeline *sql.DB, runID 
 	}
 
 	commandRows, err := pipeline.QueryContext(ctx, `
-		SELECT id, action_id, key, status, COALESCE(last_error, ''),
-		       COALESCE(stdout, ''), COALESCE(stderr, ''), COALESCE(result_json, 'null')
-		FROM output_command
-		WHERE action_id LIKE ? ESCAPE '\' AND key IN ('pr2841', 'iss1190')
-		ORDER BY id`, likePrefix(prefix))
+		SELECT oc.id, oc.action_id, oc.key, oc.status, COALESCE(oc.last_error, ''),
+		       COALESCE((SELECT group_concat(text, char(10)) FROM (
+		           SELECT text FROM action_run_log WHERE command_id = oc.id AND stream = 'stdout' ORDER BY id)), ''),
+		       COALESCE((SELECT group_concat(text, char(10)) FROM (
+		           SELECT text FROM action_run_log WHERE command_id = oc.id AND stream = 'stderr' ORDER BY id)), ''),
+		       COALESCE(oc.result_json, 'null')
+		FROM output_command oc
+		WHERE oc.action_id LIKE ? ESCAPE '\' AND oc.key IN ('pr2841', 'iss1190')
+		ORDER BY oc.id`, likePrefix(prefix))
 	if err != nil {
 		return actionSmokeState{}, fmt.Errorf("read action smoke commands: %w", err)
 	}

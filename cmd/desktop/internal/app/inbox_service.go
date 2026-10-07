@@ -331,7 +331,7 @@ func (s *InboxService) ActionRun(ctx context.Context, commandID int64) (dispatch
 		}
 		return dispatch.ActionRunView{}, Wrap(err, KindInternal, "reading action run %d", commandID)
 	}
-	view := dispatch.ActionRunView{CommandID: row.ID, Status: row.Status, Error: row.LastError, Stdout: row.Stdout, Stderr: row.Stderr}
+	view := dispatch.ActionRunView{CommandID: row.ID, Status: row.Status, Error: row.LastError}
 	if row.ResultJSON != "" {
 		if err := json.Unmarshal([]byte(row.ResultJSON), &view.Result); err != nil {
 			return dispatch.ActionRunView{}, Wrap(err, KindInternal, "decoding action run %d result", commandID)

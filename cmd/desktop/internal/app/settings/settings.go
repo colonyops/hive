@@ -214,6 +214,25 @@ type PathsSettings struct {
 // absolute path — never a command line: the same rule agent commands follow
 // (ADR a-workspace-declares-its-own-authority), so a flag cannot ride in through a settings string. Empty means
 // none configured.
+// MaxActionRunRetention bounds retention.action_runs. Each run keeps its full
+// log, so the bound is what caps the database's size.
+const MaxActionRunRetention = 10_000
+
+// RetentionSettings bounds the history the app keeps. Zero leaves the
+// pipeline's own default.
+type RetentionSettings struct {
+	// ActionRuns is how many finished runs of actions.yml actions to keep,
+	// each with its log.
+	ActionRuns int `yaml:"action_runs,omitempty" env:"HIVE_DESKTOP_RETENTION_ACTION_RUNS"`
+}
+
+func (r RetentionSettings) Validate() error {
+	if r.ActionRuns < 0 || r.ActionRuns > MaxActionRunRetention {
+		return fmt.Errorf("retention.action_runs must be between 1 and %d, or omitted for the default", MaxActionRunRetention)
+	}
+	return nil
+}
+
 type EditorSettings struct {
 	Command string `yaml:"command,omitempty" env:"HIVE_DESKTOP_EDITOR_COMMAND"`
 }
@@ -359,6 +378,7 @@ type Settings struct {
 	Keybindings     map[string][]string     `yaml:"keybindings,omitempty"`
 	Paths           PathsSettings           `yaml:"paths,omitempty"`
 	Editor          EditorSettings          `yaml:"editor,omitempty"`
+	Retention       RetentionSettings       `yaml:"retention,omitempty"`
 	AgentWorkspaces AgentWorkspacesSettings `yaml:"agent_workspaces,omitempty"`
 	Onboarding      OnboardingSettings      `yaml:"onboarding,omitempty"`
 	Development     DevelopmentSettings     `yaml:"development"`
@@ -455,6 +475,9 @@ func (s Settings) Validate() error {
 		return fmt.Errorf("appearance.terminal_session_age_threshold_days must be between %d and %d", MinTerminalSessionAgeThresholdDays, MaxTerminalSessionAgeThresholdDays)
 	}
 	if err := s.MenuBar.Validate(); err != nil {
+		return err
+	}
+	if err := s.Retention.Validate(); err != nil {
 		return err
 	}
 	if len(strings.Fields(s.Editor.Command)) > 1 {

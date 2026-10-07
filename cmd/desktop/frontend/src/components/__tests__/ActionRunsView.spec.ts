@@ -6,7 +6,6 @@ const mocks = vi.hoisted(() => ({
   List: vi.fn(),
   Log: vi.fn(),
   Cancel: vi.fn(),
-  ActionRun: vi.fn(),
   SetText: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/actionrunservice', () => ({
@@ -15,9 +14,6 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/jobservice', () => ({
   Cancel: mocks.Cancel,
-}))
-vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice', () => ({
-  ActionRun: mocks.ActionRun,
 }))
 vi.mock('../../composables/useWailsEvent', () => ({ useWailsEvent: vi.fn() }))
 vi.mock('@wailsio/runtime', () => ({ Clipboard: { SetText: mocks.SetText } }))
@@ -74,7 +70,6 @@ describe('ActionRunsView', () => {
           : { lines: [], nextAfterId: 0, more: false },
       ),
     )
-    mocks.ActionRun.mockResolvedValue({ commandId: 11, status: 'done', stdout: 'legacy output' })
   })
   afterEach(() => {
     vi.useRealTimers()
@@ -96,13 +91,12 @@ describe('ActionRunsView', () => {
     expect(streams).toEqual(['system', 'stdout', 'stderr'])
   })
 
-  it('selects the run it was opened on and falls back to recorded output', async () => {
+  it('selects the run it was opened on', async () => {
     const wrapper = mount(ActionRunsView, { props: { initialRunId: 11 } })
     await flushPromises()
 
     expect(wrapper.get('[data-testid="action-run-title"]').text()).toBe('Lint')
-    expect(mocks.ActionRun).toHaveBeenCalledWith(11)
-    expect(wrapper.get('[data-testid="action-run-log"]').text()).toContain('legacy output')
+    expect(wrapper.get('[data-testid="action-run-log-empty"]').text()).toBe('This run wrote no output.')
   })
 
   it('moves between runs from the keyboard and opens the run item', async () => {

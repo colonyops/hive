@@ -227,6 +227,8 @@ keybindings: {} # sparse overrides; omitted commands keep catalog defaults.
 agent_workspaces:
   dir: "" # workspace root; empty is the config dir's workspaces/ (a leading ~ is expanded)
   session_end_delay: 10s # grace between a chat asking to end its own session and the session being ended
+retention:
+  action_runs: 100 # finished action runs kept, each with its full log (1-10000)
 onboarding:
   completed: false # written by the app when first run ends; remove the key to walk first run again
 paths:
@@ -579,7 +581,7 @@ workspace launch regenerates its files and refuses a command that drops the
 opening prompt or interpolates it without `shq`. `repo_template` and
 `workspace` are mutually exclusive;
 `agent` and `post_hook` apply only to repository sessions. Prefer local HTTPS
-or SSH remotes for repository templates. `shell` captures bounded stdout/stderr diagnostics.
+or SSH remotes for repository templates. `shell` writes its stdout and stderr to the run's log.
 `publish-message` accepts only a constant topic and durably publishes with
 sender `hive-desktop` and an empty session identity. Completed outcomes are
 typed (session or message); failed outcomes retain their persisted diagnostics.

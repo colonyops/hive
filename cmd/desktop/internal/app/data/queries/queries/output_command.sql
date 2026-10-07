@@ -80,31 +80,46 @@ SELECT * FROM output_command WHERE id = ?;
 
 -- name: CompleteClaimedOutputCommand :execrows
 UPDATE output_command
-SET status = 'done', claim_token = '', finished_at = ?, last_error = NULL, result_json = ?, stdout = ?, stderr = ?
+SET status = 'done', claim_token = '', finished_at = ?, last_error = NULL, result_json = ?
 WHERE id = ? AND status = 'running' AND claim_token = ?;
 
 -- name: RequeueClaimedOutputCommand :execrows
 UPDATE output_command
-SET status = 'pending', claim_token = '', claimed_at = 0, not_before = ?,
-    last_error = ?, stdout = ?, stderr = ?
+SET status = 'pending', claim_token = '', claimed_at = 0, not_before = ?, last_error = ?
 WHERE id = ? AND status = 'running' AND claim_token = ?;
 
 -- name: FailClaimedOutputCommand :execrows
 UPDATE output_command
-SET status = 'failed', claim_token = '', finished_at = ?, last_error = ?, stdout = ?, stderr = ?
+SET status = 'failed', claim_token = '', finished_at = ?, last_error = ?
 WHERE id = ? AND status = 'running' AND claim_token = ?;
 
 -- name: CancelClaimedOutputCommand :execrows
 UPDATE output_command
-SET status = 'cancelled', claim_token = '', finished_at = ?, last_error = ?, stdout = ?, stderr = ?
+SET status = 'cancelled', claim_token = '', finished_at = ?, last_error = ?
 WHERE id = ? AND status = 'running' AND claim_token = ?;
 
--- name: PruneTerminalOutputCommands :exec
--- Never remove active commands: only terminal history is bounded.
+-- name: PruneTerminalActionRuns :exec
+-- The run history of actions.yml actions, whose ids never contain a colon.
+-- Active commands are never removed, and a run's log goes with it.
 DELETE FROM output_command
 WHERE id IN (
     SELECT oc.id FROM output_command oc
     WHERE oc.status IN ('done', 'failed', 'cancelled')
+      AND instr(oc.action_id, ':') = 0
+    ORDER BY oc.id DESC
+    LIMIT -1 OFFSET ?
+);
+
+-- name: PruneTerminalNodeCommands :exec
+-- Commands notify and launch nodes enqueue. They are bounded apart from action
+-- runs so a busy notify flow cannot push run history out. A launch row is a
+-- launch node's once-per-item guard, so it survives while its item exists.
+-- The match skips source_scope because a rescope leaves it behind.
+DELETE FROM output_command
+WHERE id IN (
+    SELECT oc.id FROM output_command oc
+    WHERE oc.status IN ('done', 'failed', 'cancelled')
+      AND instr(oc.action_id, ':') > 0
       AND NOT (
           oc.action_id LIKE 'launch:%'
           AND EXISTS (

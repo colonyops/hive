@@ -158,3 +158,10 @@ func shellWorkingDir(cfg *actions.ShellConfig, data OutputData) string {
 	}
 	return ""
 }
+
+func boundExecutionStream(stream string) string {
+	if len(stream) <= maxExecutionStreamBytes {
+		return stream
+	}
+	return stream[:maxExecutionStreamBytes-len(truncatedStreamMarker)] + truncatedStreamMarker
+}

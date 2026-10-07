@@ -37,7 +37,7 @@ func TestMaintenanceTick_Prunes(t *testing.T) {
 	pruner := &retentionStore{}
 	maintenance := NewMaintenance(
 		pruner,
-		queries.DefaultRetentionPolicy(),
+		queries.DefaultRetentionPolicy,
 		time.Hour,
 		zerolog.Nop(),
 	)
@@ -53,7 +53,7 @@ func TestMaintenanceStop_WaitsForScheduledLoop(t *testing.T) {
 	pruner := &retentionStore{pruned: make(chan struct{}, 1)}
 	maintenance := NewMaintenance(
 		pruner,
-		queries.DefaultRetentionPolicy(),
+		queries.DefaultRetentionPolicy,
 		time.Millisecond,
 		zerolog.Nop(),
 	)

@@ -46,8 +46,9 @@ input.
 ## Where a failure shows up
 
 On an `item` target the run is a durable command. The action card and jobs list
-show its queued or running state, allow cancellation, and retain bounded
-stdout/stderr diagnostics after failure.
+show its queued or running state and allow cancellation. Its stdout and stderr,
+interleaved in the order they were written, are kept in the run's log in
+**Action runs**, along with the command line and exit status.
 
 A `session` or `window` run is deliberately not durable — it is a manual
 operation against live local state, so it must stay repeatable and must not

@@ -45,7 +45,7 @@ func TestActionRunStore_LogTailAndPaging(t *testing.T) {
 func TestActionRunStore_ListJoinsTheFinishedCommand(t *testing.T) {
 	st, _ := openTestStores(t)
 	row := confirmTestRun(t, st, "deploy")
-	require.NoError(t, st.OutputCommands.Complete(t.Context(), row.ID, row.ClaimToken, "", "", ""))
+	require.NoError(t, st.OutputCommands.Complete(t.Context(), row.ID, row.ClaimToken, ""))
 
 	runs, err := st.ActionRuns.List(t.Context(), 0, 10)
 	require.NoError(t, err)
@@ -56,16 +56,16 @@ func TestActionRunStore_ListJoinsTheFinishedCommand(t *testing.T) {
 	assert.NotZero(t, runs[0].ClaimedAt)
 }
 
-func TestActionRunLogRetentionKeepsNewestAndActiveRuns(t *testing.T) {
+func TestActionRunLogGoesWithItsRun(t *testing.T) {
 	st, db := openTestStores(t)
 	active := confirmTestRun(t, st, "active")
 	old := confirmTestRun(t, st, "old")
-	require.NoError(t, st.OutputCommands.Complete(t.Context(), old.ID, old.ClaimToken, "", "", ""))
+	require.NoError(t, st.OutputCommands.Complete(t.Context(), old.ID, old.ClaimToken, ""))
 	newest := confirmTestRun(t, st, "newest")
-	require.NoError(t, st.OutputCommands.Complete(t.Context(), newest.ID, newest.ClaimToken, "", "", ""))
+	require.NoError(t, st.OutputCommands.Complete(t.Context(), newest.ID, newest.ClaimToken, ""))
 
 	policy := queries.DefaultRetentionPolicy()
-	policy.ActionRunLogCommandLimit = 1
+	policy.ActionRunLimit = 1
 	require.NoError(t, db.Prune(t.Context(), policy))
 
 	for id, want := range map[int64]int{active.ID: 1, old.ID: 0, newest.ID: 1} {
@@ -73,10 +73,4 @@ func TestActionRunLogRetentionKeepsNewestAndActiveRuns(t *testing.T) {
 		require.NoError(t, err)
 		assert.Len(t, lines, want, "command %d", id)
 	}
-
-	policy.TerminalOutputCommandLimit = 0
-	require.NoError(t, db.Prune(t.Context(), policy))
-	lines, err := st.ActionRuns.ListLog(t.Context(), newest.ID, 0, 10)
-	require.NoError(t, err)
-	assert.Empty(t, lines, "a pruned command takes its log with it")
 }

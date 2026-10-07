@@ -409,21 +409,21 @@ func TestEveryStoreMethodJoinsTheAmbientTransaction(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			return st.OutputCommands.Complete(ctx, claimed.ID, claimed.ClaimToken, "", "", "")
+			return st.OutputCommands.Complete(ctx, claimed.ID, claimed.ClaimToken, "")
 		}},
 		{"OutputCommandStore.Fail", func(ctx context.Context) error {
 			claimed, err := st.OutputCommands.Get(ctx, fx.commandID)
 			if err != nil {
 				return err
 			}
-			return st.OutputCommands.Fail(ctx, claimed.ID, claimed.ClaimToken, "boom", "", "")
+			return st.OutputCommands.Fail(ctx, claimed.ID, claimed.ClaimToken, "boom")
 		}},
 		{"OutputCommandStore.Requeue", func(ctx context.Context) error {
 			claimed, err := st.OutputCommands.Get(ctx, fx.commandID)
 			if err != nil {
 				return err
 			}
-			return st.OutputCommands.Requeue(ctx, claimed.ID, claimed.ClaimToken, "boom", "", "", 0)
+			return st.OutputCommands.Requeue(ctx, claimed.ID, claimed.ClaimToken, "boom", 0)
 		}},
 		{"OutputCommandStore.CountNonterminalForAction", func(ctx context.Context) error {
 			_, err := st.OutputCommands.CountNonterminalForAction(ctx, "action-a")

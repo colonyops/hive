@@ -161,8 +161,6 @@ type OutputCommand struct {
 	Attempts     int64          `json:"attempts"`
 	LastError    sql.NullString `json:"last_error"`
 	ResultJson   sql.NullString `json:"result_json"`
-	Stdout       sql.NullString `json:"stdout"`
-	Stderr       sql.NullString `json:"stderr"`
 	CreatedAt    int64          `json:"created_at"`
 	IsRerun      int64          `json:"is_rerun"`
 	ProfileID    string         `json:"profile_id"`

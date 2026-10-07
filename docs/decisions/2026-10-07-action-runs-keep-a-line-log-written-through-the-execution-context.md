@@ -15,10 +15,10 @@ Executors write through `RunLogFrom(ctx)`. A shell command tees both streams int
 
 Only catalog actions get a log. Notify and launch nodes enqueue commands under ids that contain `:`, and those write no log and do not appear in the run list, so their volume cannot push action logs out of retention.
 
-Each attempt keeps at most 512 KiB of log. Rows cascade with their command, and retention keeps logs for the newest 200 commands that have one, plus every command that can still run.
+The log replaces the bounded `stdout` and `stderr` columns, which the migration copies into it and drops, so a run's output is written once. A log is kept whole, up to 8 MiB per attempt as a guard against a runaway command, and it lives exactly as long as its command row. Retention bounds finished `actions.yml` runs on their own, at `retention.action_runs` in `settings.yaml` (100 by default), apart from notify and launch node commands, so notification volume cannot remove run history.
 
 ## Consequences
 
-The run viewer and the `list_action_runs` and `get_action_run` MCP tools read the same rows. Both follow a running command by polling from the last line id. The bounded `stdout` and `stderr` columns remain the command's summary diagnostics, and the viewer falls back to them for runs that have no log rows.
+The run viewer and the `list_action_runs` and `get_action_run` MCP tools read the same rows. Both follow a running command by polling from the last line id. The size of the log table is bounded by the run limit times the attempt cap, which is large in the worst case and small in practice; it trades disk for never cutting off the output that explains a failure.
 
 Output is line-buffered, so output that ends in no newline appears when the attempt ends or after 16 KiB. Terminal-target actions stay non-durable and have no log.
