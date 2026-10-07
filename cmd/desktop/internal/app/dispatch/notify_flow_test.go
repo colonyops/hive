@@ -74,6 +74,7 @@ func TestNotifyTerminal_DeliversThroughTheWorker(t *testing.T) {
 
 	commit(1, "acme/api#12:open:100:comment")
 	worker.Tick(ctx)
+	waitForWorker(t, worker)
 
 	require.Len(t, notifier.sent, 1)
 	assert.Equal(t, "acme/api needs review", notifier.sent[0].Title)
@@ -92,11 +93,13 @@ func TestNotifyTerminal_DeliversThroughTheWorker(t *testing.T) {
 
 	// The command is terminal, so a second tick cannot re-fire it.
 	worker.Tick(ctx)
+	waitForWorker(t, worker)
 	assert.Len(t, notifier.sent, 1)
 
 	// Nor can the same occurrence arriving again in a later batch.
 	commit(2, "acme/api#12:open:100:comment")
 	worker.Tick(ctx)
+	waitForWorker(t, worker)
 	assert.Len(t, notifier.sent, 1)
 }
 
@@ -124,6 +127,7 @@ func TestNotifyTerminal_DeletedNodeFailsItsQueuedCommand(t *testing.T) {
 		}},
 	}))
 	worker.Tick(ctx)
+	waitForWorker(t, worker)
 
 	assert.Empty(t, notifier.sent)
 	var status, lastError string

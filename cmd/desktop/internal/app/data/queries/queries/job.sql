@@ -34,16 +34,16 @@ SELECT * FROM job WHERE id < ? ORDER BY id DESC LIMIT ?;
 -- Non-terminal jobs plus terminal jobs updated within a recency window, newest
 -- first. Drives the auto-hiding titlebar chip.
 SELECT * FROM job
-WHERE status IN ('queued', 'running') OR (status IN ('done', 'failed') AND updated_at >= ?)
+WHERE status IN ('queued', 'running') OR (status IN ('done', 'failed', 'cancelled') AND updated_at >= ?)
 ORDER BY id DESC;
 
 -- name: PruneTerminalJobs :exec
--- Never remove active jobs: only terminal done/failed history is bounded
+-- Never remove active jobs: only terminal history is bounded
 -- (mirrors PruneTerminalOutputCommands).
 DELETE FROM job
 WHERE id IN (
     SELECT id FROM job
-    WHERE status IN ('done', 'failed')
+    WHERE status IN ('done', 'failed', 'cancelled')
     ORDER BY id DESC
     LIMIT -1 OFFSET ?
 );

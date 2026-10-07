@@ -3,10 +3,12 @@ package dispatch
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -22,44 +24,30 @@ import (
 const (
 	DefaultOutputWorkerInterval = 5 * time.Second
 	DefaultOutputWorkerBatch    = 50
+	DefaultManualConcurrency    = 4
+	DefaultAutomaticConcurrency = 4
 	MaxOutputCommandAttempts    = 5
+	automaticRetryDelay         = 5 * time.Second
+	outputCleanupTimeout        = 3 * time.Second
 )
 
-// ActionTypeLaunchSession is the action type whose successful runs are recorded
-// as session events by the launcher, so the worker leaves them to it rather
-// than double-logging a generic action event.
+var ErrDispatchBusy = errors.New("action dispatch is busy")
+
 const ActionTypeLaunchSession = "launch-session"
 
 type OutputData struct {
-	Key     string
-	Payload map[string]any
-	Raw     json.RawMessage
-	// Inputs are the action's declared inputs resolved for this invocation,
-	// reachable from every template as `.Inputs.<name>`; nil when the action
-	// declares none. Resolution fills a key for every declared name, so
-	// referencing an undeclared one is a render error (missingkey=error
-	// fires on nil maps too), never a blank.
-	Inputs map[string]string
-	// Session and Window are the terminal target the action was invoked
-	// against, reachable as `.Session.<field>` and `.Window.<field>`. Both are
-	// nil for a feed-item invocation and Window is nil for a session one, so a
-	// template that reads the wrong surface's data fails loudly rather than
-	// rendering a blank command.
-	Session *SessionTarget
-	Window  *WindowTarget
-	// CreatedAt is when the command was enqueued (Unix milliseconds), so an
-	// executor whose side effect is time-sensitive can tell a fresh command
-	// from one that waited out an app restart. Zero when unknown.
+	Key       string
+	Payload   map[string]any
+	Raw       json.RawMessage
+	Inputs    map[string]string
+	Session   *SessionTarget
+	Window    *WindowTarget
 	CreatedAt int64
 	CommandID int64
 	IsRerun   bool
-	// Origin is the inbox item this command was routed from — attribution, not
-	// payload, and zero when the command has no inbox item behind it.
-	Origin models.ItemRef
+	Origin    models.ItemRef
 }
 
-// ItemRemote is the item's repository clone URL, drafted the way the New
-// Session form does, or "" when the item names no repository.
 func (d OutputData) ItemRemote() string {
 	repo, _ := d.Payload["repo"].(string)
 	itemURL, _ := d.Payload["url"].(string)
@@ -69,19 +57,13 @@ func (d OutputData) ItemRemote() string {
 type Executor interface {
 	Execute(context.Context, actions.Action, OutputData, ActionInvocationInput) (ExecutionResult, error)
 }
+
 type Dispatcher struct{ executors map[string]Executor }
 
 func NewDispatcher(executors map[string]Executor) *Dispatcher {
 	return &Dispatcher{executors: executors}
 }
 
-// Execute runs one dispatched action under a root span, with the executors
-// opening conditional children for whatever they wait on. The span belongs
-// here rather than in the worker because every dispatch path funnels through
-// it -- the worker's automatic drain, a detail-pane confirmation, a terminal
-// invocation -- and because it pairs with the jobs record rather than
-// duplicating it: jobs says what happened to a command across its retries, the
-// span says where one attempt spent its time.
 func (d *Dispatcher) Execute(ctx context.Context, a actions.Action, data OutputData, input ActionInvocationInput) (result ExecutionResult, err error) {
 	ctx, span := tracer.Start(ctx, actionSpanName(a.Type), trace.WithAttributes(
 		attribute.String(attrActionID, a.ID),
@@ -97,14 +79,10 @@ func (d *Dispatcher) Execute(ctx context.Context, a actions.Action, data OutputD
 		return ExecutionResult{}, fmt.Errorf("dispatcher: no executor registered for action type %q", a.Type)
 	}
 	result, err = ex.Execute(ctx, a, data, input)
-	// A suppressed notify completes successfully having done nothing, so the
-	// span has to say whether the side effect was reached at all.
 	span.SetAttributes(attribute.Bool(attrAttempted, result.Attempted))
 	return result, err
 }
 
-// actionSpanName names the action type, which is the executor registry's
-// closed set; the action id rides as an attribute.
 func actionSpanName(actionType string) string {
 	if actionType == "" {
 		return "dispatch.action"
@@ -115,49 +93,54 @@ func actionSpanName(actionType string) string {
 type ActionLister interface {
 	Get(string) (actions.Action, bool)
 }
+
 type OutputCommandStore interface {
-	ListRunnableAfter(context.Context, int64, int) ([]stores.OutputCommand, error)
-	Confirm(context.Context, string, string, []byte, models.ItemRef) (stores.OutputCommand, bool, error)
-	Rerun(context.Context, string, string, []byte, models.ItemRef) (stores.OutputCommand, error)
+	ClaimNextAutomatic(context.Context, int64, string) (stores.OutputCommand, bool, error)
+	Confirm(context.Context, string, string, []byte, models.ItemRef, string) (stores.OutputCommand, bool, error)
+	Rerun(context.Context, string, string, []byte, models.ItemRef, string) (stores.OutputCommand, error)
 	Get(context.Context, int64) (stores.OutputCommand, error)
-	MarkDone(context.Context, int64, ...string) error
-	MarkFailed(context.Context, int64, string, ...string) error
-	Retry(context.Context, int64, string, ...string) error
+	Complete(context.Context, int64, string, string, string, string) error
+	Fail(context.Context, int64, string, string, string, string) error
+	Requeue(context.Context, int64, string, string, string, string, time.Duration) error
+	Cancel(context.Context, int64, string, string, string, string) error
 }
+
 type Worker struct {
 	db          OutputCommandStore
 	actions     ActionLister
 	dispatch    *Dispatcher
 	interval    time.Duration
 	batch       int
+	retryDelay  time.Duration
 	logger      zerolog.Logger
 	recorder    activity.Recorder
 	jobRecorder jobs.Recorder
 
-	runMu    sync.Mutex
-	stopOnce sync.Once
-	stop     chan struct{}
+	manualSlots chan struct{}
+	autoSlots   chan struct{}
+	wg          sync.WaitGroup
+	mu          sync.Mutex
+	active      map[int64]context.CancelFunc
+	stopped     bool
+	startOnce   sync.Once
+	stopOnce    sync.Once
+	stop        chan struct{}
 }
 
 func NewWorker(db OutputCommandStore, as ActionLister, d *Dispatcher, interval time.Duration, logger zerolog.Logger) *Worker {
 	return &Worker{
 		db: db, actions: as, dispatch: d, interval: interval,
-		batch: DefaultOutputWorkerBatch, logger: logger,
-		stop: make(chan struct{}),
+		batch: DefaultOutputWorkerBatch, retryDelay: automaticRetryDelay, logger: logger,
+		manualSlots: make(chan struct{}, DefaultManualConcurrency),
+		autoSlots:   make(chan struct{}, DefaultAutomaticConcurrency),
+		active:      make(map[int64]context.CancelFunc),
+		stop:        make(chan struct{}),
 	}
 }
 
-// SetRecorder attaches an activity recorder so automatic and manual action
-// runs (and their permanent failures) surface in the Activity view. Optional:
-// a nil recorder (the default) records nothing. Set once at wiring time.
 func (w *Worker) SetRecorder(r activity.Recorder) { w.recorder = r }
+func (w *Worker) SetJobRecorder(r jobs.Recorder)  { w.jobRecorder = r }
 
-// SetJobRecorder attaches a jobs recorder so manual and automatic action runs
-// surface as live jobs. A nil recorder, the default, records nothing.
-func (w *Worker) SetJobRecorder(r jobs.Recorder) { w.jobRecorder = r }
-
-// record forwards an activity event when a recorder is attached; nil is a
-// no-op, and the recorder itself logs and swallows write failures.
 func (w *Worker) record(ctx context.Context, e activity.Event) {
 	if w.recorder != nil {
 		w.recorder.Record(ctx, e)
@@ -196,171 +179,297 @@ func (w *Worker) jobFail(ctx context.Context, id int64, reason string) {
 	}
 }
 
+func (w *Worker) jobCancel(ctx context.Context, id int64, reason string) {
+	if w.jobRecorder != nil && id != 0 {
+		w.jobRecorder.Cancel(ctx, id, reason)
+	}
+}
+
 func (w *Worker) jobLogger(id int64, actionID string) zerolog.Logger {
 	return w.logger.With().Int64("job_id", id).Str("action_id", actionID).Logger()
 }
 
 func (w *Worker) Start(ctx context.Context) {
-	go func() {
-		ticker := time.NewTicker(w.interval)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-w.stop:
-				return
-			case <-ticker.C:
-				w.Tick(ctx)
+	w.startOnce.Do(func() {
+		go func() {
+			w.Tick(ctx)
+			ticker := time.NewTicker(w.interval)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-w.stop:
+					return
+				case <-ticker.C:
+					w.Tick(ctx)
+				}
 			}
-		}
-	}()
+		}()
+	})
 }
-func (w *Worker) Stop() { w.stopOnce.Do(func() { close(w.stop) }) }
+
+func (w *Worker) Stop(ctx context.Context) error {
+	w.stopOnce.Do(func() {
+		w.mu.Lock()
+		w.stopped = true
+		close(w.stop)
+		for _, cancel := range w.active {
+			cancel()
+		}
+		w.mu.Unlock()
+	})
+	done := make(chan struct{})
+	go func() {
+		w.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (w *Worker) Confirm(ctx context.Context, actionID, key string, payload []byte, origin models.ItemRef, input ActionInvocationInput) (ActionRunView, error) {
-	w.runMu.Lock()
-	defer w.runMu.Unlock()
+	action, ok := w.actions.Get(actionID)
+	if !ok {
+		return ActionRunView{}, fmt.Errorf("unknown action %q", actionID)
+	}
+	if _, err := action.ResolveInputs(input.Inputs); err != nil {
+		return ActionRunView{}, err
+	}
+	if !w.reserveManual() {
+		return ActionRunView{}, ErrDispatchBusy
+	}
+
+	claimToken := uuid.NewString()
 	var row stores.OutputCommand
 	var err error
 	if input.Rerun {
-		row, err = w.db.Rerun(ctx, actionID, key, payload, origin)
+		row, err = w.db.Rerun(ctx, actionID, key, payload, origin, claimToken)
 	} else {
 		var created bool
-		row, created, err = w.db.Confirm(ctx, actionID, key, payload, origin)
+		row, created, err = w.db.Confirm(ctx, actionID, key, payload, origin, claimToken)
 		if err == nil && !created {
-			if row.Status == "pending" || row.Status == "running" {
-				return ActionRunView{}, fmt.Errorf("action %q is already running for %q", actionID, key)
+			w.releaseManual()
+			view := actionRunView(row)
+			if row.Status != "pending" && row.Status != "running" {
+				view.ConfirmationRequired = true
 			}
-			view := w.view(ctx, row.ID)
-			view.ConfirmationRequired = true
 			return view, nil
 		}
 	}
 	if err != nil {
+		w.releaseManual()
 		return ActionRunView{}, err
 	}
 
-	action, ok := w.actions.Get(actionID)
-	label := actionID
-	if ok {
-		label = actionLabel(action)
-	}
-	jobID := w.jobBegin(ctx, label, actionID, key)
-	logger := w.jobLogger(jobID, actionID)
-	logger.Debug().Msg("output worker: job queued")
-
-	if !ok {
-		err = fmt.Errorf("unknown action %q", actionID)
-		if markErr := w.db.MarkFailed(ctx, row.ID, err.Error()); markErr != nil {
-			logger.Error().Err(markErr).Msg("output worker: marking command failed")
-			return ActionRunView{}, markErr
-		}
-		w.jobFail(ctx, jobID, err.Error())
-		logger.Debug().Err(err).Msg("output worker: job failed")
-		return w.view(ctx, row.ID), err
-	}
-
+	jobID := w.jobBegin(ctx, actionLabel(action), actionID, key)
 	w.jobRunning(ctx, jobID, row.ID)
-	logger.Debug().Int64("command_id", row.ID).Msg("output worker: job running")
-	result, err := w.execute(ctx, row, action, input, logger)
-	if err != nil {
-		// A detail-pane confirmation is an explicit, one-shot attempted side
-		// effect. Persist its diagnostics and make it terminal rather than
-		// retrying later without the interactive input that authorized it.
-		if markErr := w.db.MarkFailed(ctx, row.ID, err.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); markErr != nil {
-			logger.Error().Err(markErr).Msg("output worker: marking command failed")
-			return ActionRunView{}, markErr
-		}
-		w.jobFail(ctx, jobID, err.Error())
-		logger.Debug().Err(err).Msg("output worker: job failed")
-		view := w.view(ctx, row.ID)
-		if result.Attempted {
-			// The side effect was dispatched and failed. Return its durable
-			// diagnostics as a normal result so Wails can deliver them.
-			return view, nil
-		}
-		return view, err
-	}
-	if err = w.done(ctx, row.ID, result); err != nil {
-		logger.Error().Err(err).Msg("output worker: marking command done failed")
-		return ActionRunView{}, err
-	}
-	w.jobDone(ctx, jobID)
-	logger.Debug().Msg("output worker: job done")
-	// A launch-session run is recorded as a session event by the launcher.
-	if action.Type != ActionTypeLaunchSession {
-		w.record(ctx, activity.ActionRun(actionLabel(action), ""))
-	}
-	return w.view(ctx, row.ID), nil
+	w.launch(ctx, row, action, input, jobID, w.manualSlots, true)
+	return ActionRunView{CommandID: row.ID, Status: "running"}, nil
 }
 
 func (w *Worker) Tick(ctx context.Context) {
-	w.runMu.Lock()
-	defer w.runMu.Unlock()
-	var after int64
-	for done := 0; done < w.batch; {
-		rows, err := w.db.ListRunnableAfter(ctx, after, w.batch-done)
+	var afterID int64
+	for claimed := 0; claimed < w.batch; claimed++ {
+		if !w.reserveAutomatic() {
+			return
+		}
+		claimToken := uuid.NewString()
+		row, found, err := w.db.ClaimNextAutomatic(ctx, afterID, claimToken)
 		if err != nil {
-			w.logger.Warn().Err(err).Msg("output worker: listing runnable commands failed")
+			w.releaseAutomatic()
+			w.logger.Warn().Err(err).Msg("output worker: claiming runnable command failed")
 			return
 		}
-		if len(rows) == 0 {
+		if !found {
+			w.releaseAutomatic()
 			return
 		}
-		for _, row := range rows {
-			after = row.ID
-			w.process(ctx, row)
-			done++
-			if done == w.batch {
-				return
-			}
+		afterID = row.ID
+
+		action, ok := w.actions.Get(row.ActionID)
+		label := row.ActionID
+		if ok {
+			label = actionLabel(action)
+		}
+		jobID := w.jobResume(ctx, row.ID)
+		if jobID == 0 {
+			jobID = w.jobBegin(ctx, label, row.ActionID, row.Key)
+			w.jobRunning(ctx, jobID, row.ID)
+		}
+		if !ok {
+			action = actions.Action{ID: row.ActionID}
+		}
+		w.launch(ctx, row, action, ActionInvocationInput{}, jobID, w.autoSlots, false)
+	}
+}
+
+func (w *Worker) Cancel(commandID int64) bool {
+	w.mu.Lock()
+	cancel, ok := w.active[commandID]
+	w.mu.Unlock()
+	if ok {
+		cancel()
+	}
+	return ok
+}
+
+// WaitIdle waits until every admitted execution has persisted its terminal transition.
+func (w *Worker) WaitIdle(ctx context.Context) error {
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		w.mu.Lock()
+		idle := len(w.active) == 0
+		w.mu.Unlock()
+		if idle {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
 		}
 	}
 }
 
-func (w *Worker) process(ctx context.Context, row stores.OutputCommand) {
-	a, ok := w.actions.Get(row.ActionID)
-	label := row.ActionID
-	if ok {
-		label = actionLabel(a)
+func (w *Worker) reserveManual() bool {
+	w.mu.Lock()
+	stopped := w.stopped
+	w.mu.Unlock()
+	if stopped {
+		return false
 	}
-	jobID := w.jobResume(ctx, row.ID)
-	resumed := jobID != 0
-	if !resumed {
-		jobID = w.jobBegin(ctx, label, row.ActionID, row.Key)
+	select {
+	case w.manualSlots <- struct{}{}:
+		return true
+	default:
+		return false
 	}
+}
+
+func (w *Worker) reserveAutomatic() bool {
+	w.mu.Lock()
+	stopped := w.stopped
+	w.mu.Unlock()
+	if stopped {
+		return false
+	}
+	select {
+	case w.autoSlots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
+func (w *Worker) releaseManual()    { <-w.manualSlots }
+func (w *Worker) releaseAutomatic() { <-w.autoSlots }
+
+func (w *Worker) launch(ctx context.Context, row stores.OutputCommand, action actions.Action, input ActionInvocationInput, jobID int64, slot chan struct{}, manual bool) {
+	execCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	w.mu.Lock()
+	if w.stopped {
+		w.mu.Unlock()
+		cancel()
+		<-slot
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.WithoutCancel(ctx), outputCleanupTimeout)
+		defer cleanupCancel()
+		const reason = "Action cancelled because Hive Desktop is stopping"
+		if err := w.db.Cancel(cleanupCtx, row.ID, row.ClaimToken, reason, "", ""); err != nil {
+			w.logger.Error().Err(err).Int64("command_id", row.ID).Msg("output worker: cancelling unstarted command")
+			return
+		}
+		w.jobCancel(cleanupCtx, jobID, reason)
+		return
+	}
+	w.active[row.ID] = cancel
+	w.wg.Add(1)
+	w.mu.Unlock()
+
+	go func() {
+		defer func() {
+			cancel()
+			w.mu.Lock()
+			delete(w.active, row.ID)
+			w.mu.Unlock()
+			<-slot
+			w.wg.Done()
+		}()
+		w.run(execCtx, row, action, input, jobID, manual)
+	}()
+}
+
+func (w *Worker) run(ctx context.Context, row stores.OutputCommand, action actions.Action, input ActionInvocationInput, jobID int64, manual bool) {
 	logger := w.jobLogger(jobID, row.ActionID)
-	if !resumed {
-		logger.Debug().Msg("output worker: job queued")
+	logger.Debug().Int64("command_id", row.ID).Msg("output worker: job running")
+
+	var result ExecutionResult
+	var execErr error
+	if action.Type == "" {
+		execErr = fmt.Errorf("unknown action %q", row.ActionID)
+	} else {
+		result, execErr = w.execute(ctx, row, action, input, logger)
 	}
 
-	if !resumed {
-		w.jobRunning(ctx, jobID, row.ID)
-		logger.Debug().Int64("command_id", row.ID).Msg("output worker: job running")
-	}
-	if !ok {
-		w.fail(ctx, row, ExecutionResult{}, fmt.Errorf("unknown action %q", row.ActionID), jobID, logger)
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), outputCleanupTimeout)
+	defer cancel()
+	if ctx.Err() != nil {
+		reason := "Action cancelled"
+		if err := w.db.Cancel(cleanupCtx, row.ID, row.ClaimToken, reason, boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); err != nil {
+			logger.Error().Err(err).Msg("output worker: cancelling command")
+			return
+		}
+		w.jobCancel(cleanupCtx, jobID, reason)
+		logger.Debug().Msg("output worker: job cancelled")
 		return
 	}
-	result, err := w.execute(ctx, row, a, ActionInvocationInput{}, logger)
-	if err != nil {
-		w.fail(ctx, row, result, err, jobID, logger)
+	if execErr != nil {
+		w.finishFailure(cleanupCtx, row, action, result, execErr, jobID, manual, logger)
 		return
 	}
-	if err := w.done(ctx, row.ID, result); err != nil {
+	if err := w.done(cleanupCtx, row, result); err != nil {
 		logger.Error().Err(err).Msg("output worker: marking command done failed")
 		return
 	}
-	w.jobDone(ctx, jobID)
+	w.jobDone(cleanupCtx, jobID)
 	logger.Debug().Msg("output worker: job done")
-	// This is the automatic path (process only executes when the action
-	// auto-applies). A launch-session run is recorded by the launcher instead,
-	// and an executor that deliberately performed no side effect (a notify
-	// command suppressed by settings or a cooldown) reports Attempted false —
-	// the Activity view records what happened, not what was considered.
-	if a.Type != ActionTypeLaunchSession && result.Attempted {
-		w.record(ctx, automaticActionActivity(a, row))
+	if action.Type != ActionTypeLaunchSession && (manual || result.Attempted) {
+		if manual {
+			w.record(cleanupCtx, activity.ActionRun(actionLabel(action), ""))
+		} else {
+			w.record(cleanupCtx, automaticActionActivity(action, row))
+		}
 	}
+}
+
+func (w *Worker) finishFailure(ctx context.Context, row stores.OutputCommand, action actions.Action, result ExecutionResult, execErr error, jobID int64, manual bool, logger zerolog.Logger) {
+	stdout := boundExecutionStream(result.Log.Stdout)
+	stderr := boundExecutionStream(result.Log.Stderr)
+	terminal := manual || result.Attempted || row.Attempts >= MaxOutputCommandAttempts
+	if terminal {
+		if err := w.db.Fail(ctx, row.ID, row.ClaimToken, execErr.Error(), stdout, stderr); err != nil {
+			logger.Error().Err(err).Msg("output worker: mark failed")
+			return
+		}
+		w.jobFail(ctx, jobID, execErr.Error())
+		logger.Warn().Err(execErr).Int64("command_id", row.ID).Str("key", row.Key).Int64("attempts", row.Attempts).Msg("output worker: command failed permanently")
+		label := row.ActionID
+		if action.Type != "" {
+			label = actionLabel(action)
+		}
+		w.record(ctx, activity.ActionFailed(label, execErr.Error()))
+		return
+	}
+	if err := w.db.Requeue(ctx, row.ID, row.ClaimToken, execErr.Error(), stdout, stderr, w.retryDelay); err != nil {
+		logger.Error().Err(err).Msg("output worker: retry")
+		return
+	}
+	logger.Debug().Err(execErr).Msg("output worker: command scheduled for retry")
 }
 
 func automaticActionActivity(action actions.Action, row stores.OutputCommand) activity.Event {
@@ -378,10 +487,8 @@ func automaticActionActivity(action actions.Action, row stores.OutputCommand) ac
 			link.URL = item.URL
 			if command.ProfileID != "" && command.ExternalID != "" {
 				link.Item = &activity.ItemLink{
-					ProfileID:   command.ProfileID,
-					SourceKind:  command.SourceKind,
-					SourceScope: command.SourceScope,
-					ExternalID:  command.ExternalID,
+					ProfileID: command.ProfileID, SourceKind: command.SourceKind,
+					SourceScope: command.SourceScope, ExternalID: command.ExternalID,
 				}
 			}
 		}
@@ -389,8 +496,6 @@ func automaticActionActivity(action actions.Action, row stores.OutputCommand) ac
 	return activity.AutoAction(actionLabel(action), action.ID, target).WithLink(link)
 }
 
-// actionLabel is the human name for an action in activity copy, falling back
-// to the id when a config omits a label.
 func actionLabel(action actions.Action) string {
 	if action.Label != "" {
 		return action.Label
@@ -398,60 +503,20 @@ func actionLabel(action actions.Action) string {
 	return action.ID
 }
 
-func (w *Worker) execute(
-	ctx context.Context,
-	row stores.OutputCommand,
-	a actions.Action,
-	input ActionInvocationInput,
-	logger zerolog.Logger,
-) (ExecutionResult, error) {
+func (w *Worker) execute(ctx context.Context, row stores.OutputCommand, action actions.Action, input ActionInvocationInput, logger zerolog.Logger) (ExecutionResult, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(row.Payload, &payload); err != nil {
 		logger.Warn().Err(err).Msg("output worker: decoding command payload failed")
 		return ExecutionResult{}, fmt.Errorf("decode payload: %w", err)
 	}
-	// Resolving here rather than at the callers is what makes the automatic
-	// path work at all: a flow-fired command carries no collected values, so
-	// this is where its declared defaults are filled in.
-	inputs, err := a.ResolveInputs(input.Inputs)
+	inputs, err := action.ResolveInputs(input.Inputs)
 	if err != nil {
 		return ExecutionResult{}, err
 	}
-	return w.dispatch.Execute(ctx, a, OutputData{
+	return w.dispatch.Execute(ctx, action, OutputData{
 		Key: row.Key, Payload: payload, Raw: json.RawMessage(row.Payload), Inputs: inputs,
 		CreatedAt: row.CreatedAt, CommandID: row.ID, IsRerun: row.IsRerun, Origin: row.ItemRef(),
 	}, input)
-}
-
-func (w *Worker) fail(
-	ctx context.Context,
-	row stores.OutputCommand,
-	result ExecutionResult,
-	execErr error,
-	jobID int64,
-	logger zerolog.Logger,
-) {
-	if row.Attempts+1 >= MaxOutputCommandAttempts {
-		if err := w.db.MarkFailed(ctx, row.ID, execErr.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); err != nil {
-			logger.Error().Err(err).Msg("output worker: mark failed")
-			return
-		}
-		w.jobFail(ctx, jobID, execErr.Error())
-		logger.Warn().Err(execErr).Int64("command_id", row.ID).Str("key", row.Key).Int64("attempts", row.Attempts+1).Msg("output worker: command failed permanently")
-		// Only the terminal failure reaches the Activity view; retries stay in
-		// the logs so a flaky action doesn't spam the feed.
-		label := row.ActionID
-		if action, ok := w.actions.Get(row.ActionID); ok {
-			label = actionLabel(action)
-		}
-		w.record(ctx, activity.ActionFailed(label, execErr.Error()))
-		return
-	}
-	if err := w.db.Retry(ctx, row.ID, execErr.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); err != nil {
-		logger.Error().Err(err).Msg("output worker: retry")
-		return
-	}
-	logger.Debug().Err(execErr).Msg("output worker: command scheduled for retry")
 }
 
 func (w *Worker) view(ctx context.Context, id int64) ActionRunView {
@@ -462,8 +527,6 @@ func (w *Worker) view(ctx context.Context, id int64) ActionRunView {
 	return actionRunView(row)
 }
 
-// boundExecutionStream is the worker boundary for all executor implementations,
-// including fakes and third-party executors that do not capture output safely.
 func boundExecutionStream(stream string) string {
 	if len(stream) <= maxExecutionStreamBytes {
 		return stream
@@ -472,26 +535,26 @@ func boundExecutionStream(stream string) string {
 }
 
 func actionRunView(row stores.OutputCommand) ActionRunView {
-	v := ActionRunView{CommandID: row.ID, Status: row.Status}
+	view := ActionRunView{CommandID: row.ID, Status: row.Status}
 	if row.LastError != "" {
-		v.Error = row.LastError
+		view.Error = row.LastError
 	}
 	if row.Stdout != "" {
-		v.Stdout = row.Stdout
+		view.Stdout = row.Stdout
 	}
 	if row.Stderr != "" {
-		v.Stderr = row.Stderr
+		view.Stderr = row.Stderr
 	}
 	if row.ResultJSON != "" {
-		_ = json.Unmarshal([]byte(row.ResultJSON), &v.Result)
+		_ = json.Unmarshal([]byte(row.ResultJSON), &view.Result)
 	}
-	return v
+	return view
 }
 
-func (w *Worker) done(ctx context.Context, id int64, result ExecutionResult) error {
+func (w *Worker) done(ctx context.Context, row stores.OutputCommand, result ExecutionResult) error {
 	raw, err := json.Marshal(result.Outcome)
 	if err != nil {
 		return err
 	}
-	return w.db.MarkDone(ctx, id, string(raw), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr))
+	return w.db.Complete(ctx, row.ID, row.ClaimToken, string(raw), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr))
 }

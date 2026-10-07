@@ -16,6 +16,13 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as jobs$0 from "../../app/jobs/models.js";
 
 /**
+ * Cancel stops a running action command. Its job update arrives through jobs:updated.
+ */
+export function Cancel(commandID: number): $CancellablePromise<void> {
+    return $Call.ByID(821215606, commandID);
+}
+
+/**
  * List returns up to limit jobs with id < before, newest first.
  */
 export function List(before: number, limit: number): $CancellablePromise<jobs$0.Job[] | null> {

@@ -5,8 +5,14 @@ import { actionTypeMeta } from '../lib/actionPresentation'
 import type { ActionView } from '../types/action'
 import type { ActionRunView } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 
-const props = defineProps<{ action: ActionView; pending?: boolean; run?: ActionRunView }>()
+const props = defineProps<{ action: ActionView; pending?: boolean; run?: ActionRunView; expanded?: boolean }>()
 const view = computed(() => actionTypeMeta(props.action.type))
+const active = computed(() => props.run?.status === 'pending' || props.run?.status === 'running')
+const runSummary = computed(() => {
+  if (props.run?.status === 'done') return 'Action completed'
+  if (props.run?.status === 'cancelled') return props.run.error || 'Action cancelled'
+  return props.run?.error || 'Action failed'
+})
 const emit = defineEmits<{ run: [] }>()
 </script>
 
@@ -16,27 +22,40 @@ const emit = defineEmits<{ run: [] }>()
       class="action-row-btn"
       :data-id="action.id"
       data-testid="action-card"
-      :disabled="pending"
+      :disabled="pending || active"
       :title="view.label"
       @click="emit('run')"
     >
       <span class="action-row-icon" :style="{ color: view.color }"><AppIcon :name="view.icon" class="size-3.5" /></span>
       <span class="action-row-label">{{ action.label }}</span>
-      <span v-if="pending" class="action-row-pending" data-testid="run-action">Running…</span>
+      <span v-if="pending" class="action-row-pending" data-testid="run-action">Starting…</span>
+      <span v-else-if="active" class="action-row-pending" data-testid="run-action">
+        {{ run?.status === 'pending' ? 'Queued…' : 'Running…' }}
+      </span>
     </button>
-    <details v-if="run && run.status !== 'done'" class="action-failure" data-testid="action-failure">
-      <summary class="cursor-pointer">{{ run.error || 'Action failed' }}</summary>
+    <details
+      v-if="run && !active"
+      class="action-result"
+      :class="{ 'action-result-failed': run.status === 'failed' }"
+      :data-testid="run.status === 'failed' ? 'action-failure' : 'action-run-details'"
+      :open="expanded"
+    >
+      <summary class="cursor-pointer">{{ runSummary }}</summary>
       <dl class="mt-2 space-y-1 font-mono text-caption text-text-3">
         <div>
-          <dt class="inline text-severity-error">status:</dt>
+          <dt class="inline">status:</dt>
           <dd class="inline">{{ run.status }}</dd>
         </div>
+        <div>
+          <dt class="inline">run:</dt>
+          <dd class="inline">{{ run.commandId }}</dd>
+        </div>
         <div v-if="run.stdout">
-          <dt class="text-severity-error">stdout:</dt>
+          <dt>stdout:</dt>
           <dd class="whitespace-pre-wrap" data-testid="action-stdout">{{ run.stdout }}</dd>
         </div>
         <div v-if="run.stderr">
-          <dt class="text-severity-error">stderr:</dt>
+          <dt>stderr:</dt>
           <dd class="whitespace-pre-wrap" data-testid="action-stderr">{{ run.stderr }}</dd>
         </div>
       </dl>
@@ -87,11 +106,14 @@ const emit = defineEmits<{ run: [] }>()
   font-size: var(--text-caption);
   color: var(--color-text-3);
 }
-.action-failure {
+.action-result {
   border-top: 1px solid var(--color-border);
   padding: 8px 11px;
   text-align: left;
   font-size: var(--text-small);
+  color: var(--color-text-2);
+}
+.action-result-failed {
   color: var(--color-severity-error);
 }
 </style>

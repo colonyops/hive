@@ -11,6 +11,8 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 )
 
+var ErrOutputCommandActive = errors.New("output command is already active")
+
 const (
 	maxOutputCommandStreamBytes  = 64 * 1024
 	outputCommandTruncatedMarker = "\n... (truncated)"
@@ -33,8 +35,21 @@ func (s *OutputCommandStore) ListRunnableAfter(ctx context.Context, afterID int6
 	return MapFunc[queries.OutputCommand, OutputCommand](mapOutputCommandFromDB).Slice(rows), nil
 }
 
-// The unique (actionID, key) pair prevents replayed batches from firing an
-// action twice.
+func (s *OutputCommandStore) ClaimNextAutomatic(ctx context.Context, afterID int64, claimToken string) (OutputCommand, bool, error) {
+	row, err := s.q.Ctx(ctx).ClaimNextAutomaticOutputCommand(ctx, queries.ClaimNextAutomaticOutputCommandParams{
+		ClaimToken: claimToken,
+		ClaimedAt:  s.now().UnixMilli(),
+		AfterID:    afterID,
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return OutputCommand{}, false, nil
+	}
+	if err != nil {
+		return OutputCommand{}, false, wrap("claiming automatic output command", err)
+	}
+	return mapOutputCommandFromDB(row), true, nil
+}
+
 func (s *OutputCommandStore) Enqueue(ctx context.Context, actionID, key string, payload []byte, createdAt int64, ref models.ItemRef) error {
 	return wrap("enqueuing output command", s.q.Ctx(ctx).EnqueueOutputCommand(ctx, queries.EnqueueOutputCommandParams{
 		ActionID: actionID, Key: key, Payload: payload, CreatedAt: createdAt,
@@ -42,12 +57,11 @@ func (s *OutputCommandStore) Enqueue(ctx context.Context, actionID, key string, 
 	}))
 }
 
-// Confirm claims a queued command or creates one. A terminal command for the
-// same key returns the latest existing command with created=false.
-func (s *OutputCommandStore) Confirm(ctx context.Context, actionID, key string, payload []byte, ref models.ItemRef) (OutputCommand, bool, error) {
+func (s *OutputCommandStore) Confirm(ctx context.Context, actionID, key string, payload []byte, ref models.ItemRef, claimToken string) (OutputCommand, bool, error) {
+	now := s.now().UnixMilli()
 	q := s.q.Ctx(ctx)
 	row, err := q.ConfirmOutputCommand(ctx, queries.ConfirmOutputCommandParams{
-		ActionID: actionID, Key: key, Payload: payload, CreatedAt: s.now().UnixMilli(),
+		ActionID: actionID, Key: key, Payload: payload, CreatedAt: now, ClaimToken: claimToken, ClaimedAt: now,
 		ProfileID: ref.ProfileID, SourceKind: ref.SourceKind, SourceScope: ref.SourceScope, ExternalID: ref.ExternalID,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
@@ -60,13 +74,18 @@ func (s *OutputCommandStore) Confirm(ctx context.Context, actionID, key string, 
 	return mapOutputCommandFromDB(row), true, nil
 }
 
-// Rerun creates a new command so prior diagnostics remain intact. If no
-// completed run exists, it returns NotFoundError.
-func (s *OutputCommandStore) Rerun(ctx context.Context, actionID, key string, payload []byte, ref models.ItemRef) (OutputCommand, error) {
+func (s *OutputCommandStore) Rerun(ctx context.Context, actionID, key string, payload []byte, ref models.ItemRef, claimToken string) (OutputCommand, error) {
+	now := s.now().UnixMilli()
 	row, err := s.q.Ctx(ctx).RerunOutputCommand(ctx, queries.RerunOutputCommandParams{
-		ActionID: actionID, Key: key, Payload: payload, CreatedAt: s.now().UnixMilli(),
+		ActionID: actionID, Key: key, Payload: payload, CreatedAt: now, ClaimToken: claimToken, ClaimedAt: now,
 		ProfileID: ref.ProfileID, SourceKind: ref.SourceKind, SourceScope: ref.SourceScope, ExternalID: ref.ExternalID,
 	})
+	if errors.Is(err, sql.ErrNoRows) {
+		existing, lookupErr := s.q.Ctx(ctx).GetLatestOutputCommandForAction(ctx, queries.GetLatestOutputCommandForActionParams{ActionID: actionID, Key: key})
+		if lookupErr == nil && (existing.Status == "pending" || existing.Status == "running") {
+			return OutputCommand{}, fmt.Errorf("rerunning output command %s/%s: %w", actionID, key, ErrOutputCommandActive)
+		}
+	}
 	if err != nil {
 		return OutputCommand{}, errTransformQueryOne("output_command", fmt.Sprintf("%s/%s", actionID, key), err)
 	}
@@ -81,50 +100,43 @@ func (s *OutputCommandStore) Get(ctx context.Context, id int64) (OutputCommand, 
 	return mapOutputCommandFromDB(row), nil
 }
 
-// values are optional result JSON, stdout, and stderr, in that order; stdout
-// and stderr are bounded.
-func (s *OutputCommandStore) MarkDone(ctx context.Context, id int64, values ...string) error {
-	var resultJSON, stdout, stderr string
-	if len(values) > 0 {
-		resultJSON = values[0]
-	}
-	if len(values) > 1 {
-		stdout = values[1]
-	}
-	if len(values) > 2 {
-		stderr = values[2]
-	}
-	return wrap("marking output command done", s.q.Ctx(ctx).MarkOutputCommandDone(ctx, queries.MarkOutputCommandDoneParams{
-		ID: id, ResultJson: null(resultJSON), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
-	}))
+func (s *OutputCommandStore) Complete(ctx context.Context, id int64, claimToken, resultJSON, stdout, stderr string) error {
+	rows, err := s.q.Ctx(ctx).CompleteClaimedOutputCommand(ctx, queries.CompleteClaimedOutputCommandParams{
+		ID: id, ClaimToken: claimToken, ResultJson: null(resultJSON), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
+	})
+	return claimedTransition("completing", id, rows, err)
 }
 
-// values are optional stdout and stderr, in that order; both are bounded.
-func (s *OutputCommandStore) MarkFailed(ctx context.Context, id int64, lastErr string, values ...string) error {
-	var stdout, stderr string
-	if len(values) > 0 {
-		stdout = values[0]
-	}
-	if len(values) > 1 {
-		stderr = values[1]
-	}
-	return wrap("marking output command failed", s.q.Ctx(ctx).MarkOutputCommandFailed(ctx, queries.MarkOutputCommandFailedParams{
-		ID: id, LastError: null(lastErr), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
-	}))
+func (s *OutputCommandStore) Fail(ctx context.Context, id int64, claimToken, lastErr, stdout, stderr string) error {
+	rows, err := s.q.Ctx(ctx).FailClaimedOutputCommand(ctx, queries.FailClaimedOutputCommandParams{
+		ID: id, ClaimToken: claimToken, LastError: null(lastErr), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
+	})
+	return claimedTransition("failing", id, rows, err)
 }
 
-// values are optional stdout and stderr, in that order; both are bounded.
-func (s *OutputCommandStore) Retry(ctx context.Context, id int64, lastErr string, values ...string) error {
-	var stdout, stderr string
-	if len(values) > 0 {
-		stdout = values[0]
+func (s *OutputCommandStore) Requeue(ctx context.Context, id int64, claimToken, lastErr, stdout, stderr string, delay time.Duration) error {
+	rows, err := s.q.Ctx(ctx).RequeueClaimedOutputCommand(ctx, queries.RequeueClaimedOutputCommandParams{
+		ID: id, ClaimToken: claimToken, NotBefore: s.now().Add(delay).UnixMilli(), LastError: null(lastErr),
+		Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
+	})
+	return claimedTransition("requeueing", id, rows, err)
+}
+
+func (s *OutputCommandStore) Cancel(ctx context.Context, id int64, claimToken, reason, stdout, stderr string) error {
+	rows, err := s.q.Ctx(ctx).CancelClaimedOutputCommand(ctx, queries.CancelClaimedOutputCommandParams{
+		ID: id, ClaimToken: claimToken, LastError: null(reason), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
+	})
+	return claimedTransition("cancelling", id, rows, err)
+}
+
+func claimedTransition(verb string, id, rows int64, err error) error {
+	if err != nil {
+		return wrap(fmt.Sprintf("%s output command", verb), err)
 	}
-	if len(values) > 1 {
-		stderr = values[1]
+	if rows != 1 {
+		return fmt.Errorf("%s output command %d: stale claim", verb, id)
 	}
-	return wrap("recording output command retry", s.q.Ctx(ctx).RetryOutputCommand(ctx, queries.RetryOutputCommandParams{
-		ID: id, LastError: null(lastErr), Stdout: null(boundOutputCommandStream(stdout)), Stderr: null(boundOutputCommandStream(stderr)),
-	}))
+	return nil
 }
 
 func (s *OutputCommandStore) CountNonterminalForAction(ctx context.Context, actionID string) (int64, error) {

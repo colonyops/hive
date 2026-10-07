@@ -25,3 +25,8 @@ func (s *JobService) List(ctx context.Context, before int64, limit int) ([]jobs.
 func (s *JobService) ListActive(ctx context.Context) ([]jobs.Job, error) {
 	return s.jobs.ListActive(ctx)
 }
+
+// Cancel stops a running action command. Its job update arrives through jobs:updated.
+func (s *JobService) Cancel(ctx context.Context, commandID int64) error {
+	return s.jobs.CancelCommand(ctx, commandID)
+}

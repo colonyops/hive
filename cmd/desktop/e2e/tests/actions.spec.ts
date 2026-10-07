@@ -183,9 +183,10 @@ test('persists shell output, failure diagnostics, and durable duplicate rejectio
 
   const failing = action(state.runId, 'failed-shell')
   await page.locator(`[data-id="${failing}"]`).click()
-  await expect(page.getByTestId('action-failure')).toContainText('shell: command failed')
-  await expect(page.getByTestId('action-stdout')).toContainText('failing-stdout')
-  await expect(page.getByTestId('action-stderr')).toContainText('failing-stderr')
+  const failingRow = page.locator('.action-row', { has: page.locator(`[data-id="${failing}"]`) })
+  await expect(failingRow.getByTestId('action-failure')).toContainText('shell: command failed')
+  await expect(failingRow.getByTestId('action-stdout')).toContainText('failing-stdout')
+  await expect(failingRow.getByTestId('action-stderr')).toContainText('failing-stderr')
   await expect.poll(async () => (await smoke(page)).outputCommands.find((command) => command.actionId === failing)).toEqual(expect.objectContaining({ status: 'failed', stdout: 'failing-stdout', stderr: 'failing-stderr', lastError: expect.stringContaining('shell: command failed'), result: null }))
   await page.reload()
   await select(page, 'pr2841')

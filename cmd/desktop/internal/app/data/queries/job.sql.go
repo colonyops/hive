@@ -85,7 +85,7 @@ func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) (Job, erro
 
 const listActiveJobs = `-- name: ListActiveJobs :many
 SELECT id, created_at, updated_at, status, label, step, action_id, target, error, command_id FROM job
-WHERE status IN ('queued', 'running') OR (status IN ('done', 'failed') AND updated_at >= ?)
+WHERE status IN ('queued', 'running') OR (status IN ('done', 'failed', 'cancelled') AND updated_at >= ?)
 ORDER BY id DESC
 `
 
@@ -173,13 +173,13 @@ const pruneTerminalJobs = `-- name: PruneTerminalJobs :exec
 DELETE FROM job
 WHERE id IN (
     SELECT id FROM job
-    WHERE status IN ('done', 'failed')
+    WHERE status IN ('done', 'failed', 'cancelled')
     ORDER BY id DESC
     LIMIT -1 OFFSET ?
 )
 `
 
-// Never remove active jobs: only terminal done/failed history is bounded
+// Never remove active jobs: only terminal history is bounded
 // (mirrors PruneTerminalOutputCommands).
 func (q *Queries) PruneTerminalJobs(ctx context.Context, offset int64) error {
 	_, err := q.db.ExecContext(ctx, pruneTerminalJobs, offset)

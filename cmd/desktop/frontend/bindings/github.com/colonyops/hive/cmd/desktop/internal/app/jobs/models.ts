@@ -22,6 +22,6 @@ export interface Job {
 /**
  * JobStatus is a job's lifecycle stage.
  * 
- * ENUM(queued, running, done, failed)
+ * ENUM(queued, running, done, failed, cancelled)
  */
 export type JobStatus = string;

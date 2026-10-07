@@ -74,7 +74,7 @@ func seedCtxFixture(t *testing.T, st *Stores, db *queries.DB) ctxFixture {
 
 	command, created, err := st.OutputCommands.Confirm(ctx, "action-a", "item-1", []byte(`{}`), models.ItemRef{
 		ProfileID: "p", SourceKind: "github", SourceScope: "s", ExternalID: "item-1",
-	})
+	}, "claim")
 	require.NoError(t, err)
 	require.True(t, created)
 
@@ -388,11 +388,11 @@ func TestEveryStoreMethodJoinsTheAmbientTransaction(t *testing.T) {
 			return st.OutputCommands.Enqueue(ctx, "action-ctx", "key-ctx", []byte(`{}`), time.Now().UnixMilli(), models.ItemRef{})
 		}},
 		{"OutputCommandStore.Confirm", func(ctx context.Context) error {
-			_, _, err := st.OutputCommands.Confirm(ctx, "action-b", "item-1", []byte(`{}`), models.ItemRef{ProfileID: "p", SourceKind: "github", SourceScope: "s", ExternalID: "item-1"})
+			_, _, err := st.OutputCommands.Confirm(ctx, "action-b", "item-1", []byte(`{}`), models.ItemRef{ProfileID: "p", SourceKind: "github", SourceScope: "s", ExternalID: "item-1"}, "claim-b")
 			return err
 		}},
 		{"OutputCommandStore.Rerun", func(ctx context.Context) error {
-			_, err := st.OutputCommands.Rerun(ctx, "no-such-action", "no-such-key", []byte(`{}`), models.ItemRef{})
+			_, err := st.OutputCommands.Rerun(ctx, "no-such-action", "no-such-key", []byte(`{}`), models.ItemRef{}, "rerun-claim")
 			// A miss proves the query ran; an escaped call would have timed
 			// out on the pool instead.
 			if IsNotFound(err) {
@@ -404,14 +404,26 @@ func TestEveryStoreMethodJoinsTheAmbientTransaction(t *testing.T) {
 			_, err := st.OutputCommands.Get(ctx, fx.commandID)
 			return err
 		}},
-		{"OutputCommandStore.MarkDone", func(ctx context.Context) error {
-			return st.OutputCommands.MarkDone(ctx, fx.commandID)
+		{"OutputCommandStore.Complete", func(ctx context.Context) error {
+			claimed, err := st.OutputCommands.Get(ctx, fx.commandID)
+			if err != nil {
+				return err
+			}
+			return st.OutputCommands.Complete(ctx, claimed.ID, claimed.ClaimToken, "", "", "")
 		}},
-		{"OutputCommandStore.MarkFailed", func(ctx context.Context) error {
-			return st.OutputCommands.MarkFailed(ctx, fx.commandID, "boom")
+		{"OutputCommandStore.Fail", func(ctx context.Context) error {
+			claimed, err := st.OutputCommands.Get(ctx, fx.commandID)
+			if err != nil {
+				return err
+			}
+			return st.OutputCommands.Fail(ctx, claimed.ID, claimed.ClaimToken, "boom", "", "")
 		}},
-		{"OutputCommandStore.Retry", func(ctx context.Context) error {
-			return st.OutputCommands.Retry(ctx, fx.commandID, "boom")
+		{"OutputCommandStore.Requeue", func(ctx context.Context) error {
+			claimed, err := st.OutputCommands.Get(ctx, fx.commandID)
+			if err != nil {
+				return err
+			}
+			return st.OutputCommands.Requeue(ctx, claimed.ID, claimed.ClaimToken, "boom", "", "", 0)
 		}},
 		{"OutputCommandStore.CountNonterminalForAction", func(ctx context.Context) error {
 			_, err := st.OutputCommands.CountNonterminalForAction(ctx, "action-a")

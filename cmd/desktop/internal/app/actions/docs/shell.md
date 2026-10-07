@@ -31,10 +31,23 @@ targets: [session]
 command_template: 'zed {{ .Session.Path | shq }}'
 ```
 
+## Execution and lifetime
+
+The action stays running until the command exits. Starting a child process or
+opening a browser does not mark it complete. Item actions run through bounded
+manual or automatic capacity, so one long command does not block unrelated
+work. Hiding the Hive window leaves the command running. Quitting Hive cancels
+the owned process group and waits briefly for it to exit.
+
+Shell actions capture stdout and stderr but provide no terminal or stdin. Use a
+terminal launcher or session for a command that needs interactive terminal
+input.
+
 ## Where a failure shows up
 
-On an `item` target the run is a durable command, and failures keep bounded
-stdout/stderr diagnostics on that record, readable from the activity view.
+On an `item` target the run is a durable command. The action card and jobs list
+show its queued or running state, allow cancellation, and retain bounded
+stdout/stderr diagnostics after failure.
 
 A `session` or `window` run is deliberately not durable — it is a manual
 operation against live local state, so it must stay repeatable and must not

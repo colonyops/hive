@@ -825,6 +825,29 @@ describe('useFeedState', () => {
     expect(mocks.notify).toHaveBeenCalledWith({ title: 'command exited 1', severity: 'error', category: 'action' })
   })
 
+  it('accepts a running action and refreshes its terminal result from job events', async () => {
+    mocks.ListByFeed.mockResolvedValue([item(7)])
+    mocks.ActionViews.mockResolvedValue([
+      { id: 'review', label: 'Review', type: 'shell', showInDetail: true, requiresSessionInput: false },
+    ])
+    mocks.InvokeAction.mockResolvedValue({ commandId: 17, status: 'running' })
+    const get = mountState()
+    await flushPromises()
+
+    await get().invokeAction('review')
+    expect(get().actionRuns.value.review).toMatchObject({ commandId: 17, status: 'running' })
+    expect(mocks.notify).not.toHaveBeenCalled()
+
+    mocks.ActionRun.mockResolvedValue({ commandId: 17, status: 'done' })
+    const jobsHandler = mocks.On.mock.calls.find(([event]) => event === 'jobs:updated')?.[1]
+    expect(jobsHandler).toBeTypeOf('function')
+    jobsHandler()
+    await flushPromises()
+
+    expect(get().actionRuns.value.review).toMatchObject({ commandId: 17, status: 'done' })
+    expect(mocks.notify).toHaveBeenCalledWith({ title: 'Review completed', severity: 'success', category: 'action' })
+  })
+
   it('copies a clipboard action through the native clipboard with no durable run', async () => {
     mocks.ListByFeed.mockResolvedValue([item(7)])
     mocks.ActionViews.mockResolvedValue([

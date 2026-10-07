@@ -5,6 +5,7 @@ import { useDevTools } from '../composables/useDevTools'
 import type { useFeedState } from '../composables/useFeedState'
 import type { FlowsSession } from '../pipeline/composables/useFlowsSession'
 import { useJobs } from '../stores/useJobs'
+import { ActionRunLocation } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
 import {
   isApplicationSettingsSection,
   isProfileSettingsSection,
@@ -97,6 +98,17 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
         if (sync !== feedRouteSync || route.name !== 'feed') return
       }
       await feed.selectItem(wantedItem)
+
+      const wantedRun = Number(route.query.run)
+      const wantedAction = route.query.action
+      if (
+        typeof wantedAction === 'string' &&
+        Number.isSafeInteger(wantedRun) &&
+        wantedRun > 0 &&
+        sync === feedRouteSync &&
+        route.name === 'feed'
+      )
+        await feed.openActionRun(wantedItem, wantedAction, wantedRun)
     },
     { immediate: true },
   )
@@ -218,12 +230,20 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
   const { activeJobs } = useJobs()
   async function openJobRun(commandID: number): Promise<void> {
     const job = activeJobs.value.find((candidate) => candidate.commandId === commandID)
-    if (!job || !activeProfileId.value) return
-    await router.push({ name: 'feed', params: { profileId: activeProfileId.value } })
-    if (route.name !== 'feed') return
-    // The run opens only if its item is in the profile default selection the
-    // route watcher just applied.
-    await feed.openActionRun(Number(job.target), job.actionId, commandID)
+    if (!job) return
+    try {
+      const location = await ActionRunLocation(commandID)
+      const query: Record<string, string> = {
+        item: String(location.itemId),
+        action: job.actionId,
+        run: String(commandID),
+      }
+      if (location.feedId) query.feed = location.feedId
+      else query.view = 'trash'
+      await router.push({ name: 'feed', params: { profileId: location.profileId }, query })
+    } catch (error) {
+      console.warn('Unable to open action run', error)
+    }
   }
 
   // /dev is a real route in every build, so a shipped one that was not asked to

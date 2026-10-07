@@ -79,14 +79,14 @@ func TestActionSmokeMiddlewareReadsOnlyCurrentRunWithoutMutation(t *testing.T) {
 	require.NoError(t, err)
 
 	outputCommands := appstores.New(pipeline, appstores.Options{}).OutputCommands
-	kept, created, err := outputCommands.Confirm(ctx, "smoke-unit-shell", "pr2841", []byte(`{}`), models.ItemRef{})
+	kept, created, err := outputCommands.Confirm(ctx, "smoke-unit-shell", "pr2841", []byte(`{}`), models.ItemRef{}, "kept-claim")
 	require.NoError(t, err)
 	require.True(t, created)
-	require.NoError(t, outputCommands.MarkDone(ctx, kept.ID, `{"message":{"topic":"smoke.unit","sender":"hive-desktop"}}`, "out", "err"))
-	other, created, err := outputCommands.Confirm(ctx, "smoke-other-shell", "pr2841", []byte(`{}`), models.ItemRef{})
+	require.NoError(t, outputCommands.Complete(ctx, kept.ID, kept.ClaimToken, `{"message":{"topic":"smoke.unit","sender":"hive-desktop"}}`, "out", "err"))
+	other, created, err := outputCommands.Confirm(ctx, "smoke-other-shell", "pr2841", []byte(`{}`), models.ItemRef{}, "other-claim")
 	require.NoError(t, err)
 	require.True(t, created)
-	require.NoError(t, outputCommands.MarkFailed(ctx, other.ID, "hidden failure"))
+	require.NoError(t, outputCommands.Fail(ctx, other.ID, other.ClaimToken, "hidden failure", "", ""))
 
 	h := actionSmokeMiddleware(pipeline, core.Conn(), settings.MockMode())(http.NotFoundHandler())
 	r := httptest.NewRecorder()

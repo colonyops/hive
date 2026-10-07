@@ -147,7 +147,7 @@ Domain-Driven Design, (Go) an idiom specific to the language.
 | Pattern | Where it applies | The rule here |
 | --- | --- | --- |
 | **Strategy** (GoF) | action executors, event delivery, script runtimes | One implementation per variant behind one interface, selected by a registry lookup — never a `switch` that grows a case per type. For event delivery the strategy is *constructed*, not an enum: `events.Coalesce()` / `events.Buffer(n)`, so "coalesce with a queue size" is unrepresentable rather than merely wrong. |
-| **Command** (GoF) | action dispatch | An `output_command` row is a durable, replayable command carrying everything its executor needs. Its `UNIQUE (action_id, key)` index is the only thing preventing an already-run action from re-firing — treat it as load-bearing. |
+| **Command** (GoF) | action dispatch | An `output_command` row is the durable identity, state, and diagnostics for one item action. Automatic rows carry replayable payloads; manual inputs stay process-local and interrupted manual runs never replay. The non-rerun `UNIQUE (action_id, key)` index and active-command partial index prevent an already-run or concurrent action from re-firing -- treat both as load-bearing. Attempts execute only under token-guarded claims (ADR action-commands-use-durable-claims-and-bounded-dispatch-lanes). |
 | **Registry** | the [extension points](#extension-points) | An explicit map keyed by a type string, declared in one file, with per-type config carrying its own `Validate`. Never `init()` self-registration — `gochecknoinits` is enabled. A registry used for enumeration (MCP tool listing, CLI generation) carries *metadata only*, never dispatch. |
 | **Factory Method** (GoF) | node config decoding, connector instances | The registry stores a constructor, not an instance. `func() NodeConfig` must return a **distinct** value per call because the decoder mutates it in place. For connectors, a `Descriptor` (schema, capabilities, stability) is what gets registered; instances are constructed per-use from parsed config. |
 | **Observer** (GoF) — typed and payload-carrying | core → adapters | Core events carry payloads and each subscriber declares a delivery policy. The Wails adapter degrades them to wake-up signals; **the core never does**, because an MCP client cannot cheaply "re-read the service" and a streaming consumer needs the delta. |
@@ -1056,7 +1056,10 @@ Until appkit offers signal opt-out and ordered start, the standing pattern
 is **App-owned lifecycle**: every subsystem exposes an idempotent,
 context-taking `Stop` behind a `stopOnce` (the webhook listener is the
 template — ADR webhook-listener-placement), `App.Start` starts them in dependency order, and
-`App.Close` unwinds them in reverse. `main` holds none of it.
+`App.Close` unwinds them in reverse. `main` holds none of it. The output worker's
+stop is also a join: it stops admission, cancels its owned executions, persists
+their terminal state, and returns before the desktop store closes (ADR
+action-commands-use-durable-claims-and-bounded-dispatch-lanes).
 
 `development.pprof` is typed and defaulted off. The endpoint has no lifecycle
 of its own: when enabled, `httpapi.PprofHandler()` mounts on the shared
@@ -1703,6 +1706,18 @@ load-bearing:
   the source identity the way `notifySinks` already does and the enqueue records
   it. `OutputData.Origin` is how it reaches an executor; a launcher records the
   link and never fails the launch over it.
+
+**Item action dispatch uses claims, not an execution mutex** (ADR
+action-commands-use-durable-claims-and-bounded-dispatch-lanes). The store
+atomically changes one eligible row to `running`, increments its attempt count,
+and assigns a claim token. Every terminal or retry transition must match that
+token. Manual and automatic actions have separate bounded execution lanes, so
+an interactive shell action can remain truthfully running until exit without
+starving flow outputs. Manual invocation returns the accepted run immediately;
+`jobs:updated` makes the detail card re-read its durable outcome. Actual app
+quit cancels and joins active commands before SQLite closes. Window hiding does
+not stop them. Recovery fails residual running commands because their external
+side effects may already have happened.
 
 **A `launch-session` action targets either a repository or an agent workspace**
 ([ADR a-launch-session-action-targets-either-a-repository-or-an-agent-workspace](decisions/2026-09-18-a-launch-session-action-targets-either-a-repository-or-an-agent-workspace.md)).

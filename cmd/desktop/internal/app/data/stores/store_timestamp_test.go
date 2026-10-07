@@ -67,7 +67,7 @@ func TestCommitWritesUseUnixMilliseconds(t *testing.T) {
 func TestConfirmOutputCommandWritesUnixMilliseconds(t *testing.T) {
 	st, _ := openTestStores(t)
 	before := time.Now().UnixMilli()
-	command, created, err := st.OutputCommands.Confirm(t.Context(), "action-a", "item-1", []byte(`{}`), models.ItemRef{})
+	command, created, err := st.OutputCommands.Confirm(t.Context(), "action-a", "item-1", []byte(`{}`), models.ItemRef{}, "claim")
 	after := time.Now().UnixMilli()
 	require.NoError(t, err)
 	require.True(t, created)

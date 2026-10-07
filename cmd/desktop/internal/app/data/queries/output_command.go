@@ -36,7 +36,7 @@ func (db *DB) RecoverInterruptedOutputCommands(ctx context.Context) error {
 		}
 		if _, err := tx.querier().ExecContext(ctx, `
 		UPDATE output_command
-		SET status = 'failed', attempts = attempts + 1, last_error = ?
+		SET status = 'failed', claim_token = '', last_error = ?
 		WHERE status = 'running'`, interruptedOutputCommandError); err != nil {
 			return wrap("recovering interrupted output commands", err)
 		}

@@ -3,6 +3,8 @@ import IconCheck from '~icons/lucide/check'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconClock3 from '~icons/lucide/clock-3'
 import IconExternalLink from '~icons/lucide/external-link'
+import IconX from '~icons/lucide/x'
+import { Cancel } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/jobservice'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
 import IconButton from './ui/IconButton.vue'
 import Spinner from './ui/Spinner.vue'
@@ -14,6 +16,14 @@ function statusClasses(status: string): string {
   if (status === 'failed') return 'border-severity-error-border bg-severity-error-tint text-severity-error'
   if (status === 'done') return 'border-severity-success-border bg-severity-success-tint text-severity-success'
   return 'border-border bg-chip text-text-2'
+}
+
+async function cancel(commandId: number): Promise<void> {
+  try {
+    await Cancel(commandId)
+  } catch (error) {
+    console.warn('Unable to cancel action run', error)
+  }
 }
 </script>
 
@@ -43,6 +53,7 @@ function statusClasses(status: string): string {
           <Spinner v-if="job.status === 'running'" />
           <IconClock3 v-else-if="job.status === 'queued'" class="size-3.5" />
           <IconCheck v-else-if="job.status === 'done'" class="size-3.5" />
+          <IconX v-else-if="job.status === 'cancelled'" class="size-3.5" />
           <IconCircleAlert v-else class="size-3.5" />
         </span>
         <div class="min-w-0 flex-1">
@@ -53,15 +64,23 @@ function statusClasses(status: string): string {
           </div>
           <div v-if="job.error" class="mt-1 line-clamp-2 text-micro text-severity-error">{{ job.error }}</div>
         </div>
-        <IconButton
-          v-if="job.commandId"
-          :label="`Open action run for ${job.label || job.actionId}`"
-          tooltip="Open action run"
-          :icon="IconExternalLink"
-          class="mt-0.5"
-          :data-testid="`job-open-run-${job.id}`"
-          @click="emit('open-run', job.commandId)"
-        />
+        <div v-if="job.commandId" class="mt-0.5 flex items-center gap-1">
+          <IconButton
+            v-if="job.status === 'running'"
+            :label="`Cancel ${job.label || job.actionId}`"
+            tooltip="Cancel action"
+            :icon="IconX"
+            :data-testid="`job-cancel-${job.id}`"
+            @click="cancel(job.commandId)"
+          />
+          <IconButton
+            :label="`Open action run for ${job.label || job.actionId}`"
+            tooltip="Open action run"
+            :icon="IconExternalLink"
+            :data-testid="`job-open-run-${job.id}`"
+            @click="emit('open-run', job.commandId)"
+          />
+        </div>
       </li>
     </ul>
   </section>

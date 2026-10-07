@@ -93,10 +93,10 @@ func TestStateResetRestoresFreshlySeededBaseline(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, db.CommitConsumerOffset(ctx, queries.CommitConsumerOffsetParams{Consumer: "frontend", Offset: 5}))
 	require.NoError(t, db.UpsertSourceHead(ctx, queries.UpsertSourceHeadParams{Topic: "source:x", Key: "k", Payload: []byte(`{}`)}))
-	command, created, err := st.OutputCommands.Confirm(ctx, "smoke-shell", "pr2841", []byte(`{}`), models.ItemRef{})
+	command, created, err := st.OutputCommands.Confirm(ctx, "smoke-shell", "pr2841", []byte(`{}`), models.ItemRef{}, "claim")
 	require.NoError(t, err)
 	require.True(t, created)
-	require.NoError(t, st.OutputCommands.MarkDone(ctx, command.ID, `{"ok":true}`, "out", "err"))
+	require.NoError(t, st.OutputCommands.Complete(ctx, command.ID, command.ClaimToken, `{"ok":true}`, "out", "err"))
 	_, err = st.ActivityEvents.Append(ctx, appstores.ActivityEventCreate{Category: "action", Severity: "info", Title: "mutated"})
 	require.NoError(t, err)
 	_, err = st.Jobs.Insert(ctx, appstores.JobCreate{Status: "done", Label: "mutated"})
@@ -159,7 +159,7 @@ func TestStateResetPipelineModeWipesWithoutReseeding(t *testing.T) {
 	// The pipeline smoke fixture's own server-side append plus a command, the
 	// state a source-to-commit run leaves behind.
 	require.NoError(t, appendSourceToCommitSmokeItems(ctx, appstores.New(db, appstores.Options{}), "", nil))
-	_, created, err := appstores.New(db, appstores.Options{}).OutputCommands.Confirm(ctx, "launch", "smoke-pr", []byte(`{}`), models.ItemRef{})
+	_, created, err := appstores.New(db, appstores.Options{}).OutputCommands.Confirm(ctx, "launch", "smoke-pr", []byte(`{}`), models.ItemRef{}, "claim")
 	require.NoError(t, err)
 	require.True(t, created)
 

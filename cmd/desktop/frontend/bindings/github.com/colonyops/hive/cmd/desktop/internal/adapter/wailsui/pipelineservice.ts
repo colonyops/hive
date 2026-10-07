@@ -19,6 +19,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as app$0 from "../../app/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as actions$0 from "../../app/actions/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -29,6 +32,10 @@ import * as dispatch$0 from "../../app/dispatch/models.js";
 
 export function ActionRun(commandID: number): $CancellablePromise<dispatch$0.ActionRunView> {
     return $Call.ByID(4254816512, commandID);
+}
+
+export function ActionRunLocation(commandID: number): $CancellablePromise<app$0.ActionRunLocation> {
+    return $Call.ByID(3213990823, commandID);
 }
 
 export function ActionViews(itemID: number): $CancellablePromise<actions$0.View[] | null> {

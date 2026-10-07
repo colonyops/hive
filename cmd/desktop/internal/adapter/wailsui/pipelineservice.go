@@ -98,3 +98,7 @@ func (s *PipelineService) NodeRuns(ctx context.Context, flowID string, limit int
 func (s *PipelineService) ActionRun(ctx context.Context, commandID int64) (dispatch.ActionRunView, error) {
 	return s.inbox.ActionRun(ctx, commandID)
 }
+
+func (s *PipelineService) ActionRunLocation(ctx context.Context, commandID int64) (app.ActionRunLocation, error) {
+	return s.inbox.ActionRunLocation(ctx, commandID)
+}
