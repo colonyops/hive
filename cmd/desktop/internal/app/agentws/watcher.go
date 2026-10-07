@@ -20,8 +20,8 @@ const workspaceWatchDebounce = 250 * time.Millisecond
 
 // Watcher invokes onChange when the workspace root changes on disk: mcps.yaml
 // or skills.yml at the root, or agent-workspace.yaml inside any workspace
-// directory. Unlike ActionsWatcher/FlowsWatcher, which each watch one flat
-// directory, this tree is nested and fsnotify is not recursive, so Watcher
+// directory. Unlike dirwatch.Watcher, which watches one flat directory, this
+// tree is nested and fsnotify is not recursive, so Watcher
 // maintains two levels of watch: one on root itself (which sees the two
 // library files and workspace directories appearing or disappearing) and one
 // per workspace directory (which sees its agent-workspace.yaml). Nothing

@@ -22,6 +22,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	datastores "github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/dirwatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
@@ -262,8 +263,8 @@ type App struct {
 	settings               settings.Settings
 	settingsStore          *settings.Store
 	paths                  settings.Paths
-	flowsWatcher           *flow.FlowsWatcher
-	actionsWatcher         *actions.ActionsWatcher
+	flowsWatcher           *dirwatch.Watcher
+	actionsWatcher         *dirwatch.Watcher
 	agentWorkspacesWatcher *agentws.Watcher
 	hiveWatcher            *hivewatch.Watcher
 	hiveBusCancel          context.CancelFunc

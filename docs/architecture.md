@@ -394,6 +394,7 @@ cmd/desktop/internal/
                                   #   where SystemNotifier (the notify port) is
                                   #   declared — consumer-defined, no notify/ package
     actions/                      # actions.yml catalog, watcher, editable model
+    dirwatch/                     # the debounced flat-directory watcher actions and flows share
       docs/                       # per-action-type markdown
     configmigrate/                # versioned migrations for settings.yaml, flows, actions.yml
     prompts/                      # Go-owned LLM prompt templates + registry (ADR go-owned-llm-prompts)
@@ -2280,9 +2281,9 @@ that safe is one line of CSS: `contain: layout` on `.hv-html` makes the block
 the containing block for fixed and absolute descendants, so a block that
 positions itself cannot paint outside the pane.
 
-`agentws.Watcher` follows the tree's own shape rather than `ActionsWatcher`'s
-or `FlowsWatcher`'s flat one: fsnotify is not recursive and the tree is
-nested, so it maintains a watch at two levels — one on the root itself (which
+`agentws.Watcher` follows the tree's own shape rather than the flat
+`dirwatch.Watcher` that actions and flows share: fsnotify is not recursive
+and the tree is nested, so it maintains a watch at two levels — one on the root itself (which
 sees `mcps.yaml` and workspace directories appearing or disappearing) and one
 per workspace directory (which sees its `agent-workspace.yaml`). Nothing
 watches deeper: an agent writing into `docs/`, or the generator rewriting its
