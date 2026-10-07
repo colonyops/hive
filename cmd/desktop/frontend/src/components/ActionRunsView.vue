@@ -42,7 +42,6 @@ import {
   runStatusLabel,
   type RunFilter,
 } from '../lib/actionRunPresentation'
-import BaseButton from './ui/BaseButton.vue'
 import EmptyState from './ui/EmptyState.vue'
 import IconButton from './ui/IconButton.vue'
 import SearchField from './ui/SearchField.vue'
@@ -274,9 +273,13 @@ function statusIconClass(status: string): string {
         class="w-[230px]"
       />
       <div class="flex-1" />
-      <BaseButton variant="secondary" size="xs" data-testid="action-runs-refresh" @click="loadRuns">
-        <template #icon><IconRefreshCw class="size-3.5" /></template>Refresh
-      </BaseButton>
+      <IconButton
+        label="Refresh runs"
+        tooltip="Refresh"
+        :icon="IconRefreshCw"
+        data-testid="action-runs-refresh"
+        @click="loadRuns"
+      />
     </div>
 
     <div
@@ -314,38 +317,33 @@ function statusIconClass(status: string): string {
           type="button"
           role="option"
           :aria-selected="run.id === selectedId"
-          class="flex w-full cursor-pointer items-start gap-2.5 border-b border-row px-4 py-2.5 text-left hover:bg-row-hover"
-          :class="run.id === selectedId ? 'bg-selection' : ''"
+          class="run-row"
+          :class="{ 'run-row-selected': run.id === selectedId }"
           data-testid="action-run-row"
           :data-run-id="run.id"
           @click="select(run.id)"
         >
-          <span class="mt-0.5 flex size-4 shrink-0 items-center justify-center" :class="statusIconClass(run.status)">
+          <span class="flex size-4 shrink-0 items-center justify-center" :class="statusIconClass(run.status)">
             <Spinner v-if="run.status === 'running'" />
             <IconClock3 v-else-if="run.status === 'pending'" class="size-3.5" />
             <IconCheck v-else-if="run.status === 'done'" class="size-3.5" />
             <IconCircleStop v-else-if="run.status === 'cancelled'" class="size-3.5" />
             <IconCircleAlert v-else class="size-3.5" />
           </span>
-          <span class="min-w-0 flex-1">
-            <span class="block truncate text-small font-medium text-text">{{ run.label }}</span>
-            <span class="mt-0.5 block truncate text-micro text-text-3">
-              {{ run.itemTitle || run.key || run.actionId }}
-            </span>
-            <span class="mt-0.5 flex items-center gap-1.5 font-mono text-micro text-text-4">
-              <span>#{{ run.id }}</span>
-              <span>·</span>
-              <span>{{ laneLabel(run.lane) }}</span>
-              <template v-if="run.attempts > 1">
-                <span>·</span>
-                <span>{{ run.attempts }} attempts</span>
-              </template>
-            </span>
+          <span class="min-w-0 flex-1 truncate text-small font-medium text-text">{{ run.label }}</span>
+          <span class="shrink-0 justify-self-end font-mono text-micro text-text-4">{{
+            relativeAgo(run.createdAt, now)
+          }}</span>
+          <span class="size-4 shrink-0" />
+          <span class="min-w-0 flex-1 truncate text-micro text-text-3">
+            {{ run.itemTitle || run.key || run.actionId }}
+            <span class="font-mono text-text-4"
+              >· #{{ run.id }}<template v-if="run.attempts > 1"> · {{ run.attempts }} attempts</template></span
+            >
           </span>
-          <span class="flex shrink-0 flex-col items-end gap-0.5 font-mono text-micro text-text-4">
-            <span>{{ relativeAgo(run.createdAt, now) }}</span>
-            <span>{{ formatDuration(runDurationMs(run, now)) }}</span>
-          </span>
+          <span class="shrink-0 justify-self-end font-mono text-micro text-text-4">{{
+            formatDuration(runDurationMs(run, now))
+          }}</span>
         </button>
       </div>
 
@@ -473,6 +471,29 @@ function statusIconClass(status: string): string {
 </template>
 
 <style scoped>
+/* Two lines in a grid: status, label and age over the item and duration.
+   Selection is a tint plus an accent rail, and a selected row ignores hover,
+   so pointing at it never looks like it was deselected. */
+.run-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 2px;
+  width: 100%;
+  padding: 8px 16px 8px 14px;
+  border-bottom: 1px solid var(--color-row);
+  border-left: 2px solid transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.run-row:hover:not(.run-row-selected) {
+  background: var(--color-row-hover);
+}
+.run-row-selected {
+  border-left-color: var(--color-accent);
+  background: var(--color-selection);
+}
 .log-line {
   display: grid;
   grid-template-columns: 4.5em 6.5em minmax(0, 1fr);

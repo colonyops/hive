@@ -22,7 +22,7 @@ type RetentionStore interface {
 // Maintenance periodically bounds pipeline history.
 type Maintenance struct {
 	db       RetentionStore
-	policy   func() queries.RetentionPolicy
+	policy   queries.RetentionPolicy
 	interval time.Duration
 	logger   zerolog.Logger
 
@@ -33,10 +33,9 @@ type Maintenance struct {
 	done     chan struct{}
 }
 
-// NewMaintenance constructs the background retention loop. policy is read on
-// every pass, so a settings change applies on the next one. Callers must pass
+// NewMaintenance constructs the background retention loop. Callers must pass
 // a positive interval because time.NewTicker rejects zero and negative durations.
-func NewMaintenance(db RetentionStore, policy func() queries.RetentionPolicy, interval time.Duration, logger zerolog.Logger) *Maintenance {
+func NewMaintenance(db RetentionStore, policy queries.RetentionPolicy, interval time.Duration, logger zerolog.Logger) *Maintenance {
 	return &Maintenance{
 		db:       db,
 		policy:   policy,
@@ -92,7 +91,7 @@ func (m *Maintenance) Stop() {
 // Tick applies one retention pass. Failures are logged and retried on the
 // next interval; maintenance must never terminate the desktop backend.
 func (m *Maintenance) Tick(ctx context.Context) {
-	if err := m.db.Prune(ctx, m.policy()); err != nil {
+	if err := m.db.Prune(ctx, m.policy); err != nil {
 		m.logger.Warn().Err(err).Msg("pipeline retention: prune failed")
 	}
 }
