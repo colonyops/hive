@@ -89,15 +89,19 @@ run = "go generate ./..."
 
 [tasks.test]
 description = "Run every Go test in the module: the CLI, the desktop, and the shared packages"
+# A caller's agent override can name a profile absent from test fixtures.
+env = { HIVE_DEFAULT_AGENT = "" }
 run = "go test ./..."
 
 [tasks."test:race"]
 description = "Run all go tests with the race detector; CI runs this on main"
+env = { HIVE_DEFAULT_AGENT = "" }
 run = "go test -race ./..."
 
 [tasks.coverage]
 description = "Run tests with race detection and coverage"
 quiet = true
+env = { HIVE_DEFAULT_AGENT = "" }
 run = "go test -race -coverprofile=coverage.out -covermode=atomic ./... -v -cover"
 
 [tasks.lint]
@@ -192,8 +196,10 @@ description = "Run every gate locally: Go, the desktop bindings and frontend, th
 run = [
   { tasks = ["check:generate"] },
   { tasks = ["desktop:check:bindings", "check:adr", "desktop:check:migrations", "check:tidy"] },
-  { tasks = ["lint", "lint:workflows", "test", "check:deadcode", "check:vuln", "cli:check:goreleaser", "docs:build"] },
-  { tasks = ["desktop:frontend:install"] },
+  # docs:build replaces docs/site while Go tools walk ./..., so these batches
+  # must not overlap.
+  { tasks = ["lint", "lint:workflows", "test", "check:deadcode", "check:vuln", "cli:check:goreleaser"] },
+  { tasks = ["docs:build", "desktop:frontend:install"] },
   { tasks = ["desktop:frontend:build", "desktop:frontend:test", "desktop:frontend:format:check", "desktop:frontend:lint"] },
   { tasks = ["cli:integration"] },
   { tasks = ["desktop:e2e"] },
