@@ -18,6 +18,7 @@ nav = [
       "desktop/getting-started/index.md",
       "desktop/getting-started/features.md",
       "desktop/getting-started/agent-and-repos.md",
+      "desktop/getting-started/hive-command.md",
       "desktop/getting-started/sign-in.md",
       "desktop/getting-started/notifications.md",
       "desktop/getting-started/first-feed.md",

@@ -229,6 +229,8 @@ agent_workspaces:
   session_end_delay: 10s # grace between a chat asking to end its own session and the session being ended
 onboarding:
   completed: false # written by the app when first run ends; remove the key to walk first run again
+hive_cli:
+  install_command: true # link ~/.local/bin/hive to this app; absent until first run or Settings ▸ Hive CLI asks
 paths:
   tmux: "" # absolute path to tmux; empty discovers it (ADR tmux-discovery)
 development:

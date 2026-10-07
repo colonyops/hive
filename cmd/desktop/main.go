@@ -26,9 +26,11 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/hivecli"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/report"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/telemetry"
+	"github.com/colonyops/hive/cmd/hive/cli"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/execenv"
 	"github.com/colonyops/hive/internal/platform/observe"
@@ -54,6 +56,10 @@ var trayIcon []byte
 var trayIconLinux []byte
 
 func main() {
+	if filepath.Base(os.Args[0]) == hivecli.CommandName {
+		cli.Run(buildinfo.Resolve(version, commit, date))
+	}
+
 	bootstrap, err := settings.LoadBootstrap()
 	if err != nil {
 		log.Fatal(err)

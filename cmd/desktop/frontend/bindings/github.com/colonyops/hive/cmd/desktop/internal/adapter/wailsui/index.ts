@@ -9,6 +9,7 @@ import * as FlowsService from "./flowsservice.js";
 import * as GitHubService from "./githubservice.js";
 import * as GiteaService from "./giteaservice.js";
 import * as GrafanaService from "./grafanaservice.js";
+import * as HiveCLIService from "./hivecliservice.js";
 import * as HiveConfigService from "./hiveconfigservice.js";
 import * as IntegrationsService from "./integrationsservice.js";
 import * as JobService from "./jobservice.js";
@@ -40,6 +41,7 @@ export {
     GitHubService,
     GiteaService,
     GrafanaService,
+    HiveCLIService,
     HiveConfigService,
     IntegrationsService,
     JobService,

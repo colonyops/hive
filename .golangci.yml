@@ -176,6 +176,8 @@ linters:
         desktop-no-cli-deps:
           files:
             - "**/cmd/desktop/**"
+            # The desktop executable runs the CLI when invoked as `hive`.
+            - "!**/cmd/desktop/main.go"
           deny:
             - pkg: github.com/colonyops/hive/cmd/hive
               desc: The desktop must not import the CLI program.

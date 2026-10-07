@@ -67,7 +67,7 @@ A `settings.yaml` key this version does not know, for example one a newer versio
 
 ## Hive CLI compatibility config
 
-Hive Desktop includes the Hive runtime it needs. A separately installed [Hive CLI](../../cli/getting-started/index.md) is not required.
+Hive Desktop includes the Hive runtime it needs, and can install the `hive` command itself; see [Install the hive command](../getting-started/hive-command.md). A separately installed [Hive CLI](../../cli/getting-started/index.md) is not required.
 
 If you use the Hive CLI, Desktop also reads its optional configuration file at startup. It checks `HIVE_CONFIG` first, then looks for `config.yaml`, `config.yml`, `hive.yaml`, or `hive.yml` under `$XDG_CONFIG_HOME/hive/` with `~/.config/hive/` as the fallback. No file is required. Hive uses built-in defaults when none exists.
 

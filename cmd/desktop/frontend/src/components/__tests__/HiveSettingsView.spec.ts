@@ -14,6 +14,8 @@ const mocks = vi.hoisted(() => ({
   Setup: vi.fn(),
   Save: vi.fn(),
   InspectWorkspace: vi.fn(),
+  CommandStatus: vi.fn(),
+  SetInstall: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/systemservice', () => ({
@@ -27,6 +29,10 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Setup: mocks.Setup,
   Save: mocks.Save,
   InspectWorkspace: mocks.InspectWorkspace,
+}))
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/hivecliservice', () => ({
+  Status: mocks.CommandStatus,
+  SetInstall: mocks.SetInstall,
 }))
 vi.mock('@wailsio/runtime', () => ({
   Browser: { OpenURL: mocks.OpenURL },
@@ -87,8 +93,44 @@ function setup(
   }
 }
 
+const LINK = '/home/u/.local/bin/hive'
+const APP_EXE = '/Applications/Hive.app/Contents/MacOS/hive-desktop'
+
+function commandStatus(
+  over: Partial<{
+    enabled: boolean
+    linked: boolean
+    foreign: boolean
+    resolved: string
+    commandVersion: string
+    linkDirOnPath: boolean
+    unsupported: string
+  }> = {},
+) {
+  const linked = over.linked ?? over.enabled ?? false
+  const exists = linked || (over.foreign ?? false)
+  const resolved = over.resolved ?? (linked ? LINK : '')
+  const commandVersion = over.commandVersion ?? (resolved ? '0.61.0' : '')
+  return {
+    asked: over.enabled !== undefined,
+    enabled: over.enabled ?? false,
+    unsupported: over.unsupported ?? '',
+    link: { path: LINK, exists, appOwned: linked, target: linked ? APP_EXE : '' },
+    conflict: (over.enabled ?? false) && (over.foreign ?? false),
+    linkDir: '/home/u/.local/bin',
+    linkDirOnPath: over.linkDirOnPath ?? true,
+    resolved,
+    shadowed: linked && resolved !== LINK,
+    appVersion: '0.61.0',
+    commandVersion,
+    versionsDiffer: commandVersion !== '' && commandVersion !== '0.61.0',
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.CommandStatus.mockResolvedValue(commandStatus())
+  mocks.SetInstall.mockImplementation((install: boolean) => Promise.resolve(commandStatus({ enabled: install })))
   mocks.OpenHiveConfig.mockResolvedValue(undefined)
   mocks.OpenPath.mockResolvedValue(undefined)
   mocks.RevealPath.mockResolvedValue(undefined)
@@ -101,12 +143,11 @@ beforeEach(() => {
 describe('HiveSettingsView', () => {
   // The pane points at the file and nothing more: first run is the only
   // writer, so every change here is a hand edit followed by a restart.
-  it('explains the included runtime and sends edits to the file', async () => {
+  it('sends edits to the file', async () => {
     mocks.Info.mockResolvedValue(info(true))
     const wrapper = mount(HiveSettingsView)
     await flushPromises()
 
-    expect(wrapper.text()).toContain('does not require or invoke a separately installed Hive CLI')
     const notice = wrapper.get('[data-testid="hive-restart-notice"]').text()
     expect(notice).toContain('Edit this file in your own editor')
     expect(notice).toContain('restart the app')
@@ -205,5 +246,65 @@ describe('HiveSettingsView', () => {
     expect(wrapper.get('[data-testid="hive-settings-error"]').text()).toContain('no editor opened')
     expect(wrapper.find('[data-testid="hive-config-missing"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="hive-config-open"]').exists()).toBe(true)
+  })
+
+  describe('hive command', () => {
+    it('installs and removes the command from the switch', async () => {
+      mocks.Info.mockResolvedValue(info(true))
+      const wrapper = mount(HiveSettingsView)
+      await flushPromises()
+
+      await wrapper.get('[data-testid="hive-command-switch"]').trigger('click')
+      await flushPromises()
+      expect(mocks.SetInstall).toHaveBeenCalledWith(true)
+      expect(wrapper.get('[data-testid="hive-command-version"]').text()).toContain(LINK)
+
+      await wrapper.get('[data-testid="hive-command-switch"]').trigger('click')
+      await flushPromises()
+      expect(mocks.SetInstall).toHaveBeenLastCalledWith(false)
+    })
+
+    it('disables the switch in a build that cannot install it', async () => {
+      mocks.Info.mockResolvedValue(info(true))
+      mocks.CommandStatus.mockResolvedValue(commandStatus({ unsupported: 'This is a development build.' }))
+      const wrapper = mount(HiveSettingsView)
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="hive-command-switch"]').attributes('disabled')).toBeDefined()
+      expect(wrapper.get('[data-testid="hive-command-install"]').text()).toContain('development build')
+    })
+
+    it('reports a foreign file at the install path', async () => {
+      mocks.Info.mockResolvedValue(info(true))
+      mocks.CommandStatus.mockResolvedValue(commandStatus({ enabled: true, linked: false, foreign: true }))
+      const wrapper = mount(HiveSettingsView)
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="hive-command-conflict"]').text()).toContain('left it alone')
+    })
+
+    it('reports a hive that runs before the app command, and the version gap', async () => {
+      mocks.Info.mockResolvedValue(info(true))
+      mocks.CommandStatus.mockResolvedValue(
+        commandStatus({ enabled: true, resolved: '/opt/homebrew/bin/hive', commandVersion: 'v0.58.0' }),
+      )
+      const wrapper = mount(HiveSettingsView)
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="hive-command-shadowed"]').text()).toContain('/opt/homebrew/bin/hive')
+      expect(wrapper.find('[data-testid="hive-command-version-differs"]').exists()).toBe(true)
+      expect(wrapper.get('[data-testid="hive-command-version"]').text()).toContain('v0.58.0')
+    })
+
+    it('hints at PATH when the link directory is missing from it', async () => {
+      mocks.Info.mockResolvedValue(info(true))
+      mocks.CommandStatus.mockResolvedValue(commandStatus({ enabled: true, resolved: '', linkDirOnPath: false }))
+      const wrapper = mount(HiveSettingsView)
+      await flushPromises()
+
+      expect(wrapper.get('[data-testid="hive-command-not-on-path"]').text()).toContain(
+        'export PATH="/home/u/.local/bin:$PATH"',
+      )
+    })
   })
 })

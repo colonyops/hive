@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
-import { Browser } from '@wailsio/runtime'
 import IconCopy from '~icons/lucide/copy'
 import IconExternalLink from '~icons/lucide/external-link'
 import IconFilePlus from '~icons/lucide/file-plus'
 import IconFolderOpen from '~icons/lucide/folder-open'
 import IconInfo from '~icons/lucide/info'
+import HiveCommandSection from './HiveCommandSection.vue'
 import InlineError from './ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsPathRow from './settings/SettingsPathRow.vue'
@@ -20,12 +20,6 @@ const { info, error, refresh, openPath, revealPath, createOrOpenHiveConfig } = u
 // the only writer.
 const hive = useHiveSetup()
 const { copy } = useClipboard()
-
-const hiveCLIDocsURL = 'https://colonyops.github.io/hive/'
-
-function openHiveCLIDocs(): void {
-  void Browser.OpenURL(hiveCLIDocsURL)
-}
 
 useCommands(() => {
   const config = info.value?.hiveConfig
@@ -90,29 +84,7 @@ onMounted(() => {
       testid="hive-unreadable"
     />
 
-    <SettingsSection title="Included Hive runtime" boxed padded>
-      <template #actions>
-        <button
-          type="button"
-          class="flex cursor-pointer items-center gap-1.5 text-small font-medium text-accent hover:underline"
-          data-testid="hive-cli-docs"
-          @click="openHiveCLIDocs"
-        >
-          Hive CLI documentation
-          <IconExternalLink class="size-3" />
-        </button>
-      </template>
-      <div class="flex flex-col gap-2 text-small leading-5 text-text-2">
-        <p>
-          Hive Desktop includes the Hive runtime it needs. It does not require or invoke a separately installed Hive
-          CLI.
-        </p>
-        <p>
-          If you use the Hive CLI, Desktop shares this configuration file with it and leaves everything it does not ask
-          about alone.
-        </p>
-      </div>
-    </SettingsSection>
+    <HiveCommandSection />
 
     <SettingsSection v-if="info" title="Configuration file" description="The same file the hive CLI reads." boxed>
       <SettingsPathRow

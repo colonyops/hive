@@ -342,6 +342,13 @@ type DevelopmentSettings struct {
 	Debug    DebugSettings     `yaml:"debug"`
 }
 
+// HiveCLISettings is the `hive` command the app installs on PATH.
+type HiveCLISettings struct {
+	// InstallCommand is nil until first run or Settings asks, so an install
+	// that predates the question is not given a command it never agreed to.
+	InstallCommand *bool `yaml:"install_command,omitempty"`
+}
+
 // Settings is the typed settings.yaml schema. Environment override provenance
 // is process-local and is never serialized.
 type Settings struct {
@@ -361,6 +368,7 @@ type Settings struct {
 	Editor          EditorSettings          `yaml:"editor,omitempty"`
 	AgentWorkspaces AgentWorkspacesSettings `yaml:"agent_workspaces,omitempty"`
 	Onboarding      OnboardingSettings      `yaml:"onboarding,omitempty"`
+	HiveCLI         HiveCLISettings         `yaml:"hive_cli,omitempty"`
 	Development     DevelopmentSettings     `yaml:"development"`
 
 	overrides   map[string]bool

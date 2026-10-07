@@ -52,9 +52,7 @@ var (
 	date    = "now"
 )
 
-func build() string {
-	info := buildinfo.Resolve(version, commit, date)
-
+func build(info buildinfo.Info) string {
 	short := info.Commit
 	if len(short) > 7 {
 		short = short[:7]
@@ -63,8 +61,7 @@ func build() string {
 	return fmt.Sprintf("%s (%s) %s", info.Version, short, info.Date)
 }
 
-func hiveBuildInfo() app.BuildInfo {
-	info := buildinfo.Resolve(version, commit, date)
+func hiveBuildInfo(info buildinfo.Info) app.BuildInfo {
 	return app.BuildInfo{Version: info.Version, Commit: info.Commit, Date: info.Date}
 }
 
@@ -117,6 +114,13 @@ func isInitCommand(args []string) bool {
 
 // Main runs the hive CLI and exits the process.
 func Main() {
+	Run(buildinfo.Resolve(version, commit, date))
+}
+
+// Run runs the hive CLI as the given build and exits the process. Hive
+// Desktop calls it when its executable is invoked as `hive`, so the command
+// reports the desktop's version rather than this package's unstamped one.
+func Run(info buildinfo.Info) {
 	ctx := context.Background()
 
 	var (
@@ -144,7 +148,7 @@ spawning terminal sessions with your preferred AI tool.
 
 Run 'hive' with no arguments to open the interactive session manager.
 Run 'hive new' to create a new session from the current repository.`,
-		Version:               build(),
+		Version:               build(info),
 		EnableShellCompletion: true,
 
 		ConfigureShellCompletionCommand: commands.ConfigureCompletionCommand,
@@ -186,7 +190,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				return ctx, nil
 			}
 			if isInitCommand(os.Args) {
-				hiveApp.Build = hiveBuildInfo()
+				hiveApp.Build = hiveBuildInfo(info)
 				return ctx, nil
 			}
 
@@ -200,7 +204,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			logCloser = closer
 
 			// Extract bundled scripts (non-fatal on failure)
-			if err := scripts.EnsureExtracted(flags.DataDir, version); err != nil {
+			if err := scripts.EnsureExtracted(flags.DataDir, info.Version); err != nil {
 				cliLog.Warn().Err(err).Msg("failed to extract bundled scripts")
 			}
 
@@ -300,7 +304,7 @@ Run 'hive new' to create a new session from the current repository.`,
 
 			// Populate the pre-allocated App struct (commands already hold a pointer to it)
 			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, kvStore, pluginInfos)
-			hiveApp.Build = hiveBuildInfo()
+			hiveApp.Build = hiveBuildInfo(info)
 			hiveApp.Sources = app.BuildSourceRegistry(logger, cfg, exec, kvStore)
 
 			return ctx, nil

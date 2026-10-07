@@ -9,6 +9,7 @@ import IconBot from '~icons/lucide/bot'
 import IconCheck from '~icons/lucide/check'
 import IconFolderGit2 from '~icons/lucide/folder-git-2'
 import IconGithub from '~icons/lucide/github'
+import IconTerminal from '~icons/lucide/terminal'
 import HiveSetupForm from './HiveSetupForm.vue'
 import type { DeviceFlowInfo } from '../types/github'
 import type { ConnectCard } from '../composables/useGitHubConnection'
@@ -16,9 +17,11 @@ import type { NotificationPermission } from '../composables/useNotificationSetti
 import type { useHiveSetup } from '../composables/useHiveSetup'
 import { useClipboard } from '../composables/useClipboard'
 import BaseButton from './ui/BaseButton.vue'
+import AppCheckbox from './ui/AppCheckbox.vue'
+import type { HiveCLIStatus } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = defineProps<{
-  card: ConnectCard | 'hive' | 'permissions' | 'agent'
+  card: ConnectCard | 'hive' | 'command' | 'permissions' | 'agent'
   deviceFlow: DeviceFlowInfo | null
   error: string | null
   busy: boolean
@@ -27,6 +30,8 @@ const props = defineProps<{
   permission?: NotificationPermission
   // useOnboarding owns the single draft instance that the wizard advances.
   hive?: ReturnType<typeof useHiveSetup>
+  // Only read on the 'command' card.
+  command?: Readonly<HiveCLIStatus> | null
 }>()
 
 const emit = defineEmits<{
@@ -38,6 +43,7 @@ const emit = defineEmits<{
   // Leaving the Hive step without a save: confirming a found config, or
   // skipping the form.
   finishHive: []
+  saveCommand: [install: boolean]
   skipConnect: []
   requestPermission: []
   finishPermissions: []
@@ -46,6 +52,7 @@ const emit = defineEmits<{
 }>()
 
 const tokenInput = ref('')
+const installCommand = ref(true)
 const { copy, copied } = useClipboard({ resetDelay: 1600 })
 
 // Confirming the skip is local to this screen: it is a warning to read, not a
@@ -62,22 +69,34 @@ watch(
 // connecting seeds it.
 const activeStep = computed(() => {
   if (props.card === 'hive') return 1
-  if (props.card === 'permissions') return 3
-  if (props.card === 'agent') return 4
-  return 2
+  if (props.card === 'command') return 2
+  if (props.card === 'permissions') return 4
+  if (props.card === 'agent') return 5
+  return 3
 })
 const steps = [
   { label: 'Set up your agent and code', step: 1 },
-  { label: 'Connect GitHub', step: 2 },
-  { label: 'Turn on notifications', step: 3 },
-  { label: 'Configure Hive with your agent', step: 4 },
+  { label: 'Install the hive command', step: 2 },
+  { label: 'Connect GitHub', step: 3 },
+  { label: 'Turn on notifications', step: 4 },
+  { label: 'Configure Hive with your agent', step: 5 },
 ]
+
+// A hive the shell already runs that is not the app's own link: the card
+// says the app leaves it alone rather than letting the checkbox imply a
+// replacement.
+const existingCommand = computed(() => {
+  const status = props.command
+  if (!status?.resolved || status.resolved === status.link.path) return null
+  return { path: status.resolved, version: status.commandVersion }
+})
 
 const isConnectCard = computed(() => props.card === 'idle' || props.card === 'device' || props.card === 'token')
 
 const heading = computed(() => {
   if (confirmingSkip.value) return 'Skip connecting GitHub?'
   if (props.card === 'hive') return props.hive?.usable.value ? 'Using your Hive config' : 'Set up your agent and code'
+  if (props.card === 'command') return 'Install the hive command'
   if (props.card === 'permissions') return 'Turn on notifications'
   if (props.card === 'agent') return 'Configure Hive with your agent'
   return 'Connect to GitHub'
@@ -166,6 +185,7 @@ function submit() {
         >
           <IconAlertTriangle v-if="confirmingSkip" class="size-[30px]" />
           <IconFolderGit2 v-else-if="card === 'hive'" class="size-[30px]" />
+          <IconTerminal v-else-if="card === 'command'" class="size-[30px]" />
           <IconBell v-else-if="card === 'permissions'" class="size-[30px]" />
           <IconBot v-else-if="card === 'agent'" class="size-[30px]" />
           <IconGithub v-else class="size-[30px]" />
@@ -264,7 +284,43 @@ function submit() {
           </template>
         </template>
 
-        <!-- permissions: step 3, the OS notification grant -->
+        <!-- command: the hive CLI as a link to this app, so the two never
+             drift apart -->
+        <template v-else-if="card === 'command'">
+          <p class="mb-6 text-body leading-relaxed text-text-3">
+            Hive includes the <span class="font-mono text-text-2">hive</span> command line tool. Install it and the hive
+            in your terminal is always the same version as this app.
+          </p>
+          <div class="mb-6 text-left">
+            <AppCheckbox
+              v-model="installCommand"
+              :disabled="busy"
+              :label="`Install hive in ${command?.linkDir ?? '~/.local/bin'}`"
+              hint="It updates with the app. Turn it off any time under Settings ▸ Hive CLI."
+              testid="onboarding-command-install"
+            />
+            <p
+              v-if="existingCommand"
+              class="mt-3 text-small leading-relaxed text-text-3"
+              data-testid="onboarding-command-existing"
+            >
+              You already have <span class="font-mono text-text-2">{{ existingCommand.path }}</span>
+              <template v-if="existingCommand.version"> ({{ existingCommand.version }})</template>. Hive will not
+              replace or remove it.
+            </p>
+          </div>
+          <BaseButton
+            class="w-full"
+            :busy="busy"
+            data-testid="onboarding-command-continue"
+            @click="emit('saveCommand', installCommand)"
+          >
+            Continue
+          </BaseButton>
+          <InlineError v-if="error" testid="onboarding-error" variant="line" class="mt-4" :message="error" />
+        </template>
+
+        <!-- permissions: the OS notification grant -->
         <template v-else-if="card === 'permissions'">
           <template v-if="permission === 'granted'">
             <p class="mb-6 text-body leading-relaxed text-text-3">

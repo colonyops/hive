@@ -98,6 +98,7 @@ type App struct {
 	MenuBar    *MenuBarService
 	System     *SystemService
 	HiveConfig *HiveConfigService
+	HiveCLI    *HiveCLIService
 	Webhooks   *WebhookService
 	GitHub     *GitHubService
 	Gitea      *GiteaService
@@ -445,6 +446,14 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		},
 		Reload: a.ReloadHiveRuntime,
 	})
+	a.HiveCLI = newHiveCLIService(hiveCLIOptions{
+		Store:      cfg.SettingsStore,
+		Home:       os.UserHomeDir,
+		Executable: os.Executable,
+		Version:    cfg.Build.Version,
+		ShellPath:  a.shellPath,
+		Logger:     cfg.Logger,
+	})
 	a.ReleaseNotes = NewReleaseNotesService(cfg.Paths, cfg.Logger)
 	a.Webhooks = newWebhookService(WebhookDeps{Settings: cfg.SettingsStore, Captures: a.Stores.WebhookCaptures, Listener: a.webhook, Host: a.webhookHost, Port: a.webhookPort})
 	a.GitHub = newGitHubService(a.gitHubConnection)
@@ -646,8 +655,27 @@ func (a *App) Start(ctx context.Context) error {
 	// launch must not start the machine's shell.
 	if a.mock == "" {
 		go func() { _ = a.execEnv.Path(a.ctx) }()
+		// An app update or a moved Hive.app leaves the link pointing at the
+		// old path; every launch re-points it.
+		go func() {
+			if err := a.HiveCLI.Sync(a.ctx); err != nil {
+				a.logger.Warn().Err(err).Msg("hive command not synced")
+			}
+		}()
 	}
 	return nil
+}
+
+// shellPath is the login shell's PATH, or this process's own in a mock run,
+// which must not start the machine's shell.
+func (a *App) shellPath(ctx context.Context) string {
+	if a.mock != "" {
+		return os.Getenv("PATH")
+	}
+	if path := a.execEnv.ShellPath(ctx); path != "" {
+		return path
+	}
+	return os.Getenv("PATH")
 }
 
 // RuntimePaths returns the immutable location snapshot used by this process.

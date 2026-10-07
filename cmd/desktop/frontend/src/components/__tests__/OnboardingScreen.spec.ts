@@ -73,8 +73,9 @@ describe('OnboardingScreen', () => {
   // Profile naming is absent because a profile exists before the walk starts.
   it('lists exactly the steps onboarding has', () => {
     const wrapper = mountScreen()
-    expect(wrapper.findAll('ol li').map((li) => li.text())).toHaveLength(4)
+    expect(wrapper.findAll('ol li').map((li) => li.text())).toHaveLength(5)
     expect(wrapper.text()).toContain('Set up your agent and code')
+    expect(wrapper.text()).toContain('Install the hive command')
     expect(wrapper.text()).toContain('Connect GitHub')
     expect(wrapper.text()).toContain('Turn on notifications')
     expect(wrapper.text()).toContain('Configure Hive with your agent')
@@ -87,18 +88,19 @@ describe('OnboardingScreen', () => {
   it('orders the steps and marks the ones already past as done', () => {
     const connecting = mountScreen({ card: 'idle' }).findAll('ol li')
     expect(connecting[0].text()).toContain('Set up your agent and code')
-    expect(connecting[1].text()).toContain('Connect GitHub')
-    expect(connecting[2].text()).toContain('Turn on notifications')
-    expect(connecting[0].text()).toContain('complete')
-    expect(connecting[1].text()).toContain('2')
-    expect(connecting[1].attributes('aria-current')).toBe('step')
+    expect(connecting[1].text()).toContain('Install the hive command')
+    expect(connecting[2].text()).toContain('Connect GitHub')
+    expect(connecting[3].text()).toContain('Turn on notifications')
+    expect(connecting[1].text()).toContain('complete')
+    expect(connecting[2].text()).toContain('3')
+    expect(connecting[2].attributes('aria-current')).toBe('step')
 
     const agent = mountScreen({ card: 'agent' }).findAll('ol li')
-    expect(agent[2].text()).not.toContain('3')
-    expect(agent[2].attributes('aria-current')).toBeUndefined()
-    expect(agent[2].text()).toContain('complete')
-    expect(agent[3].text()).toContain('4')
-    expect(agent[3].attributes('aria-current')).toBe('step')
+    expect(agent[3].text()).not.toContain('4')
+    expect(agent[3].attributes('aria-current')).toBeUndefined()
+    expect(agent[3].text()).toContain('complete')
+    expect(agent[4].text()).toContain('5')
+    expect(agent[4].attributes('aria-current')).toBe('step')
   })
 
   it('emits startDeviceFlow from the idle card', async () => {
@@ -194,10 +196,39 @@ describe('OnboardingScreen', () => {
       .findAll('ol li')
       .map((li) => li.text())
     expect(steps[0]).not.toContain('1')
-    expect(steps[1]).not.toContain('2')
-    expect(steps[2]).toContain('Turn on notifications')
-    expect(steps[2]).toContain('3')
+    expect(steps[2]).not.toContain('3')
+    expect(steps[3]).toContain('Turn on notifications')
     expect(steps[3]).toContain('4')
+    expect(steps[4]).toContain('5')
+  })
+
+  it('installs the hive command by default and reports one it will leave alone', async () => {
+    const wrapper = mountScreen({
+      card: 'command',
+      command: {
+        asked: false,
+        enabled: false,
+        unsupported: '',
+        link: { path: '/home/u/.local/bin/hive', exists: false, appOwned: false, target: '' },
+        conflict: false,
+        linkDir: '/home/u/.local/bin',
+        linkDirOnPath: true,
+        resolved: '/opt/homebrew/bin/hive',
+        shadowed: false,
+        appVersion: '0.61.0',
+        commandVersion: 'v0.58.0',
+        versionsDiffer: true,
+      },
+    })
+    expect(wrapper.text()).toContain('Install hive in /home/u/.local/bin')
+    expect(wrapper.get('[data-testid="onboarding-command-existing"]').text()).toContain('/opt/homebrew/bin/hive')
+
+    await wrapper.get('[data-testid="onboarding-command-continue"]').trigger('click')
+    expect(wrapper.emitted('saveCommand')).toEqual([[true]])
+
+    await wrapper.get('[data-testid="onboarding-command-install"]').setValue(false)
+    await wrapper.get('[data-testid="onboarding-command-continue"]').trigger('click')
+    expect(wrapper.emitted('saveCommand')).toEqual([[true], [false]])
   })
 
   it('offers the agent hand-off and an honest way past it', async () => {

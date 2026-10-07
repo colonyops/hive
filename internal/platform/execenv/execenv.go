@@ -158,6 +158,17 @@ func (r *Resolver) Getenv(ctx context.Context, name string) string {
 	return r.env[name]
 }
 
+// ShellPath returns the PATH the user's login shell reports, without the
+// inherited PATH or the package-manager prefixes Path adds. It answers whether
+// a directory is on the PATH the user types commands into. It is "" when the
+// probe failed or the shell reported none.
+func (r *Resolver) ShellPath(ctx context.Context) string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.resolveLocked(ctx)
+	return r.env["PATH"]
+}
+
 // ProbeErr returns why the login shell did not answer, or nil when it answered
 // or was not asked yet. Getenv returns "" for a variable in both cases, so a
 // caller that falls back on "" uses this to tell an unset variable from a

@@ -113,9 +113,12 @@ would double-poll sources and re-execute actions. Adapters are therefore
 in-process callers of the same `App`, not clients over a wire.
 
 `hive` (the CLI/TUI in `cmd/hive`) is the other program in the same
-repository. Both run on the hive engine under `internal/`, and neither
-imports the other. When this document says "CLI", it means a future surface
-of *this* binary.
+repository. Both run on the hive engine under `internal/`. The CLI never
+imports the desktop, and the desktop imports the CLI in one place:
+`cmd/desktop/main.go` runs `cli.Run` when the executable is invoked as
+`hive`, which is how the app installs a `hive` command that cannot drift from
+it (ADR the-desktop-executable-runs-the-hive-cli-when-invoked-as-hive). When
+this document says "CLI", it means a future surface of *this* binary.
 
 ### Named patterns
 
@@ -1016,7 +1019,9 @@ A value one surface uses lives on that surface's pane; a value several use lives
 in **General** (the editor command); **Observability** is runtime cost and the
 install's telemetry exports; **System** is this install — storage, diagnostics,
 the problem reporter; **About** is the running build. **Hive CLI**
-is the compatibility boundary for the included Hive runtime: it shows the exact
+is the compatibility boundary for the included Hive runtime: it installs or
+removes the `hive` command (a link to this executable), reports a `hive` from
+another install that the shell runs first, shows the exact
 external Hive config loaded at startup, reports one that would not parse, and
 creates or opens that file without making it required. It does not edit it —
 first run is the only writer, and a change made later is a hand edit plus a

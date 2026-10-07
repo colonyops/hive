@@ -3,7 +3,51 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as hivecli$0 from "./hivecli/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as hiveconf$0 from "./hiveconf/models.js";
+
+/**
+ * HiveCLIStatus is the `hive` command as first run and Settings ▸ Hive CLI
+ * show it: whether the app installs it, what is at the install path, and what
+ * the user's shell would actually run.
+ */
+export interface HiveCLIStatus {
+    /**
+     * Asked is false until first run or Settings records a choice.
+     */
+    "asked": boolean;
+    "enabled": boolean;
+
+    /**
+     * Unsupported says why this build cannot install the command, or "".
+     */
+    "unsupported": string;
+    "link": hivecli$0.Link;
+
+    /**
+     * Conflict means the command is wanted but another program's file holds
+     * the install path.
+     */
+    "conflict": boolean;
+    "linkDir": string;
+    "linkDirOnPath": boolean;
+
+    /**
+     * Resolved is the `hive` the login shell runs, or "" when there is none.
+     */
+    "resolved": string;
+
+    /**
+     * Shadowed means the app's command is installed but an earlier PATH entry
+     * wins.
+     */
+    "shadowed": boolean;
+    "appVersion": string;
+    "commandVersion": string;
+    "versionsDiffer": boolean;
+}
 
 /**
  * HiveSetup is the external Hive configuration as the first-run and settings

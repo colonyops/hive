@@ -10,6 +10,7 @@ vi.mock('../../composables/useHiveSetup', () => ({ useHiveSetup: () => hive }))
 vi.mock('../../composables/useFirstRun', () => ({ useFirstRun: () => firstRun }))
 vi.mock('../../composables/useNotificationSettings', () => ({ useNotificationSettings: () => notifications }))
 vi.mock('../../stores/useAgentWorkspaces', () => ({ useAgentWorkspaces: () => ({ startFirstRunChat }) }))
+vi.mock('../../stores/useHiveCommand', () => ({ useHiveCommand: () => command }))
 
 import { useOnboarding } from '../useOnboarding'
 
@@ -21,6 +22,13 @@ const hive = {
   saving: ref(false),
   load: vi.fn(),
   save: vi.fn(),
+}
+const command = {
+  status: ref<{ asked: boolean; unsupported: string } | null>({ asked: true, unsupported: '' }),
+  loaded: ref(true),
+  error: ref<string | null>(null),
+  saving: ref(false),
+  setInstall: vi.fn(),
 }
 const firstRun = { completed: ref<boolean | null>(false), load: vi.fn(), complete: vi.fn() }
 const notifications = {
@@ -72,6 +80,9 @@ beforeEach(() => {
   hive.setup.value = {}
   hive.unreadable.value = ''
   hive.loaded.value = true
+  command.status.value = { asked: true, unsupported: '' }
+  command.loaded.value = true
+  command.setInstall.mockResolvedValue(true)
   firstRun.completed.value = false
   firstRun.complete.mockImplementation(() => {
     firstRun.completed.value = true
@@ -106,6 +117,36 @@ describe('useOnboarding', () => {
     expect(firstRun.complete).toHaveBeenCalledOnce()
     expect(router.push).toHaveBeenCalledWith({ name: 'agents', params: { workspace: 'hive' }, query: { chat: '4' } })
     expect(onboarding.active.value).toBe(false)
+  })
+
+  it('asks about the hive command after hive setup when no choice is recorded', async () => {
+    command.status.value = { asked: false, unsupported: '' }
+    const onboarding = setup()
+
+    hive.save.mockResolvedValue(true)
+    await onboarding.screenEvents.saveHive()
+    expect(onboarding.screen.value.card).toBe('command')
+
+    await onboarding.screenEvents.saveCommand(false)
+    expect(command.setInstall).toHaveBeenCalledWith(false)
+    expect(onboarding.screen.value.card).toBe('idle')
+  })
+
+  it('keeps the command step up when the choice cannot be saved', async () => {
+    command.status.value = { asked: false, unsupported: '' }
+    command.setInstall.mockResolvedValue(false)
+    hive.setup.value = null
+    const onboarding = setup()
+    expect(onboarding.screen.value.card).toBe('command')
+
+    await onboarding.screenEvents.saveCommand(true)
+    expect(onboarding.screen.value.card).toBe('command')
+  })
+
+  it('skips the command step in a build that cannot install it', () => {
+    command.status.value = { asked: false, unsupported: 'This is a development build.' }
+    hive.setup.value = null
+    expect(setup().screen.value.card).toBe('idle')
   })
 
   it('skips the steps whose answer is already known', () => {

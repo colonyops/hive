@@ -51,6 +51,24 @@ func TestPathFallsBackWhenTheProbeFails(t *testing.T) {
 	assert.Contains(t, entries, "/opt/homebrew/bin")
 }
 
+func TestShellPathIsOnlyWhatTheShellReports(t *testing.T) {
+	t.Setenv("PATH", "/usr/bin")
+
+	r := NewResolver(Options{Shell: "/bin/zsh", Probe: func(context.Context, string) (map[string]string, error) {
+		return map[string]string{"PATH": "/opt/tools/bin:/usr/bin"}, nil
+	}})
+
+	assert.Equal(t, "/opt/tools/bin:/usr/bin", r.ShellPath(t.Context()))
+}
+
+func TestShellPathIsEmptyWhenTheProbeFails(t *testing.T) {
+	r := NewResolver(Options{Shell: "/bin/zsh", Probe: func(context.Context, string) (map[string]string, error) {
+		return nil, errors.New("exit status 1")
+	}})
+
+	assert.Empty(t, r.ShellPath(t.Context()))
+}
+
 func TestPathWithoutAShellIsTheInheritedPathPlusPrefixes(t *testing.T) {
 	t.Setenv("PATH", "/usr/bin")
 	t.Setenv("SHELL", "")
