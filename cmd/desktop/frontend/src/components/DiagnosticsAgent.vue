@@ -18,7 +18,7 @@ import '@xterm/xterm/css/xterm.css'
 const props = defineProps<{ command: string; dir: string }>()
 const emit = defineEmits<{ close: [] }>()
 const host = ref<HTMLElement | null>(null)
-const status = ref('Starting investigation…')
+const status = ref('Starting…')
 const error = ref('')
 const pane = useXtermPane(host, resize)
 let client: PopupTerminalClient | undefined
@@ -40,14 +40,14 @@ function attachStream(terminal: Terminal): void {
   if (!client) return
   const socket = client.openStream(id)
   socket.onopen = () => {
-    status.value = 'Investigation running'
+    status.value = 'Running'
     terminal.focus()
   }
   socket.onmessage = (event: MessageEvent<ArrayBuffer>) => {
     const frame = decodeFrame(event.data)
     if (frame?.type === 'output') terminal.write(frame.data)
     if (frame?.type === 'exit') {
-      status.value = `Agent ended${frame.reason ? `: ${frame.reason}` : ''}`
+      status.value = `Ended${frame.reason ? `: ${frame.reason}` : ''}`
       pane.closeStream()
     }
   }
@@ -55,7 +55,7 @@ function attachStream(terminal: Terminal): void {
     error.value = 'Could not connect to the agent terminal. Logs and context actions remain available.'
   }
   socket.onclose = () => {
-    if (status.value === 'Investigation running') status.value = 'Agent connection closed'
+    if (status.value === 'Running') status.value = 'Connection closed'
   }
   pane.track(terminal.onData((data) => pane.send(encodeInputFrames(data))))
   pane.track(
@@ -85,7 +85,7 @@ async function start(): Promise<void> {
     }
     attachStream(terminal)
   } catch (failure) {
-    status.value = 'Investigation unavailable'
+    status.value = 'Unavailable'
     error.value = String(failure)
   }
 }
@@ -108,9 +108,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col" data-testid="diagnostics-agent-pane">
-    <div class="flex h-8 shrink-0 items-center gap-2 border-b border-row bg-raised px-2.5">
+    <div class="flex h-9 shrink-0 items-center gap-2 border-b border-row bg-canvas-toolbar px-4">
+      <h2 class="font-medium text-text">Investigation</h2>
       <BaseBadge
-        :tone="error ? 'danger' : status === 'Investigation running' ? 'success' : 'muted'"
+        :tone="error ? 'danger' : status === 'Running' ? 'success' : 'muted'"
         variant="pill"
         dot
         class="px-2 py-0.5 font-mono text-micro"

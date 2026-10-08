@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useIntervalFn, useStorage } from '@vueuse/core'
+import IconArrowUp from '~icons/lucide/arrow-up'
 import IconCheck from '~icons/lucide/check'
 import IconColumns2 from '~icons/lucide/columns-2'
 import IconCopy from '~icons/lucide/copy'
@@ -40,7 +41,9 @@ import IconButton from './ui/IconButton.vue'
 import InlineError from './ui/InlineError.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import SearchField from './ui/SearchField.vue'
+import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedControl.vue'
 import TextInput from './ui/TextInput.vue'
+import ViewHeader from './ui/ViewHeader.vue'
 
 interface Investigation {
   command: string
@@ -68,6 +71,7 @@ const working = ref<'' | 'copy' | 'save' | 'investigate'>('')
 const investigation = ref<Investigation | null>(null)
 const list = ref<HTMLElement | null>(null)
 const atTail = ref(true)
+const awayFromTop = ref(false)
 const actionMenuOpen = ref(false)
 const copiedEntryID = ref('')
 const clipboard = useClipboard()
@@ -108,6 +112,11 @@ const sourceWarnings = computed(() => {
   if (jobSource.value?.error) warnings.push(`Job history unavailable: ${jobSource.value.error}`)
   return warnings
 })
+const layoutOptions: SegmentedControlOption<'side-by-side' | 'stacked'>[] = [
+  { value: 'side-by-side', label: 'Side by side', title: 'Show panels side by side' },
+  { value: 'stacked', label: 'Stacked', title: 'Stack panels' },
+]
+const layoutIcons = { 'side-by-side': IconColumns2, stacked: IconRows2 }
 const actionMenuEntries = computed<MenuEntry[]>(() => [
   { kind: 'label', text: 'Evidence' },
   { kind: 'action', id: 'copy', label: 'Copy context', icon: IconCopy, disabled: !snapshot.value || !!working.value },
@@ -276,6 +285,11 @@ function sortedFields(entry: DiagnosticEntry): [string, string][] {
 function onEntriesScroll(): void {
   if (!list.value) return
   atTail.value = list.value.scrollHeight - list.value.scrollTop - list.value.clientHeight < 48
+  awayFromTop.value = list.value.scrollTop > 160
+}
+
+function scrollToTop(): void {
+  list.value?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 watch([level, search, period, since, until, showHTTP2xx], () => {
@@ -311,78 +325,77 @@ onBeforeUnmount(() => {
 
 <template>
   <main class="flex h-screen min-h-0 flex-col bg-app text-body text-text" data-testid="diagnostics-window">
-    <header class="flex h-11 shrink-0 items-center gap-2 px-4" data-testid="diagnostics-toolbar">
-      <h1 class="font-semibold text-text">Diagnostics</h1>
-      <BaseBadge tone="muted" variant="pill" class="px-2 py-0.5 font-mono text-micro">
-        {{ snapshot?.version || 'Development build' }}
-      </BaseBadge>
-      <BaseBadge
-        :tone="logSource?.error ? 'danger' : logSource?.truncated ? 'accent' : 'success'"
-        variant="pill"
-        dot
-        class="px-2 py-0.5 text-micro"
-        data-testid="diagnostics-source-log"
-        :title="logSource?.error || logSource?.path || undefined"
-      >
-        hive.log{{ logSource?.truncated ? ' · recent tail' : '' }}
-      </BaseBadge>
-      <span class="text-micro text-text-4">Includes recent job outcomes</span>
-      <IconButton
-        class="ml-auto"
-        label="Refresh diagnostics"
-        :icon="IconRefreshCw"
-        size="lg"
-        :busy="loading"
-        data-testid="diagnostics-refresh"
-        @click="refresh"
-      />
-      <div
-        v-if="investigation"
-        class="flex items-center rounded-md border border-card bg-pane p-0.5"
-        role="group"
-        aria-label="Investigation panel layout"
-      >
+    <ViewHeader data-testid="diagnostics-toolbar">
+      <template #title>
+        <h1 class="font-semibold text-text">Diagnostics</h1>
+        <BaseBadge tone="muted" variant="pill" class="px-2 py-0.5 font-mono text-micro">
+          {{ snapshot?.version || 'Development build' }}
+        </BaseBadge>
+        <BaseBadge
+          :tone="logSource?.error ? 'danger' : logSource?.truncated ? 'accent' : 'success'"
+          variant="pill"
+          dot
+          class="px-2 py-0.5 text-micro"
+          data-testid="diagnostics-source-log"
+          :title="logSource?.error || logSource?.path || undefined"
+        >
+          hive.log{{ logSource?.truncated ? ' · recent tail' : '' }}
+        </BaseBadge>
+        <span class="text-micro text-text-4">Includes recent job outcomes</span>
         <IconButton
-          label="Show panels side by side"
-          :icon="IconColumns2"
-          size="md"
-          :active="!stacked"
-          data-testid="diagnostics-layout-side-by-side"
-          @click="panelLayout = 'side-by-side'"
+          class="ml-auto"
+          label="Refresh diagnostics"
+          :icon="IconRefreshCw"
+          size="lg"
+          :busy="loading"
+          data-testid="diagnostics-refresh"
+          @click="refresh"
         />
-        <IconButton
-          label="Stack panels"
-          :icon="IconRows2"
-          size="md"
-          :active="stacked"
-          data-testid="diagnostics-layout-stacked"
-          @click="panelLayout = 'stacked'"
-        />
-      </div>
-    </header>
+        <SegmentedControl
+          v-if="investigation"
+          v-model="panelLayout"
+          :options="layoutOptions"
+          variant="compact"
+          size="sm"
+          aria-label="Investigation panel layout"
+          testid="diagnostics-layout"
+        >
+          <template #option="{ option }">
+            <component :is="layoutIcons[option.value]" class="size-3.5" />
+          </template>
+        </SegmentedControl>
+      </template>
+    </ViewHeader>
 
     <div
       v-if="notice"
-      class="mx-2 mb-2 shrink-0 rounded-lg border border-row bg-pane px-3 py-1.5 text-caption text-text-3"
+      class="flex shrink-0 items-center gap-2 border-b border-row bg-sidebar px-4 py-2 text-caption text-text-3"
       role="status"
     >
-      {{ notice }}
+      <span class="min-w-0 truncate">{{ notice }}</span>
       <BaseButton v-if="notice.startsWith('Saved')" variant="ghost" size="xs" @click="reveal('exports')">
         Reveal exports
       </BaseButton>
     </div>
-    <InlineError v-if="error" :message="error" class="mx-2 mb-2 shrink-0" testid="diagnostics-error" />
+    <InlineError
+      v-if="error"
+      :message="error"
+      variant="line"
+      class="shrink-0 border-b border-severity-error-border bg-severity-error-tint px-4 py-2"
+      testid="diagnostics-error"
+    />
     <InlineError
       v-for="warning in sourceWarnings"
       :key="warning"
       :message="warning"
-      class="mx-2 mb-2 shrink-0"
+      variant="line"
+      class="shrink-0 border-b border-severity-error-border bg-severity-error-tint px-4 py-2"
       data-testid="diagnostics-source-warning"
     />
 
     <section
       v-if="!investigation"
-      class="mx-2 mb-2 shrink-0 rounded-xl border border-row bg-pane p-3"
+      class="shrink-0 border-b border-row bg-sidebar px-4 py-3"
       aria-label="Start an investigation"
     >
       <div class="mb-2.5 flex items-center gap-2">
@@ -434,10 +447,11 @@ onBeforeUnmount(() => {
       />
     </section>
 
-    <div class="flex min-h-0 flex-1 gap-2 p-2 pt-0" :class="investigation && stacked ? 'flex-col' : 'flex-row'">
+    <div class="flex min-h-0 flex-1" :class="investigation && stacked ? 'flex-col' : 'flex-row'">
       <section
         v-if="investigation"
-        class="relative flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden rounded-xl border border-strong bg-pane"
+        class="relative flex min-h-0 min-w-0 shrink-0 flex-col overflow-hidden border-row bg-app"
+        :class="stacked ? 'border-b' : 'border-r'"
         :style="terminalStyle"
         aria-label="Diagnostic investigation"
         data-testid="diagnostics-terminal-panel"
@@ -452,12 +466,12 @@ onBeforeUnmount(() => {
       </section>
 
       <section
-        class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-strong bg-pane"
+        class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-app"
         aria-labelledby="diagnostics-logs-title"
         :aria-busy="loading || undefined"
         data-testid="diagnostics-logs-panel"
       >
-        <header class="flex h-9 shrink-0 items-center gap-2 border-b border-row bg-raised px-3">
+        <header class="flex h-9 shrink-0 items-center gap-2 border-b border-row bg-canvas-toolbar px-4">
           <IconList class="size-3.5 text-text-3" />
           <h2 id="diagnostics-logs-title" class="font-medium">Logs</h2>
           <BaseBadge
@@ -480,7 +494,7 @@ onBeforeUnmount(() => {
           </BaseBadge>
         </header>
 
-        <div class="flex shrink-0 items-center gap-2 border-b border-row px-2 py-1.5" aria-label="Log filters">
+        <div class="flex shrink-0 items-center gap-2 border-b border-row bg-sidebar px-4 py-2" aria-label="Log filters">
           <SearchField
             v-model="search"
             class="min-w-48 flex-1"
@@ -525,7 +539,7 @@ onBeforeUnmount(() => {
 
         <div
           ref="list"
-          class="min-h-0 flex-1 overflow-auto bg-app"
+          class="hive-scroll min-h-0 flex-1 overflow-auto bg-app"
           aria-label="Diagnostic entries"
           data-testid="diagnostics-entries"
           @scroll.passive="onEntriesScroll"
@@ -608,6 +622,20 @@ onBeforeUnmount(() => {
             </div>
           </details>
         </div>
+
+        <Transition name="tail-pill">
+          <BaseButton
+            v-if="awayFromTop"
+            variant="secondary"
+            size="xs"
+            class="absolute bottom-4 right-4 z-10 rounded-full bg-raised/95 shadow-popover"
+            data-testid="diagnostics-scroll-to-top"
+            @click="scrollToTop"
+          >
+            <template #icon><IconArrowUp class="size-3" /></template>
+            Scroll to top
+          </BaseButton>
+        </Transition>
       </section>
     </div>
   </main>

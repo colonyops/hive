@@ -112,6 +112,20 @@ describe('DiagnosticsWindow', () => {
     wrapper.unmount()
   })
 
+  it('offers a floating shortcut after the log is scrolled away from the top', async () => {
+    const wrapper = mount(DiagnosticsWindow)
+    await flushPromises()
+    const entries = wrapper.get('[data-testid="diagnostics-entries"]')
+    const scrollTo = vi.fn()
+    entries.element.scrollTo = scrollTo
+    entries.element.scrollTop = 240
+    await entries.trigger('scroll')
+
+    await wrapper.get('[data-testid="diagnostics-scroll-to-top"]').trigger('click')
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' })
+    wrapper.unmount()
+  })
+
   it('opens the investigation terminal only after preparation succeeds', async () => {
     api.Prepare.mockResolvedValueOnce({ command: 'codex prompt', dir: '/tmp/report' })
     const wrapper = mount(DiagnosticsWindow)
