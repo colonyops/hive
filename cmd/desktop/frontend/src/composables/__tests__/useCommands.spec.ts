@@ -5,6 +5,7 @@ import {
   fuzzyMatch,
   scoreCommand,
   sortCommands,
+  titleMatchPositions,
   useCommandPalette,
   useCommands,
   useKeysScope,
@@ -105,6 +106,58 @@ describe('useCommands', () => {
     ])
 
     expect(results.map((cmd) => cmd.id)).toEqual(['mark-read'])
+  })
+
+  it('fuzzyMatch picks the best alignment rather than the earliest one', () => {
+    // Greedy placement would take "ab" in "Cab"; the word start in "Abort" scores higher.
+    expect(fuzzyMatch('ab', 'Cab Abort')?.positions).toEqual([4, 5])
+  })
+
+  it('fuzzyMatch with wordStart rejects a match that starts mid-word', () => {
+    expect(fuzzyMatch('board', 'Keyboard', { wordStart: true })).toBeNull()
+    expect(fuzzyMatch('key', 'Keyboard', { wordStart: true })?.positions).toEqual([0, 1, 2])
+  })
+
+  describe('multi-term queries', () => {
+    const settingsRows = [
+      command({ id: 'settings:general', title: 'General', group: 'Settings', keywords: ['settings', 'general'] }),
+      command({
+        id: 'settings:keybindings',
+        title: 'Keyboard',
+        group: 'Settings',
+        keywords: ['settings', 'keybindings', 'Keyboard shortcuts'],
+      }),
+      command({ id: 'theme:dark', title: 'Theme: Dark', group: 'Theme', keywords: ['theme'] }),
+    ]
+
+    it.each(['settings keyboard', 'Settings > Keyboard', 'settings/keyb', 'keyb settings'])(
+      'finds a row whose terms span its group and title: %s',
+      (query) => {
+        expect(filterAndScore(query, settingsRows).map((cmd) => cmd.id)).toEqual(['settings:keybindings'])
+      },
+    )
+
+    it('matches terms in any order within the title', () => {
+      const results = filterAndScore('read mark', [
+        command({ id: 'mark-read', title: 'Mark all as read', group: 'Inbox' }),
+        command({ id: 'unrelated', title: 'Open settings', group: 'App' }),
+      ])
+
+      expect(results.map((cmd) => cmd.id)).toEqual(['mark-read'])
+    })
+
+    it('drops a row when any term matches none of its fields', () => {
+      expect(filterAndScore('settings theme', settingsRows)).toEqual([])
+    })
+
+    it('requires each term to start on a word', () => {
+      expect(filterAndScore('ettings oard', settingsRows)).toEqual([])
+    })
+
+    it('highlights the union of the terms that hit the title', () => {
+      expect(titleMatchPositions('dark theme', 'Theme: Dark')).toEqual([0, 1, 2, 3, 4, 7, 8, 9, 10])
+      expect(titleMatchPositions('settings keyb', 'Keyboard')).toEqual([0, 1, 2, 3])
+    })
   })
 
   it('sorts commands by group placement, keeping registration order within a group', () => {
