@@ -190,7 +190,7 @@ func TestTasksService_TaskRepoKeysExcludesEmpty(t *testing.T) {
 func TestTasksService_StoreFailuresAreInternal(t *testing.T) {
 	h := newHiveHarness(t, engineOptions{})
 	svc := newTasksService(h.engine)
-	require.NoError(t, h.engine.DB().Close())
+	require.NoError(t, h.db.Close())
 
 	_, err := svc.ListTasks(t.Context(), "repo")
 	assert.Equal(t, KindInternal, KindOf(err))

@@ -257,7 +257,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			sweepCtx, cancel := context.WithCancel(context.Background())
 			sweepCancel = cancel
 			bgWg.Go(func() {
-				kvStore.Sweep(sweepCtx, 5*time.Minute)
+				engine.SweepKV(sweepCtx, 5*time.Minute)
 			})
 
 			// Create all plugin instances, collect availability info for doctor,

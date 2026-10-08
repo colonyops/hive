@@ -248,8 +248,8 @@ desktop adapter/*  ──►  desktop app/*        cmd/hive/internal/*     progr
                                       pkg/                             kit
 ```
 
-Dependencies point down. A program may import any shared layer, not only the
-engine: the desktop needs `platform/tmux/control` for terminal streaming and
+Dependencies point down. A program may import any shared layer except the
+stores, not only the engine: the desktop needs `platform/tmux/control` for terminal streaming and
 `platform/sqlite` for its own database. Nothing in `internal/` imports a
 program. Go's `internal` visibility keeps `cmd/hive/internal` and
 `cmd/desktop/internal` apart, and `cli-no-desktop-deps` keeps the CLI off the
@@ -268,7 +268,7 @@ needs no lint edit:
 | Store | `internal/store/` | `hive.db`: sqlc output, migrations, one store per aggregate | `pkg/`, `domain/`, `platform/sqlite` | `store-is-persistence` |
 | Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer | `pkg/`, `domain/` | `config-is-data` |
 | Engine | `internal/hive/` | One subpackage per application service, the event bus, and `hive.Engine`, which composes them | everything above | |
-| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features, program-only config | any shared layer, their own tree | `core`, `cli-no-desktop-deps`, `desktop-no-cli-deps` |
+| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features, program-only config | any shared layer except the stores, their own tree | `core`, `programs-use-services`, `cli-no-desktop-deps`, `desktop-no-cli-deps` |
 
 `shared-surface-free` keeps charm, Wails and both programs out of all of
 `internal/`.
@@ -304,8 +304,11 @@ camelCase `json` tags, and the adapters return it as is; only a domain type
 gets an adapter copy, because its own tags are the CLI's JSON contract.
 
 A change the desktop needs in a shared package is made there, in the same PR,
-with the CLI in mind. Neither program constructs an `internal/store` type for
-state the engine owns; it asks `hive.Engine` for the service or domain port.
+with the CLI in mind. A program reaches `hive.db` state through a
+`hive.Engine` accessor, which returns a service or, where a service would add
+no policy, the domain port. `programs-use-services` denies `internal/store` to
+production program code; the handle (`store/db`) and the migration runner
+(`store/migrate`) stay allowed.
 
 ## Directory structure
 
@@ -529,7 +532,6 @@ internal/                         # the hive engine both programs run on (see
     session/  status/  hc/        #   one subpackage per application service
     messaging/  repocontext/
     todo/  gitstatus/  doctor/
-    kv/                           #   the persistent KV store and its expiry sweep
   releasenotes/                   # release tooling, outside the layers: the
                                   #   changelog parser each program's embed feeds:
                                   #   <version>.md per release, unreleased/ one file

@@ -16,13 +16,13 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
-	kvsvc "github.com/colonyops/hive/internal/hive/kv"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
 	"github.com/colonyops/hive/internal/hive/repocontext"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -79,7 +79,7 @@ type services struct {
 type Engine struct {
 	ports         Ports
 	hc            *hcsvc.Service
-	kv            *kvsvc.Service
+	kv            *store.KVStore
 	notifications notify.Store
 	reviews       review.Store
 	reloadMu      sync.Mutex
@@ -128,7 +128,7 @@ func New(cfg *config.Config, p Ports) (*Engine, error) {
 	e := &Engine{
 		ports:         p,
 		hc:            hcsvc.NewService(p.Logger, store.NewHCStore(p.DB)),
-		kv:            kvsvc.NewService(p.Logger, store.NewKVStore(p.DB)),
+		kv:            store.NewKVStore(p.DB),
 		notifications: store.NewNotifyStore(p.DB),
 		reviews:       store.NewReviewStore(p.DB),
 	}
@@ -221,9 +221,9 @@ func (e *Engine) Status() *statussvc.Service { return e.load().status }
 // HC returns the honeycomb service. It reads no config, so Reload keeps it.
 func (e *Engine) HC() *hcsvc.Service { return e.hc }
 
-// KV returns the persistent key-value service. Reload keeps it. The program
-// runs its Sweep.
-func (e *Engine) KV() *kvsvc.Service { return e.kv }
+// KV returns the persistent key-value store. Reload keeps it. The program
+// runs SweepKV.
+func (e *Engine) KV() kv.KV { return e.kv }
 
 // Notifications returns the notification history. Reload keeps it.
 func (e *Engine) Notifications() notify.Store { return e.notifications }
@@ -248,5 +248,3 @@ func (e *Engine) Doctor(validator doctor.ConfigValidator, plugins []doctor.Plugi
 }
 
 func (e *Engine) Bus() *events.EventBus { return e.ports.Bus }
-
-func (e *Engine) DB() *db.DB { return e.ports.DB }

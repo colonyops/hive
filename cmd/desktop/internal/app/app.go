@@ -57,6 +57,7 @@ import (
 	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 	tmuxcc "github.com/colonyops/hive/internal/platform/tmux/control"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
+	"github.com/colonyops/hive/internal/store/db"
 )
 
 // Config is everything App needs that it cannot resolve itself.
@@ -209,6 +210,7 @@ type App struct {
 
 	// hive owns the config-derived services and swaps them on Reload.
 	hive     *hive.Engine
+	hiveDB   *db.DB
 	launcher *dispatch.RepositoryLauncher
 
 	hiveDataDir string
@@ -675,10 +677,10 @@ func (a *App) MCPBaseURL(ctx context.Context) string {
 // HiveConn exposes hive.db (sessions, messages) as a plain *sql.DB for the
 // e2e harness's table resets and read-only snapshots.
 func (a *App) HiveConn() *sql.DB {
-	if a.hive == nil {
+	if a.hiveDB == nil {
 		return nil
 	}
-	return a.hive.DB().Conn()
+	return a.hiveDB.Conn()
 }
 
 // Close stops the background subsystems and releases resources. It is the
@@ -787,8 +789,8 @@ func (a *App) Close() error {
 	}
 
 	var err error
-	if a.hive != nil {
-		if closeErr := a.hive.DB().Close(); closeErr != nil {
+	if a.hiveDB != nil {
+		if closeErr := a.hiveDB.Close(); closeErr != nil {
 			err = fmt.Errorf("close hive action database: %w", closeErr)
 		}
 	}
@@ -1280,6 +1282,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("start hive engine: %w", err)
 	}
 	a.hive = engine
+	a.hiveDB = database
 	a.hiveBusCancel = cancel
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	a.launcher = dispatch.NewRepositoryLauncher(

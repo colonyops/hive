@@ -173,6 +173,21 @@ linters:
               desc: pkg/ must not render.
             - pkg: github.com/wailsapp
               desc: pkg/ must not depend on the desktop runtime.
+        # A program holds the hive.db handle it opens and closes (store/db), and
+        # the desktop migrates its own database with store/migrate. Tests build
+        # fixtures with the stores directly.
+        programs-use-services:
+          files:
+            - "**/cmd/hive/**"
+            - "**/cmd/desktop/**"
+            - "!$test"
+          list-mode: lax
+          allow:
+            - github.com/colonyops/hive/internal/store/db
+            - github.com/colonyops/hive/internal/store/migrate
+          deny:
+            - pkg: github.com/colonyops/hive/internal/store
+              desc: A program reaches hive.db state through a hive.Engine accessor, not a store (docs/architecture.md, "Layers and the dependency rule").
         desktop-no-cli-deps:
           files:
             - "**/cmd/desktop/**"

@@ -24,6 +24,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/events/testbus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/store/db"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
@@ -69,6 +70,7 @@ func loadConfig(t *testing.T, dataDir string) *config.Config {
 
 type harness struct {
 	engine *hive.Engine
+	db     *db.DB
 	exec   *executiltest.Exec
 	bus    *testbus.Bus
 }
@@ -79,7 +81,7 @@ func newEngine(t *testing.T, cfg *config.Config, panes terminal.PaneSource) harn
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
 
-	h := harness{exec: &executiltest.Exec{}, bus: testbus.New(t)}
+	h := harness{db: database, exec: &executiltest.Exec{}, bus: testbus.New(t)}
 	h.engine, err = hive.New(cfg, hive.Ports{
 		DB:         database,
 		Bus:        h.bus.EventBus,
@@ -273,26 +275,48 @@ func TestEnginePersistenceSurvivesAReload(t *testing.T) {
 	kvSvc, notifications, reviews := h.engine.KV(), h.engine.Notifications(), h.engine.Reviews()
 
 	require.NoError(t, h.engine.Reload(loadConfig(t, t.TempDir())))
-	assert.Same(t, kvSvc, h.engine.KV())
+	assert.Equal(t, kvSvc, h.engine.KV())
 	assert.Equal(t, notifications, h.engine.Notifications())
 	assert.Equal(t, reviews, h.engine.Reviews())
 }
 
-func TestEngineKVPersistsAndSweeps(t *testing.T) {
+func TestEngineKVPersists(t *testing.T) {
 	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
 	ctx := t.Context()
 
 	require.NoError(t, h.engine.KV().Set(ctx, "plugin.cache", "fresh"))
-	require.NoError(t, h.engine.KV().SetTTL(ctx, "update.check", "stale", time.Nanosecond))
-	time.Sleep(time.Millisecond)
-	require.NoError(t, h.engine.KV().SweepExpired(ctx))
 
 	var got string
 	require.NoError(t, h.engine.KV().Get(ctx, "plugin.cache", &got))
 	assert.Equal(t, "fresh", got)
-	keys, err := h.engine.KV().ListKeys(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"plugin.cache"}, keys)
+}
+
+// Reads already hide an expired entry, so only the table shows the sweep.
+func TestEngineSweepKVDeletesExpiredRows(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	ctx, cancel := context.WithCancel(t.Context())
+
+	require.NoError(t, h.engine.KV().Set(ctx, "plugin.cache", "fresh"))
+	require.NoError(t, h.engine.KV().SetTTL(ctx, "update.check", "stale", time.Nanosecond))
+
+	done := make(chan struct{})
+	go func() {
+		h.engine.SweepKV(ctx, time.Millisecond)
+		close(done)
+	}()
+
+	assert.Eventually(t, func() bool {
+		var rows int
+		require.NoError(t, h.db.Conn().QueryRowContext(t.Context(), "SELECT count(*) FROM kv_store").Scan(&rows))
+		return rows == 1
+	}, time.Second, time.Millisecond)
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("SweepKV did not return after its context was canceled")
+	}
 }
 
 func TestEngineNotificationsPersist(t *testing.T) {
