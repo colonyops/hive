@@ -66,7 +66,7 @@ func (cmd *HoneycombCmd) run(ctx context.Context, c *cli.Command) error {
 		Honeycomb: cmd.app.HC(),
 		RepoKey:   cmd.detectRepoKey(ctx),
 		Config:    cmd.app.Config,
-		KVStore:   cmd.app.KV,
+		KVStore:   cmd.app.KV(),
 		Renderer:  cmd.app.Renderer(),
 		Logger:    cmd.app.Logger,
 	}

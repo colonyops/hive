@@ -169,7 +169,7 @@ func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Do
 		Documents:   documents,
 		InitialDoc:  initialDoc,
 		ContextDir:  contextDir,
-		DB:          cmd.app.DB(),
+		Reviews:     cmd.app.Reviews(),
 		CopyCommand: cmd.app.Config.CopyCommand,
 		Logger:      cmd.app.Logger,
 	}

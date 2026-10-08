@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
+	"github.com/colonyops/hive/internal/store"
 	"github.com/colonyops/hive/internal/store/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -33,7 +34,7 @@ func TestReviewOnly_QKeyWithActiveEditor(t *testing.T) {
 		Documents:   []review.Document{doc},
 		InitialDoc:  nil,
 		ContextDir:  "",
-		DB:          dbConn,
+		Reviews:     store.NewReviewStore(dbConn),
 		CopyCommand: "",
 	})
 
@@ -84,7 +85,7 @@ func TestReviewOnly_CtrlCAlwaysQuits(t *testing.T) {
 		Documents:   []review.Document{doc},
 		InitialDoc:  nil,
 		ContextDir:  "",
-		DB:          dbConn,
+		Reviews:     store.NewReviewStore(dbConn),
 		CopyCommand: "",
 	})
 

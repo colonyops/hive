@@ -579,7 +579,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 
 			var recents map[string]time.Time
 			if !flagNoRecents {
-				recents = loadRecents(ctx, cmd.app.KV)
+				recents = loadRecents(ctx, cmd.app.KV())
 				for i := range items {
 					if _, ok := recents[items[i].Session.ID]; ok {
 						items[i].IsRecent = true
@@ -615,7 +615,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				return nil
 			}
 
-			_ = cmd.app.KV.SetTTL(ctx, recentsKeyPrefix+result.selected.Session.ID, result.selected.Session.Name, recentsTTL)
+			_ = cmd.app.KV().SetTTL(ctx, recentsKeyPrefix+result.selected.Session.ID, result.selected.Session.Name, recentsTTL)
 
 			if flagPrint {
 				switch flagFormat {

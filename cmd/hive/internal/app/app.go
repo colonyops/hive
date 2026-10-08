@@ -10,7 +10,6 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/sources"
-	"github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
@@ -51,7 +50,6 @@ type App struct {
 	Multiplexer Multiplexer
 	Plugins     *plugins.Manager
 	CommandSet  *plugins.CommandSet
-	KV          kv.KV
 	Build       BuildInfo
 	Sources     *sources.Registry
 }
@@ -66,7 +64,6 @@ func NewApp(
 	multiplexer Multiplexer,
 	pluginMgr *plugins.Manager,
 	commandSet *plugins.CommandSet,
-	kvStore kv.KV,
 	pluginInfos []doctor.PluginInfo,
 ) *App {
 	return &App{
@@ -77,6 +74,5 @@ func NewApp(
 		Multiplexer: multiplexer,
 		Plugins:     pluginMgr,
 		CommandSet:  commandSet,
-		KV:          kvStore,
 	}
 }

@@ -16,10 +16,13 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/notify"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
+	kvsvc "github.com/colonyops/hive/internal/hive/kv"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
 	"github.com/colonyops/hive/internal/hive/repocontext"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
@@ -74,10 +77,13 @@ type services struct {
 // current config. Fetch a service per call (e.Sessions().X) and do not hold
 // it across a Reload, or it keeps serving the old config.
 type Engine struct {
-	ports    Ports
-	hc       *hcsvc.Service
-	reloadMu sync.Mutex
-	current  atomic.Pointer[services]
+	ports         Ports
+	hc            *hcsvc.Service
+	kv            *kvsvc.Service
+	notifications notify.Store
+	reviews       review.Store
+	reloadMu      sync.Mutex
+	current       atomic.Pointer[services]
 }
 
 // OpenDB opens hive.db in dataDir and imports the JSON stores that predate
@@ -120,8 +126,11 @@ func New(cfg *config.Config, p Ports) (*Engine, error) {
 	}
 
 	e := &Engine{
-		ports: p,
-		hc:    hcsvc.NewService(p.Logger, store.NewHCStore(p.DB)),
+		ports:         p,
+		hc:            hcsvc.NewService(p.Logger, store.NewHCStore(p.DB)),
+		kv:            kvsvc.NewService(p.Logger, store.NewKVStore(p.DB)),
+		notifications: store.NewNotifyStore(p.DB),
+		reviews:       store.NewReviewStore(p.DB),
 	}
 	built, err := e.build(cfg)
 	if err != nil {
@@ -135,8 +144,9 @@ func New(cfg *config.Config, p Ports) (*Engine, error) {
 // config that fails validation changes nothing: the running services keep
 // serving the config they were built from.
 //
-// The database, the bus and the honeycomb service are kept, so a changed
-// database section or data dir still needs a restart.
+// The database, the bus, and the services that read no config (honeycomb,
+// KV, notifications, reviews) are kept, so a changed database section or data
+// dir still needs a restart.
 func (e *Engine) Reload(cfg *config.Config) error {
 	e.reloadMu.Lock()
 	defer e.reloadMu.Unlock()
@@ -210,6 +220,16 @@ func (e *Engine) Status() *statussvc.Service { return e.load().status }
 
 // HC returns the honeycomb service. It reads no config, so Reload keeps it.
 func (e *Engine) HC() *hcsvc.Service { return e.hc }
+
+// KV returns the persistent key-value service. Reload keeps it. The program
+// runs its Sweep.
+func (e *Engine) KV() *kvsvc.Service { return e.kv }
+
+// Notifications returns the notification history. Reload keeps it.
+func (e *Engine) Notifications() notify.Store { return e.notifications }
+
+// Reviews returns the document review sessions and comments. Reload keeps it.
+func (e *Engine) Reviews() review.Store { return e.reviews }
 
 func (e *Engine) Messages() *msgsvc.Service { return e.load().messages }
 

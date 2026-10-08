@@ -16,6 +16,8 @@ import (
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/notify"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/doctor"
@@ -264,4 +266,66 @@ func TestEngineServesConcurrentReadersDuringReload(t *testing.T) {
 func TestNewRejectsMissingPorts(t *testing.T) {
 	_, err := hive.New(loadConfig(t, t.TempDir()), hive.Ports{})
 	require.Error(t, err)
+}
+
+func TestEnginePersistenceSurvivesAReload(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	kvSvc, notifications, reviews := h.engine.KV(), h.engine.Notifications(), h.engine.Reviews()
+
+	require.NoError(t, h.engine.Reload(loadConfig(t, t.TempDir())))
+	assert.Same(t, kvSvc, h.engine.KV())
+	assert.Equal(t, notifications, h.engine.Notifications())
+	assert.Equal(t, reviews, h.engine.Reviews())
+}
+
+func TestEngineKVPersistsAndSweeps(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	ctx := t.Context()
+
+	require.NoError(t, h.engine.KV().Set(ctx, "plugin.cache", "fresh"))
+	require.NoError(t, h.engine.KV().SetTTL(ctx, "update.check", "stale", time.Nanosecond))
+	time.Sleep(time.Millisecond)
+	require.NoError(t, h.engine.KV().SweepExpired(ctx))
+
+	var got string
+	require.NoError(t, h.engine.KV().Get(ctx, "plugin.cache", &got))
+	assert.Equal(t, "fresh", got)
+	keys, err := h.engine.KV().ListKeys(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"plugin.cache"}, keys)
+}
+
+func TestEngineNotificationsPersist(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	ctx := t.Context()
+
+	_, err := h.engine.Notifications().Save(ctx, notify.Notification{
+		Level: notify.LevelError, Message: "spawn failed", CreatedAt: time.Now(),
+	})
+	require.NoError(t, err)
+
+	saved, err := h.engine.Notifications().List(ctx)
+	require.NoError(t, err)
+	require.Len(t, saved, 1)
+	assert.Equal(t, "spawn failed", saved[0].Message)
+}
+
+func TestEngineReviewsPersist(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	ctx := t.Context()
+
+	created, err := h.engine.Reviews().CreateSession(ctx, "/ctx/plan.md", "abc123")
+	require.NoError(t, err)
+	require.NoError(t, h.engine.Reviews().SaveComment(ctx, review.Comment{
+		ID: "c1", SessionID: created.ID, StartLine: 1, EndLine: 1, CommentText: "tighten this",
+		CreatedAt: time.Now(),
+	}))
+
+	found, err := h.engine.Reviews().GetSessionByHash(ctx, "/ctx/plan.md", "abc123")
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, found.ID)
+	comments, err := h.engine.Reviews().ListComments(ctx, created.ID)
+	require.NoError(t, err)
+	require.Len(t, comments, 1)
+	assert.Equal(t, "tighten this", comments[0].CommentText)
 }

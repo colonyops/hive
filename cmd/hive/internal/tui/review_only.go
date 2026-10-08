@@ -13,8 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	review "github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
-	"github.com/colonyops/hive/internal/store"
-	"github.com/colonyops/hive/internal/store/db"
+	corereview "github.com/colonyops/hive/internal/domain/review"
 )
 
 // ReviewOnlyOptions configures the review-only TUI.
@@ -23,7 +22,7 @@ type ReviewOnlyOptions struct {
 	Documents   []review.Document
 	InitialDoc  *review.Document
 	ContextDir  string // Directory for saving feedback files (e.g., context directory)
-	DB          *db.DB
+	Reviews     corereview.Store
 	CopyCommand string // Shell command for copying to clipboard (e.g., "pbcopy" on macOS)
 }
 
@@ -41,11 +40,7 @@ type ReviewOnlyModel struct {
 
 // NewReviewOnly creates a new review-only TUI model.
 func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
-	// Create review store from DB queries
-	store := store.NewReviewStore(opts.DB)
-
-	// Create review view
-	reviewView := review.New(opts.Logger, opts.Documents, opts.ContextDir, store, nil, 0)
+	reviewView := review.New(opts.Logger, opts.Documents, opts.ContextDir, opts.Reviews, nil, 0)
 
 	// When opening with a specific document, hide the tree so the document
 	// gets full-width focus. The user can toggle the tree with V to navigate.

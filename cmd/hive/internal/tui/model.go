@@ -31,6 +31,7 @@ import (
 	hiveconfig "github.com/colonyops/hive/internal/config"
 	corekv "github.com/colonyops/hive/internal/domain/kv"
 	"github.com/colonyops/hive/internal/domain/notify"
+	corereview "github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
@@ -44,8 +45,6 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/tasks"
 	"github.com/colonyops/hive/cmd/hive/internal/updatecheck"
-	"github.com/colonyops/hive/internal/store"
-	"github.com/colonyops/hive/internal/store/db"
 
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
@@ -96,10 +95,11 @@ type Deps struct {
 	PluginManager *plugins.Manager
 	CommandSet    *plugins.CommandSet
 	TodoService   *todosvc.Service
-	DB            *db.DB
+	Notifications notify.Store
 
 	// Optional; nil disables the corresponding feature.
 	MsgStore      *msgsvc.Service
+	Reviews       corereview.Store
 	Bus           *events.EventBus
 	KVStore       corekv.KV
 	BuildInfo     BuildInfo
@@ -263,7 +263,7 @@ type todoCreatedMsg struct {
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
 func New(deps Deps, opts Opts) Model {
-	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.Status == nil || deps.GitStatus == nil || deps.PluginManager == nil || deps.CommandSet == nil || deps.TodoService == nil || deps.DB == nil {
+	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.Status == nil || deps.GitStatus == nil || deps.PluginManager == nil || deps.CommandSet == nil || deps.TodoService == nil || deps.Notifications == nil {
 		panic("tui.New: Config, Service, Renderer, Status, GitStatus, PluginManager, CommandSet, TodoService, and DB are required")
 	}
 	cfg := deps.Config
@@ -333,15 +333,9 @@ func New(deps Deps, opts Opts) Model {
 		docs, _ = review.DiscoverDocuments(contextDir)
 	}
 
-	var reviewStore *store.ReviewStore
-	if deps.DB != nil {
-		reviewStore = store.NewReviewStore(deps.DB)
-	}
-
-	reviewView := review.New(deps.Logger, docs, contextDir, reviewStore, handler, cfg.Views.Review.SplitRatioOrDefault(30))
+	reviewView := review.New(deps.Logger, docs, contextDir, deps.Reviews, handler, cfg.Views.Review.SplitRatioOrDefault(30))
 	reviewView.SetRepoKey(repoKey)
 
-	notifyStore := store.NewNotifyStore(deps.DB)
 	toastCtrl := NewToastController()
 	toastView := NewToastView(toastCtrl)
 	notifyBuffer := NewNotificationBuffer()
@@ -393,7 +387,7 @@ func New(deps Deps, opts Opts) Model {
 		kvStore:         deps.KVStore,
 		kvView:          kvView,
 		tasksView:       tasksView,
-		notifyStore:     notifyStore,
+		notifyStore:     deps.Notifications,
 		notifyBuffer:    notifyBuffer,
 		toastController: toastCtrl,
 		toastView:       toastView,

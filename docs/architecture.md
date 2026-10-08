@@ -304,9 +304,8 @@ camelCase `json` tags, and the adapters return it as is; only a domain type
 gets an adapter copy, because its own tags are the CLI's JSON contract.
 
 A change the desktop needs in a shared package is made there, in the same PR,
-with the CLI in mind. The CLI still reads `internal/store` directly in a few
-places (the KV store and its `sweep`, the TUI's notification store and review
-views); new code goes through an engine service.
+with the CLI in mind. Neither program constructs an `internal/store` type for
+state the engine owns; it asks `hive.Engine` for the service or domain port.
 
 ## Directory structure
 
@@ -316,7 +315,7 @@ cmd/hive/                         # the hive CLI/TUI
   internal/                       # CLI-only: app/ (composition root over
                                   #   hive.Engine), config/ (the CLI sections of
                                   #   config.yaml), commands/, tui/, action/,
-                                  #   theme/, plugins/, sources/, sweep/
+                                  #   theme/, plugins/, sources/
 cmd/tools/                        # repo-wide tooling: adr, release
 main.go  go.mod                   # one module for every program
 
@@ -530,6 +529,7 @@ internal/                         # the hive engine both programs run on (see
     session/  status/  hc/        #   one subpackage per application service
     messaging/  repocontext/
     todo/  gitstatus/  doctor/
+    kv/                           #   the persistent KV store and its expiry sweep
   releasenotes/                   # release tooling, outside the layers: the
                                   #   changelog parser each program's embed feeds:
                                   #   <version>.md per release, unreleased/ one file
