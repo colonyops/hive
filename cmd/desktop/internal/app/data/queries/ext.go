@@ -28,10 +28,8 @@ func (db *DB) boundTo(tx *sql.Tx) *DB {
 	return &bound
 }
 
-// WithinTx runs fn inside a transaction, joining an ambient one on this
-// database rather than opening a second (see sqlite.WithinTx). Only the
-// outermost caller commits or rolls back; an inner fn that fails returns its
-// error up to that caller, which rolls the whole unit back.
+// WithinTx runs fn with a DB bound to a transaction on this database, joining
+// an ambient one (see sqlite.WithinTx).
 //
 // context.WithoutCancel preserves the transaction value, so a goroutine
 // detached from a ctx inside WithinTx would run store calls on a transaction

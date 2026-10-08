@@ -106,10 +106,8 @@ func (db *DB) boundTo(tx *sql.Tx) *DB {
 	return &bound
 }
 
-// WithinTx runs fn inside a transaction, joining an ambient one on this
-// database rather than opening a second (see sqlite.WithinTx). Only the
-// outermost caller commits or rolls back; an inner fn that fails returns its
-// error up to that caller, which rolls the whole unit back.
+// WithinTx runs fn with a DB bound to a transaction on this database, joining
+// an ambient one (see sqlite.WithinTx).
 func (db *DB) WithinTx(ctx context.Context, fn func(context.Context, *DB) error) error {
 	return sqlite.WithinTx(ctx, db.conn, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, db.boundTo(tx))
