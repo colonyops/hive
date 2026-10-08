@@ -40,7 +40,7 @@ func TestDoctorConfigCheckFailsOnAnInvalidKeybinding(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	app := NewApp(zerolog.Nop(), engine, cfg, nil, nil, nil, nil, nil)
+	app := NewApp(zerolog.Nop(), engine, cfg, nil, nil, nil, nil)
 	results := app.Doctor.RunChecks(t.Context(), "", false)
 
 	var configResult *doctor.Result

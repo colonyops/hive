@@ -27,7 +27,6 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/plugins/neovim"
 	plugintmux "github.com/colonyops/hive/cmd/hive/internal/plugins/tmux"
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
-	"github.com/colonyops/hive/cmd/hive/internal/sweep"
 	"github.com/colonyops/hive/cmd/hive/internal/theme"
 	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/hive"
@@ -35,7 +34,6 @@ import (
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/session/scripts"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
-	"github.com/colonyops/hive/internal/store"
 	"github.com/colonyops/hive/internal/store/db"
 	"github.com/colonyops/hive/pkg/buildinfo"
 	"github.com/colonyops/hive/pkg/executil"
@@ -226,15 +224,6 @@ Run 'hive new' to create a new session from the current repository.`,
 			if err != nil {
 				return ctx, err
 			}
-			kvStore := store.NewKVStore(database)
-
-			// Start background KV sweep goroutine
-			sweepCtx, cancel := context.WithCancel(context.Background())
-			sweepCancel = cancel
-			bgWg.Go(func() {
-				sweep.Start(sweepCtx, logger, kvStore, 5*time.Minute)
-			})
-
 			bus := events.New(64)
 			busCtx, cancel := context.WithCancel(context.Background())
 			busCancel = cancel
@@ -263,6 +252,13 @@ Run 'hive new' to create a new session from the current repository.`,
 			if err != nil {
 				return ctx, err
 			}
+			kvStore := engine.KV()
+
+			sweepCtx, cancel := context.WithCancel(context.Background())
+			sweepCancel = cancel
+			bgWg.Go(func() {
+				engine.SweepKV(sweepCtx, 5*time.Minute)
+			})
 
 			// Create all plugin instances, collect availability info for doctor,
 			// then register with the manager.
@@ -308,7 +304,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			// Populate the pre-allocated App struct (commands already hold a pointer to it)
-			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, kvStore, pluginInfos)
+			*hiveApp = *app.NewApp(logger, engine, cfg, tmuxClient, pluginMgr, commandSet, pluginInfos)
 			hiveApp.Build = hiveBuildInfo()
 			hiveApp.Sources = app.BuildSourceRegistry(logger, cfg, exec, kvStore)
 

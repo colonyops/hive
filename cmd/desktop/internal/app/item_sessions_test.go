@@ -116,7 +116,7 @@ func TestSessionsService_ItemSessionsPrunesLinksHiveCannotAccountFor(t *testing.
 // would throw associations away because hive.db was momentarily unreadable.
 func TestSessionsService_ItemSessionsKeepsLinksWhenHiveCannotBeRead(t *testing.T) {
 	h := newHiveHarness(t, engineOptions{})
-	require.NoError(t, h.engine.DB().Close())
+	require.NoError(t, h.db.Close())
 	links := &fakeItemSessionStore{
 		refs:  map[int64]models.ItemRef{7: {ProfileID: "p", ExternalID: "acme/site#81"}},
 		links: map[string][]stores.ItemSession{"acme/site#81": {{SessionID: "s1", CreatedAt: 100}}},

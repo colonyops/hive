@@ -17,6 +17,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/events"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/store"
+	"github.com/colonyops/hive/internal/store/db"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
@@ -91,6 +92,7 @@ type engineOptions struct {
 
 type hiveHarness struct {
 	engine *hive.Engine
+	db     *db.DB
 	mux    *fakeMux
 	exec   *executiltest.Exec
 	cfg    *config.Config
@@ -113,7 +115,7 @@ func newHiveHarness(t *testing.T, opts engineOptions) *hiveHarness {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
 
-	h := &hiveHarness{mux: &fakeMux{}, exec: &executiltest.Exec{}, cfg: cfg}
+	h := &hiveHarness{db: database, mux: &fakeMux{}, exec: &executiltest.Exec{}, cfg: cfg}
 	mux := opts.mux
 	if mux == nil {
 		mux = h.mux
@@ -138,7 +140,7 @@ func newHiveHarness(t *testing.T, opts engineOptions) *hiveHarness {
 // save writes s to hive.db, filling the timestamps a real session always has.
 func (h *hiveHarness) save(t *testing.T, sessions ...session.Session) {
 	t.Helper()
-	sessionStore := store.NewSessionStore(h.engine.DB())
+	sessionStore := store.NewSessionStore(h.db)
 	now := time.Now().UTC().Truncate(time.Second)
 	for _, s := range sessions {
 		if s.CreatedAt.IsZero() {

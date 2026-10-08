@@ -390,7 +390,7 @@ func TestSessionsService_RenameSessionLeavesTheStoreAloneWhenTmuxFails(t *testin
 // how a full disk presents to the rename.
 func failSessionWrites(t *testing.T, h *hiveHarness) {
 	t.Helper()
-	_, err := h.engine.DB().Conn().ExecContext(t.Context(),
+	_, err := h.db.Conn().ExecContext(t.Context(),
 		`CREATE TRIGGER fail_session_writes BEFORE UPDATE ON sessions BEGIN SELECT RAISE(ABORT, 'disk full'); END`)
 	require.NoError(t, err)
 }

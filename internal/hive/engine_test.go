@@ -16,12 +16,15 @@ import (
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	"github.com/colonyops/hive/internal/domain/notify"
+	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/events/testbus"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
+	"github.com/colonyops/hive/internal/store/db"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
@@ -67,6 +70,7 @@ func loadConfig(t *testing.T, dataDir string) *config.Config {
 
 type harness struct {
 	engine *hive.Engine
+	db     *db.DB
 	exec   *executiltest.Exec
 	bus    *testbus.Bus
 }
@@ -77,7 +81,7 @@ func newEngine(t *testing.T, cfg *config.Config, panes terminal.PaneSource) harn
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
 
-	h := harness{exec: &executiltest.Exec{}, bus: testbus.New(t)}
+	h := harness{db: database, exec: &executiltest.Exec{}, bus: testbus.New(t)}
 	h.engine, err = hive.New(cfg, hive.Ports{
 		DB:         database,
 		Bus:        h.bus.EventBus,
@@ -264,4 +268,88 @@ func TestEngineServesConcurrentReadersDuringReload(t *testing.T) {
 func TestNewRejectsMissingPorts(t *testing.T) {
 	_, err := hive.New(loadConfig(t, t.TempDir()), hive.Ports{})
 	require.Error(t, err)
+}
+
+func TestEnginePersistenceSurvivesAReload(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	kvSvc, notifications, reviews := h.engine.KV(), h.engine.Notifications(), h.engine.Reviews()
+
+	require.NoError(t, h.engine.Reload(loadConfig(t, t.TempDir())))
+	assert.Equal(t, kvSvc, h.engine.KV())
+	assert.Equal(t, notifications, h.engine.Notifications())
+	assert.Equal(t, reviews, h.engine.Reviews())
+}
+
+func TestEngineKVPersists(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	ctx := t.Context()
+
+	require.NoError(t, h.engine.KV().Set(ctx, "plugin.cache", "fresh"))
+
+	var got string
+	require.NoError(t, h.engine.KV().Get(ctx, "plugin.cache", &got))
+	assert.Equal(t, "fresh", got)
+}
+
+// Reads already hide an expired entry, so only the table shows the sweep.
+func TestEngineSweepKVDeletesExpiredRows(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	ctx, cancel := context.WithCancel(t.Context())
+
+	require.NoError(t, h.engine.KV().Set(ctx, "plugin.cache", "fresh"))
+	require.NoError(t, h.engine.KV().SetTTL(ctx, "update.check", "stale", time.Nanosecond))
+
+	done := make(chan struct{})
+	go func() {
+		h.engine.SweepKV(ctx, time.Millisecond)
+		close(done)
+	}()
+
+	assert.Eventually(t, func() bool {
+		var rows int
+		require.NoError(t, h.db.Conn().QueryRowContext(t.Context(), "SELECT count(*) FROM kv_store").Scan(&rows))
+		return rows == 1
+	}, time.Second, time.Millisecond)
+
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("SweepKV did not return after its context was canceled")
+	}
+}
+
+func TestEngineNotificationsPersist(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	ctx := t.Context()
+
+	_, err := h.engine.Notifications().Save(ctx, notify.Notification{
+		Level: notify.LevelError, Message: "spawn failed", CreatedAt: time.Now(),
+	})
+	require.NoError(t, err)
+
+	saved, err := h.engine.Notifications().List(ctx)
+	require.NoError(t, err)
+	require.Len(t, saved, 1)
+	assert.Equal(t, "spawn failed", saved[0].Message)
+}
+
+func TestEngineReviewsPersist(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	ctx := t.Context()
+
+	created, err := h.engine.Reviews().CreateSession(ctx, "/ctx/plan.md", "abc123")
+	require.NoError(t, err)
+	require.NoError(t, h.engine.Reviews().SaveComment(ctx, review.Comment{
+		ID: "c1", SessionID: created.ID, StartLine: 1, EndLine: 1, CommentText: "tighten this",
+		CreatedAt: time.Now(),
+	}))
+
+	found, err := h.engine.Reviews().GetSessionByHash(ctx, "/ctx/plan.md", "abc123")
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, found.ID)
+	comments, err := h.engine.Reviews().ListComments(ctx, created.ID)
+	require.NoError(t, err)
+	require.Len(t, comments, 1)
+	assert.Equal(t, "tighten this", comments[0].CommentText)
 }
