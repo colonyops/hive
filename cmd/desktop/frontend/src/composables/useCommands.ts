@@ -100,43 +100,88 @@ function toComparable(s: string): string {
   return out
 }
 
+export interface FuzzyMatchOptions {
+  /** Reject a match whose first character is not at a word start. */
+  wordStart?: boolean
+}
+
+function isWordStart(t: string, at: number): boolean {
+  return at === 0 || !isWordChar(t.charCodeAt(at - 1))
+}
+
+function charScore(t: string, at: number): number {
+  return 1 + (isWordStart(t, at) ? WORD_START_BONUS : 0)
+}
+
 /**
  * Case-insensitive subsequence match. Null when any query character cannot be
  * placed in order. Score rewards, in weight order: whole-prefix, word-start
  * hits, consecutive runs; penalizes gaps. Deterministic ints, no locale work.
  *
- * Placement is greedy left-to-right (the earliest text position that can
- * still complete the rest of the query) rather than an optimal placement
- * search — O(|query| x |text|), no backtracking, and cheap enough to run
- * uncached per row on every keystroke.
+ * Placement is optimal rather than greedy: a DP over (query char, text
+ * position) keeps the highest-scoring alignment, so "kb" lands on word starts
+ * instead of the first "k" it meets. O(|query| x |text|).
  */
-export function fuzzyMatch(query: string, text: string): FuzzyMatch | null {
+export function fuzzyMatch(query: string, text: string, options: FuzzyMatchOptions = {}): FuzzyMatch | null {
   if (!query) return null
   const q = toComparable(query)
   const t = toComparable(text)
+  const n = q.length
+  const m = t.length
+  if (n > m) return null
 
-  const positions: number[] = []
-  let score = 0
-  let searchFrom = 0
-  let prevPos = -1
+  // best[i * m + j]: top score with q[0..i] placed and q[i] at t[j].
+  const best = new Float64Array(n * m).fill(-Infinity)
+  const from = new Int32Array(n * m).fill(-1)
 
-  for (let qi = 0; qi < q.length; qi++) {
-    const at = t.indexOf(q[qi], searchFrom)
-    if (at === -1) return null
-
-    score += 1
-    if (prevPos >= 0) {
-      const gap = at - prevPos - 1
-      score += gap === 0 ? CONSECUTIVE_BONUS : -gap * GAP_PENALTY
+  for (let i = 0; i < n; i++) {
+    const row = i * m
+    const prev = row - m
+    // Running max of best[i-1][k] + k * GAP_PENALTY over k <= j - 2, so a
+    // gapped predecessor costs (j - k - 1) * GAP_PENALTY in O(1) per cell.
+    let gapMax = -Infinity
+    let gapArg = -1
+    for (let j = i; j < m; j++) {
+      if (i > 0 && j >= 2) {
+        const v = best[prev + j - 2] + (j - 2) * GAP_PENALTY
+        if (v > gapMax) {
+          gapMax = v
+          gapArg = j - 2
+        }
+      }
+      if (t[j] !== q[i]) continue
+      if (i === 0) {
+        if (!options.wordStart || isWordStart(t, j)) best[j] = charScore(t, j)
+        continue
+      }
+      const adjacent = best[prev + j - 1] + CONSECUTIVE_BONUS
+      const gapped = gapMax - (j - 1) * GAP_PENALTY
+      if (adjacent === -Infinity && gapped === -Infinity) continue
+      best[row + j] = charScore(t, j) + Math.max(adjacent, gapped)
+      from[row + j] = adjacent >= gapped ? j - 1 : gapArg
     }
-    if (at === 0 || !isWordChar(t.charCodeAt(at - 1))) score += WORD_START_BONUS
-
-    positions.push(at)
-    prevPos = at
-    searchFrom = at + 1
   }
 
-  if (positions.every((p, i) => p === i)) score += PREFIX_BONUS
+  const last = (n - 1) * m
+  let end = -1
+  for (let j = n - 1; j < m; j++) {
+    if (best[last + j] > (end < 0 ? -Infinity : best[last + end])) end = j
+  }
+  if (end < 0) return null
+
+  let score = best[last + end]
+  let positions: number[] = []
+  for (let i = n - 1, j = end; i >= 0; j = from[i * m + j], i--) positions.push(j)
+  positions.reverse()
+
+  if (t.startsWith(q)) {
+    let prefixScore = PREFIX_BONUS + (n - 1) * CONSECUTIVE_BONUS
+    for (let j = 0; j < n; j++) prefixScore += charScore(t, j)
+    if (prefixScore > score) {
+      score = prefixScore
+      positions = Array.from({ length: n }, (_, j) => j)
+    }
+  }
 
   return { score, positions }
 }
@@ -149,9 +194,42 @@ const TITLE_BAND = 1_000_000
 const KEYWORD_BAND = 500_000
 const GROUP_BAND = 100_000
 
+// "Settings > Keyboard", "settings/keyboard", and "settings keyboard" all
+// split into the same terms.
+const TOKEN_SEPARATORS = /[\s>/:,]+/
+
+function queryTokens(query: string): string[] {
+  return query.split(TOKEN_SEPARATORS).filter(Boolean)
+}
+
+// Several short terms, each matched as a loose subsequence, would let nearly
+// any row through, so a term in a multi-term query has to start on a word.
+function tokenOptions(tokens: string[]): FuzzyMatchOptions {
+  return { wordStart: tokens.length > 1 }
+}
+
+function scoreToken(token: string, cmd: Command, options: FuzzyMatchOptions): { band: number; score: number } | null {
+  const title = fuzzyMatch(token, cmd.title, options)
+  if (title) return { band: TITLE_BAND, score: title.score }
+
+  let keyword: FuzzyMatch | null = null
+  for (const k of cmd.keywords ?? []) {
+    const match = fuzzyMatch(token, k, options)
+    if (match && (!keyword || match.score > keyword.score)) keyword = match
+  }
+  if (keyword) return { band: KEYWORD_BAND, score: keyword.score }
+
+  const group = cmd.group ? fuzzyMatch(token, cmd.group, options) : null
+  if (group) return { band: GROUP_BAND, score: group.score }
+
+  return null
+}
+
 /**
- * Title fuzzy score dominates; keywords and group match at a lower band so a
- * title always outranks a keyword, which always outranks a group. -1 =
+ * A whole-query title match ranks first. Otherwise the query splits into
+ * terms and every term must match the title, a keyword, or the group; the row
+ * takes the band of its strongest field plus the sum of the term scores, so
+ * "settings keyboard" finds the Keyboard row in the Settings group. -1 =
  * filtered out, 0 = empty query.
  */
 export function scoreCommand(query: string, cmd: Command): number {
@@ -160,14 +238,36 @@ export function scoreCommand(query: string, cmd: Command): number {
   const titleMatch = fuzzyMatch(query, cmd.title)
   if (titleMatch) return TITLE_BAND + titleMatch.score
 
-  const keywordScore = (cmd.keywords ?? [])
-    .map((k) => fuzzyMatch(query, k)?.score ?? -Infinity)
-    .reduce((best, s) => Math.max(best, s), -Infinity)
-  if (keywordScore > -Infinity) return KEYWORD_BAND + keywordScore
+  const tokens = queryTokens(query)
+  if (tokens.length === 0) return 0
+  const options = tokenOptions(tokens)
 
-  if (cmd.group && fuzzyMatch(query, cmd.group)) return GROUP_BAND
+  let band = 0
+  let score = 0
+  for (const token of tokens) {
+    const hit = scoreToken(token, cmd, options)
+    if (!hit) return -1
+    band = Math.max(band, hit.band)
+    score += hit.score
+  }
+  return band + score
+}
 
-  return -1
+/**
+ * Title positions to highlight for `query`: the whole-query match when there
+ * is one, else the union of each term's title match.
+ */
+export function titleMatchPositions(query: string, title: string): number[] {
+  const whole = fuzzyMatch(query, title)
+  if (whole) return whole.positions
+
+  const tokens = queryTokens(query)
+  const options = tokenOptions(tokens)
+  const positions = new Set<number>()
+  for (const token of tokens) {
+    for (const p of fuzzyMatch(token, title, options)?.positions ?? []) positions.add(p)
+  }
+  return [...positions].sort((a, b) => a - b)
 }
 
 // A group's placement is the minimum `order` across all its rows, derived

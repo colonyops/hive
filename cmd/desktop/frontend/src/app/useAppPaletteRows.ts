@@ -261,7 +261,7 @@ export function useAppPaletteRows(
             group: 'Settings',
             scope: 'goto',
             kind: 'settings',
-            keywords: ['settings'],
+            keywords: ['settings', section, meta.title],
             icon: meta.icon,
             run: () => void router.push({ name: 'application-settings', params: { section } }),
           })

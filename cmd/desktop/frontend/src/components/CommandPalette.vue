@@ -4,7 +4,7 @@ import type { ComponentPublicInstance } from 'vue'
 import IconSearch from '~icons/lucide/search'
 import IconZap from '~icons/lucide/zap'
 import AppIcon from './AppIcon.vue'
-import { fuzzyMatch, useCommandPalette, type Command } from '../composables/useCommands'
+import { titleMatchPositions, useCommandPalette, type Command } from '../composables/useCommands'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { useListKeyboardNav } from '../composables/useListKeyboardNav'
 import { usePaletteRecents } from '../composables/usePaletteRecents'
@@ -57,8 +57,8 @@ type DisplayEntry = HeaderEntry | CmdEntry
  * keystroke — cheap enough that memoizing isn't worth the complexity.
  */
 function titleSegments(title: string, query: string): TitleSegment[] {
-  const positions = query ? fuzzyMatch(query, title)?.positions : undefined
-  if (!positions || positions.length === 0) return [{ text: title, match: false }]
+  const positions = query ? titleMatchPositions(query, title) : []
+  if (positions.length === 0) return [{ text: title, match: false }]
 
   const segments: TitleSegment[] = []
   let cursor = 0
