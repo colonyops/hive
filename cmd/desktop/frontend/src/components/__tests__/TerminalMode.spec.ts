@@ -1861,8 +1861,14 @@ describe('TerminalMode', () => {
     wrapper.unmount()
   })
 
-  it('reports a start that failed without leaving the panel', async () => {
-    const start = vi.fn().mockRejectedValue(new Error('session "hive-fix-parser" is recycled'))
+  it('reports a start command failure without leaving the panel', async () => {
+    const start = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          'command "missing-agent" was not found while starting window "agent" for session "hive-fix-parser" (status 127): sh: missing-agent: command not found',
+        ),
+      )
     mocks.createTerminalClient.mockReturnValue({ start })
     const session = fakeSession()
     session.tabs.value = []
@@ -1875,7 +1881,8 @@ describe('TerminalMode', () => {
     await wrapper.get('[data-testid="terminal-start-session"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="terminal-start-error"]').text()).toContain('recycled')
+    expect(wrapper.get('[data-testid="terminal-start-error"]').text()).toContain('missing-agent: command not found')
+    expect(wrapper.get('[data-testid="terminal-start-error"]').text()).toContain('status 127')
     expect(session.reconnect).not.toHaveBeenCalled()
     wrapper.unmount()
   })

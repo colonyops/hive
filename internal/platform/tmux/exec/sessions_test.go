@@ -25,9 +25,12 @@ func TestCreateSessionCreatesPanesAndFocus(t *testing.T) {
 	}
 
 	require.NoError(t, client.CreateSession(context.Background(), spec))
-	assert.Equal(t, []string{"new-session", "-d", "-s", "work", "-n", "shell", "-c", "/repo", "--", "sh", "-c", "first"}, runner.calls[0].args)
-	assert.True(t, hasCall(runner.calls, []string{"split-window", "-t", "=work:shell", "-h", "-l", "40%", "-c", "/repo", "--", "sh", "-c", "second"}))
-	assert.True(t, hasCall(runner.calls, []string{"new-window", "-t", "=work:", "-n", "agent", "-c", "/repo/sub", "--", "sh", "-c", "pi"}))
+	assert.Equal(t, []string{"new-session", "-d", "-s", "work", "-n", "shell", "-P", "-F", "#{pane_id}", "-c", "/repo", "--", "cat"}, runner.calls[0].args)
+	assert.True(t, hasCall(runner.calls, []string{"respawn-pane", "-k", "-t", "=work:shell", "-c", "/repo", "--", "sh", "-c", "first"}))
+	assert.True(t, hasCall(runner.calls, []string{"split-window", "-t", "=work:shell", "-P", "-F", "#{pane_id}", "-h", "-l", "40%", "-c", "/repo", "--", "sh", "-c", "cat"}))
+	assert.True(t, hasCall(runner.calls, []string{"respawn-pane", "-k", "-t", "=work:shell", "-c", "/repo", "--", "sh", "-c", "second"}))
+	assert.True(t, hasCall(runner.calls, []string{"new-window", "-t", "=work:", "-n", "agent", "-P", "-F", "#{pane_id}", "-c", "/repo/sub", "--", "cat"}))
+	assert.True(t, hasCall(runner.calls, []string{"respawn-pane", "-k", "-t", "=work:agent", "-c", "/repo/sub", "--", "sh", "-c", "pi"}))
 	assert.True(t, hasCall(runner.calls, []string{"select-window", "-t", "=work:agent"}))
 }
 
@@ -107,9 +110,12 @@ func TestAddWindowsPreservesDirectoriesAndFocus(t *testing.T) {
 	}
 
 	require.NoError(t, client.AddWindows(context.Background(), multiplexer.Target{Session: "work"}, windows))
-	assert.True(t, hasCall(runner.calls, []string{"new-window", "-t", "=work:", "-n", "shell", "-c", "/repo/shell", "--", "sh", "-c", "bash"}))
-	assert.True(t, hasCall(runner.calls, []string{"new-window", "-t", "=work:", "-n", "agent", "-c", "/repo/agent", "--", "sh", "-c", "pi"}))
-	assert.True(t, hasCall(runner.calls, []string{"split-window", "-t", "=work:agent", "-v", "-c", "/repo/logs", "--", "sh", "-c", "tail"}))
+	assert.True(t, hasCall(runner.calls, []string{"new-window", "-t", "=work:", "-n", "shell", "-P", "-F", "#{pane_id}", "-c", "/repo/shell", "--", "cat"}))
+	assert.True(t, hasCall(runner.calls, []string{"respawn-pane", "-k", "-t", "=work:shell", "-c", "/repo/shell", "--", "sh", "-c", "bash"}))
+	assert.True(t, hasCall(runner.calls, []string{"new-window", "-t", "=work:", "-n", "agent", "-P", "-F", "#{pane_id}", "-c", "/repo/agent", "--", "cat"}))
+	assert.True(t, hasCall(runner.calls, []string{"respawn-pane", "-k", "-t", "=work:agent", "-c", "/repo/agent", "--", "sh", "-c", "pi"}))
+	assert.True(t, hasCall(runner.calls, []string{"split-window", "-t", "=work:agent", "-P", "-F", "#{pane_id}", "-v", "-c", "/repo/logs", "--", "sh", "-c", "cat"}))
+	assert.True(t, hasCall(runner.calls, []string{"respawn-pane", "-k", "-t", "=work:agent", "-c", "/repo/logs", "--", "sh", "-c", "tail"}))
 	assert.True(t, hasCall(runner.calls, []string{"select-window", "-t", "=work:agent"}))
 }
 

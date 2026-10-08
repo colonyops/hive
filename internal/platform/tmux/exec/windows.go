@@ -3,6 +3,7 @@ package tmuxexec
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 )
@@ -14,10 +15,16 @@ func (c *Client) AddWindows(ctx context.Context, target multiplexer.Target, wind
 	}
 	name := target.Session
 	c.suppressInteractiveHooks(ctx, name)
+	var started []startedPane
 	for _, window := range windows {
-		if err := c.createWindow(ctx, name, "", window); err != nil {
+		windowPanes, err := c.createWindow(ctx, name, "", window)
+		started = append(started, windowPanes...)
+		if err != nil {
 			return err
 		}
+	}
+	if err := c.awaitStartup(ctx, name, started); err != nil {
+		return err
 	}
 	for _, window := range windows {
 		if !window.Focus {
@@ -43,48 +50,99 @@ func (c *Client) KillWindow(ctx context.Context, target multiplexer.Target) erro
 	return nil
 }
 
-func (c *Client) createWindow(ctx context.Context, sessionName, sessionDir string, window multiplexer.WindowSpec) error {
-	args := []string{"new-window", "-t", "=" + sessionName + ":", "-n", window.Name}
-	args = appendInitialPaneArgs(args, window, sessionDir)
-	if _, _, err := c.runner.Capture(ctx, args...); err != nil {
-		return fmt.Errorf("tmux new-window %q: %w", window.Name, err)
+func (c *Client) createWindow(ctx context.Context, sessionName, sessionDir string, window multiplexer.WindowSpec) ([]startedPane, error) {
+	started, err := c.createInitialPane(ctx, []string{"new-window", "-t", "=" + sessionName + ":", "-n", window.Name}, sessionName, sessionDir, window)
+	if err != nil {
+		return nil, fmt.Errorf("tmux new-window %q: %w", window.Name, err)
 	}
 	c.tagPanesWithSession(ctx, "="+sessionName+":"+window.Name, sessionName)
-	return c.splitAdditionalPanes(ctx, sessionName, sessionDir, window)
+	splitPanes, err := c.splitAdditionalPanes(ctx, sessionName, sessionDir, window)
+	return append(started, splitPanes...), err
 }
 
-func (c *Client) splitAdditionalPanes(ctx context.Context, sessionName, sessionDir string, window multiplexer.WindowSpec) error {
+func (c *Client) createInitialPane(ctx context.Context, baseArgs []string, sessionName, sessionDir string, window multiplexer.WindowSpec) ([]startedPane, error) {
+	command, dir := initialPane(window, sessionDir)
+	args := append([]string(nil), baseArgs...)
+	args = append(args, "-P", "-F", "#{pane_id}")
+	if dir != "" {
+		args = append(args, "-c", dir)
+	}
+	if command != "" {
+		args = append(args, "--", "cat")
+	}
+
+	c.log.Debug().Strs("args", args).Msg("tmux " + baseArgs[0])
+	stdout, _, err := c.runner.Capture(ctx, args...)
+	if err != nil {
+		return nil, err
+	}
+	return c.startPaneCommand(ctx, strings.TrimSpace(string(stdout)), "="+sessionName+":"+window.Name, window.Name, dir, command)
+}
+
+func (c *Client) splitAdditionalPanes(ctx context.Context, sessionName, sessionDir string, window multiplexer.WindowSpec) ([]startedPane, error) {
 	target := "=" + sessionName + ":" + window.Name
+	var started []startedPane
 	for _, pane := range additionalPanes(window) {
-		args := splitPaneArgs(target, pane, windowDir(window, sessionDir))
-		if _, _, err := c.runner.Capture(ctx, args...); err != nil {
-			return fmt.Errorf("tmux split-window %q: %w", window.Name, err)
+		dir := pane.WorkingDirectory
+		if dir == "" {
+			dir = windowDir(window, sessionDir)
+		}
+		placeholder := ""
+		if pane.Command != "" {
+			placeholder = "cat"
+		}
+		stdout, _, err := c.runner.Capture(ctx, splitPaneArgs(target, pane, dir, placeholder)...)
+		if err != nil {
+			return started, fmt.Errorf("tmux split-window %q: %w", window.Name, err)
+		}
+		paneID := strings.TrimSpace(string(stdout))
+		paneStarted, err := c.startPaneCommand(ctx, paneID, target, window.Name, dir, pane.Command)
+		started = append(started, paneStarted...)
+		if err != nil {
+			return started, err
 		}
 		c.tagPanesWithSession(ctx, target, sessionName)
 	}
-	return nil
+	return started, nil
 }
 
-func appendInitialPaneArgs(args []string, window multiplexer.WindowSpec, sessionDir string) []string {
-	command := window.Command
-	dir := windowDir(window, sessionDir)
+func (c *Client) startPaneCommand(ctx context.Context, paneID, fallbackTarget, windowName, dir, command string) ([]startedPane, error) {
+	if command == "" {
+		return nil, nil
+	}
+	target := paneID
+	if target == "" {
+		target = fallbackTarget
+	}
+	if _, _, err := c.runner.Capture(ctx, "set-option", "-w", "-t", target, "remain-on-exit", "on"); err != nil {
+		return nil, fmt.Errorf("tmux set-option remain-on-exit: %w", err)
+	}
+
+	args := []string{"respawn-pane", "-k", "-t", target}
+	if dir != "" {
+		args = append(args, "-c", dir)
+	}
+	args = append(args, "--", "sh", "-c", command)
+	if _, _, err := c.runner.Capture(ctx, args...); err != nil {
+		return nil, fmt.Errorf("tmux respawn-pane: %w", err)
+	}
+	return watchPane(paneID, windowName, command), nil
+}
+
+func initialPane(window multiplexer.WindowSpec, sessionDir string) (command, dir string) {
+	command = window.Command
+	dir = windowDir(window, sessionDir)
 	if len(window.Panes) > 0 {
 		command = window.Panes[0].Command
 		if window.Panes[0].WorkingDirectory != "" {
 			dir = window.Panes[0].WorkingDirectory
 		}
 	}
-	if dir != "" {
-		args = append(args, "-c", dir)
-	}
-	if command != "" {
-		args = append(args, "--", "sh", "-c", command)
-	}
-	return args
+	return command, dir
 }
 
-func splitPaneArgs(target string, pane multiplexer.PaneSpec, fallbackDir string) []string {
-	args := []string{"split-window", "-t", target}
+func splitPaneArgs(target string, pane multiplexer.PaneSpec, dir, command string) []string {
+	args := []string{"split-window", "-t", target, "-P", "-F", "#{pane_id}"}
 	if pane.Split == multiplexer.SplitHorizontal {
 		args = append(args, "-h")
 	} else {
@@ -93,15 +151,11 @@ func splitPaneArgs(target string, pane multiplexer.PaneSpec, fallbackDir string)
 	if pane.Size != "" {
 		args = append(args, "-l", pane.Size)
 	}
-	dir := pane.WorkingDirectory
-	if dir == "" {
-		dir = fallbackDir
-	}
 	if dir != "" {
 		args = append(args, "-c", dir)
 	}
-	if pane.Command != "" {
-		args = append(args, "--", "sh", "-c", pane.Command)
+	if command != "" {
+		args = append(args, "--", "sh", "-c", command)
 	}
 	return args
 }

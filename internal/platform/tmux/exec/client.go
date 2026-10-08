@@ -3,6 +3,7 @@ package tmuxexec
 
 import (
 	"os"
+	"time"
 
 	"github.com/colonyops/hive/pkg/logutils"
 
@@ -11,9 +12,10 @@ import (
 
 // Client implements tmux operations over a Runner.
 type Client struct {
-	runner Runner
-	log    zerolog.Logger
-	getenv func(string) string
+	runner       Runner
+	log          zerolog.Logger
+	getenv       func(string) string
+	startupGrace time.Duration
 }
 
 // New creates a tmux client.
@@ -21,7 +23,12 @@ func New(log zerolog.Logger, runner Runner) *Client {
 	if runner == nil {
 		runner = execRunner{}
 	}
-	return &Client{runner: runner, log: logutils.Component(log, "tmux"), getenv: os.Getenv}
+	return &Client{
+		runner:       runner,
+		log:          logutils.Component(log, "tmux"),
+		getenv:       os.Getenv,
+		startupGrace: defaultStartupGrace,
+	}
 }
 
 // NewDefault creates a client that invokes the tmux executable.

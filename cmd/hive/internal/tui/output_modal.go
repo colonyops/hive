@@ -94,7 +94,21 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	// Calculate modal dimensions - use most of the screen
 	modalWidth := min(width-outputModalMargin, outputModalMaxWidth)
 	modalHeight := min(height-outputModalMargin, outputModalMaxHeight)
-	contentHeight := modalHeight - outputModalChrome
+	innerWidth := modalWidth - outputModalPadding
+
+	var status string
+	switch {
+	case m.running:
+		dots := strings.Repeat(".", m.frame/3%4)
+		pad := strings.Repeat(" ", 3-len(dots))
+		c := styles.PulseColor(styles.ColorSuccess, m.frame, outputPulseFrames, outputPulseMinBright)
+		status = lipgloss.NewStyle().Foreground(c).Render("● Running"+dots) + pad
+	case m.err != nil:
+		status = styles.TextErrorStyle.Width(innerWidth).Render("✗ Error: " + m.err.Error())
+	default:
+		status = styles.TextSuccessStyle.Render("✓ Complete")
+	}
+	contentHeight := max(0, modalHeight-outputModalChrome-max(0, lipgloss.Height(status)-1))
 
 	// Build content lines with per-line status indicators
 	var contentBuilder strings.Builder
@@ -106,7 +120,7 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	}
 
 	indicatorWidth := 4 // "● " or spinner + space, with safety margin
-	maxLineWidth := modalWidth - outputModalPadding - indicatorWidth
+	maxLineWidth := innerWidth - indicatorWidth
 
 	for i := startIdx; i < len(m.lines); i++ {
 		line := m.lines[i]
@@ -137,20 +151,6 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 
 	content := contentBuilder.String()
 
-	// Build status line
-	var status string
-	switch {
-	case m.running:
-		dots := strings.Repeat(".", m.frame/3%4)
-		pad := strings.Repeat(" ", 3-len(dots))
-		c := styles.PulseColor(styles.ColorSuccess, m.frame, outputPulseFrames, outputPulseMinBright)
-		status = lipgloss.NewStyle().Foreground(c).Render("● Running"+dots) + pad
-	case m.err != nil:
-		status = styles.TextErrorStyle.Render("✗ Error: " + m.err.Error())
-	default:
-		status = styles.TextSuccessStyle.Render("✓ Complete")
-	}
-
 	// Build help line
 	var help string
 	if m.running {
@@ -167,7 +167,7 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 		lipgloss.Left,
 		styles.ModalTitleStyle.Render(m.title),
 		"",
-		lipgloss.NewStyle().Width(modalWidth-outputModalPadding).Render(content),
+		lipgloss.NewStyle().Width(innerWidth).Render(content),
 		"",
 		status,
 		styles.ModalHelpStyle.Render(help),

@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/colonyops/hive/internal/domain/terminal"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 )
 
 func TestOutputModal_NewOutputModal(t *testing.T) {
@@ -106,6 +107,23 @@ func TestOutputModal_Overlay(t *testing.T) {
 
 		assert.Contains(t, result, "Error")
 		assert.Contains(t, result, "something went wrong")
+	})
+
+	t.Run("renders failed tmux command details", func(t *testing.T) {
+		m := NewOutputModal("Creating session")
+		m.SetComplete(&tmuxexec.CommandExitedError{
+			Session: "my-session",
+			Window:  "agent",
+			Command: "missing-agent --prompt hi",
+			Status:  127,
+			Output:  "sh: missing-agent: command not found",
+		})
+
+		result := terminal.StripANSI(m.Overlay("background", 80, 24))
+
+		assert.Contains(t, result, "command not found in window")
+		assert.Contains(t, result, "missing-agent")
+		assert.Contains(t, result, "output: sh: missing-agent:")
 	})
 
 	t.Run("truncates long lines", func(t *testing.T) {

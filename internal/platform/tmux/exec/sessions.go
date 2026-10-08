@@ -37,10 +37,8 @@ func (c *Client) CreateSession(ctx context.Context, spec multiplexer.SessionSpec
 	}
 
 	first := spec.Windows[0]
-	args := []string{"new-session", "-d", "-s", name, "-n", first.Name}
-	args = appendInitialPaneArgs(args, first, spec.WorkingDirectory)
-	c.log.Debug().Strs("args", args).Msg("tmux new-session")
-	if _, _, err := c.runner.Capture(ctx, args...); err != nil {
+	started, err := c.createInitialPane(ctx, []string{"new-session", "-d", "-s", name, "-n", first.Name}, name, spec.WorkingDirectory, first)
+	if err != nil {
 		return fmt.Errorf("tmux new-session: %w", err)
 	}
 
@@ -56,13 +54,20 @@ func (c *Client) CreateSession(ctx context.Context, spec multiplexer.SessionSpec
 
 	c.tagPanesWithSession(ctx, "="+name+":", name)
 	c.suppressInteractiveHooks(ctx, name)
-	if err := c.splitAdditionalPanes(ctx, name, spec.WorkingDirectory, first); err != nil {
+	splitPanes, err := c.splitAdditionalPanes(ctx, name, spec.WorkingDirectory, first)
+	started = append(started, splitPanes...)
+	if err != nil {
 		return err
 	}
 	for _, window := range spec.Windows[1:] {
-		if err := c.createWindow(ctx, name, spec.WorkingDirectory, window); err != nil {
+		windowPanes, err := c.createWindow(ctx, name, spec.WorkingDirectory, window)
+		started = append(started, windowPanes...)
+		if err != nil {
 			return err
 		}
+	}
+	if err := c.awaitStartup(ctx, name, started); err != nil {
+		return err
 	}
 
 	focusName := first.Name

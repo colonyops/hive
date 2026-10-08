@@ -678,12 +678,62 @@ func TestSessionsService_StartTmuxSessionSpawnsTheConfiguredWindowsDetached(t *t
 	require.NoError(t, svc.StartTmuxSession(t.Context(), "review-81"))
 
 	assert.Contains(t, runner.runs, []string{"tmux", "has-session", "-t", "=review-81"})
-	assert.Contains(t, runner.runs, []string{"tmux", "new-session", "-d", "-s", "review-81", "-n", "agent", "-c", "/tmp/review-81", "--", "sh", "-c", "run review-81"})
-	assert.Contains(t, runner.runs, []string{"tmux", "new-window", "-t", "=review-81:", "-n", "shell", "-c", "/tmp/review-81"})
+	assert.Contains(t, runner.runs, []string{"tmux", "new-session", "-d", "-s", "review-81", "-n", "agent", "-P", "-F", "#{pane_id}", "-c", "/tmp/review-81", "--", "cat"})
+	assert.Contains(t, runner.runs, []string{"tmux", "respawn-pane", "-k", "-t", "=review-81:agent", "-c", "/tmp/review-81", "--", "sh", "-c", "run review-81"})
+	assert.Contains(t, runner.runs, []string{"tmux", "new-window", "-t", "=review-81:", "-n", "shell", "-P", "-F", "#{pane_id}", "-c", "/tmp/review-81"})
 	for _, run := range runner.runs {
 		assert.NotContains(t, run, "attach-session", "the desktop attaches over control mode; the spawn must stay detached")
 		assert.NotContains(t, run, "switch-client")
 	}
+}
+
+type failedCommandTmux struct{}
+
+func (failedCommandTmux) Available() bool { return true }
+
+func (failedCommandTmux) Capture(_ context.Context, args ...string) ([]byte, []byte, error) {
+	switch args[0] {
+	case "has-session":
+		return nil, nil, errors.New("can't find session")
+	case "new-session":
+		return []byte("%0\n"), nil, nil
+	case "list-panes":
+		return []byte("%0 1 127\n"), nil, nil
+	case "capture-pane":
+		return []byte("sh: missing-agent: command not found\nPane is dead (status 127)\n"), nil, nil
+	default:
+		return nil, nil, nil
+	}
+}
+
+func (f failedCommandTmux) Input(ctx context.Context, _ io.Reader, args ...string) ([]byte, []byte, error) {
+	return f.Capture(ctx, args...)
+}
+
+func (f failedCommandTmux) Interactive(ctx context.Context, _ multiplexer.AttachStreams, args ...string) error {
+	_, _, err := f.Capture(ctx, args...)
+	return err
+}
+
+func TestSessionsService_StartTmuxSessionReturnsCommandFailureForDesktop(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{
+		cfg: func(cfg *config.Config) {
+			cfg.Rules = []config.Rule{{Windows: []config.WindowConfig{{Name: "agent", Command: "missing-agent"}}}}
+		},
+		mux: tmuxexec.New(zerolog.Nop(), failedCommandTmux{}),
+	})
+	h.save(t, reviewSession())
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
+
+	err := svc.StartTmuxSession(t.Context(), "review-81")
+	require.Error(t, err)
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	assert.Contains(t, err.Error(), `command "missing-agent" was not found while starting window "agent"`)
+	assert.Contains(t, err.Error(), "sh: missing-agent: command not found")
+	var appErr *Error
+	require.ErrorAs(t, err, &appErr)
+	assert.Contains(t, appErr.Msg, "status 127")
+	assert.Contains(t, appErr.Msg, "sh: missing-agent: command not found")
 }
 
 func TestSessionsService_StartTmuxSessionLeavesALiveSessionAlone(t *testing.T) {

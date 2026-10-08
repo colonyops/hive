@@ -24,6 +24,7 @@ import (
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/execenv"
 	"github.com/colonyops/hive/internal/platform/promptfile"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/pkg/osopen"
 )
 
@@ -770,9 +771,30 @@ func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) err
 	// would hand the session to whatever terminal launched the app, or fail
 	// for a launcher that has none.
 	if err := s.hive.Sessions().OpenTmuxSession(ctx, detail.Name, detail.Path, detail.Remote, "", true); err != nil {
-		return Wrap(err, KindInternal, "starting the terminal session for %q", detail.Name)
+		return sessionStartError(detail.Name, err)
 	}
 	return nil
+}
+
+func sessionStartError(sessionName string, err error) error {
+	exited, ok := errors.AsType[*tmuxexec.CommandExitedError](err)
+	if !ok {
+		return Wrap(err, KindInternal, "starting the terminal session for %q", sessionName)
+	}
+
+	var message string
+	switch {
+	case exited.NotFound():
+		message = fmt.Sprintf("command %q was not found while starting window %q for session %q (status %d)", exited.Command, exited.Window, sessionName, exited.Status)
+	case exited.Status >= 0:
+		message = fmt.Sprintf("command %q exited while starting window %q for session %q (status %d)", exited.Command, exited.Window, sessionName, exited.Status)
+	default:
+		message = fmt.Sprintf("command %q exited while starting window %q for session %q", exited.Command, exited.Window, sessionName)
+	}
+	if output := strings.TrimSpace(exited.Output); output != "" {
+		message += ": " + output
+	}
+	return &Error{Kind: KindUnavailable, Msg: message, Err: err}
 }
 
 // SessionDirectory answers the checkout a slug's terminal should open in. A
