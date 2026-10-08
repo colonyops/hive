@@ -32,7 +32,7 @@ func (s *HCStore) CreateItems(ctx context.Context, items []hc.Item) error {
 		}
 	}
 
-	return s.db.WithTx(ctx, func(q *db.Queries) error {
+	return s.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error {
 		for _, item := range items {
 			err := q.CreateHCItem(ctx, db.CreateHCItemParams{
 				ID:        item.ID,
@@ -58,7 +58,7 @@ func (s *HCStore) CreateItems(ctx context.Context, items []hc.Item) error {
 
 // GetItem retrieves a single HC item by ID.
 func (s *HCStore) GetItem(ctx context.Context, id string) (hc.Item, error) {
-	row, err := s.db.Queries().GetHCItem(ctx, id)
+	row, err := s.db.Ctx(ctx).GetHCItem(ctx, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return hc.Item{}, fmt.Errorf("hc item %q: %w", id, hc.ErrNotFound)
 	}
@@ -75,7 +75,7 @@ func (s *HCStore) GetItem(ctx context.Context, id string) (hc.Item, error) {
 // UpdateItem applies partial updates to an HC item.
 func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdate) (hc.Item, error) {
 	var updated db.HcItem
-	err := s.db.WithTx(ctx, func(q *db.Queries) error {
+	err := s.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error {
 		existing, getErr := q.GetHCItem(ctx, id)
 		if errors.Is(getErr, sql.ErrNoRows) {
 			return fmt.Errorf("hc item %q: %w", id, hc.ErrNotFound)
@@ -133,7 +133,7 @@ func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdat
 // BulkUpdateStatus sets the status of all non-terminal descendants of the given
 // epic to the specified status. Items already in a terminal status are not modified.
 func (s *HCStore) BulkUpdateStatus(ctx context.Context, epicID string, status hc.Status) error {
-	if err := s.db.Queries().UpdateHCItemStatusByEpicID(ctx, db.UpdateHCItemStatusByEpicIDParams{
+	if err := s.db.Ctx(ctx).UpdateHCItemStatusByEpicID(ctx, db.UpdateHCItemStatusByEpicIDParams{
 		Status:    status,
 		UpdatedAt: time.Now().UnixNano(),
 		EpicID:    epicID,
@@ -171,20 +171,20 @@ func (s *HCStore) ListItems(ctx context.Context, filter hc.ListFilter) ([]hc.Ite
 func (s *HCStore) listHCRows(ctx context.Context, filter hc.ListFilter) ([]db.HcItem, error) {
 	switch {
 	case filter.EpicID != "" && filter.Status != nil:
-		return s.db.Queries().ListHCItemsByEpicAndStatus(ctx, db.ListHCItemsByEpicAndStatusParams{
+		return s.db.Ctx(ctx).ListHCItemsByEpicAndStatus(ctx, db.ListHCItemsByEpicAndStatusParams{
 			EpicID: filter.EpicID,
 			Status: *filter.Status,
 		})
 	case filter.EpicID != "":
-		return s.db.Queries().ListHCItemsByEpic(ctx, filter.EpicID)
+		return s.db.Ctx(ctx).ListHCItemsByEpic(ctx, filter.EpicID)
 	case filter.SessionID != "":
-		return s.db.Queries().ListHCItemsBySession(ctx, filter.SessionID)
+		return s.db.Ctx(ctx).ListHCItemsBySession(ctx, filter.SessionID)
 	case filter.RepoKey != "":
-		return s.db.Queries().ListHCItemsByRepo(ctx, filter.RepoKey)
+		return s.db.Ctx(ctx).ListHCItemsByRepo(ctx, filter.RepoKey)
 	case filter.Status != nil:
-		return s.db.Queries().ListAllHCItemsByStatus(ctx, *filter.Status)
+		return s.db.Ctx(ctx).ListAllHCItemsByStatus(ctx, *filter.Status)
 	default:
-		return s.db.Queries().ListAllHCItems(ctx)
+		return s.db.Ctx(ctx).ListAllHCItems(ctx)
 	}
 }
 
@@ -204,7 +204,7 @@ func (s *HCStore) NextItem(ctx context.Context, filter hc.NextFilter) (hc.Item, 
 
 	// Fall back to claiming the next unassigned open task (session_id = "").
 	if filter.EpicID != "" {
-		row, err := s.db.Queries().NextHCItemForSessionInEpic(ctx, db.NextHCItemForSessionInEpicParams{
+		row, err := s.db.Ctx(ctx).NextHCItemForSessionInEpic(ctx, db.NextHCItemForSessionInEpicParams{
 			SessionID: "",
 			EpicID:    filter.EpicID,
 		})
@@ -224,7 +224,7 @@ func (s *HCStore) NextItem(ctx context.Context, filter hc.NextFilter) (hc.Item, 
 		return item, true, nil
 	}
 
-	row, err := s.db.Queries().NextHCItemForSession(ctx, "")
+	row, err := s.db.Ctx(ctx).NextHCItemForSession(ctx, "")
 	if errors.Is(err, sql.ErrNoRows) {
 		return hc.Item{}, false, nil
 	}
@@ -244,7 +244,7 @@ func (s *HCStore) NextItem(ctx context.Context, filter hc.NextFilter) (hc.Item, 
 // resumeItemForSession returns an in_progress leaf task assigned to the given session.
 func (s *HCStore) resumeItemForSession(ctx context.Context, filter hc.NextFilter) (hc.Item, bool, error) {
 	if filter.EpicID != "" {
-		row, err := s.db.Queries().ResumeHCItemForSessionInEpic(ctx, db.ResumeHCItemForSessionInEpicParams{
+		row, err := s.db.Ctx(ctx).ResumeHCItemForSessionInEpic(ctx, db.ResumeHCItemForSessionInEpicParams{
 			SessionID: filter.SessionID,
 			EpicID:    filter.EpicID,
 		})
@@ -261,7 +261,7 @@ func (s *HCStore) resumeItemForSession(ctx context.Context, filter hc.NextFilter
 		return item, true, nil
 	}
 
-	row, err := s.db.Queries().ResumeHCItemForSession(ctx, filter.SessionID)
+	row, err := s.db.Ctx(ctx).ResumeHCItemForSession(ctx, filter.SessionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return hc.Item{}, false, nil
 	}
@@ -277,7 +277,7 @@ func (s *HCStore) resumeItemForSession(ctx context.Context, filter hc.NextFilter
 
 // DeleteItem removes an HC item and all its descendants by ID.
 func (s *HCStore) DeleteItem(ctx context.Context, id string) error {
-	allRows, err := s.db.Queries().ListAllHCItems(ctx)
+	allRows, err := s.db.Ctx(ctx).ListAllHCItems(ctx)
 	if err != nil {
 		return fmt.Errorf("list hc items for delete: %w", err)
 	}
@@ -293,7 +293,7 @@ func (s *HCStore) DeleteItem(ctx context.Context, id string) error {
 
 	deleteIDs := collectHCSubtreeIDs([]string{id}, childrenByParent)
 
-	return s.db.WithTx(ctx, func(q *db.Queries) error {
+	return s.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error {
 		for _, did := range orderHCIDsByDepthDesc(deleteIDs, depthByID) {
 			if err := q.DeleteHCCommentsByItemID(ctx, did); err != nil {
 				return fmt.Errorf("delete hc comments for %q: %w", did, err)
@@ -308,7 +308,7 @@ func (s *HCStore) DeleteItem(ctx context.Context, id string) error {
 
 // AddComment records a comment on an HC item.
 func (s *HCStore) AddComment(ctx context.Context, c hc.Comment) error {
-	_, err := s.db.Queries().InsertHCComment(ctx, db.InsertHCCommentParams{
+	_, err := s.db.Ctx(ctx).InsertHCComment(ctx, db.InsertHCCommentParams{
 		ID:        c.ID,
 		ItemID:    c.ItemID,
 		Message:   c.Message,
@@ -322,7 +322,7 @@ func (s *HCStore) AddComment(ctx context.Context, c hc.Comment) error {
 
 // ListComments returns all comments for the given item in chronological order.
 func (s *HCStore) ListComments(ctx context.Context, itemID string) ([]hc.Comment, error) {
-	rows, err := s.db.Queries().ListHCComments(ctx, itemID)
+	rows, err := s.db.Ctx(ctx).ListHCComments(ctx, itemID)
 	if err != nil {
 		return nil, fmt.Errorf("list hc comments: %w", err)
 	}
@@ -336,7 +336,7 @@ func (s *HCStore) ListComments(ctx context.Context, itemID string) ([]hc.Comment
 
 // ListRepoKeys returns all distinct, non-empty repo keys in sorted order.
 func (s *HCStore) ListRepoKeys(ctx context.Context) ([]string, error) {
-	keys, err := s.db.Queries().ListHCRepoKeys(ctx)
+	keys, err := s.db.Ctx(ctx).ListHCRepoKeys(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list hc repo keys: %w", err)
 	}
@@ -345,7 +345,7 @@ func (s *HCStore) ListRepoKeys(ctx context.Context) ([]string, error) {
 
 // Fingerprint summarizes every hc table in one read.
 func (s *HCStore) Fingerprint(ctx context.Context) (hc.Fingerprint, error) {
-	row, err := s.db.Queries().HCFingerprint(ctx)
+	row, err := s.db.Ctx(ctx).HCFingerprint(ctx)
 	if err != nil {
 		return hc.Fingerprint{}, fmt.Errorf("read hc fingerprint: %w", err)
 	}
@@ -360,7 +360,7 @@ func (s *HCStore) Fingerprint(ctx context.Context) (hc.Fingerprint, error) {
 
 // Prune removes old done/cancelled items and their comments.
 func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
-	allRows, err := s.db.Queries().ListAllHCItems(ctx)
+	allRows, err := s.db.Ctx(ctx).ListAllHCItems(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("list hc items for prune: %w", err)
 	}
@@ -418,7 +418,7 @@ func (s *HCStore) prune(ctx context.Context, allRows []db.HcItem, opts hc.PruneO
 		return total, nil
 	}
 
-	err := s.db.WithTx(ctx, func(q *db.Queries) error {
+	err := s.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error {
 		idsByDepthDesc := orderHCIDsByDepthDesc(pruneIDs, depthByID)
 		for _, id := range idsByDepthDesc {
 			if txErr := q.DeleteHCCommentsByItemID(ctx, id); txErr != nil {
@@ -479,12 +479,12 @@ func orderHCIDsByDepthDesc(ids map[string]struct{}, depthByID map[string]int64) 
 // items that have explicit open/in_progress blockers.
 func (s *HCStore) fetchBlockedSet(ctx context.Context) (map[string]struct{}, error) {
 	// Parent IDs with open/in_progress children (hierarchy blocking)
-	parentIDs, err := s.db.Queries().ListHCBlockedParentIDs(ctx)
+	parentIDs, err := s.db.Ctx(ctx).ListHCBlockedParentIDs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list hc blocked parent ids: %w", err)
 	}
 	// Items with open/in_progress explicit blockers
-	explicitIDs, err := s.db.Queries().ListHCExplicitlyBlockedIDs(ctx)
+	explicitIDs, err := s.db.Ctx(ctx).ListHCExplicitlyBlockedIDs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list hc explicitly blocked ids: %w", err)
 	}
@@ -528,12 +528,12 @@ func buildHCItem(row db.HcItem, blockedSet map[string]struct{}) hc.Item {
 
 // fetchHCItem converts a single database row to hc.Item, issuing DB calls to compute Blocked and BlockerIDs.
 func (s *HCStore) fetchHCItem(ctx context.Context, row db.HcItem) (hc.Item, error) {
-	count, err := s.db.Queries().CountHCOpenChildren(ctx, row.ID)
+	count, err := s.db.Ctx(ctx).CountHCOpenChildren(ctx, row.ID)
 	if err != nil {
 		return hc.Item{}, fmt.Errorf("count open children for %q: %w", row.ID, err)
 	}
 
-	blockerIDs, err := s.db.Queries().ListHCOpenBlockerIDsForItem(ctx, row.ID)
+	blockerIDs, err := s.db.Ctx(ctx).ListHCOpenBlockerIDsForItem(ctx, row.ID)
 	if err != nil {
 		return hc.Item{}, fmt.Errorf("list open blockers for %q: %w", row.ID, err)
 	}
@@ -559,7 +559,7 @@ func (s *HCStore) CreateBulkWithEdges(ctx context.Context, items []hc.Item, edge
 			return fmt.Errorf("validate hc item %q: %w", item.ID, err)
 		}
 	}
-	return s.db.WithTx(ctx, func(q *db.Queries) error {
+	return s.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error {
 		for _, item := range items {
 			if err := q.CreateHCItem(ctx, db.CreateHCItemParams{
 				ID:        item.ID,
@@ -594,7 +594,7 @@ func (s *HCStore) CreateBulkWithEdges(ctx context.Context, items []hc.Item, edge
 // INSERT are performed inside a single transaction so no partial state is possible.
 // Returns ErrCyclicDependency if the edge would create a cycle.
 func (s *HCStore) AddBlocker(ctx context.Context, blockerID, blockedID string) error {
-	return s.db.WithTx(ctx, func(q *db.Queries) error {
+	return s.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error {
 		if _, err := q.GetHCItem(ctx, blockerID); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("blocker item %q: %w", blockerID, hc.ErrNotFound)
@@ -632,7 +632,7 @@ func (s *HCStore) AddBlocker(ctx context.Context, blockerID, blockedID string) e
 
 // RemoveBlocker removes the explicit blocker relationship.
 func (s *HCStore) RemoveBlocker(ctx context.Context, blockerID, blockedID string) error {
-	if err := s.db.Queries().RemoveHCBlocker(ctx, db.RemoveHCBlockerParams{
+	if err := s.db.Ctx(ctx).RemoveHCBlocker(ctx, db.RemoveHCBlockerParams{
 		BlockerID: blockerID,
 		BlockedID: blockedID,
 	}); err != nil {
@@ -643,7 +643,7 @@ func (s *HCStore) RemoveBlocker(ctx context.Context, blockerID, blockedID string
 
 // ListBlockers returns IDs of open/in_progress items that explicitly block the given item.
 func (s *HCStore) ListBlockers(ctx context.Context, itemID string) ([]string, error) {
-	ids, err := s.db.Queries().ListHCOpenBlockerIDsForItem(ctx, itemID)
+	ids, err := s.db.Ctx(ctx).ListHCOpenBlockerIDsForItem(ctx, itemID)
 	if err != nil {
 		return nil, fmt.Errorf("list hc open blockers for %q: %w", itemID, err)
 	}
@@ -652,7 +652,7 @@ func (s *HCStore) ListBlockers(ctx context.Context, itemID string) ([]string, er
 
 // ListBlockerEdges returns all blocker edges as [blockerID, blockedID] pairs.
 func (s *HCStore) ListBlockerEdges(ctx context.Context) ([][2]string, error) {
-	rows, err := s.db.Queries().ListAllHCBlockerEdges(ctx)
+	rows, err := s.db.Ctx(ctx).ListAllHCBlockerEdges(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list all hc blocker edges: %w", err)
 	}

@@ -3,15 +3,16 @@ package queries
 import (
 	"context"
 	"database/sql"
-	"fmt"
+
+	"github.com/colonyops/hive/internal/platform/sqlite"
 )
 
 // Ctx returns a DB bound to the ambient transaction if the context carries
-// one, and the receiver otherwise. A store method that participates in
-// cross-domain work begins with `db := db.Ctx(ctx)`; one that does not is
-// unaffected, which is what makes adoption incremental.
+// one for this database, and the receiver otherwise. A store method that
+// participates in cross-domain work begins with `db := db.Ctx(ctx)`; one that
+// does not is unaffected, which is what makes adoption incremental.
 func (db *DB) Ctx(ctx context.Context) *DB {
-	tx, ok := txFromContext(ctx)
+	tx, ok := sqlite.AmbientTx(ctx, db.conn)
 	if !ok {
 		return db
 	}
@@ -27,40 +28,16 @@ func (db *DB) boundTo(tx *sql.Tx) *DB {
 	return &bound
 }
 
-// WithinTx runs fn inside a transaction, joining an ambient one if the
-// context already carries it rather than opening a second.
-//
-// Joining is not a nicety here. The DSN sets _txlock=immediate and the pool
-// is capped at two connections, so a nested BEGIN IMMEDIATE waits out
-// busy_timeout for a write lock its own caller holds and then fails with
-// SQLITE_BUSY. A nesting implementation would stall every composed write.
-//
-// Only the outermost caller commits or rolls back. An inner fn that fails
-// returns its error up to that caller, which is what rolls the whole unit
-// back.
+// WithinTx runs fn inside a transaction, joining an ambient one on this
+// database rather than opening a second (see sqlite.WithinTx). Only the
+// outermost caller commits or rolls back; an inner fn that fails returns its
+// error up to that caller, which rolls the whole unit back.
 //
 // context.WithoutCancel preserves the transaction value, so a goroutine
 // detached from a ctx inside WithinTx would run store calls on a transaction
 // it did not open. Do not start one here.
 func (db *DB) WithinTx(ctx context.Context, fn func(context.Context, *DB) error) error {
-	if tx, ok := txFromContext(ctx); ok {
+	return sqlite.WithinTx(ctx, db.conn, func(ctx context.Context, tx *sql.Tx) error {
 		return fn(ctx, db.boundTo(tx))
-	}
-
-	txCtx, tx, err := WithTransaction(ctx, db)
-	if err != nil {
-		return err
-	}
-
-	if err := fn(txCtx, db.Ctx(txCtx)); err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("transaction failed: %w (rollback also failed: %w)", err, rbErr)
-		}
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-	return nil
+	})
 }

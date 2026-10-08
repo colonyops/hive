@@ -27,7 +27,7 @@ func NewSessionStore(db *db.DB) *SessionStore {
 
 // List returns all sessions.
 func (s *SessionStore) List(ctx context.Context) ([]session.Session, error) {
-	rows, err := s.db.Queries().ListSessions(ctx)
+	rows, err := s.db.Ctx(ctx).ListSessions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -46,7 +46,7 @@ func (s *SessionStore) List(ctx context.Context) ([]session.Session, error) {
 
 // Get returns a session by ID. Returns ErrNotFound if not found.
 func (s *SessionStore) Get(ctx context.Context, id string) (session.Session, error) {
-	row, err := s.db.Queries().GetSession(ctx, id)
+	row, err := s.db.Ctx(ctx).GetSession(ctx, id)
 	if IsNotFoundError(err) {
 		return session.Session{}, session.ErrNotFound
 	}
@@ -89,7 +89,7 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		strategy = session.CloneStrategyFull
 	}
 
-	err := s.db.Queries().SaveSession(ctx, db.SaveSessionParams{
+	err := s.db.Ctx(ctx).SaveSession(ctx, db.SaveSessionParams{
 		ID:            sess.ID,
 		Name:          sess.Name,
 		Slug:          sess.Slug,
@@ -112,7 +112,7 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 // Delete removes a session by ID. Returns ErrNotFound if not found.
 func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	// Check if session exists first
-	_, err := s.db.Queries().GetSession(ctx, id)
+	_, err := s.db.Ctx(ctx).GetSession(ctx, id)
 	if IsNotFoundError(err) {
 		return session.ErrNotFound
 	}
@@ -120,7 +120,7 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to check session existence: %w", err)
 	}
 
-	err = s.db.Queries().DeleteSession(ctx, id)
+	err = s.db.Ctx(ctx).DeleteSession(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}

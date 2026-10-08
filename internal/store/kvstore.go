@@ -28,13 +28,13 @@ func NewKVStore(db *db.DB) *KVStore {
 // Returns an error wrapping kv.ErrNotFound if the key does not exist.
 // Expired entries are lazily deleted and treated as missing.
 func (s *KVStore) Get(ctx context.Context, key string, dest any) error {
-	row, err := s.db.Queries().KVGet(ctx, key)
+	row, err := s.db.Ctx(ctx).KVGet(ctx, key)
 	if err != nil {
 		return fmt.Errorf("kv get %q: %w", key, notFound(err))
 	}
 
 	if s.isExpired(row) {
-		_ = s.db.Queries().KVDelete(ctx, key)
+		_ = s.db.Ctx(ctx).KVDelete(ctx, key)
 		return fmt.Errorf("kv get %q: %w", key, kv.ErrNotFound)
 	}
 
@@ -58,7 +58,7 @@ func (s *KVStore) SetTTL(ctx context.Context, key string, value any, ttl time.Du
 
 // Delete removes a key.
 func (s *KVStore) Delete(ctx context.Context, key string) error {
-	if err := s.db.Queries().KVDelete(ctx, key); err != nil {
+	if err := s.db.Ctx(ctx).KVDelete(ctx, key); err != nil {
 		return fmt.Errorf("kv delete %q: %w", key, err)
 	}
 	return nil
@@ -66,7 +66,7 @@ func (s *KVStore) Delete(ctx context.Context, key string) error {
 
 // Has returns whether a key exists (and is not expired).
 func (s *KVStore) Has(ctx context.Context, key string) (bool, error) {
-	count, err := s.db.Queries().KVHas(ctx, key)
+	count, err := s.db.Ctx(ctx).KVHas(ctx, key)
 	if err != nil {
 		return false, fmt.Errorf("kv has %q: %w", key, err)
 	}
@@ -75,12 +75,12 @@ func (s *KVStore) Has(ctx context.Context, key string) (bool, error) {
 	}
 
 	// Check expiry via lazy delete
-	row, err := s.db.Queries().KVGet(ctx, key)
+	row, err := s.db.Ctx(ctx).KVGet(ctx, key)
 	if err != nil {
 		return false, fmt.Errorf("kv has %q get: %w", key, err)
 	}
 	if s.isExpired(row) {
-		_ = s.db.Queries().KVDelete(ctx, key)
+		_ = s.db.Ctx(ctx).KVDelete(ctx, key)
 		return false, nil
 	}
 
@@ -90,7 +90,7 @@ func (s *KVStore) Has(ctx context.Context, key string) (bool, error) {
 // ListKeys returns all non-expired keys in sorted order.
 func (s *KVStore) ListKeys(ctx context.Context) ([]string, error) {
 	now := sql.NullInt64{Int64: time.Now().UnixNano(), Valid: true}
-	keys, err := s.db.Queries().KVListKeys(ctx, now)
+	keys, err := s.db.Ctx(ctx).KVListKeys(ctx, now)
 	if err != nil {
 		return nil, fmt.Errorf("kv list keys: %w", err)
 	}
@@ -100,13 +100,13 @@ func (s *KVStore) ListKeys(ctx context.Context) ([]string, error) {
 // GetRaw retrieves a raw KV entry with metadata.
 // Returns an error wrapping kv.ErrNotFound if the key does not exist.
 func (s *KVStore) GetRaw(ctx context.Context, key string) (kv.Entry, error) {
-	row, err := s.db.Queries().KVGetRaw(ctx, key)
+	row, err := s.db.Ctx(ctx).KVGetRaw(ctx, key)
 	if err != nil {
 		return kv.Entry{}, fmt.Errorf("kv get raw %q: %w", key, notFound(err))
 	}
 
 	if s.isExpired(row) {
-		_ = s.db.Queries().KVDelete(ctx, key)
+		_ = s.db.Ctx(ctx).KVDelete(ctx, key)
 		return kv.Entry{}, fmt.Errorf("kv get raw %q: %w", key, kv.ErrNotFound)
 	}
 
@@ -128,7 +128,7 @@ func (s *KVStore) GetRaw(ctx context.Context, key string) (kv.Entry, error) {
 // SweepExpired deletes all entries whose TTL has passed.
 func (s *KVStore) SweepExpired(ctx context.Context) error {
 	now := sql.NullInt64{Int64: time.Now().UnixNano(), Valid: true}
-	if err := s.db.Queries().KVSweepExpired(ctx, now); err != nil {
+	if err := s.db.Ctx(ctx).KVSweepExpired(ctx, now); err != nil {
 		return fmt.Errorf("kv sweep expired: %w", err)
 	}
 	return nil
@@ -141,7 +141,7 @@ func (s *KVStore) set(ctx context.Context, key string, value any, expiresAt sql.
 	}
 
 	now := time.Now().UnixNano()
-	if err := s.db.Queries().KVSet(ctx, db.KVSetParams{
+	if err := s.db.Ctx(ctx).KVSet(ctx, db.KVSetParams{
 		Key:       key,
 		Value:     data,
 		ExpiresAt: expiresAt,

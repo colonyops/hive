@@ -28,7 +28,7 @@ func (s *ReviewStore) CreateSession(ctx context.Context, documentPath string, co
 	sessionID := uuid.NewString()
 	now := time.Now()
 
-	err := s.db.Queries().CreateReviewSession(ctx, db.CreateReviewSessionParams{
+	err := s.db.Ctx(ctx).CreateReviewSession(ctx, db.CreateReviewSessionParams{
 		ID:           sessionID,
 		DocumentPath: documentPath,
 		ContentHash:  contentHash,
@@ -50,7 +50,7 @@ func (s *ReviewStore) CreateSession(ctx context.Context, documentPath string, co
 
 // GetSession returns the most recent review session for the given document.
 func (s *ReviewStore) GetSession(ctx context.Context, documentPath string) (review.Session, error) {
-	row, err := s.db.Queries().GetReviewSessionByDocPath(ctx, documentPath)
+	row, err := s.db.Ctx(ctx).GetReviewSessionByDocPath(ctx, documentPath)
 	if IsNotFoundError(err) {
 		return review.Session{}, review.ErrSessionNotFound
 	}
@@ -63,7 +63,7 @@ func (s *ReviewStore) GetSession(ctx context.Context, documentPath string) (revi
 
 // GetSessionByHash returns a review session for the given document and content hash.
 func (s *ReviewStore) GetSessionByHash(ctx context.Context, documentPath string, contentHash string) (review.Session, error) {
-	row, err := s.db.Queries().GetReviewSessionByDocPathAndHash(ctx, db.GetReviewSessionByDocPathAndHashParams{
+	row, err := s.db.Ctx(ctx).GetReviewSessionByDocPathAndHash(ctx, db.GetReviewSessionByDocPathAndHashParams{
 		DocumentPath: documentPath,
 		ContentHash:  contentHash,
 	})
@@ -79,7 +79,7 @@ func (s *ReviewStore) GetSessionByHash(ctx context.Context, documentPath string,
 
 // CleanupStaleSessions removes review sessions for a document with different content hash.
 func (s *ReviewStore) CleanupStaleSessions(ctx context.Context, documentPath string, currentHash string) error {
-	err := s.db.Queries().DeleteReviewSessionsByDocPath(ctx, db.DeleteReviewSessionsByDocPathParams{
+	err := s.db.Ctx(ctx).DeleteReviewSessionsByDocPath(ctx, db.DeleteReviewSessionsByDocPathParams{
 		DocumentPath: documentPath,
 		ContentHash:  currentHash,
 	})
@@ -92,7 +92,7 @@ func (s *ReviewStore) CleanupStaleSessions(ctx context.Context, documentPath str
 // FinalizeSession marks a review session as finalized.
 func (s *ReviewStore) FinalizeSession(ctx context.Context, sessionID string) error {
 	now := time.Now()
-	err := s.db.Queries().FinalizeReviewSession(ctx, db.FinalizeReviewSessionParams{
+	err := s.db.Ctx(ctx).FinalizeReviewSession(ctx, db.FinalizeReviewSessionParams{
 		FinalizedAt: sql.NullInt64{Int64: now.UnixNano(), Valid: true},
 		ID:          sessionID,
 	})
@@ -104,7 +104,7 @@ func (s *ReviewStore) FinalizeSession(ctx context.Context, sessionID string) err
 
 // DeleteSession removes a review session and all associated comments.
 func (s *ReviewStore) DeleteSession(ctx context.Context, sessionID string) error {
-	err := s.db.Queries().DeleteReviewSession(ctx, sessionID)
+	err := s.db.Ctx(ctx).DeleteReviewSession(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to delete review session: %w", err)
 	}
@@ -113,7 +113,7 @@ func (s *ReviewStore) DeleteSession(ctx context.Context, sessionID string) error
 
 // SaveComment adds a comment to a review session.
 func (s *ReviewStore) SaveComment(ctx context.Context, comment review.Comment) error {
-	err := s.db.Queries().SaveReviewComment(ctx, db.SaveReviewCommentParams{
+	err := s.db.Ctx(ctx).SaveReviewComment(ctx, db.SaveReviewCommentParams{
 		ID:          comment.ID,
 		SessionID:   comment.SessionID,
 		StartLine:   int64(comment.StartLine),
@@ -130,7 +130,7 @@ func (s *ReviewStore) SaveComment(ctx context.Context, comment review.Comment) e
 
 // ListComments returns all comments for a review session, sorted by start line.
 func (s *ReviewStore) ListComments(ctx context.Context, sessionID string) ([]review.Comment, error) {
-	rows, err := s.db.Queries().ListReviewComments(ctx, sessionID)
+	rows, err := s.db.Ctx(ctx).ListReviewComments(ctx, sessionID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list review comments: %w", err)
 	}
@@ -145,7 +145,7 @@ func (s *ReviewStore) ListComments(ctx context.Context, sessionID string) ([]rev
 
 // UpdateComment updates the comment text for an existing comment.
 func (s *ReviewStore) UpdateComment(ctx context.Context, comment review.Comment) error {
-	err := s.db.Queries().UpdateReviewComment(ctx, db.UpdateReviewCommentParams{
+	err := s.db.Ctx(ctx).UpdateReviewComment(ctx, db.UpdateReviewCommentParams{
 		CommentText: comment.CommentText,
 		ID:          comment.ID,
 	})
@@ -157,7 +157,7 @@ func (s *ReviewStore) UpdateComment(ctx context.Context, comment review.Comment)
 
 // DeleteComment removes a specific comment.
 func (s *ReviewStore) DeleteComment(ctx context.Context, commentID string) error {
-	err := s.db.Queries().DeleteReviewComment(ctx, commentID)
+	err := s.db.Ctx(ctx).DeleteReviewComment(ctx, commentID)
 	if err != nil {
 		return fmt.Errorf("failed to delete review comment: %w", err)
 	}
@@ -173,7 +173,7 @@ type SessionInfo struct {
 // GetAllActiveSessionsWithCounts returns all active (non-finalized) sessions with comment counts.
 // This is optimized for batch operations like the document picker.
 func (s *ReviewStore) GetAllActiveSessionsWithCounts(ctx context.Context) (map[string]SessionInfo, error) {
-	rows, err := s.db.Queries().GetAllActiveSessionsWithCounts(ctx)
+	rows, err := s.db.Ctx(ctx).GetAllActiveSessionsWithCounts(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get active sessions with counts: %w", err)
 	}

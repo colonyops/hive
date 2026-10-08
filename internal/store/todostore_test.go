@@ -225,7 +225,7 @@ func TestTodoStore(t *testing.T) {
 		defer func() { _ = database.Close() }()
 
 		now := time.Now().UnixNano()
-		err = database.Queries().CreateTodoItem(ctx, db.CreateTodoItemParams{
+		err = database.Ctx(ctx).CreateTodoItem(ctx, db.CreateTodoItemParams{
 			ID:        "t-invalid",
 			SessionID: "",
 			Source:    "invalid-source",

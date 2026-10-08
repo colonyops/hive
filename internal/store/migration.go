@@ -39,7 +39,7 @@ func MigrateFromJSON(ctx context.Context, database *db.DB, dataDir string) error
 	}
 
 	// Check if database already has sessions
-	sessions, err := database.Queries().ListSessions(ctx)
+	sessions, err := database.Ctx(ctx).ListSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check existing sessions: %w", err)
 	}
@@ -48,16 +48,15 @@ func MigrateFromJSON(ctx context.Context, database *db.DB, dataDir string) error
 		return nil
 	}
 
-	// No enclosing transaction: the stores write through the pool, so an
-	// immediate-mode transaction held here would block their writes on a
-	// second connection until busy_timeout.
-	if err := migrateSessions(ctx, database, sessionsPath); err != nil {
-		return fmt.Errorf("failed to migrate sessions: %w", err)
-	}
-	if err := migrateMessages(ctx, database, topicsDir); err != nil {
-		return fmt.Errorf("failed to migrate messages: %w", err)
-	}
-	return nil
+	return database.WithinTx(ctx, func(ctx context.Context, _ *db.DB) error {
+		if err := migrateSessions(ctx, database, sessionsPath); err != nil {
+			return fmt.Errorf("failed to migrate sessions: %w", err)
+		}
+		if err := migrateMessages(ctx, database, topicsDir); err != nil {
+			return fmt.Errorf("failed to migrate messages: %w", err)
+		}
+		return nil
+	})
 }
 
 // migrateSessions loads sessions from JSON and inserts into SQLite.

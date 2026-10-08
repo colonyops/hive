@@ -152,7 +152,7 @@ Domain-Driven Design, (Go) an idiom specific to the language.
 | **Factory Method** (GoF) | node config decoding, connector instances | The registry stores a constructor, not an instance. `func() NodeConfig` must return a **distinct** value per call because the decoder mutates it in place. For connectors, a `Descriptor` (schema, capabilities, stability) is what gets registered; instances are constructed per-use from parsed config. |
 | **Observer** (GoF) — typed and payload-carrying | core → adapters | Core events carry payloads and each subscriber declares a delivery policy. The Wails adapter degrades them to wake-up signals; **the core never does**, because an MCP client cannot cheaply "re-read the service" and a streaming consumer needs the delta. |
 | **Declared capabilities** | connectors, any pluggable type | A type states what it supports. Never `if s, ok := x.(Backfiller)` — sniffing hides capability from the editor, the docs, and an LLM, all of which need to know before calling. |
-| **Unit of Work** (PoEAA) | operations spanning two domains | The transaction is ambient on the `context`, not a parameter threaded through every signature. A store method begins `db := db.Ctx(ctx)` and thereby joins whatever transaction is already open; `WithinTx` **joins** an ambient transaction rather than nesting, because SQLite has none and a second `BEGIN IMMEDIATE` deadlocks against the first. Only the outermost caller commits. |
+| **Unit of Work** (PoEAA) | operations spanning two domains | The transaction is ambient on the `context`, not a parameter threaded through every signature. A store method begins `db := db.Ctx(ctx)` and thereby joins whatever transaction is already open; `WithinTx` **joins** an ambient transaction rather than nesting, because SQLite has none and a second `BEGIN IMMEDIATE` deadlocks against the first. Only the outermost caller commits. The contract holds for each database on its own: `hive.db` and `desktop-pipeline.db` each have `Ctx` and `WithinTx`, a transaction is ambient only for the pool that opened it, and no unit of work spans both. |
 
 **Modelling and Go idiom**
 
@@ -743,7 +743,14 @@ ambient transaction. The database opens through `platform/sqlite.Open`, which
 sets `_txlock=immediate` for `hive.db` as well, and has `MaxOpenConns: 2`; a nested `BEGIN IMMEDIATE` waits out `busy_timeout` for a
 write lock its own caller holds and then fails with `SQLITE_BUSY`, so nothing
 opens a second transaction. `Compact` is the exception: SQLite cannot run
-`VACUUM` inside a transaction, so it runs on the pool. (ADR
+`VACUUM` inside a transaction, so it runs on the pool.
+
+`hive.db` keeps the same contract through `internal/store/db.DB`: its stores
+begin with `db.Ctx(ctx)` and open units of work with `DB.WithinTx`. Both
+wrappers delegate to `platform/sqlite.WithinTx`, which keys the ambient
+transaction by its pool. A context that carries a `hive.db` transaction
+therefore binds no `desktop-pipeline.db` query, and the reverse; a unit of
+work on one database never commits or rolls back writes on the other. (ADR
 [a-store-owns-one-entity-s-persistence-and-a-service-coordinates-over-stores](decisions/2026-09-05-a-store-owns-one-entity-s-persistence-and-a-service-coordinates-over-stores.md))
 
 ### Events
