@@ -90,7 +90,7 @@ describe('DiagnosticsWindow', () => {
   it('pauses automatic reads and keeps evidence when a later read fails', async () => {
     const wrapper = mount(DiagnosticsWindow)
     await flushPromises()
-    await wrapper.findAll('input[type=checkbox]')[0]!.setValue(false)
+    await wrapper.findAll('input[type=checkbox]')[0].setValue(false)
     await vi.advanceTimersByTimeAsync(4000)
     expect(api.Read).toHaveBeenCalledTimes(1)
     api.Read.mockRejectedValueOnce(new Error('Read failed'))

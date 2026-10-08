@@ -8,6 +8,8 @@ import './styles/markdown.css'
 import './styles/canvas-html.css'
 
 import { createApp } from 'vue'
+import App from './App.vue'
+import DiagnosticsWindow from './components/DiagnosticsWindow.vue'
 import { initializeAppFont } from './composables/useAppFont'
 import { initializeKeybindings } from './composables/useKeybindings'
 import { initializeTheme } from './composables/useTheme'
@@ -16,10 +18,8 @@ import { router } from './router'
 initializeTheme()
 initializeAppFont()
 if (new URLSearchParams(window.location.search).has('diagnostics')) {
-  void import('./components/DiagnosticsWindow.vue').then(({ default: DiagnosticsWindow }) =>
-    createApp(DiagnosticsWindow).mount('#app'),
-  )
+  createApp(DiagnosticsWindow).mount('#app')
 } else {
   initializeKeybindings()
-  void import('./App.vue').then(({ default: App }) => createApp(App).use(router).mount('#app'))
+  createApp(App).use(router).mount('#app')
 }
