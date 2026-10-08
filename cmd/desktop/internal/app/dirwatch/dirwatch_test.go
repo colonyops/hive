@@ -52,11 +52,9 @@ func TestWatcherFiresOnEachOperation(t *testing.T) {
 	path := filepath.Join(dir, "a.yaml")
 	_, changed := startWatcher(t, dir)
 
-	// Create: the file does not exist when the watch starts.
 	require.NoError(t, os.WriteFile(path, []byte("v: 1\n"), 0o600))
 	waitForChange(t, changed)
 
-	// Write to an existing file.
 	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
 	require.NoError(t, err)
 	_, err = f.WriteString("w: 2\n")
@@ -64,7 +62,6 @@ func TestWatcherFiresOnEachOperation(t *testing.T) {
 	require.NoError(t, f.Close())
 	waitForChange(t, changed)
 
-	// Rename over: the atomic replace editors and the app use.
 	tmp := filepath.Join(dir, "a.tmp")
 	require.NoError(t, os.WriteFile(tmp, []byte("v: 3\n"), 0o600))
 	require.NoError(t, os.Rename(tmp, path))
@@ -135,7 +132,6 @@ func TestWatcherWithSubdirectories(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(existing, "a.yaml"), []byte("v: 1\n"), 0o600))
 	waitForChange(t, changed)
 
-	// A new subdirectory changes the watch set, which calls back by itself.
 	added := filepath.Join(dir, "added")
 	require.NoError(t, os.Mkdir(added, 0o700))
 	waitForChange(t, changed)
@@ -143,11 +139,55 @@ func TestWatcherWithSubdirectories(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(added, "a.yaml"), []byte("v: 1\n"), 0o600))
 	waitForChange(t, changed)
 
-	// Files two levels down stay out of reach.
 	deep := filepath.Join(added, "deep")
 	require.NoError(t, os.Mkdir(deep, 0o700))
 	require.NoError(t, os.WriteFile(filepath.Join(deep, "a.yaml"), []byte("v: 1\n"), 0o600))
 	assertNoChange(t, changed)
+}
+
+func TestWatcherWithSubdirectoriesFollowsRemoveAndRename(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	sub := filepath.Join(dir, "old")
+	require.NoError(t, os.Mkdir(sub, 0o700))
+	_, changed := startWatcher(t, dir, WithSubdirectories())
+
+	require.NoError(t, os.Remove(sub))
+	waitForChange(t, changed)
+
+	require.NoError(t, os.Mkdir(sub, 0o700))
+	waitForChange(t, changed)
+	require.NoError(t, os.WriteFile(filepath.Join(sub, "a.yaml"), []byte("v: 1\n"), 0o600))
+	waitForChange(t, changed)
+
+	renamed := filepath.Join(dir, "new")
+	require.NoError(t, os.Rename(sub, renamed))
+	waitForChange(t, changed)
+	require.NoError(t, os.WriteFile(filepath.Join(renamed, "a.yaml"), []byte("v: 2\n"), 0o600))
+	waitForChange(t, changed)
+}
+
+func TestWatcherSurvivesRootRemoval(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(dir, "ws"), 0o700))
+	w, _ := startWatcher(t, dir, WithSubdirectories())
+
+	require.NoError(t, os.RemoveAll(dir))
+	time.Sleep(3 * testDebounce)
+
+	closed := make(chan struct{})
+	go func() {
+		w.Close()
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close did not return after the root was removed")
+	}
 }
 
 func TestWatcherCloseStopsDeliveryAndIsIdempotent(t *testing.T) {

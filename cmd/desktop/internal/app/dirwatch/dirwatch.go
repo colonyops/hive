@@ -1,11 +1,6 @@
-// Package dirwatch runs a callback when matching files in a directory change
-// on disk.
-//
-// It watches directories rather than files: editors and atomic writers
-// replace a file by rename, which silently drops a watch registered on the
-// file itself, and a directory watch also sees a file that does not exist yet.
-// fsnotify is not recursive, so nothing deeper than the watched directories is
-// seen.
+// Package dirwatch runs a debounced callback when matching files in a
+// directory change. It watches the directory, not the files: an atomic save
+// replaces a file by rename, which drops a watch on the file itself.
 package dirwatch
 
 import (
@@ -35,23 +30,19 @@ type options struct {
 
 type Option func(*options)
 
-// WithDebounce sets how long the watcher waits after the last matching event
-// before it calls back, so a burst (an editor's write+rename+chmod, a git
-// checkout) becomes one callback. The default is 250ms.
+// WithDebounce sets the quiet period after the last event. Default 250ms.
 func WithDebounce(d time.Duration) Option {
 	return func(o *options) { o.debounce = d }
 }
 
-// WithComponent labels the watcher's log lines and errors. The default is
-// "dirwatch".
+// WithComponent labels log lines and errors. Default "dirwatch".
 func WithComponent(name string) Option {
 	return func(o *options) { o.component = name }
 }
 
-// WithSubdirectories also watches each immediate subdirectory of the root,
-// and keeps that set in step as subdirectories appear and disappear. A change
-// to the set calls back even when no matching file event follows: a directory
-// moved in with its files already inside produces no event for those files.
+// WithSubdirectories also watches each immediate subdirectory. A change to
+// that set calls back on its own, because a directory moved in with its files
+// already inside produces no event for those files.
 func WithSubdirectories() Option {
 	return func(o *options) { o.subdirs = true }
 }
@@ -71,8 +62,8 @@ type Watcher struct {
 	done     chan struct{}
 }
 
-// New creates root if it is missing and watches it. match reports whether an
-// event path is worth a callback. Events are not delivered until Start.
+// New creates root if it is missing and watches it. Nothing is delivered
+// until Start.
 func New(root string, match func(path string) bool, onChange func(), logger zerolog.Logger, opts ...Option) (*Watcher, error) {
 	o := options{debounce: 250 * time.Millisecond, component: "dirwatch"}
 	for _, opt := range opts {
@@ -108,7 +99,6 @@ func New(root string, match func(path string) bool, onChange func(), logger zero
 	return w, nil
 }
 
-// Start runs the watch loop in a goroutine until Close.
 func (w *Watcher) Start() {
 	if w.started.Swap(true) {
 		return
@@ -116,8 +106,7 @@ func (w *Watcher) Start() {
 	go w.run()
 }
 
-// Close stops the watcher and waits for an in-flight callback to return. It
-// is safe to call more than once, but not from inside the callback.
+// Close waits for an in-flight callback, so it must not be called from one.
 func (w *Watcher) Close() {
 	w.stopOnce.Do(func() {
 		close(w.stop)
@@ -170,9 +159,7 @@ func (w *Watcher) handle(event fsnotify.Event) bool {
 	return changed
 }
 
-// resync reconciles the subdirectory watches with the directories on disk and
-// reports whether the set changed. When the root itself is gone it drops every
-// watch rather than retrying.
+// resync reports whether the subdirectory watch set changed.
 func (w *Watcher) resync() bool {
 	entries, err := os.ReadDir(w.root)
 	if err != nil {
