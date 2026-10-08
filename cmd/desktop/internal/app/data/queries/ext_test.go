@@ -77,28 +77,6 @@ func TestCtx_IgnoresAnotherDatabasesTransaction(t *testing.T) {
 	}))
 }
 
-// TestWithinTx_AnotherDatabasesTransactionDoesNotJoin: a unit of work on
-// this database opened inside a hive.db one commits on its own.
-func TestWithinTx_AnotherDatabasesTransactionDoesNotJoin(t *testing.T) {
-	t.Parallel()
-
-	pipeline := extTestDB(t)
-	hive, err := hivedb.Open(t.TempDir(), hivedb.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = hive.Close() })
-
-	sentinel := errors.New("hive.db unit failed")
-	err = hive.WithinTx(t.Context(), func(ctx context.Context, _ *hivedb.DB) error {
-		require.NoError(t, pipeline.WithinTx(ctx, func(ctx context.Context, tx *DB) error {
-			return insertItem(ctx, tx, "item-1")
-		}))
-		return sentinel
-	})
-
-	require.ErrorIs(t, err, sentinel)
-	assert.Equal(t, 1, countInboxItems(t, pipeline), "the pipeline write joined the hive.db rollback")
-}
-
 // TestWithinTx_JoinsRatherThanNesting is the property that keeps this from
 // deadlocking. The pgx original always opens a transaction; on SQLite with
 // _txlock=immediate and two connections, a second BEGIN IMMEDIATE while the

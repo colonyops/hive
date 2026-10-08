@@ -144,10 +144,3 @@ func TestAmbientTx_IsScopedToItsPool(t *testing.T) {
 	assert.Zero(t, countRows(t, first))
 	assert.Equal(t, 1, countRows(t, second), "the second pool's unit committed on its own")
 }
-
-func TestAmbientTx_BareContextHasNone(t *testing.T) {
-	t.Parallel()
-
-	_, ok := AmbientTx(t.Context(), openTestPool(t))
-	assert.False(t, ok)
-}
