@@ -121,7 +121,12 @@ func (w *Watcher) Close() {
 
 func (w *Watcher) run() {
 	defer close(w.done)
+	w.loop(w.watcher.Events, w.watcher.Errors)
+}
 
+// loop takes the fsnotify channels as arguments so a test can feed it events
+// on synctest's clock, which a goroutine blocked in an fsnotify read stalls.
+func (w *Watcher) loop(events <-chan fsnotify.Event, errs <-chan error) {
 	debounce := time.NewTimer(w.opts.debounce)
 	debounce.Stop()
 	defer debounce.Stop()
@@ -130,14 +135,14 @@ func (w *Watcher) run() {
 		select {
 		case <-w.stop:
 			return
-		case event, ok := <-w.watcher.Events:
+		case event, ok := <-events:
 			if !ok {
 				return
 			}
 			if w.handle(event) {
 				debounce.Reset(w.opts.debounce)
 			}
-		case err, ok := <-w.watcher.Errors:
+		case err, ok := <-errs:
 			if !ok {
 				return
 			}

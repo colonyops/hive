@@ -4,9 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -94,19 +97,41 @@ func TestWatcherCreatesMissingDir(t *testing.T) {
 func TestWatcherDebounceResetsOnEachEvent(t *testing.T) {
 	t.Parallel()
 
-	dir := t.TempDir()
-	path := filepath.Join(dir, "a.yaml")
-	_, changed := startWatcher(t, dir)
+	synctest.Test(t, func(t *testing.T) {
+		var fired atomic.Int32
+		events := make(chan fsnotify.Event)
+		w := &Watcher{
+			match:    isYAML,
+			onChange: func() { fired.Add(1) },
+			opts:     options{debounce: testDebounce},
+			stop:     make(chan struct{}),
+			done:     make(chan struct{}),
+		}
+		go func() {
+			defer close(w.done)
+			w.loop(events, nil)
+		}()
 
-	// The burst outlasts one debounce period, so a callback here means the
-	// timer was not reset by the later events.
-	for i := range 6 {
-		require.NoError(t, os.WriteFile(path, []byte{byte('0' + i)}, 0o600))
-		time.Sleep(testDebounce / 3)
-	}
+		// The burst outlasts one debounce period, so a callback during it
+		// means the timer was not reset by the later events.
+		for range 6 {
+			events <- fsnotify.Event{Name: "a.yaml", Op: fsnotify.Write}
+			time.Sleep(testDebounce / 3)
+		}
+		synctest.Wait()
+		assert.Zero(t, fired.Load(), "fired during the burst")
 
-	waitForChange(t, changed)
-	assertNoChange(t, changed)
+		time.Sleep(testDebounce)
+		synctest.Wait()
+		assert.EqualValues(t, 1, fired.Load())
+
+		time.Sleep(4 * testDebounce)
+		synctest.Wait()
+		assert.EqualValues(t, 1, fired.Load(), "fired again after the burst")
+
+		close(w.stop)
+		<-w.done
+	})
 }
 
 func TestWatcherIgnoresSubdirectoriesByDefault(t *testing.T) {
