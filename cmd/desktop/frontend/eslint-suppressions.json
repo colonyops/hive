@@ -459,11 +459,6 @@
       "count": 2
     }
   },
-  "src/main.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    }
-  },
   "src/pipeline/__tests__/app-registry.spec.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
