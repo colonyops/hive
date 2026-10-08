@@ -40,6 +40,8 @@ export interface TerminalTreeHandles {
   closePane(): void
   zoomPane(): void
   focusPaneDirection(direction: PaneDirection): void
+  /** Open the find bar over the attached session's active window. */
+  find(): void
 }
 
 let handles: TerminalTreeHandles | null = null
@@ -99,6 +101,18 @@ export function closeTerminalPane(): void {
 
 export function zoomTerminalPane(): void {
   handles?.zoomPane()
+}
+
+export function findInTerminal(): void {
+  handles?.find()
+}
+
+/**
+ * Whether focus is in one of the Code view's panes rather than its tree or the
+ * other emulators (the pop-up, a chat), which have no find bar.
+ */
+export function codePaneFocused(): boolean {
+  return document.activeElement?.closest('[data-code-pane]') != null
 }
 
 export function focusTerminalPaneDirection(direction: PaneDirection): void {

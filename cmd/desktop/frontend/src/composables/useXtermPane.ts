@@ -6,7 +6,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { Terminal, type IDisposable, type ILinkHandler, type ITerminalOptions } from '@xterm/xterm'
 import { loadTerminalFaces, terminalFontStack } from '../lib/terminalFaces'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
-import { claimsShiftEnter } from '../lib/terminalKeys'
+import { appClaimsPaneKey, claimsShiftEnter } from '../lib/terminalKeys'
 import { xtermTheme } from '../lib/terminalTheme'
 import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTheme } from './useTheme'
@@ -130,7 +130,10 @@ export function useXtermPane(host: Ref<HTMLElement | null>, onResize: () => void
     const created = createTerminal()
     const fitAddon = markRaw(new FitAddon())
     created.loadAddon(fitAddon)
-    created.attachCustomKeyEventHandler((event) => !claimsShiftEnter(created, event))
+    created.attachCustomKeyEventHandler((event) => {
+      if (event.type === 'keydown' && appClaimsPaneKey(event)) return false
+      return !claimsShiftEnter(created, event)
+    })
     created.open(host.value)
     loadRenderer(created)
     term.value = created

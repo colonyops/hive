@@ -15,6 +15,7 @@ import { useEventListener } from '@vueuse/core'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import IconPlus from '~icons/lucide/plus'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
+import IconSquareTerminal from '~icons/lucide/square-terminal'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
 import SettingsHeading from './settings/SettingsHeading.vue'
@@ -24,7 +25,7 @@ import IconButton from './ui/IconButton.vue'
 import EmptyState from './ui/EmptyState.vue'
 import SearchField from './ui/SearchField.vue'
 import { commandById } from '../keybindings/catalog'
-import { comboFromEvent, formatCombo, useKeybindings } from '../composables/useKeybindings'
+import { comboFromEvent, formatCombo, formatTerminalCombo, useKeybindings } from '../composables/useKeybindings'
 import { keymapRows, requestedEditorFilter, type KeymapRow } from '../keybindings/keymapRows'
 
 const kb = useKeybindings()
@@ -200,6 +201,12 @@ onUnmounted(commitCapture)
                 <IconTriangleAlert class="size-3 shrink-0 text-accent" />
               </AppTooltip>
               <kbd class="keycap">{{ row.formatted[i] }}</kbd>
+              <AppTooltip
+                v-if="formatTerminalCombo(row.id, combo)"
+                :text="`Works in a terminal: ${formatTerminalCombo(row.id, combo)}`"
+              >
+                <IconSquareTerminal class="size-3 shrink-0 text-text-4" data-testid="keybinding-terminal" />
+              </AppTooltip>
               <IconButton
                 label="Remove shortcut"
                 :icon="IconX"

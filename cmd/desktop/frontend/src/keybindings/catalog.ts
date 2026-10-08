@@ -59,7 +59,9 @@ import type { CommandScope } from '../palette/scopes'
 //
 // A combo resolves to exactly one command — the first in this list that claims
 // it — so `context` narrows *when* a command fires, it does not let two
-// commands share a chord. Widget-local navigation (the palette's own ↑↓, the
+// commands share a chord. The one exception is `terminal-pane`: such a command
+// resolves first while a pane has focus and is skipped otherwise, so it can
+// share a chord with a broader command. Widget-local navigation (the palette's own ↑↓, the
 // session tree's) is therefore not modelled here: it would have to fight the
 // feed's `j`/`k` for the same combo. Those keys stay handlers on the widget
 // that owns focus.
@@ -69,7 +71,11 @@ import type { CommandScope } from '../palette/scopes'
 // quick-terminal-launchers-are-session-scoped, ADR a-new-tab-and-a-launcher-open-where-the-terminal-s-active-pane-is).
 // Any slug the Code view attaches counts, including the scratch terminal and a
 // pinned chat — what the launcher needs is a pane, not a hive record.
-export type CommandContext = 'global' | 'feed' | 'terminal' | 'terminal-session' | 'any-terminal' | 'agents' | 'sidebar'
+//
+// `terminal-pane` is narrower than `terminal-session`: one of the attached Code
+// session's panes has focus, not the session tree beside it.
+export type CommandContext =
+  'global' | 'feed' | 'terminal' | 'terminal-session' | 'terminal-pane' | 'any-terminal' | 'agents' | 'sidebar'
 
 export interface BindableCommand {
   id: string
@@ -84,8 +90,8 @@ export interface BindableCommand {
   /** Canonical default combos; `[]` = bindable but unbound. */
   defaultCombos: string[]
   /**
-   * Non-macOS defaults for shifted escaping chords that Ctrl+Shift
-   * normalization cannot resolve. Read through defaultCombosFor.
+   * Non-macOS defaults for shifted chords that Ctrl+Shift normalization cannot
+   * resolve from a pane. Read through defaultCombosFor.
    */
   ctrlDefaultCombos?: string[]
   context: CommandContext
@@ -94,20 +100,13 @@ export interface BindableCommand {
   /** Omit from the command palette (still bindable + listed in settings). */
   paletteHidden?: boolean
   /**
-   * Fires over a focused terminal pane, and on the terminal escape chord rather
-   * than on the binding alone — Command on macOS, Ctrl+Shift where there is no
-   * Command (useKeybindings.terminalEscapeCombo). Without it the pane keeps the
-   * key, which is what leaves Ctrl+T as readline's transpose on a platform
-   * where `mod` is Ctrl.
-   */
-  escapesPane?: boolean
-  /**
    * Fires over a focused terminal pane on the binding alone, whatever
-   * modifiers it carries — the narrower opt-in for a chord `escapesPane`
-   * cannot express, since terminalEscapeCombo only qualifies Command and
-   * Ctrl+Shift. Prefer `escapesPane`: this one takes the chord away from the
-   * shell outright, so `alt+t` stops being readline's transpose-words.
-   * `non-mac` limits this policy to Windows/Linux, preserving Control on macOS.
+   * modifiers it carries. Every command already fires there on the terminal
+   * escape chord (Command on macOS, Ctrl+Shift elsewhere; see
+   * useKeybindings.terminalEscapeCombo); this is for a chord that cannot take
+   * that form, and it takes the chord away from the shell outright, so `alt+t`
+   * stops being readline's transpose-words. `non-mac` limits this policy to
+   * Linux, preserving Control on macOS.
    */
   piercesPane?: boolean | 'non-mac'
 }
@@ -259,11 +258,8 @@ export const commandCatalog: BindableCommand[] = [
     defaultCombos: ['mod+k'],
     context: 'global',
     paletteHidden: true,
-    escapesPane: true,
   },
   // ⌘N, the chord every app spells "new thing" with — a session is this app's.
-  // It escapes a focused pane because Code is where a second session is most
-  // often wanted, and a pane owns every key there otherwise.
   {
     id: 'session.new',
     title: 'New session…',
@@ -272,7 +268,6 @@ export const commandCatalog: BindableCommand[] = [
     icon: IconSquarePlus,
     defaultCombos: ['mod+n'],
     context: 'global',
-    escapesPane: true,
   },
   {
     id: 'terminal.popup.toggle',
@@ -294,17 +289,16 @@ export const commandCatalog: BindableCommand[] = [
     icon: IconPanelLeft,
     defaultCombos: ['mod+b'],
     context: 'sidebar',
-    escapesPane: true,
     piercesPane: 'non-mac',
   },
   // Directional rather than one toggle: which pane you land on should be
   // readable off the chord, not off where focus happened to be.
   //
-  // Only the sidebar half has to escape a focused pane, so it is the one chord
-  // terminal mode takes away from tmux (App.vue's dispatcher, and xterm's own
-  // handler in useTerminalWindows). `mod` is Cmd on macOS and Ctrl elsewhere,
-  // where Ctrl+← is readline's backward-word — rebind it there if the pane
-  // needs it back.
+  // The sidebar half pierces a focused pane, so terminal mode takes its plain
+  // Ctrl form away from tmux too (App.vue's dispatcher, and xterm's own handler
+  // in useTerminalWindows). `mod` is Cmd on macOS and Ctrl elsewhere, where
+  // Ctrl+← is readline's backward-word — rebind it there if the pane needs it
+  // back.
   {
     id: 'terminal.focus-sidebar',
     title: 'Focus session tree',
@@ -329,10 +323,24 @@ export const commandCatalog: BindableCommand[] = [
   // where a search for a session starts anyway. One combo resolves to one
   // command, so the feed's search box and the session filter share this one,
   // whose run() dispatches on whichever is on screen; mod+f rides the same
-  // command (xterm's own Cmd+F stays widget-local). paletteHidden: a visible
+  // command, except over a pane, where terminal.find claims it. paletteHidden: a visible
   // global row would no-op wherever neither surface is on screen, which the
   // palette forbids (hide, don't disable) — the per-view named rows below
   // carry the hint instead.
+  // Cmd+F on macOS and Ctrl+Shift+F from a pane elsewhere, the convention every
+  // terminal emulator settled on; a bare Ctrl+F is readline's forward-char.
+  // paletteHidden: opening the palette takes focus off the pane, so the row
+  // could never run.
+  {
+    id: 'terminal.find',
+    title: 'Find in terminal',
+    group: 'Code',
+    keywords: ['terminal', 'find', 'search', 'scrollback'],
+    icon: IconSearch,
+    defaultCombos: ['mod+f'],
+    context: 'terminal-pane',
+    paletteHidden: true,
+  },
   {
     id: 'view.focus-search',
     title: 'Focus search',
@@ -371,7 +379,6 @@ export const commandCatalog: BindableCommand[] = [
     icon: IconPlus,
     defaultCombos: ['mod+t'],
     context: 'terminal',
-    escapesPane: true,
   },
   {
     id: 'terminal.close-window',
@@ -381,7 +388,6 @@ export const commandCatalog: BindableCommand[] = [
     icon: IconX,
     defaultCombos: ['mod+w'],
     context: 'terminal',
-    escapesPane: true,
   },
   {
     id: 'terminal.next-window',
@@ -391,7 +397,6 @@ export const commandCatalog: BindableCommand[] = [
     icon: IconChevronRight,
     defaultCombos: ['mod+}'],
     context: 'terminal',
-    escapesPane: true,
   },
   {
     id: 'terminal.prev-window',
@@ -401,7 +406,6 @@ export const commandCatalog: BindableCommand[] = [
     icon: IconChevronLeft,
     defaultCombos: ['mod+{'],
     context: 'terminal',
-    escapesPane: true,
   },
   // A position in the window strip, not a tmux window index: the strip is what
   // is on screen, and tmux's indices have gaps as soon as a window is closed.
@@ -417,7 +421,6 @@ export const commandCatalog: BindableCommand[] = [
     icon: IconSquareSplitHorizontal,
     defaultCombos: ['mod+d'],
     context: 'terminal',
-    escapesPane: true,
   },
   {
     id: 'terminal.split-down',
@@ -428,7 +431,6 @@ export const commandCatalog: BindableCommand[] = [
     defaultCombos: ['mod+shift+d'],
     ctrlDefaultCombos: ['mod+o'],
     context: 'terminal',
-    escapesPane: true,
   },
   {
     id: 'terminal.close-pane',
@@ -439,7 +441,6 @@ export const commandCatalog: BindableCommand[] = [
     defaultCombos: ['mod+shift+w'],
     ctrlDefaultCombos: ['mod+q'],
     context: 'terminal',
-    escapesPane: true,
   },
   {
     id: 'terminal.zoom-pane',
@@ -450,7 +451,6 @@ export const commandCatalog: BindableCommand[] = [
     defaultCombos: ['mod+shift+enter'],
     ctrlDefaultCombos: ['mod+m'],
     context: 'terminal',
-    escapesPane: true,
   },
   // ADR the-zoom-chords-step-the-terminal-text-size-instead-of-magnifying-the-webview.
   // Increase carries every spelling of one physical key: `=`, the shifted `+` a
@@ -467,7 +467,6 @@ export const commandCatalog: BindableCommand[] = [
     defaultCombos: ['mod+=', 'mod+shift+plus', 'mod+plus'],
     ctrlDefaultCombos: ['mod+=', 'mod+plus'],
     context: 'any-terminal',
-    escapesPane: true,
   },
   {
     id: 'terminal.text-size-decrease',
@@ -478,7 +477,6 @@ export const commandCatalog: BindableCommand[] = [
     defaultCombos: ['mod+-'],
     ctrlDefaultCombos: ['mod+-', 'mod+_'],
     context: 'any-terminal',
-    escapesPane: true,
   },
   {
     id: 'terminal.text-size-reset',
@@ -489,7 +487,6 @@ export const commandCatalog: BindableCommand[] = [
     defaultCombos: ['mod+0'],
     ctrlDefaultCombos: ['mod+0', 'mod+)'],
     context: 'any-terminal',
-    escapesPane: true,
   },
   // Alt-arrow cannot use terminal escape normalization, so these bindings pierce
   // the pane. On Ctrl platforms readline leaves Ctrl+Alt+Arrow unbound by default.
@@ -589,8 +586,7 @@ export const commandCatalog: BindableCommand[] = [
     paletteHidden: true,
     scope: 'goto',
   },
-  // Router history, matching the title-bar buttons. Not escapesPane: a
-  // focused pane keeps the key.
+  // Router history, matching the title-bar buttons.
   {
     id: 'history.back',
     title: 'Back',
@@ -698,17 +694,10 @@ export const commandCatalog: BindableCommand[] = [
 ]
 
 // Read off the static catalog rather than off `commands`: a launcher pierces a
-// focused pane through its own path, and nothing loaded from actions.yml gets
-// to claim the escape chord.
-const paneEscapes = new Set(commandCatalog.filter((command) => command.escapesPane).map((command) => command.id))
+// focused pane through its own path.
 const panePierces = new Map(
   commandCatalog.filter((command) => command.piercesPane).map((command) => [command.id, command.piercesPane]),
 )
-
-/** Whether the command fires over a focused terminal pane on the escape chord. */
-export function commandEscapesPane(commandID: string): boolean {
-  return paneEscapes.has(commandID)
-}
 
 /** Whether the command fires over a focused terminal pane on the binding alone. */
 export function commandPiercesPane(

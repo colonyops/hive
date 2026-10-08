@@ -3,12 +3,14 @@ import { commandCatalog, defaultCombosFor } from '../catalog'
 import { comboFromEvent, terminalEscapeCombo } from '../../composables/useKeybindings'
 
 // Where `mod` is Ctrl, Ctrl+Shift is the pane escape and terminalEscapeCombo
-// drops the Shift before resolving, so a shifted default on an escapesPane
-// command is unreachable from a pane there and lands on whichever command owns
-// the unshifted spelling: Ctrl+Shift+W on `mod+shift+w` would close the window.
+// drops the Shift before resolving, so a shifted default on a terminal command
+// is unreachable from a pane there and lands on whichever command owns the
+// unshifted spelling: Ctrl+Shift+W on `mod+shift+w` would close the window.
+const terminalContexts = new Set(['terminal', 'terminal-session', 'terminal-pane', 'any-terminal'])
+
 describe('commandCatalog defaults', () => {
-  it('gives every escapesPane command unshifted defaults where mod is Ctrl', () => {
-    for (const command of commandCatalog.filter((c) => c.escapesPane)) {
+  it('gives every terminal command that escapes a pane unshifted defaults where mod is Ctrl', () => {
+    for (const command of commandCatalog.filter((c) => terminalContexts.has(c.context) && !c.piercesPane)) {
       for (const combo of defaultCombosFor(command, false)) {
         expect(combo.split('+'), `${command.id}: ${combo}`).not.toContain('shift')
       }
@@ -59,7 +61,9 @@ describe('commandCatalog defaults', () => {
     ['a Ctrl platform', false],
   ])('binds each default to one command on %s', (_, mac) => {
     const owners = new Map<string, string>()
-    for (const command of commandCatalog) {
+    // A terminal-pane command shares its chord on purpose; it resolves first
+    // over a pane and is skipped everywhere else.
+    for (const command of commandCatalog.filter((c) => c.context !== 'terminal-pane')) {
       for (const combo of defaultCombosFor(command, mac)) {
         expect(owners.get(combo), `${combo} already belongs to ${owners.get(combo)}`).toBeUndefined()
         owners.set(combo, command.id)

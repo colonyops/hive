@@ -377,6 +377,7 @@ function stubTerminalTree(overrides: Partial<TerminalTreeHandles> = {}): Termina
     closePane: vi.fn(),
     zoomPane: vi.fn(),
     focusPaneDirection: vi.fn(),
+    find: vi.fn(),
     ...overrides,
   }
   setTerminalTreeHandles(handles)

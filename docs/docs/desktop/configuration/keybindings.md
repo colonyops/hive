@@ -16,6 +16,7 @@ The command palette at <kbd>⌘K</kbd> can run commands with or without a shortc
 | Open command palette | <kbd>⌘K</kbd> |
 | Open shortcut list | <kbd>?</kbd> |
 | Search the current view | <kbd>/</kbd> or <kbd>⌘F</kbd> |
+| Find in a Code terminal | <kbd>⌘F</kbd> (Linux: <kbd>Ctrl+Shift+F</kbd>) |
 | Open Settings | <kbd>⌘,</kbd> or <kbd>g</kbd> then <kbd>s</kbd> |
 | Show or hide the current sidebar | <kbd>⌘B</kbd> (Windows/Linux: <kbd>Ctrl+B</kbd>) |
 | Go to Inbox | <kbd>g</kbd> then <kbd>i</kbd> |
@@ -49,7 +50,13 @@ Use lower-case key names and join modifiers with `+`, such as `mod+shift+t`. `mo
 
 ## Terminal shortcuts
 
-A focused terminal sends most keys to the running program. Global app shortcuts use Command on macOS or Control+Shift on other platforms so they can still leave the terminal pane.
+A focused terminal sends most keys to the running program. A shortcut works from a terminal when it starts with Command on macOS, or with Control on Linux, where you press it with Control+Shift from inside the terminal. Shortcuts without one of those, such as <kbd>g</kbd> then <kbd>i</kbd>, only work outside a terminal, so typing `git` always reaches the shell.
+
+This applies to shortcuts you add yourself. To switch to the inbox from a terminal, add a binding such as <kbd>⌘I</kbd> or <kbd>⌘G</kbd> then <kbd>i</kbd> to **Go to Inbox**. In **Settings ▸ Keyboard**, a terminal icon next to a shortcut shows that it works from a terminal and how to press it there.
+
+On Linux, a shortcut whose first key already uses Shift, such as `mod+shift+b`, cannot be reached from a terminal.
+
+**Find** (`terminal.find`) opens the search bar over a Code terminal. Over the session list and other views, <kbd>⌘F</kbd> searches the current view instead.
 
 **Text size** (`terminal.text-size-increase`, `-decrease`, `-reset`) steps the terminal font by 2px a press, between 8px and 64px, wherever a terminal is on screen (a Code session, Chats, or the pop-up panel) and saves the result to the same setting. On macOS these chords no longer zoom the window, and **Zoom In**, **Zoom Out** and **Actual Size** are gone from the **View** menu, because window zoom scales the window instead of reflowing the terminal grid.
 
