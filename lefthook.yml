@@ -50,10 +50,7 @@ pre-commit:
         - "cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go"
         - "cmd/desktop/internal/app/agentws/workspace.go"
         - "cmd/desktop/internal/app/schedule/spec.go"
-      run: |
-        # Fixture tests create repositories outside this worktree.
-        unset $(git rev-parse --local-env-vars)
-        mise run check:generate
+      run: mise run check:generate
 
 # Push is the meaningful boundary for headless work — the wrap/PR step — so the
 # full gates run here. Wails TS bindings and the e2e suite are deliberately
@@ -68,7 +65,10 @@ pre-push:
   piped: true
   jobs:
     - name: check
-      run: mise run check
+      run: |
+        # Fixture tests create repositories outside this worktree.
+        unset $(git rev-parse --local-env-vars)
+        mise run check
 
     - name: frontend-test
       glob: "cmd/desktop/frontend/*"
