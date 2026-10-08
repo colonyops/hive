@@ -137,10 +137,16 @@ func (s *JobService) setStatus(ctx context.Context, id int64, status jobs.JobSta
 	if id == 0 {
 		return
 	}
-	if _, err := s.store.SetStatus(ctx, id, status.String(), jobs.StepFor(status), errText); err != nil {
+	row, err := s.store.SetStatus(ctx, id, status.String(), jobs.StepFor(status), errText)
+	if err != nil {
 		s.log.Warn().Err(err).Int64("job_id", id).Str("status", status.String()).Msg("updating job status failed")
 		return
 	}
+	level := zerolog.InfoLevel
+	if status == jobs.JobStatusFailed {
+		level = zerolog.ErrorLevel
+	}
+	s.log.WithLevel(level).Int64("job_id", id).Str("label", row.Label).Str("target", row.Target).Str("status", status.String()).Str("error", errText).Msg("job status changed")
 	s.events.Publish(ctx, events.JobsUpdated{JobID: id})
 }
 

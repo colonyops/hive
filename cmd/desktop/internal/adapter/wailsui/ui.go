@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"sync"
 
 	"github.com/rs/zerolog"
 
@@ -25,9 +26,11 @@ import (
 // the driven ports app.Config asks for — and Mount does everything that needs
 // a built core.
 type UI struct {
-	logger        zerolog.Logger
-	mock          string
-	settingsStore *settings.Store
+	diagnosticsMu     sync.Mutex
+	diagnosticsWindow *application.WebviewWindow
+	logger            zerolog.Logger
+	mock              string
+	settingsStore     *settings.Store
 
 	focus         *FocusState
 	notifications *NotificationService
@@ -170,6 +173,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		application.NewService(NewWebhookService(core.Webhooks)),
 		application.NewService(NewPromptsService(core.Prompts)),
 		application.NewService(NewReportService(core.Report)),
+		application.NewService(NewDiagnosticsService(core.Diagnostics, u.openDiagnostics)),
 		application.NewService(NewReleaseNotesService(core.ReleaseNotes, opts.Build.Version)),
 		application.NewService(NewPerfService(core.Perf)),
 		application.NewService(NewObservabilityService(core.Observability)),

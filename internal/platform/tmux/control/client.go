@@ -1235,6 +1235,12 @@ func (c *Client) emitOutput(pane string, data []byte, at time.Time) {
 }
 
 func (c *Client) publish(ev Event) {
+	if window, ok := ev.(WindowChanged); ok && (window.Kind == WindowAdded || window.Kind == WindowClosed) {
+		c.log.Info().Str("window_id", window.Window.ID).Str("window_name", window.Window.Name).Str("state", string(window.Kind)).Msg("terminal window changed")
+	}
+	if life, ok := ev.(LifecycleChanged); ok && (life.Kind == LifecycleExited || life.Kind == LifecycleError) {
+		c.log.Info().Str("state", string(life.Kind)).Str("reason", life.Message).Msg("terminal stream ended")
+	}
 	if lc, ok := ev.(LifecycleChanged); ok {
 		switch lc.Kind {
 		case LifecyclePaused:

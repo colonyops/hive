@@ -1,3 +1,4 @@
+import { Open as openDiagnostics } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/diagnosticsservice'
 import { nextTick, onMounted, ref, type Ref } from 'vue'
 import { useCommandPalette } from '../composables/useCommands'
 import { useLaunchers } from '../composables/useLaunchers'
@@ -161,6 +162,7 @@ export function useAppCommands(deps: AppCommandDeps) {
     'view.go-inbox': () => appMode.setMode('hub'),
     'view.go-code': () => appMode.setMode('terminal'),
     'view.go-chats': () => appMode.setMode('agents'),
+    'diagnostics.open': () => void openDiagnostics(),
     'settings.open': () => nav.openSettings('application'),
     'history.back': () => nav.router.back(),
     'history.forward': () => nav.router.forward(),

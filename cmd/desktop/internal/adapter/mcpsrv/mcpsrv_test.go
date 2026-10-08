@@ -147,7 +147,7 @@ func TestToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 	}
 
 	assert.ElementsMatch(t, []string{
-		"get_status", "list_profiles", "get_flow", "list_feeds", "list_inbox",
+		"get_status", "read_diagnostics", "list_profiles", "get_flow", "list_feeds", "list_inbox",
 		"list_inbox_item_events", "list_item_sessions", "list_actions", "refresh_sources",
 		"list_action_runs", "get_action_run",
 		"create_profile", "delete_profile",
@@ -1018,3 +1018,27 @@ nodes:
     on_message: "return msg;"
 wires: []
 `
+
+func TestDiagnosticsToolReadsJobsAndReportsMissingEvidence(t *testing.T) {
+	core, session := testSession(t)
+	id := core.Jobs.Begin(t.Context(), "Create session", "new-session", "review 347")
+	core.Jobs.Fail(t.Context(), id, "tmux spawn failed")
+	var summary struct {
+		app.DiagnosticsSnapshot
+		Detail string `json:"detail"`
+	}
+	call(t, session, "read_diagnostics", map[string]any{"source": "jobs", "search": "review 347"}, &summary)
+	require.Equal(t, "summary", summary.Detail)
+	require.NotEmpty(t, summary.Entries)
+	require.Empty(t, summary.Entries[0].Raw)
+	var full struct {
+		app.DiagnosticsSnapshot
+		Detail string `json:"detail"`
+	}
+	call(t, session, "read_diagnostics", map[string]any{"source": "jobs", "reference": fmt.Sprintf("job-%d", id), "detail": "full"}, &full)
+	require.NotEmpty(t, full.Entries[0].Raw)
+	res, err := session.CallTool(t.Context(), &mcp.CallToolParams{Name: "read_diagnostics", Arguments: map[string]any{"reference": "job-999999"}})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, textOf(res), "not_found")
+}
