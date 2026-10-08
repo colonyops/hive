@@ -83,23 +83,25 @@ func (s *DiagnosticsService) Read(ctx context.Context, q DiagnosticsQuery) (Diag
 	}
 	cli := diagnostics.CLIPath(s.environ(ctx), s.paths.HiveDataDir)
 	entries := make([]diagnostics.Entry, 0)
-	seen := make(map[string]bool)
+	statuses := make(map[string]diagnostics.Source)
 	for _, src := range []diagnostics.Source{{ID: "desktop", Path: s.paths.LogFile}, {ID: "cli", Path: cli}} {
-		if seen[src.Path] {
-			status := out.Sources[0]
+		if status, ok := statuses[src.Path]; ok {
 			status.ID = src.ID
 			out.Sources = append(out.Sources, status)
+			if q.Source == "" || q.Source == src.ID {
+				out.Truncated = out.Truncated || status.Truncated
+			}
 			continue
 		}
-		seen[src.Path] = true
 		status, logs := diagnostics.Read(src.ID, src.Path)
+		statuses[src.Path] = status
 		out.Sources = append(out.Sources, status)
 		for _, entry := range logs {
 			if q.Source == "" || q.Source == entry.Source {
 				entries = append(entries, entry)
 			}
 		}
-		if q.Source != "jobs" {
+		if q.Source == "" || q.Source == src.ID {
 			out.Truncated = out.Truncated || status.Truncated
 		}
 	}
@@ -122,22 +124,25 @@ func (s *DiagnosticsService) Read(ctx context.Context, q DiagnosticsQuery) (Diag
 				break
 			}
 			raw, _ := json.Marshal(job)
-			e := diagnostics.Parse("jobs", string(raw))
-			e.ID = fmt.Sprintf("job-%d", job.ID)
-			e.Time = time.UnixMilli(job.UpdatedAt).UTC().Format(time.RFC3339Nano)
-			e.Level = "info"
+			severity := "info"
 			if job.Error != "" {
-				e.Level = "error"
+				severity = "error"
 			}
-			e.Message = fmt.Sprintf("%s: %s — %s", job.Label, job.Target, job.Status)
+			message := fmt.Sprintf("%s: %s — %s", job.Label, job.Target, job.Status)
 			if job.Error != "" {
-				e.Message += " — " + job.Error
+				message += " — " + job.Error
 			}
-			if len(e.Message) > diagnostics.MaxEntryBytes {
-				e.Message = e.Message[:diagnostics.MaxEntryBytes]
-				e.Truncated = true
+			fields := map[string]string{
+				"job_id": strconv.FormatInt(job.ID, 10), "status": job.Status.String(), "label": job.Label,
+				"action_id": job.ActionID, "target": job.Target, "step": job.Step,
 			}
-			entries = append(entries, e)
+			if job.CommandID != nil {
+				fields["command_id"] = strconv.FormatInt(*job.CommandID, 10)
+			}
+			entries = append(entries, diagnostics.NewEntry(
+				"jobs", fmt.Sprintf("job-%d", job.ID), time.UnixMilli(job.UpdatedAt).UTC().Format(time.RFC3339Nano),
+				severity, message, string(raw), fields,
+			))
 		}
 	}
 	out.Sources = append(out.Sources, jobSource)
@@ -159,20 +164,23 @@ func (s *DiagnosticsService) Read(ctx context.Context, q DiagnosticsQuery) (Diag
 		return out, Errorf(KindNotFound, "evidence %q is outside the retained tail or no longer exists", q.Reference)
 	}
 	for _, e := range entries {
-		if q.OmitRoutine && e.Level == "info" && strings.Contains(e.Message, "request complete") && (strings.Contains(e.Raw, "status=200") || strings.Contains(e.Raw, "status=204") || strings.Contains(e.Raw, `"status":200`) || strings.Contains(e.Raw, `"status":204`)) {
+		if q.OmitRoutine && isRoutineHTTP2xx(e) {
 			continue
 		}
 		t, _ := time.Parse(time.RFC3339Nano, e.Time)
-		if !since.IsZero() && (t.IsZero() || t.Before(since)) {
+		if (!since.IsZero() || !until.IsZero()) && t.IsZero() {
 			continue
 		}
-		if !until.IsZero() && !t.IsZero() && t.After(until) {
+		if !since.IsZero() && t.Before(since) {
+			continue
+		}
+		if !until.IsZero() && t.After(until) {
 			continue
 		}
 		if q.Level != "" && q.Level != e.Level {
 			continue
 		}
-		if q.Search != "" && !strings.Contains(strings.ToLower(e.ID+e.Raw+e.Message), strings.ToLower(q.Search)) {
+		if q.Search != "" && !entryContains(e, q.Search) {
 			continue
 		}
 		out.Entries = append(out.Entries, e)
@@ -183,8 +191,9 @@ func (s *DiagnosticsService) Read(ctx context.Context, q DiagnosticsQuery) (Diag
 	}
 
 	budget := 0
-	for i, v := range slices.Backward(out.Entries) {
-		budget += len(v.Raw) + len(v.Message)
+	for i, entry := range slices.Backward(out.Entries) {
+		data, _ := json.Marshal(entry)
+		budget += len(data)
 		if budget > 512<<10 {
 			out.Entries = out.Entries[i+1:]
 			out.Truncated = true
@@ -192,6 +201,27 @@ func (s *DiagnosticsService) Read(ctx context.Context, q DiagnosticsQuery) (Diag
 		}
 	}
 	return out, nil
+}
+
+func isRoutineHTTP2xx(entry diagnostics.Entry) bool {
+	if entry.Level != "info" || !strings.Contains(strings.ToLower(entry.Message), "request complete") {
+		return false
+	}
+	status, err := strconv.Atoi(entry.Fields["status"])
+	return err == nil && status >= 200 && status < 300
+}
+
+func entryContains(entry diagnostics.Entry, search string) bool {
+	search = strings.ToLower(search)
+	if strings.Contains(strings.ToLower(entry.ID+entry.Raw+entry.Message), search) {
+		return true
+	}
+	for key, value := range entry.Fields {
+		if strings.Contains(strings.ToLower(key+value), search) {
+			return true
+		}
+	}
+	return false
 }
 
 type DiagnosticsIncident struct {
@@ -230,7 +260,7 @@ func (s *DiagnosticsService) Context(ctx context.Context, req DiagnosticsInciden
 	}
 	endpoint := ""
 	if running, port := s.webhooks.Endpoint(ctx); running {
-		endpoint = fmt.Sprintf("http://%s:%d/mcp", s.webhooks.Host(), port)
+		endpoint = MCPEndpointAt(s.webhooks.Host(), port)
 	}
 	text, err := prompts.Diagnostics(req.Description, string(data), endpoint)
 	if err != nil {

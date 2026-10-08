@@ -27,7 +27,7 @@ func diagnosticsFixture(t *testing.T) *DiagnosticsService {
 	id := job.Begin(t.Context(), "Create session", "new-session", "review 347")
 	job.Fail(t.Context(), id, `a session named "review 347" already exists`)
 	path := filepath.Join(dir, "desktop.log")
-	require.NoError(t, os.WriteFile(path, []byte("2026-10-07T00:17:17Z INF creating session session_name=review-347\n2026-10-07T00:17:19Z INF request complete status=200\n"), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte("2026-10-07T00:17:17Z INF creating session session_name=review-347\n2026-10-07T00:17:19Z INF request complete status=201\n"), 0o600))
 	return &DiagnosticsService{paths: settings.Paths{LogFile: path, HiveDataDir: dir, ReportsDir: filepath.Join(dir, "reports")}, jobs: job, build: report.Build{Version: "test"}, environ: func(context.Context) []string { return nil }, webhooks: &WebhookService{}}
 }
 
@@ -38,11 +38,17 @@ func TestDiagnosticsCombinesJobFailuresWithoutAgent(t *testing.T) {
 	require.Len(t, out.Entries, 2)
 	require.Equal(t, "desktop", out.Entries[0].Source)
 	require.Equal(t, "job-1", out.Entries[1].ID)
+	require.Equal(t, "failed", out.Entries[1].Fields["status"])
+	require.Equal(t, "new-session", out.Entries[1].Fields["action_id"])
 	require.Contains(t, out.Entries[1].Message, "already exists")
 	require.NotEmpty(t, out.Sources[1].Error, "missing CLI log must not hide other evidence")
 	filtered, err := svc.Read(t.Context(), DiagnosticsQuery{Level: "error", Search: "347"})
 	require.NoError(t, err)
 	require.Len(t, filtered.Entries, 1)
+	filtered, err = svc.Read(t.Context(), DiagnosticsQuery{Search: "action_id"})
+	require.NoError(t, err)
+	require.Len(t, filtered.Entries, 1)
+	require.Equal(t, "job-1", filtered.Entries[0].ID)
 	context, err := svc.Context(t.Context(), DiagnosticsIncident{Description: "Nothing appeared", Query: DiagnosticsQuery{Search: "347"}})
 	require.NoError(t, err)
 	require.Contains(t, context.Text, "already exists")
@@ -70,6 +76,13 @@ func TestDiagnosticsBoundsAndReferences(t *testing.T) {
 	out, err = svc.Read(t.Context(), DiagnosticsQuery{Since: "2026-10-07T00:17:18Z", Until: "2026-10-07T00:17:18Z"})
 	require.NoError(t, err)
 	require.Len(t, out.Entries, 1)
+
+	require.NoError(t, os.WriteFile(svc.paths.LogFile, []byte("untimestamped evidence\n"), 0o600))
+	out, err = svc.Read(t.Context(), DiagnosticsQuery{Until: "2026-10-07T00:17:18Z"})
+	require.NoError(t, err)
+	for _, entry := range out.Entries {
+		require.NotEmpty(t, entry.Time)
+	}
 }
 
 func TestDiagnosticsPreparationUsesDefaultAndOverrideWithoutSpawning(t *testing.T) {

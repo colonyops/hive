@@ -1413,6 +1413,12 @@
           "items": {
             "additionalProperties": false,
             "properties": {
+              "fields": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
               "id": {
                 "type": "string"
               },
@@ -1441,6 +1447,7 @@
               "source",
               "level",
               "message",
+              "fields",
               "raw",
               "truncated"
             ],

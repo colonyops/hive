@@ -9,25 +9,30 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
 const (
-	MaxTailBytes  = 2 << 20
-	MaxEntryBytes = 16 << 10
+	MaxTailBytes       = 2 << 20
+	MaxEntryBytes      = 16 << 10
+	maxFields          = 64
+	maxFieldValueBytes = 4 << 10
 )
 
 type Entry struct {
-	ID        string `json:"id"`
-	Time      string `json:"time"`
-	Source    string `json:"source"`
-	Level     string `json:"level"`
-	Message   string `json:"message"`
-	Raw       string `json:"raw"`
-	Truncated bool   `json:"truncated"`
+	ID        string            `json:"id"`
+	Time      string            `json:"time"`
+	Source    string            `json:"source"`
+	Level     string            `json:"level"`
+	Message   string            `json:"message"`
+	Fields    map[string]string `json:"fields"`
+	Raw       string            `json:"raw"`
+	Truncated bool              `json:"truncated"`
 }
 
 type Source struct {
@@ -121,18 +126,28 @@ func Read(id, path string) (Source, []Entry) {
 }
 
 func Parse(source, raw string) Entry {
-	e := Entry{Source: source, Raw: raw, Message: raw, Level: "unknown"}
-	var obj struct {
-		Time    string `json:"time"`
-		Level   string `json:"level"`
-		Message string `json:"message"`
-		Service string `json:"service_name"`
-	}
-	if json.Unmarshal([]byte(raw), &obj) == nil && obj.Time != "" {
-		e.Source = serviceSource(obj.Service, source)
-		e.Time = obj.Time
-		e.Level = level(obj.Level)
-		e.Message = obj.Message
+	e := Entry{Source: source, Raw: raw, Message: raw, Level: "unknown", Fields: make(map[string]string)}
+	var obj map[string]any
+	if json.Unmarshal([]byte(raw), &obj) == nil {
+		e.Time = stringValue(obj["time"])
+		e.Level = level(stringValue(obj["level"]))
+		if message := stringValue(obj["message"]); message != "" {
+			e.Message = message
+		}
+		e.Source = serviceSource(stringValue(obj[logutils.ServiceNameKey]), source)
+		keys := make([]string, 0, len(obj))
+		for key := range obj {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			if key == "time" || key == "level" || key == "message" {
+				continue
+			}
+			if addField(e.Fields, key, valueString(obj[key])) {
+				e.Truncated = true
+			}
+		}
 	} else {
 		parts := strings.SplitN(raw, " ", 3)
 		if len(parts) == 3 {
@@ -141,10 +156,15 @@ func Parse(source, raw string) Entry {
 				e.Level = level(parts[1])
 				e.Message = parts[2]
 				for field := range strings.FieldsSeq(parts[2]) {
-					if service, ok := strings.CutPrefix(field, logutils.ServiceNameKey+"="); ok {
-						e.Source = serviceSource(service, source)
+					key, value, ok := strings.Cut(field, "=")
+					if !ok || key == "" {
+						continue
+					}
+					if addField(e.Fields, key, value) {
+						e.Truncated = true
 					}
 				}
+				e.Source = serviceSource(e.Fields[logutils.ServiceNameKey], source)
 			}
 		}
 	}
@@ -153,15 +173,71 @@ func Parse(source, raw string) Entry {
 	} else {
 		e.Time = ""
 	}
-	if len(e.Raw) > MaxEntryBytes {
-		e.Raw = e.Raw[:MaxEntryBytes]
+	if raw, truncated := truncateUTF8(e.Raw, MaxEntryBytes); truncated {
+		e.Raw = raw
 		e.Truncated = true
 	}
-	if len(e.Message) > MaxEntryBytes {
-		e.Message = e.Message[:MaxEntryBytes]
+	if message, truncated := truncateUTF8(e.Message, MaxEntryBytes); truncated {
+		e.Message = message
 		e.Truncated = true
 	}
 	return e
+}
+
+// NewEntry normalizes a record supplied by a non-file diagnostics source.
+func NewEntry(source, id, at, severity, message, raw string, fields map[string]string) Entry {
+	e := Entry{ID: id, Time: at, Source: source, Level: level(severity), Message: message, Fields: make(map[string]string), Raw: raw}
+	for key, value := range fields {
+		if addField(e.Fields, key, value) {
+			e.Truncated = true
+		}
+	}
+	if raw, truncated := truncateUTF8(e.Raw, MaxEntryBytes); truncated {
+		e.Raw = raw
+		e.Truncated = true
+	}
+	if text, truncated := truncateUTF8(e.Message, MaxEntryBytes); truncated {
+		e.Message = text
+		e.Truncated = true
+	}
+	return e
+}
+
+func addField(fields map[string]string, key, value string) bool {
+	_, exists := fields[key]
+	if (!exists && len(fields) >= maxFields) || key == "" || len(key) > 256 {
+		return true
+	}
+	var truncated bool
+	fields[key], truncated = truncateUTF8(value, maxFieldValueBytes)
+	return truncated
+}
+
+func stringValue(value any) string {
+	text, _ := value.(string)
+	return text
+}
+
+func valueString(value any) string {
+	if text, ok := value.(string); ok {
+		return text
+	}
+	data, err := json.Marshal(value)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func truncateUTF8(value string, limit int) (string, bool) {
+	if len(value) <= limit {
+		return value, false
+	}
+	value = value[:limit]
+	for !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value, true
 }
 
 func level(s string) string {

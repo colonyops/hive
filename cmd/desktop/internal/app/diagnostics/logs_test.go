@@ -19,6 +19,8 @@ func TestMixedLogsAndStableReferences(t *testing.T) {
 	require.Equal(t, "2026-10-07T00:17:17Z", entries[0].Time)
 	require.Equal(t, "error", entries[0].Level)
 	require.Equal(t, "window created", entries[1].Message)
+	require.Equal(t, "@3", entries[1].Fields["window_id"])
+	require.Equal(t, "review-347", entries[0].Fields["session"])
 	require.Equal(t, "unknown", entries[2].Level)
 	require.NoError(t, os.WriteFile(path, []byte(content+" completed\n"), 0o600))
 	_, again := Read("desktop", path)
@@ -37,9 +39,21 @@ func TestReadBoundsAndMissingFiles(t *testing.T) {
 	require.True(t, source.Truncated)
 	require.Len(t, entries, 1)
 	require.Equal(t, "kept", entries[0].Message)
-	entry := Parse("cli", "2026-10-07T00:00:00Z INF "+strings.Repeat("x", MaxEntryBytes*2))
+	entry := Parse("cli", "2026-10-07T00:00:00Z INF "+strings.Repeat("🙂", MaxEntryBytes))
 	require.True(t, entry.Truncated)
 	require.LessOrEqual(t, len(entry.Raw), MaxEntryBytes)
+	require.Equal(t, entry.Raw, strings.ToValidUTF8(entry.Raw, ""))
+}
+
+func TestParseJSONWithoutTimestampAndStructuredFields(t *testing.T) {
+	entry := Parse("desktop", `{"level":"error","message":"failed","attempt":3,"nested":{"name":"value"},"service_name":"hive-cli"}`)
+	require.Empty(t, entry.Time)
+	require.Equal(t, "cli", entry.Source)
+	require.Equal(t, "error", entry.Level)
+	require.Equal(t, "failed", entry.Message)
+	require.Equal(t, "3", entry.Fields["attempt"])
+	require.JSONEq(t, `{"name":"value"}`, entry.Fields["nested"])
+	require.Equal(t, "hive-cli", entry.Fields["service_name"])
 }
 
 func TestCLIPathOverrides(t *testing.T) {

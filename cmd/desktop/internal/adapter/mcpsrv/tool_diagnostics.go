@@ -2,6 +2,7 @@ package mcpsrv
 
 import (
 	"context"
+	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -39,7 +40,11 @@ func (ctrl *Controller) ReadDiagnostics(ctx context.Context, _ *mcp.CallToolRequ
 		for i := range result.Entries {
 			result.Entries[i].Raw = ""
 			if len(result.Entries[i].Message) > 500 {
-				result.Entries[i].Message = result.Entries[i].Message[:500]
+				message := result.Entries[i].Message[:500]
+				for !utf8.ValidString(message) {
+					message = message[:len(message)-1]
+				}
+				result.Entries[i].Message = message
 				result.Entries[i].Truncated = true
 			}
 		}

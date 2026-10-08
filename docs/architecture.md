@@ -1207,15 +1207,20 @@ or a profile type updates the panel that reads it.
 `App.Diagnostics` combines bounded file tails with `Jobs` outcomes; it owns no
 second log store (ADR [diagnostics-combines-bounded-evidence-independently-of-agent-execution](decisions/2026-10-06-diagnostics-combines-bounded-evidence-independently-of-agent-execution.md)).
 Wails and the read-only `read_diagnostics` MCP tool use the same service.
-Records retain source identity, evidence IDs, raw text, and truncation status.
-CLI and Desktop share hive.log, with service_name identifying the program.
-The reader accepts console text and JSON lines. CLI paths resolve from the launch
-environment and the instance's Hive data directory, never a frontend constant.
+Records retain source identity, evidence IDs, raw text, structured fields, and
+truncation status. JSON fields are exact; fields parsed from legacy console text
+are best effort. CLI and Desktop share hive.log, with service_name identifying
+the program. The reader accepts console text and JSON lines. CLI paths resolve
+from the launch environment and the instance's Hive data directory, never a
+frontend constant. Core filtering runs before viewer row and byte limits. An
+explicit time bound excludes records without a valid timestamp.
 
 The Diagnostics window mounts independently of the main app's onboarding and
-terminal surfaces. Opening it never starts an agent. Go-owned prompts package
-bounded incident snapshots; the selected configured agent runs only after an
-explicit action, through the existing authenticated ephemeral PTY transport.
+terminal surfaces. It owns panel layout, display order, live polling, and tail
+pinning, but it does not interpret evidence or build prompts. Opening it never
+starts an agent. Go-owned prompts package bounded incident snapshots; the
+selected configured agent runs only after an explicit action, through the
+existing authenticated ephemeral PTY transport and shared terminal renderer.
 The evidence viewer remains usable if the transport or agent is unavailable.
 
 ### Source HTTP

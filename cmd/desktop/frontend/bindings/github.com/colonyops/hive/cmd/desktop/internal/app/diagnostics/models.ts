@@ -7,6 +7,7 @@ export interface Entry {
     "source": string;
     "level": string;
     "message": string;
+    "fields": { [_ in string]?: string } | null;
     "raw": string;
     "truncated": boolean;
 }
