@@ -31,3 +31,25 @@ func TestIsInitCommand(t *testing.T) {
 		})
 	}
 }
+
+// Before skips opening the hive runtime when this reports true.
+func TestIsShellCompletion(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want bool
+	}{
+		{name: "static script", args: []string{"hive", "completion", "zsh"}, want: true},
+		{name: "dynamic completion", args: []string{"hive", "hc", "--generate-shell-completion"}, want: true},
+		{name: "flag after --", args: []string{"hive", "msg", "--", "--generate-shell-completion"}, want: false},
+		{name: "flag not last", args: []string{"hive", "--generate-shell-completion", "ls"}, want: false},
+		{name: "plain command", args: []string{"hive", "ls"}, want: false},
+		{name: "no subcommand", args: []string{"hive"}, want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, isShellCompletion(tt.args))
+		})
+	}
+}

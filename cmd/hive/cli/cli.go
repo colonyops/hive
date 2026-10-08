@@ -9,8 +9,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync"
-	"time"
 
 	"github.com/rs/zerolog"
 
@@ -31,10 +29,7 @@ import (
 	hiveconfig "github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/doctor"
-	"github.com/colonyops/hive/internal/hive/events"
-	"github.com/colonyops/hive/internal/hive/session/scripts"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
-	"github.com/colonyops/hive/internal/store/db"
 	"github.com/colonyops/hive/pkg/buildinfo"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/logutils"
@@ -123,11 +118,8 @@ func Main() {
 		logger      zerolog.Logger
 		cliLog      zerolog.Logger
 		hiveApp     = &app.App{}
-		database    *db.DB
+		hiveRuntime *hive.Runtime
 		pluginMgr   *plugins.Manager
-		sweepCancel context.CancelFunc
-		busCancel   context.CancelFunc
-		bgWg        sync.WaitGroup // tracks background goroutines for clean shutdown
 	)
 
 	flags := &commands.Flags{}
@@ -206,11 +198,6 @@ Run 'hive new' to create a new session from the current repository.`,
 			cliLog = logutils.Component(logger, "cli")
 			logCloser = closer
 
-			// Extract bundled scripts (non-fatal on failure)
-			if err := scripts.EnsureExtracted(flags.DataDir, version); err != nil {
-				cliLog.Warn().Err(err).Msg("failed to extract bundled scripts")
-			}
-
 			cfg, err := config.Load(flags.ConfigPath, flags.DataDir)
 			if err != nil {
 				return ctx, fmt.Errorf("load config: %w", err)
@@ -220,45 +207,23 @@ Run 'hive new' to create a new session from the current repository.`,
 			palette, _ := theme.Get(cfg.TUI.Theme)
 			styles.SetTheme(palette)
 
-			database, err = hive.OpenDB(ctx, cfg.DataDir, cfg.Database)
-			if err != nil {
-				return ctx, err
-			}
-			bus := events.New(64)
-			busCtx, cancel := context.WithCancel(context.Background())
-			busCancel = cancel
-			bgWg.Go(func() {
-				bus.Start(busCtx)
-				cliLog.Debug().Msg("event bus stopped")
-			})
-
-			events.RegisterDebugLogger(logger, bus)
-			hive.NewNotificationRouter(bus).Register()
-
 			exec := &executil.RealExecutor{}
 			tmuxClient := tmuxexec.NewDefault(logger)
-			engine, err := hive.New(&cfg.Config, hive.Ports{
-				DB:         database,
-				Bus:        bus,
-				Executor:   exec,
-				Mux:        tmuxClient,
-				PaneSource: tmuxClient,
-				DataDir:    flags.DataDir,
-				Styler:     styles.CLIOutputStyler{},
-				Stdout:     os.Stdout,
-				Stderr:     os.Stderr,
-				Logger:     logger,
+			hiveRuntime, err = hive.Open(ctx, &cfg.Config, hive.RuntimeOptions{
+				Executor:       exec,
+				Mux:            tmuxClient,
+				PaneSource:     tmuxClient,
+				Styler:         styles.CLIOutputStyler{},
+				Stdout:         os.Stdout,
+				Stderr:         os.Stderr,
+				Logger:         logger,
+				ScriptsVersion: version,
 			})
 			if err != nil {
 				return ctx, err
 			}
+			engine := hiveRuntime.Engine()
 			kvStore := engine.KV()
-
-			sweepCtx, cancel := context.WithCancel(context.Background())
-			sweepCancel = cancel
-			bgWg.Go(func() {
-				engine.SweepKV(sweepCtx, 5*time.Minute)
-			})
 
 			// Create all plugin instances, collect availability info for doctor,
 			// then register with the manager.
@@ -311,33 +276,19 @@ Run 'hive new' to create a new session from the current repository.`,
 			return ctx, nil
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
-			if busCancel != nil {
-				busCancel()
-			}
-
-			// Stop background sweep
-			if sweepCancel != nil {
-				sweepCancel()
-			}
-
-			// Close plugins
 			if pluginMgr != nil {
 				pluginMgr.CloseAll()
 			}
 
-			// Close database connection
-			if database != nil {
-				if err := database.Close(); err != nil {
+			// Before the log file, so background work cannot write to a
+			// closed file descriptor.
+			if hiveRuntime != nil {
+				if err := hiveRuntime.Close(); err != nil {
 					cliLog.Error().Err(err).Msg("failed to close database")
 					return err
 				}
 			}
 
-			// Wait for background goroutines to finish before closing the
-			// log file so they don't write to a closed file descriptor.
-			bgWg.Wait()
-
-			// Close log file
 			if logCloser != nil {
 				logCloser()
 			}

@@ -279,6 +279,19 @@ engine root, so the root composes them without a cycle. A service declares
 the ports it consumes, and `platform` and `store` satisfy them structurally,
 the [Go amendment](#the-go-amendment-to-hexagonal) applied to the engine.
 
+`hive.Runtime` is the one startup and shutdown path for the engine in both
+programs. `hive.Open` extracts the bundled scripts, opens `hive.db`, creates
+the event bus, builds the engine, and then starts the bus and the KV sweep.
+When a step fails, `Open` closes what it opened and returns a
+`hive.StartupError` that names the step, so each program keeps its own error
+wording. `Close` is idempotent: it stops the background work, waits for it,
+and then closes `hive.db`. The program loads its own config and supplies its
+own drivers in `hive.RuntimeOptions` (executor, multiplexer, pane source,
+output styler and streams, logger); tmux, environment, and output behavior
+stay in the program. The CLI opens the runtime in its root `Before` and
+skips it for shell completion and `hive init`. The desktop opens it in
+`app.New` and closes it last in `App.Close`.
+
 Loggers are passed down, never global: depguard denies the zerolog global
 logger in the whole module, because no program assigns it. A `zerolog.Logger`
 is the first parameter of what takes one, or the second after a
@@ -528,6 +541,8 @@ internal/                         # the hive engine both programs run on (see
   hive/                           # the engine
     engine.go                     #   hive.Engine: New(cfg, Ports), Reload(cfg),
                                   #   one accessor per service
+    runtime.go                    #   hive.Runtime: Open(ctx, cfg, opts), Close;
+                                  #   owns hive.db, the bus, and maintenance
     events/                       #   the domain event bus
     session/  status/  hc/        #   one subpackage per application service
     messaging/  repocontext/
@@ -1000,8 +1015,8 @@ Three rules hold for anything that touches this file:
 `App.ReloadHiveRuntime` makes a write take effect in the running process. It
 calls `hive.Engine.Reload`, which rebuilds every config-derived service and
 swaps the set in atomically; a failed reload keeps the old set. The database,
-the event bus and the honeycomb store are opened once and keep their startup
-settings (ADR the-hive-runtime-rebinds-on-a-config-write-instead-of-requiring-a-restart).
+the event bus and the honeycomb store belong to `hive.Runtime`, are opened
+once, and keep their startup settings (ADR the-hive-runtime-rebinds-on-a-config-write-instead-of-requiring-a-restart).
 A caller fetches a service per call (`engine.Sessions().X`) and never holds
 one, or it keeps serving the config the process started with. A new
 config-derived dependency belongs in the engine's service set.
