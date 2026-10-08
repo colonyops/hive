@@ -10,10 +10,11 @@ import (
 
 	"github.com/colonyops/hive/internal/domain/session"
 
-	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
+
+	"github.com/colonyops/hive/pkg/tmpl"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
@@ -245,7 +246,7 @@ func (e *LaunchSessionExecutor) runPostHook(
 	if command == "" {
 		return failed(errors.New("rendered blank"))
 	}
-	timeout := cfg.PostHookTimeout.Duration()
+	timeout := cfg.PostHookTimeout
 	if timeout == 0 {
 		timeout = defaultPostHookTimeout
 	}

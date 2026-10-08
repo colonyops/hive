@@ -26,7 +26,7 @@ func TestDefaultSettingsAreSafe(t *testing.T) {
 	t.Setenv(EnvConfigDir, t.TempDir())
 	cfg, err := LoadSettings()
 	require.NoError(t, err)
-	assert.Equal(t, 5*time.Minute, cfg.Polling.Interval.Duration())
+	assert.Equal(t, 5*time.Minute, cfg.Polling.Interval)
 	assert.True(t, cfg.Updates.Enabled)
 	assert.True(t, cfg.Notifications.Enabled)
 	assert.Equal(t, DeliveryAuto, cfg.Notifications.Delivery)
@@ -166,7 +166,7 @@ development:
 
 	cfg, err := LoadSettings()
 	require.NoError(t, err)
-	assert.Equal(t, 2*time.Minute, cfg.Polling.Interval.Duration())
+	assert.Equal(t, 2*time.Minute, cfg.Polling.Interval)
 	assert.False(t, cfg.Updates.Enabled)
 	assert.Equal(t, 25002, cfg.HTTP.Port)
 	assert.Equal(t, MockFeed, cfg.Development.Mocks.Mode)
@@ -261,15 +261,15 @@ func TestSettingsValidation(t *testing.T) {
 		name string
 		edit func(*Settings)
 	}{
-		{"short poll", func(s *Settings) { s.Polling.Interval = Duration(time.Second) }},
+		{"short poll", func(s *Settings) { s.Polling.Interval = time.Second }},
 		{"update channel", func(s *Settings) { s.Updates.Channel = "nightly" }},
 		{"delivery", func(s *Settings) { s.Notifications.Delivery = "desktop" }},
 		{"http host", func(s *Settings) { s.HTTP.Host = "0.0.0.0" }},
 		{"http port", func(s *Settings) { s.HTTP.Port = 80 }},
 		{"mock", func(s *Settings) { s.Development.Mocks.Mode = "mystery" }},
 		{"vite host", func(s *Settings) { s.Development.Vite.Host = "127.0.0.2" }},
-		{"negative pause", func(s *Settings) { s.Development.Debug.PauseCommit = Duration(-time.Second) }},
-		{"excessive pause", func(s *Settings) { s.Development.Debug.PauseIngest = Duration(MaxDebugPause + time.Second) }},
+		{"negative pause", func(s *Settings) { s.Development.Debug.PauseCommit = -time.Second }},
+		{"excessive pause", func(s *Settings) { s.Development.Debug.PauseIngest = MaxDebugPause + time.Second }},
 		{"github api base remote host", func(s *Settings) {
 			s.Development.GitHub.APIBase = "https://api.github.example.com"
 		}},

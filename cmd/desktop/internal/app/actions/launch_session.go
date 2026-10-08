@@ -3,6 +3,7 @@ package actions
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // LaunchSessionConfig starts either a repository-backed hive session or an
@@ -24,7 +25,7 @@ type LaunchSessionConfig struct {
 	// above plus `.Session`, then run in the new checkout.
 	PostHook string `yaml:"post_hook,omitempty"`
 	// PostHookTimeout bounds the hook; zero means the executor's default.
-	PostHookTimeout Duration `yaml:"post_hook_timeout,omitempty"`
+	PostHookTimeout time.Duration `yaml:"post_hook_timeout,omitempty"`
 }
 
 func (c *LaunchSessionConfig) Validate() error {

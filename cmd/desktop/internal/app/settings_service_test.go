@@ -84,7 +84,7 @@ func TestSettingsServiceSetNotificationSettingsPreservesUnrelatedFields(t *testi
 
 	got, err := settings.LoadSettings()
 	require.NoError(t, err)
-	require.Equal(t, 5*time.Minute, got.Polling.Interval.Duration())
+	require.Equal(t, 5*time.Minute, got.Polling.Interval)
 	require.False(t, got.Updates.Enabled)
 	require.False(t, got.Notifications.Enabled)
 	require.Equal(t, settings.DeliveryApp, got.Notifications.Delivery)
@@ -103,7 +103,7 @@ func TestSettingsServiceSetGithubSettingsPreservesAutoUpdate(t *testing.T) {
 
 	got, err := settings.LoadSettings()
 	require.NoError(t, err)
-	require.Equal(t, 2*time.Minute, got.Polling.Interval.Duration())
+	require.Equal(t, 2*time.Minute, got.Polling.Interval)
 	require.False(t, got.Updates.Enabled, "updates.enabled must survive a poll-interval save")
 }
 
@@ -163,7 +163,7 @@ func TestSettingsServiceSetGithubSettingsPersistsAndApplies(t *testing.T) {
 		require.NoError(t, service.SetGithub(t.Context(), GithubSettings{PollInterval: 2 * time.Minute}))
 		saved, err := settings.LoadSettings()
 		require.NoError(t, err)
-		require.Equal(t, 2*time.Minute, saved.Polling.Interval.Duration())
+		require.Equal(t, 2*time.Minute, saved.Polling.Interval)
 
 		got, err := service.Github(t.Context())
 		require.NoError(t, err)
@@ -223,7 +223,7 @@ func TestSettingsServiceSetAppearanceSettingsPreservesUnrelatedFields(t *testing
 	require.Equal(t, 5, got.Appearance.TerminalPoolSize)
 	require.True(t, got.Appearance.TerminalShowSessionAge)
 	require.Equal(t, 7, got.Appearance.TerminalSessionAgeThresholdDays)
-	require.Equal(t, 5*time.Minute, got.Polling.Interval.Duration())
+	require.Equal(t, 5*time.Minute, got.Polling.Interval)
 	require.False(t, got.Updates.Enabled)
 
 	roundTripped, err := service.Appearance(t.Context())

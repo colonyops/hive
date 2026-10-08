@@ -54,25 +54,8 @@ const (
 	MockActionSmoke = "action-smoke"
 )
 
-// Duration is a YAML- and environment-friendly Go duration.
-type Duration time.Duration
-
-func (d Duration) Duration() time.Duration { return time.Duration(d) }
-func (d Duration) String() string          { return time.Duration(d).String() }
-
-func (d *Duration) UnmarshalText(text []byte) error {
-	parsed, err := time.ParseDuration(string(text))
-	if err != nil {
-		return err
-	}
-	*d = Duration(parsed)
-	return nil
-}
-
-func (d Duration) MarshalText() ([]byte, error) { return []byte(d.String()), nil }
-
 type PollingSettings struct {
-	Interval Duration `yaml:"interval" env:"HIVE_DESKTOP_POLLING_INTERVAL"`
+	Interval time.Duration `yaml:"interval" env:"HIVE_DESKTOP_POLLING_INTERVAL"`
 }
 
 type UpdateSettings struct {
@@ -199,7 +182,7 @@ type AgentWorkspacesSettings struct {
 	// session and the session being ended: the request arrives from inside the
 	// agent's own tool call, and the delay lets that call return first. Zero
 	// takes the shipped value.
-	SessionEndDelay Duration `yaml:"session_end_delay,omitempty" env:"HIVE_DESKTOP_AGENT_WORKSPACES_SESSION_END_DELAY"`
+	SessionEndDelay time.Duration `yaml:"session_end_delay,omitempty" env:"HIVE_DESKTOP_AGENT_WORKSPACES_SESSION_END_DELAY"`
 }
 
 // PathsSettings locates the external binaries the app execs. Each is the escape
@@ -329,8 +312,8 @@ type DevToolsSettings struct {
 }
 
 type DebugSettings struct {
-	PauseIngest Duration `yaml:"pause_ingest" env:"HIVE_DESKTOP_DEVELOPMENT_DEBUG_PAUSE_INGEST"`
-	PauseCommit Duration `yaml:"pause_commit" env:"HIVE_DESKTOP_DEVELOPMENT_DEBUG_PAUSE_COMMIT"`
+	PauseIngest time.Duration `yaml:"pause_ingest" env:"HIVE_DESKTOP_DEVELOPMENT_DEBUG_PAUSE_INGEST"`
+	PauseCommit time.Duration `yaml:"pause_commit" env:"HIVE_DESKTOP_DEVELOPMENT_DEBUG_PAUSE_COMMIT"`
 }
 
 // EnvGitHubAPIBase is the environment name behind development.github.api_base.
@@ -390,7 +373,7 @@ type Settings struct {
 func DefaultSettings() Settings {
 	return Settings{
 		Version:       configmigrate.SettingsSet.Current,
-		Polling:       PollingSettings{Interval: Duration(5 * time.Minute)},
+		Polling:       PollingSettings{Interval: 5 * time.Minute},
 		Updates:       UpdateSettings{Enabled: true},
 		Notifications: NotificationSettings{Enabled: true, Delivery: DeliveryAuto, Sound: true},
 		Appearance: Appearance{
@@ -402,7 +385,7 @@ func DefaultSettings() Settings {
 		},
 		HTTP:            HTTPSettings{Enabled: true, Host: "127.0.0.1", Port: 0},
 		Telemetry:       TelemetrySettings{Enabled: false},
-		AgentWorkspaces: AgentWorkspacesSettings{SessionEndDelay: Duration(10 * time.Second)},
+		AgentWorkspaces: AgentWorkspacesSettings{SessionEndDelay: 10 * time.Second},
 		Development: DevelopmentSettings{
 			Mocks:    MockSettings{Mode: MockLive},
 			Vite:     ServerSettings{Host: "127.0.0.1", Port: 0},
@@ -449,7 +432,7 @@ func ResolveNotificationDelivery(value string) string {
 }
 
 func (s Settings) Validate() error {
-	if s.Polling.Interval.Duration() < MinPollInterval {
+	if s.Polling.Interval < MinPollInterval {
 		return fmt.Errorf("polling.interval must be at least %s", MinPollInterval)
 	}
 	switch s.Updates.Channel {
@@ -502,7 +485,7 @@ func (s Settings) Validate() error {
 	if s.Development.Debug.PauseIngest < 0 || s.Development.Debug.PauseCommit < 0 {
 		return fmt.Errorf("development debug pauses must not be negative")
 	}
-	if s.Development.Debug.PauseIngest.Duration() > MaxDebugPause || s.Development.Debug.PauseCommit.Duration() > MaxDebugPause {
+	if s.Development.Debug.PauseIngest > MaxDebugPause || s.Development.Debug.PauseCommit > MaxDebugPause {
 		return fmt.Errorf("development debug pauses must not exceed %s", MaxDebugPause)
 	}
 	if err := validateTelemetry(s.Telemetry); err != nil {

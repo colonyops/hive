@@ -110,10 +110,10 @@ func TestPublishMessageConfig_Validate_RequiresTopic(t *testing.T) {
 }
 
 func TestLaunchSessionConfig_PostHookTimeoutNeedsAPostHook(t *testing.T) {
-	err := (&LaunchSessionConfig{PromptTemplate: "go", PostHookTimeout: Duration(time.Minute)}).Validate()
+	err := (&LaunchSessionConfig{PromptTemplate: "go", PostHookTimeout: time.Minute}).Validate()
 	require.ErrorContains(t, err, "post_hook_timeout is set without post_hook")
 
-	require.NoError(t, (&LaunchSessionConfig{PromptTemplate: "go", PostHook: "zed .", PostHookTimeout: Duration(time.Minute)}).Validate())
+	require.NoError(t, (&LaunchSessionConfig{PromptTemplate: "go", PostHook: "zed .", PostHookTimeout: time.Minute}).Validate())
 	require.NoError(t, (&LaunchSessionConfig{PromptTemplate: "go", PostHook: "zed ."}).Validate())
 }
 

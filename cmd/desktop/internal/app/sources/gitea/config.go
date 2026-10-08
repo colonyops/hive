@@ -7,6 +7,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/gitea/giteaclient"
 	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 // Provider is the credentials provider name every Gitea credential is filed
@@ -102,7 +103,7 @@ type Config struct {
 	Limit int `json:"limit,omitempty" yaml:"limit,omitempty" jsonschema:"title=Limit,minimum=0,maximum=100,description=Maximum items per fetch. Search caps at 100 and notifications at 50; 0 uses the default of 50."`
 	// Interval is the floor between fetches, for an instance that should not
 	// be searched on every tick.
-	Interval connector.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The source still only runs on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
+	Interval duration.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The source still only runs on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
 }
 
 // Validate rejects what Gitea would silently ignore. Its search endpoint

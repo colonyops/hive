@@ -293,7 +293,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		cancel:        cancel,
 	}
 
-	a.pollInterval = cfg.Settings.Polling.Interval.Duration()
+	a.pollInterval = cfg.Settings.Polling.Interval
 	a.tmux = tmuxbin.NewResolver(cfg.Settings.Paths.Tmux)
 	a.execEnv = cfg.ExecEnv
 	if a.execEnv == nil {
@@ -322,7 +322,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	}
 
 	dbOptions := queries.DefaultOpenOptions()
-	dbOptions.PauseCommit = cfg.Settings.Development.Debug.PauseCommit.Duration()
+	dbOptions.PauseCommit = cfg.Settings.Development.Debug.PauseCommit
 	dbOptions.Logger = cfg.Logger
 	db, err := queries.Open(ctx, cfg.Paths.StateDir, dbOptions)
 	if err != nil {
@@ -1086,7 +1086,7 @@ func (a *App) buildProducer(logger zerolog.Logger) *ingest.Producer {
 		Logger:    logger,
 	})
 	producer.SetRecorder(a.Activity)
-	producer.SetDebugPause(a.settings.Development.Debug.PauseIngest.Duration())
+	producer.SetDebugPause(a.settings.Development.Debug.PauseIngest)
 	return producer
 }
 

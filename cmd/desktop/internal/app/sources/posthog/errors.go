@@ -12,6 +12,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/posthog/client"
 	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 // ItemKind is the canonical `kind` every error item carries. Without one an
@@ -64,7 +65,7 @@ type ErrorsConfig struct {
 	IncludeTestAccounts bool `json:"include_test_accounts,omitempty" yaml:"include_test_accounts,omitempty" jsonschema:"title=Include test accounts,description=Include traffic PostHog classifies as internal or test. Off by default."`
 	// Interval is the floor between fetches, for a project whose issue query
 	// is not worth running on every tick.
-	Interval connector.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The source still only runs on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
+	Interval duration.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The source still only runs on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
 }
 
 func (c *ErrorsConfig) Validate() error {

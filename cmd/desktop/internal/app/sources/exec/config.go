@@ -9,6 +9,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/icons"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sourcemark"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 // maxTimeout bounds a run. One tick drains every pull source in sequence, so a
@@ -34,7 +35,7 @@ type Config struct {
 	// Timeout bounds one run. Required: a command with no deadline can hang
 	// the poll loop, and a source that silently stopped producing is the
 	// failure this node exists to remove.
-	Timeout connector.Duration `json:"timeout" yaml:"timeout" jsonschema:"title=Timeout,description=How long one run may take before it is killed and the tick fails. Required; at most 2m because a tick drains sources in sequence."`
+	Timeout duration.Duration `json:"timeout" yaml:"timeout" jsonschema:"title=Timeout,description=How long one run may take before it is killed and the tick fails. Required; at most 2m because a tick drains sources in sequence."`
 	// Cwd is the directory the command runs in. Empty is the desktop
 	// process's own, which for a launched .app bundle is not a useful place.
 	Cwd string `json:"cwd,omitempty" yaml:"cwd,omitempty" jsonschema:"title=Working directory,description=Absolute path (or one starting with ~/) the command runs in. Empty runs in the app's own directory."`
@@ -42,7 +43,7 @@ type Config struct {
 	Env map[string]string `json:"env,omitempty" yaml:"env,omitempty" jsonschema:"title=Environment,description=Extra environment variables for this command, added to the resolved environment. Values are literal; nothing is expanded or interpolated."`
 	// Interval is the floor between runs, for a command that is expensive or
 	// only worth running hourly. Empty runs it on every poll tick.
-	Interval connector.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between runs. The command still only runs on a poll tick so the real cadence rounds up to the next one; empty runs it on every tick."`
+	Interval duration.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between runs. The command still only runs on a poll tick so the real cadence rounds up to the next one; empty runs it on every tick."`
 	// Icon is the glyph feed rows render for this node's items, from the
 	// shared feed icon set. Purely cosmetic; empty means the default.
 	Icon string `json:"icon,omitempty" yaml:"icon,omitempty" jsonschema:"title=Icon,description=The glyph feed rows render for this node's items. Empty uses the default command glyph."`
@@ -67,7 +68,7 @@ func (c *Config) Validate() error {
 	case timeout <= 0:
 		return fmt.Errorf("exec source: timeout is required, like \"30s\"")
 	case timeout > maxTimeout:
-		return fmt.Errorf("exec source: timeout %s exceeds the maximum %s", c.Timeout, connector.Duration(maxTimeout))
+		return fmt.Errorf("exec source: timeout %s exceeds the maximum %s", c.Timeout, duration.Duration(maxTimeout))
 	}
 	if err := connector.ValidateInterval("exec source", c.Interval); err != nil {
 		return err

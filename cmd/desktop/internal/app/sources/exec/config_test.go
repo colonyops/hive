@@ -11,10 +11,11 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 func validConfig() *Config {
-	return &Config{Command: "gcx alerts list -o json", Timeout: connector.Duration(30 * time.Second)}
+	return &Config{Command: "gcx alerts list -o json", Timeout: duration.Duration(30 * time.Second)}
 }
 
 func TestConfigValidate(t *testing.T) {
@@ -27,8 +28,8 @@ func TestConfigValidate(t *testing.T) {
 		"valid":               {func(*Config) {}, ""},
 		"no command":          {func(c *Config) { c.Command = "  " }, "command is required"},
 		"no timeout":          {func(c *Config) { c.Timeout = 0 }, "timeout is required"},
-		"timeout too long":    {func(c *Config) { c.Timeout = connector.Duration(10 * time.Minute) }, "exceeds the maximum"},
-		"negative interval":   {func(c *Config) { c.Interval = connector.Duration(-time.Second) }, "must not be negative"},
+		"timeout too long":    {func(c *Config) { c.Timeout = duration.Duration(10 * time.Minute) }, "exceeds the maximum"},
+		"negative interval":   {func(c *Config) { c.Interval = duration.Duration(-time.Second) }, "must not be negative"},
 		"relative cwd":        {func(c *Config) { c.Cwd = "src/repo" }, "must be an absolute path"},
 		"absolute cwd":        {func(c *Config) { c.Cwd = "/Users/x/src" }, ""},
 		"home-relative cwd":   {func(c *Config) { c.Cwd = "~/src" }, ""},
@@ -36,7 +37,7 @@ func TestConfigValidate(t *testing.T) {
 		"known icon":          {func(c *Config) { c.Icon = "bell" }, ""},
 		"bad env name":        {func(c *Config) { c.Env = map[string]string{"A=B": "c"} }, "not a usable variable name"},
 		"good env":            {func(c *Config) { c.Env = map[string]string{"TOKEN": "x"} }, ""},
-		"interval is a floor": {func(c *Config) { c.Interval = connector.Duration(time.Hour) }, ""},
+		"interval is a floor": {func(c *Config) { c.Interval = duration.Duration(time.Hour) }, ""},
 		"image":               {func(c *Config) { c.Image = "0123456789abcdef0123456789abcdef" }, ""},
 		"uppercase image":     {func(c *Config) { c.Image = "0123456789ABCDEF0123456789abcdef" }, "not a valid mark reference"},
 		"short image":         {func(c *Config) { c.Image = "0123" }, "not a valid mark reference"},

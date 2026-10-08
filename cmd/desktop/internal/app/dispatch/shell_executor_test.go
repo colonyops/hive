@@ -125,7 +125,7 @@ func TestShellExecutor_TimeoutKillsSlowCommand(t *testing.T) {
 		Type: "shell",
 		Config: &actions.ShellConfig{
 			CommandTemplate: "sleep 5",
-			Timeout:         actions.Duration(50 * time.Millisecond),
+			Timeout:         50 * time.Millisecond,
 		},
 	}
 

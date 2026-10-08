@@ -23,6 +23,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
 	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/execenv"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 // testFetchers builds the per-account fetcher registry without touching the
@@ -147,7 +148,7 @@ func TestPullFactoriesCarryTheConfiguredInterval(t *testing.T) {
 		require.NoErrorf(t, seedValidConfig(config), "connector %q", connectorType)
 		interval := reflect.ValueOf(config).Elem().FieldByName("Interval")
 		require.Truef(t, interval.IsValid() && interval.CanSet(), "pull connector %q has no settable Interval field", connectorType)
-		interval.Set(reflect.ValueOf(connector.Duration(floor)))
+		interval.Set(reflect.ValueOf(duration.Duration(floor)))
 		require.NoErrorf(t, config.Validate(), "connector %q rejects an interval", connectorType)
 
 		instance, err := factories[connectorType].New(connector.Node{FlowID: "f", NodeID: "n"}, config)
@@ -185,7 +186,7 @@ func seedValidConfig(config connector.Config) error {
 	case *webhook.Config:
 		c.Path = "ci-alerts"
 	case *execsource.Config:
-		c.Command, c.Timeout = "echo '[]'", connector.Duration(30*time.Second)
+		c.Command, c.Timeout = "echo '[]'", duration.Duration(30*time.Second)
 	case *grafana.MetricsConfig:
 		c.Credential = grafana.Provider + "/grafana.example.com-1"
 		c.DatasourceUID, c.Expr = "prometheus-uid", "up"

@@ -81,7 +81,7 @@ func TestWebhookServiceSetSettings(t *testing.T) {
 	isolateSettings(t)
 	service := newWebhookService(WebhookDeps{Settings: testSettingsStore(t), Captures: nil, Listener: nil, Host: "127.0.0.1", Port: 0})
 	cfg := settings.DefaultSettings()
-	cfg.Polling.Interval = settings.Duration(2 * time.Minute)
+	cfg.Polling.Interval = 2 * time.Minute
 	require.NoError(t, settings.SaveSettings(cfg))
 
 	require.NoError(t, service.SetState(t.Context(), true, "127.0.0.1", 27777))
@@ -94,7 +94,7 @@ func TestWebhookServiceSetSettings(t *testing.T) {
 
 	saved, err := settings.LoadPersistedSettings()
 	require.NoError(t, err)
-	assert.Equal(t, 2*time.Minute, saved.Polling.Interval.Duration())
+	assert.Equal(t, 2*time.Minute, saved.Polling.Interval)
 }
 
 func TestWebhookServiceSetSettingsValidation(t *testing.T) {

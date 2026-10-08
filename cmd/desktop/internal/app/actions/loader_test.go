@@ -245,5 +245,5 @@ actions:
 `)
 	_, err := LoadCatalog(path)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "bare number")
+	assert.Contains(t, err.Error(), "cannot unmarshal !!int `30` into time.Duration")
 }

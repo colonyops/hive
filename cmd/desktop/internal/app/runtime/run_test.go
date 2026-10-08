@@ -11,6 +11,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/flow"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/runtime"
 	whsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 func testMsg(id, payload string) models.Msg {
@@ -140,7 +141,7 @@ return msg;
 		ID: "f",
 		Nodes: []flow.Node{
 			{ID: "src", Type: "sources.webhook", Config: flow.NewSourceConfig(whsource.Descriptor.Type, &whsource.Config{Path: "hook"})},
-			{ID: "fn", Type: "function", Config: &flow.FunctionConfig{OnMessage: src, Timeout: flow.Duration(200 * time.Millisecond)}},
+			{ID: "fn", Type: "function", Config: &flow.FunctionConfig{OnMessage: src, Timeout: duration.Duration(200 * time.Millisecond)}},
 			{ID: "out", Type: "notify", Config: &flow.NotifyConfig{Title: "t"}},
 		},
 		Wires: []flow.Wire{{From: "src", To: "fn"}, {From: "fn", To: "out"}},

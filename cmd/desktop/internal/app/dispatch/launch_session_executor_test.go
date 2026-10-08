@@ -415,7 +415,7 @@ func TestLaunchSessionExecutor_CarriesTheCommandsOriginToTheLauncher(t *testing.
 	assert.Equal(t, []models.ItemRef{ref}, launcher.calls[0].Origins)
 }
 
-func launchWithPostHook(hook string, timeout actions.Duration) actions.Action {
+func launchWithPostHook(hook string, timeout time.Duration) actions.Action {
 	return actions.Action{
 		ID:   "spawn-review",
 		Type: "launch-session",
@@ -478,7 +478,7 @@ func TestLaunchSessionExecutor_PostHookTimeoutDoesNotFailTheLaunch(t *testing.T)
 	launcher := &fakeSessionLauncher{path: t.TempDir()}
 	exec := NewLaunchSessionExecutor(zerolog.Nop(), launcher, nil, hostEnvironment{})
 
-	action := launchWithPostHook("sleep 30", actions.Duration(50*time.Millisecond))
+	action := launchWithPostHook("sleep 30", 50*time.Millisecond)
 
 	result, err := exec.Execute(t.Context(), action, reviewItem(), ActionInvocationInput{})
 	require.NoError(t, err)

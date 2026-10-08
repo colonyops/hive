@@ -9,11 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog"
+
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/internal/platform/observe"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/tmpl"
-	"github.com/rs/zerolog"
 )
 
 const (
@@ -63,7 +64,7 @@ func (e *ShellExecutor) Execute(ctx context.Context, action actions.Action, data
 		Command: command,
 		Dir:     shellWorkingDir(cfg, data),
 		Env:     cfg.Env,
-		Timeout: cfg.Timeout.Duration(),
+		Timeout: cfg.Timeout,
 	})
 	if err != nil {
 		e.logger.Warn().Ctx(ctx).Err(err).Str("action_id", action.ID).Msg("shell action: command failed")

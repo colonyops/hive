@@ -2,7 +2,7 @@
 // editors describe and check one field the same way. Go's
 // connector.ValidateInterval is authoritative; this is the editor's copy.
 
-/** Mirrors Go's connector.Duration: a Go duration string, never a bare number. */
+/** Mirrors Go's duration.Duration: a Go duration string, never a bare number. */
 export const DURATION = /^\d+(\.\d+)?(ns|us|µs|ms|s|m|h)([\d.]+(ns|us|µs|ms|s|m|h))*$/
 
 export const INTERVAL_LABEL = 'Minimum interval'
