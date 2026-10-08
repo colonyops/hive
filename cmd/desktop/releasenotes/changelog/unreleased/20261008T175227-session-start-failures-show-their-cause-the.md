@@ -2,4 +2,4 @@
 kind: fixed
 ---
 
-**Session start failures show their cause.** The Code view keeps the failed command and terminal output in a terminal-style error panel with copy and retry controls, instead of leaving a session that appears to have crashed.
+**Terminal failures keep their explanation.** Code retains copyable startup errors and confirmed termination notices after the terminal closes. Restart starts a new process; Reconnect restores a lost connection. Successful setup commands leave healthy panes running.

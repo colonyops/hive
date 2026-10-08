@@ -18,6 +18,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
@@ -749,40 +750,42 @@ func (s *SessionsService) RenameSession(ctx context.Context, id, name string) (s
 // configuration for the remote, and a second definition of that here would
 // drift from the one `hive` itself uses. Spawning a session tmux already has is
 // a no-op, so this is safe to call before every cold attach.
-func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) error {
+func (s *SessionsService) StartTmuxSession(ctx context.Context, slug string) (multiplexer.LaunchResult, error) {
 	slug = strings.TrimSpace(slug)
 	if slug == "" {
-		return Errorf(KindInvalid, "session slug is required")
+		return multiplexer.LaunchResult{}, Errorf(KindInvalid, "session slug is required")
 	}
 
 	detail, err := s.detailBySlug(ctx, slug)
 	if err != nil {
-		return err
+		return multiplexer.LaunchResult{}, err
 	}
 	if detail.State != session.StateActive {
-		return Errorf(KindConflict, "session %q is %s, so there is no checkout left to open a terminal in", detail.Name, detail.State)
+		return multiplexer.LaunchResult{}, Errorf(KindConflict, "session %q is %s, so there is no checkout left to open a terminal in", detail.Name, detail.State)
 	}
 	// Hive spawns under the slug it derives from the name, so a record whose two
 	// disagree would create a tmux session nothing is attaching to (ADR session-rename-keeps-slug-and-tmux-in-step).
 	if spawned := session.Slugify(detail.Name); spawned != slug {
-		return Errorf(KindConflict, "session %q would start as %q, not %q", detail.Name, spawned, slug)
+		return multiplexer.LaunchResult{}, Errorf(KindConflict, "session %q would start as %q, not %q", detail.Name, spawned, slug)
 	}
 	// Detached: the desktop attaches over control mode, and an attaching spawn
 	// would hand the session to whatever terminal launched the app, or fail
 	// for a launcher that has none.
-	if err := s.hive.Sessions().OpenTmuxSession(ctx, detail.Name, detail.Path, detail.Remote, "", true); err != nil {
-		return sessionStartError(detail.Name, err)
+	result, err := s.hive.Sessions().OpenTmuxSession(ctx, detail.Name, detail.Path, detail.Remote, "", true)
+	if err != nil {
+		return multiplexer.LaunchResult{}, sessionStartError(detail.Name, err)
 	}
-	return nil
+	return result, nil
 }
 
 func sessionStartError(sessionName string, err error) error {
-	exited, ok := errors.AsType[*tmuxexec.CommandExitedError](err)
-	if !ok {
-		return Wrap(err, KindInternal, "starting the terminal session for %q", sessionName)
+	if launch, ok := errors.AsType[*tmuxexec.LaunchError](err); ok {
+		return &Error{Kind: KindUnavailable, Msg: launch.Error(), Err: err}
 	}
-
-	return &Error{Kind: KindUnavailable, Msg: exited.Error(), Err: err}
+	if exited, ok := errors.AsType[*tmuxexec.CommandExitedError](err); ok {
+		return &Error{Kind: KindUnavailable, Msg: exited.Error(), Err: err}
+	}
+	return &Error{Kind: KindInternal, Msg: fmt.Sprintf("starting the terminal session for %q: %v", sessionName, err), Err: err}
 }
 
 // SessionDirectory answers the checkout a slug's terminal should open in. A

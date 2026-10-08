@@ -120,7 +120,7 @@ export interface TerminalClient {
    */
   attach(slug: string, cols: number, rows: number): Promise<{ windows: WindowState[] }>
   /** Spawns the tmux session behind a slug, or reports it was already running. */
-  start(slug: string): Promise<{ started: boolean }>
+  start(slug: string): Promise<{ started: boolean; completed?: boolean }>
   /**
    * Kills the tmux session behind a slug — the terminal only; the hive session
    * and its checkout are untouched. A slug with no session answers killed:false.
@@ -207,8 +207,8 @@ export function createTerminalClient(endpoint: TerminalEndpoint): TerminalClient
       return { windows: (body?.windows ?? []).map(toWindowState) }
     },
     async start(slug) {
-      const body = await post<{ started: boolean }>('/api/terminal/start', { slug })
-      return { started: !!body?.started }
+      const body = await post<{ started: boolean; completed?: boolean }>('/api/terminal/start', { slug })
+      return { started: !!body?.started, ...(body?.completed ? { completed: true } : {}) }
     },
     async kill(slug) {
       const body = await post<{ killed: boolean }>('/api/terminal/kill', { slug })

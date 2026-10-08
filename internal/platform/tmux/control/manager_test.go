@@ -541,13 +541,18 @@ type fakeTmuxCommands struct {
 	lines    []string
 }
 
+type absentSessionError struct{}
+
+func (absentSessionError) Error() string { return "can't find session" }
+func (absentSessionError) ExitCode() int { return 1 }
+
 func (f *fakeTmuxCommands) run(_ context.Context, binary string, env []string, args ...string) ([]string, error) {
 	f.calls = append(f.calls, args)
 	f.binaries = append(f.binaries, binary)
 	f.envs = append(f.envs, env)
 	switch {
 	case len(args) > 0 && args[0] == "has-session" && f.absent:
-		return nil, errors.New("can't find session")
+		return nil, absentSessionError{}
 	case len(args) > 0 && args[0] == "rename-session":
 		return nil, f.failure
 	case len(args) > 0 && args[0] == "list-windows", len(args) > 0 && args[0] == "new-window":

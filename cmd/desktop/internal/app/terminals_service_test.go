@@ -16,6 +16,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/pkg/executil"
 
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -71,12 +72,12 @@ type spawningStarter struct {
 	err   error
 }
 
-func (s *spawningStarter) StartTmuxSession(_ context.Context, slug string) error {
+func (s *spawningStarter) StartTmuxSession(_ context.Context, slug string) (multiplexer.LaunchResult, error) {
 	s.calls = append(s.calls, slug)
 	if s.err != nil {
-		return s.err
+		return multiplexer.LaunchResult{}, s.err
 	}
-	return s.tmux("new-session", "-d", "-s", slug, "-n", "claude", "sh")
+	return multiplexer.LaunchResult{Created: true}, s.tmux("new-session", "-d", "-s", slug, "-n", "claude", "sh")
 }
 
 func TestTerminalsStartThenAttachIsTheColdPath(t *testing.T) {
@@ -93,7 +94,7 @@ func TestTerminalsStartThenAttachIsTheColdPath(t *testing.T) {
 
 	started, err := terminals.Start(t.Context(), "hive-cold")
 	require.NoError(t, err)
-	assert.True(t, started, "this call is what created the session")
+	assert.True(t, started.Created, "this call is what created the session")
 	assert.Equal(t, []string{"hive-cold"}, starter.calls)
 
 	windows, err := terminals.Attach(t.Context(), "hive-cold", 120, 40)
@@ -110,7 +111,7 @@ func TestTerminalsStartLeavesALiveSessionAlone(t *testing.T) {
 
 	started, err := terminals.Start(t.Context(), "hive-live")
 	require.NoError(t, err)
-	assert.False(t, started, "a session tmux is already running is never spawned over")
+	assert.False(t, started.Created, "a session tmux is already running is never spawned over")
 	assert.Empty(t, starter.calls)
 
 	windows, err := terminals.Attach(t.Context(), "hive-live", 120, 40)
@@ -143,7 +144,7 @@ func TestTerminalsKillEndsTheSessionAndLeavesItStartableAgain(t *testing.T) {
 
 	started, err := terminals.Start(t.Context(), "hive-kill")
 	require.NoError(t, err)
-	assert.True(t, started, "a killed session can be started again")
+	assert.True(t, started.Created, "a killed session can be started again")
 }
 
 // Reordering is the one operation whose result is not what the caller asked
@@ -230,7 +231,7 @@ func TestTerminalsStartScratchOpensItInHomeWithoutAskingHive(t *testing.T) {
 
 	started, err := terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
-	assert.True(t, started)
+	assert.True(t, started.Created)
 	assert.Empty(t, starter.calls, "there is no hive session to spawn from")
 
 	// The home directory is the *session's* working directory rather than the
@@ -249,7 +250,7 @@ func TestTerminalsStartScratchOpensItInHomeWithoutAskingHive(t *testing.T) {
 
 	started, err = terminals.Start(t.Context(), ScratchSlug)
 	require.NoError(t, err)
-	assert.False(t, started, "a scratch terminal that is running is never recreated over")
+	assert.False(t, started.Created, "a scratch terminal that is running is never recreated over")
 }
 
 // An agent workspace chat is a tmux session in its own namespace (ADR

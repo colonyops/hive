@@ -62,7 +62,8 @@ func TestSessionNamesDoNotMatchPrefixes(t *testing.T) {
 	require.Error(t, client.KillSession(t.Context(), short))
 	require.Error(t, client.AddWindows(t.Context(), short, []multiplexer.WindowSpec{{Name: "extra"}}))
 
-	require.NoError(t, client.OpenSession(t.Context(), spec(short, t.TempDir(), "short"), multiplexer.Target{}))
+	_, err = client.OpenSession(t.Context(), spec(short, t.TempDir(), "short"), multiplexer.Target{})
+	require.NoError(t, err)
 	shortWindows, err := manager.Attach(t.Context(), short.Session, 80, 24)
 	require.NoError(t, err)
 	require.Len(t, shortWindows, 1)

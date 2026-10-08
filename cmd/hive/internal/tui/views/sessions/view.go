@@ -330,8 +330,19 @@ func (v *View) handleGitStatusComplete(msg GitStatusBatchCompleteMsg) tea.Cmd {
 }
 
 func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) tea.Cmd {
+	var ended []string
 	if v.terminalStatuses != nil {
 		for sessionID, newStatus := range msg.Results {
+			previous, exists := v.terminalStatuses.Get(sessionID)
+			if exists && previous.SessionPresent && newStatus.PresenceKnown && !newStatus.SessionPresent && newStatus.Error == nil {
+				if sess := v.findByID(sessionID); sess != nil && sess.State == session.StateActive {
+					ended = append(ended, sess.Name)
+				}
+			}
+			if !newStatus.PresenceKnown && exists {
+				newStatus.SessionPresent = previous.SessionPresent
+				msg.Results[sessionID] = newStatus
+			}
 			if newStatus.Error != nil {
 				v.logger.Debug().Err(newStatus.Error).Str("sessionID", sessionID).Msg("terminal status update contains error")
 			}
@@ -360,6 +371,9 @@ func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) 
 
 		v.terminalStatuses.SetBatch(msg.Results)
 		v.rebuildWindowItems()
+	}
+	if len(ended) > 0 {
+		return func() tea.Msg { return TerminalEndedMsg{Sessions: ended} }
 	}
 	return nil
 }

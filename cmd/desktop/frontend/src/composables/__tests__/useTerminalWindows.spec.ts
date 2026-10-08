@@ -14,6 +14,7 @@ import { SYMBOL_FONT, TERMINAL_FONT, terminalFontStack } from '../../lib/termina
 import { TerminalRequestError, type PaneLayout, type TerminalClient } from '../../lib/terminalClient'
 import { paneMayAutoFocus } from '../../lib/terminalTree'
 import { useKeybindings } from '../useKeybindings'
+import { useTerminalOutcomes } from '../../stores/useTerminalOutcomes'
 
 const xterm = vi.hoisted(() => {
   interface FakeLine {
@@ -252,6 +253,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   SetTerminalFontWeights: vi.fn(() => Promise.resolve()),
   SetTerminalLetterSpacing: vi.fn(() => Promise.resolve()),
   SetTerminalLineHeight: vi.fn(() => Promise.resolve()),
+  SetKeybindingSettings: vi.fn(() => Promise.resolve()),
 }))
 
 const encoder = new TextEncoder()
@@ -1279,16 +1281,15 @@ describe('useTerminalWindows', () => {
     expect(session.outputDropped.value).toBe(false)
   })
 
-  it('settles an exit into not-started once tmux confirms the session is gone', async () => {
+  it('retains confirmed termination and the control-client report when tmux is gone', async () => {
     const { session, socket } = await attached()
 
     socket.onmessage?.({ data: jsonFrame(0x02, { kind: 'exited', windowId: '', message: 'overflow' }) })
     await flushPromises()
 
-    // The session went away, so this is the panel that offers to start it
-    // again rather than an error over a grid nothing can write to.
-    expect(session.endReason.value).toBe('not-started')
-    expect(session.error.value).toBeNull()
+    expect(session.endReason.value).toBe('terminated')
+    expect(session.error.value).toContain('Tmux session terminated. No exit details are available.')
+    expect(session.error.value).toContain('Terminal connection report:\noverflow')
     expect(session.tabs.value).toHaveLength(0)
   })
 
@@ -1327,7 +1328,7 @@ describe('useTerminalWindows', () => {
 
     expect(session.status.value).toBe('ended')
     expect(session.endReason.value).toBe('disconnected')
-    expect(session.error.value).toContain('disconnected')
+    expect(session.error.value).toBe('Terminal connection lost. The tmux session may still be running.')
   })
 
   it('ends when the attach itself fails', async () => {
@@ -1352,6 +1353,90 @@ describe('useTerminalWindows', () => {
     // Not a fault: the view turns this into the panel offering to start it.
     expect(session.endReason.value).toBe('not-started')
     expect(session.error.value).toBe('session "hive-abc" is not running')
+  })
+
+  it('reports termination without diagnostics after a dropped stream and an absent listing', async () => {
+    const { session, socket } = await attached()
+    socket.onclose?.()
+    await flushPromises()
+    expect(session.endReason.value).toBe('terminated')
+    expect(session.error.value).toBe('Tmux session terminated. No exit details are available.')
+    expect(session.tabs.value).toHaveLength(0)
+  })
+
+  it('keeps connection loss uncertain if the listing fails', async () => {
+    const client = fakeClient()
+    client.listWindows.mockRejectedValue(new Error('probe failed'))
+    const { session, socket } = await attached(client)
+    socket.onclose?.()
+    await flushPromises()
+    expect(session.endReason.value).toBe('disconnected')
+    expect(session.error.value).toContain('may still be running')
+    expect(session.tabs.value).toHaveLength(2)
+  })
+
+  it('retains termination across terminal disposal and a failed reattach', async () => {
+    const { client, session, socket } = await attached()
+    socket.onclose?.()
+    await flushPromises()
+    session.dispose()
+    client.attach.mockRejectedValue(new TerminalRequestError('not running', 'not_found'))
+    const reopened = open(client)
+    await reopened.start()
+    expect(reopened.endReason.value).toBe('terminated')
+    expect(reopened.error.value).toContain('No exit details are available')
+  })
+
+  it('retains multiline launch failures until a successful attach', async () => {
+    const report = 'Launch failed\n\n  indented detail\nCleanup incomplete: @2'
+    useTerminalOutcomes().report('hive-abc', { reason: 'start-failed', detail: report })
+    const client = fakeClient()
+    client.attach.mockRejectedValueOnce(new TerminalRequestError('not running', 'not_found'))
+    const session = open(client)
+    await session.start()
+    expect(session.endReason.value).toBe('start-failed')
+    expect(session.error.value).toBe(report)
+    await session.reconnect()
+    sockets[sockets.length - 1].onopen?.()
+    expect(session.endReason.value).toBeNull()
+    expect(useTerminalOutcomes().outcome('hive-abc')).toBeNull()
+  })
+
+  it('keeps intentional stopping distinct from unknown termination', async () => {
+    const { session, socket } = await attached()
+    useTerminalOutcomes().report('hive-abc', { reason: 'stopped', detail: 'Stopped by you.' })
+    socket.onclose?.()
+    await flushPromises()
+    expect(session.endReason.value).toBe('stopped')
+    expect(session.error.value).toBe('Stopped by you.')
+  })
+
+  it('does not let an older reconciliation replace a successful reconnect', async () => {
+    const client = fakeClient()
+    let finishProbe!: (windows: Record<string, never[]>) => void
+    client.listWindows.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishProbe = resolve
+        }),
+    )
+    const { session, socket } = await attached(client)
+    socket.onclose?.()
+    await session.reconnect()
+    sockets[1].onopen?.()
+    finishProbe({})
+    await flushPromises()
+    expect(session.status.value).toBe('live')
+    expect(session.endReason.value).toBeNull()
+    expect(session.tabs.value).toHaveLength(2)
+  })
+
+  it('reports a closed window without ending its healthy sibling', async () => {
+    const { session, socket } = await attached()
+    socket.onmessage?.({ data: jsonFrame(0x01, { kind: 'closed', windowId: '@1' }) })
+    expect(session.status.value).toBe('live')
+    expect(session.tabs.value.map((tab) => tab.windowId)).toEqual(['@2'])
+    expect(session.actionError.value).toContain('No exit details are available')
   })
 
   it('reconnect re-attaches with fresh terminals', async () => {

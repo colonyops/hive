@@ -85,8 +85,8 @@ func (m *mockGit) IsValidRepo(_ context.Context, _ string) error           { ret
 type testMultiplexer struct{}
 
 func (testMultiplexer) CreateSession(context.Context, multiplexer.SessionSpec) error { return nil }
-func (testMultiplexer) OpenSession(context.Context, multiplexer.SessionSpec, multiplexer.Target) error {
-	return nil
+func (testMultiplexer) OpenSession(context.Context, multiplexer.SessionSpec, multiplexer.Target) (multiplexer.LaunchResult, error) {
+	return multiplexer.LaunchResult{Created: true}, nil
 }
 
 func (testMultiplexer) AddWindows(context.Context, multiplexer.Target, []multiplexer.WindowSpec) error {

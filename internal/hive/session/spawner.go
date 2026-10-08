@@ -17,7 +17,7 @@ import (
 // SessionCreator is the interface used by consumers that create and open sessions.
 type SessionCreator interface {
 	CreateSession(ctx context.Context, spec multiplexer.SessionSpec) error
-	OpenSession(ctx context.Context, spec multiplexer.SessionSpec, selection multiplexer.Target) error
+	OpenSession(ctx context.Context, spec multiplexer.SessionSpec, selection multiplexer.Target) (multiplexer.LaunchResult, error)
 	AddWindows(ctx context.Context, target multiplexer.Target, windows []multiplexer.WindowSpec) error
 	AttachOrSwitch(ctx context.Context, target multiplexer.Target, streams multiplexer.AttachStreams) error
 }
@@ -108,29 +108,30 @@ func (s *Spawner) SpawnWindowsWith(ctx context.Context, windows []config.WindowC
 
 // OpenWindows renders window templates and opens (or creates) a tmux session.
 // If the session already exists, it attaches to it (optionally selecting targetWindow).
-func (s *Spawner) OpenWindows(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, targetWindow string) error {
+func (s *Spawner) OpenWindows(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, targetWindow string) (multiplexer.LaunchResult, error) {
 	return s.OpenWindowsWith(ctx, windows, data, background, targetWindow, s.renderer)
 }
 
 // OpenWindowsWith renders window templates using the given renderer and opens (or creates) a tmux session.
-func (s *Spawner) OpenWindowsWith(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, targetWindow string, renderer *tmpl.Renderer) error {
+func (s *Spawner) OpenWindowsWith(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, targetWindow string, renderer *tmpl.Renderer) (multiplexer.LaunchResult, error) {
 	rendered, err := RenderWindows(renderer, windows, data)
 	if err != nil {
-		return err
+		return multiplexer.LaunchResult{}, err
 	}
 
 	s.log.Debug().Int("windows", len(rendered)).Bool("background", background).Str("targetWindow", targetWindow).Msg("opening tmux session")
 
-	if err := s.tmux.OpenSession(ctx, multiplexer.SessionSpec{
+	result, err := s.tmux.OpenSession(ctx, multiplexer.SessionSpec{
 		Target:           multiplexer.Target{Session: data.Slug},
 		WorkingDirectory: data.Path,
 		Windows:          rendered,
 		Background:       background,
-	}, targetFromLegacy(data.Slug, targetWindow)); err != nil {
-		return fmt.Errorf("open tmux session: %w", err)
+	}, targetFromLegacy(data.Slug, targetWindow))
+	if err != nil {
+		return multiplexer.LaunchResult{}, fmt.Errorf("open tmux session: %w", err)
 	}
 
-	return nil
+	return result, nil
 }
 
 // RenderWindows renders a slice of WindowConfig templates against SpawnData,

@@ -54,6 +54,10 @@ type OpenRepoRequestMsg struct {
 // RefreshSessionsMsg requests a session list refresh.
 type RefreshSessionsMsg struct{}
 
+type TerminalEndedMsg struct {
+	Sessions []string
+}
+
 // ErrorMsg signals a non-fatal error to the parent model.
 type ErrorMsg struct{ Err error }
 

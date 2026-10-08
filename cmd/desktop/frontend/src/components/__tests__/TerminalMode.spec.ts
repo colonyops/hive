@@ -154,7 +154,7 @@ function fakeListWindowsEach(windows: FakeWindow[]) {
 type FakePane = { uid: number; paneId: string; term: object; scrolledUp: boolean }
 
 function fakeSession() {
-  return {
+  const session = {
     tabs: ref([
       {
         uid: 1,
@@ -220,7 +220,14 @@ function fakeSession() {
     focusActive: vi.fn(),
     scrollToBottom: vi.fn(),
     dispose: vi.fn(),
+    reportOutcome: vi.fn(),
   }
+  session.reportOutcome.mockImplementation((reason: string, detail: string) => {
+    session.status.value = 'ended'
+    session.endReason.value = reason
+    session.error.value = detail
+  })
+  return session
 }
 
 // The pane chords act on the active window's active pane, which the plain
@@ -1256,7 +1263,7 @@ describe('TerminalMode', () => {
     session.error.value = 'The terminal stream disconnected.'
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="terminal-session-ended"]').text()).toContain('Terminal stream lost')
+    expect(wrapper.get('[data-testid="terminal-session-ended"]').text()).toContain('Terminal connection lost')
     expect(wrapper.get('[data-testid="terminal-session-ended-reason"]').text()).toBe(
       'The terminal stream disconnected.',
     )
@@ -1264,10 +1271,45 @@ describe('TerminalMode', () => {
     session.endReason.value = 'exited'
     session.error.value = 'overflow'
     await flushPromises()
-    expect(wrapper.get('[data-testid="terminal-session-ended"]').text()).toContain('Session ended')
+    expect(wrapper.get('[data-testid="terminal-session-ended"]').text()).toContain('Terminal connection ended')
 
     await wrapper.get('[data-testid="terminal-reconnect"]').trigger('click')
     expect(session.reconnect).toHaveBeenCalled()
+  })
+
+  it('shows confirmed termination with a copyable report and Restart, not Reconnect', async () => {
+    const { wrapper, session } = await mountAvailable()
+    await sessionRows(wrapper)[0].trigger('click')
+    session.reportOutcome(
+      'terminated',
+      'Tmux session terminated. No exit details are available.\n\n  diagnostic detail',
+    )
+    await flushPromises()
+    expect(wrapper.get('[data-testid="terminal-session-ended"]').text()).toContain('Tmux session terminated')
+    expect(wrapper.find('[data-testid="terminal-session-not-started"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="terminal-reconnect"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="terminal-restart"]').text()).toBe('Restart')
+    expect(wrapper.get('[data-testid="terminal-session-ended-reason"]').element.textContent).toContain(
+      '\n\n  diagnostic detail',
+    )
+    await wrapper.get('[data-testid="terminal-ended-copy"]').trigger('click')
+    expect(mocks.SetClipboardText).toHaveBeenCalledWith(session.error.value)
+  })
+
+  it('renders a finite successful launch as completed rather than broken', async () => {
+    const start = vi.fn().mockResolvedValue({ created: true, completed: true })
+    mocks.createTerminalClient.mockReturnValue({ start, listWindows: fakeListWindows() })
+    const { wrapper, session } = await mountAvailable()
+    await sessionRows(wrapper)[0].trigger('click')
+    session.status.value = 'ended'
+    session.endReason.value = 'not-started'
+    await flushPromises()
+    await wrapper.get('[data-testid="terminal-start-session"]').trigger('click')
+    await flushPromises()
+    expect(session.reportOutcome).toHaveBeenCalledWith('completed', 'Session completed successfully.')
+    expect(session.reconnect).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="terminal-session-ended"]').text()).toContain('Session completed')
+    expect(wrapper.find('[data-testid="terminal-reconnect"]').exists()).toBe(false)
   })
 
   // The grid not matching the pane is tmux's rule, not a fault, so it is named

@@ -3,7 +3,6 @@ package tmuxexec
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 )
@@ -13,29 +12,29 @@ func (c *Client) AddWindows(ctx context.Context, target multiplexer.Target, wind
 	if err := target.ValidateSession(); err != nil {
 		return err
 	}
-	name := target.Session
-	c.suppressInteractiveHooks(ctx, name)
-	var started []startedPane
-	for _, window := range windows {
-		windowPanes, err := c.createWindow(ctx, name, "", window)
-		started = append(started, windowPanes...)
+	return c.withLaunchLock(ctx, target.Session, func() error {
+		exists, err := c.recoverLaunch(ctx, target.Session)
 		if err != nil {
 			return err
 		}
-	}
-	if err := c.awaitStartup(ctx, name, started); err != nil {
-		return err
-	}
-	for _, window := range windows {
-		if !window.Focus {
-			continue
+		if !exists {
+			return fmt.Errorf("tmux session %q had an interrupted launch and must be restarted", target.Session)
 		}
-		if _, _, err := c.runner.Capture(ctx, "select-window", "-t", "="+name+":"+window.Name); err != nil {
-			return fmt.Errorf("tmux select-window %q: %w", window.Name, err)
+		l := &launch{client: c, name: target.Session, phase: LaunchPhaseAllocating}
+		c.suppressInteractiveHooks(ctx, target.Session)
+		for _, window := range windows {
+			if err := l.allocateWindow(ctx, "", window); err != nil {
+				return l.fail(ctx, err)
+			}
 		}
-		break
-	}
-	return nil
+		if err := l.start(ctx); err != nil {
+			return l.fail(ctx, err)
+		}
+		if _, err := l.finalize(ctx); err != nil {
+			return l.fail(ctx, err)
+		}
+		return nil
+	})
 }
 
 // KillWindow kills one qualified tmux window.
@@ -48,85 +47,6 @@ func (c *Client) KillWindow(ctx context.Context, target multiplexer.Target) erro
 		return fmt.Errorf("tmux kill-window %q: %w", rendered, err)
 	}
 	return nil
-}
-
-func (c *Client) createWindow(ctx context.Context, sessionName, sessionDir string, window multiplexer.WindowSpec) ([]startedPane, error) {
-	started, err := c.createInitialPane(ctx, []string{"new-window", "-t", "=" + sessionName + ":", "-n", window.Name}, sessionName, sessionDir, window)
-	if err != nil {
-		return nil, fmt.Errorf("tmux new-window %q: %w", window.Name, err)
-	}
-	c.tagPanesWithSession(ctx, "="+sessionName+":"+window.Name, sessionName)
-	splitPanes, err := c.splitAdditionalPanes(ctx, sessionName, sessionDir, window)
-	return append(started, splitPanes...), err
-}
-
-func (c *Client) createInitialPane(ctx context.Context, baseArgs []string, sessionName, sessionDir string, window multiplexer.WindowSpec) ([]startedPane, error) {
-	command, dir := initialPane(window, sessionDir)
-	args := append([]string(nil), baseArgs...)
-	args = append(args, "-P", "-F", "#{pane_id}")
-	if dir != "" {
-		args = append(args, "-c", dir)
-	}
-	if command != "" {
-		args = append(args, "--", "cat")
-	}
-
-	c.log.Debug().Strs("args", args).Msg("tmux " + baseArgs[0])
-	stdout, _, err := c.runner.Capture(ctx, args...)
-	if err != nil {
-		return nil, err
-	}
-	return c.startPaneCommand(ctx, strings.TrimSpace(string(stdout)), "="+sessionName+":"+window.Name, window.Name, dir, command)
-}
-
-func (c *Client) splitAdditionalPanes(ctx context.Context, sessionName, sessionDir string, window multiplexer.WindowSpec) ([]startedPane, error) {
-	target := "=" + sessionName + ":" + window.Name
-	var started []startedPane
-	for _, pane := range additionalPanes(window) {
-		dir := pane.WorkingDirectory
-		if dir == "" {
-			dir = windowDir(window, sessionDir)
-		}
-		placeholder := ""
-		if pane.Command != "" {
-			placeholder = "cat"
-		}
-		stdout, _, err := c.runner.Capture(ctx, splitPaneArgs(target, pane, dir, placeholder)...)
-		if err != nil {
-			return started, fmt.Errorf("tmux split-window %q: %w", window.Name, err)
-		}
-		paneID := strings.TrimSpace(string(stdout))
-		paneStarted, err := c.startPaneCommand(ctx, paneID, target, window.Name, dir, pane.Command)
-		started = append(started, paneStarted...)
-		if err != nil {
-			return started, err
-		}
-		c.tagPanesWithSession(ctx, target, sessionName)
-	}
-	return started, nil
-}
-
-func (c *Client) startPaneCommand(ctx context.Context, paneID, fallbackTarget, windowName, dir, command string) ([]startedPane, error) {
-	if command == "" {
-		return nil, nil
-	}
-	target := paneID
-	if target == "" {
-		target = fallbackTarget
-	}
-	if _, _, err := c.runner.Capture(ctx, "set-option", "-w", "-t", target, "remain-on-exit", "on"); err != nil {
-		return nil, fmt.Errorf("tmux set-option remain-on-exit: %w", err)
-	}
-
-	args := []string{"respawn-pane", "-k", "-t", target}
-	if dir != "" {
-		args = append(args, "-c", dir)
-	}
-	args = append(args, "--", "sh", "-c", command)
-	if _, _, err := c.runner.Capture(ctx, args...); err != nil {
-		return nil, fmt.Errorf("tmux respawn-pane: %w", err)
-	}
-	return watchPane(paneID, windowName, command), nil
 }
 
 func initialPane(window multiplexer.WindowSpec, sessionDir string) (command, dir string) {
@@ -142,7 +62,7 @@ func initialPane(window multiplexer.WindowSpec, sessionDir string) (command, dir
 }
 
 func splitPaneArgs(target string, pane multiplexer.PaneSpec, dir, command string) []string {
-	args := []string{"split-window", "-t", target, "-P", "-F", "#{pane_id}"}
+	args := []string{"split-window", "-d", "-t", target, "-P", "-F", allocationFormat}
 	if pane.Split == multiplexer.SplitHorizontal {
 		args = append(args, "-h")
 	} else {

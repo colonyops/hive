@@ -561,6 +561,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleSessionRecycledDelete(msg)
 	case sessions.OpenRepoRequestMsg:
 		model, cmd = m.handleSessionOpenRepo(msg)
+	case sessions.TerminalEndedMsg:
+		for _, name := range msg.Sessions {
+			m.publishNotificationf(notify.LevelWarning, "Terminal session %q terminated. No exit details are available.", name)
+		}
+		model, cmd = m, nil
 	case sessions.ErrorMsg:
 		m.notifyErrorf("%v", msg.Err)
 		model, cmd = m, nil

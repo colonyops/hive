@@ -42,8 +42,24 @@ const activeScrolledUp = computed(() =>
 )
 const status = computed(() => visible.value?.status.value ?? 'connecting')
 const endReason = computed(() => visible.value?.endReason.value ?? null)
-// Not a failure: tmux runs nothing under this slug yet.
-const notStarted = computed(() => endReason.value === 'not-started')
+const notStarted = computed(() => endReason.value === 'not-started' || endReason.value === 'start-failed')
+const canRestart = computed(() => ['terminated', 'completed', 'stopped'].includes(endReason.value ?? ''))
+const endedTitle = computed(() => {
+  switch (endReason.value) {
+    case 'terminated':
+      return 'Tmux session terminated'
+    case 'completed':
+      return 'Session completed'
+    case 'stopped':
+      return 'Terminal stopped'
+    case 'disconnected':
+      return 'Terminal connection lost'
+    case 'exited':
+      return 'Terminal connection ended'
+    default:
+      return 'Terminal error'
+  }
+})
 const scratchAttached = computed(() => !!tree.attachedRow && tree.isScratch(tree.attachedRow))
 const chatAttached = computed(() => !!tree.attachedRow && tree.isChat(tree.attachedRow))
 const sessionError = computed(() => visible.value?.error.value ?? '')
@@ -406,29 +422,40 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-app/95 px-10 text-center"
           data-testid="terminal-session-ended"
         >
-          <div class="text-body font-semibold">
-            {{ endReason === 'disconnected' ? 'Terminal stream lost' : 'Session ended' }}
+          <div class="text-body font-semibold" data-testid="terminal-session-ended-title">{{ endedTitle }}</div>
+          <div class="w-full max-w-[680px] overflow-hidden rounded-xl border border-strong bg-sunken text-left">
+            <div class="flex items-center justify-between border-b border-strong px-3 py-2">
+              <span class="font-mono text-micro text-text-3">Terminal report</span>
+              <IconButton
+                :label="startErrorCopyLabel"
+                :icon="startErrorCopyStatus === 'success' ? IconCheck : IconCopy"
+                size="sm"
+                data-testid="terminal-ended-copy"
+                @click="copyStartError(sessionError)"
+              />
+            </div>
+            <pre
+              class="hive-scroll max-h-[280px] select-text overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-small text-text-2"
+              data-testid="terminal-session-ended-reason"
+              >{{ sessionError }}</pre>
           </div>
-          <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="terminal-session-ended-reason">
-            {{ sessionError }}
-          </p>
           <div class="mt-1 flex items-center gap-2">
-            <button
-              type="button"
-              class="flex cursor-pointer items-center gap-1.5 rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
-              data-testid="terminal-reconnect"
-              @click="visible?.reconnect()"
+            <BaseButton
+              v-if="canRestart"
+              size="sm"
+              :disabled="attach.starting === pool.activeSlug"
+              data-testid="terminal-restart"
+              @click="attach.startSession(pool.activeSlug)"
             >
-              <IconRefreshCw class="size-3" />Reconnect
-            </button>
-            <button
-              type="button"
-              class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
-              data-testid="terminal-close-session"
-              @click="attach.closeSession"
-            >
+              <template #icon><IconRefreshCw class="size-3" /></template>
+              {{ attach.starting === pool.activeSlug ? 'Starting…' : 'Restart' }}
+            </BaseButton>
+            <BaseButton v-else size="sm" data-testid="terminal-reconnect" @click="visible?.reconnect()">
+              <template #icon><IconRefreshCw class="size-3" /></template>Reconnect
+            </BaseButton>
+            <BaseButton variant="secondary" size="sm" data-testid="terminal-close-session" @click="attach.closeSession">
               Close session
-            </button>
+            </BaseButton>
           </div>
         </div>
       </template>

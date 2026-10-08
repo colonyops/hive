@@ -264,7 +264,8 @@ type terminalSessionWindowsResponse struct {
 // terminalStartResponse reports whether this call is what spawned the session,
 // so a caller can tell "I started it" from "it was already running".
 type terminalStartResponse struct {
-	Started bool `json:"started"`
+	Started   bool `json:"started"`
+	Completed bool `json:"completed,omitempty"`
 }
 
 // terminalKillResponse reports whether there was a session to kill.
@@ -323,11 +324,11 @@ func (ctrl *Controller) TerminalStart(w http.ResponseWriter, r *http.Request) er
 	if err != nil {
 		return err
 	}
-	started, err := ctrl.core.Terminals.Start(r.Context(), body.Slug)
+	result, err := ctrl.core.Terminals.Start(r.Context(), body.Slug)
 	if err != nil {
 		return err
 	}
-	return server.JSON(w, http.StatusOK, terminalStartResponse{Started: started})
+	return server.JSON(w, http.StatusOK, terminalStartResponse{Started: result.Created, Completed: result.Completed})
 }
 
 // TerminalKill kills the tmux session behind a slug, leaving the hive session

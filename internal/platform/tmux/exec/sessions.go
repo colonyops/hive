@@ -3,6 +3,7 @@ package tmuxexec
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -21,7 +22,14 @@ func (c *Client) HasSession(ctx context.Context, target multiplexer.Target) (boo
 		if ctx.Err() != nil {
 			return false, ctx.Err()
 		}
-		return false, nil
+		var exited interface {
+			error
+			ExitCode() int
+		}
+		if errors.As(err, &exited) && exited.ExitCode() == 1 {
+			return false, nil
+		}
+		return false, err
 	}
 	return true, nil
 }
@@ -36,72 +44,71 @@ func (c *Client) CreateSession(ctx context.Context, spec multiplexer.SessionSpec
 		return fmt.Errorf("tmux: at least one window is required")
 	}
 
-	first := spec.Windows[0]
-	started, err := c.createInitialPane(ctx, []string{"new-session", "-d", "-s", name, "-n", first.Name}, name, spec.WorkingDirectory, first)
-	if err != nil {
-		return fmt.Errorf("tmux new-session: %w", err)
-	}
-
-	partial := true
-	defer func() {
-		if !partial {
-			return
-		}
-		if _, _, cleanupErr := c.runner.Capture(context.WithoutCancel(ctx), "kill-session", "-t", "="+name); cleanupErr != nil {
-			c.log.Debug().Err(cleanupErr).Str("session", name).Msg("failed to clean up partial tmux session")
-		}
-	}()
-
-	c.tagPanesWithSession(ctx, "="+name+":", name)
-	c.suppressInteractiveHooks(ctx, name)
-	splitPanes, err := c.splitAdditionalPanes(ctx, name, spec.WorkingDirectory, first)
-	started = append(started, splitPanes...)
-	if err != nil {
+	var completed bool
+	err := c.withLaunchLock(ctx, name, func() error {
+		var err error
+		completed, err = c.createSession(ctx, spec)
+		return err
+	})
+	if err != nil || spec.Background || completed {
 		return err
 	}
-	for _, window := range spec.Windows[1:] {
-		windowPanes, err := c.createWindow(ctx, name, spec.WorkingDirectory, window)
-		started = append(started, windowPanes...)
-		if err != nil {
-			return err
-		}
-	}
-	if err := c.awaitStartup(ctx, name, started); err != nil {
-		return err
-	}
+	return c.AttachOrSwitch(ctx, spec.Target, multiplexer.AttachStreams{})
+}
 
-	focusName := first.Name
+func (c *Client) createSession(ctx context.Context, spec multiplexer.SessionSpec) (bool, error) {
+	l := &launch{client: c, name: spec.Target.Session, ownsSession: true, phase: LaunchPhaseAllocating}
 	for _, window := range spec.Windows {
-		if window.Focus {
-			focusName = window.Name
-			break
+		if err := l.allocateWindow(ctx, spec.WorkingDirectory, window); err != nil {
+			return false, l.fail(ctx, err)
 		}
 	}
-	if _, _, err := c.runner.Capture(ctx, "select-window", "-t", "="+name+":"+focusName); err != nil {
-		return fmt.Errorf("tmux select-window: %w", err)
+	if err := l.start(ctx); err != nil {
+		return false, l.fail(ctx, err)
 	}
-	partial = false
-	if !spec.Background {
-		return c.AttachOrSwitch(ctx, spec.Target, multiplexer.AttachStreams{})
+	completed, err := l.finalize(ctx)
+	if err != nil {
+		return false, l.fail(ctx, err)
 	}
-	return nil
+	return completed, nil
 }
 
 // OpenSession creates a missing session or opens an existing one. For an
 // existing session, selection names the window or pane to show on entry.
-func (c *Client) OpenSession(ctx context.Context, spec multiplexer.SessionSpec, selection multiplexer.Target) error {
-	exists, err := c.HasSession(ctx, spec.Target)
-	if err != nil {
-		return err
+func (c *Client) OpenSession(ctx context.Context, spec multiplexer.SessionSpec, selection multiplexer.Target) (multiplexer.LaunchResult, error) {
+	if err := spec.Target.ValidateSession(); err != nil {
+		return multiplexer.LaunchResult{}, err
 	}
-	if !exists {
-		return c.CreateSession(ctx, spec)
-	}
-	if spec.Background {
+	var result multiplexer.LaunchResult
+	err := c.withLaunchLock(ctx, spec.Target.Session, func() error {
+		exists, err := c.HasSession(ctx, spec.Target)
+		if err != nil {
+			return err
+		}
+		if exists {
+			exists, err = c.recoverLaunch(ctx, spec.Target.Session)
+			if err != nil {
+				return err
+			}
+		}
+		if !exists {
+			if len(spec.Windows) == 0 {
+				return fmt.Errorf("tmux: at least one window is required")
+			}
+			result.Created = true
+			result.Completed, err = c.createSession(ctx, spec)
+			return err
+		}
 		return nil
+	})
+	if err != nil {
+		return multiplexer.LaunchResult{}, err
+	}
+	if spec.Background || result.Completed {
+		return result, nil
 	}
 	selection.Session = spec.Target.Session
-	return c.AttachOrSwitch(ctx, selection, multiplexer.AttachStreams{})
+	return result, c.AttachOrSwitch(ctx, selection, multiplexer.AttachStreams{})
 }
 
 // AttachOrSwitch switches the active client inside tmux or attaches outside tmux.

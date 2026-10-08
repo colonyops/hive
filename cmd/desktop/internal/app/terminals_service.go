@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/platform/observe"
 	"github.com/colonyops/hive/internal/platform/tmux/control"
 )
@@ -19,7 +21,7 @@ import (
 // belongs to the session domain rather than to this one: the slug names a hive
 // session, and what its terminal holds is hive's spawn configuration.
 type terminalStarter interface {
-	StartTmuxSession(ctx context.Context, slug string) error
+	StartTmuxSession(ctx context.Context, slug string) (multiplexer.LaunchResult, error)
 }
 
 // ScratchSlug is the tmux session name of the scratch terminal — the one
@@ -119,6 +121,9 @@ func (s *TerminalsService) Attach(ctx context.Context, slug string, cols, rows i
 	if !exists {
 		return nil, Errorf(KindNotFound, "session %q is not running", slug)
 	}
+	if err := s.manager.CheckLaunch(ctx, slug); err != nil {
+		return nil, terminalError(err, "attaching to session %q", slug)
+	}
 	windows, err := s.manager.Attach(ctx, slug, cols, rows)
 	if err != nil {
 		observe.RecordError(span, err)
@@ -135,21 +140,24 @@ func (s *TerminalsService) Attach(ctx context.Context, slug string, cols, rows i
 // from failing a start for a session that needs none.
 //
 // ScratchSlug is the one slug this does not ask hive about — see startScratch.
-func (s *TerminalsService) Start(ctx context.Context, slug string) (bool, error) {
+func (s *TerminalsService) Start(ctx context.Context, slug string) (multiplexer.LaunchResult, error) {
 	exists, err := s.manager.HasSession(ctx, slug)
 	if err != nil {
-		return false, terminalError(err, "starting session %q", slug)
+		return multiplexer.LaunchResult{}, terminalError(err, "starting session %q", slug)
 	}
 	if exists {
-		return false, nil
+		if err := s.manager.CheckLaunch(ctx, slug); err != nil {
+			if errors.Is(err, tmuxcc.ErrLaunchPending) && slug != ScratchSlug {
+				return s.starter.StartTmuxSession(ctx, slug)
+			}
+			return multiplexer.LaunchResult{}, terminalError(err, "starting session %q", slug)
+		}
+		return multiplexer.LaunchResult{}, nil
 	}
 	if slug == ScratchSlug {
-		return true, s.startScratch(ctx)
+		return multiplexer.LaunchResult{Created: true}, s.startScratch(ctx)
 	}
-	if err := s.starter.StartTmuxSession(ctx, slug); err != nil {
-		return false, err
-	}
-	return true, nil
+	return s.starter.StartTmuxSession(ctx, slug)
 }
 
 // startScratch creates the scratch session here rather than through hive's spawn
@@ -510,6 +518,8 @@ func terminalError(err error, format string, args ...any) error {
 	switch {
 	case err == nil:
 		return nil
+	case errors.Is(err, tmuxcc.ErrLaunchPending):
+		return &Error{Kind: KindConflict, Msg: fmt.Sprintf(format, args...) + ": " + err.Error(), Err: err}
 	case errors.Is(err, tmuxcc.ErrUnavailable):
 		return Wrap(err, KindUnavailable, format, args...)
 	case errors.Is(err, tmuxcc.ErrInvalidSize), errors.Is(err, tmuxcc.ErrInvalidName),

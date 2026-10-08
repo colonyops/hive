@@ -7,6 +7,7 @@ import { useWailsEvent } from '../../composables/useWailsEvent'
 import { appErrorMessage, errorText } from '../../lib/appError'
 import type { TerminalClient, WindowForeground } from '../../lib/terminalClient'
 import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
+import { useTerminalOutcomes } from '../../stores/useTerminalOutcomes'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import type { TerminalAttach } from './useTerminalAttach'
 import type { TerminalPool } from './useTerminalPool'
@@ -86,6 +87,7 @@ export function useTerminalSessionOps(options: {
   async function killSession(slug: string): Promise<void> {
     if (!client.value) return
     await client.value.kill(slug)
+    useTerminalOutcomes().report(slug, { reason: 'stopped', detail: 'The terminal was stopped.' })
     // Re-attaching the killed session lands it on the start panel; a pooled one
     // that is not on screen is simply let go.
     if (slug === pool.activeSlug.value) void pool.pool.get(slug)?.reconnect()

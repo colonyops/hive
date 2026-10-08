@@ -309,6 +309,7 @@ func TestChannelWriter_Write(t *testing.T) {
 // Mock TmuxOpener
 
 type mockTmuxOpener struct {
+	result  multiplexer.LaunchResult
 	openErr error
 	calls   []tmuxOpenCall
 }
@@ -318,9 +319,9 @@ type tmuxOpenCall struct {
 	Background                       bool
 }
 
-func (m *mockTmuxOpener) OpenTmuxSession(_ context.Context, name, path, remote, targetWindow string, background bool) error {
+func (m *mockTmuxOpener) OpenTmuxSession(_ context.Context, name, path, remote, targetWindow string, background bool) (multiplexer.LaunchResult, error) {
 	m.calls = append(m.calls, tmuxOpenCall{name, path, remote, targetWindow, background})
-	return m.openErr
+	return m.result, m.openErr
 }
 
 type mockWindowSpawner struct {
