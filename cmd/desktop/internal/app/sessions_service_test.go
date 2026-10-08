@@ -728,12 +728,11 @@ func TestSessionsService_StartTmuxSessionReturnsCommandFailureForDesktop(t *test
 	err := svc.StartTmuxSession(t.Context(), "review-81")
 	require.Error(t, err)
 	assert.Equal(t, KindUnavailable, KindOf(err))
-	assert.Contains(t, err.Error(), `command "missing-agent" was not found while starting window "agent"`)
+	assert.Contains(t, err.Error(), `Command not found while starting window "agent"`)
 	assert.Contains(t, err.Error(), "sh: missing-agent: command not found")
 	var appErr *Error
 	require.ErrorAs(t, err, &appErr)
-	assert.Contains(t, appErr.Msg, "status 127")
-	assert.Contains(t, appErr.Msg, "sh: missing-agent: command not found")
+	assert.Equal(t, "Command not found while starting window \"agent\" for session \"review 81\" (status 127)\n\n$ missing-agent\nsh: missing-agent: command not found", appErr.Msg)
 }
 
 func TestSessionsService_StartTmuxSessionLeavesALiveSessionAlone(t *testing.T) {

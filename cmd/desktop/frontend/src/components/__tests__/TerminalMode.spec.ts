@@ -1866,7 +1866,7 @@ describe('TerminalMode', () => {
       .fn()
       .mockRejectedValue(
         new Error(
-          'command "missing-agent" was not found while starting window "agent" for session "hive-fix-parser" (status 127): sh: missing-agent: command not found',
+          'Command not found while starting window "agent" for session "hive-fix-parser" (status 127)\n\n$ missing-agent\nsh: missing-agent: command not found',
         ),
       )
     mocks.createTerminalClient.mockReturnValue({ start })
@@ -1881,8 +1881,14 @@ describe('TerminalMode', () => {
     await wrapper.get('[data-testid="terminal-start-session"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="terminal-start-error"]').text()).toContain('missing-agent: command not found')
-    expect(wrapper.get('[data-testid="terminal-start-error"]').text()).toContain('status 127')
+    expect(wrapper.get('[data-testid="terminal-start-error-title"]').text()).toBe('Session failed to start')
+    expect(wrapper.get('[data-testid="terminal-start-error-output"]').text()).toContain('$ missing-agent')
+    expect(wrapper.get('[data-testid="terminal-start-error-output"]').text()).toContain(
+      'missing-agent: command not found',
+    )
+    expect(wrapper.get('[data-testid="terminal-start-error-output"]').text()).toContain('status 127')
+    expect(wrapper.find('[data-testid="terminal-start-error-copy"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="terminal-start-session"]').text()).toContain('Try again')
     expect(session.reconnect).not.toHaveBeenCalled()
     wrapper.unmount()
   })

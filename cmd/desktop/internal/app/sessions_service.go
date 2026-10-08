@@ -785,14 +785,15 @@ func sessionStartError(sessionName string, err error) error {
 	var message string
 	switch {
 	case exited.NotFound():
-		message = fmt.Sprintf("command %q was not found while starting window %q for session %q (status %d)", exited.Command, exited.Window, sessionName, exited.Status)
+		message = fmt.Sprintf("Command not found while starting window %q for session %q (status %d)", exited.Window, sessionName, exited.Status)
 	case exited.Status >= 0:
-		message = fmt.Sprintf("command %q exited while starting window %q for session %q (status %d)", exited.Command, exited.Window, sessionName, exited.Status)
+		message = fmt.Sprintf("Command exited while starting window %q for session %q (status %d)", exited.Window, sessionName, exited.Status)
 	default:
-		message = fmt.Sprintf("command %q exited while starting window %q for session %q", exited.Command, exited.Window, sessionName)
+		message = fmt.Sprintf("Command exited while starting window %q for session %q", exited.Window, sessionName)
 	}
+	message += "\n\n$ " + exited.Command
 	if output := strings.TrimSpace(exited.Output); output != "" {
-		message += ": " + output
+		message += "\n" + output
 	}
 	return &Error{Kind: KindUnavailable, Msg: message, Err: err}
 }
