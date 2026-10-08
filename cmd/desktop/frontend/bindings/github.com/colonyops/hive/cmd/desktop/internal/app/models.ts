@@ -3,6 +3,9 @@
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as diagnostics$0 from "./diagnostics/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as hiveconf$0 from "./hiveconf/models.js";
 
 export interface ActionRunLocation {
@@ -46,6 +49,46 @@ export interface ActionRunSummary {
     "profileId"?: string;
     "itemId"?: number;
     "itemTitle"?: string;
+}
+
+export interface DiagnosticsAgents {
+    "names": string[] | null;
+    "defaultAgent": string;
+}
+
+export interface DiagnosticsContext {
+    "text": string;
+    "path": string;
+    "dir": string;
+    "command": string;
+}
+
+export interface DiagnosticsIncident {
+    "query": DiagnosticsQuery;
+    "description": string;
+    "agent": string;
+}
+
+export interface DiagnosticsQuery {
+    "source": string;
+    "since": string;
+    "until": string;
+    "level": string;
+    "search": string;
+    "reference": string;
+    "limit": number;
+    "omitRoutine": boolean;
+}
+
+export interface DiagnosticsSnapshot {
+    "capturedAt": string;
+    "version": string;
+    "commit": string;
+    "buildDate": string;
+    "sources": diagnostics$0.Source[] | null;
+    "entries": diagnostics$0.Entry[] | null;
+    "truncated": boolean;
+    "query": DiagnosticsQuery;
 }
 
 /**

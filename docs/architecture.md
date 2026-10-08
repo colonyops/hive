@@ -1202,6 +1202,22 @@ gcx resources, and its README maps each instrument to the series a backend
 stores. A change that adds, renames, or removes an instrument, a trigger span,
 or a profile type updates the panel that reads it.
 
+### Diagnostics
+
+`App.Diagnostics` combines bounded file tails with `Jobs` outcomes; it owns no
+second log store (ADR [diagnostics-combines-bounded-evidence-independently-of-agent-execution](decisions/2026-10-06-diagnostics-combines-bounded-evidence-independently-of-agent-execution.md)).
+Wails and the read-only `read_diagnostics` MCP tool use the same service.
+Records retain source identity, evidence IDs, raw text, and truncation status.
+CLI and Desktop share hive.log, with service_name identifying the program.
+The reader accepts console text and JSON lines. CLI paths resolve from the launch
+environment and the instance's Hive data directory, never a frontend constant.
+
+The Diagnostics window mounts independently of the main app's onboarding and
+terminal surfaces. Opening it never starts an agent. Go-owned prompts package
+bounded incident snapshots; the selected configured agent runs only after an
+explicit action, through the existing authenticated ephemeral PTY transport.
+The evidence viewer remains usable if the transport or agent is unavailable.
+
 ### Source HTTP
 
 **Every source client is built over `sources/sourcehttp`** (ADR source-http-toolkit), which

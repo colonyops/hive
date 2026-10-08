@@ -303,7 +303,13 @@ func (s *TerminalsService) SelectWindow(ctx context.Context, slug, windowID stri
 // to be on screen — so a slug with no control client is served by a one-shot,
 // and the attach that follows lists what it made. Either way the window opens
 // where the session's active pane is, not where the session was started.
-func (s *TerminalsService) NewWindow(ctx context.Context, slug string) (string, error) {
+func (s *TerminalsService) NewWindow(ctx context.Context, slug string) (windowID string, resultErr error) {
+	s.log.Info().Str("session", slug).Msg("terminal window requested")
+	defer func() {
+		if resultErr == nil {
+			s.log.Info().Str("session", slug).Str("window_id", windowID).Msg("terminal window created")
+		}
+	}()
 	client, ok := s.manager.Client(slug)
 	if !ok {
 		id, err := s.manager.NewWindow(ctx, slug)

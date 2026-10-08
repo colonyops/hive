@@ -40,6 +40,8 @@ const (
 // written for a model rather than for a person reading a reference: what the
 // tool answers, what it will not do, and what a surprising answer means.
 func (ctrl *Controller) register(srv *mcp.Server) {
+	addTool(srv, &mcp.Tool{Name: "read_diagnostics", Title: "Read diagnostics", Description: "Read bounded Desktop/CLI log tails and job outcomes, with source paths, last-write times, and truncation indicators. No processes are started. Use a reference to fetch surrounding evidence, or source jobs and search to find an operation. Missing references answer not_found; historical evidence outside the retained tail may be unavailable."}, ctrl.ReadDiagnostics)
+
 	addTool(srv, &mcp.Tool{
 		Name:  "get_status",
 		Title: "Desktop status",

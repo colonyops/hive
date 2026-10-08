@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"strings"
+
+	"github.com/rs/zerolog"
 )
 
 type sessionAgentWindows interface {
@@ -11,7 +13,15 @@ type sessionAgentWindows interface {
 
 // NewAgentWindow starts a configured profile beside the session's existing
 // windows, sharing its checkout without creating another Hive record.
-func (s *SessionsService) NewAgentWindow(ctx context.Context, slug, agent string) (string, error) {
+func (s *SessionsService) NewAgentWindow(ctx context.Context, slug, agent string) (windowID string, resultErr error) {
+	s.logger.Info().Str("session", slug).Str("agent", agent).Msg("agent window requested")
+	defer func() {
+		level := zerolog.InfoLevel
+		if resultErr != nil {
+			level = zerolog.ErrorLevel
+		}
+		s.logger.WithLevel(level).Err(resultErr).Str("session", slug).Str("agent", agent).Str("window_id", windowID).Msg("agent window request completed")
+	}()
 	agent = strings.TrimSpace(agent)
 	if agent == "" {
 		return "", Errorf(KindInvalid, "agent profile is required")

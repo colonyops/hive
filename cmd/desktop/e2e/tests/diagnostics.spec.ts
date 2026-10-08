@@ -1,0 +1,20 @@
+import { expect, test } from './fixtures.js'
+
+test('Diagnostics opens independently and retains evidence when investigation is unavailable', async ({ page }, testInfo) => {
+  await page.goto('/?diagnostics=1')
+  await expect(page.getByRole('heading', { name: 'Diagnostics', exact: true })).toBeVisible()
+  await expect(page.getByLabel('Evidence sources')).toContainText('Hive Desktop')
+  await expect(page.getByLabel('Evidence sources')).toContainText('Hive CLI')
+  await expect(page.getByLabel('Evidence sources')).toContainText('Jobs')
+  await page.getByLabel('Live follow').uncheck()
+  await page.getByRole('button', { name: 'Time range' }).click()
+  await page.getByRole('option', { name: 'Retained history' }).click()
+  await page.getByLabel('Describe the incident').fill('A new window never appeared.')
+  await expect(page.getByRole('button', { name: 'Copy context', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Investigate', exact: true }).click()
+  await expect(page.getByRole('alert').first()).toBeVisible()
+  await expect(page.getByLabel('Diagnostic entries')).toBeVisible()
+  await page.getByRole('button', { name: 'Export', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('Saved')
+  await page.screenshot({ path: `screenshots/diagnostics-${testInfo.project.name}.png`, fullPage: true })
+})

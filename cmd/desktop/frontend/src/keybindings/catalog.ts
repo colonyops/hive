@@ -564,6 +564,15 @@ export const commandCatalog: BindableCommand[] = [
     context: 'global',
   },
   {
+    id: 'diagnostics.open',
+    title: 'Open Diagnostics',
+    group: 'General',
+    keywords: ['logs', 'debug', 'errors', 'investigate'],
+    icon: IconLifeBuoy,
+    defaultCombos: [],
+    context: 'global',
+  },
+  {
     id: 'report.bundle',
     title: 'Save a diagnostic bundle',
     group: 'General',
