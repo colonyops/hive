@@ -65,7 +65,7 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topic
 	sort.Strings(resolvedTopics)
 
 	// Publish all topics atomically in a single transaction
-	err := m.db.WithTx(ctx, func(q *db.Queries) error {
+	err := m.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error {
 		for _, topic := range resolvedTopics {
 			msgCopy := msg
 			msgCopy.Topic = topic
@@ -122,7 +122,7 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topic
 // Returns ErrTopicNotFound if no matching topics exist.
 func (m *MessageStore) Subscribe(ctx context.Context, topic string, since time.Time) ([]messaging.Message, error) {
 	// Get all topics
-	allTopics, err := m.db.Queries().ListTopics(ctx)
+	allTopics, err := m.db.Ctx(ctx).ListTopics(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list topics: %w", err)
 	}
@@ -157,7 +157,7 @@ func (m *MessageStore) Subscribe(ctx context.Context, topic string, since time.T
 	// Collect messages from all matched topics
 	var messages []messaging.Message
 	for _, t := range matchedTopics {
-		rows, err := m.db.Queries().SubscribeToTopic(ctx, db.SubscribeToTopicParams{
+		rows, err := m.db.Ctx(ctx).SubscribeToTopic(ctx, db.SubscribeToTopicParams{
 			Topic:     t,
 			CreatedAt: since.UnixNano(),
 		})
@@ -181,7 +181,7 @@ func (m *MessageStore) Subscribe(ctx context.Context, topic string, since time.T
 
 // List returns all topic names.
 func (m *MessageStore) List(ctx context.Context) ([]string, error) {
-	topics, err := m.db.Queries().ListTopics(ctx)
+	topics, err := m.db.Ctx(ctx).ListTopics(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list topics: %w", err)
 	}
@@ -194,13 +194,13 @@ func (m *MessageStore) Prune(ctx context.Context, olderThan time.Duration) (int,
 	cutoff := time.Now().Add(-olderThan).UnixNano()
 
 	// Count messages to be pruned
-	count, err := m.db.Queries().CountPrunableMessages(ctx, cutoff)
+	count, err := m.db.Ctx(ctx).CountPrunableMessages(ctx, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count prunable messages: %w", err)
 	}
 
 	// Delete messages
-	err = m.db.Queries().PruneMessages(ctx, cutoff)
+	err = m.db.Ctx(ctx).PruneMessages(ctx, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("failed to prune messages: %w", err)
 	}
@@ -270,7 +270,7 @@ func (m *MessageStore) Acknowledge(ctx context.Context, consumerID string, messa
 
 	now := time.Now().UnixNano()
 
-	return m.db.WithTx(ctx, func(q *db.Queries) error {
+	return m.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error {
 		for _, msgID := range messageIDs {
 			err := q.AcknowledgeMessages(ctx, db.AcknowledgeMessagesParams{
 				MessageID:  msgID,
@@ -302,7 +302,7 @@ func (m *MessageStore) GetUnread(ctx context.Context, consumerID string, topic s
 		}
 
 		for _, t := range topics {
-			rows, err := m.db.Queries().GetUnreadMessages(ctx, db.GetUnreadMessagesParams{
+			rows, err := m.db.Ctx(ctx).GetUnreadMessages(ctx, db.GetUnreadMessagesParams{
 				Topic:      t,
 				ConsumerID: consumerID,
 			})
@@ -313,7 +313,7 @@ func (m *MessageStore) GetUnread(ctx context.Context, consumerID string, topic s
 		}
 	} else {
 		// Exact topic
-		rows, err := m.db.Queries().GetUnreadMessages(ctx, db.GetUnreadMessagesParams{
+		rows, err := m.db.Ctx(ctx).GetUnreadMessages(ctx, db.GetUnreadMessagesParams{
 			Topic:      topic,
 			ConsumerID: consumerID,
 		})

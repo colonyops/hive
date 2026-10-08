@@ -23,7 +23,7 @@ func NewNotifyStore(db *db.DB) *NotifyStore {
 
 // Save persists a notification and returns its auto-generated ID.
 func (s *NotifyStore) Save(ctx context.Context, n notify.Notification) (int64, error) {
-	id, err := s.db.Queries().InsertNotification(ctx, db.InsertNotificationParams{
+	id, err := s.db.Ctx(ctx).InsertNotification(ctx, db.InsertNotificationParams{
 		Level:     string(n.Level),
 		Message:   n.Message,
 		CreatedAt: n.CreatedAt.UnixNano(),
@@ -37,7 +37,7 @@ func (s *NotifyStore) Save(ctx context.Context, n notify.Notification) (int64, e
 
 // List returns all notifications ordered by newest first.
 func (s *NotifyStore) List(ctx context.Context) ([]notify.Notification, error) {
-	rows, err := s.db.Queries().ListNotifications(ctx)
+	rows, err := s.db.Ctx(ctx).ListNotifications(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list notifications: %w", err)
 	}
@@ -52,7 +52,7 @@ func (s *NotifyStore) List(ctx context.Context) ([]notify.Notification, error) {
 
 // Clear deletes all notifications.
 func (s *NotifyStore) Clear(ctx context.Context) error {
-	if err := s.db.Queries().DeleteAllNotifications(ctx); err != nil {
+	if err := s.db.Ctx(ctx).DeleteAllNotifications(ctx); err != nil {
 		return fmt.Errorf("clear notifications: %w", err)
 	}
 	return nil
@@ -60,7 +60,7 @@ func (s *NotifyStore) Clear(ctx context.Context) error {
 
 // Count returns the total number of notifications.
 func (s *NotifyStore) Count(ctx context.Context) (int64, error) {
-	count, err := s.db.Queries().CountNotifications(ctx)
+	count, err := s.db.Ctx(ctx).CountNotifications(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("count notifications: %w", err)
 	}

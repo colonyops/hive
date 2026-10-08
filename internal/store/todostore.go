@@ -36,7 +36,7 @@ func (s *TodoStore) Create(ctx context.Context, t todo.Todo) error {
 		return fmt.Errorf("validate todo %q: %w", t.ID, err)
 	}
 
-	err := s.db.Queries().CreateTodoItem(ctx, db.CreateTodoItemParams{
+	err := s.db.Ctx(ctx).CreateTodoItem(ctx, db.CreateTodoItemParams{
 		ID:        t.ID,
 		SessionID: t.SessionID,
 		Source:    string(t.Source),
@@ -55,7 +55,7 @@ func (s *TodoStore) Create(ctx context.Context, t todo.Todo) error {
 
 // Get retrieves a single todo item by ID.
 func (s *TodoStore) Get(ctx context.Context, id string) (todo.Todo, error) {
-	row, err := s.db.Queries().GetTodoItem(ctx, id)
+	row, err := s.db.Ctx(ctx).GetTodoItem(ctx, id)
 	if err != nil {
 		return todo.Todo{}, fmt.Errorf("get todo item: %w", err)
 	}
@@ -70,7 +70,7 @@ func (s *TodoStore) Update(ctx context.Context, id string, status todo.Status) e
 		completedAt = now.UnixNano()
 	}
 
-	err := s.db.Queries().UpdateTodoItemStatus(ctx, db.UpdateTodoItemStatusParams{
+	err := s.db.Ctx(ctx).UpdateTodoItemStatus(ctx, db.UpdateTodoItemStatusParams{
 		Status:      string(status),
 		UpdatedAt:   now.UnixNano(),
 		CompletedAt: completedAt,
@@ -103,9 +103,9 @@ func (s *TodoStore) List(ctx context.Context, filter todo.ListFilter) ([]todo.To
 
 func (s *TodoStore) listRows(ctx context.Context, filter todo.ListFilter) ([]db.TodoItem, error) {
 	if filter.Status != nil {
-		return s.db.Queries().ListTodoItemsByStatus(ctx, string(*filter.Status))
+		return s.db.Ctx(ctx).ListTodoItemsByStatus(ctx, string(*filter.Status))
 	}
-	return s.db.Queries().ListTodoItems(ctx)
+	return s.db.Ctx(ctx).ListTodoItems(ctx)
 }
 
 func matchesListFilter(item todo.Todo, filter todo.ListFilter) bool {
@@ -120,7 +120,7 @@ func matchesListFilter(item todo.Todo, filter todo.ListFilter) bool {
 
 // CountPending returns the number of pending todo items.
 func (s *TodoStore) CountPending(ctx context.Context) (int, error) {
-	count, err := s.db.Queries().CountPendingTodoItems(ctx)
+	count, err := s.db.Ctx(ctx).CountPendingTodoItems(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("count pending todo items: %w", err)
 	}
@@ -129,7 +129,7 @@ func (s *TodoStore) CountPending(ctx context.Context) (int, error) {
 
 // CountOpen returns the number of open (pending + acknowledged) todo items.
 func (s *TodoStore) CountOpen(ctx context.Context) (int, error) {
-	count, err := s.db.Queries().CountOpenTodoItems(ctx)
+	count, err := s.db.Ctx(ctx).CountOpenTodoItems(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("count open todo items: %w", err)
 	}
@@ -138,7 +138,7 @@ func (s *TodoStore) CountOpen(ctx context.Context) (int, error) {
 
 // CountRecentBySession returns the number of todo items created by a session since the given time.
 func (s *TodoStore) CountRecentBySession(ctx context.Context, sessionID string, since time.Time) (int, error) {
-	count, err := s.db.Queries().CountRecentTodoItemsBySession(ctx, db.CountRecentTodoItemsBySessionParams{
+	count, err := s.db.Ctx(ctx).CountRecentTodoItemsBySession(ctx, db.CountRecentTodoItemsBySessionParams{
 		SessionID: sessionID,
 		CreatedAt: since.UnixNano(),
 	})
@@ -150,7 +150,7 @@ func (s *TodoStore) CountRecentBySession(ctx context.Context, sessionID string, 
 
 // Delete removes a todo item by ID.
 func (s *TodoStore) Delete(ctx context.Context, id string) error {
-	if err := s.db.Queries().DeleteTodoItem(ctx, id); err != nil {
+	if err := s.db.Ctx(ctx).DeleteTodoItem(ctx, id); err != nil {
 		return fmt.Errorf("delete todo item: %w", err)
 	}
 	return nil

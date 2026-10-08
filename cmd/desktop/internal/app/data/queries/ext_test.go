@@ -8,6 +8,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	hivedb "github.com/colonyops/hive/internal/store/db"
 )
 
 func extTestDB(t *testing.T) *DB {
@@ -44,14 +46,35 @@ func TestCtx_AmbientTransactionReturnsABoundDB(t *testing.T) {
 	t.Parallel()
 
 	db := extTestDB(t)
-	txCtx, tx, err := WithTransaction(t.Context(), db)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = tx.Rollback() })
+	require.NoError(t, db.WithinTx(t.Context(), func(ctx context.Context, tx *DB) error {
+		bound := db.Ctx(ctx)
+		require.NotSame(t, db, bound)
+		require.NotNil(t, bound.tx)
+		assert.Same(t, tx.tx, bound.tx)
+		assert.Same(t, bound.tx, bound.querier(), "hand-written SQL on a bound DB must run in the transaction")
+		return nil
+	}))
+}
 
-	bound := db.Ctx(txCtx)
-	require.NotSame(t, db, bound)
-	assert.Same(t, tx, bound.tx)
-	assert.Same(t, tx, bound.querier(), "hand-written SQL on a bound DB must run in the transaction")
+// TestCtx_IgnoresAnotherDatabasesTransaction: a transaction belongs to one
+// database, so a context carrying a hive.db transaction must not bind this
+// database's queries, and the reverse.
+func TestCtx_IgnoresAnotherDatabasesTransaction(t *testing.T) {
+	t.Parallel()
+
+	pipeline := extTestDB(t)
+	hive, err := hivedb.Open(t.TempDir(), hivedb.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = hive.Close() })
+
+	require.NoError(t, hive.WithinTx(t.Context(), func(ctx context.Context, _ *hivedb.DB) error {
+		assert.Same(t, pipeline, pipeline.Ctx(ctx), "a hive.db transaction bound a desktop-pipeline.db query")
+		return nil
+	}))
+	require.NoError(t, pipeline.WithinTx(t.Context(), func(ctx context.Context, _ *DB) error {
+		assert.Same(t, hive, hive.Ctx(ctx), "a desktop-pipeline.db transaction bound a hive.db query")
+		return nil
+	}))
 }
 
 // TestWithinTx_JoinsRatherThanNesting is the property that keeps this from
@@ -175,21 +198,4 @@ func TestWithinTx_ReleasesTheConnection(t *testing.T) {
 	})
 
 	assert.Zero(t, db.Conn().Stats().InUse, "a committed and a rolled-back transaction must both release their connection")
-}
-
-// TestWithTransaction_IsIdempotentOnAnAmbientContext: asking for a
-// transaction when one is already ambient hands back the same one rather than
-// starting a second.
-func TestWithTransaction_IsIdempotentOnAnAmbientContext(t *testing.T) {
-	t.Parallel()
-
-	db := extTestDB(t)
-	ctx, first, err := WithTransaction(t.Context(), db)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = first.Rollback() })
-
-	sameCtx, second, err := WithTransaction(ctx, db)
-	require.NoError(t, err)
-	assert.Same(t, first, second)
-	assert.Equal(t, ctx, sameCtx)
 }

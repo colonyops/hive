@@ -27,9 +27,13 @@ func DefaultOpenOptions() OpenOptions {
 }
 
 // DB wraps a SQL database connection with sqlc queries.
+//
+// *Queries is embedded so a store can call a generated query on the DB it
+// holds, including the transaction-bound DB that Ctx returns.
 type DB struct {
-	conn    *sql.DB
-	queries *Queries
+	*Queries
+
+	conn *sql.DB
 }
 
 // Open creates a new database connection with the given options.
@@ -58,8 +62,8 @@ func Open(dataDir string, opts OpenOptions) (*DB, error) {
 	}
 
 	db := &DB{
+		Queries: New(conn),
 		conn:    conn,
-		queries: New(conn),
 	}
 
 	// Initialize schema
@@ -78,37 +82,36 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
-// Conn returns the underlying *sql.DB connection.
+// Conn returns the underlying connection pool, even on a transaction-bound
+// DB. Use WithinTx and the generated queries for transactional work rather
+// than running raw SQL through this.
 func (db *DB) Conn() *sql.DB {
 	return db.conn
 }
 
-// Queries returns the sqlc queries interface.
-func (db *DB) Queries() *Queries {
-	return db.queries
+// Ctx returns a DB bound to the ambient transaction if the context carries
+// one for this database, and the receiver otherwise. Store methods begin with
+// db.Ctx(ctx) so they join a unit of work their caller opened.
+func (db *DB) Ctx(ctx context.Context) *DB {
+	tx, ok := sqlite.AmbientTx(ctx, db.conn)
+	if !ok {
+		return db
+	}
+	return db.boundTo(tx)
 }
 
-// WithTx executes a function within a transaction.
-// If the function returns an error, the transaction is rolled back.
-func (db *DB) WithTx(ctx context.Context, fn func(*Queries) error) error {
-	tx, err := db.conn.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
-	}
+func (db *DB) boundTo(tx *sql.Tx) *DB {
+	bound := *db
+	bound.Queries = db.WithTx(tx)
+	return &bound
+}
 
-	queries := db.queries.WithTx(tx)
-	if err := fn(queries); err != nil {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("transaction failed: %w (rollback also failed: %w)", err, rbErr)
-		}
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	return nil
+// WithinTx runs fn with a DB bound to a transaction on this database, joining
+// an ambient one (see sqlite.WithinTx).
+func (db *DB) WithinTx(ctx context.Context, fn func(context.Context, *DB) error) error {
+	return sqlite.WithinTx(ctx, db.conn, func(ctx context.Context, tx *sql.Tx) error {
+		return fn(ctx, db.boundTo(tx))
+	})
 }
 
 // initSchema runs all pending up migrations.

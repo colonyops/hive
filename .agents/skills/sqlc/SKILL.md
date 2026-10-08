@@ -93,4 +93,4 @@ HC queries live in `queries_hc.sql` to keep the diff surface small. Add new feat
 
 **Timestamps:** Stored as `INTEGER NOT NULL` (Unix seconds). The generated code uses `int64`. Conversion to/from `time.Time` happens in the store layer, not in generated code.
 
-**Transactions:** Use `s.db.WithTx(ctx, func(q *db.Queries) error { ... })` — the `db.DB` wrapper provides this. Queries inside the closure use the transactional `Queries` instance.
+**Transactions:** Store methods call queries through `s.db.Ctx(ctx)`, which joins an ambient transaction when the context carries one. Open a unit of work with `s.db.WithinTx(ctx, func(ctx context.Context, q *db.DB) error { ... })`; a nested call joins the outer transaction and only the outermost call commits or rolls back.
