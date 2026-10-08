@@ -185,6 +185,6 @@ func TestCreateSessionSkipsStartupWatchWithoutCommands(t *testing.T) {
 
 func TestCommandExitedErrorMessage(t *testing.T) {
 	err := &CommandExitedError{Session: "s", Window: "w", Command: "x", Status: -1}
-	assert.Equal(t, `tmux session "s": command "x" exited in window "w" during startup`, err.Error())
+	assert.Equal(t, "tmux session \"s\": command exited in window \"w\" during startup\n\n$ x", err.Error())
 	assert.ErrorIs(t, err, ErrCommandExited)
 }

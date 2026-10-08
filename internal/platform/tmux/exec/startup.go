@@ -32,14 +32,17 @@ func (e *CommandExitedError) Error() string {
 	var message string
 	switch {
 	case e.NotFound():
-		message = fmt.Sprintf("tmux session %q: command not found in window %q: %q (status 127)", e.Session, e.Window, e.Command)
+		message = fmt.Sprintf("tmux session %q: command not found in window %q (status 127)", e.Session, e.Window)
 	case e.Status >= 0:
-		message = fmt.Sprintf("tmux session %q: command %q exited in window %q during startup (status %d)", e.Session, e.Command, e.Window, e.Status)
+		message = fmt.Sprintf("tmux session %q: command exited in window %q during startup (status %d)", e.Session, e.Window, e.Status)
 	default:
-		message = fmt.Sprintf("tmux session %q: command %q exited in window %q during startup", e.Session, e.Command, e.Window)
+		message = fmt.Sprintf("tmux session %q: command exited in window %q during startup", e.Session, e.Window)
+	}
+	if e.Command != "" {
+		message += "\n\n$ " + e.Command
 	}
 	if e.Output != "" {
-		message += "; output: " + e.Output
+		message += "\n" + e.Output
 	}
 	return message
 }

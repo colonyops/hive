@@ -123,7 +123,7 @@ func TestOutputModal_Overlay(t *testing.T) {
 
 		assert.Contains(t, result, "command not found in window")
 		assert.Contains(t, result, "missing-agent")
-		assert.Contains(t, result, "output: sh: missing-agent:")
+		assert.Contains(t, result, "sh: missing-agent: command not found")
 	})
 
 	t.Run("truncates long lines", func(t *testing.T) {

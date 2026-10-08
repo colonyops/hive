@@ -782,20 +782,7 @@ func sessionStartError(sessionName string, err error) error {
 		return Wrap(err, KindInternal, "starting the terminal session for %q", sessionName)
 	}
 
-	var message string
-	switch {
-	case exited.NotFound():
-		message = fmt.Sprintf("Command not found while starting window %q for session %q (status %d)", exited.Window, sessionName, exited.Status)
-	case exited.Status >= 0:
-		message = fmt.Sprintf("Command exited while starting window %q for session %q (status %d)", exited.Window, sessionName, exited.Status)
-	default:
-		message = fmt.Sprintf("Command exited while starting window %q for session %q", exited.Window, sessionName)
-	}
-	message += "\n\n$ " + exited.Command
-	if output := strings.TrimSpace(exited.Output); output != "" {
-		message += "\n" + output
-	}
-	return &Error{Kind: KindUnavailable, Msg: message, Err: err}
+	return &Error{Kind: KindUnavailable, Msg: exited.Error(), Err: err}
 }
 
 // SessionDirectory answers the checkout a slug's terminal should open in. A
