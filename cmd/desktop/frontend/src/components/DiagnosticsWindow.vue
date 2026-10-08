@@ -121,6 +121,10 @@ async function reveal(id: string): Promise<void> {
     error.value = String(e)
   }
 }
+function clearTimeBounds(): void {
+  since.value = ''
+  until.value = ''
+}
 function time(value: string): string {
   return value ? new Date(value).toLocaleString() : 'No timestamp'
 }
@@ -242,14 +246,7 @@ onBeforeUnmount(() => {
       <summary>Custom time range</summary>
       <label>From <input v-model="since" type="datetime-local" /></label
       ><label>Through <input v-model="until" type="datetime-local" /></label
-      ><button
-        @click="
-          since = ''
-          until = ''
-        "
-      >
-        Reset
-      </button>
+      ><button @click="clearTimeBounds">Reset</button>
     </details>
     <p v-if="error" class="error banner" role="alert">{{ error }}</p>
     <div class="summary">
