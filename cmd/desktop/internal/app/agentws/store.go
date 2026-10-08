@@ -19,6 +19,16 @@ const (
 	installedListName    = ".hive-installed"
 )
 
+// IsWatchedFile reports whether a change to path needs a reload. AGENTS.md is
+// left out because nothing reads it between opens.
+func IsWatchedFile(path string) bool {
+	switch filepath.Base(path) {
+	case libraryFileName, skillLibraryFileName, manifestFileName:
+		return true
+	}
+	return false
+}
+
 // WorkspaceStatus is one workspace directory's load outcome, keyed by the
 // directory name. A valid manifest carries Workspace; a broken one carries
 // Err and the last-good Workspace, so a listing UI shows why it broke rather

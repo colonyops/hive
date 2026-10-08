@@ -396,8 +396,10 @@ cmd/desktop/internal/
     dispatch/                     # output worker, Dispatcher, executors; also
                                   #   where SystemNotifier (the notify port) is
                                   #   declared — consumer-defined, no notify/ package
-    actions/                      # actions.yml catalog, watcher, editable model
+    actions/                      # actions.yml catalog, editable model
       docs/                       # per-action-type markdown
+    dirwatch/                     # the debounced directory watcher behind actions,
+                                  #   flows, and agentws hot-reload
     configmigrate/                # versioned migrations for settings.yaml, flows, actions.yml
     prompts/                      # Go-owned LLM prompt templates + registry (ADR go-owned-llm-prompts)
       templates/                 #   .tmpl files the registry renders
@@ -410,8 +412,8 @@ cmd/desktop/internal/
     agentws/                      # the agent-workspace root: mcps.yaml, .shared/,
                                   #   one directory per workspace; Workspace/Library
                                   #   parse+validate, the generator, the command
-                                  #   template and MCP wiring, the two-level
-                                  #   watcher (ADR a-workspace-declares-its-own-authority, ADR workspace-directories-are-generated-and-disposable)
+                                  #   template and MCP wiring, the
+                                  #   watched-file predicate (ADR a-workspace-declares-its-own-authority, ADR workspace-directories-are-generated-and-disposable)
     schedule/                     # cron parsing, prompt rendering, and the
                                   #   catch-up decision behind the run loop; a
                                   #   leaf, so it is testable with no tmux or DB
@@ -2290,13 +2292,13 @@ that safe is one line of CSS: `contain: layout` on `.hv-html` makes the block
 the containing block for fixed and absolute descendants, so a block that
 positions itself cannot paint outside the pane.
 
-`agentws.Watcher` follows the tree's own shape rather than `ActionsWatcher`'s
-or `FlowsWatcher`'s flat one: fsnotify is not recursive and the tree is
-nested, so it maintains a watch at two levels — one on the root itself (which
-sees `mcps.yaml` and workspace directories appearing or disappearing) and one
-per workspace directory (which sees its `agent-workspace.yaml`). Nothing
-watches deeper: an agent writing into `docs/`, or the generator rewriting its
-own output on open, is invisible to it by design, not omission.
+The agent-workspace watcher is the same `dirwatch.Watcher` that actions and
+flows use, with `WithSubdirectories`: fsnotify is not recursive and the tree
+is nested, so it watches at two levels — the root itself (which sees
+`mcps.yaml` and workspace directories appearing or disappearing) and each
+workspace directory (which sees its `agent-workspace.yaml`). Nothing watches
+deeper: an agent writing into `docs/`, or the generator rewriting its own
+output on open, is invisible to it by design, not omission.
 
 **The Agents sidebar is one tree, and position is what states a chat's
 workspace.** Workspaces are the parent rows and their chats nest beneath, in a

@@ -369,7 +369,7 @@ wires:
 Flow parsing is strict and validated by Go on Deploy: node ids are unique,
 known node types decode their own config, source limits match the GitHub API
 caps, action nodes reference actions that exist in `actions.yml`, and wires
-connect valid ports. A `flow.FlowsWatcher` watches the directory (not
+connect valid ports. A `dirwatch.Watcher` watches the directory (not
 individual files, so atomic editor saves work) and hot-reloads external edits;
 the app's own SaveFlow/SaveLayout writes intentionally trigger the same reload
 and `flows:updated` wake-up.
@@ -394,7 +394,7 @@ actions in the order they appear on disk. Dragging a row in Settings ▸ Actions
 rewrites that sequence (`ActionStore.Reorder`), and hand-editing the file has
 the same effect.
 
-An `actions.ActionsWatcher` watches the `actions.yml` parent directory,
+A `dirwatch.Watcher` watches the `actions.yml` parent directory,
 debounces write/rename bursts, reloads `ActionStore`, and emits
 `actions:updated`. `ActionStore` keeps the last-good action set when a broken
 file is saved, so a half-edited config does not blank actions out from under a
