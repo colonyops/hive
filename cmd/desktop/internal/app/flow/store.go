@@ -40,7 +40,7 @@ type FlowStatus struct {
 }
 
 // FlowStore holds the flows loaded from a flows/*.yaml directory, reloading
-// on demand (Reload) or from the watcher NewFlowsWatcher builds. It is the backend
+// on demand (Reload) or from a file watcher. It is the backend
 // half of Deploy: a flows-dir change reaches here via Reload, and the app
 // emits "flows:updated" so the frontend knows to re-fetch and reconcile its
 // running graph snapshots. This store only ever swaps its own in-memory

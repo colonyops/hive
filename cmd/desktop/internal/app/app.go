@@ -839,7 +839,9 @@ func (a *App) openActions(path string, logger zerolog.Logger) {
 		logger.Warn().Err(err).Msg("actions.yml load failed; using last-good (likely empty) action set")
 	}
 
-	watcher, err := actions.NewActionsWatcher(path, func() {
+	actionsFile := filepath.Base(path)
+	isActionsFile := func(p string) bool { return filepath.Base(p) == actionsFile }
+	watcher, err := dirwatch.New(filepath.Dir(path), isActionsFile, func() {
 		if err := a.actionStore.Reload(); err != nil {
 			logger.Warn().Err(err).Msg("actions.yml reload failed")
 		}
@@ -848,7 +850,7 @@ func (a *App) openActions(path string, logger zerolog.Logger) {
 		// A hand edit (or the app's own write) reloaded actions.yml: record
 		// the now-effective action count so the change is auditable.
 		a.Activity.Record(a.ctx, activity.ConfigReloaded("actions.yml", count))
-	}, logger)
+	}, logger, dirwatch.WithComponent("actions-watcher"))
 	if err != nil {
 		logger.Warn().Err(err).Msg("actions.yml hot-reload unavailable")
 		return
@@ -869,12 +871,12 @@ func (a *App) openFlows(dir string, logger zerolog.Logger) {
 	a.flowStore = flow.NewFlowStore(dir, actions.NewRefs(a.actionStore))
 	a.flowStore.SetOrder(a.settings.Profiles.Order)
 
-	watcher, err := flow.NewFlowsWatcher(dir, func() {
+	watcher, err := dirwatch.New(dir, flow.IsFlowFile, func() {
 		if err := a.flowStore.Reload(); err != nil {
 			logger.Warn().Err(err).Msg("flows reload failed")
 		}
 		a.PublishFlowsUpdated("reload")
-	}, logger)
+	}, logger, dirwatch.WithComponent("flows-watcher"))
 	if err != nil {
 		logger.Warn().Err(err).Msg("flows hot-reload unavailable")
 		return
@@ -892,7 +894,7 @@ func (a *App) openFlows(dir string, logger zerolog.Logger) {
 // unmounted volume, a signed-out iCloud Drive) or one occupied by a file —
 // spec §14 says that is reported, not silently replaced with a second empty
 // root elsewhere. So nothing past that point may create root or anything
-// under it: no seed, no Hive workspace, no watcher (NewWatcher's own
+// under it: no seed, no Hive workspace, no watcher (dirwatch.New's own
 // MkdirAll would recreate exactly what EnsureRoot just refused to). The store
 // still gets built — its Reload on a missing root is already a valid, empty
 // snapshot — so the rest of the app has something non-nil to read; the
@@ -923,7 +925,9 @@ func (a *App) openAgentWorkspaces(root string, logger zerolog.Logger) {
 		logger.Warn().Err(err).Msg("agent workspace root load failed; using last-good (likely empty) workspace set")
 	}
 
-	watcher, err := agentws.NewWatcher(root, func() {
+	// One level of subdirectories reaches each agent-workspace.yaml. Agent
+	// writes into docs/ and the generator's output sit deeper and never reload.
+	watcher, err := dirwatch.New(root, agentws.IsWatchedFile, func() {
 		if err := a.agentWorkspaceStore.Reload(); err != nil {
 			logger.Warn().Err(err).Msg("agent workspace reload failed")
 		}
@@ -932,7 +936,7 @@ func (a *App) openAgentWorkspaces(root string, logger zerolog.Logger) {
 		// A hand edit to a manifest's schedules: list is a schedule change like
 		// any other, so the scheduler re-reads on the same signal the UI does.
 		a.scheduler.Reload()
-	}, logger)
+	}, logger, dirwatch.WithSubdirectories(), dirwatch.WithComponent("agentws-watcher"))
 	if err != nil {
 		logger.Warn().Err(err).Msg("agent workspace hot-reload unavailable")
 		return

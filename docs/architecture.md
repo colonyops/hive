@@ -393,7 +393,7 @@ cmd/desktop/internal/
     dispatch/                     # output worker, Dispatcher, executors; also
                                   #   where SystemNotifier (the notify port) is
                                   #   declared — consumer-defined, no notify/ package
-    actions/                      # actions.yml catalog, watcher, editable model
+    actions/                      # actions.yml catalog, editable model
       docs/                       # per-action-type markdown
     dirwatch/                     # the debounced directory watcher behind actions,
                                   #   flows, and agentws hot-reload
@@ -410,7 +410,7 @@ cmd/desktop/internal/
                                   #   one directory per workspace; Workspace/Library
                                   #   parse+validate, the generator, the command
                                   #   template and MCP wiring, the
-                                  #   watcher predicate (ADR a-workspace-declares-its-own-authority, ADR workspace-directories-are-generated-and-disposable)
+                                  #   watched-file predicate (ADR a-workspace-declares-its-own-authority, ADR workspace-directories-are-generated-and-disposable)
     schedule/                     # cron parsing, prompt rendering, and the
                                   #   catch-up decision behind the run loop; a
                                   #   leaf, so it is testable with no tmux or DB

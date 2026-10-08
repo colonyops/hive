@@ -92,10 +92,21 @@ func LoadFlows(dir string, refs Refs) (flows []Flow, perFileErrors map[string]er
 	return flows, perFileErrors, warnings
 }
 
+// IsFlowFile reports whether a change to path needs a reload. It keeps
+// .ui.yaml, unlike isFlowDefinition, and excludes .sidebar.yaml: the frontend
+// owns that state and applies it optimistically, so a reload on its writes
+// would flash the sidebar.
+func IsFlowFile(path string) bool {
+	base := filepath.Base(path)
+	if strings.HasSuffix(base, ".sidebar.yaml") || strings.HasSuffix(base, ".sidebar.yml") {
+		return false
+	}
+	ext := filepath.Ext(base)
+	return ext == ".yaml" || ext == ".yml"
+}
+
 // isFlowDefinition reports whether name is a flow definition file (not a
-// .ui.yaml / .sidebar.yaml sibling), factored from LoadFlows. Deliberately NOT
-// unified with the watcher's isFlowFile (watcher.go), which keeps .ui.yaml on
-// purpose.
+// .ui.yaml / .sidebar.yaml sibling), factored from LoadFlows.
 func isFlowDefinition(name string) bool {
 	if strings.HasSuffix(name, ".ui.yaml") || strings.HasSuffix(name, ".ui.yml") {
 		return false
