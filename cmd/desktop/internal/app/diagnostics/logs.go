@@ -21,10 +21,8 @@ const (
 )
 
 type Entry struct {
-	ID   string `json:"id"`
-	Time string `json:"time"
-
-"github.com/colonyops/hive/pkg/logutils"`
+	ID        string `json:"id"`
+	Time      string `json:"time"`
 	Source    string `json:"source"`
 	Level     string `json:"level"`
 	Message   string `json:"message"`
@@ -125,9 +123,7 @@ func Read(id, path string) (Source, []Entry) {
 func Parse(source, raw string) Entry {
 	e := Entry{Source: source, Raw: raw, Message: raw, Level: "unknown"}
 	var obj struct {
-		Time string `json:"time"
-
-"github.com/colonyops/hive/pkg/logutils"`
+		Time    string `json:"time"`
 		Level   string `json:"level"`
 		Message string `json:"message"`
 		Service string `json:"service_name"`
@@ -144,7 +140,7 @@ func Parse(source, raw string) Entry {
 				e.Time = parts[0]
 				e.Level = level(parts[1])
 				e.Message = parts[2]
-				for _, field := range strings.Fields(parts[2]) {
+				for field := range strings.FieldsSeq(parts[2]) {
 					if service, ok := strings.CutPrefix(field, logutils.ServiceNameKey+"="); ok {
 						e.Source = serviceSource(service, source)
 					}
