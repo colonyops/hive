@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useIntervalFn } from '@vueuse/core'
 import { Clipboard } from '@wailsio/runtime'
 import {
@@ -18,7 +18,7 @@ import type {
 import AppSelect from './ui/AppSelect.vue'
 import AppCheckbox from './ui/AppCheckbox.vue'
 
-const DiagnosticsAgent = defineAsyncComponent(() => import('./DiagnosticsAgent.vue'))
+import DiagnosticsAgent from './DiagnosticsAgent.vue'
 
 const snapshot = shallowRef<DiagnosticsSnapshot | null>(null)
 const source = ref('')
