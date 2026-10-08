@@ -11,6 +11,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/posthog/client"
 	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 // Normalized alert states. PostHog sends display strings — "Firing", "Not
@@ -29,7 +30,7 @@ type AlertsConfig struct {
 	FiringOnly bool `json:"firing_only,omitempty" yaml:"firing_only,omitempty" jsonschema:"title=Firing only,description=Emit only alerts that are currently firing. Off by default, so an alert that stops firing updates its existing item instead of vanishing."`
 	// Interval is the floor between fetches, for a project whose alert list is
 	// not worth pulling on every tick.
-	Interval connector.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The source still only runs on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
+	Interval duration.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The source still only runs on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
 }
 
 func (c *AlertsConfig) Validate() error {

@@ -8,14 +8,15 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 func TestFactory_BuildsAnInstanceFromTheConfig(t *testing.T) {
 	factory := NewFactory(hostEnvironment{})
 	cfg := &Config{
 		Command:  "echo '[]'",
-		Timeout:  connector.Duration(30 * time.Second),
-		Interval: connector.Duration(time.Hour),
+		Timeout:  duration.Duration(30 * time.Second),
+		Interval: duration.Duration(time.Hour),
 		Cwd:      "/tmp",
 		Env:      map[string]string{"TOKEN": "x"},
 	}

@@ -3,6 +3,7 @@ package actions
 import (
 	"fmt"
 	"strings"
+	"time"
 )
 
 // ShellConfig is a shell action: it runs an author-trusted shell command
@@ -18,7 +19,7 @@ type ShellConfig struct {
 	Cwd string `yaml:"cwd,omitempty"`
 	// Timeout bounds how long the command may run; zero means no deadline
 	// beyond the invoking context's own.
-	Timeout Duration `yaml:"timeout,omitempty"`
+	Timeout time.Duration `yaml:"timeout,omitempty"`
 	// Env optionally adds/overrides environment variables for the command.
 	Env map[string]string `yaml:"env,omitempty"`
 }

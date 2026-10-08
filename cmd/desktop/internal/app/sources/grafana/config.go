@@ -6,6 +6,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 // MetricsConfig is a Grafana metrics source node's configuration. credential is
@@ -22,7 +23,7 @@ type MetricsConfig struct {
 	Title         string `json:"title,omitempty" yaml:"title,omitempty" jsonschema:"title=Title,description=The feed item's title. Defaults to the query when empty."`
 	// Interval is the floor between fetches, for a query too expensive to
 	// run on every tick.
-	Interval connector.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The source still only runs on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
+	Interval duration.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The source still only runs on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
 }
 
 func (c *MetricsConfig) Validate() error {

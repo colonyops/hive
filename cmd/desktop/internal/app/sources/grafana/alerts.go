@@ -13,6 +13,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/grafana/client"
 	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 type AlertsConfig struct {
@@ -24,7 +25,7 @@ type AlertsConfig struct {
 	Matchers []string `json:"matchers,omitempty" yaml:"matchers,omitempty" jsonschema:"title=Label matchers,description=Alertmanager label matchers, e.g. 'squad=platform' or 'severity=~critical|warning'. An alert must match every one."`
 	// Interval is the floor between fetches, for a stack whose alert list is
 	// expensive to pull on every tick.
-	Interval connector.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The source still only runs on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
+	Interval duration.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The source still only runs on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
 }
 
 func (c *AlertsConfig) Validate() error {

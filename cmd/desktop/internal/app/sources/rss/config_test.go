@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 func TestValidateAcceptsAFeedURL(t *testing.T) {
@@ -15,7 +16,7 @@ func TestValidateAcceptsAFeedURL(t *testing.T) {
 	for name, cfg := range map[string]*Config{
 		"https":            {URL: "https://example.com/feed.xml"},
 		"http on a LAN":    {URL: "http://nas.local:8080/feed"},
-		"with every field": {URL: "https://example.com/atom", Limit: 10, Interval: connector.Duration(0), Icon: "rss"},
+		"with every field": {URL: "https://example.com/atom", Limit: 10, Interval: duration.Duration(0), Icon: "rss"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -38,7 +39,7 @@ func TestValidateRejects(t *testing.T) {
 		"embedded userinfo":    {URL: "https://user:pass@example.com/feed"},
 		"a negative limit":     {URL: "https://example.com/feed", Limit: -1},
 		"a limit past the max": {URL: "https://example.com/feed", Limit: maxLimit + 1},
-		"a negative interval":  {URL: "https://example.com/feed", Interval: connector.Duration(-1)},
+		"a negative interval":  {URL: "https://example.com/feed", Interval: duration.Duration(-1)},
 		"an unknown icon":      {URL: "https://example.com/feed", Icon: "not-an-icon"},
 		"a malformed image":    {URL: "https://example.com/feed", Image: "nope"},
 	} {

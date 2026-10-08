@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 const (
@@ -30,9 +32,9 @@ const (
 // initialisation inside on_message (`state.counts ??= {}`). Having exactly one
 // entry point also removes the pretence that `msg` may be undefined.
 type FunctionConfig struct {
-	OnMessage string   `json:"on_message"        yaml:"on_message"`
-	OutputsN  int      `json:"outputs,omitempty" yaml:"outputs,omitempty"`
-	Timeout   Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+	OnMessage string            `json:"on_message"        yaml:"on_message"`
+	OutputsN  int               `json:"outputs,omitempty" yaml:"outputs,omitempty"`
+	Timeout   duration.Duration `json:"timeout,omitempty" yaml:"timeout,omitempty"`
 }
 
 func (c *FunctionConfig) Inputs() int { return 1 }

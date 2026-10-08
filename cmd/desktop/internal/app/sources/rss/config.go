@@ -8,6 +8,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/icons"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sourcemark"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 // defaultLimit is how many entries one fetch ingests when the node names no
@@ -30,7 +31,7 @@ type Config struct {
 	Limit int `json:"limit,omitempty" yaml:"limit,omitempty" jsonschema:"title=Entry limit,description=How many of the feed's most recent entries to ingest per fetch. Empty is 50; at most 500."`
 	// Interval is the floor between fetches. A feed is polite to poll
 	// conditionally but rude to poll often, so most feeds want one.
-	Interval connector.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The feed still only loads on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
+	Interval duration.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. The feed still only loads on a poll tick so the real cadence rounds up to the next one; empty fetches on every tick."`
 	// Icon is the glyph feed rows render for this node's items, from the
 	// shared feed icon set. Purely cosmetic; empty means the default.
 	Icon string `json:"icon,omitempty" yaml:"icon,omitempty" jsonschema:"title=Item icon,description=The glyph feed rows render for this node's items. Empty uses the default feed glyph."`

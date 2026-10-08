@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 func TestMetricsConfigValidate(t *testing.T) {
@@ -91,10 +91,10 @@ func TestMetricsConfigInterval(t *testing.T) {
 	assert.Zero(t, unset.Interval.Duration())
 
 	hourly := base()
-	hourly.Interval = connector.Duration(time.Hour)
+	hourly.Interval = duration.Duration(time.Hour)
 	require.NoError(t, hourly.Validate())
 
 	negative := base()
-	negative.Interval = connector.Duration(-time.Second)
+	negative.Interval = duration.Duration(-time.Second)
 	assert.ErrorContains(t, negative.Validate(), "interval must not be negative")
 }

@@ -319,7 +319,7 @@ func (s *SettingsService) Github(context.Context) (GithubSettings, error) {
 	if err != nil {
 		return GithubSettings{}, Wrap(err, KindInternal, "reading settings")
 	}
-	return GithubSettings{PollInterval: cfg.Polling.Interval.Duration(), MinPollInterval: settings.MinPollInterval}, nil
+	return GithubSettings{PollInterval: cfg.Polling.Interval, MinPollInterval: settings.MinPollInterval}, nil
 }
 
 // SetGithub validates against the floor, persists, and applies to the running
@@ -332,13 +332,13 @@ func (s *SettingsService) SetGithub(_ context.Context, in GithubSettings) error 
 	}
 
 	effective, err := s.store.Update(func(current *settings.Settings) error {
-		current.Polling.Interval = settings.Duration(in.PollInterval)
+		current.Polling.Interval = in.PollInterval
 		return nil
 	})
 	if err != nil {
 		return Wrap(err, KindInternal, "saving settings")
 	}
-	interval := effective.Polling.Interval.Duration()
+	interval := effective.Polling.Interval
 	if s.producer != nil {
 		s.producer.SetInterval(interval)
 	}
@@ -364,7 +364,7 @@ func (s *SettingsService) SessionEndDelay(context.Context) time.Duration {
 	if err != nil {
 		return 0
 	}
-	return cfg.AgentWorkspaces.SessionEndDelay.Duration()
+	return cfg.AgentWorkspaces.SessionEndDelay
 }
 
 // EditorTitle is the display title a configured command is labelled with, and

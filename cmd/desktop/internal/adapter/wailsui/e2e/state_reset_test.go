@@ -120,7 +120,7 @@ func TestStateResetRestoresFreshlySeededBaseline(t *testing.T) {
 	require.NoError(t, os.WriteFile(extraFlow, []byte("id: minted-by-test\n"), 0o644))
 	require.NoError(t, os.WriteFile(settings.ActionsPath(), []byte("version: 1\nactions:\n  - id: mutated\n"), 0o644))
 	cfg := settings.DefaultSettings()
-	cfg.Polling.Interval = settings.Duration(2 * time.Minute)
+	cfg.Polling.Interval = 2 * time.Minute
 	require.NoError(t, settings.SaveSettings(cfg))
 
 	r := httptest.NewRecorder()

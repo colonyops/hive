@@ -1,6 +1,10 @@
 package connector
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/colonyops/hive/pkg/duration"
+)
 
 // IntervalDoc is the prose every pull connector's `interval` field documents
 // itself with. Struct tags take literals only, so the tag text is still
@@ -14,7 +18,7 @@ const IntervalDoc = "Shortest time between fetches. The source still only runs o
 // Nothing here enforces the floor. A connector only declares it, as its
 // Instance's MinInterval; the poll producer is what skips a source that is not
 // due, and a manual refresh overrides it.
-func ValidateInterval(connectorName string, interval Duration) error {
+func ValidateInterval(connectorName string, interval duration.Duration) error {
 	if interval < 0 {
 		return fmt.Errorf("%s: interval must not be negative", connectorName)
 	}

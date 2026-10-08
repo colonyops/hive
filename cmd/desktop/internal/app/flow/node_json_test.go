@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
+	"github.com/colonyops/hive/pkg/duration"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,7 +24,7 @@ func TestNode_JSONRoundTrip(t *testing.T) {
 		Config: &FunctionConfig{
 			OnMessage: "return msg;",
 			OutputsN:  2,
-			Timeout:   Duration(5e9),
+			Timeout:   duration.Duration(5e9),
 		},
 	}
 

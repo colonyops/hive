@@ -23,10 +23,10 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/runtime/js"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sourcemark"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/exec"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
 	"github.com/colonyops/hive/internal/platform/credentials"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 // seedRef is the account a seeded starter graph fetches as; seededCreds is a
@@ -91,7 +91,7 @@ func markableSourceFlow() flow.Flow {
 		ID: "hooks", Name: "Hooks", Enabled: true,
 		Nodes: []flow.Node{
 			{ID: "hook", Type: "sources.webhook", Config: flow.NewSourceConfig(webhook.Descriptor.Type, &webhook.Config{Path: "ci"})},
-			{ID: "run", Type: "sources.exec", Config: flow.NewSourceConfig(exec.Descriptor.Type, &exec.Config{Command: "echo '[]'", Timeout: connector.Duration(30 * time.Second)})},
+			{ID: "run", Type: "sources.exec", Config: flow.NewSourceConfig(exec.Descriptor.Type, &exec.Config{Command: "echo '[]'", Timeout: duration.Duration(30 * time.Second)})},
 			{ID: "inbox", Type: "feed", Name: "Inbox", Config: &flow.FeedConfig{}},
 		},
 		Wires: []flow.Wire{{From: "hook", To: "inbox"}, {From: "run", To: "inbox"}},

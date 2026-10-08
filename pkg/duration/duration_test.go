@@ -1,9 +1,11 @@
-package flow
+package duration
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
+	"github.com/invopop/jsonschema"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -55,4 +57,36 @@ func TestDuration_MarshalText_UnmarshalText_RoundTrip(t *testing.T) {
 	var decoded Duration
 	require.NoError(t, decoded.UnmarshalText(text))
 	assert.Equal(t, d, decoded)
+}
+
+func TestDuration_RejectsBareZero(t *testing.T) {
+	_, err := decodeDuration(t, `0`)
+	require.Error(t, err)
+}
+
+func TestDuration_JSON_RoundTrip(t *testing.T) {
+	type wire struct {
+		Timeout Duration `json:"timeout"`
+	}
+	data, err := json.Marshal(wire{Timeout: Duration(90 * time.Second)})
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"timeout":"1m30s"}`, string(data))
+
+	var decoded wire
+	require.NoError(t, json.Unmarshal(data, &decoded))
+	assert.Equal(t, 90*time.Second, decoded.Timeout.Duration())
+
+	require.Error(t, json.Unmarshal([]byte(`{"timeout":5}`), &decoded))
+}
+
+func TestDuration_JSONSchema_ReflectsAsString(t *testing.T) {
+	type config struct {
+		Interval Duration `json:"interval"`
+	}
+	schema := (&jsonschema.Reflector{DoNotReference: true}).Reflect(&config{})
+	prop, ok := schema.Properties.Get("interval")
+	require.True(t, ok)
+	assert.Equal(t, "string", prop.Type)
+	assert.Regexp(t, prop.Pattern, "1h30m")
+	assert.NotRegexp(t, prop.Pattern, "5")
 }

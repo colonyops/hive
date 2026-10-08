@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
+	"github.com/colonyops/hive/pkg/duration"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -23,7 +24,7 @@ func TestSaveFlow_NewFile_LoadSaveLoadRoundTrip(t *testing.T) {
 		Nodes: []Node{
 			{ID: "in-prs", Type: "sources.github", Config: NewSourceConfig(github.Descriptor.Type, &github.Config{Credential: "github/octocat", Kind: "search", Query: "is:open is:pr"})},
 			{ID: "drop-bots", Type: "github-filter", Config: &GithubFilterConfig{ExcludeAuthors: []string{"*[bot]"}, Repos: []string{"colonyops/*"}}},
-			{ID: "tag", Type: "function", Name: "Tag reviewed", Config: &FunctionConfig{OnMessage: "return msg;", OutputsN: 2, Timeout: Duration(5e9)}},
+			{ID: "tag", Type: "function", Name: "Tag reviewed", Config: &FunctionConfig{OnMessage: "return msg;", OutputsN: 2, Timeout: duration.Duration(5e9)}},
 			{ID: "team-feed", Type: "feed", Config: &FeedConfig{}},
 			{ID: "spawn-review", Type: "action", Disabled: true, Config: &ActionConfig{Action: "review-pr"}},
 		},

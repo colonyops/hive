@@ -70,13 +70,13 @@ func editableFromAction(a Action) (EditableAction, error) {
 	case *LaunchSessionConfig:
 		postHookTimeout := ""
 		if c.PostHookTimeout != 0 {
-			postHookTimeout = time.Duration(c.PostHookTimeout).String()
+			postHookTimeout = c.PostHookTimeout.String()
 		}
 		out.Launch = &EditableLaunchConfig{PromptTemplate: c.PromptTemplate, Agent: c.Agent, RepoTemplate: c.RepoTemplate, Workspace: c.Workspace, PostHook: c.PostHook, PostHookTimeout: postHookTimeout}
 	case *ShellConfig:
 		timeout := ""
 		if c.Timeout != 0 {
-			timeout = time.Duration(c.Timeout).String()
+			timeout = c.Timeout.String()
 		}
 		out.Shell = &EditableShellConfig{CommandTemplate: c.CommandTemplate, Cwd: c.Cwd, Timeout: timeout, Env: cloneEnv(c.Env)}
 	case *PublishMessageConfig:
@@ -116,26 +116,26 @@ func actionFromEditable(e EditableAction) (Action, error) {
 		if e.Launch == nil {
 			return Action{}, fmt.Errorf("action %q: launch config is required for launch-session", e.ID)
 		}
-		var postHookTimeout Duration
+		var postHookTimeout time.Duration
 		if e.Launch.PostHookTimeout != "" {
 			d, err := time.ParseDuration(e.Launch.PostHookTimeout)
 			if err != nil {
 				return Action{}, fmt.Errorf("action %q: post_hook_timeout: %w", e.ID, err)
 			}
-			postHookTimeout = Duration(d)
+			postHookTimeout = d
 		}
 		a.Config = &LaunchSessionConfig{PromptTemplate: e.Launch.PromptTemplate, Agent: e.Launch.Agent, RepoTemplate: e.Launch.RepoTemplate, Workspace: e.Launch.Workspace, PostHook: e.Launch.PostHook, PostHookTimeout: postHookTimeout}
 	case "shell":
 		if e.Shell == nil {
 			return Action{}, fmt.Errorf("action %q: shell config is required for shell", e.ID)
 		}
-		var timeout Duration
+		var timeout time.Duration
 		if e.Shell.Timeout != "" {
 			d, err := time.ParseDuration(e.Shell.Timeout)
 			if err != nil {
 				return Action{}, fmt.Errorf("action %q: timeout: %w", e.ID, err)
 			}
-			timeout = Duration(d)
+			timeout = d
 		}
 		a.Config = &ShellConfig{CommandTemplate: e.Shell.CommandTemplate, Cwd: e.Shell.Cwd, Timeout: timeout, Env: cloneEnv(e.Shell.Env)}
 	case "publish-message":

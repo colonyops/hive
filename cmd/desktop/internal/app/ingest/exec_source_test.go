@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
 	execsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/exec"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 // The exec connector is the first source whose failures are entirely the
@@ -29,7 +30,7 @@ func execInstance(t *testing.T, command string) connector.Instance {
 	t.Helper()
 	instance, err := execsource.NewFactory(execEnvironment{}).New(
 		connector.Node{FlowID: "oncall", NodeID: "src", Policy: models.ResurfacePolicyStateChanges},
-		&execsource.Config{Command: command, Timeout: connector.Duration(10 * time.Second)},
+		&execsource.Config{Command: command, Timeout: duration.Duration(10 * time.Second)},
 	)
 	require.NoError(t, err)
 	return instance
