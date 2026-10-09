@@ -1342,6 +1342,24 @@ to it resumes rather than resetting. Every segment renders once a profile
 exists; an unavailable mode explains itself inside the mode rather than
 disabling its segment (ADR terminal-agents-grafana-and-commands-graduate-out-of-experimental).
 
+### Remote Code
+
+Code has separate Local and Remote views. Remote Code accepts a loopback SSH
+forward, authenticates discovery at `/api/terminal/remote/sessions`, checks
+control and terminal wire versions, and reuses the terminal client/renderer.
+Session IDs and tmux slugs remain scoped to that endpoint; remote rows never
+enter local session caches or filesystem services. The first slice attaches
+existing sessions only. The installation choice also gates local terminal
+commands; New Session switches back to Local.
+
+A `server,terminals` build opts into tmux control mode; ordinary `server` builds
+retain the unavailable behavior used by UI tests. Popup PTYs remain disabled.
+Server builds omit native notifications. `HIVE_DESKTOP_CONNECTION_FILE` exports
+the per-run token privately for SSH retrieval; clients keep it in memory.
+The Docker fixture under `cmd/desktop/remote/` exercises this boundary with
+persistent remote state and only an SSH port published on host loopback.
+ADR [remote-code-attaches-through-an-ssh-forwarded-terminal-api](decisions/2026-10-09-remote-code-attaches-through-an-ssh-forwarded-terminal-api.md).
+
 ### Terminal sessions
 
 **Image input is local file references.** Wails routes native drops to a specific

@@ -4,6 +4,7 @@ import { Window } from '@wailsio/runtime'
 import { useAgentCanvasRoute } from '../composables/useAgentCanvasRoute'
 import type { CanvasAuthor, CanvasScope } from '../lib/agentCanvas'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 
@@ -25,6 +26,7 @@ export function useAppMode(
   shellLoaded: Ref<boolean>,
 ) {
   const { route, router } = nav
+  const codeInstallation = useCodeInstallation()
   const { routeChatId, canvasRequested, canvasName, canvasUnseen, isCanvasUnseen, syncCanvasQuery } =
     useAgentCanvasRoute()
   const { recents } = useAgentSessionsAll()
@@ -97,7 +99,11 @@ export function useAppMode(
 
   // The URL is the attach state, so it is also which session is on screen.
   const onScreenSessionSlug = computed(() =>
-    route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : '',
+    route.name === 'terminal' &&
+    codeInstallation.installation.value === 'local' &&
+    typeof route.params.slug === 'string'
+      ? route.params.slug
+      : '',
   )
 
   const feedSidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)

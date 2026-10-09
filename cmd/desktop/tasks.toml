@@ -155,3 +155,28 @@ run = "npm run lint"
 description = "Run desktop frontend unit tests (vitest)"
 dir = "{{config_root}}/cmd/desktop/frontend"
 run = "npm test"
+
+["desktop:remote:up"]
+description = "Build and start the persistent SSH remote Hive fixture"
+run = "./cmd/desktop/remote/run.sh up"
+
+["desktop:remote:tunnel"]
+description = "Forward the remote fixture terminal API through SSH (foreground)"
+run = "./cmd/desktop/remote/run.sh tunnel"
+
+["desktop:remote:connection"]
+description = "Retrieve the remote fixture's per-run connection credential"
+run = "./cmd/desktop/remote/run.sh connection"
+
+["desktop:remote:shell"]
+description = "Open an SSH shell in the remote Hive fixture"
+run = "./cmd/desktop/remote/run.sh shell"
+
+["desktop:remote:down"]
+description = "Stop the remote fixture, retaining its workspace and SSH volumes"
+run = "./cmd/desktop/remote/run.sh down"
+
+["desktop:remote:test"]
+description = "Run browser/SSH/terminal smoke coverage in an isolated Docker client"
+depends = ["desktop:remote:up"]
+run = "./cmd/desktop/remote/run.sh test"

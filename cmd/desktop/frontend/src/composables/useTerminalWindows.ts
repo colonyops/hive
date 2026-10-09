@@ -20,6 +20,7 @@ import { proposeGrid, terminalCellSize, type CellSize } from '../lib/terminalGri
 import { activePaneOf, paneGrids, windowPanes } from '../lib/terminalLayout'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
 import { TerminalOutputWriter } from '../lib/terminalOutput'
+import { interceptPaste } from '../lib/terminalPaste'
 import { installTerminalImages } from '../lib/terminalImages'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
 import { appClaimsPaneKey, claimsShiftEnter } from '../lib/terminalKeys'
@@ -224,7 +225,11 @@ function validDimension(value: number | undefined): value is number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= MAX_DIMENSION
 }
 
-export function useTerminalWindows(slug: string, client: TerminalClient): UseTerminalWindows {
+export function useTerminalWindows(
+  slug: string,
+  client: TerminalClient,
+  options: { localImages?: boolean } = {},
+): UseTerminalWindows {
   const tabs = ref<TerminalWindowTab[]>([]) as Ref<TerminalWindowTab[]>
   const activeWindowId = ref('')
   const status = ref<TerminalStatus>('connecting')
@@ -516,21 +521,32 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     state.host = host
     state.term.open(host)
     watchViewportScroll(state, paneId, host)
-    const releasePaste = installTerminalImages(host, {
-      pasteText: (text) => sendPaste(paneId, text),
-      capture: () => {
-        const capturedSocket = socket
-        return {
-          current: () =>
-            socket === capturedSocket && capturedSocket?.readyState === WebSocket.OPEN && panes.get(paneId) === state,
-          paste: (text, signal) => pasteTerminalImage(slug, paneId, text, signal),
-          focus: () => {
-            void selectPane(paneId)
-            state.term.focus()
-          },
-        }
-      },
-    })
+    const releasePaste =
+      options.localImages === false
+        ? interceptPaste(
+            host,
+            (text) => sendPaste(paneId, text),
+            () => {
+              actionError.value = 'Image transfer is unavailable for remote sessions.'
+            },
+          )
+        : installTerminalImages(host, {
+            pasteText: (text) => sendPaste(paneId, text),
+            capture: () => {
+              const capturedSocket = socket
+              return {
+                current: () =>
+                  socket === capturedSocket &&
+                  capturedSocket?.readyState === WebSocket.OPEN &&
+                  panes.get(paneId) === state,
+                paste: (text, signal) => pasteTerminalImage(slug, paneId, text, signal),
+                focus: () => {
+                  void selectPane(paneId)
+                  state.term.focus()
+                },
+              }
+            },
+          })
     state.disposers.push({ dispose: releasePaste })
     if (found.tab.windowId === activeWindowId.value) {
       // After open(), never before: an unopened Terminal defers addon

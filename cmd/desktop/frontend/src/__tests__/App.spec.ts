@@ -7,6 +7,7 @@ import { resetNewSessionForTests } from '../composables/useNewSession'
 import { resetToastsForTests } from '../composables/useToasts'
 import { requestedEditorFilter } from '../keybindings/keymapRows'
 import { useReportDialog } from '../composables/useReportDialog'
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { useActivity } from '../stores/useActivity'
 import { resetFlowsSessionForTests, useFlowsSession } from '../pipeline/composables/useFlowsSession'
 import { resetNotificationSettingsForTests } from '../composables/useNotificationSettings'
@@ -347,7 +348,11 @@ async function mountApp() {
 // for a tree VTU never attached to the document.
 function terminalOnScreen(wrapper: VueWrapper): boolean {
   const mode = wrapper.find('[data-testid="terminal-mode"]')
-  return mode.exists() && !(mode.attributes('style') ?? '').includes('display: none')
+  if (!mode.exists()) return false
+  for (let el: HTMLElement | null = mode.element as HTMLElement; el; el = el.parentElement) {
+    if (el.style.display === 'none') return false
+  }
+  return true
 }
 
 // Same shape as terminalOnScreen: the Agents area is mount-once/v-show too.
@@ -358,7 +363,11 @@ async function openApplicationSettings(wrapper: VueWrapper): Promise<void> {
 
 function agentsOnScreen(wrapper: VueWrapper): boolean {
   const mode = wrapper.find('[data-testid="agents-mode"]')
-  return mode.exists() && !(mode.attributes('style') ?? '').includes('display: none')
+  if (!mode.exists()) return false
+  for (let el: HTMLElement | null = mode.element as HTMLElement; el; el = el.parentElement) {
+    if (el.style.display === 'none') return false
+  }
+  return true
 }
 
 // Stands in for TerminalMode's registration. Every handle is a spy so a test
@@ -2378,6 +2387,30 @@ describe('App', () => {
     } finally {
       wrapper.unmount()
     }
+  })
+
+  it('opens a local inbox session after using remote Code', async () => {
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(App, {
+      global: {
+        plugins: [router],
+        stubs: {
+          DetailPane: {
+            template: `<button data-testid="detail-session" @click="$emit('open-session', 'local-session')" />`,
+            emits: ['open-session'],
+          },
+        },
+      },
+    })
+    await flushPromises()
+    useCodeInstallation().select('remote')
+    await wrapper.get('[data-testid="detail-session"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value).toMatchObject({ name: 'terminal', params: { slug: 'local-session' } })
+    expect(useCodeInstallation().installation.value).toBe('local')
+    wrapper.unmount()
   })
 
   it('routes DetailPane Edit to actions settings', async () => {

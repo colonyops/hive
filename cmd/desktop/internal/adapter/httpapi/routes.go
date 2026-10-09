@@ -51,6 +51,11 @@ func (op Op) pattern() string {
 func (ctrl *Controller) operations() []Op {
 	ops := ctrl.baseOperations()
 	ops = append(ops, ctrl.terminalOperations()...)
+	ops = append(ops, Op{
+		Method: "POST", Path: TerminalPathPrefix + "remote/sessions",
+		Summary:  "List Code sessions and terminal protocol compatibility for a remote client.",
+		Response: remoteSessionsResponse{}, Handler: ctrl.RemoteSessions,
+	})
 	ops = append(ops, ctrl.popupTerminalOperations()...)
 	ops = append(ops, ctrl.agentOperations()...)
 	return ops

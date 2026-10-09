@@ -4,6 +4,7 @@ import { useEventListener } from '@vueuse/core'
 import { useDevTools } from '../composables/useDevTools'
 import type { useFeedState } from '../composables/useFeedState'
 import type { FlowsSession } from '../pipeline/composables/useFlowsSession'
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { useJobs } from '../stores/useJobs'
 import { ActionRunLocation } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
 import {
@@ -218,7 +219,9 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
 
   // The route is the attach state (ADR terminal-transport), so opening a
   // session is a navigation and nothing here touches tmux.
+  const codeInstallation = useCodeInstallation()
   function openItemSession(slug: string): void {
+    codeInstallation.select('local')
     void router.push({ name: 'terminal', params: { slug } })
   }
 

@@ -90,9 +90,9 @@ func New(mock string, settingsStore *settings.Store, appIcon []byte, logger zero
 		mock:          mock,
 		settingsStore: settingsStore,
 		focus:         NewFocusState(),
-		notifications: NewUnavailableNotificationService(fmt.Errorf("native notifications unavailable in desktop mock mode")),
+		notifications: NewUnavailableNotificationService(fmt.Errorf("native notifications unavailable in this runtime")),
 	}
-	if mock != "" {
+	if mock != "" || !nativeNotificationsSupported {
 		return ui
 	}
 

@@ -641,3 +641,19 @@ Recording UI spans to `perf.jsonl` is the `usePerf` hook, on in `dev` via
 ui-performance-spans-are-recorded-to-jsonl). The **desktop-ui-perf** agent skill carries
 the full loop: the naming rules and the jq recipes for percentiles, outliers,
 and grouping by attribute.
+
+## Remote Code preview
+
+Code → Remote connects to an SSH-forwarded terminal API for existing sessions.
+The remote backend uses `-tags server,terminals`; `desktop:serve` retains the
+terminal-disabled UI-test behavior. Server builds omit native notifications.
+
+`HIVE_DESKTOP_CONNECTION_FILE` optionally names a file in an existing directory
+where startup atomically writes `{url, token}` with mode 0600. It is a per-run
+terminal credential; retrieve it through SSH, keep it private, and retrieve it
+again after a restart. The client accepts loopback HTTP tunnel endpoints and
+keeps credentials in memory. No credentials are added to settings.yaml.
+
+See [the reusable Docker fixture](remote/README.md) for `desktop:remote:*` tasks
+and a local Desktop plus persistent Linux remote setup. Remote creation, inbox,
+Chats, file transfer and automatic SSH management remain outside this preview.

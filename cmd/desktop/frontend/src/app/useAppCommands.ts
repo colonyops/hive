@@ -27,6 +27,7 @@ import {
   stepTerminalWindow,
   zoomTerminalPane,
 } from '../lib/terminalTree'
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
@@ -57,6 +58,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   const { feed, nav, appMode, overlays, feedCommands } = deps
   const { terminalActive, agentsActive, onScreenSessionSlug, terminalSidebarCollapsed, agentsSidebarCollapsed } =
     appMode
+  const codeInstallation = useCodeInstallation()
   const palette = useCommandPalette()
   const report = useReportDialog()
   const newSession = useNewSession()
@@ -70,6 +72,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   const popupTerminalMounted = ref(false)
 
   function togglePopupTerminal(): void {
+    if (terminalActive.value && codeInstallation.installation.value === 'remote') codeInstallation.select('local')
     popupTerminalMounted.value = true
     popupTerminal.toggle({ sessionSlug: onScreenSessionSlug.value || undefined })
   }
@@ -156,7 +159,18 @@ export function useAppCommands(deps: AppCommandDeps) {
     'terminal.focus-pane-down': () => focusTerminalPaneDirection('down'),
     'agents.focus-sidebar': () => revealSidebar(agentsSidebarCollapsed, focusAgentsList),
     'agents.focus-pane': focusAgentsPane,
-    'session.new': () => newSession.openBlank(sessionRepository(onScreenSessionSlug.value)),
+    'session.new': () => {
+      codeInstallation.select('local')
+      void newSession.openBlank(sessionRepository(onScreenSessionSlug.value))
+    },
+    'view.go-remote-code': () => {
+      codeInstallation.select('remote')
+      appMode.setMode('terminal')
+    },
+    'view.go-local-code': () => {
+      codeInstallation.select('local')
+      appMode.setMode('terminal')
+    },
     'window.hide': feed.hideWindow,
     'view.go-inbox': () => appMode.setMode('hub'),
     'view.go-code': () => appMode.setMode('terminal'),
@@ -188,7 +202,7 @@ export function useAppCommands(deps: AppCommandDeps) {
       case 'feed':
         return appMode.feedNavActive.value
       case 'terminal':
-        return terminalActive.value
+        return terminalActive.value && codeInstallation.installation.value === 'local'
       // Terminal mode with nothing attached is the session picker, which has
       // no more terminal to work with than the feed does.
       case 'terminal-session':

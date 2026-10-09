@@ -1,3 +1,4 @@
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { computed, nextTick, watch } from 'vue'
 import IconFileText from '~icons/lucide/file-text'
 import IconGauge from '~icons/lucide/gauge'
@@ -360,7 +361,10 @@ export function useAppPaletteRows(
             kind: 'session',
             keywords: [row.slug, group.name, 'session', 'attach', 'switch', 'open'],
             icon: IconTerminal,
-            run: () => void router.push({ name: 'terminal', params: { slug: row.slug } }),
+            run: () => {
+              useCodeInstallation().select('local')
+              void router.push({ name: 'terminal', params: { slug: row.slug } })
+            },
           })
         }
       }
@@ -381,7 +385,10 @@ export function useAppPaletteRows(
             keywords: ['window', 'tab', 'jump', 'switch'],
             icon: IconTerminal,
             hint: hintFor(terminalWindowCommandID(index + 1)),
-            run: () => void router.push({ name: 'terminal', params: { slug }, query: { window: win.windowId } }),
+            run: () => {
+              useCodeInstallation().select('local')
+              void router.push({ name: 'terminal', params: { slug }, query: { window: win.windowId } })
+            },
           })
         })
       }

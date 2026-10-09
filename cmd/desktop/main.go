@@ -311,6 +311,16 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if path := os.Getenv(httpapi.ConnectionFileEnv); path != "" {
+		running, port := core.Webhooks.Endpoint(ctx)
+		if !running {
+			log.Fatal("cannot export remote connection: HTTP listener is not running")
+		}
+		if err := httpapi.WriteConnectionFile(path, core.Webhooks.Host(), port, terminalToken); err != nil {
+			log.Fatal(err)
+		}
+	}
+
 	// Registered as a shutdown hook and called again after Run, because which
 	// of the two fires is the platform's business: on macOS Quit is [NSApp
 	// terminate:], which runs the hooks and exits without Run ever returning,

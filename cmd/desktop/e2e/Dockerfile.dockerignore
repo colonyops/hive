@@ -16,3 +16,5 @@ docs/.cache
 launch.env
 launch.onboarding.env
 overrides.env
+
+.hive-remote

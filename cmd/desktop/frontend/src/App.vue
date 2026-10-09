@@ -39,7 +39,7 @@ const DevBar = devMode ? defineAsyncComponent(() => import('./components/DevBar.
 const DevView = defineAsyncComponent(() => import('./components/DevView.vue'))
 // Async so xterm.js stays out of the initial bundle: the hub must not pay for
 // a terminal at startup.
-const TerminalMode = defineAsyncComponent(() => import('./components/TerminalMode.vue'))
+const TerminalMode = defineAsyncComponent(() => import('./components/CodeMode.vue'))
 const AgentsMode = defineAsyncComponent(() => import('./components/AgentsMode.vue'))
 const PopupTerminal = defineAsyncComponent(() => import('./components/PopupTerminal.vue'))
 
