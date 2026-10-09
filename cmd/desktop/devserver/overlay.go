@@ -416,18 +416,17 @@ func (s *Store) RewriteNotifications(body []byte) []byte {
 // #9 and collide with a real issue #9's overlay. Anything else returns 0,
 // which observe and the overlay lookup both treat as "no item".
 func numberFromAPIURL(url string) int {
-	slash := strings.LastIndex(url, "/")
-	if slash < 0 {
+	collection, suffix, found := strings.CutLast(url, "/")
+	if !found {
 		return 0
 	}
-	collection := url[:slash]
 	if idx := strings.LastIndex(collection, "/"); idx >= 0 {
 		collection = collection[idx+1:]
 	}
 	if collection != "issues" && collection != "pulls" {
 		return 0
 	}
-	num, err := strconv.Atoi(url[slash+1:])
+	num, err := strconv.Atoi(suffix)
 	if err != nil || num <= 0 {
 		return 0
 	}

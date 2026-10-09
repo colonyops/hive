@@ -239,11 +239,11 @@ type Subject struct {
 // a subject that has no number, such as a commit.
 func (s Subject) Number() int {
 	trimmed := strings.TrimRight(s.URL, "/")
-	slash := strings.LastIndex(trimmed, "/")
-	if slash < 0 {
+	_, suffix, found := strings.CutLast(trimmed, "/")
+	if !found {
 		return 0
 	}
-	number, err := strconv.Atoi(trimmed[slash+1:])
+	number, err := strconv.Atoi(suffix)
 	if err != nil || number <= 0 {
 		return 0
 	}
