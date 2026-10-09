@@ -2,7 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useIntervalFn, useStorage, useWindowSize } from '@vueuse/core'
 import IconArrowUp from '~icons/lucide/arrow-up'
-import IconCheck from '~icons/lucide/check'
 import IconColumns2 from '~icons/lucide/columns-2'
 import IconCopy from '~icons/lucide/copy'
 import IconDownload from '~icons/lucide/download'
@@ -27,9 +26,12 @@ import type {
   DiagnosticsSnapshot,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { useClipboard } from '../composables/useClipboard'
+import { usePerf } from '../composables/usePerf'
 import { useResizablePanel } from '../composables/useResizablePanel'
+import { retainUnchangedDiagnosticEntries } from '../lib/diagnosticsEntries'
 import type { MenuEntry } from '../types/menu'
 import DiagnosticsAgent from './DiagnosticsAgent.vue'
+import DiagnosticsEntry from './DiagnosticsEntry.vue'
 import DiagnosticsTimeRange from './DiagnosticsTimeRange.vue'
 import AppMenu from './ui/AppMenu.vue'
 import AppSelect from './ui/AppSelect.vue'
@@ -77,6 +79,7 @@ const awayFromTop = ref(false)
 const actionMenuOpen = ref(false)
 const copiedEntryID = ref('')
 const clipboard = useClipboard()
+const perf = usePerf('diagnostics')
 const panelLayout = useStorage<'side-by-side' | 'stacked'>('hive.diagnostics.layout', 'stacked')
 const viewport = useWindowSize()
 const narrowWindow = computed(() => viewport.width.value < NARROW_LAYOUT_WIDTH)
@@ -187,19 +190,26 @@ function currentQuery(reference = ''): DiagnosticsQuery {
 async function refresh(): Promise<void> {
   const seq = ++generation
   const pinAfterRead = follow.value && atTail.value
+  const finish = perf.start('logs:refresh', { follow: follow.value })
+  let entryCount = 0
+  let entriesChanged = false
+  let failed = false
   loading.value = true
   try {
     const result = await Read(currentQuery())
     if (disposed || seq !== generation) return
-    snapshot.value = result
+    const entries = retainUnchangedDiagnosticEntries(rows.value, result.entries ?? [])
+    entryCount = entries.length
+    entriesChanged = entries !== rows.value
+    snapshot.value = { ...result, entries }
     error.value = ''
-    if (pinAfterRead) {
-      await nextTick()
-      list.value?.scrollTo({ top: list.value.scrollHeight })
-    }
+    await nextTick()
+    if (pinAfterRead) list.value?.scrollTo({ top: list.value.scrollHeight })
   } catch (failure) {
+    failed = true
     if (!disposed && seq === generation) error.value = String(failure)
   } finally {
+    finish({ entryCount, entriesChanged, failed })
     if (!disposed && seq === generation) loading.value = false
   }
 }
@@ -259,33 +269,6 @@ async function copyEntry(entry: DiagnosticEntry): Promise<void> {
   await clipboard.copy([entry.time, entry.source, entry.level, entry.raw].filter(Boolean).join(' '))
   if (clipboard.status.value === 'success') copiedEntryID.value = entry.id
   notice.value = clipboard.status.value === 'success' ? 'Entry copied.' : 'Could not copy entry.'
-}
-
-function time(value: string): string {
-  return value ? new Date(value).toLocaleString() : 'No timestamp'
-}
-
-function shortTime(value: string): string {
-  if (!value) return '--:--:--'
-  const date = new Date(value)
-  return date.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
-
-function sourceLabel(id: string): string {
-  if (id === 'desktop') return 'DESKTOP'
-  if (id === 'cli') return 'CLI'
-  if (id === 'jobs') return 'JOB'
-  return id.toUpperCase()
-}
-
-function levelLabel(value: string): string {
-  return { error: 'ERR', warn: 'WRN', info: 'INF', debug: 'DBG', unknown: 'UNK' }[value] ?? value.toUpperCase()
-}
-
-function sortedFields(entry: DiagnosticEntry): [string, string][] {
-  return Object.entries(entry.fields ?? {})
-    .flatMap(([key, value]) => (typeof value === 'string' ? ([[key, value]] as [string, string][]) : []))
-    .sort(([a], [b]) => a.localeCompare(b))
 }
 
 function onEntriesScroll(): void {
@@ -555,78 +538,17 @@ onBeforeUnmount(() => {
             message="No entries match these filters. Try a wider time range."
             data-testid="diagnostics-empty"
           />
-          <details
+          <DiagnosticsEntry
             v-for="entry in rows"
-            :id="entry.id"
             :key="`${entry.id}:${entry.time}`"
-            class="group border-b border-l-2 border-row font-mono text-caption"
-            :class="{
-              'border-l-severity-error': entry.level === 'error',
-              'border-l-severity-warning': entry.level === 'warn',
-              'border-l-severity-success': entry.level === 'info',
-              'border-l-text-4': entry.level === 'debug' || entry.level === 'unknown',
-            }"
-            data-testid="diagnostics-entry"
-            :data-entry-id="entry.id"
-          >
-            <summary class="flex cursor-pointer list-none items-start gap-2 px-2 py-1.5 hover:bg-hover">
-              <time class="w-17 shrink-0 text-text-4" :title="time(entry.time)">{{ shortTime(entry.time) }}</time>
-              <span class="w-13 shrink-0 text-text-3">{{ sourceLabel(entry.source) }}</span>
-              <span
-                class="w-8 shrink-0 font-semibold"
-                :class="{
-                  'text-severity-error': entry.level === 'error',
-                  'text-severity-warning': entry.level === 'warn',
-                  'text-text-3': entry.level !== 'error' && entry.level !== 'warn',
-                }"
-              >
-                {{ levelLabel(entry.level) }}
-              </span>
-              <span
-                class="min-w-0 flex-1 text-text-2"
-                :class="wrapMessages ? 'whitespace-pre-wrap break-words' : 'truncate'"
-              >
-                {{ entry.message }}
-              </span>
-            </summary>
-            <div class="border-t border-row bg-raised px-3 py-2.5" data-testid="diagnostics-entry-raw">
-              <div class="mb-2 flex flex-wrap items-center gap-2">
-                <a class="text-accent hover:underline" :href="`#${entry.id}`">{{ entry.id }}</a>
-                <BaseBadge v-if="entry.truncated" tone="accent" variant="pill" class="px-2 py-0.5 text-micro">
-                  Entry truncated
-                </BaseBadge>
-                <IconButton
-                  class="ml-auto"
-                  :label="copiedEntryID === entry.id ? 'Entry copied' : 'Copy entry'"
-                  :icon="copiedEntryID === entry.id ? IconCheck : IconCopy"
-                  :active="copiedEntryID === entry.id"
-                  size="md"
-                  data-testid="diagnostics-entry-copy"
-                  :data-entry-id="entry.id"
-                  @click="copyEntry(entry)"
-                />
-                <IconButton
-                  label="Investigate this entry"
-                  :icon="IconSparkles"
-                  size="md"
-                  :disabled="!!working || !!investigation"
-                  data-testid="diagnostics-entry-investigate"
-                  :data-entry-id="entry.id"
-                  @click="action('investigate', entry.id)"
-                />
-              </div>
-              <dl
-                v-if="sortedFields(entry).length"
-                class="mb-2 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-0.5"
-              >
-                <template v-for="[key, value] in sortedFields(entry)" :key="key">
-                  <dt class="text-text-4">{{ key }}</dt>
-                  <dd class="break-all text-text-2">{{ value }}</dd>
-                </template>
-              </dl>
-              <pre class="whitespace-pre-wrap break-words text-text-3">{{ entry.raw }}</pre>
-            </div>
-          </details>
+            v-memo="[entry, wrapMessages, copiedEntryID === entry.id, !!working || !!investigation]"
+            :entry="entry"
+            :wrap-messages="wrapMessages"
+            :copied="copiedEntryID === entry.id"
+            :actions-disabled="!!working || !!investigation"
+            @copy="copyEntry(entry)"
+            @investigate="action('investigate', entry.id)"
+          />
         </div>
 
         <Transition name="tail-pill">

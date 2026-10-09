@@ -991,6 +991,16 @@
   }
 }
 
+/* xterm's canvas covers its viewport scrollbar. Wheel input still exposes
+   scrollback without the native track taking space from the terminal grid. */
+.xterm .xterm-viewport {
+  scrollbar-width: none;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar {
+  display: none;
+}
+
 .hive-scroll::-webkit-scrollbar {
   width: 9px;
 }

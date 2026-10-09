@@ -79,7 +79,10 @@ describe('DiagnosticsWindow', () => {
     expect(wrapper.find('[data-testid="diagnostics-terminal-panel"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="diagnostics-source-log"]').text()).toContain('hive.log')
     expect(wrapper.text()).toContain('review 347 already exists')
+    expect(wrapper.find('[data-testid="diagnostics-entry-raw"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="diagnostics-entry"] summary').trigger('click')
     expect(wrapper.text()).toContain('job_id')
+    expect(wrapper.find('[data-testid="diagnostics-entry-raw"]').exists()).toBe(true)
     expect(api.Read).toHaveBeenCalledWith(
       expect.objectContaining({ source: '', level: '', search: '', limit: 500, omitRoutine: true }),
     )
