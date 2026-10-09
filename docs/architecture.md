@@ -2205,12 +2205,13 @@ canvas is keyed by (workspace, name), carries a display title and the
 creating session as provenance, and outlives the chat that made it — deleting
 a chat never touches the folder, and the generator's reconcile never enters
 `canvases/`. Deleting the workspace does take them, with the directory they
-sit in (ADR deleting-a-workspace-deletes-its-directory). Every mutation resolves the workspace
+sit in (ADR deleting-a-workspace-deletes-its-directory). Every agent mutation resolves the workspace
 through the session record — the record is the authority, the agent never
-names the workspace. Writes exist only as the `hive-canvas` MCP tools (a
-second app-hosted server in `mcpsrv`, mounted at `/mcp/canvas`); the
+names the workspace. Block and front matter writes are `hive-canvas` MCP tools
+(a second app-hosted server in `mcpsrv`, mounted at `/mcp/canvas`); the
 frontend reads over the agents HTTP client, addressed by (workspace, name),
-and re-reads on the coalesced `canvas:updated` wake-up. The agent can also
+and may delete the selected canvas after user confirmation (ADR canvases-carry-front-matter-and-users-can-delete-them).
+Both paths re-read on the coalesced `canvas:updated` wake-up. The agent can also
 ask to open or close the pane (`open_canvas`/`close_canvas`): pane
 visibility is UI intent, not stored state, so `canvas:toggle` carries the
 whole message — like `notification:activated` — and the frontend honors it
@@ -2234,6 +2235,17 @@ and `mailto` open outside the app, a relative reference that names a canvas
 in the same workspace opens that canvas in place, and anything else leads
 nowhere. Only a markdown body can carry such a reference today, because the
 write path holds a link block and an html `href` to those three schemes.
+
+A canvas's `frontmatter` is a flat mapping of agent-editable scalars or scalar
+lists. `created_at` and `updated_at` are derived from the canvas timestamps and
+cannot be overwritten. `AgentCanvasReader` renders editable fields as a
+property list and the timestamps as compact text above it. One
+localStorage-backed disclosure state expands or collapses this metadata across
+every canvas.
+Markdown copy and export prepend the combined metadata as YAML.
+`set_frontmatter` replaces the editable mapping in one atomic file write; an
+empty mapping removes it all
+(ADR canvases-carry-front-matter-and-users-can-delete-them).
 
 An agent in a **Code session** writes canvases through the same server
 (ADR a-code-session-s-canvases-belong-to-its-repository-and-live-in-the-hive-context-directory).

@@ -42,10 +42,9 @@ type canvasHiveSessions interface {
 	SessionAtPath(ctx context.Context, path string) (session.Session, bool, error)
 }
 
-// CanvasService is an owner's canvases: named, agent-written artifacts shown
-// beside a chat or a Code session. Writes arrive only through the hive-canvas
-// MCP tools; the frontend reads
-// (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
+// CanvasService owns the canvases shown beside chats and Code sessions. Agents
+// mutate blocks and front matter through hive-canvas; the frontend may delete a
+// complete canvas.
 type CanvasService struct {
 	store        *canvas.Store
 	sessions     canvasSessionResolver
@@ -176,6 +175,24 @@ func (s *CanvasService) RemoveBlock(ctx context.Context, session string, name, b
 	return s.withCanonicalAuthor(ctx, c)
 }
 
+// SetFrontmatter replaces the editable front matter on an existing canvas.
+// created_at and updated_at remain derived from the canvas timestamps.
+func (s *CanvasService) SetFrontmatter(ctx context.Context, session, name string, frontmatter map[string]any) (canvas.Canvas, error) {
+	caller, err := s.resolve(ctx, session)
+	if err != nil {
+		return canvas.Canvas{}, err
+	}
+	if err := canvas.ValidateFrontmatter(frontmatter); err != nil {
+		return canvas.Canvas{}, Wrap(err, KindInvalid, "front matter")
+	}
+	c, err := s.store.SetFrontmatter(caller.owner, name, frontmatter)
+	if err != nil {
+		return canvas.Canvas{}, s.storeError(err, name)
+	}
+	s.notify(ctx, caller.author)
+	return s.withCanonicalAuthor(ctx, c)
+}
+
 // Clear removes every block at once; the canvas, its title and its file
 // survive.
 func (s *CanvasService) Clear(ctx context.Context, session string, name string) (canvas.Canvas, error) {
@@ -215,13 +232,13 @@ func (s *CanvasService) SetPaneOpen(ctx context.Context, session string, name st
 	return nil
 }
 
-// Delete removes one canvas file entirely.
+// Delete removes one canvas file entirely for an agent caller.
 func (s *CanvasService) Delete(ctx context.Context, session string, name string) error {
 	caller, err := s.resolve(ctx, session)
 	if err != nil {
 		return err
 	}
-	existed, err := s.store.Delete(caller.owner, name)
+	_, existed, err := s.store.Delete(caller.owner, name)
 	if err != nil {
 		return s.storeError(err, name)
 	}
@@ -229,6 +246,20 @@ func (s *CanvasService) Delete(ctx context.Context, session string, name string)
 		return Errorf(KindNotFound, "no canvas named %q in this workspace", name)
 	}
 	s.notify(ctx, caller.author)
+	return nil
+}
+
+// DeleteForOwner accepts the UI's owner key; agent deletion derives its owner
+// from the calling session.
+func (s *CanvasService) DeleteForOwner(ctx context.Context, owner, name string) error {
+	deleted, existed, err := s.store.Delete(owner, name)
+	if err != nil {
+		return s.storeError(err, name)
+	}
+	if !existed {
+		return Errorf(KindNotFound, "no canvas named %q in this workspace", name)
+	}
+	s.notify(ctx, canvas.Author{Session: deleted.Session, HiveSession: deleted.HiveSession})
 	return nil
 }
 
@@ -255,7 +286,7 @@ func (s *CanvasService) GetForOwner(ctx context.Context, dir, name string) (canv
 		return canvas.Canvas{}, s.storeError(err, name)
 	}
 	if !ok {
-		return canvas.Canvas{Workspace: dir, Name: name, Blocks: []canvas.Block{}}, nil
+		return canvas.Canvas{Workspace: dir, Name: name, Frontmatter: map[string]any{}, Blocks: []canvas.Block{}}, nil
 	}
 	for i, b := range c.Blocks {
 		if b.Kind == canvas.KindHTML {
@@ -276,7 +307,11 @@ func (s *CanvasService) MarkdownForOwner(_ context.Context, dir, name string) (s
 	if !ok {
 		return "", Errorf(KindNotFound, "no canvas named %q in this workspace", name)
 	}
-	return canvas.Markdown(c), nil
+	markdown, err := canvas.Markdown(c)
+	if err != nil {
+		return "", Wrap(err, KindInternal, "rendering canvas %q as markdown", name)
+	}
+	return markdown, nil
 }
 
 // ExportForOwner writes one canvas's markdown rendering to path — the

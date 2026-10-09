@@ -47,6 +47,7 @@ const agents = vi.hoisted(() => ({
   canvas: vi.fn(),
   canvases: vi.fn(),
   canvasRepositories: vi.fn(),
+  deleteCanvas: vi.fn(),
   canvasMarkdown: vi.fn(),
   exportCanvas: vi.fn(),
 }))
@@ -61,6 +62,7 @@ vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => ({
     canvas: agents.canvas,
     canvases: agents.canvases,
     canvasRepositories: agents.canvasRepositories,
+    deleteCanvas: agents.deleteCanvas,
     canvasMarkdown: agents.canvasMarkdown,
     exportCanvas: agents.exportCanvas,
   }),
@@ -146,10 +148,12 @@ describe('AgentCanvasPage', () => {
         title: '',
         session: '7',
         createdAt: 1,
-        updatedAt: 1,
+        updatedAt: 2,
+        frontmatter: { tags: ['release', 'desktop'], reviewed: true },
         blocks: bodies[name] ?? [],
       }),
     )
+    agents.deleteCanvas.mockResolvedValue(undefined)
     agents.canvasMarkdown.mockResolvedValue('# The Plan\n')
     agents.exportCanvas.mockResolvedValue(undefined)
   })
@@ -231,6 +235,22 @@ describe('AgentCanvasPage', () => {
     wrapper.unmount()
   })
 
+  it('shows editable front matter with automatic timestamps', async () => {
+    const { wrapper } = await mountPage()
+
+    expect(wrapper.get('[data-testid="canvas-page-frontmatter-tags"]').text()).toContain('release')
+    expect(wrapper.get('[data-testid="canvas-page-frontmatter-tags"]').text()).toContain('desktop')
+    expect(wrapper.get('[data-testid="canvas-page-frontmatter-reviewed"]').text()).toContain('Yes')
+    expect(wrapper.get('[data-testid="canvas-page-frontmatter-created_at"] time').attributes('datetime')).toBe(
+      '1970-01-01T00:00:00.001Z',
+    )
+    expect(wrapper.get('[data-testid="canvas-page-frontmatter-updated_at"] time').attributes('datetime')).toBe(
+      '1970-01-01T00:00:00.002Z',
+    )
+
+    wrapper.unmount()
+  })
+
   it('copies and saves the canvas on screen as Markdown', async () => {
     const { wrapper } = await mountPage()
 
@@ -243,6 +263,22 @@ describe('AgentCanvasPage', () => {
     await flushPromises()
     expect(runtime.saveFile).toHaveBeenCalledWith(expect.objectContaining({ Filename: 'plan.md' }))
     expect(agents.exportCanvas).toHaveBeenCalledWith('web-app', 'plan', '/tmp/plan.md')
+
+    wrapper.unmount()
+  })
+
+  it('deletes the canvas after confirmation', async () => {
+    const { wrapper } = await mountPage({ name: 'plan' })
+
+    await wrapper.get('[data-testid="canvas-page-delete"]').trigger('click')
+    expect(agents.deleteCanvas).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-testid="canvas-page-delete-confirmation"]')?.textContent).toContain(
+      'This cannot be undone.',
+    )
+    document.querySelector<HTMLButtonElement>('[data-testid="canvas-page-delete-confirmation-confirm"]')?.click()
+    await flushPromises()
+
+    expect(agents.deleteCanvas).toHaveBeenCalledWith('web-app', 'plan')
 
     wrapper.unmount()
   })

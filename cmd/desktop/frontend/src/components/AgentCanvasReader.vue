@@ -2,6 +2,7 @@
 // One canvas rendered block by block. The pane and the full-page view share
 // it, so a canvas reads the same in both and only the width differs.
 import { computed } from 'vue'
+import AgentCanvasFrontmatter from './AgentCanvasFrontmatter.vue'
 import CanvasMarkdown from './CanvasMarkdown.vue'
 import EmptyState from './ui/EmptyState.vue'
 import InlineError from './ui/InlineError.vue'
@@ -47,6 +48,13 @@ function onBodyClick(event: MouseEvent): void {
 
 <template>
   <div class="canvas-reader" :style="readerStyle">
+    <AgentCanvasFrontmatter
+      v-if="canvas && canvas.createdAt > 0"
+      :frontmatter="canvas.frontmatter ?? {}"
+      :created-at="canvas.createdAt"
+      :updated-at="canvas.updatedAt"
+      :testid="testid"
+    />
     <template v-if="canvas && canvas.blocks.length">
       <article
         v-for="block in canvas.blocks"

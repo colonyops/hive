@@ -33,10 +33,13 @@ func TestAgentCanvasReadsOverTheWire(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&view))
 	assert.Equal(t, "demo", view.Workspace)
 	assert.Equal(t, "plan", view.Name)
+	require.NotNil(t, view.Frontmatter, "frontmatter is never null on the wire")
 	require.NotNil(t, view.Blocks, "blocks is never null on the wire")
 	assert.Empty(t, view.Blocks, "a name nothing was written under answers empty, not an error")
 
 	_, err = h.core.Canvas.PutBlock(t.Context(), rec.ID, "plan", "The Plan", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "hello"})
+	require.NoError(t, err)
+	_, err = h.core.Canvas.SetFrontmatter(t.Context(), rec.ID, "plan", map[string]any{"tags": []any{"release"}})
 	require.NoError(t, err)
 
 	resp = h.post(t, AgentWorkspacesPathPrefix+"canvas", testToken, agentCanvasRequest{Workspace: "demo", Name: "plan"})
@@ -45,6 +48,7 @@ func TestAgentCanvasReadsOverTheWire(t *testing.T) {
 	require.NoError(t, json.NewDecoder(resp.Body).Decode(&view))
 	assert.Equal(t, "The Plan", view.Title)
 	assert.Equal(t, rec.ID, view.Session)
+	assert.Equal(t, map[string]any{"tags": []any{"release"}}, view.Frontmatter)
 	require.Len(t, view.Blocks, 1)
 
 	listResp := h.post(t, AgentWorkspacesPathPrefix+"canvases", testToken, agentCanvasListRequest{Workspace: "demo"})
@@ -71,7 +75,7 @@ func TestAgentCanvasReadsOverTheWire(t *testing.T) {
 	require.Equal(t, http.StatusOK, mdResp.StatusCode)
 	var md agentCanvasMarkdownResponse
 	require.NoError(t, json.NewDecoder(mdResp.Body).Decode(&md))
-	assert.Equal(t, "# The Plan\n\nhello\n", md.Markdown)
+	assert.Contains(t, md.Markdown, "tags:\n    - release\n---\n\n# The Plan\n\nhello\n")
 
 	missing := h.post(t, AgentWorkspacesPathPrefix+"canvas/markdown", testToken, agentCanvasRequest{Workspace: "demo", Name: "ghost"})
 	_ = missing.Body.Close()
@@ -84,6 +88,17 @@ func TestAgentCanvasReadsOverTheWire(t *testing.T) {
 	written, err := os.ReadFile(dest)
 	require.NoError(t, err)
 	assert.Equal(t, md.Markdown, string(written))
+
+	deleteResp := h.post(t, AgentWorkspacesPathPrefix+"canvas/delete", testToken, agentCanvasRequest{Workspace: "demo", Name: "plan"})
+	defer func() { _ = deleteResp.Body.Close() }()
+	require.Equal(t, http.StatusOK, deleteResp.StatusCode)
+	var deleted agentCanvasDeleteResponse
+	require.NoError(t, json.NewDecoder(deleteResp.Body).Decode(&deleted))
+	assert.Equal(t, "plan", deleted.Deleted)
+
+	missingDelete := h.post(t, AgentWorkspacesPathPrefix+"canvas/delete", testToken, agentCanvasRequest{Workspace: "demo", Name: "plan"})
+	_ = missingDelete.Body.Close()
+	assert.Equal(t, http.StatusNotFound, missingDelete.StatusCode)
 }
 
 func TestAgentCanvasRepositoriesOverTheWire(t *testing.T) {

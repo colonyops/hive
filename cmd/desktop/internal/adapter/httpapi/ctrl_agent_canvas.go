@@ -9,12 +9,8 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
 )
 
-// The canvas surface here never mutates a canvas: content writes arrive
-// exclusively through the hive-canvas MCP tools, so the pane can never race
-// the agent through a second mutation path
-// (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
-// Export writes a rendering elsewhere on disk; the canvas itself stays
-// agent-owned.
+// This transport permits deletion but no block or front matter mutations;
+// those remain exclusive to hive-canvas.
 
 type agentCanvasBlock struct {
 	ID        string `json:"id"`
@@ -36,6 +32,7 @@ type agentCanvasView struct {
 	HiveSession string             `json:"hiveSession"`
 	CreatedAt   int64              `json:"createdAt"`
 	UpdatedAt   int64              `json:"updatedAt"`
+	Frontmatter map[string]any     `json:"frontmatter"`
 	Blocks      []agentCanvasBlock `json:"blocks"`
 }
 
@@ -126,6 +123,23 @@ func (ctrl *Controller) AgentCanvasRepositories(w http.ResponseWriter, r *http.R
 	return server.JSON(w, http.StatusOK, agentCanvasRepositoriesResponse{Repositories: keys})
 }
 
+type agentCanvasDeleteResponse struct {
+	Deleted string `json:"deleted"`
+}
+
+// AgentCanvasDelete removes the selected canvas from its owner after the
+// frontend confirms the destructive action.
+func (ctrl *Controller) AgentCanvasDelete(w http.ResponseWriter, r *http.Request) error {
+	body, err := terminalBody[agentCanvasRequest](ctrl, w, r)
+	if err != nil {
+		return err
+	}
+	if err := ctrl.core.Canvas.DeleteForOwner(r.Context(), body.Workspace, body.Name); err != nil {
+		return err
+	}
+	return server.JSON(w, http.StatusOK, agentCanvasDeleteResponse{Deleted: body.Name})
+}
+
 type agentCanvasMarkdownResponse struct {
 	Markdown string `json:"markdown"`
 }
@@ -185,6 +199,6 @@ func toAgentCanvasView(c canvas.Canvas) agentCanvasView {
 	}
 	return agentCanvasView{
 		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
-		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Blocks: blocks,
+		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: c.Frontmatter, Blocks: blocks,
 	}
 }
