@@ -739,10 +739,12 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         const intended =
           expectedWindowClosures.delete(windowId) ||
           (!!tab && tab.panes.length > 0 && tab.panes.every((pane) => expectedPaneClosures.has(pane.paneId)))
+        for (const pane of tab?.panes ?? []) expectedPaneClosures.delete(pane.paneId)
+        // A window that closes on its own is ordinary tmux behavior (its shell
+        // exited), not an error. Only the last window matters: it ends the
+        // session, and the session-end path reports that.
         if (intended && tabs.value.length === 1) {
           outcomes.report(slug, { reason: 'stopped', detail: 'The terminal was closed.' })
-        } else if (!intended) {
-          actionError.value = `Tmux window ${tab?.name || windowId} closed. No exit details are available.`
         }
         disposeTab(windowId)
         return
@@ -793,9 +795,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const grids = paneGrids(tab)
     for (const pane of [...tab.panes]) {
       if (!wanted.includes(pane.paneId)) {
-        if (!expectedPaneClosures.delete(pane.paneId)) {
-          actionError.value = `Tmux pane ${pane.paneId} closed. No exit details are available.`
-        }
+        expectedPaneClosures.delete(pane.paneId)
         disposePane(tab, pane.paneId)
       }
     }

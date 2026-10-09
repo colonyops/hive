@@ -20,7 +20,7 @@ func TestTerminationNoticeRequiresConfirmedAbsence(t *testing.T) {
 	gone := TerminalStatusBatchCompleteMsg{Results: map[string]statussvc.TerminalStatus{"one": {PresenceKnown: true, Status: terminal.StatusMissing}}}
 	cmd := v.handleTerminalStatusComplete(gone)
 	require.NotNil(t, cmd)
-	require.Equal(t, TerminalEndedMsg{Sessions: []string{"agent"}}, cmd())
+	require.Equal(t, TerminalEndedMsg{Sessions: []EndedSession{{ID: "one", Name: "agent"}}}, cmd())
 	require.Nil(t, v.handleTerminalStatusComplete(gone))
 }
 

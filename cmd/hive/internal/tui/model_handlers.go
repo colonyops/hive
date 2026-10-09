@@ -588,16 +588,51 @@ func (m Model) handleReviewAction(msg review.ActionRequestMsg) (tea.Model, tea.C
 }
 
 func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) {
+	if msg.sessionID != "" {
+		m.actionedSessions[msg.sessionID] = time.Now()
+	}
+	m.modals.Pending = Action{}
 	if msg.err != nil {
 		m.logger.Error().Err(msg.err).Msg("action failed")
+		summary, _, multiline := strings.Cut(msg.err.Error(), "\n")
+		m.notifyErrorf("action failed: %s", summary)
+		if multiline {
+			m.modals.ShowOutputModal("Action failed")
+			m.modals.Output.SetComplete(msg.err)
+			m.state = stateStreaming
+			return m, nil
+		}
 		m.state = stateNormal
-		m.modals.Pending = Action{}
-		m.notifyErrorf("action failed: %v", msg.err)
 		return m, nil
 	}
 	m.state = stateNormal
-	m.modals.Pending = Action{}
+	if msg.message != "" {
+		m.publishNotificationf(notify.LevelInfo, "%s", msg.message)
+	}
 	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
+}
+
+// actionEndGrace is the shortest time after a user action on a session during
+// which that session's terminal end counts as the action's result.
+const actionEndGrace = 5 * time.Second
+
+// handleTerminalEnded announces sessions whose tmux session went away on its
+// own. An end that follows a user action on the session, such as a kill
+// command, is the expected result of that action and is not announced.
+func (m Model) handleTerminalEnded(msg sessions.TerminalEndedMsg) (tea.Model, tea.Cmd) {
+	grace := max(2*m.cfg.Tmux.PollInterval, actionEndGrace)
+	for _, ended := range msg.Sessions {
+		if at, ok := m.actionedSessions[ended.ID]; ok && time.Since(at) < grace {
+			continue
+		}
+		m.publishNotificationf(notify.LevelInfo, "Terminal session %q ended.", ended.Name)
+	}
+	for id, at := range m.actionedSessions {
+		if time.Since(at) >= grace {
+			delete(m.actionedSessions, id)
+		}
+	}
+	return m, nil
 }
 
 func (m Model) handleStreamStarted(msg streamStartedMsg) (tea.Model, tea.Cmd) {

@@ -1431,12 +1431,12 @@ describe('useTerminalWindows', () => {
     expect(session.tabs.value).toHaveLength(2)
   })
 
-  it('reports a closed window without ending its healthy sibling', async () => {
+  it('drops a window that closed on its own without ending its sibling or raising an error', async () => {
     const { session, socket } = await attached()
     socket.onmessage?.({ data: jsonFrame(0x01, { kind: 'closed', windowId: '@1' }) })
     expect(session.status.value).toBe('live')
     expect(session.tabs.value.map((tab) => tab.windowId)).toEqual(['@2'])
-    expect(session.actionError.value).toContain('No exit details are available')
+    expect(session.actionError.value).toBeFalsy()
   })
 
   it('reconnect re-attaches with fresh terminals', async () => {

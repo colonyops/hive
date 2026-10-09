@@ -330,13 +330,13 @@ func (v *View) handleGitStatusComplete(msg GitStatusBatchCompleteMsg) tea.Cmd {
 }
 
 func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) tea.Cmd {
-	var ended []string
+	var ended []EndedSession
 	if v.terminalStatuses != nil {
 		for sessionID, newStatus := range msg.Results {
 			previous, exists := v.terminalStatuses.Get(sessionID)
 			if exists && previous.SessionPresent && newStatus.PresenceKnown && !newStatus.SessionPresent && newStatus.Error == nil {
 				if sess := v.findByID(sessionID); sess != nil && sess.State == session.StateActive {
-					ended = append(ended, sess.Name)
+					ended = append(ended, EndedSession{ID: sess.ID, Name: sess.Name})
 				}
 			}
 			if !newStatus.PresenceKnown && exists {

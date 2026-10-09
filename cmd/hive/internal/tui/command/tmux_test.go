@@ -1,7 +1,6 @@
 package command
 
 import (
-	"context"
 	"testing"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
@@ -11,16 +10,13 @@ import (
 func TestTmuxExecutorReportsFiniteCompletion(t *testing.T) {
 	opener := &mockTmuxOpener{result: multiplexer.LaunchResult{Created: true, Completed: true}}
 	executor := &TmuxExecutor{opener: opener}
-	output, done, cancel := executor.Execute(t.Context())
-	defer cancel()
-	require.Equal(t, "Session completed successfully.", <-output)
-	require.NoError(t, <-done)
+	require.NoError(t, ExecuteSync(t.Context(), executor))
+	require.Equal(t, "Session completed successfully.", executor.ResultMessage())
 }
 
-func TestTmuxExecutorCancellationDoesNotBlockCompletionDelivery(t *testing.T) {
-	opener := &mockTmuxOpener{result: multiplexer.LaunchResult{Completed: true}}
+func TestTmuxExecutorHasNoMessageForALiveSession(t *testing.T) {
+	opener := &mockTmuxOpener{result: multiplexer.LaunchResult{Created: true}}
 	executor := &TmuxExecutor{opener: opener}
-	_, done, cancel := executor.Execute(t.Context())
-	cancel()
-	require.ErrorIs(t, <-done, context.Canceled)
+	require.NoError(t, ExecuteSync(t.Context(), executor))
+	require.Empty(t, executor.ResultMessage())
 }

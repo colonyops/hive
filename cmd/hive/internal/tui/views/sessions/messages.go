@@ -54,8 +54,16 @@ type OpenRepoRequestMsg struct {
 // RefreshSessionsMsg requests a session list refresh.
 type RefreshSessionsMsg struct{}
 
+// TerminalEndedMsg reports active sessions whose tmux session was present on
+// the previous poll and is now confirmed absent.
 type TerminalEndedMsg struct {
-	Sessions []string
+	Sessions []EndedSession
+}
+
+// EndedSession identifies one session in a TerminalEndedMsg.
+type EndedSession struct {
+	ID   string
+	Name string
 }
 
 // ErrorMsg signals a non-fatal error to the parent model.
