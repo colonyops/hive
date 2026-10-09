@@ -115,7 +115,7 @@ An agent with **Hive Canvas** enabled can publish named output beside its chat. 
 
 Use the canvas pane to search previous output, copy a canvas as Markdown, save it to a file, delete it, or open its links. Delete asks for confirmation and removes the canvas for every chat or Code session that shares its owner.
 
-A canvas can include front matter such as tags, status, or an owner. Hive displays it above the document with the automatic creation and update times. Agents replace editable front matter with the Hive Canvas `set_frontmatter` tool; `created_at` and `updated_at` are reserved and updated by Hive. Values can be text, numbers, booleans, empty values, or lists of those values. Copy and save include the metadata as YAML front matter and preserve Mermaid source in a fenced `mermaid` block.
+A canvas can include front matter such as tags, status, or an owner. Hive displays it above the document with the automatic creation and update times. Collapse **Properties** to hide it; Hive uses that choice for every canvas. Agents replace editable front matter with the Hive Canvas `set_frontmatter` tool; `created_at` and `updated_at` are reserved and updated by Hive. Values can be text, numbers, booleans, empty values, or lists of those values. Copy and save include the metadata as YAML front matter and preserve Mermaid source in a fenced `mermaid` block.
 
 **Settings ▸ Canvas** changes text size and line spacing for every canvas, in Chats and in Code.
 

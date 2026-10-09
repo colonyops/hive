@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import IconChevronDown from '~icons/lucide/chevron-down'
 import BaseBadge from './ui/BaseBadge.vue'
 import type { CanvasFrontmatterScalar, CanvasFrontmatterValue } from '../lib/agentWorkspacesClient'
+import { useCanvasSettings } from '../stores/useCanvasSettings'
 
 const props = defineProps<{
   frontmatter: Record<string, CanvasFrontmatterValue>
@@ -9,6 +11,8 @@ const props = defineProps<{
   updatedAt: number
   testid: string
 }>()
+
+const { frontmatterExpanded, toggleFrontmatter } = useCanvasSettings()
 
 type Entry = {
   key: string
@@ -58,30 +62,55 @@ function formatValue(value: CanvasFrontmatterValue): string {
 
 <template>
   <div class="mb-3" :data-testid="`${testid}-frontmatter`">
-    <div class="flex flex-wrap items-center justify-end gap-1.5">
-      <BaseBadge tone="muted" class="px-2 py-0.5 text-micro" :data-testid="`${testid}-frontmatter-created_at`">
-        <span>Created</span>
-        <time
-          class="font-mono"
-          :datetime="new Date(createdAt).toISOString()"
-          :title="new Date(createdAt).toLocaleString()"
-        >
-          {{ formatTimestamp(createdAt) }}
-        </time>
-      </BaseBadge>
-      <BaseBadge tone="muted" class="px-2 py-0.5 text-micro" :data-testid="`${testid}-frontmatter-updated_at`">
-        <span>Updated</span>
-        <time
-          class="font-mono"
-          :datetime="new Date(updatedAt).toISOString()"
-          :title="new Date(updatedAt).toLocaleString()"
-        >
-          {{ formatTimestamp(updatedAt) }}
-        </time>
-      </BaseBadge>
+    <div class="grid grid-cols-[minmax(90px,0.35fr)_minmax(0,1fr)] items-center gap-3 px-3">
+      <button
+        type="button"
+        class="-ml-3 flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-caption font-semibold text-text-2 hover:bg-chip"
+        :aria-expanded="frontmatterExpanded"
+        :aria-label="frontmatterExpanded ? 'Collapse canvas properties' : 'Expand canvas properties'"
+        :data-testid="`${testid}-frontmatter-toggle`"
+        @click="toggleFrontmatter"
+      >
+        <IconChevronDown
+          class="size-3.5 text-text-3 transition-transform"
+          :class="frontmatterExpanded ? '' : '-rotate-90'"
+          aria-hidden="true"
+        />
+        Properties
+      </button>
+
+      <dl v-if="frontmatterExpanded" class="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+        <div class="inline-flex items-baseline gap-1.5" :data-testid="`${testid}-frontmatter-created_at`">
+          <dt class="text-micro font-medium uppercase tracking-wide text-text-4">Created</dt>
+          <dd>
+            <time
+              class="font-mono text-caption text-text-2"
+              :datetime="new Date(createdAt).toISOString()"
+              :title="new Date(createdAt).toLocaleString()"
+            >
+              {{ formatTimestamp(createdAt) }}
+            </time>
+          </dd>
+        </div>
+        <div class="inline-flex items-baseline gap-1.5" :data-testid="`${testid}-frontmatter-updated_at`">
+          <dt class="text-micro font-medium uppercase tracking-wide text-text-4">Updated</dt>
+          <dd>
+            <time
+              class="font-mono text-caption text-text-2"
+              :datetime="new Date(updatedAt).toISOString()"
+              :title="new Date(updatedAt).toLocaleString()"
+            >
+              {{ formatTimestamp(updatedAt) }}
+            </time>
+          </dd>
+        </div>
+      </dl>
     </div>
 
-    <dl v-if="entries.length" class="mt-2 overflow-hidden rounded-lg border border-border bg-pane text-small">
+    <dl
+      v-if="frontmatterExpanded && entries.length"
+      class="mt-2 overflow-hidden rounded-lg border border-border bg-pane text-small"
+    >
       <div
         v-for="entry in entries"
         :key="entry.key"
@@ -95,7 +124,7 @@ function formatValue(value: CanvasFrontmatterValue): string {
               v-for="(value, index) in entry.value"
               :key="index"
               variant="chip"
-              class="px-2 py-0.5 text-caption"
+              class="border border-row px-2 py-0.5 text-caption !text-text-2"
             >
               {{ formatScalar(value) }}
             </BaseBadge>

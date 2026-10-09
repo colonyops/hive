@@ -420,18 +420,32 @@ describe('AgentCanvasPane', () => {
     expect(browse).toContain('Older')
   })
 
-  it('renders editable front matter with compact timestamp badges above the blocks', async () => {
+  it('renders compact timestamp text and collapses front matter globally', async () => {
     const wrapper = await mountPane(fakeCanvasClient([block({ id: 'doc', body: 'hello' })]))
 
     expect(wrapper.get('[data-testid="agent-canvas-frontmatter-tags"]').text()).toContain('release')
     expect(wrapper.get('[data-testid="agent-canvas-frontmatter-tags"]').text()).toContain('desktop')
     const created = wrapper.get('[data-testid="agent-canvas-frontmatter-created_at"]')
     const updated = wrapper.get('[data-testid="agent-canvas-frontmatter-updated_at"]')
-    expect(created.element.tagName).toBe('SPAN')
-    expect(updated.element.tagName).toBe('SPAN')
-    expect(created.classes()).toContain('text-micro')
+    expect(created.get('dt').text()).toBe('Created')
+    expect(updated.get('dt').text()).toBe('Updated')
+    expect(created.get('dt').classes()).toContain('text-micro')
+    expect(created.get('time').classes()).toContain('text-text-2')
     expect(created.get('time').attributes('datetime')).toBe('1970-01-01T00:00:00.001Z')
     expect(updated.get('time').attributes('datetime')).toBe('1970-01-01T00:00:00.002Z')
+
+    const toggle = wrapper.get('[data-testid="agent-canvas-frontmatter-toggle"]')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    await toggle.trigger('click')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    expect(wrapper.find('[data-testid="agent-canvas-frontmatter-tags"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="agent-canvas-frontmatter-created_at"]').exists()).toBe(false)
+    expect(localStorage.getItem('hive.canvas.frontmatter.expanded')).toBe('false')
+
+    const anotherCanvas = await mountPane(fakeCanvasClient([block({ id: 'other', body: 'other' })]))
+    expect(anotherCanvas.get('[data-testid="agent-canvas-frontmatter-toggle"]').attributes('aria-expanded')).toBe(
+      'false',
+    )
   })
 
   it('copies the Go-rendered markdown to the native clipboard', async () => {

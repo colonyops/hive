@@ -1,5 +1,6 @@
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetStores } from '../defineStore'
 import { useCanvasSettings } from '../useCanvasSettings'
 
 const mocks = vi.hoisted(() => ({
@@ -58,6 +59,18 @@ describe('useCanvasSettings', () => {
     expect(settings.pageWidthClass.value).toBe('max-w-none')
     await flushPromises()
     expect(mocks.SetCanvasPageWidth).toHaveBeenCalledWith('full')
+  })
+
+  it('restores the global front matter disclosure state from localStorage', async () => {
+    const settings = useCanvasSettings()
+    expect(settings.frontmatterExpanded.value).toBe(true)
+
+    settings.toggleFrontmatter()
+    await flushPromises()
+    expect(localStorage.getItem('hive.canvas.frontmatter.expanded')).toBe('false')
+
+    resetStores()
+    expect(useCanvasSettings().frontmatterExpanded.value).toBe(false)
   })
 
   it('falls back from unknown stored values', async () => {

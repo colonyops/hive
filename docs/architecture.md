@@ -2239,9 +2239,12 @@ write path holds a link block and an html `href` to those three schemes.
 A canvas's `frontmatter` is a flat mapping of agent-editable scalars or scalar
 lists. `created_at` and `updated_at` are derived from the canvas timestamps and
 cannot be overwritten. `AgentCanvasReader` renders editable fields as a
-property list and the timestamps as compact badges above it. Markdown copy and
-export prepend the combined metadata as YAML. `set_frontmatter` replaces the
-editable mapping in one atomic file write; an empty mapping removes it all
+property list and the timestamps as compact text above it. One
+localStorage-backed disclosure state expands or collapses this metadata across
+every canvas.
+Markdown copy and export prepend the combined metadata as YAML.
+`set_frontmatter` replaces the editable mapping in one atomic file write; an
+empty mapping removes it all
 (ADR canvases-carry-front-matter-and-users-can-delete-them).
 
 An agent in a **Code session** writes canvases through the same server
