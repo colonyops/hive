@@ -3,8 +3,10 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -617,7 +619,8 @@ func TestSessionsService_StartTmuxSessionSpawnsFromTheSessionsOwnCheckout(t *tes
 	h.save(t, sess)
 	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 
-	require.NoError(t, svc.StartTmuxSession(t.Context(), "review-81"))
+	_, startErr := svc.StartTmuxSession(t.Context(), "review-81")
+	require.NoError(t, startErr)
 	require.Len(t, h.mux.opened, 1, "the spawn is hive's, so it gets the name, checkout and remote hive spawns from")
 	assert.Equal(t, "review-81", h.mux.opened[0].Target.Session)
 	assert.Equal(t, "/repos/site-wt-ab12", h.mux.opened[0].WorkingDirectory)
@@ -629,14 +632,15 @@ func TestSessionsService_StartTmuxSessionSpawnsFromTheSessionsOwnCheckout(t *tes
 // running. absent fails has-session, which is how tmux answers for a session it
 // does not hold.
 type recordingTmux struct {
-	absent bool
-	runs   [][]string
+	absent   bool
+	runs     [][]string
+	nextPane int
 }
 
 func (r *recordingTmux) record(args []string) error {
 	r.runs = append(r.runs, append([]string{"tmux"}, args...))
 	if r.absent && len(args) > 0 && args[0] == "has-session" {
-		return errors.New("can't find session")
+		return exec.Command("sh", "-c", "exit 1").Run()
 	}
 	return nil
 }
@@ -644,7 +648,18 @@ func (r *recordingTmux) record(args []string) error {
 func (*recordingTmux) Available() bool { return true }
 
 func (r *recordingTmux) Capture(_ context.Context, args ...string) ([]byte, []byte, error) {
-	return nil, nil, r.record(args)
+	if err := r.record(args); err != nil {
+		return nil, nil, err
+	}
+	switch args[0] {
+	case "new-session", "new-window":
+		id := r.nextPane
+		r.nextPane++
+		return fmt.Appendf(nil, "$0 @%d %%%d\n", id, id), nil, nil
+	case "list-panes":
+		return []byte("%0|0||\n%1|0||\n"), nil, nil
+	}
+	return nil, nil, nil
 }
 
 func (r *recordingTmux) Input(_ context.Context, _ io.Reader, args ...string) ([]byte, []byte, error) {
@@ -675,15 +690,65 @@ func TestSessionsService_StartTmuxSessionSpawnsTheConfiguredWindowsDetached(t *t
 	h.save(t, sess)
 	svc := newSessionsService(SessionsDeps{Hive: h.engine})
 
-	require.NoError(t, svc.StartTmuxSession(t.Context(), "review-81"))
+	_, startErr := svc.StartTmuxSession(t.Context(), "review-81")
+	require.NoError(t, startErr)
 
 	assert.Contains(t, runner.runs, []string{"tmux", "has-session", "-t", "=review-81"})
-	assert.Contains(t, runner.runs, []string{"tmux", "new-session", "-d", "-s", "review-81", "-n", "agent", "-c", "/tmp/review-81", "--", "sh", "-c", "run review-81"})
-	assert.Contains(t, runner.runs, []string{"tmux", "new-window", "-t", "=review-81:", "-n", "shell", "-c", "/tmp/review-81"})
+	assert.Contains(t, runner.runs, []string{"tmux", "new-session", "-d", "-s", "review-81", "-n", "agent", "-P", "-F", "#{session_id} #{window_id} #{pane_id}", "-c", "/tmp/review-81", "--", "cat", ";", "set-option", "-t", "=review-81:", tmuxexec.LaunchPendingOption, "1"})
+	assert.Contains(t, runner.runs, []string{"tmux", "respawn-pane", "-k", "-t", "%0", "-c", "/tmp/review-81", "--", "sh", "-c", "run review-81"})
+	assert.Contains(t, runner.runs, []string{"tmux", "new-window", "-d", "-t", "=review-81:", "-n", "shell", "-P", "-F", "#{session_id} #{window_id} #{pane_id}", "-c", "/tmp/review-81"})
 	for _, run := range runner.runs {
 		assert.NotContains(t, run, "attach-session", "the desktop attaches over control mode; the spawn must stay detached")
 		assert.NotContains(t, run, "switch-client")
 	}
+}
+
+type failedCommandTmux struct{}
+
+func (failedCommandTmux) Available() bool { return true }
+
+func (failedCommandTmux) Capture(_ context.Context, args ...string) ([]byte, []byte, error) {
+	switch args[0] {
+	case "has-session":
+		return nil, nil, exec.Command("sh", "-c", "exit 1").Run()
+	case "new-session":
+		return []byte("$0 @0 %0\n"), nil, nil
+	case "list-panes":
+		return []byte("%0|1|127|\n"), nil, nil
+	case "capture-pane":
+		return []byte("sh: missing-agent: command not found\n"), nil, nil
+	default:
+		return nil, nil, nil
+	}
+}
+
+func (f failedCommandTmux) Input(ctx context.Context, _ io.Reader, args ...string) ([]byte, []byte, error) {
+	return f.Capture(ctx, args...)
+}
+
+func (f failedCommandTmux) Interactive(ctx context.Context, _ multiplexer.AttachStreams, args ...string) error {
+	_, _, err := f.Capture(ctx, args...)
+	return err
+}
+
+func TestSessionsService_StartTmuxSessionReturnsCommandFailureForDesktop(t *testing.T) {
+	h := newHiveHarness(t, engineOptions{
+		cfg: func(cfg *config.Config) {
+			cfg.Rules = []config.Rule{{Windows: []config.WindowConfig{{Name: "agent", Command: "missing-agent"}}}}
+		},
+		mux: tmuxexec.New(zerolog.Nop(), failedCommandTmux{}),
+	})
+	h.save(t, reviewSession())
+	svc := newSessionsService(SessionsDeps{Hive: h.engine})
+
+	_, err := svc.StartTmuxSession(t.Context(), "review-81")
+	require.Error(t, err)
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	assert.Contains(t, err.Error(), `tmux session "review-81" failed to start: command not found in window "agent"`)
+	assert.Contains(t, err.Error(), "sh: missing-agent: command not found")
+	var appErr *Error
+	require.ErrorAs(t, err, &appErr)
+	assert.Equal(t, "tmux session \"review-81\" failed to start: command not found in window \"agent\" (status 127)\n\n$ missing-agent\nsh: missing-agent: command not found", appErr.Msg)
 }
 
 func TestSessionsService_StartTmuxSessionLeavesALiveSessionAlone(t *testing.T) {
@@ -694,9 +759,13 @@ func TestSessionsService_StartTmuxSessionLeavesALiveSessionAlone(t *testing.T) {
 	h.save(t, sess)
 	svc := newSessionsService(SessionsDeps{Hive: h.engine})
 
-	require.NoError(t, svc.StartTmuxSession(t.Context(), "review-81"))
-	assert.Equal(t, [][]string{{"tmux", "has-session", "-t", "=review-81"}}, runner.runs,
-		"a session tmux already holds is not respawned, so every cold attach can ask for one")
+	_, startErr := svc.StartTmuxSession(t.Context(), "review-81")
+	require.NoError(t, startErr)
+	assert.Contains(t, runner.runs, []string{"tmux", "has-session", "-t", "=review-81"})
+	for _, run := range runner.runs {
+		assert.NotContains(t, run, "new-session")
+		assert.NotContains(t, run, "respawn-pane")
+	}
 }
 
 func TestSessionsService_StartTmuxSessionRejectsASlugNoSessionCarries(t *testing.T) {
@@ -705,8 +774,10 @@ func TestSessionsService_StartTmuxSessionRejectsASlugNoSessionCarries(t *testing
 
 	// A tmux session made by hand is attachable, but there is nothing to
 	// create one from when it is gone.
-	assert.Equal(t, KindNotFound, KindOf(svc.StartTmuxSession(t.Context(), "hand-rolled")))
-	assert.Equal(t, KindInvalid, KindOf(svc.StartTmuxSession(t.Context(), "  ")))
+	_, err := svc.StartTmuxSession(t.Context(), "hand-rolled")
+	assert.Equal(t, KindNotFound, KindOf(err))
+	_, err = svc.StartTmuxSession(t.Context(), "  ")
+	assert.Equal(t, KindInvalid, KindOf(err))
 	assert.Empty(t, h.mux.opened)
 }
 
@@ -715,7 +786,8 @@ func TestSessionsService_StartTmuxSessionRefusesASessionWithNoCheckout(t *testin
 	h.save(t, session.Session{ID: "s2", Name: "old", Slug: "old", Remote: "acme/site", State: session.StateRecycled})
 	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 
-	assert.Equal(t, KindConflict, KindOf(svc.StartTmuxSession(t.Context(), "old")))
+	_, err := svc.StartTmuxSession(t.Context(), "old")
+	assert.Equal(t, KindConflict, KindOf(err))
 	assert.Empty(t, h.mux.opened, "a recycled session's directory is gone; a terminal in it would be one too")
 }
 
@@ -726,7 +798,8 @@ func TestSessionsService_StartTmuxSessionRefusesASlugItsNameWouldNotSpawn(t *tes
 	h.save(t, session.Session{ID: "s1", Name: "review 82", Slug: "review-81", Remote: "acme/site", State: session.StateActive})
 	svc := newSessionsService(SessionsDeps{Hive: h.engine, Tmux: &fakeSessionTmux{}, Jobs: &fakeJobRunner{}})
 
-	assert.Equal(t, KindConflict, KindOf(svc.StartTmuxSession(t.Context(), "review-81")))
+	_, err := svc.StartTmuxSession(t.Context(), "review-81")
+	assert.Equal(t, KindConflict, KindOf(err))
 	assert.Empty(t, h.mux.opened)
 }
 

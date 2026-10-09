@@ -554,6 +554,30 @@ func (t *Integration) findSessionCache(slug string, metadata map[string]string) 
 	return "", nil
 }
 
+func (t *Integration) SessionPresence(ctx context.Context, slug string, metadata map[string]string) (bool, bool, error) {
+	t.mu.RLock()
+	name, sc := t.findSessionCache(slug, metadata)
+	fresh := t.cache != nil && t.refreshFailures == 0 && time.Since(t.cacheTime) <= 2*time.Second
+	t.mu.RUnlock()
+	if fresh {
+		return sc != nil, true, nil
+	}
+	probe, ok := t.source.(interface {
+		HasSession(context.Context, multiplexer.Target) (bool, error)
+	})
+	if !ok {
+		return false, false, nil
+	}
+	if name == "" {
+		name = metadata[session.MetaTmuxSession]
+	}
+	if name == "" {
+		name = slug
+	}
+	present, err := probe.HasSession(ctx, multiplexer.Target{Session: name})
+	return present, err == nil, err
+}
+
 // DiscoverSession finds a tmux session for the given slug and metadata.
 func (t *Integration) DiscoverSession(_ context.Context, slug string, metadata map[string]string) (*terminal.SessionInfo, error) {
 	t.mu.RLock()

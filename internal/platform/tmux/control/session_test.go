@@ -35,7 +35,7 @@ func (f *fakeSessionCommands) run(_ context.Context, _ string, env []string, arg
 		if f.present[strings.TrimPrefix(args[2], "=")] {
 			return nil, nil
 		}
-		return nil, errors.New("can't find session")
+		return nil, absentSessionError{}
 	case "new-session":
 		if f.failure != nil {
 			return nil, f.failure

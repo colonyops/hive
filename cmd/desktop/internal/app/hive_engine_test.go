@@ -38,11 +38,11 @@ func (m *fakeMux) CreateSession(_ context.Context, spec multiplexer.SessionSpec)
 	return nil
 }
 
-func (m *fakeMux) OpenSession(_ context.Context, spec multiplexer.SessionSpec, _ multiplexer.Target) error {
+func (m *fakeMux) OpenSession(_ context.Context, spec multiplexer.SessionSpec, _ multiplexer.Target) (multiplexer.LaunchResult, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.opened = append(m.opened, spec)
-	return nil
+	return multiplexer.LaunchResult{Created: true}, nil
 }
 
 func (m *fakeMux) AddWindows(context.Context, multiplexer.Target, []multiplexer.WindowSpec) error {

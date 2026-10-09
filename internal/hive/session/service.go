@@ -891,10 +891,10 @@ func (s *Service) KillTmuxWindow(ctx context.Context, target multiplexer.Target)
 
 // OpenTmuxSession opens (or creates) a tmux session for the given session parameters.
 // It resolves the spawn strategy, renders window templates, and delegates to the spawner.
-func (s *Service) OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error {
+func (s *Service) OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) (multiplexer.LaunchResult, error) {
 	strategy := config.ResolveSpawn(s.config.Rules, remote, false)
 	if !strategy.IsWindows() {
-		return fmt.Errorf("tmux action requires windows config (legacy spawn commands should use shell executor)")
+		return multiplexer.LaunchResult{}, fmt.Errorf("tmux action requires windows config (legacy spawn commands should use shell executor)")
 	}
 
 	owner, repo := git.ExtractOwnerRepo(remote)
@@ -920,7 +920,7 @@ func (s *Service) OpenTmuxSession(ctx context.Context, name, path, remote, targe
 
 	renderer, err := s.rendererForAgent(strategy.Agent)
 	if err != nil {
-		return err
+		return multiplexer.LaunchResult{}, err
 	}
 
 	return s.spawner.OpenWindowsWith(ctx, strategy.Windows, data, background, targetWindow, renderer)

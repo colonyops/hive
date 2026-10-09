@@ -4,6 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { setAttachedTerminalWindows } from '../../composables/useAttachedTerminalWindows'
 import { useAgentWorkspaces } from '../../stores/useAgentWorkspaces'
 import { useTerminalAvailability } from '../../stores/useTerminalAvailability'
+import { useTerminalOutcomes } from '../../stores/useTerminalOutcomes'
+import { errorText } from '../../lib/appError'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
 import { selectIfWanted, type TerminalPool } from './useTerminalPool'
 import type { TerminalTree, TreeWindowRow } from './useTerminalTree'
@@ -48,7 +50,11 @@ export function useTerminalAttach(options: {
   const restore = useStorage('hive.terminal.restore', { slug: '', window: '' })
 
   const starting = ref('')
-  const startError = ref('')
+  const outcomes = useTerminalOutcomes()
+  const startError = computed(() => {
+    const notice = outcomes.outcome(pool.visibleSlug.value || activeSlug.value)
+    return notice?.reason === 'start-failed' ? notice.detail : ''
+  })
 
   // With a cached client the last-known tree renders at once and this only
   // re-checks availability. The session list is a SQLite read that knows
@@ -85,13 +91,11 @@ export function useTerminalAttach(options: {
   function openSession(slug: string): void {
     if (!client.value) return
     options.onSwitch()
-    startError.value = ''
     pool.open(slug, client.value, routeWindow.value)
   }
 
   function detachSession(): void {
     options.onSwitch()
-    startError.value = ''
     pool.detach()
   }
 
@@ -205,6 +209,7 @@ export function useTerminalAttach(options: {
   }
 
   function closeSession(): void {
+    outcomes.forget(activeSlug.value)
     pool.drop(activeSlug.value)
     detachSession()
     restore.value = { slug: '', window: '' }
@@ -221,12 +226,20 @@ export function useTerminalAttach(options: {
   async function startSession(slug: string): Promise<void> {
     if (!client.value || starting.value) return
     starting.value = slug
-    startError.value = ''
+    const attempt = outcomes.beginAttempt(slug)
+    let completed = false
     try {
       if (tree.chatSlugs.value.has(slug)) await resumePinnedChat(slug)
-      else await client.value.start(slug)
+      else completed = !!(await client.value.start(slug)).completed
+      if (completed) outcomes.report(slug, { reason: 'completed', detail: 'Session completed successfully.' }, attempt)
+      else outcomes.running(slug)
     } catch (e) {
-      startError.value = e instanceof Error && e.message ? e.message : 'Could not start this session.'
+      const detail = errorText(e, 'Could not start this session.')
+      outcomes.report(slug, { reason: 'start-failed', detail }, attempt)
+      pool.pool.get(slug)?.reportOutcome?.('start-failed', detail)
+      if (slug !== activeSlug.value) {
+        void router.push({ name: 'terminal', params: { slug }, query: terminalQuery(slug) })
+      }
       return
     } finally {
       starting.value = ''
@@ -239,6 +252,7 @@ export function useTerminalAttach(options: {
     }
     const pooled = pool.pool.get(slug)
     if (!pooled) openSession(slug)
+    else if (completed) pooled.reportOutcome?.('completed', 'Session completed successfully.')
     else if (pooled.status.value === 'ended') void pooled.reconnect()
     else pooled.focusActive()
   }

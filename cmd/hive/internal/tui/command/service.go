@@ -25,7 +25,7 @@ type SessionRecycler interface {
 
 // TmuxOpener opens or creates tmux sessions for hive sessions.
 type TmuxOpener interface {
-	OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error
+	OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) (multiplexer.LaunchResult, error)
 }
 
 // WindowSpawner handles window operations for SpawnWindows actions.

@@ -134,6 +134,10 @@ type Model struct {
 	// Source directory for file copying during session creation
 	source string
 
+	// actionedSessions records when a user action on a session last completed,
+	// so a terminal end that action caused is not announced.
+	actionedSessions map[string]time.Time
+
 	// Modal coordinator owns all modal components, pending state, recycle streaming
 	modals *ModalCoordinator
 
@@ -188,7 +192,9 @@ type Model struct {
 
 // actionCompleteMsg is sent when an action completes.
 type actionCompleteMsg struct {
-	err error
+	sessionID string
+	message   string
+	err       error
 }
 
 // streamResult holds optional session metadata from a streaming create operation.
@@ -368,39 +374,40 @@ func New(deps Deps, opts Opts) Model {
 	updateChecker := updatecheck.New(deps.Logger, deps.KVStore, nil)
 
 	return Model{
-		logger:          logger,
-		baseLogger:      deps.Logger,
-		cfg:             cfg,
-		service:         service,
-		cmdService:      cmdService,
-		handler:         handler,
-		state:           stateNormal,
-		spinner:         s,
-		source:          opts.Source,
-		modals:          NewModalCoordinator(),
-		sessionsView:    sessionsView,
-		msgView:         msgView,
-		activeView:      ViewSessions,
-		copyCommand:     cfg.CopyCommand,
-		commandSet:      deps.CommandSet,
-		reviewView:      &reviewView,
-		kvStore:         deps.KVStore,
-		kvView:          kvView,
-		tasksView:       tasksView,
-		notifyStore:     deps.Notifications,
-		notifyBuffer:    notifyBuffer,
-		toastController: toastCtrl,
-		toastView:       toastView,
-		bus:             deps.Bus,
-		todoService:     deps.TodoService,
-		todoCh:          todoCh,
-		renderer:        deps.Renderer,
-		buildInfo:       deps.BuildInfo,
-		updateChecker:   updateChecker,
-		doctorService:   deps.DoctorService,
-		configPath:      opts.ConfigPath,
-		startupWarnings: opts.Warnings,
-		sourceRegistry:  deps.Sources,
+		logger:           logger,
+		baseLogger:       deps.Logger,
+		cfg:              cfg,
+		service:          service,
+		cmdService:       cmdService,
+		handler:          handler,
+		state:            stateNormal,
+		spinner:          s,
+		source:           opts.Source,
+		actionedSessions: make(map[string]time.Time),
+		modals:           NewModalCoordinator(),
+		sessionsView:     sessionsView,
+		msgView:          msgView,
+		activeView:       ViewSessions,
+		copyCommand:      cfg.CopyCommand,
+		commandSet:       deps.CommandSet,
+		reviewView:       &reviewView,
+		kvStore:          deps.KVStore,
+		kvView:           kvView,
+		tasksView:        tasksView,
+		notifyStore:      deps.Notifications,
+		notifyBuffer:     notifyBuffer,
+		toastController:  toastCtrl,
+		toastView:        toastView,
+		bus:              deps.Bus,
+		todoService:      deps.TodoService,
+		todoCh:           todoCh,
+		renderer:         deps.Renderer,
+		buildInfo:        deps.BuildInfo,
+		updateChecker:    updateChecker,
+		doctorService:    deps.DoctorService,
+		configPath:       opts.ConfigPath,
+		startupWarnings:  opts.Warnings,
+		sourceRegistry:   deps.Sources,
 	}
 }
 
@@ -476,7 +483,11 @@ func (m Model) executeAction(a Action) tea.Cmd {
 		}
 
 		err = command.ExecuteSync(context.Background(), exec)
-		return actionCompleteMsg{err: err}
+		msg := actionCompleteMsg{sessionID: a.SessionID, err: err}
+		if messenger, ok := exec.(command.ResultMessenger); ok && err == nil {
+			msg.message = messenger.ResultMessage()
+		}
+		return msg
 	}
 }
 
@@ -561,6 +572,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleSessionRecycledDelete(msg)
 	case sessions.OpenRepoRequestMsg:
 		model, cmd = m.handleSessionOpenRepo(msg)
+	case sessions.TerminalEndedMsg:
+		model, cmd = m.handleTerminalEnded(msg)
 	case sessions.ErrorMsg:
 		m.notifyErrorf("%v", msg.Err)
 		model, cmd = m, nil

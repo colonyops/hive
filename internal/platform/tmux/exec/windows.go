@@ -12,23 +12,29 @@ func (c *Client) AddWindows(ctx context.Context, target multiplexer.Target, wind
 	if err := target.ValidateSession(); err != nil {
 		return err
 	}
-	name := target.Session
-	c.suppressInteractiveHooks(ctx, name)
-	for _, window := range windows {
-		if err := c.createWindow(ctx, name, "", window); err != nil {
+	return c.withLaunchLock(ctx, target.Session, func() error {
+		exists, err := c.recoverLaunch(ctx, target.Session)
+		if err != nil {
 			return err
 		}
-	}
-	for _, window := range windows {
-		if !window.Focus {
-			continue
+		if !exists {
+			return fmt.Errorf("tmux session %q had an interrupted launch and must be restarted", target.Session)
 		}
-		if _, _, err := c.runner.Capture(ctx, "select-window", "-t", "="+name+":"+window.Name); err != nil {
-			return fmt.Errorf("tmux select-window %q: %w", window.Name, err)
+		l := &launch{client: c, name: target.Session, phase: LaunchPhaseAllocating}
+		c.suppressInteractiveHooks(ctx, target.Session)
+		for _, window := range windows {
+			if err := l.allocateWindow(ctx, "", window); err != nil {
+				return l.fail(ctx, err)
+			}
 		}
-		break
-	}
-	return nil
+		if err := l.start(ctx); err != nil {
+			return l.fail(ctx, err)
+		}
+		if _, err := l.finalize(ctx); err != nil {
+			return l.fail(ctx, err)
+		}
+		return nil
+	})
 }
 
 // KillWindow kills one qualified tmux window.
@@ -43,48 +49,20 @@ func (c *Client) KillWindow(ctx context.Context, target multiplexer.Target) erro
 	return nil
 }
 
-func (c *Client) createWindow(ctx context.Context, sessionName, sessionDir string, window multiplexer.WindowSpec) error {
-	args := []string{"new-window", "-t", "=" + sessionName + ":", "-n", window.Name}
-	args = appendInitialPaneArgs(args, window, sessionDir)
-	if _, _, err := c.runner.Capture(ctx, args...); err != nil {
-		return fmt.Errorf("tmux new-window %q: %w", window.Name, err)
-	}
-	c.tagPanesWithSession(ctx, "="+sessionName+":"+window.Name, sessionName)
-	return c.splitAdditionalPanes(ctx, sessionName, sessionDir, window)
-}
-
-func (c *Client) splitAdditionalPanes(ctx context.Context, sessionName, sessionDir string, window multiplexer.WindowSpec) error {
-	target := "=" + sessionName + ":" + window.Name
-	for _, pane := range additionalPanes(window) {
-		args := splitPaneArgs(target, pane, windowDir(window, sessionDir))
-		if _, _, err := c.runner.Capture(ctx, args...); err != nil {
-			return fmt.Errorf("tmux split-window %q: %w", window.Name, err)
-		}
-		c.tagPanesWithSession(ctx, target, sessionName)
-	}
-	return nil
-}
-
-func appendInitialPaneArgs(args []string, window multiplexer.WindowSpec, sessionDir string) []string {
-	command := window.Command
-	dir := windowDir(window, sessionDir)
+func initialPane(window multiplexer.WindowSpec, sessionDir string) (command, dir string) {
+	command = window.Command
+	dir = windowDir(window, sessionDir)
 	if len(window.Panes) > 0 {
 		command = window.Panes[0].Command
 		if window.Panes[0].WorkingDirectory != "" {
 			dir = window.Panes[0].WorkingDirectory
 		}
 	}
-	if dir != "" {
-		args = append(args, "-c", dir)
-	}
-	if command != "" {
-		args = append(args, "--", "sh", "-c", command)
-	}
-	return args
+	return command, dir
 }
 
-func splitPaneArgs(target string, pane multiplexer.PaneSpec, fallbackDir string) []string {
-	args := []string{"split-window", "-t", target}
+func splitPaneArgs(target string, pane multiplexer.PaneSpec, dir, command string) []string {
+	args := []string{"split-window", "-d", "-t", target, "-P", "-F", allocationFormat}
 	if pane.Split == multiplexer.SplitHorizontal {
 		args = append(args, "-h")
 	} else {
@@ -93,15 +71,11 @@ func splitPaneArgs(target string, pane multiplexer.PaneSpec, fallbackDir string)
 	if pane.Size != "" {
 		args = append(args, "-l", pane.Size)
 	}
-	dir := pane.WorkingDirectory
-	if dir == "" {
-		dir = fallbackDir
-	}
 	if dir != "" {
 		args = append(args, "-c", dir)
 	}
-	if pane.Command != "" {
-		args = append(args, "--", "sh", "-c", pane.Command)
+	if command != "" {
+		args = append(args, "--", "sh", "-c", command)
 	}
 	return args
 }

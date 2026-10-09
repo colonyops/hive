@@ -66,8 +66,8 @@ type mouseTestMultiplexer struct{}
 
 func (mouseTestMultiplexer) CreateSession(context.Context, multiplexer.SessionSpec) error { return nil }
 
-func (mouseTestMultiplexer) OpenSession(context.Context, multiplexer.SessionSpec, multiplexer.Target) error {
-	return nil
+func (mouseTestMultiplexer) OpenSession(context.Context, multiplexer.SessionSpec, multiplexer.Target) (multiplexer.LaunchResult, error) {
+	return multiplexer.LaunchResult{Created: true}, nil
 }
 
 func (mouseTestMultiplexer) AddWindows(context.Context, multiplexer.Target, []multiplexer.WindowSpec) error {

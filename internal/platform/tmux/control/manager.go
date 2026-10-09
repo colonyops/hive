@@ -2,6 +2,7 @@ package tmuxcc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,6 +15,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/platform/observe"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 )
 
 // minMajor/minMinor is the control-mode floor: 3.2 is where pause mode and
@@ -379,7 +381,40 @@ func (m *Manager) HasSession(ctx context.Context, slug string) (bool, error) {
 		return false, err
 	}
 	_, err := m.oneShot(ctx, "has-session", "-t", "="+slug)
-	return err == nil, nil
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
+	if err == nil {
+		return true, nil
+	}
+	var exited interface {
+		error
+		ExitCode() int
+	}
+	if errors.As(err, &exited) && exited.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, err
+}
+
+// ErrLaunchPending identifies an allocated session that has not committed its launch.
+var ErrLaunchPending = errors.New("tmux session launch is in progress or was interrupted")
+
+// CheckLaunch rejects an uncommitted Hive session before a user attaches to its placeholders.
+func (m *Manager) CheckLaunch(ctx context.Context, slug string) error {
+	if mc, ok := m.managed(slug); ok {
+		if _, dead := mc.client.exited(); !dead {
+			return nil
+		}
+	}
+	lines, err := m.oneShot(ctx, "show-options", "-q", "-v", "-t", "="+slug+":", tmuxexec.LaunchPendingOption)
+	if err != nil {
+		return fmt.Errorf("check session launch: %w", err)
+	}
+	if len(lines) > 0 && strings.TrimSpace(lines[0]) != "" {
+		return fmt.Errorf("%w: %s", ErrLaunchPending, slug)
+	}
+	return nil
 }
 
 // KillSession kills the tmux session named slug and reports whether there was

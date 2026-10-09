@@ -2,12 +2,15 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
+	lipgloss "charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/colonyops/hive/internal/domain/terminal"
+	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 )
 
 func TestOutputModal_NewOutputModal(t *testing.T) {
@@ -106,6 +109,39 @@ func TestOutputModal_Overlay(t *testing.T) {
 
 		assert.Contains(t, result, "Error")
 		assert.Contains(t, result, "something went wrong")
+	})
+
+	t.Run("renders failed tmux command details", func(t *testing.T) {
+		m := NewOutputModal("Creating session")
+		m.SetComplete(&tmuxexec.CommandExitedError{
+			Session: "my-session",
+			Window:  "agent",
+			Command: "missing-agent --prompt hi",
+			Status:  127,
+			Output:  "sh: missing-agent: command not found",
+		})
+
+		result := terminal.StripANSI(m.Overlay("background", 80, 24))
+
+		assert.Contains(t, result, "command not found in window")
+		assert.Contains(t, result, "missing-agent")
+		assert.Contains(t, result, "sh: missing-agent: command not found")
+	})
+
+	t.Run("long tmux report stays inside the modal", func(t *testing.T) {
+		m := NewOutputModal("Opening session")
+		var output []string
+		for i := range 60 {
+			output = append(output, fmt.Sprintf("output line %d", i))
+		}
+		m.SetComplete(&tmuxexec.CommandExitedError{Window: "agent", Command: "agent", Status: 1, Output: strings.Join(output, "\n")})
+
+		result := terminal.StripANSI(m.Overlay("background", 80, 24))
+
+		assert.LessOrEqual(t, lipgloss.Height(result), 24)
+		assert.Contains(t, result, "Error: command exited in window")
+		assert.Contains(t, result, "output line 59")
+		assert.Contains(t, result, "enter/esc close")
 	})
 
 	t.Run("truncates long lines", func(t *testing.T) {

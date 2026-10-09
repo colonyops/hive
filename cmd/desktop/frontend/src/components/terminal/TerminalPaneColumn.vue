@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import IconArrowDown from '~icons/lucide/arrow-down'
+import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronUp from '~icons/lucide/chevron-up'
+import IconCircleAlert from '~icons/lucide/circle-alert'
+import IconCopy from '~icons/lucide/copy'
 import IconInfo from '~icons/lucide/info'
 import IconListTodo from '~icons/lucide/list-todo'
 import IconPlay from '~icons/lucide/play'
@@ -12,10 +15,10 @@ import IconTerminal from '~icons/lucide/terminal'
 import IconX from '~icons/lucide/x'
 import IconButton from '../ui/IconButton.vue'
 import BaseButton from '../ui/BaseButton.vue'
-import InlineError from '../ui/InlineError.vue'
 import PaneStatusBar from '../PaneStatusBar.vue'
 import SessionStatusChips from '../SessionStatusChips.vue'
 import TerminalTab from '../TerminalTab.vue'
+import { useClipboard } from '../../composables/useClipboard'
 import { useEditorSettings } from '../../composables/useEditorSettings'
 import { useSessionStatus } from '../../composables/useSessionStatus'
 import { activePaneOf } from '../../lib/terminalLayout'
@@ -39,14 +42,38 @@ const activeScrolledUp = computed(() =>
 )
 const status = computed(() => visible.value?.status.value ?? 'connecting')
 const endReason = computed(() => visible.value?.endReason.value ?? null)
-// Not a failure: tmux runs nothing under this slug yet.
-const notStarted = computed(() => endReason.value === 'not-started')
+const notStarted = computed(() => endReason.value === 'not-started' || endReason.value === 'start-failed')
+const canRestart = computed(() => ['terminated', 'completed', 'stopped', 'interrupted'].includes(endReason.value ?? ''))
+const endedTitle = computed(() => {
+  switch (endReason.value) {
+    case 'terminated':
+      return 'Tmux session terminated'
+    case 'completed':
+      return 'Session completed'
+    case 'stopped':
+      return 'Terminal stopped'
+    case 'interrupted':
+      return 'Session launch did not finish'
+    case 'disconnected':
+      return 'Terminal connection lost'
+    case 'exited':
+      return 'Terminal connection ended'
+    default:
+      return 'Terminal error'
+  }
+})
 const scratchAttached = computed(() => !!tree.attachedRow && tree.isScratch(tree.attachedRow))
 const chatAttached = computed(() => !!tree.attachedRow && tree.isChat(tree.attachedRow))
 const sessionError = computed(() => visible.value?.error.value ?? '')
 const actionError = computed(() => visible.value?.actionError.value || ops.treeError)
 const sizeConstraint = computed(() => visible.value?.sizeConstraint.value ?? null)
 const outputDropped = computed(() => visible.value?.outputDropped.value ?? false)
+const { copy: copyStartError, status: startErrorCopyStatus } = useClipboard()
+const startErrorCopyLabel = computed(() => {
+  if (startErrorCopyStatus.value === 'success') return 'Copied'
+  if (startErrorCopyStatus.value === 'error') return 'Copy failed'
+  return 'Copy error'
+})
 
 const search = computed(() => visible.value?.search.value ?? { open: false, query: '', matches: 0, index: 0 })
 const searchInput = ref<HTMLInputElement | null>(null)
@@ -294,29 +321,73 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-app/95 px-10 text-center"
           data-testid="terminal-session-not-started"
         >
-          <IconTerminal class="size-6 text-text-4" />
-          <div class="text-body font-semibold">
-            {{ chatAttached ? 'Chat not running' : scratchAttached ? 'Terminal not started' : 'Session not started' }}
-          </div>
-          <p v-if="chatAttached" class="max-w-[420px] text-xs leading-relaxed text-text-3">
-            This chat is stopped. Resuming it launches the agent again in its workspace, picking the conversation back
-            up where the agent itself can.
-          </p>
-          <p v-else-if="scratchAttached" class="max-w-[420px] text-xs leading-relaxed text-text-3">
-            The scratch terminal is not running. Starting it opens a shell in your home directory, and every tab you add
-            opens there too.
-          </p>
-          <p v-else class="max-w-[420px] text-xs leading-relaxed text-text-3">
-            No terminal is running for <span class="font-mono text-text-2">{{ pool.activeSlug }}</span> yet. Starting it
-            opens this session's configured windows and runs its agent command.
-          </p>
-          <InlineError
-            v-if="attach.startError"
-            testid="terminal-start-error"
-            variant="line"
-            class="max-w-[420px]"
-            :message="attach.startError"
-          />
+          <template v-if="attach.startError">
+            <div
+              class="flex size-11 items-center justify-center rounded-xl border border-severity-error-border bg-severity-error-tint"
+            >
+              <IconCircleAlert class="size-5 text-severity-error" />
+            </div>
+            <div class="text-title font-semibold" data-testid="terminal-start-error-title">
+              {{
+                chatAttached
+                  ? 'Chat failed to resume'
+                  : scratchAttached
+                    ? 'Terminal failed to start'
+                    : 'Session failed to start'
+              }}
+            </div>
+            <p class="max-w-[560px] text-xs leading-relaxed text-text-3">
+              Hive could not start the configured terminal for
+              <span class="font-mono text-text-2">{{ pool.activeSlug }}</span
+              >.
+            </p>
+            <div
+              class="w-full max-w-[680px] overflow-hidden rounded-xl border border-severity-error-border bg-sunken text-left shadow-lg"
+              data-testid="terminal-start-error"
+            >
+              <div class="flex h-9 items-center border-b border-severity-error-border bg-severity-error-tint px-3">
+                <div class="flex items-center gap-1.5" aria-hidden="true">
+                  <span class="size-2 rounded-full bg-severity-error" />
+                  <span class="size-2 rounded-full bg-severity-warning" />
+                  <span class="size-2 rounded-full bg-severity-success" />
+                </div>
+                <div class="flex min-w-0 flex-1 items-center justify-center gap-1.5 font-mono text-micro text-text-3">
+                  <IconTerminal class="size-3" />
+                  <span>Startup error</span>
+                </div>
+                <IconButton
+                  :label="startErrorCopyLabel"
+                  :icon="startErrorCopyStatus === 'success' ? IconCheck : IconCopy"
+                  size="sm"
+                  tone="danger"
+                  data-testid="terminal-start-error-copy"
+                  @click="copyStartError(attach.startError)"
+                />
+              </div>
+              <pre
+                class="hive-scroll max-h-[280px] min-h-24 select-text overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-small leading-6 text-text-2"
+                data-testid="terminal-start-error-output"
+                >{{ attach.startError }}</pre>
+            </div>
+          </template>
+          <template v-else>
+            <IconTerminal class="size-6 text-text-4" />
+            <div class="text-body font-semibold">
+              {{ chatAttached ? 'Chat not running' : scratchAttached ? 'Terminal not started' : 'Session not started' }}
+            </div>
+            <p v-if="chatAttached" class="max-w-[420px] text-xs leading-relaxed text-text-3">
+              This chat is stopped. Resuming it launches the agent again in its workspace, picking the conversation back
+              up where the agent itself can.
+            </p>
+            <p v-else-if="scratchAttached" class="max-w-[420px] text-xs leading-relaxed text-text-3">
+              The scratch terminal is not running. Starting it opens a shell in your home directory, and every tab you
+              add opens there too.
+            </p>
+            <p v-else class="max-w-[420px] text-xs leading-relaxed text-text-3">
+              No terminal is running for <span class="font-mono text-text-2">{{ pool.activeSlug }}</span> yet. Starting
+              it opens this session's configured windows and runs its agent command.
+            </p>
+          </template>
           <div class="mt-1 flex items-center gap-2">
             <BaseButton
               size="sm"
@@ -324,17 +395,22 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
               data-testid="terminal-start-session"
               @click="attach.startSession(pool.activeSlug)"
             >
-              <template #icon><IconPlay class="size-3.5" /></template>
+              <template #icon>
+                <IconRefreshCw v-if="attach.startError" class="size-3.5" />
+                <IconPlay v-else class="size-3.5" />
+              </template>
               {{
                 attach.starting === pool.activeSlug
                   ? chatAttached
                     ? 'Resuming…'
                     : 'Starting…'
-                  : chatAttached
-                    ? 'Resume chat'
-                    : scratchAttached
-                      ? 'Start terminal'
-                      : 'Start session'
+                  : attach.startError
+                    ? 'Try again'
+                    : chatAttached
+                      ? 'Resume chat'
+                      : scratchAttached
+                        ? 'Start terminal'
+                        : 'Start session'
               }}
             </BaseButton>
             <BaseButton variant="secondary" size="sm" data-testid="terminal-close-session" @click="attach.closeSession"
@@ -348,29 +424,40 @@ watch(sessionRepoKey, (key) => emit('session-repo-key', key), { immediate: true 
           class="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-app/95 px-10 text-center"
           data-testid="terminal-session-ended"
         >
-          <div class="text-body font-semibold">
-            {{ endReason === 'disconnected' ? 'Terminal stream lost' : 'Session ended' }}
+          <div class="text-body font-semibold" data-testid="terminal-session-ended-title">{{ endedTitle }}</div>
+          <div class="w-full max-w-[680px] overflow-hidden rounded-xl border border-strong bg-sunken text-left">
+            <div class="flex items-center justify-between border-b border-strong px-3 py-2">
+              <span class="font-mono text-micro text-text-3">Terminal report</span>
+              <IconButton
+                :label="startErrorCopyLabel"
+                :icon="startErrorCopyStatus === 'success' ? IconCheck : IconCopy"
+                size="sm"
+                data-testid="terminal-ended-copy"
+                @click="copyStartError(sessionError)"
+              />
+            </div>
+            <pre
+              class="hive-scroll max-h-[280px] select-text overflow-auto whitespace-pre-wrap break-words p-4 font-mono text-small text-text-2"
+              data-testid="terminal-session-ended-reason"
+              >{{ sessionError }}</pre>
           </div>
-          <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="terminal-session-ended-reason">
-            {{ sessionError }}
-          </p>
           <div class="mt-1 flex items-center gap-2">
-            <button
-              type="button"
-              class="flex cursor-pointer items-center gap-1.5 rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
-              data-testid="terminal-reconnect"
-              @click="visible?.reconnect()"
+            <BaseButton
+              v-if="canRestart"
+              size="sm"
+              :disabled="attach.starting === pool.activeSlug"
+              data-testid="terminal-restart"
+              @click="attach.startSession(pool.activeSlug)"
             >
-              <IconRefreshCw class="size-3" />Reconnect
-            </button>
-            <button
-              type="button"
-              class="cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
-              data-testid="terminal-close-session"
-              @click="attach.closeSession"
-            >
+              <template #icon><IconRefreshCw class="size-3" /></template>
+              {{ attach.starting === pool.activeSlug ? 'Starting…' : 'Restart' }}
+            </BaseButton>
+            <BaseButton v-else size="sm" data-testid="terminal-reconnect" @click="visible?.reconnect()">
+              <template #icon><IconRefreshCw class="size-3" /></template>Reconnect
+            </BaseButton>
+            <BaseButton variant="secondary" size="sm" data-testid="terminal-close-session" @click="attach.closeSession">
               Close session
-            </button>
+            </BaseButton>
           </div>
         </div>
       </template>

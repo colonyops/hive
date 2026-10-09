@@ -29,6 +29,8 @@ import { paneMayAutoFocus } from '../lib/terminalTree'
 import { searchHighlightColors } from '../lib/terminalTheme'
 import { resizeTerminalPreservingViewport } from '../lib/terminalViewport'
 import { useTerminalFont } from '../stores/useTerminalFont'
+import { useTerminalOutcomes, type TerminalEndReason } from '../stores/useTerminalOutcomes'
+export type { TerminalEndReason } from '../stores/useTerminalOutcomes'
 import { createTerminal, loadTerminalFont, watchTerminalAppearance } from './useXtermPane'
 
 /**
@@ -36,13 +38,6 @@ import { createTerminal, loadTerminalFont, watchTerminalAppearance } from './use
  * control client behind it survived — and the only way forward is reconnect().
  */
 export type TerminalStatus = 'connecting' | 'live' | 'ended'
-
-/**
- * Why the session ended, so the UI can say which of the signals fired.
- * 'not-started' is the one that is not a failure: tmux is running no session
- * under this slug yet, and starting it is an action the view offers.
- */
-export type TerminalEndReason = 'not-started' | 'attach-failed' | 'exited' | 'error' | 'disconnected'
 
 export interface TerminalSize {
   cols: number
@@ -128,6 +123,7 @@ export interface UseTerminalWindows {
   findPrevious: () => void
   start: () => Promise<void>
   reconnect: () => Promise<void>
+  reportOutcome: (reason: TerminalEndReason, detail: string) => void
   select: (windowId: string) => Promise<void>
   newWindow: (command?: string) => Promise<void>
   newAgentWindow: (agent: string) => Promise<void>
@@ -239,9 +235,13 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
 
   const windows = new Map<string, WindowRuntime>()
   const panes = new Map<string, PaneRuntime>()
+  const expectedWindowClosures = new Set<string>()
+  const expectedPaneClosures = new Set<string>()
   const scope = effectScope(true)
   let socket: WebSocket | null = null
   let disposed = false
+  let connectionEpoch = 0
+  const outcomes = useTerminalOutcomes()
 
   const { cellMetrics } = useTerminalFont()
 
@@ -684,7 +684,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         applyWindowEvent(frame.kind, frame.state)
         break
       case 'lifecycle':
-        if (frame.kind === 'exited') void exited(frame.message || 'The tmux session ended.')
+        if (frame.kind === 'exited') void exited(frame.message || 'No exit details are available.')
         else if (frame.kind === 'error') end('error', frame.message || 'The terminal client failed.')
         else if (frame.kind === 'degraded') degraded()
         break
@@ -734,9 +734,21 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         }
         return
       }
-      case 'closed':
+      case 'closed': {
+        const tab = findTab(windowId)
+        const intended =
+          expectedWindowClosures.delete(windowId) ||
+          (!!tab && tab.panes.length > 0 && tab.panes.every((pane) => expectedPaneClosures.has(pane.paneId)))
+        for (const pane of tab?.panes ?? []) expectedPaneClosures.delete(pane.paneId)
+        // A window that closes on its own is ordinary tmux behavior (its shell
+        // exited), not an error. Only the last window matters: it ends the
+        // session, and the session-end path reports that.
+        if (intended && tabs.value.length === 1) {
+          outcomes.report(slug, { reason: 'stopped', detail: 'The terminal was closed.' })
+        }
         disposeTab(windowId)
         return
+      }
       case 'renamed':
         break
       // The kind reports "this window's active flag or pane changed", not
@@ -782,7 +794,10 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const wanted = windowPanes(tab)
     const grids = paneGrids(tab)
     for (const pane of [...tab.panes]) {
-      if (!wanted.includes(pane.paneId)) disposePane(tab, pane.paneId)
+      if (!wanted.includes(pane.paneId)) {
+        expectedPaneClosures.delete(pane.paneId)
+        disposePane(tab, pane.paneId)
+      }
     }
     for (const paneId of wanted) {
       if (tab.panes.some((pane) => pane.paneId === paneId)) continue
@@ -795,7 +810,11 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     socket = client.openStream(slug)
     socket.binaryType = 'arraybuffer'
     socket.onopen = () => {
-      if (!disposed) status.value = 'live'
+      if (disposed) return
+      status.value = 'live'
+      endReason.value = null
+      error.value = null
+      outcomes.running(slug)
     }
     socket.onmessage = (event: MessageEvent) => handleFrame(event.data)
     socket.onclose = () => dropped()
@@ -806,37 +825,44 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   // be attached, but this webview has lost the stream either way.
   function dropped(): void {
     if (disposed || status.value === 'ended') return
-    end('disconnected', 'The terminal stream disconnected.')
+    end('disconnected', 'Terminal connection lost. The tmux session may still be running.')
+    void reconcileEnd(connectionEpoch)
   }
 
   function end(reason: TerminalEndReason, detail: string): void {
     if (disposed) return
+    const intended = outcomes.outcome(slug)
+    if (intended?.reason === 'stopped' && (reason === 'exited' || reason === 'disconnected')) {
+      reason = 'stopped'
+      detail = intended.detail
+    }
     status.value = 'ended'
     endReason.value = reason
     error.value = detail
+    outcomes.report(slug, { reason, detail })
     closeSocket()
   }
 
-  // The control client exits when the session is killed and when it is merely
-  // detached, so its exit does not say which happened. A session tmux is no
-  // longer holding is not a failure worth reporting over the dead scrollback —
-  // it is one to start again, the state a session that never ran is already in
-  // — so which of the two this is gets asked rather than assumed.
   async function exited(detail: string): Promise<void> {
     end('exited', detail)
+    await reconcileEnd(connectionEpoch)
+  }
+
+  async function reconcileEnd(epoch: number): Promise<void> {
     let listings: Record<string, WindowState[]>
     try {
       listings = await client.listWindows([slug])
     } catch {
-      // The probe only ever upgrades the state; with no answer the exit tmux
-      // reported stands.
       return
     }
-    if (disposed || endReason.value !== 'exited' || listings[slug]?.length) return
-    endReason.value = 'not-started'
-    error.value = null
-    // The windows went with the session. Holding their terminals would leave
-    // the pane showing a grid nothing can write to again.
+    if (disposed || epoch !== connectionEpoch || status.value !== 'ended' || listings[slug]?.length) return
+    const previous = outcomes.outcome(slug)
+    if (previous?.reason === 'stopped') end('stopped', previous.detail)
+    else {
+      const report = ['exited', 'error'].includes(endReason.value ?? '') ? error.value : null
+      const detail = 'Tmux session terminated. No exit details are available.'
+      end('terminated', report ? `${detail}\n\nTerminal connection report:\n${report}` : detail)
+    }
     disposeTabs()
   }
 
@@ -884,6 +910,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   }
 
   async function start(): Promise<void> {
+    const epoch = ++connectionEpoch
     status.value = 'connecting'
     endReason.value = null
     error.value = null
@@ -901,16 +928,24 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         loadTerminalFont(),
         client.attach(slug, vote?.cols ?? 0, vote?.rows ?? 0),
       ])
-      if (disposed) return
+      if (disposed || epoch !== connectionEpoch) return
       tabs.value = listed.map(createTab)
       setActive(listed.find((window) => window.active)?.windowId ?? listed[0]?.windowId ?? '')
       openSocket()
     } catch (e) {
-      // The core classifies "tmux is running no such session" rather than
-      // letting a dead control stream's message stand in for it, so this is a
-      // kind check, never a message match.
+      if (disposed || epoch !== connectionEpoch) return
       if (e instanceof TerminalRequestError && e.kind === 'not_found') {
-        end('not-started', e.message)
+        const previous = outcomes.outcome(slug)
+        if (previous && ['terminated', 'start-failed', 'completed', 'stopped'].includes(previous.reason))
+          end(previous.reason, previous.detail)
+        else if (outcomes.wasRunning(slug)) end('terminated', 'Tmux session terminated. No exit details are available.')
+        else end('not-started', e.message)
+        return
+      }
+      // Attach answers conflict only for a launch that has not committed. A
+      // retry of the attach cannot clear that; a start recovers the session.
+      if (e instanceof TerminalRequestError && e.kind === 'conflict') {
+        end('interrupted', e.message)
         return
       }
       end('attach-failed', message(e, 'Could not attach to this session.'))
@@ -997,7 +1032,12 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   }
 
   async function closeWindow(windowId: string): Promise<void> {
-    await control(() => client.closeWindow(slug, windowId), 'Could not close that window.')
+    expectedWindowClosures.add(windowId)
+    const closed = await control(async () => {
+      await client.closeWindow(slug, windowId)
+      return true
+    }, 'Could not close that window.')
+    if (!closed) expectedWindowClosures.delete(windowId)
   }
 
   async function rename(windowId: string, name: string): Promise<void> {
@@ -1056,7 +1096,12 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
 
   async function closePane(paneId: string = activePaneId()): Promise<void> {
     if (!paneId) return
-    await control(() => client.closePane(slug, paneId), 'Could not close that pane.')
+    expectedPaneClosures.add(paneId)
+    const closed = await control(async () => {
+      await client.closePane(slug, paneId)
+      return true
+    }, 'Could not close that pane.')
+    if (!closed) expectedPaneClosures.delete(paneId)
   }
 
   async function zoomPane(): Promise<void> {
@@ -1136,6 +1181,10 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     findPrevious,
     start,
     reconnect,
+    reportOutcome: (reason: TerminalEndReason, detail: string) => {
+      connectionEpoch++
+      end(reason, detail)
+    },
     select,
     newWindow,
     newAgentWindow,

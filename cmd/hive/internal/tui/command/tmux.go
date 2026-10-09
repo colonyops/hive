@@ -10,9 +10,14 @@ type TmuxExecutor struct {
 	remote       string
 	targetWindow string
 	background   bool
+
+	completed bool
 }
 
-var _ Executor = (*TmuxExecutor)(nil)
+var (
+	_ Executor        = (*TmuxExecutor)(nil)
+	_ ResultMessenger = (*TmuxExecutor)(nil)
+)
 
 func (e *TmuxExecutor) Execute(ctx context.Context) (output <-chan string, done <-chan error, cancel context.CancelFunc) {
 	ctx, cancel = context.WithCancel(ctx)
@@ -20,8 +25,19 @@ func (e *TmuxExecutor) Execute(ctx context.Context) (output <-chan string, done 
 
 	go func() {
 		defer close(doneCh)
-		doneCh <- e.opener.OpenTmuxSession(ctx, e.name, e.path, e.remote, e.targetWindow, e.background)
+		result, err := e.opener.OpenTmuxSession(ctx, e.name, e.path, e.remote, e.targetWindow, e.background)
+		e.completed = err == nil && result.Completed
+		doneCh <- err
 	}()
 
 	return nil, doneCh, cancel
+}
+
+// ResultMessage reports a launch whose commands all finished, because the user
+// gets no terminal to attach to and would otherwise see nothing happen.
+func (e *TmuxExecutor) ResultMessage() string {
+	if e.completed {
+		return "Session completed successfully."
+	}
+	return ""
 }

@@ -31,8 +31,8 @@ import (
 type stubMux struct{}
 
 func (stubMux) CreateSession(context.Context, multiplexer.SessionSpec) error { return nil }
-func (stubMux) OpenSession(context.Context, multiplexer.SessionSpec, multiplexer.Target) error {
-	return nil
+func (stubMux) OpenSession(context.Context, multiplexer.SessionSpec, multiplexer.Target) (multiplexer.LaunchResult, error) {
+	return multiplexer.LaunchResult{Created: true}, nil
 }
 
 func (stubMux) AddWindows(context.Context, multiplexer.Target, []multiplexer.WindowSpec) error {

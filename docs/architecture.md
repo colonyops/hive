@@ -1397,6 +1397,21 @@ them is the constraint (ADR terminal-transport):
   reachability; `Endpoint` builds `{httpBaseURL, wsURL}` from the live bind plus
   the token it was handed.
 
+**Launches are bounded adapter transactions** (ADR tmux-launches-use-owned-resource-transactions).
+`internal/platform/tmux/exec` shares ownership-based allocation, observation,
+option restoration, and rollback between session creation and window addition.
+A process-shared lock guards launch and existence checks; pending markers support
+interrupted-launch recovery. Cleanup does not inherit request cancellation.
+A successful finite launch returns `multiplexer.LaunchResult.Completed`; it does
+not turn a successful setup pane into a failure or remove healthy siblings.
+
+**Terminal reports outlive their connections.** Desktop retains session-scoped
+launch and runtime notices outside pooled terminal instances. Confirmed absence
+shows termination and Restart; unconfirmed connection loss offers Reconnect.
+A control-client reason is not an agent exit status. The CLI's status service
+uses `terminal.SessionPresenceReader` to distinguish session existence from
+agent detection before it announces termination.
+
 **A first paint is a pane's scrollback, its screen at exactly the pane's
 height, its mouse mode, and its cursor** (ADR terminal-first-paint-carries-scrollback) — three tmux commands per pane, replayed
 as one byte stream into a fresh emulator. Mouse mode is reconstructed from

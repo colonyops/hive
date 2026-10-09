@@ -25,6 +25,13 @@ type WindowSpec struct {
 	Panes            []PaneSpec
 }
 
+// LaunchResult describes a session open or launch. Completed is true only when
+// every pane completed successfully and the launch left no terminal to attach to.
+type LaunchResult struct {
+	Created   bool
+	Completed bool
+}
+
 // SessionSpec describes a session and its initial windows.
 type SessionSpec struct {
 	Target           Target

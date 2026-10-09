@@ -3,6 +3,7 @@ package status
 
 import (
 	"context"
+	"errors"
 	"maps"
 	"sync"
 	"time"
@@ -38,13 +39,15 @@ type WindowStatus struct {
 
 // TerminalStatus holds the terminal integration status for a session.
 type TerminalStatus struct {
-	Status      terminal.Status
-	Tool        string
-	WindowName  string
-	PaneContent string
-	IsLoading   bool
-	Error       error
-	Windows     []WindowStatus // per-window statuses (populated only for multi-window sessions)
+	SessionPresent bool
+	PresenceKnown  bool
+	Status         terminal.Status
+	Tool           string
+	WindowName     string
+	PaneContent    string
+	IsLoading      bool
+	Error          error
+	Windows        []WindowStatus // per-window statuses (populated only for multi-window sessions)
 }
 
 // Service performs agent status detection for sessions via terminal
@@ -184,6 +187,28 @@ func (s *Service) fetchRoot(ctx context.Context, target RootRepoTarget) Terminal
 	return status
 }
 
+func (s *Service) sessionPresence(ctx context.Context, slug string, metadata map[string]string) (bool, bool, error) {
+	integrations := s.term.EnabledIntegrations()
+	known := len(integrations) > 0
+	var failures []error
+	for _, integration := range integrations {
+		probe, ok := integration.(terminal.SessionPresenceReader)
+		if !ok {
+			known = false
+			continue
+		}
+		present, confirmed, err := probe.SessionPresence(ctx, slug, metadata)
+		if err != nil {
+			failures = append(failures, err)
+		}
+		if confirmed && present {
+			return true, true, nil
+		}
+		known = known && confirmed
+	}
+	return false, known, errors.Join(failures...)
+}
+
 // FetchSession fetches terminal status for a single session.
 func (s *Service) FetchSession(ctx context.Context, sess *session.Session) TerminalStatus {
 	status := TerminalStatus{
@@ -207,9 +232,15 @@ func (s *Service) FetchSession(ctx context.Context, sess *session.Session) Termi
 	}
 
 	if info == nil || integration == nil {
+		status.SessionPresent, status.PresenceKnown, status.Error = s.sessionPresence(ctx, sess.Slug, metadata)
+		if status.Error != nil {
+			s.logger.Debug().Err(status.Error).Str("session", sess.ID).Msg("failed to confirm terminal session existence")
+		}
 		return status
 	}
 
+	status.SessionPresent = true
+	status.PresenceKnown = true
 	// Get status from integration
 	termStatus, err := integration.GetStatus(ctx, info)
 	if err != nil {

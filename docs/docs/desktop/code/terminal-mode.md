@@ -39,6 +39,10 @@ Code lists active Hive sessions and their tmux windows. Closing Hive leaves thos
 
 If a session has no running terminal, select **Start session**. Hive creates its configured windows and starts the agent. This starts a new agent process and does not resume the previous terminal process.
 
+Startup failures stay in a copyable report with the failed command and available terminal output. If tmux terminates later, Hive keeps a termination notice even when exit details are unavailable. **Restart** starts a new process. It also recovers a session whose launch did not finish, for example after Hive quit during a start. **Reconnect** restores a lost connection to a session that may still be running. Reports survive switching sessions within the app, but not an app restart.
+
+A setup command that exits successfully does not stop healthy panes. If every configured command finishes successfully and no terminal remains, the panel shows **Session completed**.
+
 **Kill terminal** stops the tmux session and its processes while keeping the checkout and Hive session record. **Recycle** and **Delete** also change or remove the checkout.
 
 For repository sessions, the optional status bar shows the branch, changes against the default branch, uncommitted work, and unpushed commits. Connected GitHub, Gitea, and Forgejo repositories also show pull request, review, and check state. Use the status bar to open the checkout in your editor or file manager.

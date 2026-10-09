@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -94,50 +95,9 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	// Calculate modal dimensions - use most of the screen
 	modalWidth := min(width-outputModalMargin, outputModalMaxWidth)
 	modalHeight := min(height-outputModalMargin, outputModalMaxHeight)
-	contentHeight := modalHeight - outputModalChrome
+	innerWidth := modalWidth - outputModalPadding
 
-	// Build content lines with per-line status indicators
-	var contentBuilder strings.Builder
-
-	// Show last N lines that fit
-	startIdx := 0
-	if len(m.lines) > contentHeight {
-		startIdx = len(m.lines) - contentHeight
-	}
-
-	indicatorWidth := 4 // "● " or spinner + space, with safety margin
-	maxLineWidth := modalWidth - outputModalPadding - indicatorWidth
-
-	for i := startIdx; i < len(m.lines); i++ {
-		line := m.lines[i]
-		// Truncate long lines
-		if len(line) > maxLineWidth {
-			line = line[:maxLineWidth-3] + "..."
-		}
-
-		var indicator string
-		if m.running && i == len(m.lines)-1 {
-			c := styles.PulseColor(styles.ColorSuccess, m.frame, outputPulseFrames, outputPulseMinBright)
-			indicator = lipgloss.NewStyle().Foreground(c).Render("●")
-		} else {
-			indicator = styles.TextSuccessStyle.Render("●")
-		}
-		contentBuilder.WriteString(indicator + " " + styles.TextMutedStyle.Render(line))
-
-		if i < len(m.lines)-1 {
-			contentBuilder.WriteString("\n")
-		}
-	}
-
-	// Pad with empty lines if needed
-	lineCount := len(m.lines) - startIdx
-	for i := lineCount; i < contentHeight; i++ {
-		contentBuilder.WriteString("\n")
-	}
-
-	content := contentBuilder.String()
-
-	// Build status line
+	lines := m.lines
 	var status string
 	switch {
 	case m.running:
@@ -146,10 +106,61 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 		c := styles.PulseColor(styles.ColorSuccess, m.frame, outputPulseFrames, outputPulseMinBright)
 		status = lipgloss.NewStyle().Foreground(c).Render("● Running"+dots) + pad
 	case m.err != nil:
-		status = styles.TextErrorStyle.Render("✗ Error: " + m.err.Error())
+		// A multi-line error (a startup report) goes in the clipped content area,
+		// so its size cannot push the modal past the screen.
+		summary, detail, _ := strings.Cut(m.err.Error(), "\n")
+		status = styles.TextErrorStyle.Width(innerWidth).Render("✗ Error: " + summary)
+		if detail = strings.Trim(detail, "\n"); detail != "" {
+			lines = append(slices.Clone(m.lines), strings.Split(detail, "\n")...)
+		}
 	default:
 		status = styles.TextSuccessStyle.Render("✓ Complete")
 	}
+	contentHeight := max(0, modalHeight-outputModalChrome-max(0, lipgloss.Height(status)-1))
+
+	// Build content lines with per-line status indicators
+	var contentBuilder strings.Builder
+
+	// Show last N lines that fit
+	startIdx := 0
+	if len(lines) > contentHeight {
+		startIdx = len(lines) - contentHeight
+	}
+
+	indicatorWidth := 4 // "● " or spinner + space, with safety margin
+	maxLineWidth := innerWidth - indicatorWidth
+
+	for i := startIdx; i < len(lines); i++ {
+		line := lines[i]
+		// Truncate long lines
+		if len(line) > maxLineWidth {
+			line = line[:maxLineWidth-3] + "..."
+		}
+
+		var indicator string
+		switch {
+		case i >= len(m.lines):
+			indicator = styles.TextErrorStyle.Render("│")
+		case m.running && i == len(m.lines)-1:
+			c := styles.PulseColor(styles.ColorSuccess, m.frame, outputPulseFrames, outputPulseMinBright)
+			indicator = lipgloss.NewStyle().Foreground(c).Render("●")
+		default:
+			indicator = styles.TextSuccessStyle.Render("●")
+		}
+		contentBuilder.WriteString(indicator + " " + styles.TextMutedStyle.Render(line))
+
+		if i < len(lines)-1 {
+			contentBuilder.WriteString("\n")
+		}
+	}
+
+	// Pad with empty lines if needed
+	lineCount := len(lines) - startIdx
+	for i := lineCount; i < contentHeight; i++ {
+		contentBuilder.WriteString("\n")
+	}
+
+	content := contentBuilder.String()
 
 	// Build help line
 	var help string
@@ -167,7 +178,7 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 		lipgloss.Left,
 		styles.ModalTitleStyle.Render(m.title),
 		"",
-		lipgloss.NewStyle().Width(modalWidth-outputModalPadding).Render(content),
+		lipgloss.NewStyle().Width(innerWidth).Render(content),
 		"",
 		status,
 		styles.ModalHelpStyle.Render(help),

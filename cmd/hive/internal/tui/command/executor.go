@@ -11,6 +11,12 @@ type Executor interface {
 	Execute(ctx context.Context) (output <-chan string, done <-chan error, cancel context.CancelFunc)
 }
 
+// ResultMessenger is an Executor with a message for the user after it
+// succeeds. Read it only after the done channel delivers.
+type ResultMessenger interface {
+	ResultMessage() string
+}
+
 // ExecuteSync runs an executor synchronously, blocking until completion.
 // Streaming output is discarded. Returns the final error.
 func ExecuteSync(ctx context.Context, exec Executor) error {
