@@ -132,6 +132,8 @@ func TestCanvasUnknownSessionIsNotFound(t *testing.T) {
 	assert.Equal(t, KindNotFound, KindOf(err))
 	_, err = svc.RemoveBlock(ctx, "99", "plan", "a")
 	assert.Equal(t, KindNotFound, KindOf(err))
+	_, err = svc.SetFrontmatter(ctx, "99", "plan", map[string]any{"tags": []any{"x"}})
+	assert.Equal(t, KindNotFound, KindOf(err))
 	_, err = svc.Clear(ctx, "99", "plan")
 	assert.Equal(t, KindNotFound, KindOf(err))
 	err = svc.Delete(ctx, "99", "plan")
@@ -280,7 +282,7 @@ func TestCanvasReadsReportAMigratedChatByItsUUID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, canvas.Canvas{
 		Workspace: "ws", Name: "by-7", Title: "Legacy canvas", Session: chatID,
-		CreatedAt: 1, UpdatedAt: 2,
+		CreatedAt: 1, UpdatedAt: 2, Frontmatter: map[string]any{},
 		Blocks: []canvas.Block{{ID: "a", Kind: canvas.KindMarkdown, Body: "x", CreatedAt: 1, UpdatedAt: 2}},
 	}, shown)
 
@@ -363,16 +365,19 @@ func TestCanvasMutationsNotify(t *testing.T) {
 	require.NoError(t, err)
 	_, err = svc.PutBlock(ctx, "1", "plan", "", "", canvas.Block{ID: "pr", Kind: canvas.KindLink, Title: "PR", URL: "https://example.com/pr/1"})
 	require.NoError(t, err)
+	c, err := svc.SetFrontmatter(ctx, "1", "plan", map[string]any{"tags": []any{"release"}})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"tags": []any{"release"}}, c.Frontmatter)
 	_, err = svc.RemoveBlock(ctx, "1", "plan", "pr")
 	require.NoError(t, err)
-	c, err := svc.Clear(ctx, "1", "plan")
+	c, err = svc.Clear(ctx, "1", "plan")
 	require.NoError(t, err)
 	assert.Empty(t, c.Blocks)
 	assert.Equal(t, "The Plan", c.Title)
 	err = svc.Delete(ctx, "1", "plan")
 	require.NoError(t, err)
 
-	updates := signals.waitUpdates(t, 5)
+	updates := signals.waitUpdates(t, 6)
 	for _, update := range updates {
 		assert.Equal(t, "1", update)
 	}
@@ -383,6 +388,8 @@ func TestCanvasMutationsOnUnknownCanvasAreNotFound(t *testing.T) {
 	ctx := t.Context()
 
 	_, err := svc.RemoveBlock(ctx, "1", "ghost", "a")
+	assert.Equal(t, KindNotFound, KindOf(err))
+	_, err = svc.SetFrontmatter(ctx, "1", "ghost", map[string]any{"tags": []any{"x"}})
 	assert.Equal(t, KindNotFound, KindOf(err))
 	_, err = svc.Clear(ctx, "1", "ghost")
 	assert.Equal(t, KindNotFound, KindOf(err))
@@ -432,10 +439,12 @@ func TestCanvasExport(t *testing.T) {
 
 	_, err = svc.PutBlock(ctx, "1", "plan", "The Plan", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "hello"})
 	require.NoError(t, err)
+	_, err = svc.SetFrontmatter(ctx, "1", "plan", map[string]any{"tags": []any{"release"}})
+	require.NoError(t, err)
 
 	markdown, err := svc.MarkdownForOwner(ctx, "ws", "plan")
 	require.NoError(t, err)
-	assert.Equal(t, "# The Plan\n\nhello\n", markdown)
+	assert.Contains(t, markdown, "tags:\n    - release\n---\n\n# The Plan\n\nhello\n")
 
 	err = svc.ExportForOwner(ctx, "ws", "plan", "relative.md")
 	assert.Equal(t, KindInvalid, KindOf(err), "the save dialog hands back absolute paths; anything else is a caller bug")
@@ -446,7 +455,21 @@ func TestCanvasExport(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, markdown, string(written))
 
-	signals.waitUpdates(t, 1)
+	signals.waitUpdates(t, 2)
+}
+
+func TestCanvasDeleteForOwner(t *testing.T) {
+	svc, signals := testCanvasService(t)
+	ctx := t.Context()
+
+	_, err := svc.PutBlock(ctx, "1", "plan", "The Plan", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "hello"})
+	require.NoError(t, err)
+	require.NoError(t, svc.DeleteForOwner(ctx, "ws", "plan"))
+	err = svc.DeleteForOwner(ctx, "ws", "plan")
+	assert.Equal(t, KindNotFound, KindOf(err))
+
+	updates := signals.waitUpdates(t, 2)
+	assert.Equal(t, []string{"1", "1"}, updates)
 }
 
 func TestCanvasListForOwner(t *testing.T) {

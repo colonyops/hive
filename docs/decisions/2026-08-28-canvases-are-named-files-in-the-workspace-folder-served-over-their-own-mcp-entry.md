@@ -66,8 +66,8 @@ catalogue's paths to the adapter's mount constants.
 Delivery to the pane is the native wake-up pattern: content is stored state,
 `events.CanvasUpdated` → coalesced `canvas:updated` → the pane re-reads.
 The frontend reads over the token-guarded agents HTTP client, addressed by
-(workspace, name); it has no mutation surface at all — writes exist only as
-MCP tools, so the pane can never race the agent.
+(workspace, name). At introduction it had no mutation surface at all: writes
+existed only as MCP tools, so the pane could not race the agent.
 
 ## Consequences
 
@@ -88,3 +88,10 @@ MCP tools, so the pane can never race the agent.
 - M1 is a viewport with agent read-back: the user cannot edit blocks. If
   user edits ever land, the read-back tools are where the agent would see
   them — the tool surface was shaped so that adding this does not change it.
+
+## Evolution
+
+Users can now delete the canvas on screen after confirmation, while block and
+front matter edits remain MCP-only. Canvases also carry agent-editable front
+matter with Hive-owned timestamps (ADR
+[canvases-carry-front-matter-and-users-can-delete-them](2026-10-09-canvases-carry-front-matter-and-users-can-delete-them.md)).

@@ -3,6 +3,7 @@ package canvas
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -129,6 +130,44 @@ func TestRemove(t *testing.T) {
 	require.ErrorIs(t, err, ErrNotFound, "a never-written canvas is not found")
 }
 
+func TestSetFrontmatterReplacesEditableFields(t *testing.T) {
+	s := testStore(t)
+	first, err := s.Upsert("ws", "plan", Author{Session: "chat-1"}, "The Plan", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
+	require.NoError(t, err)
+
+	c, err := s.SetFrontmatter("ws", "plan", map[string]any{
+		"tags": []any{"release", "desktop"}, "reviewed": true, "score": float64(7),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{
+		"tags": []any{"release", "desktop"}, "reviewed": true, "score": float64(7),
+	}, c.Frontmatter)
+	assert.Greater(t, c.UpdatedAt, first.UpdatedAt)
+
+	c, err = s.SetFrontmatter("ws", "plan", map[string]any{})
+	require.NoError(t, err)
+	assert.Empty(t, c.Frontmatter, "an empty mapping removes every editable field")
+
+	_, err = s.SetFrontmatter("ws", "ghost", map[string]any{"tags": []any{"x"}})
+	require.ErrorIs(t, err, ErrNotFound)
+}
+
+func TestFrontmatterValidation(t *testing.T) {
+	for name, frontmatter := range map[string]map[string]any{
+		"reserved created": {"created_at": "yesterday"},
+		"reserved updated": {"UPDATED_AT": "today"},
+		"bad key":          {"review status": "ready"},
+		"nested object":    {"owner": map[string]any{"name": "Ada"}},
+		"nested list":      {"matrix": []any{[]any{"x"}}},
+		"long text":        {"notes": strings.Repeat("x", maxFrontmatterText+1)},
+	} {
+		require.ErrorIs(t, ValidateFrontmatter(frontmatter), ErrInvalidFrontmatter, name)
+	}
+	assert.NoError(t, ValidateFrontmatter(map[string]any{
+		"tags": []any{"release", "desktop"}, "owner": "Ada", "ready": true, "score": float64(9.5), "note": nil,
+	}))
+}
+
 func TestClearKeepsTheCanvas(t *testing.T) {
 	s := testStore(t)
 	first, err := s.Upsert("ws", "plan", Author{Session: "chat-1"}, "The Plan", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
@@ -176,11 +215,12 @@ func TestDeleteReportsExistence(t *testing.T) {
 	_, err := s.Upsert("ws", "plan", Author{Session: "chat-1"}, "", "", Block{ID: "a", Kind: KindMarkdown, Body: "x"})
 	require.NoError(t, err)
 
-	existed, err := s.Delete("ws", "plan")
+	deleted, existed, err := s.Delete("ws", "plan")
 	require.NoError(t, err)
 	assert.True(t, existed)
+	assert.Equal(t, "chat-1", deleted.Session)
 
-	existed, err = s.Delete("ws", "plan")
+	_, existed, err = s.Delete("ws", "plan")
 	require.NoError(t, err)
 	assert.False(t, existed)
 
@@ -189,25 +229,32 @@ func TestDeleteReportsExistence(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestMarkdownRendersTitleBlocksAndLinks(t *testing.T) {
+func TestMarkdownRendersFrontmatterTitleBlocksAndLinks(t *testing.T) {
 	c := Canvas{
-		Title: "The Plan",
+		Title: "The Plan", CreatedAt: 1_700_000_000_000, UpdatedAt: 1_700_000_060_000,
+		Frontmatter: map[string]any{"tags": []any{"release", "desktop"}, "reviewed": true},
 		Blocks: []Block{
 			{ID: "intro", Kind: KindMarkdown, Title: "Intro", Body: "hello"},
 			{ID: "body", Kind: KindMarkdown, Body: "world"},
 			{ID: "pr", Kind: KindLink, Title: "The PR", URL: "https://example.com/pr/1"},
 		},
 	}
-	want := "# The Plan\n\n## Intro\n\nhello\n\nworld\n\n[The PR](https://example.com/pr/1)\n"
-	assert.Equal(t, want, Markdown(c))
+	want := "---\ncreated_at: \"2023-11-14T22:13:20Z\"\nupdated_at: \"2023-11-14T22:14:20Z\"\nreviewed: true\ntags:\n    - release\n    - desktop\n---\n\n# The Plan\n\n## Intro\n\nhello\n\nworld\n\n[The PR](https://example.com/pr/1)\n"
+	markdown, err := Markdown(c)
+	require.NoError(t, err)
+	assert.Equal(t, want, markdown)
 
-	assert.Equal(t, "hello\n", Markdown(Canvas{Blocks: []Block{{Kind: KindMarkdown, Body: "hello"}}}),
+	markdown, err = Markdown(Canvas{CreatedAt: 1, UpdatedAt: 2, Blocks: []Block{{Kind: KindMarkdown, Body: "hello"}}})
+	require.NoError(t, err)
+	assert.Equal(t, "---\ncreated_at: \"1970-01-01T00:00:00.001Z\"\nupdated_at: \"1970-01-01T00:00:00.002Z\"\n---\n\nhello\n", markdown,
 		"no canvas title means no heading")
 }
 
 func TestMarkdownPreservesMermaidFence(t *testing.T) {
 	body := "Before\n\n```mermaid\nflowchart LR\nA --> B\n```\n\nAfter"
-	assert.Equal(t, body+"\n", Markdown(Canvas{Blocks: []Block{{Kind: KindMarkdown, Body: body}}}))
+	markdown, err := Markdown(Canvas{CreatedAt: 1, UpdatedAt: 2, Blocks: []Block{{Kind: KindMarkdown, Body: body}}})
+	require.NoError(t, err)
+	assert.Contains(t, markdown, body+"\n")
 }
 
 // An export leaves the app, so it carries the sanitized markup rather than
@@ -219,7 +266,9 @@ func TestMarkdownEmitsSanitizedHTMLBlocks(t *testing.T) {
 			{ID: "stats", Kind: KindHTML, Title: "Run", Body: `<p class="hv-muted">green</p><script>alert(1)</script>`},
 		},
 	}
-	assert.Equal(t, "## Run\n\n<p class=\"hv-muted\">green</p>\n", Markdown(c))
+	markdown, err := Markdown(c)
+	require.NoError(t, err)
+	assert.Contains(t, markdown, "## Run\n\n<p class=\"hv-muted\">green</p>\n")
 }
 
 func TestInvalidWorkspaceRefused(t *testing.T) {

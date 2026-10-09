@@ -61,11 +61,12 @@ func seedAgentSession(t *testing.T, core *app.App, workspace, name string) strin
 }
 
 type canvasView struct {
-	Workspace string `json:"workspace"`
-	Name      string `json:"name"`
-	Title     string `json:"title"`
-	Session   string `json:"session"`
-	Blocks    []struct {
+	Workspace   string         `json:"workspace"`
+	Name        string         `json:"name"`
+	Title       string         `json:"title"`
+	Session     string         `json:"session"`
+	Frontmatter map[string]any `json:"frontmatter"`
+	Blocks      []struct {
 		ID    string `json:"id"`
 		Kind  string `json:"kind"`
 		Title string `json:"title"`
@@ -86,12 +87,13 @@ type canvasListView struct {
 // canvasWriteView is what every mutation answers: metadata, plus the stored
 // block for a single-block write — never the whole surface.
 type canvasWriteView struct {
-	Workspace  string `json:"workspace"`
-	Name       string `json:"name"`
-	Title      string `json:"title"`
-	Session    string `json:"session"`
-	BlockCount int    `json:"blockCount"`
-	Block      *struct {
+	Workspace   string         `json:"workspace"`
+	Name        string         `json:"name"`
+	Title       string         `json:"title"`
+	Session     string         `json:"session"`
+	Frontmatter map[string]any `json:"frontmatter"`
+	BlockCount  int            `json:"blockCount"`
+	Block       *struct {
 		ID   string `json:"id"`
 		Body string `json:"body"`
 	} `json:"block"`
@@ -114,7 +116,7 @@ func TestCanvasToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 		assert.Equal(t, "object", schema["type"], "tool %s input schema is not type object", tool.Name)
 	}
 
-	assert.ElementsMatch(t, []string{"put_block", "put_blocks", "remove_block", "clear_canvas", "delete_canvas", "read_canvas", "list_canvases", "open_canvas", "close_canvas"}, names)
+	assert.ElementsMatch(t, []string{"put_block", "put_blocks", "remove_block", "set_frontmatter", "clear_canvas", "delete_canvas", "read_canvas", "list_canvases", "open_canvas", "close_canvas"}, names)
 }
 
 func TestCanvasRoundTrip(t *testing.T) {
@@ -154,6 +156,15 @@ func TestCanvasRoundTrip(t *testing.T) {
 	require.Len(t, got.Blocks, 2)
 	assert.Equal(t, "status", got.Blocks[0].ID)
 	assert.Equal(t, "done", got.Blocks[0].Body)
+
+	call(t, session, "set_frontmatter", map[string]any{
+		"session": id, "canvas": "plan", "frontmatter": map[string]any{
+			"tags": []any{"release", "desktop"}, "reviewed": true,
+		},
+	}, &wrote)
+	assert.Equal(t, map[string]any{"tags": []any{"release", "desktop"}, "reviewed": true}, wrote.Frontmatter)
+	call(t, session, "read_canvas", map[string]any{"session": id, "canvas": "plan"}, &got)
+	assert.Equal(t, wrote.Frontmatter, got.Frontmatter)
 
 	// A before anchor places a block ahead of an existing one.
 	call(t, session, "put_block", map[string]any{
@@ -239,6 +250,11 @@ func TestCanvasToolErrors(t *testing.T) {
 	call(t, session, "put_block", map[string]any{"session": id, "canvas": "plan", "id": "a", "kind": "markdown", "body": "x"}, &got)
 	text = callErr(t, session, "remove_block", map[string]any{"session": id, "canvas": "plan", "id": "ghost"})
 	assert.Contains(t, text, "not_found")
+
+	text = callErr(t, session, "set_frontmatter", map[string]any{
+		"session": id, "canvas": "plan", "frontmatter": map[string]any{"created_at": "yesterday"},
+	})
+	assert.Contains(t, text, "invalid")
 
 	text = callErr(t, session, "put_block", map[string]any{"session": id, "canvas": "Bad Name", "id": "a", "kind": "markdown", "body": "x"})
 	assert.Contains(t, text, "invalid")

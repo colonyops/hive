@@ -36,6 +36,20 @@ Block ids are the agent's own: reusing an id updates that block in place,
 which is how a status line is revised instead of duplicated; a `before`
 anchor places or moves a block ahead of an existing one.
 
+## Front matter
+
+A canvas can carry editable front matter for tags, status, ownership, or other
+small document properties. Keys use letters, digits, dots, hyphens, or
+underscores. Values are strings, finite numbers, booleans, null, or flat lists
+of those scalar values. `tags` is conventionally a list of strings.
+
+Use `set_frontmatter` to replace the complete editable mapping on an existing
+canvas. Read the canvas first when preserving fields another agent wrote. Pass
+an empty object to remove every editable field. Hive owns `created_at` and
+`updated_at`, updates them with the canvas, and refuses either key in the tool.
+The reader shows both automatic timestamps with the editable fields. Copy and
+save include all of them in a YAML header.
+
 ## Writing a Mermaid diagram
 
 Put a standalone `mermaid` fence inside a markdown block:
@@ -263,6 +277,7 @@ point.
 - `put_blocks` — write a batch of blocks in one atomic call, for laying out
   a canvas whole instead of block by block.
 - `remove_block` — remove one block by id.
+- `set_frontmatter` — replace the complete editable front matter mapping.
 - `clear_canvas` — remove every block; the canvas, its name and title survive.
 - `delete_canvas` — remove a canvas entirely.
 - `read_canvas` — read one canvas exactly as the user sees it, every block

@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// A workspace's canvases: agent-written markdown, Mermaid, html and link blocks,
-// read-only in the webview — writes arrive only through the hive-canvas MCP
-// tools, so this pane re-reads on canvas:updated rather than ever mutating
-// (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
+// A workspace's canvases: agent-written markdown, Mermaid, html and link blocks.
+// Block and front matter writes arrive through the hive-canvas MCP tools. The
+// user may delete the canvas after confirmation.
 import IconButton from './ui/IconButton.vue'
 import { computed, ref, toRef, watch } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
@@ -33,7 +32,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   'open-url': [url: string]
-  pick: [name: string]
+  pick: [name: string | null]
   'open-page': [name: string | null]
   setup: []
 }>()
@@ -59,6 +58,11 @@ const headerTitle = computed(() => canvas.value?.title || shown.value || 'Canvas
 function pick(name: string): void {
   browsing.value = false
   emit('pick', name)
+}
+
+function canvasDeleted(name: string): void {
+  emit('pick', metas.value.find((meta) => meta.name !== name)?.name ?? null)
+  wake()
 }
 
 // A link to another canvas lands at its top, not at the offset the last one
@@ -110,7 +114,14 @@ const {
         />
       </button>
       <div class="min-w-0 flex-1" />
-      <AgentCanvasActions v-if="shown" :workspace="workspace" :name="shown" :client="client" testid="agent-canvas" />
+      <AgentCanvasActions
+        v-if="shown"
+        :workspace="workspace"
+        :name="shown"
+        :client="client"
+        testid="agent-canvas"
+        @deleted="canvasDeleted"
+      />
       <IconButton
         label="Open full page"
         :icon="IconMaximize2"

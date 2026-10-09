@@ -221,9 +221,14 @@ func (ctrl *Controller) agentOperations() []Op {
 			Errors: agentErrors("no such session"),
 		},
 		{
-			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas", Summary: "Read one canvas by workspace and name: every block in order, as the agent last wrote it. A name nothing was written under answers an empty canvas. Mutations have no HTTP surface — the agent writes through the hive-canvas MCP server.",
+			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas", Summary: "Read one canvas by workspace and name: editable front matter and every block in order, as the agent last wrote them. A name nothing was written under answers an empty canvas. Block and front matter mutations have no HTTP surface — the agent writes through the hive-canvas MCP server.",
 			Request: agentCanvasRequest{}, Response: agentCanvasView{}, Handler: ctrl.AgentCanvas,
 			Errors: agentErrors(""),
+		},
+		{
+			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/delete", Summary: "Delete one canvas selected by the user and return its name. The file is removed from its workspace, repository context, or global canvas directory. A name that does not exist is 404.",
+			Request: agentCanvasRequest{}, Response: agentCanvasDeleteResponse{}, Handler: ctrl.AgentCanvasDelete,
+			Errors: agentErrors("no such canvas"),
 		},
 		{
 			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvases", Summary: "List a workspace's canvases, most recently updated first — metadata only (name, title, creating session, timestamps, block count), for the canvas pane's picker. Canvases are files in the workspace folder and outlive the chats that made them.",
@@ -236,12 +241,12 @@ func (ctrl *Controller) agentOperations() []Op {
 			Errors: agentErrors(""),
 		},
 		{
-			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/markdown", Summary: "Render one canvas as a standalone markdown document, for the pane's copy-to-clipboard action. A name nothing was written under is 404 — exporting nothing is a mistake worth surfacing.",
+			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/markdown", Summary: "Render one canvas as a standalone markdown document with YAML front matter, for the pane's copy-to-clipboard action. A name nothing was written under is 404 — exporting nothing is a mistake worth surfacing.",
 			Request: agentCanvasRequest{}, Response: agentCanvasMarkdownResponse{}, Handler: ctrl.AgentCanvasMarkdown,
 			Errors: agentErrors("no such canvas"),
 		},
 		{
-			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/export", Summary: "Write one canvas's markdown rendering to an absolute path the user chose in the native save dialog. The canvas itself is untouched — content writes remain MCP-only.",
+			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/export", Summary: "Write one canvas's markdown rendering, including YAML front matter, to an absolute path the user chose in the native save dialog. The canvas itself is untouched.",
 			Request: agentCanvasExportRequest{}, Response: agentCanvasExportResponse{}, Handler: ctrl.AgentCanvasExport,
 			Errors: agentErrors("no such canvas"),
 		},

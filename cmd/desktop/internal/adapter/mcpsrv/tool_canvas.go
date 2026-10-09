@@ -47,6 +47,15 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 	}, ctrl.RemoveBlock)
 
 	addTool(srv, &mcp.Tool{
+		Name:  "set_frontmatter",
+		Title: "Set canvas front matter",
+		Description: "Replace all editable front matter on an existing canvas. Use short keys and scalar values or " +
+			"lists of scalars; tags is conventionally a list of strings. Hive owns created_at and updated_at, updates " +
+			"them automatically, and refuses either key here. Pass an empty object to remove all editable fields. " +
+			"Copy and save include the resulting YAML front matter. Answers with the canvas metadata.",
+	}, ctrl.SetFrontmatter)
+
+	addTool(srv, &mcp.Tool{
 		Name:  "clear_canvas",
 		Title: "Clear a canvas",
 		Description: "Remove every block from one canvas at once and answer with its now-empty metadata. The canvas, its " +
@@ -66,8 +75,8 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 	addTool(srv, &mcp.Tool{
 		Name:  "read_canvas",
 		Title: "Read a canvas",
-		Description: "Read one canvas exactly as the user sees it: every block in order, with your ids, kinds and " +
-			"content — an html block comes back as the markup you wrote, before the app sanitizes it for display. A name " +
+		Description: "Read one canvas exactly as the user sees it: its editable front matter and every block in order, " +
+			"with your ids, kinds and content — an html block comes back as the markup you wrote, before the app sanitizes it for display. A name " +
 			"nothing was written under is not_found — use list_canvases to see what exists. Use this to re-orient after " +
 			"a long conversation instead of assuming what you last wrote.",
 	}, ctrl.ReadCanvas)
@@ -142,6 +151,12 @@ type removeBlockInput struct {
 	ID      string `json:"id"      jsonschema:"The id of the block to remove, as given to put_block."`
 }
 
+type setFrontmatterInput struct {
+	Session     string         `json:"session"     jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
+	Canvas      string         `json:"canvas"      jsonschema:"The existing canvas whose editable front matter to replace."`
+	Frontmatter map[string]any `json:"frontmatter" jsonschema:"The complete editable front matter. Keys use letters, digits, dots, hyphens, or underscores. Values are strings, finite numbers, booleans, null, or flat lists of those values. created_at and updated_at are reserved and populated by Hive."`
+}
+
 type canvasBlock struct {
 	ID        string `json:"id"              jsonschema:"The agent-chosen id put_block was called with."`
 	Kind      string `json:"kind"            jsonschema:"markdown, html or link."`
@@ -153,14 +168,15 @@ type canvasBlock struct {
 }
 
 type canvasResult struct {
-	Workspace   string        `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, owner/repo for a hive session's repository, or @global."`
-	Name        string        `json:"name"`
-	Title       string        `json:"title,omitempty"`
-	Session     string        `json:"session"               jsonschema:"The chat UUID that created this canvas, or empty."`
-	HiveSession string        `json:"hiveSession,omitempty" jsonschema:"The hive session that created this canvas, when no chat did."`
-	CreatedAt   int64         `json:"createdAt"`
-	UpdatedAt   int64         `json:"updatedAt"`
-	Blocks      []canvasBlock `json:"blocks"                jsonschema:"Every block, in display order."`
+	Workspace   string         `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, owner/repo for a hive session's repository, or @global."`
+	Name        string         `json:"name"`
+	Title       string         `json:"title,omitempty"`
+	Session     string         `json:"session"               jsonschema:"The chat UUID that created this canvas, or empty."`
+	HiveSession string         `json:"hiveSession,omitempty" jsonschema:"The hive session that created this canvas, when no chat did."`
+	CreatedAt   int64          `json:"createdAt"`
+	UpdatedAt   int64          `json:"updatedAt"`
+	Frontmatter map[string]any `json:"frontmatter"           jsonschema:"Agent-editable front matter. created_at and updated_at are exposed separately and added on Markdown export."`
+	Blocks      []canvasBlock  `json:"blocks"                jsonschema:"Every block, in display order."`
 }
 
 type canvasMetaResult struct {
@@ -178,15 +194,16 @@ type canvasMetaResult struct {
 // surface into the agent's context. Block carries the stored block for a
 // single-block write; read_canvas returns the full surface.
 type canvasWriteResult struct {
-	Workspace   string       `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, owner/repo for a hive session's repository, or @global."`
-	Name        string       `json:"name"`
-	Title       string       `json:"title,omitempty"`
-	Session     string       `json:"session"               jsonschema:"The chat UUID that created this canvas, or empty."`
-	HiveSession string       `json:"hiveSession,omitempty" jsonschema:"The hive session that created this canvas, when no chat did."`
-	CreatedAt   int64        `json:"createdAt"`
-	UpdatedAt   int64        `json:"updatedAt"`
-	BlockCount  int          `json:"blockCount"`
-	Block       *canvasBlock `json:"block,omitempty"       jsonschema:"The block as stored, echoed for a single-block write."`
+	Workspace   string         `json:"workspace"             jsonschema:"What this canvas belongs to: a workspace, owner/repo for a hive session's repository, or @global."`
+	Name        string         `json:"name"`
+	Title       string         `json:"title,omitempty"`
+	Session     string         `json:"session"               jsonschema:"The chat UUID that created this canvas, or empty."`
+	HiveSession string         `json:"hiveSession,omitempty" jsonschema:"The hive session that created this canvas, when no chat did."`
+	CreatedAt   int64          `json:"createdAt"`
+	UpdatedAt   int64          `json:"updatedAt"`
+	Frontmatter map[string]any `json:"frontmatter"           jsonschema:"Agent-editable front matter. created_at and updated_at are exposed separately and added on Markdown export."`
+	BlockCount  int            `json:"blockCount"`
+	Block       *canvasBlock   `json:"block,omitempty"       jsonschema:"The block as stored, echoed for a single-block write."`
 }
 
 type canvasListResult struct {
@@ -230,6 +247,14 @@ func (ctrl *CanvasController) PutBlocks(ctx context.Context, _ *mcp.CallToolRequ
 
 func (ctrl *CanvasController) RemoveBlock(ctx context.Context, _ *mcp.CallToolRequest, in removeBlockInput) (*mcp.CallToolResult, canvasWriteResult, error) {
 	c, err := ctrl.core.Canvas.RemoveBlock(ctx, in.Session, in.Canvas, in.ID)
+	if err != nil {
+		return nil, canvasWriteResult{}, ctrl.toolError(err)
+	}
+	return nil, canvasWriteResultFrom(c, ""), nil
+}
+
+func (ctrl *CanvasController) SetFrontmatter(ctx context.Context, _ *mcp.CallToolRequest, in setFrontmatterInput) (*mcp.CallToolResult, canvasWriteResult, error) {
+	c, err := ctrl.core.Canvas.SetFrontmatter(ctx, in.Session, in.Canvas, in.Frontmatter)
 	if err != nil {
 		return nil, canvasWriteResult{}, ctrl.toolError(err)
 	}
@@ -291,7 +316,7 @@ func (ctrl *CanvasController) ListCanvases(ctx context.Context, _ *mcp.CallToolR
 func canvasWriteResultFrom(c canvas.Canvas, blockID string) canvasWriteResult {
 	res := canvasWriteResult{
 		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
-		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, BlockCount: len(c.Blocks),
+		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: c.Frontmatter, BlockCount: len(c.Blocks),
 	}
 	for _, b := range c.Blocks {
 		if b.ID == blockID {
@@ -315,6 +340,6 @@ func canvasResultFrom(c canvas.Canvas) canvasResult {
 	}
 	return canvasResult{
 		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
-		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Blocks: blocks,
+		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: c.Frontmatter, Blocks: blocks,
 	}
 }

@@ -212,6 +212,9 @@ export interface CanvasBlock {
   updatedAt: number
 }
 
+export type CanvasFrontmatterScalar = string | number | boolean | null
+export type CanvasFrontmatterValue = CanvasFrontmatterScalar | CanvasFrontmatterScalar[]
+
 /**
  * One named canvas, blocks in display order. `workspace` is its owner key: a
  * workspace's directory name, or `owner/repo` for a repository's canvases.
@@ -226,6 +229,7 @@ export interface WorkspaceCanvas {
   hiveSession: string
   createdAt: number
   updatedAt: number
+  frontmatter: Record<string, CanvasFrontmatterValue>
   blocks: CanvasBlock[]
 }
 
@@ -371,6 +375,8 @@ export interface AgentWorkspacesClient {
   canvas(workspace: string, name: string): Promise<WorkspaceCanvas>
   /** An owner's canvases, most recently updated first — metadata only. */
   canvases(workspace: string): Promise<WorkspaceCanvasMeta[]>
+  /** Delete one user-selected canvas from its owner. */
+  deleteCanvas(workspace: string, name: string): Promise<void>
   /** The owner key of every repository that holds a canvas. */
   canvasRepositories(): Promise<string[]>
   /** One canvas rendered as a standalone markdown document — the copy action. */
@@ -523,11 +529,14 @@ export function createAgentWorkspacesClient(endpoint: AgentsEndpoint): AgentWork
     async canvas(workspace, name) {
       const body = await post<WorkspaceCanvas>('/canvas', { workspace, name })
       if (!body) throw new AgentRequestError('the canvas could not be read', '')
-      return { ...body, blocks: body.blocks ?? [] }
+      return { ...body, frontmatter: body.frontmatter ?? {}, blocks: body.blocks ?? [] }
     },
     async canvases(workspace) {
       const body = await post<{ canvases: WorkspaceCanvasMeta[] | null }>('/canvases', { workspace })
       return body?.canvases ?? []
+    },
+    async deleteCanvas(workspace, name) {
+      await post('/canvas/delete', { workspace, name })
     },
     async canvasRepositories() {
       const body = await post<{ repositories: string[] | null }>('/canvas/repositories', {})

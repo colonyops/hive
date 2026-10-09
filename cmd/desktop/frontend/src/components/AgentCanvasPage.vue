@@ -2,8 +2,8 @@
 // The full-page canvas view: one owner's canvases read as a small wiki, the
 // listing in a sidebar and the pane's reader beside it. An owner is an agent
 // workspace or a repository whose Code sessions wrote canvases. It opens in a
-// HubOverlay over whatever is on screen, like Tasks, and is read-only for the
-// pane's reason: canvas writes arrive only through the hive-canvas MCP tools.
+// HubOverlay over whatever is on screen, like Tasks. Agents own block and
+// front matter edits; the user's only content action is confirmed deletion.
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import IconCode from '~icons/lucide/code'
 import IconGlobe from '~icons/lucide/globe'
@@ -99,6 +99,11 @@ function openCanvas(name: string): void {
   emit('update:scope', { ...props.scope, workspace: workspace.value, name })
 }
 
+function canvasDeleted(name: string): void {
+  if (props.scope.name === name) emit('update:scope', { ...props.scope, workspace: workspace.value, name: null })
+  wake()
+}
+
 const title = computed(() => canvas.value?.title || shown.value || 'Canvases')
 
 // The pane's reason: Hive wires a workspace's agent, never a Code session's.
@@ -144,6 +149,7 @@ useEscapeToClose(() => emit('close'))
           :client="client"
           size="lg"
           testid="canvas-page"
+          @deleted="canvasDeleted"
         />
         <IconButton label="Close" :icon="IconX" size="lg" data-testid="canvas-page-close" @click="emit('close')" />
       </template>

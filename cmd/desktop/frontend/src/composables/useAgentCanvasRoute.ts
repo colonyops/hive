@@ -41,10 +41,12 @@ export function useAgentCanvasRoute() {
 
   // Written with replace so history never stacks. A bare open (no name) keeps
   // whatever name the query already carried, falling back to '1' — "you pick".
-  function syncCanvasQuery(open: boolean, name?: string): void {
+  function syncCanvasQuery(open: boolean, name?: string | null): void {
     if (!onCanvasRoute.value) return
     const next = open
-      ? (name ?? (typeof route.query.canvas === 'string' && route.query.canvas !== '' ? route.query.canvas : '1'))
+      ? name === null
+        ? '1'
+        : (name ?? (typeof route.query.canvas === 'string' && route.query.canvas !== '' ? route.query.canvas : '1'))
       : undefined
     if (route.query.canvas === next) return
     void router.replace({ name: route.name, params: route.params, query: { ...route.query, canvas: next } })

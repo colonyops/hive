@@ -1,11 +1,13 @@
 <script setup lang="ts">
-// Copy and save for the canvas on screen, as Markdown.
 import { Dialogs } from '@wailsio/runtime'
 import IconCheck from '~icons/lucide/check'
 import IconCopy from '~icons/lucide/copy'
 import IconDownload from '~icons/lucide/download'
+import IconTrash2 from '~icons/lucide/trash-2'
+import ConfirmationHost from './ui/ConfirmationHost.vue'
 import IconButton from './ui/IconButton.vue'
 import { useClipboard } from '../composables/useClipboard'
+import { useConfirmation } from '../composables/useConfirmation'
 import type { AgentWorkspacesClient } from '../lib/agentWorkspacesClient'
 
 const props = defineProps<{
@@ -13,9 +15,10 @@ const props = defineProps<{
   name: string
   client: AgentWorkspacesClient | null
   size?: 'md' | 'lg'
-  /** Derives `-copy` and `-download`. */
+  /** Derives `-copy`, `-download`, and `-delete`. */
   testid: string
 }>()
+const emit = defineEmits<{ deleted: [name: string] }>()
 
 // Copy is fetch-first (usePrompts' shape): the Go side renders the markdown
 // so copy and save can never disagree, and a failure before SetText is still
@@ -45,6 +48,23 @@ async function downloadCanvas(): Promise<void> {
     setSaveStatus('error')
   }
 }
+
+const deletion = useConfirmation()
+function requestDelete(): void {
+  const client = props.client
+  if (!client) return
+  const { workspace, name } = props
+  deletion.request({
+    title: 'Delete canvas',
+    description: `Delete ${name}? This removes the canvas and all of its blocks. This cannot be undone.`,
+    confirmLabel: 'Delete canvas',
+    testid: `${props.testid}-delete-confirmation`,
+    onConfirm: async () => {
+      await client.deleteCanvas(workspace, name)
+      emit('deleted', name)
+    },
+  })
+}
 </script>
 
 <template>
@@ -64,4 +84,13 @@ async function downloadCanvas(): Promise<void> {
     :data-testid="`${testid}-download`"
     @click="downloadCanvas"
   />
+  <IconButton
+    label="Delete canvas"
+    :icon="IconTrash2"
+    :size="size"
+    tone="danger"
+    :data-testid="`${testid}-delete`"
+    @click="requestDelete"
+  />
+  <ConfirmationHost :confirmation="deletion" />
 </template>

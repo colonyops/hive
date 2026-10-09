@@ -61,12 +61,20 @@ function meta(overrides: Partial<WorkspaceCanvasMeta>): WorkspaceCanvasMeta {
 
 function fakeCanvasClient(blocks: CanvasBlock[], metas: WorkspaceCanvasMeta[] = [meta({})]) {
   return {
-    canvas: vi
-      .fn()
-      .mockImplementation((workspace: string, name: string) =>
-        Promise.resolve({ workspace, name, title: '', session: '7', createdAt: 1, updatedAt: 1, blocks }),
-      ),
+    canvas: vi.fn().mockImplementation((workspace: string, name: string) =>
+      Promise.resolve({
+        workspace,
+        name,
+        title: '',
+        session: '7',
+        createdAt: 1,
+        updatedAt: 2,
+        frontmatter: { tags: ['release', 'desktop'] },
+        blocks,
+      }),
+    ),
     canvases: vi.fn().mockResolvedValue(metas),
+    deleteCanvas: vi.fn().mockResolvedValue(undefined),
     canvasMarkdown: vi.fn().mockResolvedValue('# The Plan\n\nhello\n'),
     exportCanvas: vi.fn().mockResolvedValue(undefined),
   } as unknown as AgentWorkspacesClient
@@ -412,6 +420,19 @@ describe('AgentCanvasPane', () => {
     expect(browse).toContain('Older')
   })
 
+  it('renders editable front matter and automatic timestamps above the blocks', async () => {
+    const wrapper = await mountPane(fakeCanvasClient([block({ id: 'doc', body: 'hello' })]))
+
+    expect(wrapper.get('[data-testid="agent-canvas-frontmatter-tags"]').text()).toContain('release')
+    expect(wrapper.get('[data-testid="agent-canvas-frontmatter-tags"]').text()).toContain('desktop')
+    expect(wrapper.get('[data-testid="agent-canvas-frontmatter-created_at"] time').attributes('datetime')).toBe(
+      '1970-01-01T00:00:00.001Z',
+    )
+    expect(wrapper.get('[data-testid="agent-canvas-frontmatter-updated_at"] time').attributes('datetime')).toBe(
+      '1970-01-01T00:00:00.002Z',
+    )
+  })
+
   it('copies the Go-rendered markdown to the native clipboard', async () => {
     const client = fakeCanvasClient([])
     const wrapper = await mountPane(client)
@@ -421,6 +442,19 @@ describe('AgentCanvasPane', () => {
 
     expect(vi.mocked(client.canvasMarkdown)).toHaveBeenCalledWith('web-app', 'plan')
     expect(runtime.setText).toHaveBeenCalledWith('# The Plan\n\nhello\n')
+  })
+
+  it('deletes after confirmation and selects the next canvas', async () => {
+    const client = fakeCanvasClient([], [meta({ name: 'plan' }), meta({ name: 'report' })])
+    const wrapper = await mountPane(client, 'plan')
+
+    await wrapper.get('[data-testid="agent-canvas-delete"]').trigger('click')
+    expect(vi.mocked(client.deleteCanvas)).not.toHaveBeenCalled()
+    document.querySelector<HTMLButtonElement>('[data-testid="agent-canvas-delete-confirmation-confirm"]')?.click()
+    await flushPromises()
+
+    expect(vi.mocked(client.deleteCanvas)).toHaveBeenCalledWith('web-app', 'plan')
+    expect(wrapper.emitted('pick')).toEqual([['report']])
   })
 
   it('saves through the native dialog and skips a cancelled one', async () => {

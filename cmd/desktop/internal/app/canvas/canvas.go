@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,6 +21,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/yaml.v3"
 
 	"github.com/colonyops/hive/pkg/atomicfile"
 )
@@ -42,6 +45,10 @@ var ErrNotFound = errors.New("canvas: not found")
 // itself.
 var ErrAnchorNotFound = errors.New("canvas: anchor block not found")
 
+// ErrInvalidFrontmatter reports metadata that cannot be represented as safe,
+// flat YAML front matter. The two timestamp keys are owned by the canvas.
+var ErrInvalidFrontmatter = errors.New("canvas: invalid front matter")
+
 const (
 	KindMarkdown = "markdown"
 	KindLink     = "link"
@@ -53,7 +60,14 @@ const (
 // this name, so nothing else ever writes or prunes here.
 const DirName = "canvases"
 
-const maxNameLength = 100
+const (
+	maxNameLength          = 100
+	maxFrontmatterKeys     = 50
+	maxFrontmatterKeyBytes = 64
+	maxFrontmatterText     = 4096
+	maxFrontmatterList     = 50
+	maxFrontmatterBytes    = 64 * 1024
+)
 
 // namePattern is the canvas-name slug rule: lowercase alphanumeric with
 // dots, hyphens and underscores inside. Lowercase-only because the file name
@@ -61,6 +75,8 @@ const maxNameLength = 100
 // "report" must not be two canvases that collide on disk. No leading dot, so
 // a name can never shadow a generated dot-directory.
 var namePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$`)
+
+var frontmatterKeyPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
 
 // Block is one entry on a canvas. Kind decides which content field is set:
 // markdown and html carry Body, link carries URL. An html block's Body is
@@ -83,14 +99,15 @@ type Block struct {
 // provenance for labeling, never authorization: a canvas belongs to its
 // owner, not to its author.
 type Canvas struct {
-	Workspace   string  `json:"workspace"`
-	Name        string  `json:"name"`
-	Title       string  `json:"title,omitempty"`
-	Session     string  `json:"session"`
-	HiveSession string  `json:"hiveSession,omitempty"`
-	CreatedAt   int64   `json:"createdAt"`
-	UpdatedAt   int64   `json:"updatedAt"`
-	Blocks      []Block `json:"blocks"`
+	Workspace   string         `json:"workspace"`
+	Name        string         `json:"name"`
+	Title       string         `json:"title,omitempty"`
+	Session     string         `json:"session"`
+	HiveSession string         `json:"hiveSession,omitempty"`
+	CreatedAt   int64          `json:"createdAt"`
+	UpdatedAt   int64          `json:"updatedAt"`
+	Frontmatter map[string]any `json:"frontmatter,omitempty"`
+	Blocks      []Block        `json:"blocks"`
 }
 
 // Author is who wrote a canvas first: a chat by its record id, or a hive
@@ -153,15 +170,20 @@ type Meta struct {
 	BlockCount  int    `json:"blockCount"`
 }
 
-// Markdown renders a canvas as one standalone document: the canvas title as
-// a top-level heading, each markdown block's title demoted beneath it, and
-// link blocks as plain markdown links. An html block is emitted as its
-// sanitized markup, which most markdown viewers render; the hv- class names
-// mean nothing outside the app, so an export keeps the structure and loses
-// the styling. It is the export shape behind the pane's copy and save
-// actions, so both always agree.
-func Markdown(c Canvas) string {
+// Markdown renders a canvas as one standalone document. Automatic timestamps
+// and agent-authored metadata form a YAML header; the body contains the canvas
+// title and blocks. An html block is emitted as sanitized markup. It is the
+// export shape behind the pane's copy and save actions, so both always agree.
+func Markdown(c Canvas) (string, error) {
+	header, err := markdownFrontmatter(c)
+	if err != nil {
+		return "", err
+	}
+
 	var b strings.Builder
+	b.WriteString("---\n")
+	b.Write(header)
+	b.WriteString("---\n\n")
 	if c.Title != "" {
 		b.WriteString("# " + c.Title + "\n\n")
 	}
@@ -185,7 +207,40 @@ func Markdown(c Canvas) string {
 		}
 	}
 	b.WriteString("\n")
-	return b.String()
+	return b.String(), nil
+}
+
+func markdownFrontmatter(c Canvas) ([]byte, error) {
+	if err := ValidateFrontmatter(c.Frontmatter); err != nil {
+		return nil, err
+	}
+	root := yaml.Node{Kind: yaml.MappingNode}
+	appendYAMLPair := func(key string, value any) error {
+		keyNode := yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: key}
+		var valueNode yaml.Node
+		if err := valueNode.Encode(value); err != nil {
+			return fmt.Errorf("encode front matter %q: %w", key, err)
+		}
+		root.Content = append(root.Content, &keyNode, &valueNode)
+		return nil
+	}
+	if err := appendYAMLPair("created_at", time.UnixMilli(c.CreatedAt).UTC().Format(time.RFC3339Nano)); err != nil {
+		return nil, err
+	}
+	if err := appendYAMLPair("updated_at", time.UnixMilli(c.UpdatedAt).UTC().Format(time.RFC3339Nano)); err != nil {
+		return nil, err
+	}
+	keys := make([]string, 0, len(c.Frontmatter))
+	for key := range c.Frontmatter {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if err := appendYAMLPair(key, c.Frontmatter[key]); err != nil {
+			return nil, err
+		}
+	}
+	return yaml.Marshal(&root)
 }
 
 // Roots locates canvases on disk by what owns them.
@@ -244,7 +299,7 @@ func (s *Store) Upsert(workspace, name string, author Author, title, before stri
 	if !ok {
 		c = Canvas{
 			Workspace: workspace, Name: name, Session: author.Session, HiveSession: author.HiveSession,
-			CreatedAt: nowMillis, Blocks: []Block{},
+			CreatedAt: nowMillis, Frontmatter: map[string]any{}, Blocks: []Block{},
 		}
 	}
 	if title != "" {
@@ -322,6 +377,31 @@ func (s *Store) Remove(workspace, name, blockID string) (Canvas, bool, error) {
 	return c, true, nil
 }
 
+// SetFrontmatter replaces every editable metadata field on an existing
+// canvas. The canvas-owned created_at and updated_at fields are derived from
+// its timestamps and never stored in this map.
+func (s *Store) SetFrontmatter(workspace, name string, frontmatter map[string]any) (Canvas, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := ValidateFrontmatter(frontmatter); err != nil {
+		return Canvas{}, err
+	}
+	c, ok, err := s.load(workspace, name)
+	if err != nil {
+		return Canvas{}, err
+	}
+	if !ok {
+		return Canvas{}, fmt.Errorf("%w: %s/%s", ErrNotFound, workspace, name)
+	}
+	c.Frontmatter = cloneFrontmatter(frontmatter)
+	c.UpdatedAt = s.now().UnixMilli()
+	if err := s.write(c); err != nil {
+		return Canvas{}, err
+	}
+	return c, nil
+}
+
 // Clear empties an existing canvas but keeps it: the file, its title and its
 // CreatedAt survive, so a clear reads as a fresh layout in the same pane,
 // not a deletion. A canvas that does not exist is ErrNotFound.
@@ -385,22 +465,27 @@ func (s *Store) List(workspace string) ([]Meta, error) {
 	return metas, nil
 }
 
-// Delete removes one canvas file, reporting whether it existed.
-func (s *Store) Delete(workspace, name string) (bool, error) {
+// Delete removes one canvas file and returns what was deleted. The caller can
+// use its author to publish the same update signal as other mutations.
+func (s *Store) Delete(workspace, name string) (Canvas, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	c, ok, err := s.load(workspace, name)
+	if err != nil || !ok {
+		return Canvas{}, ok, err
+	}
 	path, err := s.path(workspace, name)
 	if err != nil {
-		return false, err
+		return Canvas{}, false, err
 	}
 	if err := os.Remove(path); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
+			return Canvas{}, false, nil
 		}
-		return false, fmt.Errorf("canvas: delete %s/%s: %w", workspace, name, err)
+		return Canvas{}, false, fmt.Errorf("canvas: delete %s/%s: %w", workspace, name, err)
 	}
-	return true, nil
+	return c, true, nil
 }
 
 func (s *Store) load(workspace, name string) (Canvas, bool, error) {
@@ -421,6 +506,12 @@ func (s *Store) load(workspace, name string) (Canvas, bool, error) {
 	}
 	c.Workspace = workspace
 	c.Name = name
+	if c.Frontmatter == nil {
+		c.Frontmatter = map[string]any{}
+	}
+	if err := ValidateFrontmatter(c.Frontmatter); err != nil {
+		return Canvas{}, false, fmt.Errorf("canvas: parse %s/%s: %w", workspace, name, err)
+	}
 	if c.Blocks == nil {
 		c.Blocks = []Block{}
 	}
@@ -567,4 +658,76 @@ func nameFromFilename(filename string) (string, bool) {
 		return "", false
 	}
 	return base, true
+}
+
+// ValidateFrontmatter accepts a flat YAML-style mapping whose values are
+// scalars or scalar lists. Nested objects and lists are refused because the
+// reader presents this as a compact property list, not a second document.
+func ValidateFrontmatter(frontmatter map[string]any) error {
+	if len(frontmatter) > maxFrontmatterKeys {
+		return fmt.Errorf("%w: too many fields (%d max)", ErrInvalidFrontmatter, maxFrontmatterKeys)
+	}
+	for key, value := range frontmatter {
+		if len(key) > maxFrontmatterKeyBytes || !frontmatterKeyPattern.MatchString(key) {
+			return fmt.Errorf("%w: key %q must use letters, digits, dots, hyphens, or underscores", ErrInvalidFrontmatter, key)
+		}
+		if strings.EqualFold(key, "created_at") || strings.EqualFold(key, "updated_at") {
+			return fmt.Errorf("%w: %q is managed by Hive", ErrInvalidFrontmatter, key)
+		}
+		if err := validateFrontmatterValue(value, false); err != nil {
+			return fmt.Errorf("%w: %q: %w", ErrInvalidFrontmatter, key, err)
+		}
+	}
+	data, err := json.Marshal(frontmatter)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidFrontmatter, err)
+	}
+	if len(data) > maxFrontmatterBytes {
+		return fmt.Errorf("%w: metadata is too large (%d bytes max)", ErrInvalidFrontmatter, maxFrontmatterBytes)
+	}
+	return nil
+}
+
+func validateFrontmatterValue(value any, inList bool) error {
+	switch value := value.(type) {
+	case nil, bool, float32, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return nil
+	case float64:
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return errors.New("number must be finite")
+		}
+		return nil
+	case string:
+		if len(value) > maxFrontmatterText {
+			return fmt.Errorf("text is too long (%d bytes max)", maxFrontmatterText)
+		}
+		return nil
+	case []any:
+		if inList {
+			return errors.New("nested lists are not allowed")
+		}
+		if len(value) > maxFrontmatterList {
+			return fmt.Errorf("list has too many values (%d max)", maxFrontmatterList)
+		}
+		for _, item := range value {
+			if err := validateFrontmatterValue(item, true); err != nil {
+				return err
+			}
+		}
+		return nil
+	default:
+		return fmt.Errorf("value has unsupported type %T; use a scalar or a list of scalars", value)
+	}
+}
+
+func cloneFrontmatter(frontmatter map[string]any) map[string]any {
+	cloned := make(map[string]any, len(frontmatter))
+	for key, value := range frontmatter {
+		if list, ok := value.([]any); ok {
+			cloned[key] = append([]any(nil), list...)
+			continue
+		}
+		cloned[key] = value
+	}
+	return cloned
 }
