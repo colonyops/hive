@@ -5,6 +5,8 @@ import { useDriveRoute } from '../composables/useDriveRoute'
 import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveActivity } from '../stores/useDriveActivity'
+
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import { createLogger } from '../lib/log'
@@ -32,6 +34,8 @@ export function useAppMode(
   const { route, router } = nav
   const { routeChatId, docRequested, docPath, docUnseen, syncDocQuery } = useDriveRoute()
   const activity = useDriveActivity()
+
+  const codeInstallation = useCodeInstallation()
   const { recents } = useAgentSessionsAll()
   const { sessions: codeSessions } = useTerminalSessions()
 
@@ -112,7 +116,11 @@ export function useAppMode(
 
   // The URL is the attach state, so it is also which session is on screen.
   const onScreenSessionSlug = computed(() =>
-    route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : '',
+    route.name === 'terminal' &&
+    codeInstallation.installation.value === 'local' &&
+    typeof route.params.slug === 'string'
+      ? route.params.slug
+      : '',
   )
 
   const feedSidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)

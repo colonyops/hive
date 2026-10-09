@@ -1386,6 +1386,24 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 `Area` value and a case there, and a link only ever navigates
 ([ADR hive-desktop-is-addressed-by-hive-urls-not-by-its-internal-routes](decisions/2026-10-10-hive-desktop-is-addressed-by-hive-urls-not-by-its-internal-routes.md)).
 
+### Remote Code
+
+Code has separate Local and Remote views. Remote Code accepts a loopback SSH
+forward, authenticates discovery at `/api/terminal/remote/sessions`, checks
+control and terminal wire versions, and reuses the terminal client/renderer.
+Session IDs and tmux slugs remain scoped to that endpoint; remote rows never
+enter local session caches or filesystem services. The first slice attaches
+existing sessions only. The installation choice also gates local terminal
+commands; New Session switches back to Local.
+
+A `server,terminals` build opts into tmux control mode; ordinary `server` builds
+retain the unavailable behavior used by UI tests. Popup PTYs remain disabled.
+Server builds omit native notifications. `HIVE_DESKTOP_CONNECTION_FILE` exports
+the per-run token privately for SSH retrieval; clients keep it in memory.
+The Docker fixture under `cmd/desktop/remote/` exercises this boundary with
+persistent remote state and only an SSH port published on host loopback.
+ADR [remote-code-attaches-through-an-ssh-forwarded-terminal-api](decisions/2026-10-09-remote-code-attaches-through-an-ssh-forwarded-terminal-api.md).
+
 ### Terminal sessions
 
 **Image input is local file references.** Wails routes native drops to a specific

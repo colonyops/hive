@@ -1,0 +1,15 @@
+version: "0.2.7"
+git_path: git
+workspaces:
+  - /home/hive/repos
+agents:
+  default: shell
+  shell:
+    command: bash
+rules:
+  - pattern: ".*"
+    windows:
+      - name: shell
+        command: bash
+      - name: second
+        command: bash

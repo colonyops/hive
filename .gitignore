@@ -63,3 +63,5 @@ overrides.env
 # svx stack state and per-checkout overrides
 .svx/
 svx.local.yaml
+
+.hive-remote/
