@@ -65,7 +65,10 @@ pre-push:
   piped: true
   jobs:
     - name: check
-      run: mise run check
+      run: |
+        # Tests create temporary repositories; hook-local Git state must not follow them.
+        unset $(git rev-parse --local-env-vars)
+        mise run check
 
     - name: frontend-test
       glob: "cmd/desktop/frontend/*"
