@@ -1296,6 +1296,18 @@ describe('TerminalMode', () => {
     expect(mocks.SetClipboardText).toHaveBeenCalledWith(session.error.value)
   })
 
+  it('offers Restart, not Reconnect, for a launch that did not finish', async () => {
+    const { wrapper, session } = await mountAvailable()
+    await sessionRows(wrapper)[0].trigger('click')
+    session.endReason.value = 'interrupted'
+    session.status.value = 'ended'
+    session.error.value = 'tmux session launch is in progress or was interrupted: hive-fix-parser'
+    await flushPromises()
+    expect(wrapper.get('[data-testid="terminal-session-ended-title"]').text()).toBe('Session launch did not finish')
+    expect(wrapper.find('[data-testid="terminal-reconnect"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="terminal-restart"]').text()).toBe('Restart')
+  })
+
   it('renders a finite successful launch as completed rather than broken', async () => {
     const start = vi.fn().mockResolvedValue({ created: true, completed: true })
     mocks.createTerminalClient.mockReturnValue({ start, listWindows: fakeListWindows() })

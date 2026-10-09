@@ -1355,6 +1355,19 @@ describe('useTerminalWindows', () => {
     expect(session.error.value).toBe('session "hive-abc" is not running')
   })
 
+  it('reports an uncommitted launch as interrupted so the view offers a start', async () => {
+    const client = fakeClient()
+    client.attach.mockRejectedValue(
+      new TerminalRequestError('tmux session launch is in progress or was interrupted: hive-abc', 'conflict'),
+    )
+    const session = open(client)
+
+    await session.start()
+
+    expect(session.endReason.value).toBe('interrupted')
+    expect(session.error.value).toContain('launch is in progress or was interrupted')
+  })
+
   it('reports termination without diagnostics after a dropped stream and an absent listing', async () => {
     const { session, socket } = await attached()
     socket.onclose?.()

@@ -942,6 +942,12 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         else end('not-started', e.message)
         return
       }
+      // Attach answers conflict only for a launch that has not committed. A
+      // retry of the attach cannot clear that; a start recovers the session.
+      if (e instanceof TerminalRequestError && e.kind === 'conflict') {
+        end('interrupted', e.message)
+        return
+      }
       end('attach-failed', message(e, 'Could not attach to this session.'))
     }
   }

@@ -43,7 +43,7 @@ const activeScrolledUp = computed(() =>
 const status = computed(() => visible.value?.status.value ?? 'connecting')
 const endReason = computed(() => visible.value?.endReason.value ?? null)
 const notStarted = computed(() => endReason.value === 'not-started' || endReason.value === 'start-failed')
-const canRestart = computed(() => ['terminated', 'completed', 'stopped'].includes(endReason.value ?? ''))
+const canRestart = computed(() => ['terminated', 'completed', 'stopped', 'interrupted'].includes(endReason.value ?? ''))
 const endedTitle = computed(() => {
   switch (endReason.value) {
     case 'terminated':
@@ -52,6 +52,8 @@ const endedTitle = computed(() => {
       return 'Session completed'
     case 'stopped':
       return 'Terminal stopped'
+    case 'interrupted':
+      return 'Session launch did not finish'
     case 'disconnected':
       return 'Terminal connection lost'
     case 'exited':

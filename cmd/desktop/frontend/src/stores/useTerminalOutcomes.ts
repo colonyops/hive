@@ -5,6 +5,7 @@ export type TerminalEndReason =
   | 'not-started'
   | 'start-failed'
   | 'attach-failed'
+  | 'interrupted'
   | 'exited'
   | 'terminated'
   | 'completed'
