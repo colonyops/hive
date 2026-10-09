@@ -375,7 +375,6 @@ export interface AgentWorkspacesClient {
   canvas(workspace: string, name: string): Promise<WorkspaceCanvas>
   /** An owner's canvases, most recently updated first — metadata only. */
   canvases(workspace: string): Promise<WorkspaceCanvasMeta[]>
-  /** Delete one user-selected canvas from its owner. */
   deleteCanvas(workspace: string, name: string): Promise<void>
   /** The owner key of every repository that holds a canvas. */
   canvasRepositories(): Promise<string[]>

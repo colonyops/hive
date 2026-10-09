@@ -1,9 +1,6 @@
 <script setup lang="ts">
-// The full-page canvas view: one owner's canvases read as a small wiki, the
-// listing in a sidebar and the pane's reader beside it. An owner is an agent
-// workspace or a repository whose Code sessions wrote canvases. It opens in a
-// HubOverlay over whatever is on screen, like Tasks. Agents own block and
-// front matter edits; the user's only content action is confirmed deletion.
+// Agents own block and front matter edits; users can only delete a complete
+// canvas after confirmation.
 import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import IconCode from '~icons/lucide/code'
 import IconGlobe from '~icons/lucide/globe'

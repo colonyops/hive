@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// A workspace's canvases: agent-written markdown, Mermaid, html and link blocks.
-// Block and front matter writes arrive through the hive-canvas MCP tools. The
-// user may delete the canvas after confirmation.
+// Agents edit blocks and front matter through hive-canvas; users can only
+// delete a complete canvas after confirmation.
 import IconButton from './ui/IconButton.vue'
 import { computed, ref, toRef, watch } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'

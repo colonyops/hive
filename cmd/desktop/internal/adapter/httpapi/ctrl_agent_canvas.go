@@ -9,9 +9,8 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
 )
 
-// The frontend reads canvases and may delete one after user confirmation.
-// Block and front matter edits remain agent-owned through hive-canvas; export
-// writes a rendering elsewhere on disk.
+// This transport permits deletion but no block or front matter mutations;
+// those remain exclusive to hive-canvas.
 
 type agentCanvasBlock struct {
 	ID        string `json:"id"`

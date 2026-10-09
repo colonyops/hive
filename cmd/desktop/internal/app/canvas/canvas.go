@@ -45,8 +45,8 @@ var ErrNotFound = errors.New("canvas: not found")
 // itself.
 var ErrAnchorNotFound = errors.New("canvas: anchor block not found")
 
-// ErrInvalidFrontmatter reports metadata that cannot be represented as safe,
-// flat YAML front matter. The two timestamp keys are owned by the canvas.
+// ErrInvalidFrontmatter reports metadata outside the flat YAML subset or an
+// attempt to set canvas-owned timestamps.
 var ErrInvalidFrontmatter = errors.New("canvas: invalid front matter")
 
 const (
@@ -170,10 +170,8 @@ type Meta struct {
 	BlockCount  int    `json:"blockCount"`
 }
 
-// Markdown renders a canvas as one standalone document. Automatic timestamps
-// and agent-authored metadata form a YAML header; the body contains the canvas
-// title and blocks. An html block is emitted as sanitized markup. It is the
-// export shape behind the pane's copy and save actions, so both always agree.
+// Markdown renders a standalone document with timestamp and agent-authored
+// YAML metadata, the canvas title and blocks. HTML blocks use sanitized markup.
 func Markdown(c Canvas) (string, error) {
 	header, err := markdownFrontmatter(c)
 	if err != nil {

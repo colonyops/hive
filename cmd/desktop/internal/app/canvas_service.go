@@ -42,10 +42,9 @@ type canvasHiveSessions interface {
 	SessionAtPath(ctx context.Context, path string) (session.Session, bool, error)
 }
 
-// CanvasService is an owner's canvases: named, agent-written artifacts shown
-// beside a chat or a Code session. Writes arrive only through the hive-canvas
-// MCP tools; the frontend reads
-// (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
+// CanvasService owns the canvases shown beside chats and Code sessions. Agents
+// mutate blocks and front matter through hive-canvas; the frontend may delete a
+// complete canvas.
 type CanvasService struct {
 	store        *canvas.Store
 	sessions     canvasSessionResolver
@@ -250,9 +249,8 @@ func (s *CanvasService) Delete(ctx context.Context, session string, name string)
 	return nil
 }
 
-// DeleteForOwner removes one canvas selected by the user in the reader. The
-// owner and name come from the canvas already on screen rather than from an
-// agent session.
+// DeleteForOwner accepts the UI's owner key; agent deletion derives its owner
+// from the calling session.
 func (s *CanvasService) DeleteForOwner(ctx context.Context, owner, name string) error {
 	deleted, existed, err := s.store.Delete(owner, name)
 	if err != nil {
