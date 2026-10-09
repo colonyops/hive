@@ -62,10 +62,10 @@ function formatValue(value: CanvasFrontmatterValue): string {
 
 <template>
   <div class="mb-3" :data-testid="`${testid}-frontmatter`">
-    <div class="grid grid-cols-[minmax(90px,0.35fr)_minmax(0,1fr)] items-center gap-3 px-3">
+    <div class="flex flex-wrap items-center justify-between gap-2">
       <button
         type="button"
-        class="-ml-3 flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-caption font-semibold text-text-2 hover:bg-chip"
+        class="flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-caption font-semibold text-text-2 hover:bg-chip"
         :aria-expanded="frontmatterExpanded"
         :aria-label="frontmatterExpanded ? 'Collapse canvas properties' : 'Expand canvas properties'"
         :data-testid="`${testid}-frontmatter-toggle`"
@@ -79,7 +79,7 @@ function formatValue(value: CanvasFrontmatterValue): string {
         Properties
       </button>
 
-      <dl v-if="frontmatterExpanded" class="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+      <dl v-if="frontmatterExpanded" class="ml-auto flex min-w-0 flex-wrap items-baseline justify-end gap-x-4 gap-y-1">
         <div class="inline-flex items-baseline gap-1.5" :data-testid="`${testid}-frontmatter-created_at`">
           <dt class="text-micro font-medium uppercase tracking-wide text-text-4">Created</dt>
           <dd>
