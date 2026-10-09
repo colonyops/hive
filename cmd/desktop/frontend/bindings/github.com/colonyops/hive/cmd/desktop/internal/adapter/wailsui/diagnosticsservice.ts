@@ -21,6 +21,10 @@ export function Open(): $CancellablePromise<void> {
     return $Call.ByID(3040026171);
 }
 
+/**
+ * Prepare saves evidence and renders a command; only the authenticated PTY
+ * transport may execute it.
+ */
 export function Prepare(req: app$0.DiagnosticsIncident): $CancellablePromise<app$0.DiagnosticsContext> {
     return $Call.ByID(3299530178, req);
 }

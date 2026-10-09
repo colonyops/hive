@@ -1,4 +1,3 @@
-// Package diagnostics reads bounded evidence from existing log files.
 package diagnostics
 
 import (

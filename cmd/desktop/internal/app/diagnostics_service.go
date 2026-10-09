@@ -131,9 +131,9 @@ func (s *DiagnosticsService) Read(ctx context.Context, q DiagnosticsQuery) (Diag
 			if job.Error != "" {
 				severity = "error"
 			}
-			message := fmt.Sprintf("%s: %s — %s", job.Label, job.Target, job.Status)
+			message := fmt.Sprintf("%s: %s - %s", job.Label, job.Target, job.Status)
 			if job.Error != "" {
-				message += " — " + job.Error
+				message += " - " + job.Error
 			}
 			fields := map[string]string{
 				"job_id": strconv.FormatInt(job.ID, 10), "status": job.Status.String(), "label": job.Label,
