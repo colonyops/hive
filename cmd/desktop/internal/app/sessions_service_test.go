@@ -694,7 +694,7 @@ func TestSessionsService_StartTmuxSessionSpawnsTheConfiguredWindowsDetached(t *t
 	require.NoError(t, startErr)
 
 	assert.Contains(t, runner.runs, []string{"tmux", "has-session", "-t", "=review-81"})
-	assert.Contains(t, runner.runs, []string{"tmux", "new-session", "-d", "-s", "review-81", "-n", "agent", "-P", "-F", "#{session_id} #{window_id} #{pane_id}", "-c", "/tmp/review-81", "--", "cat", ";", "set-option", tmuxexec.LaunchPendingOption, "1"})
+	assert.Contains(t, runner.runs, []string{"tmux", "new-session", "-d", "-s", "review-81", "-n", "agent", "-P", "-F", "#{session_id} #{window_id} #{pane_id}", "-c", "/tmp/review-81", "--", "cat", ";", "set-option", "-t", "=review-81:", tmuxexec.LaunchPendingOption, "1"})
 	assert.Contains(t, runner.runs, []string{"tmux", "respawn-pane", "-k", "-t", "%0", "-c", "/tmp/review-81", "--", "sh", "-c", "run review-81"})
 	assert.Contains(t, runner.runs, []string{"tmux", "new-window", "-d", "-t", "=review-81:", "-n", "shell", "-P", "-F", "#{session_id} #{window_id} #{pane_id}", "-c", "/tmp/review-81"})
 	for _, run := range runner.runs {

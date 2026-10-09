@@ -127,6 +127,30 @@ func TestTmuxOpenRecoversInterruptedLaunch(t *testing.T) {
 	assertTmuxWindowNames(t, name, []string{"agent"})
 }
 
+func TestTmuxLaunchFromInsideTmuxMarksOnlyTheNewSession(t *testing.T) {
+	NewHarness(t)
+	outer, name := "launch-caller", "launch-from-inside"
+	cleanupTmuxSession(t, outer)
+	cleanupTmuxSession(t, name)
+	out, err := exec.Command("tmux", "new-session", "-d", "-s", outer, "--", "cat").CombinedOutput()
+	require.NoError(t, err, string(out))
+	info, err := exec.Command("tmux", "display-message", "-p", "-t", "="+outer+":", "#{socket_path},#{pid},#{session_id}|#{pane_id}").Output()
+	require.NoError(t, err)
+	tmuxEnv, pane, _ := strings.Cut(strings.TrimSpace(string(info)), "|")
+	t.Setenv("TMUX", tmuxEnv)
+	t.Setenv("TMUX_PANE", pane)
+
+	client := tmuxexec.NewDefault(zerolog.Nop())
+	require.NoError(t, client.CreateSession(t.Context(), launchSpec(name, multiplexer.WindowSpec{Name: "agent", Command: "sleep 600"})))
+
+	marker, err := exec.Command("tmux", "show-options", "-q", "-v", "-t", "="+outer+":", tmuxexec.LaunchPendingOption).Output()
+	require.NoError(t, err)
+	assert.Empty(t, strings.TrimSpace(string(marker)), "the caller's session must not carry the launch marker")
+	result, err := client.OpenSession(t.Context(), launchSpec(outer, multiplexer.WindowSpec{Name: "agent", Command: "sleep 600"}), multiplexer.Target{})
+	require.NoError(t, err)
+	assert.False(t, result.Created, "opening the caller's session must not treat it as an interrupted launch")
+}
+
 func TestTmuxConcurrentOpenCreatesOneSession(t *testing.T) {
 	NewHarness(t)
 	name := "launch-concurrent"

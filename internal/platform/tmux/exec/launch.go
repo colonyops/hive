@@ -73,10 +73,16 @@ type launch struct {
 type LaunchError struct {
 	Session string
 	Phase   LaunchPhase
-	Err     error
+	// AddedWindows is true when the launch added windows to a session that
+	// already existed, so the session itself did not fail.
+	AddedWindows bool
+	Err          error
 }
 
 func (e *LaunchError) Error() string {
+	if e.AddedWindows {
+		return fmt.Sprintf("new windows in tmux session %q failed to start: %v", e.Session, e.Err)
+	}
 	return fmt.Sprintf("tmux session %q failed to start: %v", e.Session, e.Err)
 }
 
@@ -135,7 +141,7 @@ func (l *launch) fail(ctx context.Context, err error) error {
 		l.phase = LaunchPhaseCleanupIncomplete
 		err = errors.Join(err, &CleanupError{Resources: resources, Err: errors.Join(failures...)})
 	}
-	return &LaunchError{Session: l.name, Phase: failedPhase, Err: err}
+	return &LaunchError{Session: l.name, Phase: failedPhase, AddedWindows: !l.ownsSession, Err: err}
 }
 
 func (l *launch) allRemoved() bool {

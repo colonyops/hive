@@ -305,6 +305,7 @@ func TestAddWindowsFailurePreservesExistingSession(t *testing.T) {
 	runner := &startupRunner{listPanes: func(int) string { return "%0|0||\n%1|1|1|\n" }}
 	err := newStartupClient(runner, 0).AddWindows(t.Context(), multiplexer.Target{Session: "work"}, []multiplexer.WindowSpec{{Name: "healthy", Command: "agent"}, {Name: "failed", Command: "bad"}})
 	require.ErrorIs(t, err, ErrCommandExited)
+	assert.Contains(t, err.Error(), `new windows in tmux session "work" failed to start`)
 	assert.Empty(t, runner.find("kill-session"))
 	assert.Equal(t, [][]string{{"kill-window", "-t", "@0"}, {"kill-window", "-t", "@1"}}, runner.find("kill-window"))
 }

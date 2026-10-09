@@ -29,7 +29,10 @@ func (l *launch) allocateWindow(ctx context.Context, sessionDir string, spec mul
 		args = append(args, "--", "cat")
 	}
 	if args[0] == "new-session" {
-		args = append(args, ";", "set-option", launchMarker, "1")
+		// The marker goes in the same invocation so no moment exists where the
+		// session is unmarked. It needs an explicit target: inside tmux, an
+		// untargeted set-option resolves to the caller's own session.
+		args = append(args, ";", "set-option", "-t", "="+l.name+":", launchMarker, "1")
 	}
 	stdout, _, commandErr := l.client.runner.Capture(ctx, args...)
 	ids := strings.Fields(string(stdout))

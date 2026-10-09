@@ -25,7 +25,7 @@ func TestCreateSessionCreatesPanesAndFocus(t *testing.T) {
 	}
 
 	require.NoError(t, client.CreateSession(context.Background(), spec))
-	assert.Equal(t, []string{"new-session", "-d", "-s", "work", "-n", "shell", "-P", "-F", allocationFormat, "-c", "/repo", "--", "cat", ";", "set-option", launchMarker, "1"}, runner.calls[0])
+	assert.Equal(t, []string{"new-session", "-d", "-s", "work", "-n", "shell", "-P", "-F", allocationFormat, "-c", "/repo", "--", "cat", ";", "set-option", "-t", "=work:", launchMarker, "1"}, runner.calls[0])
 	assert.Contains(t, runner.calls, []string{"respawn-pane", "-k", "-t", "%0", "-c", "/repo", "--", "sh", "-c", "first"})
 	assert.Contains(t, runner.calls, []string{"split-window", "-d", "-t", "@0", "-P", "-F", allocationFormat, "-h", "-l", "40%", "-c", "/repo", "--", "sh", "-c", "cat"})
 	assert.Contains(t, runner.calls, []string{"respawn-pane", "-k", "-t", "%1", "-c", "/repo", "--", "sh", "-c", "second"})
