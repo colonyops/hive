@@ -420,17 +420,18 @@ describe('AgentCanvasPane', () => {
     expect(browse).toContain('Older')
   })
 
-  it('renders editable front matter and automatic timestamps above the blocks', async () => {
+  it('renders editable front matter with compact timestamp badges above the blocks', async () => {
     const wrapper = await mountPane(fakeCanvasClient([block({ id: 'doc', body: 'hello' })]))
 
     expect(wrapper.get('[data-testid="agent-canvas-frontmatter-tags"]').text()).toContain('release')
     expect(wrapper.get('[data-testid="agent-canvas-frontmatter-tags"]').text()).toContain('desktop')
-    expect(wrapper.get('[data-testid="agent-canvas-frontmatter-created_at"] time').attributes('datetime')).toBe(
-      '1970-01-01T00:00:00.001Z',
-    )
-    expect(wrapper.get('[data-testid="agent-canvas-frontmatter-updated_at"] time').attributes('datetime')).toBe(
-      '1970-01-01T00:00:00.002Z',
-    )
+    const created = wrapper.get('[data-testid="agent-canvas-frontmatter-created_at"]')
+    const updated = wrapper.get('[data-testid="agent-canvas-frontmatter-updated_at"]')
+    expect(created.element.tagName).toBe('SPAN')
+    expect(updated.element.tagName).toBe('SPAN')
+    expect(created.classes()).toContain('text-micro')
+    expect(created.get('time').attributes('datetime')).toBe('1970-01-01T00:00:00.001Z')
+    expect(updated.get('time').attributes('datetime')).toBe('1970-01-01T00:00:00.002Z')
   })
 
   it('copies the Go-rendered markdown to the native clipboard', async () => {
