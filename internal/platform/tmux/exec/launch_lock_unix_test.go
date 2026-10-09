@@ -56,6 +56,15 @@ func TestLaunchLockAcrossProcesses(t *testing.T) {
 	require.NoError(t, release())
 }
 
+func TestLaunchLockFilesAreBoundedPerServer(t *testing.T) {
+	names := make(map[string]struct{})
+	for i := range 1000 {
+		names[launchLockName("/tmp/tmux-501/default", fmt.Sprintf("session-%d", i))] = struct{}{}
+	}
+	require.LessOrEqual(t, len(names), launchLockBuckets)
+	require.NotEqual(t, launchLockName("/tmp/tmux-501/default", "session"), launchLockName("/tmp/tmux-501/other", "session"))
+}
+
 func TestLaunchLockDistinguishesServers(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())

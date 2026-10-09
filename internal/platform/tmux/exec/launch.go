@@ -23,6 +23,21 @@ type optionLease struct {
 	name     string
 	value    string
 	explicit bool
+	optional bool
+}
+
+type paneOption struct {
+	name  string
+	value string
+	// optional options may not exist in older tmux; -q makes them no-ops there.
+	optional bool
+}
+
+// remain-on-exit-format arrived in tmux 3.3. On 3.2 the dead pane keeps
+// tmux's own "Pane is dead" line, which only adds a line to the report.
+var launchPaneOptions = []paneOption{
+	{name: "remain-on-exit-format", value: "", optional: true},
+	{name: "remain-on-exit", value: "on"},
 }
 
 type launchPane struct {
@@ -62,7 +77,7 @@ type LaunchError struct {
 }
 
 func (e *LaunchError) Error() string {
-	return fmt.Sprintf("tmux session %q launch failed during %s: %v", e.Session, e.Phase, e.Err)
+	return fmt.Sprintf("tmux session %q failed to start: %v", e.Session, e.Err)
 }
 
 func (e *LaunchError) Unwrap() error { return e.Err }
@@ -88,7 +103,7 @@ func (l *launch) fail(ctx context.Context, err error) error {
 	var resources []string
 	remove := func(command, id string, windows []*launchWindow) {
 		if _, _, cleanupErr := l.client.runner.Capture(cleanupCtx, command, "-t", id); cleanupErr != nil {
-			if !l.resourcePresent(cleanupCtx, command, id) {
+			if !l.resourcePresent(cleanupCtx, id) {
 				return
 			}
 			resources = append(resources, id)
@@ -166,22 +181,29 @@ func (l *launch) arm(ctx context.Context, pane *launchPane) error {
 		return fmt.Errorf("read pane retention: %w", err)
 	}
 	pane.retention = strings.TrimSpace(string(stdout))
-	for _, option := range []struct{ name, value string }{{"remain-on-exit-format", ""}, {"remain-on-exit", "on"}} {
-		previous, _, err := l.client.runner.Capture(ctx, "show-options", "-p", "-v", "-t", pane.id, option.name)
+	for _, option := range launchPaneOptions {
+		previous, _, err := l.client.runner.Capture(ctx, optionArgs(option.optional, "show-options", "-p", "-v", "-t", pane.id, option.name)...)
 		if err != nil {
 			return fmt.Errorf("read pane option %s: %w", option.name, err)
 		}
-		pane.leases = append(pane.leases, optionLease{name: option.name, value: strings.TrimSuffix(string(previous), "\n"), explicit: len(previous) > 0})
-		if _, _, err := l.client.runner.Capture(ctx, "set-option", "-p", "-t", pane.id, option.name, option.value); err != nil {
+		pane.leases = append(pane.leases, optionLease{name: option.name, value: strings.TrimSuffix(string(previous), "\n"), explicit: len(previous) > 0, optional: option.optional})
+		if _, _, err := l.client.runner.Capture(ctx, optionArgs(option.optional, "set-option", "-p", "-t", pane.id, option.name, option.value)...); err != nil {
 			return fmt.Errorf("set pane option %s: %w", option.name, err)
 		}
 	}
 	return nil
 }
 
-func (l *launch) resourcePresent(ctx context.Context, command, id string) bool {
+func optionArgs(optional bool, command string, args ...string) []string {
+	if optional {
+		return append([]string{command, "-q"}, args...)
+	}
+	return append([]string{command}, args...)
+}
+
+func (l *launch) resourcePresent(ctx context.Context, id string) bool {
 	args := []string{"list-sessions", "-F", "#{session_id}"}
-	if command == "kill-window" {
+	if strings.HasPrefix(id, "@") {
 		args = []string{"list-windows", "-a", "-F", "#{window_id}"}
 	}
 	stdout, _, err := l.client.runner.Capture(ctx, args...)
@@ -194,7 +216,7 @@ func (l *launch) resourcePresent(ctx context.Context, command, id string) bool {
 func (l *launch) restorePane(ctx context.Context, pane *launchPane) error {
 	var failures []error
 	for _, lease := range pane.leases {
-		args := []string{"set-option", "-p", "-t", pane.id}
+		args := []string{"-p", "-t", pane.id}
 		if !lease.explicit {
 			args = append(args, "-u")
 		}
@@ -202,23 +224,19 @@ func (l *launch) restorePane(ctx context.Context, pane *launchPane) error {
 		if lease.explicit {
 			args = append(args, lease.value)
 		}
-		if _, _, err := l.client.runner.Capture(ctx, args...); err != nil {
+		if _, _, err := l.client.runner.Capture(ctx, optionArgs(lease.optional, "set-option", args...)...); err != nil {
 			failures = append(failures, fmt.Errorf("restore pane option %s: %w", lease.name, err))
 		}
 	}
 	return errors.Join(failures...)
 }
 
+// finalize observes once more while exits are still retained, then commits.
+// Pane options are restored only after every check that can fail the launch:
+// once retention is off, tmux removes a pane that exits, and a later check
+// would mistake that ordinary exit for a lost pane and roll back healthy work.
 func (l *launch) finalize(ctx context.Context) (bool, error) {
 	l.phase = LaunchPhaseFinalizing
-	for _, window := range l.windows {
-		for _, pane := range window.panes {
-			if err := l.restorePane(ctx, pane); err != nil {
-				return false, err
-			}
-		}
-	}
-
 	if err := l.observe(ctx); err != nil {
 		return false, err
 	}
@@ -236,7 +254,9 @@ func (l *launch) finalize(ctx context.Context) (bool, error) {
 			}
 		}
 		window.removed = remaining == 0
-		if remaining > 0 && (focus == nil || (window.focus && !focus.focus)) {
+		// A new session opens on its first window; added windows end on the
+		// last one, as plain new-window would. An explicit focus wins either way.
+		if remaining > 0 && (focus == nil || !focus.focus && (window.focus || !l.ownsSession)) {
 			focus = window
 		}
 	}
@@ -246,17 +266,37 @@ func (l *launch) finalize(ctx context.Context) (bool, error) {
 		}
 	}
 	for _, window := range l.windows {
+		for _, pane := range window.panes {
+			if !pane.removed {
+				if err := l.restorePane(ctx, pane); err != nil {
+					return false, err
+				}
+			}
+		}
+	}
+	for _, window := range l.windows {
 		if !window.removed {
-			if _, _, err := l.client.runner.Capture(ctx, "set-option", "-w", "-u", "-t", window.id, launchMarker); err != nil {
+			if err := l.clearMarker(ctx, window.id, "-w"); err != nil {
 				return false, fmt.Errorf("clear window launch marker: %w", err)
 			}
 		}
 	}
 	if l.ownsSession && !l.allRemoved() {
-		if _, _, err := l.client.runner.Capture(ctx, "set-option", "-u", "-t", l.sessionID, launchMarker); err != nil {
+		if err := l.clearMarker(ctx, l.sessionID); err != nil {
 			return false, fmt.Errorf("clear session launch marker: %w", err)
 		}
 	}
 	l.phase = LaunchPhaseCommitted
 	return focus == nil, nil
+}
+
+// clearMarker runs after pane options are restored, so the resource may have
+// closed on its own in between. A resource that is gone needs no marker.
+func (l *launch) clearMarker(ctx context.Context, id string, flags ...string) error {
+	args := append([]string{"set-option"}, flags...)
+	args = append(args, "-u", "-t", id, launchMarker)
+	if _, _, err := l.client.runner.Capture(ctx, args...); err != nil && l.resourcePresent(ctx, id) {
+		return err
+	}
+	return nil
 }

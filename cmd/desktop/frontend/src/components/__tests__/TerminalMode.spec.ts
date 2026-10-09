@@ -1908,7 +1908,7 @@ describe('TerminalMode', () => {
       .fn()
       .mockRejectedValue(
         new Error(
-          'tmux session "hive-fix-parser": command not found in window "agent" (status 127)\n\n$ missing-agent\nsh: missing-agent: command not found',
+          'tmux session "hive-fix-parser" failed to start: command not found in window "agent" (status 127)\n\n$ missing-agent\nsh: missing-agent: command not found',
         ),
       )
     mocks.createTerminalClient.mockReturnValue({ start })

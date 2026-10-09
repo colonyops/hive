@@ -22,6 +22,8 @@ const (
 
 // CommandExitedError reports a failed or lost pane during session startup.
 // Output is a best-effort terminal excerpt, not a separate stderr stream.
+// Its message leaves out the session name because a LaunchError, which names
+// the session, always wraps it.
 type CommandExitedError struct {
 	Session      string
 	Window       string
@@ -39,15 +41,15 @@ func (e *CommandExitedError) Error() string {
 	var message string
 	switch {
 	case e.Lost:
-		message = fmt.Sprintf("tmux session %q: pane %s disappeared in window %q during startup. No exit details are available.", e.Session, e.Pane, e.Window)
+		message = fmt.Sprintf("pane %s disappeared in window %q during startup. No exit details are available.", e.Pane, e.Window)
 	case e.Signal != "":
-		message = fmt.Sprintf("tmux session %q: command terminated in window %q during startup (signal %s)", e.Session, e.Window, e.Signal)
+		message = fmt.Sprintf("command terminated in window %q during startup (signal %s)", e.Window, e.Signal)
 	case e.NotFound():
-		message = fmt.Sprintf("tmux session %q: command not found in window %q (status 127)", e.Session, e.Window)
+		message = fmt.Sprintf("command not found in window %q (status 127)", e.Window)
 	case e.Status >= 0:
-		message = fmt.Sprintf("tmux session %q: command exited in window %q during startup (status %d)", e.Session, e.Window, e.Status)
+		message = fmt.Sprintf("command exited in window %q during startup (status %d)", e.Window, e.Status)
 	default:
-		message = fmt.Sprintf("tmux session %q: command terminated in window %q during startup. No exit details are available.", e.Session, e.Window)
+		message = fmt.Sprintf("command terminated in window %q during startup. No exit details are available.", e.Window)
 	}
 	if e.Command != "" {
 		message += "\n\n$ " + e.Command
@@ -178,7 +180,7 @@ func (l *launch) paneFailure(ctx context.Context, pane *launchPane, observation 
 	if len(err.Output) > maxStartupOutput {
 		err.Truncated = true
 		err.Output = err.Output[len(err.Output)-maxStartupOutput:]
-		for !utf8.ValidString(err.Output) && len(err.Output) > 0 {
+		for len(err.Output) > 0 && !utf8.RuneStart(err.Output[0]) {
 			err.Output = err.Output[1:]
 		}
 	}

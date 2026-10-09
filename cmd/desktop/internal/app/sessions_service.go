@@ -782,9 +782,6 @@ func sessionStartError(sessionName string, err error) error {
 	if launch, ok := errors.AsType[*tmuxexec.LaunchError](err); ok {
 		return &Error{Kind: KindUnavailable, Msg: launch.Error(), Err: err}
 	}
-	if exited, ok := errors.AsType[*tmuxexec.CommandExitedError](err); ok {
-		return &Error{Kind: KindUnavailable, Msg: exited.Error(), Err: err}
-	}
 	return &Error{Kind: KindInternal, Msg: fmt.Sprintf("starting the terminal session for %q: %v", sessionName, err), Err: err}
 }
 

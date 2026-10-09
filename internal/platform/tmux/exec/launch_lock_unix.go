@@ -24,8 +24,7 @@ func (r execRunner) lockLaunch(ctx context.Context, name string) (func() error, 
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create tmux launch lock directory: %w", err)
 	}
-	key := sha256.Sum256([]byte(r.socketIdentity(ctx) + "\x00" + name))
-	file, err := os.OpenFile(filepath.Join(dir, fmt.Sprintf("%x.lock", key)), os.O_CREATE|os.O_RDWR, 0o600)
+	file, err := os.OpenFile(filepath.Join(dir, launchLockName(r.socketIdentity(ctx), name)), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open tmux launch lock: %w", err)
 	}
@@ -48,6 +47,17 @@ func (r execRunner) lockLaunch(ctx context.Context, name string) (func() error, 
 		case <-timer.C:
 		}
 	}
+}
+
+// launchLockBuckets bounds the lock files per tmux server. A lock file cannot
+// be deleted safely while another process may wait on it, so files are reused
+// instead; two sessions that share a bucket only wait for each other.
+const launchLockBuckets = 64
+
+func launchLockName(socket, session string) string {
+	server := sha256.Sum256([]byte(socket))
+	key := sha256.Sum256([]byte(socket + "\x00" + session))
+	return fmt.Sprintf("%x-%02d.lock", server[:8], int(key[0])%launchLockBuckets)
 }
 
 func (r execRunner) socketIdentity(ctx context.Context) string {

@@ -174,9 +174,56 @@ func TestCreateSessionHealthyStartupRestoresEachPaneOption(t *testing.T) {
 	spec.Windows[0].Panes = []multiplexer.PaneSpec{{Command: "first"}, {Command: "second"}}
 	require.NoError(t, newStartupClient(runner, 0).CreateSession(t.Context(), spec))
 	assert.Contains(t, runner.find("set-option"), []string{"set-option", "-p", "-t", "%0", "remain-on-exit", "failed"})
-	assert.Contains(t, runner.find("set-option"), []string{"set-option", "-p", "-t", "%0", "remain-on-exit-format", ""})
+	assert.Contains(t, runner.find("set-option"), []string{"set-option", "-q", "-p", "-t", "%0", "remain-on-exit-format", ""})
+	assert.Contains(t, runner.find("set-option"), []string{"set-option", "-q", "-p", "-t", "%1", "-u", "remain-on-exit-format"})
 	assert.Contains(t, runner.find("set-option"), []string{"set-option", "-p", "-t", "%1", "-u", "remain-on-exit"})
 	assert.Empty(t, runner.find("kill-session"))
+}
+
+func TestPaneThatExitsAfterRestoreDoesNotRollBack(t *testing.T) {
+	restored := false
+	runner := &startupRunner{
+		listPanes: func(int) string {
+			if restored {
+				return "%1|0||\n"
+			}
+			return "%0|0||\n%1|0||\n"
+		},
+		failure: func(_ context.Context, args []string) error {
+			if args[0] == "set-option" && slices.Contains(args, "%0") && args[len(args)-1] == "remain-on-exit" {
+				restored = true
+			}
+			return nil
+		},
+	}
+	spec := startupSpec()
+	spec.Windows[0].Panes = []multiplexer.PaneSpec{{Command: "setup"}, {Command: "agent"}}
+	require.NoError(t, newStartupClient(runner, 0).CreateSession(t.Context(), spec))
+	assert.True(t, restored)
+	assert.Empty(t, runner.find("kill-session"))
+}
+
+func TestAddWindowsSelectsLastWindowWithoutFocus(t *testing.T) {
+	runner := &startupRunner{}
+	windows := []multiplexer.WindowSpec{{Name: "one", Command: "a"}, {Name: "two", Command: "b"}}
+	require.NoError(t, newStartupClient(runner, 0).AddWindows(t.Context(), multiplexer.Target{Session: "work"}, windows))
+	assert.Equal(t, [][]string{{"select-window", "-t", "@1"}}, runner.find("select-window"))
+
+	runner = &startupRunner{}
+	windows[0].Focus = true
+	require.NoError(t, newStartupClient(runner, 0).AddWindows(t.Context(), multiplexer.Target{Session: "work"}, windows))
+	assert.Equal(t, [][]string{{"select-window", "-t", "@0"}}, runner.find("select-window"))
+}
+
+func TestTruncatedOutputKeepsTextAroundInvalidBytes(t *testing.T) {
+	tail := strings.Repeat("a", maxStartupOutput-6) + "\xff" + "tail"
+	output := "xx" + "é" + tail
+	runner := &startupRunner{listPanes: func(int) string { return "%0|1|1|\n" }, capture: output}
+	err := newStartupClient(runner, 0).CreateSession(t.Context(), startupSpec())
+	var report *CommandExitedError
+	require.ErrorAs(t, err, &report)
+	assert.True(t, report.Truncated)
+	assert.Equal(t, tail, report.Output)
 }
 
 func TestCreateSessionWaitsForExitMetadata(t *testing.T) {
