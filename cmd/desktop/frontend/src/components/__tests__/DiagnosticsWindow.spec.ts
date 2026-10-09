@@ -104,6 +104,30 @@ describe('DiagnosticsWindow', () => {
     wrapper.unmount()
   })
 
+  it('keeps the first log view at the top before following the tail', async () => {
+    const wrapper = mount(DiagnosticsWindow)
+    const entries = wrapper.get('[data-testid="diagnostics-entries"]')
+    const scrollTo = vi.fn()
+    Object.defineProperties(entries.element, {
+      scrollHeight: { value: 1000, configurable: true },
+      clientHeight: { value: 400, configurable: true },
+      scrollTop: { value: 0, writable: true, configurable: true },
+      scrollTo: { value: scrollTo, configurable: true },
+    })
+
+    await flushPromises()
+    expect(scrollTo).not.toHaveBeenCalled()
+
+    entries.element.scrollTop = 600
+    await entries.trigger('scroll')
+    await vi.advanceTimersByTimeAsync(2000)
+    await flushPromises()
+
+    expect(api.Read).toHaveBeenCalledTimes(2)
+    expect(scrollTo).toHaveBeenCalledWith({ top: 1000 })
+    wrapper.unmount()
+  })
+
   it('filters by several log levels', async () => {
     const wrapper = mount(DiagnosticsWindow)
     await flushPromises()

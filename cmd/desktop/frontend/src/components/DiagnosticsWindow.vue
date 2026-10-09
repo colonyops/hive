@@ -190,7 +190,8 @@ function currentQuery(reference = ''): DiagnosticsQuery {
 
 async function refresh(): Promise<void> {
   const seq = ++generation
-  const pinAfterRead = follow.value && atTail.value
+  const initialRead = snapshot.value === null
+  const pinAfterRead = !initialRead && follow.value && atTail.value
   const finish = perf.start('logs:refresh', { follow: follow.value })
   let entryCount = 0
   let entriesChanged = false
@@ -206,6 +207,7 @@ async function refresh(): Promise<void> {
     error.value = ''
     await nextTick()
     if (pinAfterRead) list.value?.scrollTo({ top: list.value.scrollHeight })
+    else if (initialRead) onEntriesScroll()
   } catch (failure) {
     failed = true
     if (!disposed && seq === generation) error.value = String(failure)
