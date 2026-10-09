@@ -6,6 +6,7 @@ import * as ActionsService from "./actionsservice.js";
 import * as ActivityService from "./activityservice.js";
 import * as AgentsService from "./agentsservice.js";
 import * as DevToolsService from "./devtoolsservice.js";
+import * as DiagnosticsService from "./diagnosticsservice.js";
 import * as FlowsService from "./flowsservice.js";
 import * as GitHubService from "./githubservice.js";
 import * as GiteaService from "./giteaservice.js";
@@ -38,6 +39,7 @@ export {
     ActivityService,
     AgentsService,
     DevToolsService,
+    DiagnosticsService,
     FlowsService,
     GitHubService,
     GiteaService,

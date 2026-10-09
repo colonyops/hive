@@ -19,6 +19,10 @@ var zoomRoles = []application.Role{
 func (u *UI) buildMenu() {
 	menu := application.DefaultApplicationMenu()
 	removeRoles(menu, zoomRoles)
+	if window := menu.FindByRole(application.WindowMenu); window != nil {
+		window.GetSubmenu().AddSeparator()
+		window.GetSubmenu().Add("Diagnostics…").OnClick(func(*application.Context) { u.openDiagnostics() })
+	}
 	u.app.Menu.SetApplicationMenu(menu)
 }
 

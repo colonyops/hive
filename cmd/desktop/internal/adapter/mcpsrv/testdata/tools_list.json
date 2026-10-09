@@ -1354,6 +1354,219 @@
     "title": "Create or update a scheduled chat"
   },
   {
+    "description": "Read bounded Desktop/CLI log tails and job outcomes, with source paths, last-write times, and truncation indicators. No processes are started. Use a reference to fetch surrounding evidence, or source jobs and search to find an operation. Missing references answer not_found; historical evidence outside the retained tail may be unavailable.",
+    "inputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "description": "summary (default) omits raw records; full includes them.",
+          "type": "string"
+        },
+        "levels": {
+          "description": "Any of debug, info, warn, error, and unknown; empty includes all levels.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "limit": {
+          "description": "Maximum entries, default 100, capped at 1000.",
+          "type": "integer"
+        },
+        "reference": {
+          "description": "Entry ID for surrounding evidence. Job IDs are job-\u003cid\u003e. Overrides time/text filters.",
+          "type": "string"
+        },
+        "search": {
+          "description": "Case-insensitive text to find.",
+          "type": "string"
+        },
+        "since": {
+          "description": "Inclusive RFC3339 start time.",
+          "type": "string"
+        },
+        "source": {
+          "description": "desktop, cli, jobs, or empty for all sources.",
+          "type": "string"
+        },
+        "until": {
+          "description": "Inclusive RFC3339 end time.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "name": "read_diagnostics",
+    "outputSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "buildDate": {
+          "type": "string"
+        },
+        "capturedAt": {
+          "type": "string"
+        },
+        "commit": {
+          "type": "string"
+        },
+        "detail": {
+          "type": "string"
+        },
+        "entries": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "fields": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "id": {
+                "type": "string"
+              },
+              "level": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "raw": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "time": {
+                "type": "string"
+              },
+              "truncated": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "time",
+              "source",
+              "level",
+              "message",
+              "fields",
+              "raw",
+              "truncated"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "query": {
+          "additionalProperties": false,
+          "properties": {
+            "levels": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
+            },
+            "limit": {
+              "type": "integer"
+            },
+            "omitRoutine": {
+              "type": "boolean"
+            },
+            "reference": {
+              "type": "string"
+            },
+            "search": {
+              "type": "string"
+            },
+            "since": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "until": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "source",
+            "since",
+            "until",
+            "levels",
+            "search",
+            "reference",
+            "limit",
+            "omitRoutine"
+          ],
+          "type": "object"
+        },
+        "sources": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "error": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              },
+              "truncated": {
+                "type": "boolean"
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "path",
+              "updatedAt",
+              "error",
+              "truncated"
+            ],
+            "type": "object"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "capturedAt",
+        "version",
+        "commit",
+        "buildDate",
+        "sources",
+        "entries",
+        "truncated",
+        "query",
+        "detail"
+      ],
+      "type": "object"
+    },
+    "title": "Read diagnostics"
+  },
+  {
     "description": "Force one producer tick across all sources, dropping fetch caches. Returns aggregate totals rather than a per-source breakdown. Use it after changing a flow or pushing a test event instead of waiting for the next poll.",
     "inputSchema": {
       "additionalProperties": false,

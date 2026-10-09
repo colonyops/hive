@@ -5,7 +5,17 @@ description: Fix common setup, source, notification, and terminal problems.
 
 # Troubleshooting
 
-Check **Activity** for flow, source, and action errors. Open **Settings ▸ System ▸ Diagnostics** for the application log.
+Open **Window ▸ Diagnostics** on macOS, or **Open Diagnostics** in the command palette on any platform. Check **Activity** for flow, source, and action errors.
+
+## Investigate a failure
+
+Diagnostics combines the Hive log and recent job outcomes in a searchable timeline. Filter by time or severity, or search for a session name. Expand an entry for its original record, parsed fields, and evidence ID. Desktop and CLI records normally share `hive.log`; the service name distinguishes their entries.
+
+The viewer reads a capped recent portion of the log. **Older entries omitted** means the full retained file did not fit in the viewer; reveal `hive.log` to inspect it. Turn off **Live** to hold the view while reading. View options and export actions are in the menu beside Live.
+
+Describe the incident in the prompt and choose **Investigate** to open your configured default agent beside the logs. You can select another profile. The terminal stacks above the logs in a narrow window, and its divider is resizable. Investigation does not need tmux. Opening Diagnostics never starts an agent, and the logs stay available if the agent fails.
+
+**Copy context** and **Export** collect a bounded incident snapshot from the displayed query, including job errors and source status. You can give that context to an agent outside Hive when the built-in investigation cannot start. Snapshots can contain local paths and command output; review them before sharing.
 
 ## Hive does not start on Linux
 

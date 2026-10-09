@@ -118,6 +118,7 @@ run = "./cmd/desktop/scripts/check-migration-order.sh"
 ["desktop:test"]
 description = "Run the desktop slice: frontend vitest + the app's Go packages and the shared packages it runs on"
 depends = ["desktop:frontend:test"]
+env = { HIVE_DEFAULT_AGENT = "" }
 run = "go test ./cmd/desktop/... ./internal/... ./pkg/..."
 
 ["desktop:e2e"]

@@ -7,8 +7,9 @@ import './styles/main.css'
 import './styles/markdown.css'
 import './styles/canvas-html.css'
 
-import { createApp } from 'vue'
+import { createApp, type Component } from 'vue'
 import App from './App.vue'
+import DiagnosticsWindow from './components/DiagnosticsWindow.vue'
 import { initializeAppFont } from './composables/useAppFont'
 import { initializeKeybindings } from './composables/useKeybindings'
 import { initializeTheme } from './composables/useTheme'
@@ -16,5 +17,11 @@ import { router } from './router'
 
 initializeTheme()
 initializeAppFont()
-initializeKeybindings()
-createApp(App).use(router).mount('#app')
+if (new URLSearchParams(window.location.search).has('diagnostics')) {
+  createApp(DiagnosticsWindow as Component).mount('#app')
+} else {
+  initializeKeybindings()
+  createApp(App as Component)
+    .use(router)
+    .mount('#app')
+}

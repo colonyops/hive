@@ -57,7 +57,18 @@ function onKeydown(e: KeyboardEvent): void {
   z-index: 10;
   touch-action: none;
   background: transparent;
-  transition: background-color 120ms ease;
+}
+
+.panel-resize-handle::after {
+  position: absolute;
+  content: '';
+  border-radius: 999px;
+  background: var(--color-text-4);
+  opacity: 0.65;
+  transition:
+    background-color 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
 }
 
 /* Left/right handles: a full-height vertical bar dragged horizontally. */
@@ -74,6 +85,14 @@ function onKeydown(e: KeyboardEvent): void {
 .panel-resize-handle-right {
   right: -3px;
 }
+.panel-resize-handle-left::after,
+.panel-resize-handle-right::after {
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 36px;
+  transform: translate(-50%, -50%);
+}
 
 /* Top/bottom handles: a full-width horizontal bar dragged vertically. */
 .panel-resize-handle-top,
@@ -89,14 +108,41 @@ function onKeydown(e: KeyboardEvent): void {
 .panel-resize-handle-bottom {
   bottom: -3px;
 }
+.panel-resize-handle-top::after,
+.panel-resize-handle-bottom::after {
+  top: 50%;
+  left: 50%;
+  width: 36px;
+  height: 3px;
+  transform: translate(-50%, -50%);
+}
 
-.panel-resize-handle:hover,
-.panel-resize-handle:active {
-  background: color-mix(in srgb, var(--color-accent) 45%, transparent);
+.panel-resize-handle:hover::after,
+.panel-resize-handle:active::after,
+.panel-resize-handle:focus-visible::after {
+  background: var(--color-accent);
+  opacity: 1;
+}
+
+.panel-resize-handle-left:hover::after,
+.panel-resize-handle-left:active::after,
+.panel-resize-handle-left:focus-visible::after,
+.panel-resize-handle-right:hover::after,
+.panel-resize-handle-right:active::after,
+.panel-resize-handle-right:focus-visible::after {
+  transform: translate(-50%, -50%) scaleX(1.35);
+}
+
+.panel-resize-handle-top:hover::after,
+.panel-resize-handle-top:active::after,
+.panel-resize-handle-top:focus-visible::after,
+.panel-resize-handle-bottom:hover::after,
+.panel-resize-handle-bottom:active::after,
+.panel-resize-handle-bottom:focus-visible::after {
+  transform: translate(-50%, -50%) scaleY(1.35);
 }
 
 .panel-resize-handle:focus-visible {
   outline: none;
-  background: color-mix(in srgb, var(--color-accent) 65%, transparent);
 }
 </style>
