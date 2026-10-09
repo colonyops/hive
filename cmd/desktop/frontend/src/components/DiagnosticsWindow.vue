@@ -32,6 +32,7 @@ import { retainUnchangedDiagnosticEntries } from '../lib/diagnosticsEntries'
 import type { MenuEntry } from '../types/menu'
 import DiagnosticsAgent from './DiagnosticsAgent.vue'
 import DiagnosticsEntry from './DiagnosticsEntry.vue'
+import DiagnosticsLevelFilter from './DiagnosticsLevelFilter.vue'
 import DiagnosticsTimeRange from './DiagnosticsTimeRange.vue'
 import AppMenu from './ui/AppMenu.vue'
 import AppSelect from './ui/AppSelect.vue'
@@ -55,7 +56,7 @@ interface Investigation {
 const NARROW_LAYOUT_WIDTH = 900
 
 const snapshot = shallowRef<DiagnosticsSnapshot | null>(null)
-const level = ref('')
+const levels = ref<string[]>([])
 const search = ref('')
 const period = ref('60')
 const since = ref('')
@@ -153,7 +154,7 @@ function currentQuery(reference = ''): DiagnosticsQuery {
   if (since.value || until.value) {
     return {
       source: '',
-      level: level.value,
+      levels: [...levels.value],
       search: search.value,
       since: since.value ? new Date(since.value).toISOString() : '',
       until: until.value ? new Date(until.value).toISOString() : '',
@@ -165,7 +166,7 @@ function currentQuery(reference = ''): DiagnosticsQuery {
   if (period.value === 'all') {
     return {
       source: '',
-      level: level.value,
+      levels: [...levels.value],
       search: search.value,
       since: '',
       until: '',
@@ -177,7 +178,7 @@ function currentQuery(reference = ''): DiagnosticsQuery {
   const end = new Date()
   return {
     source: '',
-    level: level.value,
+    levels: [...levels.value],
     search: search.value,
     since: new Date(end.getTime() - Number(period.value) * 60_000).toISOString(),
     until: end.toISOString(),
@@ -281,7 +282,7 @@ function scrollToTop(): void {
   list.value?.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-watch([level, search, period, since, until, showHTTP2xx], () => {
+watch([levels, search, period, since, until, showHTTP2xx], () => {
   clearTimeout(debounce)
   debounce = setTimeout(() => void refresh(), 250)
 })
@@ -491,20 +492,7 @@ onBeforeUnmount(() => {
             aria-label="Search logs"
             testid="diagnostics-search"
           />
-          <AppSelect
-            v-model="level"
-            aria-label="Severity"
-            size="sm"
-            testid="diagnostics-severity-filter"
-            :options="[
-              { value: '', label: 'All levels' },
-              { value: 'error', label: 'Error' },
-              { value: 'warn', label: 'Warning' },
-              { value: 'info', label: 'Info' },
-              { value: 'debug', label: 'Debug' },
-              { value: 'unknown', label: 'Unknown' },
-            ]"
-          />
+          <DiagnosticsLevelFilter v-model="levels" />
           <DiagnosticsTimeRange v-model:period="period" v-model:since="since" v-model:until="until" />
           <AppSwitch v-model="follow" label="Live" size="sm" testid="diagnostics-live-follow" />
           <div class="relative">

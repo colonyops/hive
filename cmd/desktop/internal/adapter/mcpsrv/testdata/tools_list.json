@@ -1362,9 +1362,15 @@
           "description": "summary (default) omits raw records; full includes them.",
           "type": "string"
         },
-        "level": {
-          "description": "debug, info, warn, error, unknown, or empty.",
-          "type": "string"
+        "levels": {
+          "description": "Any of debug, info, warn, error, and unknown; empty includes all levels.",
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "null",
+            "array"
+          ]
         },
         "limit": {
           "description": "Maximum entries, default 100, capped at 1000.",
@@ -1461,8 +1467,14 @@
         "query": {
           "additionalProperties": false,
           "properties": {
-            "level": {
-              "type": "string"
+            "levels": {
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "null",
+                "array"
+              ]
             },
             "limit": {
               "type": "integer"
@@ -1490,7 +1502,7 @@
             "source",
             "since",
             "until",
-            "level",
+            "levels",
             "search",
             "reference",
             "limit",

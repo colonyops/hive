@@ -30,14 +30,14 @@ type DiagnosticsService struct {
 }
 
 type DiagnosticsQuery struct {
-	Source      string `json:"source"`
-	Since       string `json:"since"`
-	Until       string `json:"until"`
-	Level       string `json:"level"`
-	Search      string `json:"search"`
-	Reference   string `json:"reference"`
-	Limit       int    `json:"limit"`
-	OmitRoutine bool   `json:"omitRoutine"`
+	Source      string   `json:"source"`
+	Since       string   `json:"since"`
+	Until       string   `json:"until"`
+	Levels      []string `json:"levels"`
+	Search      string   `json:"search"`
+	Reference   string   `json:"reference"`
+	Limit       int      `json:"limit"`
+	OmitRoutine bool     `json:"omitRoutine"`
 }
 
 type DiagnosticsSnapshot struct {
@@ -61,8 +61,12 @@ func (s *DiagnosticsService) Read(ctx context.Context, q DiagnosticsQuery) (Diag
 	if q.Source != "" && q.Source != "desktop" && q.Source != "cli" && q.Source != "jobs" {
 		return out, Errorf(KindInvalid, "unknown diagnostics source %q", q.Source)
 	}
-	if q.Level != "" && q.Level != "debug" && q.Level != "info" && q.Level != "warn" && q.Level != "error" && q.Level != "unknown" {
-		return out, Errorf(KindInvalid, "unknown diagnostics level %q", q.Level)
+	selectedLevels := make(map[string]struct{}, len(q.Levels))
+	for _, level := range q.Levels {
+		if level != "debug" && level != "info" && level != "warn" && level != "error" && level != "unknown" {
+			return out, Errorf(KindInvalid, "unknown diagnostics level %q", level)
+		}
+		selectedLevels[level] = struct{}{}
 	}
 	var since, until time.Time
 	for _, bound := range []struct {
@@ -179,8 +183,10 @@ func (s *DiagnosticsService) Read(ctx context.Context, q DiagnosticsQuery) (Diag
 		if !until.IsZero() && t.After(until) {
 			continue
 		}
-		if q.Level != "" && q.Level != e.Level {
-			continue
+		if len(selectedLevels) > 0 {
+			if _, ok := selectedLevels[e.Level]; !ok {
+				continue
+			}
 		}
 		if q.Search != "" && !entryContains(e, q.Search) {
 			continue

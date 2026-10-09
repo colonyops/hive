@@ -1027,8 +1027,9 @@ func TestDiagnosticsToolReadsJobsAndReportsMissingEvidence(t *testing.T) {
 		app.DiagnosticsSnapshot
 		Detail string `json:"detail"`
 	}
-	call(t, session, "read_diagnostics", map[string]any{"source": "jobs", "search": "review 347"}, &summary)
+	call(t, session, "read_diagnostics", map[string]any{"source": "jobs", "levels": []string{"warn", "error"}, "search": "review 347"}, &summary)
 	require.Equal(t, "summary", summary.Detail)
+	require.Equal(t, []string{"warn", "error"}, summary.Query.Levels)
 	require.NotEmpty(t, summary.Entries)
 	require.Empty(t, summary.Entries[0].Raw)
 	var full struct {

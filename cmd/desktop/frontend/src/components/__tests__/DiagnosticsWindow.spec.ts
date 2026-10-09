@@ -25,7 +25,7 @@ const query = {
   source: '',
   since: '',
   until: '2026-10-07T01:00:00Z',
-  level: '',
+  levels: [],
   search: '',
   reference: '',
   limit: 500,
@@ -84,7 +84,7 @@ describe('DiagnosticsWindow', () => {
     expect(wrapper.text()).toContain('job_id')
     expect(wrapper.find('[data-testid="diagnostics-entry-raw"]').exists()).toBe(true)
     expect(api.Read).toHaveBeenCalledWith(
-      expect.objectContaining({ source: '', level: '', search: '', limit: 500, omitRoutine: true }),
+      expect.objectContaining({ source: '', levels: [], search: '', limit: 500, omitRoutine: true }),
     )
     expect(api.Prepare).not.toHaveBeenCalled()
 
@@ -101,6 +101,20 @@ describe('DiagnosticsWindow', () => {
     await flushPromises()
     expect(api.copy).toHaveBeenCalledWith('incident evidence')
     expect(api.Context).toHaveBeenCalledWith(expect.objectContaining({ query }))
+    wrapper.unmount()
+  })
+
+  it('filters by several log levels', async () => {
+    const wrapper = mount(DiagnosticsWindow)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="diagnostics-level-filter"]').trigger('click')
+    await wrapper.get('[data-testid="diagnostics-level-option-error"]').trigger('click')
+    await wrapper.get('[data-testid="diagnostics-level-option-warn"]').trigger('click')
+    await vi.advanceTimersByTimeAsync(300)
+
+    expect(wrapper.get('[data-testid="diagnostics-level-filter"]').text()).toContain('Error + Warning')
+    expect(api.Read).toHaveBeenLastCalledWith(expect.objectContaining({ levels: ['error', 'warn'] }))
     wrapper.unmount()
   })
 

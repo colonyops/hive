@@ -73,7 +73,7 @@ export interface DiagnosticsQuery {
     "source": string;
     "since": string;
     "until": string;
-    "level": string;
+    "levels": string[] | null;
     "search": string;
     "reference": string;
     "limit": number;
