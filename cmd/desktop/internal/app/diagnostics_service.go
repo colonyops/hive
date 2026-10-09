@@ -7,7 +7,6 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -157,7 +156,10 @@ func (s *DiagnosticsService) Read(ctx context.Context, q DiagnosticsQuery) (Diag
 	if q.Reference != "" {
 		for i, e := range entries {
 			if e.ID == q.Reference {
-				out.Entries = entries[max(0, i-10):min(len(entries), i+11)]
+				start := max(0, i-10)
+				var truncated bool
+				out.Entries, truncated = boundDiagnosticsEntries(entries[start:min(len(entries), i+11)], q.Limit, i-start)
+				out.Truncated = out.Truncated || truncated
 				return out, nil
 			}
 		}
@@ -185,22 +187,56 @@ func (s *DiagnosticsService) Read(ctx context.Context, q DiagnosticsQuery) (Diag
 		}
 		out.Entries = append(out.Entries, e)
 	}
-	if len(out.Entries) > q.Limit {
-		out.Entries = out.Entries[len(out.Entries)-q.Limit:]
-		out.Truncated = true
+	var truncated bool
+	out.Entries, truncated = boundDiagnosticsEntries(out.Entries, q.Limit, -1)
+	out.Truncated = out.Truncated || truncated
+	return out, nil
+}
+
+func boundDiagnosticsEntries(entries []diagnostics.Entry, limit, anchor int) ([]diagnostics.Entry, bool) {
+	truncated := false
+	if len(entries) > limit {
+		if anchor < 0 {
+			entries = entries[len(entries)-limit:]
+		} else {
+			start := max(0, anchor-(limit-1)/2)
+			end := min(len(entries), start+limit)
+			start = max(0, end-limit)
+			entries = entries[start:end]
+			anchor -= start
+		}
+		truncated = true
 	}
 
-	budget := 0
-	for i, entry := range slices.Backward(out.Entries) {
+	sizes := make([]int, len(entries))
+	total := 0
+	for i, entry := range entries {
 		data, _ := json.Marshal(entry)
-		budget += len(data)
-		if budget > 512<<10 {
-			out.Entries = out.Entries[i+1:]
-			out.Truncated = true
-			break
-		}
+		sizes[i] = len(data)
+		total += sizes[i]
 	}
-	return out, nil
+	for total > 512<<10 && len(entries) > 0 {
+		dropFirst := anchor < 0
+		if anchor >= 0 {
+			left := anchor
+			right := len(entries) - 1 - anchor
+			dropFirst = left >= right && left > 0
+		}
+		if dropFirst {
+			total -= sizes[0]
+			entries = entries[1:]
+			sizes = sizes[1:]
+			if anchor >= 0 {
+				anchor--
+			}
+		} else {
+			total -= sizes[len(sizes)-1]
+			entries = entries[:len(entries)-1]
+			sizes = sizes[:len(sizes)-1]
+		}
+		truncated = true
+	}
+	return entries, truncated
 }
 
 func isRoutineHTTP2xx(entry diagnostics.Entry) bool {

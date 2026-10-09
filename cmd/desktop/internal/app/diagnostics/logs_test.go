@@ -46,12 +46,12 @@ func TestReadBoundsAndMissingFiles(t *testing.T) {
 }
 
 func TestParseJSONWithoutTimestampAndStructuredFields(t *testing.T) {
-	entry := Parse("desktop", `{"level":"error","message":"failed","attempt":3,"nested":{"name":"value"},"service_name":"hive-cli"}`)
+	entry := Parse("desktop", `{"level":"error","message":"failed","attempt":9007199254740993,"nested":{"name":"value"},"service_name":"hive-cli"}`)
 	require.Empty(t, entry.Time)
 	require.Equal(t, "cli", entry.Source)
 	require.Equal(t, "error", entry.Level)
 	require.Equal(t, "failed", entry.Message)
-	require.Equal(t, "3", entry.Fields["attempt"])
+	require.Equal(t, "9007199254740993", entry.Fields["attempt"])
 	require.JSONEq(t, `{"name":"value"}`, entry.Fields["nested"])
 	require.Equal(t, "hive-cli", entry.Fields["service_name"])
 }

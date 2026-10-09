@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
-import { useIntervalFn, useStorage } from '@vueuse/core'
+import { useIntervalFn, useStorage, useWindowSize } from '@vueuse/core'
 import IconArrowUp from '~icons/lucide/arrow-up'
 import IconCheck from '~icons/lucide/check'
 import IconColumns2 from '~icons/lucide/columns-2'
@@ -50,6 +50,8 @@ interface Investigation {
   dir: string
 }
 
+const NARROW_LAYOUT_WIDTH = 900
+
 const snapshot = shallowRef<DiagnosticsSnapshot | null>(null)
 const level = ref('')
 const search = ref('')
@@ -76,7 +78,9 @@ const actionMenuOpen = ref(false)
 const copiedEntryID = ref('')
 const clipboard = useClipboard()
 const panelLayout = useStorage<'side-by-side' | 'stacked'>('hive.diagnostics.layout', 'stacked')
-const stacked = computed(() => panelLayout.value === 'stacked')
+const viewport = useWindowSize()
+const narrowWindow = computed(() => viewport.width.value < NARROW_LAYOUT_WIDTH)
+const stacked = computed(() => narrowWindow.value || panelLayout.value === 'stacked')
 const horizontalPanel = useResizablePanel({
   storageKey: 'hive.diagnostics.terminal.width',
   defaultSize: 580,
@@ -106,8 +110,10 @@ const logSource = computed(() => fileSources.value.find((item) => item.path && !
 const jobSource = computed(() => snapshot.value?.sources?.find((item) => item.id === 'jobs'))
 const sourceWarnings = computed(() => {
   const warnings: string[] = []
-  if (fileSources.value.length && fileSources.value.every((item) => item.error)) {
-    warnings.push(`Hive log unavailable: ${fileSources.value[0]?.error}`)
+  for (const source of fileSources.value) {
+    if (!source.error) continue
+    const label = source.id === 'cli' ? 'CLI' : 'Desktop'
+    warnings.push(`${label} log unavailable: ${source.error}`)
   }
   if (jobSource.value?.error) warnings.push(`Job history unavailable: ${jobSource.value.error}`)
   return warnings
@@ -352,7 +358,7 @@ onBeforeUnmount(() => {
           @click="refresh"
         />
         <SegmentedControl
-          v-if="investigation"
+          v-if="investigation && !narrowWindow"
           v-model="panelLayout"
           :options="layoutOptions"
           variant="compact"

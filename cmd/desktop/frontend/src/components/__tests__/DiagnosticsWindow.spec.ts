@@ -58,6 +58,8 @@ const snapshot = {
 describe('DiagnosticsWindow', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    window.innerWidth = 1024
+    window.dispatchEvent(new Event('resize'))
     localStorage.clear()
     api.Read.mockResolvedValue(snapshot)
     api.Agents.mockResolvedValue({ names: ['codex'], defaultAgent: 'codex' })
@@ -65,6 +67,8 @@ describe('DiagnosticsWindow', () => {
     api.Prepare.mockRejectedValue(new Error('Agent unavailable'))
   })
   afterEach(() => {
+    window.innerWidth = 1024
+    window.dispatchEvent(new Event('resize'))
     vi.useRealTimers()
     vi.clearAllMocks()
   })
@@ -94,6 +98,21 @@ describe('DiagnosticsWindow', () => {
     await flushPromises()
     expect(api.copy).toHaveBeenCalledWith('incident evidence')
     expect(api.Context).toHaveBeenCalledWith(expect.objectContaining({ query }))
+    wrapper.unmount()
+  })
+
+  it('shows each unavailable log source when other evidence remains available', async () => {
+    api.Read.mockResolvedValueOnce({
+      ...snapshot,
+      sources: snapshot.sources.map((source) =>
+        source.id === 'cli' ? { ...source, path: '/logs/cli.log', error: 'permission denied' } : source,
+      ),
+    })
+    const wrapper = mount(DiagnosticsWindow)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('CLI log unavailable: permission denied')
+    expect(wrapper.text()).toContain('review 347 already exists')
     wrapper.unmount()
   })
 
@@ -148,6 +167,23 @@ describe('DiagnosticsWindow', () => {
       'vertical',
     )
     expect(localStorage.getItem('hive.diagnostics.layout')).toBe('side-by-side')
+    wrapper.unmount()
+  })
+
+  it('forces a stacked investigation layout in a narrow window', async () => {
+    window.innerWidth = 800
+    window.dispatchEvent(new Event('resize'))
+    localStorage.setItem('hive.diagnostics.layout', 'side-by-side')
+    api.Prepare.mockResolvedValueOnce({ command: 'codex prompt', dir: '/tmp/report' })
+    const wrapper = mount(DiagnosticsWindow)
+    await flushPromises()
+    await wrapper.get('[data-testid="diagnostics-investigate"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="resize-handle-diagnostics-terminal"]').attributes('aria-orientation')).toBe(
+      'horizontal',
+    )
+    expect(wrapper.find('[data-testid="diagnostics-layout"]').exists()).toBe(false)
     wrapper.unmount()
   })
 

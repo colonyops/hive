@@ -2,13 +2,17 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/diagnostics"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/report"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
@@ -66,9 +70,11 @@ func TestDiagnosticsBoundsAndReferences(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, out.Entries, 1)
 	require.True(t, out.Truncated)
-	out, err = svc.Read(t.Context(), DiagnosticsQuery{Reference: "job-1", Search: "does not match"})
+	out, err = svc.Read(t.Context(), DiagnosticsQuery{Reference: "job-1", Search: "does not match", Limit: 1})
 	require.NoError(t, err)
-	require.NotEmpty(t, out.Entries)
+	require.Len(t, out.Entries, 1)
+	require.Equal(t, "job-1", out.Entries[0].ID)
+	require.True(t, out.Truncated)
 	_, err = svc.Read(t.Context(), DiagnosticsQuery{Reference: "job-999"})
 	require.Equal(t, KindNotFound, KindOf(err))
 	_, err = svc.Read(t.Context(), DiagnosticsQuery{Since: "invalid"})
@@ -83,6 +89,28 @@ func TestDiagnosticsBoundsAndReferences(t *testing.T) {
 	for _, entry := range out.Entries {
 		require.NotEmpty(t, entry.Time)
 	}
+}
+
+func TestDiagnosticsReferenceResponseStaysWithinByteBudget(t *testing.T) {
+	fields := make(map[string]string, 64)
+	for i := range 64 {
+		fields[fmt.Sprintf("field_%d", i)] = strings.Repeat("x", 4<<10)
+	}
+	entries := make([]diagnostics.Entry, 5)
+	for i := range entries {
+		entries[i] = diagnostics.NewEntry("desktop", string(rune('a'+i)), "", "info", strings.Repeat("m", 16<<10), strings.Repeat("r", 16<<10), fields)
+	}
+
+	bounded, truncated := boundDiagnosticsEntries(entries, len(entries), 2)
+	require.True(t, truncated)
+	require.Contains(t, bounded, entries[2])
+	total := 0
+	for _, entry := range bounded {
+		data, err := json.Marshal(entry)
+		require.NoError(t, err)
+		total += len(data)
+	}
+	require.LessOrEqual(t, total, 512<<10)
 }
 
 func TestDiagnosticsPreparationUsesDefaultAndOverrideWithoutSpawning(t *testing.T) {

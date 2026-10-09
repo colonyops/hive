@@ -127,8 +127,7 @@ func Read(id, path string) (Source, []Entry) {
 
 func Parse(source, raw string) Entry {
 	e := Entry{Source: source, Raw: raw, Message: raw, Level: "unknown", Fields: make(map[string]string)}
-	var obj map[string]any
-	if json.Unmarshal([]byte(raw), &obj) == nil {
+	if obj, ok := decodeJSONObject(raw); ok {
 		e.Time = stringValue(obj["time"])
 		e.Level = level(stringValue(obj["level"]))
 		if message := stringValue(obj["message"]); message != "" {
@@ -182,6 +181,20 @@ func Parse(source, raw string) Entry {
 		e.Truncated = true
 	}
 	return e
+}
+
+func decodeJSONObject(raw string) (map[string]any, bool) {
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.UseNumber()
+	var obj map[string]any
+	if err := decoder.Decode(&obj); err != nil {
+		return nil, false
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return nil, false
+	}
+	return obj, true
 }
 
 // NewEntry normalizes a record supplied by a non-file diagnostics source.
