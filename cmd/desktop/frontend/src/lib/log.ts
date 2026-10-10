@@ -1,8 +1,4 @@
-// Webview logging into hive.log (ADR
-// webview-logs-and-uncaught-errors-are-written-to-hive-log-through-the-root-logger).
-// Entries buffer here and cross the binding in batches; the backend bounds
-// and rate-limits them and writes them through the root logger as
-// cmp=webview.<name>.
+// ADR webview-logs-and-uncaught-errors-are-written-to-hive-log-through-the-root-logger.
 import type { App } from 'vue'
 import {
   Level as BackendLevel,
@@ -14,17 +10,17 @@ import { appErrorKind, appErrorMessage } from './appError'
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type LogFields = Record<string, unknown>
 
+/**
+ * `detail` is usually the caught error: its message, stack and Kind become
+ * fields of their own. Anything else that is not a string is logged as a
+ * `detail` field.
+ */
 type LogMethod = (message: string, detail?: unknown, fields?: LogFields) => void
 
 export interface Logger {
   debug: LogMethod
   info: LogMethod
   warn: LogMethod
-  /**
-   * `detail` is usually the caught error: its message, stack and Kind become
-   * fields of their own. Anything else that is not a string is logged as a
-   * `detail` field.
-   */
   error: LogMethod
 }
 
@@ -247,7 +243,6 @@ export function captureVueErrors(app: App): void {
   }
 }
 
-/** Send anything buffered immediately. */
 export function flushLogs(): Promise<void> {
   return flush()
 }
