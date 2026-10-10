@@ -7,110 +7,50 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLocation_RoundTrip(t *testing.T) {
+func TestParse(t *testing.T) {
 	tests := []struct {
-		name string
-		loc  Location
-		url  string
+		raw  string
+		want Location
 	}{
-		{
-			name: "code session",
-			loc:  Location{Area: AreaCode, Slug: "hive-fix-auth"},
-			url:  "hive://code/hive-fix-auth",
-		},
-		{
-			name: "code window and canvas",
-			loc:  Location{Area: AreaCode, Slug: "web", Window: "@3", Canvas: "plan"},
-			url:  "hive://code/web?canvas=plan&window=%403",
-		},
-		{
-			name: "chats workspace",
-			loc:  Location{Area: AreaChats, Workspace: "research"},
-			url:  "hive://chats/research",
-		},
-		{
-			name: "chat with canvas",
-			loc:  Location{Area: AreaChats, Workspace: "research", Chat: "42", Canvas: "notes"},
-			url:  "hive://chats/research/42?canvas=notes",
-		},
-		{
-			name: "inbox profile feed",
-			loc:  Location{Area: AreaInbox, Profile: "work", Feed: "prs"},
-			url:  "hive://inbox/work?feed=prs",
-		},
-		{
-			name: "inbox item",
-			loc:  Location{Area: AreaInbox, Profile: "work", Item: 7},
-			url:  "hive://inbox/work/7",
-		},
-		{
-			name: "repository canvas",
-			loc:  Location{Area: AreaCanvas, Canvas: "release plan", Owner: "colonyops/hive"},
-			url:  "hive://canvas/release%20plan?owner=colonyops%2Fhive",
-		},
-		{
-			name: "global canvas",
-			loc:  Location{Area: AreaCanvas, Canvas: "todo", Owner: GlobalCanvasOwner},
-			url:  "hive://canvas/todo?owner=%40global",
-		},
-		{
-			name: "slug with a slash",
-			loc:  Location{Area: AreaCode, Slug: "a/b"},
-			url:  "hive://code/a%2Fb",
-		},
+		{"hive://code/hive-fix-auth", Location{Area: AreaCode, Slug: "hive-fix-auth"}},
+		{"hive://code/web?window=@3&canvas=plan", Location{Area: AreaCode, Slug: "web", Window: "@3", Canvas: "plan"}},
+		{"hive://code/a%2Fb", Location{Area: AreaCode, Slug: "a/b"}},
+		{"hive://chats/research", Location{Area: AreaChats, Workspace: "research"}},
+		{"hive://chats/research/42?canvas=notes", Location{Area: AreaChats, Workspace: "research", Chat: "42", Canvas: "notes"}},
+		{"hive://inbox/work?feed=prs", Location{Area: AreaInbox, Profile: "work", Feed: "prs"}},
+		{"hive://inbox/work/7", Location{Area: AreaInbox, Profile: "work", Item: 7}},
+		{"hive://canvas/release%20plan?owner=colonyops/hive", Location{Area: AreaCanvas, Canvas: "release plan", Owner: "colonyops/hive"}},
+		{"hive://canvas/todo?owner=@global", Location{Area: AreaCanvas, Canvas: "todo", Owner: "@global"}},
+		{"HIVE://Code/web/?window=@1&future=1", Location{Area: AreaCode, Slug: "web", Window: "@1"}},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := tt.loc.URL()
+		t.Run(tt.raw, func(t *testing.T) {
+			got, err := Parse(tt.raw)
 			require.NoError(t, err)
-			assert.Equal(t, tt.url, got)
-
-			parsed, err := Parse(got)
-			require.NoError(t, err)
-			assert.Equal(t, tt.loc, parsed)
+			assert.Equal(t, tt.want, got)
 		})
 	}
-}
-
-func TestParse_Lenient(t *testing.T) {
-	loc, err := Parse("HIVE://Code/web/?window=@1&future=1")
-	require.NoError(t, err)
-	assert.Equal(t, Location{Area: AreaCode, Slug: "web", Window: "@1"}, loc)
 }
 
 func TestParse_Rejects(t *testing.T) {
-	tests := []struct {
-		name string
-		raw  string
-	}{
-		{name: "other scheme", raw: "https://code/web"},
-		{name: "opaque", raw: "hive:code/web"},
-		{name: "unknown area", raw: "hive://flows/work"},
-		{name: "code without slug", raw: "hive://code"},
-		{name: "code with extra segment", raw: "hive://code/web/extra"},
-		{name: "empty segment", raw: "hive://chats/research//42"},
-		{name: "inbox item not a number", raw: "hive://inbox/work/abc"},
-		{name: "inbox item zero", raw: "hive://inbox/work/0"},
-		{name: "canvas without owner", raw: "hive://canvas/plan"},
-		{name: "chats canvas without chat", raw: "hive://chats/research?canvas=plan"},
+	tests := []string{
+		"https://code/web",
+		"hive:code/web",
+		"hive://flows/work",
+		"hive://code",
+		"hive://code/web/extra",
+		"hive://chats/research//42",
+		"hive://chats/research?canvas=plan",
+		"hive://inbox/work/abc",
+		"hive://inbox/work/0",
+		"hive://canvas/plan",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			_, err := Parse(tt.raw)
+	for _, raw := range tests {
+		t.Run(raw, func(t *testing.T) {
+			_, err := Parse(raw)
 			assert.Error(t, err)
 		})
 	}
-}
-
-func TestLocation_ValidateRejectsFieldsFromOtherAreas(t *testing.T) {
-	_, err := Location{Area: AreaCode, Slug: "web", Profile: "work"}.URL()
-	require.ErrorContains(t, err, "inbox item")
-
-	_, err = Location{Area: AreaInbox, Profile: "work", Canvas: "plan"}.URL()
-	require.ErrorContains(t, err, "canvas")
-
-	_, err = Location{}.URL()
-	require.ErrorContains(t, err, "unknown link area")
 }

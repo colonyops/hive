@@ -63,10 +63,9 @@ sources = [
   "cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go",
   "cmd/desktop/internal/app/agentws/workspace.go",
   "cmd/desktop/internal/app/schedule/spec.go",
-  "internal/domain/deeplink/deeplink.go",
 ]
 outputs = { auto = true }
-run = "go-enum --nocase --names --marshal -f internal/platform/tmux/exec/launch.go -f cmd/hive/internal/action/type.go -f internal/domain/hc/item.go -f internal/domain/notify/store.go -f internal/domain/todo/todo.go -f cmd/hive/internal/sources/backend.go -f cmd/desktop/internal/app/activity/activity.go -f cmd/desktop/internal/app/jobs/jobs.go -f cmd/desktop/internal/app/data/models/classify.go -f cmd/desktop/internal/app/flow/flow.go -f cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go -f cmd/desktop/internal/app/agentws/workspace.go -f cmd/desktop/internal/app/schedule/spec.go -f internal/domain/deeplink/deeplink.go"
+run = "go-enum --nocase --names --marshal -f internal/platform/tmux/exec/launch.go -f cmd/hive/internal/action/type.go -f internal/domain/hc/item.go -f internal/domain/notify/store.go -f internal/domain/todo/todo.go -f cmd/hive/internal/sources/backend.go -f cmd/desktop/internal/app/activity/activity.go -f cmd/desktop/internal/app/jobs/jobs.go -f cmd/desktop/internal/app/data/models/classify.go -f cmd/desktop/internal/app/flow/flow.go -f cmd/desktop/internal/app/mcpcatalog/mcpcatalog.go -f cmd/desktop/internal/app/agentws/workspace.go -f cmd/desktop/internal/app/schedule/spec.go"
 
 [tasks."generate:sqlc"]
 description = "Generate both store layers (hive.db and the desktop pipeline) from sqlc.yaml"

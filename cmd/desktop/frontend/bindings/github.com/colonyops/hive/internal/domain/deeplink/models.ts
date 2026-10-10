@@ -3,10 +3,18 @@
 
 /**
  * Area is the part of Hive Desktop a link opens.
- * 
- * ENUM(code, chats, inbox, canvas)
  */
-export type Area = string;
+export enum Area {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    AreaCode = "code",
+    AreaChats = "chats",
+    AreaInbox = "inbox",
+    AreaCanvas = "canvas",
+};
 
 /**
  * Location is one place in Hive Desktop. Which fields apply depends on Area:

@@ -15,8 +15,8 @@ change with the UI.
 
 **A place in the app has one public address, a `hive://` URL.** The app
 registers the scheme with the operating system. The schema lives in the
-shared `internal/domain/deeplink` package, so the CLI and the desktop parse
-and render the same URLs:
+shared `internal/domain/deeplink` package, so the CLI and the desktop accept
+the same URLs:
 
 ```
 hive://code/<slug>[?window=<id>][&canvas=<name>]
@@ -42,10 +42,10 @@ the binary again for each link, so the app uses the Wails single-instance
 lock, keyed by the data directory. Wails fails startup when it cannot take the
 lock, so the app does not use the lock when no session bus is present.
 
-**The CLI builds links and does not talk to the app.** `hive desktop url`
-prints a link and `hive desktop open` passes it to `open` or `xdg-open`. A
-later channel back from the app, such as an MCP tool, can use the same
-`Location` type.
+**Hive ships the schema, not link builders.** Links come from static
+templates or from an agent that reads the schema in the docs or in
+`hive desktop --help`. `hive desktop open` checks a link with `Parse` and
+passes it to `open` or `xdg-open`. It does not talk to the app.
 
 ## Consequences
 
