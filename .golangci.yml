@@ -71,6 +71,8 @@ linters:
           list-mode: lax
           allow:
             - github.com/colonyops/hive/internal/domain
+            # URL parsing is pure; the net deny below is aimed at network I/O.
+            - net/url
           deny:
             - pkg: github.com/colonyops/hive/internal
               desc: domain imports only domain (docs/architecture.md, "Layers and the dependency rule").

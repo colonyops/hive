@@ -176,16 +176,20 @@ Type=Application
 Version=1.0
 Name=Hive
 Comment=Desktop workspace for feeds, code, and agent chats
-Exec="$escaped_exe"
+Exec="$escaped_exe" %u
 Icon=hive-desktop
 Categories=Development;
 Terminal=false
 StartupNotify=true
 StartupWMClass=hive-desktop
+MimeType=x-scheme-handler/hive;
 EOF
   chmod 0644 "$desktop_file"
   if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "$applications_dir" >/dev/null 2>&1 || true
+  fi
+  if command -v xdg-mime >/dev/null 2>&1; then
+    xdg-mime default hive-desktop.desktop x-scheme-handler/hive >/dev/null 2>&1 || true
   fi
 }
 

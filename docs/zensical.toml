@@ -38,6 +38,7 @@ nav = [
     { "Configuration" = [
       "desktop/configuration/settings.md",
       "desktop/configuration/keybindings.md",
+      "desktop/configuration/links.md",
     ]},
     { "Resources" = [
       "desktop/getting-started/build-from-source.md",

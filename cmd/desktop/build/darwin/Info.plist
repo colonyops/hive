@@ -39,6 +39,17 @@
             <string>A command running within Hive may access files on removable volumes.</string>
         <key>NSSystemAdministrationUsageDescription</key>
             <string>A command running within Hive may request elevated privileges.</string>
+        <key>CFBundleURLTypes</key>
+            <array>
+                <dict>
+                    <key>CFBundleURLName</key>
+                        <string>com.hivedesktop.app</string>
+                    <key>CFBundleURLSchemes</key>
+                        <array>
+                            <string>hive</string>
+                        </array>
+                </dict>
+            </array>
         <key>NSHumanReadableCopyright</key>
             <string>© 2026 ColonyOps</string>
     </dict>
