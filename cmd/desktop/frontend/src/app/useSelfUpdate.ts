@@ -7,6 +7,9 @@ import {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/updaterservice'
 import type { UpdateInfo } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import type { FeedState } from './useAppNavigation'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('self-update')
 
 /**
  * The title bar's update chip. The updater checks the release-channel manifest
@@ -36,7 +39,7 @@ export function useSelfUpdate(confirmation: Confirmation, showToast: FeedState['
       await InstallUpdate()
     } catch (error) {
       installing.value = false
-      console.error('Update install failed', error)
+      log.error('Update install failed', error)
       showToast('Could not install the update', {
         severity: 'error',
         body: error instanceof Error ? error.message : String(error),
@@ -52,8 +55,8 @@ export function useSelfUpdate(confirmation: Confirmation, showToast: FeedState['
         info.value = status
       })
       .catch((error: unknown) => {
-        // eslint-disable-next-line no-console -- expected outside Wails, so not a warning
-        console.debug('Updater status unavailable', error)
+        // Expected outside Wails, so not a warning.
+        log.debug('Updater status unavailable', error)
       })
   })
   useWailsEvent('update:available', (event: { data: UpdateInfo | UpdateInfo[] }) => {

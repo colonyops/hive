@@ -4,6 +4,9 @@ import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/i
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { defineStore } from './defineStore'
 import { useResource } from './useResource'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('jobs')
 
 // The backend owns the terminal-job linger window; this store only keeps
 // re-reading while terminal rows remain so they fall out of the authoritative
@@ -39,7 +42,7 @@ export const useJobs = defineStore('jobs', () => {
 
   async function reload(): Promise<void> {
     await jobs.reload()
-    if (jobs.error.value) console.warn('Unable to load active jobs:', jobs.error.value)
+    if (jobs.error.value) log.warn('Unable to load active jobs:', jobs.error.value)
     if (jobs.data.value.some(isTerminal)) scheduleTrailingRead()
     else clearTrailingRead()
   }

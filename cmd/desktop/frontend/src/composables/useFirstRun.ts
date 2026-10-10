@@ -3,6 +3,9 @@ import {
   OnboardingSettings,
   SetOnboardingCompleted,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('first-run')
 
 /**
  * A separate marker is required because profiles always exist and no other
@@ -18,7 +21,7 @@ export function useFirstRun() {
     try {
       completed.value = (await OnboardingSettings()).completed
     } catch (err) {
-      console.warn('Unable to read the first-run state', err)
+      log.warn('Unable to read the first-run state', err)
       completed.value = true
     }
   }
@@ -29,7 +32,7 @@ export function useFirstRun() {
     try {
       await SetOnboardingCompleted()
     } catch (err) {
-      console.warn('Unable to record that first run finished', err)
+      log.warn('Unable to record that first run finished', err)
     }
   }
 

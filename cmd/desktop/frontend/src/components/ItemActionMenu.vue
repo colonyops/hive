@@ -15,6 +15,9 @@ import IconSquarePlus from '~icons/lucide/square-plus'
 import type { ActionView } from '../types/action'
 import type { InboxItem } from '../types/feed'
 import type { MenuEntry } from '../types/menu'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('item-action-menu')
 
 // The one "…" menu for an inbox item, shared by every surface that offers it
 // (feed rows, the detail pane) so they never drift: triage state, then
@@ -48,7 +51,7 @@ onMounted(async () => {
   try {
     fetchedActions.value = (await ActionViews(props.item.id)) ?? []
   } catch (error) {
-    console.warn('Unable to load actions for item menu', error)
+    log.warn('Unable to load actions for item menu', error)
   }
 })
 

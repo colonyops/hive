@@ -9,6 +9,9 @@ import FormField from '../ui/FormField.vue'
 import TextInput from '../ui/TextInput.vue'
 import { useGitHubConnection } from '../../composables/useGitHubConnection'
 import * as SettingsService from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
+import { createLogger } from '../../lib/log'
+
+const log = createLogger('github-integration-drawer')
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -57,7 +60,7 @@ async function openVerification() {
   try {
     await Browser.OpenURL(uri)
   } catch (err) {
-    console.warn('Unable to open the verification page', err)
+    log.warn('Unable to open the verification page', err)
   }
 }
 

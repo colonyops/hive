@@ -73,7 +73,7 @@ export default defineConfig(
       // TypeScript already resolves every identifier; this rule only knows ESLint's globals list.
       'no-undef': 'off',
       'no-new-func': 'error',
-      'no-console': ['error', { allow: ['warn', 'error'] }],
+      'no-console': 'error',
       eqeqeq: ['error', 'always', { null: 'ignore' }],
       'no-fallthrough': 'error',
 
@@ -161,6 +161,8 @@ export default defineConfig(
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/unbound-method': 'off',
+      // Specs assert on what lib/log echoes to the console.
+      'no-console': 'off',
     },
   },
 

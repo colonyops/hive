@@ -4,6 +4,9 @@ import {
   AppearanceSettings as GetAppearanceSettings,
   SetTheme as PersistThemeSetting,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('theme')
 
 export const themes = [
   'dark',
@@ -87,7 +90,7 @@ function persistTheme(theme: Theme): void {
     .catch((error: unknown) => {
       // The theme is applied and cached regardless; losing the durable write is
       // a degraded-but-working state, not a reason to revert what the user sees.
-      console.warn('Unable to persist theme to settings.yaml', error)
+      log.warn('Unable to persist theme to settings.yaml', error)
     })
 }
 
@@ -111,7 +114,7 @@ async function hydrateFromSettings(): Promise<void> {
     if (isTheme(cachedThemeAtLoad)) persistTheme(cachedThemeAtLoad)
   } catch (error) {
     // Keep the cached theme: an unavailable binding must not reset the UI.
-    console.warn('Unable to load theme from settings.yaml', error)
+    log.warn('Unable to load theme from settings.yaml', error)
   }
 }
 

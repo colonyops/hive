@@ -2,6 +2,9 @@ import { readonly, ref } from 'vue'
 import { Focused } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { defineStore } from './defineStore'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('window-focus')
 
 // Native focus events are the source of truth once subscribed; the initial
 // RPC only seeds the state before the first event arrives.
@@ -26,7 +29,7 @@ export const useWindowFocus = defineStore('windowFocus', () => {
       if (stateVersion === seedVersion) focused.value = isFocused
     })
     .catch((error: unknown) => {
-      console.error('load window focus state failed', error)
+      log.error('load window focus state failed', error)
     })
 
   return { focused: readonly(focused) }

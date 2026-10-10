@@ -9,6 +9,9 @@ import { Cancel } from '../../bindings/github.com/colonyops/hive/cmd/desktop/int
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
 import IconButton from './ui/IconButton.vue'
 import Spinner from './ui/Spinner.vue'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('jobs-popover')
 
 defineProps<{ jobs: readonly Job[] }>()
 const emit = defineEmits<{ 'open-run': [commandId: number]; 'open-log': [commandId: number] }>()
@@ -23,7 +26,7 @@ async function cancel(commandId: number): Promise<void> {
   try {
     await Cancel(commandId)
   } catch (error) {
-    console.warn('Unable to cancel action run', error)
+    log.warn('Unable to cancel action run', error)
   }
 }
 </script>

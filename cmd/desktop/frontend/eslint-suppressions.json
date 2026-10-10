@@ -286,9 +286,6 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
-    },
-    "no-console": {
-      "count": 1
     }
   },
   "src/composables/useFrameStats.ts": {
@@ -506,11 +503,6 @@
   },
   "src/pipeline/composables/__tests__/usePipelineEditor.spec.ts": {
     "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/pipeline/composables/usePipelineEditor.ts": {
-    "no-console": {
       "count": 1
     }
   },

@@ -4,6 +4,9 @@ import {
   SetKeybindingSettings,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
 import { commandPiercesPane, commands, defaultCombosFor, launcherActionID } from '../keybindings/catalog'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('keybindings')
 
 // The frontend keybinding layer. Pure normalization (comboFromEvent /
 // formatCombo) is separate from the effective keymap so both are unit-testable
@@ -388,7 +391,7 @@ function persistOverrides(next: Overrides): void {
     .catch((error: unknown) => {
       // The rebind is already live in this session; losing the durable write is
       // degraded-but-working, not a reason to revert what the user sees.
-      console.warn('Unable to persist keybindings to settings.yaml', error)
+      log.warn('Unable to persist keybindings to settings.yaml', error)
     })
 }
 
@@ -409,7 +412,7 @@ async function hydrateFromSettings(): Promise<void> {
     if (overridesVersion !== version) return
     overrides.value = sanitizeOverrides(settings.overrides)
   } catch (error) {
-    console.warn('Unable to load keybindings from settings.yaml', error)
+    log.warn('Unable to load keybindings from settings.yaml', error)
   }
 }
 

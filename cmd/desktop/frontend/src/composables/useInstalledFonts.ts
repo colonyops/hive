@@ -1,5 +1,8 @@
 import { ref, type Ref } from 'vue'
 import { Fonts as GetFonts } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('installed-fonts')
 
 // Every family the OS scan found, and the fixed-pitch subset. One module
 // singleton so the app font pickers and the terminal's share a single scan —
@@ -24,7 +27,7 @@ export function loadInstalledFonts(): void {
     .catch((error: unknown) => {
       // A failed scan leaves the pickers offering the bundled faces alone,
       // which is still a working app.
-      console.warn('Unable to list installed fonts', error)
+      log.warn('Unable to list installed fonts', error)
     })
 }
 

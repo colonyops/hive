@@ -10,6 +10,9 @@ import {
 import { TERMINAL_FONT } from '../lib/terminalFaces'
 import { defineStore } from './defineStore'
 import { usePersistedSetting, type PersistedSetting } from './usePersistedSetting'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('terminal-font')
 
 // The bounds repeat settings.MinTerminalFontSizePx / MaxTerminalFontSizePx,
 // which govern the file (ADR the-terminal-text-size-is-a-pixel-count).
@@ -91,7 +94,7 @@ export const useTerminalFont = defineStore('terminalFont', () => {
     try {
       return await GetAppearanceSettings()
     } catch (error) {
-      console.warn('Unable to load terminal font settings from settings.yaml', error)
+      log.warn('Unable to load terminal font settings from settings.yaml', error)
       return null
     }
   }
