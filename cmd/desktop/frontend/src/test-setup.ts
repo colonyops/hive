@@ -7,8 +7,7 @@ import { resetStores } from './stores/defineStore'
 // after-hooks, every mounted wrapper is gone before the stores it used stop.
 afterEach(resetStores)
 
-// Every spec that logs reaches lib/log. Its binding is stubbed here, once, so
-// no spec has to mock it to stay off the network; log.spec reads these mocks.
+// Keeps every spec that logs off the network; log.spec reads these mocks.
 vi.mock('../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/clientlogservice', () => ({
   Level: vi.fn(() => Promise.resolve('debug')),
   Write: vi.fn(() => Promise.resolve()),

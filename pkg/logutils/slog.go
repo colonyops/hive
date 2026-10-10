@@ -88,8 +88,7 @@ func addContextAttr(ctx zerolog.Context, prefix string, attr slog.Attr) zerolog.
 	return ctx.Interface(prefix+attr.Key, value.Any())
 }
 
-// An inline group (empty key) adds its members at the current level, per the
-// slog.Handler contract.
+// Per the slog.Handler contract, a group with an empty key inlines its members.
 func groupPrefix(prefix, key string) string {
 	if key == "" {
 		return prefix

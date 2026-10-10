@@ -123,9 +123,7 @@ type App struct {
 	TerminalImages *TerminalImagesService
 	// Perf records UI spans to a JSONL file when development.perf.enabled is
 	// on. Always non-nil; a disabled recorder is a no-op (ADR ui-performance-spans-are-recorded-to-jsonl).
-	Perf *PerfService
-	// ClientLog writes the webview's log entries and uncaught errors to the
-	// root logger.
+	Perf      *PerfService
 	ClientLog *ClientLogService
 	// Observability owns process sampling and telemetry startup status.
 	Observability *ObservabilityService

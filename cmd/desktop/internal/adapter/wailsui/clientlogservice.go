@@ -15,8 +15,7 @@ func NewClientLogService(clientLog *app.ClientLogService) *ClientLogService {
 	return &ClientLogService{clientLog: clientLog}
 }
 
-// ClientLogEntry is one webview log line. AtUnixMs is Date.now() at the call;
-// zero leaves only the time the backend wrote it.
+// AtUnixMs is Date.now(); zero leaves only the backend's own timestamp.
 type ClientLogEntry struct {
 	AtUnixMs int64          `json:"atUnixMs"`
 	Level    string         `json:"level"`

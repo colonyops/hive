@@ -55,7 +55,6 @@ export function useSelfUpdate(confirmation: Confirmation, showToast: FeedState['
         info.value = status
       })
       .catch((error: unknown) => {
-        // Expected outside Wails, so not a warning.
         log.debug('Updater status unavailable', error)
       })
   })

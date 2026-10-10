@@ -30,10 +30,6 @@ const recentsSerializer = {
   write: (value: string[]): string => JSON.stringify(value),
 }
 
-// useStorage's own read/write already catch a throwing storage accessor
-// (e.g. localStorage unavailable) and fall back to the initial value; onError
-// here just logs that failure as a warning instead of VueUse's default
-// console.error.
 const recentIds = useStorage<string[]>(storageKey, [], undefined, {
   serializer: recentsSerializer,
   onError: (error) => log.warn('Unable to read palette recents', error),

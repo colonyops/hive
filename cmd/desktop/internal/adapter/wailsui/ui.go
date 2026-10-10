@@ -220,8 +220,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		// is what lets the UI tell "sign in again" from "we broke" without
 		// matching on error text.
 		MarshalError: MarshalError,
-		// Wails reports a panic it recovers from a bound method through this
-		// logger. Below warn it narrates startup and every window event.
+		// Carries recovered bound-method panics. Below warn it narrates every window event.
 		Logger: slog.New(logutils.SlogHandler(wailsLogger(u.logger))),
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(opts.Assets),

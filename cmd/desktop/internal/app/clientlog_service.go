@@ -15,8 +15,6 @@ import (
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
-// ClientLogComponent is the cmp value of every line the webview writes; a
-// named frontend logger appends ".<name>".
 const ClientLogComponent = "webview"
 
 const (
@@ -31,9 +29,7 @@ const (
 	clientLogBurst = 200
 )
 
-// Keys the service sets itself, or the root logger and its hooks own. A
-// caller field with one of these names is dropped rather than allowed to
-// shadow it.
+// Caller fields may not shadow these.
 var clientLogReservedKeys = map[string]bool{
 	zerolog.LevelFieldName:     true,
 	zerolog.TimestampFieldName: true,
@@ -51,11 +47,8 @@ var clientLogReservedKeys = map[string]bool{
 	"span_id":                  true,
 }
 
-// ClientLogService writes the webview's log entries into the root logger, so
-// they share hive.log and every other sink with the Go side (ADR
+// Input is untrusted in size and rate (ADR
 // webview-logs-and-uncaught-errors-are-written-to-hive-log-through-the-root-logger).
-// Input is untrusted in size and rate: every field is bounded and a flood is
-// collapsed into one count.
 type ClientLogService struct {
 	logger  zerolog.Logger
 	limiter *rate.Limiter
@@ -85,8 +78,6 @@ type ClientLogEntry struct {
 	Fields  map[string]any
 }
 
-// Level is the root logger's level, so the webview can drop entries that
-// would be filtered here anyway before they cross the binding.
 func (s *ClientLogService) Level(_ context.Context) string {
 	return s.logger.GetLevel().String()
 }
@@ -140,9 +131,7 @@ func (s *ClientLogService) write(entry ClientLogEntry) {
 	event.Msg(truncate(entry.Message, clientLogMaxMessage))
 }
 
-// The webview may not log above error: fatal and panic would end the
-// process from the Go side's point of view, and an unknown level is most
-// likely a typo for something ordinary.
+// Fatal and panic mean process death on the Go side, so the webview tops out at error.
 func clientLogLevel(level string) zerolog.Level {
 	parsed, err := zerolog.ParseLevel(level)
 	switch {
@@ -189,8 +178,6 @@ func clientLogFieldKeys(fields map[string]any) []string {
 	return keys
 }
 
-// A nested value is bounded by its encoded size; one that is too large is
-// kept as its truncated JSON text rather than dropped.
 func clientLogFieldValue(value any) any {
 	switch v := value.(type) {
 	case string:

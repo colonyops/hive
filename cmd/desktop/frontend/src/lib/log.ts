@@ -1,4 +1,3 @@
-// ADR webview-logs-and-uncaught-errors-are-written-to-hive-log-through-the-root-logger.
 import type { App } from 'vue'
 import {
   Level as BackendLevel,
@@ -10,11 +9,7 @@ import { appErrorKind, appErrorMessage } from './appError'
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 export type LogFields = Record<string, unknown>
 
-/**
- * `detail` is usually the caught error: its message, stack and Kind become
- * fields of their own. Anything else that is not a string is logged as a
- * `detail` field.
- */
+/** An Error `detail` becomes error, stack and kind fields; any other non-string becomes a `detail` field. */
 type LogMethod = (message: string, detail?: unknown, fields?: LogFields) => void
 
 export interface Logger {
@@ -35,8 +30,7 @@ let threshold: number | null = null
 let levelRequest: Promise<number> | null = null
 
 let buffer: ClientLogEntry[] = []
-// Identical entries waiting in the buffer collapse into one with a count, so
-// an error thrown on every frame costs one line per flush.
+// An error thrown on every frame costs one line per flush.
 let pending = new Map<string, ClientLogEntry>()
 let dropped = 0
 let timer: ReturnType<typeof setTimeout> | null = null
@@ -175,7 +169,7 @@ function echo(level: LogLevel, message: string, detail: unknown, fields?: LogFie
   console[level](...args)
 }
 
-// Specs assert on behaviour, not on console output, so vitest runs quiet.
+// Specs assert on behaviour, not console output.
 const echoToConsole = import.meta.env.MODE !== 'test'
 
 function emit(level: LogLevel, name: string, message: string, detail: unknown, fields?: LogFields, toConsole = true) {
@@ -183,15 +177,11 @@ function emit(level: LogLevel, name: string, message: string, detail: unknown, f
   try {
     enqueue(entry(level, name, message, detail, fields))
   } catch {
-    // Logging must never be the thing that throws.
+    // A logging call never throws into its caller.
   }
 }
 
-/**
- * A logger whose lines carry `cmp=webview.<name>` in hive.log. Every call also
- * writes to the devtools console. Name it after the module or feature
- * ('feed-state', 'keybindings') so one filter narrows hive.log to it.
- */
+/** Lines carry `cmp=webview.<name>`; name it after the module ('feed-state'). */
 export function createLogger(name = ''): Logger {
   return {
     debug: (message, detail, fields) => emit('debug', name, message, detail, fields),
@@ -203,11 +193,7 @@ export function createLogger(name = ''): Logger {
 
 let captureInstalled = false
 
-/**
- * Sends uncaught errors and unhandled rejections to hive.log, and flushes
- * what is buffered when the page goes away. The browser already prints
- * these to the console, so they are not echoed.
- */
+// Not echoed: the browser already prints uncaught errors.
 export function installErrorCapture(target: Window = window): void {
   if (captureInstalled) return
   captureInstalled = true
@@ -231,11 +217,7 @@ export function installErrorCapture(target: Window = window): void {
   target.addEventListener('pagehide', () => void flush())
 }
 
-/**
- * Routes errors from Vue render functions, watchers and lifecycle hooks to
- * hive.log. Vue stops printing them once a handler is set, so these are
- * echoed.
- */
+// Echoed, because Vue stops printing errors once a handler is set.
 export function captureVueErrors(app: App): void {
   app.config.errorHandler = (err, instance, info) => {
     const component = instance?.$options.name ?? instance?.$options.__name
