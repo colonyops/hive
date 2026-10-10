@@ -42,8 +42,10 @@ func (cmd *DesktopCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
 		Name:    "desktop",
 		Aliases: []string{"dt"},
-		Usage:   "Link into Hive Desktop",
-		Description: `Builds and opens hive:// links, which Hive Desktop registers with the operating
+		Usage:   "Link into Hive Desktop (experimental)",
+		Description: `Experimental: the commands and the link format can change.
+
+Builds and opens hive:// links, which Hive Desktop registers with the operating
 system. A link opens a Code session, a chat, an inbox item, or a canvas.
 
   hive://code/<slug>[?window=<id>][&canvas=<name>]
