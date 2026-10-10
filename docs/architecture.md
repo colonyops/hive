@@ -293,6 +293,14 @@ with `logutils.Component`, which adds `cmp=<name>`, so one filter narrows a log
 to one component. The engine and the programs hand out a logger with no `cmp`
 label, because zerolog appends fields and a second label would repeat the key.
 
+The desktop webview logs into the same stream. Frontend code logs through
+`createLogger(name)` in `src/lib/log.ts`, never `console`, and a global
+catcher sends uncaught errors, unhandled rejections, and Vue errors the same
+way. Entries cross one binding in batches and the core writes them through the
+root logger as `cmp=webview.<name>`, bounded and rate-limited. Wails' own
+system log is the root logger too, through `logutils.SlogHandler`
+(ADR [webview-logs-and-uncaught-errors-are-written-to-hive-log-through-the-root-logger](decisions/2026-10-10-webview-logs-and-uncaught-errors-are-written-to-hive-log-through-the-root-logger.md)).
+
 Inside the desktop, `adapter` imports `app` and `app` imports the shared
 layers; `app` never imports `adapter`, Wails, or any transport package. An
 `app` package that needs something from the outside declares an interface and

@@ -13,15 +13,19 @@ import DiagnosticsWindow from './components/DiagnosticsWindow.vue'
 import { initializeAppFont } from './composables/useAppFont'
 import { initializeKeybindings } from './composables/useKeybindings'
 import { initializeTheme } from './composables/useTheme'
+import { captureVueErrors, installErrorCapture } from './lib/log'
 import { router } from './router'
 
+installErrorCapture()
 initializeTheme()
 initializeAppFont()
 if (new URLSearchParams(window.location.search).has('diagnostics')) {
-  createApp(DiagnosticsWindow as Component).mount('#app')
+  const app = createApp(DiagnosticsWindow as Component)
+  captureVueErrors(app)
+  app.mount('#app')
 } else {
   initializeKeybindings()
-  createApp(App as Component)
-    .use(router)
-    .mount('#app')
+  const app = createApp(App as Component).use(router)
+  captureVueErrors(app)
+  app.mount('#app')
 }

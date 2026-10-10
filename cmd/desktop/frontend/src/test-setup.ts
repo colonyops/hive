@@ -1,10 +1,19 @@
 import { enableAutoUnmount } from '@vue/test-utils'
-import { afterAll, afterEach, beforeEach } from 'vitest'
+import { afterAll, afterEach, beforeEach, vi } from 'vitest'
+import { resetLogForTests } from './lib/log'
 import { resetStores } from './stores/defineStore'
 
 // Registered before enableAutoUnmount so that, with Vitest's stack ordering of
 // after-hooks, every mounted wrapper is gone before the stores it used stop.
 afterEach(resetStores)
+
+// Every spec that logs reaches lib/log. Its binding is stubbed here, once, so
+// no spec has to mock it to stay off the network; log.spec reads these mocks.
+vi.mock('../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/clientlogservice', () => ({
+  Level: vi.fn(() => Promise.resolve('debug')),
+  Write: vi.fn(() => Promise.resolve()),
+}))
+afterEach(resetLogForTests)
 
 // Every `mount` is torn down between tests. Leaked wrappers stay attached to
 // the document, and each carries its own Vue app whose `useId()` counter

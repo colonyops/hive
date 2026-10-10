@@ -155,6 +155,24 @@ export interface CanvasWrite {
 }
 
 /**
+ * ClientLogEntry is one webview log line. AtUnixMs is Date.now() at the call;
+ * zero leaves only the time the backend wrote it.
+ */
+export interface ClientLogEntry {
+    "atUnixMs": number;
+    "level": string;
+    "name"?: string;
+    "message": string;
+    "error"?: string;
+    "kind"?: string;
+    "stack"?: string;
+    "window"?: string;
+    "route"?: string;
+    "count"?: number;
+    "fields"?: { [_ in string]?: any } | null;
+}
+
+/**
  * DevToolsInfo is what the frontend needs before it decides to render the pane.
  */
 export interface DevToolsInfo {
