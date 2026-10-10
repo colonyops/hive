@@ -98,7 +98,7 @@ func New(mock string, settingsStore *settings.Store, appIcon []byte, logger zero
 		mock:          mock,
 		settingsStore: settingsStore,
 		focus:         NewFocusState(),
-		links:         NewLinkService(),
+		links:         NewLinkService(logger),
 		notifications: NewUnavailableNotificationService(fmt.Errorf("native notifications unavailable in desktop mock mode")),
 	}
 	if mock != "" {
@@ -151,7 +151,7 @@ func (u *UI) Mount(ctx context.Context, core *app.App, opts MountOptions) {
 	u.trayIconLinux = opts.TrayIconLinux
 	u.app = application.New(u.options(core, opts))
 	u.app.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(event *application.ApplicationEvent) {
-		u.openLink(event.Context().URL())
+		u.openLink(event.Context().URL(), linkFromOS)
 	})
 	u.attachUpdater(opts)
 	u.buildMenu()
@@ -396,12 +396,11 @@ func (u *UI) reveal() {
 // openLink raises the window and routes to the place a hive:// link names. A
 // link that does not parse still raises the window, so the click visibly
 // landed, and says why nothing opened.
-func (u *UI) openLink(raw string) {
+func (u *UI) openLink(raw string, source linkSource) {
 	if u.window != nil {
 		u.reveal()
 	}
-	if err := u.links.deliver(raw); err != nil {
-		u.logger.Warn().Err(err).Str("url", raw).Msg("ignoring hive:// link")
+	if err := u.links.deliver(raw, source); err != nil {
 		emitNotificationToast(NotificationToast{Title: "Could not open link", Body: err.Error(), Severity: "error"})
 	}
 }
@@ -413,15 +412,27 @@ func (u *UI) openLink(raw string) {
 // with their own data still run side by side, and it is off without a session
 // bus, because Wails fails startup when it cannot take the lock.
 func (u *UI) singleInstance(dataDir string) *application.SingleInstanceOptions {
-	if runtime.GOOS != "linux" || u.mock != "" || os.Getenv("DBUS_SESSION_BUS_ADDRESS") == "" {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	if u.mock != "" {
+		u.logger.Info().Str("mock", u.mock).Msg("single-instance lock off in mock mode; a hive:// link starts a second Hive")
+		return nil
+	}
+	if os.Getenv("DBUS_SESSION_BUS_ADDRESS") == "" {
+		u.logger.Warn().Msg("single-instance lock off: DBUS_SESSION_BUS_ADDRESS is unset; a hive:// link starts a second Hive")
 		return nil
 	}
 	sum := sha256.Sum256([]byte(dataDir))
+	uniqueID := "com.hivedesktop.app." + hex.EncodeToString(sum[:8])
+	u.logger.Info().Str("unique_id", uniqueID).Str("data_dir", dataDir).Msg("single-instance lock on")
 	return &application.SingleInstanceOptions{
-		UniqueID: "com.hivedesktop.app." + hex.EncodeToString(sum[:8]),
+		UniqueID: uniqueID,
 		OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-			if link, ok := linkArg(data.Args); ok {
-				u.openLink(link)
+			link, ok := linkArg(data.Args)
+			u.logger.Info().Strs("args", data.Args).Bool("has_link", ok).Msg("second Hive launch handed over")
+			if ok {
+				u.openLink(link, linkFromSecondInstance)
 				return
 			}
 			u.reveal()

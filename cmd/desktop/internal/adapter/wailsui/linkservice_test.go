@@ -1,6 +1,7 @@
 package wailsui
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -21,11 +22,11 @@ func countLinkOpens(t *testing.T) *int {
 
 func TestLinkService_HoldsTheLatestLinkUntilTaken(t *testing.T) {
 	opens := countLinkOpens(t)
-	links := NewLinkService()
+	links := NewLinkService(zerolog.Nop())
 	assert.Nil(t, links.Take())
 
-	require.NoError(t, links.deliver("hive://code/first"))
-	require.NoError(t, links.deliver("hive://inbox/work/7"))
+	require.NoError(t, links.deliver("hive://code/first", linkFromOS))
+	require.NoError(t, links.deliver("hive://inbox/work/7", linkFromSecondInstance))
 	assert.Equal(t, 2, *opens)
 
 	assert.Equal(t, &deeplink.Location{Area: deeplink.AreaInbox, Profile: "work", Item: 7}, links.Take())
@@ -37,8 +38,8 @@ func TestUI_OpenLinkToastsALinkThatDoesNotParse(t *testing.T) {
 	toasts := make(chan NotificationToast, 1)
 	swapEmitNotificationToast(t, toasts)
 
-	ui := &UI{logger: zerolog.Nop(), links: NewLinkService()}
-	ui.openLink("hive://flows/work")
+	ui := &UI{logger: zerolog.Nop(), links: NewLinkService(zerolog.Nop())}
+	ui.openLink("hive://flows/work", linkFromOS)
 
 	assert.Zero(t, *opens)
 	assert.Nil(t, ui.links.Take())
@@ -54,4 +55,22 @@ func TestLinkArg(t *testing.T) {
 
 	_, ok = linkArg([]string{"/usr/local/bin/hive-desktop"})
 	assert.False(t, ok)
+}
+
+func TestLinkService_LogsEachStep(t *testing.T) {
+	countLinkOpens(t)
+	var buf bytes.Buffer
+	links := NewLinkService(zerolog.New(&buf))
+
+	require.NoError(t, links.deliver("hive://code/web?window=@2", linkFromSecondInstance))
+	links.Take()
+	require.Error(t, links.deliver("hive://flows/x", linkFromOS))
+
+	out := buf.String()
+	assert.Contains(t, out, `"message":"received hive:// link"`)
+	assert.Contains(t, out, `"source":"second-instance"`)
+	assert.Contains(t, out, `"link":{"area":"code","slug":"web","window":"@2"}`)
+	assert.Contains(t, out, `"message":"frontend took hive:// link"`)
+	assert.Contains(t, out, `"message":"ignoring hive:// link"`)
+	assert.Contains(t, out, `"cmp":"links"`)
 }

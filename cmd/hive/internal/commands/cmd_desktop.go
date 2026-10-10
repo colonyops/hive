@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
@@ -17,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/session"
 	hivesession "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/git"
+	"github.com/colonyops/hive/pkg/logutils"
 )
 
 // DesktopCmd implements the hive desktop command group.
@@ -54,6 +56,10 @@ system. A link opens a Code session, a chat, an inbox item, or a canvas.
 		},
 	})
 	return app
+}
+
+func (cmd *DesktopCmd) logger() zerolog.Logger {
+	return logutils.Component(cmd.app.Logger, "cli.desktop")
 }
 
 func (cmd *DesktopCmd) urlCmd() *cli.Command {
@@ -222,13 +228,21 @@ func (cmd *DesktopCmd) openLocation(ctx context.Context, _ *cli.Command, loc dee
 	if runtime.GOOS == "darwin" {
 		opener = "open"
 	}
+	log := cmd.logger().With().Str("url", link).Str("opener", opener).Logger()
+	log.Info().Interface("link", loc).Msg("opening hive:// link")
+
 	out, err := exec.CommandContext(ctx, opener, link).CombinedOutput()
+	msg := strings.TrimSpace(string(out))
 	if err != nil {
-		if msg := strings.TrimSpace(string(out)); msg != "" {
+		log.Error().Err(err).Str("output", msg).Msg("opener failed")
+		if msg != "" {
 			return fmt.Errorf("%s %s: %w: %s", opener, link, err, msg)
 		}
 		return fmt.Errorf("%s %s: %w", opener, link, err)
 	}
+	// open and xdg-open exit 0 once the OS accepts the URL, which says nothing
+	// about whether Hive Desktop received it; the desktop log records that.
+	log.Info().Str("output", msg).Msg("opener accepted hive:// link")
 	return nil
 }
 
@@ -241,9 +255,17 @@ func (cmd *DesktopCmd) currentSession(ctx context.Context) (session.Session, err
 	if err != nil {
 		return session.Session{}, fmt.Errorf("detect session: %w", err)
 	}
+	log := cmd.logger()
 	if !ok {
+		log.Debug().Str("cwd", cwd).Msg("no hive session holds the working directory")
 		return session.Session{}, errors.New("not in a hive session; name one explicitly")
 	}
+	log.Debug().
+		Str("cwd", cwd).
+		Str("session", sess.ID).
+		Str("tmux_session", hivesession.Target(sess).Session).
+		Str("remote", sess.Remote).
+		Msg("resolved hive session from working directory")
 	return sess, nil
 }
 

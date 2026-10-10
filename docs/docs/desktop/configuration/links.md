@@ -45,5 +45,15 @@ hive dt open 'hive://inbox/work/7'        # or any link
 
 Without a slug, `code` uses the hive session that holds the current directory. Without `--owner`, `canvas` uses that session's repository.
 
+## A link does nothing
+
+Both sides log to the shared `hive.log` (see [Report a problem](../getting-started/troubleshooting.md#report-a-problem) for its path). Search it for `hive://`:
+
+- `opening hive:// link` and `opener accepted hive:// link` come from the CLI. `opener failed` means the OS has no handler for `hive://`, so install Hive Desktop or reinstall it to register the scheme.
+- `received hive:// link` means Hive Desktop got the link, and `frontend took hive:// link` means the window started routing to it. `ignoring hive:// link` names the part that did not parse.
+- On Linux, `single-instance lock off` means a link starts a second Hive instead of reaching the running one.
+
+Pass `--log-level debug` to the CLI to also log which hive session it found for the current directory.
+
 !!! note "Installed builds only"
     The packaged macOS app and the Linux install script register the scheme. A build run with `mise run desktop:dev` does not receive links.
