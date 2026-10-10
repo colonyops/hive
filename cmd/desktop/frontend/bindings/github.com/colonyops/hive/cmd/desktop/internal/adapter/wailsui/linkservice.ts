@@ -6,6 +6,10 @@
  * frontend takes it. A link that launches the app arrives before the webview
  * listens, so link:open is only a wake-up and the link itself waits here.
  * Only the latest link is kept: a user who clicks twice wants the second place.
+ * 
+ * Every step is logged at info: links are rare and user-driven, and a link
+ * that "does nothing" is otherwise impossible to place between the OS, this
+ * service, and the frontend.
  * @module
  */
 
