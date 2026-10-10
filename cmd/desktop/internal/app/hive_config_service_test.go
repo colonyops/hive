@@ -14,6 +14,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/hiveconf"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
+	"github.com/colonyops/hive/internal/platform/execenv"
 )
 
 func hiveSetupApp(t *testing.T) (core *App, configPath, workspace string) {
@@ -26,15 +27,19 @@ func hiveSetupApp(t *testing.T) (core *App, configPath, workspace string) {
 	t.Setenv(settings.EnvDataDir, filepath.Join(root, "data"))
 	t.Setenv(settings.EnvConfigDir, filepath.Join(root, "config"))
 	t.Setenv("HIVE_CONFIG", configPath)
-	// HIVE_DEFAULT_AGENT wins over agents.default at load, so a developer who
-	// exports it would otherwise see these assertions answer to their shell.
+	// An empty process value falls back to the login shell, so use a controlled
+	// shell answer to keep a developer's agent override out of these tests.
 	t.Setenv("HIVE_DEFAULT_AGENT", "")
 	t.Setenv(settings.EnvMockMode, "feed")
+	testExecEnv := execenv.NewResolver(execenv.Options{Shell: "/bin/sh", Probe: func(context.Context, string) (map[string]string, error) {
+		return map[string]string{"PATH": os.Getenv("PATH")}, nil
+	}})
 
 	core, err := New(t.Context(), Config{
 		Settings: settings.DefaultSettings(),
 		MockMode: settings.MockMode(),
 		Logger:   zerolog.Nop(),
+		ExecEnv:  testExecEnv,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
