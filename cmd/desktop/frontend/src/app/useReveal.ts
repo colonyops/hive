@@ -12,7 +12,7 @@ import type {
   NotificationToast,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { Take as TakeLink } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/linkservice'
-import type { Location } from '../../bindings/github.com/colonyops/hive/internal/domain/deeplink/models'
+import { Area, type Location } from '../../bindings/github.com/colonyops/hive/internal/domain/deeplink/models'
 import type { CanvasScope } from '../lib/agentCanvas'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 
@@ -116,21 +116,21 @@ export function useReveal(
   // needs is present.
   async function revealLocation(loc: Location): Promise<void> {
     switch (loc.area) {
-      case 'code': {
+      case Area.AreaCode: {
         const query: Record<string, string> = {}
         if (loc.window) query.window = loc.window
         if (loc.canvas) query.canvas = loc.canvas
         await nav.router.push({ name: 'terminal', params: { slug: loc.slug }, query })
         return
       }
-      case 'chats': {
+      case Area.AreaChats: {
         const query: Record<string, string> = {}
         if (loc.chat) query.chat = loc.chat
         if (loc.canvas) query.canvas = loc.canvas
         await nav.router.push({ name: 'agents', params: { workspace: loc.workspace }, query })
         return
       }
-      case 'inbox':
+      case Area.AreaInbox:
         if (loc.item) await revealInboxItem(loc.profile ?? '', loc.item)
         else
           await nav.router.push({
@@ -139,11 +139,11 @@ export function useReveal(
             query: loc.feed ? { feed: loc.feed } : {},
           })
         return
-      case 'canvas':
+      case Area.AreaCanvas:
         openCanvas({ workspace: loc.owner ?? '', name: loc.canvas ?? null, session: null })
         return
       default:
-        showToast(`Hive cannot open ${loc.area} links yet`, { severity: 'error' })
+        showToast(`Hive cannot open ${String(loc.area)} links yet`, { severity: 'error' })
     }
   }
 
