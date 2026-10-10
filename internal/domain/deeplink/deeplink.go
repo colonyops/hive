@@ -24,14 +24,9 @@ import (
 const Scheme = "hive"
 
 // Area is the part of Hive Desktop a link opens.
+//
+// ENUM(code, chats, inbox, canvas)
 type Area string
-
-const (
-	AreaCode   Area = "code"
-	AreaChats  Area = "chats"
-	AreaInbox  Area = "inbox"
-	AreaCanvas Area = "canvas"
-)
 
 // Location is one place in Hive Desktop. Which fields apply depends on Area:
 //
@@ -68,14 +63,18 @@ func Parse(raw string) (Location, error) {
 	if u.Opaque != "" || u.Host == "" {
 		return Location{}, fmt.Errorf("link must start with %s://", Scheme)
 	}
+	area, err := ParseArea(u.Host)
+	if err != nil {
+		return Location{}, fmt.Errorf("unknown link area %q", u.Host)
+	}
 	segments, err := pathSegments(u)
 	if err != nil {
 		return Location{}, err
 	}
 
 	q := u.Query()
-	loc := Location{Area: Area(strings.ToLower(u.Host))}
-	switch loc.Area {
+	loc := Location{Area: area}
+	switch area {
 	case AreaCode:
 		if len(segments) != 1 {
 			return Location{}, errors.New("code links name a session slug")
@@ -117,8 +116,6 @@ func Parse(raw string) (Location, error) {
 		if loc.Owner == "" {
 			return Location{}, errors.New("canvas links need an owner")
 		}
-	default:
-		return Location{}, fmt.Errorf("unknown link area %q", u.Host)
 	}
 	return loc, nil
 }
