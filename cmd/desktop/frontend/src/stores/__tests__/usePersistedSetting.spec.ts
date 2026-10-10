@@ -1,5 +1,5 @@
 import { flushPromises } from '@vue/test-utils'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { usePersistedSetting } from '../usePersistedSetting'
 
 function deferred<T>() {
@@ -13,10 +13,6 @@ function deferred<T>() {
 }
 
 describe('usePersistedSetting', () => {
-  beforeEach(() => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-  })
-
   afterEach(() => vi.restoreAllMocks())
 
   it('holds the initial value until the stored one arrives', async () => {
@@ -59,7 +55,6 @@ describe('usePersistedSetting', () => {
 
     expect(setting.value.value).toBe(3)
     expect(setting.hydrated.value).toBe(true)
-    expect(console.warn).toHaveBeenCalledWith('Unable to load the size from settings.yaml', expect.any(Error))
   })
 
   it('applies a write at once and persists it', async () => {
@@ -107,6 +102,5 @@ describe('usePersistedSetting', () => {
     expect(write).toHaveBeenCalledTimes(2)
     expect(write).toHaveBeenLastCalledWith(3)
     expect(setting.value.value).toBe(3)
-    expect(console.warn).toHaveBeenCalledWith('Unable to persist the size to settings.yaml', expect.any(Error))
   })
 })

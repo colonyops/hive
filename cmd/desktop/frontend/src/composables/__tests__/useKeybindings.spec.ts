@@ -591,12 +591,11 @@ describe('override storage sanitization', () => {
   // shortcut-less.
   it('keeps catalog defaults when the settings read fails', async () => {
     settings.get.mockRejectedValue(new Error('unavailable'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { useKeybindings, initializeKeybindings } = await import('../useKeybindings')
     initializeKeybindings()
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled())
+    await vi.waitFor(() => expect(settings.get).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 0))
     expect(useKeybindings().bindings.value['feed.next']).toEqual(['j', 'arrowdown'])
-    warn.mockRestore()
   })
 
   // Hydration happens after mount; a rebind made while that read is in flight

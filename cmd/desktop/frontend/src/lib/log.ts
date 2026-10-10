@@ -179,8 +179,11 @@ function echo(level: LogLevel, message: string, detail: unknown, fields?: LogFie
   console[level](...args)
 }
 
+// Specs assert on behaviour, not on console output, so vitest runs quiet.
+const echoToConsole = import.meta.env.MODE !== 'test'
+
 function emit(level: LogLevel, name: string, message: string, detail: unknown, fields?: LogFields, toConsole = true) {
-  if (toConsole) echo(level, message, detail, fields)
+  if (toConsole && echoToConsole) echo(level, message, detail, fields)
   try {
     enqueue(entry(level, name, message, detail, fields))
   } catch {

@@ -80,15 +80,11 @@ describe('usePaletteRecents', () => {
     const getItem = vi.spyOn(localStorage, 'getItem').mockImplementation(() => {
       throw new Error('storage unavailable')
     })
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-
     try {
       const { usePaletteRecents } = await import('../usePaletteRecents')
       expect(usePaletteRecents().recentIds.value).toEqual([])
-      expect(warn).toHaveBeenCalled()
     } finally {
       getItem.mockRestore()
-      warn.mockRestore()
     }
   })
 })

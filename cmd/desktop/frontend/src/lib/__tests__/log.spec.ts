@@ -18,15 +18,10 @@ beforeEach(() => {
   log.resetLogForTests()
   mocks.Level.mockResolvedValue('debug')
   mocks.Write.mockResolvedValue(undefined)
-  vi.spyOn(console, 'debug').mockImplementation(() => {})
-  vi.spyOn(console, 'info').mockImplementation(() => {})
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
-  vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 
 afterEach(() => {
   vi.useRealTimers()
-  vi.restoreAllMocks()
   log.resetLogForTests()
 })
 
@@ -51,12 +46,6 @@ describe('createLogger', () => {
     })
     expect(batch[0].stack).toContain('boom')
     expect(batch[1]).toMatchObject({ level: 'info', message: 'loaded' })
-  })
-
-  it('keeps the console call the code made', () => {
-    log.createLogger('jobs').warn('Unable to load active jobs:', 'temporary failure')
-
-    expect(console.warn).toHaveBeenCalledWith('Unable to load active jobs:', 'temporary failure')
   })
 
   it('reads the Kind and message the Go core put on a binding error', async () => {

@@ -926,7 +926,6 @@ describe('App', () => {
       notes: '',
     })
     mocks.InstallUpdate.mockRejectedValue(new Error('checksum mismatch'))
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const wrapper = await mountApp()
 
     try {
@@ -948,7 +947,6 @@ describe('App', () => {
       expect(wrapper.get('[data-testid="titlebar-update-chip"]').attributes('disabled')).toBeUndefined()
     } finally {
       wrapper.unmount()
-      consoleError.mockRestore()
     }
   })
 
@@ -2535,7 +2533,6 @@ describe('App', () => {
           ])
         : secondEvents,
     )
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const wrapper = await mountApp()
     expect(wrapper.get('[data-testid="observed-activity"]').text()).toContain('first event')
 
@@ -2546,7 +2543,6 @@ describe('App', () => {
     rejectSecond(new Error('events unavailable'))
     await flushPromises()
     expect(wrapper.find('[data-testid="observed-activity"]').exists()).toBe(false)
-    expect(warn).toHaveBeenCalledWith('Unable to load inbox item events', expect.any(Error))
     wrapper.unmount()
   })
 

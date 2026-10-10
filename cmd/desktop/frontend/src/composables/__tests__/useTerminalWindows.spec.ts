@@ -16,6 +16,9 @@ import { paneMayAutoFocus } from '../../lib/terminalTree'
 import { useKeybindings } from '../useKeybindings'
 import { useTerminalOutcomes } from '../../stores/useTerminalOutcomes'
 
+const logged = vi.hoisted(() => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }))
+vi.mock('../../lib/log', () => ({ createLogger: () => logged }))
+
 const xterm = vi.hoisted(() => {
   interface FakeLine {
     isWrapped: boolean
@@ -752,20 +755,17 @@ describe('useTerminalWindows', () => {
   })
 
   it('falls back to the canvas renderer where WebGL2 is missing', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     xterm.FakeWebglAddon.unavailable = true
     const { session } = await attached()
 
     mountWindow(session, '@1')
 
     expect(xterm.FakeCanvasAddon.instances).toHaveLength(1)
-    warn.mockRestore()
   })
 
   // Both atlas renderers gone leaves the DOM renderer, which draws with the
   // #131 seams — degraded, but never a pane that failed to open.
   it('still opens the pane when no renderer context exists at all', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     xterm.FakeWebglAddon.unavailable = true
     xterm.FakeCanvasAddon.unavailable = true
     const { session } = await attached()
@@ -774,7 +774,6 @@ describe('useTerminalWindows', () => {
 
     expect(xterm.FakeTerminal.instances[0].open).toHaveBeenCalledTimes(1)
     expect(session.status.value).toBe('live')
-    warn.mockRestore()
   })
 
   it('claims the canvas renderer when a WebGL context is lost for good', async () => {
@@ -806,7 +805,6 @@ describe('useTerminalWindows', () => {
   // The canvas claim is all that stands between a lost context and the DOM
   // renderer, so a failed one must not strand the pane there for good.
   it('retries the renderer on the next activation when the canvas claim failed', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { session } = await attached()
     mountWindow(session, '@1')
     mountWindow(session, '@2')
@@ -820,7 +818,6 @@ describe('useTerminalWindows', () => {
     await session.select('@1')
 
     expect(xterm.FakeWebglAddon.instances).toHaveLength(3)
-    warn.mockRestore()
   })
 
   // xterm disposes its core before its addons, and a renderer addon restores a
@@ -1163,7 +1160,6 @@ describe('useTerminalWindows', () => {
 
   it('votes nothing when the pane cannot be measured', async () => {
     vi.useFakeTimers()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const client = fakeClient()
     const session = open(client)
     await session.start()
@@ -1176,14 +1172,13 @@ describe('useTerminalWindows', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(client.resize).not.toHaveBeenCalled()
-    warn.mockRestore()
   })
 
   // The fake mirrors a private xterm cell field; this warning catches upstream
   // changes that would otherwise silently stop size votes.
   it('warns once when an opened, visible pane reports no cell', async () => {
     vi.useFakeTimers()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    logged.warn.mockClear()
     const client = fakeClient()
     const session = open(client)
     await session.start()
@@ -1197,21 +1192,19 @@ describe('useTerminalWindows', () => {
     await vi.advanceTimersByTimeAsync(100)
 
     expect(client.resize).not.toHaveBeenCalled()
-    const warnings = warn.mock.calls.filter((call) => String(call[0]).includes('terminalGrid.ts'))
+    const warnings = logged.warn.mock.calls.filter((call) => String(call[0]).includes('terminalGrid.ts'))
     expect(warnings).toHaveLength(1)
-    warn.mockRestore()
   })
 
   // Pooled sessions legitimately expose 0×0 pane boxes under display:none.
   it('does not warn about a pane with no rendered box', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    logged.warn.mockClear()
     const { session } = await attached()
     for (const term of xterm.FakeTerminal.instances) term._core = {}
 
     mountWindow(session, '@1', document.createElement('div'))
 
-    expect(warn).not.toHaveBeenCalled()
-    warn.mockRestore()
+    expect(logged.warn).not.toHaveBeenCalled()
   })
 
   // A pooled session's windows sit behind display:none while another session

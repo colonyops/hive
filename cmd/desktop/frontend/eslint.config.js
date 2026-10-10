@@ -161,8 +161,6 @@ export default defineConfig(
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-argument': 'off',
       '@typescript-eslint/unbound-method': 'off',
-      // Specs assert on what lib/log echoes to the console.
-      'no-console': 'off',
     },
   },
 

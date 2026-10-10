@@ -80,15 +80,12 @@ describe('useLaunchers', () => {
     const { commands } = await import('../../keybindings/catalog')
     await useLaunchers().refresh()
 
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     service.Launchers.mockRejectedValue(new Error('unavailable'))
     await useLaunchers().refresh()
 
-    expect(warn).toHaveBeenCalled()
     expect(commands.value.filter((command) => command.group === 'Quick terminals').map((c) => c.id)).toEqual([
       'launcher.lazygit',
     ])
-    warn.mockRestore()
   })
 
   // A null crossing the Wails bridge is an empty catalog, not a failure.

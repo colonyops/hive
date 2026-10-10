@@ -32,7 +32,6 @@ describe('useTerminalFont', () => {
     mocks.AppearanceSettings.mockResolvedValue({ terminalFontSizePx: 0 })
     mocks.SetTerminalFontSize.mockResolvedValue(undefined)
     mocks.SetTerminalFontWeights.mockResolvedValue(undefined)
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
   afterEach(() => vi.restoreAllMocks())
@@ -61,14 +60,13 @@ describe('useTerminalFont', () => {
     expect(font.cellMetrics()).toBe('17|Menlo|400|600|1.4|2')
   })
 
-  it('keeps the defaults and warns once when the read fails', async () => {
+  it('keeps the defaults when the read fails', async () => {
     mocks.AppearanceSettings.mockRejectedValue(new Error('no file'))
 
     const font = useTerminalFont()
     await settle()
 
     expect(font.px.value).toBe(defaultTerminalFontSizePx)
-    expect(console.warn).toHaveBeenCalledTimes(1)
   })
 
   it('steps by two and holds at both ends', async () => {

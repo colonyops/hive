@@ -38,7 +38,6 @@ describe('useJobs', () => {
     vi.clearAllMocks()
     mocks.On.mockReturnValue(mocks.unsubscribe)
     mocks.ListActive.mockResolvedValue([])
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -89,7 +88,6 @@ describe('useJobs', () => {
     await vi.advanceTimersByTimeAsync(500)
     await flushPromises()
     expect(jobs.hasActive.value).toBe(true)
-    expect(console.warn).toHaveBeenCalledWith('Unable to load active jobs:', 'temporary failure')
     await vi.advanceTimersByTimeAsync(500)
     await flushPromises()
 

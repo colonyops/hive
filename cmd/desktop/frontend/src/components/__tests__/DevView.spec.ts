@@ -144,7 +144,6 @@ describe('DevView notification test card', () => {
   })
 
   it('reports the banner failure behind an auto notification that fell back to a toast', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
     mocks.focused.value = false
     mocks.Notify.mockRejectedValueOnce(new Error('notification permission not granted'))
     const wrapper = mount(DevView)
