@@ -16,9 +16,9 @@ the processes that still hold the old file keep writing to a backup.
 `logutils.NewRoot` writes the file through a rotating writer:
 
 1. **Size is read from disk, not counted.** A process checks when it opens
-   the log, then on the first write after five minutes. It stats the path and
+   the log, then on the first write after 30 minutes. It stats the path and
    its open file; when they are the same file and the file has reached
-   10 MiB, it rotates. Five minutes is enough: hive writes on the order of
+   10 MiB, it rotates. Thirty minutes is enough: hive writes on the order of
    150 KB a day, and a late rotation costs only some overshoot.
 2. **Rotation holds an exclusive `flock` on `hive.log.lock`** and re-checks
    the size under it, so concurrent writers rotate once. It renames
@@ -29,8 +29,8 @@ the processes that still hold the old file keep writing to a backup.
 ## Consequences
 
 - Retained log is about 40 MiB. A file can overshoot 10 MiB by what is
-  written in five minutes.
-- A long-running writer keeps appending to a rotated backup for up to five
+  written in 30 minutes.
+- A long-running writer keeps appending to a rotated backup for up to 30
   minutes after another process rotates. Short-lived CLI processes check only
   on open.
 - Diagnostics and the problem report read only `hive.log`, so right after a
