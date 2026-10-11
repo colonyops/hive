@@ -9,6 +9,9 @@ import {
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/githubservice'
 import type { ConnectionStatus, DeviceFlowInfo } from '../types/github'
 import { useWailsEvent } from './useWailsEvent'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('github-connection')
 
 export type ConnectCard = 'idle' | 'device' | 'token'
 
@@ -47,7 +50,7 @@ export function useGitHubConnection() {
         deviceFlow.value = null
       }
     } catch (err) {
-      console.warn('Unable to load GitHub connection status', err)
+      log.warn('unable to load GitHub connection status', err)
       status.value = { state: 'disconnected', login: '', name: '', avatarUrl: '', message: '' }
     }
   }
@@ -72,7 +75,7 @@ export function useGitHubConnection() {
     try {
       await CancelDeviceFlow()
     } catch (err) {
-      console.warn('Unable to cancel device flow', err)
+      log.warn('unable to cancel device flow', err)
     }
   }
 
@@ -88,7 +91,7 @@ export function useGitHubConnection() {
     try {
       await CancelDeviceFlow()
     } catch (err) {
-      console.warn('Unable to cancel device flow', err)
+      log.warn('unable to cancel device flow', err)
     }
   }
 
@@ -117,7 +120,7 @@ export function useGitHubConnection() {
       deviceFlow.value = null
       await reload()
     } catch (err) {
-      console.warn('Unable to disconnect GitHub', err)
+      log.warn('unable to disconnect GitHub', err)
     }
   }
 

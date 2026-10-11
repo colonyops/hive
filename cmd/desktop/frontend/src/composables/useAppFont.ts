@@ -6,6 +6,9 @@ import {
   SetMonoFontFamily as PersistMonoFontFamily,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice'
 import { appFontStacks } from '../lib/appFaces'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('app-font')
 
 /** The bundled faces, offered as the empty selection so the shipped default is
  * tracked by role rather than pinned by name into a user's settings.yaml. */
@@ -50,7 +53,7 @@ function persist(write: () => Promise<void>): void {
   persistChain = persistChain.then(write).catch((error: unknown) => {
     // The choice is applied and cached regardless; losing the durable write is
     // a degraded-but-working state, not a reason to revert what the user sees.
-    console.warn('Unable to persist font settings to settings.yaml', error)
+    log.warn('unable to persist font settings to settings.yaml', error)
   })
 }
 
@@ -70,7 +73,7 @@ async function hydrate(): Promise<void> {
     apply()
   } catch (error) {
     // Keep the cached choice: an unavailable binding must not reset the UI.
-    console.warn('Unable to load font settings from settings.yaml', error)
+    log.warn('unable to load font settings from settings.yaml', error)
   }
 }
 

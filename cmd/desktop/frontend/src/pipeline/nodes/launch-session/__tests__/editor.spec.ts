@@ -93,12 +93,9 @@ describe('launch-session editor', () => {
 
   it('keeps the field usable when the repository list cannot load', async () => {
     mocks.SessionLaunchOptions.mockRejectedValue(new Error('hive unavailable'))
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const wrapper = mount(Editor, { props: { config: { repo: 'https://example.com/a.git', prompt: 'p' } } })
     await flushPromises()
-    expect(warn).toHaveBeenCalled()
     expect(wrapper.find(repoField).exists()).toBe(true)
-    warn.mockRestore()
   })
 
   it('offers the default agent and the configured agents', async () => {

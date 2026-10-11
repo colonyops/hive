@@ -6,6 +6,7 @@ import (
 	"embed"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
 	"os"
 	"runtime"
 	"sync"
@@ -16,6 +17,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
+	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	wailsnotify "github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -185,6 +187,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		application.NewService(NewDiagnosticsService(core.Diagnostics, u.openDiagnostics)),
 		application.NewService(NewReleaseNotesService(core.ReleaseNotes, opts.Build.Version)),
 		application.NewService(NewPerfService(core.Perf)),
+		application.NewService(NewClientLogService(core.ClientLog)),
 		application.NewService(NewObservabilityService(core.Observability)),
 		application.NewService(NewDevToolsService(core.DevTools)),
 		application.NewService(NewTerminalService(core.Terminals, core.Webhooks, opts.Terminal)),
@@ -217,6 +220,8 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		// is what lets the UI tell "sign in again" from "we broke" without
 		// matching on error text.
 		MarshalError: MarshalError,
+		// Carries recovered bound-method panics. Below warn it narrates every window event.
+		Logger: slog.New(zerolog.NewSlogHandler(wailsLogger(u.logger))),
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(opts.Assets),
 			Middleware: e2e.SmokeMiddleware(core.PipelineDB(), core.Stores, core.HiveConn(), reset, core.PublishLogAppended),
@@ -483,4 +488,12 @@ func (u *UI) SeedMock(ctx context.Context, core *app.App) {
 		return
 	}
 	e2e.SeedMockInboxItemsOrWarn(ctx, core.PipelineDB(), core.Stores.EventLog, u.logger)
+}
+
+func wailsLogger(logger zerolog.Logger) zerolog.Logger {
+	logger = logutils.Component(logger, "wails")
+	if logger.GetLevel() < zerolog.WarnLevel {
+		logger = logger.Level(zerolog.WarnLevel)
+	}
+	return logger
 }

@@ -73,7 +73,6 @@ describe('useSelfUpdate', () => {
   })
 
   it('reports a failed install and lets the user try again', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
     mocks.InstallUpdate.mockRejectedValue(new Error('disk full'))
     const { confirmation, update } = setup()
 

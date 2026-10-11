@@ -32,6 +32,9 @@ import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTerminalOutcomes, type TerminalEndReason } from '../stores/useTerminalOutcomes'
 export type { TerminalEndReason } from '../stores/useTerminalOutcomes'
 import { createTerminal, loadTerminalFont, watchTerminalAppearance } from './useXtermPane'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('terminal-windows')
 
 /**
  * 'ended' is terminal: this view has no stream any more — whether or not the
@@ -606,7 +609,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   function warnUnmeasuredCell(state: PaneRuntime): void {
     if (warnedUnmeasuredCell || !state.term.element || !state.host?.clientWidth) return
     warnedUnmeasuredCell = true
-    console.warn(
+    log.warn(
       'terminalGrid.ts: an opened terminal reports no cell; xterm may have moved _core._renderService.dimensions',
     )
   }

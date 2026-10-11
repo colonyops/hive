@@ -1,6 +1,9 @@
 import { ref, watch } from 'vue'
 import { useItemSessions } from '../stores/useItemSessions'
 import type { FeedState } from './useAppNavigation'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('selected-item-detail')
 
 /**
  * What the detail pane shows beside the selected item: its event timeline and
@@ -25,7 +28,7 @@ export function useSelectedItemDetail(feed: FeedState) {
         const loaded = await feed.loadEvents(item.id)
         if (current()) events.value = loaded
       } catch (error) {
-        if (current()) console.warn('Unable to load inbox item events', error)
+        if (current()) log.warn('unable to load inbox item events', error)
       }
     },
     { immediate: true },

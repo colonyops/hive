@@ -3,6 +3,9 @@ import { Launchers } from '../../bindings/github.com/colonyops/hive/cmd/desktop/
 import type { PopupLauncher } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { launcherCommandID, setLauncherCommands } from '../keybindings/catalog'
 import { launcherIconComponent } from '../lib/launcherIcons'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('launchers')
 
 // The configured launchers — the `terminal-popup` actions in actions.yml. Each
 // one is a bindable command of its own, so this is what turns a line of config
@@ -31,7 +34,7 @@ async function refresh(): Promise<void> {
     // A catalog that cannot be read leaves the launchers that were already
     // registered alone: losing every shortcut over one failed read would be
     // worse than serving the set from a moment ago.
-    console.warn('Unable to read the configured launchers', error)
+    log.warn('unable to read the configured launchers', error)
     return
   }
   setLauncherCommands(

@@ -15,6 +15,9 @@ import { Take as TakeLink } from '../../bindings/github.com/colonyops/hive/cmd/d
 import type { Location } from '../../bindings/github.com/colonyops/hive/internal/domain/deeplink/models'
 import type { CanvasScope } from '../lib/agentCanvas'
 import type { AppNavigation, FeedState } from './useAppNavigation'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('reveal')
 
 type Payload<T> = { data: T | T[] }
 const first = <T>(event: Payload<T>): T | undefined => (Array.isArray(event.data) ? event.data[0] : event.data)
@@ -56,7 +59,7 @@ export function useReveal(
     try {
       feedId = (await Feed(profileId, itemId)) ?? ''
     } catch (error) {
-      console.warn('Unable to locate the inbox item', error)
+      log.warn('unable to locate the inbox item', error)
     }
     const query: Record<string, string> = { item: String(itemId) }
     if (feedId) query.feed = feedId
@@ -107,7 +110,7 @@ export function useReveal(
       }
       await revealInboxItem(link.profileId, item.id)
     } catch (error) {
-      console.warn('Unable to open the linked activity item', error)
+      log.warn('unable to open the linked activity item', error)
       showToast('Could not open the linked item', { severity: 'error' })
     }
   }
@@ -152,7 +155,7 @@ export function useReveal(
       const loc = await TakeLink()
       if (loc) await revealLocation(loc)
     } catch (error) {
-      console.warn('Unable to open the link', error)
+      log.warn('unable to open the link', error)
       showToast('Could not open the link', { severity: 'error' })
     }
   }

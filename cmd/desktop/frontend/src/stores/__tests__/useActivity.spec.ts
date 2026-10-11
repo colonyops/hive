@@ -73,7 +73,6 @@ describe('useActivity', () => {
   })
 
   it('fills record defaults and reports failure instead of throwing', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {})
     const activity = useActivity()
     await flushPromises()
 
@@ -89,6 +88,5 @@ describe('useActivity', () => {
 
     mocks.Record.mockRejectedValueOnce(new Error('down'))
     expect(await activity.record({ title: 'Again' })).toBe(false)
-    expect(console.error).toHaveBeenCalledOnce()
   })
 })

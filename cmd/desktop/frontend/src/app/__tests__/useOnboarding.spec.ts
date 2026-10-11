@@ -138,7 +138,6 @@ describe('useOnboarding', () => {
   it('seeds an empty profile when the account connects, and reports a failed seed', async () => {
     hive.setup.value = null
     feed.seedStarterFlow.mockRejectedValue(new Error('no flows dir'))
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
     const onboarding = setup()
     expect(onboarding.screen.value.card).toBe('idle')
 

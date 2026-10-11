@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
+const logged = vi.hoisted(() => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }))
+vi.mock('../../lib/log', () => ({ createLogger: () => logged }))
+
 import { notifySeverityMapping, useNotify, type NotifyDeps, type NotifySeverity } from '../useNotify'
 
 function makeSettings(overrides: Partial<NotifyDeps['settings']> = {}): NotifyDeps['settings'] {
@@ -129,21 +132,18 @@ describe('useNotify', () => {
   })
 
   it('warns but still surfaces transient feedback when durable recording fails', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    logged.warn.mockClear()
     const deps = makeDeps({ record: vi.fn().mockResolvedValue(false) })
-    const event = { title: 'Record failed' }
-    await useNotify(deps).notify(event)
-    expect(warn).toHaveBeenCalledWith('[notify] activity record failed; surfacing anyway', event)
+    await useNotify(deps).notify({ title: 'Record failed' })
+    expect(logged.warn).toHaveBeenCalledOnce()
     expect(deps.showToast).toHaveBeenCalledOnce()
-    warn.mockRestore()
   })
 
   it('falls back to a toast when native delivery rejects', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    logged.warn.mockClear()
     const deps = makeDeps({ focused: ref(false), osNotify: vi.fn().mockRejectedValue(new Error('no daemon')) })
     await useNotify(deps).notify({ title: 'Native failure' })
     expect(deps.showToast).toHaveBeenCalledWith('Native failure', { body: '', severity: 'info' })
-    expect(warn).toHaveBeenCalledWith('[notify] native notification failed; surfacing toast instead', expect.any(Error))
-    warn.mockRestore()
+    expect(logged.warn).toHaveBeenCalledWith(expect.any(String), expect.any(Error))
   })
 })

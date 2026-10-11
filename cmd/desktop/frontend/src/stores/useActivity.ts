@@ -10,6 +10,9 @@ import type {
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { defineStore } from './defineStore'
 import { useResource } from './useResource'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('activity')
 
 const PAGE_SIZE = 200
 
@@ -54,7 +57,7 @@ export const useActivity = defineStore('activity', () => {
       })
       return true
     } catch (error) {
-      console.error('recording activity event failed', error)
+      log.error('recording activity event failed', error)
       return false
     }
   }

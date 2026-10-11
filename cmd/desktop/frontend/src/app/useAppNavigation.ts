@@ -13,6 +13,9 @@ import {
   type ProfileSettingsSection,
 } from '../router'
 import type { SidebarSelection } from '../types/feed'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('app-navigation')
 
 export type FeedState = ReturnType<typeof useFeedState>
 export type AppNavigation = ReturnType<typeof useAppNavigation>
@@ -244,7 +247,7 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
       else query.view = 'trash'
       await router.push({ name: 'feed', params: { profileId: location.profileId }, query })
     } catch (error) {
-      console.warn('Unable to open action run', error)
+      log.warn('unable to open action run', error)
     }
   }
 

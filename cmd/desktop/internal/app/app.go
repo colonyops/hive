@@ -123,7 +123,8 @@ type App struct {
 	TerminalImages *TerminalImagesService
 	// Perf records UI spans to a JSONL file when development.perf.enabled is
 	// on. Always non-nil; a disabled recorder is a no-op (ADR ui-performance-spans-are-recorded-to-jsonl).
-	Perf *PerfService
+	Perf      *PerfService
+	ClientLog *ClientLogService
 	// Observability owns process sampling and telemetry startup status.
 	Observability *ObservabilityService
 	DevTools      *DevToolsService
@@ -465,6 +466,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	_ = os.Remove(filepath.Join(cfg.Paths.StateDir, "skills.json"))
 	a.Report = newReportService(cfg.Paths, cfg.SettingsStore, cfg.Build, cfg.Logger)
 	a.Perf = newPerfService(openPerfRecorder(cfg.Settings.Development.Perf.Enabled, cfg.Paths.StateDir, cfg.Logger), cfg.Logger)
+	a.ClientLog = newClientLogService(cfg.Logger)
 	a.Observability = newObservabilityService(cfg.SettingsStore, cfg.Settings.Telemetry, cfg.TelemetryRuntime)
 	a.DevTools = newDevToolsService(cfg.Settings.Development.DevTools.Enabled)
 	a.Canvas = newCanvasService(CanvasDeps{

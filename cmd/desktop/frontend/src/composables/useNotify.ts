@@ -11,6 +11,9 @@ import {
 import { useToasts } from './useToasts'
 import { useWindowFocus } from '../stores/useWindowFocus'
 import type { ToastOptions, ToastSeverity } from '../types/toast'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('notify')
 
 export type NotifySeverity = 'info' | 'success' | 'warning' | 'error'
 
@@ -97,7 +100,7 @@ export function useNotify(overrides: Partial<NotifyDeps> = {}) {
       source,
       metadata: null,
     })
-    if (!recorded) console.warn('[notify] activity record failed; surfacing anyway', event)
+    if (!recorded) log.warn('[notify] activity record failed; surfacing anyway', event)
 
     if (!deps.settings.notificationsEnabled.value) return
     const toast = () => deps.showToast(event.title, { body, severity: mapping.toast })
@@ -129,7 +132,7 @@ export function useNotify(overrides: Partial<NotifyDeps> = {}) {
         data: event.data ?? {},
       })
     } catch (error) {
-      console.warn('[notify] native notification failed; surfacing toast instead', error)
+      log.warn('[notify] native notification failed; surfacing toast instead', error)
       toast()
     }
   }

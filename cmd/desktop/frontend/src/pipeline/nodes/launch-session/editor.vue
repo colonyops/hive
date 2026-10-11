@@ -6,6 +6,9 @@ import RepositorySelect from '../../../components/RepositorySelect.vue'
 import FormField from '../../../components/ui/FormField.vue'
 import { SelectField, TextField, TextareaField } from '../../fields'
 import { ITEM_REMOTE, repoMode, type Config, type RepoMode } from './config'
+import { createLogger } from '../../../lib/log'
+
+const log = createLogger('launch-session-editor')
 
 const props = defineProps<{ config: Config; errors?: string[] }>()
 const emit = defineEmits<{ 'update:config': [config: Config] }>()
@@ -36,7 +39,7 @@ onMounted(async () => {
     repositories.value = options?.repositories ?? []
     agents.value = options?.agents ?? []
   } catch (err) {
-    console.warn('Unable to load session launch options', err)
+    log.warn('unable to load session launch options', err)
   }
 })
 

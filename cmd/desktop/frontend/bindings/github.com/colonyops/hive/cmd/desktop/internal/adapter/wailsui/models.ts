@@ -155,6 +155,23 @@ export interface CanvasWrite {
 }
 
 /**
+ * AtUnixMs is Date.now(); zero leaves only the backend's own timestamp.
+ */
+export interface ClientLogEntry {
+    "atUnixMs": number;
+    "level": string;
+    "name"?: string;
+    "message": string;
+    "error"?: string;
+    "kind"?: string;
+    "stack"?: string;
+    "window"?: string;
+    "route"?: string;
+    "count"?: number;
+    "fields"?: { [_ in string]?: any } | null;
+}
+
+/**
  * DevToolsInfo is what the frontend needs before it decides to render the pane.
  */
 export interface DevToolsInfo {

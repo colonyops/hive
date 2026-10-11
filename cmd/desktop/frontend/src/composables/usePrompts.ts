@@ -4,6 +4,9 @@ import {
   Render,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/promptsservice'
 import type { Prompt } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/prompts/models'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('prompts')
 
 // The frontend never builds prompt text. Every prompt — the settings catalog
 // and the context-scoped ones offered from an editor — is assembled by
@@ -53,7 +56,7 @@ export async function renderPrompt(
     })
     return prompt.text
   } catch (error) {
-    console.warn(`Unable to render the "${id}" prompt`, error)
+    log.warn(`unable to render the "${id}" prompt`, error)
     return null
   }
 }

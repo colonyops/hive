@@ -6,6 +6,9 @@ import type { CanvasAuthor, CanvasScope } from '../lib/agentCanvas'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('app-mode')
 
 export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings'
 
@@ -186,8 +189,7 @@ export function useAppMode(
     try {
       if (typeof Window?.ToggleMaximise === 'function') await Window.ToggleMaximise()
     } catch (error) {
-      // eslint-disable-next-line no-console -- expected outside Wails, so not a warning
-      console.debug('Window maximise is unavailable outside Wails', error)
+      log.debug('window maximise is unavailable outside Wails', error)
     }
   }
 

@@ -17,6 +17,9 @@ import { appErrorKind } from '../lib/appError'
 import { DEFAULT_TASK_FILTER, type TaskFilterId } from '../lib/tasksPresentation'
 import { defineStore } from './defineStore'
 import { useResource } from './useResource'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('tasks')
 
 export const useTasks = defineStore('tasks', () => {
   const repoKey = useStorage('hive.tasks.repo', '')
@@ -61,7 +64,7 @@ export const useTasks = defineStore('tasks', () => {
       repoKeys.value = keys ?? []
     } catch (err) {
       if (sequence !== repoKeysSequence) return
-      console.warn('Unable to load task repo keys', err)
+      log.warn('unable to load task repo keys', err)
     }
   }
 
@@ -79,7 +82,7 @@ export const useTasks = defineStore('tasks', () => {
         detail.value = null
         return
       }
-      console.warn('Unable to load task detail', err)
+      log.warn('unable to load task detail', err)
     }
   }
 

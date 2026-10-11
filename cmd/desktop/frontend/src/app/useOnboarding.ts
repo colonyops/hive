@@ -6,6 +6,9 @@ import { useHiveSetup } from '../composables/useHiveSetup'
 import { useNotificationSettings } from '../composables/useNotificationSettings'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import type { FeedState } from './useAppNavigation'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('onboarding')
 
 /**
  * The first-run walk: hive setup -> connect GitHub -> notifications -> meet the
@@ -113,7 +116,7 @@ export function useOnboarding(feed: FeedState, github: ReturnType<typeof useGitH
     try {
       if (profile && profile.nodes === 0) await feed.seedStarterFlow(profile.id)
     } catch (error) {
-      console.warn('Unable to seed the starter flow', error)
+      log.warn('unable to seed the starter flow', error)
       feed.showToast('Starter feeds were not added', {
         body: 'This profile has no sources yet — add one in the flow editor.',
         severity: 'error',

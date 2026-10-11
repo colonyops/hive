@@ -1,6 +1,9 @@
 import { CanvasAddon } from '@xterm/addon-canvas'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ITerminalAddon, Terminal } from '@xterm/xterm'
+import { createLogger } from './log'
+
+const log = createLogger('terminal-renderer')
 
 /**
  * Put an atlas renderer on `term` — WebGL, falling back to canvas, with xterm's
@@ -59,7 +62,7 @@ function loadAddon<T extends ITerminalAddon>(
     track(addon)
     return addon
   } catch (error) {
-    console.warn('Terminal renderer unavailable, falling back', error)
+    log.warn('terminal renderer unavailable, falling back', error)
     return undefined
   }
 }

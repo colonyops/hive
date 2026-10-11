@@ -1,5 +1,8 @@
 import { useStorage } from '@vueuse/core'
 import type { Ref } from 'vue'
+import { createLogger } from '../lib/log'
+
+const log = createLogger('palette-recents')
 
 // Recents are usage data, not configuration: device-local and rebuilt from
 // behaviour, so they live in localStorage (hive.* pattern) rather than
@@ -27,13 +30,9 @@ const recentsSerializer = {
   write: (value: string[]): string => JSON.stringify(value),
 }
 
-// useStorage's own read/write already catch a throwing storage accessor
-// (e.g. localStorage unavailable) and fall back to the initial value; onError
-// here just keeps that failure on the codebase's console.warn convention
-// instead of VueUse's default console.error.
 const recentIds = useStorage<string[]>(storageKey, [], undefined, {
   serializer: recentsSerializer,
-  onError: (error) => console.warn('Unable to read palette recents', error),
+  onError: (error) => log.warn('unable to read palette recents', error),
 })
 
 function recordRun(id: string): void {

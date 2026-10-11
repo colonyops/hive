@@ -73,7 +73,7 @@ export default defineConfig(
       // TypeScript already resolves every identifier; this rule only knows ESLint's globals list.
       'no-undef': 'off',
       'no-new-func': 'error',
-      'no-console': ['error', { allow: ['warn', 'error'] }],
+      'no-console': 'error',
       eqeqeq: ['error', 'always', { null: 'ignore' }],
       'no-fallthrough': 'error',
 

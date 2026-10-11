@@ -5,6 +5,7 @@ import * as ActionRunService from "./actionrunservice.js";
 import * as ActionsService from "./actionsservice.js";
 import * as ActivityService from "./activityservice.js";
 import * as AgentsService from "./agentsservice.js";
+import * as ClientLogService from "./clientlogservice.js";
 import * as DevToolsService from "./devtoolsservice.js";
 import * as DiagnosticsService from "./diagnosticsservice.js";
 import * as FlowsService from "./flowsservice.js";
@@ -39,6 +40,7 @@ export {
     ActionsService,
     ActivityService,
     AgentsService,
+    ClientLogService,
     DevToolsService,
     DiagnosticsService,
     FlowsService,
@@ -77,6 +79,7 @@ export type {
     BuildInfo,
     CanvasToggle,
     CanvasWrite,
+    ClientLogEntry,
     DevToolsInfo,
     EditorChoice,
     EditorSettings,
