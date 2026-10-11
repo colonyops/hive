@@ -1,47 +1,45 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp, defineComponent, h } from 'vue'
-import {
-  Level,
-  Write,
-} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/clientlogservice'
-import * as log from '../log'
+import type { ClientLogEntry } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import { LogSink } from '../log'
 
-// test-setup stubs the binding for every spec.
-const mocks = { Level: vi.mocked(Level), Write: vi.mocked(Write) }
-
-function written(call = 0): Array<Record<string, unknown>> {
-  return (mocks.Write.mock.calls[call][0] ?? []) as unknown as Array<Record<string, unknown>>
+function setup(level = 'debug') {
+  const transport = {
+    level: vi.fn(() => Promise.resolve(level)),
+    write: vi.fn((_entries: ClientLogEntry[]) => Promise.resolve()),
+  }
+  const sink = new LogSink({
+    transport,
+    echoToConsole: false,
+    location: () => ({ search: '', hash: '#/inbox', pathname: '/' }),
+  })
+  const written = (call = 0) => transport.write.mock.calls[call][0]
+  return { transport, sink, written }
 }
-
-beforeEach(() => {
-  vi.clearAllMocks()
-  log.resetLogForTests()
-  mocks.Level.mockResolvedValue('debug')
-  mocks.Write.mockResolvedValue(undefined)
-})
 
 afterEach(() => {
   vi.useRealTimers()
-  log.resetLogForTests()
 })
 
-describe('createLogger', () => {
+describe('LogSink', () => {
   it('batches entries into one call and names the component', async () => {
-    const feed = log.createLogger('feed-state')
+    const { sink, transport, written } = setup()
+    const feed = sink.logger('feed-state')
 
-    feed.warn('Unable to load flows', new Error('boom'), { flowId: 'f1' })
+    feed.warn('unable to load flows', new Error('boom'), { flowId: 'f1' })
     feed.info('loaded')
-    await log.flushLogs()
+    await sink.flush()
 
-    expect(mocks.Write).toHaveBeenCalledTimes(1)
+    expect(transport.write).toHaveBeenCalledTimes(1)
     const batch = written()
     expect(batch).toHaveLength(2)
     expect(batch[0]).toMatchObject({
       level: 'warn',
       name: 'feed-state',
-      message: 'Unable to load flows',
+      message: 'unable to load flows',
       error: 'boom',
       window: 'main',
+      route: '#/inbox',
       fields: { flowId: 'f1' },
     })
     expect(batch[0].stack).toContain('boom')
@@ -49,41 +47,44 @@ describe('createLogger', () => {
   })
 
   it('reads the Kind and message the Go core put on a binding error', async () => {
+    const { sink, written } = setup()
     const err = new Error('call failed', { cause: { kind: 'not_found', message: 'no such flow' } })
 
-    log.createLogger().error('Unable to open flow', err)
-    await log.flushLogs()
+    sink.logger().error('unable to open flow', err)
+    await sink.flush()
 
     expect(written()[0]).toMatchObject({ name: '', error: 'no such flow', kind: 'not_found' })
   })
 
   it('collapses identical entries into one with a count', async () => {
-    const loop = log.createLogger('render')
+    const { sink, written } = setup()
+    const loop = sink.logger('render')
 
     for (let i = 0; i < 50; i++) loop.error('frame failed', 'bad state')
-    await log.flushLogs()
+    await sink.flush()
 
     expect(written()).toHaveLength(1)
     expect(written()[0]).toMatchObject({ message: 'frame failed', count: 50 })
   })
 
   it('drops entries below the backend level', async () => {
-    mocks.Level.mockResolvedValue('warn')
-    const logger = log.createLogger()
+    const { sink, written } = setup('warn')
+    const logger = sink.logger()
 
     logger.debug('noise')
     logger.info('noise')
     logger.warn('kept')
-    await log.flushLogs()
+    await sink.flush()
 
     expect(written().map((e) => e.message)).toEqual(['kept'])
   })
 
   it('reports how many entries an overflowing buffer dropped', async () => {
-    const logger = log.createLogger()
+    const { sink, written } = setup()
+    const logger = sink.logger()
 
     for (let i = 0; i < 205; i++) logger.info(`entry ${i}`)
-    await log.flushLogs()
+    await sink.flush()
 
     const batch = written()
     expect(batch[0].message).toBe('entry 5')
@@ -92,34 +93,35 @@ describe('createLogger', () => {
 
   it('flushes errors sooner than other entries', async () => {
     vi.useFakeTimers()
-    const logger = log.createLogger()
+    const { sink, transport, written } = setup()
+    const logger = sink.logger()
 
     logger.info('later')
     logger.error('now')
     await vi.advanceTimersByTimeAsync(300)
 
-    expect(mocks.Write).toHaveBeenCalledTimes(1)
+    expect(transport.write).toHaveBeenCalledTimes(1)
     expect(written()).toHaveLength(2)
   })
 
   it('swallows a failed delivery', async () => {
-    mocks.Write.mockRejectedValue(new Error('backend gone'))
+    const { sink, transport } = setup()
+    transport.write.mockRejectedValue(new Error('backend gone'))
 
-    log.createLogger().error('lost')
-    await expect(log.flushLogs()).resolves.toBeUndefined()
+    sink.logger().error('lost')
+    await expect(sink.flush()).resolves.toBeUndefined()
   })
-})
 
-describe('error capture', () => {
   it('logs uncaught errors and unhandled rejections', async () => {
+    const { sink, written } = setup()
     const target = new EventTarget() as unknown as Window
-    log.installErrorCapture(target)
+    sink.installErrorCapture(target)
 
     target.dispatchEvent(new ErrorEvent('error', { error: new Error('kaboom'), filename: 'app.js', lineno: 3 }))
     const rejection = new Event('unhandledrejection') as PromiseRejectionEvent
     Object.defineProperty(rejection, 'reason', { value: 'nope' })
     target.dispatchEvent(rejection)
-    await log.flushLogs()
+    await sink.flush()
 
     expect(written()).toEqual([
       expect.objectContaining({
@@ -133,6 +135,7 @@ describe('error capture', () => {
   })
 
   it('logs errors Vue catches in a component', async () => {
+    const { sink, written } = setup()
     const Broken = defineComponent({
       name: 'BrokenPanel',
       setup() {
@@ -141,9 +144,9 @@ describe('error capture', () => {
       render: () => h('div'),
     })
     const app = createApp(Broken)
-    log.captureVueErrors(app)
+    sink.captureVueErrors(app)
     app.mount(document.createElement('div'))
-    await log.flushLogs()
+    await sink.flush()
 
     expect(written()[0]).toMatchObject({
       name: 'vue',

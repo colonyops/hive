@@ -19,22 +19,26 @@ export interface Logger {
   error: LogMethod
 }
 
+export interface LogTransport {
+  level: () => Promise<string>
+  write: (entries: ClientLogEntry[]) => Promise<void>
+}
+
+type LogLocation = Pick<Location, 'search' | 'hash' | 'pathname'>
+
+export interface LogSinkOptions {
+  transport: LogTransport
+  echoToConsole?: boolean
+  now?: () => number
+  location?: () => LogLocation
+}
+
 const RANK: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 }
 const SILENT = 4
 
 const FLUSH_MS = 1000
 const ERROR_FLUSH_MS = 250
 const MAX_BUFFERED = 200
-
-let threshold: number | null = null
-let levelRequest: Promise<number> | null = null
-
-let buffer: ClientLogEntry[] = []
-// An error thrown on every frame costs one line per flush.
-let pending = new Map<string, ClientLogEntry>()
-let dropped = 0
-let timer: ReturnType<typeof setTimeout> | null = null
-let timerDue = 0
 
 function rankOf(level: string): number {
   switch (level) {
@@ -52,53 +56,6 @@ function rankOf(level: string): number {
     default:
       return RANK.info
   }
-}
-
-function backendThreshold(): Promise<number> {
-  if (threshold !== null) return Promise.resolve(threshold)
-  levelRequest ??= Promise.resolve()
-    .then(() => BackendLevel())
-    .then(rankOf, () => RANK.info)
-    .then((rank) => (threshold = rank))
-  return levelRequest
-}
-
-async function flush(): Promise<void> {
-  if (timer !== null) {
-    clearTimeout(timer)
-    timer = null
-  }
-  if (buffer.length === 0 && dropped === 0) return
-
-  const min = await backendThreshold()
-  const batch = buffer.filter((entry) => rankOf(entry.level) >= min)
-  if (dropped > 0) {
-    batch.push(entry('warn', '', 'webview log buffer overflowed; oldest entries dropped', undefined, { dropped }))
-  }
-  buffer = []
-  pending = new Map()
-  dropped = 0
-  if (batch.length === 0) return
-
-  try {
-    await Write(batch)
-  } catch {
-    // Never logged: a failure to deliver logs reported as a log would loop.
-  }
-}
-
-function schedule(delay: number): void {
-  const due = Date.now() + delay
-  if (timer !== null) {
-    if (timerDue <= due) return
-    clearTimeout(timer)
-  }
-  timerDue = due
-  timer = setTimeout(() => void flush(), delay)
-}
-
-function currentWindow(): string {
-  return new URLSearchParams(window.location.search).has('diagnostics') ? 'diagnostics' : 'main'
 }
 
 function describeDetail(detail: unknown): Pick<ClientLogEntry, 'error' | 'kind' | 'stack'> & { fields?: LogFields } {
@@ -120,45 +77,8 @@ function describeDetail(detail: unknown): Pick<ClientLogEntry, 'error' | 'kind' 
   return { error: (detail as number | boolean | bigint | symbol).toString() }
 }
 
-function entry(level: LogLevel, name: string, message: string, detail: unknown, fields?: LogFields): ClientLogEntry {
-  const described = describeDetail(detail)
-  const merged = described.fields || fields ? { ...described.fields, ...fields } : undefined
-  return {
-    atUnixMs: Date.now(),
-    level,
-    name,
-    message,
-    error: described.error,
-    kind: described.kind,
-    stack: described.stack,
-    window: currentWindow(),
-    route: window.location.hash || window.location.pathname,
-    count: 1,
-    fields: merged,
-  }
-}
-
 function dedupeKey(e: ClientLogEntry): string {
   return [e.level, e.name, e.message, e.error, e.stack].join('\u0000')
-}
-
-function enqueue(next: ClientLogEntry): void {
-  if (threshold !== null && rankOf(next.level) < threshold) return
-
-  const key = dedupeKey(next)
-  const existing = pending.get(key)
-  if (existing) {
-    existing.count = (existing.count ?? 1) + 1
-  } else {
-    if (buffer.length >= MAX_BUFFERED) {
-      const oldest = buffer.shift()
-      if (oldest) pending.delete(dedupeKey(oldest))
-      dropped++
-    }
-    buffer.push(next)
-    pending.set(key, next)
-  }
-  schedule(next.level === 'error' ? ERROR_FLUSH_MS : FLUSH_MS)
 }
 
 function echo(level: LogLevel, message: string, detail: unknown, fields?: LogFields): void {
@@ -169,73 +89,180 @@ function echo(level: LogLevel, message: string, detail: unknown, fields?: LogFie
   console[level](...args)
 }
 
-// Specs assert on behaviour, not console output.
-const echoToConsole = import.meta.env.MODE !== 'test'
+export class LogSink {
+  private readonly transport: LogTransport
+  private readonly echoToConsole: boolean
+  private readonly now: () => number
+  private readonly location: () => LogLocation
 
-function emit(level: LogLevel, name: string, message: string, detail: unknown, fields?: LogFields, toConsole = true) {
-  if (toConsole && echoToConsole) echo(level, message, detail, fields)
-  try {
-    enqueue(entry(level, name, message, detail, fields))
-  } catch {
-    // A logging call never throws into its caller.
+  private threshold: number | null = null
+  private levelRequest: Promise<number> | null = null
+  private buffer: ClientLogEntry[] = []
+  // An error thrown on every frame costs one line per flush.
+  private pending = new Map<string, ClientLogEntry>()
+  private dropped = 0
+  private timer: ReturnType<typeof setTimeout> | null = null
+  private timerDue = 0
+  private captureInstalled = false
+
+  constructor(options: LogSinkOptions) {
+    this.transport = options.transport
+    this.echoToConsole = options.echoToConsole ?? true
+    this.now = options.now ?? Date.now
+    this.location = options.location ?? (() => window.location)
+  }
+
+  /** Lines carry `cmp=webview.<name>`; name it after the module ('feed-state'). */
+  logger(name = ''): Logger {
+    return {
+      debug: (message, detail, fields) => this.emit('debug', name, message, detail, fields),
+      info: (message, detail, fields) => this.emit('info', name, message, detail, fields),
+      warn: (message, detail, fields) => this.emit('warn', name, message, detail, fields),
+      error: (message, detail, fields) => this.emit('error', name, message, detail, fields),
+    }
+  }
+
+  // Not echoed: the browser already prints uncaught errors.
+  installErrorCapture(target: Window): void {
+    if (this.captureInstalled) return
+    this.captureInstalled = true
+    target.addEventListener('error', (event: ErrorEvent) => {
+      this.emit(
+        'error',
+        'uncaught',
+        'uncaught error',
+        event.error ?? event.message,
+        {
+          source: event.filename || undefined,
+          line: event.lineno || undefined,
+          column: event.colno || undefined,
+        },
+        false,
+      )
+    })
+    target.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+      this.emit('error', 'uncaught', 'unhandled promise rejection', event.reason, undefined, false)
+    })
+    target.addEventListener('pagehide', () => void this.flush())
+  }
+
+  // Echoed, because Vue stops printing errors once a handler is set.
+  captureVueErrors(app: App): void {
+    app.config.errorHandler = (err, instance, info) => {
+      const component = instance?.$options.name ?? instance?.$options.__name
+      this.emit('error', 'vue', 'error caught by Vue', err, { component, hook: info })
+    }
+  }
+
+  async flush(): Promise<void> {
+    if (this.timer !== null) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+    if (this.buffer.length === 0 && this.dropped === 0) return
+
+    const min = await this.backendThreshold()
+    const batch = this.buffer.filter((entry) => rankOf(entry.level) >= min)
+    if (this.dropped > 0) {
+      batch.push(
+        this.entry('warn', '', 'webview log buffer overflowed; oldest entries dropped', undefined, {
+          dropped: this.dropped,
+        }),
+      )
+    }
+    this.buffer = []
+    this.pending = new Map()
+    this.dropped = 0
+    if (batch.length === 0) return
+
+    try {
+      await this.transport.write(batch)
+    } catch {
+      // Never logged: a failure to deliver logs reported as a log would loop.
+    }
+  }
+
+  private backendThreshold(): Promise<number> {
+    if (this.threshold !== null) return Promise.resolve(this.threshold)
+    this.levelRequest ??= Promise.resolve()
+      .then(() => this.transport.level())
+      .then(rankOf, () => RANK.info)
+      .then((rank) => (this.threshold = rank))
+    return this.levelRequest
+  }
+
+  private schedule(delay: number): void {
+    const due = this.now() + delay
+    if (this.timer !== null) {
+      if (this.timerDue <= due) return
+      clearTimeout(this.timer)
+    }
+    this.timerDue = due
+    this.timer = setTimeout(() => void this.flush(), delay)
+  }
+
+  private entry(level: LogLevel, name: string, message: string, detail: unknown, fields?: LogFields): ClientLogEntry {
+    const described = describeDetail(detail)
+    const merged = described.fields || fields ? { ...described.fields, ...fields } : undefined
+    const location = this.location()
+    return {
+      atUnixMs: this.now(),
+      level,
+      name,
+      message,
+      error: described.error,
+      kind: described.kind,
+      stack: described.stack,
+      window: new URLSearchParams(location.search).has('diagnostics') ? 'diagnostics' : 'main',
+      route: location.hash || location.pathname,
+      count: 1,
+      fields: merged,
+    }
+  }
+
+  private enqueue(next: ClientLogEntry): void {
+    if (this.threshold !== null && rankOf(next.level) < this.threshold) return
+
+    const key = dedupeKey(next)
+    const existing = this.pending.get(key)
+    if (existing) {
+      existing.count = (existing.count ?? 1) + 1
+    } else {
+      if (this.buffer.length >= MAX_BUFFERED) {
+        const oldest = this.buffer.shift()
+        if (oldest) this.pending.delete(dedupeKey(oldest))
+        this.dropped++
+      }
+      this.buffer.push(next)
+      this.pending.set(key, next)
+    }
+    this.schedule(next.level === 'error' ? ERROR_FLUSH_MS : FLUSH_MS)
+  }
+
+  private emit(level: LogLevel, name: string, message: string, detail: unknown, fields?: LogFields, toConsole = true) {
+    if (toConsole && this.echoToConsole) echo(level, message, detail, fields)
+    try {
+      this.enqueue(this.entry(level, name, message, detail, fields))
+    } catch {
+      // A logging call never throws into its caller.
+    }
   }
 }
 
-/** Lines carry `cmp=webview.<name>`; name it after the module ('feed-state'). */
+const sink = new LogSink({
+  transport: { level: BackendLevel, write: Write },
+  // Specs assert on behaviour, not console output.
+  echoToConsole: import.meta.env.MODE !== 'test',
+})
+
 export function createLogger(name = ''): Logger {
-  return {
-    debug: (message, detail, fields) => emit('debug', name, message, detail, fields),
-    info: (message, detail, fields) => emit('info', name, message, detail, fields),
-    warn: (message, detail, fields) => emit('warn', name, message, detail, fields),
-    error: (message, detail, fields) => emit('error', name, message, detail, fields),
-  }
+  return sink.logger(name)
 }
 
-let captureInstalled = false
-
-// Not echoed: the browser already prints uncaught errors.
 export function installErrorCapture(target: Window = window): void {
-  if (captureInstalled) return
-  captureInstalled = true
-  target.addEventListener('error', (event: ErrorEvent) => {
-    emit(
-      'error',
-      'uncaught',
-      'uncaught error',
-      event.error ?? event.message,
-      {
-        source: event.filename || undefined,
-        line: event.lineno || undefined,
-        column: event.colno || undefined,
-      },
-      false,
-    )
-  })
-  target.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-    emit('error', 'uncaught', 'unhandled promise rejection', event.reason, undefined, false)
-  })
-  target.addEventListener('pagehide', () => void flush())
+  sink.installErrorCapture(target)
 }
 
-// Echoed, because Vue stops printing errors once a handler is set.
 export function captureVueErrors(app: App): void {
-  app.config.errorHandler = (err, instance, info) => {
-    const component = instance?.$options.name ?? instance?.$options.__name
-    emit('error', 'vue', 'error caught by Vue', err, { component, hook: info })
-  }
-}
-
-export function flushLogs(): Promise<void> {
-  return flush()
-}
-
-export function resetLogForTests(): void {
-  if (timer !== null) clearTimeout(timer)
-  timer = null
-  timerDue = 0
-  threshold = null
-  levelRequest = null
-  buffer = []
-  pending = new Map()
-  dropped = 0
+  sink.captureVueErrors(app)
 }
