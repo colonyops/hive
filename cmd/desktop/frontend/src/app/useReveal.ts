@@ -155,7 +155,7 @@ export function useReveal(
       const loc = await TakeLink()
       if (loc) await revealLocation(loc)
     } catch (error) {
-      console.warn('Unable to open the link', error)
+      log.warn('unable to open the link', error)
       showToast('Could not open the link', { severity: 'error' })
     }
   }

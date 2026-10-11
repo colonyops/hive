@@ -157,7 +157,7 @@ Do not write another `err instanceof Error ? err.message : ...`.
   rejects a destructured method.
 - An error is always **`string | null`**, with `null` meaning no error. Not
   `''`, not `unknown`, not a toast from inside the store. A store whose error
-  no surface renders logs it with `console.warn` so it is not lost.
+  no surface renders logs it with `createLogger` so it is not lost.
 - No `reset…ForTests` helpers. `resetStores()` covers every store.
 - One store per file, the file named after the hook it exports.
 
