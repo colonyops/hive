@@ -20,6 +20,7 @@ declare module "@wailsio/runtime" {
             "flows:updated": string;
             "inbox:updated": string;
             "jobs:updated": string;
+            "link:open": string;
             "log:appended": number;
             "menubar:open": wailsui$0.MenuBarNavigation;
             "notification:activated": wailsui$0.NotificationActivation;

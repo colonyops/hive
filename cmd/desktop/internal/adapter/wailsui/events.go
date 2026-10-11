@@ -82,6 +82,9 @@ func registerEvents() struct{} {
 	application.RegisterEvent[NotificationToast]("notification:toast")
 	// The tray raises the window before emitting menubar:open.
 	application.RegisterEvent[MenuBarNavigation]("menubar:open")
+	// link:open is a wake-up: the hive:// link waits in LinkService.Take,
+	// because a link that launched the app arrives before anything listens.
+	application.RegisterEvent[string]("link:open")
 	return struct{}{}
 }
 
@@ -354,6 +357,13 @@ func emitFlowsUpdated() {
 func emitActionsUpdated() {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("actions:updated", "changed")
+	}
+}
+
+// A var, like emitNotificationToast, so a test can run without a Wails app.
+var emitLinkOpen = func() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("link:open", "changed")
 	}
 }
 

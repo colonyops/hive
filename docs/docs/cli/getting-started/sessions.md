@@ -71,6 +71,8 @@ A terminal multiplexer session that hosts a hive session. When you create a hive
 
 **Relationship**: Each hive session spawns a tmux session with the same name. The tmux session contains agent windows (matched by `tmux.preview_window_matcher` patterns) and a `shell` window. See the architecture diagram above.
 
+To open a session in Hive Desktop, run `hive desktop open hive://code/<slug>`. See [Links](../../desktop/configuration/links.md) for the link formats.
+
 ## Repository
 
 A git remote URL (e.g., `github.com/colonyops/hive`). Multiple sessions can be created from the same repository.

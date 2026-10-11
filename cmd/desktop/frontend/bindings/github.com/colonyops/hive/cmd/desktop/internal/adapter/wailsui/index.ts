@@ -14,6 +14,7 @@ import * as GrafanaService from "./grafanaservice.js";
 import * as HiveConfigService from "./hiveconfigservice.js";
 import * as IntegrationsService from "./integrationsservice.js";
 import * as JobService from "./jobservice.js";
+import * as LinkService from "./linkservice.js";
 import * as MenuBarService from "./menubarservice.js";
 import * as NotificationService from "./notificationservice.js";
 import * as ObservabilityService from "./observabilityservice.js";
@@ -47,6 +48,7 @@ export {
     HiveConfigService,
     IntegrationsService,
     JobService,
+    LinkService,
     MenuBarService,
     NotificationService,
     ObservabilityService,

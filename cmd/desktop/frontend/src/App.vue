@@ -63,7 +63,7 @@ const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, 
 const overlays = useHubOverlays(terminalActive, appMode.viewCanvasScope)
 const { tasksOpen, activityOpen, canvasOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
-const reveal = useReveal(nav, session, feed.showToast)
+const reveal = useReveal(nav, session, feed.showToast, overlays.openCanvas)
 const feedCommands = useFeedCommands(feed, confirmation)
 const itemDetail = useSelectedItemDetail(feed)
 

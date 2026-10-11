@@ -2,8 +2,12 @@ package wailsui
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"fmt"
+	"os"
+	"runtime"
 	"sync"
 
 	"github.com/rs/zerolog"
@@ -33,6 +37,7 @@ type UI struct {
 	settingsStore     *settings.Store
 
 	focus         *FocusState
+	links         *LinkService
 	notifications *NotificationService
 	native        *wailsnotify.NotificationService
 
@@ -93,6 +98,7 @@ func New(mock string, settingsStore *settings.Store, appIcon []byte, logger zero
 		mock:          mock,
 		settingsStore: settingsStore,
 		focus:         NewFocusState(),
+		links:         NewLinkService(logger),
 		notifications: NewUnavailableNotificationService(fmt.Errorf("native notifications unavailable in desktop mock mode")),
 	}
 	if mock != "" {
@@ -144,6 +150,9 @@ func (u *UI) Mount(ctx context.Context, core *app.App, opts MountOptions) {
 	u.trayIcon = opts.TrayIcon
 	u.trayIconLinux = opts.TrayIconLinux
 	u.app = application.New(u.options(core, opts))
+	u.app.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(event *application.ApplicationEvent) {
+		u.openLink(event.Context().URL(), linkFromOS)
+	})
 	u.attachUpdater(opts)
 	u.buildMenu()
 	u.buildWindow()
@@ -189,6 +198,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 	services = append(services,
 		application.NewService(u.notifications),
 		application.NewService(NewWindowService(u.focus)),
+		application.NewService(u.links),
 	)
 
 	// Test-only /_e2e/reset harness (nil outside the Docker e2e mock modes).
@@ -211,6 +221,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 			Handler:    application.AssetFileServerFS(opts.Assets),
 			Middleware: e2e.SmokeMiddleware(core.PipelineDB(), core.Stores, core.HiveConn(), reset, core.PublishLogAppended),
 		},
+		SingleInstance: u.singleInstance(core.RuntimePaths().DataDir),
 		Mac: application.MacOptions{
 			ActivationPolicy: application.ActivationPolicyRegular,
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
@@ -380,6 +391,53 @@ func (u *UI) refreshTray() {
 func (u *UI) reveal() {
 	u.window.Show()
 	u.window.Focus()
+}
+
+// openLink raises the window and routes to the place a hive:// link names. A
+// link that does not parse still raises the window, so the click visibly
+// landed, and says why nothing opened.
+func (u *UI) openLink(raw string, source linkSource) {
+	if u.window != nil {
+		u.reveal()
+	}
+	if err := u.links.deliver(raw, source); err != nil {
+		emitNotificationToast(NotificationToast{Title: "Could not open link", Body: err.Error(), Severity: "error"})
+	}
+}
+
+// singleInstance keeps a link from starting a second Hive on Linux, where the
+// OS runs the binary again for every hive:// link it opens: the second process
+// hands its arguments to the first and exits. macOS delivers a link to the
+// running app itself. The lock is keyed by the data directory so instances
+// with their own data still run side by side, and it is off without a session
+// bus, because Wails fails startup when it cannot take the lock.
+func (u *UI) singleInstance(dataDir string) *application.SingleInstanceOptions {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	if u.mock != "" {
+		u.logger.Info().Str("mock", u.mock).Msg("single-instance lock off in mock mode; a hive:// link starts a second Hive")
+		return nil
+	}
+	if os.Getenv("DBUS_SESSION_BUS_ADDRESS") == "" {
+		u.logger.Warn().Msg("single-instance lock off: DBUS_SESSION_BUS_ADDRESS is unset; a hive:// link starts a second Hive")
+		return nil
+	}
+	sum := sha256.Sum256([]byte(dataDir))
+	uniqueID := "com.hivedesktop.app." + hex.EncodeToString(sum[:8])
+	u.logger.Info().Str("unique_id", uniqueID).Str("data_dir", dataDir).Msg("single-instance lock on")
+	return &application.SingleInstanceOptions{
+		UniqueID: uniqueID,
+		OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+			link, ok := linkArg(data.Args)
+			u.logger.Info().Strs("args", data.Args).Bool("has_link", ok).Msg("second Hive launch handed over")
+			if ok {
+				u.openLink(link, linkFromSecondInstance)
+				return
+			}
+			u.reveal()
+		},
+	}
 }
 
 // Run blocks until the app quits.

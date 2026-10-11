@@ -1363,6 +1363,12 @@ to it resumes rather than resetting. Every segment renders once a profile
 exists; an unavailable mode explains itself inside the mode rather than
 disabling its segment (ADR terminal-agents-grafana-and-commands-graduate-out-of-experimental).
 
+The routes are internal. Anything outside the app addresses a place with a
+`hive://` URL from `internal/domain/deeplink`, and `useReveal` is the one
+place that turns a `Location` into a route or an overlay. A new area adds an
+`Area` value and a case there, and a link only ever navigates
+([ADR hive-desktop-is-addressed-by-hive-urls-not-by-its-internal-routes](decisions/2026-10-10-hive-desktop-is-addressed-by-hive-urls-not-by-its-internal-routes.md)).
+
 ### Terminal sessions
 
 **Image input is local file references.** Wails routes native drops to a specific
