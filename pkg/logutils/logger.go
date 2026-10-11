@@ -1,6 +1,7 @@
 package logutils
 
 import (
+	"cmp"
 	"fmt"
 	"io"
 	"os"
@@ -19,6 +20,10 @@ type Options struct {
 	// JSON writers must not block.
 	JSON  []io.Writer
 	Hooks []zerolog.Hook
+	// Zero means DefaultMaxFileSize and DefaultFileBackups; a negative
+	// FileBackups truncates the file instead of keeping a backup.
+	MaxFileSize int64
+	FileBackups int
 }
 
 // NewRoot builds a program's root logger. When File cannot be opened it
@@ -32,7 +37,7 @@ func NewRoot(opts Options) (zerolog.Logger, func(), error) {
 	)
 
 	if opts.File != "" {
-		f, err := openAppend(opts.File)
+		f, err := openRotating(opts.File, cmp.Or(opts.MaxFileSize, DefaultMaxFileSize), cmp.Or(opts.FileBackups, DefaultFileBackups))
 		if err != nil {
 			fileErr = err
 		} else {

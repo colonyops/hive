@@ -140,6 +140,8 @@ Shared log file** to see the effective path. By default it is:
 ~/.local/share/hive/hive.log
 ```
 
+When the log reaches 10 MB it moves to `hive.log.1`, and older files shift to `hive.log.2` and `hive.log.3`. The oldest is deleted, so the log never takes more than about 40 MB.
+
 The file follows the Hive data directory, including `HIVE_DATA_DIR` and
 `HIVE_DESKTOP_HIVE_DATA_DIR` overrides. It does not follow a separate Desktop
 data-directory override.
