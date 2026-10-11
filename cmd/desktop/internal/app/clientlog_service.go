@@ -146,6 +146,7 @@ func clientLogLevel(level string) zerolog.Level {
 	}
 }
 
+// Name is caller-controlled: keep it under webview and a single filterable token.
 func clientLogComponent(name string) string {
 	name = strings.Map(func(r rune) rune {
 		switch {
