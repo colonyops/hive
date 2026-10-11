@@ -124,11 +124,11 @@ describe('error capture', () => {
     expect(written()).toEqual([
       expect.objectContaining({
         name: 'uncaught',
-        message: 'Uncaught error',
+        message: 'uncaught error',
         error: 'kaboom',
         fields: { source: 'app.js', line: 3 },
       }),
-      expect.objectContaining({ name: 'uncaught', message: 'Unhandled promise rejection', error: 'nope' }),
+      expect.objectContaining({ name: 'uncaught', message: 'unhandled promise rejection', error: 'nope' }),
     ])
   })
 

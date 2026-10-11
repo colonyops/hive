@@ -51,7 +51,7 @@ onMounted(async () => {
   try {
     fetchedActions.value = (await ActionViews(props.item.id)) ?? []
   } catch (error) {
-    log.warn('Unable to load actions for item menu', error)
+    log.warn('unable to load actions for item menu', error)
   }
 })
 

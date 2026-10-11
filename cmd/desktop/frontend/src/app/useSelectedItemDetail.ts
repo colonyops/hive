@@ -28,7 +28,7 @@ export function useSelectedItemDetail(feed: FeedState) {
         const loaded = await feed.loadEvents(item.id)
         if (current()) events.value = loaded
       } catch (error) {
-        if (current()) log.warn('Unable to load inbox item events', error)
+        if (current()) log.warn('unable to load inbox item events', error)
       }
     },
     { immediate: true },

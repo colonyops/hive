@@ -39,7 +39,7 @@ onMounted(async () => {
     repositories.value = options?.repositories ?? []
     agents.value = options?.agents ?? []
   } catch (err) {
-    log.warn('Unable to load session launch options', err)
+    log.warn('unable to load session launch options', err)
   }
 })
 

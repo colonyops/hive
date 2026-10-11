@@ -92,7 +92,7 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     try {
       flows.value = (await client.listFlows()) ?? []
     } catch (err) {
-      log.warn('Unable to load flows', err)
+      log.warn('unable to load flows', err)
       error.value = errorText(err, 'Could not load flows.')
     } finally {
       loadingFlows.value = false
@@ -110,7 +110,7 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
       // Node-run status is a live overlay on top of the canvas, not a
       // blocking load — log and keep whatever status was already shown
       // rather than surfacing an error for a background poll tick.
-      log.debug('Unable to load node runs', err)
+      log.debug('unable to load node runs', err)
     }
   }
 
@@ -131,7 +131,7 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
       const [wireFlow, wireLayout] = await Promise.all([client.getFlow(id), client.getLayout(id)])
       replaceDraft(wireFlow, wireLayout)
     } catch (err) {
-      log.warn('Unable to load flow', err, { flowId: id })
+      log.warn('unable to load flow', err, { flowId: id })
       error.value = errorText(err, 'Could not load the flow.')
       activeFlow.value = null
     } finally {
@@ -232,7 +232,7 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
       await refreshFlows()
       return flowSnapshot
     } catch (err) {
-      log.warn('Unable to deploy flow', err, { flowId: flow.id })
+      log.warn('unable to deploy flow', err, { flowId: flow.id })
       // A deploy that fails silently is one the author walks away from
       // believing it shipped, so this interrupts rather than only marking the
       // status strip.

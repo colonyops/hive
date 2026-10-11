@@ -59,7 +59,7 @@ export function useReveal(
     try {
       feedId = (await Feed(profileId, itemId)) ?? ''
     } catch (error) {
-      log.warn('Unable to locate the inbox item', error)
+      log.warn('unable to locate the inbox item', error)
     }
     const query: Record<string, string> = { item: String(itemId) }
     if (feedId) query.feed = feedId
@@ -110,7 +110,7 @@ export function useReveal(
       }
       await revealInboxItem(link.profileId, item.id)
     } catch (error) {
-      log.warn('Unable to open the linked activity item', error)
+      log.warn('unable to open the linked activity item', error)
       showToast('Could not open the linked item', { severity: 'error' })
     }
   }

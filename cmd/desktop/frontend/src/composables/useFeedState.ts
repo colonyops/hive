@@ -112,7 +112,7 @@ export function useFeedState() {
     try {
       localStorage.setItem(lastSelectionStorageKey, JSON.stringify({ ...readLastSelections(), [profileID]: sel }))
     } catch (error) {
-      log.warn('Unable to persist sidebar selection', error)
+      log.warn('unable to persist sidebar selection', error)
     }
   }
   // Search is a pure view filter over the loaded list (like unreadOnly). It
@@ -200,7 +200,7 @@ export function useFeedState() {
       }
       return result
     } catch (error) {
-      log.warn('Unable to restore action run IDs', error)
+      log.warn('unable to restore action run IDs', error)
       return {}
     }
   }
@@ -208,7 +208,7 @@ export function useFeedState() {
     try {
       localStorage.setItem('hive.action-run-ids', JSON.stringify(actionRunIDs))
     } catch (error) {
-      log.warn('Unable to persist action run IDs', error)
+      log.warn('unable to persist action run IDs', error)
     }
   }
   function nextActionRunGeneration(itemID: number, actionID: string): void {
@@ -328,7 +328,7 @@ export function useFeedState() {
       if (seq === selectionActionsSeq) selectionActions.value = common
     } catch (error) {
       if (seq !== selectionActionsSeq) return
-      log.warn('Unable to load clipboard actions for item selection', error)
+      log.warn('unable to load clipboard actions for item selection', error)
       selectionActions.value = []
     }
   }
@@ -419,7 +419,7 @@ export function useFeedState() {
       profilesLoaded.value = true
     } catch (error) {
       if (seq !== profilesSeq) return
-      log.warn('Unable to load flows', error)
+      log.warn('unable to load flows', error)
       profilesError.value = 'Could not load your profiles.'
     }
   }
@@ -443,7 +443,7 @@ export function useFeedState() {
       profiles.value = flows.map(toProfileStub)
       if (activeProfileId.value) await loadFeeds(activeProfileId.value)
     } catch (error) {
-      log.warn('Unable to refresh flows', error)
+      log.warn('unable to refresh flows', error)
     }
   }
 
@@ -511,7 +511,7 @@ export function useFeedState() {
         try {
           resolved = (await MarkImages(hashes)) ?? {}
         } catch (error) {
-          log.warn('Unable to load source mark images', error)
+          log.warn('unable to load source mark images', error)
         }
         if (seq !== feedsSeq) return null
         const images: Record<string, string> = {}
@@ -535,7 +535,7 @@ export function useFeedState() {
       }
       return feeds
     } catch (error) {
-      log.warn('Unable to load flow feeds', error)
+      log.warn('unable to load flow feeds', error)
       return null
     }
   }
@@ -549,7 +549,7 @@ export function useFeedState() {
     try {
       await SaveSidebar(flowId, treeToLayout(tree, flowId))
     } catch (error) {
-      log.warn('Unable to save sidebar layout', error)
+      log.warn('unable to save sidebar layout', error)
       await notify({
         title: 'Sidebar layout save failed',
         body: profile?.name
@@ -576,7 +576,7 @@ export function useFeedState() {
       await SetFlowOrder(ids)
     } catch (error) {
       profiles.value = previous
-      log.warn('Unable to save the profile order', error)
+      log.warn('unable to save the profile order', error)
       await notify({
         title: 'Profile order save failed',
         body: 'Could not save the order of the profile rail.',
@@ -600,7 +600,7 @@ export function useFeedState() {
       await selectProfile(created.id)
       return created.id
     } catch (error) {
-      log.warn('Unable to create flow', error)
+      log.warn('unable to create flow', error)
       createProfileError.value =
         error instanceof Error && error.message ? error.message : 'Could not create the profile.'
       return null
@@ -641,7 +641,7 @@ export function useFeedState() {
       await notify({ title: 'Profile renamed', body: renamed.name, severity: 'success', category: 'config' })
       return true
     } catch (error) {
-      log.warn('Unable to rename flow', error)
+      log.warn('unable to rename flow', error)
       renameProfileError.value =
         error instanceof Error && error.message ? error.message : 'Could not rename the profile.'
       return false
@@ -669,7 +669,7 @@ export function useFeedState() {
       })
       return true
     } catch (error) {
-      log.warn('Unable to update flow enablement', error)
+      log.warn('unable to update flow enablement', error)
       toggleProfileError.value =
         error instanceof Error && error.message ? error.message : 'Could not update the profile.'
       return false
@@ -686,7 +686,7 @@ export function useFeedState() {
     try {
       await DeleteFlow(profileID)
     } catch (error) {
-      log.warn('Unable to delete flow', error)
+      log.warn('unable to delete flow', error)
       await notify({
         title: `Couldn't delete profile ${deletedName}`,
         body: error instanceof Error && error.message ? error.message : 'Could not delete the profile.',
@@ -720,7 +720,7 @@ export function useFeedState() {
       await reloadProfilesQuietly()
       return true
     } catch (error) {
-      log.warn('Unable to set profile image', error)
+      log.warn('unable to set profile image', error)
       profileImageError.value =
         appErrorMessage(error) || (error instanceof Error ? error.message : '') || 'Could not update the profile image.'
       return false
@@ -738,7 +738,7 @@ export function useFeedState() {
       await reloadProfilesQuietly()
       return true
     } catch (error) {
-      log.warn('Unable to clear profile image', error)
+      log.warn('unable to clear profile image', error)
       profileImageError.value =
         appErrorMessage(error) || (error instanceof Error ? error.message : '') || 'Could not remove the profile image.'
       return false
@@ -816,7 +816,7 @@ export function useFeedState() {
 
   function handleLoadError(seq: number, error: unknown) {
     if (seq !== loadSeq) return
-    log.warn('Unable to load inbox items', error)
+    log.warn('unable to load inbox items', error)
     loadError.value = "Can't load inbox items right now."
     items.value = []
     archivedItems.value = []
@@ -852,7 +852,7 @@ export function useFeedState() {
             const run = await ActionRun(commandID)
             if (isCurrentActionRun(item.id, action.id, commandID, generation)) setActionRun(item.id, action.id, run)
           } catch (error) {
-            log.warn('Unable to restore action run', error)
+            log.warn('unable to restore action run', error)
             // A run row deleted underneath us is not a failure: drop the stale
             // id so the card disappears. Anything else is left alone, because
             // forgetting a run id on a transient fault loses the user's link to
@@ -864,7 +864,7 @@ export function useFeedState() {
       )
     } catch (error) {
       if (token !== actionLoadSeq) return
-      log.warn('Unable to load actions', error)
+      log.warn('unable to load actions', error)
       actions.value = []
     }
   }
@@ -885,7 +885,7 @@ export function useFeedState() {
         })
       }
     } catch (error) {
-      log.warn('Unable to refresh action run', error)
+      log.warn('unable to refresh action run', error)
     }
   }
 
@@ -937,7 +937,7 @@ export function useFeedState() {
       setActionRun(itemID, actionID, run)
       return true
     } catch (error) {
-      log.warn('Unable to open action run', error)
+      log.warn('unable to open action run', error)
       return false
     }
   }
@@ -963,7 +963,7 @@ export function useFeedState() {
     try {
       applyItemUpdate(await SetUnread(item.id, item.revision, unread))
     } catch (error) {
-      log.warn('Unable to update inbox item unread state', error)
+      log.warn('unable to update inbox item unread state', error)
       await reloadCurrentSelection()
     }
     if (activeProfileId.value) await loadFeeds(activeProfileId.value)
@@ -988,7 +988,7 @@ export function useFeedState() {
         { severity: 'success' },
       )
     } catch (error) {
-      log.warn('Unable to mark inbox items as read', error)
+      log.warn('unable to mark inbox items as read', error)
       showToast('Could not mark items as read', { severity: 'error' })
     } finally {
       markingAllRead.value = false
@@ -1010,7 +1010,7 @@ export function useFeedState() {
       // archived section, so the current selection always reloads.
       await reloadCurrentSelection()
     } catch (error) {
-      log.warn('Unable to toggle inbox item archive state', error)
+      log.warn('unable to toggle inbox item archive state', error)
       await reloadCurrentSelection()
     }
     if (activeProfileId.value) await loadFeeds(activeProfileId.value)
@@ -1021,7 +1021,7 @@ export function useFeedState() {
       await ToggleIgnored(item.id, item.revision)
       await reloadCurrentSelection()
     } catch (error) {
-      log.warn('Unable to toggle inbox item ignored state', error)
+      log.warn('unable to toggle inbox item ignored state', error)
       await reloadCurrentSelection()
     }
     if (activeProfileId.value) await loadFeeds(activeProfileId.value)
@@ -1150,7 +1150,7 @@ export function useFeedState() {
       // Mock modes have no producer. There is nothing to fetch and nothing
       // the user can do about it, so fall through to the reload silently.
       if (appErrorKind(error) !== 'unavailable') {
-        log.warn('Unable to refresh sources', error)
+        log.warn('unable to refresh sources', error)
         await notify({
           title: errorText(error, 'Could not refresh the sources.'),
           severity: 'error',
@@ -1212,7 +1212,7 @@ export function useFeedState() {
       await notifyActionSuccess(actionID, run)
       return true
     } catch (error) {
-      log.warn('Unable to invoke action', error)
+      log.warn('unable to invoke action', error)
       actionError.value = error instanceof Error && error.message ? error.message : 'Could not run the action.'
       await notify({ title: actionError.value, severity: 'error', category: 'action' })
       return false
@@ -1338,7 +1338,7 @@ export function useFeedState() {
     try {
       await Browser.OpenURL(url)
     } catch (error) {
-      log.warn('Unable to open URL', error)
+      log.warn('unable to open URL', error)
       showToast('Could not open the link', { severity: 'error' })
     }
   }
@@ -1413,7 +1413,7 @@ export function useFeedState() {
       actionError.value = 'Could not copy to the clipboard.'
       return false
     } catch (error) {
-      log.warn('Unable to copy action to clipboard', error)
+      log.warn('unable to copy action to clipboard', error)
       const message = error instanceof Error && error.message ? error.message : 'Could not copy to the clipboard.'
       actionError.value = message
       showToast(message, { severity: 'error' })
@@ -1438,7 +1438,7 @@ export function useFeedState() {
     try {
       if (typeof Window !== 'undefined' && typeof Window.Hide === 'function') await Window.Hide()
     } catch (error) {
-      log.debug('Window hide is unavailable outside Wails', error)
+      log.debug('window hide is unavailable outside Wails', error)
     }
   }
 

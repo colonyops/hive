@@ -56,7 +56,7 @@ export async function renderPrompt(
     })
     return prompt.text
   } catch (error) {
-    log.warn(`Unable to render the "${id}" prompt`, error)
+    log.warn(`unable to render the "${id}" prompt`, error)
     return null
   }
 }

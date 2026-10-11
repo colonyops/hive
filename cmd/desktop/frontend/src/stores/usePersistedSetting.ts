@@ -42,7 +42,7 @@ export function usePersistedSetting<T>(options: PersistedSettingOptions<T>): Per
       const stored = await options.read()
       if (version === startedAt && stored !== undefined) value.value = stored
     } catch (error) {
-      log.warn(`Unable to load ${options.label} from settings.yaml`, error)
+      log.warn(`unable to load ${options.label} from settings.yaml`, error)
     } finally {
       hydrated.value = true
     }
@@ -54,7 +54,7 @@ export function usePersistedSetting<T>(options: PersistedSettingOptions<T>): Per
     persistChain = persistChain
       .then(() => options.write(next))
       .catch((error: unknown) => {
-        log.warn(`Unable to persist ${options.label} to settings.yaml`, error)
+        log.warn(`unable to persist ${options.label} to settings.yaml`, error)
       })
   }
 

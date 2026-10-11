@@ -42,7 +42,7 @@ export const useJobs = defineStore('jobs', () => {
 
   async function reload(): Promise<void> {
     await jobs.reload()
-    if (jobs.error.value) log.warn('Unable to load active jobs:', jobs.error.value)
+    if (jobs.error.value) log.warn('unable to load active jobs', jobs.error.value)
     if (jobs.data.value.some(isTerminal)) scheduleTrailingRead()
     else clearTrailingRead()
   }

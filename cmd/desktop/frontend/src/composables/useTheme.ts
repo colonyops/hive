@@ -90,7 +90,7 @@ function persistTheme(theme: Theme): void {
     .catch((error: unknown) => {
       // The theme is applied and cached regardless; losing the durable write is
       // a degraded-but-working state, not a reason to revert what the user sees.
-      log.warn('Unable to persist theme to settings.yaml', error)
+      log.warn('unable to persist theme to settings.yaml', error)
     })
 }
 
@@ -114,7 +114,7 @@ async function hydrateFromSettings(): Promise<void> {
     if (isTheme(cachedThemeAtLoad)) persistTheme(cachedThemeAtLoad)
   } catch (error) {
     // Keep the cached theme: an unavailable binding must not reset the UI.
-    log.warn('Unable to load theme from settings.yaml', error)
+    log.warn('unable to load theme from settings.yaml', error)
   }
 }
 

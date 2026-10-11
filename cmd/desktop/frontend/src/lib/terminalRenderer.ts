@@ -62,7 +62,7 @@ function loadAddon<T extends ITerminalAddon>(
     track(addon)
     return addon
   } catch (error) {
-    log.warn('Terminal renderer unavailable, falling back', error)
+    log.warn('terminal renderer unavailable, falling back', error)
     return undefined
   }
 }

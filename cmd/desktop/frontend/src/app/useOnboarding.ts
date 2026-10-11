@@ -116,7 +116,7 @@ export function useOnboarding(feed: FeedState, github: ReturnType<typeof useGitH
     try {
       if (profile && profile.nodes === 0) await feed.seedStarterFlow(profile.id)
     } catch (error) {
-      log.warn('Unable to seed the starter flow', error)
+      log.warn('unable to seed the starter flow', error)
       feed.showToast('Starter feeds were not added', {
         body: 'This profile has no sources yet — add one in the flow editor.',
         severity: 'error',

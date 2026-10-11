@@ -94,7 +94,7 @@ export const useTerminalFont = defineStore('terminalFont', () => {
     try {
       return await GetAppearanceSettings()
     } catch (error) {
-      log.warn('Unable to load terminal font settings from settings.yaml', error)
+      log.warn('unable to load terminal font settings from settings.yaml', error)
       return null
     }
   }

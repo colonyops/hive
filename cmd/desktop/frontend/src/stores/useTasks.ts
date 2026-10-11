@@ -64,7 +64,7 @@ export const useTasks = defineStore('tasks', () => {
       repoKeys.value = keys ?? []
     } catch (err) {
       if (sequence !== repoKeysSequence) return
-      log.warn('Unable to load task repo keys', err)
+      log.warn('unable to load task repo keys', err)
     }
   }
 
@@ -82,7 +82,7 @@ export const useTasks = defineStore('tasks', () => {
         detail.value = null
         return
       }
-      log.warn('Unable to load task detail', err)
+      log.warn('unable to load task detail', err)
     }
   }
 

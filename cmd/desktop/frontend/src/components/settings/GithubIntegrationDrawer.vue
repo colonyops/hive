@@ -60,7 +60,7 @@ async function openVerification() {
   try {
     await Browser.OpenURL(uri)
   } catch (err) {
-    log.warn('Unable to open the verification page', err)
+    log.warn('unable to open the verification page', err)
   }
 }
 

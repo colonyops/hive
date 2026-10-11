@@ -201,7 +201,7 @@ export function installErrorCapture(target: Window = window): void {
     emit(
       'error',
       'uncaught',
-      'Uncaught error',
+      'uncaught error',
       event.error ?? event.message,
       {
         source: event.filename || undefined,
@@ -212,7 +212,7 @@ export function installErrorCapture(target: Window = window): void {
     )
   })
   target.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
-    emit('error', 'uncaught', 'Unhandled promise rejection', event.reason, undefined, false)
+    emit('error', 'uncaught', 'unhandled promise rejection', event.reason, undefined, false)
   })
   target.addEventListener('pagehide', () => void flush())
 }
@@ -221,7 +221,7 @@ export function installErrorCapture(target: Window = window): void {
 export function captureVueErrors(app: App): void {
   app.config.errorHandler = (err, instance, info) => {
     const component = instance?.$options.name ?? instance?.$options.__name
-    emit('error', 'vue', 'Vue error', err, { component, hook: info })
+    emit('error', 'vue', 'error caught by Vue', err, { component, hook: info })
   }
 }
 

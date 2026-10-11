@@ -247,7 +247,7 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
       else query.view = 'trash'
       await router.push({ name: 'feed', params: { profileId: location.profileId }, query })
     } catch (error) {
-      log.warn('Unable to open action run', error)
+      log.warn('unable to open action run', error)
     }
   }
 

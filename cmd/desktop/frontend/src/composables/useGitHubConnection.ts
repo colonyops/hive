@@ -50,7 +50,7 @@ export function useGitHubConnection() {
         deviceFlow.value = null
       }
     } catch (err) {
-      log.warn('Unable to load GitHub connection status', err)
+      log.warn('unable to load GitHub connection status', err)
       status.value = { state: 'disconnected', login: '', name: '', avatarUrl: '', message: '' }
     }
   }
@@ -75,7 +75,7 @@ export function useGitHubConnection() {
     try {
       await CancelDeviceFlow()
     } catch (err) {
-      log.warn('Unable to cancel device flow', err)
+      log.warn('unable to cancel device flow', err)
     }
   }
 
@@ -91,7 +91,7 @@ export function useGitHubConnection() {
     try {
       await CancelDeviceFlow()
     } catch (err) {
-      log.warn('Unable to cancel device flow', err)
+      log.warn('unable to cancel device flow', err)
     }
   }
 
@@ -120,7 +120,7 @@ export function useGitHubConnection() {
       deviceFlow.value = null
       await reload()
     } catch (err) {
-      log.warn('Unable to disconnect GitHub', err)
+      log.warn('unable to disconnect GitHub', err)
     }
   }
 

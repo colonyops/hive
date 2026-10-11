@@ -21,7 +21,7 @@ export function useFirstRun() {
     try {
       completed.value = (await OnboardingSettings()).completed
     } catch (err) {
-      log.warn('Unable to read the first-run state', err)
+      log.warn('unable to read the first-run state', err)
       completed.value = true
     }
   }
@@ -32,7 +32,7 @@ export function useFirstRun() {
     try {
       await SetOnboardingCompleted()
     } catch (err) {
-      log.warn('Unable to record that first run finished', err)
+      log.warn('unable to record that first run finished', err)
     }
   }
 

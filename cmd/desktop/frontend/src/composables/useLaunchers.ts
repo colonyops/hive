@@ -34,7 +34,7 @@ async function refresh(): Promise<void> {
     // A catalog that cannot be read leaves the launchers that were already
     // registered alone: losing every shortcut over one failed read would be
     // worse than serving the set from a moment ago.
-    log.warn('Unable to read the configured launchers', error)
+    log.warn('unable to read the configured launchers', error)
     return
   }
   setLauncherCommands(

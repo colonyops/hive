@@ -189,7 +189,7 @@ export function useAppMode(
     try {
       if (typeof Window?.ToggleMaximise === 'function') await Window.ToggleMaximise()
     } catch (error) {
-      log.debug('Window maximise is unavailable outside Wails', error)
+      log.debug('window maximise is unavailable outside Wails', error)
     }
   }
 

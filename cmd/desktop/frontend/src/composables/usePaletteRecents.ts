@@ -32,7 +32,7 @@ const recentsSerializer = {
 
 const recentIds = useStorage<string[]>(storageKey, [], undefined, {
   serializer: recentsSerializer,
-  onError: (error) => log.warn('Unable to read palette recents', error),
+  onError: (error) => log.warn('unable to read palette recents', error),
 })
 
 function recordRun(id: string): void {

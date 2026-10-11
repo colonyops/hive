@@ -39,7 +39,7 @@ export function useSelfUpdate(confirmation: Confirmation, showToast: FeedState['
       await InstallUpdate()
     } catch (error) {
       installing.value = false
-      log.error('Update install failed', error)
+      log.error('update install failed', error)
       showToast('Could not install the update', {
         severity: 'error',
         body: error instanceof Error ? error.message : String(error),
@@ -55,7 +55,7 @@ export function useSelfUpdate(confirmation: Confirmation, showToast: FeedState['
         info.value = status
       })
       .catch((error: unknown) => {
-        log.debug('Updater status unavailable', error)
+        log.debug('updater status unavailable', error)
       })
   })
   useWailsEvent('update:available', (event: { data: UpdateInfo | UpdateInfo[] }) => {

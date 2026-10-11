@@ -26,7 +26,7 @@ async function cancel(commandId: number): Promise<void> {
   try {
     await Cancel(commandId)
   } catch (error) {
-    log.warn('Unable to cancel action run', error)
+    log.warn('unable to cancel action run', error)
   }
 }
 </script>

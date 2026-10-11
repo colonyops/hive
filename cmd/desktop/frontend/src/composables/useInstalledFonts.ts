@@ -27,7 +27,7 @@ export function loadInstalledFonts(): void {
     .catch((error: unknown) => {
       // A failed scan leaves the pickers offering the bundled faces alone,
       // which is still a working app.
-      log.warn('Unable to list installed fonts', error)
+      log.warn('unable to list installed fonts', error)
     })
 }
 
