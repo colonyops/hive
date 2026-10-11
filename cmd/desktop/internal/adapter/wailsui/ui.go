@@ -221,7 +221,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		// matching on error text.
 		MarshalError: MarshalError,
 		// Carries recovered bound-method panics. Below warn it narrates every window event.
-		Logger: slog.New(logutils.SlogHandler(wailsLogger(u.logger))),
+		Logger: slog.New(zerolog.NewSlogHandler(wailsLogger(u.logger))),
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(opts.Assets),
 			Middleware: e2e.SmokeMiddleware(core.PipelineDB(), core.Stores, core.HiveConn(), reset, core.PublishLogAppended),

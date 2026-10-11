@@ -18,7 +18,7 @@ the problem report could not show it.
 1. **One sink.** A webview entry is written through the desktop root logger,
    so it reaches `hive.log`, stderr, the telemetry log bridge, Diagnostics and
    the problem report like any Go log line. There is no second file. Wails gets
-   the same logger, at warn and above, through an `slog.Handler` over zerolog.
+   the same logger, at warn and above, through `zerolog.NewSlogHandler`.
    That covers the panics Wails recovers from bound methods. `PanicHandler`
    stays unset so any other panic still exits the process.
 
