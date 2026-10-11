@@ -13,7 +13,7 @@ const (
 	DefaultMaxFileSize = 10 << 20
 	DefaultFileBackups = 3
 
-	rotateCheckInterval = 30 * time.Minute
+	rotateCheckInterval = 5 * time.Minute
 )
 
 // rotatingFile appends to path and rotates it to path.1 … path.N once it
