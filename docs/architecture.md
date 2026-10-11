@@ -287,7 +287,7 @@ is the first parameter of what takes one, or the second after a
 and default to `<hive-data-dir>/hive.log`. Each composition root picks its
 sinks and hooks in `logutils.Options`, and decides whether a log file it
 cannot open is fatal: `NewRoot` returns the error beside a logger over the
-remaining sinks. The roots inject `hive-cli` or `hive-desktop`, which the root
+remaining sinks. The file rotates at 10 MiB and keeps three backups; every hive process appends to it, so rotation runs under a file lock and a writer reopens the path when another process rotated it (ADR [hive-log-rotates-by-size-under-a-file-lock-shared-by-every-hive-process](decisions/2026-10-10-hive-log-rotates-by-size-under-a-file-lock-shared-by-every-hive-process.md)). The roots inject `hive-cli` or `hive-desktop`, which the root
 logger carries as `service_name` so a reader can split the shared stream. A component labels the logger it is given
 with `logutils.Component`, which adds `cmp=<name>`, so one filter narrows a log
 to one component. The engine and the programs hand out a logger with no `cmp`
