@@ -35,7 +35,7 @@ mise run desktop:devserver     # the shared GitHub proxy `dev` routes through
 ```
 
 `desktop:dev:prepare` / `desktop:dev:fresh` / `desktop:dev:reset` manage this worktree's isolated
-instance. `solo up` brings up devserver + app together from `.solo.yml`.
+instance. `svx up` brings up devserver + app together from `svx.yaml`.
 
 ## Never
 

@@ -22,7 +22,7 @@ Launching devserver when one is already running is not an error — the second p
 
 Nothing preflights the proxy. If it is not running, GitHub calls fail as transport errors in the shared `hive.log` with `service_name=hive-desktop`, same as any other GitHub failure.
 
-`solo up` runs both tabs from the checked-in `.solo.yml`.
+`svx up` runs both services from the checked-in `svx.yaml`.
 
 ### Running against real GitHub
 

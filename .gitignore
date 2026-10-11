@@ -59,3 +59,7 @@ overrides.env
 /devserver
 /devtools
 /release
+
+# svx stack state and per-checkout overrides
+.svx/
+svx.local.yaml
