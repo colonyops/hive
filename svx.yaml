@@ -1,0 +1,24 @@
+# svx stack for Hive Desktop development. `svx up` from anywhere in the
+# worktree brings up the whole dev session; `svx down` tears it back down.
+#
+# Nothing gates the desktop on the proxy being up. A proxy that is not
+# answering yet surfaces as transport errors in the desktop logs, which is the
+# same place any other GitHub failure shows up.
+
+services:
+  # The shared GitHub proxy on http://127.0.0.1:7777. It is a singleton across
+  # every worktree, so it takes no svx port: if one is already running from
+  # another stack, this one stands by and takes over when that one stops.
+  devserver:
+    run: mise run desktop:devserver
+    links:
+      Dashboard: http://127.0.0.1:7777/
+
+  # The task runs the dev runner under `devtools run`, which also watches for
+  # the terminal going away, so killing this window cannot leave the app
+  # running unsupervised (ADR shutdown-is-signalled-and-bounded).
+  desktop:
+    run: mise run desktop:dev
+    # Covers the app's shutdown grace plus the runner's, so `svx down` does not
+    # force-kill a teardown in progress. A normal stop takes about a second.
+    stop_timeout: 30s
