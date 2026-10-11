@@ -298,7 +298,7 @@ The desktop webview logs into the same stream. Frontend code logs through
 catcher sends uncaught errors, unhandled rejections, and Vue errors the same
 way. Entries cross one binding in batches and the core writes them through the
 root logger as `cmp=webview.<name>`, bounded and rate-limited. Wails' own
-system log is the root logger too, through `logutils.SlogHandler`
+system log is the root logger too, through `zerolog.NewSlogHandler`
 (ADR [webview-logs-and-uncaught-errors-are-written-to-hive-log-through-the-root-logger](decisions/2026-10-10-webview-logs-and-uncaught-errors-are-written-to-hive-log-through-the-root-logger.md)).
 
 Inside the desktop, `adapter` imports `app` and `app` imports the shared
