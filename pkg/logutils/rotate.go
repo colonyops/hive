@@ -13,8 +13,7 @@ const (
 	DefaultMaxFileSize = 10 << 20
 	DefaultFileBackups = 3
 
-	rotateCheckBytes    = 256 << 10
-	rotateCheckInterval = 30 * time.Second
+	rotateCheckInterval = 5 * time.Minute
 )
 
 // rotatingFile appends to path and rotates it to path.1 … path.N once it
@@ -23,23 +22,22 @@ const (
 // runs under an flock, and a writer whose path was rotated by another process
 // reopens it.
 type rotatingFile struct {
-	path       string
-	maxSize    int64
-	backups    int
-	checkBytes int64
+	path          string
+	maxSize       int64
+	backups       int
+	checkInterval time.Duration
 
 	mu          sync.Mutex
 	file        *os.File
-	sinceCheck  int64
 	lastChecked time.Time
 }
 
 func openRotating(path string, maxSize int64, backups int) (*rotatingFile, error) {
 	r := &rotatingFile{
-		path:       path,
-		maxSize:    maxSize,
-		backups:    backups,
-		checkBytes: min(rotateCheckBytes, max(maxSize/8, 1)),
+		path:          path,
+		maxSize:       maxSize,
+		backups:       backups,
+		checkInterval: rotateCheckInterval,
 	}
 	// A failed rotation leaves the file growing; it must not cost the log.
 	_ = rotate(path, maxSize, backups)
@@ -59,8 +57,7 @@ func (r *rotatingFile) Write(p []byte) (int, error) {
 		return 0, os.ErrClosed
 	}
 	n, err := r.file.Write(p)
-	r.sinceCheck += int64(n)
-	if r.sinceCheck >= r.checkBytes || time.Since(r.lastChecked) >= rotateCheckInterval {
+	if time.Since(r.lastChecked) >= r.checkInterval {
 		r.check()
 	}
 	return n, err
@@ -78,7 +75,6 @@ func (r *rotatingFile) Close() error {
 }
 
 func (r *rotatingFile) check() {
-	r.sinceCheck = 0
 	r.lastChecked = time.Now()
 
 	held, err := r.file.Stat()

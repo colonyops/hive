@@ -20,6 +20,15 @@ func readLog(t *testing.T, path string) string {
 	return string(data)
 }
 
+// openChecking checks on every write instead of every few minutes.
+func openChecking(t *testing.T, path string, maxSize int64, backups int) *rotatingFile {
+	t.Helper()
+	r, err := openRotating(path, maxSize, backups)
+	require.NoError(t, err)
+	r.checkInterval = 0
+	return r
+}
+
 func TestNewRootRotatesAnOversizedFileOnOpen(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hive.log")
 	require.NoError(t, os.WriteFile(path, []byte(strings.Repeat("old\n", 300)), 0o644))
@@ -36,8 +45,7 @@ func TestNewRootRotatesAnOversizedFileOnOpen(t *testing.T) {
 
 func TestRotatingFileRotatesWhileWritingAndKeepsBackups(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hive.log")
-	r, err := openRotating(path, 1<<10, 2)
-	require.NoError(t, err)
+	r := openChecking(t, path, 1<<10, 2)
 
 	line := strings.Repeat("x", 99) + "\n"
 	for range 100 {
@@ -49,8 +57,7 @@ func TestRotatingFileRotatesWhileWritingAndKeepsBackups(t *testing.T) {
 	for _, p := range []string{path, path + ".1", path + ".2"} {
 		info, err := os.Stat(p)
 		require.NoError(t, err, p)
-		// Size is checked every maxSize/8 bytes, so a file overshoots by at most that and one line.
-		assert.LessOrEqual(t, info.Size(), int64(1<<10+1<<10/8+len(line)), p)
+		assert.LessOrEqual(t, info.Size(), int64(1<<10+len(line)), p)
 	}
 	assert.NoFileExists(t, path+".3")
 }
@@ -69,12 +76,10 @@ func TestRotatingFileNegativeBackupsTruncates(t *testing.T) {
 
 func TestRotatingFileFollowsARotationByAnotherWriter(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "hive.log")
-	desktop, err := openRotating(path, 1<<10, 3)
-	require.NoError(t, err)
-	cli, err := openRotating(path, 1<<10, 3)
-	require.NoError(t, err)
+	desktop := openChecking(t, path, 1<<10, 3)
+	cli := openChecking(t, path, 1<<10, 3)
 
-	_, err = cli.Write([]byte(strings.Repeat("c", 2<<10) + "\n"))
+	_, err := cli.Write([]byte(strings.Repeat("c", 2<<10) + "\n"))
 	require.NoError(t, err)
 	_, err = desktop.Write([]byte(strings.Repeat("d", 200) + "\n"))
 	require.NoError(t, err)
@@ -93,8 +98,7 @@ func TestRotatingFileLosesNoLinesAcrossConcurrentWriters(t *testing.T) {
 
 	var wg sync.WaitGroup
 	for w := range writers {
-		r, err := openRotating(path, 4<<10, 1000)
-		require.NoError(t, err)
+		r := openChecking(t, path, 4<<10, 1000)
 		wg.Go(func() {
 			defer func() { _ = r.Close() }()
 			for i := range lines {
@@ -114,4 +118,21 @@ func TestRotatingFileLosesNoLinesAcrossConcurrentWriters(t *testing.T) {
 		total += strings.Count(readLog(t, m), "\n")
 	}
 	assert.Equal(t, writers*lines, total)
+}
+
+func TestRotatingFileWaitsForTheIntervalBeforeChecking(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hive.log")
+	r, err := openRotating(path, 1<<10, 3)
+	require.NoError(t, err)
+
+	_, err = r.Write([]byte(strings.Repeat("x", 4<<10) + "\n"))
+	require.NoError(t, err)
+	assert.NoFileExists(t, path+".1")
+
+	r.lastChecked = r.lastChecked.Add(-rotateCheckInterval)
+	_, err = r.Write([]byte("next\n"))
+	require.NoError(t, err)
+	require.NoError(t, r.Close())
+
+	assert.FileExists(t, path+".1")
 }
