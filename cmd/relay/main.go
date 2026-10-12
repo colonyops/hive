@@ -122,7 +122,7 @@ func openPersistentStore(ctx context.Context, cmd *cli.Command) (relay.Store, er
 		return nil, err
 	}
 	if cfg.Store == config.StoreMemory {
-		return nil, fmt.Errorf("%s needs the sqlite store, which arrives in Phase 3", cmd.FullName())
+		return nil, fmt.Errorf("%s needs --store sqlite: the memory store lives inside the server process, so there is nothing here to act on", cmd.FullName())
 	}
 	return app.OpenStore(ctx, cfg)
 }
@@ -155,9 +155,13 @@ func accountsList(ctx context.Context, cmd *cli.Command) (err error) {
 	}
 	slices.SortFunc(accts, func(a, b relay.Account) int { return a.CreatedAt.Compare(b.CreatedAt) })
 	tw := tabwriter.NewWriter(cmd.Root().Writer, 0, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintln(tw, "EMAIL\tBYTES\tCREATED")
+	_, _ = fmt.Fprintln(tw, "EMAIL\tSOURCES\tBYTES\tCREATED")
 	for _, a := range accts {
-		_, _ = fmt.Fprintf(tw, "%s\t%d\t%s\n", a.Email, a.BytesUsed, a.CreatedAt.Format("2006-01-02"))
+		n, err := store.Sources().CountByEmail(ctx, a.Email)
+		if err != nil {
+			return err
+		}
+		_, _ = fmt.Fprintf(tw, "%s\t%d\t%d\t%s\n", a.Email, n, a.BytesUsed, a.CreatedAt.Format("2006-01-02"))
 	}
 	return tw.Flush()
 }
@@ -169,5 +173,25 @@ func accountsDelete(ctx context.Context, cmd *cli.Command) (err error) {
 	}
 	defer func() { err = errors.Join(err, store.Close()) }()
 
-	return store.Accounts().Delete(ctx, relay.NormalizeEmail(cmd.String("email")))
+	email := relay.NormalizeEmail(cmd.String("email"))
+	acct, err := store.Accounts().Get(ctx, email)
+	if errors.Is(err, relay.ErrNotFound) {
+		return fmt.Errorf("no account for %s", email)
+	}
+	if err != nil {
+		return err
+	}
+	sources, err := store.Sources().CountByEmail(ctx, email)
+	if err != nil {
+		return err
+	}
+	tokens, err := store.Tokens().ListByEmail(ctx, email)
+	if err != nil {
+		return err
+	}
+	if err := store.Accounts().Delete(ctx, email); err != nil {
+		return err
+	}
+	_, err = fmt.Fprintf(cmd.Root().Writer, "deleted %s: %d sources, %d tokens, %d bytes\n", email, sources, len(tokens), acct.BytesUsed)
+	return err
 }

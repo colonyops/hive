@@ -7,6 +7,8 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +39,10 @@ func TestRunServesTheFlow(t *testing.T) {
 	done := make(chan error, 1)
 	go func() {
 		done <- Run(ctx, cfg, zerolog.Nop(), Options{
-			Plugs:    []plugs.Option{plugs.WithSignals()},
+			// WithSignals() with no signals does not disable handling:
+			// signal.NotifyContext then relays every signal, including the
+			// runtime's SIGURG preemption, which stops the server mid-test.
+			Plugs:    []plugs.Option{plugs.WithSignals(os.Interrupt)},
 			Stdout:   stdoutW,
 			OnListen: func(a net.Addr) { addrs <- a },
 		})
@@ -93,7 +98,10 @@ func TestRunServesTheFlow(t *testing.T) {
 	}
 }
 
-func TestOpenStoreSQLiteNotYet(t *testing.T) {
-	_, err := OpenStore(context.Background(), config.Config{Store: config.StoreSQLite})
-	assert.ErrorContains(t, err, "Phase 3")
+func TestOpenStoreSQLiteCreatesDataDir(t *testing.T) {
+	cfg := config.Config{Store: config.StoreSQLite, DataDir: filepath.Join(t.TempDir(), "nested", "relay")}
+	store, err := OpenStore(t.Context(), cfg)
+	require.NoError(t, err)
+	require.NoError(t, store.Close())
+	assert.FileExists(t, cfg.SQLitePath())
 }

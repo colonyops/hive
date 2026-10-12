@@ -36,3 +36,17 @@ sql:
         emit_interface: false
         emit_exact_table_names: false
         emit_empty_slices: true
+  - engine: "sqlite"
+    queries:
+      - "cmd/relay/internal/store/sqlite/queries"
+    schema: "cmd/relay/internal/store/sqlite/migrations"
+    gen:
+      go:
+        package: "db"
+        out: "cmd/relay/internal/store/sqlite/db"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: false
+        emit_exact_table_names: false
+        emit_empty_slices: true
+        emit_result_struct_pointers: false

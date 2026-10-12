@@ -7,6 +7,15 @@ description = "Run the relay on the memory store with a minted dev key on stdout
 env = { RELAY_LOG_LEVEL = "debug" }
 run = "go run ./cmd/relay serve --store memory --public-url http://127.0.0.1:8080 --mint dev@example.com"
 
+["relay:dev:sqlite"]
+description = "Run the relay on a sqlite store in ./.data/relay; mint a key with `go run ./cmd/relay tokens create --data-dir ./.data/relay`"
+env = { RELAY_LOG_LEVEL = "debug" }
+run = "go run ./cmd/relay serve --store sqlite --data-dir ./.data/relay --public-url http://127.0.0.1:8080"
+
+["relay:check:migrations"]
+description = "Verify the relay's SQLite migrations are ordered and released history is immutable"
+run = "./cmd/desktop/scripts/check-migration-order.sh cmd/relay/internal/store/sqlite/migrations"
+
 ["relay:test"]
 description = "Run the relay's Go tests"
 run = "go test ./cmd/relay/..."

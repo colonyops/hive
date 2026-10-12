@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/hay-kot/appkit/plugs"
@@ -18,6 +19,7 @@ import (
 	"github.com/colonyops/hive/cmd/relay/internal/httpapi"
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
 	"github.com/colonyops/hive/cmd/relay/internal/store/memory"
+	"github.com/colonyops/hive/cmd/relay/internal/store/sqlite"
 )
 
 type Options struct {
@@ -90,19 +92,27 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	mgr := plugs.New(append([]plugs.Option{
 		plugs.WithTimeout(10 * time.Second),
 		plugs.WithLogger(plugsLogger{log}),
+		plugs.WithMaxAttempts(3),
 	}, opts.Plugs...)...)
 	mgr.Add(plugs.PluginFunc("http", func(ctx context.Context) error {
 		return httpapi.Serve(ctx, ln, cfg.Limits, handler, log)
 	}))
+	sweeper := relay.NewSweeper(store, cfg.Limits, log)
+	mgr.Add(plugs.PluginFunc("sweeper", func(ctx context.Context) error {
+		return sweeper.Run(ctx, time.Minute)
+	}))
 	return mgr.Start(ctx)
 }
 
-func OpenStore(_ context.Context, cfg config.Config) (relay.Store, error) {
+func OpenStore(ctx context.Context, cfg config.Config) (relay.Store, error) {
 	switch cfg.Store {
 	case config.StoreMemory:
 		return memory.New(), nil
 	case config.StoreSQLite:
-		return nil, errors.New("sqlite store arrives in Phase 3; run with --store memory")
+		if err := os.MkdirAll(filepath.Dir(cfg.SQLitePath()), 0o700); err != nil {
+			return nil, fmt.Errorf("create data dir: %w", err)
+		}
+		return sqlite.Open(ctx, cfg.SQLitePath())
 	default:
 		return nil, fmt.Errorf("unknown store %q", cfg.Store)
 	}
