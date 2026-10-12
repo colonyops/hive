@@ -137,10 +137,10 @@ useEscapeToClose(() => emit('close'))
       :style="{ width: sidebarWidth + 'px' }"
       data-testid="drive-page-sidebar"
     >
-      <!-- The picker is the tree's heading: a flat row at the title strip's
-           height, so the strip's bottom line runs on across the sidebar and
-           the only chrome is the sidebar's own. -->
-      <div class="flex h-11 shrink-0 items-center border-b border-row px-1.5">
+      <!-- The picker is the tree's heading: a flat row in the title strip's
+           own colour and height, so the strip runs on across the sidebar and
+           the picker shows no chrome of its own. -->
+      <div class="flex h-11 shrink-0 items-center border-b border-row bg-canvas-toolbar px-1.5">
         <AppSelect
           class="min-w-0 flex-1"
           :model-value="space"
