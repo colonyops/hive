@@ -1,8 +1,8 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Window } from '@wailsio/runtime'
-import { useAgentCanvasRoute } from '../composables/useAgentCanvasRoute'
-import type { CanvasAuthor, CanvasScope } from '../lib/agentCanvas'
+import { useDriveRoute } from '../composables/useDriveRoute'
+import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
@@ -28,8 +28,7 @@ export function useAppMode(
   shellLoaded: Ref<boolean>,
 ) {
   const { route, router } = nav
-  const { routeChatId, canvasRequested, canvasName, canvasUnseen, isCanvasUnseen, syncCanvasQuery } =
-    useAgentCanvasRoute()
+  const { routeChatId, docRequested, docPath, docUnseen, isDocUnseen, syncDocQuery } = useDriveRoute()
   const { recents } = useAgentSessionsAll()
   const { sessions: codeSessions } = useTerminalSessions()
 
@@ -141,46 +140,44 @@ export function useAppMode(
     if (collapsed) collapsed.value = !collapsed.value
   }
 
-  // Whose canvases the session on screen in Code reads: its repository's for
-  // a hive session, its workspace's for a pinned chat. The scratch terminal
-  // has none.
-  const codeCanvas = computed<{ workspace: string; session: CanvasAuthor } | null>(() => {
+  // The space the session on screen in Code reads: its repository's for a
+  // hive session, its workspace's for a pinned chat. The scratch terminal has
+  // none.
+  const codeDrive = computed<{ space: string; session: DriveAuthor } | null>(() => {
     const slug = onScreenSessionSlug.value
     if (!terminalActive.value || !slug) return null
     const chat = recents.value.find((row) => row.slug === slug)
-    if (chat) return { workspace: chat.workspace, session: chat.id }
+    if (chat) return { space: workspaceSpaceKey(chat.workspace), session: chat.id }
     const row = codeSessions.value.find((session) => session.slug === slug)
-    return row?.canvasOwner ? { workspace: row.canvasOwner, session: row.id } : null
+    return row?.canvasOwner ? { space: row.canvasOwner, session: row.id } : null
   })
 
   // One control per frame edge: the right toggle names the detail preview in
-  // Inbox and the canvas in Chats and Code (hay-kot/hive-desktop#432).
-  const agentsCanvasAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
-  const canvasAvailable = computed(() => agentsCanvasAvailable.value || codeCanvas.value !== null)
-  const previewToggleCollapsed = computed(() =>
-    canvasAvailable.value ? !canvasRequested.value : previewCollapsed.value,
-  )
-  const canTogglePreview = computed(() => feedViewActive.value || canvasAvailable.value)
+  // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
+  const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
+  const driveAvailable = computed(() => agentsDriveAvailable.value || codeDrive.value !== null)
+  const previewToggleCollapsed = computed(() => (driveAvailable.value ? !docRequested.value : previewCollapsed.value))
+  const canTogglePreview = computed(() => feedViewActive.value || driveAvailable.value)
   const previewUnseen = computed(() =>
-    agentsCanvasAvailable.value ? canvasUnseen.value : isCanvasUnseen(codeCanvas.value?.session ?? null),
+    agentsDriveAvailable.value ? docUnseen.value : isDocUnseen(codeDrive.value?.session ?? null),
   )
 
   function togglePreview(): void {
-    if (canvasAvailable.value) syncCanvasQuery(!canvasRequested.value)
+    if (driveAvailable.value) syncDocQuery(!docRequested.value)
     else previewCollapsed.value = !previewCollapsed.value
   }
 
-  // What the canvas pane beside the open chat or Code session shows, or would
-  // show: the full-page view opens on the same canvas. A chat's workspace is
+  // What the drive pane beside the open chat or Code session shows, or would
+  // show: the full-page view opens on the same document. A chat's workspace is
   // its own and need not be the focused one, which is the fallback with no
   // chat open.
-  const viewCanvasScope = computed<CanvasScope | null>(() => {
-    if (codeCanvas.value) return { ...codeCanvas.value, name: canvasName.value }
+  const viewDriveScope = computed<DriveScope | null>(() => {
+    if (codeDrive.value) return { ...codeDrive.value, path: docPath.value }
     if (!agentsActive.value) return null
     const session = routeChatId.value
     const focused = typeof route.params.workspace === 'string' ? route.params.workspace : ''
     const workspace = recents.value.find((chat) => chat.id === session)?.workspace ?? focused
-    return workspace ? { workspace, name: canvasName.value, session } : null
+    return workspace ? { space: workspaceSpaceKey(workspace), path: docPath.value, session } : null
   })
 
   // The hidden-inset title bar loses the native double-click-to-zoom, so it is
@@ -216,8 +213,8 @@ export function useAppMode(
     canTogglePreview,
     previewUnseen,
     togglePreview,
-    codeCanvas,
-    viewCanvasScope,
+    codeDrive,
+    viewDriveScope,
     toggleMaximise,
   }
 }

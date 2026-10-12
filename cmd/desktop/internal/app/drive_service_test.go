@@ -140,6 +140,14 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 
 func (f driveFixture) contextDir() string { return f.harness.cfg.ContextDir() }
 
+func (f driveFixture) canvasesAt(ctx context.Context, space string) ([]drive.CanvasMeta, error) {
+	parsed, err := drive.ParseSpaceKey(space)
+	if err != nil {
+		return nil, err
+	}
+	return f.svc.listCanvases(ctx, f.harness.engine.Drive(), parsed)
+}
+
 func mustSpace(space drive.Space, err error) drive.Space {
 	if err != nil {
 		panic(err)
@@ -327,7 +335,7 @@ func TestCanvasReadsReportAMigratedChatByItsUUID(t *testing.T) {
 		assert.Equal(t, shown, read)
 	}
 
-	metas, err := f.svc.ListCanvasesAt(ctx, "workspaces/ws")
+	metas, err := f.canvasesAt(ctx, "workspaces/ws")
 	require.NoError(t, err)
 	authors := map[string]string{}
 	for _, meta := range metas {
@@ -353,7 +361,7 @@ func TestCanvasPutBlocks(t *testing.T) {
 	_, err = f.svc.PutBlocks(ctx, "1", "plan", "", []drive.Block{markdownBlock("a", "x"), markdownBlock("a", "y")})
 	assert.Equal(t, KindInvalid, KindOf(err), "duplicate ids in one batch are refused")
 
-	metas, err := f.svc.ListCanvasesAt(ctx, "workspaces/ws")
+	metas, err := f.canvasesAt(ctx, "workspaces/ws")
 	require.NoError(t, err)
 	assert.Empty(t, metas, "a rejected batch writes nothing")
 	assert.Empty(t, f.signals.Updates())
@@ -501,17 +509,17 @@ func TestDriveDeleteOfACanvasWakesItsAuthor(t *testing.T) {
 	assert.Equal(t, []string{"1", "1"}, updateSessions(updates), "the delete wakes the chat that wrote the canvas")
 }
 
-func TestCanvasListAt(t *testing.T) {
+func TestCanvasListBySpaceAndBySession(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 
-	metas, err := f.svc.ListCanvasesAt(ctx, "workspaces/ws")
+	metas, err := f.canvasesAt(ctx, "workspaces/ws")
 	require.NoError(t, err)
 	assert.Empty(t, metas)
 
 	_, err = f.svc.PutBlock(ctx, "1", "plan", "The Plan", "", markdownBlock("a", "x"))
 	require.NoError(t, err)
-	metas, err = f.svc.ListCanvasesAt(ctx, "workspaces/ws")
+	metas, err = f.canvasesAt(ctx, "workspaces/ws")
 	require.NoError(t, err)
 	require.Len(t, metas, 1)
 	assert.Equal(t, "workspaces/ws", metas[0].Space)
@@ -522,11 +530,6 @@ func TestCanvasListAt(t *testing.T) {
 	fromSession, err := f.svc.ListCanvases(ctx, "1")
 	require.NoError(t, err)
 	assert.Equal(t, metas, fromSession, "ListCanvases resolves the session's space and answers the same rows")
-
-	_, err = f.svc.ListCanvasesAt(ctx, "workspaces/../escape")
-	assert.Equal(t, KindInvalid, KindOf(err))
-	_, err = f.svc.ListCanvasesAt(ctx, "ws")
-	assert.Equal(t, KindInvalid, KindOf(err), "a bare workspace name is an owner key, not a space key")
 }
 
 var siteSession = session.Session{
@@ -558,10 +561,6 @@ func TestCanvasFromAHiveSessionIsFiledUnderItsRepository(t *testing.T) {
 	shown, err := f.svc.GetCanvasAt(ctx, "acme/site", "plan")
 	require.NoError(t, err)
 	require.Len(t, shown.Blocks, 1)
-
-	repositories, err := f.svc.Repositories(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, []string{"acme/site"}, repositories, "the workspace space is not a repository")
 }
 
 // Two sessions of one repository share its canvases, the way two chats share
@@ -619,7 +618,7 @@ func TestAgentsOutsideEverySessionShareTheSharedSpace(t *testing.T) {
 	_, err = f.svc.PutBlock(ctx, " global ", "notes", "", "", markdownBlock("b", "y"))
 	require.NoError(t, err, "a second global agent writes to the same canvas")
 
-	metas, err := f.svc.ListCanvasesAt(ctx, drive.SharedKey)
+	metas, err := f.canvasesAt(ctx, drive.SharedKey)
 	require.NoError(t, err)
 	require.Len(t, metas, 1)
 	assert.Equal(t, 2, metas[0].BlockCount)
@@ -654,13 +653,12 @@ func TestRepositoryCanvasesSitInTheHiveContextLayout(t *testing.T) {
 	assert.Empty(t, SpaceKeyForRemote("git@github.com:shared/site.git"), "a reserved owner names no space")
 }
 
-func TestSpaceKeysTranslateOwnerKeysBothWays(t *testing.T) {
-	for owner, key := range map[string]string{
-		"@global":   "shared",
-		"demo":      "workspaces/demo",
-		"acme/site": "acme/site",
+func TestOwnerForSpaceKey(t *testing.T) {
+	for key, owner := range map[string]string{
+		"shared":          "@global",
+		"workspaces/demo": "demo",
+		"acme/site":       "acme/site",
 	} {
-		assert.Equal(t, key, SpaceKeyForOwner(owner), owner)
 		assert.Equal(t, owner, OwnerForSpaceKey(key), key)
 	}
 }
@@ -678,10 +676,6 @@ func TestDriveIsUnavailableBeforeTheEngineStarts(t *testing.T) {
 	_, err = svc.PutBlock(ctx, "/work/site-abc123", "plan", "", "", markdownBlock("a", "x"))
 	assert.Equal(t, KindUnavailable, KindOf(err))
 	_, err = svc.GetCanvasAt(ctx, "workspaces/ws", "plan")
-	assert.Equal(t, KindUnavailable, KindOf(err))
-	_, err = svc.ListCanvasesAt(ctx, "workspaces/ws")
-	assert.Equal(t, KindUnavailable, KindOf(err))
-	_, err = svc.Repositories(ctx)
 	assert.Equal(t, KindUnavailable, KindOf(err))
 	_, err = svc.Spaces(ctx)
 	assert.Equal(t, KindUnavailable, KindOf(err))
@@ -745,7 +739,7 @@ func TestImportLegacyCanvasesMovesEveryPreDriveCanvasIntoItsSpace(t *testing.T) 
 	require.Len(t, shown.Blocks, 1)
 
 	importLegacyCanvases(t.Context(), zerolog.Nop(), f.harness.engine, paths)
-	metas, err := f.svc.ListCanvasesAt(t.Context(), drive.SharedKey)
+	metas, err := f.canvasesAt(t.Context(), drive.SharedKey)
 	require.NoError(t, err)
 	assert.Len(t, metas, 1, "a second run is a no-op")
 }

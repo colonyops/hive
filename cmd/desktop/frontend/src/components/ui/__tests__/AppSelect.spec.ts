@@ -127,6 +127,26 @@ describe('AppSelect', () => {
     wrapper.unmount()
   })
 
+  it('draws a header above each group of options and keeps the walk on the options', async () => {
+    const grouped = [
+      { value: 'acme/site', label: 'acme/site', group: 'Repositories' },
+      { value: 'acme/api', label: 'acme/api', group: 'Repositories' },
+      { value: 'workspaces/demo', label: 'demo', group: 'Workspaces' },
+    ]
+    const wrapper = mountSelect({ modelValue: 'acme/site', options: grouped })
+    const popover = await openSelect(wrapper, 'action-type')
+    expect(
+      Array.from(popover.querySelectorAll('[data-testid^="action-type-group-"]')).map((h) => h.textContent?.trim()),
+    ).toEqual(['Repositories', 'Workspaces'])
+
+    const root = wrapper.get('[data-testid="action-type"]')
+    await root.trigger('keydown', { key: 'ArrowDown' })
+    await root.trigger('keydown', { key: 'ArrowDown' })
+    await root.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['workspaces/demo'])
+    wrapper.unmount()
+  })
+
   describe('placeholder', () => {
     it('shows the placeholder when the value matches no option', () => {
       const wrapper = mountSelect({ modelValue: '', placeholder: 'Choose one' })

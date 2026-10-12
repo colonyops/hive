@@ -1,5 +1,7 @@
 <script setup lang="ts">
-// Canvas settings apply to every canvas, in Chats and in Code alike.
+// Drive reading settings apply to every document, in the pane and the full
+// page, in Chats and in Code alike. They keep their canvas_* keys in
+// settings.yaml so existing values carry over.
 import CanvasTypographyPreview from './settings/CanvasTypographyPreview.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
@@ -37,18 +39,21 @@ const pageWidthOptions = canvasPageWidths.map((value) => ({
 </script>
 
 <template>
-  <SettingsPage testid="settings-canvas">
+  <SettingsPage testid="settings-drive">
     <SettingsSection
       title="Typography"
-      description="How canvas text is drawn. Changes apply to every open canvas immediately."
+      description="How document text is drawn. Changes apply to every open document immediately."
       boxed
     >
-      <SettingsRow label="Font size" hint="Applies to headings, body text, cards, and diagrams in every canvas.">
+      <SettingsRow
+        label="Font size"
+        hint="Applies to headings, body text, cards, and diagrams in every markdown and canvas document."
+      >
         <SegmentedControl
           :model-value="fontSize"
           :options="fontSizeOptions"
-          aria-label="Canvas text size"
-          testid="settings-canvas-font-size"
+          aria-label="Document text size"
+          testid="settings-drive-font-size"
           @update:model-value="setFontSize($event as CanvasFontSize)"
         />
       </SettingsRow>
@@ -59,15 +64,15 @@ const pageWidthOptions = canvasPageWidths.map((value) => ({
         <SegmentedControl
           :model-value="lineSpacing"
           :options="lineSpacingOptions"
-          aria-label="Canvas line spacing"
-          testid="settings-canvas-line-spacing"
+          aria-label="Document line spacing"
+          testid="settings-drive-line-spacing"
           @update:model-value="setLineSpacing($event as CanvasLineSpacing)"
         />
       </SettingsRow>
       <div class="px-4 py-3.5"><CanvasTypographyPreview /></div>
     </SettingsSection>
 
-    <SettingsSection title="Full page" description="How the full-page view lays out a canvas." boxed>
+    <SettingsSection title="Full page" description="How the full-page view lays out a document." boxed>
       <SettingsRow
         label="Text width"
         hint="Narrow keeps lines at a comfortable reading length. Wide fits HTML laid out in columns. Full runs to the edges of the view."
@@ -75,8 +80,8 @@ const pageWidthOptions = canvasPageWidths.map((value) => ({
         <SegmentedControl
           :model-value="pageWidth"
           :options="pageWidthOptions"
-          aria-label="Canvas full-page text width"
-          testid="settings-canvas-page-width"
+          aria-label="Full-page text width"
+          testid="settings-drive-page-width"
           @update:model-value="setPageWidth($event as CanvasPageWidth)"
         />
       </SettingsRow>

@@ -11,7 +11,7 @@ export interface GlobalKeymapDeps {
   paletteOpen: Ref<boolean>
   activityOpen: Ref<boolean>
   tasksOpen: Ref<boolean>
-  canvasOpen: Ref<boolean>
+  driveOpen: Ref<boolean>
   actionRunsOpen: Ref<boolean>
 }
 
@@ -27,19 +27,19 @@ export function useGlobalKeymap({
   paletteOpen,
   activityOpen,
   tasksOpen,
-  canvasOpen,
+  driveOpen,
   actionRunsOpen,
 }: GlobalKeymapDeps) {
   const kb = useKeybindings()
 
   // Every dialog and drawer registers in openModalCount while mounted. The
   // palette and the hub overlays are not modals, so they are named here. Tasks
-  // and Canvases are split out so each one's toggle can close its own overlay
+  // and Drive are split out so each one's toggle can close its own overlay
   // while it stays suppressed under anything else.
   const openModalCount = useOpenModalCount()
   const toggledOverlays: Record<string, Ref<boolean>> = {
     'tasks.toggle': tasksOpen,
-    'canvas.toggle': canvasOpen,
+    'drive.toggle': driveOpen,
     'action-runs.toggle': actionRunsOpen,
   }
   const otherOverlayOpen = computed(() => paletteOpen.value || activityOpen.value || openModalCount.value > 0)

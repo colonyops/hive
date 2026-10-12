@@ -1,7 +1,7 @@
 import type { Component } from 'vue'
 import IconKeyboard from '~icons/lucide/keyboard'
 import IconPalette from '~icons/lucide/palette'
-import IconPanelRight from '~icons/lucide/panel-right'
+import IconFolderTree from '~icons/lucide/folder-tree'
 import IconPlug from '~icons/lucide/plug'
 import IconPlay from '~icons/lucide/play'
 import IconSquareTerminal from '~icons/lucide/square-terminal'
@@ -26,7 +26,7 @@ export const applicationSettingsSectionMeta: Record<
 > = {
   general: { label: 'General', title: 'General', icon: IconSliders },
   appearance: { label: 'Appearance', title: 'Appearance', icon: IconPalette },
-  canvas: { label: 'Canvas', title: 'Canvas', icon: IconPanelRight },
+  drive: { label: 'Drive', title: 'Drive', icon: IconFolderTree },
   keybindings: { label: 'Keyboard', title: 'Keyboard shortcuts', icon: IconKeyboard },
   terminal: { label: 'Terminal', title: 'Terminal', icon: IconSquareTerminal },
   agents: { label: 'Chats', title: 'Chats', icon: IconMessagesSquare },

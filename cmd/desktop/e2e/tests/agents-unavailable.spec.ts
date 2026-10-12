@@ -63,19 +63,18 @@ test('the Chats area explains its own unavailability and hands the frame back', 
   expect(appConsoleErrors, 'an unavailable Chats area is a rendered state, not a failure').toEqual([])
 })
 
-// The full-page canvas view reads canvases through the Chats area's client, so
-// this build has none to show. The overlay still has to open on its chord,
-// say why, and hand the feed back.
-test('the Canvases view opens over the feed and explains its own unavailability', async ({ page }) => {
+// The Drive view reads the engine's drive, not the Chats area, so it still
+// opens on its chord in a build without Chats, shows its spaces, and hands
+// the feed back.
+test('the Drive view opens over the feed without the Chats area', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByTestId('feed-item')).toHaveCount(feedItemCount)
 
   await page.keyboard.press('ControlOrMeta+Shift+P')
-  await expect(page.getByTestId('canvas-overlay')).toBeVisible()
-  await expect(page.getByTestId('canvas-page-unavailable')).not.toBeEmpty()
-  await expect(page.getByTestId('canvas-page-sidebar')).toHaveCount(0)
+  await expect(page.getByTestId('drive-overlay')).toBeVisible()
+  await expect(page.getByTestId('drive-page-sidebar')).toBeVisible()
 
   await page.keyboard.press('Escape')
-  await expect(page.getByTestId('canvas-overlay')).toHaveCount(0)
+  await expect(page.getByTestId('drive-overlay')).toHaveCount(0)
   await expect(page.getByTestId('feed-item')).toHaveCount(feedItemCount)
 })

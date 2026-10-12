@@ -72,25 +72,12 @@ type driveCaller struct {
 	author drive.Author
 }
 
-// legacyGlobalOwner is the owner key the frontend still addresses the shared
+// legacyGlobalOwner is the owner key hive-canvas results still name the shared
 // space by; the @ kept it out of the workspace names hive creates.
 const legacyGlobalOwner = "@global"
 
-// SpaceKeyForOwner maps the owner key the frontend addresses a canvas by onto
-// a drive space key: @global is the shared space, a slash-less owner is a
-// workspace, and owner/repo already is one.
-func SpaceKeyForOwner(owner string) string {
-	switch {
-	case owner == legacyGlobalOwner:
-		return drive.SharedKey
-	case !strings.Contains(owner, "/"):
-		return drive.WorkspacesDir + "/" + owner
-	default:
-		return owner
-	}
-}
-
-// OwnerForSpaceKey is the inverse of SpaceKeyForOwner.
+// OwnerForSpaceKey maps a space key onto the owner key the hive-canvas MCP
+// results still name: shared is @global, workspaces/<name> is the name.
 func OwnerForSpaceKey(key string) string {
 	if key == drive.SharedKey {
 		return legacyGlobalOwner
@@ -336,21 +323,6 @@ func (s *DriveService) GetCanvasAt(ctx context.Context, space, path string) (dri
 		}
 	}
 	return s.withCanonicalAuthor(ctx, c)
-}
-
-// ListCanvasesAt is a space's canvases, most recently updated first. A
-// canvas whose creating chat or session is gone still lists: the artifact
-// outlives what produced it.
-func (s *DriveService) ListCanvasesAt(ctx context.Context, space string) ([]drive.CanvasMeta, error) {
-	d, err := s.engineDrive()
-	if err != nil {
-		return nil, err
-	}
-	parsed, err := parseSpace(space)
-	if err != nil {
-		return nil, err
-	}
-	return s.listCanvases(ctx, d, parsed)
 }
 
 // Markdown is one document as standalone markdown, the reader's copy action:
@@ -741,26 +713,6 @@ func documentError(err error, space drive.Space, path string) error {
 	}
 }
 
-// Repositories is the space key of every repository in the drive, so a
-// reader can offer them beside the workspaces.
-func (s *DriveService) Repositories(ctx context.Context) ([]string, error) {
-	d, err := s.engineDrive()
-	if err != nil {
-		return nil, err
-	}
-	spaces, err := d.Spaces(ctx)
-	if err != nil {
-		return nil, Wrap(err, KindInternal, "listing repositories in the drive")
-	}
-	keys := []string{}
-	for _, space := range spaces {
-		if space.Kind == drive.SpaceKindRepository {
-			keys = append(keys, space.Key)
-		}
-	}
-	return keys, nil
-}
-
 func (s *DriveService) listCanvases(ctx context.Context, d *drivesvc.Service, space drive.Space) ([]drive.CanvasMeta, error) {
 	metas, err := d.ListCanvases(ctx, space)
 	if err != nil {
@@ -1008,7 +960,7 @@ func validateBlock(b *drive.Block) error {
 		// offender instead of rendering a layout it believes is intact.
 		if rejected := canvas.RejectedHTML(b.Body); rejected != "" {
 			return Errorf(KindInvalid,
-				"an html block cannot use %s; see the hive-canvas docs for the tags and attributes it accepts, and link only to http, https or mailto",
+				"an html block cannot use %s; see the hive-drive docs for the tags and attributes it accepts, and link only to http, https or mailto",
 				rejected)
 		}
 	case drive.BlockKindLink:

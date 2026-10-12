@@ -14,6 +14,18 @@ describe('TitleBarMenu', () => {
     wrapper.unmount()
   })
 
+  it('lists Drive among the views and toggles it', async () => {
+    const wrapper = mount(TitleBarMenu, { attachTo: document.body })
+    await wrapper.get('[data-testid="titlebar-menu"]').trigger('click')
+    const entry = wrapper.get('[data-testid="titlebar-menu-drive"]')
+    expect(entry.text()).toContain('Drive')
+    expect(wrapper.find('[data-testid="titlebar-menu-canvases"]').exists()).toBe(false)
+
+    await entry.trigger('click')
+    expect(wrapper.emitted('run-command')).toEqual([['drive.toggle']])
+    wrapper.unmount()
+  })
+
   it('lists application settings after the views', async () => {
     const wrapper = mount(TitleBarMenu, { attachTo: document.body })
     await wrapper.get('[data-testid="titlebar-menu"]').trigger('click')

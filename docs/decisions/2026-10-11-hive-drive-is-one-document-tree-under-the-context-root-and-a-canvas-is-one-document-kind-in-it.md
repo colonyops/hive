@@ -116,8 +116,9 @@ lives in `hive.db`.
   script, and is held in by `contain: layout`. An `.html` document keeps its
   script and runs in an opaque-origin iframe under a CSP Go injects, so the
   frontend holds no policy for either tier. Links inside an HTML document do
-  nothing until the sandbox allows popups. The allow-popups spike result is
-  recorded here after Phase 3.
+  nothing until the sandbox allows popups. The frame ships with
+  `allow-scripts` only, so links inside an html document stay inert until a
+  later change verifies `allow-popups` on WKWebView.
 - `hive ctx` becomes an alias of `hive drive`, because it is a public CLI
   contract in users' rules, skills, and `CLAUDE.md` files. `/mcp/canvas`
   keeps answering for the same reason.

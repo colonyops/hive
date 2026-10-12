@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import CanvasSettingsView from '../CanvasSettingsView.vue'
+import DriveSettingsView from '../DriveSettingsView.vue'
 
 const settingsBindings = vi.hoisted(() => ({
   AppearanceSettings: vi.fn(),
@@ -25,16 +25,16 @@ beforeEach(() => {
   settingsBindings.SetCanvasPageWidth.mockResolvedValue(undefined)
 })
 
-describe('CanvasSettingsView', () => {
-  it('changes the global canvas text size and line spacing', async () => {
-    const wrapper = mount(CanvasSettingsView)
+describe('DriveSettingsView', () => {
+  it('changes the document text size and line spacing', async () => {
+    const wrapper = mount(DriveSettingsView)
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="settings-canvas-font-size-small"]').attributes('aria-pressed')).toBe('true')
-    expect(wrapper.get('[data-testid="settings-canvas-line-spacing-compact"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="settings-drive-font-size-small"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="settings-drive-line-spacing-compact"]').attributes('aria-pressed')).toBe('true')
 
-    await wrapper.get('[data-testid="settings-canvas-font-size-xl"]').trigger('click')
-    await wrapper.get('[data-testid="settings-canvas-line-spacing-relaxed"]').trigger('click')
+    await wrapper.get('[data-testid="settings-drive-font-size-xl"]').trigger('click')
+    await wrapper.get('[data-testid="settings-drive-line-spacing-relaxed"]').trigger('click')
     await flushPromises()
 
     expect(settingsBindings.SetCanvasFontSize).toHaveBeenCalledWith('xl')
@@ -45,12 +45,12 @@ describe('CanvasSettingsView', () => {
   })
 
   it('defaults the full-page width to narrow and saves a new choice', async () => {
-    const wrapper = mount(CanvasSettingsView)
+    const wrapper = mount(DriveSettingsView)
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="settings-canvas-page-width-narrow"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="settings-drive-page-width-narrow"]').attributes('aria-pressed')).toBe('true')
 
-    await wrapper.get('[data-testid="settings-canvas-page-width-full"]').trigger('click')
+    await wrapper.get('[data-testid="settings-drive-page-width-full"]').trigger('click')
     await flushPromises()
 
     expect(settingsBindings.SetCanvasPageWidth).toHaveBeenCalledWith('full')

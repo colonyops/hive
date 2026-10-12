@@ -12,7 +12,7 @@ export type AppRouteName =
 export const applicationSettingsSections = [
   'general',
   'appearance',
-  'canvas',
+  'drive',
   'notifications',
   'menubar',
   'keybindings',

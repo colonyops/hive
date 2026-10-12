@@ -2,11 +2,12 @@
 import { computed } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import BaseBadge from './ui/BaseBadge.vue'
-import type { CanvasFrontmatterScalar, CanvasFrontmatterValue } from '../lib/agentWorkspacesClient'
+import type { FrontmatterScalar, FrontmatterValue } from '../lib/drive'
 import { useCanvasSettings } from '../stores/useCanvasSettings'
 
 const props = defineProps<{
-  frontmatter: Record<string, CanvasFrontmatterValue>
+  frontmatter: Record<string, FrontmatterValue>
+  /** Unix milliseconds; 0 where the file system records no birth time. */
   createdAt: number
   updatedAt: number
   testid: string
@@ -17,7 +18,7 @@ const { frontmatterExpanded, toggleFrontmatter } = useCanvasSettings()
 type Entry = {
   key: string
   label: string
-  value: CanvasFrontmatterValue
+  value: FrontmatterValue
 }
 
 function labelFor(key: string): string {
@@ -49,14 +50,17 @@ function formatTimestamp(value: number): string {
   return date.toLocaleString([], options)
 }
 
-function formatScalar(value: CanvasFrontmatterScalar): string {
+function formatScalar(value: FrontmatterScalar): string {
   if (value === null) return 'None'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
   return String(value)
 }
 
-function formatValue(value: CanvasFrontmatterValue): string {
-  return Array.isArray(value) ? value.map(formatScalar).join(', ') || 'None' : formatScalar(value)
+// Markdown front matter can nest; a canvas's never does.
+function formatValue(value: FrontmatterValue): string {
+  if (Array.isArray(value)) return value.map(formatScalar).join(', ') || 'None'
+  if (value !== null && typeof value === 'object') return JSON.stringify(value)
+  return formatScalar(value)
 }
 </script>
 
@@ -67,7 +71,7 @@ function formatValue(value: CanvasFrontmatterValue): string {
         type="button"
         class="flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-caption font-semibold text-text-2 hover:bg-chip"
         :aria-expanded="frontmatterExpanded"
-        :aria-label="frontmatterExpanded ? 'Collapse canvas properties' : 'Expand canvas properties'"
+        :aria-label="frontmatterExpanded ? 'Collapse properties' : 'Expand properties'"
         :data-testid="`${testid}-frontmatter-toggle`"
         @click="toggleFrontmatter"
       >
@@ -80,7 +84,11 @@ function formatValue(value: CanvasFrontmatterValue): string {
       </button>
 
       <dl v-if="frontmatterExpanded" class="ml-auto flex min-w-0 flex-wrap items-baseline justify-end gap-x-4 gap-y-1">
-        <div class="inline-flex items-baseline gap-1.5" :data-testid="`${testid}-frontmatter-created_at`">
+        <div
+          v-if="createdAt > 0"
+          class="inline-flex items-baseline gap-1.5"
+          :data-testid="`${testid}-frontmatter-created_at`"
+        >
           <dt class="text-micro font-medium uppercase tracking-wide text-text-4">Created</dt>
           <dd>
             <time
@@ -92,7 +100,11 @@ function formatValue(value: CanvasFrontmatterValue): string {
             </time>
           </dd>
         </div>
-        <div class="inline-flex items-baseline gap-1.5" :data-testid="`${testid}-frontmatter-updated_at`">
+        <div
+          v-if="updatedAt > 0"
+          class="inline-flex items-baseline gap-1.5"
+          :data-testid="`${testid}-frontmatter-updated_at`"
+        >
           <dt class="text-micro font-medium uppercase tracking-wide text-text-4">Updated</dt>
           <dd>
             <time

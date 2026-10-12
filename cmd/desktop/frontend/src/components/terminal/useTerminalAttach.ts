@@ -41,8 +41,8 @@ export function useTerminalAttach(options: {
   function terminalQuery(slug: string, window = ''): Record<string, string> {
     const query: Record<string, string> = {}
     if (window) query.window = window
-    const canvas = route.name === 'terminal' ? route.query.canvas : undefined
-    if (canvas !== undefined) query.canvas = slug === routeSlug.value && typeof canvas === 'string' ? canvas : '1'
+    const doc = route.name === 'terminal' ? route.query.doc : undefined
+    if (doc !== undefined) query.doc = slug === routeSlug.value && typeof doc === 'string' ? doc : '1'
     return query
   }
 

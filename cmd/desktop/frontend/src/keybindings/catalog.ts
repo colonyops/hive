@@ -3,7 +3,7 @@ import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
 import IconArrowUp from '~icons/lucide/arrow-up'
-import IconBookOpen from '~icons/lucide/book-open'
+import IconFolderTree from '~icons/lucide/folder-tree'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconBug from '~icons/lucide/bug'
 import IconLifeBuoy from '~icons/lucide/life-buoy'
@@ -679,14 +679,14 @@ export const commandCatalog: BindableCommand[] = [
     scope: 'goto',
   },
   {
-    id: 'canvas.toggle',
-    title: 'Toggle Canvases',
+    id: 'drive.toggle',
+    title: 'Toggle Drive',
     group: 'View',
-    keywords: ['canvas', 'canvases', 'wiki', 'page', 'document', 'report'],
-    icon: IconBookOpen,
+    keywords: ['drive', 'canvas', 'canvases', 'wiki', 'page', 'document', 'documents', 'plan', 'report', 'context'],
+    icon: IconFolderTree,
     defaultCombos: ['mod+shift+p', 'g v'],
     context: 'global',
-    // Pierces for Tasks' reason: the chat that wrote a canvas is a focused
+    // Pierces for Tasks' reason: the chat that wrote a document is a focused
     // pane, and the chord that opens the view from there has to close it.
     piercesPane: true,
     scope: 'goto',

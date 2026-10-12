@@ -4,7 +4,6 @@ import IconLayoutGrid from '~icons/lucide/layout-grid'
 import ActionInputsDialog from '../components/ActionInputsDialog.vue'
 import ActionRunsView from '../components/ActionRunsView.vue'
 import ActivityView from '../components/ActivityView.vue'
-import AgentCanvasPage from '../components/AgentCanvasPage.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import ErrorDialog from '../components/ErrorDialog.vue'
 import ReportProblemDialog from '../components/ReportProblemDialog.vue'
@@ -13,6 +12,7 @@ import TasksView from '../components/TasksView.vue'
 import ToastStack from '../components/ToastStack.vue'
 import UnsavedFlowChangesModal from '../components/UnsavedFlowChangesModal.vue'
 import WhatsNewDialog from '../components/WhatsNewDialog.vue'
+import DrivePage from '../components/drive/DrivePage.vue'
 import ConfirmationHost from '../components/ui/ConfirmationHost.vue'
 import HubOverlay from '../components/ui/HubOverlay.vue'
 import RenameDialog from '../components/ui/RenameDialog.vue'
@@ -56,12 +56,12 @@ const {
   createProfileError,
 } = feed
 const { pendingNavigation, unsavedChangesBusy } = nav
-const { tasksOpen, activityOpen, canvasOpen, canvasScope, actionRunsOpen, actionRunsRunId } = overlays
+const { tasksOpen, activityOpen, driveOpen, driveScope, actionRunsOpen, actionRunsRunId } = overlays
 const { newProfileOpen } = profileActions
 const flowsSession = useFlowsSession()
 
 function openMcpSettings(): void {
-  canvasOpen.value = false
+  driveOpen.value = false
   nav.selectApplicationSettingsSection('mcp')
 }
 const { open: reportDialogOpen } = useReportDialog()
@@ -159,10 +159,10 @@ onMounted(() => {
   <HubOverlay v-if="tasksOpen" label="Tasks" testid="tasks-overlay" @close="tasksOpen = false">
     <TasksView @close="tasksOpen = false" />
   </HubOverlay>
-  <HubOverlay v-if="canvasOpen" label="Canvases" testid="canvas-overlay" @close="canvasOpen = false">
-    <AgentCanvasPage
-      v-model:scope="canvasScope"
-      @close="canvasOpen = false"
+  <HubOverlay v-if="driveOpen" label="Drive" testid="drive-overlay" @close="driveOpen = false">
+    <DrivePage
+      v-model:scope="driveScope"
+      @close="driveOpen = false"
       @open-url="feed.openUrl"
       @setup="openMcpSettings"
     />

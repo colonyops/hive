@@ -3,17 +3,17 @@ import { onMounted, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
-import AgentCanvasPane from './AgentCanvasPane.vue'
 import SessionDetailDialog from './SessionDetailDialog.vue'
+import DrivePane from './drive/DrivePane.vue'
 import ConfirmationHost from './ui/ConfirmationHost.vue'
 import RenameDialog from './ui/RenameDialog.vue'
 import TerminalPaneColumn from './terminal/TerminalPaneColumn.vue'
 import TerminalSidebar from './terminal/TerminalSidebar.vue'
 import { provideTerminalMode } from './terminal/terminalModeContext'
 import { useSessionTreeView } from './terminal/useSessionTreeView'
-import { useTerminalCanvas, type TerminalCanvasTarget } from './terminal/useTerminalCanvas'
 import { useTerminalAttach } from './terminal/useTerminalAttach'
 import { useTerminalCommands } from './terminal/useTerminalCommands'
+import { useTerminalDrive, type TerminalDriveTarget } from './terminal/useTerminalDrive'
 import { useTerminalPool } from './terminal/useTerminalPool'
 import { useTerminalSessionOps } from './terminal/useTerminalSessionOps'
 import { useTerminalTree } from './terminal/useTerminalTree'
@@ -22,7 +22,7 @@ import { useWindowRename } from './terminal/useWindowRename'
 import { useNewSession } from '../composables/useNewSession'
 import { useSessionActions } from '../composables/useSessionActions'
 import { openLink } from '../composables/useXtermPane'
-import type { CanvasScope } from '../lib/agentCanvas'
+import { spaceGroup, type DriveScope } from '../lib/drive'
 import { useTerminalAvailability } from '../stores/useTerminalAvailability'
 import { useTerminalPoolSize } from '../stores/useTerminalPoolSize'
 import '@xterm/xterm/css/xterm.css'
@@ -34,15 +34,15 @@ const props = withDefaults(
   defineProps<{
     sidebarCollapsed?: boolean
     active?: boolean
-    /** Whose canvases the attached session reads; null for a session with none. */
-    canvas?: TerminalCanvasTarget | null
+    /** The space the attached session reads; null for a session with none. */
+    drive?: TerminalDriveTarget | null
   }>(),
-  { active: true, canvas: null },
+  { active: true, drive: null },
 )
 const emit = defineEmits<{
   'open-tasks': []
   'session-repo-key': [repoKey: string]
-  'open-canvas-page': [scope: CanvasScope]
+  'open-drive-page': [scope: DriveScope]
 }>()
 const active = (): boolean => props.active
 
@@ -73,12 +73,7 @@ const context = { pool, tree, view, nav, attach, ops, rename, sessions }
 provideTerminalMode(context)
 useTerminalCommands(context, active)
 
-const {
-  pane: canvasPane,
-  canvasName,
-  client: canvasClient,
-  syncCanvasQuery,
-} = useTerminalCanvas(toRef(props, 'canvas'), active)
+const { pane: drivePane, docPath, syncDocQuery } = useTerminalDrive(toRef(props, 'drive'), active)
 
 // Hive does not configure a Code session's agent, so the empty pane leads to
 // the page that says how.
@@ -129,18 +124,17 @@ const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, ca
       />
       <!-- A sibling of the pane column, as in Chats: opening it must not
            re-key a terminal host, and the size vote absorbs the width change. -->
-      <AgentCanvasPane
-        v-if="canvasPane"
-        :session="canvasPane.session"
-        :workspace="canvasPane.workspace"
-        :name="canvasName"
-        :client="canvasClient"
-        :agent-setup="typeof canvasPane.session === 'string'"
+      <DrivePane
+        v-if="drivePane"
+        :session="drivePane.session"
+        :space="drivePane.space"
+        :path="docPath"
+        :agent-setup="spaceGroup(drivePane.space) === 'Repositories'"
         @setup="openMcpSettings"
-        @close="syncCanvasQuery(false)"
+        @close="syncDocQuery(false)"
         @open-url="openLink"
-        @pick="(name) => syncCanvasQuery(true, name)"
-        @open-page="(name) => emit('open-canvas-page', { ...canvasPane!, name })"
+        @pick="(path) => syncDocQuery(true, path)"
+        @open-page="(path) => emit('open-drive-page', { ...drivePane!, path })"
       />
     </div>
 

@@ -20,6 +20,8 @@ export interface AppSelectOption {
   hint?: string
   icon?: Component
   disabled?: boolean
+  /** A header drawn above the first option of each run of options that share it. Keep each group's options together. */
+  group?: string
 }
 
 /** `md` matches TextField's metrics (it sits beside one in every form); `sm` is for toolbars and sidebars. */
@@ -74,6 +76,11 @@ function matches(option: AppSelectOption, query: string): boolean {
   return `${option.label} ${option.value} ${option.hint ?? ''}`.toLowerCase().includes(query)
 }
 
+function startsGroup(index: number): boolean {
+  const group = visible.value[index]?.group
+  return !!group && visible.value[index - 1]?.group !== group
+}
+
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue) ?? null)
 const visible = computed(() => {
   if (props.editable) {
@@ -117,7 +124,7 @@ const nav = useListKeyboardNav({
   open: () => open.value,
   disabled: (index) => !!visible.value[index]?.disabled,
   homeEnd: () => !props.editable,
-  row: (index) => list.value?.children[index]?.firstElementChild,
+  row: (index) => list.value?.children[index]?.querySelector('button'),
 })
 
 function firstEnabled(): number {
@@ -343,6 +350,14 @@ onClickOutside(
             role="option"
             :aria-selected="option.value === modelValue"
           >
+            <p
+              v-if="startsGroup(index)"
+              class="px-[9px] pb-1 pt-2 text-micro font-medium uppercase tracking-wide text-text-4"
+              :data-testid="testid ? `${testid}-group-${option.group}` : undefined"
+              aria-hidden="true"
+            >
+              {{ option.group }}
+            </p>
             <button
               type="button"
               class="flex w-full gap-2 rounded-md px-[9px] py-[7px] text-left disabled:cursor-not-allowed disabled:opacity-40"

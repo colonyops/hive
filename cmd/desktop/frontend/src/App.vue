@@ -60,10 +60,10 @@ const shellLoaded = computed(() => (profilesLoaded.value || !!profilesError.valu
 const appMode = useAppMode(feed, nav, onboardingActive, shellLoaded)
 const { mode, terminalActive, agentsActive, hubActive, settingsActive, terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
-const overlays = useHubOverlays(terminalActive, appMode.viewCanvasScope)
-const { tasksOpen, activityOpen, canvasOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
+const overlays = useHubOverlays(terminalActive, appMode.viewDriveScope)
+const { tasksOpen, activityOpen, driveOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
-const reveal = useReveal(nav, session, feed.showToast, overlays.openCanvas)
+const reveal = useReveal(nav, session, feed.showToast, overlays.openDrive)
 const feedCommands = useFeedCommands(feed, confirmation)
 const itemDetail = useSelectedItemDetail(feed)
 
@@ -86,7 +86,7 @@ useGlobalKeymap({
   paletteOpen: palette.open,
   activityOpen,
   tasksOpen,
-  canvasOpen,
+  driveOpen,
   actionRunsOpen,
 })
 
@@ -160,8 +160,8 @@ useWailsEvent('flows:updated', () => {
         v-show="terminalActive"
         :active="terminalActive"
         :sidebar-collapsed="terminalSidebarCollapsed"
-        :canvas="appMode.codeCanvas.value"
-        @open-canvas-page="overlays.openCanvas"
+        :drive="appMode.codeDrive.value"
+        @open-drive-page="overlays.openDrive"
         @open-tasks="overlays.toggleTasks"
         @session-repo-key="terminalSessionRepoKey = $event"
       />
@@ -170,7 +170,7 @@ useWailsEvent('flows:updated', () => {
         v-show="agentsActive"
         :active="agentsActive"
         :sidebar-collapsed="agentsSidebarCollapsed"
-        @open-canvas-page="overlays.openCanvas"
+        @open-drive-page="overlays.openDrive"
       />
       <SettingsView
         v-if="settingsActive"

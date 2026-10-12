@@ -1,26 +1,27 @@
 <script setup lang="ts">
-// One canvas rendered block by block. The pane and the full-page view share
-// it, so a canvas reads the same in both and only the width differs.
+// One document rendered by kind. The pane and the full-page view share it, so
+// a document reads the same in both and only the width differs.
 import { computed } from 'vue'
-import AgentCanvasFrontmatter from './AgentCanvasFrontmatter.vue'
-import CanvasMarkdown from './CanvasMarkdown.vue'
-import EmptyState from './ui/EmptyState.vue'
-import InlineError from './ui/InlineError.vue'
+import HtmlDocumentFrame from './HtmlDocumentFrame.vue'
+import AgentCanvasFrontmatter from '../AgentCanvasFrontmatter.vue'
+import CanvasMarkdown from '../CanvasMarkdown.vue'
+import EmptyState from '../ui/EmptyState.vue'
+import InlineError from '../ui/InlineError.vue'
 import IconArrowUpRight from '~icons/lucide/arrow-up-right'
-import { useCanvasSettings } from '../stores/useCanvasSettings'
-import { canvasLinkTarget } from '../lib/agentCanvas'
-import type { WorkspaceCanvas, WorkspaceCanvasMeta } from '../lib/agentWorkspacesClient'
+import { useCanvasSettings } from '../../stores/useCanvasSettings'
+import { entryTime, linkTarget, markdownBody, type FrontmatterValue } from '../../lib/drive'
+import type { DocumentWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
-  canvas: WorkspaceCanvas | null
-  /** The workspace's canvases, which a relative link can name. */
-  metas: WorkspaceCanvasMeta[]
+  document: DocumentWire | null
+  /** Every document path in the space, which a relative link can name. */
+  paths: ReadonlySet<string>
   loading: boolean
-  error: string
-  /** Derives `-block-<id>`, `-error` and `-empty`. */
+  error: string | null
+  /** Derives `-document`, `-markdown`, `-block-<id>`, `-frame`, `-file`, `-error`, and `-empty`. */
   testid: string
 }>()
-const emit = defineEmits<{ 'open-url': [url: string]; 'open-canvas': [name: string] }>()
+const emit = defineEmits<{ 'open-url': [url: string]; open: [path: string] }>()
 
 const { fontSizePx, lineHeight } = useCanvasSettings()
 const readerStyle = computed(() => ({
@@ -28,16 +29,38 @@ const readerStyle = computed(() => ({
   '--hv-line-height': String(lineHeight.value),
 }))
 
-const canvasNames = computed(() => new Set(props.metas.map((meta) => meta.name)))
+const kind = computed(() => props.document?.entry.kind ?? null)
+const canvas = computed(() => props.document?.canvas ?? null)
+const blocks = computed(() => canvas.value?.blocks ?? [])
+
+const properties = computed<{ frontmatter: Record<string, FrontmatterValue>; created: number; updated: number } | null>(
+  () => {
+    const doc = props.document
+    if (!doc) return null
+    if (doc.canvas && doc.canvas.createdAt > 0) {
+      return {
+        frontmatter: doc.canvas.frontmatter ?? {},
+        created: doc.canvas.createdAt,
+        updated: doc.canvas.updatedAt,
+      }
+    }
+    if (doc.entry.kind !== 'markdown') return null
+    return {
+      frontmatter: doc.entry.front ?? {},
+      created: entryTime(doc.entry.created),
+      updated: entryTime(doc.entry.modified),
+    }
+  },
+)
 
 function follow(href: string): void {
-  const target = canvasLinkTarget(href, canvasNames.value)
+  const target = linkTarget(href, props.document?.entry.path ?? '', props.paths)
   if (target?.kind === 'url') emit('open-url', target.url)
-  else if (target?.kind === 'canvas') emit('open-canvas', target.name)
+  else if (target?.kind === 'document') emit('open', target.path)
 }
 
 // Links must open in the user's real browser rather than navigate the webview
-// away from the app — DetailPane's interception, for the same reason.
+// away from the app: DetailPane's interception, for the same reason.
 function onBodyClick(event: MouseEvent): void {
   const anchor = (event.target as HTMLElement).closest('a')
   if (!anchor) return
@@ -47,17 +70,28 @@ function onBodyClick(event: MouseEvent): void {
 </script>
 
 <template>
-  <div class="canvas-reader" :style="readerStyle">
+  <div class="canvas-reader flex min-h-0 flex-col" :style="readerStyle" :data-testid="`${testid}-document`">
     <AgentCanvasFrontmatter
-      v-if="canvas && canvas.createdAt > 0"
-      :frontmatter="canvas.frontmatter ?? {}"
-      :created-at="canvas.createdAt"
-      :updated-at="canvas.updatedAt"
+      v-if="properties"
+      :frontmatter="properties.frontmatter"
+      :created-at="properties.created"
+      :updated-at="properties.updated"
       :testid="testid"
     />
-    <template v-if="canvas && canvas.blocks.length">
+    <InlineError v-if="error" :testid="`${testid}-error`" variant="line" class="leading-relaxed" :message="error" />
+    <CanvasMarkdown
+      v-else-if="document && kind === 'markdown'"
+      class="canvas-reading-body text-text-2 markdown-body"
+      :style="readerStyle"
+      :source="markdownBody(document.markdown)"
+      :testid="`${testid}-markdown`"
+      :data-testid="`${testid}-markdown`"
+      @follow="follow"
+    />
+    <HtmlDocumentFrame v-else-if="document && kind === 'html'" :html="document.html" :testid="testid" />
+    <template v-else-if="kind === 'canvas' && blocks.length">
       <article
-        v-for="block in canvas.blocks"
+        v-for="block in blocks"
         :key="block.id"
         class="canvas-block"
         :data-testid="`${testid}-block-${block.id}`"
@@ -97,19 +131,13 @@ function onBodyClick(event: MouseEvent): void {
         </button>
       </article>
     </template>
-    <InlineError
-      v-else-if="error"
-      :testid="`${testid}-error`"
-      variant="line"
-      class="leading-relaxed"
-      :message="error"
-    />
     <EmptyState
-      v-else-if="!loading"
+      v-else-if="document && kind === 'file'"
       variant="inline"
-      message="The agent hasn't put anything here yet."
-      :data-testid="`${testid}-empty`"
+      message="Hive shows markdown, html, and canvas documents. Open this file in another app to read it."
+      :data-testid="`${testid}-file`"
     />
+    <EmptyState v-else-if="!loading" variant="inline" message="Nothing here yet." :data-testid="`${testid}-empty`" />
   </div>
 </template>
 
