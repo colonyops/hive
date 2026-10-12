@@ -52,7 +52,8 @@ a leftover the user can move or delete.
 **`@global` becomes the shared space.** Global canvases move from
 `<data>/canvases/` to `<ctx>/shared/canvases/`. The MCP `session: "global"`
 argument stays and resolves to the shared space. The `@global` owner key is
-gone, and the shared space gets a pane like every other.
+gone. The shared space has no pane: `open_document`, `open_canvas` and
+`close_canvas` refuse it, and the user reads it in the Drive page.
 
 **A canvas file is `<name>.canvas.json`.** A space holds files Hive did not
 write, so `.json` alone cannot mean canvas. The on-disk shape and the ten
@@ -115,8 +116,7 @@ lives in `hive.db`.
 - HTML has two tiers. A canvas html block is sanitized in Go, carries no
   script, and is held in by `contain: layout`. An `.html` document keeps its
   script and runs in an opaque-origin iframe under a CSP Go injects, so the
-  frontend holds no policy for either tier. Links inside an HTML document do
-  nothing until the sandbox allows popups. The frame ships with
+  frontend holds no policy for either tier. The frame ships with
   `allow-scripts` only, so links inside an html document stay inert until a
   later change verifies `allow-popups` on WKWebView.
 - `hive ctx` becomes an alias of `hive drive`, because it is a public CLI
@@ -126,5 +126,6 @@ lives in `hive.db`.
 - A move breaks a link to the old path, as it does in every editor already
   open on this tree.
 - On macOS fsnotify opens a descriptor per watched file, about 1,200 for
-  the current root. The watcher sits behind one interface so the backend can
-  become FSEvents without touching the service.
+  the current root. The service holds the concrete `*fswatch.Watcher`. Its
+  backend-neutral contract is the `Change{Dirs}` value with `Changes()` and
+  `Close()`; an interface waits for a second backend, such as FSEvents.

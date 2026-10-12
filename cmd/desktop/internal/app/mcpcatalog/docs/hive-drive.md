@@ -4,7 +4,7 @@ The `hive-drive` MCP server is an agent's output surface. Its tools put
 documents in front of the user, in a pane beside the conversation, in a chat
 or in a Code session, while the session keeps running. It is the difference
 between describing a plan in terminal scrollback and handing the user one to
-read (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
+read (ADR hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it).
 
 Like `hive-desktop`, the server is the running app itself: nothing to
 install, nothing to fetch. It is a separate entry so a workspace can have the
@@ -124,7 +124,8 @@ A canvas is addressed by name or by path. A bare name like `perf` files at
 `reports/2026-10/perf` is `reports/2026-10/perf.canvas.json`, and the folders
 are created on the first write. The last segment is short, lowercase and
 filename-like. `list_canvases` answers each canvas by the name the other
-canvas tools take.
+canvas tools take. A canvas at the space root, which only a move can put
+there, is named `./<stem>`, and the canvas tools accept that form.
 
 The canvas tools:
 

@@ -2,4 +2,4 @@
 kind: added
 ---
 
-Fenced code in rendered markdown is syntax highlighted in the feed, the drive, and canvases.
+**Syntax highlighting for fenced code** in rendered markdown, in the feed, the drive, and canvases.

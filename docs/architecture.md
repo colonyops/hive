@@ -509,8 +509,8 @@ internal/                         # the hive engine both programs run on (see
                                   #   package prefixes; ADR tmux-discovery)
     fswatch/                      #   one fsnotify watch per directory, re-walked
                                   #   on directory create, debounced to changed
-                                  #   directories; behind an interface so the
-                                  #   backend can change
+                                  #   directories; Change{Dirs}, Changes(),
+                                  #   Close() are the backend-neutral contract
     proc/                         #   process inspection: process/, classifier/
     sqlite/                       #   Open: DSN, pragmas, _txlock=immediate, pool;
                                   #   hive.db and desktop-pipeline.db both use it
@@ -2264,7 +2264,9 @@ the root (`owner/repo`, `workspaces/<name>`, `shared`), and an `Entry` whose
 service set, and `Reload` calls its `Reconfigure`. It keeps an in-memory
 snapshot per space, scanned lazily on the first `Tree` or `Search` of that
 space, with front matter read from the head of each markdown file. No index
-sits in `hive.db`. Documents are `.md`, `.html` and `.canvas.json`; `Write`
+sits in `hive.db`. A `Reconfigure` with a new context root publishes one
+`drive.changed` per previously scanned space, with empty paths, so panes
+refresh. Documents are `.md`, `.html` and `.canvas.json`; `Write`
 accepts only the first two, and a canvas changes through its block methods.
 A document is identified by `(space, path)`, so a move is a rename.
 
@@ -2281,8 +2283,12 @@ to a space, and the UI methods: `Spaces`, `Tree`, `Search`, `Document`,
 `Markdown`, `Export`, `CreateFolder`, `Rename`, `Move` and `Delete`. The Wails
 `DriveService` in `adapter/wailsui` binds the UI methods with camelCase wire
 types; the frontend does not use the HTTP agents client for the drive.
-`drive.changed` reaches the frontend as the coalesced wake-up `drive:updated`
-(space, paths, author), and a request to open or close the pane as
+`drive.changed` carries the space, the changed paths and the author (chat
+session or hive session) of a write. The desktop forwarder passes it through
+and publishes nothing of its own: one change, one event. `wailsui.drive`
+subscribes with `events.Buffer(64)`, not `Coalesce()`, because the payload is a
+per-space delta with an author and must not be dropped. It reaches the
+frontend as `drive:updated`, and a request to open or close the pane as
 `drive:toggle`. Pane visibility is UI intent, not stored state, so
 `drive:toggle` carries the whole message, and the frontend honors it only for
 the chat in view. The agent learns its own session id from
@@ -2292,7 +2298,7 @@ the chat in view. The agent learns its own session id from
 at `/mcp/drive` and at `/mcp/canvas`; the old address keeps answering for
 existing agent configurations. It has sixteen tools: the ten canvas tools,
 whose `canvas` argument is a name or a path (`reports/perf` files at
-`reports/perf.canvas.json`, a bare name under `canvases/`), and six document
+`reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), and six document
 tools: `list_documents`, `read_document`, `write_document`, `move_document`,
 `delete_document` and `open_document`. An app-hosted catalogue entry declares
 its mount as `Descriptor.RuntimePath`, joined with the live loopback base when
@@ -2302,7 +2308,8 @@ Code session's agent: the user adds its address to the agent's own MCP
 configuration, and Settings ▸ MCP servers lists it.
 
 **A session resolves to a space.** The `session` argument is `global`, a chat's
-record id, or the caller's working directory. `global` is the `shared` space.
+record id, or the caller's working directory. `global` is the `shared` space,
+which has no pane: `open_document`, `open_canvas` and `close_canvas` refuse it.
 A chat's record names its workspace space. A directory maps to the active hive
 session whose checkout holds it (`Sessions().SessionAtPath`) and from there to
 the repository space; a directory inside no session stays `not_found`. A
@@ -2313,8 +2320,8 @@ write; the frontend uses it for the unseen dot. A chat's space outlives the
 chat, and deleting a workspace leaves its space behind
 (ADR deleting-a-workspace-deletes-its-directory).
 
-**Three idempotent migrations move older canvases.** On the first scan of a
-space the engine renames `canvases/<name>.json` to `<name>.canvas.json` when
+**Three idempotent migrations move older canvases.** Once per space, on the first scan of
+that space and nowhere else, the engine renames `canvases/<name>.json` to `<name>.canvas.json` when
 the file has a `blocks` key. After the engine starts, the desktop calls
 `ImportLegacyCanvases` for the desktop data directory's `canvases/`, which
 moves to `shared/canvases/`, and for each workspace folder's `canvases/`,
