@@ -20,6 +20,7 @@ import MarkdownIt from 'markdown-it'
 import type StateBlock from 'markdown-it/lib/rules_block/state_block.mjs'
 import type Token from 'markdown-it/lib/token.mjs'
 import taskLists from 'markdown-it-task-lists'
+import { highlightCode } from './codeHighlight'
 
 const alertTypes = new Map([
   ['NOTE', 'Note'],
@@ -140,7 +141,16 @@ function githubExtensions(md: MarkdownIt) {
   })
 }
 
-const md = new MarkdownIt({ html: true, linkify: true, breaks: true }).use(taskLists).use(githubExtensions)
+// highlight returns shiki's own escaped markup; an empty string makes
+// markdown-it fall back to its escaped <pre><code class="language-x"> output.
+const md = new MarkdownIt({
+  html: true,
+  linkify: true,
+  breaks: true,
+  highlight: (code, lang) => highlightCode(code, lang) ?? '',
+})
+  .use(taskLists)
+  .use(githubExtensions)
 
 // Enabling HTML lets the parser distinguish comments from text. Keep the
 // output safe by escaping every remaining HTML token; whitelisted details

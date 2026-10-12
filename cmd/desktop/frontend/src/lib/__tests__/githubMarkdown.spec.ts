@@ -2,6 +2,25 @@ import { describe, expect, it } from 'vitest'
 import { renderCanvasMarkdown, renderGithubMarkdown } from '../githubMarkdown'
 
 describe('renderGithubMarkdown', () => {
+  it('highlights a fenced block in a known language', () => {
+    const html = renderGithubMarkdown('```go\nfunc main() {}\n```')
+    expect(html).toContain('class="shiki')
+    expect(html).toContain('--shiki-dark')
+  })
+
+  it('renders an unknown language as escaped plain code', () => {
+    const html = renderGithubMarkdown('```nonsense\n<b>x</b>\n```')
+    expect(html).toContain('<pre><code class="language-nonsense">&lt;b&gt;x&lt;/b&gt;\n</code></pre>')
+    expect(html).not.toContain('shiki')
+  })
+
+  it('escapes a script tag inside a fence in both paths', () => {
+    for (const lang of ['html', 'nonsense']) {
+      const html = renderGithubMarkdown('```' + lang + '\n<script>alert(1)</script>\n```')
+      expect(html).not.toContain('<script>')
+    }
+  })
+
   it('returns an empty string for blank input', () => {
     expect(renderGithubMarkdown('')).toBe('')
     expect(renderGithubMarkdown('   \n  ')).toBe('')
@@ -79,7 +98,7 @@ describe('renderGithubMarkdown', () => {
   it('preserves comment-like text inside code', () => {
     const html = renderGithubMarkdown('`<!-- keep me -->`\n\n```html\n<!-- keep me too -->\n```')
     expect(html).toContain('&lt;!-- keep me --&gt;')
-    expect(html).toContain('&lt;!-- keep me too --&gt;')
+    expect(html).toContain('&#x3C;!-- keep me too -->')
   })
 
   it('renders fenced code blocks', () => {

@@ -1042,3 +1042,25 @@ body {
   outline: 2px solid var(--color-text-3);
   outline-offset: -2px;
 }
+
+/* Shiki is rendered with both github themes as variables (defaultColor:false)
+   and never picks one itself. Dark is the :root default; the light themes opt
+   in. Keep this list in step with `themes` in composables/useTheme.ts. The
+   block background stays on the markdown `pre` styling so it follows the app
+   palette instead of github's. */
+.shiki,
+.shiki span {
+  color: var(--shiki-dark);
+}
+
+:is(
+    [data-theme="light"],
+    [data-theme="slate-light"],
+    [data-theme="one-light"],
+    [data-theme="tokyo-night-day"],
+    [data-theme="catppuccin-latte"],
+    [data-theme="nord-light"]
+  )
+  :is(.shiki, .shiki span) {
+  color: var(--shiki-light);
+}
