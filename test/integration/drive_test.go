@@ -52,6 +52,12 @@ func TestDriveLs(t *testing.T) {
 func TestDriveLsAll(t *testing.T) {
 	h := NewHarness(t)
 	workDir := driveWorkDir(t, h, "drive-ls-all-repo")
+	target, err := os.Readlink(filepath.Join(workDir, ".hive"))
+	require.NoError(t, err)
+	// The JSON lines are entries, so the shared space shows only once it holds one.
+	shared := filepath.Join(filepath.Dir(filepath.Dir(target)), "shared")
+	require.NoError(t, os.MkdirAll(shared, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(shared, "team.md"), []byte("# Team\n"), 0o644))
 
 	lines, err := h.RunJSONLinesInDir(workDir, "drive", "ls", "--all", "--json")
 	require.NoError(t, err)
