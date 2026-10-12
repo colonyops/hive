@@ -35,6 +35,8 @@ func Run(t *testing.T, open func(t *testing.T) relay.Store) {
 	t.Run("tokens", func(t *testing.T) { testTokens(t, fresh) })
 	t.Run("sources", func(t *testing.T) { testSources(t, fresh) })
 	t.Run("deliveries", func(t *testing.T) { testDeliveries(t, fresh) })
+	t.Run("auth codes", func(t *testing.T) { testAuthCodes(t, fresh) })
+	t.Run("outbox", func(t *testing.T) { testOutbox(t, fresh) })
 }
 
 func putAccount(t *testing.T, s relay.Store, email string) {
@@ -501,5 +503,155 @@ func testDeliveries(t *testing.T, open func(t *testing.T) relay.Store) {
 		assert.Equal(t, sum, used)
 		assert.LessOrEqual(t, used, int64(capBytes))
 		assert.Equal(t, workers, len(rows)+overCap)
+	})
+}
+
+func testAuthCodes(t *testing.T, open func(t *testing.T) relay.Store) {
+	const maxAttempts = 3
+	expires := epoch.Add(10 * time.Minute)
+
+	t.Run("put consume ok", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", expires))
+		ok, _, err := s.AuthCodes().Consume(ctx, alice, "h1", epoch, maxAttempts)
+		require.NoError(t, err)
+		assert.True(t, ok)
+
+		ok, left, err := s.AuthCodes().Consume(ctx, alice, "h1", epoch, maxAttempts)
+		require.NoError(t, err)
+		assert.False(t, ok, "a consumed code works once")
+		assert.Zero(t, left)
+	})
+
+	t.Run("wrong code counts down then deletes", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", expires))
+		for want := maxAttempts - 1; want > 0; want-- {
+			ok, left, err := s.AuthCodes().Consume(ctx, alice, "nope", epoch, maxAttempts)
+			require.NoError(t, err)
+			assert.False(t, ok)
+			assert.Equal(t, want, left)
+		}
+		ok, left, err := s.AuthCodes().Consume(ctx, alice, "nope", epoch, maxAttempts)
+		require.NoError(t, err)
+		assert.False(t, ok)
+		assert.Zero(t, left)
+
+		ok, _, err = s.AuthCodes().Consume(ctx, alice, "h1", epoch, maxAttempts)
+		require.NoError(t, err)
+		assert.False(t, ok, "the cap deletes the code")
+	})
+
+	t.Run("expired is a miss", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", expires))
+		ok, left, err := s.AuthCodes().Consume(ctx, alice, "h1", expires, maxAttempts)
+		require.NoError(t, err)
+		assert.False(t, ok)
+		assert.Zero(t, left)
+
+		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", expires))
+		ok, _, err = s.AuthCodes().Consume(ctx, alice, "h1", epoch, maxAttempts)
+		require.NoError(t, err)
+		assert.True(t, ok)
+	})
+
+	t.Run("put replaces and resets attempts", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", expires))
+		_, left, err := s.AuthCodes().Consume(ctx, alice, "nope", epoch, maxAttempts)
+		require.NoError(t, err)
+		require.Equal(t, maxAttempts-1, left)
+
+		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h2", expires))
+		_, left, err = s.AuthCodes().Consume(ctx, alice, "h1", epoch, maxAttempts)
+		require.NoError(t, err)
+		assert.Equal(t, maxAttempts-1, left, "the old code is gone and attempts reset")
+		ok, _, err := s.AuthCodes().Consume(ctx, alice, "h2", epoch, maxAttempts)
+		require.NoError(t, err)
+		assert.True(t, ok)
+	})
+
+	t.Run("delete expired", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", epoch.Add(time.Minute)))
+		require.NoError(t, s.AuthCodes().Put(ctx, bob, "h2", epoch.Add(time.Hour)))
+		n, err := s.AuthCodes().DeleteExpired(ctx, epoch.Add(2*time.Minute))
+		require.NoError(t, err)
+		assert.Equal(t, 1, n)
+		ok, _, err := s.AuthCodes().Consume(ctx, bob, "h2", epoch, maxAttempts)
+		require.NoError(t, err)
+		assert.True(t, ok)
+	})
+}
+
+func mail(id string, created time.Time) relay.Mail {
+	return relay.Mail{ID: id, To: alice, Subject: "s-" + id, Body: "b-" + id, CreatedAt: created, NextAt: created}
+}
+
+func mailIDs(ms []relay.Mail) []string {
+	out := make([]string, len(ms))
+	for i, m := range ms {
+		out[i] = m.ID
+	}
+	return out
+}
+
+func testOutbox(t *testing.T, open func(t *testing.T) relay.Store) {
+	t.Run("append and due order", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		require.NoError(t, s.Outbox().Append(ctx, mail("m2", epoch.Add(time.Second))))
+		require.NoError(t, s.Outbox().Append(ctx, mail("m1", epoch)))
+		require.NoError(t, s.Outbox().Append(ctx, mail("m3", epoch.Add(time.Hour))))
+
+		due, err := s.Outbox().Due(ctx, epoch.Add(time.Minute), 10)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"m1", "m2"}, mailIDs(due))
+		assert.Equal(t, alice, due[0].To)
+		assert.Equal(t, "s-m1", due[0].Subject)
+		assert.Equal(t, "b-m1", due[0].Body)
+		assert.True(t, epoch.Equal(due[0].CreatedAt))
+		assert.True(t, due[0].SentAt.IsZero())
+
+		due, err = s.Outbox().Due(ctx, epoch.Add(time.Minute), 1)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"m1"}, mailIDs(due))
+	})
+
+	t.Run("mark sent excludes", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		require.NoError(t, s.Outbox().Append(ctx, mail("m1", epoch)))
+		require.NoError(t, s.Outbox().Append(ctx, mail("m2", epoch)))
+		require.NoError(t, s.Outbox().MarkSent(ctx, "m1", epoch))
+		due, err := s.Outbox().Due(ctx, epoch, 10)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"m2"}, mailIDs(due))
+		assert.ErrorIs(t, s.Outbox().MarkSent(ctx, "missing", epoch), relay.ErrNotFound)
+	})
+
+	t.Run("mark failed defers and bumps attempts", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		require.NoError(t, s.Outbox().Append(ctx, mail("m1", epoch)))
+		next := epoch.Add(30 * time.Second)
+		require.NoError(t, s.Outbox().MarkFailed(ctx, "m1", next))
+
+		due, err := s.Outbox().Due(ctx, epoch.Add(29*time.Second), 10)
+		require.NoError(t, err)
+		assert.Empty(t, due)
+
+		due, err = s.Outbox().Due(ctx, next, 10)
+		require.NoError(t, err)
+		require.Len(t, due, 1)
+		assert.Equal(t, 1, due[0].Attempts)
+		assert.True(t, next.Equal(due[0].NextAt))
+		assert.ErrorIs(t, s.Outbox().MarkFailed(ctx, "missing", next), relay.ErrNotFound)
 	})
 }

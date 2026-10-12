@@ -3,13 +3,13 @@
 # module lives.
 
 ["relay:dev"]
-description = "Run the relay on the memory store with a minted dev key on stdout (args pass through)"
-env = { RELAY_LOG_LEVEL = "debug" }
+description = "Run the relay on the memory store with a minted dev key on stdout and email sign-in codes printed there too (args pass through)"
+env = { RELAY_LOG_LEVEL = "debug", RELAY_SMTP_URL = "log", RELAY_ALLOWED_EMAILS = "dev@example.com" }
 run = "go run ./cmd/relay serve --store memory --public-url http://127.0.0.1:8080 --mint dev@example.com"
 
 ["relay:dev:sqlite"]
-description = "Run the relay on a sqlite store in ./.data/relay; mint a key with `go run ./cmd/relay tokens create --data-dir ./.data/relay`"
-env = { RELAY_LOG_LEVEL = "debug" }
+description = "Run the relay on a sqlite store in ./.data/relay; mint a key with `go run ./cmd/relay tokens create --data-dir ./.data/relay --email dev@example.com --name dev`"
+env = { RELAY_LOG_LEVEL = "debug", RELAY_SMTP_URL = "log", RELAY_ALLOWED_EMAILS = "dev@example.com" }
 run = "go run ./cmd/relay serve --store sqlite --data-dir ./.data/relay --public-url http://127.0.0.1:8080"
 
 ["relay:check:migrations"]

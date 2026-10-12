@@ -9,7 +9,10 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"slices"
+	"syscall"
 	"time"
 
 	"github.com/hay-kot/appkit/plugs"
@@ -17,16 +20,22 @@ import (
 
 	"github.com/colonyops/hive/cmd/relay/internal/config"
 	"github.com/colonyops/hive/cmd/relay/internal/httpapi"
+	"github.com/colonyops/hive/cmd/relay/internal/mail"
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
 	"github.com/colonyops/hive/cmd/relay/internal/store/memory"
 	"github.com/colonyops/hive/cmd/relay/internal/store/sqlite"
+	"github.com/colonyops/hive/internal/platform/secrets"
 )
 
 type Options struct {
-	Plugs    []plugs.Option
+	Plugs []plugs.Option
+	// Stdout receives the --mint key and, with the log sender, every mail.
 	Stdout   io.Writer
 	OnListen func(addr net.Addr)
 	Version  string
+	// NoReload skips the SIGHUP handler, which tests cannot share a process
+	// signal with.
+	NoReload bool
 }
 
 // Run serves the relay until ctx is done or a plugin fails. With an empty
@@ -62,9 +71,23 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 		publicURL = "http://" + ln.Addr().String()
 	}
 
-	auth := relay.NewAuth(store, nil)
+	if cfg.MintFor != "" && len(cfg.AllowedEmails) == 0 {
+		log.Info().Str("email", cfg.MintFor).Msg("allowlist is empty; admitting the --mint email")
+	}
+	allow := relay.NewAllowlist(allowedEmails(cfg), cfg.UserEmails())
+	if len(cfg.AllowedEmails) == 0 && len(cfg.Users) == 0 && cfg.MintFor == "" {
+		log.Warn().Msg("the allowlist and the user list are empty, so every request is refused; set allowed_emails or users")
+	}
+	signIn := relay.NewSignIn(store, allow, cfg.UserHashes(), store.Outbox(), publicURL, cfg.SMTP.Enabled())
+	sender, err := newSender(cfg.SMTP, stdout)
+	if err != nil {
+		return err
+	}
+
+	auth := relay.NewAuth(store, allow.Allow)
 	core := httpapi.Core{
 		Auth:    auth,
+		SignIn:  signIn,
 		Sources: relay.NewSources(store, cfg.Limits, publicURL),
 		Ingress: relay.NewIngress(store, cfg.Limits),
 		Feed:    relay.NewFeed(store),
@@ -101,7 +124,66 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	mgr.Add(plugs.PluginFunc("sweeper", func(ctx context.Context) error {
 		return sweeper.Run(ctx, time.Minute)
 	}))
+	mailer := mail.NewMailer(store.Outbox(), sender, log)
+	mgr.Add(plugs.PluginFunc("mailer", func(ctx context.Context) error {
+		return mailer.Run(ctx, 5*time.Second)
+	}))
+	if !opts.NoReload {
+		mgr.Add(plugs.PluginFunc("reload", func(ctx context.Context) error {
+			reloadOnHangup(ctx, cfg, allow, signIn, log)
+			return nil
+		}))
+	}
 	return mgr.Start(ctx)
+}
+
+// allowedEmails is cfg's allowlist, plus the --mint email when the list is
+// empty: a dev relay with no list would otherwise refuse its own minted key.
+func allowedEmails(cfg config.Config) []string {
+	if cfg.MintFor != "" && len(cfg.AllowedEmails) == 0 {
+		return []string{relay.NormalizeEmail(cfg.MintFor)}
+	}
+	return slices.Clone(cfg.AllowedEmails)
+}
+
+func newSender(cfg config.SMTP, stdout io.Writer) (mail.Sender, error) {
+	if cfg.IsLog() {
+		return &mail.Log{Out: stdout}, nil
+	}
+	password := func() (string, error) {
+		if cfg.Password == "" {
+			return "", nil
+		}
+		return secrets.Resolve(cfg.Password)
+	}
+	s, err := mail.NewSMTP(cfg.URL, password, cfg.From)
+	if err != nil {
+		return nil, fmt.Errorf("smtp: %w", err)
+	}
+	return s, nil
+}
+
+// reloadOnHangup re-reads the allowlist and the user list on every SIGHUP
+// until ctx is done. A bad file is logged and the running lists stay.
+func reloadOnHangup(ctx context.Context, cfg config.Config, allow *relay.Allowlist, signIn *relay.SignIn, log zerolog.Logger) {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGHUP)
+	defer signal.Stop(ch)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ch:
+		}
+		next, err := cfg.Reload()
+		if err != nil {
+			log.Error().Err(err).Msg("reload failed; keeping the current allowlist and users")
+			continue
+		}
+		allow.Reload(allowedEmails(next), next.UserEmails())
+		signIn.SetUsers(next.UserHashes())
+		log.Info().Int("allowed_emails", len(next.AllowedEmails)).Int("users", len(next.Users)).Msg("reloaded allowlist and users")
+	}
 }
 
 func OpenStore(ctx context.Context, cfg config.Config) (relay.Store, error) {

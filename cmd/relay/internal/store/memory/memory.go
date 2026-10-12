@@ -5,6 +5,7 @@ package memory
 import (
 	"cmp"
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"slices"
 	"sync"
@@ -20,6 +21,14 @@ type store struct {
 	sources  map[string]relay.Source
 	// deliveries holds each source's rows sorted by ID ascending.
 	deliveries map[string][]relay.Delivery
+	codes      map[string]authCode
+	outbox     map[string]relay.Mail
+}
+
+type authCode struct {
+	hash     string
+	expires  time.Time
+	attempts int
 }
 
 func New() relay.Store {
@@ -28,6 +37,8 @@ func New() relay.Store {
 		tokens:     map[string]relay.Token{},
 		sources:    map[string]relay.Source{},
 		deliveries: map[string][]relay.Delivery{},
+		codes:      map[string]authCode{},
+		outbox:     map[string]relay.Mail{},
 	}
 }
 
@@ -35,6 +46,8 @@ func (s *store) Accounts() relay.AccountStore    { return accounts{s} }
 func (s *store) Tokens() relay.TokenStore        { return tokens{s} }
 func (s *store) Sources() relay.SourceStore      { return sources{s} }
 func (s *store) Deliveries() relay.DeliveryStore { return deliveries{s} }
+func (s *store) AuthCodes() relay.AuthCodeStore  { return authCodes{s} }
+func (s *store) Outbox() relay.OutboxStore       { return outbox{s} }
 func (s *store) Close() error                    { return nil }
 
 func copyDelivery(d relay.Delivery) relay.Delivery {
@@ -366,4 +379,103 @@ func (r deliveries) Stats(_ context.Context, sourceID string) (int, int64, error
 		bytes += d.Size
 	}
 	return len(rows), bytes, nil
+}
+
+type authCodes struct{ s *store }
+
+func (a authCodes) Put(_ context.Context, email, hash string, expires time.Time) error {
+	a.s.mu.Lock()
+	defer a.s.mu.Unlock()
+	a.s.codes[email] = authCode{hash: hash, expires: expires}
+	return nil
+}
+
+func (a authCodes) Consume(_ context.Context, email, hash string, now time.Time, maxAttempts int) (bool, int, error) {
+	a.s.mu.Lock()
+	defer a.s.mu.Unlock()
+	c, ok := a.s.codes[email]
+	if !ok {
+		return false, 0, nil
+	}
+	if !now.Before(c.expires) {
+		delete(a.s.codes, email)
+		return false, 0, nil
+	}
+	if subtle.ConstantTimeCompare([]byte(c.hash), []byte(hash)) == 1 {
+		delete(a.s.codes, email)
+		return true, 0, nil
+	}
+	c.attempts++
+	left := maxAttempts - c.attempts
+	if left <= 0 {
+		delete(a.s.codes, email)
+		return false, 0, nil
+	}
+	a.s.codes[email] = c
+	return false, left, nil
+}
+
+func (a authCodes) DeleteExpired(_ context.Context, now time.Time) (int, error) {
+	a.s.mu.Lock()
+	defer a.s.mu.Unlock()
+	n := 0
+	for email, c := range a.s.codes {
+		if !now.Before(c.expires) {
+			delete(a.s.codes, email)
+			n++
+		}
+	}
+	return n, nil
+}
+
+type outbox struct{ s *store }
+
+func (o outbox) Append(_ context.Context, m relay.Mail) error {
+	o.s.mu.Lock()
+	defer o.s.mu.Unlock()
+	o.s.outbox[m.ID] = m
+	return nil
+}
+
+func (o outbox) Due(_ context.Context, now time.Time, limit int) ([]relay.Mail, error) {
+	o.s.mu.Lock()
+	defer o.s.mu.Unlock()
+	var out []relay.Mail
+	for _, m := range o.s.outbox {
+		if m.SentAt.IsZero() && !m.NextAt.After(now) {
+			out = append(out, m)
+		}
+	}
+	slices.SortFunc(out, func(x, y relay.Mail) int {
+		return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID))
+	})
+	if limit >= 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
+func (o outbox) MarkSent(_ context.Context, id string, at time.Time) error {
+	o.s.mu.Lock()
+	defer o.s.mu.Unlock()
+	m, ok := o.s.outbox[id]
+	if !ok {
+		return relay.ErrNotFound
+	}
+	m.SentAt = at
+	o.s.outbox[id] = m
+	return nil
+}
+
+func (o outbox) MarkFailed(_ context.Context, id string, next time.Time) error {
+	o.s.mu.Lock()
+	defer o.s.mu.Unlock()
+	m, ok := o.s.outbox[id]
+	if !ok {
+		return relay.ErrNotFound
+	}
+	m.NextAt = next
+	m.Attempts++
+	o.s.outbox[id] = m
+	return nil
 }

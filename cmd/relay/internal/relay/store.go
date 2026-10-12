@@ -15,6 +15,8 @@ type Store interface {
 	Tokens() TokenStore
 	Sources() SourceStore
 	Deliveries() DeliveryStore
+	AuthCodes() AuthCodeStore
+	Outbox() OutboxStore
 	Close() error
 }
 
@@ -64,4 +66,37 @@ type DeliveryStore interface {
 	DeleteBefore(ctx context.Context, email, sourceID string, before time.Time) (n int, bytes int64, err error)
 	TrimTo(ctx context.Context, email, sourceID string, keep int) (n int, bytes int64, err error)
 	Stats(ctx context.Context, sourceID string) (count int, bytes int64, err error)
+}
+
+// AuthCodeStore holds at most one pending sign-in code per email.
+type AuthCodeStore interface {
+	// Put replaces any pending code for email and resets its attempts.
+	Put(ctx context.Context, email, hash string, expires time.Time) error
+	// Consume checks hash against email's pending code. A match deletes the
+	// code and returns ok. A miss increments attempts; after maxAttempts the
+	// code is deleted. An expired code is a miss and is deleted. No pending
+	// code is a miss with no attempts left.
+	Consume(ctx context.Context, email, hash string, now time.Time, maxAttempts int) (ok bool, attemptsLeft int, err error)
+	DeleteExpired(ctx context.Context, now time.Time) (int, error)
+}
+
+// Mail is one queued message. SentAt is zero until it is sent.
+type Mail struct {
+	ID        string
+	To        string
+	Subject   string
+	Body      string
+	CreatedAt time.Time
+	NextAt    time.Time
+	Attempts  int
+	SentAt    time.Time
+}
+
+type OutboxStore interface {
+	Append(ctx context.Context, m Mail) error
+	// Due returns up to limit unsent mails with NextAt <= now, oldest first.
+	Due(ctx context.Context, now time.Time, limit int) ([]Mail, error)
+	MarkSent(ctx context.Context, id string, at time.Time) error
+	// MarkFailed defers the mail to next and bumps Attempts.
+	MarkFailed(ctx context.Context, id string, next time.Time) error
 }

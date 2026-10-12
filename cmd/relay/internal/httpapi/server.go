@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"time"
 
@@ -26,6 +27,7 @@ const (
 
 type Core struct {
 	Auth    *relay.Auth
+	SignIn  *relay.SignIn
 	Sources *relay.Sources
 	Ingress *relay.Ingress
 	Feed    *relay.Feed
@@ -35,9 +37,11 @@ type Core struct {
 }
 
 type api struct {
-	core    Core
-	ingress *ingressHandler
-	handler http.Handler
+	core       Core
+	ingress    *ingressHandler
+	trusted    []netip.Prefix
+	authLimits authLimits
+	handler    http.Handler
 }
 
 func New(core Core, cfg config.Config, log zerolog.Logger) http.Handler {
@@ -45,7 +49,12 @@ func New(core Core, cfg config.Config, log zerolog.Logger) http.Handler {
 }
 
 func newAPI(core Core, cfg config.Config, log zerolog.Logger) *api {
-	s := &api{core: core, ingress: newIngressHandler(core, cfg.TrustedProxies, log)}
+	s := &api{
+		core:       core,
+		ingress:    newIngressHandler(core, cfg.TrustedProxies, log),
+		trusted:    cfg.TrustedProxies,
+		authLimits: newAuthLimits(core.Limits),
+	}
 
 	chain := errchain.New(mid.Errors(log, mapKind))
 	chain.Use(retryAfter)
@@ -61,6 +70,9 @@ func newAPI(core Core, cfg config.Config, log zerolog.Logger) *api {
 	mux.HandleFunc("GET /healthz", healthz)
 
 	public("GET /v1/auth/methods", s.authMethods)
+	public("POST /v1/auth/start", s.authStart)
+	public("POST /v1/auth/verify", s.authVerify)
+	public("POST /v1/auth/login", s.authLogin)
 
 	authed("GET /v1/me", s.me)
 	authed("GET /v1/sources", s.listSources)

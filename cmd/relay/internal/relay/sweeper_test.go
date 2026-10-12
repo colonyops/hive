@@ -173,3 +173,17 @@ func TestSweeperRunStopsOnCancel(t *testing.T) {
 	cancel()
 	require.NoError(t, <-done)
 }
+
+func TestSweeperDeletesExpiredCodes(t *testing.T) {
+	ctx := t.Context()
+	now := newClock().Now()
+	store := newStore()
+	require.NoError(t, store.AuthCodes().Put(ctx, alice, "old", now.Add(-time.Minute)))
+	require.NoError(t, store.AuthCodes().Put(ctx, bob, "fresh", now.Add(time.Minute)))
+
+	require.NoError(t, newSweeper(store, sweepLimits(time.Hour, 10), now).Tick(ctx))
+
+	n, err := store.AuthCodes().DeleteExpired(ctx, now.Add(time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "only the fresh code should be left")
+}

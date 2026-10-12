@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -45,6 +46,7 @@ func TestRunServesTheFlow(t *testing.T) {
 			Plugs:    []plugs.Option{plugs.WithSignals(os.Interrupt)},
 			Stdout:   stdoutW,
 			OnListen: func(a net.Addr) { addrs <- a },
+			NoReload: true,
 		})
 	}()
 
@@ -104,4 +106,88 @@ func TestOpenStoreSQLiteCreatesDataDir(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, store.Close())
 	assert.FileExists(t, cfg.SQLitePath())
+}
+
+func TestRunSignsInWithTheLogSender(t *testing.T) {
+	cfg := config.Config{
+		Listen:        "127.0.0.1:0",
+		Store:         config.StoreMemory,
+		Limits:        relay.DefaultLimits(),
+		LogLevel:      "info",
+		AllowedEmails: []string{"*@example.com"},
+		SMTP:          config.SMTP{URL: config.SMTPLog},
+	}
+
+	stdoutR, stdoutW := io.Pipe()
+	codes := make(chan string, 1)
+	go func() {
+		re := regexp.MustCompile(`^\s*(\d{8})\s*$`)
+		sc := bufio.NewScanner(stdoutR)
+		for sc.Scan() {
+			if m := re.FindStringSubmatch(sc.Text()); m != nil {
+				codes <- m[1]
+			}
+		}
+	}()
+	addrs := make(chan net.Addr, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(ctx, cfg, zerolog.Nop(), Options{
+			Plugs:    []plugs.Option{plugs.WithSignals(os.Interrupt)},
+			Stdout:   stdoutW,
+			OnListen: func(a net.Addr) { addrs <- a },
+			NoReload: true,
+		})
+	}()
+	base := "http://" + (<-addrs).String()
+
+	post := func(path, body string) (int, []byte) {
+		t.Helper()
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, base+path, strings.NewReader(body))
+		require.NoError(t, err)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer func() { _ = resp.Body.Close() }()
+		out, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		return resp.StatusCode, out
+	}
+
+	status, body := post("/v1/auth/start", `{"email":"dev@example.com"}`)
+	require.Equal(t, http.StatusAccepted, status, string(body))
+
+	var code string
+	select {
+	case code = <-codes:
+	case <-time.After(15 * time.Second):
+		t.Fatal("no sign-in code on stdout")
+	}
+
+	status, body = post("/v1/auth/verify", `{"email":"dev@example.com","code":"`+code+`","device":"test"}`)
+	require.Equal(t, http.StatusOK, status, string(body))
+	var signedIn struct {
+		Token string `json:"token"`
+		Kind  string `json:"kind"`
+	}
+	require.NoError(t, json.Unmarshal(body, &signedIn))
+	assert.Equal(t, "device", signedIn.Kind)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/v1/me", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+signedIn.Token)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	_ = resp.Body.Close()
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
+	cancel()
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(15 * time.Second):
+		t.Fatal("Run did not return after cancel")
+	}
 }

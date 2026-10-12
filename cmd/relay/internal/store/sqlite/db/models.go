@@ -15,6 +15,13 @@ type Account struct {
 	CreatedAt  int64  `json:"created_at"`
 }
 
+type AuthCode struct {
+	Email     string `json:"email"`
+	Hash      string `json:"hash"`
+	ExpiresAt int64  `json:"expires_at"`
+	Attempts  int64  `json:"attempts"`
+}
+
 type Delivery struct {
 	ID         string `json:"id"`
 	SourceID   string `json:"source_id"`
@@ -22,6 +29,17 @@ type Delivery struct {
 	Enc        int64  `json:"enc"`
 	Size       int64  `json:"size"`
 	Record     []byte `json:"record"`
+}
+
+type Outbox struct {
+	ID        string        `json:"id"`
+	Recipient string        `json:"recipient"`
+	Subject   string        `json:"subject"`
+	Body      string        `json:"body"`
+	CreatedAt int64         `json:"created_at"`
+	NextAt    int64         `json:"next_at"`
+	Attempts  int64         `json:"attempts"`
+	SentAt    sql.NullInt64 `json:"sent_at"`
 }
 
 type Source struct {

@@ -1,4 +1,5 @@
-// Package config resolves the relay's settings from flags and RELAY_* env.
+// Package config resolves the relay's settings from an optional relay.yaml,
+// RELAY_* env, and flags. Env and flags win over the file.
 package config
 
 import (
@@ -13,6 +14,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
+	"github.com/colonyops/hive/internal/platform/secrets"
 )
 
 const (
@@ -21,6 +23,7 @@ const (
 )
 
 const (
+	flagConfig              = "config"
 	flagListen              = "listen"
 	flagPublicURL           = "public-url"
 	flagStore               = "store"
@@ -47,6 +50,11 @@ type Config struct {
 	MintFor        string
 	Limits         relay.Limits
 	LogLevel       string
+	ConfigFile     string
+	// AllowedEmails are lowercased glob patterns over the whole address.
+	AllowedEmails []string
+	Users         []User
+	SMTP          SMTP
 }
 
 // Flags returns fresh flag values on every call: a cli.Flag holds parse state,
@@ -54,6 +62,7 @@ type Config struct {
 func Flags() []cli.Flag {
 	d := relay.DefaultLimits()
 	return []cli.Flag{
+		&cli.StringFlag{Name: flagConfig, Usage: "path to relay.yaml (optional); env and flags win over it", Sources: cli.EnvVars("RELAY_CONFIG")},
 		&cli.StringFlag{Name: flagListen, Usage: "address to listen on", Value: ":8080", Sources: cli.EnvVars("RELAY_LISTEN")},
 		&cli.StringFlag{Name: flagPublicURL, Usage: "public base URL senders reach, used to build ingress URLs", Sources: cli.EnvVars("RELAY_PUBLIC_URL")},
 		&cli.StringFlag{Name: flagStore, Usage: "store driver: memory or sqlite", Value: StoreSQLite, Sources: cli.EnvVars("RELAY_STORE")},
@@ -69,35 +78,56 @@ func Flags() []cli.Flag {
 	}
 }
 
-// Load reads cmd's flags, which must include Flags(), into a validated Config.
+// Load reads the config file named by --config, then cmd's flags, which must
+// include Flags(), into a validated Config. A flag set on the command line or
+// through env wins over the file; the file wins over a flag's default.
 func Load(cmd *cli.Command) (Config, error) {
+	f, err := readFile(cmd.String(flagConfig))
+	if err != nil {
+		return Config{}, err
+	}
+
 	limits := relay.DefaultLimits()
-	limits.BodyBytes = cmd.Int64(flagBodyBytes)
-	limits.Retention = cmd.Duration(flagRetention)
-	limits.DeliveriesPerSource = cmd.Int(flagDeliveriesPerSource)
-	limits.BytesPerAccount = cmd.Int64(flagBytesPerAccount)
-	limits.SourcesPerAccount = cmd.Int(flagSourcesPerAccount)
-	limits.Concurrency = cmd.Int(flagConcurrency)
+	limits.BodyBytes = pick(cmd, flagBodyBytes, f.BodyBytes, cmd.Int64)
+	limits.Retention = pick(cmd, flagRetention, f.Retention, cmd.Duration)
+	limits.DeliveriesPerSource = pick(cmd, flagDeliveriesPerSource, f.DeliveriesPerSource, cmd.Int)
+	limits.BytesPerAccount = pick(cmd, flagBytesPerAccount, f.BytesPerAccount, cmd.Int64)
+	limits.SourcesPerAccount = pick(cmd, flagSourcesPerAccount, f.SourcesPerAccount, cmd.Int)
+	limits.Concurrency = pick(cmd, flagConcurrency, f.Concurrency, cmd.Int)
 
 	cfg := Config{
-		Listen:    cmd.String(flagListen),
-		PublicURL: strings.TrimRight(cmd.String(flagPublicURL), "/"),
-		Store:     cmd.String(flagStore),
-		DataDir:   cmd.String(flagDataDir),
-		MintFor:   strings.TrimSpace(cmd.String(FlagMint)),
-		Limits:    limits,
-		LogLevel:  cmd.String(flagLogLevel),
+		Listen:     pick(cmd, flagListen, f.Listen, cmd.String),
+		PublicURL:  strings.TrimRight(pick(cmd, flagPublicURL, f.PublicURL, cmd.String), "/"),
+		Store:      pick(cmd, flagStore, f.Store, cmd.String),
+		DataDir:    pick(cmd, flagDataDir, f.DataDir, cmd.String),
+		MintFor:    strings.TrimSpace(cmd.String(FlagMint)),
+		Limits:     limits,
+		LogLevel:   pick(cmd, flagLogLevel, f.LogLevel, cmd.String),
+		ConfigFile: cmd.String(flagConfig),
+		SMTP:       smtpConfig(f),
 	}
 
 	var errs []error
-	proxies, err := ParseTrustedProxies(cmd.String(flagTrustedProxies))
+	proxies := cmd.String(flagTrustedProxies)
+	if !cmd.IsSet(flagTrustedProxies) && f.TrustedProxies != nil {
+		proxies = strings.Join(f.TrustedProxies, ",")
+	}
+	cfg.TrustedProxies, err = ParseTrustedProxies(proxies)
 	errs = append(errs, err)
-	cfg.TrustedProxies = proxies
+	cfg.AllowedEmails, cfg.Users, err = access(f)
+	errs = append(errs, err)
 	errs = append(errs, cfg.validate())
 	if err := errors.Join(errs...); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+func pick[T any](cmd *cli.Command, flag string, file *T, get func(string) T) T {
+	if file != nil && !cmd.IsSet(flag) {
+		return *file
+	}
+	return get(flag)
 }
 
 // RequirePublicURL is the extra check serve makes: without a public URL the
@@ -128,6 +158,7 @@ func (c Config) validate() error {
 	if c.Listen == "" {
 		errs = append(errs, errors.New("--listen is required"))
 	}
+	errs = append(errs, c.SMTP.validate())
 	if _, err := zerolog.ParseLevel(c.LogLevel); err != nil {
 		errs = append(errs, fmt.Errorf("--log-level: %w", err))
 	}
@@ -135,6 +166,26 @@ func (c Config) validate() error {
 	if l.BodyBytes <= 0 || l.DeliveriesPerSource <= 0 || l.BytesPerAccount <= 0 ||
 		l.SourcesPerAccount <= 0 || l.Concurrency <= 0 || l.Retention <= 0 {
 		errs = append(errs, errors.New("every limit must be positive"))
+	}
+	return errors.Join(errs...)
+}
+
+func (s SMTP) validate() error {
+	var errs []error
+	if s.Password != "" && !secrets.HasKnownPrefix(s.Password) {
+		errs = append(errs, fmt.Errorf("smtp password must be a secret reference (%s), not the password itself", strings.Join(secrets.KnownPrefixes, ", ")))
+	}
+	if !s.IsLog() {
+		u, err := url.Parse(s.URL)
+		switch {
+		case err != nil || (u.Scheme != "smtp" && u.Scheme != "smtps") || u.Hostname() == "":
+			errs = append(errs, fmt.Errorf("smtp url must be smtp://[user@]host[:port], smtps://[user@]host[:port], or %q, got %q", SMTPLog, s.URL))
+		case u.User != nil && s.Password == "":
+			errs = append(errs, errors.New("smtp url names a user but no smtp password (RELAY_SMTP_PASSWORD) is set"))
+		}
+		if s.From == "" {
+			errs = append(errs, errors.New("smtp needs a sender address (RELAY_MAIL_FROM or smtp.from)"))
+		}
 	}
 	return errors.Join(errs...)
 }

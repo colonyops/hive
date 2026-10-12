@@ -2,11 +2,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"slices"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/rs/zerolog"
@@ -85,10 +88,12 @@ func newApp() *cli.Command {
 			},
 			{
 				Name:  "hash-password",
-				Usage: "Hash a password for the users list in the config file",
-				Action: func(context.Context, *cli.Command) error {
-					return errors.New("hash-password arrives in Phase 4")
-				},
+				Usage: "Hash a password for the users list in the config file; reads it from stdin",
+				Flags: []cli.Flag{&cli.StringFlag{
+					Name:  "password",
+					Usage: "the password, for scripts; it shows in the process list, so prefer stdin",
+				}},
+				Action: hashPassword,
 			},
 		},
 	}
@@ -116,19 +121,20 @@ func newLogger(level zerolog.Level) zerolog.Logger {
 // openPersistentStore opens the store for an operator command. Those commands
 // write to the store a running server reads, so the memory store, which lives
 // only inside one process, has nothing for them to act on.
-func openPersistentStore(ctx context.Context, cmd *cli.Command) (relay.Store, error) {
+func openPersistentStore(ctx context.Context, cmd *cli.Command) (relay.Store, config.Config, error) {
 	cfg, _, err := load(cmd)
 	if err != nil {
-		return nil, err
+		return nil, config.Config{}, err
 	}
 	if cfg.Store == config.StoreMemory {
-		return nil, fmt.Errorf("%s needs --store sqlite: the memory store lives inside the server process, so there is nothing here to act on", cmd.FullName())
+		return nil, config.Config{}, fmt.Errorf("%s needs --store sqlite: the memory store lives inside the server process, so there is nothing here to act on", cmd.FullName())
 	}
-	return app.OpenStore(ctx, cfg)
+	store, err := app.OpenStore(ctx, cfg)
+	return store, cfg, err
 }
 
 func tokensCreate(ctx context.Context, cmd *cli.Command) (err error) {
-	store, err := openPersistentStore(ctx, cmd)
+	store, cfg, err := openPersistentStore(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -138,12 +144,57 @@ func tokensCreate(ctx context.Context, cmd *cli.Command) (err error) {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(cmd.Root().Writer, key)
+	if _, err := fmt.Fprintln(cmd.Root().Writer, key); err != nil {
+		return err
+	}
+	if !relay.NewAllowlist(cfg.AllowedEmails, cfg.UserEmails()).Allow(cmd.String("email")) {
+		_, _ = fmt.Fprintf(cmd.Root().ErrWriter, "warning: %s is not in allowed_emails or users, so the relay will refuse this key until it is\n", relay.NormalizeEmail(cmd.String("email")))
+	}
+	return nil
+}
+
+func hashPassword(_ context.Context, cmd *cli.Command) error {
+	pw := cmd.String("password")
+	if cmd.IsSet("password") {
+		_, _ = fmt.Fprintln(cmd.Root().ErrWriter, "warning: --password shows in the process list and shell history; prefer stdin")
+	} else {
+		var err error
+		if pw, err = readPassword(cmd.Root().Reader, cmd.Root().ErrWriter); err != nil {
+			return err
+		}
+	}
+	if pw == "" {
+		return errors.New("password is empty")
+	}
+	hash, err := relay.HashPassword(pw)
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(cmd.Root().Writer, hash)
 	return err
 }
 
+// readPassword reads one line from in. On a terminal it prompts and turns
+// echo off; piped input is read as is.
+func readPassword(in io.Reader, prompt io.Writer) (string, error) {
+	if f, ok := in.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		_, _ = fmt.Fprint(prompt, "Password: ")
+		b, err := term.ReadPassword(int(f.Fd()))
+		_, _ = fmt.Fprintln(prompt)
+		if err != nil {
+			return "", fmt.Errorf("read password: %w", err)
+		}
+		return string(b), nil
+	}
+	line, err := bufio.NewReader(in).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("read password: %w", err)
+	}
+	return strings.TrimRight(line, "\r\n"), nil
+}
+
 func accountsList(ctx context.Context, cmd *cli.Command) (err error) {
-	store, err := openPersistentStore(ctx, cmd)
+	store, _, err := openPersistentStore(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -167,7 +218,7 @@ func accountsList(ctx context.Context, cmd *cli.Command) (err error) {
 }
 
 func accountsDelete(ctx context.Context, cmd *cli.Command) (err error) {
-	store, err := openPersistentStore(ctx, cmd)
+	store, _, err := openPersistentStore(ctx, cmd)
 	if err != nil {
 		return err
 	}

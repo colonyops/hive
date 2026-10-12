@@ -21,17 +21,25 @@ func NewSweeper(store Store, limits Limits, log zerolog.Logger) *Sweeper {
 	return &Sweeper{store: store, limits: limits, now: time.Now, log: log}
 }
 
-// Tick walks every account's sources once: DeleteBefore(now - Retention), then
-// TrimTo(DeliveriesPerSource). The drivers credit the freed bytes themselves.
+// Tick drops expired sign-in codes, then walks every account's sources once:
+// DeleteBefore(now - Retention), then TrimTo(DeliveriesPerSource). The drivers credit the freed bytes themselves.
 // Work runs per source and a failure skips only that source, so one account's
 // volume or fault never holds back another's retention.
 func (s *Sweeper) Tick(ctx context.Context) error {
+	now := s.now()
+	var errs []error
+	if n, err := s.store.AuthCodes().DeleteExpired(ctx, now); err != nil {
+		s.log.Warn().Err(err).Msg("sweep: delete expired sign-in codes")
+		errs = append(errs, fmt.Errorf("sweep: delete expired sign-in codes: %w", err))
+	} else if n > 0 {
+		s.log.Debug().Int("codes", n).Msg("swept expired sign-in codes")
+	}
+
 	accts, err := s.store.Accounts().List(ctx)
 	if err != nil {
-		return fmt.Errorf("sweep: list accounts: %w", err)
+		return errors.Join(append(errs, fmt.Errorf("sweep: list accounts: %w", err))...)
 	}
-	cutoff := s.now().Add(-s.limits.Retention)
-	var errs []error
+	cutoff := now.Add(-s.limits.Retention)
 	for _, a := range accts {
 		srcs, err := s.store.Sources().ListByEmail(ctx, a.Email)
 		if err != nil {

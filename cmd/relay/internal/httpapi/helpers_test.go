@@ -23,17 +23,40 @@ const (
 )
 
 type harness struct {
-	t    *testing.T
-	api  *api
-	core Core
+	t     *testing.T
+	api   *api
+	core  Core
+	allow *relay.Allowlist
+}
+
+// signInSetup turns on email codes for patterns and passwords for users. Its
+// zero value is an API-key-only relay that admits every email.
+type signInSetup struct {
+	patterns []string
+	users    map[string]string
 }
 
 func newHarness(t *testing.T, limits relay.Limits, trusted ...netip.Prefix) *harness {
 	t.Helper()
+	return newSignInHarness(t, limits, signInSetup{}, trusted...)
+}
+
+func newSignInHarness(t *testing.T, limits relay.Limits, setup signInSetup, trusted ...netip.Prefix) *harness {
+	t.Helper()
 	store := memory.New()
 	t.Cleanup(func() { _ = store.Close() })
+	userEmails := make([]string, 0, len(setup.users))
+	for e := range setup.users {
+		userEmails = append(userEmails, e)
+	}
+	allow := relay.NewAllowlist(setup.patterns, userEmails)
+	var allowFn func(string) bool
+	if len(setup.patterns) > 0 || len(setup.users) > 0 {
+		allowFn = allow.Allow
+	}
 	core := Core{
-		Auth:    relay.NewAuth(store, nil),
+		Auth:    relay.NewAuth(store, allowFn),
+		SignIn:  relay.NewSignIn(store, allow, setup.users, store.Outbox(), testPublicURL, len(setup.patterns) > 0),
 		Sources: relay.NewSources(store, limits, testPublicURL),
 		Ingress: relay.NewIngress(store, limits),
 		Feed:    relay.NewFeed(store),
@@ -42,7 +65,7 @@ func newHarness(t *testing.T, limits relay.Limits, trusted ...netip.Prefix) *har
 		Version: testVersion,
 	}
 	cfg := config.Config{TrustedProxies: trusted, Limits: limits}
-	return &harness{t: t, api: newAPI(core, cfg, zerolog.Nop()), core: core}
+	return &harness{t: t, api: newAPI(core, cfg, zerolog.Nop()), core: core, allow: allow}
 }
 
 func (h *harness) do(r *http.Request) *httptest.ResponseRecorder {

@@ -3,6 +3,7 @@ package sqlite
 
 import (
 	"context"
+	"crypto/subtle"
 	"database/sql"
 	"embed"
 	"errors"
@@ -52,6 +53,8 @@ func (s *store) Accounts() relay.AccountStore    { return accounts{s} }
 func (s *store) Tokens() relay.TokenStore        { return tokens{s} }
 func (s *store) Sources() relay.SourceStore      { return sources{s} }
 func (s *store) Deliveries() relay.DeliveryStore { return deliveries{s} }
+func (s *store) AuthCodes() relay.AuthCodeStore  { return authCodes{s} }
+func (s *store) Outbox() relay.OutboxStore       { return outbox{s} }
 func (s *store) Close() error                    { return s.conn.Close() }
 
 // tx runs fn in one write transaction with queries bound to it. With a single
@@ -453,4 +456,105 @@ func (r deliveries) Stats(ctx context.Context, sourceID string) (int, int64, err
 		return 0, 0, wrap("delivery stats", err)
 	}
 	return int(row.Count), row.Bytes, nil
+}
+
+type authCodes struct{ s *store }
+
+func (a authCodes) Put(ctx context.Context, email, hash string, expires time.Time) error {
+	return wrap("put auth code", a.s.q.PutAuthCode(ctx, db.PutAuthCodeParams{
+		Email:     email,
+		Hash:      hash,
+		ExpiresAt: toNanos(expires),
+	}))
+}
+
+func (a authCodes) Consume(ctx context.Context, email, hash string, now time.Time, maxAttempts int) (bool, int, error) {
+	var (
+		ok   bool
+		left int
+	)
+	err := a.s.tx(ctx, func(q *db.Queries) error {
+		row, err := q.GetAuthCode(ctx, email)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return wrap("consume auth code", err)
+		}
+		if !now.Before(fromNanos(row.ExpiresAt)) {
+			return wrap("consume auth code: delete expired", q.DeleteAuthCode(ctx, email))
+		}
+		if subtle.ConstantTimeCompare([]byte(row.Hash), []byte(hash)) == 1 {
+			ok = true
+			return wrap("consume auth code: delete", q.DeleteAuthCode(ctx, email))
+		}
+		attempts, err := q.IncrementAuthCodeAttempts(ctx, email)
+		if err != nil {
+			return wrap("consume auth code: count attempt", err)
+		}
+		left = maxAttempts - int(attempts)
+		if left <= 0 {
+			left = 0
+			return wrap("consume auth code: delete spent", q.DeleteAuthCode(ctx, email))
+		}
+		return nil
+	})
+	if err != nil {
+		return false, 0, err
+	}
+	return ok, left, nil
+}
+
+func (a authCodes) DeleteExpired(ctx context.Context, now time.Time) (int, error) {
+	n, err := a.s.q.DeleteExpiredAuthCodes(ctx, toNanos(now))
+	if err != nil {
+		return 0, wrap("delete expired auth codes", err)
+	}
+	return int(n), nil
+}
+
+type outbox struct{ s *store }
+
+func (o outbox) Append(ctx context.Context, m relay.Mail) error {
+	return wrap("append mail", o.s.q.AppendMail(ctx, db.AppendMailParams{
+		ID:        m.ID,
+		Recipient: m.To,
+		Subject:   m.Subject,
+		Body:      m.Body,
+		CreatedAt: toNanos(m.CreatedAt),
+		NextAt:    toNanos(m.NextAt),
+		Attempts:  int64(m.Attempts),
+		SentAt:    toNullNanos(m.SentAt),
+	}))
+}
+
+func (o outbox) Due(ctx context.Context, now time.Time, limit int) ([]relay.Mail, error) {
+	rows, err := o.s.q.DueMail(ctx, db.DueMailParams{Now: toNanos(now), MaxRows: int64(limit)})
+	if err != nil {
+		return nil, wrap("due mail", err)
+	}
+	out := make([]relay.Mail, len(rows))
+	for i, r := range rows {
+		out[i] = relay.Mail{
+			ID:        r.ID,
+			To:        r.Recipient,
+			Subject:   r.Subject,
+			Body:      r.Body,
+			CreatedAt: fromNanos(r.CreatedAt),
+			NextAt:    fromNanos(r.NextAt),
+			Attempts:  int(r.Attempts),
+			SentAt:    fromNullNanos(r.SentAt),
+		}
+	}
+	return out, nil
+}
+
+func (o outbox) MarkSent(ctx context.Context, id string, at time.Time) error {
+	n, err := o.s.q.MarkMailSent(ctx, db.MarkMailSentParams{SentAt: toNullNanos(at), ID: id})
+	return notFoundUnless("mark mail sent", n, err)
+}
+
+func (o outbox) MarkFailed(ctx context.Context, id string, next time.Time) error {
+	n, err := o.s.q.MarkMailFailed(ctx, db.MarkMailFailedParams{NextAt: toNanos(next), ID: id})
+	return notFoundUnless("mark mail failed", n, err)
 }

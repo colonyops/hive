@@ -5,15 +5,17 @@ import (
 	"net/http"
 
 	"github.com/hay-kot/httpkit/server"
+
+	"github.com/colonyops/hive/cmd/relay/internal/relay"
 )
 
 type meResponse struct {
-	Email      string          `json:"email"`
-	Encryption bool            `json:"encryption"`
-	Limits     limitsResponse  `json:"limits"`
-	Usage      usageResponse   `json:"usage"`
-	Methods    methodsResponse `json:"methods"`
-	Version    string          `json:"version"`
+	Email      string         `json:"email"`
+	Encryption bool           `json:"encryption"`
+	Limits     limitsResponse `json:"limits"`
+	Usage      usageResponse  `json:"usage"`
+	Methods    relay.Methods  `json:"methods"`
+	Version    string         `json:"version"`
 }
 
 type limitsResponse struct {
@@ -49,7 +51,7 @@ func (s *api) me(w http.ResponseWriter, r *http.Request) error {
 			RetentionSeconds:    int64(l.Retention.Seconds()),
 		},
 		Usage:   usageResponse{Bytes: acct.BytesUsed, Sources: n},
-		Methods: signInMethods(),
+		Methods: s.core.SignIn.Methods(),
 		Version: s.core.Version,
 	})
 }
