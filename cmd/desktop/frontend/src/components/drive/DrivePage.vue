@@ -1,6 +1,7 @@
 <script setup lang="ts">
-// Every space's documents at full page: a space picker and its tree in the
-// sidebar, the reader beside it, and a search that spans every space.
+// Every space's documents at full page: the space picker in the header over
+// the sidebar's tree, the reader beside it, and a search that spans every
+// space.
 import { computed, ref, watch } from 'vue'
 import IconCode from '~icons/lucide/code'
 import IconGlobe from '~icons/lucide/globe'
@@ -85,6 +86,12 @@ function documentMoved(from: string, to: string): void {
 }
 
 const title = computed(() => (document.value ? entryLabel(document.value.entry) : shown.value) || 'Drive')
+// The title already names the document, so only its folder sits beside it.
+const folder = computed(() => {
+  const path = document.value?.entry.path ?? ''
+  const slash = path.lastIndexOf('/')
+  return slash < 0 ? '' : path.slice(0, slash)
+})
 const modified = computed(() => (document.value ? entryTime(document.value.entry.modified) : 0))
 
 // The pane's reason: Hive wires a workspace's agent, never a Code session's.
@@ -114,6 +121,11 @@ const {
   edge: 'right',
 })
 
+// The picker ends where the sidebar does, so it reads as the tree's heading
+// and the title starts over the reader: the header's padding and gap are
+// what is taken off.
+const pickerWidth = computed(() => Math.max(160, sidebarWidth.value - 26))
+
 useEscapeToClose(() => emit('close'))
 </script>
 
@@ -121,11 +133,29 @@ useEscapeToClose(() => emit('close'))
   <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="drive-page">
     <ViewHeader>
       <template #title>
-        <span class="min-w-0 truncate text-body font-semibold text-text" data-testid="drive-page-title">{{
-          title
-        }}</span>
-        <span v-if="document" class="shrink-0 font-mono text-caption text-text-4"
-          >{{ document.entry.path }}<template v-if="modified"> · {{ relativeAge(modified) }}</template></span
+        <div class="shrink-0" :style="{ width: pickerWidth + 'px' }">
+          <AppSelect
+            :model-value="space"
+            :options="spaceOptions"
+            :disabled="!spaceOptions.length"
+            size="sm"
+            aria-label="Space"
+            testid="drive-page-space"
+            @update:model-value="selectSpace"
+          />
+        </div>
+        <span
+          class="min-w-0 truncate text-body font-semibold text-text"
+          :title="document?.entry.path"
+          data-testid="drive-page-title"
+          >{{ title }}</span
+        >
+        <span
+          v-if="document && (folder || modified)"
+          class="shrink-0 font-mono text-caption text-text-4"
+          data-testid="drive-page-folder"
+          >{{ folder }}<template v-if="folder && modified"> · </template
+          ><template v-if="modified">{{ relativeAge(modified) }}</template></span
         >
         <div class="flex-1" />
         <DriveDocumentActions
@@ -154,16 +184,6 @@ useEscapeToClose(() => emit('close'))
         :style="{ width: sidebarWidth + 'px' }"
         data-testid="drive-page-sidebar"
       >
-        <div class="shrink-0 border-b border-border p-2">
-          <AppSelect
-            :model-value="space"
-            :options="spaceOptions"
-            size="sm"
-            aria-label="Space"
-            testid="drive-page-space"
-            @update:model-value="selectSpace"
-          />
-        </div>
         <DriveBrowser
           :space="space"
           :tree="tree"
