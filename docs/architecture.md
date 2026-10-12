@@ -2090,7 +2090,7 @@ disabled, matching the launcher palette row's own choice (ADR quick-terminal-lau
 And Go to is global: a row meant to be reachable from anywhere registers at
 the App level (`useAppPaletteRows`) off a module-scoped source
 (`useTerminalSessions`, `useAttachedTerminalWindows`, `useAgentSessionsAll`,
-`useDriveDocuments`), never inside a lazily-mounted mode component, so it exists before that mode
+`useDrive`), never inside a lazily-mounted mode component, so it exists before that mode
 has ever mounted. A row's title and group follow one more rule: a command row
 keeps its catalog verb title unchanged, since Settings › Keyboard reads the
 same string, while a dynamic object row (a feed, a chat, a document, a session,
