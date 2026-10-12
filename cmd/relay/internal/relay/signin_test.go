@@ -27,7 +27,7 @@ type signInFixture struct {
 
 func newSignIn(t *testing.T, users map[string]string) signInFixture {
 	t.Helper()
-	store := newStore()
+	store := newStore(t)
 	c := newClock()
 	userEmails := make([]string, 0, len(users))
 	for e := range users {
@@ -135,7 +135,7 @@ func TestSignInLogin(t *testing.T) {
 }
 
 func TestSignInMethods(t *testing.T) {
-	store := newStore()
+	store := newStore(t)
 	tests := []struct {
 		name     string
 		patterns []string

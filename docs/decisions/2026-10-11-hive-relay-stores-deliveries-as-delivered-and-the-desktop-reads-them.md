@@ -35,10 +35,9 @@ pull on its poll tick.
   operation is scoped to the account the bearer token resolves to. The
   operator is not a user: they act through host subcommands that open the
   store directly, and there is no admin role over HTTP.
-- **The store is a port**, `relay.Store`, with a `sqlite` driver by default
-  and a `memory` driver for tests and relays that may forget. The access
-  pattern stays an append-only log per source plus keyed records, so an
-  object-store driver stays possible.
+- **The store is a port**, `relay.Store`, with one `sqlite` driver; tests run
+  it in memory. The access pattern stays an append-only log per source plus
+  keyed records, so an object-store driver stays possible.
 - **An account can turn on age sealing** to its desktops' recipients. It is
   off by default.
 - **The HTTP plumbing is shared.** The relay and the desktop both build on

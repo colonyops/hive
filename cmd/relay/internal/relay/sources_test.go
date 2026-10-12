@@ -10,7 +10,7 @@ import (
 )
 
 func TestSourcesLifecycle(t *testing.T) {
-	store := newStore()
+	store := newStore(t)
 	ctx := t.Context()
 	svc := relay.NewSources(store, relay.DefaultLimits(), "https://relay.test")
 
@@ -70,7 +70,7 @@ func TestSourcesLifecycle(t *testing.T) {
 func TestSourcesCap(t *testing.T) {
 	limits := relay.DefaultLimits()
 	limits.SourcesPerAccount = 2
-	svc := relay.NewSources(newStore(), limits, "https://relay.test")
+	svc := relay.NewSources(newStore(t), limits, "https://relay.test")
 	for range 2 {
 		_, _, err := svc.Create(t.Context(), alice, "s", "")
 		require.NoError(t, err)
@@ -89,7 +89,7 @@ func TestSourcesIngressURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.public, func(t *testing.T) {
-			assert.Equal(t, tt.want, relay.NewSources(newStore(), relay.DefaultLimits(), tt.public).IngressURL("tok"))
+			assert.Equal(t, tt.want, relay.NewSources(newStore(t), relay.DefaultLimits(), tt.public).IngressURL("tok"))
 		})
 	}
 }

@@ -148,7 +148,7 @@ func deliver(t *testing.T, method, target, contentType string, headers map[strin
 	return out.ID
 }
 
-// startRelay builds cmd/relay and serves it on the memory store. It returns
+// startRelay builds cmd/relay and serves it on a temporary data dir. It returns
 // the base URL and the API key --mint prints as the first stdout line.
 func startRelay(t *testing.T) (string, string) {
 	t.Helper()
@@ -161,7 +161,7 @@ func startRelay(t *testing.T) (string, string) {
 
 	port := freePort(t)
 	base := "http://127.0.0.1:" + port
-	cmd := exec.Command(bin, "serve", "--store", "memory", "--listen", "127.0.0.1:"+port, "--public-url", base, "--mint", e2eEmail)
+	cmd := exec.Command(bin, "serve", "--data-dir", t.TempDir(), "--listen", "127.0.0.1:"+port, "--public-url", base, "--mint", e2eEmail)
 	cmd.Env = relayEnv()
 	stdout, err := cmd.StdoutPipe()
 	require.NoError(t, err)

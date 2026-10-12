@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
-	"github.com/colonyops/hive/cmd/relay/internal/store/memory"
+	"github.com/colonyops/hive/cmd/relay/internal/store/sqlite"
 )
 
 var epoch = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
@@ -39,7 +39,9 @@ func (f *fakeSender) Send(_ context.Context, m relay.Mail) error {
 
 func newMailer(t *testing.T, sender Sender, now *time.Time) (*Mailer, relay.OutboxStore) {
 	t.Helper()
-	store := memory.New()
+	store, err := sqlite.Open(t.Context(), sqlite.InMemory)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = store.Close() })
 	m := NewMailer(store.Outbox(), sender, zerolog.Nop())
 	m.now = func() time.Time { return *now }
 	return m, store.Outbox()

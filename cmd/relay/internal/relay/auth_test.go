@@ -11,7 +11,7 @@ import (
 )
 
 func TestAuthMintAndAuthenticate(t *testing.T) {
-	store := newStore()
+	store := newStore(t)
 	clk := newClock()
 	auth := relay.NewAuth(store, nil)
 	auth.SetNow(clk.Now)
@@ -51,7 +51,7 @@ func TestAuthAuthenticateErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			auth := relay.NewAuth(newStore(), tt.allow)
+			auth := relay.NewAuth(newStore(t), tt.allow)
 			plain, _, err := auth.MintToken(t.Context(), alice, "laptop", relay.TokenDevice)
 			require.NoError(t, err)
 			_, _, err = auth.Authenticate(t.Context(), tt.bearer(plain))
@@ -61,7 +61,7 @@ func TestAuthAuthenticateErrors(t *testing.T) {
 }
 
 func TestAuthTouchesOncePerHour(t *testing.T) {
-	store := &countingStore{Store: newStore()}
+	store := &countingStore{Store: newStore(t)}
 	clk := newClock()
 	auth := relay.NewAuth(store, nil)
 	auth.SetNow(clk.Now)
@@ -96,7 +96,7 @@ func TestAuthTouchesOncePerHour(t *testing.T) {
 }
 
 func TestAuthListAndRevoke(t *testing.T) {
-	auth := relay.NewAuth(newStore(), nil)
+	auth := relay.NewAuth(newStore(t), nil)
 	plain, tok, err := auth.MintToken(t.Context(), alice, "laptop", relay.TokenDevice)
 	require.NoError(t, err)
 	_, _, err = auth.MintToken(t.Context(), alice, "ci", relay.TokenAPI)

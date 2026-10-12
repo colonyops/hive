@@ -19,7 +19,7 @@ import (
 	"github.com/colonyops/hive/cmd/relay/internal/httpapi"
 	"github.com/colonyops/hive/cmd/relay/internal/mcpsrv"
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
-	"github.com/colonyops/hive/cmd/relay/internal/store/memory"
+	"github.com/colonyops/hive/cmd/relay/internal/store/sqlite"
 	"github.com/colonyops/hive/cmd/relay/internal/wire"
 	"github.com/colonyops/hive/internal/web"
 )
@@ -38,7 +38,8 @@ type env struct {
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
-	store := memory.New()
+	store, err := sqlite.Open(t.Context(), sqlite.InMemory)
+	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	limits := relay.DefaultLimits()
 	srv := httptest.NewUnstartedServer(nil)

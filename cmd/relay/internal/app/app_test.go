@@ -26,7 +26,7 @@ import (
 func TestRunServesTheFlow(t *testing.T) {
 	cfg := config.Config{
 		Listen:   "127.0.0.1:0",
-		Store:    config.StoreMemory,
+		DataDir:  t.TempDir(),
 		MintFor:  "dev@example.com",
 		Limits:   relay.DefaultLimits(),
 		LogLevel: "info",
@@ -100,8 +100,8 @@ func TestRunServesTheFlow(t *testing.T) {
 	}
 }
 
-func TestOpenStoreSQLiteCreatesDataDir(t *testing.T) {
-	cfg := config.Config{Store: config.StoreSQLite, DataDir: filepath.Join(t.TempDir(), "nested", "relay")}
+func TestOpenStoreCreatesDataDir(t *testing.T) {
+	cfg := config.Config{DataDir: filepath.Join(t.TempDir(), "nested", "relay")}
 	store, err := OpenStore(t.Context(), cfg)
 	require.NoError(t, err)
 	require.NoError(t, store.Close())
@@ -111,7 +111,7 @@ func TestOpenStoreSQLiteCreatesDataDir(t *testing.T) {
 func TestRunSignsInWithTheLogSender(t *testing.T) {
 	cfg := config.Config{
 		Listen:        "127.0.0.1:0",
-		Store:         config.StoreMemory,
+		DataDir:       t.TempDir(),
 		Limits:        relay.DefaultLimits(),
 		LogLevel:      "info",
 		AllowedEmails: []string{"*@example.com"},

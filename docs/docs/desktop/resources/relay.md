@@ -39,10 +39,10 @@ Put a TLS-terminating proxy such as Caddy or Traefik in front of the container a
 
 `GET /healthz` returns `ok` when the relay is up.
 
-For a throwaway relay that keeps nothing across restarts, `--mint` admits one email and prints an API key for it on the first line of stdout:
+To try a relay without an operator step, `--mint` admits one email and prints an API key for it on the first line of stdout. Every start mints another key, so use it for a throwaway relay only:
 
 ```sh
-docker run --rm -p 8080:8080 -e RELAY_PUBLIC_URL=http://localhost:8080 ghcr.io/colonyops/hive-relay --store memory --mint you@example.com
+docker run --rm -p 8080:8080 -e RELAY_PUBLIC_URL=http://localhost:8080 ghcr.io/colonyops/hive-relay --mint you@example.com
 ```
 
 ## Configure
@@ -53,7 +53,6 @@ Every setting is a flag, an environment variable, or a key in an optional `relay
 | --- | --- | --- | --- |
 | `RELAY_PUBLIC_URL` | `--public-url` | none, required | URL senders reach. Used to build ingress URLs. |
 | `RELAY_LISTEN` | `--listen` | `:8080` | Address to listen on. |
-| `RELAY_STORE` | `--store` | `sqlite` | `sqlite` or `memory`. |
 | `RELAY_DATA_DIR` | `--data-dir` | `.` (`/data` in the image) | Directory that holds `relay.db`. |
 | `RELAY_TRUSTED_PROXIES` | `--trusted-proxies` | none | Comma-separated CIDRs whose `X-Forwarded-For` is honoured. |
 | `RELAY_LOG_LEVEL` | `--log-level` | `info` | `debug`, `info`, `warn`, or `error`. |

@@ -14,7 +14,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/relay/internal/config"
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
-	"github.com/colonyops/hive/cmd/relay/internal/store/memory"
+	"github.com/colonyops/hive/cmd/relay/internal/store/sqlite"
 )
 
 const (
@@ -43,7 +43,8 @@ func newHarness(t *testing.T, limits relay.Limits, trusted ...netip.Prefix) *har
 
 func newSignInHarness(t *testing.T, limits relay.Limits, setup signInSetup, trusted ...netip.Prefix) *harness {
 	t.Helper()
-	store := memory.New()
+	store, err := sqlite.Open(t.Context(), sqlite.InMemory)
+	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	userEmails := make([]string, 0, len(setup.users))
 	for e := range setup.users {

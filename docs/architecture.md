@@ -348,8 +348,8 @@ cmd/relay/                        # Hive Relay, the hive-relay binary
   Dockerfile                      # the ghcr.io/colonyops/hive-relay image
   releasenotes/                   # the relay's embedded changelog
   internal/                       # relay-only: relay/ (the core: models, the
-                                  #   store port, the services), store/ (memory,
-                                  #   sqlite, the storetest contract), httpapi/,
+                                  #   store port, the services), store/ (the
+                                  #   sqlite driver), httpapi/,
                                   #   guard/ (rate limits, the semaphore),
                                   #   config/, app/ (the plugs composition root)
 cmd/tools/                        # repo-wide tooling: adr, release

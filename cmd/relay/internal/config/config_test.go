@@ -33,7 +33,6 @@ func TestLoadDefaults(t *testing.T) {
 	cfg, err := load(t)
 	require.NoError(t, err)
 	assert.Equal(t, ":8080", cfg.Listen)
-	assert.Equal(t, StoreSQLite, cfg.Store)
 	assert.Equal(t, "info", cfg.LogLevel)
 	assert.Empty(t, cfg.PublicURL)
 	assert.Empty(t, cfg.TrustedProxies)
@@ -46,7 +45,6 @@ func TestLoadEnv(t *testing.T) {
 	t.Setenv("RELAY_RETENTION", "1h")
 	t.Setenv("RELAY_BODY_BYTES", "1024")
 	t.Setenv("RELAY_PUBLIC_URL", "https://relay.example.com/")
-	t.Setenv("RELAY_STORE", "memory")
 
 	cfg, err := load(t)
 	require.NoError(t, err)
@@ -58,7 +56,6 @@ func TestLoadEnv(t *testing.T) {
 	assert.Equal(t, time.Hour, cfg.Limits.Retention)
 	assert.Equal(t, int64(1024), cfg.Limits.BodyBytes)
 	assert.Equal(t, "https://relay.example.com", cfg.PublicURL)
-	assert.Equal(t, StoreMemory, cfg.Store)
 	assert.NoError(t, cfg.RequirePublicURL())
 }
 
@@ -70,8 +67,6 @@ func TestLoadRejects(t *testing.T) {
 	}{
 		{"bad cidr", map[string]string{"RELAY_TRUSTED_PROXIES": "10.0.0.0/33"}, nil},
 		{"not an ip", map[string]string{"RELAY_TRUSTED_PROXIES": "proxy.local"}, nil},
-		{"mint with sqlite", nil, []string{"--mint", "a@example.com"}},
-		{"unknown store", nil, []string{"--store", "s3"}},
 		{"relative public url", nil, []string{"--public-url", "relay.example.com"}},
 		{"non-http public url", nil, []string{"--public-url", "ftp://relay.example.com"}},
 		{"bad log level", nil, []string{"--log-level", "loud"}},
@@ -88,8 +83,8 @@ func TestLoadRejects(t *testing.T) {
 	}
 }
 
-func TestLoadMintWithMemory(t *testing.T) {
-	cfg, err := load(t, "--store", "memory", "--mint", " dev@example.com ")
+func TestLoadMintTrims(t *testing.T) {
+	cfg, err := load(t, "--mint", " dev@example.com ")
 	require.NoError(t, err)
 	assert.Equal(t, "dev@example.com", cfg.MintFor)
 }

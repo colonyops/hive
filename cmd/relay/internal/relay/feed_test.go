@@ -26,7 +26,7 @@ func TestFeedBodies(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := newStore()
+			store := newStore(t)
 			src, token := newSource(t, store, alice, "")
 			_, err := relay.NewIngress(store, relay.DefaultLimits()).Accept(t.Context(), token, "", relay.Record{
 				Method:      "POST",
@@ -51,7 +51,7 @@ func TestFeedBodies(t *testing.T) {
 }
 
 func TestFeedPaging(t *testing.T) {
-	store := newStore()
+	store := newStore(t)
 	src, token := newSource(t, store, alice, "")
 	ingress := relay.NewIngress(store, relay.DefaultLimits())
 	var ids []string
@@ -91,14 +91,14 @@ func TestFeedPaging(t *testing.T) {
 }
 
 func TestFeedOtherAccount(t *testing.T) {
-	store := newStore()
+	store := newStore(t)
 	src, _ := newSource(t, store, alice, "")
 	_, err := relay.NewFeed(store).ListAfter(t.Context(), bob, src.ID, "", 10)
 	requireKind(t, relay.KindNotFound, err)
 }
 
 func TestFeedSealed(t *testing.T) {
-	store := newStore()
+	store := newStore(t)
 	src, _ := newSource(t, store, alice, "")
 	blob := []byte("age-encryption.org/v1 ciphertext")
 	at := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)

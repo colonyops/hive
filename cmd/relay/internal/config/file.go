@@ -42,7 +42,6 @@ type SMTP struct {
 type fileConfig struct {
 	Listen              *string        `yaml:"listen"`
 	PublicURL           *string        `yaml:"public_url"`
-	Store               *string        `yaml:"store"`
 	DataDir             *string        `yaml:"data_dir"`
 	TrustedProxies      []string       `yaml:"trusted_proxies"`
 	LogLevel            *string        `yaml:"log_level"`

@@ -40,7 +40,7 @@ type encEnv struct {
 
 func newEncEnv(t *testing.T) *encEnv {
 	t.Helper()
-	store := newStore()
+	store := newStore(t)
 	src, token := newSource(t, store, alice, "")
 	return &encEnv{
 		store:    store,

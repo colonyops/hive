@@ -71,7 +71,7 @@ func TestSweeperTick(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := t.Context()
 			now := newClock().Now()
-			store := newStore()
+			store := newStore(t)
 			putSweepSource(t, store, alice, "a1")
 			appendAged(t, store, now, alice, "a1", tt.ages...)
 
@@ -94,7 +94,7 @@ func TestSweeperTick(t *testing.T) {
 func TestSweeperTrimsSourcesIndependently(t *testing.T) {
 	ctx := t.Context()
 	now := newClock().Now()
-	store := newStore()
+	store := newStore(t)
 	putSweepSource(t, store, alice, "a1")
 	putSweepSource(t, store, alice, "a2")
 	appendAged(t, store, now, alice, "a1", 5*time.Minute, 4*time.Minute, 3*time.Minute, 2*time.Minute)
@@ -139,7 +139,7 @@ func (f failingDeliveries) DeleteBefore(ctx context.Context, email, sourceID str
 func TestSweeperSkipsAFailingSource(t *testing.T) {
 	ctx := t.Context()
 	now := newClock().Now()
-	store := newStore()
+	store := newStore(t)
 	putSweepSource(t, store, alice, "a1")
 	putSweepSource(t, store, alice, "a2")
 	putSweepSource(t, store, bob, "b1")
@@ -160,7 +160,7 @@ func TestSweeperSkipsAFailingSource(t *testing.T) {
 func TestSweeperRunStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	now := newClock().Now()
-	store := newStore()
+	store := newStore(t)
 	putSweepSource(t, store, alice, "a1")
 	appendAged(t, store, now, alice, "a1", 48*time.Hour)
 
@@ -177,7 +177,7 @@ func TestSweeperRunStopsOnCancel(t *testing.T) {
 func TestSweeperDeletesExpiredCodes(t *testing.T) {
 	ctx := t.Context()
 	now := newClock().Now()
-	store := newStore()
+	store := newStore(t)
 	require.NoError(t, store.AuthCodes().Put(ctx, alice, "old", now.Add(-time.Minute)))
 	require.NoError(t, store.AuthCodes().Put(ctx, bob, "fresh", now.Add(time.Minute)))
 

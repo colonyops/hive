@@ -23,7 +23,6 @@ import (
 	"github.com/colonyops/hive/cmd/relay/internal/mail"
 	"github.com/colonyops/hive/cmd/relay/internal/mcpsrv"
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
-	"github.com/colonyops/hive/cmd/relay/internal/store/memory"
 	"github.com/colonyops/hive/cmd/relay/internal/store/sqlite"
 	"github.com/colonyops/hive/internal/platform/secrets"
 )
@@ -119,7 +118,7 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 		}
 	}
 
-	log.Info().Str("addr", ln.Addr().String()).Str("store", cfg.Store).Str("public_url", publicURL).Msg("relay listening")
+	log.Info().Str("addr", ln.Addr().String()).Str("db", cfg.SQLitePath()).Str("public_url", publicURL).Msg("relay listening")
 	if opts.OnListen != nil {
 		opts.OnListen(ln.Addr())
 	}
@@ -199,17 +198,10 @@ func reloadOnHangup(ctx context.Context, cfg config.Config, allow *relay.Allowli
 }
 
 func OpenStore(ctx context.Context, cfg config.Config) (relay.Store, error) {
-	switch cfg.Store {
-	case config.StoreMemory:
-		return memory.New(), nil
-	case config.StoreSQLite:
-		if err := os.MkdirAll(filepath.Dir(cfg.SQLitePath()), 0o700); err != nil {
-			return nil, fmt.Errorf("create data dir: %w", err)
-		}
-		return sqlite.Open(ctx, cfg.SQLitePath())
-	default:
-		return nil, fmt.Errorf("unknown store %q", cfg.Store)
+	if err := os.MkdirAll(filepath.Dir(cfg.SQLitePath()), 0o700); err != nil {
+		return nil, fmt.Errorf("create data dir: %w", err)
 	}
+	return sqlite.Open(ctx, cfg.SQLitePath())
 }
 
 type plugsLogger struct{ log zerolog.Logger }

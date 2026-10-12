@@ -25,7 +25,12 @@ type store struct {
 	q    *db.Queries
 }
 
+// InMemory is the path that opens a private in-memory database.
+const InMemory = ":memory:"
+
 // Open opens or creates the database at path and applies pending migrations.
+// An InMemory path gives a private database that lives until Close, which the
+// single-connection pool makes safe.
 func Open(ctx context.Context, path string) (relay.Store, error) {
 	// One connection makes this process a single writer, so the atomic cap in
 	// Append never races another connection here. Other processes (the

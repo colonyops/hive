@@ -1,5 +1,4 @@
-// Package storetest is the contract every relay.Store driver passes.
-package storetest
+package sqlite_test
 
 import (
 	"bytes"
@@ -11,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
+	"github.com/colonyops/hive/cmd/relay/internal/store/sqlite"
 	"github.com/colonyops/hive/pkg/randid"
 )
 
@@ -21,23 +21,12 @@ const (
 
 var epoch = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
-// Run exercises open's store against the relay.Store contract. open returns
-// a fresh, empty store for each subtest.
-func Run(t *testing.T, open func(t *testing.T) relay.Store) {
+func openMemory(t *testing.T) relay.Store {
 	t.Helper()
-	fresh := func(t *testing.T) relay.Store {
-		t.Helper()
-		s := open(t)
-		t.Cleanup(func() { assert.NoError(t, s.Close()) })
-		return s
-	}
-	t.Run("accounts", func(t *testing.T) { testAccounts(t, fresh) })
-	t.Run("tokens", func(t *testing.T) { testTokens(t, fresh) })
-	t.Run("sources", func(t *testing.T) { testSources(t, fresh) })
-	t.Run("deliveries", func(t *testing.T) { testDeliveries(t, fresh) })
-	t.Run("auth codes", func(t *testing.T) { testAuthCodes(t, fresh) })
-	t.Run("outbox", func(t *testing.T) { testOutbox(t, fresh) })
-	t.Run("recipients", func(t *testing.T) { testRecipients(t, fresh) })
+	s, err := sqlite.Open(t.Context(), sqlite.InMemory)
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, s.Close()) })
+	return s
 }
 
 func putAccount(t *testing.T, s relay.Store, email string) {
@@ -93,9 +82,9 @@ func ids(ds []relay.Delivery) []string {
 	return out
 }
 
-func testAccounts(t *testing.T, open func(t *testing.T) relay.Store) {
+func TestAccounts(t *testing.T) {
 	t.Run("put get list", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		want := relay.Account{Email: bob, Encryption: true, BytesUsed: 7, CreatedAt: epoch}
 		require.NoError(t, s.Accounts().Put(ctx, want))
@@ -124,7 +113,7 @@ func testAccounts(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("put keeps bytes and created at", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		putAccount(t, s, alice)
 		putSource(t, s, alice, "a1")
@@ -145,13 +134,13 @@ func testAccounts(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("get missing", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		_, err := s.Accounts().Get(t.Context(), alice)
 		require.ErrorIs(t, err, relay.ErrNotFound)
 	})
 
 	t.Run("add bytes", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		putAccount(t, s, alice)
 		n, err := s.Accounts().AddBytes(t.Context(), alice, 100)
 		require.NoError(t, err)
@@ -166,7 +155,7 @@ func testAccounts(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("delete cascades", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		putAccount(t, s, alice)
 		putAccount(t, s, bob)
@@ -201,8 +190,8 @@ func testAccounts(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 }
 
-func testTokens(t *testing.T, open func(t *testing.T) relay.Store) {
-	s := open(t)
+func TestTokens(t *testing.T) {
+	s := openMemory(t)
 	ctx := t.Context()
 	putAccount(t, s, alice)
 	putAccount(t, s, bob)
@@ -244,9 +233,9 @@ func testTokens(t *testing.T, open func(t *testing.T) relay.Store) {
 	require.ErrorIs(t, s.Tokens().Delete(ctx, alice, "t1"), relay.ErrNotFound)
 }
 
-func testSources(t *testing.T, open func(t *testing.T) relay.Store) {
+func TestSources(t *testing.T) {
 	t.Run("get list count", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		putAccount(t, s, alice)
 		putAccount(t, s, bob)
@@ -293,7 +282,7 @@ func testSources(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("delete cascades and credits", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		putAccount(t, s, alice)
 		putSource(t, s, alice, "a1")
@@ -314,10 +303,10 @@ func testSources(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 }
 
-func testDeliveries(t *testing.T, open func(t *testing.T) relay.Store) {
+func TestDeliveries(t *testing.T) {
 	setup := func(t *testing.T) relay.Store {
 		t.Helper()
-		s := open(t)
+		s := openMemory(t)
 		putAccount(t, s, alice)
 		putSource(t, s, alice, "a1")
 		return s
@@ -507,12 +496,12 @@ func testDeliveries(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 }
 
-func testAuthCodes(t *testing.T, open func(t *testing.T) relay.Store) {
+func TestAuthCodes(t *testing.T) {
 	const maxAttempts = 3
 	expires := epoch.Add(10 * time.Minute)
 
 	t.Run("put consume ok", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", expires))
 		ok, _, err := s.AuthCodes().Consume(ctx, alice, "h1", epoch, maxAttempts)
@@ -526,7 +515,7 @@ func testAuthCodes(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("wrong code counts down then deletes", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", expires))
 		for want := maxAttempts - 1; want > 0; want-- {
@@ -546,7 +535,7 @@ func testAuthCodes(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("expired is a miss", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", expires))
 		ok, left, err := s.AuthCodes().Consume(ctx, alice, "h1", expires, maxAttempts)
@@ -561,7 +550,7 @@ func testAuthCodes(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("put replaces and resets attempts", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", expires))
 		_, left, err := s.AuthCodes().Consume(ctx, alice, "nope", epoch, maxAttempts)
@@ -578,7 +567,7 @@ func testAuthCodes(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("delete expired", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		require.NoError(t, s.AuthCodes().Put(ctx, alice, "h1", epoch.Add(time.Minute)))
 		require.NoError(t, s.AuthCodes().Put(ctx, bob, "h2", epoch.Add(time.Hour)))
@@ -603,9 +592,9 @@ func mailIDs(ms []relay.Mail) []string {
 	return out
 }
 
-func testOutbox(t *testing.T, open func(t *testing.T) relay.Store) {
+func TestOutbox(t *testing.T) {
 	t.Run("append and due order", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		require.NoError(t, s.Outbox().Append(ctx, mail("m2", epoch.Add(time.Second))))
 		require.NoError(t, s.Outbox().Append(ctx, mail("m1", epoch)))
@@ -626,7 +615,7 @@ func testOutbox(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("mark sent excludes", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		require.NoError(t, s.Outbox().Append(ctx, mail("m1", epoch)))
 		require.NoError(t, s.Outbox().Append(ctx, mail("m2", epoch)))
@@ -638,7 +627,7 @@ func testOutbox(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("mark failed defers and bumps attempts", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		require.NoError(t, s.Outbox().Append(ctx, mail("m1", epoch)))
 		next := epoch.Add(30 * time.Second)
@@ -669,9 +658,9 @@ func recipientIDs(rs []relay.Recipient) []string {
 	return out
 }
 
-func testRecipients(t *testing.T, open func(t *testing.T) relay.Store) {
+func TestRecipients(t *testing.T) {
 	t.Run("put and list order", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		putAccount(t, s, alice)
 		putAccount(t, s, bob)
@@ -694,7 +683,7 @@ func testRecipients(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("put upserts on the same recipient", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		putAccount(t, s, alice)
 		require.NoError(t, s.Recipients().Put(ctx, recipient(alice, "r1", "age1a", epoch)))
@@ -711,7 +700,7 @@ func testRecipients(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("delete is scoped by email", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		putAccount(t, s, alice)
 		putAccount(t, s, bob)
@@ -724,7 +713,7 @@ func testRecipients(t *testing.T, open func(t *testing.T) relay.Store) {
 	})
 
 	t.Run("account delete cascades", func(t *testing.T) {
-		s := open(t)
+		s := openMemory(t)
 		ctx := t.Context()
 		putAccount(t, s, alice)
 		putAccount(t, s, bob)

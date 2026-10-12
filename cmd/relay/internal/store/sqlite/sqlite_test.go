@@ -11,7 +11,6 @@ import (
 
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
 	"github.com/colonyops/hive/cmd/relay/internal/store/sqlite"
-	"github.com/colonyops/hive/cmd/relay/internal/store/storetest"
 	"github.com/colonyops/hive/pkg/randid"
 )
 
@@ -20,12 +19,6 @@ func open(t *testing.T, path string) relay.Store {
 	s, err := sqlite.Open(t.Context(), path)
 	require.NoError(t, err)
 	return s
-}
-
-func TestContract(t *testing.T) {
-	storetest.Run(t, func(t *testing.T) relay.Store {
-		return open(t, filepath.Join(t.TempDir(), "relay.db"))
-	})
 }
 
 func TestOverCapAndRestart(t *testing.T) {

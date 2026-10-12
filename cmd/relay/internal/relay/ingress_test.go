@@ -24,7 +24,7 @@ func TestIngressStoresAsDelivered(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := newStore()
+			store := newStore(t)
 			src, token := newSource(t, store, alice, "")
 			ingress := relay.NewIngress(store, relay.DefaultLimits())
 			rec := relay.Record{
@@ -61,7 +61,7 @@ func TestIngressStoresAsDelivered(t *testing.T) {
 }
 
 func TestAcceptSourceGoneIsNotFound(t *testing.T) {
-	store := newStore()
+	store := newStore(t)
 	src, _ := newSource(t, store, alice, "")
 	require.NoError(t, store.Sources().Delete(t.Context(), alice, src.ID))
 
@@ -86,7 +86,7 @@ func TestIngressRejects(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			store := newStore()
+			store := newStore(t)
 			_, token := newSource(t, store, alice, tt.secret)
 			_, err := relay.NewIngress(store, relay.DefaultLimits()).Accept(t.Context(), tt.token(token), tt.presented, relay.Record{Method: "POST"})
 			if tt.want == "" {
@@ -99,7 +99,7 @@ func TestIngressRejects(t *testing.T) {
 }
 
 func TestIngressOverCap(t *testing.T) {
-	store := newStore()
+	store := newStore(t)
 	src, token := newSource(t, store, alice, "")
 	limits := relay.DefaultLimits()
 	limits.BytesPerAccount = 300

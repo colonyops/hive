@@ -31,7 +31,7 @@ func TestLoadFile(t *testing.T) {
 	p := writeFile(t, `
 listen: 127.0.0.1:9000
 public_url: https://relay.example.com/
-store: memory
+data_dir: /srv/relay
 log_level: debug
 retention: 2h
 body_bytes: 2048
@@ -49,7 +49,7 @@ smtp:
 	require.NoError(t, err)
 	assert.Equal(t, "127.0.0.1:9000", cfg.Listen)
 	assert.Equal(t, "https://relay.example.com", cfg.PublicURL)
-	assert.Equal(t, StoreMemory, cfg.Store)
+	assert.Equal(t, "/srv/relay", cfg.DataDir)
 	assert.Equal(t, "debug", cfg.LogLevel)
 	assert.Equal(t, 2*time.Hour, cfg.Limits.Retention)
 	assert.Equal(t, int64(2048), cfg.Limits.BodyBytes)
@@ -66,7 +66,7 @@ smtp:
 func TestLoadEnvAndFlagsWinOverFile(t *testing.T) {
 	p := writeFile(t, `
 listen: 127.0.0.1:9000
-store: memory
+data_dir: /srv/relay
 log_level: debug
 allowed_emails: ["*@file.test"]
 smtp:
@@ -83,7 +83,7 @@ smtp:
 	assert.Equal(t, p, cfg.ConfigFile)
 	assert.Equal(t, "127.0.0.1:9100", cfg.Listen, "a flag wins")
 	assert.Equal(t, "warn", cfg.LogLevel, "env wins")
-	assert.Equal(t, StoreMemory, cfg.Store, "the file wins over a default")
+	assert.Equal(t, "/srv/relay", cfg.DataDir, "the file wins over a default")
 	assert.Equal(t, []string{"a@env.test", "*@env.test"}, cfg.AllowedEmails)
 	assert.Equal(t, SMTP{URL: "log", From: "env@example.com"}, cfg.SMTP)
 	assert.True(t, cfg.SMTP.IsLog())

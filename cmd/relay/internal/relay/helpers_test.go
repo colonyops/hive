@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
-	"github.com/colonyops/hive/cmd/relay/internal/store/memory"
+	"github.com/colonyops/hive/cmd/relay/internal/store/sqlite"
 )
 
 const (
@@ -55,4 +55,10 @@ func newSource(t *testing.T, store relay.Store, email, secret string) (relay.Sou
 	return src, token
 }
 
-func newStore() relay.Store { return memory.New() }
+func newStore(t *testing.T) relay.Store {
+	t.Helper()
+	s, err := sqlite.Open(t.Context(), sqlite.InMemory)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+	return s
+}

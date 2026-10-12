@@ -47,7 +47,7 @@ func newApp() *cli.Command {
 				Usage: "Run the relay server",
 				Flags: append(config.Flags(), &cli.StringFlag{
 					Name:  config.FlagMint,
-					Usage: "memory store only: mint an API key for `EMAIL` at start and print it once",
+					Usage: "mint an API key for `EMAIL` at start and print it once; every start mints another key, so this is for dev relays",
 				}),
 				Action: func(ctx context.Context, cmd *cli.Command) error {
 					cfg, log, err := load(cmd)
@@ -118,23 +118,18 @@ func newLogger(level zerolog.Level) zerolog.Logger {
 	return zerolog.New(os.Stderr).Level(level).With().Timestamp().Logger()
 }
 
-// openPersistentStore opens the store for an operator command. Those commands
-// write to the store a running server reads, so the memory store, which lives
-// only inside one process, has nothing for them to act on.
-func openPersistentStore(ctx context.Context, cmd *cli.Command) (relay.Store, config.Config, error) {
+// openStore opens the same database the server uses, for an operator command.
+func openStore(ctx context.Context, cmd *cli.Command) (relay.Store, config.Config, error) {
 	cfg, _, err := load(cmd)
 	if err != nil {
 		return nil, config.Config{}, err
-	}
-	if cfg.Store == config.StoreMemory {
-		return nil, config.Config{}, fmt.Errorf("%s needs --store sqlite: the memory store lives inside the server process, so there is nothing here to act on", cmd.FullName())
 	}
 	store, err := app.OpenStore(ctx, cfg)
 	return store, cfg, err
 }
 
 func tokensCreate(ctx context.Context, cmd *cli.Command) (err error) {
-	store, cfg, err := openPersistentStore(ctx, cmd)
+	store, cfg, err := openStore(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -194,7 +189,7 @@ func readPassword(in io.Reader, prompt io.Writer) (string, error) {
 }
 
 func accountsList(ctx context.Context, cmd *cli.Command) (err error) {
-	store, _, err := openPersistentStore(ctx, cmd)
+	store, _, err := openStore(ctx, cmd)
 	if err != nil {
 		return err
 	}
@@ -218,7 +213,7 @@ func accountsList(ctx context.Context, cmd *cli.Command) (err error) {
 }
 
 func accountsDelete(ctx context.Context, cmd *cli.Command) (err error) {
-	store, _, err := openPersistentStore(ctx, cmd)
+	store, _, err := openStore(ctx, cmd)
 	if err != nil {
 		return err
 	}

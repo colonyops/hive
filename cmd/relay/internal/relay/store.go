@@ -8,8 +8,7 @@ import (
 
 var ErrNotFound = errors.New("relay: not found")
 
-// Store is the persistence port. Every driver (memory, sqlite) implements it
-// and passes storetest.Run.
+// Store is the persistence port. The sqlite driver implements it.
 type Store interface {
 	Accounts() AccountStore
 	Tokens() TokenStore
@@ -53,11 +52,11 @@ type SourceStore interface {
 
 type DeliveryStore interface {
 	// Append stores d and debits d.Size from the owning account inside one
-	// critical section (the memory driver's mutex; one sqlite transaction
-	// with UPDATE ... RETURNING). It returns KindOverCap, storing nothing,
-	// when the account's bytes would pass maxAccountBytes. It then trims the
-	// source to keepPerSource newest rows and credits the freed bytes back,
-	// so a bounded driver needs no sweeper to stay bounded.
+	// critical section (one sqlite transaction with UPDATE ... RETURNING).
+	// It returns KindOverCap, storing nothing, when the account's bytes would
+	// pass maxAccountBytes. It then trims the source to keepPerSource newest
+	// rows and credits the freed bytes back, so a bounded driver needs no
+	// sweeper to stay bounded.
 	Append(ctx context.Context, email string, d Delivery, maxAccountBytes int64, keepPerSource int) error
 	// ListAfter returns up to limit deliveries with ID > afterID in ID order,
 	// and whether more remain. afterID "" means from the beginning.

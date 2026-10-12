@@ -18,15 +18,9 @@ import (
 )
 
 const (
-	StoreMemory = "memory"
-	StoreSQLite = "sqlite"
-)
-
-const (
 	flagConfig              = "config"
 	flagListen              = "listen"
 	flagPublicURL           = "public-url"
-	flagStore               = "store"
 	flagDataDir             = "data-dir"
 	flagTrustedProxies      = "trusted-proxies"
 	flagLogLevel            = "log-level"
@@ -44,7 +38,6 @@ const (
 type Config struct {
 	Listen         string
 	PublicURL      string
-	Store          string
 	DataDir        string
 	TrustedProxies []netip.Prefix
 	MintFor        string
@@ -65,7 +58,6 @@ func Flags() []cli.Flag {
 		&cli.StringFlag{Name: flagConfig, Usage: "path to relay.yaml (optional); env and flags win over it", Sources: cli.EnvVars("RELAY_CONFIG")},
 		&cli.StringFlag{Name: flagListen, Usage: "address to listen on", Value: ":8080", Sources: cli.EnvVars("RELAY_LISTEN")},
 		&cli.StringFlag{Name: flagPublicURL, Usage: "public base URL senders reach, used to build ingress URLs", Sources: cli.EnvVars("RELAY_PUBLIC_URL")},
-		&cli.StringFlag{Name: flagStore, Usage: "store driver: memory or sqlite", Value: StoreSQLite, Sources: cli.EnvVars("RELAY_STORE")},
 		&cli.StringFlag{Name: flagDataDir, Usage: "directory for the sqlite store (relay.db)", Value: ".", Sources: cli.EnvVars("RELAY_DATA_DIR")},
 		&cli.StringFlag{Name: flagTrustedProxies, Usage: "comma-separated CIDRs whose X-Forwarded-For is honoured", Sources: cli.EnvVars("RELAY_TRUSTED_PROXIES")},
 		&cli.StringFlag{Name: flagLogLevel, Usage: "log level (debug, info, warn, error)", Value: "info", Sources: cli.EnvVars("RELAY_LOG_LEVEL")},
@@ -98,7 +90,6 @@ func Load(cmd *cli.Command) (Config, error) {
 	cfg := Config{
 		Listen:     pick(cmd, flagListen, f.Listen, cmd.String),
 		PublicURL:  strings.TrimRight(pick(cmd, flagPublicURL, f.PublicURL, cmd.String), "/"),
-		Store:      pick(cmd, flagStore, f.Store, cmd.String),
 		DataDir:    pick(cmd, flagDataDir, f.DataDir, cmd.String),
 		MintFor:    strings.TrimSpace(cmd.String(FlagMint)),
 		Limits:     limits,
@@ -141,14 +132,6 @@ func (c Config) RequirePublicURL() error {
 
 func (c Config) validate() error {
 	var errs []error
-	switch c.Store {
-	case StoreMemory, StoreSQLite:
-	default:
-		errs = append(errs, fmt.Errorf("--store must be %q or %q, got %q", StoreMemory, StoreSQLite, c.Store))
-	}
-	if c.MintFor != "" && c.Store != StoreMemory {
-		errs = append(errs, errors.New("--mint works only with --store memory; mint a persistent key with `hive-relay tokens create`"))
-	}
 	if c.PublicURL != "" {
 		u, err := url.Parse(c.PublicURL)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
