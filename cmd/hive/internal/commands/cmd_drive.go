@@ -1,0 +1,330 @@
+package commands
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/internal/domain/drive"
+	"github.com/colonyops/hive/pkg/iojson"
+	"github.com/urfave/cli/v3"
+)
+
+type DriveCmd struct {
+	flags *Flags
+	app   *app.App
+
+	// Shared flags
+	repo   string
+	shared bool
+
+	// ls and spaces flags
+	all  bool
+	json bool
+
+	// prune flag
+	olderThan string
+}
+
+// NewDriveCmd creates a new drive command.
+func NewDriveCmd(flags *Flags, app *app.App) *DriveCmd {
+	return &DriveCmd{flags: flags, app: app}
+}
+
+// Register adds the drive command to the application.
+func (cmd *DriveCmd) Register(app *cli.Command) *cli.Command {
+	app.Commands = append(app.Commands, &cli.Command{
+		Name:    "drive",
+		Aliases: []string{"ctx"},
+		Usage:   "Browse and manage Hive Drive, the documents under the context root",
+		Description: `Hive Drive is the document tree under the context root: one space per
+repository, per Chats workspace, and one shared space. Agents and people put
+markdown, html, and canvas documents there.
+
+The context root is $XDG_DATA_HOME/hive/context, or context.base_dir when set.
+A repository's space is {owner}/{repo} under the root. Use 'hive drive init'
+in a git repository to create a .hive symlink pointing to its space.
+
+'ctx' is the former name of this command and still works.`,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:        "repo",
+				Aliases:     []string{"r"},
+				Usage:       "target a specific repository space (owner/repo)",
+				Destination: &cmd.repo,
+			},
+			&cli.BoolFlag{
+				Name:        "shared",
+				Aliases:     []string{"s"},
+				Usage:       "use the shared space",
+				Destination: &cmd.shared,
+			},
+		},
+		Commands: []*cli.Command{
+			cmd.initCmd(),
+			cmd.lsCmd(),
+			cmd.spacesCmd(),
+			cmd.pruneCmd(),
+		},
+	})
+
+	return app
+}
+
+func (cmd *DriveCmd) initCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "init",
+		Usage: "Create symlink to the space directory",
+		Description: `Creates a symlink in the current directory pointing to the space directory.
+
+The symlink name is configured via context.symlink_name (default: .hive).
+The target is {owner}/{repo} under the context root ($XDG_DATA_HOME/hive/context,
+or context.base_dir when set).`,
+		Action: cmd.runInit,
+	}
+}
+
+func (cmd *DriveCmd) lsCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "ls",
+		Usage: "List the documents and folders of a space",
+		Description: `Prints the space directory, then one line per entry: its kind and its path.
+Kinds are dir, markdown, html, canvas, and file.
+
+With --all, every space is listed under a header line with its key.
+With --json, each entry is one JSON object per line, without children. With
+--all and --json, each line is {"space": ..., "entry": ...}.
+
+Example: hive drive ls`,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:        "all",
+				Usage:       "list every space",
+				Destination: &cmd.all,
+			},
+			&cli.BoolFlag{
+				Name:        "json",
+				Usage:       "output one JSON object per line",
+				Destination: &cmd.json,
+			},
+		},
+		Action: cmd.runLs,
+	}
+}
+
+func (cmd *DriveCmd) runLs(ctx context.Context, c *cli.Command) error {
+	if cmd.all {
+		if cmd.repo != "" || cmd.shared {
+			return fmt.Errorf("--all cannot be combined with --repo or --shared")
+		}
+		return cmd.runLsAll(ctx)
+	}
+
+	space, err := cmd.app.Drive().ResolveSpace(ctx, cmd.repo, cmd.shared)
+	if err != nil {
+		return err
+	}
+	dir, err := cmd.app.Drive().SpaceDir(space)
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if cmd.json {
+			return nil
+		}
+		fmt.Println("Context directory does not exist. Run 'hive drive init' first.")
+		return nil
+	}
+
+	root, err := cmd.app.Drive().Tree(ctx, space)
+	if err != nil {
+		return err
+	}
+	if cmd.json {
+		return writeEntries(root, func(e drive.Entry) any { return e })
+	}
+	fmt.Println(dir)
+	printEntries(root)
+	return nil
+}
+
+func (cmd *DriveCmd) runLsAll(ctx context.Context) error {
+	spaces, err := cmd.app.Drive().Spaces(ctx)
+	if err != nil {
+		return err
+	}
+	for _, space := range spaces {
+		root, err := cmd.app.Drive().Tree(ctx, space)
+		if err != nil {
+			return err
+		}
+		if cmd.json {
+			err = writeEntries(root, func(e drive.Entry) any {
+				return struct {
+					Space drive.Space `json:"space"`
+					Entry drive.Entry `json:"entry"`
+				}{space, e}
+			})
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		fmt.Println(space.Key)
+		printEntries(root)
+	}
+	return nil
+}
+
+// The kind column is as wide as the longest kind name, markdown.
+func printEntries(root drive.Entry) {
+	for _, entry := range root.Children {
+		fmt.Printf("%-8s  %s\n", entry.Kind, entry.Path)
+		printEntries(entry)
+	}
+}
+
+// writeEntries writes every entry under root, depth first, as one JSON line
+// each. The entry carries no children: the lines are the tree.
+func writeEntries(root drive.Entry, wrap func(drive.Entry) any) error {
+	for _, entry := range root.Children {
+		children := entry.Children
+		entry.Children = nil
+		if err := iojson.WriteLine(os.Stdout, wrap(entry)); err != nil {
+			return err
+		}
+		if err := writeEntries(drive.Entry{Children: children}, wrap); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (cmd *DriveCmd) spacesCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "spaces",
+		Usage: "List the spaces under the context root",
+		Description: `Prints one line per space: its kind and its key. The shared space is always listed.
+With --json, each space is one JSON object per line.
+
+Example: hive drive spaces`,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:        "json",
+				Usage:       "output one JSON object per line",
+				Destination: &cmd.json,
+			},
+		},
+		Action: cmd.runSpaces,
+	}
+}
+
+func (cmd *DriveCmd) runSpaces(ctx context.Context, c *cli.Command) error {
+	spaces, err := cmd.app.Drive().Spaces(ctx)
+	if err != nil {
+		return err
+	}
+	for _, space := range spaces {
+		if cmd.json {
+			if err := iojson.WriteLine(os.Stdout, space); err != nil {
+				return err
+			}
+			continue
+		}
+		fmt.Printf("%-10s  %s\n", space.Kind, space.Key)
+	}
+	return nil
+}
+
+func (cmd *DriveCmd) pruneCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "prune",
+		Usage: "Delete old files from a space",
+		Description: `Deletes files older than the specified duration.
+
+Example: hive drive prune --older-than 7d`,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:        "older-than",
+				Usage:       "delete files older than this duration (e.g., 7d, 24h)",
+				Destination: &cmd.olderThan,
+				Required:    true,
+			},
+		},
+		Action: cmd.runPrune,
+	}
+}
+
+func (cmd *DriveCmd) runInit(ctx context.Context, c *cli.Command) error {
+	ctxDir, err := cmd.resolveContextDir(ctx)
+	if err != nil {
+		return err
+	}
+
+	createdSubdirs, err := cmd.app.Drive().Init(ctxDir)
+	if err != nil {
+		return err
+	}
+
+	alreadyExists, err := cmd.app.Drive().CreateSymlink(ctxDir)
+	if err != nil {
+		return err
+	}
+
+	symlinkName := cmd.app.Config.Context.SymlinkName
+	if alreadyExists {
+		fmt.Fprintf(os.Stderr, "Symlink already exists: %s -> %s\n", symlinkName, ctxDir)
+	} else {
+		fmt.Fprintf(os.Stderr, "Created symlink: %s -> %s\n", symlinkName, ctxDir)
+	}
+
+	if len(createdSubdirs) > 0 {
+		fmt.Fprintf(os.Stderr, "Created subdirectories: %s\n", strings.Join(createdSubdirs, ", "))
+	}
+	return nil
+}
+
+func (cmd *DriveCmd) runPrune(ctx context.Context, c *cli.Command) error {
+	ctxDir, err := cmd.resolveContextDir(ctx)
+	if err != nil {
+		return err
+	}
+
+	duration, err := parseDuration(cmd.olderThan)
+	if err != nil {
+		return fmt.Errorf("invalid duration: %w", err)
+	}
+
+	count, err := cmd.app.Drive().Prune(ctxDir, duration)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		fmt.Fprintf(os.Stderr, "No files older than %s\n", cmd.olderThan)
+	} else {
+		fmt.Fprintf(os.Stderr, "Removed %d file(s) older than %s\n", count, cmd.olderThan)
+	}
+	return nil
+}
+
+func (cmd *DriveCmd) resolveContextDir(ctx context.Context) (string, error) {
+	return cmd.app.Drive().ResolveDir(ctx, cmd.repo, cmd.shared)
+}
+
+func parseDuration(s string) (time.Duration, error) {
+	// Handle day suffix (not supported by time.ParseDuration)
+	if before, ok := strings.CutSuffix(s, "d"); ok {
+		days := before
+		var d int
+		if _, err := fmt.Sscanf(days, "%d", &d); err != nil {
+			return 0, fmt.Errorf("invalid days: %s", s)
+		}
+		return time.Duration(d) * 24 * time.Hour, nil
+	}
+	return time.ParseDuration(s)
+}

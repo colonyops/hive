@@ -48,15 +48,15 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 		{
 			Path:    "/test/plans/doc1.md",
 			RelPath: "plans/doc1.md",
-			Type:    review.DocTypePlan,
+			Type:    "plan",
 		},
 		{
 			Path:    "/test/research/doc2.md",
 			RelPath: "research/doc2.md",
-			Type:    review.DocTypeResearch,
+			Type:    "research",
 		},
 	}
-	reviewView := review.New(zerolog.Nop(), nil, docs, review.Scope{Dir: "/test"}, nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), nil, nil, docs, review.Scope{Dir: "/test"}, nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	// Create a minimal handler for testing
@@ -80,21 +80,21 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 }
 
 func TestOpenDocument(t *testing.T) {
-	// Documents as DiscoverDocuments produces them: RelPath is relative to contextDir,
-	// without any ".hive/" prefix. The contextDir is "/test" here.
+	// Documents with RelPath relative to contextDir, without the ".hive/" prefix.
+	// The contextDir is "/test" here.
 	docs := []review.Document{
 		{
 			Path:    "/test/plans/doc1.md",
 			RelPath: "plans/doc1.md",
-			Type:    review.DocTypePlan,
+			Type:    "plan",
 		},
 		{
 			Path:    "/test/research/doc2.md",
 			RelPath: "research/doc2.md",
-			Type:    review.DocTypeResearch,
+			Type:    "research",
 		},
 	}
-	reviewView := review.New(zerolog.Nop(), nil, docs, review.Scope{Dir: "/test"}, nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), nil, nil, docs, review.Scope{Dir: "/test"}, nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	tests := []struct {
@@ -145,24 +145,23 @@ func TestOpenDocument(t *testing.T) {
 	}
 }
 
-// TestOpenDocument_SuffixMatch covers the production mismatch where DiscoverDocuments
-// produces RelPath relative to the context dir (e.g. "plans/doc.md"), but todos store
-// URIs relative to the repo root (e.g. "review://.hive/plans/doc.md").
+// TestOpenDocument_SuffixMatch covers a RelPath relative to the context dir (e.g. "plans/doc.md") when todos
+// store URIs relative to the repo root (e.g. "review://.hive/plans/doc.md").
 func TestOpenDocument_SuffixMatch(t *testing.T) {
-	// Simulate docs as produced by DiscoverDocuments: RelPath has no ".hive/" prefix.
+	// RelPath has no ".hive/" prefix.
 	docs := []review.Document{
 		{
 			Path:    "/real/context/owner/repo/plans/doc1.md",
 			RelPath: "plans/doc1.md",
-			Type:    review.DocTypePlan,
+			Type:    "plan",
 		},
 		{
 			Path:    "/real/context/owner/repo/research/doc2.md",
 			RelPath: "research/doc2.md",
-			Type:    review.DocTypeResearch,
+			Type:    "research",
 		},
 	}
-	reviewView := review.New(zerolog.Nop(), nil, docs, review.Scope{Dir: "/real/context/owner/repo"}, nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), nil, nil, docs, review.Scope{Dir: "/real/context/owner/repo"}, nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	tests := []struct {

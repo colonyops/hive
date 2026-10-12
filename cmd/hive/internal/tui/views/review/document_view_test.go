@@ -15,7 +15,7 @@ func createTestDocument(lines []string) *Document {
 	return &Document{
 		Path:    "/test/path/document.md",
 		RelPath: "test/document.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 		Content: content,
 	}

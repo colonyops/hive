@@ -18,6 +18,7 @@ type ReviewCmd struct {
 	app    *app.App
 	file   string
 	latest bool
+	all    bool
 }
 
 // NewReviewCmd creates a new review command.
@@ -36,10 +37,14 @@ The review TUI supports document navigation, inline comments, search,
 and document picking. Comments are persisted per-document with session IDs.
 
 With --file, you can review any markdown file without requiring context directory.
-Without --file, the picker mode discovers documents from your context directory.
+Without --file, the picker lists the markdown documents in your repository's
+Hive Drive space, grouped by the front matter "type:" of each document (for
+example plan, design-doc, research). A document without one is grouped by its
+top folder. With --all, the picker lists the documents of every space.
 
 Examples:
   hive review                        # Open picker (requires context dir)
+  hive review --all                  # Open picker over every space
   hive review --latest               # Open latest document (requires context dir)
   hive review -f plans/my.md         # Open file relative to context dir
   hive review -f ./notes.md          # Open file relative to current directory
@@ -55,6 +60,11 @@ Examples:
 				Name:        "latest",
 				Usage:       "open most recently modified document (requires context dir)",
 				Destination: &cmd.latest,
+			},
+			&cli.BoolFlag{
+				Name:        "all",
+				Usage:       "list the documents of every space",
+				Destination: &cmd.all,
 			},
 		},
 		Action: cmd.run,
@@ -107,6 +117,7 @@ func (cmd *ReviewCmd) runWithDirectFile(ctx context.Context) error {
 	doc := review.Document{
 		Path:    targetPath,
 		RelPath: filepath.Base(targetPath),
+		Type:    review.TypeOther,
 		ModTime: info.ModTime(),
 	}
 
@@ -130,13 +141,12 @@ func (cmd *ReviewCmd) runWithContextDir(ctx context.Context, c *cli.Command) err
 
 	// Check if directory exists before discovering
 	if _, err := os.Stat(contextDir); os.IsNotExist(err) {
-		return fmt.Errorf("context directory does not exist: %s\nRun 'hive ctx init' to create it", contextDir)
+		return fmt.Errorf("context directory does not exist: %s\nRun 'hive drive init' to create it", contextDir)
 	} else if err != nil {
 		return fmt.Errorf("failed to access context directory %s: %w", contextDir, err)
 	}
 
-	// Discover documents from context directory
-	documents, err := review.DiscoverDocuments(contextDir)
+	documents, err := review.ListDocuments(ctx, cmd.app.Drive(), scope)
 	if err != nil {
 		return fmt.Errorf("failed to discover documents: %w", err)
 	}
@@ -145,7 +155,7 @@ func (cmd *ReviewCmd) runWithContextDir(ctx context.Context, c *cli.Command) err
 		if _, err := fmt.Fprintf(c.Root().Writer, "No documents found in %s\n", contextDir); err != nil {
 			return fmt.Errorf("failed to write output: %w", err)
 		}
-		if _, err := fmt.Fprintln(c.Root().Writer, "Create .md or .txt files in subdirectories: plans/, research/, context/"); err != nil {
+		if _, err := fmt.Fprintln(c.Root().Writer, "Create markdown files under .hive/plans/, or add a front matter \"type:\" to a document."); err != nil {
 			return fmt.Errorf("failed to write output: %w", err)
 		}
 		return nil
@@ -182,6 +192,7 @@ func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Do
 	m := tui.NewReviewOnly(tui.ReviewOnlyOptions{
 		Logger:      cmd.app.Logger,
 		Bus:         cmd.app.Bus(),
+		Source:      cmd.app.Drive(),
 		Documents:   documents,
 		InitialDoc:  initialDoc,
 		Scope:       scope,
@@ -195,8 +206,12 @@ func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Do
 }
 
 // resolveScope is the space of the repository behind the current directory,
-// the detection 'hive ctx' uses, with its directory created.
+// the detection 'hive drive' uses, with its directory created. With --all it
+// is every space under the drive root.
 func (cmd *ReviewCmd) resolveScope(ctx context.Context) (review.Scope, error) {
+	if cmd.all {
+		return review.Scope{All: true, Dir: cmd.app.Drive().Root()}, nil
+	}
 	space, err := cmd.app.Drive().ResolveSpace(ctx, "", false)
 	if err != nil {
 		return review.Scope{}, err

@@ -100,6 +100,7 @@ type Deps struct {
 	// Optional; nil disables the corresponding feature.
 	MsgStore      *msgsvc.Service
 	Reviews       corereview.Store
+	Drive         review.Source
 	Bus           *events.EventBus
 	KVStore       corekv.KV
 	BuildInfo     BuildInfo
@@ -331,9 +332,12 @@ func New(deps Deps, opts Opts) Model {
 	if scope.Dir == "" {
 		scope = sharedReviewScope(cfg)
 	}
-	docs, _ := review.DiscoverDocuments(scope.Dir)
+	docs, err := review.ListDocuments(context.Background(), deps.Drive, scope)
+	if err != nil {
+		logger.Warn().Err(err).Str("dir", scope.Dir).Msg("documents not listed at startup")
+	}
 
-	reviewView := review.New(deps.Logger, deps.Bus, docs, scope, deps.Reviews, handler, cfg.Views.Review.SplitRatioOrDefault(30))
+	reviewView := review.New(deps.Logger, deps.Bus, deps.Drive, docs, scope, deps.Reviews, handler, cfg.Views.Review.SplitRatioOrDefault(30))
 	reviewView.SetRepoKey(repoKey)
 
 	toastCtrl := NewToastController()
@@ -873,7 +877,7 @@ func (m Model) docTemplateData() *DocTemplateData {
 	return &DocTemplateData{
 		Path:    doc.Path,
 		RelPath: doc.RelPath,
-		Type:    strings.ToLower(doc.Type.String()),
+		Type:    doc.Type,
 	}
 }
 

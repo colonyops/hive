@@ -94,6 +94,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		CommandSet:    cmd.app.CommandSet,
 		Notifications: cmd.app.Notifications(),
 		Reviews:       cmd.app.Reviews(),
+		Drive:         cmd.app.Drive(),
 		KVStore:       cmd.app.KV(),
 		Renderer:      cmd.app.Renderer(),
 		BuildInfo: tui.BuildInfo{

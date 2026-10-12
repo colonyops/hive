@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -45,6 +47,7 @@ type View struct {
 	list              list.Model
 	viewport          viewport.Model
 	scope             Scope
+	source            Source
 	changes           <-chan events.DriveChangedPayload
 	repoKey           string // owner/repo display label
 	store             corereview.Store
@@ -93,8 +96,8 @@ type View struct {
 }
 
 // New creates a review view over documents. A non-nil bus keeps the list in
-// step with the scope's space; a non-nil store persists comments.
-func New(logger zerolog.Logger, bus *events.EventBus, documents []Document, scope Scope, store corereview.Store, handler KeyResolver, splitRatio int) View {
+// step with the scope; source lists documents again after a change, and a non-nil store persists comments.
+func New(logger zerolog.Logger, bus *events.EventBus, source Source, documents []Document, scope Scope, store corereview.Store, handler KeyResolver, splitRatio int) View {
 	logger = logutils.Component(logger, "tui.review")
 	items := BuildTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
@@ -142,6 +145,7 @@ func New(logger zerolog.Logger, bus *events.EventBus, documents []Document, scop
 		list:            l,
 		viewport:        vp,
 		scope:           scope,
+		source:          source,
 		changes:         subscribeDriveChanges(logger, bus),
 		store:           store,
 		fullScreen:      false,
@@ -1179,7 +1183,7 @@ func (v *View) loadDocument(doc *Document) {
 
 	v.logger.Debug().
 		Str("path", doc.RelPath).
-		Str("type", doc.Type.String()).
+		Str("type", doc.Type).
 		Msg("review: loading document")
 
 	// Enter full-screen reader mode: hide the tree and give the doc full width.
@@ -2236,25 +2240,20 @@ func BuildTreeItems(documents []Document) []list.Item {
 
 	items := make([]list.Item, 0)
 
-	// Group documents by type
-	groups := make(map[DocumentType][]Document)
+	groups := make(map[string][]Document)
 	for _, doc := range documents {
 		groups[doc.Type] = append(groups[doc.Type], doc)
 	}
 
-	// Render in priority order (most relevant types first)
-	typeOrder := []DocumentType{DocTypePlan, DocTypeResearch, DocTypeContext, DocTypeOther}
+	typeOrder := slices.SortedFunc(maps.Keys(groups), compareTypes)
 
 	for _, docType := range typeOrder {
-		docs, exists := groups[docType]
-		if !exists || len(docs) == 0 {
-			continue
-		}
+		docs := groups[docType]
 
 		// Add header
 		header := TreeItem{
 			IsHeader:   true,
-			HeaderName: docType.String(),
+			HeaderName: typeTitle(docType),
 		}
 		items = append(items, header)
 
@@ -2448,7 +2447,7 @@ func (v *View) LoadDocumentFromPath(absPath string) {
 	doc := Document{
 		Path:    absPath,
 		RelPath: relPath,
-		Type:    inferDocumentType(relPath),
+		Type:    typeFromPath(relPath),
 		ModTime: info.ModTime(),
 	}
 	v.loadDocument(&doc)
@@ -2468,7 +2467,7 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 	return func() tea.Msg {
 		// Resolve .hive/ prefix: the .hive symlink in the repo root points to contextDir,
 		// so ".hive/foo" is equivalent to contextDir/foo. Agents use .hive/-prefixed paths
-		// in URIs, but DiscoverDocuments stores RelPath relative to contextDir (no prefix).
+		// in URIs, but a space's own listing may carry no prefix.
 		absPath := path
 		relPath := path
 		if v.scope.Dir != "" && strings.HasPrefix(path, ".hive/") {
@@ -2511,7 +2510,7 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 				doc := Document{
 					Path:    tryPath,
 					RelPath: relPath,
-					Type:    inferDocumentType(relPath),
+					Type:    typeFromPath(relPath),
 					ModTime: info.ModTime(),
 				}
 				found = &doc

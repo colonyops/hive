@@ -278,7 +278,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				{plugin: github.New(logger, cfg.Plugins.GitHub, kvStore), disabled: isDisabled(cfg.Plugins.GitHub.Enabled)},
 				{plugin: lazygit.New(cfg.Plugins.LazyGit), disabled: isDisabled(cfg.Plugins.LazyGit.Enabled)},
 				{plugin: neovim.New(cfg.Plugins.Neovim), disabled: isDisabled(cfg.Plugins.Neovim.Enabled)},
-				{plugin: contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir), disabled: isDisabled(cfg.Plugins.ContextDir.Enabled)},
+				{plugin: contextdir.New(cfg.Plugins.ContextDir, cfg.ContextDir()), disabled: isDisabled(cfg.Plugins.ContextDir.Enabled)},
 				{plugin: claude.New(cfg.Plugins.Claude), disabled: isDisabled(cfg.Plugins.Claude.Enabled)},
 				{plugin: plugintmux.New(cfg.Plugins.Tmux), disabled: isDisabled(cfg.Plugins.Tmux.Enabled)},
 			}
@@ -351,7 +351,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewPruneCmd(flags, hiveApp).Register(app)
 	app = commands.NewDoctorCmd(flags, hiveApp).Register(app)
 	app = commands.NewBatchCmd(flags, hiveApp).Register(app)
-	app = commands.NewCtxCmd(flags, hiveApp).Register(app)
+	app = commands.NewDriveCmd(flags, hiveApp).Register(app)
 	app = commands.NewMsgCmd(flags, hiveApp).Register(app)
 	app = commands.NewDocCmd(flags, hiveApp).Register(app)
 	app = commands.NewSessionCmd(flags, hiveApp).Register(app)

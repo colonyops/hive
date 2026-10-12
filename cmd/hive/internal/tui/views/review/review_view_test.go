@@ -36,25 +36,25 @@ func TestBuildTreeItems(t *testing.T) {
 		{
 			Path:    "/path/to/plans/plan1.md",
 			RelPath: "plans/plan1.md",
-			Type:    DocTypePlan,
+			Type:    "plan",
 			ModTime: now,
 		},
 		{
 			Path:    "/path/to/plans/plan2.md",
 			RelPath: "plans/plan2.md",
-			Type:    DocTypePlan,
+			Type:    "plan",
 			ModTime: now.Add(-time.Hour),
 		},
 		{
 			Path:    "/path/to/research/research1.md",
 			RelPath: "research/research1.md",
-			Type:    DocTypeResearch,
+			Type:    "research",
 			ModTime: now,
 		},
 		{
 			Path:    "/path/to/context/notes.md",
 			RelPath: "context/notes.md",
-			Type:    DocTypeContext,
+			Type:    "context",
 			ModTime: now,
 		},
 	}
@@ -108,12 +108,12 @@ func TestNew(t *testing.T) {
 		{
 			Path:    "/path/to/test.md",
 			RelPath: "plans/test.md",
-			Type:    DocTypePlan,
+			Type:    "plan",
 			ModTime: time.Now(),
 		},
 	}
 
-	view := New(zerolog.Nop(), nil, docs, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, docs, Scope{}, nil, nil, 0)
 
 	// Should not panic and should have a list
 	require.NotNil(t, view.list.Items(), "expected list items to be initialized")
@@ -126,12 +126,12 @@ func TestCommentDeletionWithConfirmation(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -178,12 +178,12 @@ func TestCommentDeletionCancellation(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -227,12 +227,12 @@ func TestReviewDiscardWithConfirmation(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -294,12 +294,12 @@ func TestReviewDiscardCancellation(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -341,12 +341,12 @@ func TestReviewDiscardWithNoComments(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -371,12 +371,12 @@ func TestCommentVisualStyling(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 	view.selectedDoc = &doc
 
@@ -429,12 +429,12 @@ func TestLineMappingWithComments(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.selectedDoc = &doc
 
 	// Create a session with comments on lines 2 and 4
@@ -528,13 +528,13 @@ func TestScrollVisibilityWithComments(t *testing.T) {
 	doc := Document{
 		Path:          "/path/to/test.md",
 		RelPath:       "test.md",
-		Type:          DocTypePlan,
+		Type:          "plan",
 		ModTime:       time.Now(),
 		Content:       content,
 		RenderedLines: lines,
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 10) // Small height to force scrolling
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -610,13 +610,13 @@ func TestJumpToMatchWithComments(t *testing.T) {
 	doc := Document{
 		Path:          "/path/to/test.md",
 		RelPath:       "test.md",
-		Type:          DocTypePlan,
+		Type:          "plan",
 		ModTime:       time.Now(),
 		Content:       content,
 		RenderedLines: lines,
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 10)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -725,12 +725,12 @@ func TestReverseMappingCorrectness(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "test.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.selectedDoc = &doc
 
 	// Create session with comments
@@ -825,13 +825,13 @@ func TestFinalizedSessionsNotReloaded(t *testing.T) {
 	doc := Document{
 		Path:    docPath,
 		RelPath: "test.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Now(),
 		Content: content,
 	}
 
 	// Create review view with the store
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{Dir: tmpDir}, store, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{Dir: tmpDir}, store, nil, 0)
 	view.SetSize(80, 24)
 
 	// Load document and create a session with a comment
@@ -874,13 +874,13 @@ func TestCtrlDUWithComments(t *testing.T) {
 	doc := Document{
 		Path:          "/path/to/test.md",
 		RelPath:       "test.md",
-		Type:          DocTypePlan,
+		Type:          "plan",
 		ModTime:       time.Now(),
 		Content:       content,
 		RenderedLines: lines,
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 10) // Small height to force scrolling
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -968,10 +968,10 @@ func TestFinalizationModal_IntegrationWithView(t *testing.T) {
 		{
 			Path:    "/test/doc.md",
 			RelPath: "doc.md",
-			Type:    DocTypePlan,
+			Type:    "plan",
 		},
 	}
-	v := New(zerolog.Nop(), nil, docs, Scope{Dir: "/test"}, nil, nil, 0)
+	v := New(zerolog.Nop(), nil, nil, docs, Scope{Dir: "/test"}, nil, nil, 0)
 	v.SetSize(100, 40)
 
 	// Manually set up the finalization modal state (simulating pressing 'f')
@@ -993,12 +993,12 @@ func TestHasActiveEditor(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "test.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -1124,7 +1124,7 @@ func TestOpenDocumentByPath_AbsolutePathDiskFallback(t *testing.T) {
 	require.NoError(t, os.WriteFile(docPath, []byte("# Cross Repo Doc"), 0o644))
 
 	// Create a review view with NO documents (simulating a different repo's context)
-	view := New(zerolog.Nop(), nil, nil, Scope{Dir: "/some/other/context"}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, nil, Scope{Dir: "/some/other/context"}, nil, nil, 0)
 	view.SetSize(100, 40)
 
 	// Open the document by absolute path — should fall back to disk
@@ -1145,7 +1145,7 @@ func TestLoadDocumentFromPath(t *testing.T) {
 	docPath := filepath.Join(plansDir, "test-plan.md")
 	require.NoError(t, os.WriteFile(docPath, []byte("# Test Plan\nSome content"), 0o644))
 
-	view := New(zerolog.Nop(), nil, nil, Scope{Dir: "/other/context"}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, nil, Scope{Dir: "/other/context"}, nil, nil, 0)
 	view.SetSize(100, 40)
 
 	// Load document from absolute path
@@ -1155,11 +1155,11 @@ func TestLoadDocumentFromPath(t *testing.T) {
 	require.NotNil(t, view.selectedDoc, "expected selectedDoc to be set")
 	assert.Equal(t, docPath, view.selectedDoc.Path)
 	assert.Equal(t, "plans/test-plan.md", view.selectedDoc.RelPath)
-	assert.Equal(t, DocTypePlan, view.selectedDoc.Type)
+	assert.Equal(t, "plan", view.selectedDoc.Type)
 }
 
 func TestLoadDocumentFromPath_NonExistent(t *testing.T) {
-	view := New(zerolog.Nop(), nil, nil, Scope{Dir: "/some/context"}, nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, nil, Scope{Dir: "/some/context"}, nil, nil, 0)
 	view.SetSize(100, 40)
 
 	// Loading a non-existent file should not crash or set selectedDoc
@@ -1172,7 +1172,7 @@ func TestLoadDocumentFromPath_NonExistent(t *testing.T) {
 // newReviewViewWithDocs creates a View with flatNodes populated from the given documents.
 // showTree and showPreview are set as specified.
 func newReviewViewWithDocs(docs []Document, showTree, showPreview bool) View {
-	v := New(zerolog.Nop(), nil, docs, Scope{}, nil, nil, 0)
+	v := New(zerolog.Nop(), nil, nil, docs, Scope{}, nil, nil, 0)
 	v.SetSize(100, 24)
 	v.showTree = showTree
 	v.showPreview = showPreview
@@ -1181,7 +1181,7 @@ func newReviewViewWithDocs(docs []Document, showTree, showPreview bool) View {
 
 func TestSelectAtRow_ShowTreeFalse_ReturnsNil(t *testing.T) {
 	docs := []Document{
-		{Path: "/p/doc.md", RelPath: "doc.md", Type: DocTypePlan},
+		{Path: "/p/doc.md", RelPath: "doc.md", Type: "plan"},
 	}
 	v := newReviewViewWithDocs(docs, false, true)
 
@@ -1191,7 +1191,7 @@ func TestSelectAtRow_ShowTreeFalse_ReturnsNil(t *testing.T) {
 }
 
 func TestSelectAtRow_EmptyFlatNodes_ReturnsNil(t *testing.T) {
-	v := New(zerolog.Nop(), nil, nil, Scope{}, nil, nil, 0)
+	v := New(zerolog.Nop(), nil, nil, nil, Scope{}, nil, nil, 0)
 	v.SetSize(100, 24)
 	v.showTree = true
 
@@ -1202,8 +1202,8 @@ func TestSelectAtRow_EmptyFlatNodes_ReturnsNil(t *testing.T) {
 
 func TestSelectAtRow_ContentY0_RepoHeader_NoOp(t *testing.T) {
 	docs := []Document{
-		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: DocTypePlan},
-		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: DocTypePlan},
+		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: "plan"},
+		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: "plan"},
 	}
 	v := newReviewViewWithDocs(docs, true, false)
 	require.NotEmpty(t, v.flatNodes)
@@ -1215,8 +1215,8 @@ func TestSelectAtRow_ContentY0_RepoHeader_NoOp(t *testing.T) {
 
 func TestSelectAtRow_ContentY1_SetsTreeCursor0(t *testing.T) {
 	docs := []Document{
-		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: DocTypePlan},
-		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: DocTypePlan},
+		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: "plan"},
+		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: "plan"},
 	}
 	v := newReviewViewWithDocs(docs, true, false)
 	require.NotEmpty(t, v.flatNodes)
@@ -1227,8 +1227,8 @@ func TestSelectAtRow_ContentY1_SetsTreeCursor0(t *testing.T) {
 
 func TestSelectAtRow_ContentY2_SetsTreeCursor1(t *testing.T) {
 	docs := []Document{
-		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: DocTypePlan},
-		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: DocTypePlan},
+		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: "plan"},
+		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: "plan"},
 	}
 	v := newReviewViewWithDocs(docs, true, false)
 	require.GreaterOrEqual(t, len(v.flatNodes), 2, "need at least 2 flat nodes")
@@ -1239,7 +1239,7 @@ func TestSelectAtRow_ContentY2_SetsTreeCursor1(t *testing.T) {
 
 func TestSelectAtRow_ShowPreview_ClickInDetailPane_NoOp(t *testing.T) {
 	docs := []Document{
-		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: DocTypePlan},
+		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: "plan"},
 	}
 	v := newReviewViewWithDocs(docs, true, true)
 	v.width = 100
@@ -1253,8 +1253,8 @@ func TestSelectAtRow_ShowPreview_ClickInDetailPane_NoOp(t *testing.T) {
 
 func TestSelectAtRow_ShowPreview_ClickInTree_Selects(t *testing.T) {
 	docs := []Document{
-		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: DocTypePlan},
-		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: DocTypePlan},
+		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: "plan"},
+		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: "plan"},
 	}
 	v := newReviewViewWithDocs(docs, true, true)
 	v.width = 100

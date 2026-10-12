@@ -21,6 +21,7 @@ import (
 type ReviewOnlyOptions struct {
 	Logger      zerolog.Logger
 	Bus         *events.EventBus // nil leaves the document list static
+	Source      review.Source    // lists documents again on a change
 	Documents   []review.Document
 	InitialDoc  *review.Document
 	Scope       review.Scope // the space whose changes refresh the list; its Dir also holds saved feedback files
@@ -42,7 +43,7 @@ type ReviewOnlyModel struct {
 
 // NewReviewOnly creates a new review-only TUI model.
 func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
-	reviewView := review.New(opts.Logger, opts.Bus, opts.Documents, opts.Scope, opts.Reviews, nil, 0)
+	reviewView := review.New(opts.Logger, opts.Bus, opts.Source, opts.Documents, opts.Scope, opts.Reviews, nil, 0)
 
 	// When opening with a specific document, hide the tree so the document
 	// gets full-width focus. The user can toggle the tree with V to navigate.
