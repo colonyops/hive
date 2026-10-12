@@ -54,37 +54,51 @@ type spaceSnapshot struct {
 // publishes once.
 type Service struct {
 	logger zerolog.Logger
-	bus    *events.EventBus
-	now    func() time.Time
+	// baseLogger carries no component label, so the watcher can add its own.
+	baseLogger zerolog.Logger
+	bus        *events.EventBus
+	now        func() time.Time
 
 	mu     sync.RWMutex
 	cfg    *config.Config
 	git    git.Git
 	spaces map[string]*spaceSnapshot
+
+	debounce time.Duration
+	watch    *watcher
+	watchCtx context.Context
+	watchers sync.WaitGroup
 }
 
 func NewService(logger zerolog.Logger, cfg *config.Config, gitClient git.Git, bus *events.EventBus) *Service {
 	return &Service{
-		logger: logutils.Component(logger, "drive"),
-		bus:    bus,
-		now:    time.Now,
-		cfg:    cfg,
-		git:    gitClient,
-		spaces: map[string]*spaceSnapshot{},
+		logger:     logutils.Component(logger, "drive"),
+		baseLogger: logger,
+		bus:        bus,
+		now:        time.Now,
+		cfg:        cfg,
+		git:        gitClient,
+		spaces:     map[string]*spaceSnapshot{},
+		debounce:   defaultWatchDebounce,
 	}
 }
 
-// Reconfigure is what Engine.Reload calls. The snapshots describe one root,
-// so a changed ContextDir drops them; anything else only swaps the config
-// and the git executor built for it.
+// Reconfigure is what Engine.Reload calls. The snapshots and the watcher
+// describe one root, so a changed ContextDir drops the snapshots and moves a
+// running watcher; anything else only swaps the config and the git executor
+// built for it.
 func (s *Service) Reconfigure(cfg *config.Config, gitClient git.Git) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if cfg.ContextDir() != s.cfg.ContextDir() {
+	rerooted := cfg.ContextDir() != s.cfg.ContextDir()
+	if rerooted {
 		s.spaces = map[string]*spaceSnapshot{}
 	}
 	s.cfg = cfg
 	s.git = gitClient
+	if rerooted && s.watch != nil {
+		s.restartWatcher()
+	}
 }
 
 // Root is the drive root: the context directory.
@@ -189,6 +203,33 @@ func spaceDir(root string, space drive.Space) (string, error) {
 		return "", err
 	}
 	return filepath.Join(root, filepath.FromSlash(parsed.Key)), nil
+}
+
+// SpaceAt is the space holding path and path's location inside it, when
+// path sits under the root. Both are resolved through symbolic links first,
+// so a document reached through a checkout's .hive link is found.
+func (s *Service) SpaceAt(path string) (drive.Space, string, bool) {
+	root, err := resolvePath(s.Root())
+	if err != nil {
+		return drive.Space{}, "", false
+	}
+	resolved, err := resolvePath(path)
+	if err != nil {
+		return drive.Space{}, "", false
+	}
+	rel, err := filepath.Rel(root, resolved)
+	if err != nil || !filepath.IsLocal(rel) {
+		return drive.Space{}, "", false
+	}
+	return spaceOf(filepath.ToSlash(rel))
+}
+
+func resolvePath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(abs)
 }
 
 // ResolveSpace is the space a CLI invocation means: --repo owner/repo,

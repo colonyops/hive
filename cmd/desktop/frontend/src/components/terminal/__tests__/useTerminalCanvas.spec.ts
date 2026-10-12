@@ -114,24 +114,24 @@ describe('useTerminalCanvas', () => {
     expect(router.currentRoute.value.query.canvas).toBeUndefined()
   })
 
-  it('opens and closes on canvas:toggle for the session in view only', async () => {
+  it('opens and closes on drive:toggle for the session in view only', async () => {
     const { router, active } = await mountAt('/terminal/fix-login')
 
-    wailsEvents.fire('canvas:toggle', { session: 0, hiveSession: 'def456', name: '', open: true })
+    wailsEvents.fire('drive:toggle', { session: 0, hiveSession: 'def456', name: '', open: true })
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBeUndefined()
 
     active.value = false
-    wailsEvents.fire('canvas:toggle', { session: 0, hiveSession: 'abc123', name: 'plan', open: true })
+    wailsEvents.fire('drive:toggle', { session: 0, hiveSession: 'abc123', name: 'plan', open: true })
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBeUndefined()
 
     active.value = true
-    wailsEvents.fire('canvas:toggle', { session: 0, hiveSession: 'abc123', name: 'plan', open: true })
+    wailsEvents.fire('drive:toggle', { session: 0, hiveSession: 'abc123', name: 'plan', open: true })
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBe('plan')
 
-    wailsEvents.fire('canvas:toggle', { session: 0, hiveSession: 'abc123', name: '', open: false })
+    wailsEvents.fire('drive:toggle', { session: 0, hiveSession: 'abc123', name: '', open: false })
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBeUndefined()
   })
@@ -140,7 +140,7 @@ describe('useTerminalCanvas', () => {
     const { router } = await mountAt('/terminal/fix-login')
     const { isCanvasUnseen } = useCanvasRouteFor(router)
 
-    wailsEvents.fire('canvas:updated', { session: 0, hiveSession: 'abc123' })
+    wailsEvents.fire('drive:updated', { session: 0, hiveSession: 'abc123' })
     await flushPromises()
     expect(isCanvasUnseen('abc123')).toBe(true)
 
@@ -148,7 +148,7 @@ describe('useTerminalCanvas', () => {
     await flushPromises()
     expect(isCanvasUnseen('abc123')).toBe(false)
 
-    wailsEvents.fire('canvas:updated', { session: 0, hiveSession: 'abc123' })
+    wailsEvents.fire('drive:updated', { session: 0, hiveSession: 'abc123' })
     await flushPromises()
     expect(isCanvasUnseen('abc123')).toBe(false)
   })

@@ -611,6 +611,11 @@ func (a *App) Start(ctx context.Context) error {
 		a.agentWorkspacesWatcher.Start()
 	}
 	a.hiveWatcher.Start(ctx)
+	if a.hive != nil {
+		if err := a.hive.Drive().Watch(ctx); err != nil {
+			a.logger.Warn().Err(err).Msg("drive watcher unavailable; documents written outside the app will not refresh")
+		}
+	}
 	// After the watcher, so the first pass evaluates the workspace set the
 	// watcher is already keeping current. That pass is the catch-up for
 	// everything that came due while the app was closed, so it runs in mock
@@ -773,6 +778,11 @@ func (a *App) Close() error {
 	}
 	if a.hiveWatcher != nil {
 		a.hiveWatcher.Stop()
+	}
+	if a.hive != nil {
+		if err := a.hive.Drive().Close(); err != nil {
+			a.logger.Warn().Err(err).Msg("drive watcher shutdown")
+		}
 	}
 	a.Events.Close()
 
@@ -1282,6 +1292,9 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	a.hive = engine
 	a.hiveDB = database
 	a.hiveBusCancel = cancel
+	bus.SubscribeDriveChanged(func(p hiveevents.DriveChangedPayload) {
+		a.Events.Publish(busCtx, events.DriveChanged{Space: p.Space, Paths: p.Paths})
+	})
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	a.launcher = dispatch.NewRepositoryLauncher(
 		func() dispatch.SessionCreator { return a.hive.Sessions() },

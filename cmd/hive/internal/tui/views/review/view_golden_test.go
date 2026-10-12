@@ -29,7 +29,7 @@ func TestView_ListMode(t *testing.T) {
 		},
 	}
 
-	view := New(zerolog.Nop(), docs, "", nil, nil, 0)
+	view := New(zerolog.Nop(), nil, docs, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 
 	output := view.View()
@@ -61,7 +61,7 @@ func TestView_DocumentMode(t *testing.T) {
 		Content: testContent,
 	}
 
-	view := New(zerolog.Nop(), []Document{doc}, "", nil, nil, 0)
+	view := New(zerolog.Nop(), nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 
 	// Load the document to enter fullscreen mode

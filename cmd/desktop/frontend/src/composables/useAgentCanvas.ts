@@ -10,7 +10,7 @@ function message(error: unknown, fallback: string): string {
 /**
  * One canvas pane's state: the canvas being shown plus the workspace's canvas
  * listing for the picker. Per-pane, not a module singleton — the pane owns the
- * lifetime. The generation guard is useActionsSettings' shape: a canvas:updated
+ * lifetime. The generation guard is useActionsSettings' shape: a drive:updated
  * wake and a canvas switch can race, and an older response must never replace
  * a newer request's.
  *

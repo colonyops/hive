@@ -14,14 +14,16 @@ import (
 	act "github.com/colonyops/hive/cmd/hive/internal/action"
 	review "github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
 	corereview "github.com/colonyops/hive/internal/domain/review"
+	"github.com/colonyops/hive/internal/hive/events"
 )
 
 // ReviewOnlyOptions configures the review-only TUI.
 type ReviewOnlyOptions struct {
 	Logger      zerolog.Logger
+	Bus         *events.EventBus // nil leaves the document list static
 	Documents   []review.Document
 	InitialDoc  *review.Document
-	ContextDir  string // Directory for saving feedback files (e.g., context directory)
+	Scope       review.Scope // the space whose changes refresh the list; its Dir also holds saved feedback files
 	Reviews     corereview.Store
 	CopyCommand string // Shell command for copying to clipboard (e.g., "pbcopy" on macOS)
 }
@@ -40,7 +42,7 @@ type ReviewOnlyModel struct {
 
 // NewReviewOnly creates a new review-only TUI model.
 func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
-	reviewView := review.New(opts.Logger, opts.Documents, opts.ContextDir, opts.Reviews, nil, 0)
+	reviewView := review.New(opts.Logger, opts.Bus, opts.Documents, opts.Scope, opts.Reviews, nil, 0)
 
 	// When opening with a specific document, hide the tree so the document
 	// gets full-width focus. The user can toggle the tree with V to navigate.
@@ -51,7 +53,7 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	return ReviewOnlyModel{
 		reviewView:  reviewView,
 		initialDoc:  opts.InitialDoc,
-		contextDir:  opts.ContextDir,
+		contextDir:  opts.Scope.Dir,
 		copyCommand: opts.CopyCommand,
 		width:       80,
 		height:      24,

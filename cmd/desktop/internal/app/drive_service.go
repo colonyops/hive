@@ -191,7 +191,7 @@ func (s *DriveService) putBlocks(ctx context.Context, session, name, title, befo
 		}
 		return drive.Canvas{}, driveError(err, name)
 	}
-	s.notify(ctx, caller.author)
+	s.notify(ctx, caller.space, path, caller.author)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -212,7 +212,7 @@ func (s *DriveService) RemoveBlock(ctx context.Context, session, name, blockID s
 	if !removed {
 		return drive.Canvas{}, Errorf(KindNotFound, "no block %q on canvas %q", blockID, name)
 	}
-	s.notify(ctx, caller.author)
+	s.notify(ctx, caller.space, path, caller.author)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -234,7 +234,7 @@ func (s *DriveService) SetFrontmatter(ctx context.Context, session, name string,
 	if err != nil {
 		return drive.Canvas{}, driveError(err, name)
 	}
-	s.notify(ctx, caller.author)
+	s.notify(ctx, caller.space, path, caller.author)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -253,7 +253,7 @@ func (s *DriveService) ClearCanvas(ctx context.Context, session, name string) (d
 	if err != nil {
 		return drive.Canvas{}, driveError(err, name)
 	}
-	s.notify(ctx, caller.author)
+	s.notify(ctx, caller.space, path, caller.author)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -270,7 +270,7 @@ func (s *DriveService) DeleteCanvas(ctx context.Context, session, name string) e
 	if err := d.Delete(ctx, caller.space, path); err != nil {
 		return driveError(err, name)
 	}
-	s.notify(ctx, caller.author)
+	s.notify(ctx, caller.space, path, caller.author)
 	return nil
 }
 
@@ -302,10 +302,11 @@ func (s *DriveService) SetPaneOpen(ctx context.Context, session, name string, op
 		if err != nil {
 			return err
 		}
-		pinned = drive.CanvasName(c.Path)
+		pinned = c.Path
 	}
-	s.events.Publish(ctx, events.CanvasToggleRequested{
-		Session: caller.author.Session, HiveSession: caller.author.HiveSession, Name: pinned, Open: open,
+	s.events.Publish(ctx, events.DriveToggleRequested{
+		Session: caller.author.Session, HiveSession: caller.author.HiveSession,
+		Space: caller.space.Key, Path: pinned, Open: open,
 	})
 	return nil
 }
@@ -368,7 +369,7 @@ func (s *DriveService) DeleteAt(ctx context.Context, space, path string) error {
 	if err := t.svc.Delete(ctx, t.space, t.path); err != nil {
 		return driveError(err, path)
 	}
-	s.notify(ctx, drive.Author{Session: c.Session, HiveSession: c.HiveSession})
+	s.notify(ctx, t.space, t.path, drive.Author{Session: c.Session, HiveSession: c.HiveSession})
 	return nil
 }
 
@@ -630,8 +631,10 @@ func driveError(err error, name string) error {
 	}
 }
 
-func (s *DriveService) notify(ctx context.Context, author drive.Author) {
-	s.events.Publish(ctx, events.CanvasUpdated{Session: author.Session, HiveSession: author.HiveSession})
+func (s *DriveService) notify(ctx context.Context, space drive.Space, path string, author drive.Author) {
+	s.events.Publish(ctx, events.DriveChanged{
+		Space: space.Key, Paths: []string{path}, Session: author.Session, HiveSession: author.HiveSession,
+	})
 }
 
 // plainTitle decodes HTML entities. A title is plain text on every surface,

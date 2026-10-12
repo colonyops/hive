@@ -112,6 +112,14 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		ConfigPath:  cmd.flags.ConfigPath,
 	}
 
+	if err := cmd.app.Drive().Watch(ctx); err != nil {
+		logger.Warn().Err(err).Msg("drive watcher unavailable; the docs view will not refresh on its own")
+	}
+	defer func() {
+		if err := cmd.app.Drive().Close(); err != nil {
+			logger.Debug().Err(err).Msg("drive watcher not closed cleanly")
+		}
+	}()
 	restoreOutput := cmd.app.Sessions().SilenceOutput()
 
 	m := tui.New(deps, opts)

@@ -361,7 +361,7 @@ describe('AgentCanvasPane', () => {
     await mountPane(client, 'perf-report')
 
     vi.mocked(client.canvases).mockResolvedValue([meta({ name: 'plan', session: '7' })])
-    wailsEvents.fire('canvas:updated', 9)
+    wailsEvents.fire('drive:updated', 9)
     await flushPromises()
 
     expect(vi.mocked(client.canvas)).toHaveBeenLastCalledWith('web-app', 'plan')
@@ -372,7 +372,7 @@ describe('AgentCanvasPane', () => {
     const client = fakeCanvasClient([], [meta({ name: 'plan' })])
     await mountPane(client, 'draft')
 
-    wailsEvents.fire('canvas:updated', 7)
+    wailsEvents.fire('drive:updated', 7)
     await flushPromises()
 
     expect(vi.mocked(client.canvas)).toHaveBeenLastCalledWith('web-app', 'draft')
@@ -487,12 +487,12 @@ describe('AgentCanvasPane', () => {
     expect(vi.mocked(client.exportCanvas)).toHaveBeenCalledTimes(1)
   })
 
-  it('re-reads the canvas on canvas:updated', async () => {
+  it('re-reads the canvas on drive:updated', async () => {
     const client = fakeCanvasClient([])
     await mountPane(client)
     const readsBefore = vi.mocked(client.canvas).mock.calls.length
 
-    wailsEvents.fire('canvas:updated', 7)
+    wailsEvents.fire('drive:updated', 7)
     await flushPromises()
 
     expect(vi.mocked(client.canvas).mock.calls.length).toBeGreaterThan(readsBefore)

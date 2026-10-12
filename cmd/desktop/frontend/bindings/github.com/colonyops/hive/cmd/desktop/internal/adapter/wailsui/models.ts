@@ -134,27 +134,6 @@ export interface BuildInfo {
 }
 
 /**
- * CanvasToggle is the canvas:toggle payload: whose pane to open or close, a
- * chat's or a hive session's, and the canvas to pin when opening (empty
- * leaves the pane's pick).
- */
-export interface CanvasToggle {
-    "session": string;
-    "hiveSession": string;
-    "name": string;
-    "open": boolean;
-}
-
-/**
- * CanvasWrite is the canvas:updated payload: the author of the write, a chat
- * (Session) or a hive session (HiveSession), never both.
- */
-export interface CanvasWrite {
-    "session": string;
-    "hiveSession": string;
-}
-
-/**
  * AtUnixMs is Date.now(); zero leaves only the backend's own timestamp.
  */
 export interface ClientLogEntry {
@@ -176,6 +155,34 @@ export interface ClientLogEntry {
  */
 export interface DevToolsInfo {
     "enabled": boolean;
+}
+
+/**
+ * DriveToggle is the drive:toggle payload: whose pane to open or close, a
+ * chat's or a hive session's, and the document to pin when opening (empty
+ * leaves the pane's pick). Name is Path's canvas name, for a pane that still
+ * pins by name.
+ */
+export interface DriveToggle {
+    "session": string;
+    "hiveSession": string;
+    "space": string;
+    "path": string;
+    "name": string;
+    "open": boolean;
+}
+
+/**
+ * DriveWrite is the drive:updated payload: the space and the document paths
+ * that changed, and who wrote them when an agent did through the desktop, a
+ * chat (Session) or a hive session (HiveSession), never both. Both are empty
+ * for a change the drive watcher found on disk.
+ */
+export interface DriveWrite {
+    "space": string;
+    "paths": string[] | null;
+    "session": string;
+    "hiveSession": string;
 }
 
 /**

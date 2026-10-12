@@ -73,7 +73,7 @@ watch(shown, () => {
 
 // Every write re-reads both the shown canvas and the browse listing: the
 // signal's payload can be coalesced away, and both reads are cheap.
-useWailsEvent('canvas:updated', () => wake())
+useWailsEvent('drive:updated', () => wake())
 
 const {
   size: paneWidth,

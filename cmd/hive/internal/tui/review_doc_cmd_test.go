@@ -56,7 +56,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 			Type:    review.DocTypeResearch,
 		},
 	}
-	reviewView := review.New(zerolog.Nop(), docs, "/test", nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), nil, docs, review.Scope{Dir: "/test"}, nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	// Create a minimal handler for testing
@@ -94,7 +94,7 @@ func TestOpenDocument(t *testing.T) {
 			Type:    review.DocTypeResearch,
 		},
 	}
-	reviewView := review.New(zerolog.Nop(), docs, "/test", nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), nil, docs, review.Scope{Dir: "/test"}, nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	tests := []struct {
@@ -162,7 +162,7 @@ func TestOpenDocument_SuffixMatch(t *testing.T) {
 			Type:    review.DocTypeResearch,
 		},
 	}
-	reviewView := review.New(zerolog.Nop(), docs, "/real/context/owner/repo", nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), nil, docs, review.Scope{Dir: "/real/context/owner/repo"}, nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	tests := []struct {

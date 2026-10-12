@@ -54,7 +54,7 @@ export function useTerminalCanvas(target: Ref<TerminalCanvasTarget | null>, acti
     },
   )
 
-  useWailsEvent('canvas:updated', (event) => {
+  useWailsEvent('drive:updated', (event) => {
     const author = canvasEventAuthor(event.data)
     if (author === null) return
     // After every other listener: the Chats area marks a pinned chat's write
@@ -67,7 +67,7 @@ export function useTerminalCanvas(target: Ref<TerminalCanvasTarget | null>, acti
 
   // An agent can ask to open or close the pane. Honored only for the session
   // in view, for the Chats pane's reason: it must never drag the user away.
-  useWailsEvent('canvas:toggle', (event) => {
+  useWailsEvent('drive:toggle', (event) => {
     const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
       { name: string; open: boolean } | undefined
     if (!payload || !active() || route.name !== 'terminal') return

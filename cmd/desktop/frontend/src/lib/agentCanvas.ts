@@ -23,7 +23,7 @@ export function isRepositoryCanvasOwner(owner: string): boolean {
 }
 
 /**
- * The author a canvas:updated or canvas:toggle event names, or null when it
+ * The author a drive:updated or drive:toggle event names, or null when it
  * names none. A chat and a hive session never share an event.
  */
 export function canvasEventAuthor(data: unknown): CanvasAuthor | null {

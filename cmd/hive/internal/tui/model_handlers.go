@@ -405,10 +405,10 @@ func (m Model) handleRepoKeysLoaded(msg repoKeysLoadedMsg) (tea.Model, tea.Cmd) 
 	return m, nil
 }
 
-// docsRepoEntry holds a repo key and its context directory for the docs repo picker.
+// docsRepoEntry holds a repo key and its review scope for the docs repo picker.
 type docsRepoEntry struct {
-	key        string // "owner/repo"
-	contextDir string
+	key   string // "owner/repo"
+	scope review.Scope
 }
 
 // docsRepoKeysLoadedMsg carries the result of loading docs repo keys from sessions.
@@ -428,19 +428,12 @@ func (m Model) loadDocsRepoKeys() tea.Cmd {
 		seen := map[string]bool{}
 		var repos []docsRepoEntry
 		for _, s := range sessions {
-			owner, repo := git.ExtractOwnerRepo(s.Remote)
-			if owner == "" || repo == "" {
-				continue
-			}
-			key := owner + "/" + repo
-			if seen[key] {
+			scope, key, ok := remoteReviewScope(cfg, s.Remote)
+			if !ok || seen[key] {
 				continue
 			}
 			seen[key] = true
-			repos = append(repos, docsRepoEntry{
-				key:        key,
-				contextDir: cfg.RepoContextDir(owner, repo),
-			})
+			repos = append(repos, docsRepoEntry{key: key, scope: scope})
 		}
 		return docsRepoKeysLoadedMsg{repos: repos}
 	}
@@ -778,7 +771,9 @@ func (m Model) handleBgStreamComplete(msg bgStreamCompleteMsg) (tea.Model, tea.C
 
 // --- Review delegation ---
 
-func (m Model) handleReviewDocChange(msg review.DocumentChangeMsg) (tea.Model, tea.Cmd) {
+// forwardToReview hands the review view a message it must see whether or
+// not it is focused.
+func (m Model) forwardToReview(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.reviewView != nil {
 		var cmd tea.Cmd
 		*m.reviewView, cmd = m.reviewView.Update(msg)
@@ -1192,7 +1187,7 @@ func (m Model) handleRepoPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				for _, e := range entries {
 					if e.key == selected {
 						m.reviewView.SetRepoKey(e.key)
-						return m, m.reviewView.SetContextDir(e.contextDir)
+						return m, m.reviewView.SetScope(e.scope)
 					}
 				}
 			}

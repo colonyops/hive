@@ -317,7 +317,7 @@ watch(
 // The query itself is owned by useAgentCanvasRoute, shared with the title bar's
 // right-panel toggle. This view keeps the two Wails listeners, which are its
 // own: both are answers about the chat it has on screen.
-useWailsEvent('canvas:updated', (event) => {
+useWailsEvent('drive:updated', (event) => {
   const author = canvasEventAuthor(event.data)
   if (author !== null) noteCanvasWrite(author)
 })
@@ -329,7 +329,7 @@ watch([canvasVisible, routeChatId], ([visible, id]) => {
 // An agent can ask to open or close the pane (open_canvas / close_canvas).
 // Honored only for the chat in view: an agent must never drag the user away
 // from a different chat — its write already lights the unseen dot there.
-useWailsEvent('canvas:toggle', (event) => {
+useWailsEvent('drive:toggle', (event) => {
   const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
     { name: string; open: boolean } | undefined
   if (!payload || canvasEventAuthor(payload) !== routeChatId.value) return

@@ -65,7 +65,7 @@ onMounted(() => {
   void reloadWorkspaces()
 })
 
-useWailsEvent('canvas:updated', () => {
+useWailsEvent('drive:updated', () => {
   wake()
   void reloadRepositories()
 })

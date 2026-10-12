@@ -351,11 +351,11 @@ describe('AgentCanvasPage', () => {
     wrapper.unmount()
   })
 
-  it('re-reads on canvas:updated', async () => {
+  it('re-reads on drive:updated', async () => {
     const { wrapper } = await mountPage()
     const readsBefore = agents.canvas.mock.calls.length
 
-    wailsEvents.fire('canvas:updated', 7)
+    wailsEvents.fire('drive:updated', 7)
     await flushPromises()
 
     expect(agents.canvas.mock.calls.length).toBeGreaterThan(readsBefore)

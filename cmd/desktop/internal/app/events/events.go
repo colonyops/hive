@@ -55,25 +55,30 @@ type MenuBarUpdated struct{}
 // AgentWorkspacesUpdated reports that the workspace set was reloaded.
 type AgentWorkspacesUpdated struct{ Count int }
 
-// CanvasUpdated reports that a canvas the author's owner holds changed — a
-// block was put or removed, a canvas deleted or cleared. The content is
-// stored state a reader re-reads; the payload names no canvas, only the
-// author, and a pane re-reads its owner's canvases. The author is a chat
-// (Session) or a hive session (HiveSession), never both.
-type CanvasUpdated struct {
+// DriveChanged reports that documents in a drive space changed: Paths names
+// them, and empty means the whole space. The content is stored state a
+// reader re-reads. Session or HiveSession names the chat or hive session
+// whose agent wrote through the desktop, never both; both are empty for a
+// change the drive watcher found on disk, which wakes a pane without
+// marking anything unseen.
+type DriveChanged struct {
+	Space       string
+	Paths       []string
 	Session     string
 	HiveSession string
 }
 
-// CanvasToggleRequested reports an agent asked to open or close the canvas
+// DriveToggleRequested reports an agent asked to open or close the drive
 // pane beside its chat. Unlike the wake-up events the payload is the whole
-// message — pane visibility is UI intent, not stored state to re-read. Name
-// pins one canvas when opening; empty leaves the pane's own pick. The asker
-// is a chat (Session) or a hive session (HiveSession), never both.
-type CanvasToggleRequested struct {
+// message: pane visibility is UI intent, not stored state to re-read. Path
+// pins one document of Space when opening; empty leaves the pane's own
+// pick. The asker is a chat (Session) or a hive session (HiveSession),
+// never both.
+type DriveToggleRequested struct {
 	Session     string
 	HiveSession string
-	Name        string
+	Space       string
+	Path        string
 	Open        bool
 }
 
@@ -115,8 +120,8 @@ func (FlowsUpdated) eventName() string           { return "flows.updated" }
 func (ActionsUpdated) eventName() string         { return "actions.updated" }
 func (MenuBarUpdated) eventName() string         { return "menu-bar.updated" }
 func (AgentWorkspacesUpdated) eventName() string { return "agent-workspaces.updated" }
-func (CanvasUpdated) eventName() string          { return "canvas.updated" }
-func (CanvasToggleRequested) eventName() string  { return "canvas.toggle-requested" }
+func (DriveChanged) eventName() string           { return "drive.changed" }
+func (DriveToggleRequested) eventName() string   { return "drive.toggle-requested" }
 func (SchedulesUpdated) eventName() string       { return "schedules.updated" }
 func (ConnectionUpdated) eventName() string      { return "connection.updated" }
 func (NotificationRaised) eventName() string     { return "notification.raised" }

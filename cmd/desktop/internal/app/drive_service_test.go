@@ -40,29 +40,29 @@ func (f fakeCanvasSessions) Get(_ context.Context, id string) (stores.AgentSessi
 type canvasSignals struct {
 	bus     *events.Bus
 	mu      sync.Mutex
-	updates []events.CanvasUpdated
-	toggles []events.CanvasToggleRequested
+	updates []events.DriveChanged
+	toggles []events.DriveToggleRequested
 }
 
-func (s *canvasSignals) addUpdate(e events.CanvasUpdated) {
+func (s *canvasSignals) addUpdate(e events.DriveChanged) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.updates = append(s.updates, e)
 }
 
-func (s *canvasSignals) addToggle(e events.CanvasToggleRequested) {
+func (s *canvasSignals) addToggle(e events.DriveToggleRequested) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.toggles = append(s.toggles, e)
 }
 
-func (s *canvasSignals) Updates() []events.CanvasUpdated {
+func (s *canvasSignals) Updates() []events.DriveChanged {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.updates)
 }
 
-func (s *canvasSignals) Toggles() []events.CanvasToggleRequested {
+func (s *canvasSignals) Toggles() []events.DriveToggleRequested {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return slices.Clone(s.toggles)
@@ -71,13 +71,13 @@ func (s *canvasSignals) Toggles() []events.CanvasToggleRequested {
 // waitUpdates polls until exactly n updates have been recorded. Publish hands
 // off to the bus subscriber's own goroutine, so a test asserting a positive
 // count has to wait rather than read Updates() synchronously.
-func (s *canvasSignals) waitUpdates(t *testing.T, n int) []events.CanvasUpdated {
+func (s *canvasSignals) waitUpdates(t *testing.T, n int) []events.DriveChanged {
 	t.Helper()
 	require.Eventually(t, func() bool { return len(s.Updates()) == n }, eventWait, 5*time.Millisecond)
 	return s.Updates()
 }
 
-func (s *canvasSignals) waitToggles(t *testing.T, n int) []events.CanvasToggleRequested {
+func (s *canvasSignals) waitToggles(t *testing.T, n int) []events.DriveToggleRequested {
 	t.Helper()
 	require.Eventually(t, func() bool { return len(s.Toggles()) == n }, eventWait, 5*time.Millisecond)
 	return s.Toggles()
@@ -89,13 +89,15 @@ func (s *canvasSignals) waitToggles(t *testing.T, n int) []events.CanvasToggleRe
 // which a synchronous read of Updates() could never guarantee.
 func (s *canvasSignals) requireNoUpdates(t *testing.T, msg string) {
 	t.Helper()
-	sentinel := events.CanvasUpdated{Session: "sentinel"}
+	sentinel := events.DriveChanged{Session: "sentinel"}
 	s.bus.Publish(t.Context(), sentinel)
-	require.Eventually(t, func() bool { return slices.Contains(s.Updates(), sentinel) }, eventWait, 5*time.Millisecond)
-	assert.Equal(t, []events.CanvasUpdated{sentinel}, s.Updates(), msg)
+	require.Eventually(t, func() bool {
+		return slices.ContainsFunc(s.Updates(), func(e events.DriveChanged) bool { return e.Session == sentinel.Session })
+	}, eventWait, 5*time.Millisecond)
+	assert.Equal(t, []events.DriveChanged{sentinel}, s.Updates(), msg)
 }
 
-func updateSessions(updates []events.CanvasUpdated) []string {
+func updateSessions(updates []events.DriveChanged) []string {
 	out := make([]string, 0, len(updates))
 	for _, e := range updates {
 		out = append(out, e.Session)
@@ -116,11 +118,11 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 	t.Helper()
 	bus := newTestBus(t)
 	signals := &canvasSignals{bus: bus}
-	cancelUpdated := events.Subscribe(t.Context(), bus, "test.canvas-updated", events.Buffer(64), func(_ context.Context, e events.CanvasUpdated) {
+	cancelUpdated := events.Subscribe(t.Context(), bus, "test.canvas-updated", events.Buffer(64), func(_ context.Context, e events.DriveChanged) {
 		signals.addUpdate(e)
 	})
 	t.Cleanup(cancelUpdated)
-	cancelToggled := events.Subscribe(t.Context(), bus, "test.canvas-toggled", events.Buffer(64), func(_ context.Context, e events.CanvasToggleRequested) {
+	cancelToggled := events.Subscribe(t.Context(), bus, "test.canvas-toggled", events.Buffer(64), func(_ context.Context, e events.DriveToggleRequested) {
 		signals.addToggle(e)
 	})
 	t.Cleanup(cancelToggled)
@@ -439,11 +441,11 @@ func TestCanvasSetPaneOpen(t *testing.T) {
 	err = f.svc.SetPaneOpen(ctx, "99", "", true)
 	assert.Equal(t, KindNotFound, KindOf(err))
 
-	assert.Equal(t, []events.CanvasToggleRequested{
-		{Session: "1", Open: true},
-		{Session: "1", Name: "plan", Open: true},
-		{Session: "1", Name: "plan", Open: true},
-		{Session: "1", Open: false},
+	assert.Equal(t, []events.DriveToggleRequested{
+		{Session: "1", Space: "workspaces/ws", Open: true},
+		{Session: "1", Space: "workspaces/ws", Path: "canvases/plan.canvas.json", Open: true},
+		{Session: "1", Space: "workspaces/ws", Path: "canvases/plan.canvas.json", Open: true},
+		{Session: "1", Space: "workspaces/ws", Open: false},
 	}, f.signals.waitToggles(t, 4))
 	f.signals.waitUpdates(t, 1)
 }
@@ -547,7 +549,7 @@ func TestCanvasFromAHiveSessionIsFiledUnderItsRepository(t *testing.T) {
 	require.FileExists(t, filepath.Join(f.contextDir(), "acme", "site", "canvases", "plan.canvas.json"))
 
 	updates := f.signals.waitUpdates(t, 1)
-	assert.Equal(t, events.CanvasUpdated{HiveSession: "abc123"}, updates[0])
+	assert.Equal(t, events.DriveChanged{Space: "acme/site", Paths: []string{"canvases/plan.canvas.json"}, HiveSession: "abc123"}, updates[0])
 
 	read, err := f.svc.GetCanvas(ctx, "/work/site-abc123", "plan")
 	require.NoError(t, err)
@@ -622,7 +624,8 @@ func TestAgentsOutsideEverySessionShareTheSharedSpace(t *testing.T) {
 	require.Len(t, metas, 1)
 	assert.Equal(t, 2, metas[0].BlockCount)
 	updates := f.signals.waitUpdates(t, 2)
-	assert.Equal(t, []events.CanvasUpdated{{}, {}}, updates, "shared writes still wake the readers, with no author")
+	notes := events.DriveChanged{Space: drive.SharedKey, Paths: []string{"canvases/notes.canvas.json"}}
+	assert.Equal(t, []events.DriveChanged{notes, notes}, updates, "shared writes still wake the readers, with no author")
 
 	err = f.svc.SetPaneOpen(ctx, "global", "notes", true)
 	assert.Equal(t, KindInvalid, KindOf(err), "a shared canvas has no pane")
@@ -634,7 +637,7 @@ func TestCanvasPaneToggleNamesTheHiveSession(t *testing.T) {
 	require.NoError(t, f.svc.SetPaneOpen(t.Context(), siteSession.Path, "", true))
 
 	toggles := f.signals.waitToggles(t, 1)
-	assert.Equal(t, events.CanvasToggleRequested{HiveSession: "abc123", Open: true}, toggles[0])
+	assert.Equal(t, events.DriveToggleRequested{HiveSession: "abc123", Space: "acme/site", Open: true}, toggles[0])
 }
 
 // A repository's canvases sit where hive's own context layout puts the

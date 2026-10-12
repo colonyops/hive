@@ -110,19 +110,23 @@ func (cmd *ReviewCmd) runWithDirectFile(ctx context.Context) error {
 		ModTime: info.ModTime(),
 	}
 
-	// Launch review TUI with single document
-	// contextDir is the parent directory of the file
-	contextDir := filepath.Dir(targetPath)
-	return cmd.launchReviewTUI(ctx, []review.Document{doc}, &doc, contextDir)
+	// The file's own folder is listed on a change. Its space is known only
+	// when the file sits in the drive, directly or through a checkout's .hive
+	// link; outside the drive nothing refreshes the list.
+	scope := review.Scope{Dir: filepath.Dir(targetPath)}
+	if space, _, ok := cmd.app.Drive().SpaceAt(scope.Dir); ok {
+		scope.Space = space
+	}
+	return cmd.launchReviewTUI(ctx, []review.Document{doc}, &doc, scope)
 }
 
 // runWithContextDir uses context directory discovery for picker/latest modes.
 func (cmd *ReviewCmd) runWithContextDir(ctx context.Context, c *cli.Command) error {
-	// Resolve context directory with session filtering
-	contextDir, err := cmd.resolveContextDir(ctx)
+	scope, err := cmd.resolveScope(ctx)
 	if err != nil {
 		return err
 	}
+	contextDir := scope.Dir
 
 	// Check if directory exists before discovering
 	if _, err := os.Stat(contextDir); os.IsNotExist(err) {
@@ -159,50 +163,50 @@ func (cmd *ReviewCmd) runWithContextDir(ctx context.Context, c *cli.Command) err
 	}
 
 	// Launch review TUI
-	return cmd.launchReviewTUI(ctx, documents, initialDoc, contextDir)
+	return cmd.launchReviewTUI(ctx, documents, initialDoc, scope)
 }
 
-// launchReviewTUI starts the review-only TUI with the given documents.
-func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Document, initialDoc *review.Document, contextDir string) error {
-	// Create review-only options
-	opts := tui.ReviewOnlyOptions{
+// launchReviewTUI runs the review-only TUI. The drive watcher runs for the
+// program's lifetime so a document edited meanwhile refreshes the list.
+func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Document, initialDoc *review.Document, scope review.Scope) error {
+	drive := cmd.app.Drive()
+	if err := drive.Watch(ctx); err != nil {
+		cmd.app.Logger.Warn().Err(err).Msg("drive watcher unavailable; documents will not refresh while open")
+	}
+	defer func() {
+		if err := drive.Close(); err != nil {
+			cmd.app.Logger.Debug().Err(err).Msg("drive watcher not closed cleanly")
+		}
+	}()
+
+	m := tui.NewReviewOnly(tui.ReviewOnlyOptions{
+		Logger:      cmd.app.Logger,
+		Bus:         cmd.app.Bus(),
 		Documents:   documents,
 		InitialDoc:  initialDoc,
-		ContextDir:  contextDir,
+		Scope:       scope,
 		Reviews:     cmd.app.Reviews(),
 		CopyCommand: cmd.app.Config.CopyCommand,
-		Logger:      cmd.app.Logger,
-	}
-
-	// Create review-only model
-	m := tui.NewReviewOnly(opts)
-
-	// Create program
-	p := tea.NewProgram(m)
-
-	// Run program
-	if _, err := p.Run(); err != nil {
+	})
+	if _, err := tea.NewProgram(m).Run(); err != nil {
 		return fmt.Errorf("run review TUI: %w", err)
 	}
-
 	return nil
 }
 
-// resolveContextDir resolves the context directory for the current working directory.
-// Uses the same logic as 'hive ctx' - detects git remote from cwd and resolves to context dir.
-func (cmd *ReviewCmd) resolveContextDir(ctx context.Context) (string, error) {
-	// Let ResolveDir detect from current working directory
-	// This uses the same git remote detection as 'hive ctx'
-	contextDir, err := cmd.app.Drive().ResolveDir(ctx, "", false)
+// resolveScope is the space of the repository behind the current directory,
+// the detection 'hive ctx' uses, with its directory created.
+func (cmd *ReviewCmd) resolveScope(ctx context.Context) (review.Scope, error) {
+	space, err := cmd.app.Drive().ResolveSpace(ctx, "", false)
 	if err != nil {
-		return "", err
+		return review.Scope{}, err
 	}
-
-	// Ensure context dir exists
-	_, err = cmd.app.Drive().Init(contextDir)
+	dir, err := cmd.app.Drive().SpaceDir(space)
 	if err != nil {
-		return "", err
+		return review.Scope{}, err
 	}
-
-	return contextDir, nil
+	if _, err := cmd.app.Drive().Init(dir); err != nil {
+		return review.Scope{}, err
+	}
+	return review.Scope{Space: space, Dir: dir}, nil
 }

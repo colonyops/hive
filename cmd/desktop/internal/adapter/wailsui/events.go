@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
+	"github.com/colonyops/hive/internal/domain/drive"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	wailsnotify "github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -53,16 +54,16 @@ func registerEvents() struct{} {
 	// frontend, via ActivityService.Record) appends to the activity log. The
 	// Activity view re-reads its latest page and advances its unseen marker.
 	application.RegisterEvent[int64]("activity:appended")
-	// canvas:updated carries the chat or hive session whose canvas an agent
-	// just wrote. Canvas content is stored state, so the pane re-reads the
-	// canvas it is showing on receipt; coalescing can drop an author but never
-	// content.
-	application.RegisterEvent[CanvasWrite]("canvas:updated")
-	// canvas:toggle carries an agent's ask to open or close the canvas pane
+	// drive:updated carries the space and document paths that changed and,
+	// for a write an agent made through the desktop, its chat or hive
+	// session. Documents are stored state, so a pane re-reads what it shows
+	// on receipt; coalescing can drop an author but never content.
+	application.RegisterEvent[DriveWrite](driveUpdatedEvent)
+	// drive:toggle carries an agent's ask to open or close the drive pane
 	// beside its chat. Pane visibility is UI intent, not state to re-read, so
 	// the payload is the whole message; coalescing keeps only the latest ask,
 	// which is the final intent anyway.
-	application.RegisterEvent[CanvasToggle]("canvas:toggle")
+	application.RegisterEvent[DriveToggle](driveToggleEvent)
 	// schedules:updated carries the workspace whose scheduled chats changed:
 	// its manifest was written, or one of its schedules ran. The Chats area
 	// re-reads its workspace and chat lists on receipt.
@@ -139,11 +140,14 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		events.Subscribe(ctx, bus, "wailsui.menu-bar", events.Coalesce(), func(context.Context, events.MenuBarUpdated) {
 			trayStale()
 		}),
-		events.Subscribe(ctx, bus, "wailsui.canvas", events.Coalesce(), func(_ context.Context, e events.CanvasUpdated) {
-			emitCanvasUpdated(CanvasWrite{Session: e.Session, HiveSession: e.HiveSession})
+		events.Subscribe(ctx, bus, "wailsui.drive", events.Coalesce(), func(_ context.Context, e events.DriveChanged) {
+			emitDriveUpdated(DriveWrite{Space: e.Space, Paths: e.Paths, Session: e.Session, HiveSession: e.HiveSession})
 		}),
-		events.Subscribe(ctx, bus, "wailsui.canvas-toggle", events.Coalesce(), func(_ context.Context, e events.CanvasToggleRequested) {
-			emitCanvasToggle(CanvasToggle{Session: e.Session, HiveSession: e.HiveSession, Name: e.Name, Open: e.Open})
+		events.Subscribe(ctx, bus, "wailsui.drive-toggle", events.Coalesce(), func(_ context.Context, e events.DriveToggleRequested) {
+			emitDriveToggle(DriveToggle{
+				Session: e.Session, HiveSession: e.HiveSession,
+				Space: e.Space, Path: e.Path, Name: drive.CanvasName(e.Path), Open: e.Open,
+			})
 		}),
 		events.Subscribe(ctx, bus, "wailsui.schedules", events.Coalesce(), func(_ context.Context, e events.SchedulesUpdated) {
 			emitSchedulesUpdated(e.Workspace)
@@ -204,35 +208,48 @@ func emitActivityAppended(id int64) {
 	}
 }
 
-// CanvasWrite is the canvas:updated payload: the author of the write, a chat
-// (Session) or a hive session (HiveSession), never both.
-type CanvasWrite struct {
-	Session     string `json:"session"`
-	HiveSession string `json:"hiveSession"`
+const (
+	driveUpdatedEvent = "drive:updated"
+	driveToggleEvent  = "drive:toggle"
+)
+
+// DriveWrite is the drive:updated payload: the space and the document paths
+// that changed, and who wrote them when an agent did through the desktop, a
+// chat (Session) or a hive session (HiveSession), never both. Both are empty
+// for a change the drive watcher found on disk.
+type DriveWrite struct {
+	Space       string   `json:"space"`
+	Paths       []string `json:"paths"`
+	Session     string   `json:"session"`
+	HiveSession string   `json:"hiveSession"`
 }
 
-// emitCanvasUpdated pushes the canvas:updated wake-up to the frontend after
-// an agent's canvas write. Safe to call from any goroutine once the app is
-// running.
-func emitCanvasUpdated(write CanvasWrite) {
-	if app := application.Get(); app != nil {
-		app.Event.Emit("canvas:updated", write)
-	}
+func emitDriveUpdated(write DriveWrite) {
+	emitEvent(driveUpdatedEvent, write)
 }
 
-// CanvasToggle is the canvas:toggle payload: whose pane to open or close, a
-// chat's or a hive session's, and the canvas to pin when opening (empty
-// leaves the pane's pick).
-type CanvasToggle struct {
+// DriveToggle is the drive:toggle payload: whose pane to open or close, a
+// chat's or a hive session's, and the document to pin when opening (empty
+// leaves the pane's pick). Name is Path's canvas name, for a pane that still
+// pins by name.
+type DriveToggle struct {
 	Session     string `json:"session"`
 	HiveSession string `json:"hiveSession"`
+	Space       string `json:"space"`
+	Path        string `json:"path"`
 	Name        string `json:"name"`
 	Open        bool   `json:"open"`
 }
 
-func emitCanvasToggle(toggle CanvasToggle) {
+func emitDriveToggle(toggle DriveToggle) {
+	emitEvent(driveToggleEvent, toggle)
+}
+
+// emitEvent is the drive emitters' door to the webview. A var so a test can
+// see the name and payload the frontend receives without a Wails app.
+var emitEvent = func(name string, data any) {
 	if app := application.Get(); app != nil {
-		app.Event.Emit("canvas:toggle", toggle)
+		app.Event.Emit(name, data)
 	}
 }
 

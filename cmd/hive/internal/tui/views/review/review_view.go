@@ -27,6 +27,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/shared"
 	corereview "github.com/colonyops/hive/internal/domain/review"
+	"github.com/colonyops/hive/internal/hive/events"
 )
 
 // ReviewFinalizedMsg is sent when review is finalized and copied to clipboard.
@@ -43,8 +44,8 @@ type reviewDiscardedMsg struct{}
 type View struct {
 	list              list.Model
 	viewport          viewport.Model
-	watcher           *DocumentWatcher
-	contextDir        string
+	scope             Scope
+	changes           <-chan events.DriveChangedPayload
 	repoKey           string // owner/repo display label
 	store             corereview.Store
 	width             int
@@ -91,10 +92,9 @@ type View struct {
 	helpDialog *components.HelpDialog // active help overlay, nil when not shown
 }
 
-// New creates a new review view.
-// If contextDir is non-empty, it will watch for file changes.
-// If store is non-nil, comments will be persisted to the database.
-func New(logger zerolog.Logger, documents []Document, contextDir string, store corereview.Store, handler KeyResolver, splitRatio int) View {
+// New creates a review view over documents. A non-nil bus keeps the list in
+// step with the scope's space; a non-nil store persists comments.
+func New(logger zerolog.Logger, bus *events.EventBus, documents []Document, scope Scope, store corereview.Store, handler KeyResolver, splitRatio int) View {
 	logger = logutils.Component(logger, "tui.review")
 	items := BuildTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
@@ -116,15 +116,6 @@ func New(logger zerolog.Logger, documents []Document, contextDir string, store c
 	l.Help.Styles.FullSeparator = helpStyle
 	l.Help.ShortSeparator = " • "
 	l.Styles.HelpStyle = styles.ListHelpContainerStyle
-
-	// Initialize watcher if context directory is provided
-	var watcher *DocumentWatcher
-	if contextDir != "" {
-		w, err := NewDocumentWatcher(logger, contextDir)
-		if err == nil {
-			watcher = w
-		}
-	}
 
 	// Create viewport for document preview
 	vp := viewport.New()
@@ -150,8 +141,8 @@ func New(logger zerolog.Logger, documents []Document, contextDir string, store c
 		logger:          logger,
 		list:            l,
 		viewport:        vp,
-		watcher:         watcher,
-		contextDir:      contextDir,
+		scope:           scope,
+		changes:         subscribeDriveChanges(logger, bus),
 		store:           store,
 		fullScreen:      false,
 		cursorLine:      1,
@@ -231,9 +222,14 @@ func (v *View) HasActiveEditor() bool {
 	return v.searchMode || v.treeSearchMode || v.commentModal != nil || v.helpDialog != nil || v.finalizationModal != nil || v.confirmModal != nil
 }
 
-// ContextDir returns the current context directory.
+// Scope is the space and directory the view lists.
+func (v View) Scope() Scope {
+	return v.scope
+}
+
+// ContextDir is the directory the view's documents are discovered from.
 func (v View) ContextDir() string {
-	return v.contextDir
+	return v.scope.Dir
 }
 
 // SetRepoKey sets the owner/repo display label shown in the header.
@@ -367,48 +363,19 @@ func (v *View) ToggleTree() tea.Cmd {
 	return v.previewDocument(doc)
 }
 
-// SetContextDir updates the context directory, restarts the file watcher,
-// and returns a cmd that scans and delivers a DocumentChangeMsg.
-func (v *View) SetContextDir(contextDir string) tea.Cmd {
-	if contextDir == v.contextDir {
+// SetScope points the view at another space and directory and answers a
+// command that lists it. The same scope is a no-op.
+func (v *View) SetScope(scope Scope) tea.Cmd {
+	if scope == v.scope {
 		return nil
 	}
-
-	// Stop old watcher
-	if v.watcher != nil {
-		_ = v.watcher.Close()
-		v.watcher = nil
-	}
-
-	v.contextDir = contextDir
-
-	// Start new watcher
-	if contextDir != "" {
-		w, err := NewDocumentWatcher(v.logger, contextDir)
-		if err == nil {
-			v.watcher = w
-		}
-	}
-
-	// Return a cmd that immediately scans the new contextDir and starts watching
-	return func() tea.Msg {
-		if contextDir == "" {
-			return DocumentChangeMsg{Documents: nil}
-		}
-		docs, err := DiscoverDocuments(contextDir)
-		if err != nil {
-			docs = nil
-		}
-		return DocumentChangeMsg{Documents: docs}
-	}
+	v.scope = scope
+	return v.discover()
 }
 
-// Init initializes the review view and starts the file watcher.
+// Init starts waiting for drive changes.
 func (v View) Init() tea.Cmd {
-	if v.watcher != nil {
-		return v.watcher.Start()
-	}
-	return nil
+	return v.listenForDriveChanges()
 }
 
 // Update handles messages.
@@ -426,7 +393,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 		// Rebuild tree with new documents
 		v.logger.Debug().
 			Int("document_count", len(msg.Documents)).
-			Msg("review: rebuilding document tree from file watcher")
+			Msg("review: rebuilding document tree")
 		items := BuildTreeItems(msg.Documents)
 		v.list.SetItems(items)
 		v.rebuildTree()
@@ -443,11 +410,14 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			}
 		}
 
-		// Continue watching for more changes
-		if v.watcher != nil {
-			return v, v.watcher.Start()
-		}
 		return v, nil
+
+	case DriveChangedMsg:
+		next := v.listenForDriveChanges()
+		if !v.scope.covers(msg.Payload.Space) {
+			return v, next
+		}
+		return v, tea.Batch(next, v.discover())
 
 	case reviewDiscardedMsg:
 		// Clear active session and reload document
@@ -1019,10 +989,10 @@ func (v View) View() string {
 	// --- Repo scope header (1 line above tree) ---
 	repoName := v.repoKey
 	if repoName == "" {
-		repoName = filepath.Base(v.contextDir)
+		repoName = filepath.Base(v.scope.Dir)
 	}
 	if repoName == "" || repoName == "." {
-		repoName = v.contextDir
+		repoName = v.scope.Dir
 	}
 	repoHeader := " " + styles.TextMutedStyle.Render(repoName)
 	repoHeader = shared.EnsureExactWidth(repoHeader, treeWidth)
@@ -2501,9 +2471,9 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 		// in URIs, but DiscoverDocuments stores RelPath relative to contextDir (no prefix).
 		absPath := path
 		relPath := path
-		if v.contextDir != "" && strings.HasPrefix(path, ".hive/") {
+		if v.scope.Dir != "" && strings.HasPrefix(path, ".hive/") {
 			rel := strings.TrimPrefix(path, ".hive/")
-			absPath = filepath.Join(v.contextDir, rel)
+			absPath = filepath.Join(v.scope.Dir, rel)
 			relPath = rel
 		}
 

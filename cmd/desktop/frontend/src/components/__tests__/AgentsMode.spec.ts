@@ -111,7 +111,7 @@ vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => ({
 }))
 
 // Captures every useWailsEvent registration (AgentsMode's dot and the canvas
-// pane's refetch both listen) so a test can fire canvas:updated by hand.
+// pane's refetch both listen) so a test can fire drive:updated by hand.
 const wailsEvents = vi.hoisted(() => ({
   handlers: [] as Array<[string, (event: { data: unknown }) => void]>,
   fire(name: string, data: unknown) {
@@ -881,21 +881,21 @@ describe('AgentsMode', () => {
     expect(router.currentRoute.value.query.canvas).toBeUndefined()
   })
 
-  // open_canvas / close_canvas arrive as canvas:toggle. Only the open chat's
+  // open_canvas / close_canvas arrive as drive:toggle. Only the open chat's
   // ask is honored — an agent must never drag the user away from another chat.
-  it('opens and closes the pane on canvas:toggle for the open chat only', async () => {
+  it('opens and closes the pane on drive:toggle for the open chat only', async () => {
     const { wrapper, router } = await mountWithOpenChat()
 
-    wailsEvents.fire('canvas:toggle', { session: '99', name: '', open: true })
+    wailsEvents.fire('drive:toggle', { session: '99', name: '', open: true })
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBeUndefined()
 
-    wailsEvents.fire('canvas:toggle', { session: '7', name: 'plan', open: true })
+    wailsEvents.fire('drive:toggle', { session: '7', name: 'plan', open: true })
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBe('plan')
     expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(true)
 
-    wailsEvents.fire('canvas:toggle', { session: '7', name: '', open: false })
+    wailsEvents.fire('drive:toggle', { session: '7', name: '', open: false })
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBeUndefined()
     expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)
