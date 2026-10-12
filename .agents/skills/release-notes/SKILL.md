@@ -1,6 +1,6 @@
 ---
 name: release-notes
-description: Write the release-notes line a branch owes to the changelog of the program it changes -- cmd/hive/releasenotes/changelog/unreleased/ for the hive CLI, cmd/desktop/releasenotes/changelog/unreleased/ for Hive Desktop. Use when asked to update the changelog or release notes, or to check whether the work on this branch earns an entry before the PR goes up.
+description: Write the release-notes line a branch owes to the changelog of the program it changes -- cmd/hive/releasenotes/changelog/unreleased/ for the hive CLI, cmd/desktop/releasenotes/changelog/unreleased/ for Hive Desktop, cmd/relay/releasenotes/changelog/unreleased/ for Hive Relay. Use when asked to update the changelog or release notes, or to check whether the work on this branch earns an entry before the PR goes up.
 ---
 
 # Add a release note
@@ -12,8 +12,9 @@ changes, **in the pull request that earns it**:
 | --- | --- | --- |
 | hive CLI/TUI (`cmd/hive`) | `cli` | `cmd/hive/releasenotes/changelog/` |
 | Hive Desktop (`cmd/desktop`) | `desktop` | `cmd/desktop/releasenotes/changelog/` |
+| Hive Relay (`cmd/relay`) | `relay` | `cmd/relay/releasenotes/changelog/` |
 
-Every release ships both programs under one version. The desktop embeds its
+Every release ships every program under one version. The desktop embeds its
 changelog and shows the fragments as the draft in the app; the CLI's notes ship
 on the GitHub release. Either way, what you write here is the product's
 changelog, not a note to a future maintainer.
@@ -75,7 +76,7 @@ Earns nothing:
 Read what is already unreleased before writing:
 
 ```bash
-ls cmd/hive/releasenotes/changelog/unreleased/ cmd/desktop/releasenotes/changelog/unreleased/
+ls cmd/hive/releasenotes/changelog/unreleased/ cmd/desktop/releasenotes/changelog/unreleased/ cmd/relay/releasenotes/changelog/unreleased/
 ```
 
 **If a fragment already describes the exact surface you touched, edit that
@@ -90,7 +91,7 @@ Otherwise write a new one:
 mise run changelog:new -- --product desktop --kind added "**A notify terminal node**, so a feed can notify on new items."
 ```
 
-`--product` is `cli` or `desktop`. `--kind` is `added`, `changed`, or
+`--product` is `cli`, `desktop`, or `relay`. `--kind` is `added`, `changed`, or
 `fixed` -- the section it renders under. For
 a note that spans lines, pipe it on stdin instead of quoting it:
 
@@ -132,7 +133,7 @@ whole release, which no single change can write, so promotion writes it.
 ## 5. Verify
 
 ```bash
-go test ./cmd/hive/releasenotes/... ./cmd/desktop/releasenotes/...
+go test ./cmd/hive/releasenotes/... ./cmd/desktop/releasenotes/... ./cmd/relay/releasenotes/...
 ```
 
 Each program's `TestChangelogParses` reads its embedded files, so a broken header, an unknown kind, a name the tool did not build, or

@@ -57,8 +57,9 @@ Two worktree states are valid:
 1. **Clean:** run `mise run changelog:promote`, adding `-- --bump <level>` for
    a bump level or `-- <version>` for an explicit version.
 2. **Already promoted:** continue without promoting again when the only changes
-   are one untracked `<version>.md` in each of `cmd/hive/releasenotes/changelog/`
-   and `cmd/desktop/releasenotes/changelog/`, all for the same version, and
+   are one untracked `<version>.md` in each of `cmd/hive/releasenotes/changelog/`,
+   `cmd/desktop/releasenotes/changelog/`, and
+   `cmd/relay/releasenotes/changelog/`, all for the same version, and
    deleted files under their `unreleased/` directories.
 
 For an already promoted tree, require the entry filename to match an explicit

@@ -209,7 +209,7 @@ func TestParseProduct(t *testing.T) {
 			t.Errorf("parseProduct(%q) = %+v, %v", p.name, got, err)
 		}
 	}
-	if _, err := parseProduct("relay"); err == nil {
+	if _, err := parseProduct("worker"); err == nil {
 		t.Fatal("expected an unknown product to be rejected")
 	}
 }

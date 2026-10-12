@@ -90,9 +90,9 @@ individual choices; this document describes the shape everything fits into.
 > MCP server registry it wires workspaces against. See
 > [Agent workspaces](#agent-workspaces).
 >
-> Not yet built: the plugs-managed lifecycle (attempted; blocked on appkit —
-> see [Background lifecycle](#background-lifecycle)). New work should move
-> toward this shape rather than extending the current one.
+> Not yet built: the plugs-managed lifecycle for the desktop (attempted and
+> declined -- see [Background lifecycle](#background-lifecycle)). New work
+> should move toward this shape rather than extending the current one.
 
 ## The shape
 
@@ -116,6 +116,12 @@ in-process callers of the same `App`, not clients over a wire.
 repository. Both run on the hive engine under `internal/`, and neither
 imports the other. When this document says "CLI", it means a future surface
 of *this* binary.
+
+`hive-relay` (Hive Relay, `cmd/relay`) is a third program: a hosted feed that
+stores every HTTP request on a source's ingress URL as delivered and serves it
+by cursor. It does not run on the engine and parses nothing; the desktop's
+`sources.relay` connector pulls the deliveries and does all the parsing (ADR
+hive-relay-stores-deliveries-as-delivered-and-the-desktop-reads-them).
 
 ### Named patterns
 
@@ -184,7 +190,7 @@ column is the section that specifies it.
 | A new **HTTP endpoint** | Error chain — `errchain` handler, `web/extractors` input, `ctrl_*.go` + routes in one place. Only for the frontend's own transport: an agent capability is a tool | ADR http-handler-conventions, ADR mcp-replaces-the-agent-facing-http-api |
 | A new **streaming endpoint** (WebSocket/SSE) | Data-plane mount — raw handler at its own prefix, REST control plane beside it | [Terminal sessions](#terminal-sessions), ADR terminal-transport |
 | A new **event** | Observer — payload in core, degraded to a wake-up in `wailsui` | [Events](#events) |
-| A new **background subsystem** | One instance per process, App-owned lifecycle (plugs once unblocked) | [Background lifecycle](#background-lifecycle) |
+| A new **background subsystem** | One instance per process, App-owned lifecycle in the desktop; a `plugs` plugin in the relay | [Background lifecycle](#background-lifecycle) |
 | A new **metric, span, or log field** | Package-level instrument via `platform/observe` against the global provider; bounded attributes only; a span is a trigger or a wait; the SDK stays in `app/telemetry` | [Telemetry](#telemetry), ADR a-span-is-a-trigger-or-a-wait-and-its-count-per-trigger-is-bounded-by-configuration |
 | A new **scheduled/recurring launch** | Registry-free, One instance per process, App-owned lifecycle, Consumer-defined interfaces, Store | [Scheduled chats](#scheduled-chats), ADR scheduled-chats-are-declared-in-the-workspace-manifest-and-their-run-state-lives-in-sqlite |
 | A new **app mode** | Closed union over sibling active flags — never an `else` branch | [App modes](#app-modes) |
@@ -268,10 +274,19 @@ needs no lint edit:
 | Store | `internal/store/` | `hive.db`: sqlc output, migrations, one store per aggregate | `pkg/`, `domain/`, `platform/sqlite` | `store-is-persistence` |
 | Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer | `pkg/`, `domain/` | `config-is-data` |
 | Engine | `internal/hive/` | One subpackage per application service, the event bus, and `hive.Engine`, which composes them | everything above | |
-| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features, program-only config | any shared layer except the stores, their own tree | `core`, `programs-use-services`, `cli-no-desktop-deps`, `desktop-no-cli-deps` |
+| Web | `internal/web/` | Shared HTTP plumbing: the error wire shape, the version handler, `mid/` (error and request-log middleware), `extractors/` (`Body` and `Query` decode and validate). Outside the engine's layers: plumbing, not a driver | `pkg/`, criterio, httpkit, zerolog. Never the engine, the stores, or a program | `web-is-plumbing` |
+| Programs | `cmd/hive/internal/`, `cmd/desktop/internal/`, `cmd/relay/internal/` | Input, rendering, program-only features, program-only config | any shared layer except the stores, their own tree | `core`, `programs-use-services`, `cli-no-desktop-deps`, `desktop-no-cli-deps`, `relay-no-program-deps` |
 
-`shared-surface-free` keeps charm, Wails and both programs out of all of
+`shared-surface-free` keeps charm, Wails and every program out of all of
 `internal/`.
+
+The relay sits beside the engine, not on it. It may import `pkg/`,
+`internal/domain`, `internal/platform`, the migration runner
+`internal/store/migrate` for its own database, and `internal/web`; today it
+uses `platform/sqlite`, `platform/secrets`, `store/migrate`, and `web`. It
+never imports a program, and `relay-no-program-deps` says so: depguard denies
+it the desktop, the CLI, Wails, and goja. Its store is its own sqlc target
+under `cmd/relay/internal/store/sqlite`, never `hive.db`.
 
 The engine takes its drivers as `hive.Ports` and builds the config-derived
 services on `New` and on each `Reload`. Engine subpackages never import the
@@ -327,6 +342,16 @@ cmd/hive/                         # the hive CLI/TUI
                                   #   hive.Engine), config/ (the CLI sections of
                                   #   config.yaml), commands/, tui/, action/,
                                   #   theme/, plugins/, sources/
+cmd/relay/                        # Hive Relay, the hive-relay binary
+  main.go                         # serve and the operator subcommands
+  tasks.toml                      # the relay:* mise tasks
+  Dockerfile                      # the ghcr.io/colonyops/hive-relay image
+  releasenotes/                   # the relay's embedded changelog
+  internal/                       # relay-only: relay/ (the core: models, the
+                                  #   store port, the services), store/ (memory,
+                                  #   sqlite, the storetest contract), httpapi/,
+                                  #   guard/ (rate limits, the semaphore),
+                                  #   config/, app/ (the plugs composition root)
 cmd/tools/                        # repo-wide tooling: adr, release
 main.go  go.mod                   # one module for every program
 
@@ -348,10 +373,6 @@ cmd/desktop/                      # Wails app package — stays `main`, stays he
 
 cmd/desktop/internal/
   devproxy/                       # the address-and-health contract devserver and devtools share
-  web/                            # HTTP plumbing httpapi and devserver share
-                                  #   (ADR http-handler-conventions): error wire shape, version
-                                  #   handler; mid/ (error + logger middleware),
-                                  #   extractors/ (Body/Query decode + validate)
   app/                            # THE CORE. No Wails, no transport, no globals.
     app.go                        # App facade
     errors.go                     # Error{Kind, Msg, Err}; Kind enum
@@ -540,6 +561,12 @@ internal/                         # the hive engine both programs run on (see
     session/  status/  hc/        #   one subpackage per application service
     messaging/  repocontext/
     todo/  gitstatus/  doctor/
+  web/                            # HTTP plumbing the desktop's httpapi, its
+                                  #   devserver, and the relay share, outside the
+                                  #   layers (ADR http-handler-conventions): error
+                                  #   wire shape, version handler; mid/ (error +
+                                  #   logger middleware), extractors/ (Body/Query
+                                  #   decode + validate)
   releasenotes/                   # release tooling, outside the layers: the
                                   #   changelog parser each program's embed feeds:
                                   #   <version>.md per release, unreleased/ one file
@@ -1078,10 +1105,13 @@ capture, retry with backoff, and one graceful shutdown path.
 unconditionally installs `signal.NotifyContext`, which permanently adds Go's
 process-wide `os/signal` watcher goroutine — `os/signal` offers no opt-out,
 and `TestAppLifecycle`'s strict goroutine accounting rightly refuses the
-leak. Plugs also guarantees no startup order, which the engine's
+leak. The pinned appkit has `plugs.WithSignals()`, but it narrows the signal
+set and does not remove the watcher: with no signals, `signal.NotifyContext`
+relays every signal, including the runtime's `SIGURG` preemption, so a test
+that needs a quiet manager passes an explicit signal such as `os.Interrupt`.
+Plugs also guarantees no startup order, which the engine's
 install-before-appenders constraint needs expressed, not worked around.
-Until appkit offers signal opt-out and ordered start, the standing pattern
-is **App-owned lifecycle**: every subsystem exposes an idempotent,
+The standing pattern for the desktop is therefore **App-owned lifecycle**: every subsystem exposes an idempotent,
 context-taking `Stop` behind a `stopOnce` (the webhook listener is the
 template — ADR webhook-listener-placement), `App.Start` starts them in dependency order, and
 `App.Close` unwinds them in reverse. `main` holds none of it. The output worker's
@@ -1098,6 +1128,12 @@ requires `http.enabled`, and a disabled endpoint has no route at all. When
 continuous profiling is active, the CPU route uses Pyroscope's compatible
 handler so an on-demand profile can share the process-wide CPU profiler (ADR
 continuous-profiles-are-pushed-directly-with-pyroscope).
+
+The relay is the exception, and its constraints are the reverse: it is a
+server whose process exists to run its plugins, so the watcher goroutine is
+the point, and its plugins (`http`, `sweeper`) are independent. `cmd/relay/internal/app`
+runs them under one `plugs.Manager` with a shutdown timeout and bounded
+restarts.
 
 Other `appkit` packages with a clear home here: `httpclient` (context-first
 client with composable middleware, **adopted** — see below), `concurrency`

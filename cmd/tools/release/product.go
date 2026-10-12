@@ -8,6 +8,7 @@ import (
 
 	desktopnotes "github.com/colonyops/hive/cmd/desktop/releasenotes"
 	clinotes "github.com/colonyops/hive/cmd/hive/releasenotes"
+	relaynotes "github.com/colonyops/hive/cmd/relay/releasenotes"
 	"github.com/colonyops/hive/internal/releasenotes"
 )
 
@@ -40,7 +41,13 @@ var (
 		dir:       "cmd/desktop/releasenotes/changelog",
 		changelog: desktopnotes.Changelog,
 	}
-	products = []product{cliProduct, desktopProduct}
+	relayProduct = product{
+		name:      "relay",
+		title:     "Hive Relay",
+		dir:       "cmd/relay/releasenotes/changelog",
+		changelog: relaynotes.Changelog,
+	}
+	products = []product{cliProduct, desktopProduct, relayProduct}
 )
 
 func productNames() []string {
