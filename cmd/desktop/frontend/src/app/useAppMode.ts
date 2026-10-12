@@ -10,16 +10,17 @@ import { createLogger } from '../lib/log'
 
 const log = createLogger('app-mode')
 
-export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings'
+export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings' | 'drive'
 
 /**
  * Which area owns the frame under the title bar, and that frame's panel chrome.
  * Inbox (the hub) is the feed, flows, and profile settings; Code is terminal
- * mode; Chats is the agents area. Application settings answer to the whole
- * app, so they are an area of their own rather than a page of the Inbox. Terminal and agents are routes, so the title bar
- * stays live inside them and history restores where each was left. A relaunch
- * lands on the hub, so none attaches a tmux client or an agent session
- * unprompted.
+ * mode; Chats is the agents area. Application settings and Hive Drive answer
+ * to the whole app, so each is an area of its own rather than a page of the
+ * Inbox, and closing either returns to the page it was opened from. Terminal
+ * and agents are routes, so the title bar stays live inside them and history
+ * restores where each was left. A relaunch lands on the hub, so none attaches
+ * a tmux client or an agent session unprompted.
  */
 export function useAppMode(
   feed: FeedState,
@@ -36,6 +37,7 @@ export function useAppMode(
     if (route.name === 'terminal') return 'terminal'
     if (route.name === 'agents') return 'agents'
     if (route.name === 'application-settings') return 'settings'
+    if (route.name === 'drive') return 'drive'
     return 'hub'
   })
   // Each area is its own positive case rather than "not terminal", so a deep
@@ -45,6 +47,7 @@ export function useAppMode(
   const agentsActive = shown('agents')
   const hubActive = shown('hub')
   const settingsActive = shown('settings')
+  const driveActive = shown('drive')
 
   // Mounted on first entry and then only hidden (ADR
   // terminal-mode-is-hidden-not-unmounted): both hold live PTYs and xterm
@@ -69,17 +72,25 @@ export function useAppMode(
   // attach a tmux control client unconditionally.
   let lastHubPath = ''
   let lastTerminalPath = ''
-  // Where closing settings returns to: the last page of any other area.
+  // Where closing settings or the drive returns to: the last page of any
+  // other area, each including the other, so Settings opened from the drive
+  // closes back onto it.
   let lastOutsideSettingsPath = ''
+  let lastOutsideDrivePath = ''
+  // The drive reopens on the document last read when no chat or session on
+  // screen names one.
+  let lastDrivePath = ''
   const lastAgentsPath = useStorage('hive.mode.agents.path', '')
   if (!lastAgentsPath.value.startsWith('/workspaces')) lastAgentsPath.value = ''
   watch(
     () => route.fullPath,
     (path) => {
       if (!route.name) return
+      if (route.name !== 'drive') lastOutsideDrivePath = path
       if (route.name === 'application-settings') return
       lastOutsideSettingsPath = path
-      if (route.name === 'terminal') lastTerminalPath = path
+      if (route.name === 'drive') lastDrivePath = path
+      else if (route.name === 'terminal') lastTerminalPath = path
       else if (route.name === 'agents') lastAgentsPath.value = path
       else lastHubPath = path
     },
@@ -114,6 +125,7 @@ export function useAppMode(
       !terminalActive.value &&
       !agentsActive.value &&
       !settingsActive.value &&
+      !driveActive.value &&
       !nav.profileSettingsActive.value &&
       !nav.flowsActive.value &&
       !nav.devActive.value &&
@@ -180,6 +192,44 @@ export function useAppMode(
     return workspace ? { space: workspaceSpaceKey(workspace), path: docPath.value, session } : null
   })
 
+  // The full page's scope is its query, so a document is a link and history
+  // restores it. A pick inside the page replaces rather than pushes, as the
+  // pane's ?doc does, so Back leaves the page instead of walking its picks.
+  const str = (value: unknown) => (typeof value === 'string' ? value : '')
+  const driveScope = computed<DriveScope>(() => ({
+    space: str(route.query.space),
+    path: str(route.query.doc) || null,
+    session: str(route.query.session) || null,
+  }))
+
+  function driveLocation(scope: DriveScope) {
+    const query: Record<string, string> = {}
+    if (scope.space) query.space = scope.space
+    if (scope.path) query.doc = scope.path
+    if (scope.session) query.session = scope.session
+    return { name: 'drive' as const, query }
+  }
+
+  function openDrive(scope: DriveScope): void {
+    void router.push(driveLocation(scope))
+  }
+
+  function updateDriveScope(scope: DriveScope): void {
+    void router.replace(driveLocation(scope))
+  }
+
+  function closeDrive(): void {
+    void router.push(lastOutsideDrivePath || { name: 'feed' })
+  }
+
+  // Opening follows the chat or session on screen; from anywhere else it
+  // returns to the document last read.
+  function toggleDrive(): void {
+    if (mode.value === 'drive') closeDrive()
+    else if (viewDriveScope.value) openDrive(viewDriveScope.value)
+    else void router.push(lastDrivePath || { name: 'drive' })
+  }
+
   // The hidden-inset title bar loses the native double-click-to-zoom, so it is
   // re-implemented here. Guarded for the non-Wails test and browser context.
   async function toggleMaximise(): Promise<void> {
@@ -197,6 +247,12 @@ export function useAppMode(
     agentsActive,
     hubActive,
     settingsActive,
+    driveActive,
+    driveScope,
+    openDrive,
+    updateDriveScope,
+    closeDrive,
+    toggleDrive,
     closeSettings,
     terminalMounted,
     agentsMounted,

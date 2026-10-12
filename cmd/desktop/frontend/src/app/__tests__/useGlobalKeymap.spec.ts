@@ -22,7 +22,7 @@ const activeContexts = new Set<CommandContext>()
 const paletteOpen = ref(false)
 const activityOpen = ref(false)
 const tasksOpen = ref(false)
-const driveOpen = ref(false)
+const actionRunsOpen = ref(false)
 
 beforeEach(async () => {
   vi.resetModules()
@@ -41,7 +41,7 @@ beforeEach(async () => {
   paletteOpen.value = false
   activityOpen.value = false
   tasksOpen.value = false
-  driveOpen.value = false
+  actionRunsOpen.value = false
   scope = effectScope()
   scope.run(() =>
     m.useGlobalKeymap({
@@ -50,8 +50,7 @@ beforeEach(async () => {
       paletteOpen,
       activityOpen,
       tasksOpen,
-      driveOpen,
-      actionRunsOpen: ref(false),
+      actionRunsOpen,
     }),
   )
 })
@@ -112,7 +111,7 @@ describe('useGlobalKeymap overlay gate', () => {
     ['the palette', () => (paletteOpen.value = true)],
     ['Activity', () => (activityOpen.value = true)],
     ['Tasks', () => (tasksOpen.value = true)],
-    ['Drive', () => (driveOpen.value = true)],
+    ['Action runs', () => (actionRunsOpen.value = true)],
     ['a modal', () => void openModal()],
   ])('suppresses everything but the palette toggle while %s is open', (_name, open) => {
     activeContexts.add('feed')
@@ -143,31 +142,20 @@ describe('useGlobalKeymap overlay gate', () => {
     expect(runCommand).not.toHaveBeenCalled()
   })
 
-  it('lets drive.toggle close the Drive overlay when nothing else is open', () => {
-    driveOpen.value = true
+  // The Drive is a page, not an overlay: its chord goes through the ordinary
+  // gate, so it is swallowed under any overlay and runs everywhere else.
+  it('runs drive.toggle with no overlay open and swallows it under Tasks', () => {
     press('p', driveChord)
     expect(runCommand).toHaveBeenCalledWith('drive.toggle')
-  })
 
-  it.each([
-    ['the palette', () => (paletteOpen.value = true)],
-    ['Tasks', () => (tasksOpen.value = true)],
-    ['a modal stacked over it', () => void openModal()],
-  ])('swallows drive.toggle over Drive while %s is also open', (_name, open) => {
-    driveOpen.value = true
-    open()
-
+    runCommand.mockReset()
+    tasksOpen.value = true
     press('p', driveChord)
     expect(runCommand).not.toHaveBeenCalled()
   })
 
   it("keeps one overlay's toggle from opening over the other", () => {
-    tasksOpen.value = true
-    press('p', driveChord)
-    expect(runCommand).not.toHaveBeenCalled()
-
-    tasksOpen.value = false
-    driveOpen.value = true
+    actionRunsOpen.value = true
     press('t', tasksChord)
     expect(runCommand).not.toHaveBeenCalled()
   })

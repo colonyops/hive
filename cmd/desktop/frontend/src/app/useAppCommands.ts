@@ -127,7 +127,7 @@ export function useAppCommands(deps: AppCommandDeps) {
     },
     'report.bundle': report.openBundleDialog,
     'tasks.toggle': overlays.toggleTasks,
-    'drive.toggle': overlays.toggleDrive,
+    'drive.toggle': appMode.toggleDrive,
     'action-runs.toggle': () => overlays.toggleActionRuns(),
     'terminal.popup.toggle': togglePopupTerminal,
     'terminal.toggle-sidebar': appMode.toggleSidebar,

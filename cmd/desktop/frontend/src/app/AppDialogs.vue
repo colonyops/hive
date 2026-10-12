@@ -12,7 +12,6 @@ import TasksView from '../components/TasksView.vue'
 import ToastStack from '../components/ToastStack.vue'
 import UnsavedFlowChangesModal from '../components/UnsavedFlowChangesModal.vue'
 import WhatsNewDialog from '../components/WhatsNewDialog.vue'
-import DrivePage from '../components/drive/DrivePage.vue'
 import ConfirmationHost from '../components/ui/ConfirmationHost.vue'
 import HubOverlay from '../components/ui/HubOverlay.vue'
 import RenameDialog from '../components/ui/RenameDialog.vue'
@@ -56,14 +55,9 @@ const {
   createProfileError,
 } = feed
 const { pendingNavigation, unsavedChangesBusy } = nav
-const { tasksOpen, activityOpen, driveOpen, driveScope, actionRunsOpen, actionRunsRunId } = overlays
+const { tasksOpen, activityOpen, actionRunsOpen, actionRunsRunId } = overlays
 const { newProfileOpen } = profileActions
 const flowsSession = useFlowsSession()
-
-function openMcpSettings(): void {
-  driveOpen.value = false
-  nav.selectApplicationSettingsSection('mcp')
-}
 const { open: reportDialogOpen } = useReportDialog()
 const { current: appError, dismissError } = useErrorDialog()
 
@@ -158,14 +152,6 @@ onMounted(() => {
   />
   <HubOverlay v-if="tasksOpen" label="Tasks" testid="tasks-overlay" @close="tasksOpen = false">
     <TasksView @close="tasksOpen = false" />
-  </HubOverlay>
-  <HubOverlay v-if="driveOpen" label="Drive" testid="drive-overlay" @close="driveOpen = false">
-    <DrivePage
-      v-model:scope="driveScope"
-      @close="driveOpen = false"
-      @open-url="feed.openUrl"
-      @setup="openMcpSettings"
-    />
   </HubOverlay>
   <HubOverlay v-if="actionRunsOpen" label="Action runs" testid="action-runs-overlay" @close="actionRunsOpen = false">
     <ActionRunsView

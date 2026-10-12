@@ -65,7 +65,7 @@ export function useAppPaletteRows(
   runCommand: (id: string) => void,
   contextActive: (context: CommandContext) => boolean,
 ): void {
-  const { feed, nav, appMode, overlays, shellLoaded, onboardingActive, openNewProfile } = deps
+  const { feed, nav, appMode, shellLoaded, onboardingActive, openNewProfile } = deps
   const { profiles, activeProfile, selectedItem, selectedItemIDs, actions, invokeAction } = feed
   const { router, devToolsEnabled, requestSelectProfile, navigateSidebar, flowsActive, openFlows } = nav
   const { mode, hubActive, onScreenSessionSlug } = appMode
@@ -427,7 +427,7 @@ export function useAppPaletteRows(
             kind: 'document',
             keywords: ['document', 'drive', entry.path],
             icon: IconFileText,
-            run: () => overlays.openDrive({ space: space.key, path: entry.path, session: null }),
+            run: () => appMode.openDrive({ space: space.key, path: entry.path, session: null }),
           })
         }
       }

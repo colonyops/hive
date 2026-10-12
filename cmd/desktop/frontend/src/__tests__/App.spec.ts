@@ -3235,26 +3235,49 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('toggles the Drive overlay over the current route with mod+shift+P, and closes it on Escape', async () => {
+  it('opens the Drive page with mod+shift+P and closes it back onto the feed on the chord or Escape', async () => {
     const { wrapper, router } = await mountAppWithRouter()
     const driveChord = { key: 'p', metaKey: true, shiftKey: true }
+    const feedPath = router.currentRoute.value.fullPath
 
     window.dispatchEvent(new KeyboardEvent('keydown', driveChord))
     await flushPromises()
-    expect(router.currentRoute.value.name).toBe('feed')
-    expect(document.querySelector('[data-testid="drive-overlay"]')).not.toBeNull()
-    expect(document.querySelector('[data-testid="drive-page"]')).not.toBeNull()
+    expect(router.currentRoute.value.name).toBe('drive')
+    expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="feed-search"]').exists()).toBe(false)
 
     window.dispatchEvent(new KeyboardEvent('keydown', driveChord))
     await flushPromises()
-    expect(document.querySelector('[data-testid="drive-overlay"]')).toBeNull()
+    expect(router.currentRoute.value.fullPath).toBe(feedPath)
+    expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(false)
 
     window.dispatchEvent(new KeyboardEvent('keydown', driveChord))
     await flushPromises()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="drive-overlay"]')).toBeNull()
+    expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(false)
+    expect(router.currentRoute.value.fullPath).toBe(feedPath)
+
+    wrapper.unmount()
+  })
+
+  it('carries the Drive page scope in the route and reopens on the document last read', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    const driveChord = { key: 'p', metaKey: true, shiftKey: true }
+
+    await router.push({ name: 'drive', query: { space: 'shared', doc: 'notes.md' } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(true)
+    expect(mocks.DriveTree).toHaveBeenCalledWith('shared')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', driveChord))
+    await flushPromises()
     expect(router.currentRoute.value.name).toBe('feed')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', driveChord))
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('drive')
+    expect(router.currentRoute.value.query).toEqual({ space: 'shared', doc: 'notes.md' })
 
     wrapper.unmount()
   })
@@ -3341,9 +3364,13 @@ describe('App', () => {
     await palette.run(row!)
     await flushPromises()
 
-    expect(router.currentRoute.value.name).toBe('feed')
+    expect(router.currentRoute.value.name).toBe('drive')
+    expect(router.currentRoute.value.query).toEqual({
+      space: 'workspaces/my-workspace',
+      doc: 'reports/perf.canvas.json',
+    })
     expect(mocks.DriveDocument).toHaveBeenCalledWith('workspaces/my-workspace', 'reports/perf.canvas.json')
-    expect(document.querySelector('[data-testid="drive-page-block-doc"]')?.textContent).toContain('p95 is 96ms')
+    expect(wrapper.find('[data-testid="drive-page-block-doc"]').text()).toContain('p95 is 96ms')
 
     wrapper.unmount()
   })
@@ -3395,7 +3422,9 @@ describe('App', () => {
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', metaKey: true, shiftKey: true }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="drive-overlay"]')).not.toBeNull()
+    expect(router.currentRoute.value.name).toBe('drive')
+    expect(router.currentRoute.value.query).toEqual({ space: 'hay-kot/hive', session: 's1' })
+    expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(true)
     expect(mocks.DriveTree).toHaveBeenCalledWith('hay-kot/hive')
 
     vi.mocked(ListSessions).mockResolvedValue([])

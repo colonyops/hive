@@ -116,9 +116,9 @@ Drive is the folder tree of documents that agents and you share. It holds Markdo
 ### Where it shows
 
 - **The pane.** The right-panel button in the title bar opens the Drive pane beside a chat. It has a header, the workspace's folder tree, and a reader for the selected document.
-- **The Drive overlay.** Open it from the views menu (**Drive**), the command palette, or <kbd>⌘⇧P</kbd> (Windows/Linux: <kbd>Ctrl+Shift+P</kbd>) or <kbd>g</kbd> then <kbd>v</kbd>. It opens over the current view. Its picker groups spaces as **Repositories**, **Workspaces**, and **Shared**. Press <kbd>Esc</kbd> or <kbd>⌘⇧P</kbd> again to go back. A <kbd>g</kbd> sequence does not start while the overlay is open.
+- **The Drive page.** Open it from the views menu (**Drive**), the command palette, or <kbd>⌘⇧P</kbd> (Windows/Linux: <kbd>Ctrl+Shift+P</kbd>) or <kbd>g</kbd> then <kbd>v</kbd>. It takes the whole window, like Settings, and opens on the document the pane shows when a chat or Code session is on screen. Its picker groups spaces as **Repositories**, **Workspaces**, and **Shared**. Press <kbd>Esc</kbd>, <kbd>⌘⇧P</kbd> again, or the close button to return to the view you came from. The page is a place in history, so Back returns to it, and a document on it has a link you can open again.
 
-Search in the pane or overlay looks across every space. Copy a document as Markdown, save it to a file, or open its links from the reader. A Markdown link to another document in the space opens it in place.
+Search in the pane or on the page looks across every space. Copy a document as Markdown, save it to a file, or open its links from the reader. A Markdown link to another document in the space opens it in place.
 
 ### Document kinds
 

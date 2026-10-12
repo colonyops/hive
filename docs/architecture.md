@@ -2004,9 +2004,10 @@ Three rules govern it, and each is a consequence of that:
   — in two ways, which is the distinction to get right before adding to it.
 
   A command **pierces** when the catalog marks it `piercesPane`: it is claimed
-  on the binding alone, whatever modifiers it carries. The pop-up toggle,
-  `tasks.toggle` and `drive.toggle`, because the combo that opens an overlay
-  has to close it;
+  on the binding alone, whatever modifiers it carries. The pop-up toggle and
+  `tasks.toggle`, because the combo that opens an overlay has to close it, and
+  `drive.toggle`, because the chat that wrote a document is a focused pane and
+  the chord that opens the page from there has to work from inside it;
   `terminal.focus-sidebar` and `agents.focus-sidebar`, because reaching the list
   is the way back out — only that half of the focus pair, since the chord moving
   focus *into* a pane is unreachable from inside one; and
@@ -2328,10 +2329,20 @@ Chats and in Code, riding `?doc=` on the route. `lib/drive.ts` holds the scope,
 the space-group rule and `linkTarget`, which resolves a link in a document:
 `http`, `https` and `mailto` open outside the app, a relative or `.hive/`
 reference that names a document in the space opens it in place, and anything
-else leads nowhere. The full page is a hub overlay like Tasks; its scope is
-state in `useHubOverlays`, opened by `drive.toggle`, the views menu or a
-palette row. The reader is one renderer for both surfaces, so a document does
-not read differently in the pane and on the page. Reorganization (new
+else leads nowhere. The full page is the `drive` route, an area of its own
+like Settings, rendered in the main frame; its scope is the route's query
+(`space`, `doc`, `session`), so a document is a link and history restores it.
+`useAppMode` owns the navigation: `drive.toggle`, the views menu, a palette
+row, the pane's expand button and a `hive://drive` link open it, and closing
+returns to the page it was opened from. The reader is one renderer for both
+surfaces, so a document does not read differently in the pane and on the page.
+Fenced code is highlighted by shiki on the oniguruma WASM engine, never
+inside a render: `stores/useCodeHighlight.ts` answers a fence from its cache
+or queues it, drains the queue in slices between frames, and bumps a reactive
+version that re-runs the computed that asked; the renderers in
+`lib/githubMarkdown.ts` take that highlighter per call and stay pure. The JavaScript regex engine was
+dropped because it backtracked for seconds on some Go input, and a render
+that highlights inline froze the window for as long as its fences took. Reorganization (new
 folder, rename, move, delete of a document or an empty folder) is the user's
 only write; the app never edits document content.
 

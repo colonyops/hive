@@ -125,9 +125,9 @@ The address stays the same across restarts. An agent already set up with `/mcp/c
 
 Open the Drive pane beside a session with the right-panel button in the title bar. A session's documents belong to its repository, so every session of that repository shows the same ones, and they remain after the session is deleted. They are in `<root>/<owner>/<repo>/` under the hive context directory, which `hive drive init` links into a checkout as `.hive`, so a file you write to `.hive/plans/` shows in the pane within a second.
 
-The pane, the Drive overlay, search, reorganizing, and the document tools work as they do in [Chats](../chats/agent-workspaces.md#drive). A scratch terminal has no Drive pane.
+The pane, the Drive page, search, reorganizing, and the document tools work as they do in [Chats](../chats/agent-workspaces.md#drive). A scratch terminal has no Drive pane.
 
-An agent outside any chat or Code session, such as one you start in a plain terminal, can still write documents: it passes `global` as its session, and every such agent shares the Shared space. It has no pane. Read it in the Drive overlay under **Shared**, or find a document by name in the command palette.
+An agent outside any chat or Code session, such as one you start in a plain terminal, can still write documents: it passes `global` as its session, and every such agent shares the Shared space. It has no pane. Read it on the Drive page under **Shared**, or find a document by name in the command palette.
 
 ## Appearance
 

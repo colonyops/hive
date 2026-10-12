@@ -50,8 +50,9 @@ import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedCon
 // no toggle, no history, no palette.
 // mode is the app-level Inbox|Code|Chats switch. A segment is never disabled,
 // because an unavailable terminal or Chats area explains itself inside the
-// mode. Settings is an area too, but not a peer of the three: it is reached
-// from the Views menu, and while it is open no segment is selected.
+// mode. Settings and Drive are areas too, but not peers of the three: they
+// are reached from the Views menu, and while one is open no segment is
+// selected.
 // errorCount (8d) is the count of the active flow's nodes whose last run
 // failed. activityActive marks the Activity icon on when the audit-log page is
 // open; unseenActivity (6d) is the number of events since it was last opened,
@@ -65,7 +66,7 @@ import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedCon
 // onboarding too.
 const props = defineProps<{
   profileName?: string
-  mode?: 'hub' | 'terminal' | 'agents' | 'settings'
+  mode?: 'hub' | 'terminal' | 'agents' | 'settings' | 'drive'
   activityActive?: boolean
   actionRunsActive?: boolean
   errorCount?: number
@@ -186,7 +187,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
         size="sm"
         class="ml-1.5 shrink-0"
         style="--wails-draggable: no-drag"
-        :model-value="mode === 'settings' ? undefined : mode"
+        :model-value="mode === 'settings' || mode === 'drive' ? undefined : mode"
         :options="modeOptions"
         aria-label="App mode"
         testid="titlebar-mode"
@@ -298,7 +299,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       </IconButton>
       <TitleBarMenu
         v-if="profileName"
-        :active="actionRunsActive || mode === 'settings'"
+        :active="actionRunsActive || mode === 'settings' || mode === 'drive'"
         @run-command="(commandId) => emit('run-command', commandId)"
       />
       <IconButton

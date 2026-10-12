@@ -7,13 +7,15 @@ import { expect, test } from './fixtures.js'
 const planPath = 'plans/2026-10-11-plan.md'
 const planTitle = 'E2E Drive Plan'
 
-test('the Drive overlay opens a document from a space and finds it from another', async ({ page }) => {
+test('the Drive page opens a document from a space and finds it from another', async ({ page }) => {
   await page.goto('/')
   await expect(page.getByTestId('feed-item').first()).toBeVisible()
 
   await page.getByTestId('titlebar-menu').click()
   await page.getByTestId('titlebar-menu-drive').click()
-  await expect(page.getByTestId('drive-overlay')).toBeVisible()
+  await expect(page.getByTestId('drive-page')).toBeVisible()
+  await expect(page.getByTestId('feed-item')).toHaveCount(0)
+  await expect(page).toHaveURL(/#\/drive/)
 
   await page.getByTestId('drive-page-space').click()
   await expect(page.getByTestId('drive-page-space-group-Repositories')).toBeVisible()
@@ -32,7 +34,9 @@ test('the Drive overlay opens a document from a space and finds it from another'
   await page.getByTestId('drive-page-search').fill('E2E Drive')
   await page.getByTestId(`drive-page-hit-e2e/repo:${planPath}`).click()
   await expect(page.getByTestId('drive-page-title')).toHaveText(planTitle)
+  await expect(page).toHaveURL(/#\/drive\?space=e2e(%2F|\/)repo&doc=plans(%2F|\/)2026-10-11-plan\.md/)
 
   await page.keyboard.press('Escape')
-  await expect(page.getByTestId('drive-overlay')).toHaveCount(0)
+  await expect(page.getByTestId('drive-page')).toHaveCount(0)
+  await expect(page.getByTestId('feed-item').first()).toBeVisible()
 })
