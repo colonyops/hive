@@ -91,6 +91,7 @@ type AgentWorkspacesService struct {
 	// port is not known when this service is built and can change if it
 	// rebinds.
 	mcpBase  MCPBaseReader
+	accounts mcpcatalog.AccountResolvers
 	endDelay SessionEndDelayReader
 	events   *events.Bus
 	// OnSchedulesChanged is a field rather than a constructor argument because
@@ -204,7 +205,23 @@ func (s *AgentWorkspacesService) catalogue(ctx context.Context) []agentws.Catalo
 		}
 		entries[i].Server.URL = base + descriptor.RuntimePath
 	}
+	for i, entry := range entries {
+		descriptor, ok := mcpcatalog.Lookup(entry.ID)
+		if !ok || !entry.Shipped || !descriptor.AccountURL {
+			continue
+		}
+		if _, ok := s.accounts.Lookup(entry.ID); !ok {
+			entries[i].Problem = "nothing in this install provides an account for this server"
+		}
+	}
 	return entries
+}
+
+// RegisterAccountResolver supplies the URL and headers of an AccountURL
+// catalogue entry. It is registered after construction because the account
+// owner (the relay connector) is wired beside this service, not under it.
+func (s *AgentWorkspacesService) RegisterAccountResolver(mcpType string, resolve mcpcatalog.AccountResolver) {
+	s.accounts.Register(mcpType, resolve)
 }
 
 // lookPath is what the catalogue validates a stdio command against: the PATH
@@ -457,14 +474,26 @@ func (s *AgentWorkspacesService) regenerate(ctx context.Context, dir string) (re
 		return regeneration{}, err
 	}
 
+	servers, serverProblems := s.resolveServers(ctx, ws)
 	generated, err := agentws.Generate(agentws.GenerateInput{
 		Dir:       filepath.Join(s.store.Root(), dir),
 		Workspace: ws,
-		Servers:   s.resolveServers(ctx, ws),
+		Servers:   servers,
 		Skills:    rendered,
 	})
 	if err != nil {
 		return regeneration{}, Wrap(err, KindInternal, "generating workspace %q", dir)
+	}
+	if len(serverProblems) > 0 {
+		missing := generated.MissingMCPs[:0]
+		for _, id := range generated.MissingMCPs {
+			if problem, ok := serverProblems[id]; ok {
+				generated.Problems = append(generated.Problems, problem)
+				continue
+			}
+			missing = append(missing, id)
+		}
+		generated.MissingMCPs = missing
 	}
 	return regeneration{status: st, generated: generated, missingPackages: missingPackages}, nil
 }
@@ -1664,19 +1693,48 @@ func (s *AgentWorkspacesService) liveSessionCount(ctx context.Context) (int, err
 // resolveServers resolves a workspace's declared MCP ids through the store's
 // catalogue. An id with no catalogue entry is simply omitted here; Generate
 // itself reports it in MissingMCPs by comparing ws.MCPs against this map, so
-// there is nothing to track twice.
-func (s *AgentWorkspacesService) resolveServers(ctx context.Context, ws agentws.Workspace) map[string]mcpcatalog.Server {
-	byID := make(map[string]mcpcatalog.Server, len(ws.MCPs))
+// there is nothing to track twice. An AccountURL entry is resolved for this
+// workspace; one that cannot be is omitted too and returned in problems,
+// keyed by id, so the caller can tell it from a missing one.
+func (s *AgentWorkspacesService) resolveServers(ctx context.Context, ws agentws.Workspace) (servers map[string]mcpcatalog.Server, problems map[string]string) {
+	byID := make(map[string]agentws.CatalogueEntry, len(ws.MCPs))
 	for _, entry := range s.catalogue(ctx) {
-		byID[entry.ID] = entry.Server
+		byID[entry.ID] = entry
 	}
-	servers := make(map[string]mcpcatalog.Server, len(ws.MCPs))
+	servers = make(map[string]mcpcatalog.Server, len(ws.MCPs))
+	problems = map[string]string{}
 	for _, id := range ws.MCPs {
-		if srv, ok := byID[id]; ok {
-			servers[id] = srv
+		entry, ok := byID[id]
+		if !ok {
+			continue
 		}
+		srv, err := s.resolveAccount(ctx, entry, ws.Dir)
+		if err != nil {
+			problems[id] = id + ": " + err.Error()
+			continue
+		}
+		servers[id] = srv
 	}
-	return servers
+	return servers, problems
+}
+
+func (s *AgentWorkspacesService) resolveAccount(ctx context.Context, entry agentws.CatalogueEntry, workspace string) (mcpcatalog.Server, error) {
+	descriptor, ok := mcpcatalog.Lookup(entry.ID)
+	if !ok || !entry.Shipped || !descriptor.AccountURL {
+		return entry.Server, nil
+	}
+	resolve, ok := s.accounts.Lookup(entry.ID)
+	if !ok {
+		return mcpcatalog.Server{}, errors.New(entry.Problem)
+	}
+	base, headers, err := resolve(ctx, workspace)
+	if err != nil {
+		return mcpcatalog.Server{}, err
+	}
+	srv := entry.Server
+	srv.URL = strings.TrimRight(base, "/") + descriptor.AccountPath
+	srv.Headers = headers
+	return srv, nil
 }
 
 // resolveSkills expands a workspace's enabled packages into the skills they

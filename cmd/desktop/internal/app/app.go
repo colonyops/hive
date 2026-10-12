@@ -506,6 +506,8 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Events:          a.Events,
 		Logger:          cfg.Logger,
 	})
+	relayMCP := &relayMCPResolver{accounts: a.relayAuth.Accounts, clientFor: a.relayFetchers.For, creds: a.credentials}
+	a.AgentWorkspaces.RegisterAccountResolver("hive-relay", relayMCP.Resolve)
 	a.outputs = a.buildOutputWorker(cfg)
 	a.Jobs.setCommandCanceller(a.outputs.Cancel)
 	a.ActionRuns = newActionRunsService(a.Stores.ActionRuns, dispatch.NewFlowActions(a.flowStore, a.actionStore))

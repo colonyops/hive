@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
+	"github.com/colonyops/hive/cmd/relay/internal/wire"
 	"github.com/colonyops/hive/internal/web"
 )
 
@@ -55,7 +56,7 @@ func TestAuthEmailCodeFlow(t *testing.T) {
 
 	me := client{h: h, key: got.Token}.call(http.MethodGet, "/v1/me", nil)
 	require.Equal(t, http.StatusOK, me.Code)
-	assert.True(t, decode[meResponse](t, me).Methods.EmailCode)
+	assert.True(t, decode[wire.Me](t, me).Methods.EmailCode)
 
 	rec = anon.call(http.MethodPost, "/v1/auth/verify", map[string]string{"email": "alice@example.com", "code": code})
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)

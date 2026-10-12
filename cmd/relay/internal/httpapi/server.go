@@ -34,6 +34,9 @@ type Core struct {
 	Store   relay.Store
 	Limits  relay.Limits
 	Version string
+	// MCP is served at /mcp behind the same bearer check as /v1; nil leaves
+	// /mcp unmounted.
+	MCP http.Handler
 }
 
 type api struct {
@@ -85,6 +88,10 @@ func newAPI(core Core, cfg config.Config, log zerolog.Logger) *api {
 	authed("GET /v1/tokens", s.listTokens)
 	authed("POST /v1/tokens", s.createToken)
 	authed("DELETE /v1/tokens/{id}", s.deleteToken)
+
+	if core.MCP != nil {
+		mux.Handle("/mcp", s.requireBearerPlain(log, core.MCP))
+	}
 
 	// The ingress token is a credential, and mid.Logger logs the raw path, so
 	// /in/ bypasses it for a logger that redacts the token.

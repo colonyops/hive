@@ -21,6 +21,7 @@ import (
 	"github.com/colonyops/hive/cmd/relay/internal/config"
 	"github.com/colonyops/hive/cmd/relay/internal/httpapi"
 	"github.com/colonyops/hive/cmd/relay/internal/mail"
+	"github.com/colonyops/hive/cmd/relay/internal/mcpsrv"
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
 	"github.com/colonyops/hive/cmd/relay/internal/store/memory"
 	"github.com/colonyops/hive/cmd/relay/internal/store/sqlite"
@@ -95,6 +96,15 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 		Limits:  cfg.Limits,
 		Version: version,
 	}
+	core.MCP = mcpsrv.New(mcpsrv.Core{
+		Auth:    core.Auth,
+		SignIn:  core.SignIn,
+		Sources: core.Sources,
+		Feed:    core.Feed,
+		Store:   core.Store,
+		Limits:  core.Limits,
+		Version: core.Version,
+	}, log).Handler()
 	handler := httpapi.New(core, cfg, log)
 
 	if cfg.MintFor != "" {

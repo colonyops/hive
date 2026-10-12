@@ -171,6 +171,23 @@ func (c *Client) Deliveries(ctx context.Context, sourceID, after string, limit i
 	return out, c.call(ctx, http.MethodGet, path, nil, &out)
 }
 
+// CreateToken mints an API key on the account and returns its plaintext,
+// which the relay never shows again, and its id for revoking it.
+func (c *Client) CreateToken(ctx context.Context, name string) (plaintext, id string, err error) {
+	var out struct {
+		Token string `json:"token"`
+		ID    string `json:"id"`
+	}
+	if err := c.call(ctx, http.MethodPost, "/v1/tokens", map[string]string{"name": name}, &out); err != nil {
+		return "", "", err
+	}
+	return out.Token, out.ID, nil
+}
+
+func (c *Client) RevokeToken(ctx context.Context, id string) error {
+	return c.call(ctx, http.MethodDelete, "/v1/tokens/"+url.PathEscape(id), nil, nil)
+}
+
 func (c *Client) call(ctx context.Context, method, path string, in, out any) error {
 	var (
 		resp *http.Response

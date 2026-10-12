@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/relay/internal/relay"
+	"github.com/colonyops/hive/cmd/relay/internal/wire"
 	"github.com/colonyops/hive/internal/web"
 )
 
@@ -71,7 +72,7 @@ func TestAPISourcesAndDeliveries(t *testing.T) {
 
 	rec := c.call(http.MethodPost, "/v1/sources", map[string]string{"name": "ci", "secret": "abc"})
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
-	created := decode[createdSourceResponse](t, rec)
+	created := decode[wire.CreatedSource](t, rec)
 	assert.Equal(t, "ci", created.Name)
 	assert.True(t, created.HasSecret)
 	require.True(t, strings.HasPrefix(created.IngressURL, testPublicURL+"/in/"))
@@ -83,13 +84,13 @@ func TestAPISourcesAndDeliveries(t *testing.T) {
 
 	rec = c.call(http.MethodGet, "/v1/sources", nil)
 	require.Equal(t, http.StatusOK, rec.Code)
-	list := decode[sourcesResponse](t, rec)
+	list := decode[wire.Sources](t, rec)
 	require.Len(t, list.Sources, 1)
 	assert.Equal(t, created.ID, list.Sources[0].ID)
 
 	rec = c.call(http.MethodPatch, "/v1/sources/"+created.ID, map[string]string{"name": "ci-2", "secret": ""})
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	patched := decode[sourceView](t, rec)
+	patched := decode[wire.Source](t, rec)
 	assert.Equal(t, "ci-2", patched.Name)
 	assert.False(t, patched.HasSecret)
 
@@ -99,7 +100,7 @@ func TestAPISourcesAndDeliveries(t *testing.T) {
 
 	rec = c.call(http.MethodGet, "/v1/sources/"+created.ID, nil)
 	require.Equal(t, http.StatusOK, rec.Code)
-	got := decode[sourceView](t, rec)
+	got := decode[wire.Source](t, rec)
 	assert.Equal(t, 3, got.Deliveries)
 	assert.Positive(t, got.Bytes)
 
@@ -124,7 +125,7 @@ func TestAPISourcesAndDeliveries(t *testing.T) {
 
 	rec = c.call(http.MethodPost, "/v1/sources/"+created.ID+"/rotate", nil)
 	require.Equal(t, http.StatusOK, rec.Code)
-	rotated := decode[ingressURLResponse](t, rec)
+	rotated := decode[wire.IngressURL](t, rec)
 	assert.NotEqual(t, created.IngressURL, rotated.IngressURL)
 	assert.Equal(t, http.StatusNotFound, h.do(ingressPost(token, "x")).Code)
 	newToken := strings.TrimPrefix(rotated.IngressURL, testPublicURL+"/in/")
@@ -147,7 +148,7 @@ func TestAPITokens(t *testing.T) {
 
 	rec := c.call(http.MethodPost, "/v1/tokens", map[string]string{"name": "laptop"})
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
-	created := decode[createdTokenResponse](t, rec)
+	created := decode[wire.CreatedToken](t, rec)
 	assert.NotEmpty(t, created.Token)
 	assert.Equal(t, "laptop", created.Name)
 	assert.Equal(t, relay.TokenAPI, created.Kind)
@@ -157,7 +158,7 @@ func TestAPITokens(t *testing.T) {
 	rec = c.call(http.MethodGet, "/v1/tokens", nil)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.NotContains(t, rec.Body.String(), "hash")
-	list := decode[tokensResponse](t, rec)
+	list := decode[wire.Tokens](t, rec)
 	require.Len(t, list.Tokens, 2)
 	var current int
 	for _, tok := range list.Tokens {
@@ -184,7 +185,7 @@ func TestAPIMe(t *testing.T) {
 
 	rec := c.call(http.MethodGet, "/v1/me", nil)
 	require.Equal(t, http.StatusOK, rec.Code)
-	me := decode[meResponse](t, rec)
+	me := decode[wire.Me](t, rec)
 	assert.Equal(t, owner, me.Email)
 	assert.False(t, me.Encryption)
 	assert.Equal(t, 1, me.Usage.Sources)

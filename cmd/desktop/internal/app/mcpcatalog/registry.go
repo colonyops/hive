@@ -39,6 +39,17 @@ var registry = map[string]Descriptor{
 		RuntimeURL:  true,
 		RuntimePath: "/mcp/canvas",
 	},
+	// A connected Hive Relay account. The URL is the account's relay and the
+	// header a per-workspace API key, so both come from an AccountResolver.
+	"hive-relay": {
+		Type:        "hive-relay",
+		Title:       "Hive Relay",
+		Description: "Your connected Hive Relay account: create and rotate webhook sources, page through stored deliveries, and manage API keys.",
+		Stability:   StabilityExperimental,
+		Server:      Server{Transport: TransportHttp},
+		AccountURL:  true,
+		AccountPath: "/mcp",
+	},
 	"chrome-devtools": {
 		Type:        "chrome-devtools",
 		Title:       "Chrome DevTools",

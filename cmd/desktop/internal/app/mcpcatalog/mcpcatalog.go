@@ -56,4 +56,10 @@ type Descriptor struct {
 	// literal lives here, in core, because the adapter cannot be imported
 	// back — a pinning test in mcpsrv asserts the two agree.
 	RuntimePath string
+	// AccountURL marks a server whose URL and headers come from a connected
+	// account rather than from this install: the catalogue asks the resolver
+	// registered for Type and reports a Problem when no account is connected.
+	AccountURL bool
+	// AccountPath is joined onto the base URL the resolver returns.
+	AccountPath string
 }
