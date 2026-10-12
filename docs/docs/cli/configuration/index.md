@@ -37,7 +37,7 @@ rules:
         focus: true
       - name: shell
     commands:
-      - hive ctx init
+      - hive drive init
 
   - pattern: ".*/data-team/.*"
     agent: aider
@@ -147,7 +147,7 @@ terminal:
 
 | Option                 | Type     | Default                          | Description                                                                          |
 | ---------------------- | -------- | -------------------------------- | ------------------------------------------------------------------------------------ |
-| `context.symlink_name` | `string` | `.hive`                          | Symlink name created by `hive ctx init`                                              |
+| `context.symlink_name` | `string` | `.hive`                          | Symlink name created by `hive drive init`                                              |
 | `context.base_dir`     | `string` | `$HIVE_DATA_DIR/context/`        | Override the base directory for all context storage. Accepts `~` and absolute paths. Can be overridden with `HIVE_CONTEXT_BASE_DIR`. |
 
 By default context documents are stored under hive's data directory (`~/.local/share/hive/context/`). Set `context.base_dir` or `HIVE_CONTEXT_BASE_DIR` to redirect them elsewhere — for example, into a git repository so plans and research are version-controlled alongside your code.

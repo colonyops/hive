@@ -133,7 +133,7 @@ The Chats area gives ongoing agent work a durable home outside a repository sess
 
     ---
 
-    Choose reusable skill packages and tools for each workspace. Hive includes integrations for Hive Desktop, Hive Canvas, Playwright, and Chrome DevTools.
+    Choose reusable skill packages and tools for each workspace. Hive includes integrations for Hive Desktop, Hive Drive, Playwright, and Chrome DevTools.
 
 -   :lucide-calendar-clock:{ .lg .middle } __Scheduled jobs__
 
@@ -147,11 +147,11 @@ The Chats area gives ongoing agent work a durable home outside a repository sess
 
     See which chats are working, need approval, are running, or are stopped. Stop, restart, rename, or delete a chat independently of its workspace.
 
--   :lucide-panels-right-bottom:{ .lg .middle } __Canvases__
+-   :lucide-panels-right-bottom:{ .lg .middle } __Drive__
 
     ---
 
-    Let agents publish durable Markdown, HTML, and links beside a chat or a Code session, then read them full page, search, copy, or export the result.
+    Let agents publish durable Markdown, HTML, and canvas documents beside a chat or a Code session, then browse the folder tree, search every space, reorganize it, or read a document full page.
 
 -   :lucide-panel-left-open:{ .lg .middle } __Code integration__
 

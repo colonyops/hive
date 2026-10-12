@@ -6,7 +6,7 @@ icon: lucide/git-branch
 
 Store hive's planning and research documents in a git repository so they are version-controlled, searchable, and shareable across machines.
 
-By default, context documents live inside hive's data directory (`~/.local/share/hive/context/`), which is not tracked by git. Redirecting them into a dedicated repository gives you full history, diffs, and automatic sync across machines.
+By default, the documents live inside hive's data directory (`~/.local/share/hive/context/`), which is not tracked by git. That directory is the root of [Hive Drive](../getting-started/context.md), so this recipe puts the whole drive under git. Redirecting them into a dedicated repository gives you full history, diffs, and automatic sync across machines.
 
 ## Setup
 
@@ -37,7 +37,7 @@ hive doctor
 
 ```bash
 cd ~/projects/my-repo
-hive ctx init   # creates .hive → ~/notes/hive-context/{owner}/{repo}/
+hive drive init   # creates .hive → ~/notes/hive-context/{owner}/{repo}/
 ```
 
 Documents written to `.hive/plans/` and `.hive/research/` now land inside `~/notes/hive-context/`.
@@ -105,7 +105,9 @@ With `base_dir: ~/notes/hive-context`, the layout is:
     └── architecture-decisions.md
 ```
 
-Each project's `.hive` symlink points to its own subdirectory. All documents live in one repository that you can push, pull, and browse with standard git tools.
+Each project's `.hive` symlink points to its own subdirectory. A space is a folder under the root: `<owner>/<repo>/` for a repository, `workspaces/<name>/` for a Hive Desktop Chats workspace, and `shared/`. All documents live in one repository that you can push, pull, and browse with standard git tools.
+
+Hive Desktop shows the same files in its Drive view, and Obsidian or git sees the same files the desktop does. A document an agent writes, a file you edit in Obsidian, and a commit pulled by the sync job all appear in the drive within a second. Hive Desktop also stores its canvases here, as `.canvas.json` files, so they are committed with the rest.
 
 ## Tips
 

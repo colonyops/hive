@@ -7,7 +7,7 @@ description: Run persistent coding agents, scheduled jobs, skills, and MCP serve
 
 The **Chats** area runs coding agents in persistent workspaces. Open it with <kbd>g</kbd> then <kbd>a</kbd>.
 
-A workspace contains its instructions, chats, launch command, skill packages, MCP servers, schedules, and canvases. Chats run in tmux, so they can continue when you switch views or restart Hive.
+A workspace contains its instructions, chats, launch command, skill packages, MCP servers, schedules, and a Drive space for the documents agents write. Chats run in tmux, so they can continue when you switch views or restart Hive.
 
 ## Requirements
 
@@ -103,23 +103,65 @@ The built-in Hive package covers:
 Hive includes these MCP entries:
 
 - **Hive Desktop** for reading and configuring the running app. It requires the local HTTP server, which is enabled by default.
-- **Hive Canvas** for durable Markdown, Mermaid diagrams, HTML, and links beside a chat.
+- **Hive Drive** for durable Markdown, HTML, and canvas documents beside a chat.
 - **Playwright** for browser automation. It requires Node.js and a Playwright browser.
 - **Chrome DevTools** for a running Chrome browser. It requires Node.js 20.19 or newer and Chrome.
 
 You can add HTTP, SSE, and stdio servers to the shared MCP library, then enable them per workspace. Secrets in custom server configuration can use `env:`, `file:`, or `op://` references.
 
-## Canvases
+## Drive
 
-An agent with **Hive Canvas** enabled can publish named output beside its chat. Canvases remain available after the chat ends and can contain Markdown, Mermaid diagrams, sanitized HTML, and links. Use a standalone `mermaid` fence inside a Markdown block. Mermaid diagrams follow the current theme. Drag a diagram to pan, use its controls to zoom or fit it, or hold Control/Command while scrolling to zoom around the pointer. An invalid diagram shows an error in place without hiding the rest of the canvas.
+Drive is the folder tree of documents that agents and you share. It holds Markdown, HTML, and canvas documents in folders, and it outlives any chat. The [hive CLI](../../cli/getting-started/context.md) reads the same tree.
 
-Use the canvas pane to search previous output, copy a canvas as Markdown, save it to a file, delete it, or open its links. Delete asks for confirmation and removes the canvas for every chat or Code session that shares its owner.
+### Where it shows
 
-A canvas can include front matter such as tags, status, or an owner. Hive displays it above the document with the automatic creation and update times. Collapse **Properties** to hide it; Hive uses that choice for every canvas. Agents replace editable front matter with the Hive Canvas `set_frontmatter` tool; `created_at` and `updated_at` are reserved and updated by Hive. Values can be text, numbers, booleans, empty values, or lists of those values. Copy and save include the metadata as YAML front matter and preserve Mermaid source in a fenced `mermaid` block.
+- **The pane.** The right-panel button in the title bar opens the Drive pane beside a chat. It has a header, the workspace's folder tree, and a reader for the selected document.
+- **The Drive overlay.** Open it from the views menu (**Drive**), the command palette, or <kbd>⌘⇧P</kbd> (Windows/Linux: <kbd>Ctrl+Shift+P</kbd>) or <kbd>g</kbd> then <kbd>v</kbd>. It opens over the current view. Its picker groups spaces as **Repositories**, **Workspaces**, and **Shared**. Press <kbd>Esc</kbd> or <kbd>⌘⇧P</kbd> again to go back. A <kbd>g</kbd> sequence does not start while the overlay is open.
 
-**Settings ▸ Canvas** changes text size and line spacing for every canvas, in Chats and in Code.
+Search in the pane or overlay looks across every space. Copy a document as Markdown, save it to a file, or open its links from the reader. A Markdown link to another document in the space opens it in place.
 
-To read a canvas full page, use **Open full page** in the pane, pick the canvas in the command palette, or press <kbd>⌘⇧P</kbd> (Windows/Linux: <kbd>Ctrl+Shift+P</kbd>) or <kbd>g</kbd> then <kbd>v</kbd>. The full-page view opens over the current view and lists the workspace's canvases in a sidebar. Its picker also lists the repositories whose [Code sessions wrote canvases](../code/terminal-mode.md#canvases). A Markdown link whose target is the name of another canvas in the workspace opens that canvas in place. The text runs at a narrow reading width by default. Change it under **Text width** in Settings ▸ Canvas: **Wide** fits HTML laid out in columns, and **Full** runs to the edges of the view. Press <kbd>Esc</kbd> or <kbd>⌘⇧P</kbd> again to go back. A <kbd>g</kbd> sequence does not start while the view is open. A repository with no canvases yet links to the setup in **Settings ▸ MCP servers**.
+### Document kinds
+
+- **Markdown** (`.md`) renders with its front matter shown above it.
+- **HTML** (`.html`) runs in a sandbox. Scripts run inside the frame, and the page cannot reach Hive or anything on your computer. It can load `https:` content.
+- **Canvas** (`.canvas.json`) is a document of blocks that an agent builds: Markdown, Mermaid diagrams, sanitized HTML, and links.
+
+Use a standalone `mermaid` fence inside a Markdown block for a diagram. Mermaid diagrams follow the current theme. Drag a diagram to pan, use its controls to zoom or fit it, or hold Control/Command while scrolling to zoom around the pointer. An invalid diagram shows an error in place without hiding the rest of the canvas.
+
+A Markdown document or a canvas can include front matter such as tags, status, or an owner. Hive displays it above the document. A canvas also shows automatic creation and update times. Collapse **Properties** to hide it; Hive uses that choice for every document. Agents replace a canvas's editable front matter with the `set_frontmatter` tool; `created_at` and `updated_at` are reserved and updated by Hive. Values can be text, numbers, booleans, empty values, or lists of those values. Copy and save include the metadata as YAML front matter and preserve Mermaid source in a fenced `mermaid` block.
+
+**Settings ▸ Drive** changes text size, line spacing, and text width for every document, in Chats and in Code. The text runs at a narrow reading width by default. **Wide** fits HTML laid out in columns, and **Full** runs to the edges of the view.
+
+### Reorganize
+
+You can reorganize the tree without an agent running. Create a folder, rename a document or folder, move it into another folder in the same space, or delete it from a row's menu. You can also drag a document onto a folder. Delete works on a document or an empty folder, and asks for confirmation. Deleting a document removes it for every chat or Code session that shares the space.
+
+### Files on disk
+
+Drive is a folder on disk under the hive context root, `~/.local/share/hive/context/` unless `context.base_dir` moves it:
+
+| Space | Folder |
+| --- | --- |
+| A repository | `<root>/<owner>/<repo>/` |
+| A Chats workspace | `<root>/workspaces/<name>/` |
+| Shared | `<root>/shared/` |
+
+A [Code session's](../code/terminal-mode.md#drive) checkout links its space as `.hive`. Drive refreshes within a second when a file changes on disk, so a document you write from a terminal or edit in Obsidian appears without a reload. Deleting a workspace or a chat leaves its documents in place.
+
+### Let an agent write
+
+An agent with **Hive Drive** enabled can publish documents beside its chat. The seeded Hive workspace has it on. The MCP server is at `/mcp/drive`; the older address `/mcp/canvas` answers the same server, so existing agent setups keep working. The six document tools are:
+
+- `list_documents`
+- `read_document`
+- `write_document`
+- `move_document`
+- `delete_document`
+- `open_document`
+
+The ten canvas tools remain. A canvas name can include folders, so `reports/perf` is filed as `reports/perf.canvas.json`, and a bare name is filed under `canvases/`. An agent can only write `.md` and `.html` documents with `write_document`.
+
+A repository with no documents yet links to the setup in **Settings ▸ MCP servers**.
 
 ## Use a chat in Code
 
