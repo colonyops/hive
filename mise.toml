@@ -18,7 +18,7 @@ go = "1.27.2"
 "github:sqlc-dev/sqlc" = "v1.31.1"
 golangci-lint = "2.14.0"
 "goreleaser" = "2.17.1"
-lefthook = "2.1.14"
+lefthook = "2.1.17"
 
 # Hive Desktop (cmd/desktop): the Wails CLI and Node for the frontend.
 "go:github.com/wailsapp/wails/v3/cmd/wails3" = "v3.0.0-beta.21"
