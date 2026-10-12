@@ -23,3 +23,19 @@ run = "go test ./cmd/relay/..."
 ["relay:build"]
 description = "Build the hive-relay binary into cmd/relay/bin/"
 run = "go build -o cmd/relay/bin/hive-relay ./cmd/relay"
+
+["relay:image"]
+description = "Build the hive-relay container image locally as hive-relay:dev from a relay:build output"
+depends = ["relay:build"]
+run = """
+set -euo pipefail
+ctx=$(mktemp -d)
+trap 'rm -rf "$ctx"' EXIT
+# The Dockerfile copies from <os>/<arch>/hive-relay, the layout goreleaser's
+# dockers_v2 hands it, so the local build lays the binary out the same way.
+arch=$(go env GOARCH)
+mkdir -p "$ctx/linux/$arch"
+GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -o "$ctx/linux/$arch/hive-relay" ./cmd/relay
+cp cmd/relay/Dockerfile "$ctx/Dockerfile"
+docker build --platform "linux/$arch" -t hive-relay:dev "$ctx"
+"""

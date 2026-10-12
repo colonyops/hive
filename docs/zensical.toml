@@ -43,6 +43,7 @@ nav = [
     { "Resources" = [
       "desktop/getting-started/build-from-source.md",
       "desktop/getting-started/troubleshooting.md",
+      "desktop/resources/relay.md",
     ]},
   ]},
   { "CLI" = [
