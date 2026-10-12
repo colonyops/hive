@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -60,6 +61,7 @@ func TestMoveDocumentKeepsTheKind(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.svc.MoveDocument(ctx, "1", "plan.md", "plan.html")
 	assert.Equal(t, KindInvalid, KindOf(err))
+	assert.Contains(t, errorMessage(t, err), "keep the extension")
 
 	entry, err := f.svc.MoveDocument(ctx, "1", "plan.md", "plans/plan.md")
 	require.NoError(t, err)
@@ -69,4 +71,12 @@ func TestMoveDocumentKeepsTheKind(t *testing.T) {
 	assert.Equal(t, []string{"plan.md"}, updates[0].Paths)
 	assert.Equal(t, []string{"plan.md", "plans/plan.md"}, updates[1].Paths, "a move names both ends")
 	assert.Equal(t, "1", updates[1].Session)
+}
+
+// errorMessage is what the UI shows: the message alone, without the cause.
+func errorMessage(t *testing.T, err error) string {
+	t.Helper()
+	appErr, ok := errors.AsType[*Error](err)
+	require.True(t, ok, "%v is not an app error", err)
+	return appErr.Msg
 }

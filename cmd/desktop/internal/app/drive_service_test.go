@@ -641,19 +641,6 @@ func TestCanvasPaneToggleNamesTheHiveSession(t *testing.T) {
 	assert.Equal(t, events.DriveToggleRequested{HiveSession: "abc123", Space: "acme/site", Open: true}, toggles[0])
 }
 
-func TestSpaceKeyMappings(t *testing.T) {
-	for key, owner := range map[string]string{
-		"shared":          "@global",
-		"workspaces/demo": "demo",
-		"acme/site":       "acme/site",
-	} {
-		assert.Equal(t, owner, OwnerForSpaceKey(key), key)
-	}
-	assert.Equal(t, "acme/site", SpaceKeyForRemote("git@github.com:acme/site.git"))
-	assert.Empty(t, SpaceKeyForRemote(""))
-	assert.Empty(t, SpaceKeyForRemote("git@github.com:shared/site.git"), "a reserved owner names no space")
-}
-
 func TestDriveIsUnavailableBeforeTheEngineStarts(t *testing.T) {
 	svc := newDriveService(DriveDeps{
 		Engine:   func() *hive.Engine { return nil },
@@ -733,6 +720,24 @@ func TestImportLegacyCanvasesMovesEveryPreDriveCanvasIntoItsSpace(t *testing.T) 
 	metas, err := f.canvasesAt(t.Context(), drive.SharedKey)
 	require.NoError(t, err)
 	assert.Len(t, metas, 1, "a second run is a no-op")
+}
+
+func TestImportLegacyCanvasesContinuesPastAFailedImport(t *testing.T) {
+	f := newDriveFixture(t)
+	paths := settings.Paths{DataDir: t.TempDir(), AgentWorkspacesDir: t.TempDir()}
+	require.NoError(t, os.WriteFile(filepath.Join(paths.DataDir, "canvases"), []byte("not a directory"), 0o644))
+	demo := filepath.Join(paths.AgentWorkspacesDir, "demo", "canvases")
+	require.NoError(t, os.MkdirAll(demo, 0o755))
+	legacy := `{"workspace":"demo","name":"plan","session":"1","createdAt":1,"updatedAt":2,"blocks":[]}`
+	require.NoError(t, os.WriteFile(filepath.Join(demo, "plan.json"), []byte(legacy), 0o644))
+
+	var logs strings.Builder
+	importLegacyCanvases(t.Context(), zerolog.New(&logs), f.harness.engine, paths)
+
+	assert.Contains(t, logs.String(), "legacy canvases not imported")
+	assert.Contains(t, logs.String(), filepath.Join(paths.DataDir, "canvases"))
+	require.FileExists(t, filepath.Join(f.contextDir(), "workspaces", "demo", "canvases", "plan.canvas.json"),
+		"a failed shared import does not stop the workspace imports after it")
 }
 
 // writeDoc puts a file in a space on disk. Call it before the space's first
@@ -933,6 +938,11 @@ func TestDriveRenameKeepsTheKind(t *testing.T) {
 		assert.Equal(t, tc.want, KindOf(err), "Rename(%q, %q): %v", tc.path, tc.name, err)
 	}
 	assert.FileExists(t, filepath.Join(f.contextDir(), "workspaces", "ws", "d.md"), "a refused rename leaves the file")
+
+	_, err := f.svc.Rename(ctx, "workspaces/ws", "d.md", "d.html")
+	assert.Contains(t, errorMessage(t, err), "keep the extension")
+	_, err = f.svc.Rename(ctx, "workspaces/ws", "canvases/roadmap.canvas.json", "Road Map")
+	assert.Contains(t, errorMessage(t, err), "not a canvas name the canvas tools can address")
 }
 
 func TestDriveMoveAndCreateFolderRefusals(t *testing.T) {

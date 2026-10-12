@@ -2,10 +2,10 @@ package mcpsrv
 
 import (
 	"context"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/internal/domain/drive"
 )
 
@@ -321,7 +321,7 @@ func (ctrl *DriveController) ListCanvases(ctx context.Context, _ *mcp.CallToolRe
 
 func canvasWriteResultFrom(c drive.Canvas, blockID string) canvasWriteResult {
 	res := canvasWriteResult{
-		Workspace: app.OwnerForSpaceKey(c.Space), Name: drive.CanvasName(c.Path), Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
+		Workspace: canvasOwner(c.Space), Name: drive.CanvasName(c.Path), Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: c.Frontmatter, BlockCount: len(c.Blocks),
 	}
 	for _, b := range c.Blocks {
@@ -345,7 +345,23 @@ func canvasResultFrom(c drive.Canvas) canvasResult {
 		})
 	}
 	return canvasResult{
-		Workspace: app.OwnerForSpaceKey(c.Space), Name: drive.CanvasName(c.Path), Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
+		Workspace: canvasOwner(c.Space), Name: drive.CanvasName(c.Path), Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: c.Frontmatter, Blocks: blocks,
 	}
+}
+
+// legacyGlobalOwner is the owner key hive-canvas results still name the shared
+// space by; the @ kept it out of the workspace names hive creates.
+const legacyGlobalOwner = "@global"
+
+// canvasOwner maps a space key onto the owner key the hive-canvas results
+// still name: shared is @global, workspaces/<name> is the name.
+func canvasOwner(spaceKey string) string {
+	if spaceKey == drive.SharedKey {
+		return legacyGlobalOwner
+	}
+	if name, ok := strings.CutPrefix(spaceKey, drive.WorkspacesDir+"/"); ok {
+		return name
+	}
+	return spaceKey
 }

@@ -3,8 +3,8 @@ package wailsui
 import (
 	"time"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/internal/domain/session"
+	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 )
 
@@ -21,9 +21,10 @@ type SessionSummary struct {
 }
 
 func sessionSummaryOf(s session.Session) SessionSummary {
+	space, _ := drivesvc.SpaceForRemote(s.Remote)
 	return SessionSummary{
 		ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, State: string(s.State),
-		CanvasOwner: app.SpaceKeyForRemote(s.Remote), CreatedAt: s.ActivatedAt(),
+		CanvasOwner: space.Key, CreatedAt: s.ActivatedAt(),
 	}
 }
 

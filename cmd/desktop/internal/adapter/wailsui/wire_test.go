@@ -93,6 +93,12 @@ func TestSessionSummaryOfMapsEachField(t *testing.T) {
 	}, sessionSummaryOf(s))
 }
 
+func TestSessionSummaryOfHasNoCanvasOwnerForARemoteWithNoRepository(t *testing.T) {
+	for _, remote := range []string{"", "git@github.com:shared/site.git"} {
+		assert.Empty(t, sessionSummaryOf(session.Session{Remote: remote}).CanvasOwner, remote)
+	}
+}
+
 func TestSessionSummaryOfUsesTheCurrentActivation(t *testing.T) {
 	createdAt := time.Date(2026, time.July, 1, 12, 0, 0, 0, time.UTC)
 	activatedAt := time.Date(2026, time.October, 1, 12, 0, 0, 0, time.UTC)

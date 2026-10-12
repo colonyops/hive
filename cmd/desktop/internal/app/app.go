@@ -1298,6 +1298,8 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		func() dispatch.SessionCreator { return a.hive.Sessions() },
 		a.Stores.ItemSessions, a.Activity, cfg.Logger,
 	)
+	// After hive.New so the canvases land under the engine's context root; the
+	// import is idempotent, so a reload that runs it again moves nothing.
 	importLegacyCanvases(ctx, a.logger, a.hive, cfg.Paths)
 	return nil
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 )
 
-// maxDocumentBytes caps one write_document body; the tool description states it. A document is read back
+// maxDocumentBytes caps one write_document body. A document is read back
 // whole into an agent's context and rendered whole in the pane, so a larger
 // one is a mistake on both ends.
 const maxDocumentBytes = 2 << 20
@@ -34,13 +34,12 @@ func (s *DriveService) ListDocuments(ctx context.Context, session, path string, 
 			return drive.Space{}, drive.Entry{}, documentError(err, caller.space, path)
 		}
 	}
-	root, err := d.Tree(ctx, caller.space)
+	entry, err := d.Entry(ctx, caller.space, path)
+	if errors.Is(err, drive.ErrNotFound) {
+		return drive.Space{}, drive.Entry{}, Errorf(KindNotFound, "nothing at %q in this space; list_documents with an empty path shows the root", path)
+	}
 	if err != nil {
 		return drive.Space{}, drive.Entry{}, documentError(err, caller.space, path)
-	}
-	entry, ok := drive.Find(root, path)
-	if !ok {
-		return drive.Space{}, drive.Entry{}, Errorf(KindNotFound, "nothing at %q in this space; list_documents with an empty path shows the root", path)
 	}
 	if !tree {
 		for i := range entry.Children {
@@ -126,8 +125,8 @@ func checkFrontmatter(body []byte) error {
 }
 
 // MoveDocument renames a document or a folder inside the calling session's
-// space. A document keeps its kind: renaming plan.md to plan.html would hand
-// one renderer the other's source.
+// space. The drive refuses a move that changes a document's kind or files a
+// canvas where no canvas name reaches it.
 func (s *DriveService) MoveDocument(ctx context.Context, session, from, to string) (drive.Entry, error) {
 	d, caller, err := s.open(ctx, session)
 	if err != nil {
@@ -138,12 +137,9 @@ func (s *DriveService) MoveDocument(ctx context.Context, session, from, to strin
 			return drive.Entry{}, documentError(err, caller.space, p)
 		}
 	}
-	if drive.KindOf(from) != drive.KindOf(to) {
-		return drive.Entry{}, Errorf(KindInvalid, "moving %q to %q would change its kind; keep the extension", from, to)
-	}
 	entry, err := d.Move(ctx, caller.space, from, to, caller.author)
 	if err != nil {
-		return drive.Entry{}, documentError(err, caller.space, from)
+		return drive.Entry{}, moveError(err, caller.space, from)
 	}
 	return entry, nil
 }
@@ -173,7 +169,7 @@ func (s *DriveService) OpenDocument(ctx context.Context, session, path string) e
 		return err
 	}
 	if caller.space.Kind == drive.SpaceKindShared {
-		return Errorf(KindInvalid, "a global canvas has no pane to open or close; the user reads it in the full-page canvas view")
+		return Errorf(KindInvalid, "the shared space has no pane to open or close; the user reads it in the Drive page")
 	}
 	if path != "" {
 		if err := drive.ValidatePath(path); err != nil {

@@ -22,7 +22,6 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/hive"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
-	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/osopen"
 )
 
@@ -45,9 +44,9 @@ type canvasSessionResolver interface {
 	Get(ctx context.Context, id string) (stores.AgentSession, error)
 }
 
-// DriveService is the desktop's door onto Hive Drive. Agents mutate canvas
-// blocks and front matter through hive-canvas; the pane reads by space key
-// and may delete a whole canvas.
+// DriveService is the desktop's door onto Hive Drive. Agents read and write
+// documents and canvas blocks through the hive-drive MCP tools; the UI reads
+// and reorganizes a space by its key.
 type DriveService struct {
 	// engine is read per call: it starts after the services are built, and
 	// every method answers KindUnavailable until it has.
@@ -77,37 +76,6 @@ func newDriveService(d DriveDeps) *DriveService {
 type driveCaller struct {
 	space  drive.Space
 	author drive.Author
-}
-
-// legacyGlobalOwner is the owner key hive-canvas results still name the shared
-// space by; the @ kept it out of the workspace names hive creates.
-const legacyGlobalOwner = "@global"
-
-// OwnerForSpaceKey maps a space key onto the owner key the hive-canvas MCP
-// results still name: shared is @global, workspaces/<name> is the name.
-func OwnerForSpaceKey(key string) string {
-	if key == drive.SharedKey {
-		return legacyGlobalOwner
-	}
-	if name, ok := strings.CutPrefix(key, drive.WorkspacesDir+"/"); ok {
-		return name
-	}
-	return key
-}
-
-// SpaceKeyForRemote is the space key of the repository a hive session
-// checked out, or "" for a remote that names no owner and repo. A function
-// rather than a method because the Wails session wire has no engine handle.
-func SpaceKeyForRemote(remote string) string {
-	owner, repo := git.ExtractOwnerRepo(remote)
-	if owner == "" || repo == "" {
-		return ""
-	}
-	space, err := drive.RepositorySpace(owner, repo)
-	if err != nil {
-		return ""
-	}
-	return space.Key
 }
 
 // GetCanvas is one canvas in the calling session's space. A name nothing
@@ -284,7 +252,7 @@ func (s *DriveService) SetPaneOpen(ctx context.Context, session, name string, op
 		return err
 	}
 	if caller.space.Kind == drive.SpaceKindShared {
-		return Errorf(KindInvalid, "a global canvas has no pane to open or close; the user reads it in the full-page canvas view")
+		return Errorf(KindInvalid, "the shared space has no pane to open or close; the user reads it in the Drive page")
 	}
 	pinned := ""
 	if open && name != "" {
@@ -435,8 +403,8 @@ func (s *DriveService) Search(ctx context.Context, query string, limit int) ([]d
 }
 
 // Document is one document read for the reader. The kind comes from the
-// name, so a plain file is answered from the tree without reading what may
-// be a large binary.
+// name, so a plain file is answered from the snapshot without reading what
+// may be a large binary.
 func (s *DriveService) Document(ctx context.Context, space, path string) (DocumentView, error) {
 	d, parsed, err := s.space(space)
 	if err != nil {
@@ -450,13 +418,9 @@ func (s *DriveService) Document(ctx context.Context, space, path string) (Docume
 	}
 	view := DocumentView{Space: parsed}
 	if drive.KindOf(path) == drive.KindFile {
-		root, err := d.Tree(ctx, parsed)
+		entry, err := d.Entry(ctx, parsed, path)
 		if err != nil {
 			return DocumentView{}, documentError(err, parsed, path)
-		}
-		entry, ok := drive.Find(root, path)
-		if !ok {
-			return DocumentView{}, documentNotFound(parsed, path)
 		}
 		if entry.Kind == drive.KindDir {
 			return DocumentView{}, Errorf(KindInvalid, "%q is a folder, not a document", path)
@@ -502,8 +466,8 @@ func (s *DriveService) CreateFolder(ctx context.Context, space, path string) (dr
 }
 
 // Rename gives a document or folder a new name in the same folder. name is a
-// name, not a path. A document keeps its kind: "b" renames a.md to b.md,
-// "b.md" does the same, and "b.html" is refused because it would turn a
+// name, not a path. A name with no extension takes the document's: "b"
+// renames a.md to b.md. The drive refuses "b.html", which would turn a
 // markdown document into an html one.
 func (s *DriveService) Rename(ctx context.Context, space, path, name string) (drive.Entry, error) {
 	d, parsed, err := s.space(space)
@@ -521,9 +485,7 @@ func (s *DriveService) Rename(ctx context.Context, space, path, name string) (dr
 		return drive.Entry{}, err
 	}
 	if !isDir {
-		if name, err = keepKind(path, name); err != nil {
-			return drive.Entry{}, err
-		}
+		name = withDocumentExt(path, name)
 	}
 	return s.move(ctx, d, parsed, path, joinDrivePath(parentDrivePath(path), name))
 }
@@ -558,19 +520,15 @@ func (s *DriveService) Move(ctx context.Context, space, path, dir string) (drive
 // error.
 func (s *DriveService) move(ctx context.Context, d *drivesvc.Service, space drive.Space, from, to string) (drive.Entry, error) {
 	if from == to {
-		root, err := d.Tree(ctx, space)
+		entry, err := d.Entry(ctx, space, from)
 		if err != nil {
 			return drive.Entry{}, documentError(err, space, from)
-		}
-		entry, ok := drive.Find(root, from)
-		if !ok {
-			return drive.Entry{}, documentNotFound(space, from)
 		}
 		return entry, nil
 	}
 	entry, err := d.Move(ctx, space, from, to, drive.Author{})
 	if err != nil {
-		return drive.Entry{}, documentError(err, space, to)
+		return drive.Entry{}, moveError(err, space, to)
 	}
 	return entry, nil
 }
@@ -609,11 +567,10 @@ func (s *DriveService) Locate(_ context.Context, space, path string) (string, er
 	if path != "" && drive.ValidatePath(path) != nil {
 		return "", Errorf(KindInvalid, "%q is not a path inside the space", path)
 	}
-	dir, err := d.SpaceDir(parsed)
+	full, err := d.Locate(parsed, path)
 	if err != nil {
 		return "", documentError(err, parsed, path)
 	}
-	full := filepath.Join(dir, filepath.FromSlash(path))
 	if _, err := os.Lstat(full); errors.Is(err, fs.ErrNotExist) {
 		return "", documentNotFound(parsed, path)
 	} else if err != nil {
@@ -647,11 +604,11 @@ func (s *DriveService) space(key string) (*drivesvc.Service, drive.Space, error)
 // target's name from it, and the snapshot can trail a change made outside
 // the app by the watcher's debounce.
 func (s *DriveService) isDir(d *drivesvc.Service, space drive.Space, path string) (bool, error) {
-	dir, err := d.SpaceDir(space)
+	full, err := d.Locate(space, path)
 	if err != nil {
 		return false, documentError(err, space, path)
 	}
-	info, err := os.Lstat(filepath.Join(dir, filepath.FromSlash(path)))
+	info, err := os.Lstat(full)
 	if errors.Is(err, fs.ErrNotExist) {
 		return false, documentNotFound(space, path)
 	}
@@ -661,26 +618,18 @@ func (s *DriveService) isDir(d *drivesvc.Service, space drive.Space, path string
 	return info.IsDir(), nil
 }
 
-// keepKind is the file name a document renamed to name gets: name as given
-// when it already has the document's kind, or with the kind's extension
-// appended. A canvas name must stay one an agent can address.
-func keepKind(path, name string) (string, error) {
+// withDocumentExt is the file name a document renamed to name gets: name with
+// the document's extension appended when name has none. Any other name is
+// left for the drive's Move to accept or refuse.
+func withDocumentExt(path, name string) string {
 	kind := drive.KindOf(path)
-	target := name
-	if got := drive.KindOf(name); got != kind {
-		if got != drive.KindFile {
-			return "", Errorf(KindInvalid, "renaming %q to %q would change it from %s to %s", baseDrivePath(path), name, kind, got)
-		}
-		target = name + documentExt(baseDrivePath(path), kind)
-	} else if kind == drive.KindFile && pathpkg.Ext(name) == "" {
-		target = name + pathpkg.Ext(path)
+	switch got := drive.KindOf(name); {
+	case got == drive.KindFile && kind != drive.KindFile:
+		return name + documentExt(baseDrivePath(path), kind)
+	case got == drive.KindFile && pathpkg.Ext(name) == "":
+		return name + pathpkg.Ext(path)
 	}
-	if kind == drive.KindCanvas {
-		if _, err := drive.CanvasPath(target); err != nil {
-			return "", invalidCanvasName(strings.TrimSuffix(target, drive.CanvasExt))
-		}
-	}
-	return target, nil
+	return name
 }
 
 // documentExt is the extension that makes a name the given kind, read from
@@ -725,6 +674,16 @@ func baseDrivePath(path string) string {
 
 func documentNotFound(space drive.Space, path string) error {
 	return Errorf(KindNotFound, "no %q in %s", path, space.Key)
+}
+
+// moveError keeps the drive's own reason for refusing a move as the message,
+// since the UI shows only the message: it names the rule the new name broke,
+// such as keeping the extension or a canvas name the tools can address.
+func moveError(err error, space drive.Space, path string) error {
+	if errors.Is(err, drive.ErrInvalidPath) {
+		return Errorf(KindInvalid, "%s", strings.TrimPrefix(err.Error(), drive.ErrInvalidPath.Error()+": "))
+	}
+	return documentError(err, space, path)
 }
 
 // documentError maps the drive's sentinel errors for every caller that
@@ -791,7 +750,8 @@ func (s *DriveService) withCanonicalAuthor(ctx context.Context, c drive.Canvas) 
 }
 
 // canvasGlobalSession is the session argument of an agent outside any chat
-// or hive session.
+// or hive session. It still reads "global", not "shared", because existing
+// agent configurations and the HIVE_AGENT_SESSION docs pass that word.
 const canvasGlobalSession = "global"
 
 func (s *DriveService) engineDrive() (*drivesvc.Service, error) {
