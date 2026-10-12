@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { usePerf } from '../composables/usePerf'
 import { renderCanvasMarkdown } from '../lib/githubMarkdown'
+import { useCodeHighlight } from '../stores/useCodeHighlight'
 import CanvasMermaid from './CanvasMermaid.vue'
 
 const props = defineProps<{
@@ -12,7 +14,14 @@ const emit = defineEmits<{
   follow: [href: string]
 }>()
 
-const parts = computed(() => renderCanvasMarkdown(props.source))
+const perf = usePerf('drive')
+const { highlight } = useCodeHighlight()
+const parts = computed(() => {
+  const end = perf.start('markdown:render', { chars: props.source.length })
+  const rendered = renderCanvasMarkdown(props.source, highlight)
+  end({ parts: rendered.length })
+  return rendered
+})
 
 function followLink(event: MouseEvent) {
   const target = event.target

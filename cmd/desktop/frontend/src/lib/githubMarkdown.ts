@@ -20,7 +20,14 @@ import MarkdownIt from 'markdown-it'
 import type StateBlock from 'markdown-it/lib/rules_block/state_block.mjs'
 import type Token from 'markdown-it/lib/token.mjs'
 import taskLists from 'markdown-it-task-lists'
-import { highlightCode } from './codeHighlight'
+
+/**
+ * Highlighted HTML for a fence, or null to keep markdown-it's escaped
+ * `<pre><code class="language-x">`. The renderers take one per call: the
+ * highlighter is a store (stores/useCodeHighlight.ts), and this module stays
+ * a pure string transform.
+ */
+export type Highlight = (code: string, lang: string) => string | null
 
 const alertTypes = new Map([
   ['NOTE', 'Note'],
@@ -141,13 +148,26 @@ function githubExtensions(md: MarkdownIt) {
   })
 }
 
-// highlight returns shiki's own escaped markup; an empty string makes
+// markdown-it binds its highlight hook once, so the one a render was given is
+// held for the length of that synchronous call. An empty string makes
 // markdown-it fall back to its escaped <pre><code class="language-x"> output.
+let activeHighlight: Highlight | null = null
+
+function withHighlight<T>(highlight: Highlight | undefined, render: () => T): T {
+  const previous = activeHighlight
+  activeHighlight = highlight ?? null
+  try {
+    return render()
+  } finally {
+    activeHighlight = previous
+  }
+}
+
 const md = new MarkdownIt({
   html: true,
   linkify: true,
   breaks: true,
-  highlight: (code, lang) => highlightCode(code, lang) ?? '',
+  highlight: (code, lang) => activeHighlight?.(code, lang) ?? '',
 })
   .use(taskLists)
   .use(githubExtensions)
@@ -167,9 +187,9 @@ md.renderer.rules.html_inline = (tokens: Token[], index: number) => {
   return md.utils.escapeHtml(content)
 }
 
-export function renderGithubMarkdown(src: string): string {
+export function renderGithubMarkdown(src: string, highlight?: Highlight): string {
   if (!src.trim()) return ''
-  return md.render(src)
+  return withHighlight(highlight, () => md.render(src))
 }
 
 export type CanvasMarkdownPart = { kind: 'html'; html: string } | { kind: 'mermaid'; source: string }
@@ -178,25 +198,27 @@ function isTopLevelMermaidFence(token: Token): boolean {
   return token.type === 'fence' && token.level === 0 && token.info.trim().toLowerCase() === 'mermaid'
 }
 
-export function renderCanvasMarkdown(src: string): CanvasMarkdownPart[] {
+export function renderCanvasMarkdown(src: string, highlight?: Highlight): CanvasMarkdownPart[] {
   if (!src.trim()) return []
 
-  const env = {}
-  const tokens = md.parse(src, env)
-  const parts: CanvasMarkdownPart[] = []
-  let htmlStart = 0
+  return withHighlight(highlight, () => {
+    const env = {}
+    const tokens = md.parse(src, env)
+    const parts: CanvasMarkdownPart[] = []
+    let htmlStart = 0
 
-  for (let index = 0; index < tokens.length; index++) {
-    const token = tokens[index]
-    if (!isTopLevelMermaidFence(token)) continue
+    for (let index = 0; index < tokens.length; index++) {
+      const token = tokens[index]
+      if (!isTopLevelMermaidFence(token)) continue
 
-    const html = md.renderer.render(tokens.slice(htmlStart, index), md.options, env)
+      const html = md.renderer.render(tokens.slice(htmlStart, index), md.options, env)
+      if (html) parts.push({ kind: 'html', html })
+      parts.push({ kind: 'mermaid', source: token.content })
+      htmlStart = index + 1
+    }
+
+    const html = md.renderer.render(tokens.slice(htmlStart), md.options, env)
     if (html) parts.push({ kind: 'html', html })
-    parts.push({ kind: 'mermaid', source: token.content })
-    htmlStart = index + 1
-  }
-
-  const html = md.renderer.render(tokens.slice(htmlStart), md.options, env)
-  if (html) parts.push({ kind: 'html', html })
-  return parts
+    return parts
+  })
 }

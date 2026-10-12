@@ -148,16 +148,27 @@ describe('DrivePane', () => {
     expect(wrapper.find('[data-testid="drive-pane-empty"]').exists()).toBe(true)
   })
 
-  it('re-reads the document on drive:updated for its space only', async () => {
+  it('re-reads the document on drive:updated only when its own entry changed', async () => {
     await mountPane()
     const reads = drive.Document.mock.calls.length
     wailsEvents.fire('drive:updated', { space: 'acme/site', paths: ['x.md'], session: '', hiveSession: '' })
     await flushPromises()
     expect(drive.Document.mock.calls.length).toBe(reads)
 
+    // The other document changed (and stays older): the tree is re-read, the
+    // shown one is kept.
+    tree = root([
+      folder('plans', [doc(plan.path, { ...plan, modified: '2026-10-04T00:00:00Z' })]),
+      folder('reports', [perf]),
+    ])
+    wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: [plan.path], session: '', hiveSession: '' })
+    await flushPromises()
+    expect(drive.Document.mock.calls.length).toBe(reads)
+
+    tree = root([folder('plans', [plan]), folder('reports', [doc(perf.path, { ...perf, size: 11 })])])
     wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: [perf.path], session: '', hiveSession: '' })
     await flushPromises()
-    expect(drive.Document.mock.calls.length).toBeGreaterThan(reads)
+    expect(drive.Document.mock.calls.length).toBe(reads + 1)
   })
 
   it('asks for the full-page view on the document it is showing, and closes', async () => {

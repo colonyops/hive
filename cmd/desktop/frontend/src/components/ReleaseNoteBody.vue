@@ -4,10 +4,12 @@
 // rather than a second, laxer one.
 import { computed } from 'vue'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
+import { useCodeHighlight } from '../stores/useCodeHighlight'
 
 const props = defineProps<{ body: string }>()
 
-const html = computed(() => renderGithubMarkdown(props.body))
+const { highlight } = useCodeHighlight()
+const html = computed(() => renderGithubMarkdown(props.body, highlight))
 </script>
 
 <template>

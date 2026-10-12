@@ -25,6 +25,7 @@ import { useTerminalSessions } from '../stores/useTerminalSessions'
 import { errorText } from '../lib/appError'
 import { relativeAgo } from '../lib/age'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
+import { useCodeHighlight } from '../stores/useCodeHighlight'
 import { externalMarkdownHref } from '../lib/markdownLinks'
 import { cascadeCount, checkpointBody, isCheckpoint, matchesTaskFilter, statusMeta } from '../lib/tasksPresentation'
 import type { TaskComment } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
@@ -41,14 +42,15 @@ const STATUS_OPTIONS: AppSelectOption[] = [
 ]
 
 const typeLabel = computed(() => (detail.value?.type === 'epic' ? 'Epic' : 'Task'))
-const bodyHtml = computed(() => (detail.value?.desc ? renderGithubMarkdown(detail.value.desc) : ''))
+const { highlight } = useCodeHighlight()
+const bodyHtml = computed(() => (detail.value?.desc ? renderGithubMarkdown(detail.value.desc, highlight) : ''))
 
 function absoluteTime(iso: string): string {
   return new Date(iso).toLocaleString()
 }
 
 function commentHtml(comment: TaskComment): string {
-  return renderGithubMarkdown(checkpointBody(comment))
+  return renderGithubMarkdown(checkpointBody(comment), highlight)
 }
 
 // Rendered bodies are untrusted markdown; links must open in the user's real

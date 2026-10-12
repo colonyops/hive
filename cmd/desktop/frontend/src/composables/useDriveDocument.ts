@@ -8,6 +8,7 @@ import { errorText } from '../lib/appError'
 import { documentsOf, newestDocument, type DriveAuthor } from '../lib/drive'
 import { useDrive } from '../stores/useDrive'
 import { useDriveActivity } from '../stores/useDriveActivity'
+import { usePerf } from './usePerf'
 
 /**
  * One drive surface's document: the space it browses, its tree from the
@@ -22,6 +23,7 @@ import { useDriveActivity } from '../stores/useDriveActivity'
 export function useDriveDocument() {
   const drive = useDrive()
   const activity = useDriveActivity()
+  const perf = usePerf('drive')
 
   const document: ShallowRef<DocumentWire | null> = shallowRef(null)
   const shown: Ref<string | null> = ref(null)
@@ -33,7 +35,8 @@ export function useDriveDocument() {
 
   const tree = computed<EntryWire | null>(() => drive.trees.value.get(space.value) ?? null)
   const treeError = computed(() => drive.treeErrors.value.get(space.value) ?? null)
-  const paths = computed(() => new Set(documentsOf(tree.value).map((entry) => entry.path)))
+  const entries = computed(() => new Map(documentsOf(tree.value).map((entry) => [entry.path, entry])))
+  const paths = computed(() => new Set(entries.value.keys()))
 
   let listedSpace = ''
   let listedPaths: ReadonlySet<string> = new Set()
@@ -62,7 +65,24 @@ export function useDriveDocument() {
       listedSpace = key
       listedPaths = paths.value
       const path = requested.value ?? defaultPath()
-      const loaded = key && path && paths.value.has(path) ? await Document(key, path) : null
+      const entry = path ? entries.value.get(path) : undefined
+      // A tree reload names the same document more often than not (another
+      // document changed, or the window regained focus), and the document on
+      // screen is kept rather than fetched and rendered again: a large one
+      // with many code fences is the expensive part of the whole surface.
+      const current = document.value
+      const unchanged =
+        !!current &&
+        !!entry &&
+        current.space.key === key &&
+        current.entry.path === path &&
+        current.entry.modified === entry.modified &&
+        current.entry.size === entry.size
+      const loaded = unchanged
+        ? current
+        : key && path && entry
+          ? await perf.track('document:load', () => Document(key, path), { space: key, path })
+          : null
       if (token !== generation) return
       shown.value = path
       document.value = loaded
