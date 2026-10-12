@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -191,7 +192,7 @@ func (s *DriveService) putBlocks(ctx context.Context, session, name, title, befo
 		}
 		return drive.Canvas{}, driveError(err, name)
 	}
-	s.notify(ctx, caller.space, path, caller.author)
+	s.notify(ctx, caller.space, caller.author, path)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -212,7 +213,7 @@ func (s *DriveService) RemoveBlock(ctx context.Context, session, name, blockID s
 	if !removed {
 		return drive.Canvas{}, Errorf(KindNotFound, "no block %q on canvas %q", blockID, name)
 	}
-	s.notify(ctx, caller.space, path, caller.author)
+	s.notify(ctx, caller.space, caller.author, path)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -234,7 +235,7 @@ func (s *DriveService) SetFrontmatter(ctx context.Context, session, name string,
 	if err != nil {
 		return drive.Canvas{}, driveError(err, name)
 	}
-	s.notify(ctx, caller.space, path, caller.author)
+	s.notify(ctx, caller.space, caller.author, path)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -253,7 +254,7 @@ func (s *DriveService) ClearCanvas(ctx context.Context, session, name string) (d
 	if err != nil {
 		return drive.Canvas{}, driveError(err, name)
 	}
-	s.notify(ctx, caller.space, path, caller.author)
+	s.notify(ctx, caller.space, caller.author, path)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -270,7 +271,7 @@ func (s *DriveService) DeleteCanvas(ctx context.Context, session, name string) e
 	if err := d.Delete(ctx, caller.space, path); err != nil {
 		return driveError(err, name)
 	}
-	s.notify(ctx, caller.space, path, caller.author)
+	s.notify(ctx, caller.space, caller.author, path)
 	return nil
 }
 
@@ -352,31 +353,22 @@ func (s *DriveService) ListCanvasesAt(ctx context.Context, space string) ([]driv
 	return s.listCanvases(ctx, d, parsed)
 }
 
-// DeleteAt removes one canvas for the UI and publishes with the author that
-// wrote it, so the pane beside that chat or session wakes.
-func (s *DriveService) DeleteAt(ctx context.Context, space, path string) error {
-	t, err := s.target(space, path)
-	if err != nil {
-		return err
-	}
-	c, ok, err := t.svc.LoadCanvas(ctx, t.space, t.path)
-	if err != nil {
-		return driveError(err, path)
-	}
-	if !ok {
-		return canvasNotFound(path)
-	}
-	if err := t.svc.Delete(ctx, t.space, t.path); err != nil {
-		return driveError(err, path)
-	}
-	s.notify(ctx, t.space, t.path, drive.Author{Session: c.Session, HiveSession: c.HiveSession})
-	return nil
-}
-
-// Markdown renders one canvas as a standalone markdown document, the pane's
-// copy action. A canvas nothing was written under is not_found: exporting
-// nothing is a mistake worth surfacing, unlike showing it.
+// Markdown is one document as standalone markdown, the reader's copy action:
+// a markdown document's own body, or a canvas rendered. A canvas nothing was
+// written under is not_found: exporting nothing is a mistake worth surfacing,
+// unlike showing it.
 func (s *DriveService) Markdown(ctx context.Context, space, path string) (string, error) {
+	if drive.KindOf(path) == drive.KindMarkdown {
+		d, parsed, err := s.space(space)
+		if err != nil {
+			return "", err
+		}
+		_, body, err := d.Read(ctx, parsed, path)
+		if err != nil {
+			return "", documentError(err, parsed, path)
+		}
+		return string(body), nil
+	}
 	t, err := s.target(space, path)
 	if err != nil {
 		return "", err
@@ -395,7 +387,7 @@ func (s *DriveService) Markdown(ctx context.Context, space, path string) (string
 	return markdown, nil
 }
 
-// Export writes one canvas's markdown rendering to dest, the pane's save
+// Export writes one document's Markdown to dest, the pane's save
 // action. dest comes from the native save dialog, which is why it must
 // already be absolute.
 func (s *DriveService) Export(ctx context.Context, space, path, dest string) error {
@@ -407,9 +399,346 @@ func (s *DriveService) Export(ctx context.Context, space, path, dest string) err
 		return Errorf(KindInvalid, "export path must be absolute")
 	}
 	if err := os.WriteFile(dest, []byte(markdown), 0o644); err != nil {
-		return Wrap(err, KindInternal, "writing export for canvas %q", path)
+		return Wrap(err, KindInternal, "writing export for %q", path)
 	}
 	return nil
+}
+
+// DocumentView is one document as the reader shows it. Exactly one of
+// Markdown, HTML, and Canvas is set for those kinds; a plain file carries
+// only its entry.
+type DocumentView struct {
+	Space    drive.Space   `json:"space"`
+	Entry    drive.Entry   `json:"entry"`
+	Markdown string        `json:"markdown,omitempty"` // raw: the frontend's sanitizing renderer handles it
+	HTML     string        `json:"html,omitempty"`     // CSP meta injected first
+	Canvas   *drive.Canvas `json:"canvas,omitempty"`   // html blocks sanitized
+}
+
+// Spaces is every space in the drive: repositories, then workspaces, then
+// shared.
+func (s *DriveService) Spaces(ctx context.Context) ([]drive.Space, error) {
+	d, err := s.engineDrive()
+	if err != nil {
+		return nil, err
+	}
+	spaces, err := d.Spaces(ctx)
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "listing drive spaces")
+	}
+	return spaces, nil
+}
+
+// Tree is one space's whole folder tree. A space with no directory yet is an
+// empty root.
+func (s *DriveService) Tree(ctx context.Context, space string) (drive.Entry, error) {
+	d, parsed, err := s.space(space)
+	if err != nil {
+		return drive.Entry{}, err
+	}
+	root, err := d.Tree(ctx, parsed)
+	if err != nil {
+		return drive.Entry{}, documentError(err, parsed, "")
+	}
+	return root, nil
+}
+
+// Search matches query against every space's paths and titles; limit 0 is
+// the drive's default cap.
+func (s *DriveService) Search(ctx context.Context, query string, limit int) ([]drivesvc.Hit, error) {
+	d, err := s.engineDrive()
+	if err != nil {
+		return nil, err
+	}
+	if limit < 0 {
+		return nil, Errorf(KindInvalid, "search limit must not be negative")
+	}
+	hits, err := d.Search(ctx, query, limit)
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "searching the drive")
+	}
+	return hits, nil
+}
+
+// Document is one document read for the reader. The kind comes from the
+// name, so a plain file is answered from the tree without reading what may
+// be a large binary.
+func (s *DriveService) Document(ctx context.Context, space, path string) (DocumentView, error) {
+	d, parsed, err := s.space(space)
+	if err != nil {
+		return DocumentView{}, err
+	}
+	if path == "" {
+		return DocumentView{}, Errorf(KindInvalid, "the space root is a folder, not a document")
+	}
+	if err := drive.ValidatePath(path); err != nil {
+		return DocumentView{}, Errorf(KindInvalid, "%q is not a path inside the space", path)
+	}
+	view := DocumentView{Space: parsed}
+	if drive.KindOf(path) == drive.KindFile {
+		root, err := d.Tree(ctx, parsed)
+		if err != nil {
+			return DocumentView{}, documentError(err, parsed, path)
+		}
+		entry, ok := drive.Find(root, path)
+		if !ok {
+			return DocumentView{}, documentNotFound(parsed, path)
+		}
+		if entry.Kind == drive.KindDir {
+			return DocumentView{}, Errorf(KindInvalid, "%q is a folder, not a document", path)
+		}
+		view.Entry = entry
+		return view, nil
+	}
+	entry, body, err := d.Read(ctx, parsed, path)
+	if err != nil {
+		return DocumentView{}, documentError(err, parsed, path)
+	}
+	view.Entry = entry
+	switch entry.Kind {
+	case drive.KindMarkdown:
+		view.Markdown = string(body)
+	case drive.KindHtml:
+		view.HTML = canvas.WrapDocument(body)
+	case drive.KindCanvas:
+		c, err := s.GetCanvasAt(ctx, space, path)
+		if err != nil {
+			return DocumentView{}, err
+		}
+		view.Canvas = &c
+	case drive.KindDir, drive.KindFile:
+	}
+	return view, nil
+}
+
+// CreateFolder makes one folder, and any folders above it, in a space.
+func (s *DriveService) CreateFolder(ctx context.Context, space, path string) (drive.Entry, error) {
+	d, parsed, err := s.space(space)
+	if err != nil {
+		return drive.Entry{}, err
+	}
+	if err := documentPath(path); err != nil {
+		return drive.Entry{}, err
+	}
+	entry, err := d.CreateFolder(ctx, parsed, path)
+	if err != nil {
+		return drive.Entry{}, documentError(err, parsed, path)
+	}
+	s.notify(ctx, parsed, drive.Author{}, path)
+	return entry, nil
+}
+
+// Rename gives a document or folder a new name in the same folder. name is a
+// name, not a path. A document keeps its kind: "b" renames a.md to b.md,
+// "b.md" does the same, and "b.html" is refused because it would turn a
+// markdown document into an html one.
+func (s *DriveService) Rename(ctx context.Context, space, path, name string) (drive.Entry, error) {
+	d, parsed, err := s.space(space)
+	if err != nil {
+		return drive.Entry{}, err
+	}
+	if err := documentPath(path); err != nil {
+		return drive.Entry{}, err
+	}
+	if strings.Contains(name, "/") || drive.ValidatePath(name) != nil {
+		return drive.Entry{}, Errorf(KindInvalid, "%q is not a valid name: use one name with no slash that does not start with a dot", name)
+	}
+	isDir, err := s.isDir(d, parsed, path)
+	if err != nil {
+		return drive.Entry{}, err
+	}
+	if !isDir {
+		if name, err = keepKind(path, name); err != nil {
+			return drive.Entry{}, err
+		}
+	}
+	return s.move(ctx, d, parsed, path, joinDrivePath(parentDrivePath(path), name))
+}
+
+// Move puts a document or folder into dir, a folder in the same space, under
+// its own name. dir "" is the space root.
+func (s *DriveService) Move(ctx context.Context, space, path, dir string) (drive.Entry, error) {
+	d, parsed, err := s.space(space)
+	if err != nil {
+		return drive.Entry{}, err
+	}
+	if err := documentPath(path); err != nil {
+		return drive.Entry{}, err
+	}
+	if dir != "" {
+		if err := documentPath(dir); err != nil {
+			return drive.Entry{}, err
+		}
+		isDir, err := s.isDir(d, parsed, dir)
+		if err != nil {
+			return drive.Entry{}, err
+		}
+		if !isDir {
+			return drive.Entry{}, Errorf(KindInvalid, "%q is a document, not a folder to move into", dir)
+		}
+	}
+	return s.move(ctx, d, parsed, path, joinDrivePath(dir, baseDrivePath(path)))
+}
+
+// move is a rename that is a no-op when nothing changes, so a rename
+// committed without an edit, or a move into the current folder, is not an
+// error.
+func (s *DriveService) move(ctx context.Context, d *drivesvc.Service, space drive.Space, from, to string) (drive.Entry, error) {
+	if from == to {
+		root, err := d.Tree(ctx, space)
+		if err != nil {
+			return drive.Entry{}, documentError(err, space, from)
+		}
+		entry, ok := drive.Find(root, from)
+		if !ok {
+			return drive.Entry{}, documentNotFound(space, from)
+		}
+		return entry, nil
+	}
+	entry, err := d.Move(ctx, space, from, to)
+	if err != nil {
+		return drive.Entry{}, documentError(err, space, to)
+	}
+	s.notify(ctx, space, drive.Author{}, from, to)
+	return entry, nil
+}
+
+// Delete removes a document or an empty folder. A canvas publishes with the
+// author that wrote it, so the pane beside that chat or session wakes.
+func (s *DriveService) Delete(ctx context.Context, space, path string) error {
+	d, parsed, err := s.space(space)
+	if err != nil {
+		return err
+	}
+	if err := documentPath(path); err != nil {
+		return err
+	}
+	var author drive.Author
+	if drive.KindOf(path) == drive.KindCanvas {
+		// A canvas that no longer parses is still deleted, just without an
+		// author to wake.
+		if c, ok, err := d.LoadCanvas(ctx, parsed, path); err == nil && ok {
+			author = drive.Author{Session: c.Session, HiveSession: c.HiveSession}
+		}
+	}
+	if err := d.Delete(ctx, parsed, path); err != nil {
+		return documentError(err, parsed, path)
+	}
+	s.notify(ctx, parsed, author, path)
+	return nil
+}
+
+func (s *DriveService) space(key string) (*drivesvc.Service, drive.Space, error) {
+	d, err := s.engineDrive()
+	if err != nil {
+		return nil, drive.Space{}, err
+	}
+	parsed, err := parseSpace(key)
+	if err != nil {
+		return nil, drive.Space{}, err
+	}
+	return d, parsed, nil
+}
+
+// isDir reads the disk rather than the snapshot: a rename or move decides the
+// target's name from it, and the snapshot can trail a change made outside
+// the app by the watcher's debounce.
+func (s *DriveService) isDir(d *drivesvc.Service, space drive.Space, path string) (bool, error) {
+	dir, err := d.SpaceDir(space)
+	if err != nil {
+		return false, documentError(err, space, path)
+	}
+	info, err := os.Lstat(filepath.Join(dir, filepath.FromSlash(path)))
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, documentNotFound(space, path)
+	}
+	if err != nil {
+		return false, Wrap(err, KindInternal, "reading %q in %s", path, space.Key)
+	}
+	return info.IsDir(), nil
+}
+
+// keepKind is the file name a document renamed to name gets: name as given
+// when it already has the document's kind, or with the kind's extension
+// appended. A canvas name must stay one an agent can address.
+func keepKind(path, name string) (string, error) {
+	kind := drive.KindOf(path)
+	target := name
+	if got := drive.KindOf(name); got != kind {
+		if got != drive.KindFile {
+			return "", Errorf(KindInvalid, "renaming %q to %q would change it from %s to %s", baseDrivePath(path), name, kind, got)
+		}
+		target = name + documentExt(baseDrivePath(path), kind)
+	} else if kind == drive.KindFile && pathpkg.Ext(name) == "" {
+		target = name + pathpkg.Ext(path)
+	}
+	if kind == drive.KindCanvas {
+		if _, err := drive.CanvasPath(target); err != nil {
+			return "", invalidCanvasName(strings.TrimSuffix(target, drive.CanvasExt))
+		}
+	}
+	return target, nil
+}
+
+// documentExt is the extension that makes a name the given kind, read from
+// the document's own name so its case is kept.
+func documentExt(name string, kind drive.Kind) string {
+	if kind == drive.KindCanvas {
+		return name[len(name)-len(drive.CanvasExt):]
+	}
+	return pathpkg.Ext(name)
+}
+
+// documentPath refuses the space root and anything outside the space before
+// the drive is asked, so the message names the mistake rather than a file.
+func documentPath(path string) error {
+	if path == "" {
+		return Errorf(KindInvalid, "the space root cannot be changed")
+	}
+	if err := drive.ValidatePath(path); err != nil {
+		return Errorf(KindInvalid, "%q is not a path inside the space", path)
+	}
+	return nil
+}
+
+func joinDrivePath(dir, name string) string {
+	if dir == "" {
+		return name
+	}
+	return dir + "/" + name
+}
+
+func parentDrivePath(path string) string {
+	dir := pathpkg.Dir(path)
+	if dir == "." {
+		return ""
+	}
+	return dir
+}
+
+func baseDrivePath(path string) string {
+	return pathpkg.Base(path)
+}
+
+func documentNotFound(space drive.Space, path string) error {
+	return Errorf(KindNotFound, "no %q in %s", path, space.Key)
+}
+
+// documentError maps the drive's sentinel errors for every caller that
+// addresses a document by space and path rather than a canvas by name.
+func documentError(err error, space drive.Space, path string) error {
+	switch {
+	case errors.Is(err, drive.ErrNotFound):
+		return documentNotFound(space, path)
+	case errors.Is(err, drive.ErrExists):
+		return Errorf(KindConflict, "%q already exists in %s", path, space.Key)
+	case errors.Is(err, drive.ErrNotEmpty):
+		return Errorf(KindInvalid, "folder %q is not empty; move or delete what is in it first", path)
+	case errors.Is(err, drive.ErrInvalidPath), errors.Is(err, drive.ErrInvalidSpace), errors.Is(err, drive.ErrNotWritable):
+		return Wrap(err, KindInvalid, "%q in %s", path, space.Key)
+	default:
+		return Wrap(err, KindInternal, "%q in %s", path, space.Key)
+	}
 }
 
 // Repositories is the space key of every repository in the drive, so a
@@ -631,9 +960,9 @@ func driveError(err error, name string) error {
 	}
 }
 
-func (s *DriveService) notify(ctx context.Context, space drive.Space, path string, author drive.Author) {
+func (s *DriveService) notify(ctx context.Context, space drive.Space, author drive.Author, paths ...string) {
 	s.events.Publish(ctx, events.DriveChanged{
-		Space: space.Key, Paths: []string{path}, Session: author.Session, HiveSession: author.HiveSession,
+		Space: space.Key, Paths: paths, Session: author.Session, HiveSession: author.HiveSession,
 	})
 }
 

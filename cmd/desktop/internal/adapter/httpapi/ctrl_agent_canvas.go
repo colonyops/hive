@@ -139,7 +139,11 @@ func (ctrl *Controller) AgentCanvasDelete(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		return err
 	}
-	if err := ctrl.core.Drive.DeleteAt(r.Context(), app.SpaceKeyForOwner(body.Workspace), body.Name); err != nil {
+	path, err := drive.CanvasPath(body.Name)
+	if err != nil {
+		return app.Wrap(err, app.KindInvalid, "canvas name %q is not allowed", body.Name)
+	}
+	if err := ctrl.core.Drive.Delete(r.Context(), app.SpaceKeyForOwner(body.Workspace), path); err != nil {
 		return err
 	}
 	return server.JSON(w, http.StatusOK, agentCanvasDeleteResponse{Deleted: body.Name})

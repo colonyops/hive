@@ -487,14 +487,14 @@ func TestCanvasExport(t *testing.T) {
 	f.signals.waitUpdates(t, 2)
 }
 
-func TestCanvasDeleteAt(t *testing.T) {
+func TestDriveDeleteOfACanvasWakesItsAuthor(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 
 	_, err := f.svc.PutBlock(ctx, "1", "plan", "The Plan", "", markdownBlock("a", "hello"))
 	require.NoError(t, err)
-	require.NoError(t, f.svc.DeleteAt(ctx, "workspaces/ws", "plan"))
-	err = f.svc.DeleteAt(ctx, "workspaces/ws", "plan")
+	require.NoError(t, f.svc.Delete(ctx, "workspaces/ws", "canvases/plan.canvas.json"))
+	err = f.svc.Delete(ctx, "workspaces/ws", "canvases/plan.canvas.json")
 	assert.Equal(t, KindNotFound, KindOf(err))
 
 	updates := f.signals.waitUpdates(t, 2)
@@ -683,6 +683,21 @@ func TestDriveIsUnavailableBeforeTheEngineStarts(t *testing.T) {
 	assert.Equal(t, KindUnavailable, KindOf(err))
 	_, err = svc.Repositories(ctx)
 	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = svc.Spaces(ctx)
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = svc.Tree(ctx, "workspaces/ws")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = svc.Search(ctx, "plan", 0)
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = svc.Document(ctx, "workspaces/ws", "a.md")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = svc.CreateFolder(ctx, "workspaces/ws", "x")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = svc.Rename(ctx, "workspaces/ws", "a.md", "b")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	_, err = svc.Move(ctx, "workspaces/ws", "a.md", "")
+	assert.Equal(t, KindUnavailable, KindOf(err))
+	assert.Equal(t, KindUnavailable, KindOf(svc.Delete(ctx, "workspaces/ws", "a.md")))
 }
 
 func TestLegacyCanvasImportsNameTheRootsOnlyTheDesktopKnows(t *testing.T) {
@@ -733,4 +748,270 @@ func TestImportLegacyCanvasesMovesEveryPreDriveCanvasIntoItsSpace(t *testing.T) 
 	metas, err := f.svc.ListCanvasesAt(t.Context(), drive.SharedKey)
 	require.NoError(t, err)
 	assert.Len(t, metas, 1, "a second run is a no-op")
+}
+
+// writeDoc puts a file in a space on disk. Call it before the space's first
+// read: no watcher runs in these tests, so the snapshot never sees a file
+// written after the scan.
+func (f driveFixture) writeDoc(t *testing.T, space, path, body string) {
+	t.Helper()
+	full := filepath.Join(f.contextDir(), filepath.FromSlash(space), filepath.FromSlash(path))
+	require.NoError(t, os.MkdirAll(filepath.Dir(full), 0o755))
+	require.NoError(t, os.WriteFile(full, []byte(body), 0o644))
+}
+
+func TestDriveDocumentByKind(t *testing.T) {
+	f := newDriveFixture(t)
+	ctx := t.Context()
+	f.writeDoc(t, "workspaces/ws", "plans/p.md", "---\ntitle: P\n---\n# Hi <b>raw</b>\n")
+	f.writeDoc(t, "workspaces/ws", "page.html", "<p>x</p>")
+	f.writeDoc(t, "workspaces/ws", "data.bin", "\x00\x01")
+	_, err := f.harness.engine.Drive().UpsertBlocks(ctx, wsSpace, "canvases/plan.canvas.json", drive.Author{Session: "1"}, "", "", drive.Block{
+		ID: "a", Kind: drive.BlockKindHTML, Body: `<p>ok</p><script>alert(1)</script>`,
+	})
+	require.NoError(t, err)
+
+	md, err := f.svc.Document(ctx, "workspaces/ws", "plans/p.md")
+	require.NoError(t, err)
+	assert.Equal(t, wsSpace, md.Space)
+	assert.Equal(t, drive.KindMarkdown, md.Entry.Kind)
+	assert.Equal(t, "P", md.Entry.Title)
+	assert.Equal(t, "---\ntitle: P\n---\n# Hi <b>raw</b>\n", md.Markdown, "markdown leaves raw; the renderer sanitizes")
+	assert.Empty(t, md.HTML)
+	assert.Nil(t, md.Canvas)
+
+	page, err := f.svc.Document(ctx, "workspaces/ws", "page.html")
+	require.NoError(t, err)
+	assert.Equal(t, drive.KindHtml, page.Entry.Kind)
+	assert.True(t, strings.HasPrefix(page.HTML, `<html><head><meta http-equiv="Content-Security-Policy"`), page.HTML)
+	assert.Contains(t, page.HTML, "<p>x</p>")
+	assert.Empty(t, page.Markdown)
+
+	cv, err := f.svc.Document(ctx, "workspaces/ws", "canvases/plan.canvas.json")
+	require.NoError(t, err)
+	assert.Equal(t, drive.KindCanvas, cv.Entry.Kind)
+	require.NotNil(t, cv.Canvas)
+	assert.Equal(t, "<p>ok</p>", cv.Canvas.Blocks[0].Body, "canvas html blocks leave sanitized")
+
+	file, err := f.svc.Document(ctx, "workspaces/ws", "data.bin")
+	require.NoError(t, err)
+	assert.Equal(t, drive.KindFile, file.Entry.Kind)
+	assert.Empty(t, file.Markdown)
+	assert.Empty(t, file.HTML)
+	assert.Nil(t, file.Canvas)
+
+	for _, tc := range []struct {
+		path string
+		want Kind
+	}{
+		{"plans", KindInvalid},
+		{"", KindInvalid},
+		{"../escape.md", KindInvalid},
+		{"/etc/hosts", KindInvalid},
+		{"nope.md", KindNotFound},
+		{"nope", KindNotFound},
+	} {
+		_, err := f.svc.Document(ctx, "workspaces/ws", tc.path)
+		assert.Equal(t, tc.want, KindOf(err), "Document(%q)", tc.path)
+	}
+	_, err = f.svc.Document(ctx, "nowhere", "a.md")
+	assert.Equal(t, KindInvalid, KindOf(err))
+}
+
+func TestDriveMarkdownOfAMarkdownDocumentIsItsBody(t *testing.T) {
+	f := newDriveFixture(t)
+	f.writeDoc(t, "workspaces/ws", "notes.md", "# Notes\n")
+
+	got, err := f.svc.Markdown(t.Context(), "workspaces/ws", "notes.md")
+	require.NoError(t, err)
+	assert.Equal(t, "# Notes\n", got)
+}
+
+func TestDriveSpacesTreeAndSearch(t *testing.T) {
+	f := newDriveFixture(t)
+	ctx := t.Context()
+	f.writeDoc(t, "acme/site", "plans/release-plan.md", "---\ntitle: Release\n---\n")
+	f.writeDoc(t, "workspaces/ws", "notes/plan-b.md", "b")
+
+	spaces, err := f.svc.Spaces(ctx)
+	require.NoError(t, err)
+	keys := make([]string, 0, len(spaces))
+	for _, sp := range spaces {
+		keys = append(keys, sp.Key)
+	}
+	assert.Equal(t, []string{"acme/site", "workspaces/ws", "shared"}, keys)
+
+	root, err := f.svc.Tree(ctx, "acme/site")
+	require.NoError(t, err)
+	entry, ok := drive.Find(root, "plans/release-plan.md")
+	require.True(t, ok)
+	assert.Equal(t, "Release", entry.Title)
+
+	empty, err := f.svc.Tree(ctx, "shared")
+	require.NoError(t, err)
+	assert.Empty(t, empty.Children, "a space with no directory is an empty root")
+
+	_, err = f.svc.Tree(ctx, "../acme")
+	assert.Equal(t, KindInvalid, KindOf(err))
+
+	hits, err := f.svc.Search(ctx, "plan", 0)
+	require.NoError(t, err)
+	var found []string
+	for _, h := range hits {
+		found = append(found, h.Space.Key+":"+h.Entry.Path)
+	}
+	assert.Equal(t, []string{"acme/site:plans", "acme/site:plans/release-plan.md", "workspaces/ws:notes/plan-b.md"}, found)
+
+	limited, err := f.svc.Search(ctx, "plan", 1)
+	require.NoError(t, err)
+	assert.Len(t, limited, 1)
+	_, err = f.svc.Search(ctx, "plan", -1)
+	assert.Equal(t, KindInvalid, KindOf(err))
+}
+
+func TestDriveReorganizes(t *testing.T) {
+	f := newDriveFixture(t)
+	ctx := t.Context()
+	f.writeDoc(t, "workspaces/ws", "plans/a.md", "a")
+
+	folder, err := f.svc.CreateFolder(ctx, "workspaces/ws", "reports/2026")
+	require.NoError(t, err)
+	assert.Equal(t, drive.KindDir, folder.Kind)
+	assert.DirExists(t, filepath.Join(f.contextDir(), "workspaces", "ws", "reports", "2026"))
+
+	renamed, err := f.svc.Rename(ctx, "workspaces/ws", "plans/a.md", "b")
+	require.NoError(t, err)
+	assert.Equal(t, "plans/b.md", renamed.Path)
+
+	moved, err := f.svc.Move(ctx, "workspaces/ws", "plans/b.md", "reports/2026")
+	require.NoError(t, err)
+	assert.Equal(t, "reports/2026/b.md", moved.Path)
+
+	atRoot, err := f.svc.Move(ctx, "workspaces/ws", "reports/2026/b.md", "")
+	require.NoError(t, err)
+	assert.Equal(t, "b.md", atRoot.Path, "a move to the root keeps the base name")
+
+	folderRenamed, err := f.svc.Rename(ctx, "workspaces/ws", "reports", "archive")
+	require.NoError(t, err)
+	assert.Equal(t, "archive", folderRenamed.Path)
+	assert.Equal(t, []string{"archive/2026"}, entryPaths(folderRenamed.Children))
+
+	same, err := f.svc.Move(ctx, "workspaces/ws", "b.md", "")
+	require.NoError(t, err, "a move into the current folder changes nothing")
+	assert.Equal(t, "b.md", same.Path)
+
+	require.NoError(t, f.svc.Delete(ctx, "workspaces/ws", "b.md"))
+	require.NoError(t, f.svc.Delete(ctx, "workspaces/ws", "archive/2026"))
+
+	root, err := f.svc.Tree(ctx, "workspaces/ws")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"archive", "plans"}, entryPaths(root.Children))
+
+	updates := f.signals.waitUpdates(t, 7)
+	for _, u := range updates {
+		assert.Equal(t, "workspaces/ws", u.Space)
+		assert.Empty(t, u.Session, "a user's change has no agent author")
+		assert.Empty(t, u.HiveSession)
+	}
+	assert.Equal(t, []string{"plans/a.md", "plans/b.md"}, updates[1].Paths)
+	assert.Equal(t, []string{"plans/b.md", "reports/2026/b.md"}, updates[2].Paths)
+}
+
+func entryPaths(entries []drive.Entry) []string {
+	out := make([]string, 0, len(entries))
+	for _, e := range entries {
+		out = append(out, e.Path)
+	}
+	return out
+}
+
+func TestDriveRenameKeepsTheKind(t *testing.T) {
+	f := newDriveFixture(t)
+	ctx := t.Context()
+	f.writeDoc(t, "workspaces/ws", "a.md", "a")
+	f.writeDoc(t, "workspaces/ws", "c.md", "c")
+	f.writeDoc(t, "workspaces/ws", "page.html", "<p>x</p>")
+	f.writeDoc(t, "workspaces/ws", "data.json", "{}")
+	f.writeDoc(t, "workspaces/ws", "canvases/plan.canvas.json", `{"blocks":[]}`)
+
+	for _, tc := range []struct {
+		path, name, want string
+	}{
+		{"a.md", "b", "b.md"},
+		{"b.md", "d.md", "d.md"},
+		{"page.html", "index", "index.html"},
+		{"data.json", "other", "other.json"},
+		{"other.json", "other.csv", "other.csv"},
+		{"canvases/plan.canvas.json", "roadmap", "canvases/roadmap.canvas.json"},
+	} {
+		got, err := f.svc.Rename(ctx, "workspaces/ws", tc.path, tc.name)
+		require.NoError(t, err, "Rename(%q, %q)", tc.path, tc.name)
+		assert.Equal(t, tc.want, got.Path, "Rename(%q, %q)", tc.path, tc.name)
+	}
+
+	for _, tc := range []struct {
+		path, name string
+		want       Kind
+	}{
+		{"d.md", "d.html", KindInvalid},
+		{"index.html", "index.md", KindInvalid},
+		{"other.csv", "x.md", KindInvalid},
+		{"d.md", "x.canvas.json", KindInvalid},
+		{"canvases/roadmap.canvas.json", "Road Map", KindInvalid},
+		{"d.md", "sub/x", KindInvalid},
+		{"d.md", ".hidden", KindInvalid},
+		{"d.md", "..", KindInvalid},
+		{"d.md", "", KindInvalid},
+		{"d.md", "c", KindConflict},
+		{"ghost.md", "x", KindNotFound},
+		{"../d.md", "x", KindInvalid},
+		{"/d.md", "x", KindInvalid},
+		{"", "x", KindInvalid},
+	} {
+		_, err := f.svc.Rename(ctx, "workspaces/ws", tc.path, tc.name)
+		assert.Equal(t, tc.want, KindOf(err), "Rename(%q, %q): %v", tc.path, tc.name, err)
+	}
+	assert.FileExists(t, filepath.Join(f.contextDir(), "workspaces", "ws", "d.md"), "a refused rename leaves the file")
+}
+
+func TestDriveMoveAndCreateFolderRefusals(t *testing.T) {
+	f := newDriveFixture(t)
+	ctx := t.Context()
+	f.writeDoc(t, "workspaces/ws", "a.md", "a")
+	f.writeDoc(t, "workspaces/ws", "plans/a.md", "taken")
+	f.writeDoc(t, "workspaces/ws", "plans/sub/x.md", "x")
+
+	for _, tc := range []struct {
+		path, dir string
+		want      Kind
+	}{
+		{"a.md", "plans", KindConflict},
+		{"a.md", "ghost", KindNotFound},
+		{"a.md", "plans/a.md", KindInvalid},
+		{"plans", "plans/sub", KindInvalid},
+		{"../a.md", "plans", KindInvalid},
+		{"a.md", "../elsewhere", KindInvalid},
+		{"a.md", "/tmp", KindInvalid},
+		{"ghost.md", "plans", KindNotFound},
+		{"", "plans", KindInvalid},
+	} {
+		_, err := f.svc.Move(ctx, "workspaces/ws", tc.path, tc.dir)
+		assert.Equal(t, tc.want, KindOf(err), "Move(%q, %q): %v", tc.path, tc.dir, err)
+	}
+
+	_, err := f.svc.CreateFolder(ctx, "workspaces/ws", "plans")
+	assert.Equal(t, KindConflict, KindOf(err))
+	_, err = f.svc.CreateFolder(ctx, "workspaces/ws", "../out")
+	assert.Equal(t, KindInvalid, KindOf(err))
+	_, err = f.svc.CreateFolder(ctx, "workspaces/ws", "")
+	assert.Equal(t, KindInvalid, KindOf(err))
+
+	err = f.svc.Delete(ctx, "workspaces/ws", "plans")
+	assert.Equal(t, KindInvalid, KindOf(err))
+	assert.Contains(t, err.Error(), "not empty")
+	assert.Equal(t, KindInvalid, KindOf(f.svc.Delete(ctx, "workspaces/ws", "..")))
+	assert.Equal(t, KindInvalid, KindOf(f.svc.Delete(ctx, "workspaces/ws", "")))
+	assert.Equal(t, KindNotFound, KindOf(f.svc.Delete(ctx, "workspaces/ws", "ghost.md")))
+
+	f.signals.requireNoUpdates(t, "a refused change publishes nothing")
 }

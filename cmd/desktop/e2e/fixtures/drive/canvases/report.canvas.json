@@ -1,0 +1,26 @@
+{
+  "space": "e2e/repo",
+  "path": "canvases/report.canvas.json",
+  "title": "E2E Report",
+  "session": "",
+  "createdAt": 1760140800000,
+  "updatedAt": 1760140800000,
+  "blocks": [
+    {
+      "id": "summary",
+      "kind": "markdown",
+      "title": "Summary",
+      "body": "The report canvas the drive e2e flows open.",
+      "createdAt": 1760140800000,
+      "updatedAt": 1760140800000
+    },
+    {
+      "id": "plan",
+      "kind": "link",
+      "title": "Hive Drive plan",
+      "url": "https://example.com/hive-drive-plan",
+      "createdAt": 1760140800000,
+      "updatedAt": 1760140800000
+    }
+  ]
+}

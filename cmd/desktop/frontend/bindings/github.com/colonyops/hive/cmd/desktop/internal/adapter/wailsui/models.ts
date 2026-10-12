@@ -101,6 +101,16 @@ export interface AppearanceSettings {
     "canvasPageWidth": string;
 }
 
+export interface BlockWire {
+    "id": string;
+    "kind": string;
+    "title": string;
+    "body": string;
+    "url": string;
+    "createdAt": number;
+    "updatedAt": number;
+}
+
 /**
  * BuildInfo describes the running desktop build so users can see and report
  * the exact version they are on from the System settings screen.
@@ -134,6 +144,22 @@ export interface BuildInfo {
 }
 
 /**
+ * CanvasWire is one canvas with its html blocks sanitized. Timestamps are
+ * unix milliseconds, as the canvas file stores them.
+ */
+export interface CanvasWire {
+    "space": string;
+    "path": string;
+    "title": string;
+    "session": string;
+    "hiveSession": string;
+    "createdAt": number;
+    "updatedAt": number;
+    "frontmatter": { [_ in string]?: any } | null;
+    "blocks": BlockWire[] | null;
+}
+
+/**
  * AtUnixMs is Date.now(); zero leaves only the backend's own timestamp.
  */
 export interface ClientLogEntry {
@@ -155,6 +181,19 @@ export interface ClientLogEntry {
  */
 export interface DevToolsInfo {
     "enabled": boolean;
+}
+
+/**
+ * DocumentWire is one document for the reader. Markdown is set for a
+ * markdown document, HTML for an html one, Canvas for a canvas; a plain file
+ * carries only its entry.
+ */
+export interface DocumentWire {
+    "space": SpaceWire;
+    "entry": EntryWire;
+    "markdown": string;
+    "html": string;
+    "canvas": CanvasWire | null;
 }
 
 /**
@@ -210,6 +249,24 @@ export interface EditorSettings {
 }
 
 /**
+ * EntryWire is one row of a space's tree. Path is relative to the space root
+ * with forward slashes, "" for the root itself. Kind is dir, markdown, html,
+ * canvas, or file. Created is the zero time where the file system records no
+ * birth time. Front and Children are never null.
+ */
+export interface EntryWire {
+    "path": string;
+    "name": string;
+    "kind": string;
+    "size": number;
+    "modified": string;
+    "created": string;
+    "title": string;
+    "front": { [_ in string]?: any } | null;
+    "children": EntryWire[] | null;
+}
+
+/**
  * ExportStatus distinguishes valid local configuration from exporter startup.
  * Running does not confirm that the backend accepted data.
  */
@@ -253,6 +310,14 @@ export interface FlowSummary {
 export interface GithubSettings {
     "pollIntervalSeconds": number;
     "minPollIntervalSeconds": number;
+}
+
+/**
+ * HitWire is one search result; Entry carries no children.
+ */
+export interface HitWire {
+    "space": SpaceWire;
+    "entry": EntryWire;
 }
 
 /**
@@ -559,6 +624,16 @@ export interface SessionSummary {
     "state": string;
     "canvasOwner": string;
     "createdAt": string;
+}
+
+/**
+ * SpaceWire is one drive space. Key is the identity every DriveService call
+ * takes; Kind is repository, workspace, or shared.
+ */
+export interface SpaceWire {
+    "kind": string;
+    "key": string;
+    "name": string;
 }
 
 /**
