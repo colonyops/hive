@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useCodeCopy } from '../composables/useCodeCopy'
 import { usePerf } from '../composables/usePerf'
 import { renderCanvasMarkdown } from '../lib/githubMarkdown'
 import { useCodeHighlight } from '../stores/useCodeHighlight'
@@ -23,7 +24,10 @@ const parts = computed(() => {
   return rendered
 })
 
-function followLink(event: MouseEvent) {
+const { copyCode } = useCodeCopy()
+
+function onClick(event: MouseEvent) {
+  if (copyCode(event)) return
   const target = event.target
   if (!(target instanceof Element)) return
   const anchor = target.closest('a')
@@ -38,12 +42,7 @@ function followLink(event: MouseEvent) {
   <div>
     <template v-for="(part, index) in parts" :key="index">
       <!-- eslint-disable vue/no-v-html -- renderCanvasMarkdown escapes raw HTML and restricts links (githubMarkdown.spec.ts) -->
-      <div
-        v-if="part.kind === 'html'"
-        :data-testid="`${testid}-html-${index}`"
-        v-html="part.html"
-        @click="followLink"
-      />
+      <div v-if="part.kind === 'html'" :data-testid="`${testid}-html-${index}`" v-html="part.html" @click="onClick" />
       <!-- eslint-enable vue/no-v-html -->
       <CanvasMermaid v-else :source="part.source" :testid="`${testid}-mermaid-${index}`" />
     </template>

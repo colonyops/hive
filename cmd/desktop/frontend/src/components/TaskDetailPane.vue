@@ -18,6 +18,7 @@ import BaseBadge from './ui/BaseBadge.vue'
 import ConfirmationHost from './ui/ConfirmationHost.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import { useClipboard } from '../composables/useClipboard'
+import { useCodeCopy } from '../composables/useCodeCopy'
 import { useConfirmation } from '../composables/useConfirmation'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import { useTasks } from '../stores/useTasks'
@@ -55,7 +56,10 @@ function commentHtml(comment: TaskComment): string {
 
 // Rendered bodies are untrusted markdown; links must open in the user's real
 // browser rather than navigate the webview away from the app.
+const { copyCode } = useCodeCopy()
+
 function onBodyClick(event: MouseEvent): void {
+  if (copyCode(event)) return
   const href = externalMarkdownHref(event)
   if (href) void Browser.OpenURL(href)
 }

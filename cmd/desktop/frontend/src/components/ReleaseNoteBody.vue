@@ -3,18 +3,20 @@
 // the binary — but it goes through the same escaping renderer as issue bodies
 // rather than a second, laxer one.
 import { computed } from 'vue'
+import { useCodeCopy } from '../composables/useCodeCopy'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
 import { useCodeHighlight } from '../stores/useCodeHighlight'
 
 const props = defineProps<{ body: string }>()
 
 const { highlight } = useCodeHighlight()
+const { copyCode } = useCodeCopy()
 const html = computed(() => renderGithubMarkdown(props.body, highlight))
 </script>
 
 <template>
   <!-- eslint-disable-next-line vue/no-v-html -- renderGithubMarkdown escapes raw HTML (githubMarkdown.spec.ts) -->
-  <div v-if="html" class="release-notes text-body leading-[1.65] text-text-2" v-html="html" />
+  <div v-if="html" class="release-notes text-body leading-[1.65] text-text-2" @click="copyCode" v-html="html" />
 </template>
 
 <style scoped>

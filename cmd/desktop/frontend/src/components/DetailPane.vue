@@ -5,6 +5,7 @@ import ItemActionMenu from './ItemActionMenu.vue'
 import IconButton from './ui/IconButton.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import PullRequestMetadata from './PullRequestMetadata.vue'
+import { useCodeCopy } from '../composables/useCodeCopy'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import {
   body,
@@ -100,7 +101,10 @@ const bodyHtml = computed(() => (props.item ? renderGithubMarkdown(body(props.it
 // Links inside the rendered body must open in the user's real browser rather
 // than navigate the webview away from the app. Intercept anchor clicks and
 // hand the href up to the parent, which routes it through Wails.
+const { copyCode } = useCodeCopy()
+
 function onBodyClick(event: MouseEvent) {
+  if (copyCode(event)) return
   const href = externalMarkdownHref(event)
   if (href) emit('open-url', href)
 }

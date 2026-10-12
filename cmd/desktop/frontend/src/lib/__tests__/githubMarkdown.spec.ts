@@ -16,6 +16,18 @@ describe('renderGithubMarkdown', () => {
     expect(html).toContain('--shiki-dark')
   })
 
+  it('wraps every code block in a block that carries a copy button', () => {
+    const fenced = renderGithubMarkdown('```go\nfunc main() {}\n```')
+    expect(fenced).toContain(
+      '<div class="markdown-code"><button type="button" class="markdown-code-copy" aria-label="Copy code"',
+    )
+    expect(fenced).toContain('</button><pre><code class="language-go">func main() {}\n</code></pre>\n</div>')
+
+    const indented = renderGithubMarkdown('    indented code\n')
+    expect(indented).toContain('class="markdown-code-copy"')
+    expect(indented).toContain('</button><pre><code>indented code\n</code></pre>\n</div>')
+  })
+
   it('returns an empty string for blank input', () => {
     expect(renderGithubMarkdown('')).toBe('')
     expect(renderGithubMarkdown('   \n  ')).toBe('')
