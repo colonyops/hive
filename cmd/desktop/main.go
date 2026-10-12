@@ -244,11 +244,16 @@ func main() {
 	if core.MountAPI(mcpsrv.PathPrefix, mcpsrv.New(core, logger, mcpsrv.Options{Version: build.Version}).Handler()) {
 		logger.Info().Str("path", mcpsrv.PathPrefix).Msg("agent MCP server mounted")
 	}
-	// The canvas MCP server is a separate mount and catalogue entry, so a
-	// workspace can enable the canvas without the app-control tool set
-	// (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
-	if core.MountAPI(mcpsrv.CanvasPathPrefix, mcpsrv.NewCanvas(core, logger, mcpsrv.Options{Version: build.Version}).Handler()) {
-		logger.Info().Str("path", mcpsrv.CanvasPathPrefix).Msg("canvas MCP server mounted")
+	// The drive MCP server is a separate mount and catalogue entry, so a
+	// workspace can enable documents and canvases without the app-control
+	// tool set (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
+	// It answers at the canvas server's old address too, for agent
+	// configurations that already point there.
+	driveMCP := mcpsrv.NewDrive(core, logger, mcpsrv.Options{Version: build.Version}).Handler()
+	for _, prefix := range []string{mcpsrv.DrivePathPrefix, mcpsrv.CanvasPathPrefix} {
+		if core.MountAPI(prefix, driveMCP) {
+			logger.Info().Str("path", prefix).Msg("drive MCP server mounted")
+		}
 	}
 	terminal := wailsui.TerminalTransport{}
 	popupTerminal := wailsui.PopupTerminalTransport{}

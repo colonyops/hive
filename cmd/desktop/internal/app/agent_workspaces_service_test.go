@@ -577,7 +577,7 @@ func TestStartFirstRunChatSeedsAMissingHiveWorkspace(t *testing.T) {
 	st, ok := svc.store.Status(agentws.HiveWorkspaceDir)
 	require.True(t, ok, "the seeded workspace is in the store")
 	assert.True(t, st.Valid)
-	assert.Equal(t, []string{"hive-desktop", "hive-canvas"}, st.Workspace.MCPs)
+	assert.Equal(t, []string{"hive-desktop", "hive-drive"}, st.Workspace.MCPs)
 	assert.FileExists(t, filepath.Join(root, agentws.HiveWorkspaceDir, "AGENTS.md"))
 }
 
@@ -1317,6 +1317,11 @@ func TestCatalogueResolvesTheDesktopsOwnEndpoint(t *testing.T) {
 	assert.True(t, byID["hive-desktop"].Shipped)
 	assert.Equal(t, testMCPBaseURL+"/mcp", byID["hive-desktop"].Command)
 	assert.Empty(t, byID["hive-desktop"].Problem)
+
+	require.Contains(t, byID, "hive-drive")
+	assert.True(t, byID["hive-drive"].Shipped)
+	assert.Equal(t, testMCPBaseURL+"/mcp/drive", byID["hive-drive"].Command)
+	assert.Empty(t, byID["hive-drive"].Problem)
 
 	require.Contains(t, byID, "hive-canvas")
 	assert.True(t, byID["hive-canvas"].Shipped)

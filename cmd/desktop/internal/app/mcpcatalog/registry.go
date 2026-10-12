@@ -26,14 +26,26 @@ var registry = map[string]Descriptor{
 		RuntimeURL:  true,
 		RuntimePath: "/mcp",
 	},
-	// The desktop's canvas server (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry): the surface an agent
-	// puts content in front of the user through. Its own entry rather than
-	// more hive-desktop tools, so a workspace can have a canvas without
-	// granting the app-control surface — and vice versa.
+	// The desktop's drive server (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry):
+	// the surface an agent writes documents and canvases in front of the user
+	// through. Its own entry rather than more hive-desktop tools, so a
+	// workspace can have the drive without granting the app-control surface,
+	// and vice versa.
+	"hive-drive": {
+		Type:        "hive-drive",
+		Title:       "Hive Drive",
+		Description: "The documents beside a chat or a Code session: markdown, html and canvas documents in folders, saved as files and shown to the user while the conversation keeps running.",
+		Stability:   StabilityStable,
+		Server:      Server{Transport: TransportHttp},
+		RuntimeURL:  true,
+		RuntimePath: "/mcp/drive",
+	},
+	// The same server at the address it had before it served documents. A
+	// workspace manifest names it, so dropping the entry would break those.
 	"hive-canvas": {
 		Type:        "hive-canvas",
 		Title:       "Hive Canvas",
-		Description: "Canvases beside a chat or a Code session: named surfaces of markdown with Mermaid diagrams, html and link blocks, saved as files and shown to the user while the conversation keeps running.",
+		Description: "The hive-drive server at its older address, kept for agent configurations that already point at it. New configurations use hive-drive.",
 		Stability:   StabilityStable,
 		Server:      Server{Transport: TransportHttp},
 		RuntimeURL:  true,
