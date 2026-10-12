@@ -95,3 +95,14 @@ func (s *DriveService) Move(ctx context.Context, space, path, dir string) (Entry
 	}
 	return entryWireOf(entry), nil
 }
+
+// Locate is the absolute path on disk of path in space; path "" is the
+// space's own folder.
+func (s *DriveService) Locate(ctx context.Context, space, path string) (string, error) {
+	return s.drive.Locate(ctx, space, path)
+}
+
+// Reveal shows path in the OS file manager.
+func (s *DriveService) Reveal(ctx context.Context, space, path string) error {
+	return s.drive.Reveal(ctx, space, path)
+}

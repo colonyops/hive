@@ -4,8 +4,11 @@
 // instead of filtering this one.
 import { watchDebounced } from '@vueuse/core'
 import { computed, onMounted, ref, shallowRef } from 'vue'
+import IconFolderPlus from '~icons/lucide/folder-plus'
+import DriveEntryMenu from './DriveEntryMenu.vue'
 import DriveTree from './DriveTree.vue'
 import EmptyState from '../ui/EmptyState.vue'
+import IconButton from '../ui/IconButton.vue'
 import InlineError from '../ui/InlineError.vue'
 import SearchField from '../ui/SearchField.vue'
 import { errorText } from '../../lib/appError'
@@ -26,13 +29,17 @@ const props = defineProps<{
   searchEverySpace?: boolean
   /** Focuses the field on mount, for a browser that opens on request. */
   autofocus?: boolean
-  /** Derives `-browse`, `-search`, `-tree`, `-row-<path>`, `-hit-<space>:<path>`, and `-browse-empty`. */
+  /**
+   * Derives `-browse`, `-search`, `-new-folder-open`, `-tree`, `-row-<path>`, `-hit-<space>:<path>`,
+   * `-browse-empty`, and the entry menu's ids (DriveEntryMenu).
+   */
   testid: string
 }>()
 const emit = defineEmits<{
   pick: [path: string]
   'open-hit': [space: string, path: string]
-  menu: [entry: EntryWire, anchor: HTMLElement]
+  moved: [from: string, to: string]
+  deleted: [path: string]
   escape: []
 }>()
 
@@ -40,7 +47,15 @@ const { search } = useDrive()
 
 const query = ref('')
 const searchInput = ref<{ focus: () => void } | null>(null)
-const treeRef = ref<{ onKeydown: (event: KeyboardEvent) => boolean } | null>(null)
+const treeRef = ref<{
+  onKeydown: (event: KeyboardEvent) => boolean
+  startRename: (path: string) => void
+  reveal: (path: string) => void
+} | null>(null)
+const entryMenu = ref<{
+  open: (entry: EntryWire, anchor: HTMLElement, toggle?: HTMLElement | null) => void
+  newFolder: (dir: string) => void
+} | null>(null)
 onMounted(() => {
   if (props.autofocus) searchInput.value?.focus()
 })
@@ -85,7 +100,11 @@ const noMatches = computed(() => {
 // The field keeps focus while the arrows walk the tree under it, the command
 // palette's shape.
 function forwardKey(event: KeyboardEvent): void {
-  if (!searching.value && ['ArrowDown', 'ArrowUp', 'Enter'].includes(event.key)) treeRef.value?.onKeydown(event)
+  if (!searching.value && ['ArrowDown', 'ArrowUp', 'Enter', 'F2'].includes(event.key)) treeRef.value?.onKeydown(event)
+}
+
+function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | null): void {
+  entryMenu.value?.open(entry, anchor, toggle)
 }
 </script>
 
@@ -101,6 +120,13 @@ function forwardKey(event: KeyboardEvent): void {
         :testid="`${testid}-search`"
         @keydown="forwardKey"
         @escape="emit('escape')"
+      />
+      <IconButton
+        v-if="tree"
+        label="New folder"
+        :icon="IconFolderPlus"
+        :data-testid="`${testid}-new-folder-open`"
+        @click="entryMenu?.newFolder('')"
       />
     </div>
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-2 pt-1">
@@ -139,7 +165,8 @@ function forwardKey(event: KeyboardEvent): void {
           :compact="compact"
           :testid="testid"
           @pick="emit('pick', $event)"
-          @menu="(entry, anchor) => emit('menu', entry, anchor)"
+          @menu="openMenu"
+          @moved="(from, to) => emit('moved', from, to)"
         />
         <EmptyState
           v-if="empty || noMatches"
@@ -150,5 +177,15 @@ function forwardKey(event: KeyboardEvent): void {
         />
       </template>
     </div>
+    <DriveEntryMenu
+      ref="entryMenu"
+      :space="space"
+      inline-rename
+      :testid="testid"
+      @rename="treeRef?.startRename($event.path)"
+      @created="treeRef?.reveal($event)"
+      @moved="(from, to) => emit('moved', from, to)"
+      @deleted="emit('deleted', $event)"
+    />
   </div>
 </template>

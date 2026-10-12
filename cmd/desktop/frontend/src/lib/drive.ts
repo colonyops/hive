@@ -82,6 +82,15 @@ export function newestDocument(root: EntryWire | undefined | null): EntryWire | 
   return newest
 }
 
+/**
+ * Where path lives after from moved to to: itself or anything under it
+ * follows, anything else stays put.
+ */
+export function movedPath(path: string, from: string, to: string): string {
+  if (path === from) return to
+  return path.startsWith(`${from}/`) ? to + path.slice(from.length) : path
+}
+
 /** The folders that hold path, outermost first. */
 export function ancestorPaths(path: string): string[] {
   const parts = path.split('/')

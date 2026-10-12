@@ -1009,3 +1009,42 @@ func TestDriveMoveAndCreateFolderRefusals(t *testing.T) {
 
 	f.signals.requireNoUpdates(t, "a refused change publishes nothing")
 }
+
+func TestDriveLocateAndReveal(t *testing.T) {
+	f := newDriveFixture(t)
+	var revealed []string
+	f.svc.reveal = func(path string) error {
+		revealed = append(revealed, path)
+		return nil
+	}
+	ctx := t.Context()
+	f.writeDoc(t, "workspaces/ws", "plans/a.md", "a")
+	spaceDir := filepath.Join(f.contextDir(), "workspaces", "ws")
+
+	got, err := f.svc.Locate(ctx, "workspaces/ws", "plans/a.md")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(spaceDir, "plans", "a.md"), got)
+
+	root, err := f.svc.Locate(ctx, "workspaces/ws", "")
+	require.NoError(t, err)
+	assert.Equal(t, spaceDir, root)
+
+	for _, tc := range []struct {
+		path string
+		want Kind
+	}{
+		{"ghost.md", KindNotFound},
+		{"../ws2/a.md", KindInvalid},
+		{"/etc/passwd", KindInvalid},
+	} {
+		_, err := f.svc.Locate(ctx, "workspaces/ws", tc.path)
+		assert.Equal(t, tc.want, KindOf(err), "Locate(%q): %v", tc.path, err)
+	}
+	_, err = f.svc.Locate(ctx, "../outside", "a.md")
+	assert.Equal(t, KindInvalid, KindOf(err))
+
+	require.NoError(t, f.svc.Reveal(ctx, "workspaces/ws", "plans"))
+	assert.Equal(t, []string{filepath.Join(spaceDir, "plans")}, revealed)
+	assert.Equal(t, KindNotFound, KindOf(f.svc.Reveal(ctx, "workspaces/ws", "ghost.md")))
+	assert.Len(t, revealed, 1, "a path that is not there is never handed to the file manager")
+}

@@ -41,6 +41,14 @@ export function Export(space: string, path: string, dest: string): $CancellableP
 }
 
 /**
+ * Locate is the absolute path on disk of path in space; path "" is the
+ * space's own folder.
+ */
+export function Locate(space: string, path: string): $CancellablePromise<string> {
+    return $Call.ByID(2079895141, space, path);
+}
+
+/**
  * Markdown is a markdown document's body or a canvas rendered as markdown.
  */
 export function Markdown(space: string, path: string): $CancellablePromise<string> {
@@ -61,6 +69,13 @@ export function Move(space: string, path: string, dir: string): $CancellableProm
  */
 export function Rename(space: string, path: string, name: string): $CancellablePromise<$models.EntryWire> {
     return $Call.ByID(1953469489, space, path, name);
+}
+
+/**
+ * Reveal shows path in the OS file manager.
+ */
+export function Reveal(space: string, path: string): $CancellablePromise<void> {
+    return $Call.ByID(2662089214, space, path);
 }
 
 /**

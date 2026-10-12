@@ -1,12 +1,16 @@
 import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDrive } from '../useDrive'
-import { doc, root, space } from '../../test-utils/drive'
+import { doc, folder, root, space } from '../../test-utils/drive'
 
 const mocks = vi.hoisted(() => ({
   Spaces: vi.fn(),
   Tree: vi.fn(),
   Search: vi.fn(),
+  CreateFolder: vi.fn(),
+  Rename: vi.fn(),
+  Move: vi.fn(),
+  Delete: vi.fn(),
   Focused: vi.fn(),
   On: vi.fn(),
 }))
@@ -14,6 +18,10 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Spaces: mocks.Spaces,
   Tree: mocks.Tree,
   Search: mocks.Search,
+  CreateFolder: mocks.CreateFolder,
+  Rename: mocks.Rename,
+  Move: mocks.Move,
+  Delete: mocks.Delete,
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
   Focused: mocks.Focused,
@@ -99,5 +107,43 @@ describe('useDrive', () => {
     const drive = useDrive()
     expect(await drive.search('plan')).toEqual([])
     expect(mocks.Search).toHaveBeenCalledWith('plan', 50)
+  })
+
+  it('runs each reorganization through its binding and then re-reads the space', async () => {
+    mocks.CreateFolder.mockResolvedValue(folder('archive', []))
+    mocks.Rename.mockResolvedValue(doc('b.md'))
+    mocks.Move.mockResolvedValue(doc('archive/b.md'))
+    mocks.Delete.mockResolvedValue(undefined)
+    const drive = useDrive()
+    await drive.ensureTree('acme/site')
+
+    const steps: Array<[() => Promise<{ error: string | null }>, ReturnType<typeof vi.fn>, unknown[]]> = [
+      [() => drive.createFolder('acme/site', 'archive'), mocks.CreateFolder, ['acme/site', 'archive']],
+      [() => drive.rename('acme/site', 'a.md', 'b'), mocks.Rename, ['acme/site', 'a.md', 'b']],
+      [() => drive.move('acme/site', 'b.md', 'archive'), mocks.Move, ['acme/site', 'b.md', 'archive']],
+      [() => drive.remove('acme/site', 'archive/b.md'), mocks.Delete, ['acme/site', 'archive/b.md']],
+    ]
+    for (const [run, binding, args] of steps) {
+      mocks.Tree.mockClear()
+      expect((await run()).error).toBeNull()
+      expect(binding).toHaveBeenCalledWith(...args)
+      expect(mocks.Tree.mock.calls).toEqual([['acme/site']])
+    }
+    expect((await drive.move('acme/site', 'b.md', 'archive')).result?.path).toBe('archive/b.md')
+  })
+
+  it('answers a refused change as its error text and still re-reads the space', async () => {
+    mocks.Move.mockRejectedValue(
+      Object.assign(new Error('call failed'), { cause: { kind: 'conflict', message: '"plans/a.md" already exists' } }),
+    )
+    const drive = useDrive()
+    await drive.ensureTree('acme/site')
+    mocks.Tree.mockClear()
+
+    expect(await drive.move('acme/site', 'a.md', 'plans')).toEqual({
+      result: null,
+      error: '"plans/a.md" already exists',
+    })
+    expect(mocks.Tree.mock.calls).toEqual([['acme/site']])
   })
 })

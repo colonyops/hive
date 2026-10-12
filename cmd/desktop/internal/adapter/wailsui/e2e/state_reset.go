@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -43,6 +44,9 @@ type pristineFile struct {
 	path    string
 	mode    fs.FileMode
 	content []byte
+	// modTime is put back with the content when set. The drive orders
+	// documents by it, so a rewritten fixture must not become the newest.
+	modTime time.Time
 }
 
 // StateReset owns the post-startup baseline POST /_e2e/reset restores. Reset
@@ -61,6 +65,10 @@ type StateReset struct {
 	mock     string
 	flowsDir string
 	files    []pristineFile
+	// driveDir is the Hive Drive root. Tests reorganize the seeded e2e/repo
+	// space, and a later test (or a retry) must find it as serve.sh laid it out.
+	driveDir  string
+	driveDirs map[string]bool
 }
 
 // NewStateResetHarness captures the reset baseline, or returns nil when the
@@ -92,6 +100,24 @@ func NewStateResetHarnessForInstance(db *queries.DB, st *stores.Stores, core *sq
 			return nil
 		}
 		r.capture(path)
+		return nil
+	})
+	// serve.sh sets no context.base_dir, so the drive is the hive data dir's
+	// default context root.
+	r.driveDir = filepath.Join(paths.HiveDataDir, "context")
+	r.driveDirs = map[string]bool{}
+	_ = filepath.WalkDir(r.driveDir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if entry.IsDir() {
+			r.driveDirs[path] = true
+			return nil
+		}
+		r.capture(path)
+		if info, err := entry.Info(); err == nil {
+			r.files[len(r.files)-1].modTime = info.ModTime()
+		}
 		return nil
 	})
 	return r
@@ -131,8 +157,48 @@ func (r *StateReset) Reset(ctx context.Context) error {
 	if err := r.resetCoreTables(ctx); err != nil {
 		return fmt.Errorf("reset core database: %w", err)
 	}
+	if err := r.sweepDrive(); err != nil {
+		return fmt.Errorf("restore drive baseline: %w", err)
+	}
 	if err := r.restoreConfigFiles(); err != nil {
 		return fmt.Errorf("restore config baseline: %w", err)
+	}
+	return nil
+}
+
+// sweepDrive removes every file and folder created in the drive after boot
+// and recreates the folders a test deleted; restoreConfigFiles then puts the
+// captured documents back.
+func (r *StateReset) sweepDrive() error {
+	captured := make(map[string]bool, len(r.files))
+	for _, f := range r.files {
+		captured[f.path] = true
+	}
+	err := filepath.WalkDir(r.driveDir, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil
+		}
+		if entry.IsDir() {
+			if r.driveDirs[path] {
+				return nil
+			}
+			if err := os.RemoveAll(path); err != nil {
+				return err
+			}
+			return filepath.SkipDir
+		}
+		if captured[path] {
+			return nil
+		}
+		return os.Remove(path)
+	})
+	if err != nil {
+		return fmt.Errorf("removing post-boot drive entries: %w", err)
+	}
+	for dir := range r.driveDirs {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return fmt.Errorf("recreating drive folder %s: %w", dir, err)
+		}
 	}
 	return nil
 }
@@ -208,6 +274,11 @@ func restorePristineFile(f pristineFile) error {
 	}
 	if err := os.WriteFile(f.path, f.content, f.mode); err != nil {
 		return fmt.Errorf("restoring %s: %w", f.path, err)
+	}
+	if !f.modTime.IsZero() {
+		if err := os.Chtimes(f.path, f.modTime, f.modTime); err != nil {
+			return fmt.Errorf("restoring the time of %s: %w", f.path, err)
+		}
 	}
 	return nil
 }

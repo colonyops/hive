@@ -23,6 +23,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	"github.com/colonyops/hive/internal/platform/git"
+	"github.com/colonyops/hive/pkg/osopen"
 )
 
 // maxCanvasBodyBytes caps one markdown or html block's body so a single tool
@@ -53,16 +54,22 @@ type DriveService struct {
 	engine   func() *hive.Engine
 	sessions canvasSessionResolver
 	events   *events.Bus
+	reveal   func(string) error
 }
 
 type DriveDeps struct {
 	Engine   func() *hive.Engine
 	Sessions canvasSessionResolver
 	Events   *events.Bus
+	// Reveal shows an absolute path in the file manager; nil is osopen.Reveal.
+	Reveal func(string) error
 }
 
 func newDriveService(d DriveDeps) *DriveService {
-	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events}
+	if d.Reveal == nil {
+		d.Reveal = osopen.Reveal
+	}
+	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal}
 }
 
 // driveCaller is who a tool call comes from and the space its canvases
@@ -598,6 +605,38 @@ func (s *DriveService) Delete(ctx context.Context, space, path string) error {
 	}
 	s.notify(ctx, parsed, author, path)
 	return nil
+}
+
+// Locate is the absolute path on disk of a document or folder in a space;
+// path "" is the space's own folder.
+func (s *DriveService) Locate(_ context.Context, space, path string) (string, error) {
+	d, parsed, err := s.space(space)
+	if err != nil {
+		return "", err
+	}
+	if path != "" && drive.ValidatePath(path) != nil {
+		return "", Errorf(KindInvalid, "%q is not a path inside the space", path)
+	}
+	dir, err := d.SpaceDir(parsed)
+	if err != nil {
+		return "", documentError(err, parsed, path)
+	}
+	full := filepath.Join(dir, filepath.FromSlash(path))
+	if _, err := os.Lstat(full); errors.Is(err, fs.ErrNotExist) {
+		return "", documentNotFound(parsed, path)
+	} else if err != nil {
+		return "", Wrap(err, KindInternal, "reading %q in %s", path, parsed.Key)
+	}
+	return full, nil
+}
+
+// Reveal shows a document or folder in the OS file manager.
+func (s *DriveService) Reveal(ctx context.Context, space, path string) error {
+	full, err := s.Locate(ctx, space, path)
+	if err != nil {
+		return err
+	}
+	return Wrap(s.reveal(full), KindInternal, "revealing %s", full)
 }
 
 func (s *DriveService) space(key string) (*drivesvc.Service, drive.Space, error) {

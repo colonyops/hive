@@ -1,5 +1,9 @@
 import { computed, shallowReadonly, shallowRef, watch } from 'vue'
 import {
+  CreateFolder,
+  Delete,
+  Move,
+  Rename,
   Search,
   Spaces,
   Tree,
@@ -10,9 +14,13 @@ import type {
   SpaceWire,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { useWailsEvent } from '../composables/useWailsEvent'
+import { errorText } from '../lib/appError'
 import { defineStore } from './defineStore'
 import { useResource, type Resource } from './useResource'
 import { useWindowFocus } from './useWindowFocus'
+
+/** What a reorganization produced, or the error text when the drive refused it. */
+export type DriveChange<T> = { result: T; error: null } | { result: null; error: string }
 
 /**
  * Hive Drive as the frontend reads it: the spaces, and each space's tree once
@@ -78,6 +86,37 @@ export const useDrive = defineStore('drive', () => {
     return (await Search(query, limit)) ?? []
   }
 
+  // The space is re-read after a refusal too: a not_found usually means the
+  // tree on screen is stale.
+  async function attempt<T>(space: string, run: () => Promise<T>, fallback: string): Promise<DriveChange<T>> {
+    try {
+      return { result: await run(), error: null }
+    } catch (err) {
+      return { result: null, error: errorText(err, fallback) }
+    } finally {
+      await reload(space)
+    }
+  }
+
+  function createFolder(space: string, path: string): Promise<DriveChange<EntryWire>> {
+    return attempt(space, () => CreateFolder(space, path), `Could not create ${path}.`)
+  }
+
+  /** Renames in place; a document keeps its kind's extension. */
+  function rename(space: string, path: string, name: string): Promise<DriveChange<EntryWire>> {
+    return attempt(space, () => Rename(space, path, name), `Could not rename ${path}.`)
+  }
+
+  /** Moves into dir under the same name; dir "" is the space root. */
+  function move(space: string, path: string, dir: string): Promise<DriveChange<EntryWire>> {
+    return attempt(space, () => Move(space, path, dir), `Could not move ${path}.`)
+  }
+
+  /** Deletes a document or an empty folder. */
+  function remove(space: string, path: string): Promise<DriveChange<void>> {
+    return attempt(space, () => Delete(space, path), `Could not delete ${path}.`)
+  }
+
   useWailsEvent('drive:updated', (event) => {
     const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as { space?: unknown } | undefined
     const space = typeof payload?.space === 'string' ? payload.space : ''
@@ -107,5 +146,9 @@ export const useDrive = defineStore('drive', () => {
     ensureTree,
     reload,
     search,
+    createFolder,
+    rename,
+    move,
+    remove,
   }
 })

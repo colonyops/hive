@@ -20,7 +20,7 @@ import { useDriveDocument } from '../../composables/useDriveDocument'
 import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import { useResizablePanel } from '../../composables/useResizablePanel'
 import { relativeAge } from '../../lib/age'
-import { entryLabel, entryTime, spaceGroup, spaceGroups, type DriveScope } from '../../lib/drive'
+import { entryLabel, entryTime, movedPath, spaceGroup, spaceGroups, type DriveScope } from '../../lib/drive'
 import { useCanvasSettings } from '../../stores/useCanvasSettings'
 import { useDrive } from '../../stores/useDrive'
 
@@ -75,6 +75,15 @@ function documentDeleted(path: string): void {
   if (props.scope.path === path) emit('update:scope', { ...props.scope, space: space.value, path: null })
 }
 
+// The scope may name no path while the default is on screen, so the shown
+// document is what follows a move.
+function documentMoved(from: string, to: string): void {
+  const current = shown.value
+  if (current && movedPath(current, from, to) !== current) {
+    emit('update:scope', { ...props.scope, space: space.value, path: movedPath(current, from, to) })
+  }
+}
+
 const title = computed(() => (document.value ? entryLabel(document.value.entry) : shown.value) || 'Drive')
 const modified = computed(() => (document.value ? entryTime(document.value.entry.modified) : 0))
 
@@ -122,11 +131,11 @@ useEscapeToClose(() => emit('close'))
         <DriveDocumentActions
           v-if="document"
           :space="space"
-          :path="document.entry.path"
-          :kind="document.entry.kind"
+          :entry="document.entry"
           size="lg"
           testid="drive-page"
           @deleted="documentDeleted"
+          @moved="documentMoved"
         />
         <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
       </template>
@@ -164,6 +173,8 @@ useEscapeToClose(() => emit('close'))
           testid="drive-page"
           @pick="openDocument"
           @open-hit="openHit"
+          @moved="documentMoved"
+          @deleted="documentDeleted"
         />
         <PanelResizeHandle edge="right" name="canvas-sidebar" :start="startSidebarResize" :step="stepSidebar" />
       </aside>

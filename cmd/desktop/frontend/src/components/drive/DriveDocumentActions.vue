@@ -1,38 +1,33 @@
 <script setup lang="ts">
 import { Dialogs } from '@wailsio/runtime'
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import IconCheck from '~icons/lucide/check'
 import IconCopy from '~icons/lucide/copy'
 import IconDownload from '~icons/lucide/download'
-import IconTrash2 from '~icons/lucide/trash-2'
-import ConfirmationHost from '../ui/ConfirmationHost.vue'
+import IconEllipsis from '~icons/lucide/ellipsis'
+import DriveEntryMenu from './DriveEntryMenu.vue'
 import IconButton from '../ui/IconButton.vue'
 import { useClipboard } from '../../composables/useClipboard'
-import { useConfirmation } from '../../composables/useConfirmation'
-import { useDrive } from '../../stores/useDrive'
 import {
-  Delete,
   Export,
   Markdown,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/driveservice'
+import type { EntryWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
   space: string
-  path: string
-  kind: string
+  entry: EntryWire
   size?: 'md' | 'lg'
-  /** Derives `-copy`, `-download`, and `-delete`. */
+  /** Derives `-copy`, `-download`, `-more`, and the entry menu's ids (DriveEntryMenu). */
   testid: string
 }>()
-const emit = defineEmits<{ deleted: [path: string] }>()
-
-const { reload } = useDrive()
+const emit = defineEmits<{ deleted: [path: string]; moved: [from: string, to: string] }>()
 
 // Markdown and canvas documents have a markdown form; html and plain files
 // do not.
-const exportable = computed(() => props.kind === 'markdown' || props.kind === 'canvas')
+const exportable = computed(() => props.entry.kind === 'markdown' || props.entry.kind === 'canvas')
 const fileName = computed(() => {
-  const base = props.path.split('/').pop() ?? props.path
+  const base = props.entry.name
   return base.replace(/\.canvas\.json$/, '').replace(/\.md$/, '') + '.md'
 })
 
@@ -41,7 +36,7 @@ const fileName = computed(() => {
 const { copy, setStatus: setCopyStatus, status: copyStatus } = useClipboard()
 async function copyDocument(): Promise<void> {
   try {
-    await copy(await Markdown(props.space, props.path))
+    await copy(await Markdown(props.space, props.entry.path))
   } catch {
     setCopyStatus('error')
   }
@@ -51,7 +46,8 @@ async function copyDocument(): Promise<void> {
 // save button instead of a clipboard.
 const { setStatus: setSaveStatus, status: saveStatus } = useClipboard()
 async function downloadDocument(): Promise<void> {
-  const { space, path } = props
+  const { space } = props
+  const { path } = props.entry
   try {
     const dest = await Dialogs.SaveFile({ Filename: fileName.value, Title: 'Export document' })
     if (!dest) return
@@ -62,20 +58,13 @@ async function downloadDocument(): Promise<void> {
   }
 }
 
-const deletion = useConfirmation()
-function requestDelete(): void {
-  const { space, path } = props
-  deletion.request({
-    title: 'Delete document',
-    description: `Delete ${path}? The file is removed for every chat and session that shares this space. This cannot be undone.`,
-    confirmLabel: 'Delete document',
-    testid: `${props.testid}-delete-confirmation`,
-    onConfirm: async () => {
-      await Delete(space, path)
-      emit('deleted', path)
-      await reload(space)
-    },
-  })
+const entryMenu = ref<{
+  open: (entry: EntryWire, anchor: HTMLElement, toggle?: HTMLElement | null) => void
+} | null>(null)
+function openMenu(event: MouseEvent): void {
+  const button = event.currentTarget as HTMLElement
+  // The header row, so the menu takes a menu's width rather than the button's.
+  entryMenu.value?.open(props.entry, button.parentElement ?? button, button)
 }
 </script>
 
@@ -99,12 +88,17 @@ function requestDelete(): void {
     />
   </template>
   <IconButton
-    label="Delete document"
-    :icon="IconTrash2"
+    label="More actions"
+    :icon="IconEllipsis"
     :size="size"
-    tone="danger"
-    :data-testid="`${testid}-delete`"
-    @click="requestDelete"
+    :data-testid="`${testid}-more`"
+    @click="openMenu"
   />
-  <ConfirmationHost :confirmation="deletion" />
+  <DriveEntryMenu
+    ref="entryMenu"
+    :space="space"
+    :testid="testid"
+    @moved="(from, to) => emit('moved', from, to)"
+    @deleted="emit('deleted', $event)"
+  />
 </template>

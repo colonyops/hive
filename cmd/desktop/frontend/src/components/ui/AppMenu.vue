@@ -76,8 +76,11 @@ function measure(): void {
   const rect = el.getBoundingClientRect()
   const width = Math.min(230, rect.width)
   const flip = rect.bottom > window.innerHeight - FLIP_WITHIN
+  // Teleported, it layers with AppSelect's popover, above a modal or a hub
+  // overlay that may host its anchor.
   anchoredStyle.value = {
     position: 'fixed',
+    zIndex: '50',
     right: 'auto',
     left: `${rect.right - width}px`,
     width: `${width}px`,
@@ -176,7 +179,11 @@ useEventListener(anchoredWindow, 'resize', measure)
             />
             <IconCheck v-else-if="entry.checked" class="size-3.5 shrink-0 text-accent" />
             <span v-else-if="entry.checked === false" class="size-3.5 shrink-0" aria-hidden="true" />
-            <span class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
+            <span v-if="entry.hint" class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate">{{ entry.label }}</span>
+              <span class="text-micro text-text-4">{{ entry.hint }}</span>
+            </span>
+            <span v-else class="min-w-0 flex-1 truncate">{{ entry.label }}</span>
             <Kbd v-if="entry.kbd" class="ml-auto pl-2 text-micro text-text-4">{{ entry.kbd }}</Kbd>
           </button>
         </template>

@@ -35,6 +35,7 @@ const drive = vi.hoisted(() => ({
   Markdown: vi.fn(),
   Export: vi.fn(),
   Delete: vi.fn(),
+  Rename: vi.fn(),
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/driveservice', () => drive)
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
@@ -200,13 +201,32 @@ describe('DrivePane', () => {
 
   it('deletes after confirmation and picks the next document', async () => {
     const wrapper = await mountPane({ path: plan.path })
-    await wrapper.get('[data-testid="drive-pane-delete"]').trigger('click')
+    await wrapper.get('[data-testid="drive-pane-more"]').trigger('click')
+    document.querySelector<HTMLButtonElement>('[data-testid="drive-pane-menu-delete"]')?.click()
+    await flushPromises()
     expect(drive.Delete).not.toHaveBeenCalled()
     document.querySelector<HTMLButtonElement>('[data-testid="drive-pane-delete-confirmation-confirm"]')?.click()
     await flushPromises()
 
     expect(drive.Delete).toHaveBeenCalledWith('workspaces/web-app', 'plans/plan.md')
     expect(wrapper.emitted('pick')).toEqual([['reports/perf.canvas.json']])
+  })
+
+  it('follows the shown document when the menu renames it', async () => {
+    drive.Rename.mockResolvedValue(doc('plans/roadmap.md'))
+    const wrapper = await mountPane({ path: plan.path })
+    await wrapper.get('[data-testid="drive-pane-more"]').trigger('click')
+    document.querySelector<HTMLButtonElement>('[data-testid="drive-pane-menu-rename"]')?.click()
+    await flushPromises()
+    const input = document.querySelector<HTMLInputElement>('[data-testid="drive-pane-rename-input"]')
+    expect(input?.value).toBe('plan.md')
+    input!.value = 'roadmap'
+    input!.dispatchEvent(new Event('input'))
+    document.querySelector<HTMLButtonElement>('[data-testid="drive-pane-rename-save"]')?.click()
+    await flushPromises()
+
+    expect(drive.Rename).toHaveBeenCalledWith('workspaces/web-app', 'plans/plan.md', 'roadmap')
+    expect(wrapper.emitted('pick')).toEqual([['plans/roadmap.md']])
   })
 
   it('offers no markdown copy for an html document', async () => {
@@ -216,6 +236,6 @@ describe('DrivePane', () => {
     const wrapper = await mountPane()
     expect(wrapper.find('[data-testid="drive-pane-frame"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="drive-pane-copy"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="drive-pane-delete"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="drive-pane-more"]').exists()).toBe(true)
   })
 })

@@ -22,6 +22,8 @@ export interface MenuActionEntry {
    * disappearing, so the menu's shape does not shift under the pointer.
    */
   disabled?: boolean
+  /** A second line under the label, such as why a disabled entry cannot run. */
+  hint?: string
   /**
    * A state the entry turns on and off, and whether it is on. Set it even
    * while off: an unchecked entry still reserves the check's width, so its

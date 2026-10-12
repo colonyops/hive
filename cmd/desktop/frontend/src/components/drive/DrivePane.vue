@@ -14,7 +14,7 @@ import IconButton from '../ui/IconButton.vue'
 import PanelResizeHandle from '../ui/PanelResizeHandle.vue'
 import { useDriveDocument } from '../../composables/useDriveDocument'
 import { useResizablePanel } from '../../composables/useResizablePanel'
-import { entryLabel, newestDocument, type DriveAuthor } from '../../lib/drive'
+import { entryLabel, movedPath, newestDocument, type DriveAuthor } from '../../lib/drive'
 
 const props = defineProps<{
   /** The open chat or Code session, whose newest write is the default pick. */
@@ -57,8 +57,14 @@ function pick(path: string): void {
 }
 
 function documentDeleted(path: string): void {
+  if (path !== shown.value && path !== props.path) return
   const next = newestDocument(tree.value)
   emit('pick', next && next.path !== path ? next.path : null)
+}
+
+function documentMoved(from: string, to: string): void {
+  const current = shown.value
+  if (current && movedPath(current, from, to) !== current) emit('pick', movedPath(current, from, to))
 }
 
 // A link to another document lands at its top, not at the offset the last
@@ -111,10 +117,10 @@ const {
       <DriveDocumentActions
         v-if="document"
         :space="space"
-        :path="document.entry.path"
-        :kind="document.entry.kind"
+        :entry="document.entry"
         testid="drive-pane"
         @deleted="documentDeleted"
+        @moved="documentMoved"
       />
       <IconButton
         label="Open full page"
@@ -135,6 +141,8 @@ const {
       autofocus
       testid="drive-pane"
       @pick="pick"
+      @moved="documentMoved"
+      @deleted="documentDeleted"
       @escape="browsing = false"
     />
 
