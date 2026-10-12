@@ -187,6 +187,17 @@ describe('DrivePage', () => {
       'drive-page-space-option-workspaces/demo',
       'drive-page-space-option-shared',
     ])
+
+    // A long listing is found by typing: the search field filters the options.
+    const search = popover.querySelector<HTMLInputElement>('[data-testid="drive-page-space-search"]')!
+    search.value = 'demo'
+    search.dispatchEvent(new Event('input', { bubbles: true }))
+    await flushPromises()
+    expect(
+      Array.from(popover.querySelectorAll('[role="option"] button')).map((option) =>
+        option.getAttribute('data-testid'),
+      ),
+    ).toEqual(['drive-page-space-option-workspaces/demo'])
     await wrapper.get('[data-testid="drive-page-space"]').trigger('click')
 
     await chooseOption(wrapper, 'drive-page-space', 'shared')

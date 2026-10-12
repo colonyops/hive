@@ -147,6 +147,8 @@ useEscapeToClose(() => emit('close'))
           :options="spaceOptions"
           variant="flat"
           size="sm"
+          searchable
+          search-placeholder="Find a space"
           aria-label="Space"
           testid="drive-page-space"
           @update:model-value="selectSpace"
