@@ -1,4 +1,4 @@
-import { computed, nextTick, watch, type Ref } from 'vue'
+import { computed, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDriveRoute } from '../../composables/useDriveRoute'
 import { useWailsEvent } from '../../composables/useWailsEvent'
@@ -18,18 +18,10 @@ export interface TerminalDriveTarget {
  */
 export function useTerminalDrive(target: Ref<TerminalDriveTarget | null>, active: () => boolean) {
   const route = useRoute()
-  const { docRequested, docPath, syncDocQuery, markDocUnseen, clearDocUnseen } = useDriveRoute()
+  const { docRequested, docPath, syncDocQuery } = useDriveRoute()
 
   const open = computed(() => route.name === 'terminal' && docRequested.value)
   const pane = computed(() => (open.value ? target.value : null))
-
-  watch(
-    pane,
-    (shown) => {
-      if (shown) clearDocUnseen(shown.session)
-    },
-    { immediate: true },
-  )
 
   // A route write outside useTerminalAttach can still rebuild the query. A
   // close changes nothing but ?doc, so any other write that drops it gets it
@@ -47,17 +39,6 @@ export function useTerminalDrive(target: Ref<TerminalDriveTarget | null>, active
       syncDocQuery(true, sameSession && typeof before.doc === 'string' ? before.doc : '1')
     },
   )
-
-  useWailsEvent('drive:updated', (event) => {
-    const author = driveEventAuthor(event.data)
-    if (author === null) return
-    // After every other listener: the Chats area marks a pinned chat's write
-    // unseen, and the pane on screen here has already shown it.
-    void nextTick(() => {
-      if (pane.value?.session === author) clearDocUnseen(author)
-      else markDocUnseen(author)
-    })
-  })
 
   // An agent can ask to open or close the pane. Honored only for the session
   // in view, for the Chats pane's reason: it must never drag the user away.

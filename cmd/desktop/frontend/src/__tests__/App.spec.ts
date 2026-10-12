@@ -25,6 +25,8 @@ import type { AgentWorkspacesClient } from '../lib/agentWorkspacesClient'
 import { useTasks } from '../stores/useTasks'
 import { applicationSettingsSections, createAppRouter } from '../router'
 import TerminalMode from '../components/TerminalMode.vue'
+import DrivePage from '../components/drive/DrivePage.vue'
+import SettingsView from '../components/SettingsView.vue'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { setTerminalTreeHandles, type TerminalTreeHandles } from '../lib/terminalTree'
 import { ListSessions } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
@@ -3256,6 +3258,28 @@ describe('App', () => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
     expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(false)
+    expect(router.currentRoute.value.fullPath).toBe(feedPath)
+
+    wrapper.unmount()
+  })
+
+  it('closes Settings opened from the Drive page onto the drive, then the drive onto the feed', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    const feedPath = router.currentRoute.value.fullPath
+
+    await router.push({ name: 'drive', query: { space: 'shared' } })
+    await flushPromises()
+    const drivePath = router.currentRoute.value.fullPath
+    wrapper.findComponent(DrivePage).vm.$emit('setup')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('application-settings')
+
+    wrapper.findComponent(SettingsView).vm.$emit('close')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe(drivePath)
+
+    wrapper.findComponent(DrivePage).vm.$emit('close')
+    await flushPromises()
     expect(router.currentRoute.value.fullPath).toBe(feedPath)
 
     wrapper.unmount()

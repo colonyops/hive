@@ -1,6 +1,5 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { DriveAuthor } from '../lib/drive'
 import { useDriveActivity } from '../stores/useDriveActivity'
 
 // The drive pane rides the route in Chats and in Code alike: ?doc opens it
@@ -42,12 +41,6 @@ export function useDriveRoute() {
 
   const docUnseen = computed(() => activity.isUnseen(routeChatId.value))
 
-  function noteDriveWrite(author: DriveAuthor): void {
-    if (!author) return
-    if (docVisible.value && author === routeChatId.value) return
-    activity.markUnseen(author)
-  }
-
   return {
     routeChatId,
     docRequested,
@@ -55,9 +48,5 @@ export function useDriveRoute() {
     docPath,
     docUnseen,
     syncDocQuery,
-    noteDriveWrite,
-    markDocUnseen: activity.markUnseen,
-    clearDocUnseen: activity.clearUnseen,
-    isDocUnseen: activity.isUnseen,
   }
 }

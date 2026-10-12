@@ -127,7 +127,7 @@ const paneWorkspaceName = computed(
 // ── Route-driven workspace selection ────────────────────────────────────────
 const route = useRoute()
 const router = useRouter()
-const { routeChatId, docVisible, docPath, syncDocQuery, noteDriveWrite, clearDocUnseen } = useDriveRoute()
+const { routeChatId, docVisible, docPath, syncDocQuery } = useDriveRoute()
 const selectedWorkspace = computed(() =>
   route.name === 'agents' && typeof route.params.workspace === 'string' ? route.params.workspace : '',
 )
@@ -314,21 +314,10 @@ watch(
 
 // ── The drive pane rides the route too (?doc[=path]) ────────────────────────
 // The query itself is owned by useDriveRoute, shared with the title bar's
-// right-panel toggle. This view keeps the two Wails listeners, which are its
-// own: both are answers about the chat it has on screen.
-useWailsEvent('drive:updated', (event) => {
-  const author = driveEventAuthor(event.data)
-  if (author !== null) noteDriveWrite(author)
-})
-// Viewing a chat with its pane open clears its dot.
-watch([docVisible, routeChatId], ([visible, id]) => {
-  if (visible && id !== null) clearDocUnseen(id)
-})
-
-// An agent can ask to open or close the pane (open_document, open_canvas,
-// close_canvas).
-// Honored only for the chat in view: an agent must never drag the user away
-// from a different chat — its write already lights the unseen dot there.
+// right-panel toggle. An agent can ask to open or close the pane
+// (open_document, open_canvas, close_canvas), honored only for the chat in
+// view: an agent must never drag the user away from a different chat — its
+// write already lights the unseen dot there.
 useWailsEvent('drive:toggle', (event) => {
   const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
     { path?: string; open: boolean } | undefined

@@ -2,7 +2,7 @@
 // The drive beside a chat or a Code session: the space's documents, opened on
 // the one the session wrote last. Agents write the content; the user reads,
 // copies, exports, and deletes.
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconMaximize2 from '~icons/lucide/maximize-2'
 import IconX from '~icons/lucide/x'
@@ -14,6 +14,7 @@ import IconButton from '../ui/IconButton.vue'
 import PanelResizeHandle from '../ui/PanelResizeHandle.vue'
 import { useDriveDocument } from '../../composables/useDriveDocument'
 import { useResizablePanel } from '../../composables/useResizablePanel'
+import { useDriveActivity } from '../../stores/useDriveActivity'
 import { entryLabel, movedPath, newestDocument, type DriveAuthor } from '../../lib/drive'
 
 const props = defineProps<{
@@ -35,6 +36,17 @@ const emit = defineEmits<{
 }>()
 
 const { document, tree, treeError, paths, shown, loading, error, show } = useDriveDocument()
+const activity = useDriveActivity()
+
+watch(
+  () => props.session,
+  (session, before) => {
+    if (before !== undefined) activity.unregisterVisible(before)
+    activity.registerVisible(session)
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => activity.unregisterVisible(props.session))
 
 watch(
   () => [props.space, props.path, props.session] as const,
@@ -95,7 +107,7 @@ const {
     :style="{ width: paneWidth + 'px' }"
     data-testid="drive-pane"
   >
-    <PanelResizeHandle edge="left" name="agents-canvas" :start="startPaneResize" :step="stepPane" />
+    <PanelResizeHandle edge="left" name="drive-pane" :start="startPaneResize" :step="stepPane" />
 
     <div class="flex shrink-0 items-center gap-1 border-b border-border px-2 py-1">
       <button

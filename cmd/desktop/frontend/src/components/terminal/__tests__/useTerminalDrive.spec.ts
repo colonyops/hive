@@ -3,7 +3,7 @@ import { defineComponent, ref, type Ref } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAppRouter } from '../../../router'
-import { useDriveRoute } from '../../../composables/useDriveRoute'
+import { useDriveActivity } from '../../../stores/useDriveActivity'
 import { useTerminalDrive, type TerminalDriveTarget } from '../useTerminalDrive'
 
 const wailsEvents = vi.hoisted(() => ({
@@ -130,34 +130,20 @@ describe('useTerminalDrive', () => {
     expect(router.currentRoute.value.query.doc).toBeUndefined()
   })
 
-  it('marks a write unseen until the pane for that session shows it', async () => {
-    const { router } = await mountAt('/terminal/fix-login')
-    const { isDocUnseen } = useDriveRouteFor(router)
+  // Code stays mounted behind Chats after its first visit, with no pane of its
+  // own on screen. A write the Chats pane is showing must stay seen after
+  // that pane closes.
+  it('leaves a write shown in the Chats pane seen while Code is mounted behind it', async () => {
+    const { router } = await mountAt('/workspaces/web-app?chat=7&doc=1', { space: 'workspaces/web-app', session: '7' })
+    const activity = useDriveActivity()
 
-    wailsEvents.fire('drive:updated', { session: 0, hiveSession: 'abc123' })
+    activity.registerVisible('7')
+    wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: ['x.md'], session: '7', hiveSession: '' })
     await flushPromises()
-    expect(isDocUnseen('abc123')).toBe(true)
+    await router.replace('/workspaces/web-app?chat=7')
+    activity.unregisterVisible('7')
+    await flushPromises()
 
-    await router.replace('/terminal/fix-login?doc=1')
-    await flushPromises()
-    expect(isDocUnseen('abc123')).toBe(false)
-
-    wailsEvents.fire('drive:updated', { session: 0, hiveSession: 'abc123' })
-    await flushPromises()
-    expect(isDocUnseen('abc123')).toBe(false)
+    expect(activity.isUnseen('7')).toBe(false)
   })
 })
-
-// The unseen set lives in a store, read here through a second caller the
-// way the title bar's toggle reads it.
-function useDriveRouteFor(router: Router): ReturnType<typeof useDriveRoute> {
-  let api!: ReturnType<typeof useDriveRoute>
-  const Host = defineComponent({
-    setup() {
-      api = useDriveRoute()
-      return () => null
-    },
-  })
-  mount(Host, { global: { plugins: [router] } })
-  return api
-}

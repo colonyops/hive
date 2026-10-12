@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DrivePane from '../DrivePane.vue'
 import type { EntryWire } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 import { doc, documentFor, folder, root, space } from '../../../test-utils/drive'
+import { useDriveActivity } from '../../../stores/useDriveActivity'
 
 const wailsEvents = vi.hoisted(() => ({
   handlers: [] as Array<[string, (event: { data: unknown }) => void]>,
@@ -101,6 +102,33 @@ describe('DrivePane', () => {
     })
     await flushPromises()
     expect(drive.Document).toHaveBeenLastCalledWith('workspaces/web-app', 'plans/plan.md')
+  })
+
+  it("counts the session's writes as seen only while the pane shows that session", async () => {
+    const activity = useDriveActivity()
+    const write = (session: string) =>
+      wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: [plan.path], session, hiveSession: '' })
+    write('7')
+    write('9')
+    const wrapper = await mountPane()
+    expect(activity.isUnseen('7')).toBe(false)
+
+    write('7')
+    expect(activity.isUnseen('7')).toBe(false)
+
+    await wrapper.setProps({ session: '9' })
+    expect(activity.isUnseen('9')).toBe(false)
+    write('7')
+    expect(activity.isUnseen('7')).toBe(true)
+
+    wrapper.unmount()
+    write('9')
+    expect(activity.isUnseen('9')).toBe(true)
+  })
+
+  it('names its resize handle after the pane', async () => {
+    const wrapper = await mountPane()
+    expect(wrapper.find('[data-testid="resize-handle-drive-pane"]').exists()).toBe(true)
   })
 
   it('pins the route-named document and marks it in the tree', async () => {

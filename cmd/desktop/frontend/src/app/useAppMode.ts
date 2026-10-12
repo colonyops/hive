@@ -4,6 +4,7 @@ import { Window } from '@wailsio/runtime'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
+import { useDriveActivity } from '../stores/useDriveActivity'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import { createLogger } from '../lib/log'
@@ -29,7 +30,8 @@ export function useAppMode(
   shellLoaded: Ref<boolean>,
 ) {
   const { route, router } = nav
-  const { routeChatId, docRequested, docPath, docUnseen, isDocUnseen, syncDocQuery } = useDriveRoute()
+  const { routeChatId, docRequested, docPath, docUnseen, syncDocQuery } = useDriveRoute()
+  const activity = useDriveActivity()
   const { recents } = useAgentSessionsAll()
   const { sessions: codeSessions } = useTerminalSessions()
 
@@ -72,9 +74,9 @@ export function useAppMode(
   // attach a tmux control client unconditionally.
   let lastHubPath = ''
   let lastTerminalPath = ''
-  // Where closing settings or the drive returns to: the last page of any
-  // other area, each including the other, so Settings opened from the drive
-  // closes back onto it.
+  // Where closing settings or the drive returns to. Settings remembers the
+  // drive, so Settings opened from the drive closes back onto it; the drive
+  // skips settings, or the two would each return to the other forever.
   let lastOutsideSettingsPath = ''
   let lastOutsideDrivePath = ''
   // The drive reopens on the document last read when no chat or session on
@@ -86,8 +88,8 @@ export function useAppMode(
     () => route.fullPath,
     (path) => {
       if (!route.name) return
-      if (route.name !== 'drive') lastOutsideDrivePath = path
       if (route.name === 'application-settings') return
+      if (route.name !== 'drive') lastOutsideDrivePath = path
       lastOutsideSettingsPath = path
       if (route.name === 'drive') lastDrivePath = path
       else if (route.name === 'terminal') lastTerminalPath = path
@@ -171,7 +173,7 @@ export function useAppMode(
   const previewToggleCollapsed = computed(() => (driveAvailable.value ? !docRequested.value : previewCollapsed.value))
   const canTogglePreview = computed(() => feedViewActive.value || driveAvailable.value)
   const previewUnseen = computed(() =>
-    agentsDriveAvailable.value ? docUnseen.value : isDocUnseen(codeDrive.value?.session ?? null),
+    agentsDriveAvailable.value ? docUnseen.value : activity.isUnseen(codeDrive.value?.session ?? null),
   )
 
   function togglePreview(): void {

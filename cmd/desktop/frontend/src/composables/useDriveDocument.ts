@@ -114,9 +114,11 @@ export function useDriveDocument() {
   }
 
   // The store replaces a tree on every drive:updated for its space, which is
-  // the only wake-up a surface needs.
+  // the only wake-up a surface needs. A tree that first arrives after a failed
+  // load wakes it too; the generation guard absorbs the wake that duplicates
+  // show()'s own load.
   watch(tree, (next, before) => {
-    if (next && before && next !== before) wake()
+    if (next && next !== before) wake()
   })
 
   return { document, tree, treeError, paths, shown, space, loading, error, show, wake }

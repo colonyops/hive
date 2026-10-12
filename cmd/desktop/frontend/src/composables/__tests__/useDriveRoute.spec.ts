@@ -5,7 +5,21 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAppRouter } from '../../router'
 import { useDriveRoute } from '../useDriveRoute'
 
-vi.mock('@wailsio/runtime', () => ({ Events: { On: vi.fn().mockReturnValue(() => {}) } }))
+const events = vi.hoisted(() => ({
+  handlers: new Map<string, (event: { data: unknown }) => void>(),
+}))
+vi.mock('@wailsio/runtime', () => ({
+  Events: {
+    On: (name: string, handler: (event: { data: unknown }) => void) => {
+      events.handlers.set(name, handler)
+      return () => {}
+    },
+  },
+}))
+
+function agentWrote(session: string): void {
+  events.handlers.get('drive:updated')?.({ data: { space: 'workspaces/web-app', paths: ['x.md'], session } })
+}
 
 // The composable resolves against a live route, so it is exercised through a
 // throwaway host component rather than called bare.
@@ -88,58 +102,21 @@ describe('useDriveRoute', () => {
     expect(router.currentRoute.value.query.doc).toBe('plans/x.md')
   })
 
-  // The dot is keyed by the authoring chat: a write to the chat in view with
-  // its pane open is already read, a write to any other chat is remembered and
-  // lights when that chat comes into view.
-  it('keys the unseen dot by chat', async () => {
+  // The dot is keyed by the authoring chat, so switching to a chat lights
+  // only its own.
+  it('reads the unseen dot of the chat the route names', async () => {
     const { api, router } = await mountAt('/workspaces/web-app?chat=7')
     expect(api.docUnseen.value).toBe(false)
 
-    api.noteDriveWrite('9')
+    agentWrote('9')
     expect(api.docUnseen.value).toBe(false)
 
-    api.noteDriveWrite('7')
+    agentWrote('7')
     expect(api.docUnseen.value).toBe(true)
 
-    api.clearDocUnseen('7')
-    expect(api.docUnseen.value).toBe(false)
-
-    // The write to 9 was remembered, so switching to it lights its own dot.
     await router.replace({ query: { chat: '9' } })
     await flushPromises()
     expect(api.docUnseen.value).toBe(true)
-  })
-
-  it('ignores a write while that chat has its pane on screen', async () => {
-    const { api } = await mountAt('/workspaces/web-app?chat=7&doc=1')
-    api.noteDriveWrite('7')
-    expect(api.docUnseen.value).toBe(false)
-  })
-
-  it('ignores a write with no usable session id', async () => {
-    const { api } = await mountAt('/workspaces/web-app?chat=7')
-    api.noteDriveWrite('')
-    expect(api.docUnseen.value).toBe(false)
-  })
-
-  // The set lives in a store so the title bar and AgentsMode read one truth.
-  it('shares the unseen set across callers', async () => {
-    const { api: first, router } = await mountAt('/workspaces/web-app?chat=7')
-    first.noteDriveWrite('7')
-
-    let second!: Api
-    const Host = defineComponent({
-      setup() {
-        second = useDriveRoute()
-        return () => null
-      },
-    })
-    mount(Host, { global: { plugins: [router] } })
-    await flushPromises()
-
-    expect(second.docUnseen.value).toBe(true)
-    second.clearDocUnseen('7')
-    expect(first.docUnseen.value).toBe(false)
   })
 
   // Code rides the same query on its own route, so the title bar's toggle and
@@ -159,17 +136,5 @@ describe('useDriveRoute', () => {
     api.syncDocQuery(false)
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({ window: '@2' })
-  })
-
-  it('keeps an unseen mark per author, chat or hive session', async () => {
-    const { api } = await mountAt('/terminal/fix-login')
-
-    api.markDocUnseen('abc123')
-    expect(api.isDocUnseen('abc123')).toBe(true)
-    expect(api.isDocUnseen('def456')).toBe(false)
-    expect(api.isDocUnseen(null)).toBe(false)
-
-    api.clearDocUnseen('abc123')
-    expect(api.isDocUnseen('abc123')).toBe(false)
   })
 })

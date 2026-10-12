@@ -5,6 +5,7 @@ import AgentsMode from '../AgentsMode.vue'
 import AgentsSidebar from '../AgentsSidebar.vue'
 import SessionLaunchDialog from '../SessionLaunchDialog.vue'
 import { createAppRouter } from '../../router'
+import { useDriveActivity } from '../../stores/useDriveActivity'
 import { tooltipFor } from '../../test-utils/tooltip'
 import type { MissingSkillPackage } from '../../lib/agentWorkspacesClient'
 
@@ -119,8 +120,8 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Focused: vi.fn().mockResolvedValue(true),
 }))
 
-// Captures every useWailsEvent registration (AgentsMode's dot and the drive
-// store both listen) so a test can fire drive:updated by hand.
+// Captures every useWailsEvent registration so a test can fire drive:updated
+// and drive:toggle by hand.
 const wailsEvents = vi.hoisted(() => ({
   handlers: [] as Array<[string, (event: { data: unknown }) => void]>,
   fire(name: string, data: unknown) {
@@ -899,6 +900,23 @@ describe('AgentsMode', () => {
     await flushPromises()
     expect(router.currentRoute.value.query.doc).toBeUndefined()
     expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
+  })
+
+  it("keeps the open chat's write seen when its pane was open for it and then closes", async () => {
+    const { router } = await mountWithOpenChat()
+    await setDoc(router, '1')
+
+    wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: ['x.md'], session: '7', hiveSession: '' })
+    await flushPromises()
+    await setDoc(router, undefined)
+    expect(useDriveActivity().isUnseen('7')).toBe(false)
+
+    wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: ['x.md'], session: '7', hiveSession: '' })
+    await flushPromises()
+    expect(useDriveActivity().isUnseen('7')).toBe(true)
+
+    await setDoc(router, '1')
+    expect(useDriveActivity().isUnseen('7')).toBe(false)
   })
 
   // An unnamed chat is still a named chat: the dialog applies the default,
