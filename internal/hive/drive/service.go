@@ -1043,7 +1043,7 @@ func (s *Service) scanEntries(dir, rel string, entries []fs.DirEntry) []drive.En
 	children := make([]drive.Entry, 0, len(entries))
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasPrefix(name, ".") {
+		if skipEntry(name) {
 			continue
 		}
 		info, err := entry.Info()
@@ -1069,6 +1069,12 @@ func (s *Service) scanEntries(dir, rel string, entries []fs.DirEntry) []drive.En
 	}
 	drive.SortEntries(children)
 	return children
+}
+
+// skipEntry is the one rule for what a listing leaves out: dot entries and
+// the files hive kept for itself.
+func skipEntry(name string) bool {
+	return strings.HasPrefix(name, ".") || drive.IsHiveState(name)
 }
 
 // scanPath is the entry at path built from disk, with its subtree when it is

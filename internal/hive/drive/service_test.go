@@ -346,6 +346,8 @@ func TestTreeListsEveryKindAndSkipsDotEntries(t *testing.T) {
 	f.write(t, acme, "canvases/stray.json", `{"not":"a canvas"}`)
 	f.write(t, acme, ".git/HEAD", "ref")
 	f.write(t, acme, ".DS_Store", "")
+	f.write(t, acme, "kv.json", `{"entries":{}}`)
+	f.write(t, acme, "kv.json.lock", "")
 
 	root, err := f.svc.Tree(t.Context(), acme)
 	require.NoError(t, err)
@@ -389,6 +391,10 @@ func TestTreeListsEveryKindAndSkipsDotEntries(t *testing.T) {
 	_, ok = drive.Find(root, ".git")
 	assert.False(t, ok)
 	_, ok = drive.Find(root, ".DS_Store")
+	assert.False(t, ok)
+	_, ok = drive.Find(root, "kv.json")
+	assert.False(t, ok, "an earlier hive's key-value store is not a document")
+	_, ok = drive.Find(root, "kv.json.lock")
 	assert.False(t, ok)
 }
 

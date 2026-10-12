@@ -250,7 +250,7 @@ func (s *Service) rescanDir(snap *spaceSnapshot, space drive.Space, rel string) 
 	next := make([]drive.Entry, 0, len(entries))
 	for _, entry := range entries {
 		name := entry.Name()
-		if strings.HasPrefix(name, ".") {
+		if skipEntry(name) {
 			continue
 		}
 		info, err := entry.Info()

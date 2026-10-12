@@ -47,6 +47,18 @@ func KindOf(name string) Kind {
 	}
 }
 
+// hiveStateFiles are what an earlier hive kept beside a space's documents:
+// its key-value store and that store's lock. Nothing writes them now, but
+// they are still on disk, and they are not documents.
+var hiveStateFiles = map[string]struct{}{"kv.json": {}, "kv.json.lock": {}}
+
+// IsHiveState reports whether name is a file hive kept for itself in a space.
+// The tree leaves such a file out, as it does a dot entry.
+func IsHiveState(name string) bool {
+	_, ok := hiveStateFiles[path.Base(name)]
+	return ok
+}
+
 func hasExt(name, ext string) bool {
 	return len(name) > len(ext) && strings.HasSuffix(name, ext)
 }
