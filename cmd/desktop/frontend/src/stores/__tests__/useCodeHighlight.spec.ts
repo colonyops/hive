@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useTheme } from '../../composables/useTheme'
 import { cacheLimit, useCodeHighlight } from '../useCodeHighlight'
 
 /** A render asks, the queue drains, the next render finds the fence. */
@@ -26,12 +27,32 @@ describe('useCodeHighlight', () => {
     expect(await highlighted(code, 'go')).toContain('class="shiki')
   }, 2000)
 
-  it('highlights a Go snippet with both theme variables on token spans', async () => {
+  it('highlights a Go snippet in the app theme, with one variable per token', async () => {
     const html = (await highlighted('func main() {\n\tfmt.Println("hi")\n}\n', 'go'))!
     expect(html).toContain('class="shiki')
-    expect(html).toMatch(/<span style="[^"]*--shiki-light:#[0-9a-f]{6}[^"]*--shiki-dark:#[0-9a-f]{6}/i)
-    expect(html).toContain('--shiki-light-bg')
-    expect(html).toContain('--shiki-dark-bg')
+    expect(html).toMatch(/<span style="--shiki-app:#f5b23f">func<\/span>/i)
+    expect(html).not.toContain('--shiki-dark')
+  })
+
+  it('re-highlights in the new code theme when the app theme changes, and keeps the old one cached', async () => {
+    const { theme } = useTheme()
+    const code = 'func main() {}\n'
+    const hive = (await highlighted(code, 'go'))!
+    theme.value = 'tokyo-night'
+    try {
+      const { highlight, settle } = useCodeHighlight()
+      // The theme is not loaded yet, so the fence is not even queued.
+      expect(highlight(code, 'go')).toBeNull()
+      await settle()
+      const night = (await highlighted(code, 'go'))!
+      expect(night).toContain('--shiki-app:')
+      expect(night).not.toBe(hive)
+      expect(night).not.toMatch(/#f5b23f/i)
+      theme.value = 'dark'
+      expect(highlight(code, 'go')).toBe(hive)
+    } finally {
+      theme.value = 'dark'
+    }
   })
 
   it('returns null for an unknown language', async () => {

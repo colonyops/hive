@@ -21,8 +21,8 @@ import typescript from 'shiki/langs/typescript.mjs'
 import vue from 'shiki/langs/vue.mjs'
 import xml from 'shiki/langs/xml.mjs'
 import yaml from 'shiki/langs/yaml.mjs'
-import githubDark from 'shiki/themes/github-dark.mjs'
-import githubLight from 'shiki/themes/github-light.mjs'
+import { useTheme } from '../composables/useTheme'
+import { codeThemes, type CodeTheme } from '../lib/codeThemes'
 import type { Highlight } from '../lib/githubMarkdown'
 import { createLogger } from '../lib/log'
 import { defineStore } from './defineStore'
@@ -84,6 +84,11 @@ const nextFrame: (run: () => void) => void =
  * block comment took over ten seconds per render and froze the window). The
  * WASM is a dynamic import, so nothing pays for it until a fence renders.
  *
+ * A fence is highlighted in the code theme of the app theme in view
+ * (lib/codeThemes.ts). The engine starts with that one theme and loads
+ * another the first time the user switches to it; the cache is keyed by
+ * theme, so switching back costs nothing.
+ *
  * Highlighting never runs inside a render. A fence the cache does not hold
  * renders escaped and joins the queue; the queue drains in slices between
  * frames, and `version` re-runs every computed that asked, which then finds
@@ -97,39 +102,69 @@ const nextFrame: (run: () => void) => void =
  * hits the next render needs, and the queue would never empty.
  */
 export const useCodeHighlight = defineStore('codeHighlight', () => {
+  const { theme: appTheme } = useTheme()
   let highlighter: HighlighterCore | null = null
   let loading: Promise<void> | null = null
   const loaded = new Set<string>()
+  const loadedThemes = new Set<string>()
+  const themeLoads = new Map<string, Promise<void>>()
   const ready = shallowRef(false)
 
   const cache = new Map<string, string | null>()
-  const queue = new Map<string, { code: string; lang: string }>()
+  const queue = new Map<string, { code: string; lang: string; theme: string }>()
   const version = shallowRef(0)
   let touched = new Set<string>()
   let scheduled = false
   let lastBump = 0
 
+  function codeTheme(): CodeTheme {
+    return codeThemes[appTheme.value]
+  }
+
   /** Loads the engine once. Resolves either way: a failed load leaves every fence unhighlighted. */
   function load(): Promise<void> {
-    loading ??= createHighlighterCore({
-      themes: [githubLight, githubDark],
-      langs: languages,
-      engine: createOnigurumaEngine(import('shiki/wasm')),
-    }).then(
-      (core) => {
-        highlighter = core
-        for (const lang of core.getLoadedLanguages()) loaded.add(lang)
-        ready.value = true
-      },
-      (err: unknown) => {
-        log.warn('syntax highlighting is unavailable', err)
-      },
-    )
+    loading ??= (async () => {
+      const first = codeTheme()
+      const core = await createHighlighterCore({
+        themes: [await first.load()],
+        langs: languages,
+        engine: createOnigurumaEngine(import('shiki/wasm')),
+      })
+      highlighter = core
+      for (const lang of core.getLoadedLanguages()) loaded.add(lang)
+      loadedThemes.add(first.name)
+      ready.value = true
+    })().catch((err: unknown) => {
+      log.warn('syntax highlighting is unavailable', err)
+    })
     return loading
   }
 
-  function cacheKey(code: string, lang: string): string {
-    return `${lang}\0${code}`
+  /** Loads a theme the engine does not hold yet, then re-runs the renders that asked. */
+  function ensureTheme(theme: CodeTheme): Promise<void> {
+    if (loadedThemes.has(theme.name)) return Promise.resolve()
+    let pending = themeLoads.get(theme.name)
+    if (!pending) {
+      pending = theme
+        .load()
+        .then((registration) => highlighter!.loadTheme(registration))
+        .then(
+          () => {
+            loadedThemes.add(theme.name)
+            version.value++
+          },
+          (err: unknown) => {
+            log.warn('code theme is unavailable', { theme: theme.name, err })
+            themeLoads.delete(theme.name)
+          },
+        )
+      themeLoads.set(theme.name, pending)
+    }
+    return pending
+  }
+
+  function cacheKey(theme: string, code: string, lang: string): string {
+    return `${theme}\0${lang}\0${code}`
   }
 
   function remember(key: string, html: string | null): void {
@@ -140,13 +175,15 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
     cache.set(key, html)
   }
 
-  function compute(code: string, lang: string): string | null {
+  function compute(code: string, lang: string, theme: string): string | null {
     try {
       // markdown-it fence content ends in a newline that shiki would render
-      // as a blank last line.
+      // as a blank last line. One theme under the `app` key: every token
+      // carries a --shiki-app variable and the block keeps the app's own
+      // background.
       return highlighter!.codeToHtml(code.replace(/\n$/, ''), {
         lang,
-        themes: { light: 'github-light', dark: 'github-dark' },
+        themes: { app: theme },
         defaultColor: false,
       })
     } catch {
@@ -159,7 +196,7 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
     const started = performance.now()
     for (const [key, job] of queue) {
       queue.delete(key)
-      remember(key, compute(job.code, job.lang))
+      remember(key, compute(job.code, job.lang, job.theme))
       if (performance.now() - started >= budgetMs) break
     }
     const now = performance.now()
@@ -183,26 +220,32 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
   /** Highlights everything queued so far, for a test that reads the result back at once. */
   async function settle(): Promise<void> {
     await load()
+    if (highlighter) await ensureTheme(codeTheme())
     while (queue.size) drain(Number.POSITIVE_INFINITY)
   }
 
   /**
-   * Shiki's HTML (a `pre.shiki` carrying `--shiki-light` and `--shiki-dark`
-   * variables per token) for a known language the cache holds, or null so
-   * the renderer keeps its own escaped output. Shiki escapes the code
+   * Shiki's HTML (a `pre.shiki` carrying a `--shiki-app` variable per token)
+   * for a known language the cache holds under the app theme in view, or
+   * null so the renderer keeps its own escaped output. Shiki escapes the code
    * itself. A miss queues the fence; a computed that called this re-runs
-   * once the engine is ready and again as queued fences land.
+   * once the engine or the theme is ready and again as queued fences land.
    */
   const highlight: Highlight = (code, lang) => {
+    const theme = codeTheme()
     if (!ready.value || !highlighter) {
       void load()
+      return null
+    }
+    if (!loadedThemes.has(theme.name)) {
+      void ensureTheme(theme)
       return null
     }
     void version.value
     const alias = lang.trim().toLowerCase()
     const resolved = extraAliases[alias] ?? alias
     if (!loaded.has(resolved)) return null
-    const key = cacheKey(code, resolved)
+    const key = cacheKey(theme.name, code, resolved)
     touched.add(key)
     const hit = cache.get(key)
     if (hit !== undefined) {
@@ -210,7 +253,7 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
       cache.set(key, hit)
       return hit
     }
-    if (!queue.has(key)) queue.set(key, { code, lang: resolved })
+    if (!queue.has(key)) queue.set(key, { code, lang: resolved, theme: theme.name })
     schedule()
     return null
   }

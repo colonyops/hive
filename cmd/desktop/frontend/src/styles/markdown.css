@@ -161,12 +161,16 @@
   font-family: var(--font-mono);
   font-size: 0.86em;
 }
+/* A code block sits on the raised surface inside a hairline, not on the
+   lighter card: the code themes in lib/codeThemes.ts are drawn against the
+   raised tone, and a bright slab drowned their contrast. */
 .markdown-body pre {
   margin: 10px 0;
   padding: 12px 14px;
   overflow-x: auto;
+  border: 1px solid var(--color-border);
   border-radius: 7px;
-  background: var(--color-card);
+  background: var(--color-raised);
   line-height: 1.5;
 }
 .markdown-body pre code {
@@ -191,7 +195,7 @@
   height: 24px;
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: var(--color-card);
+  background: var(--color-raised);
   color: var(--color-text-3);
   cursor: pointer;
   opacity: 0;

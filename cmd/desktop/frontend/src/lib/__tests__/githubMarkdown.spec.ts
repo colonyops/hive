@@ -13,7 +13,7 @@ describe('renderGithubMarkdown', () => {
     await settle()
     const html = renderGithubMarkdown(source, highlight)
     expect(html).toContain('class="shiki')
-    expect(html).toContain('--shiki-dark')
+    expect(html).toContain('--shiki-app')
   })
 
   it('wraps every code block in a block that carries a copy button', () => {
