@@ -56,6 +56,12 @@ export function entryLabel(entry: EntryWire): string {
   return entry.title || entry.name
 }
 
+/** Whether the tree filter keeps entry: its name or title contains the query, ignoring case. */
+export function entryMatches(entry: EntryWire, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  return entry.name.toLowerCase().includes(q) || entry.title.toLowerCase().includes(q)
+}
+
 export function entryTime(iso: string): number {
   const ms = Date.parse(iso)
   return Number.isFinite(ms) && ms > 0 ? ms : 0

@@ -144,9 +144,9 @@ describe('useGlobalKeymap overlay gate', () => {
 
   // The Drive is a page, not an overlay: its chord goes through the ordinary
   // gate, so it is swallowed under any overlay and runs everywhere else.
-  it('runs drive.toggle with no overlay open and swallows it under Tasks', () => {
+  it('runs canvas.toggle with no overlay open and swallows it under Tasks', () => {
     press('p', driveChord)
-    expect(runCommand).toHaveBeenCalledWith('drive.toggle')
+    expect(runCommand).toHaveBeenCalledWith('canvas.toggle')
 
     runCommand.mockReset()
     tasksOpen.value = true

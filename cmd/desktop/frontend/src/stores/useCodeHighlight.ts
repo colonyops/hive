@@ -65,7 +65,7 @@ const languages = [
   xml,
 ]
 
-const cacheLimit = 200
+export const cacheLimit = 200
 const sliceMs = 12
 const bumpEveryMs = 150
 
@@ -90,6 +90,11 @@ const nextFrame: (run: () => void) => void =
  * its fences in the cache. A document with dozens of fences still costs
  * hundreds of milliseconds to highlight, and paid inside one render that was
  * a frozen window.
+ *
+ * The cache keeps the most recent `cacheLimit` fences but never evicts one a
+ * render asked for since the last `version` bump, so it grows past the limit
+ * while more fences than that are on screen. Evicting those would drop the
+ * hits the next render needs, and the queue would never empty.
  */
 export const useCodeHighlight = defineStore('codeHighlight', () => {
   let highlighter: HighlighterCore | null = null
@@ -100,6 +105,7 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
   const cache = new Map<string, string | null>()
   const queue = new Map<string, { code: string; lang: string }>()
   const version = shallowRef(0)
+  let touched = new Set<string>()
   let scheduled = false
   let lastBump = 0
 
@@ -127,7 +133,10 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
   }
 
   function remember(key: string, html: string | null): void {
-    if (cache.size >= cacheLimit) cache.delete(cache.keys().next().value as string)
+    for (const old of cache.keys()) {
+      if (cache.size < cacheLimit) break
+      if (!touched.has(old)) cache.delete(old)
+    }
     cache.set(key, html)
   }
 
@@ -156,6 +165,7 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
     const now = performance.now()
     if (queue.size === 0 || now - lastBump >= bumpEveryMs) {
       lastBump = now
+      touched = new Set()
       version.value++
     }
   }
@@ -193,6 +203,7 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
     const resolved = extraAliases[alias] ?? alias
     if (!loaded.has(resolved)) return null
     const key = cacheKey(code, resolved)
+    touched.add(key)
     const hit = cache.get(key)
     if (hit !== undefined) {
       cache.delete(key)

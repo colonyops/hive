@@ -166,7 +166,7 @@ useEscapeToClose(() => emit('close'))
         @moved="documentMoved"
         @deleted="documentDeleted"
       />
-      <PanelResizeHandle edge="right" name="canvas-sidebar" :start="startSidebarResize" :step="stepSidebar" />
+      <PanelResizeHandle edge="right" name="drive-sidebar" :start="startSidebarResize" :step="stepSidebar" />
     </aside>
 
     <div class="flex min-h-0 min-w-0 flex-1 flex-col">

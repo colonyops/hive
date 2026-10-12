@@ -44,10 +44,10 @@ const entries = computed<MenuEntry[]>(() => [
   },
   {
     kind: 'action',
-    id: 'drive.toggle',
+    id: 'canvas.toggle',
     label: 'Drive',
     icon: IconFolderTree,
-    kbd: kbdFor('drive.toggle'),
+    kbd: kbdFor('canvas.toggle'),
     testid: 'titlebar-menu-drive',
   },
   { kind: 'separator' },

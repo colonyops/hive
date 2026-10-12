@@ -3,6 +3,7 @@ import {
   ancestorPaths,
   documentsOf,
   driveEventAuthor,
+  entryMatches,
   linkTarget,
   markdownBody,
   newestDocument,
@@ -11,6 +12,14 @@ import {
 import { doc, folder, root } from '../../test-utils/drive'
 
 describe('drive', () => {
+  it('matches a filter against the name or the title, ignoring case and padding', () => {
+    const entry = doc('plans/auth.md', { title: 'Login Flow' })
+    expect(entryMatches(entry, 'AUTH')).toBe(true)
+    expect(entryMatches(entry, ' login ')).toBe(true)
+    expect(entryMatches(entry, 'plans')).toBe(false)
+    expect(entryMatches(entry, '')).toBe(true)
+  })
+
   it('groups a space by its key', () => {
     expect(spaceGroup('colonyops/hive')).toBe('Repositories')
     expect(spaceGroup('workspaces/demo')).toBe('Workspaces')

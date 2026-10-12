@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
-import BaseBadge from './ui/BaseBadge.vue'
-import type { FrontmatterScalar, FrontmatterValue } from '../lib/drive'
-import { useCanvasSettings } from '../stores/useCanvasSettings'
+import BaseBadge from '../ui/BaseBadge.vue'
+import type { FrontmatterScalar, FrontmatterValue } from '../../lib/drive'
+import { useCanvasSettings } from '../../stores/useCanvasSettings'
 
 const props = defineProps<{
   frontmatter: Record<string, FrontmatterValue>

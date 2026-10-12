@@ -125,6 +125,9 @@ describe('DrivePage', () => {
     expect(wrapper.get('[data-testid="drive-page-folder"]').text()).toMatch(/^plans( · .+)?$/)
     // The picker heads the sidebar rather than the title strip.
     expect(wrapper.find('[data-testid="drive-page-sidebar"] [data-testid="drive-page-space"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="resize-handle-drive-sidebar"]').attributes('aria-label')).toBe(
+      'Resize drive-sidebar panel',
+    )
     expect(wrapper.get('[data-testid="drive-page-markdown"] h1').text()).toBe('E2E Drive Plan')
     expect(wrapper.get('[data-testid="drive-page-frontmatter-type"]').text()).toContain('plan')
     expect(wrapper.get('[data-testid="drive-page-row-plans/2026-10-11-plan.md"]').attributes('aria-selected')).toBe(

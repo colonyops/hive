@@ -22,7 +22,7 @@ describe('TitleBarMenu', () => {
     expect(wrapper.find('[data-testid="titlebar-menu-canvases"]').exists()).toBe(false)
 
     await entry.trigger('click')
-    expect(wrapper.emitted('run-command')).toEqual([['drive.toggle']])
+    expect(wrapper.emitted('run-command')).toEqual([['canvas.toggle']])
     wrapper.unmount()
   })
 

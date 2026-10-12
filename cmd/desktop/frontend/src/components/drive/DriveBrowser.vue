@@ -12,7 +12,7 @@ import IconButton from '../ui/IconButton.vue'
 import InlineError from '../ui/InlineError.vue'
 import SearchField from '../ui/SearchField.vue'
 import { errorText } from '../../lib/appError'
-import { entryLabel } from '../../lib/drive'
+import { entryLabel, entryMatches } from '../../lib/drive'
 import { useDrive } from '../../stores/useDrive'
 import type {
   EntryWire,
@@ -90,10 +90,10 @@ watchDebounced(
 
 const empty = computed(() => !searching.value && !!props.tree && !props.tree.children?.length)
 const noMatches = computed(() => {
-  const q = filter.value.trim().toLowerCase()
+  const q = filter.value.trim()
   if (!q || !props.tree) return false
-  const matches = (entry: EntryWire) => entry.name.toLowerCase().includes(q) || entry.title.toLowerCase().includes(q)
-  const walk = (entry: EntryWire): boolean => (entry.children ?? []).some((child) => matches(child) || walk(child))
+  const walk = (entry: EntryWire): boolean =>
+    (entry.children ?? []).some((child) => entryMatches(child, q) || walk(child))
   return !walk(props.tree)
 })
 

@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { useCodeHighlight } from '../useCodeHighlight'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { cacheLimit, useCodeHighlight } from '../useCodeHighlight'
 
 /** A render asks, the queue drains, the next render finds the fence. */
 async function highlighted(code: string, lang: string): Promise<string | null> {
@@ -23,10 +23,8 @@ describe('useCodeHighlight', () => {
   it('highlights a one-line Go struct with a block comment without stalling', async () => {
     const code =
       'type SignIn struct{ store Store; allow func(string) bool; users map[string]string /* email -> hash */; outbox OutboxStore; limits Limits; now func() time.Time; code func() string }\n'
-    const started = performance.now()
     expect(await highlighted(code, 'go')).toContain('class="shiki')
-    expect(performance.now() - started).toBeLessThan(2000)
-  })
+  }, 2000)
 
   it('highlights a Go snippet with both theme variables on token spans', async () => {
     const html = (await highlighted('func main() {\n\tfmt.Println("hi")\n}\n', 'go'))!
@@ -62,9 +60,60 @@ describe('useCodeHighlight', () => {
     expect(await highlighted(code, alias)).not.toBeNull()
   })
 
+  it('holds every fence on screen when there are more than the cache limit', async () => {
+    const { highlight, settle } = useCodeHighlight()
+    const fences = Array.from({ length: cacheLimit + 1 }, (_, i) => `x := ${i}`)
+    const render = () => fences.map((code) => highlight(code, 'go'))
+
+    render()
+    await settle()
+    expect(render().every((html) => html?.includes('class="shiki'))).toBe(true)
+  })
+
   it('escapes markup in the code', async () => {
     const html = (await highlighted('<script>alert(1)</script>', 'html'))!
     expect(html).not.toContain('<script>')
     expect(html).toContain('&#x3C;')
+  })
+})
+
+describe('useCodeHighlight with a failing engine', () => {
+  async function storeWith(core: () => Promise<unknown>) {
+    vi.resetModules()
+    vi.doMock('shiki/core', () => ({ createHighlighterCore: core }))
+    vi.doMock('shiki/engine/oniguruma', () => ({ createOnigurumaEngine: () => ({}) }))
+    vi.doMock('shiki/wasm', () => ({ default: {} }))
+    const { useCodeHighlight } = await import('../useCodeHighlight')
+    return useCodeHighlight()
+  }
+
+  afterEach(() => {
+    vi.doUnmock('shiki/core')
+    vi.doUnmock('shiki/engine/oniguruma')
+    vi.doUnmock('shiki/wasm')
+  })
+
+  it('leaves every fence unhighlighted when the engine does not load', async () => {
+    const store = await storeWith(() => Promise.reject(new Error('no wasm')))
+    await expect(store.load()).resolves.toBeUndefined()
+    expect(store.highlight('x', 'go')).toBeNull()
+  })
+
+  it('answers null for a fence that throws and still highlights the others', async () => {
+    const codeToHtml = vi.fn((code: string) => {
+      if (code === 'bad') throw new Error('pathological')
+      return `<pre class="shiki">${code}</pre>`
+    })
+    const store = await storeWith(() => Promise.resolve({ getLoadedLanguages: () => ['go'], codeToHtml }))
+    await store.load()
+
+    store.highlight('bad', 'go')
+    store.highlight('good', 'go')
+    await store.settle()
+
+    expect(store.highlight('bad', 'go')).toBeNull()
+    expect(store.highlight('good', 'go')).toBe('<pre class="shiki">good</pre>')
+    await store.settle()
+    expect(codeToHtml).toHaveBeenCalledTimes(2)
   })
 })

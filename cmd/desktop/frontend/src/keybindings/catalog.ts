@@ -679,7 +679,8 @@ export const commandCatalog: BindableCommand[] = [
     scope: 'goto',
   },
   {
-    id: 'drive.toggle',
+    // Ids are written into users' settings as rebind keys; never rename one.
+    id: 'canvas.toggle',
     title: 'Toggle Drive',
     group: 'View',
     keywords: ['drive', 'canvas', 'canvases', 'wiki', 'page', 'document', 'documents', 'plan', 'report', 'context'],

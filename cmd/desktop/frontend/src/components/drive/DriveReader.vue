@@ -3,7 +3,7 @@
 // a document reads the same in both and only the width differs.
 import { computed } from 'vue'
 import HtmlDocumentFrame from './HtmlDocumentFrame.vue'
-import AgentCanvasFrontmatter from '../AgentCanvasFrontmatter.vue'
+import DriveFrontmatter from './DriveFrontmatter.vue'
 import CanvasMarkdown from '../CanvasMarkdown.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import InlineError from '../ui/InlineError.vue'
@@ -71,7 +71,7 @@ function onBodyClick(event: MouseEvent): void {
 
 <template>
   <div class="canvas-reader flex min-h-0 flex-col" :style="readerStyle" :data-testid="`${testid}-document`">
-    <AgentCanvasFrontmatter
+    <DriveFrontmatter
       v-if="properties"
       :frontmatter="properties.frontmatter"
       :created-at="properties.created"

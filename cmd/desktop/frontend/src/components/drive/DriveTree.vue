@@ -15,7 +15,7 @@ import IconButton from '../ui/IconButton.vue'
 import InlineError from '../ui/InlineError.vue'
 import { useListKeyboardNav } from '../../composables/useListKeyboardNav'
 import { useTreeExpansion } from '../../composables/useTreeExpansion'
-import { ancestorPaths, entryLabel } from '../../lib/drive'
+import { ancestorPaths, entryLabel, entryMatches } from '../../lib/drive'
 import { useDrive } from '../../stores/useDrive'
 import { useDriveActivity } from '../../stores/useDriveActivity'
 import type { EntryWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
@@ -49,11 +49,6 @@ interface Row {
 
 const query = computed(() => props.filter.trim().toLowerCase())
 
-function matches(entry: EntryWire): boolean {
-  const q = query.value
-  return entry.name.toLowerCase().includes(q) || entry.title.toLowerCase().includes(q)
-}
-
 const allDirs = computed(() => {
   const dirs: EntryWire[] = []
   const walk = (entry: EntryWire) => {
@@ -81,7 +76,7 @@ const rows = computed(() => {
   const out: Row[] = []
   const walk = (parent: EntryWire, depth: number, keep: boolean) => {
     for (const child of parent.children ?? []) {
-      const own = keep || !query.value || matches(child)
+      const own = keep || !query.value || entryMatches(child, query.value)
       if (child.kind === 'dir') {
         const start = out.length
         out.push({ entry: child, depth })
