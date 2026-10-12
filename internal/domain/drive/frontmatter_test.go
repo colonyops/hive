@@ -23,6 +23,8 @@ func TestParseMarkdownFrontmatter(t *testing.T) {
 			"type": "plan", "tags": []any{"desktop", "cli"}, "draft": true, "score": 9.5,
 		}, true},
 		{"closing fence at end of input", "---\ntype: plan\n---", Frontmatter{"type": "plan"}, true},
+		{"closing fence with trailing blanks", "---\na: 1\n--- \n", Frontmatter{"a": 1}, true},
+		{"closing fence with a trailing tab at end of input", "---\na: 1\n---\t", Frontmatter{"a": 1}, true},
 		{"empty block", "---\n---\n# Title\n", Frontmatter{}, true},
 		{"crlf", "---\r\ntype: plan\r\n---\r\nbody\r\n", Frontmatter{"type": "plan"}, true},
 		{"bom", "\xef\xbb\xbf---\ntype: plan\n---\n", Frontmatter{"type": "plan"}, true},

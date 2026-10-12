@@ -186,7 +186,6 @@ func (s *DriveService) putBlocks(ctx context.Context, session, name, title, befo
 		}
 		return drive.Canvas{}, driveError(err, name)
 	}
-	s.notify(ctx, caller.space, caller.author, path)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -200,14 +199,13 @@ func (s *DriveService) RemoveBlock(ctx context.Context, session, name, blockID s
 	if err != nil {
 		return drive.Canvas{}, err
 	}
-	c, removed, err := d.RemoveBlock(ctx, caller.space, path, blockID)
+	c, removed, err := d.RemoveBlock(ctx, caller.space, path, blockID, caller.author)
 	if err != nil {
 		return drive.Canvas{}, driveError(err, name)
 	}
 	if !removed {
 		return drive.Canvas{}, Errorf(KindNotFound, "no block %q on canvas %q", blockID, name)
 	}
-	s.notify(ctx, caller.space, caller.author, path)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -225,11 +223,10 @@ func (s *DriveService) SetFrontmatter(ctx context.Context, session, name string,
 	if err := drive.ValidateFrontmatter(fm); err != nil {
 		return drive.Canvas{}, Wrap(err, KindInvalid, "front matter")
 	}
-	c, err := d.SetCanvasFrontmatter(ctx, caller.space, path, fm)
+	c, err := d.SetCanvasFrontmatter(ctx, caller.space, path, caller.author, fm)
 	if err != nil {
 		return drive.Canvas{}, driveError(err, name)
 	}
-	s.notify(ctx, caller.space, caller.author, path)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -244,11 +241,10 @@ func (s *DriveService) ClearCanvas(ctx context.Context, session, name string) (d
 	if err != nil {
 		return drive.Canvas{}, err
 	}
-	c, err := d.ClearCanvas(ctx, caller.space, path)
+	c, err := d.ClearCanvas(ctx, caller.space, path, caller.author)
 	if err != nil {
 		return drive.Canvas{}, driveError(err, name)
 	}
-	s.notify(ctx, caller.space, caller.author, path)
 	return s.withCanonicalAuthor(ctx, c)
 }
 
@@ -262,10 +258,9 @@ func (s *DriveService) DeleteCanvas(ctx context.Context, session, name string) e
 	if err != nil {
 		return err
 	}
-	if err := d.Delete(ctx, caller.space, path); err != nil {
+	if err := d.Delete(ctx, caller.space, path, caller.author); err != nil {
 		return driveError(err, name)
 	}
-	s.notify(ctx, caller.space, caller.author, path)
 	return nil
 }
 
@@ -499,11 +494,10 @@ func (s *DriveService) CreateFolder(ctx context.Context, space, path string) (dr
 	if err := documentPath(path); err != nil {
 		return drive.Entry{}, err
 	}
-	entry, err := d.CreateFolder(ctx, parsed, path)
+	entry, err := d.CreateFolder(ctx, parsed, path, drive.Author{})
 	if err != nil {
 		return drive.Entry{}, documentError(err, parsed, path)
 	}
-	s.notify(ctx, parsed, drive.Author{}, path)
 	return entry, nil
 }
 
@@ -574,11 +568,10 @@ func (s *DriveService) move(ctx context.Context, d *drivesvc.Service, space driv
 		}
 		return entry, nil
 	}
-	entry, err := d.Move(ctx, space, from, to)
+	entry, err := d.Move(ctx, space, from, to, drive.Author{})
 	if err != nil {
 		return drive.Entry{}, documentError(err, space, to)
 	}
-	s.notify(ctx, space, drive.Author{}, from, to)
 	return entry, nil
 }
 
@@ -600,10 +593,9 @@ func (s *DriveService) Delete(ctx context.Context, space, path string) error {
 			author = drive.Author{Session: c.Session, HiveSession: c.HiveSession}
 		}
 	}
-	if err := d.Delete(ctx, parsed, path); err != nil {
+	if err := d.Delete(ctx, parsed, path, author); err != nil {
 		return documentError(err, parsed, path)
 	}
-	s.notify(ctx, parsed, author, path)
 	return nil
 }
 
@@ -949,12 +941,6 @@ func driveError(err error, name string) error {
 	default:
 		return Wrap(err, KindInternal, "canvas %q", name)
 	}
-}
-
-func (s *DriveService) notify(ctx context.Context, space drive.Space, author drive.Author, paths ...string) {
-	s.events.Publish(ctx, events.DriveChanged{
-		Space: space.Key, Paths: paths, Session: author.Session, HiveSession: author.HiveSession,
-	})
 }
 
 // plainTitle decodes HTML entities. A title is plain text on every surface,

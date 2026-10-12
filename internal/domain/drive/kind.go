@@ -14,15 +14,21 @@ type Kind string
 
 // CanvasExt is the canvas file extension. A plain .json is a file: a space
 // holds files Hive did not write, so the kind must be readable from the name.
+// CanvasesDir is the folder a bare canvas name files under.
 const (
 	CanvasExt   = ".canvas.json"
 	CanvasesDir = "canvases"
 )
 
 const (
-	markdownExt   = ".md"
-	htmlExt       = ".html"
+	markdownExt = ".md"
+	htmlExt     = ".html"
+	// maxStemLength keeps a canvas file name, CanvasExt included, well under
+	// the 255-byte name limit of common file systems.
 	maxStemLength = 100
+	// rootCanvasPrefix marks a canvas filed at the space root, which a bare
+	// name cannot name because a bare name files under CanvasesDir.
+	rootCanvasPrefix = "./"
 )
 
 // canvasStemPattern is the canvas name rule. Lowercase only because the file
@@ -64,20 +70,27 @@ func hasExt(name, ext string) bool {
 }
 
 // CanvasPath maps the name an agent gives a canvas to its document path. A
-// bare name files under canvases/; a name with folders files where it says:
+// bare name files under canvases/; a name with folders files where it says;
+// a name starting with "./" files at the space root:
 //
 //	"perf"                 -> "canvases/perf.canvas.json"
 //	"reports/2026-10/perf" -> "reports/2026-10/perf.canvas.json"
+//	"./perf"               -> "perf.canvas.json"
 //
-// A document path that already ends in CanvasExt maps to itself. Folder
-// segments follow ValidatePath; the final stem follows the canvas name rule.
+// A trailing CanvasExt is ignored, so a document path outside the space root
+// maps to itself. Folder segments follow ValidatePath; the final stem follows
+// the canvas name rule.
 func CanvasPath(name string) (string, error) {
 	name = strings.TrimSuffix(name, CanvasExt)
-	dir, stem := path.Split(name)
+	rest, atRoot := strings.CutPrefix(name, rootCanvasPrefix)
+	dir, stem := path.Split(rest)
 	if len(stem) > maxStemLength || !canvasStemPattern.MatchString(stem) {
 		return "", fmt.Errorf("%w: canvas name %q", ErrInvalidPath, name)
 	}
 	if dir == "" {
+		if atRoot {
+			return stem + CanvasExt, nil
+		}
 		return CanvasesDir + "/" + stem + CanvasExt, nil
 	}
 	dir = strings.TrimSuffix(dir, "/")
@@ -88,13 +101,16 @@ func CanvasPath(name string) (string, error) {
 }
 
 // CanvasName is the inverse of CanvasPath: the name an agent calls a canvas
-// document by. A document directly under canvases/ answers its stem; one
-// filed anywhere else answers its path without the extension, which
-// CanvasPath maps straight back.
+// document by. A document directly under canvases/ answers its stem, one at
+// the space root answers "./" and its stem, and one filed anywhere else
+// answers its path without the extension. CanvasPath maps each straight back.
 func CanvasName(p string) string {
 	p = strings.TrimSuffix(p, CanvasExt)
 	if stem, ok := strings.CutPrefix(p, CanvasesDir+"/"); ok && !strings.Contains(stem, "/") {
 		return stem
+	}
+	if !strings.Contains(p, "/") {
+		return rootCanvasPrefix + p
 	}
 	return p
 }

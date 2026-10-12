@@ -138,26 +138,23 @@ func Parse(raw string) (Location, error) {
 
 // driveTarget splits a drive link's segments into the space key and the path
 // inside it. The key's length follows from its first segment, so a path
-// never needs escaping to be told apart from the key.
+// never needs escaping to be told apart from the key; an escaped slash inside
+// a key segment is refused rather than read as a separator.
 func driveTarget(segments []string) (space, path string, err error) {
-	keyLen := 2
-	if len(segments) > 0 && segments[0] == drive.SharedKey {
-		keyLen = 1
+	parsed, path, err := drive.SplitSpacePath(strings.Join(segments, "/"))
+	if err != nil {
+		return "", "", fmt.Errorf("drive links name a space: shared, workspaces/<name>, or <owner>/<repo>: %w", err)
 	}
-	if len(segments) < keyLen {
-		return "", "", errors.New("drive links name a space: shared, workspaces/<name>, or <owner>/<repo>")
+	keyLen := strings.Count(parsed.Key, "/") + 1
+	if len(segments) < keyLen || strings.Join(segments[:keyLen], "/") != parsed.Key {
+		return "", "", fmt.Errorf("drive link space %q: %w", parsed.Key, drive.ErrInvalidSpace)
 	}
-	space = strings.Join(segments[:keyLen], "/")
-	if _, err := drive.ParseSpaceKey(space); err != nil {
-		return "", "", fmt.Errorf("drive link space %q: %w", space, err)
-	}
-	path = strings.Join(segments[keyLen:], "/")
 	if path != "" {
 		if err := drive.ValidatePath(path); err != nil {
 			return "", "", fmt.Errorf("drive link: %w", err)
 		}
 	}
-	return space, path, nil
+	return parsed.Key, path, nil
 }
 
 // pathSegments splits the escaped path so a segment can carry an escaped

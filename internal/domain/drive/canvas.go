@@ -53,7 +53,7 @@ type Author struct {
 }
 
 // UnmarshalJSON accepts numeric chat ids written before chats moved to UUIDs.
-// A later write keeps the original author, so the file keeps the number.
+// The id is kept as the author and rewritten as a string on the next write.
 func (c *Canvas) UnmarshalJSON(data []byte) error {
 	type alias Canvas
 	decoded := struct {

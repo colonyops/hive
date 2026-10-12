@@ -5,7 +5,9 @@
 // of applying event deltas.
 //
 // Symbolic links below the root are not followed: a linked directory is
-// neither walked nor watched. The root itself may be a link.
+// neither walked nor watched. The root itself may be a link. Directories whose
+// names start with "." are not watched, which keeps .git, .obsidian, and .hive
+// out of the set.
 package fswatch
 
 import (
@@ -26,40 +28,55 @@ import (
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
+// DefaultDebounce coalesces the write, rename, and chmod burst of one editor
+// save into one Change, and so into one rescan.
+const DefaultDebounce = 100 * time.Millisecond
+
+// relevantOps leaves out Chmod: an attribute-only change does not change a
+// listing or a file's contents.
 const relevantOps = fsnotify.Create | fsnotify.Write | fsnotify.Remove | fsnotify.Rename
 
 type options struct {
 	debounce time.Duration
-	skipDir  func(name string) bool
+	// events and errors replace fsnotify's channels in tests, which then
+	// decide which events the pump sees.
+	events <-chan fsnotify.Event
+	errors <-chan error
 }
 
 type Option func(*options)
 
 // WithDebounce sets the window that collects events into one Change. The
 // window opens at the first event after the previous one closed and closes d
-// later, so a continuous writer still yields a Change every d. Default 100ms.
+// later, so a continuous writer still yields a Change every d. Default
+// DefaultDebounce.
 func WithDebounce(d time.Duration) Option {
 	return func(o *options) { o.debounce = d }
 }
 
-// WithSkipDir replaces the rule that leaves a directory unwatched. fn sees the
-// base name of every directory below the root. The default skips names
-// starting with ".", which keeps .git, .obsidian, and .hive out of the set.
-func WithSkipDir(fn func(name string) bool) Option {
-	return func(o *options) { o.skipDir = fn }
-}
-
-func defaultSkipDir(name string) bool { return strings.HasPrefix(name, ".") }
+func skipDir(name string) bool { return strings.HasPrefix(name, ".") }
 
 // Change lists the absolute directories whose listing or files changed since
 // the previous Change, sorted. A created directory is listed itself as well
 // as through its parent: files written into it before its watch existed
 // produced no events, so the consumer has to read it.
-type Change struct{ Dirs []string }
+//
+// Resync reports that the kernel dropped events, so Dirs lists every watched
+// directory and the consumer must re-read everything it holds, not only
+// those directories' listings.
+type Change struct {
+	Dirs   []string
+	Resync bool
+}
 
 // Watcher delivers one Change per debounce window on an unbuffered channel.
 // It never blocks on its consumer: windows that close while the consumer is
 // busy merge into the Change it receives next.
+//
+// When the root itself is removed or renamed, the watcher stops and Changes
+// closes, as after Close: every watch is gone with the root, and a new one
+// can only be added once something creates the root again. The consumer
+// starts a new Watcher then.
 type Watcher struct {
 	logger  zerolog.Logger
 	root    string
@@ -67,9 +84,11 @@ type Watcher struct {
 	fsw     *fsnotify.Watcher
 	changes chan Change
 
-	// dirs and pending belong to the pump goroutine after New returns.
+	// dirs, pending, and resync belong to the pump goroutine after New
+	// returns.
 	dirs    map[string]struct{}
 	pending map[string]struct{}
+	resync  bool
 
 	closeOnce sync.Once
 	stop      chan struct{}
@@ -78,7 +97,7 @@ type Watcher struct {
 
 // New walks root, adds one fsnotify watch per directory, and starts the pump.
 func New(logger zerolog.Logger, root string, opts ...Option) (*Watcher, error) {
-	o := options{debounce: 100 * time.Millisecond, skipDir: defaultSkipDir}
+	o := options{debounce: DefaultDebounce}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -99,6 +118,12 @@ func New(logger zerolog.Logger, root string, opts ...Option) (*Watcher, error) {
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("fswatch: start watcher: %w", err)
+	}
+	if o.events == nil {
+		o.events = fsw.Events
+	}
+	if o.errors == nil {
+		o.errors = fsw.Errors
 	}
 
 	w := &Watcher{
@@ -121,7 +146,7 @@ func New(logger zerolog.Logger, root string, opts ...Option) (*Watcher, error) {
 	return w, nil
 }
 
-// Changes is closed after Close.
+// Changes is closed after Close, or once the root is removed or renamed.
 func (w *Watcher) Changes() <-chan Change { return w.changes }
 
 // Close stops the pump and releases every watch. It is idempotent.
@@ -152,19 +177,25 @@ func (w *Watcher) run() {
 		select {
 		case <-w.stop:
 			return
-		case event, ok := <-w.fsw.Events:
+		case event, ok := <-w.opts.events:
 			if !ok {
+				return
+			}
+			if w.rootGone(event) {
+				w.logger.Info().Msg("watched root removed or renamed; watcher stopped")
 				return
 			}
 			w.handle(event)
-			if len(w.pending) > 0 && window == nil {
-				window = time.After(w.opts.debounce)
-			}
-		case err, ok := <-w.fsw.Errors:
+		case err, ok := <-w.opts.errors:
 			if !ok {
 				return
 			}
-			w.logger.Warn().Err(err).Msg("watch error")
+			if errors.Is(err, fsnotify.ErrEventOverflow) {
+				w.logger.Warn().Err(err).Msg("events lost; resyncing every watched directory")
+				w.recover()
+			} else {
+				w.logger.Warn().Err(err).Msg("watch error")
+			}
 		case <-window:
 			window = nil
 			if len(w.pending) == 0 {
@@ -175,12 +206,39 @@ func (w *Watcher) run() {
 			}
 			maps.Copy(ready, w.pending)
 			clear(w.pending)
-			next = Change{Dirs: slices.Sorted(maps.Keys(ready))}
+			next = Change{Dirs: slices.Sorted(maps.Keys(ready)), Resync: next.Resync || w.resync}
+			w.resync = false
 		case out <- next:
 			ready = nil
 			next = Change{}
 		}
+		if len(w.pending) > 0 && window == nil {
+			window = time.After(w.opts.debounce)
+		}
 	}
+}
+
+func (w *Watcher) rootGone(event fsnotify.Event) bool {
+	return filepath.Clean(event.Name) == w.root && (event.Has(fsnotify.Remove) || event.Has(fsnotify.Rename))
+}
+
+// recover follows a queue overflow. The walk adds directories created while
+// events were being dropped, the stat drops ones removed meanwhile, and every
+// watched directory is marked for the consumer to re-read.
+func (w *Watcher) recover() {
+	for dir := range w.dirs {
+		if _, err := os.Lstat(dir); errors.Is(err, fs.ErrNotExist) {
+			w.dropTree(dir)
+		}
+	}
+	if err := w.addTree(w.root); err != nil {
+		w.logger.Warn().Err(err).Msg("rewalk after overflow failed")
+	}
+	for dir := range w.dirs {
+		w.pending[dir] = struct{}{}
+	}
+	w.pending[w.root] = struct{}{}
+	w.resync = true
 }
 
 func (w *Watcher) handle(event fsnotify.Event) {
@@ -230,7 +288,7 @@ func (w *Watcher) handle(event fsnotify.Event) {
 // watchable reports whether a created entry is a directory the watcher should
 // add. Lstat keeps a link to a directory out, matching the walk.
 func (w *Watcher) watchable(name string) bool {
-	if w.opts.skipDir(filepath.Base(name)) {
+	if skipDir(filepath.Base(name)) {
 		return false
 	}
 	info, err := os.Lstat(name)
@@ -239,15 +297,15 @@ func (w *Watcher) watchable(name string) bool {
 
 // addTree watches dir before reading it, so a file created after the watch
 // exists produces an event and one created before it is found by the
-// consumer's read of dir.
+// consumer's read of dir. A directory already watched is walked again, which
+// is how recover finds the directories it missed.
 func (w *Watcher) addTree(dir string) error {
-	if _, ok := w.dirs[dir]; ok {
-		return nil
+	if _, ok := w.dirs[dir]; !ok {
+		if err := w.fsw.Add(dir); err != nil {
+			return err
+		}
+		w.dirs[dir] = struct{}{}
 	}
-	if err := w.fsw.Add(dir); err != nil {
-		return err
-	}
-	w.dirs[dir] = struct{}{}
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -257,7 +315,7 @@ func (w *Watcher) addTree(dir string) error {
 		return err
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() || w.opts.skipDir(entry.Name()) {
+		if !entry.IsDir() || skipDir(entry.Name()) {
 			continue
 		}
 		child := filepath.Join(dir, entry.Name())

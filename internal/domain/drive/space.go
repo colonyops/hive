@@ -67,6 +67,32 @@ func ParseSpaceKey(key string) (Space, error) {
 	return RepositorySpace(first, rest)
 }
 
+// SplitSpacePath splits a slash path relative to the drive root into the
+// space it sits in and its path inside that space, "" for the space root:
+//
+//	"shared/notes/a.md"     -> shared, "notes/a.md"
+//	"workspaces/hive/a.md"  -> workspaces/hive, "a.md"
+//	"colonyops/hive/plans"  -> colonyops/hive, "plans"
+//
+// The root itself, an owner directory, and the workspaces directory hold
+// spaces rather than documents and are ErrInvalidSpace. The inner path is
+// not validated.
+func SplitSpacePath(rel string) (Space, string, error) {
+	first, rest, _ := strings.Cut(rel, "/")
+	if first == SharedKey {
+		return Shared, rest, nil
+	}
+	second, rest, _ := strings.Cut(rest, "/")
+	if second == "" {
+		return Space{}, "", fmt.Errorf("%w: %q is not inside a space", ErrInvalidSpace, rel)
+	}
+	space, err := ParseSpaceKey(first + "/" + second)
+	if err != nil {
+		return Space{}, "", err
+	}
+	return space, rest, nil
+}
+
 // isReserved folds case because the drive root may sit on a case-insensitive
 // file system, where "Shared" and "shared" are one directory.
 func isReserved(owner string) bool {
@@ -74,7 +100,7 @@ func isReserved(owner string) bool {
 }
 
 // isPathComponent reports whether s names exactly one directory entry: not
-// empty, not a dot entry, no separator, and nothing filepath would refuse on
+// empty, not "." or "..", no separator, and nothing filepath would refuse on
 // this platform.
 func isPathComponent(s string) bool {
 	if s == "" || s == "." {

@@ -3,9 +3,11 @@ package fswatch
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,8 +16,16 @@ import (
 const (
 	testDebounce = 20 * time.Millisecond
 	waitTimeout  = 10 * time.Second
-	quietPeriod  = 15 * testDebounce
 )
+
+// withSources feeds the pump from events and errs instead of fsnotify, so a
+// test decides which events are lost.
+func withSources(events <-chan fsnotify.Event, errs <-chan error) Option {
+	return func(o *options) {
+		o.events = events
+		o.errors = errs
+	}
+}
 
 func newWatcher(t *testing.T, root string, opts ...Option) *Watcher {
 	t.Helper()
@@ -48,30 +58,54 @@ func waitFor(t *testing.T, w *Watcher, dirs ...string) {
 	}
 }
 
-// assertNeverNamed fails if a Change names dir during the quiet period.
-// Changes naming other directories are ignored, because a backend may
-// deliver a late event for an earlier operation.
-func assertNeverNamed(t *testing.T, w *Watcher, dir string) {
+// assertNeverNamed writes a file into control, a watched directory, and
+// fails if any Change up to the one naming control names dir. The pump
+// handles events in order, so once control is named every earlier event has
+// been seen.
+func assertNeverNamed(t *testing.T, w *Watcher, dir, control string) {
 	t.Helper()
-	timeout := time.After(quietPeriod)
+	writeFile(t, filepath.Join(control, "control-"+time.Now().Format("150405.000000000")))
+	deadline := time.After(waitTimeout)
 	for {
 		select {
 		case change, ok := <-w.Changes():
 			require.True(t, ok, "changes closed")
 			assert.NotContains(t, change.Dirs, dir)
-		case <-timeout:
-			return
+			if slices.Contains(change.Dirs, control) {
+				return
+			}
+		case <-deadline:
+			t.Fatalf("no change named the control %s within %s", control, waitTimeout)
 		}
 	}
 }
 
-func assertQuiet(t *testing.T, w *Watcher, period time.Duration) {
+// nextChange is the next Change, or fails at the deadline.
+func nextChange(t *testing.T, w *Watcher) Change {
 	t.Helper()
 	select {
 	case change, ok := <-w.Changes():
 		require.True(t, ok, "changes closed")
-		t.Fatalf("unexpected change: %v", change.Dirs)
-	case <-time.After(period):
+		return change
+	case <-time.After(waitTimeout):
+		t.Fatalf("no change within %s", waitTimeout)
+		return Change{}
+	}
+}
+
+// waitClosed fails unless Changes closes before the deadline.
+func waitClosed(t *testing.T, w *Watcher) {
+	t.Helper()
+	deadline := time.After(waitTimeout)
+	for {
+		select {
+		case _, ok := <-w.Changes():
+			if !ok {
+				return
+			}
+		case <-deadline:
+			t.Fatalf("changes not closed within %s", waitTimeout)
+		}
 	}
 }
 
@@ -176,7 +210,7 @@ func TestDotDirectoriesAreNotWatched(t *testing.T) {
 	assert.NotContains(t, w.fsw.WatchList(), git)
 
 	writeFile(t, filepath.Join(git, "HEAD"))
-	assertNeverNamed(t, w, git)
+	assertNeverNamed(t, w, git, root)
 
 	obsidian := filepath.Join(root, ".obsidian")
 	require.NoError(t, os.Mkdir(obsidian, 0o755))
@@ -184,23 +218,7 @@ func TestDotDirectoriesAreNotWatched(t *testing.T) {
 	assert.NotContains(t, w.fsw.WatchList(), obsidian)
 
 	writeFile(t, filepath.Join(obsidian, "workspace.json"))
-	assertNeverNamed(t, w, obsidian)
-}
-
-func TestWithSkipDirReplacesTheDefault(t *testing.T) {
-	t.Parallel()
-	root := t.TempDir()
-	hidden := filepath.Join(root, ".hidden")
-	skipped := filepath.Join(root, "skip")
-	require.NoError(t, os.Mkdir(hidden, 0o755))
-	require.NoError(t, os.Mkdir(skipped, 0o755))
-	w := newWatcher(t, root, WithSkipDir(func(name string) bool { return name == "skip" }))
-
-	assert.Contains(t, w.fsw.WatchList(), hidden)
-	assert.NotContains(t, w.fsw.WatchList(), skipped)
-
-	writeFile(t, filepath.Join(hidden, "a.md"))
-	waitFor(t, w, hidden)
+	assertNeverNamed(t, w, obsidian, root)
 }
 
 func TestSymlinkedDirectoryIsNotFollowed(t *testing.T) {
@@ -216,8 +234,9 @@ func TestSymlinkedDirectoryIsNotFollowed(t *testing.T) {
 	assert.NotContains(t, list, target)
 
 	writeFile(t, filepath.Join(target, "a.md"))
-	assertNeverNamed(t, w, link)
-	assertNeverNamed(t, w, target)
+	assertNeverNamed(t, w, link, root)
+	writeFile(t, filepath.Join(target, "b.md"))
+	assertNeverNamed(t, w, target, root)
 }
 
 func TestSymlinkedRootReportsUnderTheLink(t *testing.T) {
@@ -234,6 +253,8 @@ func TestSymlinkedRootReportsUnderTheLink(t *testing.T) {
 func TestWritesInsideTheWindowYieldOneChange(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
+	other := filepath.Join(root, "other")
+	require.NoError(t, os.Mkdir(other, 0o755))
 	path := filepath.Join(root, "a.md")
 	writeFile(t, path)
 	// A window wide enough that a loaded runner cannot split two back-to-back
@@ -244,10 +265,15 @@ func TestWritesInsideTheWindowYieldOneChange(t *testing.T) {
 	writeFile(t, path)
 	writeFile(t, path)
 	waitFor(t, w, root)
-	assertQuiet(t, w, 3*window)
+
+	writeFile(t, filepath.Join(other, "control.md"))
+	assert.Equal(t, []string{other}, nextChange(t, w).Dirs, "no second change for root came before the control")
 }
 
-func TestSlowConsumerReceivesOneMergedChange(t *testing.T) {
+// The consumer reads nothing until every write is done, so windows that
+// close in between merge. The sleeps only make separate windows likely; the
+// assertion holds however the writes fall into windows.
+func TestSlowConsumerReceivesMergedChanges(t *testing.T) {
 	t.Parallel()
 	root := t.TempDir()
 	var dirs []string
@@ -263,14 +289,48 @@ func TestSlowConsumerReceivesOneMergedChange(t *testing.T) {
 		time.Sleep(5 * testDebounce)
 	}
 
-	select {
-	case change, ok := <-w.Changes():
-		require.True(t, ok)
-		assert.Equal(t, dirs, change.Dirs)
-	case <-time.After(waitTimeout):
-		t.Fatal("no change")
+	seen := map[string]struct{}{}
+	received := 0
+	for len(seen) < len(dirs) {
+		change := nextChange(t, w)
+		received++
+		for _, dir := range change.Dirs {
+			seen[dir] = struct{}{}
+		}
 	}
-	assertQuiet(t, w, quietPeriod)
+	assert.Less(t, received, len(dirs), "windows that closed while the consumer was busy merged")
+}
+
+func TestOverflowResyncsEveryWatchedDirectory(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	require.NoError(t, os.Mkdir(sub, 0o755))
+	events := make(chan fsnotify.Event)
+	errs := make(chan error)
+	w := newWatcher(t, root, withSources(events, errs))
+
+	gap := filepath.Join(root, "gap")
+	deep := filepath.Join(gap, "deep")
+	require.NoError(t, os.MkdirAll(deep, 0o755))
+	require.NoError(t, os.RemoveAll(sub))
+	errs <- fsnotify.ErrEventOverflow
+
+	change := nextChange(t, w)
+	assert.True(t, change.Resync)
+	assert.Equal(t, []string{root, gap, deep}, change.Dirs, "every watched directory, the ones made during the gap included")
+	assert.Contains(t, w.fsw.WatchList(), deep)
+	assert.NotContains(t, w.fsw.WatchList(), sub)
+}
+
+func TestRemovedRootClosesChanges(t *testing.T) {
+	t.Parallel()
+	root := filepath.Join(t.TempDir(), "root")
+	require.NoError(t, os.MkdirAll(filepath.Join(root, "sub"), 0o755))
+	w := newWatcher(t, root)
+
+	require.NoError(t, os.RemoveAll(root))
+	waitClosed(t, w)
 }
 
 func TestCloseClosesChanges(t *testing.T) {
@@ -279,12 +339,7 @@ func TestCloseClosesChanges(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, w.Close())
-	select {
-	case _, ok := <-w.Changes():
-		assert.False(t, ok, "changes still open after Close")
-	case <-time.After(waitTimeout):
-		t.Fatal("changes not closed")
-	}
+	waitClosed(t, w)
 	require.NoError(t, w.Close())
 }
 

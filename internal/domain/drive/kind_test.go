@@ -48,6 +48,7 @@ func TestCanvasPath(t *testing.T) {
 		{"canvases/perf", "canvases/perf.canvas.json"},
 		{"perf.canvas.json", "canvases/perf.canvas.json"},
 		{"reports/perf.canvas.json", "reports/perf.canvas.json"},
+		{"./reports/perf", "reports/perf.canvas.json"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,18 +71,23 @@ func TestCanvasName(t *testing.T) {
 		{"canvases/release-notes.canvas.json", "release-notes"},
 		{"reports/2026-10/perf.canvas.json", "reports/2026-10/perf"},
 		{"canvases/sub/perf.canvas.json", "canvases/sub/perf"},
-		{"perf.canvas.json", "perf"},
-		{"perf", "perf"},
+		{"perf.canvas.json", "./perf"},
+		{"perf", "./perf"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.path, func(t *testing.T) {
 			assert.Equal(t, tt.want, CanvasName(tt.path))
 		})
 	}
-	for _, name := range []string{"perf", "reports/2026-10/perf", "canvases/sub/perf"} {
+	for _, name := range []string{"perf", "reports/2026-10/perf", "canvases/sub/perf", "./perf"} {
 		path, err := CanvasPath(name)
 		require.NoError(t, err)
 		assert.Equal(t, name, CanvasName(path), "CanvasName inverts CanvasPath")
+	}
+	for _, path := range []string{"canvases/x.canvas.json", "reports/x.canvas.json", "perf.canvas.json"} {
+		got, err := CanvasPath(CanvasName(path))
+		require.NoError(t, err)
+		assert.Equal(t, path, got, "CanvasPath inverts CanvasName")
 	}
 }
 
@@ -90,6 +96,7 @@ func TestCanvasPathRejects(t *testing.T) {
 	for _, name := range []string{
 		"", ".", "..", "../escape", "reports/../perf", "reports/./perf", ".hidden", "reports/.hidden",
 		"-plan", "plan-", "Report", "reports/Perf", "has space", "/perf", "reports//perf", "reports/", long,
+		"./", "./../perf", "././perf", "./Perf",
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := CanvasPath(name)

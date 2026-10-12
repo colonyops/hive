@@ -180,7 +180,6 @@ func (cmd *DriveCmd) runLsAll(ctx context.Context) error {
 	return nil
 }
 
-// The kind column is as wide as the longest kind name, markdown.
 func printEntries(root drive.Entry) {
 	for _, entry := range root.Children {
 		fmt.Printf("%-8s  %s\n", entry.Kind, entry.Path)
@@ -313,7 +312,11 @@ func (cmd *DriveCmd) runPrune(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *DriveCmd) resolveContextDir(ctx context.Context) (string, error) {
-	return cmd.app.Drive().ResolveDir(ctx, cmd.repo, cmd.shared)
+	space, err := cmd.app.Drive().ResolveSpace(ctx, cmd.repo, cmd.shared)
+	if err != nil {
+		return "", err
+	}
+	return cmd.app.Drive().SpaceDir(space)
 }
 
 func parseDuration(s string) (time.Duration, error) {

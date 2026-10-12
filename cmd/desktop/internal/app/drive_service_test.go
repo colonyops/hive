@@ -22,6 +22,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
+	hiveevents "github.com/colonyops/hive/internal/hive/events"
 )
 
 type fakeCanvasSessions map[string]stores.AgentSession
@@ -34,9 +35,10 @@ func (f fakeCanvasSessions) Get(_ context.Context, id string) (stores.AgentSessi
 	return rec, nil
 }
 
-// canvasSignals mirrors the two events DriveService publishes. Delivery runs
-// on the bus subscriber's own goroutine, so every field is guarded by a
-// mutex and read through the wait helpers rather than directly.
+// canvasSignals records the drive events that reach the app bus: changes the
+// engine publishes, forwarded as the app does, and DriveService's toggles.
+// Delivery runs on the bus subscriber's own goroutine, so every field is
+// guarded by a mutex and read through the wait helpers rather than directly.
 type canvasSignals struct {
 	bus     *events.Bus
 	mu      sync.Mutex
@@ -130,6 +132,8 @@ func newDriveFixture(t *testing.T, hiveSessions ...session.Session) driveFixture
 	contextRoot := t.TempDir()
 	h := newHiveHarness(t, engineOptions{cfg: func(cfg *config.Config) { cfg.Context.BaseDir = contextRoot }})
 	h.save(t, hiveSessions...)
+	forwardDriveChanges(t.Context(), h.engine.Bus(), bus)
+	go h.engine.Bus().Start(t.Context())
 	svc := newDriveService(DriveDeps{
 		Engine:   func() *hive.Engine { return h.engine },
 		Sessions: fakeCanvasSessions{"1": {ID: "1", Workspace: "ws", Name: "chat", Agent: "claude"}},
@@ -510,6 +514,24 @@ func TestCanvasListBySessionResolvesTheSpace(t *testing.T) {
 	fromSession, err := f.svc.ListCanvases(ctx, "1")
 	require.NoError(t, err)
 	assert.Equal(t, metas, fromSession, "ListCanvases resolves the session's space and answers the same rows")
+}
+
+// The engine is the only publisher of a drive change. A sentinel sent through
+// the engine bus after the write arrives behind everything the write caused,
+// so the recorded list is complete when it lands.
+func TestOneWritePublishesOneDriveChangedWithItsAuthor(t *testing.T) {
+	f := newDriveFixture(t)
+	ctx := t.Context()
+
+	_, err := f.svc.PutBlocks(ctx, "1", "plan", "", []drive.Block{markdownBlock("a", "x")})
+	require.NoError(t, err)
+	f.harness.engine.Bus().PublishDriveChanged(hiveevents.DriveChangedPayload{Space: "sentinel"})
+
+	updates := f.signals.waitUpdates(t, 2)
+	assert.Equal(t, []events.DriveChanged{
+		{Space: "workspaces/ws", Paths: []string{"canvases/plan.canvas.json"}, Session: "1"},
+		{Space: "sentinel"},
+	}, updates)
 }
 
 var siteSession = session.Session{

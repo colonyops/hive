@@ -12,6 +12,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Canvas front matter limits: room for any property list a reader shows in
+// full, and too small for an agent to use front matter as a second document.
 const (
 	maxFrontmatterKeys     = 50
 	maxFrontmatterKeyBytes = 64
@@ -63,7 +65,8 @@ func ParseMarkdownFrontmatter(head []byte) (fm Frontmatter, present bool, err er
 }
 
 // closingFence finds "\n---" ending a line in body, where body starts at the
-// newline that closed the opening fence; -1 when there is none.
+// newline that closed the opening fence; -1 when there is none. Spaces and
+// tabs after the fence still end it, since an editor can leave them there.
 func closingFence(body string) int {
 	from := 0
 	for {
@@ -73,6 +76,9 @@ func closingFence(body string) int {
 		}
 		i += from
 		after := i + len("\n"+frontmatterFence)
+		for after < len(body) && (body[after] == ' ' || body[after] == '\t') {
+			after++
+		}
 		if after == len(body) || body[after] == '\n' {
 			return i
 		}

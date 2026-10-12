@@ -192,16 +192,16 @@ func TestRemoveBlock(t *testing.T) {
 	_, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
 	require.NoError(t, err)
 
-	c, removed, err := f.svc.RemoveBlock(ctx, ws, plan, "a")
+	c, removed, err := f.svc.RemoveBlock(ctx, ws, plan, "a", drive.Author{})
 	require.NoError(t, err)
 	assert.True(t, removed)
 	assert.Empty(t, c.Blocks)
 
-	_, removed, err = f.svc.RemoveBlock(ctx, ws, plan, "a")
+	_, removed, err = f.svc.RemoveBlock(ctx, ws, plan, "a", drive.Author{})
 	require.NoError(t, err)
 	assert.False(t, removed)
 
-	_, _, err = f.svc.RemoveBlock(ctx, ws, "canvases/other.canvas.json", "a")
+	_, _, err = f.svc.RemoveBlock(ctx, ws, "canvases/other.canvas.json", "a", drive.Author{})
 	require.ErrorIs(t, err, drive.ErrNotFound, "a never-written canvas is not found")
 	assert.Len(t, f.changes(), 2, "a removal that changed nothing publishes nothing")
 }
@@ -213,21 +213,21 @@ func TestSetCanvasFrontmatterReplacesEditableFields(t *testing.T) {
 	require.NoError(t, err)
 
 	fm := drive.Frontmatter{"tags": []any{"release", "desktop"}, "reviewed": true, "score": float64(7)}
-	c, err := f.svc.SetCanvasFrontmatter(ctx, ws, plan, fm)
+	c, err := f.svc.SetCanvasFrontmatter(ctx, ws, plan, drive.Author{}, fm)
 	require.NoError(t, err)
 	assert.Equal(t, fm, c.Frontmatter)
 	assert.Greater(t, c.UpdatedAt, first.UpdatedAt)
 	fm["tags"].([]any)[0] = "changed"
 	assert.Equal(t, "release", c.Frontmatter["tags"].([]any)[0], "the canvas holds its own copy")
 
-	c, err = f.svc.SetCanvasFrontmatter(ctx, ws, plan, drive.Frontmatter{})
+	c, err = f.svc.SetCanvasFrontmatter(ctx, ws, plan, drive.Author{}, drive.Frontmatter{})
 	require.NoError(t, err)
 	assert.Empty(t, c.Frontmatter, "an empty mapping removes every editable field")
 
-	_, err = f.svc.SetCanvasFrontmatter(ctx, ws, plan, drive.Frontmatter{"created_at": "yesterday"})
+	_, err = f.svc.SetCanvasFrontmatter(ctx, ws, plan, drive.Author{}, drive.Frontmatter{"created_at": "yesterday"})
 	require.ErrorIs(t, err, drive.ErrInvalidFrontmatter)
 
-	_, err = f.svc.SetCanvasFrontmatter(ctx, ws, "canvases/ghost.canvas.json", drive.Frontmatter{"tags": []any{"x"}})
+	_, err = f.svc.SetCanvasFrontmatter(ctx, ws, "canvases/ghost.canvas.json", drive.Author{}, drive.Frontmatter{"tags": []any{"x"}})
 	require.ErrorIs(t, err, drive.ErrNotFound)
 }
 
@@ -237,7 +237,7 @@ func TestClearCanvasKeepsTheCanvas(t *testing.T) {
 	first, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "The Plan", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
 	require.NoError(t, err)
 
-	c, err := f.svc.ClearCanvas(ctx, ws, plan)
+	c, err := f.svc.ClearCanvas(ctx, ws, plan, drive.Author{})
 	require.NoError(t, err)
 	assert.Empty(t, c.Blocks)
 	assert.Equal(t, first.CreatedAt, c.CreatedAt, "clear keeps the canvas's CreatedAt")
@@ -248,7 +248,7 @@ func TestClearCanvasKeepsTheCanvas(t *testing.T) {
 	require.True(t, ok, "the file survives a clear")
 	assert.Empty(t, reloaded.Blocks)
 
-	_, err = f.svc.ClearCanvas(ctx, ws, "canvases/other.canvas.json")
+	_, err = f.svc.ClearCanvas(ctx, ws, "canvases/other.canvas.json", drive.Author{})
 	require.ErrorIs(t, err, drive.ErrNotFound)
 }
 
@@ -306,7 +306,7 @@ func TestCanvasWritesLeaveNoTempFiles(t *testing.T) {
 	ctx := t.Context()
 	_, err := f.svc.UpsertBlocks(ctx, ws, plan, drive.Author{Session: "chat-1"}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
 	require.NoError(t, err)
-	_, err = f.svc.ClearCanvas(ctx, ws, plan)
+	_, err = f.svc.ClearCanvas(ctx, ws, plan, drive.Author{})
 	require.NoError(t, err)
 
 	entries, err := os.ReadDir(filepath.Join(f.root, "workspaces", "ws", "canvases"))
@@ -423,19 +423,70 @@ func TestTreeIsACopy(t *testing.T) {
 	assert.Equal(t, drive.Frontmatter{"tags": []any{"x"}}, entry.Front)
 }
 
+func TestEntryAnswersOneEntryFromTheSnapshot(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	f.write(t, acme, "plans/sub/a.md", "---\ntitle: A\n---\n")
+
+	entry, err := f.svc.Entry(ctx, acme, "plans")
+	require.NoError(t, err, "an unscanned space is scanned first")
+	assert.Equal(t, drive.KindDir, entry.Kind)
+	assert.Equal(t, []string{"plans/sub"}, paths(entry.Children))
+
+	entry.Children[0].Name = "changed"
+	again, err := f.svc.Entry(ctx, acme, "plans/sub/a.md")
+	require.NoError(t, err)
+	assert.Equal(t, "A", again.Title)
+	sub, err := f.svc.Entry(ctx, acme, "plans/sub")
+	require.NoError(t, err)
+	assert.Equal(t, "sub", sub.Name, "the answer is a copy")
+
+	root, err := f.svc.Entry(ctx, acme, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"plans"}, paths(root.Children))
+
+	_, err = f.svc.Entry(ctx, acme, "ghost.md")
+	require.ErrorIs(t, err, drive.ErrNotFound)
+	_, err = f.svc.Entry(ctx, acme, "../escape")
+	require.ErrorIs(t, err, drive.ErrInvalidPath)
+}
+
+func TestLocateIsTheFileOnDisk(t *testing.T) {
+	f := newFixture(t, nil)
+	got, err := f.svc.Locate(acme, "plans/a.md")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(f.root, "acme", "site", "plans", "a.md"), got)
+	got, err = f.svc.Locate(acme, "")
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(f.root, "acme", "site"), got)
+	_, err = f.svc.Locate(acme, "../escape")
+	require.ErrorIs(t, err, drive.ErrInvalidPath)
+	_, err = f.svc.Locate(drive.Space{Key: "../x"}, "a.md")
+	require.ErrorIs(t, err, drive.ErrInvalidSpace)
+}
+
 func TestFirstScanRenamesLegacyCanvasesOnce(t *testing.T) {
 	f := newFixture(t, nil)
 	f.write(t, acme, "canvases/plan.json", `{"workspace":"acme/site","name":"plan","title":"Legacy","blocks":[]}`)
 	f.write(t, acme, "canvases/taken.json", `{"blocks":[]}`)
 	f.write(t, acme, "canvases/taken.canvas.json", `{"title":"Already here","blocks":[]}`)
 	f.write(t, acme, "canvases/stray.json", `{"blocks":"no"}`)
+	f.write(t, acme, "canvases/notes.json", `{"a":1}`)
+	f.write(t, acme, "canvases/broken.json", `{`)
 	f.write(t, acme, "other/plan.json", `{"blocks":[]}`)
 
 	root, err := f.svc.Tree(t.Context(), acme)
 	require.NoError(t, err)
 	canvases, ok := drive.Find(root, "canvases")
 	require.True(t, ok)
-	assert.Equal(t, []string{"canvases/plan.canvas.json", "canvases/stray.canvas.json", "canvases/taken.canvas.json", "canvases/taken.json"}, paths(canvases.Children))
+	assert.Equal(t, []string{
+		"canvases/broken.json", "canvases/notes.json", "canvases/plan.canvas.json",
+		"canvases/stray.canvas.json", "canvases/taken.canvas.json", "canvases/taken.json",
+	}, paths(canvases.Children))
+	for _, path := range []string{"canvases/notes.json", "canvases/broken.json"} {
+		entry, _ := drive.Find(root, path)
+		assert.Equal(t, drive.KindFile, entry.Kind, "%s holds no canvas and keeps its name", path)
+	}
 	entry, _ := drive.Find(root, "canvases/plan.canvas.json")
 	assert.Equal(t, "Legacy", entry.Title)
 	entry, _ = drive.Find(root, "canvases/taken.canvas.json")
@@ -471,14 +522,14 @@ func TestWriteCreatesFoldersAndIndexesTheDocument(t *testing.T) {
 	_, err := f.svc.Tree(ctx, acme)
 	require.NoError(t, err)
 
-	entry, err := f.svc.Write(ctx, acme, "plans/2026/plan.md", []byte("---\ntitle: Plan\n---\nbody\n"))
+	entry, err := f.svc.Write(ctx, acme, "plans/2026/plan.md", drive.Author{}, []byte("---\ntitle: Plan\n---\nbody\n"))
 	require.NoError(t, err)
 	assert.Equal(t, drive.KindMarkdown, entry.Kind)
 	assert.Equal(t, "Plan", entry.Title)
 	assert.Equal(t, "plans/2026/plan.md", entry.Path)
 	assert.Nil(t, entry.Children)
 
-	page, err := f.svc.Write(ctx, acme, "page.html", []byte("<p>hi</p>"))
+	page, err := f.svc.Write(ctx, acme, "page.html", drive.Author{}, []byte("<p>hi</p>"))
 	require.NoError(t, err)
 	assert.Equal(t, drive.KindHtml, page.Kind)
 
@@ -505,16 +556,16 @@ func TestWriteRefusesWhatIsNotMarkdownOrHTML(t *testing.T) {
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	for _, path := range []string{"canvases/plan.canvas.json", "notes.txt", "data.json", "plans"} {
-		_, err := f.svc.Write(ctx, acme, path, []byte("x"))
+		_, err := f.svc.Write(ctx, acme, path, drive.Author{}, []byte("x"))
 		require.ErrorIs(t, err, drive.ErrNotWritable, "path %q", path)
 	}
 	for _, path := range []string{"", "../x.md", ".hidden/x.md", "a//b.md"} {
-		_, err := f.svc.Write(ctx, acme, path, []byte("x"))
+		_, err := f.svc.Write(ctx, acme, path, drive.Author{}, []byte("x"))
 		require.ErrorIs(t, err, drive.ErrInvalidPath, "path %q", path)
 	}
-	_, err := f.svc.CreateFolder(ctx, acme, "plans")
+	_, err := f.svc.CreateFolder(ctx, acme, "plans", drive.Author{})
 	require.NoError(t, err)
-	_, err = f.svc.Write(ctx, acme, "plans", []byte("x"))
+	_, err = f.svc.Write(ctx, acme, "plans", drive.Author{}, []byte("x"))
 	require.ErrorIs(t, err, drive.ErrNotWritable, "a folder path is refused by kind before anything else")
 	assert.Len(t, f.changes(), 1)
 }
@@ -539,16 +590,16 @@ func TestCreateFolder(t *testing.T) {
 	_, err := f.svc.Tree(ctx, acme)
 	require.NoError(t, err)
 
-	entry, err := f.svc.CreateFolder(ctx, acme, "reports/2026")
+	entry, err := f.svc.CreateFolder(ctx, acme, "reports/2026", drive.Author{})
 	require.NoError(t, err)
 	assert.Equal(t, drive.KindDir, entry.Kind)
 	assert.Equal(t, "2026", entry.Name)
 	assert.DirExists(t, filepath.Join(f.root, "acme", "site", "reports", "2026"))
 
-	_, err = f.svc.CreateFolder(ctx, acme, "reports/2026")
+	_, err = f.svc.CreateFolder(ctx, acme, "reports/2026", drive.Author{})
 	require.ErrorIs(t, err, drive.ErrExists)
 	f.write(t, acme, "notes.md", "x")
-	_, err = f.svc.CreateFolder(ctx, acme, "notes.md")
+	_, err = f.svc.CreateFolder(ctx, acme, "notes.md", drive.Author{})
 	require.ErrorIs(t, err, drive.ErrExists, "a document in the way is a conflict too")
 
 	root, err := f.svc.Tree(ctx, acme)
@@ -567,7 +618,7 @@ func TestMoveRekeysAFolderAndRefusesConflicts(t *testing.T) {
 	_, err := f.svc.Tree(ctx, acme)
 	require.NoError(t, err)
 
-	moved, err := f.svc.Move(ctx, acme, "plans", "archive/2026/plans")
+	moved, err := f.svc.Move(ctx, acme, "plans", "archive/2026/plans", drive.Author{})
 	require.NoError(t, err)
 	assert.Equal(t, "archive/2026/plans", moved.Path)
 	assert.Equal(t, "plans", moved.Name)
@@ -585,18 +636,18 @@ func TestMoveRekeysAFolderAndRefusesConflicts(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, "A", entry.Title, "a re-keyed entry keeps what the scan read")
 
-	renamed, err := f.svc.Move(ctx, acme, "archive/2026/plans/a.md", "archive/a.txt")
+	renamed, err := f.svc.Move(ctx, acme, "archive/2026/plans/a.md", "archive/b.md", drive.Author{})
 	require.NoError(t, err)
-	assert.Equal(t, drive.KindFile, renamed.Kind, "a renamed document takes the kind of its new name")
-	assert.Empty(t, renamed.Title)
+	assert.Equal(t, "archive/b.md", renamed.Path)
+	assert.Equal(t, "A", renamed.Title, "a renamed document is indexed from disk")
 
-	_, err = f.svc.Move(ctx, acme, "archive/a.txt", "taken.md")
+	_, err = f.svc.Move(ctx, acme, "archive/b.md", "taken.md", drive.Author{})
 	require.ErrorIs(t, err, drive.ErrExists)
-	_, err = f.svc.Move(ctx, acme, "ghost.md", "x.md")
+	_, err = f.svc.Move(ctx, acme, "ghost.md", "x.md", drive.Author{})
 	require.ErrorIs(t, err, drive.ErrNotFound)
-	_, err = f.svc.Move(ctx, acme, "archive", "archive/inner")
+	_, err = f.svc.Move(ctx, acme, "archive", "archive/inner", drive.Author{})
 	require.ErrorIs(t, err, drive.ErrInvalidPath)
-	_, err = f.svc.Move(ctx, acme, "archive", "archive")
+	_, err = f.svc.Move(ctx, acme, "archive", "archive", drive.Author{})
 	require.ErrorIs(t, err, drive.ErrInvalidPath)
 
 	changes := f.changes()
@@ -604,12 +655,80 @@ func TestMoveRekeysAFolderAndRefusesConflicts(t *testing.T) {
 	assert.Equal(t, []string{"plans", "archive/2026/plans"}, changes[0].Paths)
 }
 
+func TestMoveRefusesAKindChange(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	f.write(t, acme, "plans/a.md", "a")
+	require.NoError(t, os.MkdirAll(filepath.Join(f.root, "acme", "site", "notes.md"), 0o755))
+
+	for _, to := range []string{"plans/a.html", "plans/a.txt", "plans/a.canvas.json", "plans/a"} {
+		_, err := f.svc.Move(ctx, acme, "plans/a.md", to, drive.Author{})
+		require.ErrorIs(t, err, drive.ErrInvalidPath, to)
+		require.ErrorContains(t, err, "keep the extension", to)
+	}
+	assert.FileExists(t, filepath.Join(f.root, "acme", "site", "plans", "a.md"))
+
+	_, err := f.svc.Move(ctx, acme, "notes.md", "notes", drive.Author{})
+	require.NoError(t, err, "a folder has no kind to keep")
+	assert.Len(t, f.changes(), 1, "a refusal publishes nothing")
+}
+
+func TestMoveKeepsACanvasAddressable(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	_, err := f.svc.UpsertBlocks(ctx, acme, plan, drive.Author{}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
+	require.NoError(t, err)
+
+	for _, to := range []string{"plans/My Plan.canvas.json", "Plan.canvas.json", "plans/-x.canvas.json"} {
+		_, err := f.svc.Move(ctx, acme, plan, to, drive.Author{})
+		require.ErrorIs(t, err, drive.ErrInvalidPath, to)
+		require.ErrorContains(t, err, "canvas name", to)
+	}
+	assert.FileExists(t, filepath.Join(f.root, "acme", "site", "canvases", "plan.canvas.json"))
+
+	moved, err := f.svc.Move(ctx, acme, plan, "perf.canvas.json", drive.Author{})
+	require.NoError(t, err, "a canvas at the space root is addressable as ./perf")
+	assert.Equal(t, "./perf", drive.CanvasName(moved.Path))
+	_, err = f.svc.Move(ctx, acme, "perf.canvas.json", "reports/2026/perf.canvas.json", drive.Author{})
+	require.NoError(t, err)
+}
+
+func TestMoveRenamesCaseOnlyOnACaseInsensitiveFileSystem(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	probe := filepath.Join(f.root, "a")
+	require.NoError(t, os.WriteFile(probe, nil, 0o644))
+	_, err := os.Lstat(filepath.Join(f.root, "A"))
+	require.NoError(t, os.Remove(probe))
+	if err != nil {
+		t.Skip("the temp directory is on a case-sensitive file system")
+	}
+	f.write(t, acme, "plan.md", "---\ntitle: P\n---\n")
+	_, err = f.svc.Tree(ctx, acme)
+	require.NoError(t, err)
+
+	moved, err := f.svc.Move(ctx, acme, "plan.md", "Plan.md", drive.Author{})
+	require.NoError(t, err)
+	assert.Equal(t, "Plan.md", moved.Path)
+	entries, err := os.ReadDir(filepath.Join(f.root, "acme", "site"))
+	require.NoError(t, err)
+	require.Len(t, entries, 1)
+	assert.Equal(t, "Plan.md", entries[0].Name())
+	root, err := f.svc.Tree(ctx, acme)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Plan.md"}, paths(root.Children))
+
+	f.write(t, acme, "other.md", "o")
+	_, err = f.svc.Move(ctx, acme, "Plan.md", "other.md", drive.Author{})
+	require.ErrorIs(t, err, drive.ErrExists, "a different file is still a conflict")
+}
+
 func TestMoveOfAnUnscannedSpaceIndexesFromDisk(t *testing.T) {
 	f := newFixture(t, nil)
 	ctx := t.Context()
 	f.write(t, acme, "plans/sub/b.md", "b")
 
-	moved, err := f.svc.Move(ctx, acme, "plans", "archive")
+	moved, err := f.svc.Move(ctx, acme, "plans", "archive", drive.Author{})
 	require.NoError(t, err)
 	assert.Equal(t, []string{"archive/sub"}, paths(moved.Children))
 
@@ -624,15 +743,15 @@ func TestDeleteRefusesANonEmptyFolder(t *testing.T) {
 	ctx := t.Context()
 	f.write(t, acme, "plans/a.md", "a")
 	f.write(t, acme, "empty/.keep", "")
-	_, err := f.svc.CreateFolder(ctx, acme, "reports")
+	_, err := f.svc.CreateFolder(ctx, acme, "reports", drive.Author{})
 	require.NoError(t, err)
 
-	require.ErrorIs(t, f.svc.Delete(ctx, acme, "plans"), drive.ErrNotEmpty)
-	require.ErrorIs(t, f.svc.Delete(ctx, acme, "empty"), drive.ErrNotEmpty, "a hidden file still counts")
-	require.ErrorIs(t, f.svc.Delete(ctx, acme, "ghost.md"), drive.ErrNotFound)
-	require.NoError(t, f.svc.Delete(ctx, acme, "plans/a.md"))
-	require.NoError(t, f.svc.Delete(ctx, acme, "plans"))
-	require.NoError(t, f.svc.Delete(ctx, acme, "reports"))
+	require.ErrorIs(t, f.svc.Delete(ctx, acme, "plans", drive.Author{}), drive.ErrNotEmpty)
+	require.ErrorIs(t, f.svc.Delete(ctx, acme, "empty", drive.Author{}), drive.ErrNotEmpty, "a hidden file still counts")
+	require.ErrorIs(t, f.svc.Delete(ctx, acme, "ghost.md", drive.Author{}), drive.ErrNotFound)
+	require.NoError(t, f.svc.Delete(ctx, acme, "plans/a.md", drive.Author{}))
+	require.NoError(t, f.svc.Delete(ctx, acme, "plans", drive.Author{}))
+	require.NoError(t, f.svc.Delete(ctx, acme, "reports", drive.Author{}))
 	assert.NoFileExists(t, filepath.Join(f.root, "acme", "site", "plans", "a.md"))
 	assert.NoDirExists(t, filepath.Join(f.root, "acme", "site", "plans"))
 
@@ -699,6 +818,9 @@ func TestSpaceForRemote(t *testing.T) {
 	assert.False(t, ok)
 	_, ok = f.svc.SpaceForRemote("https://github.com/shared/site")
 	assert.False(t, ok, "a reserved owner is no repository space")
+	space, ok = SpaceForRemote("git@github.com:acme/site.git")
+	require.True(t, ok)
+	assert.Equal(t, acme, space)
 }
 
 func TestResolveSpaceAndDir(t *testing.T) {
@@ -719,18 +841,18 @@ func TestResolveSpaceAndDir(t *testing.T) {
 	_, err = f.svc.ResolveSpace(ctx, "shared/x", false)
 	require.ErrorIs(t, err, drive.ErrInvalidSpace)
 
-	dir, err := f.svc.ResolveDir(ctx, "", false)
+	dir, err := f.svc.SpaceDir(acme)
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(f.root, "acme", "site"), dir)
-	dir, err = f.svc.ResolveDir(ctx, "", true)
+	dir, err = f.svc.SpaceDir(drive.Shared)
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(f.root, "shared"), dir)
 
 	noRemote := newFixture(t, stubGit{err: errors.New("not a git repository")})
-	_, err = noRemote.svc.ResolveDir(ctx, "", false)
+	_, err = noRemote.svc.ResolveSpace(ctx, "", false)
 	require.ErrorContains(t, err, "detect remote")
 	badRemote := newFixture(t, stubGit{remote: "nonsense"})
-	_, err = badRemote.svc.ResolveDir(ctx, "", false)
+	_, err = badRemote.svc.ResolveSpace(ctx, "", false)
 	require.ErrorContains(t, err, "could not extract owner/repo")
 }
 
@@ -796,6 +918,20 @@ func TestReconfigureDropsTheSnapshotOnlyWhenTheRootMoves(t *testing.T) {
 	root, err = f.svc.Tree(ctx, acme)
 	require.NoError(t, err)
 	assert.Empty(t, root.Children, "a moved root starts over")
+}
+
+func TestReconfigureToANewRootPublishesEveryScannedSpace(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	for _, space := range []drive.Space{acme, ws} {
+		_, err := f.svc.Tree(ctx, space)
+		require.NoError(t, err)
+	}
+	f.svc.Reconfigure(&config.Config{Context: config.ContextConfig{BaseDir: f.root, SymlinkName: ".ctx"}}, stubGit{})
+	assert.Empty(t, f.changes(), "the same root changes nothing")
+
+	f.svc.Reconfigure(&config.Config{Context: config.ContextConfig{BaseDir: t.TempDir()}}, stubGit{})
+	assert.Equal(t, []events.DriveChangedPayload{{Space: acme.Key}, {Space: ws.Key}}, f.changes())
 }
 
 // Legacy import.
@@ -960,33 +1096,57 @@ func TestPruneRemovesOldEntriesAndKeepsCanvases(t *testing.T) {
 	assert.Len(t, f.changes(), 1, "nothing removed, nothing published")
 }
 
-func TestEveryMutationPublishesOnce(t *testing.T) {
+func TestPruneKeepsAFolderHoldingACanvasAtAnyDepth(t *testing.T) {
+	f := newFixture(t, nil)
+	dir, err := f.svc.SpaceDir(acme)
+	require.NoError(t, err)
+	f.write(t, acme, "reports/2026-10/perf.canvas.json", `{"blocks":[]}`)
+	f.write(t, acme, "reports/2026-10/notes.md", "x")
+	f.write(t, acme, "old/notes.md", "x")
+	f.write(t, acme, "root.canvas.json", `{"blocks":[]}`)
+	old := time.Now().Add(-48 * time.Hour)
+	for _, name := range []string{"reports", "old", "root.canvas.json"} {
+		require.NoError(t, os.Chtimes(filepath.Join(dir, name), old, old))
+	}
+
+	removed, err := f.svc.Prune(dir, 24*time.Hour)
+	require.NoError(t, err)
+	assert.Equal(t, 1, removed)
+	assert.NoDirExists(t, filepath.Join(dir, "old"))
+	assert.FileExists(t, filepath.Join(dir, "reports", "2026-10", "perf.canvas.json"))
+	assert.FileExists(t, filepath.Join(dir, "reports", "2026-10", "notes.md"), "a folder holding a canvas is kept whole")
+	assert.FileExists(t, filepath.Join(dir, "root.canvas.json"))
+}
+
+func TestEveryMutationPublishesOnceWithItsAuthor(t *testing.T) {
 	f := newFixture(t, nil)
 	ctx := t.Context()
-	count := func() int { return len(f.changes()) }
+	author := drive.Author{Session: "chat-1", HiveSession: "hive-1"}
 	steps := []struct {
 		name string
 		run  func() error
 	}{
-		{"write", func() error { _, err := f.svc.Write(ctx, acme, "plans/a.md", []byte("x")); return err }},
-		{"create folder", func() error { _, err := f.svc.CreateFolder(ctx, acme, "reports"); return err }},
-		{"move", func() error { _, err := f.svc.Move(ctx, acme, "plans/a.md", "reports/a.md"); return err }},
+		{"write", func() error { _, err := f.svc.Write(ctx, acme, "plans/a.md", author, []byte("x")); return err }},
+		{"create folder", func() error { _, err := f.svc.CreateFolder(ctx, acme, "reports", author); return err }},
+		{"move", func() error { _, err := f.svc.Move(ctx, acme, "plans/a.md", "reports/a.md", author); return err }},
 		{"upsert", func() error {
-			_, err := f.svc.UpsertBlocks(ctx, acme, plan, drive.Author{}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
+			_, err := f.svc.UpsertBlocks(ctx, acme, plan, author, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "x"})
 			return err
 		}},
-		{"remove block", func() error { _, _, err := f.svc.RemoveBlock(ctx, acme, plan, "a"); return err }},
+		{"remove block", func() error { _, _, err := f.svc.RemoveBlock(ctx, acme, plan, "a", author); return err }},
 		{"set front matter", func() error {
-			_, err := f.svc.SetCanvasFrontmatter(ctx, acme, plan, drive.Frontmatter{"k": "v"})
+			_, err := f.svc.SetCanvasFrontmatter(ctx, acme, plan, author, drive.Frontmatter{"k": "v"})
 			return err
 		}},
-		{"clear", func() error { _, err := f.svc.ClearCanvas(ctx, acme, plan); return err }},
-		{"delete", func() error { return f.svc.Delete(ctx, acme, "reports/a.md") }},
+		{"clear", func() error { _, err := f.svc.ClearCanvas(ctx, acme, plan, author); return err }},
+		{"delete", func() error { return f.svc.Delete(ctx, acme, "reports/a.md", author) }},
 	}
 	for i, step := range steps {
 		require.NoError(t, step.run(), step.name)
-		assert.Equal(t, i+1, count(), "%s publishes exactly once", step.name)
-		assert.Equal(t, "acme/site", f.changes()[i].Space, step.name)
-		assert.NotEmpty(t, f.changes()[i].Paths, step.name)
+		changes := f.changes()
+		require.Len(t, changes, i+1, "%s publishes exactly once", step.name)
+		assert.Equal(t, "acme/site", changes[i].Space, step.name)
+		assert.NotEmpty(t, changes[i].Paths, step.name)
+		assert.Equal(t, author, changes[i].Author, step.name)
 	}
 }

@@ -65,3 +65,41 @@ func TestWorkspaceSpaceHoldsToOneComponent(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "workspaces/Hive Notes", got.Key)
 }
+
+func TestSplitSpacePath(t *testing.T) {
+	repo := must(RepositorySpace("colonyops", "hive"))
+	ws := must(WorkspaceSpace("hive"))
+	tests := []struct {
+		rel   string
+		space Space
+		path  string
+	}{
+		{"shared", Shared, ""},
+		{"shared/notes/a.md", Shared, "notes/a.md"},
+		{"workspaces/hive", ws, ""},
+		{"workspaces/hive/canvases/a.canvas.json", ws, "canvases/a.canvas.json"},
+		{"colonyops/hive", repo, ""},
+		{"colonyops/hive/plans/x.md", repo, "plans/x.md"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.rel, func(t *testing.T) {
+			space, path, err := SplitSpacePath(tt.rel)
+			require.NoError(t, err)
+			assert.Equal(t, tt.space, space)
+			assert.Equal(t, tt.path, path)
+		})
+	}
+	for _, rel := range []string{"", ".", "colonyops", "workspaces", "workspaces/", "Shared/x", "../x/y"} {
+		t.Run("above a space "+rel, func(t *testing.T) {
+			_, _, err := SplitSpacePath(rel)
+			require.ErrorIs(t, err, ErrInvalidSpace)
+		})
+	}
+}
+
+func must(space Space, err error) Space {
+	if err != nil {
+		panic(err)
+	}
+	return space
+}

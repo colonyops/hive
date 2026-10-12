@@ -13,14 +13,12 @@ import (
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/platform/fswatch"
 )
 
 const (
 	testDebounce = 20 * time.Millisecond
-	// quietPeriod is how long a negative test waits for a change that must
-	// not arrive: several debounce windows.
-	quietPeriod = 10 * testDebounce
-	waitTimeout = 10 * time.Second
+	waitTimeout  = 10 * time.Second
 )
 
 // watching is a fixture whose watcher runs with a short debounce and whose
@@ -29,12 +27,30 @@ func watching(t *testing.T) fixture {
 	t.Helper()
 	f := newFixture(t, nil)
 	f.svc.debounce = testDebounce
+	f.svc.rootPoll = testDebounce
 	require.NoError(t, os.MkdirAll(filepath.Join(f.root, "acme", "site", "plans"), 0o755))
 	_, err := f.svc.Tree(t.Context(), acme)
 	require.NoError(t, err)
 	require.NoError(t, f.svc.Watch(t.Context()))
 	t.Cleanup(func() { require.NoError(t, f.svc.Close()) })
 	return f
+}
+
+// waitClosed fails unless w's channel closes before the deadline, which
+// proves its pump has stopped.
+func waitClosed(t *testing.T, w *watcher) {
+	t.Helper()
+	deadline := time.After(waitTimeout)
+	for {
+		select {
+		case _, ok := <-w.fs.Changes():
+			if !ok {
+				return
+			}
+		case <-deadline:
+			t.Fatalf("watcher channel not closed within %s", waitTimeout)
+		}
+	}
 }
 
 // waitForPath polls Tree until path is present, or absent when present is
@@ -116,7 +132,7 @@ func TestWatchDropsASpaceWhoseDirectoryVanished(t *testing.T) {
 func TestWatchDoesNotRepublishTheServicesOwnWrite(t *testing.T) {
 	f := watching(t)
 
-	_, err := f.svc.Write(t.Context(), acme, "plans/a.md", []byte("# A\n"))
+	_, err := f.svc.Write(t.Context(), acme, "plans/a.md", drive.Author{}, []byte("# A\n"))
 	require.NoError(t, err)
 	f.write(t, acme, "plans/b.md", "# B\n")
 	waitForPath(t, f, acme, "plans/b.md", true)
@@ -127,12 +143,15 @@ func TestWatchDoesNotRepublishTheServicesOwnWrite(t *testing.T) {
 	}, f.changes())
 }
 
+// The acme write comes after the ws write, so once the watcher has filed it,
+// it has handled the ws write too.
 func TestWatchIgnoresASpaceNoOneHasRead(t *testing.T) {
 	f := watching(t)
 
 	f.write(t, ws, "notes.md", "# N\n")
-	time.Sleep(quietPeriod)
-	assert.Empty(t, f.changes())
+	f.write(t, acme, "plans/control.md", "# C\n")
+	waitForPath(t, f, acme, "plans/control.md", true)
+	assert.Equal(t, []events.DriveChangedPayload{{Space: acme.Key, Paths: []string{"plans/control.md"}}}, f.changes())
 
 	root, err := f.svc.Tree(t.Context(), ws)
 	require.NoError(t, err)
@@ -157,13 +176,16 @@ func TestWatchCreatesTheRoot(t *testing.T) {
 	assert.DirExists(t, root)
 }
 
+// Close waits for the goroutine that applies changes, so once it returns and
+// the watcher's channel is closed, nothing can file a later write.
 func TestCloseStopsTheWatcher(t *testing.T) {
 	f := watching(t)
+	w := f.svc.watch
 	require.NoError(t, f.svc.Close())
 	require.NoError(t, f.svc.Close(), "idempotent")
+	waitClosed(t, w)
 
 	f.write(t, acme, "plans/a.md", "# A\n")
-	time.Sleep(quietPeriod)
 	assert.Empty(t, f.changes())
 	root, err := f.svc.Tree(t.Context(), acme)
 	require.NoError(t, err)
@@ -184,29 +206,31 @@ func TestWatchEndsWithItsContext(t *testing.T) {
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(t.Context())
 	require.NoError(t, f.svc.Watch(ctx))
+	w := f.svc.watch
 
 	cancel()
 	f.svc.watchers.Wait()
+	waitClosed(t, w)
 	f.write(t, acme, "plans/a.md", "# A\n")
-	time.Sleep(quietPeriod)
 	assert.Empty(t, f.changes())
 	require.NoError(t, f.svc.Close())
 }
 
 func TestReconfigureMovesTheWatcherToTheNewRoot(t *testing.T) {
 	f := watching(t)
+	old := f.svc.watch
 	newRoot := t.TempDir()
 	f.svc.Reconfigure(&config.Config{Context: config.ContextConfig{BaseDir: newRoot, SymlinkName: ".hive"}}, nil)
 	require.Equal(t, newRoot, f.svc.Root())
+	waitClosed(t, old)
 
 	_, err := f.svc.Tree(t.Context(), acme)
 	require.NoError(t, err)
+	f.write(t, acme, "plans/old.md", "# Old\n")
 	moved := fixture{svc: f.svc, root: newRoot, bus: f.bus}
 	moved.write(t, acme, "plans/new.md", "# New\n")
 	waitForPath(t, moved, acme, "plans/new.md", true)
 
-	f.write(t, acme, "plans/old.md", "# Old\n")
-	time.Sleep(quietPeriod)
 	changes := f.changes()
 	require.NotEmpty(t, changes)
 	for _, change := range changes {
@@ -217,6 +241,57 @@ func TestReconfigureMovesTheWatcherToTheNewRoot(t *testing.T) {
 	require.NoError(t, err)
 	_, ok := drive.Find(root, "plans/old.md")
 	assert.False(t, ok)
+}
+
+func TestWatchLeavesALegacyCanvasWrittenLaterAlone(t *testing.T) {
+	f := watching(t)
+
+	f.write(t, acme, "canvases/x.json", `{"blocks":[]}`)
+	waitForPath(t, f, acme, "canvases/x.json", true)
+
+	root, err := f.svc.Tree(t.Context(), acme)
+	require.NoError(t, err)
+	entry, _ := drive.Find(root, "canvases/x.json")
+	assert.Equal(t, drive.KindFile, entry.Kind)
+	assert.FileExists(t, filepath.Join(f.root, "acme", "site", "canvases", "x.json"))
+	assert.NoFileExists(t, filepath.Join(f.root, "acme", "site", "canvases", "x.canvas.json"), "the legacy rename runs only before the first scan")
+}
+
+func TestWatchRestartsWhenTheRootComesBack(t *testing.T) {
+	f := watching(t)
+	first := f.svc.watch
+
+	require.NoError(t, os.RemoveAll(f.root))
+	waitClosed(t, first)
+	f.write(t, acme, "plans/a.md", "# A\n")
+	waitForPath(t, f, acme, "plans/a.md", true)
+	assert.NotSame(t, first, f.svc.watch)
+
+	f.write(t, acme, "plans/b.md", "# B\n")
+	waitForPath(t, f, acme, "plans/b.md", true)
+}
+
+func TestResyncRescansEveryScannedSpace(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	for _, space := range []drive.Space{acme, ws} {
+		_, err := f.svc.Tree(ctx, space)
+		require.NoError(t, err)
+	}
+	f.write(t, acme, "plans/a.md", "# A\n")
+	f.write(t, ws, "notes.md", "# N\n")
+
+	f.svc.apply(&watcher{cfgRoot: f.svc.Root()}, fswatch.Change{Resync: true})
+
+	assert.Equal(t, []events.DriveChangedPayload{{Space: acme.Key}, {Space: ws.Key}}, f.changes())
+	root, err := f.svc.Tree(ctx, acme)
+	require.NoError(t, err)
+	_, ok := drive.Find(root, "plans/a.md")
+	assert.True(t, ok)
+	root, err = f.svc.Tree(ctx, ws)
+	require.NoError(t, err)
+	_, ok = drive.Find(root, "notes.md")
+	assert.True(t, ok)
 }
 
 func TestSpaceAtResolvesThroughSymlinks(t *testing.T) {

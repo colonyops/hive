@@ -7,14 +7,15 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/platform/fswatch"
 )
 
-const defaultWatchDebounce = 100 * time.Millisecond
+// defaultRootPoll is how often a watcher whose root vanished checks for the
+// root to come back.
+const defaultRootPoll = 250 * time.Millisecond
 
 // watcher is one fswatch over the root the service had when it started, and
 // the goroutine draining it. A Reconfigure to another root retires it.
@@ -28,8 +29,9 @@ type watcher struct {
 // editor, by an agent through a checkout's .hive link, or by another hive
 // process lands in its space's snapshot and publishes drive.changed as if
 // the service wrote it. The root is created first, because a fresh install
-// has none yet. The watcher runs until ctx is done or Close is called, and a
-// second Watch is a no-op.
+// has none yet. If the root is later removed, the watcher waits for it to be
+// created again and then rescans every scanned space. The watcher runs until
+// ctx is done or Close is called, and a second Watch is a no-op.
 func (s *Service) Watch(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -107,11 +109,50 @@ func (s *Service) drain(ctx context.Context, w *watcher) {
 			return
 		case change, ok := <-w.fs.Changes():
 			if !ok {
+				s.awaitRoot(ctx, w)
 				return
 			}
 			s.apply(w, change)
 		}
 	}
+}
+
+// awaitRoot runs after w's channel closed. When w is still the service's
+// watcher, nothing retired it, so the root went away: awaitRoot polls until
+// the root is a directory again, then starts a fresh watcher over it and
+// rescans every scanned space, since anything may have changed meanwhile.
+// It gives up as soon as Close, a Reconfigure, or ctx retires w.
+func (s *Service) awaitRoot(ctx context.Context, w *watcher) {
+	ticker := time.NewTicker(s.rootPoll)
+	defer ticker.Stop()
+	for !s.restartOnRoot(ctx, w) {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+// restartOnRoot reports whether awaitRoot is done: w was retired, or the
+// root is back and a new watcher runs over it.
+func (s *Service) restartOnRoot(ctx context.Context, w *watcher) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.watch != w {
+		return true
+	}
+	if info, err := os.Stat(w.cfgRoot); err != nil || !info.IsDir() {
+		return false
+	}
+	next, err := s.startWatcher(ctx, w.cfgRoot)
+	if err != nil {
+		s.logger.Warn().Err(err).Str("root", w.cfgRoot).Msg("drive watcher not restarted after the root came back")
+		return false
+	}
+	s.watch = next
+	s.resyncSpaces()
+	return true
 }
 
 // spaceDelta is what one Change did to a space.
@@ -125,11 +166,16 @@ type spaceDelta struct {
 // spaces they sit in and publishes once per space that changed. A space no
 // one has read yet is skipped: it is scanned whole on first use. The root
 // and an owner directory hold spaces rather than documents, and Spaces reads
-// the disk, so a change there only reconciles the scanned spaces.
+// the disk, so a change there only reconciles the scanned spaces. A resync
+// rescans every scanned space whole.
 func (s *Service) apply(w *watcher, change fswatch.Change) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cfg.ContextDir() != w.cfgRoot {
+		return
+	}
+	if change.Resync {
+		s.resyncSpaces()
 		return
 	}
 
@@ -155,8 +201,8 @@ func (s *Service) apply(w *watcher, change fswatch.Change) {
 		if err != nil || !filepath.IsLocal(rel) {
 			continue
 		}
-		space, path, ok := spaceOf(filepath.ToSlash(rel))
-		if !ok {
+		space, path, err := drive.SplitSpacePath(filepath.ToSlash(rel))
+		if err != nil {
 			aboveSpaces = true
 			continue
 		}
@@ -174,30 +220,36 @@ func (s *Service) apply(w *watcher, change fswatch.Change) {
 	for _, key := range slices.Sorted(maps.Keys(deltas)) {
 		d := deltas[key]
 		if d.whole {
-			s.publish(d.space)
+			s.publish(d.space, drive.Author{})
 			continue
 		}
-		s.publish(d.space, slices.Sorted(maps.Keys(d.paths))...)
+		s.publish(d.space, drive.Author{}, slices.Sorted(maps.Keys(d.paths))...)
 	}
 }
 
-// spaceOf is the space a path under the root belongs to and the path inside
-// it. The root itself, an owner directory, and the workspaces directory hold
-// spaces rather than documents and belong to none.
-func spaceOf(rel string) (drive.Space, string, bool) {
-	first, rest, _ := strings.Cut(rel, "/")
-	if first == drive.SharedKey {
-		return drive.Shared, rest, true
+// resyncSpaces rescans every scanned space from disk and publishes each as
+// changed whole. A space that no longer scans loses its snapshot and is
+// scanned again on next use. The caller holds s.mu for writing.
+func (s *Service) resyncSpaces() {
+	for _, key := range slices.Sorted(maps.Keys(s.spaces)) {
+		space, err := drive.ParseSpaceKey(key)
+		if err != nil {
+			delete(s.spaces, key)
+			continue
+		}
+		dir, err := spaceDir(s.cfg.ContextDir(), space)
+		if err == nil {
+			var root drive.Entry
+			if root, err = s.scan(dir); err == nil {
+				s.spaces[key] = &spaceSnapshot{root: root}
+			}
+		}
+		if err != nil {
+			s.logger.Warn().Err(err).Str("space", key).Msg("space not rescanned after lost events")
+			delete(s.spaces, key)
+		}
+		s.publish(space, drive.Author{})
 	}
-	second, rest, _ := strings.Cut(rest, "/")
-	if second == "" {
-		return drive.Space{}, "", false
-	}
-	space, err := drive.ParseSpaceKey(first + "/" + second)
-	if err != nil {
-		return drive.Space{}, "", false
-	}
-	return space, rest, true
 }
 
 // rescanDir re-reads one folder of a scanned space into its snapshot and
@@ -239,9 +291,6 @@ func (s *Service) rescanDir(snap *spaceSnapshot, space drive.Space, rel string) 
 	if err != nil {
 		s.logger.Warn().Err(err).Str("space", space.Key).Str("path", rel).Msg("changed folder not listed")
 		return nil, false
-	}
-	if rel == drive.CanvasesDir {
-		entries = s.renameLegacyCanvases(full, entries)
 	}
 	previous := make(map[string]drive.Entry, len(node.Children))
 	for _, child := range node.Children {

@@ -1292,9 +1292,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	a.hive = engine
 	a.hiveDB = database
 	a.hiveBusCancel = cancel
-	bus.SubscribeDriveChanged(func(p hiveevents.DriveChangedPayload) {
-		a.Events.Publish(busCtx, events.DriveChanged{Space: p.Space, Paths: p.Paths})
-	})
+	forwardDriveChanges(busCtx, bus, a.Events)
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	a.launcher = dispatch.NewRepositoryLauncher(
 		func() dispatch.SessionCreator { return a.hive.Sessions() },
@@ -1302,6 +1300,17 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	)
 	importLegacyCanvases(ctx, a.logger, a.hive, cfg.Paths)
 	return nil
+}
+
+// forwardDriveChanges republishes every engine drive change on the app bus.
+// The engine is the one publisher, so each change reaches the UI once, with
+// the author the engine was given.
+func forwardDriveChanges(ctx context.Context, from *hiveevents.EventBus, to *events.Bus) {
+	from.SubscribeDriveChanged(func(p hiveevents.DriveChangedPayload) {
+		to.Publish(ctx, events.DriveChanged{
+			Space: p.Space, Paths: p.Paths, Session: p.Author.Session, HiveSession: p.Author.HiveSession,
+		})
+	})
 }
 
 // Reloads re-resolve HIVE_CONFIG because it can change between calls, and

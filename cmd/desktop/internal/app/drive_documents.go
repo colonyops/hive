@@ -104,11 +104,10 @@ func (s *DriveService) WriteDocument(ctx context.Context, session, path string, 
 			return drive.Entry{}, err
 		}
 	}
-	entry, err := d.Write(ctx, caller.space, path, body)
+	entry, err := d.Write(ctx, caller.space, path, caller.author, body)
 	if err != nil {
 		return drive.Entry{}, documentError(err, caller.space, path)
 	}
-	s.notify(ctx, caller.space, caller.author, path)
 	return entry, nil
 }
 
@@ -142,11 +141,10 @@ func (s *DriveService) MoveDocument(ctx context.Context, session, from, to strin
 	if drive.KindOf(from) != drive.KindOf(to) {
 		return drive.Entry{}, Errorf(KindInvalid, "moving %q to %q would change its kind; keep the extension", from, to)
 	}
-	entry, err := d.Move(ctx, caller.space, from, to)
+	entry, err := d.Move(ctx, caller.space, from, to, caller.author)
 	if err != nil {
 		return drive.Entry{}, documentError(err, caller.space, from)
 	}
-	s.notify(ctx, caller.space, caller.author, from, to)
 	return entry, nil
 }
 
@@ -160,10 +158,9 @@ func (s *DriveService) DeleteDocument(ctx context.Context, session, path string)
 	if err := drive.ValidatePath(path); err != nil {
 		return documentError(err, caller.space, path)
 	}
-	if err := d.Delete(ctx, caller.space, path); err != nil {
+	if err := d.Delete(ctx, caller.space, path, caller.author); err != nil {
 		return documentError(err, caller.space, path)
 	}
-	s.notify(ctx, caller.space, caller.author, path)
 	return nil
 }
 

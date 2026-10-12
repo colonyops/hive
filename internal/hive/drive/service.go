@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -24,6 +25,7 @@ import (
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/hive/events"
+	"github.com/colonyops/hive/internal/platform/fswatch"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/pkg/atomicfile"
 	"github.com/colonyops/hive/pkg/fsx"
@@ -32,7 +34,9 @@ import (
 
 const (
 	// frontmatterHeadBytes bounds what a scan reads from a markdown file:
-	// front matter past 8 KiB is not indexed, and the file is not an error.
+	// 8 KiB holds any front matter written by hand or by an agent, and keeps
+	// a scan to one small read per file. Front matter past it is not indexed,
+	// and the file is not an error.
 	frontmatterHeadBytes = 8 * 1024
 	defaultSearchLimit   = 50
 	dirPerm              = 0o755
@@ -49,9 +53,9 @@ type spaceSnapshot struct {
 	root drive.Entry
 }
 
-// Service serves the drive. Reads of a scanned space never touch the disk;
-// a mutation does its file operation, files the result in the snapshot, and
-// publishes once.
+// Service serves the drive. Tree and Search of a scanned space are served
+// from the snapshot; a mutation does its file operation, files the result in
+// the snapshot, and publishes once with the author it was given.
 type Service struct {
 	logger zerolog.Logger
 	// baseLogger carries no component label, so the watcher can add its own.
@@ -65,6 +69,7 @@ type Service struct {
 	spaces map[string]*spaceSnapshot
 
 	debounce time.Duration
+	rootPoll time.Duration
 	watch    *watcher
 	watchCtx context.Context
 	watchers sync.WaitGroup
@@ -79,25 +84,32 @@ func NewService(logger zerolog.Logger, cfg *config.Config, gitClient git.Git, bu
 		cfg:        cfg,
 		git:        gitClient,
 		spaces:     map[string]*spaceSnapshot{},
-		debounce:   defaultWatchDebounce,
+		debounce:   fswatch.DefaultDebounce,
+		rootPoll:   defaultRootPoll,
 	}
 }
 
 // Reconfigure is what Engine.Reload calls. The snapshots and the watcher
 // describe one root, so a changed ContextDir drops the snapshots and moves a
 // running watcher; anything else only swaps the config and the git executor
-// built for it.
+// built for it. Every space that had a snapshot is published as changed
+// whole, because its documents now come from another directory.
 func (s *Service) Reconfigure(cfg *config.Config, gitClient git.Git) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	rerooted := cfg.ContextDir() != s.cfg.ContextDir()
+	var dropped []string
 	if rerooted {
+		dropped = slices.Sorted(maps.Keys(s.spaces))
 		s.spaces = map[string]*spaceSnapshot{}
 	}
 	s.cfg = cfg
 	s.git = gitClient
 	if rerooted && s.watch != nil {
 		s.restartWatcher()
+	}
+	for _, key := range dropped {
+		s.publish(drive.Space{Key: key}, drive.Author{})
 	}
 }
 
@@ -182,6 +194,11 @@ func subdirectories(dir string) ([]string, error) {
 
 // SpaceForRemote is the repository space a git remote URL belongs to.
 func (s *Service) SpaceForRemote(remote string) (drive.Space, bool) {
+	return SpaceForRemote(remote)
+}
+
+// SpaceForRemote is the repository space a git remote URL belongs to.
+func SpaceForRemote(remote string) (drive.Space, bool) {
 	owner, repo := git.ExtractOwnerRepo(remote)
 	if owner == "" || repo == "" {
 		return drive.Space{}, false
@@ -221,7 +238,8 @@ func (s *Service) SpaceAt(path string) (drive.Space, string, bool) {
 	if err != nil || !filepath.IsLocal(rel) {
 		return drive.Space{}, "", false
 	}
-	return spaceOf(filepath.ToSlash(rel))
+	space, inner, err := drive.SplitSpacePath(filepath.ToSlash(rel))
+	return space, inner, err == nil
 }
 
 func resolvePath(path string) (string, error) {
@@ -260,15 +278,6 @@ func (s *Service) ResolveSpace(ctx context.Context, repo string, shared bool) (d
 	return space, nil
 }
 
-// ResolveDir is SpaceDir(ResolveSpace(...)).
-func (s *Service) ResolveDir(ctx context.Context, repo string, shared bool) (string, error) {
-	space, err := s.ResolveSpace(ctx, repo, shared)
-	if err != nil {
-		return "", err
-	}
-	return s.SpaceDir(space)
-}
-
 // Tree is the space's whole tree, scanned on first use. The result is a deep
 // copy: a caller may keep or change it without touching the snapshot. A space
 // whose directory does not exist is an empty root, not an error.
@@ -290,8 +299,53 @@ func (s *Service) Tree(_ context.Context, space drive.Space) (drive.Entry, error
 	return cloneEntry(snap.root), nil
 }
 
-// snapshot answers the space's snapshot, scanning on first use. The caller
-// holds s.mu for writing.
+// Entry is the entry at path in the space's snapshot, with its subtree, as a
+// deep copy; path "" is the space root. The space is scanned on first use.
+// An entry the snapshot does not hold is ErrNotFound.
+func (s *Service) Entry(_ context.Context, space drive.Space, path string) (drive.Entry, error) {
+	if path != "" {
+		if err := drive.ValidatePath(path); err != nil {
+			return drive.Entry{}, err
+		}
+	}
+	s.mu.RLock()
+	if snap, ok := s.spaces[space.Key]; ok {
+		defer s.mu.RUnlock()
+		return entryAt(snap, space, path)
+	}
+	s.mu.RUnlock()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	snap, err := s.snapshot(space)
+	if err != nil {
+		return drive.Entry{}, err
+	}
+	return entryAt(snap, space, path)
+}
+
+func entryAt(snap *spaceSnapshot, space drive.Space, path string) (drive.Entry, error) {
+	node := findNode(&snap.root, path)
+	if node == nil {
+		return drive.Entry{}, notFound(space, path)
+	}
+	return cloneEntry(*node), nil
+}
+
+// Locate is the absolute path of a document or folder in a space, whether or
+// not it exists; path "" is the space's own directory.
+func (s *Service) Locate(space drive.Space, path string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if path == "" {
+		return spaceDir(s.cfg.ContextDir(), space)
+	}
+	return s.documentFile(space, path)
+}
+
+// snapshot answers the space's snapshot, scanning on first use. The legacy
+// canvas rename runs here, once per space, before that first scan. The
+// caller holds s.mu for writing.
 func (s *Service) snapshot(space drive.Space) (*spaceSnapshot, error) {
 	if snap, ok := s.spaces[space.Key]; ok {
 		return snap, nil
@@ -300,6 +354,7 @@ func (s *Service) snapshot(space drive.Space) (*spaceSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.renameLegacyCanvases(filepath.Join(dir, drive.CanvasesDir))
 	root, err := s.scan(dir)
 	if err != nil {
 		return nil, fmt.Errorf("drive: scan %s: %w", space.Key, err)
@@ -383,7 +438,7 @@ func (s *Service) Read(_ context.Context, space drive.Space, path string) (drive
 // Write replaces a markdown or html document with body, creating the folders
 // above it. Anything else is ErrNotWritable: a canvas changes through the
 // canvas operations, and the drive writes no other kind.
-func (s *Service) Write(_ context.Context, space drive.Space, path string, body []byte) (drive.Entry, error) {
+func (s *Service) Write(_ context.Context, space drive.Space, path string, author drive.Author, body []byte) (drive.Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	full, err := s.documentFile(space, path)
@@ -406,13 +461,13 @@ func (s *Service) Write(_ context.Context, space drive.Space, path string, body 
 	if err != nil {
 		return drive.Entry{}, err
 	}
-	s.publish(space, path)
+	s.publish(space, author, path)
 	return entry, nil
 }
 
 // CreateFolder makes one folder, and the folders above it. A path that
 // exists, as anything, is ErrExists.
-func (s *Service) CreateFolder(_ context.Context, space drive.Space, path string) (drive.Entry, error) {
+func (s *Service) CreateFolder(_ context.Context, space drive.Space, path string, author drive.Author) (drive.Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	full, err := s.documentFile(space, path)
@@ -431,15 +486,18 @@ func (s *Service) CreateFolder(_ context.Context, space drive.Space, path string
 	if err != nil {
 		return drive.Entry{}, err
 	}
-	s.publish(space, path)
+	s.publish(space, author, path)
 	return entry, nil
 }
 
 // Move renames a document or a folder inside its space, creating the folders
 // above the target. The target must not exist (ErrExists), and a folder
-// cannot move into itself (ErrInvalidPath). A moved folder's descendants are
+// cannot move into itself (ErrInvalidPath). A document keeps its kind, and a
+// canvas moves only to a path the canvas tools can name (ErrInvalidPath). A
+// rename that changes only case is allowed on a case-insensitive file system,
+// where the target is the source itself. A moved folder's descendants are
 // re-keyed in the snapshot rather than rescanned.
-func (s *Service) Move(_ context.Context, space drive.Space, from, to string) (drive.Entry, error) {
+func (s *Service) Move(_ context.Context, space drive.Space, from, to string, author drive.Author) (drive.Entry, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	src, err := s.documentFile(space, from)
@@ -453,13 +511,21 @@ func (s *Service) Move(_ context.Context, space drive.Space, from, to string) (d
 	if to == from || strings.HasPrefix(to, from+"/") {
 		return drive.Entry{}, fmt.Errorf("%w: cannot move %q into itself", drive.ErrInvalidPath, from)
 	}
-	if _, err := os.Lstat(src); errors.Is(err, fs.ErrNotExist) {
+	srcInfo, err := os.Lstat(src)
+	if errors.Is(err, fs.ErrNotExist) {
 		return drive.Entry{}, notFound(space, from)
 	} else if err != nil {
 		return drive.Entry{}, fmt.Errorf("drive: move %s/%s: %w", space.Key, from, err)
 	}
-	if _, err := os.Lstat(dst); err == nil {
-		return drive.Entry{}, fmt.Errorf("%w: %q", drive.ErrExists, to)
+	if !srcInfo.IsDir() {
+		if err := checkKeepsKind(from, to); err != nil {
+			return drive.Entry{}, err
+		}
+	}
+	if dstInfo, err := os.Lstat(dst); err == nil {
+		if !os.SameFile(srcInfo, dstInfo) {
+			return drive.Entry{}, fmt.Errorf("%w: %q", drive.ErrExists, to)
+		}
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return drive.Entry{}, fmt.Errorf("drive: move %s/%s: %w", space.Key, to, err)
 	}
@@ -484,13 +550,28 @@ func (s *Service) Move(_ context.Context, space drive.Space, from, to string) (d
 			return drive.Entry{}, err
 		}
 	}
-	s.publish(space, from, to)
+	s.publish(space, author, from, to)
 	return entry, nil
+}
+
+// checkKeepsKind refuses a document move that would hand one renderer the
+// other's source, or file a canvas where no canvas name reaches it.
+func checkKeepsKind(from, to string) error {
+	if drive.KindOf(from) != drive.KindOf(to) {
+		return fmt.Errorf("%w: moving %q to %q would change its kind; keep the extension", drive.ErrInvalidPath, from, to)
+	}
+	if drive.KindOf(to) != drive.KindCanvas {
+		return nil
+	}
+	if back, err := drive.CanvasPath(drive.CanvasName(to)); err != nil || back != to {
+		return fmt.Errorf("%w: %q is not a canvas name the canvas tools can address; use lowercase letters, digits, dots, hyphens, or underscores", drive.ErrInvalidPath, to)
+	}
+	return nil
 }
 
 // Delete removes a document or an empty folder. A folder with anything in
 // it, hidden files included, is ErrNotEmpty.
-func (s *Service) Delete(_ context.Context, space drive.Space, path string) error {
+func (s *Service) Delete(_ context.Context, space drive.Space, path string, author drive.Author) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	full, err := s.documentFile(space, path)
@@ -519,7 +600,7 @@ func (s *Service) Delete(_ context.Context, space drive.Space, path string) erro
 	if snap, ok := s.spaces[space.Key]; ok {
 		removeNode(&snap.root, path)
 	}
-	s.publish(space, path)
+	s.publish(space, author, path)
 	return nil
 }
 
@@ -581,7 +662,7 @@ func (s *Service) UpsertBlocks(_ context.Context, space drive.Space, path string
 	}
 	c.UpdatedAt = nowMillis
 
-	if err := s.writeCanvas(space, c); err != nil {
+	if err := s.writeCanvas(space, c, author); err != nil {
 		return drive.Canvas{}, err
 	}
 	return c, nil
@@ -593,7 +674,7 @@ func blockIndex(blocks []drive.Block, id string) int {
 
 // RemoveBlock deletes one block by id, reporting whether it was present. A
 // canvas that does not exist is ErrNotFound.
-func (s *Service) RemoveBlock(_ context.Context, space drive.Space, path, blockID string) (drive.Canvas, bool, error) {
+func (s *Service) RemoveBlock(_ context.Context, space drive.Space, path, blockID string, author drive.Author) (drive.Canvas, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -610,7 +691,7 @@ func (s *Service) RemoveBlock(_ context.Context, space drive.Space, path, blockI
 	}
 	c.Blocks = slices.Delete(c.Blocks, i, i+1)
 	c.UpdatedAt = s.now().UnixMilli()
-	if err := s.writeCanvas(space, c); err != nil {
+	if err := s.writeCanvas(space, c, author); err != nil {
 		return drive.Canvas{}, false, err
 	}
 	return c, true, nil
@@ -619,7 +700,7 @@ func (s *Service) RemoveBlock(_ context.Context, space drive.Space, path, blockI
 // SetCanvasFrontmatter replaces every editable metadata field on an existing
 // canvas. created_at and updated_at derive from the canvas timestamps and are
 // never stored in this map.
-func (s *Service) SetCanvasFrontmatter(_ context.Context, space drive.Space, path string, fm drive.Frontmatter) (drive.Canvas, error) {
+func (s *Service) SetCanvasFrontmatter(_ context.Context, space drive.Space, path string, author drive.Author, fm drive.Frontmatter) (drive.Canvas, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -638,7 +719,7 @@ func (s *Service) SetCanvasFrontmatter(_ context.Context, space drive.Space, pat
 		c.Frontmatter = drive.Frontmatter{}
 	}
 	c.UpdatedAt = s.now().UnixMilli()
-	if err := s.writeCanvas(space, c); err != nil {
+	if err := s.writeCanvas(space, c, author); err != nil {
 		return drive.Canvas{}, err
 	}
 	return c, nil
@@ -647,7 +728,7 @@ func (s *Service) SetCanvasFrontmatter(_ context.Context, space drive.Space, pat
 // ClearCanvas empties an existing canvas but keeps it: the file, its title
 // and its CreatedAt survive, so a clear reads as a fresh layout in the same
 // pane, not a deletion.
-func (s *Service) ClearCanvas(_ context.Context, space drive.Space, path string) (drive.Canvas, error) {
+func (s *Service) ClearCanvas(_ context.Context, space drive.Space, path string, author drive.Author) (drive.Canvas, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -660,7 +741,7 @@ func (s *Service) ClearCanvas(_ context.Context, space drive.Space, path string)
 	}
 	c.Blocks = []drive.Block{}
 	c.UpdatedAt = s.now().UnixMilli()
-	if err := s.writeCanvas(space, c); err != nil {
+	if err := s.writeCanvas(space, c, author); err != nil {
 		return drive.Canvas{}, err
 	}
 	return c, nil
@@ -695,88 +776,6 @@ func (s *Service) ListCanvases(_ context.Context, space drive.Space) ([]drive.Ca
 	}
 	sort.SliceStable(metas, func(i, j int) bool { return metas[i].UpdatedAt > metas[j].UpdatedAt })
 	return metas, nil
-}
-
-// ImportLegacyCanvases moves the canvases in from, a canvases directory
-// outside the drive, to <space>/canvases/<name>.canvas.json, rewriting each
-// file's space and path on the way. A .json that is not a canvas stays; a
-// target that exists is skipped with a warning; an emptied from is removed.
-// A from that does not exist is 0, nil. The desktop runs this at start for
-// the directories only it knows, so it is idempotent.
-func (s *Service) ImportLegacyCanvases(_ context.Context, from string, space drive.Space) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	dir, err := spaceDir(s.cfg.ContextDir(), space)
-	if err != nil {
-		return 0, err
-	}
-	target := filepath.Join(dir, drive.CanvasesDir)
-	if filepath.Clean(from) == target {
-		return 0, nil
-	}
-	entries, err := os.ReadDir(from)
-	if errors.Is(err, fs.ErrNotExist) {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, fmt.Errorf("drive: import canvases from %s: %w", from, err)
-	}
-
-	var moved []string
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".json") {
-			continue
-		}
-		src := filepath.Join(from, name)
-		data, err := os.ReadFile(src)
-		if err != nil {
-			s.logger.Warn().Err(err).Str("file", src).Msg("legacy canvas not readable, left in place")
-			continue
-		}
-		if !isCanvasJSON(data) {
-			continue
-		}
-		var c drive.Canvas
-		if err := json.Unmarshal(data, &c); err != nil {
-			s.logger.Warn().Err(err).Str("file", src).Msg("legacy canvas does not parse, left in place")
-			continue
-		}
-		path := drive.CanvasesDir + "/" + canvasStem(name) + drive.CanvasExt
-		dst := filepath.Join(dir, filepath.FromSlash(path))
-		if _, err := os.Lstat(dst); err == nil {
-			s.logger.Warn().Str("file", src).Str("target", dst).Msg("legacy canvas target exists, left in place")
-			continue
-		}
-		c.Space = space.Key
-		c.Path = path
-		out, err := json.MarshalIndent(c, "", "  ")
-		if err != nil {
-			return len(moved), fmt.Errorf("drive: encode %s: %w", src, err)
-		}
-		if err := os.MkdirAll(target, dirPerm); err != nil {
-			return len(moved), fmt.Errorf("drive: create %s: %w", target, err)
-		}
-		if err := atomicfile.Write(dst, out, filePerm); err != nil {
-			return len(moved), fmt.Errorf("drive: write %s: %w", dst, err)
-		}
-		if err := os.Remove(src); err != nil {
-			s.logger.Warn().Err(err).Str("file", src).Msg("legacy canvas copied but not removed")
-		}
-		moved = append(moved, path)
-	}
-
-	if rest, err := os.ReadDir(from); err == nil && len(rest) == 0 {
-		if err := os.Remove(from); err != nil {
-			s.logger.Warn().Err(err).Str("dir", from).Msg("emptied legacy canvases directory not removed")
-		}
-	}
-	if len(moved) > 0 {
-		delete(s.spaces, space.Key)
-		s.publish(space, moved...)
-	}
-	return len(moved), nil
 }
 
 // Init creates the context directory and its standard subdirectories,
@@ -827,8 +826,9 @@ func (s *Service) CreateSymlink(dir string) (bool, error) {
 }
 
 // Prune deletes the top-level entries of dir older than olderThan and answers
-// how many. The canvases entry is never pruned: a canvas is durable output,
-// and the age of its directory says nothing about whether it is still
+// how many. A canvas is never pruned, and neither is the canvases folder or
+// any folder holding a canvas at any depth: a canvas is durable output, and
+// the age of the entry above it says nothing about whether it is still
 // wanted.
 func (s *Service) Prune(dir string, olderThan time.Duration) (int, error) {
 	cutoff := time.Now().Add(-olderThan)
@@ -843,7 +843,7 @@ func (s *Service) Prune(dir string, olderThan time.Duration) (int, error) {
 
 	count := 0
 	for _, entry := range entries {
-		if entry.Name() == drive.CanvasesDir {
+		if entry.Name() == drive.CanvasesDir || drive.KindOf(entry.Name()) == drive.KindCanvas {
 			continue
 		}
 		info, err := entry.Info()
@@ -852,6 +852,9 @@ func (s *Service) Prune(dir string, olderThan time.Duration) (int, error) {
 		}
 		if info.ModTime().Before(cutoff) {
 			path := filepath.Join(dir, entry.Name())
+			if entry.IsDir() && s.holdsCanvas(path) {
+				continue
+			}
 			if err := os.RemoveAll(path); err != nil {
 				s.logger.Warn().Err(err).Str("path", path).Msg("failed to remove context entry during prune")
 				continue
@@ -863,6 +866,25 @@ func (s *Service) Prune(dir string, olderThan time.Duration) (int, error) {
 		s.forget(dir)
 	}
 	return count, nil
+}
+
+// holdsCanvas reports whether a canvas file sits anywhere under dir. A walk
+// that fails counts as holding one, so Prune keeps what it could not see.
+func (s *Service) holdsCanvas(dir string) bool {
+	found := errors.New("canvas found")
+	err := filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && drive.KindOf(d.Name()) == drive.KindCanvas {
+			return found
+		}
+		return nil
+	})
+	if err != nil && !errors.Is(err, found) {
+		s.logger.Warn().Err(err).Str("dir", dir).Msg("folder not pruned: could not check it for canvases")
+	}
+	return err != nil
 }
 
 // forget drops the snapshot of the space whose directory is dir, if dir is
@@ -880,11 +902,11 @@ func (s *Service) forget(dir string) {
 		return
 	}
 	delete(s.spaces, space.Key)
-	s.publish(space)
+	s.publish(space, drive.Author{})
 }
 
-func (s *Service) publish(space drive.Space, paths ...string) {
-	s.bus.PublishDriveChanged(events.DriveChangedPayload{Space: space.Key, Paths: paths})
+func (s *Service) publish(space drive.Space, author drive.Author, paths ...string) {
+	s.bus.PublishDriveChanged(events.DriveChangedPayload{Space: space.Key, Paths: paths, Author: author})
 }
 
 func notFound(space drive.Space, path string) error {
@@ -948,7 +970,7 @@ func (s *Service) loadCanvas(space drive.Space, path string) (drive.Canvas, bool
 
 // writeCanvas replaces the canvas file, files the entry in the snapshot and
 // publishes. The caller holds s.mu for writing.
-func (s *Service) writeCanvas(space drive.Space, c drive.Canvas) error {
+func (s *Service) writeCanvas(space drive.Space, c drive.Canvas, author drive.Author) error {
 	full, err := s.canvasFile(space, c.Path)
 	if err != nil {
 		return err
@@ -966,7 +988,7 @@ func (s *Service) writeCanvas(space drive.Space, c drive.Canvas) error {
 	if _, err := s.refresh(space, c.Path); err != nil {
 		return err
 	}
-	s.publish(space, c.Path)
+	s.publish(space, author, c.Path)
 	return nil
 }
 
@@ -1037,9 +1059,6 @@ func (s *Service) scan(dir string) (drive.Entry, error) {
 // are symlinks and anything else that is neither a file nor a folder:
 // following a link could loop, and nothing Hive writes is one.
 func (s *Service) scanEntries(dir, rel string, entries []fs.DirEntry) []drive.Entry {
-	if rel == drive.CanvasesDir {
-		entries = s.renameLegacyCanvases(dir, entries)
-	}
 	children := make([]drive.Entry, 0, len(entries))
 	for _, entry := range entries {
 		name := entry.Name()
@@ -1099,61 +1118,6 @@ func (s *Service) scanPath(dir, path string) (drive.Entry, error) {
 	default:
 		return drive.Entry{}, fmt.Errorf("%w: %q is neither a document nor a folder", drive.ErrNotFound, path)
 	}
-}
-
-// renameLegacyCanvases gives every canvases/<name>.json that holds a canvas
-// its .canvas.json name before the listing is indexed, and answers the
-// listing as it is afterwards. A target that exists is left alone with a
-// warning.
-func (s *Service) renameLegacyCanvases(dir string, entries []fs.DirEntry) []fs.DirEntry {
-	renamed := false
-	for _, entry := range entries {
-		name := entry.Name()
-		if entry.IsDir() || strings.HasPrefix(name, ".") || !strings.HasSuffix(name, ".json") || strings.HasSuffix(name, drive.CanvasExt) {
-			continue
-		}
-		src := filepath.Join(dir, name)
-		data, err := os.ReadFile(src)
-		if err != nil || !isCanvasJSON(data) {
-			continue
-		}
-		dst := filepath.Join(dir, canvasStem(name)+drive.CanvasExt)
-		if _, err := os.Lstat(dst); err == nil {
-			s.logger.Warn().Str("file", src).Str("target", dst).Msg("legacy canvas target exists, left in place")
-			continue
-		}
-		if err := os.Rename(src, dst); err != nil {
-			s.logger.Warn().Err(err).Str("file", src).Msg("legacy canvas not renamed")
-			continue
-		}
-		renamed = true
-	}
-	if !renamed {
-		return entries
-	}
-	after, err := os.ReadDir(dir)
-	if err != nil {
-		s.logger.Warn().Err(err).Str("dir", dir).Msg("canvases folder not relisted after rename")
-		return entries
-	}
-	return after
-}
-
-// isCanvasJSON reports whether data is a JSON object with a blocks key,
-// which is what every canvas file ever written has and no other file in a
-// canvases directory does.
-func isCanvasJSON(data []byte) bool {
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal(data, &object); err != nil {
-		return false
-	}
-	_, ok := object["blocks"]
-	return ok
-}
-
-func canvasStem(filename string) string {
-	stem := strings.TrimSuffix(filename, ".json")
-	return strings.TrimSuffix(stem, ".canvas")
 }
 
 func (s *Service) fileEntry(full, path string, info fs.FileInfo) drive.Entry {
