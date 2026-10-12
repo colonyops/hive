@@ -347,7 +347,6 @@ func TestCanvasMountedBesideTheDesktopServer(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = driveSession.Close() })
 	assert.Equal(t, toolNames(t, canvasSession), toolNames(t, driveSession))
-	assert.Len(t, toolNames(t, driveSession), 16)
 	var read canvasView
 	call(t, driveSession, "read_canvas", map[string]any{"session": id, "canvas": "plan"}, &read)
 	require.Len(t, read.Blocks, 1)

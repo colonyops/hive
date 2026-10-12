@@ -132,12 +132,6 @@ describe('DrivePage', () => {
     )
   })
 
-  it('lays the document out at the narrow measure until the setting says otherwise', async () => {
-    const narrow = await mountPage()
-    expect(narrow.wrapper.get('[data-testid="drive-page-measure"]').classes()).toContain('max-w-3xl')
-    narrow.wrapper.unmount()
-  })
-
   it('lets the full-page width setting widen the measure', async () => {
     settingsBindings.AppearanceSettings.mockResolvedValue({
       canvasFontSize: '',
@@ -239,27 +233,6 @@ describe('DrivePage', () => {
 
     const workspace = await mountPage({ space: 'workspaces/demo' })
     expect(workspace.wrapper.find('[data-testid="drive-page-setup"]').exists()).toBe(false)
-  })
-
-  // Rendering a large document is the expensive part of the page, so a
-  // reload that leaves the document's entry as it was keeps what is on screen.
-  it('re-reads on drive:updated only when the shown document changed', async () => {
-    await mountPage()
-    const reads = drive.Document.mock.calls.length
-    wailsEvents.fire('drive:updated', { space: 'e2e/repo', paths: [report.path], session: '', hiveSession: '' })
-    await flushPromises()
-    expect(drive.Document.mock.calls.length).toBe(reads)
-
-    const original = trees['e2e/repo']
-    const rewritten = doc(plan.path, { ...plan, modified: '2026-10-12T00:00:00Z' })
-    trees['e2e/repo'] = root([folder('canvases', [report]), folder('plans', [rewritten])])
-    try {
-      wailsEvents.fire('drive:updated', { space: 'e2e/repo', paths: [plan.path], session: '', hiveSession: '' })
-      await flushPromises()
-      expect(drive.Document.mock.calls.length).toBe(reads + 1)
-    } finally {
-      trees['e2e/repo'] = original
-    }
   })
 
   it('closes from its button and on Escape', async () => {

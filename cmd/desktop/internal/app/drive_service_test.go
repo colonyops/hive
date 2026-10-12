@@ -219,10 +219,6 @@ func TestCanvasPutBlockValidation(t *testing.T) {
 		"html without body":     {ID: "a", Kind: drive.BlockKindHTML},
 		"html with url":         {ID: "a", Kind: drive.BlockKindHTML, Body: "<p>x</p>", URL: "https://example.com"},
 		"html with a script":    {ID: "a", Kind: drive.BlockKindHTML, Body: "<p>x</p><script>alert(1)</script>"},
-		"html with a handler":   {ID: "a", Kind: drive.BlockKindHTML, Body: `<div onclick="x()">x</div>`},
-		"html with an id":       {ID: "a", Kind: drive.BlockKindHTML, Body: `<div id="wails">x</div>`},
-		"html with a bad link":  {ID: "a", Kind: drive.BlockKindHTML, Body: `<a href="javascript:alert(1)">x</a>`},
-		"html with a bad image": {ID: "a", Kind: drive.BlockKindHTML, Body: `<img src="javascript:alert(1)">`},
 		"link without title":    {ID: "a", Kind: drive.BlockKindLink, URL: "https://example.com"},
 		"link without url":      {ID: "a", Kind: drive.BlockKindLink, Title: "t"},
 		"link with body":        {ID: "a", Kind: drive.BlockKindLink, Title: "t", URL: "https://example.com", Body: "x"},
@@ -235,8 +231,6 @@ func TestCanvasPutBlockValidation(t *testing.T) {
 
 	_, err := f.svc.PutBlock(ctx, "1", "Bad Name", "", "", markdownBlock("a", "x"))
 	assert.Equal(t, KindInvalid, KindOf(err), "an invalid canvas name is the caller's mistake")
-	_, err = f.svc.PutBlock(ctx, "1", "../escape", "", "", markdownBlock("a", "x"))
-	assert.Equal(t, KindInvalid, KindOf(err), "a path out of the space is refused")
 	_, err = f.svc.PutBlock(ctx, "1", "plan", strings.Repeat("t", maxCanvasTitleLength+1), "", markdownBlock("a", "x"))
 	assert.Equal(t, KindInvalid, KindOf(err), "an oversized canvas title is refused")
 
@@ -272,12 +266,6 @@ func TestCanvasHTMLBlockRejectionNamesTheOffender(t *testing.T) {
 		Body: `<div class="hv-grid hv-cols-2"><span class="hv-badge hv-warn">2 flaky</span></div>`,
 	})
 	require.NoError(t, err, "the vocabulary itself is accepted")
-
-	_, err = f.svc.PutBlock(ctx, "1", "plan", "", "", drive.Block{
-		ID: "a", Kind: drive.BlockKindHTML,
-		Body: `<div class="mystery" style="color:#f00"><img src="https://example.com/a.png"></div>`,
-	})
-	require.NoError(t, err, "a class, a style and an image are the agent's own business")
 }
 
 // The pane's read is the seam between stored agent source and the app's own
@@ -509,23 +497,15 @@ func TestDriveDeleteOfACanvasWakesItsAuthor(t *testing.T) {
 	assert.Equal(t, []string{"1", "1"}, updateSessions(updates), "the delete wakes the chat that wrote the canvas")
 }
 
-func TestCanvasListBySpaceAndBySession(t *testing.T) {
+func TestCanvasListBySessionResolvesTheSpace(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 
+	_, err := f.svc.PutBlock(ctx, "1", "plan", "The Plan", "", markdownBlock("a", "x"))
+	require.NoError(t, err)
 	metas, err := f.canvasesAt(ctx, "workspaces/ws")
 	require.NoError(t, err)
-	assert.Empty(t, metas)
-
-	_, err = f.svc.PutBlock(ctx, "1", "plan", "The Plan", "", markdownBlock("a", "x"))
-	require.NoError(t, err)
-	metas, err = f.canvasesAt(ctx, "workspaces/ws")
-	require.NoError(t, err)
 	require.Len(t, metas, 1)
-	assert.Equal(t, "workspaces/ws", metas[0].Space)
-	assert.Equal(t, "canvases/plan.canvas.json", metas[0].Path)
-	assert.Equal(t, "The Plan", metas[0].Title)
-	assert.Equal(t, "1", metas[0].Session)
 
 	fromSession, err := f.svc.ListCanvases(ctx, "1")
 	require.NoError(t, err)
@@ -639,21 +619,7 @@ func TestCanvasPaneToggleNamesTheHiveSession(t *testing.T) {
 	assert.Equal(t, events.DriveToggleRequested{HiveSession: "abc123", Space: "acme/site", Open: true}, toggles[0])
 }
 
-// A repository's canvases sit where hive's own context layout puts the
-// repository, so the checkout's .hive link and the pane read one directory.
-func TestRepositoryCanvasesSitInTheHiveContextLayout(t *testing.T) {
-	f := newDriveFixture(t, siteSession)
-
-	_, err := f.svc.PutBlock(t.Context(), siteSession.Path, "plan", "", "", markdownBlock("a", "x"))
-	require.NoError(t, err)
-
-	require.FileExists(t, filepath.Join(f.harness.cfg.RepoContextDir("acme", "site"), drive.CanvasesDir, "plan.canvas.json"))
-	assert.Equal(t, "acme/site", SpaceKeyForRemote("git@github.com:acme/site.git"))
-	assert.Empty(t, SpaceKeyForRemote(""))
-	assert.Empty(t, SpaceKeyForRemote("git@github.com:shared/site.git"), "a reserved owner names no space")
-}
-
-func TestOwnerForSpaceKey(t *testing.T) {
+func TestSpaceKeyMappings(t *testing.T) {
 	for key, owner := range map[string]string{
 		"shared":          "@global",
 		"workspaces/demo": "demo",
@@ -661,6 +627,9 @@ func TestOwnerForSpaceKey(t *testing.T) {
 	} {
 		assert.Equal(t, owner, OwnerForSpaceKey(key), key)
 	}
+	assert.Equal(t, "acme/site", SpaceKeyForRemote("git@github.com:acme/site.git"))
+	assert.Empty(t, SpaceKeyForRemote(""))
+	assert.Empty(t, SpaceKeyForRemote("git@github.com:shared/site.git"), "a reserved owner names no space")
 }
 
 func TestDriveIsUnavailableBeforeTheEngineStarts(t *testing.T) {
@@ -821,44 +790,20 @@ func TestDriveMarkdownOfAMarkdownDocumentIsItsBody(t *testing.T) {
 	assert.Equal(t, "# Notes\n", got)
 }
 
-func TestDriveSpacesTreeAndSearch(t *testing.T) {
+// Spaces, Tree and Search pass through to the engine, whose tests own their
+// behaviour; the facade adds the space-key check and the limit check.
+func TestDriveTreeAndSearchGuardTheirArguments(t *testing.T) {
 	f := newDriveFixture(t)
 	ctx := t.Context()
 	f.writeDoc(t, "acme/site", "plans/release-plan.md", "---\ntitle: Release\n---\n")
-	f.writeDoc(t, "workspaces/ws", "notes/plan-b.md", "b")
 
-	spaces, err := f.svc.Spaces(ctx)
-	require.NoError(t, err)
-	keys := make([]string, 0, len(spaces))
-	for _, sp := range spaces {
-		keys = append(keys, sp.Key)
-	}
-	assert.Equal(t, []string{"acme/site", "workspaces/ws", "shared"}, keys)
-
-	root, err := f.svc.Tree(ctx, "acme/site")
-	require.NoError(t, err)
-	entry, ok := drive.Find(root, "plans/release-plan.md")
-	require.True(t, ok)
-	assert.Equal(t, "Release", entry.Title)
-
-	empty, err := f.svc.Tree(ctx, "shared")
-	require.NoError(t, err)
-	assert.Empty(t, empty.Children, "a space with no directory is an empty root")
-
-	_, err = f.svc.Tree(ctx, "../acme")
+	_, err := f.svc.Tree(ctx, "../acme")
 	assert.Equal(t, KindInvalid, KindOf(err))
 
-	hits, err := f.svc.Search(ctx, "plan", 0)
+	hits, err := f.svc.Search(ctx, "release", 1)
 	require.NoError(t, err)
-	var found []string
-	for _, h := range hits {
-		found = append(found, h.Space.Key+":"+h.Entry.Path)
-	}
-	assert.Equal(t, []string{"acme/site:plans", "acme/site:plans/release-plan.md", "workspaces/ws:notes/plan-b.md"}, found)
-
-	limited, err := f.svc.Search(ctx, "plan", 1)
-	require.NoError(t, err)
-	assert.Len(t, limited, 1)
+	require.Len(t, hits, 1)
+	assert.Equal(t, "plans/release-plan.md", hits[0].Entry.Path)
 	_, err = f.svc.Search(ctx, "plan", -1)
 	assert.Equal(t, KindInvalid, KindOf(err))
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
+
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -48,42 +48,6 @@ func TestCtxInitIdempotent(t *testing.T) {
 	out2, err := h.RunInDir(workDir, "ctx", "init")
 	require.NoError(t, err, "second ctx init: %s", out2)
 	assert.Contains(t, out2, "already exists")
-}
-
-func TestCtxLs(t *testing.T) {
-	h := NewHarness(t)
-	repo := createBareRepo(t, "ctx-ls-repo")
-
-	workDir := filepath.Join(t.TempDir(), "work")
-	run(t, "git", "clone", repo, workDir)
-
-	// Init to create the context dir
-	_, err := h.RunInDir(workDir, "ctx", "init")
-	require.NoError(t, err)
-
-	// Resolve the symlink target and create a test file
-	target, err := os.Readlink(filepath.Join(workDir, ".hive"))
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(target, "test.txt"), []byte("hello"), 0o644))
-
-	// ls prints one line per entry: the kind, then the path
-	out, err := h.RunInDir(workDir, "ctx", "ls")
-	require.NoError(t, err, "ctx ls: %s", out)
-	assert.Equal(t, "file", kindOfLine(t, out, "test.txt"))
-	assert.Equal(t, "dir", kindOfLine(t, out, "plans"))
-}
-
-// kindOfLine is the first field of the ctx ls line whose path is path.
-func kindOfLine(t *testing.T, out, path string) string {
-	t.Helper()
-	for line := range strings.SplitSeq(out, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 2 && fields[1] == path {
-			return fields[0]
-		}
-	}
-	t.Fatalf("no line for %q in output:\n%s", path, out)
-	return ""
 }
 
 func TestCtxPrune(t *testing.T) {

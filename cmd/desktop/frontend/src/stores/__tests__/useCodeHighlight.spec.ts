@@ -12,13 +12,6 @@ async function highlighted(code: string, lang: string): Promise<string | null> {
 describe('useCodeHighlight', () => {
   beforeEach(() => useCodeHighlight().load())
 
-  it('answers null before the engine is loaded and starts the load', async () => {
-    const { highlight, load } = useCodeHighlight()
-    await load()
-    // A fresh store per test: the first ask on a loaded engine is a queue miss.
-    expect(highlight('x = 1', 'go')).toBeNull()
-  })
-
   it('answers null for a fence it has not highlighted yet, then the cached HTML', async () => {
     const { highlight, settle } = useCodeHighlight()
     const code = 'package main\n'

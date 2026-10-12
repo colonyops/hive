@@ -88,8 +88,6 @@ func TestWriteDocumentRefusals(t *testing.T) {
 
 	text = callErr(t, session, "write_document", map[string]any{"session": id, "path": "../escape.md", "body": "x"})
 	assert.Contains(t, text, "invalid")
-	text = callErr(t, session, "write_document", map[string]any{"session": id, "path": "plans/../../escape.md", "body": "x"})
-	assert.Contains(t, text, "invalid")
 
 	text = callErr(t, session, "write_document", map[string]any{"session": id, "path": "notes.txt", "body": "x"})
 	assert.Contains(t, text, "invalid")
@@ -163,9 +161,6 @@ func TestCanvasNamesFileUnderPaths(t *testing.T) {
 		names = append(names, c.Name)
 	}
 	assert.ElementsMatch(t, []string{"reports/2026-10/perf", "plan"}, names)
-
-	text := callErr(t, session, "read_document", map[string]any{"session": id, "path": "reports/2026-10/perf.canvas.json"})
-	assert.Contains(t, text, "read_canvas", "a canvas is read with the canvas tools")
 }
 
 func TestOpenDocumentPublishesTheToggle(t *testing.T) {

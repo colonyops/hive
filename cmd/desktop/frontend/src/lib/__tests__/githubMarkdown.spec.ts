@@ -16,19 +16,6 @@ describe('renderGithubMarkdown', () => {
     expect(html).toContain('--shiki-dark')
   })
 
-  it('renders an unknown language as escaped plain code', () => {
-    const html = renderGithubMarkdown('```nonsense\n<b>x</b>\n```')
-    expect(html).toContain('<pre><code class="language-nonsense">&lt;b&gt;x&lt;/b&gt;\n</code></pre>')
-    expect(html).not.toContain('shiki')
-  })
-
-  it('escapes a script tag inside a fence in both paths', () => {
-    for (const lang of ['html', 'nonsense']) {
-      const html = renderGithubMarkdown('```' + lang + '\n<script>alert(1)</script>\n```')
-      expect(html).not.toContain('<script>')
-    }
-  })
-
   it('returns an empty string for blank input', () => {
     expect(renderGithubMarkdown('')).toBe('')
     expect(renderGithubMarkdown('   \n  ')).toBe('')

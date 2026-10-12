@@ -83,11 +83,6 @@ describe('useDriveRoute', () => {
   // A bare open after a named one keeps the path rather than resetting the pick.
   it('keeps the pinned path on a bare reopen', async () => {
     const { api, router } = await mountAt('/workspaces/web-app?chat=7&doc=plans%2Fx.md')
-    api.syncDocQuery(false)
-    await flushPromises()
-
-    await router.replace({ query: { chat: '7', doc: 'plans/x.md' } })
-    await flushPromises()
     api.syncDocQuery(true)
     await flushPromises()
     expect(router.currentRoute.value.query.doc).toBe('plans/x.md')

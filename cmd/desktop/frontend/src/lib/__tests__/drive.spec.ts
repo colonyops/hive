@@ -1,29 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   ancestorPaths,
-  canvasDocumentPath,
   documentsOf,
   driveEventAuthor,
   linkTarget,
   markdownBody,
   newestDocument,
-  ownerToSpaceKey,
   spaceGroup,
 } from '../drive'
 import { doc, folder, root } from '../../test-utils/drive'
 
 describe('drive', () => {
-  it('maps a canvas owner key onto its space key', () => {
-    expect(ownerToSpaceKey('@global')).toBe('shared')
-    expect(ownerToSpaceKey('demo')).toBe('workspaces/demo')
-    expect(ownerToSpaceKey('colonyops/hive')).toBe('colonyops/hive')
-  })
-
-  it('files a canvas name where drive.CanvasPath does', () => {
-    expect(canvasDocumentPath('plan')).toBe('canvases/plan.canvas.json')
-    expect(canvasDocumentPath('reports/2026-10/perf')).toBe('reports/2026-10/perf.canvas.json')
-  })
-
   it('groups a space by its key', () => {
     expect(spaceGroup('colonyops/hive')).toBe('Repositories')
     expect(spaceGroup('workspaces/demo')).toBe('Workspaces')

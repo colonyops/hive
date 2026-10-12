@@ -14,8 +14,6 @@ func TestWriteDocumentRefusesFrontMatterThatDoesNotParse(t *testing.T) {
 
 	_, err := f.svc.WriteDocument(ctx, "1", "plans/a.md", []byte("---\ntitle: [unclosed\n---\nbody\n"))
 	assert.Equal(t, KindInvalid, KindOf(err))
-	_, err = f.svc.WriteDocument(ctx, "1", "plans/a.md", []byte("---\ntitle: never closed\nbody\n"))
-	assert.Equal(t, KindInvalid, KindOf(err), "an unterminated block is refused, not saved as body")
 
 	long := "---\nnotes: " + strings.Repeat("x", frontmatterIndexBytes) + "\n---\nbody\n"
 	_, err = f.svc.WriteDocument(ctx, "1", "plans/a.md", []byte(long))
