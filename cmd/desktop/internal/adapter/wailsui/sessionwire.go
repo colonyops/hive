@@ -23,7 +23,7 @@ type SessionSummary struct {
 func sessionSummaryOf(s session.Session) SessionSummary {
 	return SessionSummary{
 		ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, State: string(s.State),
-		CanvasOwner: app.CanvasOwnerForRemote(s.Remote), CreatedAt: s.ActivatedAt(),
+		CanvasOwner: app.SpaceKeyForRemote(s.Remote), CreatedAt: s.ActivatedAt(),
 	}
 }
 

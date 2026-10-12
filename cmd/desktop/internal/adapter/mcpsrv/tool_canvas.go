@@ -5,7 +5,8 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
+	"github.com/colonyops/hive/cmd/desktop/internal/app"
+	"github.com/colonyops/hive/internal/domain/drive"
 )
 
 // register declares the canvas tool table, under the same rules as
@@ -224,7 +225,7 @@ type paneResult struct {
 }
 
 func (ctrl *CanvasController) PutBlock(ctx context.Context, _ *mcp.CallToolRequest, in putBlockInput) (*mcp.CallToolResult, canvasWriteResult, error) {
-	c, err := ctrl.core.Canvas.PutBlock(ctx, in.Session, in.Canvas, in.CanvasTitle, in.Before, canvas.Block{
+	c, err := ctrl.core.Drive.PutBlock(ctx, in.Session, in.Canvas, in.CanvasTitle, in.Before, drive.Block{
 		ID: in.ID, Kind: in.Kind, Title: in.Title, Body: in.Body, URL: in.URL,
 	})
 	if err != nil {
@@ -234,11 +235,11 @@ func (ctrl *CanvasController) PutBlock(ctx context.Context, _ *mcp.CallToolReque
 }
 
 func (ctrl *CanvasController) PutBlocks(ctx context.Context, _ *mcp.CallToolRequest, in putBlocksInput) (*mcp.CallToolResult, canvasWriteResult, error) {
-	blocks := make([]canvas.Block, 0, len(in.Blocks))
+	blocks := make([]drive.Block, 0, len(in.Blocks))
 	for _, b := range in.Blocks {
-		blocks = append(blocks, canvas.Block{ID: b.ID, Kind: b.Kind, Title: b.Title, Body: b.Body, URL: b.URL})
+		blocks = append(blocks, drive.Block{ID: b.ID, Kind: b.Kind, Title: b.Title, Body: b.Body, URL: b.URL})
 	}
-	c, err := ctrl.core.Canvas.PutBlocks(ctx, in.Session, in.Canvas, in.CanvasTitle, blocks)
+	c, err := ctrl.core.Drive.PutBlocks(ctx, in.Session, in.Canvas, in.CanvasTitle, blocks)
 	if err != nil {
 		return nil, canvasWriteResult{}, ctrl.toolError(err)
 	}
@@ -246,7 +247,7 @@ func (ctrl *CanvasController) PutBlocks(ctx context.Context, _ *mcp.CallToolRequ
 }
 
 func (ctrl *CanvasController) RemoveBlock(ctx context.Context, _ *mcp.CallToolRequest, in removeBlockInput) (*mcp.CallToolResult, canvasWriteResult, error) {
-	c, err := ctrl.core.Canvas.RemoveBlock(ctx, in.Session, in.Canvas, in.ID)
+	c, err := ctrl.core.Drive.RemoveBlock(ctx, in.Session, in.Canvas, in.ID)
 	if err != nil {
 		return nil, canvasWriteResult{}, ctrl.toolError(err)
 	}
@@ -254,7 +255,7 @@ func (ctrl *CanvasController) RemoveBlock(ctx context.Context, _ *mcp.CallToolRe
 }
 
 func (ctrl *CanvasController) SetFrontmatter(ctx context.Context, _ *mcp.CallToolRequest, in setFrontmatterInput) (*mcp.CallToolResult, canvasWriteResult, error) {
-	c, err := ctrl.core.Canvas.SetFrontmatter(ctx, in.Session, in.Canvas, in.Frontmatter)
+	c, err := ctrl.core.Drive.SetFrontmatter(ctx, in.Session, in.Canvas, in.Frontmatter)
 	if err != nil {
 		return nil, canvasWriteResult{}, ctrl.toolError(err)
 	}
@@ -262,7 +263,7 @@ func (ctrl *CanvasController) SetFrontmatter(ctx context.Context, _ *mcp.CallToo
 }
 
 func (ctrl *CanvasController) ClearCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasNameInput) (*mcp.CallToolResult, canvasWriteResult, error) {
-	c, err := ctrl.core.Canvas.Clear(ctx, in.Session, in.Canvas)
+	c, err := ctrl.core.Drive.ClearCanvas(ctx, in.Session, in.Canvas)
 	if err != nil {
 		return nil, canvasWriteResult{}, ctrl.toolError(err)
 	}
@@ -270,14 +271,14 @@ func (ctrl *CanvasController) ClearCanvas(ctx context.Context, _ *mcp.CallToolRe
 }
 
 func (ctrl *CanvasController) DeleteCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasNameInput) (*mcp.CallToolResult, deleteCanvasResult, error) {
-	if err := ctrl.core.Canvas.Delete(ctx, in.Session, in.Canvas); err != nil {
+	if err := ctrl.core.Drive.DeleteCanvas(ctx, in.Session, in.Canvas); err != nil {
 		return nil, deleteCanvasResult{}, ctrl.toolError(err)
 	}
 	return nil, deleteCanvasResult{Deleted: in.Canvas}, nil
 }
 
 func (ctrl *CanvasController) ReadCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasNameInput) (*mcp.CallToolResult, canvasResult, error) {
-	c, err := ctrl.core.Canvas.Get(ctx, in.Session, in.Canvas)
+	c, err := ctrl.core.Drive.GetCanvas(ctx, in.Session, in.Canvas)
 	if err != nil {
 		return nil, canvasResult{}, ctrl.toolError(err)
 	}
@@ -285,37 +286,37 @@ func (ctrl *CanvasController) ReadCanvas(ctx context.Context, _ *mcp.CallToolReq
 }
 
 func (ctrl *CanvasController) OpenCanvas(ctx context.Context, _ *mcp.CallToolRequest, in openCanvasInput) (*mcp.CallToolResult, paneResult, error) {
-	if err := ctrl.core.Canvas.SetPaneOpen(ctx, in.Session, in.Canvas, true); err != nil {
+	if err := ctrl.core.Drive.SetPaneOpen(ctx, in.Session, in.Canvas, true); err != nil {
 		return nil, paneResult{}, ctrl.toolError(err)
 	}
 	return nil, paneResult{Requested: "open"}, nil
 }
 
 func (ctrl *CanvasController) CloseCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasSessionInput) (*mcp.CallToolResult, paneResult, error) {
-	if err := ctrl.core.Canvas.SetPaneOpen(ctx, in.Session, "", false); err != nil {
+	if err := ctrl.core.Drive.SetPaneOpen(ctx, in.Session, "", false); err != nil {
 		return nil, paneResult{}, ctrl.toolError(err)
 	}
 	return nil, paneResult{Requested: "close"}, nil
 }
 
 func (ctrl *CanvasController) ListCanvases(ctx context.Context, _ *mcp.CallToolRequest, in canvasSessionInput) (*mcp.CallToolResult, canvasListResult, error) {
-	metas, err := ctrl.core.Canvas.List(ctx, in.Session)
+	metas, err := ctrl.core.Drive.ListCanvases(ctx, in.Session)
 	if err != nil {
 		return nil, canvasListResult{}, ctrl.toolError(err)
 	}
 	out := canvasListResult{Canvases: make([]canvasMetaResult, 0, len(metas))}
 	for _, m := range metas {
 		out.Canvases = append(out.Canvases, canvasMetaResult{
-			Name: m.Name, Title: m.Title, Session: m.Session, HiveSession: m.HiveSession,
+			Name: drive.CanvasName(m.Path), Title: m.Title, Session: m.Session, HiveSession: m.HiveSession,
 			CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt, BlockCount: m.BlockCount,
 		})
 	}
 	return nil, out, nil
 }
 
-func canvasWriteResultFrom(c canvas.Canvas, blockID string) canvasWriteResult {
+func canvasWriteResultFrom(c drive.Canvas, blockID string) canvasWriteResult {
 	res := canvasWriteResult{
-		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
+		Workspace: app.OwnerForSpaceKey(c.Space), Name: drive.CanvasName(c.Path), Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: c.Frontmatter, BlockCount: len(c.Blocks),
 	}
 	for _, b := range c.Blocks {
@@ -330,7 +331,7 @@ func canvasWriteResultFrom(c canvas.Canvas, blockID string) canvasWriteResult {
 	return res
 }
 
-func canvasResultFrom(c canvas.Canvas) canvasResult {
+func canvasResultFrom(c drive.Canvas) canvasResult {
 	blocks := make([]canvasBlock, 0, len(c.Blocks))
 	for _, b := range c.Blocks {
 		blocks = append(blocks, canvasBlock{
@@ -339,7 +340,7 @@ func canvasResultFrom(c canvas.Canvas) canvasResult {
 		})
 	}
 	return canvasResult{
-		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
+		Workspace: app.OwnerForSpaceKey(c.Space), Name: drive.CanvasName(c.Path), Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: c.Frontmatter, Blocks: blocks,
 	}
 }

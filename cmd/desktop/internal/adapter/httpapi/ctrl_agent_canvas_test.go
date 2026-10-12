@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
+	"github.com/colonyops/hive/internal/domain/drive"
 )
 
 func TestAgentCanvasReadsOverTheWire(t *testing.T) {
@@ -37,9 +37,9 @@ func TestAgentCanvasReadsOverTheWire(t *testing.T) {
 	require.NotNil(t, view.Blocks, "blocks is never null on the wire")
 	assert.Empty(t, view.Blocks, "a name nothing was written under answers empty, not an error")
 
-	_, err = h.core.Canvas.PutBlock(t.Context(), rec.ID, "plan", "The Plan", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "hello"})
+	_, err = h.core.Drive.PutBlock(t.Context(), rec.ID, "plan", "The Plan", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown, Body: "hello"})
 	require.NoError(t, err)
-	_, err = h.core.Canvas.SetFrontmatter(t.Context(), rec.ID, "plan", map[string]any{"tags": []any{"release"}})
+	_, err = h.core.Drive.SetFrontmatter(t.Context(), rec.ID, "plan", drive.Frontmatter{"tags": []any{"release"}})
 	require.NoError(t, err)
 
 	resp = h.post(t, AgentWorkspacesPathPrefix+"canvas", testToken, agentCanvasRequest{Workspace: "demo", Name: "plan"})

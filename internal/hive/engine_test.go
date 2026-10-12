@@ -221,6 +221,18 @@ func TestEngineDoctorChecksWithTheProgramsValidator(t *testing.T) {
 	assert.Contains(t, details[0], "unknown command")
 }
 
+// The drive service holds the snapshot of the context root, so a reload
+// keeps it and re-roots it rather than building a blank one.
+func TestEngineDriveSurvivesAReloadAndFollowsTheContextDir(t *testing.T) {
+	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
+	drive := h.engine.Drive()
+
+	next := loadConfig(t, t.TempDir())
+	require.NoError(t, h.engine.Reload(next))
+	assert.Same(t, drive, h.engine.Drive())
+	assert.Equal(t, next.ContextDir(), h.engine.Drive().Root())
+}
+
 func TestEngineHoneycombSurvivesAReload(t *testing.T) {
 	h := newEngine(t, loadConfig(t, t.TempDir()), nil)
 	hc := h.engine.HC()

@@ -6,11 +6,15 @@ import (
 	"github.com/hay-kot/criterio"
 	"github.com/hay-kot/httpkit/server"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
+	"github.com/colonyops/hive/cmd/desktop/internal/app"
+	"github.com/colonyops/hive/internal/domain/drive"
 )
 
 // This transport permits deletion but no block or front matter mutations;
-// those remain exclusive to hive-canvas.
+// those remain exclusive to hive-canvas. It still speaks the owner keys and
+// canvas names the frontend was written against; app.SpaceKeyForOwner and
+// drive.CanvasName translate at this boundary so the frontend is untouched
+// by the drive.
 
 type agentCanvasBlock struct {
 	ID        string `json:"id"`
@@ -23,7 +27,7 @@ type agentCanvasBlock struct {
 }
 
 // Workspace is the canvas's owner key in every type here: a workspace's
-// directory name, or owner/repo for a repository's canvases.
+// directory name, owner/repo for a repository's canvases, or @global.
 type agentCanvasView struct {
 	Workspace   string             `json:"workspace"`
 	Name        string             `json:"name"`
@@ -67,7 +71,7 @@ func (ctrl *Controller) AgentCanvas(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
-	c, err := ctrl.core.Canvas.GetForOwner(r.Context(), body.Workspace, body.Name)
+	c, err := ctrl.core.Drive.GetCanvasAt(r.Context(), app.SpaceKeyForOwner(body.Workspace), body.Name)
 	if err != nil {
 		return err
 	}
@@ -92,14 +96,15 @@ func (ctrl *Controller) AgentCanvasList(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		return err
 	}
-	metas, err := ctrl.core.Canvas.ListForOwner(r.Context(), body.Workspace)
+	metas, err := ctrl.core.Drive.ListCanvasesAt(r.Context(), app.SpaceKeyForOwner(body.Workspace))
 	if err != nil {
 		return err
 	}
 	views := make([]agentCanvasMeta, 0, len(metas))
 	for _, m := range metas {
 		views = append(views, agentCanvasMeta{
-			Workspace: m.Workspace, Name: m.Name, Title: m.Title, Session: m.Session, HiveSession: m.HiveSession,
+			Workspace: app.OwnerForSpaceKey(m.Space), Name: drive.CanvasName(m.Path), Title: m.Title,
+			Session: m.Session, HiveSession: m.HiveSession,
 			CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt, BlockCount: m.BlockCount,
 		})
 	}
@@ -110,13 +115,13 @@ type agentCanvasRepositoriesResponse struct {
 	Repositories []string `json:"repositories"`
 }
 
-// AgentCanvasRepositories lists the repositories that hold a canvas, by owner
-// key, so the full-page view can offer them beside the workspaces.
+// AgentCanvasRepositories lists the repositories in the drive, by owner key,
+// so the full-page view can offer them beside the workspaces.
 func (ctrl *Controller) AgentCanvasRepositories(w http.ResponseWriter, r *http.Request) error {
 	if _, err := terminalBody[struct{}](ctrl, w, r); err != nil {
 		return err
 	}
-	keys, err := ctrl.core.Canvas.Repositories(r.Context())
+	keys, err := ctrl.core.Drive.Repositories(r.Context())
 	if err != nil {
 		return err
 	}
@@ -134,7 +139,7 @@ func (ctrl *Controller) AgentCanvasDelete(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		return err
 	}
-	if err := ctrl.core.Canvas.DeleteForOwner(r.Context(), body.Workspace, body.Name); err != nil {
+	if err := ctrl.core.Drive.DeleteAt(r.Context(), app.SpaceKeyForOwner(body.Workspace), body.Name); err != nil {
 		return err
 	}
 	return server.JSON(w, http.StatusOK, agentCanvasDeleteResponse{Deleted: body.Name})
@@ -151,7 +156,7 @@ func (ctrl *Controller) AgentCanvasMarkdown(w http.ResponseWriter, r *http.Reque
 	if err != nil {
 		return err
 	}
-	markdown, err := ctrl.core.Canvas.MarkdownForOwner(r.Context(), body.Workspace, body.Name)
+	markdown, err := ctrl.core.Drive.Markdown(r.Context(), app.SpaceKeyForOwner(body.Workspace), body.Name)
 	if err != nil {
 		return err
 	}
@@ -183,13 +188,13 @@ func (ctrl *Controller) AgentCanvasExport(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		return err
 	}
-	if err := ctrl.core.Canvas.ExportForOwner(r.Context(), body.Workspace, body.Name, body.Path); err != nil {
+	if err := ctrl.core.Drive.Export(r.Context(), app.SpaceKeyForOwner(body.Workspace), body.Name, body.Path); err != nil {
 		return err
 	}
 	return server.JSON(w, http.StatusOK, agentCanvasExportResponse{Path: body.Path})
 }
 
-func toAgentCanvasView(c canvas.Canvas) agentCanvasView {
+func toAgentCanvasView(c drive.Canvas) agentCanvasView {
 	blocks := make([]agentCanvasBlock, 0, len(c.Blocks))
 	for _, b := range c.Blocks {
 		blocks = append(blocks, agentCanvasBlock{
@@ -198,7 +203,8 @@ func toAgentCanvasView(c canvas.Canvas) agentCanvasView {
 		})
 	}
 	return agentCanvasView{
-		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
+		Workspace: app.OwnerForSpaceKey(c.Space), Name: drive.CanvasName(c.Path), Title: c.Title,
+		Session: c.Session, HiveSession: c.HiveSession,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: c.Frontmatter, Blocks: blocks,
 	}
 }

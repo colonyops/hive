@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/colonyops/hive/cmd/hive/internal/app"
+	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/urfave/cli/v3"
 )
 
@@ -86,48 +86,35 @@ Example: hive ctx ls`,
 }
 
 func (cmd *CtxCmd) runLs(ctx context.Context, c *cli.Command) error {
-	ctxDir, err := cmd.resolveContextDir(ctx)
+	space, err := cmd.app.Drive().ResolveSpace(ctx, cmd.repo, cmd.shared)
+	if err != nil {
+		return err
+	}
+	dir, err := cmd.app.Drive().SpaceDir(space)
 	if err != nil {
 		return err
 	}
 
-	if _, err := os.Stat(ctxDir); os.IsNotExist(err) {
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		fmt.Println("Context directory does not exist. Run 'hive ctx init' first.")
 		return nil
 	}
 
-	fmt.Println(ctxDir)
-	return printTree(ctxDir, "")
+	root, err := cmd.app.Drive().Tree(ctx, space)
+	if err != nil {
+		return err
+	}
+	fmt.Println(dir)
+	printEntries(root)
+	return nil
 }
 
-func printTree(dir, prefix string) error {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return fmt.Errorf("read directory: %w", err)
+// The kind column is as wide as the longest kind name, markdown.
+func printEntries(root drive.Entry) {
+	for _, entry := range root.Children {
+		fmt.Printf("%-8s  %s\n", entry.Kind, entry.Path)
+		printEntries(entry)
 	}
-
-	for i, entry := range entries {
-		isLast := i == len(entries)-1
-
-		connector := "├── "
-		if isLast {
-			connector = "└── "
-		}
-
-		fmt.Printf("%s%s%s\n", prefix, connector, entry.Name())
-
-		if entry.IsDir() {
-			childPrefix := prefix + "│   "
-			if isLast {
-				childPrefix = prefix + "    "
-			}
-			if err := printTree(filepath.Join(dir, entry.Name()), childPrefix); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }
 
 func (cmd *CtxCmd) pruneCmd() *cli.Command {
@@ -155,12 +142,12 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 
-	createdSubdirs, err := cmd.app.Context().Init(ctxDir)
+	createdSubdirs, err := cmd.app.Drive().Init(ctxDir)
 	if err != nil {
 		return err
 	}
 
-	alreadyExists, err := cmd.app.Context().CreateSymlink(ctxDir)
+	alreadyExists, err := cmd.app.Drive().CreateSymlink(ctxDir)
 	if err != nil {
 		return err
 	}
@@ -189,7 +176,7 @@ func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("invalid duration: %w", err)
 	}
 
-	count, err := cmd.app.Context().Prune(ctxDir, duration)
+	count, err := cmd.app.Drive().Prune(ctxDir, duration)
 	if err != nil {
 		return err
 	}
@@ -203,7 +190,7 @@ func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *CtxCmd) resolveContextDir(ctx context.Context) (string, error) {
-	return cmd.app.Context().ResolveDir(ctx, cmd.repo, cmd.shared)
+	return cmd.app.Drive().ResolveDir(ctx, cmd.repo, cmd.shared)
 }
 
 func parseDuration(s string) (time.Duration, error) {

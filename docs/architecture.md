@@ -538,7 +538,7 @@ internal/                         # the hive engine both programs run on (see
                                   #   one accessor per service
     events/                       #   the domain event bus
     session/  status/  hc/        #   one subpackage per application service
-    messaging/  repocontext/
+    messaging/  drive/
     todo/  gitstatus/  doctor/
   releasenotes/                   # release tooling, outside the layers: the
                                   #   changelog parser each program's embed feeds:
@@ -2249,13 +2249,14 @@ than leaving an unbounded tool set looking identical to a bounded one.
 A chat's agent may write **canvases** — named surfaces of markdown, html and
 link blocks shown in a pane beside the conversation
 (ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
-Each is one JSON file at `<workspace>/canvases/<name>.json` in the workspace
-folder, owned by `cmd/desktop/internal/app/canvas` and served by `CanvasService`: a
+Each is one canvas document at `canvases/<name>.canvas.json` in the
+workspace's drive space, `<context root>/workspaces/<name>/`, held by the
+engine's drive service and served by `DriveService`
+(ADR hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it): a
 canvas is keyed by (workspace, name), carries a display title and the
 creating session as provenance, and outlives the chat that made it — deleting
-a chat never touches the folder, and the generator's reconcile never enters
-`canvases/`. Deleting the workspace does take them, with the directory they
-sit in (ADR deleting-a-workspace-deletes-its-directory). Every agent mutation resolves the workspace
+a chat never touches the space, and deleting the workspace leaves the space
+behind (ADR deleting-a-workspace-deletes-its-directory). Every agent mutation resolves the workspace
 through the session record — the record is the authority, the agent never
 names the workspace. Block and front matter writes are `hive-canvas` MCP tools
 (a second app-hosted server in `mcpsrv`, mounted at `/mcp/canvas`); the
@@ -2304,19 +2305,20 @@ server's address to the agent's own MCP configuration. Settings ▸ MCP servers
 lists the app-hosted servers with their addresses and the setup for each
 agent, and the empty canvas pane in Code leads there. The tool's `session` argument is a string that is either a
 chat's record id or the caller's working directory, and
-`CanvasService.resolve` maps a directory to the active hive session whose
+`DriveService.resolve` maps a directory to the active hive session whose
 checkout holds it (`Sessions().SessionAtPath`). That session's canvases
 belong to its repository and are filed in hive's context directory,
 `<context root>/<owner>/<repo>/canvases/`, never in the checkout;
-`repocontext.Prune` skips the directory by name. The owner key `owner/repo`
-travels in the field a workspace name does, and `canvas.Store` tells the two
-apart by the slash. An agent outside every session passes `global`, which
-files its canvases under the owner key `@global` in the desktop data
-directory; a directory inside no session stays `not_found` rather than
+the drive service's `Prune` skips the directory by name. The frontend still
+addresses a canvas by owner key, a workspace name, `owner/repo`, or `@global`,
+and the HTTP controller translates it to the drive's space key with
+`app.SpaceKeyForOwner` and back with `app.OwnerForSpaceKey`. An agent outside
+every session passes `global`, which files its canvases in the drive's
+`shared` space; a directory inside no session stays `not_found` rather than
 falling back to it
 (ADR agents-outside-every-session-share-one-global-canvas-owner).
-`canvas.Author` records which chat or hive session wrote a canvas first, and
-the two canvas events carry that author; a global write records neither. The frontend
+`drive.Author` records which chat or hive session wrote a canvas first, and
+the two canvas events carry that author; a shared write records neither. The frontend
 reaches a session's owner as `SessionSummary.canvasOwner`. The pane in Code
 is the Chats pane, `AgentCanvasPane`, mounted beside the pane column and
 riding `?canvas` on the terminal route (`useTerminalCanvas`), so the title

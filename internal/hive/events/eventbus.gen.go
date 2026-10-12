@@ -12,6 +12,7 @@ type Event string
 const (
 	EventAgentStatusChanged    Event = "agent.status-changed"
 	EventConfigReloaded        Event = "config.reloaded"
+	EventDriveChanged          Event = "drive.changed"
 	EventMessageReceived       Event = "message.received"
 	EventNotificationPublished Event = "notification.published"
 	EventRepoFocused           Event = "repo.focused"
@@ -57,6 +58,7 @@ func newSubscribersMap() map[Event][]any {
 	return map[Event][]any{
 		EventAgentStatusChanged:    {},
 		EventConfigReloaded:        {},
+		EventDriveChanged:          {},
 		EventMessageReceived:       {},
 		EventNotificationPublished: {},
 		EventRepoFocused:           {},
@@ -143,6 +145,30 @@ func (bus *EventBus) SubscribeConfigReloaded(fn func(ConfigReloadedPayload)) {
 	})
 	bus.mu.Unlock()
 	bus.runOnSubscribe(EventConfigReloaded)
+}
+
+// PublishDriveChanged publishes a drive.changed event.
+func (bus *EventBus) PublishDriveChanged(payload DriveChangedPayload) {
+	select {
+	case bus.ch <- envelope{event: EventDriveChanged, payload: payload}:
+		bus.runOnPublish(EventDriveChanged, payload)
+	default:
+		bus.runOnDrop(EventDriveChanged, payload)
+	}
+}
+
+// SubscribeDriveChanged registers a handler for drive.changed events.
+func (bus *EventBus) SubscribeDriveChanged(fn func(DriveChangedPayload)) {
+	bus.mu.Lock()
+	bus.subscribers[EventDriveChanged] = append(bus.subscribers[EventDriveChanged], func(v any) {
+		payload, ok := v.(DriveChangedPayload)
+		if !ok {
+			return
+		}
+		fn(payload)
+	})
+	bus.mu.Unlock()
+	bus.runOnSubscribe(EventDriveChanged)
 }
 
 // PublishMessageReceived publishes a message.received event.

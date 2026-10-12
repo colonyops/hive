@@ -20,11 +20,11 @@ import (
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/terminal"
+	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
 	msgsvc "github.com/colonyops/hive/internal/hive/messaging"
-	"github.com/colonyops/hive/internal/hive/repocontext"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/hive/session/scripts"
 	statussvc "github.com/colonyops/hive/internal/hive/status"
@@ -68,7 +68,6 @@ type services struct {
 	terminal  *terminal.Manager
 	status    *statussvc.Service
 	messages  *msgsvc.Service
-	context   *repocontext.Service
 	todos     *todosvc.Service
 	gitStatus *gitstatus.Service
 }
@@ -76,12 +75,16 @@ type services struct {
 // Engine is the hive engine. Accessors return the services built from the
 // current config. Fetch a service per call (e.Sessions().X) and do not hold
 // it across a Reload, or it keeps serving the old config.
+//
+// The drive service is the exception: it holds the snapshot of the context
+// root, so it is built once and follows a Reload through Reconfigure.
 type Engine struct {
 	ports         Ports
 	hc            *hcsvc.Service
 	kv            *store.KVStore
 	notifications notify.Store
 	reviews       review.Store
+	drive         *drivesvc.Service
 	reloadMu      sync.Mutex
 	current       atomic.Pointer[services]
 }
@@ -137,6 +140,7 @@ func New(cfg *config.Config, p Ports) (*Engine, error) {
 		return nil, err
 	}
 	e.current.Store(built)
+	e.drive = drivesvc.NewService(p.Logger, cfg, built.git, p.Bus)
 	return e, nil
 }
 
@@ -146,7 +150,9 @@ func New(cfg *config.Config, p Ports) (*Engine, error) {
 //
 // The database, the bus, and the services that read no config (honeycomb,
 // KV, notifications, reviews) are kept, so a changed database section or data
-// dir still needs a restart.
+// dir still needs a restart. The drive service is kept too and handed the
+// new config and git executor; it re-roots itself when the context dir
+// moved.
 func (e *Engine) Reload(cfg *config.Config) error {
 	e.reloadMu.Lock()
 	defer e.reloadMu.Unlock()
@@ -156,6 +162,7 @@ func (e *Engine) Reload(cfg *config.Config) error {
 		return err
 	}
 	e.current.Store(built)
+	e.drive.Reconfigure(cfg, built.git)
 	e.ports.Bus.PublishConfigReloaded(events.ConfigReloadedPayload{Config: cfg})
 	return nil
 }
@@ -188,7 +195,6 @@ func (e *Engine) build(cfg *config.Config) (*services, error) {
 			p.Styler, p.Stdout, p.Stderr, p.Mux,
 		),
 		messages:  msgsvc.NewService(store.NewMessageStore(p.DB, cfg.Messaging.MaxMessages), cfg, p.Bus),
-		context:   repocontext.NewService(p.Logger, cfg, gitExec),
 		todos:     todosvc.NewService(p.Logger, store.NewTodoStore(p.Logger, p.DB), p.Bus, cfg),
 		gitStatus: gitstatus.NewService(p.Logger, gitExec, cfg.Git.StatusWorkers),
 	}
@@ -233,7 +239,8 @@ func (e *Engine) Reviews() review.Store { return e.reviews }
 
 func (e *Engine) Messages() *msgsvc.Service { return e.load().messages }
 
-func (e *Engine) Context() *repocontext.Service { return e.load().context }
+// Drive returns the Hive Drive service. Reload keeps it and re-roots it.
+func (e *Engine) Drive() *drivesvc.Service { return e.drive }
 
 func (e *Engine) Todos() *todosvc.Service { return e.load().todos }
 

@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/configmigrate"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
@@ -515,24 +514,14 @@ func TestDeleteEndsLiveTerminals(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 2, liveAgentSessionCount(t, svc))
 
-	canvases := canvas.NewStore(canvas.Roots{Workspaces: root})
-	_, err = canvases.Upsert("demo", "plan", canvas.Author{Session: s1.ID}, "", "", canvas.Block{ID: "a", Kind: canvas.KindMarkdown, Body: "x"})
-	require.NoError(t, err)
-
 	require.NoError(t, svc.DeleteSession(t.Context(), s1.ID))
 	_, err = svc.sessions.Get(t.Context(), s1.ID)
 	assert.True(t, stores.IsNotFound(err), "the record is gone too")
-	_, ok, err := canvases.Load("demo", "plan")
-	require.NoError(t, err)
-	assert.True(t, ok, "the canvas outlives the chat that made it")
 	assert.Equal(t, 1, liveAgentSessionCount(t, svc))
 
 	require.NoError(t, svc.DeleteWorkspace(t.Context(), "demo"))
 	_, err = svc.sessions.Get(t.Context(), s2.ID)
 	assert.True(t, stores.IsNotFound(err))
-	metas, err := canvases.List("demo")
-	require.NoError(t, err)
-	assert.Empty(t, metas, "canvases live in the workspace folder, which the delete takes with it")
 	assert.Equal(t, 0, liveAgentSessionCount(t, svc), "every live terminal the workspace held is gone")
 }
 

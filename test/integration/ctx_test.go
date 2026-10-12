@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -65,10 +66,24 @@ func TestCtxLs(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(filepath.Join(target, "test.txt"), []byte("hello"), 0o644))
 
-	// ls should show the file
+	// ls prints one line per entry: the kind, then the path
 	out, err := h.RunInDir(workDir, "ctx", "ls")
 	require.NoError(t, err, "ctx ls: %s", out)
-	assert.Contains(t, out, "test.txt")
+	assert.Equal(t, "file", kindOfLine(t, out, "test.txt"))
+	assert.Equal(t, "dir", kindOfLine(t, out, "plans"))
+}
+
+// kindOfLine is the first field of the ctx ls line whose path is path.
+func kindOfLine(t *testing.T, out, path string) string {
+	t.Helper()
+	for line := range strings.SplitSeq(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[1] == path {
+			return fields[0]
+		}
+	}
+	t.Fatalf("no line for %q in output:\n%s", path, out)
+	return ""
 }
 
 func TestCtxPrune(t *testing.T) {
