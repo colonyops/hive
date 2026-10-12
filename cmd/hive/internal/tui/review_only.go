@@ -24,7 +24,8 @@ type ReviewOnlyOptions struct {
 	Source      review.Source    // lists documents again on a change
 	Documents   []review.Document
 	InitialDoc  *review.Document
-	Scope       review.Scope // the space whose changes refresh the list; its Dir also holds saved feedback files
+	Scope       review.Scope // the space whose changes refresh the list
+	FeedbackDir string       // where feedback is saved when the clipboard fails; empty is the working directory
 	Reviews     corereview.Store
 	CopyCommand string // Shell command for copying to clipboard (e.g., "pbcopy" on macOS)
 }
@@ -33,7 +34,7 @@ type ReviewOnlyOptions struct {
 type ReviewOnlyModel struct {
 	reviewView  review.View
 	initialDoc  *review.Document
-	contextDir  string // Directory for saving feedback files
+	feedbackDir string
 	copyCommand string
 	width       int
 	height      int
@@ -54,7 +55,7 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	return ReviewOnlyModel{
 		reviewView:  reviewView,
 		initialDoc:  opts.InitialDoc,
-		contextDir:  opts.Scope.Dir,
+		feedbackDir: opts.FeedbackDir,
 		copyCommand: opts.CopyCommand,
 		width:       80,
 		height:      24,
@@ -176,7 +177,7 @@ func (m ReviewOnlyModel) copyToClipboard(text string) error {
 	return cmd.Run()
 }
 
-// saveFeedbackToFile saves feedback to a timestamped file in the context directory.
+// saveFeedbackToFile saves feedback to a timestamped file in the feedback directory.
 // Returns the path to the saved file.
 func (m ReviewOnlyModel) saveFeedbackToFile(feedback string) (string, error) {
 	if feedback == "" {
@@ -184,9 +185,8 @@ func (m ReviewOnlyModel) saveFeedbackToFile(feedback string) (string, error) {
 	}
 
 	// Determine save directory
-	saveDir := m.contextDir
+	saveDir := m.feedbackDir
 	if saveDir == "" {
-		// Fall back to current directory if context dir not set
 		var err error
 		saveDir, err = os.Getwd()
 		if err != nil {

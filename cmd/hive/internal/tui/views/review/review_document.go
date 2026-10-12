@@ -148,20 +148,27 @@ func collectDocuments(docs *[]Document, space drive.Space, dir string, entry dri
 		if child.Kind != drive.KindMarkdown {
 			continue
 		}
-		rel := child.Path
-		switch {
-		case qualified:
-			rel = space.Key + "/" + child.Path
-		case space.Kind == drive.SpaceKindRepository:
-			rel = ".hive/" + child.Path
-		}
-		*docs = append(*docs, Document{
-			Path:    filepath.Join(dir, filepath.FromSlash(child.Path)),
-			RelPath: rel,
-			Type:    documentType(child),
-			Space:   space,
-			ModTime: child.Modified,
-		})
+		doc := spaceDocument(space, dir, child.Path, qualified)
+		doc.Type = documentType(child)
+		doc.ModTime = child.Modified
+		*docs = append(*docs, doc)
+	}
+}
+
+// spaceDocument is the document at path, relative to the space directory
+// dir, with its RelPath named the way the space's listing names it.
+func spaceDocument(space drive.Space, dir, path string, qualified bool) Document {
+	rel := path
+	switch {
+	case qualified:
+		rel = space.Key + "/" + path
+	case space.Kind == drive.SpaceKindRepository:
+		rel = ".hive/" + path
+	}
+	return Document{
+		Path:    filepath.Join(dir, filepath.FromSlash(path)),
+		RelPath: rel,
+		Space:   space,
 	}
 }
 

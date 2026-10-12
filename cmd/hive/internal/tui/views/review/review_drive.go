@@ -3,7 +3,10 @@ package review
 import (
 	"context"
 	"fmt"
+	pathpkg "path"
 	"path/filepath"
+	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog"
@@ -13,12 +16,44 @@ import (
 )
 
 // Scope is what a review view lists: the drive space whose changes refresh
-// it, and the directory its documents are discovered from. With All, the view
-// lists every space under Dir, the drive root.
+// it, and the directory its documents are discovered from. Folder narrows the
+// listing to one folder of the space, in the space's forward-slash paths.
+// With All, the view lists every space under Dir, the drive root.
 type Scope struct {
-	Space drive.Space
-	Dir   string
-	All   bool
+	Space  drive.Space
+	Dir    string
+	Folder string
+	All    bool
+}
+
+// SpaceLocator finds the drive space a path on disk belongs to.
+type SpaceLocator interface {
+	SpaceAt(path string) (drive.Space, string, bool)
+	SpaceDir(space drive.Space) (string, error)
+}
+
+// FileScope is the scope and the document of one file opened by path. A
+// file inside a space lists its own folder of that space and refreshes on
+// the space's changes, its path rebuilt from the space directory so the
+// listing matches it. A file outside every space is listed alone.
+func FileScope(locator SpaceLocator, path string, modTime time.Time) (Scope, Document) {
+	alone := Document{Path: path, RelPath: filepath.Base(path), Type: TypeOther, ModTime: modTime}
+	space, rel, ok := locator.SpaceAt(path)
+	if !ok {
+		return Scope{Dir: filepath.Dir(path)}, alone
+	}
+	dir, err := locator.SpaceDir(space)
+	if err != nil {
+		return Scope{Dir: filepath.Dir(path)}, alone
+	}
+	folder := pathpkg.Dir(rel)
+	if folder == "." {
+		folder = ""
+	}
+	doc := spaceDocument(space, dir, rel, false)
+	doc.Type = typeFromPath(rel)
+	doc.ModTime = modTime
+	return Scope{Space: space, Dir: dir, Folder: folder}, doc
 }
 
 // Source is the part of the drive engine a review view lists documents from.
@@ -46,7 +81,11 @@ func ListDocuments(ctx context.Context, source Source, scope Scope) ([]Document,
 		if err != nil {
 			return nil, err
 		}
-		return DocumentsFromTree(scope.Space, scope.Dir, root, false), nil
+		folder, ok := subtree(root, scope.Folder)
+		if !ok {
+			return nil, nil
+		}
+		return DocumentsFromTree(scope.Space, scope.Dir, folder, false), nil
 	}
 
 	spaces, err := source.Spaces(ctx)
@@ -63,6 +102,18 @@ func ListDocuments(ctx context.Context, source Source, scope Scope) ([]Document,
 	}
 	SortDocuments(docs)
 	return docs, nil
+}
+
+func subtree(entry drive.Entry, folder string) (drive.Entry, bool) {
+	if entry.Path == folder {
+		return entry, true
+	}
+	for _, child := range entry.Children {
+		if child.Kind == drive.KindDir && (child.Path == folder || strings.HasPrefix(folder, child.Path+"/")) {
+			return subtree(child, folder)
+		}
+	}
+	return drive.Entry{}, false
 }
 
 // DocumentChangeMsg carries the documents discovered after the scope's space

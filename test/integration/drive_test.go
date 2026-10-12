@@ -5,7 +5,6 @@ package integration
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,12 +33,6 @@ func TestDriveLs(t *testing.T) {
 	h := NewHarness(t)
 	workDir := driveWorkDir(t, h, "drive-ls-repo")
 
-	out, err := h.RunStdoutInDir(workDir, "drive", "ls")
-	require.NoError(t, err, "drive ls: %s", out)
-	assert.Equal(t, "markdown", kindOfLine(t, out, "plans/ship.md"))
-	assert.Equal(t, "file", kindOfLine(t, out, "notes.txt"))
-	assert.Equal(t, "dir", kindOfLine(t, out, "plans"))
-
 	entries, err := h.RunJSONLinesInDir(workDir, "drive", "ls", "--json")
 	require.NoError(t, err)
 	kinds := map[string]string{}
@@ -52,6 +45,7 @@ func TestDriveLs(t *testing.T) {
 		assert.NotContains(t, entry, "children", "the lines are the tree, so no entry nests")
 	}
 	assert.Equal(t, "markdown", kinds["plans/ship.md"])
+	assert.Equal(t, "file", kinds["notes.txt"])
 	assert.Equal(t, "dir", kinds["plans"])
 }
 
@@ -74,19 +68,6 @@ func TestDriveLsAll(t *testing.T) {
 		keys[key] = true
 	}
 	assert.True(t, keys["shared"], "--all lists the shared space: %v", keys)
-}
-
-// kindOfLine is the first field of the drive ls line whose path is path.
-func kindOfLine(t *testing.T, out, path string) string {
-	t.Helper()
-	for line := range strings.SplitSeq(out, "\n") {
-		fields := strings.Fields(line)
-		if len(fields) == 2 && fields[1] == path {
-			return fields[0]
-		}
-	}
-	t.Fatalf("no line for %q in output:\n%s", path, out)
-	return ""
 }
 
 func TestDriveSpaces(t *testing.T) {

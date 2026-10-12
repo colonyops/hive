@@ -113,22 +113,8 @@ func (cmd *ReviewCmd) runWithDirectFile(ctx context.Context) error {
 		return fmt.Errorf("path is a directory, not a file: %s", targetPath)
 	}
 
-	// Create a single document for the specified file
-	doc := review.Document{
-		Path:    targetPath,
-		RelPath: filepath.Base(targetPath),
-		Type:    review.TypeOther,
-		ModTime: info.ModTime(),
-	}
-
-	// The file's own folder is listed on a change. Its space is known only
-	// when the file sits in the drive, directly or through a checkout's .hive
-	// link; outside the drive nothing refreshes the list.
-	scope := review.Scope{Dir: filepath.Dir(targetPath)}
-	if space, _, ok := cmd.app.Drive().SpaceAt(scope.Dir); ok {
-		scope.Space = space
-	}
-	return cmd.launchReviewTUI(ctx, []review.Document{doc}, &doc, scope)
+	scope, doc := review.FileScope(cmd.app.Drive(), targetPath, info.ModTime())
+	return cmd.launchReviewTUI(ctx, []review.Document{doc}, &doc, scope, filepath.Dir(targetPath))
 }
 
 // runWithContextDir uses context directory discovery for picker/latest modes.
@@ -173,12 +159,12 @@ func (cmd *ReviewCmd) runWithContextDir(ctx context.Context, c *cli.Command) err
 	}
 
 	// Launch review TUI
-	return cmd.launchReviewTUI(ctx, documents, initialDoc, scope)
+	return cmd.launchReviewTUI(ctx, documents, initialDoc, scope, scope.Dir)
 }
 
 // launchReviewTUI runs the review-only TUI. The drive watcher runs for the
 // program's lifetime so a document edited meanwhile refreshes the list.
-func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Document, initialDoc *review.Document, scope review.Scope) error {
+func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Document, initialDoc *review.Document, scope review.Scope, feedbackDir string) error {
 	drive := cmd.app.Drive()
 	if err := drive.Watch(ctx); err != nil {
 		cmd.app.Logger.Warn().Err(err).Msg("drive watcher unavailable; documents will not refresh while open")
@@ -196,6 +182,7 @@ func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Do
 		Documents:   documents,
 		InitialDoc:  initialDoc,
 		Scope:       scope,
+		FeedbackDir: feedbackDir,
 		Reviews:     cmd.app.Reviews(),
 		CopyCommand: cmd.app.Config.CopyCommand,
 	})

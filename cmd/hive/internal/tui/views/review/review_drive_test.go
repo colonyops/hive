@@ -2,6 +2,8 @@ package review
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -9,7 +11,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/drive"
+	hivedrive "github.com/colonyops/hive/internal/hive/drive"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/events/testbus"
 )
@@ -115,4 +119,54 @@ func TestAllScopeListsEverySpaceAndHearsEveryChange(t *testing.T) {
 		"acme/site/plans/a.md": "/ctx/acme/site/plans/a.md",
 		"shared/plans/b.md":    "/ctx/shared/plans/b.md",
 	}, paths)
+}
+
+func writeFile(t *testing.T, path string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte("# doc\n"), 0o644))
+}
+
+func TestFileInASpaceFolderListsThatFolderOnAChange(t *testing.T) {
+	root := t.TempDir()
+	svc := hivedrive.NewService(zerolog.Nop(), &config.Config{Context: config.ContextConfig{BaseDir: root}}, nil, nil)
+	spaceDir := filepath.Join(root, "acme", "site")
+	writeFile(t, filepath.Join(spaceDir, "plans", "x.md"))
+	writeFile(t, filepath.Join(spaceDir, "plans", "y.md"))
+	writeFile(t, filepath.Join(spaceDir, "research", "z.md"))
+	checkout := t.TempDir()
+	require.NoError(t, os.Symlink(spaceDir, filepath.Join(checkout, ".hive")))
+
+	scope, doc := FileScope(svc, filepath.Join(checkout, ".hive", "plans", "x.md"), time.Now())
+	require.Equal(t, "acme/site", scope.Space.Key)
+
+	view := New(zerolog.Nop(), nil, svc, []Document{doc}, scope, nil, nil, 0)
+	_, cmd := view.Update(DriveChangedMsg{Payload: events.DriveChangedPayload{Space: "acme/site"}})
+	require.NotNil(t, cmd)
+	msg, ok := cmd().(DocumentChangeMsg)
+	require.True(t, ok)
+
+	var rels, paths []string
+	for _, d := range msg.Documents {
+		rels = append(rels, d.RelPath)
+		paths = append(paths, d.Path)
+		assert.FileExists(t, d.Path)
+	}
+	assert.ElementsMatch(t, []string{".hive/plans/x.md", ".hive/plans/y.md"}, rels)
+	assert.Contains(t, paths, doc.Path)
+	assert.Equal(t, ".hive/plans/x.md", doc.RelPath)
+}
+
+func TestFileOutsideEverySpaceIsListedAlone(t *testing.T) {
+	svc := hivedrive.NewService(zerolog.Nop(), &config.Config{Context: config.ContextConfig{BaseDir: t.TempDir()}}, nil, nil)
+	path := filepath.Join(t.TempDir(), "notes.md")
+	writeFile(t, path)
+
+	scope, doc := FileScope(svc, path, time.Now())
+	assert.Equal(t, Scope{Dir: filepath.Dir(path)}, scope)
+	assert.Equal(t, path, doc.Path)
+
+	view := New(zerolog.Nop(), nil, svc, []Document{doc}, scope, nil, nil, 0)
+	_, cmd := view.Update(DriveChangedMsg{Payload: events.DriveChangedPayload{Space: "acme/site"}})
+	assert.Nil(t, cmd)
 }
