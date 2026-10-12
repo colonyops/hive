@@ -23,6 +23,7 @@ type store struct {
 	deliveries map[string][]relay.Delivery
 	codes      map[string]authCode
 	outbox     map[string]relay.Mail
+	recipients map[string]relay.Recipient
 }
 
 type authCode struct {
@@ -39,16 +40,18 @@ func New() relay.Store {
 		deliveries: map[string][]relay.Delivery{},
 		codes:      map[string]authCode{},
 		outbox:     map[string]relay.Mail{},
+		recipients: map[string]relay.Recipient{},
 	}
 }
 
-func (s *store) Accounts() relay.AccountStore    { return accounts{s} }
-func (s *store) Tokens() relay.TokenStore        { return tokens{s} }
-func (s *store) Sources() relay.SourceStore      { return sources{s} }
-func (s *store) Deliveries() relay.DeliveryStore { return deliveries{s} }
-func (s *store) AuthCodes() relay.AuthCodeStore  { return authCodes{s} }
-func (s *store) Outbox() relay.OutboxStore       { return outbox{s} }
-func (s *store) Close() error                    { return nil }
+func (s *store) Accounts() relay.AccountStore     { return accounts{s} }
+func (s *store) Tokens() relay.TokenStore         { return tokens{s} }
+func (s *store) Sources() relay.SourceStore       { return sources{s} }
+func (s *store) Deliveries() relay.DeliveryStore  { return deliveries{s} }
+func (s *store) AuthCodes() relay.AuthCodeStore   { return authCodes{s} }
+func (s *store) Outbox() relay.OutboxStore        { return outbox{s} }
+func (s *store) Recipients() relay.RecipientStore { return recipients{s} }
+func (s *store) Close() error                     { return nil }
 
 func copyDelivery(d relay.Delivery) relay.Delivery {
 	d.Record = slices.Clone(d.Record)
@@ -118,6 +121,11 @@ func (a accounts) Delete(_ context.Context, email string) error {
 		if src.Email == email {
 			delete(a.s.deliveries, id)
 			delete(a.s.sources, id)
+		}
+	}
+	for id, r := range a.s.recipients {
+		if r.Email == email {
+			delete(a.s.recipients, id)
 		}
 	}
 	delete(a.s.accounts, email)
@@ -478,4 +486,46 @@ func (o outbox) MarkFailed(_ context.Context, id string, next time.Time) error {
 	m.Attempts++
 	o.s.outbox[id] = m
 	return nil
+}
+
+type recipients struct{ s *store }
+
+func (r recipients) Put(_ context.Context, rec relay.Recipient) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	for id, existing := range r.s.recipients {
+		if existing.Email == rec.Email && existing.Recipient == rec.Recipient {
+			existing.Device = rec.Device
+			r.s.recipients[id] = existing
+			return nil
+		}
+	}
+	r.s.recipients[rec.ID] = rec
+	return nil
+}
+
+func (r recipients) Delete(_ context.Context, email, id string) error {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	rec, ok := r.s.recipients[id]
+	if !ok || rec.Email != email {
+		return relay.ErrNotFound
+	}
+	delete(r.s.recipients, id)
+	return nil
+}
+
+func (r recipients) ListByEmail(_ context.Context, email string) ([]relay.Recipient, error) {
+	r.s.mu.Lock()
+	defer r.s.mu.Unlock()
+	var out []relay.Recipient
+	for _, rec := range r.s.recipients {
+		if rec.Email == email {
+			out = append(out, rec)
+		}
+	}
+	slices.SortFunc(out, func(x, y relay.Recipient) int {
+		return cmp.Or(x.CreatedAt.Compare(y.CreatedAt), cmp.Compare(x.ID, y.ID))
+	})
+	return out, nil
 }

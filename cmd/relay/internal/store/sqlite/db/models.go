@@ -42,6 +42,14 @@ type Outbox struct {
 	SentAt    sql.NullInt64 `json:"sent_at"`
 }
 
+type Recipient struct {
+	ID        string `json:"id"`
+	Email     string `json:"email"`
+	Recipient string `json:"recipient"`
+	Device    string `json:"device"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 type Source struct {
 	ID          string `json:"id"`
 	Email       string `json:"email"`

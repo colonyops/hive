@@ -26,14 +26,15 @@ const (
 )
 
 type Core struct {
-	Auth    *relay.Auth
-	SignIn  *relay.SignIn
-	Sources *relay.Sources
-	Ingress *relay.Ingress
-	Feed    *relay.Feed
-	Store   relay.Store
-	Limits  relay.Limits
-	Version string
+	Auth     *relay.Auth
+	SignIn   *relay.SignIn
+	Sources  *relay.Sources
+	Ingress  *relay.Ingress
+	Feed     *relay.Feed
+	Accounts *relay.Accounts
+	Store    relay.Store
+	Limits   relay.Limits
+	Version  string
 	// MCP is served at /mcp behind the same bearer check as /v1; nil leaves
 	// /mcp unmounted.
 	MCP http.Handler
@@ -78,6 +79,10 @@ func newAPI(core Core, cfg config.Config, log zerolog.Logger) *api {
 	public("POST /v1/auth/login", s.authLogin)
 
 	authed("GET /v1/me", s.me)
+	authed("PATCH /v1/me", s.updateMe)
+	authed("GET /v1/recipients", s.listRecipients)
+	authed("POST /v1/recipients", s.createRecipient)
+	authed("DELETE /v1/recipients/{id}", s.deleteRecipient)
 	authed("GET /v1/sources", s.listSources)
 	authed("POST /v1/sources", s.createSource)
 	authed("GET /v1/sources/{id}", s.getSource)

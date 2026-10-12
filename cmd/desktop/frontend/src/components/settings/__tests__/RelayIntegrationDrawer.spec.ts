@@ -5,8 +5,12 @@ import RelayIntegrationDrawer from '../RelayIntegrationDrawer.vue'
 const mocks = vi.hoisted(() => ({
   ConnectWithKey: vi.fn(),
   Disconnect: vi.fn(),
+  ListRecipients: vi.fn(),
   Login: vi.fn(),
+  Me: vi.fn(),
   Methods: vi.fn(),
+  RevokeRecipient: vi.fn(),
+  SetEncryption: vi.fn(),
   StartEmail: vi.fn(),
   VerifyEmail: vi.fn(),
   List: vi.fn(),
@@ -17,8 +21,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/relayservice', () => ({
   ConnectWithKey: mocks.ConnectWithKey,
   Disconnect: mocks.Disconnect,
+  ListRecipients: mocks.ListRecipients,
   Login: mocks.Login,
+  Me: mocks.Me,
   Methods: mocks.Methods,
+  RevokeRecipient: mocks.RevokeRecipient,
+  SetEncryption: mocks.SetEncryption,
   StartEmail: mocks.StartEmail,
   VerifyEmail: mocks.VerifyEmail,
 }))
@@ -37,6 +45,12 @@ const URL = 'https://relay.hivedesktop.com'
 const ACCOUNT = 'relay.hivedesktop.com-you@example.com'
 const INSTANCE = { account: ACCOUNT, url: URL, email: 'you@example.com' }
 const ALL = { email_code: true, password: true, api_key: true }
+const OTHER = 'relay.hivedesktop.com-other@example.com'
+const RECIPIENT = { id: 'rcp1', recipient: 'age1abc', device: 'laptop', created_at: '2026-10-01T00:00:00Z' }
+
+function relayMe(encryption: boolean) {
+  return { email: 'you@example.com', encryption, limits: {}, usage: {}, methods: ALL, version: 'test' }
+}
 
 function connectedAccounts(...accounts: string[]) {
   mocks.List.mockResolvedValue([
@@ -56,6 +70,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.On.mockReturnValue(() => {})
   mocks.Methods.mockResolvedValue(ALL)
+  mocks.Me.mockResolvedValue(relayMe(false))
+  mocks.ListRecipients.mockResolvedValue([])
   connectedAccounts()
 })
 
@@ -228,5 +244,68 @@ describe('RelayIntegrationDrawer', () => {
     const wrapper = await mountDrawer()
     await click(wrapper, 'relay-connect-docs')
     expect(mocks.OpenURL).toHaveBeenCalledWith('https://hivedesktop.com/desktop/inbox/sources/#hive-relay')
+  })
+
+  it('hides encryption until an account is connected', async () => {
+    const wrapper = await mountDrawer()
+    expect(has(wrapper, 'relay-encryption')).toBe(false)
+    expect(mocks.Me).not.toHaveBeenCalled()
+  })
+
+  it('turns encryption on and shows the new state', async () => {
+    connectedAccounts(ACCOUNT)
+    mocks.SetEncryption.mockResolvedValue(relayMe(true))
+    const wrapper = await mountDrawer()
+
+    const toggle = wrapper.get('[data-testid="relay-encryption-toggle"]')
+    expect(mocks.Me).toHaveBeenCalledWith(ACCOUNT)
+    expect(toggle.attributes('aria-checked')).toBe('false')
+
+    await click(wrapper, 'relay-encryption-toggle')
+
+    expect(mocks.SetEncryption).toHaveBeenCalledWith(ACCOUNT, true)
+    expect(wrapper.get('[data-testid="relay-encryption-toggle"]').attributes('aria-checked')).toBe('true')
+  })
+
+  it('shows the relay refusing encryption with no recipient', async () => {
+    connectedAccounts(ACCOUNT)
+    mocks.SetEncryption.mockRejectedValue(
+      Object.assign(new Error('refused'), {
+        cause: { kind: 'invalid', message: 'register a recipient before turning encryption on' },
+      }),
+    )
+    const wrapper = await mountDrawer()
+
+    await click(wrapper, 'relay-encryption-toggle')
+
+    expect(wrapper.get('[data-testid="relay-error"]').text()).toContain('register a recipient')
+    expect(wrapper.get('[data-testid="relay-encryption-toggle"]').attributes('aria-checked')).toBe('false')
+  })
+
+  it('lists the recipients and revokes one', async () => {
+    connectedAccounts(ACCOUNT)
+    mocks.ListRecipients.mockResolvedValue([RECIPIENT])
+    mocks.RevokeRecipient.mockResolvedValue(undefined)
+    const wrapper = await mountDrawer()
+
+    expect(mocks.ListRecipients).toHaveBeenCalledWith(ACCOUNT)
+    expect(wrapper.get('[data-testid="relay-recipient-rcp1"]').text()).toContain('laptop')
+
+    await click(wrapper, 'relay-recipient-rcp1-revoke')
+
+    expect(mocks.RevokeRecipient).toHaveBeenCalledWith(ACCOUNT, 'rcp1')
+    expect(has(wrapper, 'relay-recipient-rcp1')).toBe(false)
+  })
+
+  it('reads the chosen account when several are connected', async () => {
+    connectedAccounts(ACCOUNT, OTHER)
+    const wrapper = await mountDrawer()
+    expect(mocks.Me).toHaveBeenLastCalledWith(ACCOUNT)
+
+    await click(wrapper, 'relay-encryption-account')
+    await click(wrapper, `relay-encryption-account-option-${OTHER}`)
+
+    expect(mocks.Me).toHaveBeenLastCalledWith(OTHER)
+    expect(mocks.ListRecipients).toHaveBeenLastCalledWith(OTHER)
   })
 })

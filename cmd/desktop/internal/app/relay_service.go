@@ -95,18 +95,66 @@ func (s *RelayService) DeleteSource(ctx context.Context, account, id string) err
 // RecentDeliveries is the node editor's preview: the newest limit deliveries,
 // each parsed under the auto dialect.
 func (s *RelayService) RecentDeliveries(ctx context.Context, account, sourceID string, limit int) ([]relay.RecentDelivery, error) {
+	ref, err := relayRef(account)
+	if err != nil {
+		return nil, err
+	}
+	recent, err := s.fetchers.RecentDeliveries(ctx, ref, sourceID, limit)
+	return recent, Wrap(err, relayErrorKind(err), "reading relay deliveries")
+}
+
+func (s *RelayService) Me(ctx context.Context, account string) (relay.Me, error) {
+	client, err := s.client(account)
+	if err != nil {
+		return relay.Me{}, err
+	}
+	me, err := client.Me(ctx)
+	return me, Wrap(err, relayErrorKind(err), "reading the Hive Relay account")
+}
+
+// SetEncryption turns sealing on or off for the account's later deliveries.
+// The relay refuses "on" while no recipient is registered, and says so.
+func (s *RelayService) SetEncryption(ctx context.Context, account string, on bool) (relay.Me, error) {
+	client, err := s.client(account)
+	if err != nil {
+		return relay.Me{}, err
+	}
+	me, err := client.SetEncryption(ctx, on)
+	return me, Wrap(err, relayErrorKind(err), "changing Hive Relay encryption")
+}
+
+func (s *RelayService) ListRecipients(ctx context.Context, account string) ([]relay.RecipientView, error) {
 	client, err := s.client(account)
 	if err != nil {
 		return nil, err
 	}
-	recent, err := client.RecentDeliveries(ctx, sourceID, limit)
-	return recent, Wrap(err, relayErrorKind(err), "reading relay deliveries")
+	recipients, err := client.ListRecipients(ctx)
+	return recipients, Wrap(err, relayErrorKind(err), "listing Hive Relay recipients")
+}
+
+// RevokeRecipient stops the relay sealing later deliveries to one device.
+// The relay refuses the last recipient while encryption is on.
+func (s *RelayService) RevokeRecipient(ctx context.Context, account, id string) error {
+	client, err := s.client(account)
+	if err != nil {
+		return err
+	}
+	err = client.RemoveRecipient(ctx, id)
+	return Wrap(err, relayErrorKind(err), "revoking the Hive Relay recipient")
+}
+
+func relayRef(account string) (credentials.Ref, error) {
+	ref := credentials.Ref{Provider: relay.Provider, Account: account}
+	if err := ref.Validate(); err != nil {
+		return credentials.Ref{}, Wrap(err, KindInvalid, "relay account %q", account)
+	}
+	return ref, nil
 }
 
 func (s *RelayService) client(account string) (*relay.Client, error) {
-	ref := credentials.Ref{Provider: relay.Provider, Account: account}
-	if err := ref.Validate(); err != nil {
-		return nil, Wrap(err, KindInvalid, "relay account %q", account)
+	ref, err := relayRef(account)
+	if err != nil {
+		return nil, err
 	}
 	client, err := s.fetchers.For(ref)
 	return client, Wrap(err, relayErrorKind(err), "relay account %q", account)
@@ -123,6 +171,8 @@ func relaySignInKind(err error) Kind {
 
 func relayErrorKind(err error) Kind {
 	switch {
+	case errors.Is(err, relay.ErrInvalid):
+		return KindInvalid
 	case errors.Is(err, relay.ErrNotConnected), errors.Is(err, sourcehttp.ErrUnauthorized), errors.Is(err, relay.ErrForbidden):
 		return KindUnauthenticated
 	case errors.Is(err, sourcehttp.ErrRateLimited), errors.Is(err, sourcehttp.ErrUnreachable):

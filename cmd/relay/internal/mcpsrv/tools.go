@@ -44,6 +44,19 @@ type tokenIDInput struct {
 	ID string `json:"id" jsonschema:"Token id from list_tokens."`
 }
 
+type setEncryptionInput struct {
+	On bool `json:"on" jsonschema:"true seals later deliveries to the account's recipients; false stores them readable again. Stored deliveries keep their form."`
+}
+
+type addRecipientInput struct {
+	Recipient string `json:"recipient"        jsonschema:"An age X25519 public key, age1..."`
+	Device    string `json:"device,omitempty" jsonschema:"Label for the desktop that holds the private key, up to 80 characters."`
+}
+
+type recipientIDInput struct {
+	ID string `json:"id" jsonschema:"Recipient id from list_recipients."`
+}
+
 type deleted struct {
 	ID      string `json:"id"`
 	Deleted bool   `json:"deleted"`
@@ -101,17 +114,76 @@ func (c *Controller) register(srv *mcp.Server) {
 		Title:       "Revoke an API key",
 		Description: "Revoke a device token or API key. It stops authenticating at once; revoking the current one ends this session's access.",
 	}, c.revokeToken)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:  "set_encryption",
+		Title: "Turn encryption on or off",
+		Description: "Turn encryption at rest on or off and return the account as whoami does. With it on, the relay seals each later delivery to every registered recipient and cannot read it. " +
+			"Turning it on needs at least one recipient. Deliveries already stored keep the form they were written in.",
+	}, c.setEncryption)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "list_recipients",
+		Title:       "List recipients",
+		Description: "List the age public keys deliveries are sealed to, oldest first. Each is one desktop.",
+	}, c.listRecipients)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:        "add_recipient",
+		Title:       "Add a recipient",
+		Description: "Register an age X25519 public key that later sealed deliveries open with. Registering a key already listed updates its device label.",
+	}, c.addRecipient)
+	mcp.AddTool(srv, &mcp.Tool{
+		Name:  "remove_recipient",
+		Title: "Remove a recipient",
+		Description: "Remove a recipient. Later deliveries are not sealed to it; ones already stored are not re-encrypted. " +
+			"The last recipient cannot be removed while encryption is on.",
+	}, c.removeRecipient)
 }
 
 func email(ctx context.Context) string { return authctx.AccountFrom(ctx).Email }
 
 func (c *Controller) whoami(ctx context.Context, _ *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, wire.Me, error) {
-	acct := authctx.AccountFrom(ctx)
+	return c.me(ctx, authctx.AccountFrom(ctx))
+}
+
+func (c *Controller) me(ctx context.Context, acct relay.Account) (*mcp.CallToolResult, wire.Me, error) {
 	n, err := c.core.Store.Sources().CountByEmail(ctx, acct.Email)
 	if err != nil {
 		return nil, wire.Me{}, c.toolError(fmt.Errorf("count sources: %w", err))
 	}
 	return nil, wire.MeFrom(acct, n, c.core.Limits, c.core.SignIn.Methods(), c.core.Version), nil
+}
+
+func (c *Controller) setEncryption(ctx context.Context, _ *mcp.CallToolRequest, in setEncryptionInput) (*mcp.CallToolResult, wire.Me, error) {
+	acct, err := c.core.Accounts.SetEncryption(ctx, email(ctx), in.On)
+	if err != nil {
+		return nil, wire.Me{}, c.toolError(err)
+	}
+	return c.me(ctx, acct)
+}
+
+func (c *Controller) listRecipients(ctx context.Context, _ *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, wire.Recipients, error) {
+	rs, err := c.core.Accounts.ListRecipients(ctx, email(ctx))
+	if err != nil {
+		return nil, wire.Recipients{}, c.toolError(err)
+	}
+	return nil, wire.RecipientsFrom(rs), nil
+}
+
+func (c *Controller) addRecipient(ctx context.Context, _ *mcp.CallToolRequest, in addRecipientInput) (*mcp.CallToolResult, wire.Recipient, error) {
+	if err := (wire.CreateRecipient{Recipient: in.Recipient, Device: in.Device}).Validate(); err != nil {
+		return nil, wire.Recipient{}, c.toolError(invalid(err))
+	}
+	r, err := c.core.Accounts.AddRecipient(ctx, email(ctx), in.Recipient, in.Device)
+	if err != nil {
+		return nil, wire.Recipient{}, c.toolError(err)
+	}
+	return nil, wire.RecipientFrom(r), nil
+}
+
+func (c *Controller) removeRecipient(ctx context.Context, _ *mcp.CallToolRequest, in recipientIDInput) (*mcp.CallToolResult, deleted, error) {
+	if err := c.core.Accounts.RemoveRecipient(ctx, email(ctx), in.ID); err != nil {
+		return nil, deleted{}, c.toolError(err)
+	}
+	return nil, deleted{ID: in.ID, Deleted: true}, nil
 }
 
 func (c *Controller) listSources(ctx context.Context, _ *mcp.CallToolRequest, _ noInput) (*mcp.CallToolResult, wire.Sources, error) {

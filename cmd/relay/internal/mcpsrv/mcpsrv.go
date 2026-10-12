@@ -16,13 +16,14 @@ import (
 const serverName = "hive-relay"
 
 type Core struct {
-	Auth    *relay.Auth
-	SignIn  *relay.SignIn
-	Sources *relay.Sources
-	Feed    *relay.Feed
-	Store   relay.Store
-	Limits  relay.Limits
-	Version string
+	Auth     *relay.Auth
+	SignIn   *relay.SignIn
+	Sources  *relay.Sources
+	Feed     *relay.Feed
+	Accounts *relay.Accounts
+	Store    relay.Store
+	Limits   relay.Limits
+	Version  string
 }
 
 type Controller struct {
@@ -42,7 +43,7 @@ func New(core Core, log zerolog.Logger) *Controller {
 		Title:   "Hive Relay",
 		Version: version,
 		Description: "Manage a Hive Relay account: its webhook sources and ingress URLs, " +
-			"the deliveries each source has stored, and the account's API keys.",
+			"the deliveries each source has stored, the account's API keys, and its encryption recipients.",
 	}, nil)
 	c.register(c.server)
 	return c

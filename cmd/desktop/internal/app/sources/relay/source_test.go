@@ -163,7 +163,7 @@ func TestProduceSendsTheUserAgent(t *testing.T) {
 	assert.Equal(t, "hive-desktop/1.2.3", relay.userAgents[0])
 }
 
-func TestProduceDecodesBase64AndSkipsSealedRows(t *testing.T) {
+func TestProduceDecodesBase64AndShowsSealedRowsWithoutAKey(t *testing.T) {
 	t.Parallel()
 	relay := newFakeRelay(t)
 	relay.add(
@@ -172,8 +172,10 @@ func TestProduceDecodesBase64AndSkipsSealedRows(t *testing.T) {
 	)
 	msgs, err := produce(t, newSource(t, relay))
 	require.NoError(t, err)
-	require.Len(t, msgs, 1)
+	require.Len(t, msgs, 2)
 	assert.Equal(t, "bin", msgs[0].Key)
+	assert.Equal(t, deliveryID(2), msgs[1].Key)
+	assert.Equal(t, placeholderKind, payloadOf(t, msgs[1])["kind"])
 }
 
 func TestProduceAppliesTheMap(t *testing.T) {
@@ -201,10 +203,8 @@ func TestRecentDeliveriesKeepsTheTail(t *testing.T) {
 	}
 	relay.add(DeliveryView{ID: deliveryID(601), Enc: "age"})
 	fetchers, ref := connected(t, relay)
-	client, err := fetchers.For(ref)
-	require.NoError(t, err)
 
-	recent, err := client.RecentDeliveries(t.Context(), "src", 3)
+	recent, err := fetchers.RecentDeliveries(t.Context(), ref, "src", 3)
 	require.NoError(t, err)
 	require.Len(t, recent, 3)
 	assert.Equal(t, "k599", recent[0].Key)

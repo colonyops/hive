@@ -45,13 +45,26 @@ func (i *Ingress) AcceptSource(ctx context.Context, src Source, rec Record) (str
 	if err != nil {
 		return "", fmt.Errorf("encode record: %w", err)
 	}
+	acct, err := i.store.Accounts().Get(ctx, src.Email)
+	if errors.Is(err, ErrNotFound) {
+		return "", NewError(KindNotFound, "unknown ingress token")
+	}
+	if err != nil {
+		return "", fmt.Errorf("look up account: %w", err)
+	}
 	d := Delivery{
 		ID:         i.newID(),
 		SourceID:   src.ID,
 		ReceivedAt: i.now(),
-		Size:       int64(len(raw)),
 		Record:     raw,
 	}
+	if acct.Encryption {
+		if d.Record, err = i.sealFor(ctx, src.Email, raw); err != nil {
+			return "", err
+		}
+		d.Enc = true
+	}
+	d.Size = int64(len(d.Record))
 	err = i.store.Deliveries().Append(ctx, src.Email, d, i.limits.BytesPerAccount, i.limits.DeliveriesPerSource)
 	switch {
 	case err == nil:
@@ -64,6 +77,24 @@ func (i *Ingress) AcceptSource(ctx context.Context, src Source, rec Record) (str
 	default:
 		return "", fmt.Errorf("append delivery: %w", err)
 	}
+}
+
+// sealFor encrypts raw to the account's recipients. SetEncryption and
+// RemoveRecipient never leave encryption on with none, so an empty list is a
+// broken invariant, not a caller error.
+func (i *Ingress) sealFor(ctx context.Context, email string, raw []byte) ([]byte, error) {
+	rs, err := i.store.Recipients().ListByEmail(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("list recipients: %w", err)
+	}
+	if len(rs) == 0 {
+		return nil, fmt.Errorf("account %s has encryption on and no recipients", email)
+	}
+	keys := make([]string, len(rs))
+	for j, r := range rs {
+		keys[j] = r.Recipient
+	}
+	return seal(raw, keys)
 }
 
 // ResolveSource looks the source up by ingress token and checks the secret.

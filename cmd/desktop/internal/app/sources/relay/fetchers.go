@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"filippo.io/age"
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/platform/credentials"
@@ -30,19 +31,26 @@ type Fetchers struct {
 	version   string
 	log       zerolog.Logger
 
-	mu     sync.Mutex
-	nodes  map[string]*nodeState
-	limits map[credentials.Ref]Limits
+	mu         sync.Mutex
+	nodes      map[string]*nodeState
+	limits     map[credentials.Ref]Limits
+	identities map[credentials.Ref]cachedIdentity
+}
+
+type cachedIdentity struct {
+	raw      string
+	identity *age.X25519Identity
 }
 
 func NewFetchers(instances *InstanceStore, creds credentials.Store, version string, log zerolog.Logger) *Fetchers {
 	return &Fetchers{
-		instances: instances,
-		creds:     creds,
-		version:   version,
-		log:       log,
-		nodes:     map[string]*nodeState{},
-		limits:    map[credentials.Ref]Limits{},
+		instances:  instances,
+		creds:      creds,
+		version:    version,
+		log:        log,
+		nodes:      map[string]*nodeState{},
+		limits:     map[credentials.Ref]Limits{},
+		identities: map[credentials.Ref]cachedIdentity{},
 	}
 }
 
@@ -76,6 +84,53 @@ func (f *Fetchers) InvalidateAll() {
 	defer f.mu.Unlock()
 	f.nodes = map[string]*nodeState{}
 	f.limits = map[credentials.Ref]Limits{}
+	f.identities = map[credentials.Ref]cachedIdentity{}
+}
+
+// identity returns the account's age identity, or nil when this device holds
+// none. The keychain is read on every call so a reconnect applies on the next
+// tick; only the parse is cached. A stored value that does not parse is
+// logged and treated as absent, so its deliveries show as placeholders rather
+// than stalling the feed.
+func (f *Fetchers) identity(ref credentials.Ref) (*age.X25519Identity, error) {
+	key := ageRef(ref.Account)
+	raw, err := f.creds.Get(key)
+	if errors.Is(err, credentials.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read relay age identity: %w", err)
+	}
+
+	f.mu.Lock()
+	cached, ok := f.identities[key]
+	f.mu.Unlock()
+	if ok && cached.raw == raw {
+		return cached.identity, nil
+	}
+	identity, err := age.ParseX25519Identity(raw)
+	if err != nil {
+		f.log.Warn().Err(err).Str("credential", key.String()).Msg("relay: stored age identity does not parse")
+		return nil, nil
+	}
+	f.mu.Lock()
+	f.identities[key] = cachedIdentity{raw: raw, identity: identity}
+	f.mu.Unlock()
+	return identity, nil
+}
+
+// RecentDeliveries is the node editor's preview, opening sealed deliveries
+// with the account's identity when this device holds it.
+func (f *Fetchers) RecentDeliveries(ctx context.Context, ref credentials.Ref, sourceID string, limit int) ([]RecentDelivery, error) {
+	client, err := f.For(ref)
+	if err != nil {
+		return nil, err
+	}
+	identity, err := f.identity(ref)
+	if err != nil {
+		return nil, err
+	}
+	return client.RecentDeliveries(ctx, sourceID, limit, identity)
 }
 
 func (f *Fetchers) state(nodeID string) *nodeState {

@@ -3,6 +3,7 @@ package relay
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,6 +18,10 @@ import (
 )
 
 const sourceName = "relay"
+
+// ErrInvalid is the relay refusing a well-formed request it cannot apply, such
+// as turning encryption on with no recipient. Its message names why.
+var ErrInvalid = errors.New("relay: invalid request")
 
 // Client is the relay's /v1 API. Error bodies are the relay's {kind, message}
 // shape, which sourcehttp already reads the message out of.
@@ -197,11 +202,9 @@ func (c *Client) call(ctx context.Context, method, path string, in, out any) err
 	case http.MethodGet:
 		resp, err = c.api.Get(ctx, path)
 	case http.MethodPost:
-		var body io.Reader = http.NoBody
-		if in != nil {
-			body = httpclient.JSONBody(in)
-		}
-		resp, err = c.api.Post(ctx, path, body, httpclient.JSONContent())
+		resp, err = c.api.Post(ctx, path, requestBody(in), httpclient.JSONContent())
+	case http.MethodPatch:
+		resp, err = c.api.Patch(ctx, path, requestBody(in), httpclient.JSONContent())
 	case http.MethodDelete:
 		resp, err = c.api.Delete(ctx, path)
 	default:
@@ -212,6 +215,9 @@ func (c *Client) call(ctx context.Context, method, path string, in, out any) err
 	}
 	defer resp.Body.Close() //nolint:errcheck // read-only body close
 
+	if resp.StatusCode == http.StatusUnprocessableEntity {
+		return &refusal{sentinel: ErrInvalid, message: readMessage(resp.Body)}
+	}
 	if err := c.errs.Status(resp); err != nil {
 		return err
 	}
@@ -222,4 +228,11 @@ func (c *Client) call(ctx context.Context, method, path string, in, out any) err
 		return c.errs.Errorf("decode %s: %w", path, err)
 	}
 	return nil
+}
+
+func requestBody(in any) io.Reader {
+	if in == nil {
+		return http.NoBody
+	}
+	return httpclient.JSONBody(in)
 }

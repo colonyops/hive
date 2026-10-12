@@ -3,7 +3,11 @@
 
 export type {
     Instance,
+    Limits,
+    Me,
     Methods,
     RecentDelivery,
-    SourceView
+    RecipientView,
+    SourceView,
+    Usage
 } from "./models.js";

@@ -31,6 +31,16 @@ type Token struct {
 	LastUsedAt time.Time
 }
 
+// Recipient is an age X25519 public key a desktop registered, in its
+// "age1..." form.
+type Recipient struct {
+	ID        string
+	Email     string
+	Recipient string
+	Device    string
+	CreatedAt time.Time
+}
+
 type Source struct {
 	ID          string // uuid v4
 	Email       string

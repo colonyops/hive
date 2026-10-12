@@ -91,6 +91,29 @@ func CreatedTokenFrom(plaintext string, tok relay.Token) CreatedToken {
 	return CreatedToken{Token: plaintext, ID: tok.ID, Name: tok.Device, Kind: tok.Kind, CreatedAt: tok.CreatedAt}
 }
 
+type Recipient struct {
+	ID        string    `json:"id"`
+	Recipient string    `json:"recipient"`
+	Device    string    `json:"device"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+func RecipientFrom(r relay.Recipient) Recipient {
+	return Recipient{ID: r.ID, Recipient: r.Recipient, Device: r.Device, CreatedAt: r.CreatedAt}
+}
+
+type Recipients struct {
+	Recipients []Recipient `json:"recipients"`
+}
+
+func RecipientsFrom(rs []relay.Recipient) Recipients {
+	out := make([]Recipient, 0, len(rs))
+	for _, r := range rs {
+		out = append(out, RecipientFrom(r))
+	}
+	return Recipients{Recipients: out}
+}
+
 type Me struct {
 	Email      string        `json:"email"`
 	Encryption bool          `json:"encryption"`

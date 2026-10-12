@@ -17,6 +17,7 @@ type Store interface {
 	Deliveries() DeliveryStore
 	AuthCodes() AuthCodeStore
 	Outbox() OutboxStore
+	Recipients() RecipientStore
 	Close() error
 }
 
@@ -26,7 +27,7 @@ type AccountStore interface {
 	// only: BytesUsed belongs to Append and AddBytes, CreatedAt to the first
 	// insert, so a Get-then-Put from any service can never reset either.
 	Put(ctx context.Context, a Account) error
-	Delete(ctx context.Context, email string) error // cascades sources, deliveries, tokens
+	Delete(ctx context.Context, email string) error // cascades sources, deliveries, tokens, recipients
 	List(ctx context.Context) ([]Account, error)
 	// AddBytes credits bytes back after a trim or an expiry and returns the
 	// new value. Debiting happens inside DeliveryStore.Append, never here.
@@ -66,6 +67,15 @@ type DeliveryStore interface {
 	DeleteBefore(ctx context.Context, email, sourceID string, before time.Time) (n int, bytes int64, err error)
 	TrimTo(ctx context.Context, email, sourceID string, keep int) (n int, bytes int64, err error)
 	Stats(ctx context.Context, sourceID string) (count int, bytes int64, err error)
+}
+
+type RecipientStore interface {
+	// Put inserts r, or for an (Email, Recipient) pair already stored updates
+	// Device only, keeping the first ID and CreatedAt: one desktop
+	// registering twice is one row.
+	Put(ctx context.Context, r Recipient) error
+	Delete(ctx context.Context, email, id string) error
+	ListByEmail(ctx context.Context, email string) ([]Recipient, error) // CreatedAt then ID order
 }
 
 // AuthCodeStore holds at most one pending sign-in code per email.

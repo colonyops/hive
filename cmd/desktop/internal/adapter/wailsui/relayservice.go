@@ -72,3 +72,22 @@ func (s *RelayService) DeleteSource(ctx context.Context, account, id string) err
 func (s *RelayService) RecentDeliveries(ctx context.Context, account, sourceID string, limit int) ([]relay.RecentDelivery, error) {
 	return s.relay.RecentDeliveries(ctx, account, sourceID, limit)
 }
+
+func (s *RelayService) Me(ctx context.Context, account string) (relay.Me, error) {
+	return s.relay.Me(ctx, account)
+}
+
+// SetEncryption turns sealing on or off for later deliveries. Turning it on
+// needs at least one registered recipient.
+func (s *RelayService) SetEncryption(ctx context.Context, account string, on bool) (relay.Me, error) {
+	return s.relay.SetEncryption(ctx, account, on)
+}
+
+// ListRecipients lists the devices the relay seals deliveries to.
+func (s *RelayService) ListRecipients(ctx context.Context, account string) ([]relay.RecipientView, error) {
+	return s.relay.ListRecipients(ctx, account)
+}
+
+func (s *RelayService) RevokeRecipient(ctx context.Context, account, id string) error {
+	return s.relay.RevokeRecipient(ctx, account, id)
+}

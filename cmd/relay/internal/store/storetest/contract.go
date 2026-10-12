@@ -37,6 +37,7 @@ func Run(t *testing.T, open func(t *testing.T) relay.Store) {
 	t.Run("deliveries", func(t *testing.T) { testDeliveries(t, fresh) })
 	t.Run("auth codes", func(t *testing.T) { testAuthCodes(t, fresh) })
 	t.Run("outbox", func(t *testing.T) { testOutbox(t, fresh) })
+	t.Run("recipients", func(t *testing.T) { testRecipients(t, fresh) })
 }
 
 func putAccount(t *testing.T, s relay.Store, email string) {
@@ -653,5 +654,89 @@ func testOutbox(t *testing.T, open func(t *testing.T) relay.Store) {
 		assert.Equal(t, 1, due[0].Attempts)
 		assert.True(t, next.Equal(due[0].NextAt))
 		assert.ErrorIs(t, s.Outbox().MarkFailed(ctx, "missing", next), relay.ErrNotFound)
+	})
+}
+
+func recipient(email, id, key string, at time.Time) relay.Recipient {
+	return relay.Recipient{ID: id, Email: email, Recipient: key, Device: "dev-" + id, CreatedAt: at}
+}
+
+func recipientIDs(rs []relay.Recipient) []string {
+	out := make([]string, len(rs))
+	for i, r := range rs {
+		out[i] = r.ID
+	}
+	return out
+}
+
+func testRecipients(t *testing.T, open func(t *testing.T) relay.Store) {
+	t.Run("put and list order", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		putAccount(t, s, alice)
+		putAccount(t, s, bob)
+		require.NoError(t, s.Recipients().Put(ctx, recipient(alice, "r3", "age1c", epoch.Add(time.Minute))))
+		require.NoError(t, s.Recipients().Put(ctx, recipient(alice, "r2", "age1b", epoch)))
+		require.NoError(t, s.Recipients().Put(ctx, recipient(alice, "r1", "age1a", epoch)))
+		require.NoError(t, s.Recipients().Put(ctx, recipient(bob, "b1", "age1a", epoch)))
+
+		got, err := s.Recipients().ListByEmail(ctx, alice)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"r1", "r2", "r3"}, recipientIDs(got))
+		assert.Equal(t, "age1a", got[0].Recipient)
+		assert.Equal(t, "dev-r1", got[0].Device)
+		assert.Equal(t, alice, got[0].Email)
+		assert.True(t, epoch.Equal(got[0].CreatedAt))
+
+		none, err := s.Recipients().ListByEmail(ctx, "nobody@example.com")
+		require.NoError(t, err)
+		assert.Empty(t, none)
+	})
+
+	t.Run("put upserts on the same recipient", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		putAccount(t, s, alice)
+		require.NoError(t, s.Recipients().Put(ctx, recipient(alice, "r1", "age1a", epoch)))
+		again := recipient(alice, "r2", "age1a", epoch.Add(time.Hour))
+		again.Device = "renamed"
+		require.NoError(t, s.Recipients().Put(ctx, again))
+
+		got, err := s.Recipients().ListByEmail(ctx, alice)
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		assert.Equal(t, "r1", got[0].ID)
+		assert.Equal(t, "renamed", got[0].Device)
+		assert.True(t, epoch.Equal(got[0].CreatedAt))
+	})
+
+	t.Run("delete is scoped by email", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		putAccount(t, s, alice)
+		putAccount(t, s, bob)
+		require.NoError(t, s.Recipients().Put(ctx, recipient(alice, "r1", "age1a", epoch)))
+
+		require.ErrorIs(t, s.Recipients().Delete(ctx, bob, "r1"), relay.ErrNotFound)
+		require.ErrorIs(t, s.Recipients().Delete(ctx, alice, "missing"), relay.ErrNotFound)
+		require.NoError(t, s.Recipients().Delete(ctx, alice, "r1"))
+		require.ErrorIs(t, s.Recipients().Delete(ctx, alice, "r1"), relay.ErrNotFound)
+	})
+
+	t.Run("account delete cascades", func(t *testing.T) {
+		s := open(t)
+		ctx := t.Context()
+		putAccount(t, s, alice)
+		putAccount(t, s, bob)
+		require.NoError(t, s.Recipients().Put(ctx, recipient(alice, "r1", "age1a", epoch)))
+		require.NoError(t, s.Recipients().Put(ctx, recipient(bob, "b1", "age1b", epoch)))
+
+		require.NoError(t, s.Accounts().Delete(ctx, alice))
+		got, err := s.Recipients().ListByEmail(ctx, alice)
+		require.NoError(t, err)
+		assert.Empty(t, got)
+		got, err = s.Recipients().ListByEmail(ctx, bob)
+		require.NoError(t, err)
+		assert.Len(t, got, 1)
 	})
 }

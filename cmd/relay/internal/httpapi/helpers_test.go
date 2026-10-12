@@ -55,14 +55,15 @@ func newSignInHarness(t *testing.T, limits relay.Limits, setup signInSetup, trus
 		allowFn = allow.Allow
 	}
 	core := Core{
-		Auth:    relay.NewAuth(store, allowFn),
-		SignIn:  relay.NewSignIn(store, allow, setup.users, store.Outbox(), testPublicURL, len(setup.patterns) > 0),
-		Sources: relay.NewSources(store, limits, testPublicURL),
-		Ingress: relay.NewIngress(store, limits),
-		Feed:    relay.NewFeed(store),
-		Store:   store,
-		Limits:  limits,
-		Version: testVersion,
+		Auth:     relay.NewAuth(store, allowFn),
+		SignIn:   relay.NewSignIn(store, allow, setup.users, store.Outbox(), testPublicURL, len(setup.patterns) > 0),
+		Sources:  relay.NewSources(store, limits, testPublicURL),
+		Ingress:  relay.NewIngress(store, limits),
+		Feed:     relay.NewFeed(store),
+		Accounts: relay.NewAccounts(store),
+		Store:    store,
+		Limits:   limits,
+		Version:  testVersion,
 	}
 	cfg := config.Config{TrustedProxies: trusted, Limits: limits}
 	return &harness{t: t, api: newAPI(core, cfg, zerolog.Nop()), core: core, allow: allow}

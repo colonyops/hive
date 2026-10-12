@@ -2,7 +2,10 @@ package relay
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"filippo.io/age"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/relayformat"
 )
@@ -31,7 +34,7 @@ type RecentDelivery struct {
 // RecentDeliveries returns the newest limit deliveries, oldest first. The log
 // is read forward from the start because the relay pages only by cursor; the
 // per-source cap keeps that to a couple of pages.
-func (c *Client) RecentDeliveries(ctx context.Context, sourceID string, limit int) ([]RecentDelivery, error) {
+func (c *Client) RecentDeliveries(ctx context.Context, sourceID string, limit int, identity *age.X25519Identity) ([]RecentDelivery, error) {
 	if limit <= 0 {
 		limit = defaultPreviewCount
 	}
@@ -55,12 +58,12 @@ func (c *Client) RecentDeliveries(ctx context.Context, sourceID string, limit in
 	}
 	out := make([]RecentDelivery, 0, len(tail))
 	for _, view := range tail {
-		out = append(out, preview(view))
+		out = append(out, preview(identity, view))
 	}
 	return out, nil
 }
 
-func preview(view DeliveryView) RecentDelivery {
+func preview(identity *age.X25519Identity, view DeliveryView) RecentDelivery {
 	rd := RecentDelivery{
 		ID:          view.ID,
 		ReceivedAt:  view.ReceivedAt,
@@ -68,15 +71,16 @@ func preview(view DeliveryView) RecentDelivery {
 		Path:        view.Path,
 		ContentType: view.ContentType,
 	}
-	if view.Enc != "" {
-		rd.Error = "this delivery is encrypted; reading sealed deliveries arrives in a later release"
+	d, err := decode(identity, view)
+	if errors.Is(err, errUnopenable) {
+		rd.Error = "this delivery is encrypted and this device holds no key that opens it"
 		return rd
 	}
-	d, err := toDelivery(view)
 	if err != nil {
 		rd.Error = err.Error()
 		return rd
 	}
+	rd.Method, rd.Path, rd.ContentType = d.Method, d.Path, d.ContentType
 	rd.Body = string(d.Body)
 	items, dialect, err := relayformat.Parse(relayformat.DialectAuto, d)
 	if err != nil {

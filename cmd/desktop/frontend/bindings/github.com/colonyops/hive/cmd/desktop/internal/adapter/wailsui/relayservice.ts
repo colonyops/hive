@@ -43,6 +43,13 @@ export function Disconnect(account: string): $CancellablePromise<void> {
     return $Call.ByID(3643029480, account);
 }
 
+/**
+ * ListRecipients lists the devices the relay seals deliveries to.
+ */
+export function ListRecipients(account: string): $CancellablePromise<relay$0.RecipientView[] | null> {
+    return $Call.ByID(589531902, account);
+}
+
 export function ListSources(account: string): $CancellablePromise<relay$0.SourceView[] | null> {
     return $Call.ByID(3046258772, account);
 }
@@ -52,6 +59,10 @@ export function ListSources(account: string): $CancellablePromise<relay$0.Source
  */
 export function Login(url: string, email: string, password: string): $CancellablePromise<relay$0.Instance> {
     return $Call.ByID(3486727075, url, email, password);
+}
+
+export function Me(account: string): $CancellablePromise<relay$0.Me> {
+    return $Call.ByID(2813362140, account);
 }
 
 /**
@@ -65,12 +76,24 @@ export function RecentDeliveries(account: string, sourceID: string, limit: numbe
     return $Call.ByID(3356225233, account, sourceID, limit);
 }
 
+export function RevokeRecipient(account: string, id: string): $CancellablePromise<void> {
+    return $Call.ByID(3656342875, account, id);
+}
+
 /**
  * RotateSource returns the new ingress URL; the old one stops accepting
  * deliveries.
  */
 export function RotateSource(account: string, id: string): $CancellablePromise<string> {
     return $Call.ByID(2054435400, account, id);
+}
+
+/**
+ * SetEncryption turns sealing on or off for later deliveries. Turning it on
+ * needs at least one registered recipient.
+ */
+export function SetEncryption(account: string, on: boolean): $CancellablePromise<relay$0.Me> {
+    return $Call.ByID(837913907, account, on);
 }
 
 /**

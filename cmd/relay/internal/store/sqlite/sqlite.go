@@ -49,13 +49,14 @@ func Open(ctx context.Context, path string) (relay.Store, error) {
 	return &store{conn: conn, q: db.New(conn)}, nil
 }
 
-func (s *store) Accounts() relay.AccountStore    { return accounts{s} }
-func (s *store) Tokens() relay.TokenStore        { return tokens{s} }
-func (s *store) Sources() relay.SourceStore      { return sources{s} }
-func (s *store) Deliveries() relay.DeliveryStore { return deliveries{s} }
-func (s *store) AuthCodes() relay.AuthCodeStore  { return authCodes{s} }
-func (s *store) Outbox() relay.OutboxStore       { return outbox{s} }
-func (s *store) Close() error                    { return s.conn.Close() }
+func (s *store) Accounts() relay.AccountStore     { return accounts{s} }
+func (s *store) Tokens() relay.TokenStore         { return tokens{s} }
+func (s *store) Sources() relay.SourceStore       { return sources{s} }
+func (s *store) Deliveries() relay.DeliveryStore  { return deliveries{s} }
+func (s *store) AuthCodes() relay.AuthCodeStore   { return authCodes{s} }
+func (s *store) Outbox() relay.OutboxStore        { return outbox{s} }
+func (s *store) Recipients() relay.RecipientStore { return recipients{s} }
+func (s *store) Close() error                     { return s.conn.Close() }
 
 // tx runs fn in one write transaction with queries bound to it. With a single
 // pooled connection, a query on s.q inside fn would wait forever for the
@@ -557,4 +558,39 @@ func (o outbox) MarkSent(ctx context.Context, id string, at time.Time) error {
 func (o outbox) MarkFailed(ctx context.Context, id string, next time.Time) error {
 	n, err := o.s.q.MarkMailFailed(ctx, db.MarkMailFailedParams{NextAt: toNanos(next), ID: id})
 	return notFoundUnless("mark mail failed", n, err)
+}
+
+type recipients struct{ s *store }
+
+func (r recipients) Put(ctx context.Context, rec relay.Recipient) error {
+	return wrap("put recipient", r.s.q.PutRecipient(ctx, db.PutRecipientParams{
+		ID:        rec.ID,
+		Email:     rec.Email,
+		Recipient: rec.Recipient,
+		Device:    rec.Device,
+		CreatedAt: toNanos(rec.CreatedAt),
+	}))
+}
+
+func (r recipients) Delete(ctx context.Context, email, id string) error {
+	n, err := r.s.q.DeleteRecipient(ctx, db.DeleteRecipientParams{Email: email, ID: id})
+	return notFoundUnless("delete recipient", n, err)
+}
+
+func (r recipients) ListByEmail(ctx context.Context, email string) ([]relay.Recipient, error) {
+	rows, err := r.s.q.ListRecipientsByEmail(ctx, email)
+	if err != nil {
+		return nil, wrap("list recipients", err)
+	}
+	out := make([]relay.Recipient, len(rows))
+	for i, row := range rows {
+		out[i] = relay.Recipient{
+			ID:        row.ID,
+			Email:     row.Email,
+			Recipient: row.Recipient,
+			Device:    row.Device,
+			CreatedAt: fromNanos(row.CreatedAt),
+		}
+	}
+	return out, nil
 }

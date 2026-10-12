@@ -87,23 +87,25 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 
 	auth := relay.NewAuth(store, allow.Allow)
 	core := httpapi.Core{
-		Auth:    auth,
-		SignIn:  signIn,
-		Sources: relay.NewSources(store, cfg.Limits, publicURL),
-		Ingress: relay.NewIngress(store, cfg.Limits),
-		Feed:    relay.NewFeed(store),
-		Store:   store,
-		Limits:  cfg.Limits,
-		Version: version,
+		Auth:     auth,
+		SignIn:   signIn,
+		Sources:  relay.NewSources(store, cfg.Limits, publicURL),
+		Ingress:  relay.NewIngress(store, cfg.Limits),
+		Feed:     relay.NewFeed(store),
+		Accounts: relay.NewAccounts(store),
+		Store:    store,
+		Limits:   cfg.Limits,
+		Version:  version,
 	}
 	core.MCP = mcpsrv.New(mcpsrv.Core{
-		Auth:    core.Auth,
-		SignIn:  core.SignIn,
-		Sources: core.Sources,
-		Feed:    core.Feed,
-		Store:   core.Store,
-		Limits:  core.Limits,
-		Version: core.Version,
+		Auth:     core.Auth,
+		SignIn:   core.SignIn,
+		Sources:  core.Sources,
+		Feed:     core.Feed,
+		Accounts: core.Accounts,
+		Store:    core.Store,
+		Limits:   core.Limits,
+		Version:  core.Version,
 	}, log).Handler()
 	handler := httpapi.New(core, cfg, log)
 

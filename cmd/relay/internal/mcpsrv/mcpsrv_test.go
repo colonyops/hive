@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"filippo.io/age"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -44,17 +45,18 @@ func newEnv(t *testing.T) *env {
 	publicURL := "http://" + srv.Listener.Addr().String()
 	allow := relay.NewAllowlist(nil, nil)
 	core := httpapi.Core{
-		Auth:    relay.NewAuth(store, nil),
-		SignIn:  relay.NewSignIn(store, allow, nil, store.Outbox(), publicURL, false),
-		Sources: relay.NewSources(store, limits, publicURL),
-		Ingress: relay.NewIngress(store, limits),
-		Feed:    relay.NewFeed(store),
-		Store:   store,
-		Limits:  limits,
-		Version: testVersion,
+		Auth:     relay.NewAuth(store, nil),
+		SignIn:   relay.NewSignIn(store, allow, nil, store.Outbox(), publicURL, false),
+		Sources:  relay.NewSources(store, limits, publicURL),
+		Ingress:  relay.NewIngress(store, limits),
+		Feed:     relay.NewFeed(store),
+		Accounts: relay.NewAccounts(store),
+		Store:    store,
+		Limits:   limits,
+		Version:  testVersion,
 	}
 	core.MCP = mcpsrv.New(mcpsrv.Core{
-		Auth: core.Auth, SignIn: core.SignIn, Sources: core.Sources, Feed: core.Feed,
+		Auth: core.Auth, SignIn: core.SignIn, Sources: core.Sources, Feed: core.Feed, Accounts: core.Accounts,
 		Store: store, Limits: limits, Version: testVersion,
 	}, zerolog.Nop()).Handler()
 	srv.Config.Handler = httpapi.New(core, config.Config{Limits: limits}, zerolog.Nop())
@@ -141,6 +143,7 @@ func TestToolsList(t *testing.T) {
 	assert.ElementsMatch(t, []string{
 		"whoami", "list_sources", "create_source", "update_source", "delete_source",
 		"rotate_ingress", "list_deliveries", "list_tokens", "create_token", "revoke_token",
+		"set_encryption", "list_recipients", "add_recipient", "remove_recipient",
 	}, names)
 }
 
@@ -298,4 +301,30 @@ func TestMCPRequiresBearer(t *testing.T) {
 		assert.Equal(t, "unauthorized", body.Kind)
 		assert.Equal(t, testVersion, resp.Header.Get(httpapi.VersionHeader))
 	}
+}
+
+func TestEncryptionAndRecipientTools(t *testing.T) {
+	e := newEnv(t)
+	cs := e.session(e.mint())
+	identity, err := age.GenerateX25519Identity()
+	require.NoError(t, err)
+
+	assert.Contains(t, callErr(t, cs, "set_encryption", map[string]any{"on": true}), "invalid")
+	assert.Contains(t, callErr(t, cs, "add_recipient", map[string]any{"recipient": "nope"}), "invalid")
+
+	added := call[wire.Recipient](t, cs, "add_recipient", map[string]any{"recipient": identity.Recipient().String(), "device": "laptop"})
+	assert.Equal(t, "laptop", added.Device)
+	list := call[wire.Recipients](t, cs, "list_recipients", nil)
+	assert.Equal(t, []wire.Recipient{added}, list.Recipients)
+
+	me := call[wire.Me](t, cs, "set_encryption", map[string]any{"on": true})
+	assert.True(t, me.Encryption)
+	assert.True(t, call[wire.Me](t, cs, "whoami", nil).Encryption)
+
+	assert.Contains(t, callErr(t, cs, "remove_recipient", map[string]any{"id": added.ID}), "invalid")
+	assert.False(t, call[wire.Me](t, cs, "set_encryption", map[string]any{"on": false}).Encryption)
+	gone := call[map[string]any](t, cs, "remove_recipient", map[string]any{"id": added.ID})
+	assert.Equal(t, true, gone["deleted"])
+	assert.Contains(t, callErr(t, cs, "remove_recipient", map[string]any{"id": added.ID}), "not_found")
+	assert.Empty(t, call[wire.Recipients](t, cs, "list_recipients", nil).Recipients)
 }

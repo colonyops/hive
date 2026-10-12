@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -37,6 +38,11 @@ func (s *source) Produce(ctx context.Context, emit func(models.Msg) error) error
 		return fmt.Errorf("relay source %q: %w", s.id, err)
 	}
 
+	identity, err := s.fetchers.identity(s.ref)
+	if err != nil {
+		return fmt.Errorf("relay source %q: %w", s.id, err)
+	}
+
 	st := s.fetchers.state(s.id)
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -63,8 +69,14 @@ func (s *source) Produce(ctx context.Context, emit func(models.Msg) error) error
 	}
 	var batch []parsed
 	for _, view := range fetched {
-		d, ok := s.delivery(view)
-		if !ok {
+		d, err := decode(identity, view)
+		if errors.Is(err, errUnopenable) {
+			s.fetchers.log.Debug().Err(err).Str("node", s.id).Str("delivery", view.ID).Msg("relay: showing a sealed delivery as a placeholder")
+			batch = append(batch, parsed{key: view.ID, it: placeholder(view)})
+			continue
+		}
+		if err != nil {
+			s.fetchers.log.Warn().Err(err).Str("node", s.id).Str("delivery", view.ID).Msg("relay: skipping an undecodable delivery")
 			continue
 		}
 		items, _, err := relayformat.Parse(s.cfg.dialect(), d)
@@ -102,21 +114,6 @@ func (s *source) Produce(ctx context.Context, emit func(models.Msg) error) error
 		}
 	}
 	return nil
-}
-
-// delivery decodes a wire row. A sealed row needs the account's age identity,
-// which arrives with encryption in a later release, so it is skipped.
-func (s *source) delivery(view DeliveryView) (relayformat.Delivery, bool) {
-	if view.Enc != "" {
-		s.fetchers.log.Debug().Str("node", s.id).Str("delivery", view.ID).Msg("relay: skipping a sealed delivery")
-		return relayformat.Delivery{}, false
-	}
-	d, err := toDelivery(view)
-	if err != nil {
-		s.fetchers.log.Warn().Err(err).Str("node", s.id).Str("delivery", view.ID).Msg("relay: skipping an undecodable delivery")
-		return relayformat.Delivery{}, false
-	}
-	return d, true
 }
 
 func toDelivery(view DeliveryView) (relayformat.Delivery, error) {

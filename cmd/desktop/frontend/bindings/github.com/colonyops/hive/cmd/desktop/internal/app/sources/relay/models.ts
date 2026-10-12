@@ -11,6 +11,27 @@ export interface Instance {
     "email": string;
 }
 
+export interface Limits {
+    "body_bytes": number;
+    "header_bytes": number;
+    "deliveries_per_source": number;
+    "bytes_per_account": number;
+    "sources_per_account": number;
+    "retention_seconds": number;
+}
+
+/**
+ * Me is the account a key authenticates as.
+ */
+export interface Me {
+    "email": string;
+    "encryption": boolean;
+    "limits": Limits;
+    "usage": Usage;
+    "methods": Methods;
+    "version": string;
+}
+
 export interface Methods {
     "email_code": boolean;
     "password": boolean;
@@ -36,6 +57,17 @@ export interface RecentDelivery {
 }
 
 /**
+ * RecipientView is one age recipient registered on the account, one per
+ * desktop.
+ */
+export interface RecipientView {
+    "id": string;
+    "recipient": string;
+    "device": string;
+    "created_at": string;
+}
+
+/**
  * SourceView is one relay source. IngressURL is set only when the source was
  * just created; the relay never returns it again.
  */
@@ -47,4 +79,9 @@ export interface SourceView {
     "deliveries": number;
     "bytes": number;
     "ingress_url"?: string;
+}
+
+export interface Usage {
+    "bytes": number;
+    "sources": number;
 }

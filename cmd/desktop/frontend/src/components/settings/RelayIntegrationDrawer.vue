@@ -2,6 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { Browser } from '@wailsio/runtime'
 import RelayMark from '../marks/RelayMark.vue'
+import AppSelect from '../ui/AppSelect.vue'
+import AppSwitch from '../ui/AppSwitch.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import DrawerSheet from '../ui/DrawerSheet.vue'
 import FormField from '../ui/FormField.vue'
@@ -11,15 +13,25 @@ import TextInput from '../ui/TextInput.vue'
 import ConnectedAccountsField from './ConnectedAccountsField.vue'
 import { useIntegrations } from '../../composables/useIntegrations'
 import { useTokenConnection } from '../../composables/useTokenConnection'
+import { relativeTimeLabel } from '../../lib/age'
+import { errorText } from '../../lib/appError'
 import {
   ConnectWithKey,
   Disconnect,
+  ListRecipients,
   Login,
+  Me,
   Methods,
+  RevokeRecipient,
+  SetEncryption,
   StartEmail,
   VerifyEmail,
 } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/relayservice'
-import type { Methods as RelayMethods } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/sources/relay/models'
+import type {
+  Me as RelayMe,
+  Methods as RelayMethods,
+  RecipientView,
+} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/sources/relay/models'
 
 type Method = 'email' | 'password' | 'key'
 
@@ -130,6 +142,61 @@ function changeEmail(): void {
   error.value = null
 }
 
+const chosenAccount = ref('')
+const encryptionAccount = computed(() =>
+  accounts.value.includes(chosenAccount.value) ? chosenAccount.value : (accounts.value[0] ?? ''),
+)
+const accountOptions = computed(() => accounts.value.map((account) => ({ value: account, label: account })))
+const me = ref<RelayMe | null>(null)
+const recipients = ref<RecipientView[]>([])
+const encryptionBusy = ref(false)
+const revoking = ref<string | null>(null)
+
+async function encryptionCall(call: () => Promise<void>, fallback: string): Promise<void> {
+  error.value = null
+  try {
+    await call()
+  } catch (err) {
+    error.value = errorText(err, fallback)
+  }
+}
+
+async function loadEncryption(account: string): Promise<void> {
+  me.value = null
+  recipients.value = []
+  if (account === '') return
+  await encryptionCall(async () => {
+    const [loadedMe, loadedRecipients] = await Promise.all([Me(account), ListRecipients(account)])
+    // A slow answer for an account the user has since switched away from is stale.
+    if (account !== encryptionAccount.value) return
+    me.value = loadedMe
+    recipients.value = loadedRecipients ?? []
+  }, 'Could not read the relay account.')
+}
+
+async function setEncryption(on: boolean): Promise<void> {
+  const account = encryptionAccount.value
+  if (account === '' || encryptionBusy.value) return
+  encryptionBusy.value = true
+  await encryptionCall(async () => {
+    me.value = await SetEncryption(account, on)
+  }, 'The relay did not change encryption.')
+  encryptionBusy.value = false
+}
+
+async function revoke(id: string): Promise<void> {
+  const account = encryptionAccount.value
+  if (account === '' || revoking.value !== null) return
+  revoking.value = id
+  await encryptionCall(async () => {
+    await RevokeRecipient(account, id)
+    recipients.value = recipients.value.filter((r) => r.id !== id)
+  }, 'The relay did not revoke the device.')
+  revoking.value = null
+}
+
+watch(encryptionAccount, (account) => void loadEncryption(account), { immediate: true })
+
 onMounted(() => void checkMethods())
 </script>
 
@@ -146,6 +213,56 @@ onMounted(() => void checkMethods())
     @close="emit('close')"
   >
     <ConnectedAccountsField :accounts="accounts" noun="account" testid="relay" :disconnect="disconnect" />
+
+    <FormField v-if="accounts.length > 0" label="Encryption" testid="relay-encryption" class="mt-5">
+      <div class="flex flex-col gap-3">
+        <AppSelect
+          v-if="accounts.length > 1"
+          :model-value="encryptionAccount"
+          :options="accountOptions"
+          size="sm"
+          aria-label="Relay account"
+          testid="relay-encryption-account"
+          @update:model-value="chosenAccount = $event"
+        />
+        <AppSwitch
+          :model-value="me?.encryption ?? false"
+          label="Encrypt deliveries on the relay"
+          hint="Later deliveries are sealed to this account's devices, so the relay cannot read them."
+          :disabled="me === null || encryptionBusy"
+          testid="relay-encryption-toggle"
+          @update:model-value="setEncryption"
+        />
+        <div class="flex flex-col gap-2" data-testid="relay-recipients">
+          <div
+            v-for="recipient in recipients"
+            :key="recipient.id"
+            class="flex items-center justify-between gap-3 rounded-lg border border-border bg-raised px-3 py-2.5"
+            :data-testid="`relay-recipient-${recipient.id}`"
+          >
+            <div class="min-w-0">
+              <div class="truncate text-body text-text">{{ recipient.device || 'Unnamed device' }}</div>
+              <div class="text-xs text-text-3">Added {{ relativeTimeLabel(Date.parse(recipient.created_at)) }}</div>
+            </div>
+            <BaseButton
+              variant="secondary"
+              size="sm"
+              :busy="revoking === recipient.id"
+              :data-testid="`relay-recipient-${recipient.id}-revoke`"
+              @click="revoke(recipient.id)"
+              >Revoke</BaseButton
+            >
+          </div>
+          <div
+            v-if="me !== null && recipients.length === 0"
+            class="text-xs text-text-3"
+            data-testid="relay-recipients-empty"
+          >
+            No device can decrypt this account's deliveries.
+          </div>
+        </div>
+      </div>
+    </FormField>
 
     <FormField
       label="Connect a relay"

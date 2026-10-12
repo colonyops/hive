@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"filippo.io/age"
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/sourcehttp"
@@ -71,7 +72,7 @@ func (a *Authenticator) ConnectWithKey(ctx context.Context, rawURL, key string) 
 		return Instance{}, errors.New("relay: the API key authenticates no account")
 	}
 
-	return a.store(base, host, me.Email, key)
+	return a.store(ctx, base, host, me.Email, key)
 }
 
 // StartEmail asks the relay to mail a sign-in code. It stores nothing; the
@@ -103,7 +104,7 @@ func (a *Authenticator) VerifyEmail(ctx context.Context, rawURL, email, code str
 	if err != nil {
 		return Instance{}, err
 	}
-	return a.storeSignedIn(base, host, signed)
+	return a.storeSignedIn(ctx, base, host, signed)
 }
 
 // Login trades a password for a device token and connects the account.
@@ -123,22 +124,30 @@ func (a *Authenticator) Login(ctx context.Context, rawURL, email, password strin
 	if err != nil {
 		return Instance{}, err
 	}
-	return a.storeSignedIn(base, host, signed)
+	return a.storeSignedIn(ctx, base, host, signed)
 }
 
-func (a *Authenticator) storeSignedIn(base, host string, signed SignedIn) (Instance, error) {
+func (a *Authenticator) storeSignedIn(ctx context.Context, base, host string, signed SignedIn) (Instance, error) {
 	if signed.Token == "" || signed.Email == "" {
 		return Instance{}, errors.New("relay: the sign-in response carries no token")
 	}
-	return a.store(base, host, signed.Email, signed.Token)
+	return a.store(ctx, base, host, signed.Email, signed.Token)
 }
 
-// store persists token and the account's binding. The account is keyed by the
-// email the relay reports, never the one typed, so it matches what the relay
-// authenticates the token as.
-func (a *Authenticator) store(base, host, email, token string) (Instance, error) {
+// store persists token, the account's binding, and this device's age
+// identity, then registers the identity's recipient. The account is keyed by
+// the email the relay reports, never the one typed, so it matches what the
+// relay authenticates the token as.
+//
+// A failed registration undoes everything written here: a desktop the relay
+// does not seal to would show every encrypted delivery as a placeholder.
+func (a *Authenticator) store(ctx context.Context, base, host, email, token string) (Instance, error) {
 	ref := credentials.Ref{Provider: Provider, Account: accountID(host, email)}
 	previous, hadPrevious, err := a.previousKey(ref)
+	if err != nil {
+		return Instance{}, err
+	}
+	previousBinding, err := a.instances.Get(ref)
 	if err != nil {
 		return Instance{}, err
 	}
@@ -152,8 +161,49 @@ func (a *Authenticator) store(base, host, email, token string) (Instance, error)
 		return Instance{}, err
 	}
 
+	identity, created, err := a.ensureIdentity(ref.Account)
+	if err == nil {
+		client := a.newClient(base, func() string { return token })
+		_, err = client.AddRecipient(ctx, identity.Recipient().String(), deviceName())
+		if err != nil {
+			err = fmt.Errorf("registering this device's encryption key with the relay: %w", err)
+		}
+	}
+	if err != nil {
+		rollback := []error{err, a.rollbackKey(ref, previous, hadPrevious), a.rollbackBinding(ref, previousBinding)}
+		if created {
+			rollback = append(rollback, a.creds.Delete(ageRef(ref.Account)))
+		}
+		return Instance{}, errors.Join(rollback...)
+	}
+
 	a.notify(ref)
 	return Instance{Account: ref.Account, URL: base, Email: email}, nil
+}
+
+// ensureIdentity returns the account's stored age identity, generating and
+// storing one on first connect. created reports whether it was generated.
+func (a *Authenticator) ensureIdentity(account string) (identity *age.X25519Identity, created bool, err error) {
+	ref := ageRef(account)
+	raw, err := a.creds.Get(ref)
+	switch {
+	case err == nil:
+		identity, err = age.ParseX25519Identity(raw)
+		if err == nil {
+			return identity, false, nil
+		}
+		a.logger.Warn().Err(err).Str("credential", ref.String()).Msg("relay: stored age identity does not parse; generating a new one")
+	case !errors.Is(err, credentials.ErrNotFound):
+		return nil, false, fmt.Errorf("read relay age identity: %w", err)
+	}
+	identity, err = age.GenerateX25519Identity()
+	if err != nil {
+		return nil, false, fmt.Errorf("generate relay age identity: %w", err)
+	}
+	if err := a.creds.Set(ref, identity.String()); err != nil {
+		return nil, false, fmt.Errorf("store relay age identity: %w", err)
+	}
+	return identity, true, nil
 }
 
 func requireEmail(email string) (string, error) {
@@ -181,19 +231,56 @@ func deviceName() string {
 	return name
 }
 
-// Disconnect is idempotent: an account with nothing stored disconnects cleanly.
-func (a *Authenticator) Disconnect(_ context.Context, account string) error {
+// Disconnect is idempotent: an account with nothing stored disconnects
+// cleanly. It first asks the relay to stop sealing to this device; a relay
+// that cannot be reached does not block the disconnect.
+func (a *Authenticator) Disconnect(ctx context.Context, account string) error {
 	ref := credentials.Ref{Provider: Provider, Account: strings.TrimSpace(account)}
 	if err := ref.Validate(); err != nil {
 		return err
 	}
+	if err := a.removeRecipient(ctx, ref); err != nil {
+		a.logger.Warn().Err(err).Str("credential", ref.String()).Msg("relay: removing this device's recipient failed")
+	}
 	credErr := a.creds.Delete(ref)
+	identityErr := a.creds.Delete(ageRef(ref.Account))
 	bindingErr := a.instances.Delete(ref)
 	a.notify(ref)
-	if credErr != nil {
-		return credErr
+	return errors.Join(credErr, identityErr, bindingErr)
+}
+
+func (a *Authenticator) removeRecipient(ctx context.Context, ref credentials.Ref) error {
+	raw, err := a.creds.Get(ageRef(ref.Account))
+	if errors.Is(err, credentials.ErrNotFound) {
+		return nil
 	}
-	return bindingErr
+	if err != nil {
+		return err
+	}
+	identity, err := age.ParseX25519Identity(raw)
+	if err != nil {
+		return err
+	}
+	binding, err := a.instances.Get(ref)
+	if err != nil || binding.URL == "" {
+		return err
+	}
+	token, err := a.creds.Get(ref)
+	if err != nil {
+		return err
+	}
+	client := a.newClient(binding.URL, func() string { return token })
+	recipients, err := client.ListRecipients(ctx)
+	if err != nil {
+		return err
+	}
+	mine := identity.Recipient().String()
+	for _, r := range recipients {
+		if r.Recipient == mine {
+			return client.RemoveRecipient(ctx, r.ID)
+		}
+	}
+	return nil
 }
 
 // Methods reports which sign-in methods a relay offers. It needs no key, so
@@ -241,6 +328,13 @@ func (a *Authenticator) rollbackKey(ref credentials.Ref, previous string, hadPre
 		return a.creds.Set(ref, previous)
 	}
 	return a.creds.Delete(ref)
+}
+
+func (a *Authenticator) rollbackBinding(ref credentials.Ref, previous Binding) error {
+	if previous.URL != "" {
+		return a.instances.Set(ref, previous)
+	}
+	return a.instances.Delete(ref)
 }
 
 func (a *Authenticator) notify(ref credentials.Ref) {

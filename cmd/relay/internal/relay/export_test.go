@@ -12,3 +12,7 @@ func (s *SignIn) SetNow(now func() time.Time) {
 	s.now = now
 	s.auth.now = now
 }
+
+func (a *Accounts) SetNow(now func() time.Time) { a.now = now }
+
+var Seal = seal

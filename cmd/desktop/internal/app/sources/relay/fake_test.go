@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -31,6 +33,10 @@ type fakeRelay struct {
 	status     int
 	afters     []string
 	userAgents []string
+
+	recipients       []RecipientView
+	recipientStatus  int
+	removedRecipient []string
 }
 
 func newFakeRelay(t *testing.T) *fakeRelay {
@@ -68,6 +74,8 @@ func (f *fakeRelay) serve(w http.ResponseWriter, r *http.Request) {
 	switch r.URL.Path {
 	case "/v1/me":
 		_ = json.NewEncoder(w).Encode(Me{Email: f.email, Limits: f.limits, Version: "test"})
+	case "/v1/recipients":
+		f.serveRecipients(w, r)
 	case "/v1/sources/src/deliveries":
 		after := r.URL.Query().Get("after")
 		f.afters = append(f.afters, after)
@@ -86,8 +94,38 @@ func (f *fakeRelay) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewEncoder(w).Encode(page)
 	default:
+		if id, ok := strings.CutPrefix(r.URL.Path, "/v1/recipients/"); ok && r.Method == http.MethodDelete {
+			f.recipients = slices.DeleteFunc(f.recipients, func(rv RecipientView) bool { return rv.ID == id })
+			f.removedRecipient = append(f.removedRecipient, id)
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		w.WriteHeader(http.StatusNotFound)
 	}
+}
+
+func (f *fakeRelay) serveRecipients(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		_ = json.NewEncoder(w).Encode(map[string]any{"recipients": f.recipients})
+		return
+	}
+	if f.recipientStatus != 0 {
+		w.WriteHeader(f.recipientStatus)
+		_, _ = w.Write([]byte(`{"kind":"invalid","message":"bad recipient"}`))
+		return
+	}
+	var body map[string]string
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	for _, rv := range f.recipients {
+		if rv.Recipient == body["recipient"] {
+			_ = json.NewEncoder(w).Encode(rv)
+			return
+		}
+	}
+	rv := RecipientView{ID: fmt.Sprintf("rcp%d", len(f.recipients)+1), Recipient: body["recipient"], Device: body["device"], CreatedAt: time.Now()}
+	f.recipients = append(f.recipients, rv)
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(rv)
 }
 
 func deliveryID(n int) string { return fmt.Sprintf("d%05d", n) }

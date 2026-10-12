@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/hay-kot/criterio"
+
+	"github.com/colonyops/hive/cmd/relay/internal/relay"
 )
 
 const (
@@ -50,6 +52,33 @@ type CreateToken struct {
 func (b CreateToken) Validate() error {
 	return criterio.Run("name", strings.TrimSpace(b.Name), criterio.StrBetween(1, MaxTokenName))
 }
+
+type CreateRecipient struct {
+	Recipient string `json:"recipient"`
+	Device    string `json:"device"`
+}
+
+func (b CreateRecipient) Validate() error {
+	return criterio.ValidateStruct(
+		criterio.Run("recipient", strings.TrimSpace(b.Recipient), criterio.StrNotEmpty),
+		criterio.Run("device", strings.TrimSpace(b.Device), criterio.StrMax(relay.MaxRecipientDevice)),
+	)
+}
+
+const (
+	EncryptionOn  = "on"
+	EncryptionOff = "off"
+)
+
+type UpdateMe struct {
+	Encryption string `json:"encryption"`
+}
+
+func (b UpdateMe) Validate() error {
+	return criterio.Run("encryption", b.Encryption, criterio.OneOf(EncryptionOn, EncryptionOff))
+}
+
+func (b UpdateMe) On() bool { return b.Encryption == EncryptionOn }
 
 type DeliveriesQuery struct {
 	After string `query:"after"`
