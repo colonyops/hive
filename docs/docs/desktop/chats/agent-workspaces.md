@@ -106,6 +106,7 @@ Hive includes these MCP entries:
 - **Hive Canvas** for durable Markdown, Mermaid diagrams, HTML, and links beside a chat.
 - **Playwright** for browser automation. It requires Node.js and a Playwright browser.
 - **Chrome DevTools** for a running Chrome browser. It requires Node.js 20.19 or newer and Chrome.
+- **Hive Relay** for managing a connected [Hive Relay](../inbox/sources.md#hive-relay) account: webhook sources and ingress URLs, stored deliveries, API keys, and encryption recipients. It requires a connected account; without one the workspace opens and reports a problem. The workspace gets its own API key, named `workspace:<workspace>`, written in plain text into the workspace's MCP config files (`.mcp.json` and `.codex/config.toml`). Revoke it from the relay's token list to cut the workspace off. It cannot read an encrypted account's deliveries.
 
 You can add HTTP, SSE, and stdio servers to the shared MCP library, then enable them per workspace. Secrets in custom server configuration can use `env:`, `file:`, or `op://` references.
 

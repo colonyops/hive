@@ -132,13 +132,21 @@ The hosted instance is `https://relay.hivedesktop.com`.
 
 ### Connect
 
-Open **Settings ▸ Integrations ▸ Hive Relay** and enter the relay host and an API key. An operator mints a key with `hive-relay tokens create`, or a signed-in user creates one from the account.
+Open **Settings ▸ Integrations ▸ Hive Relay** and enter the relay's URL, then choose **Check**. The drawer shows the sign-in methods that relay offers:
+
+- **Email code.** Enter your email and choose **Send code**, then enter the 8-digit code from the mail.
+- **Password.** Enter your email and the password the operator set for it.
+- **API key.** Paste a key. An operator mints one with `hive-relay tokens create`, or a signed-in user creates one with `POST /v1/tokens` or the `create_token` MCP tool (see [Self-host Hive Relay](../resources/relay.md#mcp-endpoint)).
+
+A relay offers the methods its operator turned on (see [sign-in methods](../resources/relay.md#sign-in-methods)). Email code and password sign-in give this desktop its own device token. Disconnect the account in the same drawer.
+
+A relay answers `403` to an email that is not on its allowlist, even with a valid token. Ask the operator to add it.
 
 Desktops signed in with the same email see the same sources. Each desktop keeps its own read position.
 
 ### Add a source
 
-Create a `sources.relay` node. In the editor, pick the account, then pick or create a relay source. Copy the ingress URL into the sender. Set these fields:
+Create a `sources.relay` node. In the editor, pick the account, then pick or create a relay source. Copy the ingress URL into the sender. The relay keeps only a hash of the URL, so the editor shows it once, when you create the source or choose **Rotate**. Rotating replaces the URL and the old one stops accepting at once. Set these fields:
 
 - `credential`, the connected relay account;
 - `source`, the relay source;
@@ -147,6 +155,10 @@ Create a `sources.relay` node. In the editor, pick the account, then pick or cre
 - `map`, optional pointers that override the defaults (see below);
 - `interval`, the shortest time between pulls;
 - `icon` and `image`, the display of the node's items.
+
+#### Source secret
+
+A source can have a secret. The sender then presents it in `X-Hive-Secret`, `X-Gotify-Key`, or `Authorization: Bearer`. A post without it, or with a wrong one, gets `401`. The relay removes these headers before it stores a delivery, so they never reach `raw.headers`.
 
 ### What a delivery becomes
 
@@ -240,13 +252,25 @@ Function nodes read the delivery from `msg.Payload.raw`:
     return msg;
 ```
 
+### Encryption
+
+By default the relay stores deliveries as plaintext. To keep it from reading them, open **Settings ▸ Integrations ▸ Hive Relay** and turn on **Encrypt deliveries on the relay** for the account. The relay then seals each later delivery to the devices listed under it, and only those desktops can open it.
+
+- Each desktop registers its own key when it connects, so every signed-in desktop is a recipient. The list shows each device with **Revoke**.
+- The switch needs at least one device. You cannot revoke the last device while encryption is on.
+- The switch applies to later deliveries. Stored ones keep the form they were written in, and revoking a device does not re-encrypt them.
+- A desktop without the key, such as one connected after a delivery arrived, shows `Encrypted delivery, no key on this device` as the item title with kind `Encrypted`.
+- A sender can seal a body itself with `age -r <recipient>`, binary or armored, and post it. The desktop opens it with its key. Use a desktop's recipient from the relay's `list_recipients` tool.
+
+The desktop's key stays in your keychain.
+
 ### Limits
 
 - Body: 256 KiB.
 - 1000 deliveries per source.
 - Deliveries are kept for 14 days.
 - 50 sources per account.
-- 64 MiB per account on the hosted instance.
+- 64 MiB per account on the hosted instance. A full account answers senders with `429` until older deliveries expire.
 
 ## Commands and CLIs
 

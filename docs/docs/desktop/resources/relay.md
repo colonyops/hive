@@ -140,8 +140,37 @@ docker compose exec relay hive-relay accounts delete --email you@example.com
 
 A sweeper runs every minute and deletes deliveries that pass the retention age or exceed the per-source count. The relay counts an account's bytes on write. A full account gets `429` on ingress until something expires.
 
-The relay stores requests as plaintext on disk. Per-account encryption is coming in a later release.
+Unless an account turns on [encryption](#encryption), the relay stores requests as plaintext on disk. An over-cap `429` has no `Retry-After` header; a rate-limit `429` has one.
+
+## Encryption
+
+An account can have the relay seal its deliveries with [age](https://age-encryption.org) so the operator cannot read them. The relay holds only public keys.
+
+- Each desktop registers an age public key when it connects. The user turns encryption on under **Settings ▸ Integrations ▸ Hive Relay**. See [Encryption](../inbox/sources.md#encryption) for what the user sees.
+- Turning it on needs at least one registered key. Removing the last key while it is on is refused.
+- The relay seals each later delivery to every key. Stored deliveries are not re-encrypted.
+- A sealed account's `list_deliveries` returns metadata only.
+- A sender can seal the body itself with `age -r <recipient>`. The desktop opens it with its key.
+
+Scripts use `set_encryption`, `list_recipients`, `add_recipient`, and `remove_recipient` on the [MCP endpoint](#mcp-endpoint), or `PATCH /v1/me` and `/v1/recipients`.
+
+## MCP endpoint
+
+The relay serves its account API as MCP tools at `/mcp`, over stateless Streamable HTTP. Send an API key as `Authorization: Bearer <key>`. The tools act on the key's account.
+
+| Tool | Does |
+| --- | --- |
+| `whoami` | Email, encryption setting, limits, usage, sign-in methods, version |
+| `list_sources`, `create_source`, `update_source`, `delete_source` | Manage sources. `create_source` returns the ingress URL |
+| `rotate_ingress` | Replace a source's ingress URL |
+| `list_deliveries` | Page through stored deliveries. Metadata only on an encrypted account |
+| `list_tokens`, `create_token`, `revoke_token` | Manage the account's API keys |
+| `set_encryption`, `list_recipients`, `add_recipient`, `remove_recipient` | Manage [encryption](#encryption) |
+
+`create_source` and `rotate_ingress` are the only places the ingress URL appears. `create_token` returns the key once. Revoking the key a call used ends that session's access.
+
+Hive Desktop offers this server to agent workspaces. See [MCP servers](../chats/agent-workspaces.md#mcp-servers).
 
 ## Connect Hive Desktop
 
-Open **Settings ▸ Integrations ▸ Hive Relay** and enter your relay's host and an API key. Then add a `sources.relay` node to a flow. See [Hive Relay](../inbox/sources.md#hive-relay) for the node's fields and the formats it recognises.
+Open **Settings ▸ Integrations ▸ Hive Relay** and enter your relay's URL and sign in with a method the relay offers. See [Connect](../inbox/sources.md#connect). Then add a `sources.relay` node to a flow. See [Hive Relay](../inbox/sources.md#hive-relay) for the node's fields and the formats it recognises.
