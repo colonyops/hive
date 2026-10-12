@@ -49,13 +49,25 @@ func Dialects() []string {
 }
 
 // Parse returns the items a delivery yields under dialect, and the dialect that
-// matched ("generic" for generic; under "auto", the detector that won).
+// parsed it: under "auto", the one the detector picked.
 func Parse(dialect string, d Delivery) ([]Item, string, error) {
+	if dialect == DialectAuto {
+		dialect = detect(d)
+	}
 	switch dialect {
-	case DialectAuto, DialectGeneric:
+	case DialectGeneric:
 		return []Item{parseGeneric(d)}, DialectGeneric, nil
-	case DialectNtfy, DialectGotify, DialectHealthchecks:
-		return nil, "", fmt.Errorf("dialect %s arrives in a later release", dialect)
+	case DialectNtfy:
+		return []Item{parseNtfy(d)}, DialectNtfy, nil
+	case DialectGotify:
+		return []Item{parseGotify(d)}, DialectGotify, nil
+	case DialectHealthchecks:
+		// A delivery to the ingress root names no check, so it falls back to
+		// generic rather than failing the tick on one stray request.
+		if item, ok := parseHealthchecks(d); ok {
+			return []Item{item}, DialectHealthchecks, nil
+		}
+		return []Item{parseGeneric(d)}, DialectGeneric, nil
 	default:
 		return nil, "", fmt.Errorf("unknown dialect %q (want one of %s)", dialect, strings.Join(Dialects(), ", "))
 	}

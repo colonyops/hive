@@ -3,6 +3,7 @@ package relay
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/icons"
@@ -19,7 +20,7 @@ type Config struct {
 	Source     string            `json:"source"             yaml:"source"             jsonschema:"title=Relay source,description=The relay source id this node reads."`
 	Dialect    string            `json:"dialect,omitempty"  yaml:"dialect,omitempty"  jsonschema:"title=Format,description=How a delivery is parsed into items. Empty or auto detects it; generic is the local webhook contract.,enum=auto,enum=generic,enum=ntfy,enum=gotify,enum=healthchecks"`
 	Map        *Map              `json:"map,omitempty"      yaml:"map,omitempty"      jsonschema:"title=Map,description=JSON Pointers that overlay the parsed item's key and fields."`
-	Checks     map[string]Check  `json:"checks,omitempty"   yaml:"checks,omitempty"   jsonschema:"title=Checks,description=Healthchecks period and grace per slug. Used by the healthchecks format."`
+	Checks     map[string]Check  `json:"checks,omitempty"   yaml:"checks,omitempty"   jsonschema:"title=Checks,description=Healthchecks period and grace per slug. A check with no successful ping for period plus grace goes down."`
 	Interval   duration.Duration `json:"interval,omitempty" yaml:"interval,omitempty" jsonschema:"title=Minimum interval,description=Shortest time between fetches. Empty fetches on every poll tick."`
 	Icon       string            `json:"icon,omitempty"     yaml:"icon,omitempty"     jsonschema:"title=Item icon,description=The glyph feed rows render for this node's items. Empty uses the default feed glyph."`
 	Image      string            `json:"image,omitempty"    yaml:"image,omitempty"    jsonschema:"title=Image,description=Content hash of an uploaded image shown as this source's feed mark instead of the icon. Empty falls back to the icon."`
@@ -86,14 +87,10 @@ func (c *Config) Validate() error {
 }
 
 func validateDialect(dialect string) error {
-	switch dialect {
-	case "", relayformat.DialectAuto, relayformat.DialectGeneric:
+	if dialect == "" || slices.Contains(relayformat.Dialects(), dialect) {
 		return nil
-	case relayformat.DialectNtfy, relayformat.DialectGotify, relayformat.DialectHealthchecks:
-		return fmt.Errorf("relay source: format %q arrives in a later release; use auto or generic", dialect)
-	default:
-		return fmt.Errorf("relay source: format %q is not one of %s", dialect, strings.Join(relayformat.Dialects(), ", "))
 	}
+	return fmt.Errorf("relay source: format %q is not one of %s", dialect, strings.Join(relayformat.Dialects(), ", "))
 }
 
 func (m *Map) validate() error {

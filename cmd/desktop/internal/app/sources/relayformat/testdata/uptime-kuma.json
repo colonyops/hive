@@ -1,0 +1,7 @@
+{
+  "method": "POST",
+  "path": "/kuma",
+  "headers": {"Content-Type": ["application/json"], "User-Agent": ["Uptime-Kuma/1.23.16"]},
+  "content_type": "application/json",
+  "body": "{\"heartbeat\":{\"monitorID\":1,\"status\":0,\"time\":\"2026-10-11 09:30:00\",\"msg\":\"connect ECONNREFUSED 10.0.0.5:443\",\"important\":true,\"duration\":60},\"monitor\":{\"id\":1,\"name\":\"api\",\"url\":\"https://api.example.com\",\"type\":\"http\"},\"msg\":\"[api] [Down] connect ECONNREFUSED 10.0.0.5:443\"}"
+}

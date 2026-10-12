@@ -1,0 +1,7 @@
+{
+  "method": "POST",
+  "path": "",
+  "headers": {"Content-Type": ["application/json"], "User-Agent": ["curl/8.7.1"]},
+  "content_type": "application/json",
+  "body": "{\"id\":\"deploy-42\",\"title\":\"Deploy failed\",\"state\":\"open\",\"url\":\"https://ci.example.com/42\"}"
+}

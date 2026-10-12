@@ -118,12 +118,13 @@ func (f *Fetchers) window(ctx context.Context, ref credentials.Ref, client *Clie
 }
 
 type nodeState struct {
-	mu        sync.Mutex
-	cursor    string
-	items     map[string]item
-	order     []string
-	retention time.Duration
-	maxKeys   int
+	mu          sync.Mutex
+	cursor      string
+	items       map[string]item
+	order       []string
+	retention   time.Duration
+	maxKeys     int
+	lastSuccess map[string]time.Time
 }
 
 type item struct {
@@ -132,10 +133,19 @@ type item struct {
 }
 
 // merge keeps the newest delivery per key and the order keys were first seen.
+// A healthchecks /start or /log ping reports no outcome, so it keeps the
+// stored item's state.
 func (n *nodeState) merge(key string, it item) {
-	if _, ok := n.items[key]; !ok {
+	prev, ok := n.items[key]
+	if !ok {
 		n.order = append(n.order, key)
 	}
+	if ping, _ := it.payload["ping"].(string); ping != "" && ok {
+		if state, has := prev.payload["state"]; has {
+			it.payload["state"] = state
+		}
+	}
+	n.recordSuccess(key, it)
 	n.items[key] = it
 }
 
@@ -166,4 +176,9 @@ func (n *nodeState) prune(now time.Time) {
 		_, ok := n.items[key]
 		return !ok
 	})
+	for key := range n.lastSuccess {
+		if _, ok := n.items[key]; !ok {
+			delete(n.lastSuccess, key)
+		}
+	}
 }

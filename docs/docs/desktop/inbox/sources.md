@@ -142,7 +142,8 @@ Create a `sources.relay` node. In the editor, pick the account, then pick or cre
 
 - `credential`, the connected relay account;
 - `source`, the relay source;
-- `dialect`, how deliveries are read: `auto` or `generic`. `ntfy`, `gotify`, and `healthchecks` arrive in a later release;
+- `dialect`, how deliveries are read: `auto`, `generic`, `ntfy`, `gotify`, or `healthchecks` (see [Dialects](#dialects));
+- `checks`, optional `period` and `grace` per Healthchecks slug (see [Healthchecks clock](#healthchecks-clock));
 - `map`, optional pointers that override the defaults (see below);
 - `interval`, the shortest time between pulls;
 - `icon` and `image`, the display of the node's items.
@@ -164,6 +165,44 @@ curl -X POST "$INGRESS_URL" -H 'Content-Type: application/json' \
 
 A second post with the same `id` and `"state":"resolved"` archives the item, as with [webhooks](#webhooks).
 
+### Dialects
+
+`auto` picks a dialect per delivery. Set `dialect` to skip detection. [`map`](#map) works on every dialect. Generic is above.
+
+**ntfy.** Use the ingress URL as the ntfy server. The path is the topic. One publish is one `Notification` item; the topic is `repo`, the tags are `labels`, and the Click header is `url`.
+
+```sh
+ntfy publish "$INGRESS_URL/alerts" "disk almost full"
+curl -d "disk almost full" -H "Title: nas" -H "Priority: 4" -H "Tags: warning" "$INGRESS_URL/alerts"
+```
+
+**Gotify.** Point a Gotify client at the ingress URL as its server, with any app token. One message is one `Notification` item. The relay reads `X-Gotify-Key` as the source secret, so the secret can be the Gotify key.
+
+```sh
+curl -X POST "$INGRESS_URL/message?token=x" -H 'Content-Type: application/json' \
+  -d '{"title":"nas","message":"disk almost full","priority":5}'
+```
+
+**Healthchecks.** Ping the ingress URL like a Healthchecks.io URL. The first path segment is the slug, and each slug is one `Check` item. A success or exit status 0 is `resolved`. `fail` or a non-zero exit status is `down`. `start` and `log` do not change the state.
+
+```sh
+curl "$INGRESS_URL/backup"
+curl "$INGRESS_URL/backup/start"
+curl "$INGRESS_URL/backup/fail"
+curl "$INGRESS_URL/backup/log"
+curl "$INGRESS_URL/backup/2"
+```
+
+#### Healthchecks clock
+
+`checks` sets how often a slug must report. The desktop marks the check `down` with `no ping for <duration>` when no success ping arrives within `period` plus `grace`. The next success resolves it.
+
+```yaml
+dialect: healthchecks
+checks:
+  backup: { period: 1h, grace: 5m }
+```
+
 ### Map
 
 Senders that do not use this shape need a `map`. Each value is a JSON Pointer ([RFC 6901](https://www.rfc-editor.org/rfc/rfc6901)) over the item. `/raw/body/...` reaches into the posted JSON. A pointer that resolves to nothing keeps the default. `states` renames the resolved `state` value.
@@ -177,6 +216,16 @@ map:
   title: /raw/body/monitor/name
   state: /raw/body/heartbeat/status
   states: { "0": down, "1": resolved }
+```
+
+This reads a Gatus webhook alert:
+
+```yaml
+map:
+  key: /raw/body/endpoint/name
+  title: /raw/body/endpoint/name
+  state: /raw/body/result/success
+  states: { "true": resolved, "false": down }
 ```
 
 ### Function nodes

@@ -1,0 +1,13 @@
+{
+  "method": "POST",
+  "path": "/alerts",
+  "query": {
+    "title": ["Disk low"],
+    "priority": ["4"],
+    "tags": ["disk,warning"],
+    "click": ["https://nas.example.com"]
+  },
+  "headers": {"Content-Type": ["text/plain"], "User-Agent": ["curl/8.7.1"]},
+  "content_type": "text/plain",
+  "body": "Disk at 95% on /volume1"
+}

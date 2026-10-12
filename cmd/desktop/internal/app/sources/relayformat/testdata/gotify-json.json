@@ -1,0 +1,8 @@
+{
+  "method": "POST",
+  "path": "/message",
+  "query": {"token": ["AbCdEfGh123"]},
+  "headers": {"Content-Type": ["application/json"], "User-Agent": ["Go-http-client/1.1"]},
+  "content_type": "application/json",
+  "body": "{\"title\":\"Backup\",\"message\":\"Backup finished in 4m\",\"priority\":5,\"extras\":{\"client::notification\":{\"click\":{\"url\":\"https://backup.example.com/runs/9\"}}}}"
+}

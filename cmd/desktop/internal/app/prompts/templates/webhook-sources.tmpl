@@ -33,4 +33,22 @@ nodes:
 wires:
   - { from: ci, to: ci-feed }
 ```
+
+## When the listener cannot be reached: Hive Relay
+
+The local endpoint only works for senders on this machine or its network. When the sender is on the internet (a CI runner, a server, a phone, a cron job) and this machine is not reachable, offer a Hive Relay source instead. The relay gives each source a public ingress URL and stores every request sent to it; the desktop pulls them on its next refresh.
+
+1. The user connects an account under Settings ▸ Integrations ▸ Hive Relay (relay host and API key). You cannot do this for them.
+2. A `sources.relay` node reads one relay source. The user picks or creates the source in the node editor, which shows the ingress URL once, so ask them to copy it into the sender.
+3. Pick a `dialect` that matches the sender, or leave `auto`. Use `map` when the sender's JSON is not the generic shape.
+
+```yaml
+nodes:
+  - { id: kuma, type: sources.relay, credential: relay/relay.hivedesktop.com-you@example.com, source: <source-id>, dialect: generic, map: { key: /raw/body/monitor/id, title: /raw/body/monitor/name, state: /raw/body/heartbeat/status, states: { "0": down, "1": resolved } } }
+  - { id: kuma-feed, type: feed, icon: activity }
+wires:
+  - { from: kuma, to: kuma-feed }
+```
+
+{{section 3 "sources.relay" .RelayDoc}}
 {{template "yaml-strict" .}}{{template "task" .}}

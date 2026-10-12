@@ -1,7 +1,7 @@
 // Runs on the backend (cmd/desktop/internal/app/sources/relay); role 'source' means no runtime.ts here.
 
 import IconRadioTower from '~icons/lucide/radio-tower'
-import { intervalError } from '../../lib/sourceInterval'
+import { DURATION, intervalError } from '../../lib/sourceInterval'
 
 export const type = 'sources.relay'
 export const role = 'source' as const
@@ -12,16 +12,15 @@ export type Dialect = 'auto' | 'generic' | 'ntfy' | 'gotify' | 'healthchecks'
 export interface DialectOption {
   value: Dialect
   label: string
-  available: boolean
 }
 
 /** Mirrors validateDialect in cmd/desktop/internal/app/sources/relay/config.go. */
 export const DIALECTS: DialectOption[] = [
-  { value: 'auto', label: 'Auto-detect', available: true },
-  { value: 'generic', label: 'Generic', available: true },
-  { value: 'ntfy', label: 'ntfy', available: false },
-  { value: 'gotify', label: 'Gotify', available: false },
-  { value: 'healthchecks', label: 'Healthchecks', available: false },
+  { value: 'auto', label: 'Auto-detect' },
+  { value: 'generic', label: 'Generic' },
+  { value: 'ntfy', label: 'ntfy' },
+  { value: 'gotify', label: 'Gotify' },
+  { value: 'healthchecks', label: 'Healthchecks' },
 ]
 
 /** RFC 6901 JSON Pointers over the parsed item; empty means unset. */
@@ -83,8 +82,15 @@ export function validate(config: Config): string[] {
   if (config.dialect) {
     const dialect = DIALECTS.find((d) => d.value === config.dialect)
     if (!dialect) errors.push(`format "${config.dialect}" is not one of ${DIALECTS.map((d) => d.value).join(', ')}`)
-    else if (!dialect.available)
-      errors.push(`format "${config.dialect}" arrives in a later release; use auto or generic`)
+  }
+
+  for (const [slug, check] of Object.entries(config.checks ?? {})) {
+    if (!slug.trim()) errors.push('a check needs a slug')
+    const period = (check.period ?? '').trim()
+    if (!period) errors.push(`check "${slug}" needs a period like "1h"`)
+    else if (!DURATION.test(period)) errors.push(`check "${slug}" period must be a duration like "1h"`)
+    const grace = (check.grace ?? '').trim()
+    if (grace && !DURATION.test(grace)) errors.push(`check "${slug}" grace must be a duration like "5m"`)
   }
 
   for (const name of MAP_POINTERS) {

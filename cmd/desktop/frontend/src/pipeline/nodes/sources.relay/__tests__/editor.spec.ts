@@ -215,6 +215,79 @@ describe('sources.relay editor', () => {
     expect(emitted(w).at(-1)).toEqual({ ...base, map: { state: '/raw/body/status', states: { '0': 'down' } } })
   })
 
+  it('shows the checks table only for healthchecks and auto', async () => {
+    const w = mountEditor({ ...base, dialect: 'generic' })
+    await flushPromises()
+    expect(w.find('[data-testid="sources.relay-editor-checks-add"]').exists()).toBe(false)
+    await w.setProps({ config: { ...base, dialect: 'healthchecks' } })
+    expect(w.find('[data-testid="sources.relay-editor-checks-add"]').exists()).toBe(true)
+    await w.setProps({ config: { ...base, dialect: 'auto' } })
+    expect(w.find('[data-testid="sources.relay-editor-checks-add"]').exists()).toBe(true)
+  })
+
+  it('adds, fills, and removes check rows', async () => {
+    const config: Config = { ...base, dialect: 'healthchecks', checks: { backup: { period: '1h', grace: '5m' } } }
+    const w = mountEditor(config)
+    await flushPromises()
+
+    expect(w.get<HTMLInputElement>('[data-testid="sources.relay-editor-checks-row-0-slug"]').element.value).toBe(
+      'backup',
+    )
+    expect(w.get<HTMLInputElement>('[data-testid="sources.relay-editor-checks-row-0-period"]').element.value).toBe('1h')
+
+    await w.get('[data-testid="sources.relay-editor-checks-add"]').trigger('click')
+    await typeInto(w, 'sources.relay-editor-checks-row-1-slug', 'nightly')
+    await typeInto(w, 'sources.relay-editor-checks-row-1-period', '24h')
+    await typeInto(w, 'sources.relay-editor-checks-row-1-grace', '30m')
+
+    expect(emitted(w).at(-1)).toEqual({
+      ...config,
+      checks: { backup: { period: '1h', grace: '5m' }, nightly: { period: '24h', grace: '30m' } },
+    })
+
+    await w.get('[data-testid="sources.relay-editor-checks-row-0-remove"]').trigger('click')
+    expect(w.find('[data-testid="sources.relay-editor-checks-row-1"]').exists()).toBe(false)
+    expect(emitted(w).at(-1)).toEqual({ ...config, checks: { nightly: { period: '24h', grace: '30m' } } })
+  })
+
+  it('keeps an incomplete check row out of the config', async () => {
+    const w = mountEditor({ ...base, dialect: 'healthchecks' })
+    await flushPromises()
+
+    await w.get('[data-testid="sources.relay-editor-checks-add"]').trigger('click')
+    await typeInto(w, 'sources.relay-editor-checks-row-0-slug', 'backup')
+    expect(emitted(w).at(-1)).toEqual({ ...base, dialect: 'healthchecks', checks: undefined })
+
+    await typeInto(w, 'sources.relay-editor-checks-row-0-period', '1h')
+    expect(emitted(w).at(-1)).toEqual({
+      ...base,
+      dialect: 'healthchecks',
+      checks: { backup: { period: '1h', grace: '' } },
+    })
+  })
+
+  it.each<[Config['dialect'], string, boolean]>([
+    ['generic', '"id": "build-42"', false],
+    ['auto', '"id": "build-42"', false],
+    ['ntfy', 'ntfy publish https://relay.hivedesktop.com/in/tok123-rotated/<topic> "message"', false],
+    ['ntfy', '-H "Tags: warning"', false],
+    ['gotify', '/message?token=x', false],
+    ['gotify', 'X-Gotify-Key: <your secret>', true],
+    ['healthchecks', `${URL}-rotated/<slug>/fail`, false],
+    ['healthchecks', `${URL}-rotated/<slug>/<exit-status>`, false],
+  ])('shows the %s paste block with %s', async (dialect, fragment, hasSecret) => {
+    const client = fakeClient({
+      listSources: vi.fn(() => Promise.resolve([source('src-1', 'uptime', { has_secret: hasSecret })])),
+    })
+    const w = mountEditor({ ...base, source: 'src-new', dialect }, client)
+    await flushPromises()
+    await w.setProps({ config: { ...base, source: 'src-1', dialect } })
+    await w.get('[data-testid="sources.relay-editor-rotate"]').trigger('click')
+    await flushPromises()
+
+    expect(w.get('[data-testid="sources.relay-editor-paste"]').text()).toContain(fragment)
+  })
+
   it('renders the recent deliveries', async () => {
     const client = fakeClient({ recentDeliveries: vi.fn(() => Promise.resolve([delivery('d1'), delivery('d2')])) })
     const w = mountEditor(base, client)
@@ -253,11 +326,33 @@ describe('sources.relay validate', () => {
       { ...base, credential: 'gitea/git.example.com-me' },
       ['credential must look like "relay/<host>-<email>"'],
     ],
+    ['an ntfy dialect', { ...base, dialect: 'ntfy' }, []],
     [
-      'an unavailable dialect',
-      { ...base, dialect: 'ntfy' },
-      ['format "ntfy" arrives in a later release; use auto or generic'],
+      'an unknown dialect',
+      { ...base, dialect: 'slack' as never },
+      ['format "slack" is not one of auto, generic, ntfy, gotify, healthchecks'],
     ],
+    [
+      'a healthchecks config with a clock',
+      { ...base, dialect: 'healthchecks', checks: { backup: { period: '1h', grace: '' } } },
+      [],
+    ],
+    [
+      'a check with a bad period',
+      { ...base, checks: { backup: { period: '60', grace: '5m' } } },
+      ['check "backup" period must be a duration like "1h"'],
+    ],
+    [
+      'a check with a bad grace',
+      { ...base, checks: { backup: { period: '1h', grace: 'soon' } } },
+      ['check "backup" grace must be a duration like "5m"'],
+    ],
+    [
+      'a check with no period',
+      { ...base, checks: { backup: { period: '', grace: '' } } },
+      ['check "backup" needs a period like "1h"'],
+    ],
+    ['a check with no slug', { ...base, checks: { '': { period: '1h', grace: '' } } }, ['a check needs a slug']],
     [
       'a pointer without a leading slash',
       { ...base, map: { key: 'raw/body/id', title: '' } },

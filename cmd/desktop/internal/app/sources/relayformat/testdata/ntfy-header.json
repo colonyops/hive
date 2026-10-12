@@ -1,0 +1,14 @@
+{
+  "method": "POST",
+  "path": "/alerts",
+  "headers": {
+    "Content-Type": ["text/plain"],
+    "User-Agent": ["curl/8.7.1"],
+    "X-Title": ["Backup failed"],
+    "X-Priority": ["urgent"],
+    "X-Tags": ["warning,skull"],
+    "X-Click": ["https://home.example.com/backups"]
+  },
+  "content_type": "text/plain",
+  "body": "Backup of /home failed after 3 retries"
+}

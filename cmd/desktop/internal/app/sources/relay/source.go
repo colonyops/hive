@@ -82,7 +82,9 @@ func (s *source) Produce(ctx context.Context, emit func(models.Msg) error) error
 		st.merge(p.key, p.it)
 	}
 	st.cursor = cursor
-	st.prune(time.Now())
+	now := time.Now()
+	st.applyClock(s.cfg.Checks, now)
+	st.prune(now)
 
 	trace.SpanFromContext(ctx).SetAttributes(
 		attribute.String("relay.source", s.cfg.Source),

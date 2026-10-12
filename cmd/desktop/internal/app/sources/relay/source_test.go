@@ -12,6 +12,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/sourcehttp"
+	"github.com/colonyops/hive/pkg/duration"
 )
 
 func newSource(t *testing.T, relay *fakeRelay) *source {
@@ -210,4 +211,28 @@ func TestRecentDeliveriesKeepsTheTail(t *testing.T) {
 	assert.Equal(t, "generic", recent[0].Dialect)
 	assert.Equal(t, "k599", recent[0].Item["id"])
 	assert.Contains(t, recent[2].Error, "encrypted")
+}
+
+func TestProduceMarksAnOverdueCheckDown(t *testing.T) {
+	t.Parallel()
+	relay := newFakeRelay(t)
+	now := time.Now()
+	relay.add(
+		DeliveryView{ID: deliveryID(1), ReceivedAt: now.Add(-3 * time.Hour), Method: "GET", Path: "/backup"},
+		DeliveryView{ID: deliveryID(2), ReceivedAt: now.Add(-time.Minute), Method: "GET", Path: "/nightly"},
+	)
+	s := newSource(t, relay)
+	s.cfg.Checks = map[string]Check{
+		"backup":  {Period: duration.Duration(time.Hour), Grace: duration.Duration(time.Minute)},
+		"nightly": {Period: duration.Duration(time.Hour)},
+	}
+
+	msgs, err := produce(t, s)
+	require.NoError(t, err)
+	require.Len(t, msgs, 2)
+	backup := payloadOf(t, msgs[0])
+	assert.Equal(t, "backup", msgs[0].Key)
+	assert.Equal(t, "down", backup["state"])
+	assert.Contains(t, backup["body"], "no ping for 3h")
+	assert.Equal(t, "resolved", payloadOf(t, msgs[1])["state"])
 }

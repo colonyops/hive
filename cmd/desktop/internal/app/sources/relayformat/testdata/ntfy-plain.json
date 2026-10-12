@@ -1,0 +1,7 @@
+{
+  "method": "POST",
+  "path": "/alerts",
+  "headers": {"Content-Type": ["application/x-www-form-urlencoded"], "User-Agent": ["curl/8.7.1"]},
+  "content_type": "application/x-www-form-urlencoded",
+  "body": "Backup successful"
+}

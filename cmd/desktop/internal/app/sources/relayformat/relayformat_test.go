@@ -131,13 +131,8 @@ func TestParseRawBody(t *testing.T) {
 	assert.Equal(t, "plain", textRaw["body"])
 }
 
-func TestParseRejectsDialects(t *testing.T) {
+func TestParseRejectsUnknownDialect(t *testing.T) {
 	t.Parallel()
-
-	for _, dialect := range []string{DialectNtfy, DialectGotify, DialectHealthchecks} {
-		_, _, err := Parse(dialect, delivery(`{}`))
-		require.ErrorContains(t, err, "dialect "+dialect+" arrives in a later release")
-	}
 	_, _, err := Parse("bogus", delivery(`{}`))
 	require.ErrorContains(t, err, `unknown dialect "bogus"`)
 }

@@ -1,0 +1,8 @@
+{
+  "method": "POST",
+  "path": "/message",
+  "query": {"token": ["AbCdEfGh123"]},
+  "headers": {"Content-Type": ["application/x-www-form-urlencoded"], "User-Agent": ["Go-http-client/1.1"]},
+  "content_type": "application/x-www-form-urlencoded",
+  "body": "title=Deploy&message=Deployed+v1.2.0+to+prod&priority=5"
+}

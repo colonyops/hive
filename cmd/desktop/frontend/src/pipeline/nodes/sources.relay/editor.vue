@@ -32,7 +32,7 @@ import {
 } from '../../fields'
 import IconPlus from '~icons/lucide/plus'
 import IconX from '~icons/lucide/x'
-import { DIALECTS, MAP_POINTERS, type Config, type Dialect, type RelayMap } from './config'
+import { DIALECTS, MAP_POINTERS, type Config, type Dialect, type RelayCheck, type RelayMap } from './config'
 
 interface RelayBackendClient {
   listSources(account: string): Promise<SourceView[]>
@@ -160,20 +160,99 @@ async function onRotate(): Promise<void> {
   }
 }
 
+const pasteDialect = computed<Dialect>(() => props.config.dialect || 'auto')
+
 const pasteExample = computed(() => {
-  if (!ingressUrl.value) return ''
-  const lines = [`curl -X POST '${ingressUrl.value}'`, `  -H 'Content-Type: application/json'`]
-  if (selectedSource.value?.has_secret) lines.push(`  -H 'X-Hive-Secret: <your secret>'`)
-  lines.push(`  -d '{"id": "build-42", "title": "Build 42 failed", "state": "open"}'`)
-  return lines.join(' \\\n')
+  const url = ingressUrl.value
+  if (!url) return ''
+  const secret = selectedSource.value?.has_secret
+  switch (pasteDialect.value) {
+    case 'ntfy':
+      return [
+        `ntfy publish ${url}/<topic> "message"`,
+        '',
+        `curl -d "message" \\`,
+        `  -H "Title: Build failed" -H "Priority: 4" -H "Tags: warning" \\`,
+        ...(secret ? [`  -H 'X-Hive-Secret: <your secret>' \\`] : []),
+        `  ${url}/<topic>`,
+      ].join('\n')
+    case 'gotify':
+      return [
+        `curl -X POST "${url}/message?token=x" \\`,
+        `  -H 'Content-Type: application/json' \\`,
+        ...(secret ? [`  -H 'X-Gotify-Key: <your secret>' \\`] : []),
+        `  -d '{"title": "Build failed", "message": "Build 42", "priority": 5}'`,
+        '',
+        secret
+          ? 'The source secret is the Gotify key: send it as X-Gotify-Key.'
+          : 'Any app token works. Set a source secret to use it as the Gotify key.',
+      ].join('\n')
+    case 'healthchecks':
+      return [
+        `curl ${url}/<slug>`,
+        `curl ${url}/<slug>/start`,
+        `curl ${url}/<slug>/fail`,
+        `curl ${url}/<slug>/log`,
+        `curl ${url}/<slug>/<exit-status>`,
+      ].join('\n')
+    default: {
+      const lines = [`curl -X POST '${url}'`, `  -H 'Content-Type: application/json'`]
+      if (secret) lines.push(`  -H 'X-Hive-Secret: <your secret>'`)
+      lines.push(`  -d '{"id": "build-42", "title": "Build 42 failed", "state": "open"}'`)
+      return lines.join(' \\\n')
+    }
+  }
 })
 
 // ── Dialect ────────────────────────────────────────────────────────────────
 
-const dialectOptions: SelectOption[] = DIALECTS.map((d) => ({
-  value: d.value,
-  label: d.available ? d.label : `${d.label} (later release)`,
-}))
+const dialectOptions: SelectOption[] = DIALECTS.map((d) => ({ value: d.value, label: d.label }))
+
+// ── Checks ─────────────────────────────────────────────────────────────────
+
+interface CheckRow {
+  slug: string
+  period: string
+  grace: string
+}
+
+const showChecks = computed(() => ['healthchecks', 'auto'].includes(props.config.dialect || 'auto'))
+
+// Rows are local so a half-typed row survives; only rows with a slug and a
+// period reach the config.
+function seedCheckRows(checks: Config['checks']): CheckRow[] {
+  return Object.entries(checks ?? {}).map(([slug, c]) => ({ slug, period: c.period, grace: c.grace ?? '' }))
+}
+
+// eslint-disable-next-line vue/no-setup-props-reactivity-loss -- seeds the rows once
+const checkRows = ref<CheckRow[]>(seedCheckRows(props.config.checks))
+
+function writeChecks(rows: CheckRow[]) {
+  checkRows.value = rows
+  const checks: Record<string, RelayCheck> = {}
+  for (const row of rows) {
+    const slug = row.slug.trim()
+    const period = row.period.trim()
+    if (slug && period) checks[slug] = { period, grace: row.grace.trim() }
+  }
+  update({ checks: Object.keys(checks).length > 0 ? checks : undefined })
+}
+
+function addCheckRow() {
+  checkRows.value = [...checkRows.value, { slug: '', period: '', grace: '' }]
+}
+
+function updateCheckRow(index: number, patch: Partial<CheckRow>) {
+  writeChecks(checkRows.value.map((row, i) => (i === index ? { ...row, ...patch } : row)))
+}
+
+function removeCheckRow(index: number) {
+  writeChecks(checkRows.value.filter((_, i) => i !== index))
+}
+
+function checkError(): string | undefined {
+  return props.errors?.find((m) => m.startsWith('check') || m.startsWith('a check'))
+}
 
 // ── Map ────────────────────────────────────────────────────────────────────
 
@@ -373,10 +452,70 @@ watch(
       label="Format"
       :model-value="config.dialect || 'auto'"
       :options="dialectOptions"
-      hint="How a delivery is parsed into items. Auto parses everything as generic today."
+      hint="How a delivery is parsed into items. Auto picks one per delivery."
       testid="sources.relay-editor-dialect"
       @update:model-value="(dialect: string) => update({ dialect: (dialect || undefined) as Dialect | undefined })"
     />
+
+    <FormField
+      v-if="showChecks"
+      label="Checks"
+      hint="Mark a healthchecks slug down when no success ping arrives within period plus grace. Durations like 1h or 5m."
+      testid="sources.relay-editor-checks"
+    >
+      <div>
+        <div class="mb-1.5 flex items-center justify-between text-small text-text-2">
+          <span>Slug, period, grace</span>
+          <IconButton
+            label="Add a check"
+            :icon="IconPlus"
+            data-testid="sources.relay-editor-checks-add"
+            @click="addCheckRow"
+          />
+        </div>
+        <div
+          v-for="(row, i) in checkRows"
+          :key="i"
+          class="mb-1.5 flex items-center gap-2"
+          :data-testid="`sources.relay-editor-checks-row-${i}`"
+        >
+          <div class="min-w-0 flex-1">
+            <TextField
+              :model-value="row.slug"
+              placeholder="backup"
+              monospace
+              :testid="`sources.relay-editor-checks-row-${i}-slug`"
+              @update:model-value="(slug: string) => updateCheckRow(i, { slug })"
+            />
+          </div>
+          <div class="w-24">
+            <TextField
+              :model-value="row.period"
+              placeholder="1h"
+              monospace
+              :testid="`sources.relay-editor-checks-row-${i}-period`"
+              @update:model-value="(period: string) => updateCheckRow(i, { period })"
+            />
+          </div>
+          <div class="w-24">
+            <TextField
+              :model-value="row.grace"
+              placeholder="5m"
+              monospace
+              :testid="`sources.relay-editor-checks-row-${i}-grace`"
+              @update:model-value="(grace: string) => updateCheckRow(i, { grace })"
+            />
+          </div>
+          <IconButton
+            label="Remove this check"
+            :icon="IconX"
+            :data-testid="`sources.relay-editor-checks-row-${i}-remove`"
+            @click="removeCheckRow(i)"
+          />
+        </div>
+        <InlineError v-if="checkError()" variant="line" :message="checkError()!" />
+      </div>
+    </FormField>
 
     <FormField
       label="Map"

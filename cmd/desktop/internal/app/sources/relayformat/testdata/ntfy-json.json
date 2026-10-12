@@ -1,0 +1,7 @@
+{
+  "method": "POST",
+  "path": "",
+  "headers": {"Content-Type": ["application/json"], "User-Agent": ["curl/8.7.1"]},
+  "content_type": "application/json",
+  "body": "{\"topic\":\"alerts\",\"message\":\"Disk full on nas\",\"title\":\"Low disk\",\"tags\":[\"warning\",\"cd\"],\"priority\":4,\"click\":\"https://nas.example.com/storage\"}"
+}

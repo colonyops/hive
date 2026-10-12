@@ -1,0 +1,7 @@
+{
+  "method": "POST",
+  "path": "/backup/1",
+  "headers": {"User-Agent": ["curl/8.7.1"], "Content-Type": ["application/x-www-form-urlencoded"]},
+  "content_type": "application/x-www-form-urlencoded",
+  "body": "exit status 1"
+}

@@ -1,0 +1,7 @@
+{
+  "method": "GET",
+  "path": "/backup",
+  "headers": {"User-Agent": ["curl/8.7.1"]},
+  "content_type": "",
+  "body": ""
+}

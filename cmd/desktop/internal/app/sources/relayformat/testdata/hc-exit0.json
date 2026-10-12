@@ -1,0 +1,7 @@
+{
+  "method": "POST",
+  "path": "/backup/0",
+  "headers": {"User-Agent": ["curl/8.7.1"]},
+  "content_type": "",
+  "body": ""
+}

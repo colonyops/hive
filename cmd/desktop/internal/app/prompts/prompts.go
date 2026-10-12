@@ -131,7 +131,7 @@ var definitions = []definition{
 	{
 		id:          "webhook-sources",
 		title:       "Webhook sources",
-		description: "Wire an external system into Hive by POSTing JSON to this install's local webhook endpoint, and shape the payload so it renders well in a feed.",
+		description: "Wire an external system into Hive by POSTing JSON to this install's local webhook endpoint, or through a Hive Relay source when the machine is not reachable, and shape the payload so it renders well in a feed.",
 		target:      func(env Env) string { return env.WebhookBaseURL },
 		listed:      true,
 		data:        webhookSourcesData,
@@ -371,14 +371,18 @@ func agentWorkspacesData(Env, Input) (map[string]any, error) {
 }
 
 // webhookSourcesData assembles the webhook integration prompt. It reuses the
-// sources.webhook node's own documentation rather than restating the delivery
-// contract.
+// sources.webhook and sources.relay nodes' own documentation rather than
+// restating their delivery contracts.
 func webhookSourcesData(Env, Input) (map[string]any, error) {
 	doc, err := flow.NodeDoc("sources.webhook")
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"Doc": strings.TrimSpace(doc)}, nil
+	relayDoc, err := flow.NodeDoc("sources.relay")
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{"Doc": strings.TrimSpace(doc), "RelayDoc": strings.TrimSpace(relayDoc)}, nil
 }
 
 func settingsData(Env, Input) (map[string]any, error) {
