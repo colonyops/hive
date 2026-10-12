@@ -31,6 +31,17 @@ function vueFiles(dir: string): string[] {
 }
 
 describe('AppSelect', () => {
+  it('draws the flat variant without a border or fill of its own', () => {
+    const outlined = mountSelect().get('[data-testid="action-type"]').classes()
+    expect(outlined).toContain('bg-app')
+    expect(outlined).toContain('border-strong')
+
+    const flat = mountSelect({ variant: 'flat' }).get('[data-testid="action-type"]').classes()
+    expect(flat).toContain('bg-transparent')
+    expect(flat).toContain('border-transparent')
+    expect(flat).not.toContain('border-strong')
+  })
+
   // AppSelect exists because a native picker cannot be themed in the WebKit
   // webview Wails uses — one reintroduced element is a light-mode flash in a
   // dark app, and neither type-checking nor a unit test would notice.

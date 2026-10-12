@@ -121,85 +121,91 @@ const {
   edge: 'right',
 })
 
-// The picker ends where the sidebar does, so it reads as the tree's heading
-// and the title starts over the reader: the header's padding and gap are
-// what is taken off.
-const pickerWidth = computed(() => Math.max(160, sidebarWidth.value - 26))
+// The sidebar, with the picker as its heading, is there whenever there is a
+// space to browse; a listing error or an empty drive leaves the reader
+// column alone to say so.
+const browsable = computed(() => !(spacesError.value && !spaces.value.length) && !(spacesLoaded.value && !space.value))
 
 useEscapeToClose(() => emit('close'))
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="drive-page">
-    <ViewHeader>
-      <template #title>
-        <div class="shrink-0" :style="{ width: pickerWidth + 'px' }">
-          <AppSelect
-            :model-value="space"
-            :options="spaceOptions"
-            :disabled="!spaceOptions.length"
-            size="sm"
-            aria-label="Space"
-            testid="drive-page-space"
-            @update:model-value="selectSpace"
+  <div class="flex h-full min-h-0 flex-1" data-testid="drive-page">
+    <aside
+      v-if="browsable"
+      class="relative flex shrink-0 flex-col border-r border-border bg-sidebar"
+      :style="{ width: sidebarWidth + 'px' }"
+      data-testid="drive-page-sidebar"
+    >
+      <!-- The picker is the tree's heading: a flat row at the title strip's
+           height, so the strip's bottom line runs on across the sidebar and
+           the only chrome is the sidebar's own. -->
+      <div class="flex h-11 shrink-0 items-center border-b border-row px-1.5">
+        <AppSelect
+          class="min-w-0 flex-1"
+          :model-value="space"
+          :options="spaceOptions"
+          variant="flat"
+          size="sm"
+          aria-label="Space"
+          testid="drive-page-space"
+          @update:model-value="selectSpace"
+        />
+      </div>
+      <DriveBrowser
+        :space="space"
+        :tree="tree"
+        :selected="shown"
+        :error="treeError"
+        search-every-space
+        testid="drive-page"
+        @pick="openDocument"
+        @open-hit="openHit"
+        @moved="documentMoved"
+        @deleted="documentDeleted"
+      />
+      <PanelResizeHandle edge="right" name="canvas-sidebar" :start="startSidebarResize" :step="stepSidebar" />
+    </aside>
+
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+      <ViewHeader>
+        <template #title>
+          <span
+            class="min-w-0 truncate text-body font-semibold text-text"
+            :title="document?.entry.path"
+            data-testid="drive-page-title"
+            >{{ title }}</span
+          >
+          <span
+            v-if="document && (folder || modified)"
+            class="shrink-0 font-mono text-caption text-text-4"
+            data-testid="drive-page-folder"
+            >{{ folder }}<template v-if="folder && modified"> · </template
+            ><template v-if="modified">{{ relativeAge(modified) }}</template></span
+          >
+          <div class="flex-1" />
+          <DriveDocumentActions
+            v-if="document"
+            :space="space"
+            :entry="document.entry"
+            size="lg"
+            testid="drive-page"
+            @deleted="documentDeleted"
+            @moved="documentMoved"
           />
-        </div>
-        <span
-          class="min-w-0 truncate text-body font-semibold text-text"
-          :title="document?.entry.path"
-          data-testid="drive-page-title"
-          >{{ title }}</span
-        >
-        <span
-          v-if="document && (folder || modified)"
-          class="shrink-0 font-mono text-caption text-text-4"
-          data-testid="drive-page-folder"
-          >{{ folder }}<template v-if="folder && modified"> · </template
-          ><template v-if="modified">{{ relativeAge(modified) }}</template></span
-        >
-        <div class="flex-1" />
-        <DriveDocumentActions
-          v-if="document"
-          :space="space"
-          :entry="document.entry"
-          size="lg"
-          testid="drive-page"
-          @deleted="documentDeleted"
-          @moved="documentMoved"
-        />
-        <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
-      </template>
-    </ViewHeader>
+          <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
+        </template>
+      </ViewHeader>
 
-    <InlineError v-if="spacesError && !spaces.length" class="m-4" :message="spacesError" testid="drive-page-error" />
-    <EmptyState
-      v-else-if="spacesLoaded && !space"
-      class="m-auto"
-      message="No spaces yet. A repository, a workspace, or the shared space appears here once a document is written to it."
-      data-testid="drive-page-no-spaces"
-    />
-    <div v-else class="flex min-h-0 flex-1">
-      <aside
-        class="relative flex shrink-0 flex-col border-r border-border bg-sidebar"
-        :style="{ width: sidebarWidth + 'px' }"
-        data-testid="drive-page-sidebar"
-      >
-        <DriveBrowser
-          :space="space"
-          :tree="tree"
-          :selected="shown"
-          :error="treeError"
-          search-every-space
-          testid="drive-page"
-          @pick="openDocument"
-          @open-hit="openHit"
-          @moved="documentMoved"
-          @deleted="documentDeleted"
-        />
-        <PanelResizeHandle edge="right" name="canvas-sidebar" :start="startSidebarResize" :step="stepSidebar" />
-      </aside>
-
+      <InlineError v-if="spacesError && !spaces.length" class="m-4" :message="spacesError" testid="drive-page-error" />
+      <EmptyState
+        v-else-if="spacesLoaded && !space"
+        class="m-auto"
+        message="No spaces yet. A repository, a workspace, or the shared space appears here once a document is written to it."
+        data-testid="drive-page-no-spaces"
+      />
       <div
+        v-else
         ref="reader"
         class="hive-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-app"
         data-testid="drive-page-reader"
