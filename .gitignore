@@ -59,6 +59,7 @@ overrides.env
 /devserver
 /devtools
 /release
+/relay
 
 # svx stack state and per-checkout overrides
 .svx/

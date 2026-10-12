@@ -1,0 +1,16 @@
+# Hive Relay. Included by the root mise.toml, so these run from anywhere in the
+# repo as `mise run relay:<task>`. Every task runs from the repo root, where the
+# module lives.
+
+["relay:dev"]
+description = "Run the relay on the memory store with a minted dev key on stdout (args pass through)"
+env = { RELAY_LOG_LEVEL = "debug" }
+run = "go run ./cmd/relay serve --store memory --public-url http://127.0.0.1:8080 --mint dev@example.com"
+
+["relay:test"]
+description = "Run the relay's Go tests"
+run = "go test ./cmd/relay/..."
+
+["relay:build"]
+description = "Build the hive-relay binary into cmd/relay/bin/"
+run = "go build -o cmd/relay/bin/hive-relay ./cmd/relay"

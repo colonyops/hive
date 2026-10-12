@@ -3,10 +3,10 @@
 # program in the module (`generate`, `test`, `lint`, `check`, `ci`). Each
 # program's own tasks live in a task file beside it and carry its prefix:
 # `cli:*` from cmd/hive/tasks.toml, `desktop:*` from cmd/desktop/tasks.toml,
-# and `docs:*` from docs/tasks.toml.
+# `relay:*` from cmd/relay/tasks.toml, and `docs:*` from docs/tasks.toml.
 
 [task_config]
-includes = ["cmd/hive/tasks.toml", "cmd/desktop/tasks.toml", "docs/tasks.toml"]
+includes = ["cmd/hive/tasks.toml", "cmd/desktop/tasks.toml", "cmd/relay/tasks.toml", "docs/tasks.toml"]
 
 [tools]
 # Go Tools

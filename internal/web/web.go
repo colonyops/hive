@@ -13,7 +13,7 @@ import (
 // ErrorBody is the error wire shape: {kind, message}, with per-field detail
 // on validation failures.
 type ErrorBody struct {
-	Kind    string            `json:"kind"             jsonschema:"enum=invalid,enum=not_found,enum=conflict,enum=unauthenticated,enum=unavailable,enum=internal,description=Stable machine-readable error category."`
+	Kind    string            `json:"kind"             jsonschema:"enum=invalid,enum=not_found,enum=conflict,enum=unauthenticated,enum=unavailable,enum=internal,enum=forbidden,enum=too_large,enum=rate_limited,enum=over_cap,description=Stable machine-readable error category."`
 	Message string            `json:"message"`
 	Fields  map[string]string `json:"fields,omitempty" jsonschema:"description=Per-field validation messages keyed by field name; present on validation failures."`
 }

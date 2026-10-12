@@ -182,6 +182,7 @@ linters:
           files:
             - "**/cmd/hive/**"
             - "**/cmd/desktop/**"
+            - "**/cmd/relay/**"
             - "!$test"
           list-mode: lax
           allow:
@@ -196,17 +197,31 @@ linters:
           deny:
             - pkg: github.com/colonyops/hive/cmd/hive
               desc: The desktop must not import the CLI program.
-        # The devserver imports cmd/desktop/internal/web, so the package cannot
-        # depend on the app. Go's internal rule enforced that while it lived
-        # in shared internal/ (ADR http-handler-conventions).
-        desktop-web-is-plumbing:
+        # The devserver and the relay both import internal/web, so it imports
+        # only pkg/, criterio, httpkit, and zerolog. Kind mapping stays in the
+        # adapter that owns the vocabulary (ADR http-handler-conventions).
+        web-is-plumbing:
           files:
-            - "**/cmd/desktop/internal/web/**"
+            - "**/internal/web/**"
           deny:
-            - pkg: github.com/colonyops/hive/cmd/desktop/internal/app
-              desc: web is HTTP plumbing the devserver shares. Kind mapping stays in the adapter that owns the vocabulary.
-            - pkg: github.com/colonyops/hive/cmd/desktop/internal/adapter
-              desc: web is HTTP plumbing the devserver shares. An adapter imports it, not the reverse.
+            - pkg: github.com/colonyops/hive/internal/hive
+              desc: web is HTTP plumbing both programs import. It may not reach the engine.
+            - pkg: github.com/colonyops/hive/internal/store
+              desc: web is HTTP plumbing both programs import. It may not reach the store.
+            - pkg: github.com/colonyops/hive/cmd
+              desc: web is HTTP plumbing both programs import. It may not reach a program.
+        relay-no-program-deps:
+          files:
+            - "**/cmd/relay/**"
+          deny:
+            - pkg: github.com/colonyops/hive/cmd/desktop
+              desc: The relay must not import the desktop program.
+            - pkg: github.com/colonyops/hive/cmd/hive
+              desc: The relay must not import the CLI program.
+            - pkg: github.com/wailsapp
+              desc: The relay has no UI runtime.
+            - pkg: github.com/dop251/goja
+              desc: The relay runs no user code.
         cli-no-desktop-deps:
           files:
             - "**/cmd/hive/**"

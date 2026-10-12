@@ -53,6 +53,8 @@ modeled on recipinned, whose httpkit-based structure is the reference.
    Only the desktop's HTTP adapter and its devserver import it, and shared
    `internal/` is the engine both programs run on (ADR
    both-programs-run-on-one-layered-hive-engine).
+   **Update (2026-10-11):** the package moved back to shared `internal/web`
+   when the relay became its second consumer.
 
 ## Consequences
 
