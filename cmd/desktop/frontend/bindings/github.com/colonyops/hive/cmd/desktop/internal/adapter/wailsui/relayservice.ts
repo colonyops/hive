@@ -48,6 +48,13 @@ export function ListSources(account: string): $CancellablePromise<relay$0.Source
 }
 
 /**
+ * Login trades a password for a device token and stores it.
+ */
+export function Login(url: string, email: string, password: string): $CancellablePromise<relay$0.Instance> {
+    return $Call.ByID(3486727075, url, email, password);
+}
+
+/**
  * Methods reports the sign-in methods a relay offers; it needs no key.
  */
 export function Methods(url: string): $CancellablePromise<relay$0.Methods> {
@@ -64,4 +71,18 @@ export function RecentDeliveries(account: string, sourceID: string, limit: numbe
  */
 export function RotateSource(account: string, id: string): $CancellablePromise<string> {
     return $Call.ByID(2054435400, account, id);
+}
+
+/**
+ * StartEmail asks the relay to mail a sign-in code; it stores nothing.
+ */
+export function StartEmail(url: string, email: string): $CancellablePromise<void> {
+    return $Call.ByID(3289440882, url, email);
+}
+
+/**
+ * VerifyEmail trades the mailed code for a device token and stores it.
+ */
+export function VerifyEmail(url: string, email: string, code: string): $CancellablePromise<relay$0.Instance> {
+    return $Call.ByID(3282518229, url, email, code);
 }

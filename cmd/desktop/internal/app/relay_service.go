@@ -25,6 +25,23 @@ func (s *RelayService) ConnectWithKey(ctx context.Context, url, key string) (rel
 	return instance, Wrap(err, KindUnauthenticated, "connecting to Hive Relay")
 }
 
+// StartEmail mails a sign-in code. A refusal carries the relay's own message,
+// which names why the email cannot sign in.
+func (s *RelayService) StartEmail(ctx context.Context, url, email string) error {
+	err := s.auth.StartEmail(ctx, url, email)
+	return Wrap(err, relaySignInKind(err), "sending a Hive Relay sign-in code")
+}
+
+func (s *RelayService) VerifyEmail(ctx context.Context, url, email, code string) (relay.Instance, error) {
+	instance, err := s.auth.VerifyEmail(ctx, url, email, code)
+	return instance, Wrap(err, relaySignInKind(err), "verifying the Hive Relay sign-in code")
+}
+
+func (s *RelayService) Login(ctx context.Context, url, email, password string) (relay.Instance, error) {
+	instance, err := s.auth.Login(ctx, url, email, password)
+	return instance, Wrap(err, relaySignInKind(err), "signing in to Hive Relay")
+}
+
 func (s *RelayService) Disconnect(ctx context.Context, account string) error {
 	return Wrap(s.auth.Disconnect(ctx, account), KindInternal, "disconnecting Hive Relay")
 }
@@ -95,9 +112,18 @@ func (s *RelayService) client(account string) (*relay.Client, error) {
 	return client, Wrap(err, relayErrorKind(err), "relay account %q", account)
 }
 
+// relaySignInKind leaves a failure the relay did not name, such as a
+// malformed URL, as unauthenticated, the way ConnectWithKey reports it.
+func relaySignInKind(err error) Kind {
+	if kind := relayErrorKind(err); kind != KindInternal {
+		return kind
+	}
+	return KindUnauthenticated
+}
+
 func relayErrorKind(err error) Kind {
 	switch {
-	case errors.Is(err, relay.ErrNotConnected), errors.Is(err, sourcehttp.ErrUnauthorized):
+	case errors.Is(err, relay.ErrNotConnected), errors.Is(err, sourcehttp.ErrUnauthorized), errors.Is(err, relay.ErrForbidden):
 		return KindUnauthenticated
 	case errors.Is(err, sourcehttp.ErrRateLimited), errors.Is(err, sourcehttp.ErrUnreachable):
 		return KindUnavailable

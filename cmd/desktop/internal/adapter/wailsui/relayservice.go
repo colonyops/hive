@@ -21,6 +21,21 @@ func (s *RelayService) ConnectWithKey(ctx context.Context, url, key string) (rel
 	return s.relay.ConnectWithKey(ctx, url, key)
 }
 
+// StartEmail asks the relay to mail a sign-in code; it stores nothing.
+func (s *RelayService) StartEmail(ctx context.Context, url, email string) error {
+	return s.relay.StartEmail(ctx, url, email)
+}
+
+// VerifyEmail trades the mailed code for a device token and stores it.
+func (s *RelayService) VerifyEmail(ctx context.Context, url, email, code string) (relay.Instance, error) {
+	return s.relay.VerifyEmail(ctx, url, email, code)
+}
+
+// Login trades a password for a device token and stores it.
+func (s *RelayService) Login(ctx context.Context, url, email, password string) (relay.Instance, error) {
+	return s.relay.Login(ctx, url, email, password)
+}
+
 func (s *RelayService) Disconnect(ctx context.Context, account string) error {
 	return s.relay.Disconnect(ctx, account)
 }

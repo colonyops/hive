@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -25,8 +26,8 @@ type Instance struct {
 // clientFactory is a field so a test can point the authenticator anywhere.
 type clientFactory func(base string, token func() string) *Client
 
-// Authenticator connects and disconnects relay accounts. This phase signs in
-// with an API key only; the relay's other methods arrive later.
+// Authenticator connects and disconnects relay accounts, signing in with an
+// API key, an emailed code, or a password.
 type Authenticator struct {
 	creds     credentials.Store
 	instances *InstanceStore
@@ -70,15 +71,81 @@ func (a *Authenticator) ConnectWithKey(ctx context.Context, rawURL, key string) 
 		return Instance{}, errors.New("relay: the API key authenticates no account")
 	}
 
-	ref := credentials.Ref{Provider: Provider, Account: accountID(host, me.Email)}
+	return a.store(base, host, me.Email, key)
+}
+
+// StartEmail asks the relay to mail a sign-in code. It stores nothing; the
+// code comes back through VerifyEmail.
+func (a *Authenticator) StartEmail(ctx context.Context, rawURL, email string) error {
+	base, _, err := normalizeRelayURL(rawURL)
+	if err != nil {
+		return err
+	}
+	email, err = requireEmail(email)
+	if err != nil {
+		return err
+	}
+	return a.newClient(base, nil).StartEmail(ctx, email)
+}
+
+// VerifyEmail trades an emailed code for a device token and connects the
+// account it names.
+func (a *Authenticator) VerifyEmail(ctx context.Context, rawURL, email, code string) (Instance, error) {
+	base, host, err := normalizeRelayURL(rawURL)
+	if err != nil {
+		return Instance{}, err
+	}
+	email, err = requireEmail(email)
+	if err != nil {
+		return Instance{}, err
+	}
+	signed, err := a.newClient(base, nil).VerifyEmail(ctx, email, strings.TrimSpace(code), deviceName())
+	if err != nil {
+		return Instance{}, err
+	}
+	return a.storeSignedIn(base, host, signed)
+}
+
+// Login trades a password for a device token and connects the account.
+func (a *Authenticator) Login(ctx context.Context, rawURL, email, password string) (Instance, error) {
+	base, host, err := normalizeRelayURL(rawURL)
+	if err != nil {
+		return Instance{}, err
+	}
+	email, err = requireEmail(email)
+	if err != nil {
+		return Instance{}, err
+	}
+	if password == "" {
+		return Instance{}, errors.New("relay: password is empty")
+	}
+	signed, err := a.newClient(base, nil).Login(ctx, email, password, deviceName())
+	if err != nil {
+		return Instance{}, err
+	}
+	return a.storeSignedIn(base, host, signed)
+}
+
+func (a *Authenticator) storeSignedIn(base, host string, signed SignedIn) (Instance, error) {
+	if signed.Token == "" || signed.Email == "" {
+		return Instance{}, errors.New("relay: the sign-in response carries no token")
+	}
+	return a.store(base, host, signed.Email, signed.Token)
+}
+
+// store persists token and the account's binding. The account is keyed by the
+// email the relay reports, never the one typed, so it matches what the relay
+// authenticates the token as.
+func (a *Authenticator) store(base, host, email, token string) (Instance, error) {
+	ref := credentials.Ref{Provider: Provider, Account: accountID(host, email)}
 	previous, hadPrevious, err := a.previousKey(ref)
 	if err != nil {
 		return Instance{}, err
 	}
-	if err := a.creds.Set(ref, key); err != nil {
+	if err := a.creds.Set(ref, token); err != nil {
 		return Instance{}, err
 	}
-	if err := a.instances.Set(ref, Binding{URL: base, Email: me.Email}); err != nil {
+	if err := a.instances.Set(ref, Binding{URL: base, Email: email}); err != nil {
 		if rollbackErr := a.rollbackKey(ref, previous, hadPrevious); rollbackErr != nil {
 			return Instance{}, errors.Join(err, fmt.Errorf("rollback relay key: %w", rollbackErr))
 		}
@@ -86,7 +153,32 @@ func (a *Authenticator) ConnectWithKey(ctx context.Context, rawURL, key string) 
 	}
 
 	a.notify(ref)
-	return Instance{Account: ref.Account, URL: base, Email: me.Email}, nil
+	return Instance{Account: ref.Account, URL: base, Email: email}, nil
+}
+
+func requireEmail(email string) (string, error) {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return "", errors.New("relay: email is required")
+	}
+	return email, nil
+}
+
+// maxDeviceName is the relay's limit on a token's device label.
+const maxDeviceName = 80
+
+// deviceName labels the minted token in the relay's token list, so the user
+// can tell which machine to revoke.
+func deviceName() string {
+	name, err := os.Hostname()
+	name = strings.TrimSpace(name)
+	if err != nil || name == "" {
+		return "Hive Desktop"
+	}
+	if runes := []rune(name); len(runes) > maxDeviceName {
+		return string(runes[:maxDeviceName])
+	}
+	return name
 }
 
 // Disconnect is idempotent: an account with nothing stored disconnects cleanly.
