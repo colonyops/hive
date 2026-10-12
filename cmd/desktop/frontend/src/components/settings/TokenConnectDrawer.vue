@@ -21,7 +21,7 @@ export interface TokenProvider {
   hint?: string
   docsUrl: string
   /** Where the entered instance mints a token, so making one is a click away. */
-  tokenPage: { path: string; label: string }
+  tokenPage?: { path: string; label: string }
   urlPlaceholder: string
   tokenPlaceholder: string
   defaultUrl?: string
@@ -48,8 +48,9 @@ const token = ref('')
 const canConnect = computed(() => url.value.trim() !== '' && token.value.trim() !== '')
 
 const tokenPageUrl = computed(() => {
+  const page = props.provider.tokenPage
   const base = url.value.trim().replace(/\/+$/, '')
-  return /^https?:\/\//i.test(base) ? base + props.provider.tokenPage.path : ''
+  return page && /^https?:\/\//i.test(base) ? base + page.path : ''
 })
 
 async function onConnect(): Promise<void> {
@@ -113,7 +114,7 @@ function clearError(): void {
             :data-testid="`${provider.id}-connect-instance-link`"
             @click="Browser.OpenURL(tokenPageUrl)"
           >
-            {{ provider.tokenPage.label }} ↗
+            {{ provider.tokenPage?.label }} ↗
           </button>
         </div>
       </div>

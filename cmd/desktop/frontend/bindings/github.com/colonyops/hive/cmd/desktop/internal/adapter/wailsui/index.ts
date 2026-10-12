@@ -24,6 +24,7 @@ import * as PipelineService from "./pipelineservice.js";
 import * as PopupTerminalService from "./popupterminalservice.js";
 import * as PostHogService from "./posthogservice.js";
 import * as PromptsService from "./promptsservice.js";
+import * as RelayService from "./relayservice.js";
 import * as ReleaseNotesService from "./releasenotesservice.js";
 import * as ReportService from "./reportservice.js";
 import * as SessionService from "./sessionservice.js";
@@ -59,6 +60,7 @@ export {
     PopupTerminalService,
     PostHogService,
     PromptsService,
+    RelayService,
     ReleaseNotesService,
     ReportService,
     SessionService,

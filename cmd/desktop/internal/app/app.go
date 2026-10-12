@@ -43,6 +43,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/grafana"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/posthog"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/relay"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/rss"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/terminalimg"
@@ -105,6 +106,7 @@ type App struct {
 	Gitea      *GiteaService
 	Grafana    *GrafanaService
 	PostHog    *PostHogService
+	Relay      *RelayService
 	// Integrations lists the connector registry with each entry's connection
 	// state. Generic; GitHub, Gitea, Grafana and PostHog above are the
 	// provider-specific acquisition halves.
@@ -182,6 +184,9 @@ type App struct {
 	// rssFetchers is the shared feed client and its per-URL window cache.
 	// There is no auth beside it: the connector reads public feeds.
 	rssFetchers *rss.Fetchers
+
+	relayFetchers *relay.Fetchers
+	relayAuth     *relay.Authenticator
 
 	// sources resolves the current flow set into live connector instances.
 	// Both ingress paths go through it — the poll producer takes its
@@ -409,6 +414,13 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		a.Events.Publish(a.ctx, events.ConnectionUpdated{Provider: gitea.Provider})
 	})
 
+	relayInstances := relay.NewInstanceStore(filepath.Join(cfg.Paths.StateDir, "relay-instances.json"))
+	a.relayFetchers = relay.NewFetchers(relayInstances, a.credentials, cfg.Build.Version, cfg.Logger)
+	a.relayAuth = relay.NewAuthenticator(a.credentials, relayInstances, cfg.Build.Version, cfg.Logger, func(credentials.Ref) {
+		a.relayFetchers.InvalidateAll()
+		a.Events.Publish(a.ctx, events.ConnectionUpdated{Provider: relay.Provider})
+	})
+
 	// Feeds need no account, so the client is wired unconditionally and has
 	// no connection callback to drop its cache on.
 	a.rssFetchers = rss.NewFetchers(cfg.Logger)
@@ -421,7 +433,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.producer = a.buildProducer(cfg.Logger)
 	a.openWebhook(runCtx, cfg)
 
-	a.Sources = newSourcesService(a.producer, a.fetchers, a.rssFetchers)
+	a.Sources = newSourcesService(a.producer, a.fetchers, a.rssFetchers, a.relayFetchers)
 	a.Settings = newSettingsService(SettingsDeps{Store: cfg.SettingsStore, Producer: a.producer, Fetchers: a.fetchers, LookPath: a.execEnv.LookPath})
 	a.TerminalImages = &TerminalImagesService{store: terminalimg.NewStore(filepath.Join(cfg.Paths.StateDir, "assets", "terminal-images"))}
 	profileImages := profileimg.NewStore(filepath.Join(cfg.Paths.StateDir, "assets", "profiles"))
@@ -457,6 +469,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.Gitea = newGiteaService(a.giteaAuth)
 	a.Grafana = newGrafanaService(a.grafanaAuth)
 	a.PostHog = newPostHogService(a.posthogAuth)
+	a.Relay = newRelayService(a.relayAuth, a.relayFetchers)
 	a.Integrations = newIntegrationsService(a.credentials)
 	a.Prompts = newPromptsService(cfg.Paths, cfg.SettingsStore, a.Webhooks)
 	a.Skills = newSkillsService(a.Prompts)
@@ -1035,13 +1048,13 @@ func (a *App) buildEngine(logger zerolog.Logger) *runtime.Engine {
 // declared and not wired is a source node the editor offers and nothing ever
 // polls.
 func (a *App) buildSources(logger zerolog.Logger) *ingest.Resolver {
-	return ingest.NewResolver(a.flowStore, sourceFactories(a.fetchers, a.grafanaFetchers, a.posthogFetchers, a.giteaFetchers, a.rssFetchers, a.execEnv), logger)
+	return ingest.NewResolver(a.flowStore, sourceFactories(a.fetchers, a.grafanaFetchers, a.posthogFetchers, a.giteaFetchers, a.rssFetchers, a.relayFetchers, a.execEnv), logger)
 }
 
 // sourceFactories is the instance half of the connector registry. It is a
 // function of its dependencies rather than a method so the bijection test can
 // hold it against the descriptors without standing up an App.
-func sourceFactories(fetchers *ghsource.Fetchers, grafanaFetchers *grafana.Fetchers, posthogFetchers *posthog.Fetchers, giteaFetchers *gitea.Fetchers, rssFetchers *rss.Fetchers, env execsource.Environment) map[string]connector.Factory {
+func sourceFactories(fetchers *ghsource.Fetchers, grafanaFetchers *grafana.Fetchers, posthogFetchers *posthog.Fetchers, giteaFetchers *gitea.Fetchers, rssFetchers *rss.Fetchers, relayFetchers *relay.Fetchers, env execsource.Environment) map[string]connector.Factory {
 	factories := map[string]connector.Factory{
 		webhook.Descriptor.Type:    webhook.NewFactory(),
 		execsource.Descriptor.Type: execsource.NewFactory(env),
@@ -1067,6 +1080,9 @@ func sourceFactories(fetchers *ghsource.Fetchers, grafanaFetchers *grafana.Fetch
 	}
 	if rssFetchers != nil {
 		factories[rss.Descriptor.Type] = rss.NewFactory(rssFetchers)
+	}
+	if relayFetchers != nil {
+		factories[relay.Descriptor.Type] = relay.NewFactory(relayFetchers)
 	}
 	return factories
 }

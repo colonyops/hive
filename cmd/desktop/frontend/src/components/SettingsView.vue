@@ -30,6 +30,7 @@ import GithubIntegrationDrawer from './settings/GithubIntegrationDrawer.vue'
 import GrafanaIntegrationDrawer from './settings/GrafanaIntegrationDrawer.vue'
 import PostHogIntegrationDrawer from './settings/PostHogIntegrationDrawer.vue'
 import GiteaIntegrationDrawer from './settings/GiteaIntegrationDrawer.vue'
+import RelayIntegrationDrawer from './settings/RelayIntegrationDrawer.vue'
 import WebhookIntegrationDrawer from './settings/WebhookIntegrationDrawer.vue'
 import SettingsLayout from './settings/SettingsLayout.vue'
 import SettingsNavItem from './settings/SettingsNavItem.vue'
@@ -40,6 +41,7 @@ import GithubMark from './marks/GithubMark.vue'
 import GrafanaMark from './marks/GrafanaMark.vue'
 import PostHogMark from './marks/PostHogMark.vue'
 import GiteaMark from './marks/GiteaMark.vue'
+import RelayMark from './marks/RelayMark.vue'
 import { useWebhookSettings } from '../stores/useWebhookSettings'
 import { isConnected, takesCredential, useIntegrations } from '../composables/useIntegrations'
 import type { Integration } from '../types/integrations'
@@ -76,6 +78,7 @@ const githubSettingsOpen = ref(false)
 const grafanaSettingsOpen = ref(false)
 const posthogSettingsOpen = ref(false)
 const giteaSettingsOpen = ref(false)
+const relaySettingsOpen = ref(false)
 const webhookSettingsOpen = ref(false)
 
 // The webhook card's badge reflects the same state the drawer edits, so a save
@@ -116,6 +119,7 @@ const presentation: Record<string, { description: string }> = {
   grafana: { description: 'Metrics and alerts from a Grafana stack' },
   posthog: { description: 'Error tracking issues and insight alerts from a PostHog project' },
   gitea: { description: 'Issues, pull requests, and notifications from a Gitea or Forgejo instance' },
+  relay: { description: 'Requests posted to a hosted ingress URL, pulled by this desktop' },
   'sources.webhook': { description: 'Receive JSON from anything that can POST' },
   'sources.rss': { description: 'Entries from an RSS, Atom, or JSON Feed URL' },
 }
@@ -134,6 +138,9 @@ const drawers: Record<string, () => void> = {
   },
   gitea: () => {
     giteaSettingsOpen.value = true
+  },
+  relay: () => {
+    relaySettingsOpen.value = true
   },
   'sources.webhook': () => {
     webhookSettingsOpen.value = true
@@ -254,6 +261,7 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
                 <GrafanaMark v-else-if="integration.key === 'grafana'" class="size-full" />
                 <PostHogMark v-else-if="integration.key === 'posthog'" class="size-full" />
                 <GiteaMark v-else-if="integration.key === 'gitea'" class="size-full" />
+                <RelayMark v-else-if="integration.key === 'relay'" class="size-full" />
                 <IconWebhook v-else-if="integration.key === 'sources.webhook'" class="size-full" />
                 <IconRss v-else-if="integration.key === 'sources.rss'" class="size-full" />
                 <IconPlug v-else class="size-full" />
@@ -298,6 +306,7 @@ function statusFor(integration: Integration): { label: string; tone: 'success' |
       <GrafanaIntegrationDrawer v-if="grafanaSettingsOpen" @close="grafanaSettingsOpen = false" />
       <PostHogIntegrationDrawer v-if="posthogSettingsOpen" @close="posthogSettingsOpen = false" />
       <GiteaIntegrationDrawer v-if="giteaSettingsOpen" @close="giteaSettingsOpen = false" />
+      <RelayIntegrationDrawer v-if="relaySettingsOpen" @close="relaySettingsOpen = false" />
       <WebhookIntegrationDrawer v-if="webhookSettingsOpen" @close="webhookSettingsOpen = false" />
     </SettingsPage>
   </SettingsLayout>

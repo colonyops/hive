@@ -1,6 +1,6 @@
 ---
 icon: lucide/plug
-description: Supported source providers, local webhooks, and command-based inputs.
+description: Supported source providers, local webhooks, Hive Relay, and command-based inputs.
 ---
 
 # Sources
@@ -15,6 +15,7 @@ Add sources in the flow editor. Connect provider accounts under **Settings ▸ I
 | PostHog | Stable | Error tracking and insight alerts |
 | RSS feeds | Stable | Entries from an RSS, Atom, or JSON Feed URL |
 | Webhooks | Stable | JSON sent to a local endpoint |
+| Hive Relay | Experimental | Requests posted to a hosted ingress URL |
 | Commands and CLIs | Stable | JSON returned by a shell command |
 
 Provider tokens are stored in the OS keychain. Flow files refer to a connected account by name.
@@ -122,6 +123,81 @@ Other fields remain available to function nodes and action templates.
 
 !!! tip "Ask the Hive workspace"
     The **Hive** workspace can create the webhook node and sender with the `hive-webhook-sources` skill.
+
+## Hive Relay
+
+Hive Relay is a hosted feed for senders that cannot reach the local webhook listener, such as CI runners, servers, phones, and cron jobs. Any HTTP request posted to a relay source's ingress URL is stored exactly as delivered. Hive Desktop pulls it on its next refresh. The relay never reads the body; every format is recognised on the desktop.
+
+The hosted instance is `https://relay.hivedesktop.com`.
+
+### Connect
+
+Open **Settings ▸ Integrations ▸ Hive Relay** and enter the relay host and an API key. An operator mints a key with `hive-relay tokens create`, or a signed-in user creates one from the account.
+
+Desktops signed in with the same email see the same sources. Each desktop keeps its own read position.
+
+### Add a source
+
+Create a `sources.relay` node. In the editor, pick the account, then pick or create a relay source. Copy the ingress URL into the sender. Set these fields:
+
+- `credential`, the connected relay account;
+- `source`, the relay source;
+- `dialect`, how deliveries are read: `auto` or `generic`. `ntfy`, `gotify`, and `healthchecks` arrive in a later release;
+- `map`, optional pointers that override the defaults (see below);
+- `interval`, the shortest time between pulls;
+- `icon` and `image`, the display of the node's items.
+
+### What a delivery becomes
+
+With the `generic` dialect:
+
+- A JSON object body keeps its fields. A body that is not JSON becomes `body`.
+- `id`, a string or a number, is the stable identity. Without one, the identity is a hash of the body.
+- `title` and `url` are promoted when present.
+- `kind` defaults to `Webhook`.
+- `raw` carries `method`, `path`, `query`, `headers`, and `body`. `body` is decoded when it was JSON.
+
+```sh
+curl -X POST "$INGRESS_URL" -H 'Content-Type: application/json' \
+  -d '{"id":"build-1","title":"tests failed","state":"failing"}'
+```
+
+A second post with the same `id` and `"state":"resolved"` archives the item, as with [webhooks](#webhooks).
+
+### Map
+
+Senders that do not use this shape need a `map`. Each value is a JSON Pointer ([RFC 6901](https://www.rfc-editor.org/rfc/rfc6901)) over the item. `/raw/body/...` reaches into the posted JSON. A pointer that resolves to nothing keeps the default. `states` renames the resolved `state` value.
+
+This reads Uptime Kuma:
+
+```yaml
+dialect: generic
+map:
+  key: /raw/body/monitor/id
+  title: /raw/body/monitor/name
+  state: /raw/body/heartbeat/status
+  states: { "0": down, "1": resolved }
+```
+
+### Function nodes
+
+Function nodes read the delivery from `msg.Payload.raw`:
+
+```yaml
+- id: pick-branch
+  type: function
+  on_message: |
+    msg.Payload.branch = msg.Payload.raw.body.ref;
+    return msg;
+```
+
+### Limits
+
+- Body: 256 KiB.
+- 1000 deliveries per source.
+- Deliveries are kept for 14 days.
+- 50 sources per account.
+- 64 MiB per account on the hosted instance.
 
 ## Commands and CLIs
 

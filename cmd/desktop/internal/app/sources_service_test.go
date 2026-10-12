@@ -11,7 +11,7 @@ import (
 // rather than panicking on the nil the mode leaves behind.
 func TestSourcesServiceWithoutAProducerIsUnavailable(t *testing.T) {
 	t.Parallel()
-	svc := newSourcesService(nil, nil, nil)
+	svc := newSourcesService(nil, nil, nil, nil)
 
 	_, err := svc.Refresh(t.Context())
 	require.Error(t, err)

@@ -5,6 +5,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/ingest"
 	ghsource "github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/relay"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/rss"
 )
 
@@ -22,10 +23,11 @@ type SourcesService struct {
 	producer *ingest.Producer
 	fetchers *ghsource.Fetchers
 	feeds    *rss.Fetchers
+	relays   *relay.Fetchers
 }
 
-func newSourcesService(producer *ingest.Producer, fetchers *ghsource.Fetchers, feeds *rss.Fetchers) *SourcesService {
-	return &SourcesService{producer: producer, fetchers: fetchers, feeds: feeds}
+func newSourcesService(producer *ingest.Producer, fetchers *ghsource.Fetchers, feeds *rss.Fetchers, relays *relay.Fetchers) *SourcesService {
+	return &SourcesService{producer: producer, fetchers: fetchers, feeds: feeds, relays: relays}
 }
 
 // Refresh clears the fetch caches and drains every source now. Engine commits
@@ -39,6 +41,9 @@ func (s *SourcesService) Refresh(ctx context.Context) (ingest.TickSummary, error
 	// what makes refresh refetch rather than answer 304 from the last window.
 	if s.feeds != nil {
 		s.feeds.InvalidateAll()
+	}
+	if s.relays != nil {
+		s.relays.InvalidateAll()
 	}
 	return s.Run(ctx)
 }

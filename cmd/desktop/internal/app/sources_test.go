@@ -19,6 +19,7 @@ import (
 	ghclient "github.com/colonyops/hive/cmd/desktop/internal/app/sources/github/ghclient"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/grafana"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/posthog"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/relay"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/rss"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
 	"github.com/colonyops/hive/internal/platform/credentials"
@@ -55,6 +56,12 @@ func testGiteaFetchers(t *testing.T) *gitea.Fetchers {
 	return gitea.NewFetchers(instances, credentials.NewMemoryStore(), zerolog.Nop())
 }
 
+func testRelayFetchers(t *testing.T) *relay.Fetchers {
+	t.Helper()
+	instances := relay.NewInstanceStore(filepath.Join(t.TempDir(), "relay-instances.json"))
+	return relay.NewFetchers(instances, credentials.NewMemoryStore(), "test", zerolog.Nop())
+}
+
 // A connector's declaration is in two halves: the descriptor says what it is
 // and what it supports, and the factory is what actually constructs it. They
 // are separate because only the factory needs dependencies — but that is also
@@ -64,7 +71,7 @@ func testGiteaFetchers(t *testing.T) *gitea.Fetchers {
 func TestFactoriesCoverEveryDescriptor(t *testing.T) {
 	t.Parallel()
 
-	factories := sourceFactories(testFetchers(), testGrafanaFetchers(t), testPostHogFetchers(t), testGiteaFetchers(t), rss.NewFetchers(zerolog.Nop()), execenv.NewResolver(execenv.Options{}))
+	factories := sourceFactories(testFetchers(), testGrafanaFetchers(t), testPostHogFetchers(t), testGiteaFetchers(t), rss.NewFetchers(zerolog.Nop()), testRelayFetchers(t), execenv.NewResolver(execenv.Options{}))
 
 	for _, connectorType := range sources.Types() {
 		factory, ok := factories[connectorType]
@@ -86,7 +93,7 @@ func TestFactoriesCoverEveryDescriptor(t *testing.T) {
 func TestFactoriesMatchDescribedCapabilities(t *testing.T) {
 	t.Parallel()
 
-	factories := sourceFactories(testFetchers(), testGrafanaFetchers(t), testPostHogFetchers(t), testGiteaFetchers(t), rss.NewFetchers(zerolog.Nop()), execenv.NewResolver(execenv.Options{}))
+	factories := sourceFactories(testFetchers(), testGrafanaFetchers(t), testPostHogFetchers(t), testGiteaFetchers(t), rss.NewFetchers(zerolog.Nop()), testRelayFetchers(t), execenv.NewResolver(execenv.Options{}))
 
 	for _, connectorType := range sources.Types() {
 		descriptor, _ := sources.Lookup(connectorType)
@@ -135,7 +142,7 @@ func TestFactoriesMatchDescribedCapabilities(t *testing.T) {
 func TestPullFactoriesCarryTheConfiguredInterval(t *testing.T) {
 	t.Parallel()
 
-	factories := sourceFactories(testFetchers(), testGrafanaFetchers(t), testPostHogFetchers(t), testGiteaFetchers(t), rss.NewFetchers(zerolog.Nop()), execenv.NewResolver(execenv.Options{}))
+	factories := sourceFactories(testFetchers(), testGrafanaFetchers(t), testPostHogFetchers(t), testGiteaFetchers(t), rss.NewFetchers(zerolog.Nop()), testRelayFetchers(t), execenv.NewResolver(execenv.Options{}))
 	const floor = 90 * time.Minute
 
 	for _, connectorType := range sources.Types() {
@@ -165,7 +172,7 @@ func TestPullFactoriesCarryTheConfiguredInterval(t *testing.T) {
 func TestGithubFactoryIsAbsentWithoutAFetcher(t *testing.T) {
 	t.Parallel()
 
-	factories := sourceFactories(nil, nil, nil, nil, nil, execenv.NewResolver(execenv.Options{}))
+	factories := sourceFactories(nil, nil, nil, nil, nil, nil, execenv.NewResolver(execenv.Options{}))
 
 	_, ok := factories[ghsource.Descriptor.Type]
 	assert.False(t, ok, "the GitHub connector is wired without a fetcher to construct it over")
@@ -203,6 +210,9 @@ func seedValidConfig(config connector.Config) error {
 		c.Kind = gitea.KindSearch
 	case *rss.Config:
 		c.URL = "https://example.com/feed.xml"
+	case *relay.Config:
+		c.Credential = relay.Provider + "/relay.example.com-me@example.com"
+		c.Source = "src_1"
 	default:
 		return fmt.Errorf("no valid config seed for %T; add one alongside the connector", config)
 	}

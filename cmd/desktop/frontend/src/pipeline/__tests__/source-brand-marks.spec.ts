@@ -23,7 +23,7 @@ const sourceTypes = Object.values(byType).filter((def) => def.role === 'source')
 
 describe('source brand marks', () => {
   it('covers every source node type — each is either a known brand or a deliberate generic', () => {
-    const generic = ['sources.exec', 'sources.rss', 'sources.webhook']
+    const generic = ['sources.exec', 'sources.relay', 'sources.rss', 'sources.webhook']
     for (const def of sourceTypes) {
       const kind = sourceKindForNodeType(def.type)
       expect(kind, `${def.type} has no sourceKind`).toBeTruthy()

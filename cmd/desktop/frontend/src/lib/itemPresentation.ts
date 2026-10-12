@@ -19,6 +19,7 @@ import * as grafanaAlertsSourceNode from '../pipeline/nodes/sources.grafana_aler
 import * as grafanaIRMAlertsSourceNode from '../pipeline/nodes/sources.grafana_irm_alerts/config'
 import * as posthogErrorsSourceNode from '../pipeline/nodes/sources.posthog_errors/config'
 import * as posthogAlertsSourceNode from '../pipeline/nodes/sources.posthog_alerts/config'
+import * as relaySourceNode from '../pipeline/nodes/sources.relay/config'
 import * as rssSourceNode from '../pipeline/nodes/sources.rss/config'
 import * as webhookSourceNode from '../pipeline/nodes/sources.webhook/config'
 import IconActivity from '~icons/lucide/activity'
@@ -281,6 +282,14 @@ const rssPresentation: ItemPresentation = {
   markImage: (item, ctx) => ctx?.sourceImages?.[item.sourceScope],
 }
 
+// The relay is a hosted webhook, so its items fall back to the webhook glyph:
+// the feed icon allow-list has no relay-specific one.
+const relayPresentation: ItemPresentation = {
+  sourceLabel: 'Relay',
+  mark: (item, ctx) => feedIconComponent(ctx?.sourceIcons?.[item.sourceScope] || defaultWebhookSourceIcon),
+  markImage: (item, ctx) => ctx?.sourceImages?.[item.sourceScope],
+}
+
 const webhookPresentation: ItemPresentation = {
   sourceLabel: 'Webhook',
   mark: (item, ctx) => feedIconComponent(ctx?.sourceIcons?.[item.sourceScope] || defaultWebhookSourceIcon),
@@ -299,6 +308,7 @@ export function presentationFor(sourceKind: string | undefined): ItemPresentatio
   if (sourceKind === 'webhook') return webhookPresentation
   if (sourceKind === 'exec') return execPresentation
   if (sourceKind === 'rss') return rssPresentation
+  if (sourceKind === 'relay') return relayPresentation
   return { sourceLabel: sourceKind ?? '', mark: () => IconInbox }
 }
 
@@ -319,6 +329,7 @@ const SOURCE_KIND_BY_NODE_TYPE: Record<string, string> = {
   [webhookSourceNode.type]: webhookSourceNode.sourceKind,
   [execSourceNode.type]: execSourceNode.sourceKind,
   [rssSourceNode.type]: rssSourceNode.sourceKind,
+  [relaySourceNode.type]: relaySourceNode.sourceKind,
 }
 
 /** Flow node type → inbox item sourceKind; null for non-source node types. */

@@ -167,6 +167,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		application.NewService(NewGrafanaService(core.Grafana)),
 		application.NewService(NewPostHogService(core.PostHog)),
 		application.NewService(NewGiteaService(core.Gitea)),
+		application.NewService(NewRelayService(core.Relay)),
 		application.NewService(NewIntegrationsService(core.Integrations)),
 		application.NewService(NewPipelineService(core.Inbox)),
 		application.NewService(NewSourcesService(core.Sources)),

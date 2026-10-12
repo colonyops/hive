@@ -4,13 +4,14 @@ import { useIntegrations } from '../../composables/useIntegrations'
 import SelectField from './SelectField.vue'
 import TextField from './TextField.vue'
 
-type Provider = 'github' | 'gitea' | 'grafana' | 'posthog'
+type Provider = 'github' | 'gitea' | 'grafana' | 'posthog' | 'relay'
 
 const PROVIDERS: Record<Provider, { label: string; name: string; placeholder: string }> = {
   github: { label: 'Account', name: 'GitHub account', placeholder: 'github/octocat' },
   gitea: { label: 'Account', name: 'Gitea instance', placeholder: 'gitea/git.example.com-octocat' },
   grafana: { label: 'Stack', name: 'Grafana stack', placeholder: 'grafana/grafana.example.com-1' },
   posthog: { label: 'Project', name: 'PostHog project', placeholder: 'posthog/us.posthog.com-1' },
+  relay: { label: 'Account', name: 'Hive Relay account', placeholder: 'relay/relay.hivedesktop.com-you@example.com' },
 }
 
 const props = defineProps<{

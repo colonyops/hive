@@ -20,6 +20,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/connector"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/relayformat"
 )
 
 type Ingester interface {
@@ -259,7 +260,7 @@ func (l *Listener) handleHook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UnixMilli()
-	key, title, url := identity(path, body)
+	key, title, url := relayformat.GenericIdentity(path, body)
 
 	delivered := 0
 	var lastOffset int64

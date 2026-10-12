@@ -24,6 +24,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/github"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/grafana"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/posthog"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/relay"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/rss"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/sources/webhook"
 )
@@ -43,6 +44,7 @@ var descriptors = map[string]connector.Descriptor{
 	grafana.IRMAlertsDescriptor.Type: grafana.IRMAlertsDescriptor,
 	posthog.ErrorsDescriptor.Type:    posthog.ErrorsDescriptor,
 	posthog.AlertsDescriptor.Type:    posthog.AlertsDescriptor,
+	relay.Descriptor.Type:            relay.Descriptor,
 	rss.Descriptor.Type:              rss.Descriptor,
 	webhook.Descriptor.Type:          webhook.Descriptor,
 }

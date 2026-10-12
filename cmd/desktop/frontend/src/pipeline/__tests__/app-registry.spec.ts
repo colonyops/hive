@@ -19,6 +19,7 @@ describe('byType', () => {
       'sources.grafana_metrics',
       'sources.posthog_alerts',
       'sources.posthog_errors',
+      'sources.relay',
       'sources.rss',
       'sources.webhook',
     ])
@@ -55,6 +56,7 @@ describe('palette', () => {
       'sources.grafana_metrics',
       'sources.posthog_alerts',
       'sources.posthog_errors',
+      'sources.relay',
       'sources.rss',
       'sources.webhook',
     ])
