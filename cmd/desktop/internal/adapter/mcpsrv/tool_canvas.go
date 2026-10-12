@@ -93,8 +93,8 @@ func (ctrl *DriveController) registerCanvas(srv *mcp.Server) {
 		Description: "Ask Hive to open the canvas pane beside this chat or Code session, optionally pinned to one canvas by name " +
 			"(the name must exist — put_block first). It applies only while the user is viewing it; it never pulls " +
 			"them away from something else, and a write while the pane is closed already shows an unseen dot. Open when " +
-			"you finish something worth looking at, not on every write. A global canvas has no pane; the user reads it in " +
-			"the full-page canvas view.",
+			"you finish something worth looking at, not on every write. A global canvas lives in the shared space, which " +
+			"has no pane; the user reads it in the Drive page.",
 	}, ctrl.OpenCanvas)
 
 	addTool(srv, &mcp.Tool{

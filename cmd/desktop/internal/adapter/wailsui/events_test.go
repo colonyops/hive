@@ -118,3 +118,21 @@ func TestSubscribeEmitsDriveEventsUnderTheirFrontendNames(t *testing.T) {
 		data: DriveToggle{Session: "7", Space: "workspaces/ws", Path: "canvases/plan.canvas.json", Name: "plan", Open: true},
 	}, receiveEmitted(t, sink))
 }
+
+// One watcher batch publishes a DriveChanged per space back to back, and the
+// frontend reloads only the named space, so none of them may be dropped.
+func TestSubscribeEmitsEveryDriveChangeInOrder(t *testing.T) {
+	sink := make(chan emitted, 2)
+	swapEmitEvent(t, sink)
+
+	bus := events.New(zerolog.Nop())
+	t.Cleanup(bus.Close)
+	cancel := Subscribe(t.Context(), bus, nil)
+	t.Cleanup(cancel)
+
+	bus.Publish(t.Context(), events.DriveChanged{Space: "acme/site", Paths: []string{"a.md"}})
+	bus.Publish(t.Context(), events.DriveChanged{Space: "acme/api", Paths: []string{"b.md"}})
+
+	require.Equal(t, emitted{name: "drive:updated", data: DriveWrite{Space: "acme/site", Paths: []string{"a.md"}}}, receiveEmitted(t, sink))
+	require.Equal(t, emitted{name: "drive:updated", data: DriveWrite{Space: "acme/api", Paths: []string{"b.md"}}}, receiveEmitted(t, sink))
+}

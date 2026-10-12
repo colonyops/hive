@@ -56,8 +56,9 @@ func registerEvents() struct{} {
 	application.RegisterEvent[int64]("activity:appended")
 	// drive:updated carries the space and document paths that changed and,
 	// for a write an agent made through the desktop, its chat or hive
-	// session. Documents are stored state, so a pane re-reads what it shows
-	// on receipt; coalescing can drop an author but never content.
+	// session. The payload is a per-space delta with an author, so every
+	// event has to reach the frontend: the subscription buffers rather than
+	// coalesces, and a pane re-reads the named space on receipt.
 	application.RegisterEvent[DriveWrite](driveUpdatedEvent)
 	// drive:toggle carries an agent's ask to open or close the drive pane
 	// beside its chat. Pane visibility is UI intent, not state to re-read, so
@@ -140,7 +141,7 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		events.Subscribe(ctx, bus, "wailsui.menu-bar", events.Coalesce(), func(context.Context, events.MenuBarUpdated) {
 			trayStale()
 		}),
-		events.Subscribe(ctx, bus, "wailsui.drive", events.Coalesce(), func(_ context.Context, e events.DriveChanged) {
+		events.Subscribe(ctx, bus, "wailsui.drive", events.Buffer(64), func(_ context.Context, e events.DriveChanged) {
 			emitDriveUpdated(DriveWrite{Space: e.Space, Paths: e.Paths, Session: e.Session, HiveSession: e.HiveSession})
 		}),
 		events.Subscribe(ctx, bus, "wailsui.drive-toggle", events.Coalesce(), func(_ context.Context, e events.DriveToggleRequested) {

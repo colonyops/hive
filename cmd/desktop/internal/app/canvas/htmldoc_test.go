@@ -1,6 +1,7 @@
 package canvas
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -63,4 +64,27 @@ func TestWrapDocument(t *testing.T) {
 func TestWrapDocumentMetaCarriesThePolicy(t *testing.T) {
 	got := WrapDocument([]byte(`<p>x</p>`))
 	assert.Contains(t, got, `http-equiv="Content-Security-Policy" content="`+DocumentCSP+`"`)
+}
+
+// Non-whitespace text before <head> makes the parser open <body>, where a CSP
+// meta is ignored, so the meta has to precede every such character.
+func TestWrapDocumentMetaPrecedesLeadingText(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		text string
+	}{
+		{name: "text before head", body: `x<head><title>t</title></head><body></body>`, text: `x<head><title>t</title></head><body></body>`},
+		{name: "text between html and head", body: `<html>x<head>`, text: `x<head>`},
+		{name: "text before html", body: `x<html>`, text: `x<html>`},
+		{name: "text before doctype", body: `x<!doctype html><p>`, text: `x<!doctype html><p>`},
+		{name: "byte order mark", body: "\uFEFFx<head></head>", text: `x<head></head>`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := WrapDocument([]byte(tc.body))
+			assert.True(t, strings.HasPrefix(got, "<html><head>"+cspMeta), "meta is not ahead of all text: %q", got)
+			assert.Contains(t, got, tc.text)
+		})
+	}
 }

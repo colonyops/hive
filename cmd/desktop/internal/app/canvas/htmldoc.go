@@ -9,8 +9,13 @@ import (
 
 // DocumentCSP is the policy an html document runs under: https and data
 // sources only, so a page cannot reach the loopback MCP server, submit a form,
-// or frame anything.
+// or frame anything. Inline and https scripts stay allowed on purpose: agent
+// pages are meant to run, and the sandboxed frame, not this policy, is the
+// boundary
+// (ADR hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it).
 const DocumentCSP = "default-src 'none'; script-src 'unsafe-inline' https:; style-src 'unsafe-inline' https:; img-src data: https:; font-src data: https:; media-src data: https:; connect-src https:; frame-src 'none'; form-action 'none'; base-uri 'none'"
+
+const htmlWhitespace = "\t\n\f\r "
 
 // cspMeta needs no attribute escaping: DocumentCSP holds no double quote.
 const cspMeta = `<meta http-equiv="Content-Security-Policy" content="` + DocumentCSP + `">`
@@ -20,6 +25,7 @@ const cspMeta = `<meta http-equiv="Content-Security-Policy" content="` + Documen
 // document declares itself stays after ours; the browser enforces both, so a
 // document can only tighten the policy, never loosen it.
 func WrapDocument(body []byte) string {
+	body = bytes.TrimPrefix(body, []byte("\uFEFF"))
 	headEnd, htmlEnd, doctypeEnd := documentAnchors(body)
 	var out strings.Builder
 	out.Grow(len(body) + len(cspMeta) + 32)
@@ -45,8 +51,10 @@ func WrapDocument(body []byte) string {
 // documentAnchors finds the byte offsets just past the document's <head>,
 // <html>, and doctype tokens, or -1 for each it lacks. A tokenizer rather than
 // a substring search, so a "<head>" inside a comment or a "<header>" never
-// matches. Only the prologue is read: any other tag first means the document
-// has no explicit head.
+// matches. Only the prologue is read: any other tag, or any text that is not
+// whitespace, ends it. The parser opens <body> at the first such text, and a
+// CSP meta after that point is ignored, so a later <head> does not count and a
+// doctype after it is not kept in front.
 func documentAnchors(body []byte) (headEnd, htmlEnd, doctypeEnd int) {
 	headEnd, htmlEnd, doctypeEnd = -1, -1, -1
 	z := html.NewTokenizer(bytes.NewReader(body))
@@ -69,7 +77,11 @@ func documentAnchors(body []byte) (headEnd, htmlEnd, doctypeEnd int) {
 			default:
 				return headEnd, htmlEnd, doctypeEnd
 			}
-		case html.TextToken, html.CommentToken:
+		case html.TextToken:
+			if strings.TrimLeft(string(z.Raw()), htmlWhitespace) != "" {
+				return headEnd, htmlEnd, doctypeEnd
+			}
+		case html.CommentToken:
 		}
 	}
 }
