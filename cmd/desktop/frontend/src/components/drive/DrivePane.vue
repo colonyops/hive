@@ -10,7 +10,9 @@ import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
 import DriveDocumentActions from './DriveDocumentActions.vue'
 import DriveReader from './DriveReader.vue'
-import DriveReviewSidebar from './DriveReviewSidebar.vue'
+import DriveReviewCards from './DriveReviewCards.vue'
+import DriveReviewFooter from './DriveReviewFooter.vue'
+import DriveReviewHeader from './DriveReviewHeader.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import IconButton from '../ui/IconButton.vue'
 import PanelResizeHandle from '../ui/PanelResizeHandle.vue'
@@ -224,17 +226,23 @@ const {
       </div>
       <div
         v-if="reviewed && commentsOpen"
-        class="hive-scroll absolute inset-y-0 right-0 overflow-y-auto border-l border-border bg-pane px-3 pb-3 shadow-popover"
+        class="absolute inset-y-0 right-0 flex w-[min(360px,100%)] flex-col border-l border-row bg-pane shadow-popover"
+        data-testid="drive-pane-comments-panel"
       >
-        <DriveReviewSidebar
-          class="bg-pane"
+        <DriveReviewHeader
           :space="reviewed.space"
           :path="reviewed.path"
-          :agent="agent"
           closable
           testid="drive-pane"
           @close="commentsOpen = false"
         />
+        <DriveReviewCards
+          class="hive-scroll min-h-0 flex-1 overflow-y-auto"
+          :space="reviewed.space"
+          :path="reviewed.path"
+          testid="drive-pane"
+        />
+        <DriveReviewFooter :space="reviewed.space" :path="reviewed.path" :agent="agent" testid="drive-pane" />
       </div>
     </div>
   </aside>

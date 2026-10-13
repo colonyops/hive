@@ -76,22 +76,26 @@ describe('selectionToRange', () => {
 })
 
 describe('markReviewedBlocks', () => {
-  it('marks the innermost overlapping blocks and numbers each comment once', () => {
+  it('marks the innermost overlapping blocks and the active comment', () => {
     const root = mountRoot(body)
-    markReviewedBlocks(root, [
-      { id: 'a', startLine: 4, endLine: 4 },
-      { id: 'b', startLine: 9, endLine: 10 },
-    ])
-    expect(root.querySelector('h1')!.dataset.reviewMarker).toBe('1')
+    markReviewedBlocks(
+      root,
+      [
+        { id: 'a', startLine: 4, endLine: 4 },
+        { id: 'b', startLine: 9, endLine: 10 },
+      ],
+      'b',
+    )
+    expect(root.querySelector('h1')!.dataset.reviewIds).toBe('a')
+    expect(root.querySelector('h1')!.classList.contains('is-active-review')).toBe(false)
     const items = root.querySelectorAll('li')
     expect(items[0].classList.contains('has-review-comment')).toBe(true)
-    expect(items[0].dataset.reviewMarker).toBe('2')
+    expect(items[0].classList.contains('is-active-review')).toBe(true)
     expect(items[1].dataset.reviewIds).toBe('b')
-    expect(items[1].dataset.reviewMarker).toBeUndefined()
     expect(root.querySelector('ul')!.classList.contains('has-review-comment')).toBe(false)
 
     markReviewedBlocks(root, [])
-    expect(root.querySelectorAll('.has-review-comment')).toHaveLength(0)
-    expect(root.querySelector('[data-review-marker]')).toBeNull()
+    expect(root.querySelectorAll('.has-review-comment, .is-active-review')).toHaveLength(0)
+    expect(root.querySelector('[data-review-ids]')).toBeNull()
   })
 })

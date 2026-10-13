@@ -134,10 +134,10 @@ A Markdown document or a canvas can include front matter such as tags, status, o
 
 ### Comment on a document
 
-Select text in a Markdown document, in the pane or on the Drive page, and choose **Comment**. The comment is anchored to the lines of the file the selection covers, and the commented blocks are highlighted. On the Drive page, comments sit in a column beside the document, each level with the block it is on. In the pane, the comments button in the pane header shows them over the document. Select a comment to scroll to its block, or a highlighted block to find its comment. Edit or delete a comment from its card, and add a general note above them.
+Select text in a Markdown document, in the pane or on the Drive page, and a comment box opens under it. Type the comment and press <kbd>⌘↵</kbd> or **Add comment**; <kbd>Esc</kbd> closes it. The comment is anchored to the lines of the file the selection covers, and the commented blocks are tinted. On the Drive page, comments sit in a column beside the document, each on the row of its block. In the pane, the comments button in the pane header shows them over the document. Select a comment to scroll to its block, or a tinted block to find its comment; the active comment has **Edit** and **Delete**. Write a note for the agent at the bottom of the column.
 
-- **Copy feedback** puts the comments and the note on the clipboard as plain text that names the document's path. The comments stay.
-- **Send to Agent** opens a list of the agents running now, in Code sessions and chats, with their status. The agent beside the pane is listed first. Sending pastes the feedback into the agent as one message, submits it, and clears the comments. An agent that is working gets it mid-turn; an agent waiting on a prompt cannot be picked until the prompt is answered.
+- **Copy all** puts the comments and the note on the clipboard as plain text that names the document's path. The comments stay.
+- **Send to agent** (<kbd>⌘↵</kbd> in the note) opens a list of the agents running now, in Code sessions and chats, with their status. The agent beside the pane is listed first. Sending pastes the feedback into the agent as one message, submits it, and clears the comments. An agent that is working gets it mid-turn; an agent waiting on a prompt cannot be picked until the prompt is answered.
 - **Clear** deletes the comments and the note after asking.
 
 Comments are kept in Hive's database, not in the file, and survive a restart. If the document changes after you comment, the panel says the comments are on an earlier version. Send, copy, or discard them before adding new ones. Renaming or moving a document leaves its comments behind.

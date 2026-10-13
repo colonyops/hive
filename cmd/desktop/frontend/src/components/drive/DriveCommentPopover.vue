@@ -1,10 +1,10 @@
 <script setup lang="ts">
-// The comment form a text selection opens in the reader, anchored to the
-// Comment button that opened it.
-import { computed, nextTick, onMounted, ref } from 'vue'
+// The comment form a text selection opens, anchored under the selection. It
+// does not take focus on open: the selection stays live, so the user can
+// still copy it, and a click into the field starts the comment.
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import BaseButton from '../ui/BaseButton.vue'
 import InlineError from '../ui/InlineError.vue'
-import TextArea from '../ui/TextArea.vue'
 import { useAnchoredPopover } from '../../composables/useAnchoredPopover'
 import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import type { SourceRange } from '../../lib/driveReviewSelection'
@@ -19,25 +19,25 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ save: [text: string]; cancel: [] }>()
 
-const text = ref('')
+const text = defineModel<string>('text', { default: '' })
 const popover = ref<HTMLElement | null>(null)
-const input = ref<{ focus: () => void } | null>(null)
 const open = ref(true)
 const anchorRef = computed(() => props.anchor)
 const { style, measure } = useAnchoredPopover(anchorRef, popover, open)
 
 const lines = computed(() =>
   props.range.startLine === props.range.endLine
-    ? `Line ${props.range.startLine}`
-    : `Lines ${props.range.startLine}-${props.range.endLine}`,
+    ? `L${props.range.startLine}`
+    : `L${props.range.startLine}–${props.range.endLine}`,
 )
 
-onMounted(async () => {
+async function place(): Promise<void> {
   measure()
   await nextTick()
   measure()
-  input.value?.focus()
-})
+}
+onMounted(place)
+watch(() => props.range, place)
 
 useEscapeToClose(() => emit('cancel'))
 
@@ -51,31 +51,43 @@ function onKeydown(event: KeyboardEvent): void {
     save()
   }
 }
+
+defineExpose({ contains: (node: Node | null) => !!node && !!popover.value?.contains(node) })
 </script>
 
 <template>
   <Teleport to="body">
     <div
       ref="popover"
-      class="fixed z-50 flex w-80 flex-col gap-2 rounded-lg border border-card bg-raised p-3 shadow-popover"
+      class="fixed z-50 flex w-[360px] flex-col gap-2.5 rounded-xl border border-card bg-raised p-3 shadow-popover"
       :style="style"
       role="dialog"
-      aria-label="Comment"
+      aria-label="Add a comment"
       :data-testid="`${testid}-comment-popover`"
     >
-      <span class="font-mono text-caption text-text-4">{{ lines }}</span>
-      <TextArea
-        ref="input"
+      <div class="flex min-w-0 items-center gap-2 text-caption text-text-4">
+        <span class="shrink-0 font-mono text-micro">{{ lines }}</span>
+        <span class="min-w-0 truncate text-text-2">“{{ range.context }}”</span>
+        <span class="ml-auto shrink-0">Esc</span>
+      </div>
+      <textarea
         v-model="text"
-        :rows="3"
-        size="sm"
-        placeholder="Comment"
+        rows="3"
+        placeholder="Ask or instruct the agent…"
+        class="w-full resize-none rounded-lg border border-strong bg-app px-[11px] py-[9px] text-body text-text outline-none placeholder:text-text-4 focus:border-accent/60 focus:ring-3 focus:ring-accent/12"
         :data-testid="`${testid}-comment-text`"
         @keydown="onKeydown"
       />
       <InlineError v-if="error" variant="line" :message="error" :testid="`${testid}-comment-error`" />
-      <div class="flex justify-end gap-2">
-        <BaseButton variant="ghost" size="xs" :data-testid="`${testid}-comment-cancel`" @click="emit('cancel')">
+      <div class="flex items-center gap-2.5">
+        <span class="font-mono text-micro text-text-4">⌘↵ to add</span>
+        <BaseButton
+          variant="ghost"
+          size="xs"
+          class="ml-auto"
+          :data-testid="`${testid}-comment-cancel`"
+          @click="emit('cancel')"
+        >
           Cancel
         </BaseButton>
         <BaseButton
@@ -85,7 +97,7 @@ function onKeydown(event: KeyboardEvent): void {
           :data-testid="`${testid}-comment-save`"
           @click="save"
         >
-          Save
+          Add comment
         </BaseButton>
       </div>
     </div>

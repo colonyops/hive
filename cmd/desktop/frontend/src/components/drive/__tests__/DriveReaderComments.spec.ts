@@ -17,7 +17,7 @@ vi.mock(
 )
 
 describe('DriveReader comments', () => {
-  it('offers Comment for a selection and saves it on the source lines', async () => {
+  it('opens the comment popover for a selection and saves it on the source lines', async () => {
     const wrapper = mount(DriveReader, {
       props: {
         document: documentFor('e2e/repo', doc('plans/p.md'), {
@@ -43,10 +43,10 @@ describe('DriveReader comments', () => {
     document.dispatchEvent(new Event('selectionchange'))
     await flushPromises()
 
-    const button = document.querySelector<HTMLButtonElement>('[data-testid="r-comment-button"]')
-    expect(button).not.toBeNull()
-    button!.click()
+    await new Promise((resolve) => setTimeout(resolve, 250))
     await flushPromises()
+
+    expect(document.querySelector('[data-testid="r-comment-popover"]')!.textContent).toContain('“This plan”')
     const text = document.querySelector<HTMLTextAreaElement>('[data-testid="r-comment-text"]')!
     text.value = 'Name it'
     text.dispatchEvent(new Event('input'))

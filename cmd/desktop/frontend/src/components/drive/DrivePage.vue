@@ -2,6 +2,7 @@
 // Every space's documents at full page: the space picker in the header over
 // the sidebar's tree, the reader beside it, and a search that spans every
 // space.
+import { useElementSize, useResizeObserver } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import IconCode from '~icons/lucide/code'
 import IconGlobe from '~icons/lucide/globe'
@@ -10,7 +11,9 @@ import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
 import DriveDocumentActions from './DriveDocumentActions.vue'
 import DriveReader from './DriveReader.vue'
-import DriveReviewSidebar from './DriveReviewSidebar.vue'
+import DriveReviewCards from './DriveReviewCards.vue'
+import DriveReviewFooter from './DriveReviewFooter.vue'
+import DriveReviewHeader from './DriveReviewHeader.vue'
 import AppSelect, { type AppSelectOption } from '../ui/AppSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import EmptyState from '../ui/EmptyState.vue'
@@ -110,6 +113,18 @@ const offerSetup = computed(
 
 const reader = ref<HTMLElement | null>(null)
 const measure = ref<HTMLElement | null>(null)
+const footer = ref<HTMLElement | null>(null)
+const { height: footerHeight } = useElementSize(footer)
+
+// The reader's scrollbar takes width inside the scroller, which moves the
+// cards column left of the header and the composer above and below it; both
+// shift by the same width so the column reads as one.
+const gutter = ref(0)
+function measureGutter(): void {
+  gutter.value = reader.value ? reader.value.offsetWidth - reader.value.clientWidth : 0
+}
+useResizeObserver(reader, measureGutter)
+useResizeObserver(measure, measureGutter)
 
 const review = useDriveReview()
 const reviewed = computed(() => {
@@ -182,34 +197,45 @@ useEscapeToClose(() => emit('close'))
     </aside>
 
     <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <ViewHeader>
-        <template #title>
-          <span
-            class="min-w-0 truncate text-body font-semibold text-text"
-            :title="document?.entry.path"
-            data-testid="drive-page-title"
-            >{{ title }}</span
-          >
-          <span
-            v-if="document && (folder || modified)"
-            class="shrink-0 font-mono text-caption text-text-4"
-            data-testid="drive-page-folder"
-            >{{ folder }}<template v-if="folder && modified"> · </template
-            ><template v-if="modified">{{ relativeAge(modified) }}</template></span
-          >
-          <div class="flex-1" />
-          <DriveDocumentActions
-            v-if="document"
-            :space="space"
-            :entry="document.entry"
-            size="lg"
-            testid="drive-page"
-            @deleted="documentDeleted"
-            @moved="documentMoved"
-          />
-          <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
-        </template>
-      </ViewHeader>
+      <!-- The comments header shares the document's bar, so the column reads as part of the page. -->
+      <div class="flex shrink-0">
+        <ViewHeader class="min-w-0 flex-1">
+          <template #title>
+            <span
+              class="min-w-0 truncate text-body font-semibold text-text"
+              :title="document?.entry.path"
+              data-testid="drive-page-title"
+              >{{ title }}</span
+            >
+            <span
+              v-if="document && (folder || modified)"
+              class="shrink-0 font-mono text-caption text-text-4"
+              data-testid="drive-page-folder"
+              >{{ folder }}<template v-if="folder && modified"> · </template
+              ><template v-if="modified">{{ relativeAge(modified) }}</template></span
+            >
+            <div class="flex-1" />
+            <DriveDocumentActions
+              v-if="document"
+              :space="space"
+              :entry="document.entry"
+              size="lg"
+              testid="drive-page"
+              @deleted="documentDeleted"
+              @moved="documentMoved"
+            />
+            <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
+          </template>
+        </ViewHeader>
+        <DriveReviewHeader
+          v-if="reviewed"
+          class="shrink-0 border-l"
+          :style="{ width: `${360 + gutter}px`, paddingRight: `${16 + gutter}px` }"
+          :space="reviewed.space"
+          :path="reviewed.path"
+          testid="drive-page"
+        />
+      </div>
 
       <InlineError v-if="spacesError && !spaces.length" class="m-4" :message="spacesError" testid="drive-page-error" />
       <EmptyState
@@ -251,15 +277,24 @@ useEscapeToClose(() => emit('close'))
                 </BaseButton>
               </div>
             </div>
-            <DriveReviewSidebar
+            <DriveReviewCards
               v-if="reviewed"
-              class="mr-6 bg-app py-5"
+              class="w-[360px] shrink-0 border-l border-row bg-pane"
+              :style="{ paddingBottom: `${footerHeight + 16}px` }"
               :space="reviewed.space"
               :path="reviewed.path"
               :align-to="measure"
               testid="drive-page"
             />
           </div>
+        </div>
+        <div
+          v-if="reviewed"
+          ref="footer"
+          class="absolute bottom-0 w-[360px] border-l border-row"
+          :style="{ right: `${gutter}px` }"
+        >
+          <DriveReviewFooter :space="reviewed.space" :path="reviewed.path" testid="drive-page" />
         </div>
       </div>
     </div>

@@ -75,27 +75,28 @@ test("a comment on a Drive document survives a reload, then clears", async ({
       selection.removeAllRanges();
       selection.addRange(range);
     });
-  await page.getByTestId("drive-page-comment-button").click();
+  await expect(page.getByTestId("drive-page-comment-popover")).toContainText(
+    "This plan",
+  );
   await page.getByTestId("drive-page-comment-text").fill("Name the plan");
   await page.getByTestId("drive-page-comment-save").click();
 
   const row = page.getByTestId("drive-page-review-card-1");
-  await expect(row).toContainText("L8-9");
-  await expect(row).toContainText("This plan");
+  await expect(row).toContainText("L8–9");
   await expect(row).toContainText("Name the plan");
-  await expect(body.locator("[data-review-marker='1']")).toHaveCount(1);
+  await expect(body.locator(".has-review-comment")).toHaveCount(1);
 
   await page.reload();
   await expect(page.getByTestId("drive-page-review-card-1")).toContainText(
     "Name the plan",
   );
-  await expect(body.locator("[data-review-marker='1']")).toHaveCount(1);
+  await expect(body.locator(".has-review-comment")).toHaveCount(1);
 
   await page.getByTestId("drive-page-review-copy").click();
   await expect(page.getByTestId("drive-page-review-card-1")).toBeVisible();
 
   await page.getByTestId("drive-page-review-clear").click();
-  await page.getByTestId("drive-page-review-confirm-confirm").click();
-  await expect(page.getByTestId("drive-page-review")).toHaveCount(0);
+  await page.getByTestId("drive-page-review-clear-confirm").click();
+  await expect(page.getByTestId("drive-page-review-header")).toHaveCount(0);
   await expect(body.locator(".has-review-comment")).toHaveCount(0);
 });

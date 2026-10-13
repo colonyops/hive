@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // One document rendered by kind. The pane and the full-page view share it, so
 // a document reads the same in both and only the width differs.
-import { useEventListener, useMutationObserver } from '@vueuse/core'
+import { useDebounceFn, useEventListener, useMutationObserver } from '@vueuse/core'
 import { computed, ref, watch, type ComponentPublicInstance } from 'vue'
 import HtmlDocumentFrame from './HtmlDocumentFrame.vue'
 import DriveCommentPopover from './DriveCommentPopover.vue'
@@ -10,7 +10,6 @@ import CanvasMarkdown from '../CanvasMarkdown.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import InlineError from '../ui/InlineError.vue'
 import IconArrowUpRight from '~icons/lucide/arrow-up-right'
-import IconMessageSquarePlus from '~icons/lucide/message-square-plus'
 import { useCanvasSettings } from '../../stores/useCanvasSettings'
 import { useDriveReview } from '../../stores/useDriveReview'
 import { entryTime, frontmatterLineCount, linkTarget, markdownBody, type FrontmatterValue } from '../../lib/drive'
@@ -25,7 +24,7 @@ const props = defineProps<{
   error: string | null
   /**
    * Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-file`, `-error`,
-   * `-empty`, `-comment-button`, and the comment popover's ids (DriveCommentPopover).
+   * `-empty`, and the comment popover's ids (DriveCommentPopover).
    */
   testid: string
 }>()
@@ -78,39 +77,41 @@ const sourceLines = computed(() =>
 const markdownView = ref<ComponentPublicInstance | null>(null)
 const body = computed(() => (markdownView.value?.$el as HTMLElement | undefined) ?? null)
 
-const selected = ref<SourceRange | null>(null)
-const buttonPosition = ref<{ top: number; left: number } | null>(null)
-const commentButton = ref<HTMLElement | null>(null)
+// A finished selection opens the comment popover under it. It waits for the
+// selection to settle, so a drag does not open it at every step, and it
+// leaves an open draft alone once the user is in it or has typed.
 const drafting = ref<SourceRange | null>(null)
+const draftText = ref('')
+const anchorRect = ref<{ top: number; left: number; width: number; height: number } | null>(null)
+const selectionAnchor = ref<HTMLElement | null>(null)
+const popover = ref<{ contains: (node: Node | null) => boolean } | null>(null)
 const saving = ref(false)
 const saveError = ref<string | null>(null)
+
+const onSelectionChange = useDebounceFn(() => {
+  if (popover.value?.contains(globalThis.document.activeElement) || draftText.value.trim()) return
+  const selection = globalThis.getSelection()
+  const range = selection && body.value && current.value ? selectionToRange(selection, body.value) : null
+  if (!range || !selection) {
+    endComment()
+    return
+  }
+  const rect = selection.getRangeAt(0).getBoundingClientRect()
+  anchorRect.value = { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+  drafting.value = range
+  saveError.value = null
+}, 200)
 
 useEventListener(
   () => (reviewed.value ? globalThis.document : null),
   'selectionchange',
-  () => {
-    if (drafting.value) return
-    const selection = globalThis.getSelection()
-    const range = selection && body.value && current.value ? selectionToRange(selection, body.value) : null
-    selected.value = range
-    if (!range || !selection) {
-      buttonPosition.value = null
-      return
-    }
-    const rect = selection.getRangeAt(0).getBoundingClientRect()
-    buttonPosition.value = { top: Math.max(8, rect.top - 34), left: Math.max(8, rect.right - 28) }
-  },
+  () => void onSelectionChange(),
 )
-
-function startComment(): void {
-  drafting.value = selected.value
-  saveError.value = null
-}
 
 function endComment(): void {
   drafting.value = null
-  selected.value = null
-  buttonPosition.value = null
+  draftText.value = ''
+  anchorRect.value = null
   saveError.value = null
 }
 
@@ -135,18 +136,34 @@ watch(reviewed, endComment)
 // renders again), so the markers follow every change to it, not only to the
 // comments. The markers set attributes, which this does not observe.
 function mark(): void {
-  if (body.value) markReviewedBlocks(body.value, current.value ? comments.value : [], reviewStore.active.value)
+  if (body.value) {
+    markReviewedBlocks(
+      body.value,
+      current.value ? comments.value : [],
+      reviewStore.active.value,
+      reviewStore.hovered.value,
+    )
+  }
 }
 useMutationObserver(body, mark, { childList: true, subtree: true })
-watch([body, comments, current, reviewStore.active], mark, { flush: 'post' })
+watch([body, comments, current, reviewStore.active, reviewStore.hovered], mark, { flush: 'post' })
+
+// Hover reaches the comment from any element inside its block: a link, a
+// code span, a nested list item.
+function commentAt(target: EventTarget | null): string | null {
+  if (!(target instanceof Element)) return null
+  return target.closest<HTMLElement>('[data-review-ids]')?.dataset.reviewIds?.split(' ')[0] ?? null
+}
+useEventListener(body, 'mouseover', (event: MouseEvent) => reviewStore.setHovered(commentAt(event.target)))
+useEventListener(body, 'mouseleave', () => reviewStore.setHovered(null))
 
 // A click on a commented block points at its comment; a link inside it still
 // follows.
 useEventListener(body, 'click', (event: MouseEvent) => {
   const target = event.target
   if (!(target instanceof Element) || target.closest('a') || !globalThis.getSelection()?.isCollapsed) return
-  const ids = target.closest<HTMLElement>('[data-review-ids]')?.dataset.reviewIds
-  if (ids) reviewStore.setActive(ids.split(' ')[0])
+  const id = commentAt(target)
+  if (id) reviewStore.setActive(id)
 })
 
 function follow(href: string): void {
@@ -239,23 +256,24 @@ function onBodyClick(event: MouseEvent): void {
     />
     <EmptyState v-else-if="!loading" variant="inline" message="Nothing here yet." :data-testid="`${testid}-empty`" />
     <Teleport to="body">
-      <button
-        v-if="buttonPosition"
-        ref="commentButton"
-        type="button"
-        class="drive-comment-button fixed z-40 flex h-7 cursor-pointer items-center gap-1 rounded-lg border border-card bg-raised px-2 text-small font-medium text-text shadow-popover hover:bg-chip"
-        :style="{ top: `${buttonPosition.top}px`, left: `${buttonPosition.left}px` }"
-        :data-testid="`${testid}-comment-button`"
-        @mousedown.prevent
-        @click="startComment"
-      >
-        <IconMessageSquarePlus class="size-3.5" aria-hidden="true" />
-        Comment
-      </button>
+      <div
+        v-if="drafting && anchorRect"
+        ref="selectionAnchor"
+        class="pointer-events-none fixed"
+        :style="{
+          top: `${anchorRect.top}px`,
+          left: `${anchorRect.left}px`,
+          width: `${anchorRect.width}px`,
+          height: `${anchorRect.height}px`,
+        }"
+        aria-hidden="true"
+      />
     </Teleport>
     <DriveCommentPopover
       v-if="drafting"
-      :anchor="commentButton"
+      ref="popover"
+      v-model:text="draftText"
+      :anchor="selectionAnchor"
       :range="drafting"
       :busy="saving"
       :error="saveError"
@@ -349,37 +367,29 @@ function onBodyClick(event: MouseEvent): void {
 .canvas-reading-body.markdown-body :deep(tr) {
   background: transparent;
 }
+/* The highlight is the only marker of a comment in the document: a quiet
+   tint on every commented block, stronger under the pointer, and stronger
+   still with a hairline outline for the active one. The tint spreads past the
+   block with a shadow and the outline sits in that margin, so neither moves
+   the text. */
 .canvas-reading-body.markdown-body :deep(.has-review-comment) {
   border-radius: 4px;
-  background: var(--color-accent-tint);
-  box-shadow: -6px 0 0 var(--color-accent-tint);
-}
-.canvas-reading-body.markdown-body :deep(.has-review-comment) {
+  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 6%, transparent);
   cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.canvas-reading-body.markdown-body :deep(.is-hovered-review) {
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 10%, transparent);
 }
 .canvas-reading-body.markdown-body :deep(.is-active-review) {
-  background: color-mix(in oklab, var(--color-accent) 22%, transparent);
-  box-shadow: -6px 0 0 color-mix(in oklab, var(--color-accent) 22%, transparent);
-}
-.canvas-reading-body.markdown-body :deep([data-review-marker]) {
-  position: relative;
-}
-.canvas-reading-body.markdown-body :deep([data-review-marker])::before {
-  /* Inside the block's right edge: the pane's narrow gutter would clip a
-     badge in the left margin. */
-  position: absolute;
-  top: 0;
-  right: 0;
-  min-width: 18px;
-  padding: 0 4px;
-  border-radius: 9px;
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  content: attr(data-review-marker);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 18px;
-  text-align: center;
+  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 12%, transparent);
+  outline: 1px solid color-mix(in oklab, var(--color-accent) 35%, transparent);
+  outline-offset: 4px;
 }
 .canvas-link {
   display: flex;

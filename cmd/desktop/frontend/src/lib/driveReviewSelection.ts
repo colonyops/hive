@@ -39,23 +39,24 @@ export function selectionToRange(sel: Selection, root: HTMLElement): SourceRange
 
 const commentClass = 'has-review-comment'
 const activeClass = 'is-active-review'
+const hoverClass = 'is-hovered-review'
 
 /**
  * Marks the blocks under root that each comment covers: the innermost blocks
  * whose source lines overlap it get the has-review-comment class and list the
- * comment's id in data-review-ids, and the first of them carries the
- * comment's number, from 1, in data-review-marker. The blocks of the active
- * comment also get is-active-review. Earlier marks are removed first.
+ * comment's id in data-review-ids. The blocks of the active comment also get
+ * is-active-review, and those of the hovered one is-hovered-review. Earlier
+ * marks are removed first.
  */
 export function markReviewedBlocks(
   root: HTMLElement,
   comments: readonly { id: string; startLine: number; endLine: number }[],
   active: string | null = null,
+  hovered: string | null = null,
 ): void {
   for (const marked of root.querySelectorAll<HTMLElement>(`.${commentClass}`)) {
-    marked.classList.remove(commentClass, activeClass)
+    marked.classList.remove(commentClass, activeClass, hoverClass)
     marked.removeAttribute('data-review-ids')
-    marked.removeAttribute('data-review-marker')
   }
   if (!comments.length) return
 
@@ -64,18 +65,16 @@ export function markReviewedBlocks(
     start: Number(element.dataset.sourceStart),
     end: Number(element.dataset.sourceEnd),
   }))
-  comments.forEach((comment, index) => {
+  for (const comment of comments) {
     const overlapping = blocks.filter((block) => block.start <= comment.endLine && block.end >= comment.startLine)
     const innermost = overlapping.filter(
       (block) => !overlapping.some((other) => other !== block && block.element.contains(other.element)),
     )
-    innermost.forEach(({ element }, position) => {
+    for (const { element } of innermost) {
       element.classList.add(commentClass)
       if (comment.id === active) element.classList.add(activeClass)
+      if (comment.id === hovered) element.classList.add(hoverClass)
       element.dataset.reviewIds = [element.dataset.reviewIds, comment.id].filter(Boolean).join(' ')
-      if (position === 0) {
-        element.dataset.reviewMarker = [element.dataset.reviewMarker, String(index + 1)].filter(Boolean).join(',')
-      }
-    })
-  })
+    }
+  }
 }
