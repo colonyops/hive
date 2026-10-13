@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/xterm'
-import { TerminalOutputWriter } from '../terminalOutput'
+import { ScreenTitleFilter, TerminalOutputWriter } from '../terminalOutput'
 
 const encoder = new TextEncoder()
 const decoder = new TextDecoder()
@@ -151,4 +151,47 @@ it('releases a synchronized frame that grows past the hold bound', () => {
   expect(sent).toBeLessThanOrEqual(2 << 20)
   const total = written.reduce((n, part) => n + part.length, 0)
   expect(total).toBe(sent + 8)
+})
+
+describe('ScreenTitleFilter', () => {
+  function strip(...chunks: string[]): string {
+    const filter = new ScreenTitleFilter()
+    return chunks.map((chunk) => decoder.decode(filter.strip(encoder.encode(chunk)))).join('')
+  }
+
+  it('drops the window name a shell sends before each command', () => {
+    expect(strip('\x1bkgit\x1b\\done\n')).toBe('done\n')
+  })
+
+  it('drops a window name split at every byte boundary', () => {
+    const data = 'a\x1bkgit\x1b\\b\x1b[31mc'
+    expect(strip(...data.split(''))).toBe('ab\x1b[31mc')
+  })
+
+  it('passes other escape sequences through unchanged', () => {
+    const data = '\x1b[?1049h\x1b]0;title\x07\x1b\x1bc\x1b'
+    expect(strip(data, 'x')).toBe(data + 'x')
+  })
+
+  it('ends the name on BEL, and on an ESC that starts another sequence', () => {
+    expect(strip('\x1bkgit\x07a', '\x1bkvim\x1b[1mb')).toBe('a\x1b[1mb')
+  })
+
+  it('aborts the name on CAN', () => {
+    expect(strip('\x1bkgit\x18a')).toBe('\x18a')
+  })
+
+  it('renders the issue repro as plain output', async () => {
+    const term = new Terminal({ cols: 24, rows: 2 })
+    const writes: Promise<void>[] = []
+    const output = new TerminalOutputWriter((data) => {
+      writes.push(write(term, data))
+    })
+
+    output.write(encoder.encode('\x1bkgi'))
+    output.write(encoder.encode('t\x1b\\done'))
+    await Promise.all(writes)
+
+    expect(screen(term)[0]).toBe('done')
+  })
 })

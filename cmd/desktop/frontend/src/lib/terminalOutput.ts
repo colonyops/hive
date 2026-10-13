@@ -19,10 +19,15 @@ export class TerminalOutputWriter {
   private endMatched = 0
   private synchronizing = false
   private timer: ReturnType<typeof setTimeout> | undefined
+  private readonly titles = new ScreenTitleFilter()
 
   constructor(private readonly sink: (data: Uint8Array) => void) {}
 
   write(data: Uint8Array): void {
+    this.forward(this.titles.strip(data))
+  }
+
+  private forward(data: Uint8Array): void {
     if (!data.length) return
     if (this.synchronizing) {
       this.writeSynchronized(data)
@@ -60,6 +65,7 @@ export class TerminalOutputWriter {
    * the timeout — would paint pre-repaint output over the snapshot.
    */
   reset(): void {
+    this.titles.reset()
     clearTimeout(this.timer)
     this.timer = undefined
     this.prefix = new Uint8Array()
@@ -82,7 +88,7 @@ export class TerminalOutputWriter {
 
       this.appendFrame(data.subarray(0, i + 1))
       this.flushFrame()
-      this.write(data.subarray(i + 1))
+      this.forward(data.subarray(i + 1))
       return
     }
     this.appendFrame(data)
@@ -125,6 +131,87 @@ export class TerminalOutputWriter {
       this.prefix = new Uint8Array()
       if (prefix.length) this.sink(prefix)
     }, SYNCHRONIZED_OUTPUT_TIMEOUT_MS)
+  }
+}
+
+const ESC = 0x1b
+const BEL = 0x07
+const CAN = 0x18
+const SUB = 0x1a
+const LOWERCASE_K = 0x6b
+const BACKSLASH = 0x5c
+const LONE_ESC = Uint8Array.of(ESC)
+
+/**
+ * Removes screen's window-name string, `ESC k <name> ESC \`.
+ *
+ * Shells send it when TERM is screen* or tmux* (oh-my-zsh does by default).
+ * tmux consumes it on the pane but control mode forwards the raw bytes, and
+ * xterm.js has no handler for it, so it prints the name. The string can span
+ * %output notifications, so the state carries across chunks; an ESC that ends
+ * a chunk is held until the next byte says whether it opens one.
+ *
+ * The string ends the way tmux ends it: ST or BEL, CAN or SUB abort it, and
+ * any other ESC ends it and starts a new sequence.
+ */
+export class ScreenTitleFilter {
+  private state: 'ground' | 'escape' | 'title' | 'titleEscape' = 'ground'
+
+  strip(data: Uint8Array): Uint8Array {
+    const kept: Uint8Array[] = []
+    // Start of the bytes being passed through, or -1 while dropping or while
+    // the ESC that opened this.state came from an earlier chunk.
+    let run = this.state === 'ground' ? 0 : -1
+    for (let i = 0; i < data.length; i++) {
+      const byte = data[i]
+      switch (this.state) {
+        case 'ground':
+          if (byte === ESC) this.state = 'escape'
+          break
+        case 'escape':
+          if (byte === LOWERCASE_K) {
+            if (run !== -1 && i - 1 > run) kept.push(data.subarray(run, i - 1))
+            run = -1
+            this.state = 'title'
+          } else {
+            if (run === -1) {
+              kept.push(LONE_ESC)
+              run = i
+            }
+            this.state = byte === ESC ? 'escape' : 'ground'
+          }
+          break
+        case 'title':
+          if (byte === ESC) this.state = 'titleEscape'
+          else if (byte === BEL) {
+            this.state = 'ground'
+            run = i + 1
+          } else if (byte === CAN || byte === SUB) {
+            this.state = 'ground'
+            run = i
+          }
+          break
+        case 'titleEscape':
+          if (byte === BACKSLASH) {
+            this.state = 'ground'
+            run = i + 1
+          } else {
+            this.state = 'escape'
+            i--
+          }
+          break
+      }
+    }
+    if (run !== -1) {
+      const end = this.state === 'escape' ? data.length - 1 : data.length
+      if (end > run) kept.push(data.subarray(run, end))
+    }
+    if (kept.length === 1) return kept[0]
+    return concatenate(kept)
+  }
+
+  reset(): void {
+    this.state = 'ground'
   }
 }
 
