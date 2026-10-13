@@ -61,7 +61,6 @@ watch(
 // The header title opens the tree over the content (the Grafana-assistant
 // pattern) rather than a dropdown.
 const browsing = ref(false)
-const htmlExpanded = ref(true)
 
 const headerTitle = computed(() => (document.value ? entryLabel(document.value.entry) : shown.value) || 'Drive')
 
@@ -133,7 +132,6 @@ const {
         v-if="document"
         :space="space"
         :entry="document.entry"
-        v-model:html-expanded="htmlExpanded"
         testid="drive-pane"
         @deleted="documentDeleted"
         @moved="documentMoved"
@@ -162,7 +160,7 @@ const {
       @escape="browsing = false"
     />
 
-    <!-- Positioned so an expanded html document fills the reader, not the pane. -->
+    <!-- Positioned so an html document fills the reader, not the pane. -->
     <div v-else class="relative flex min-h-0 flex-1 flex-col">
       <div ref="reader" class="hive-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
         <DriveReader
@@ -170,7 +168,6 @@ const {
           :paths="paths"
           :loading="loading"
           :error="error ?? treeError"
-          :html-expanded="htmlExpanded"
           testid="drive-pane"
           @open-url="emit('open-url', $event)"
           @open="pick"

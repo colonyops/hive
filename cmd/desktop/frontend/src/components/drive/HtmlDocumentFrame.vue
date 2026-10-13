@@ -5,15 +5,11 @@
 // is left out until it is verified on WKWebView (ADR
 // hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it).
 //
-// Expanded fills the reader it sits in, the nearest positioned ancestor in
+// The frame fills the reader it sits in, the nearest positioned ancestor in
 // DrivePage and DrivePane, and leaves the tree and the document header in
-// place, so it is not a modal and does not stop the global keys. The toggle
-// lives in the header (DriveDocumentActions). Collapsing restyles the same
-// element rather than moving it: moving an iframe in the DOM reloads it, and
-// a demo would lose its state.
+// place.
 defineProps<{
   html: string
-  expanded: boolean
   /** Derives `-frame`. */
   testid: string
 }>()
@@ -25,8 +21,7 @@ defineProps<{
     :srcdoc="html"
     referrerpolicy="no-referrer"
     title="HTML document"
-    class="w-full flex-1 border-0 bg-white"
-    :class="expanded ? 'absolute inset-0 z-30 h-full' : 'min-h-[480px] rounded-lg border border-border'"
+    class="absolute inset-0 z-30 h-full w-full border-0 bg-white"
     :data-testid="`${testid}-frame`"
   />
 </template>

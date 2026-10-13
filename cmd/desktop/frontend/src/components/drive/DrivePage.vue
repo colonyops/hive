@@ -95,7 +95,6 @@ const folder = computed(() => {
   return slash < 0 ? '' : path.slice(0, slash)
 })
 const modified = computed(() => (document.value ? entryTime(document.value.entry.modified) : 0))
-const htmlExpanded = ref(true)
 
 // The pane's reason: Hive wires a workspace's agent, never a Code session's.
 const offerSetup = computed(
@@ -193,7 +192,6 @@ useEscapeToClose(() => emit('close'))
             v-if="document"
             :space="space"
             :entry="document.entry"
-            v-model:html-expanded="htmlExpanded"
             size="lg"
             testid="drive-page"
             @deleted="documentDeleted"
@@ -210,7 +208,7 @@ useEscapeToClose(() => emit('close'))
         message="No spaces yet. A repository, a workspace, or the shared space appears here once a document is written to it."
         data-testid="drive-page-no-spaces"
       />
-      <!-- Positioned so an expanded html document fills the reader, not the page. -->
+      <!-- Positioned so an html document fills the reader, not the page. -->
       <div v-else class="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div
           ref="reader"
@@ -227,7 +225,6 @@ useEscapeToClose(() => emit('close'))
               :paths="paths"
               :loading="loading"
               :error="error"
-              :html-expanded="htmlExpanded"
               testid="drive-page"
               @open-url="emit('open-url', $event)"
               @open="openDocument"

@@ -278,22 +278,17 @@ describe('DrivePane', () => {
     expect(wrapper.find('[data-testid="drive-pane-more"]').exists()).toBe(true)
   })
 
-  it('marks an html document sandboxed in the header and toggles it between filling the reader and inline', async () => {
+  it('marks an html document sandboxed in the header and fills the reader with it', async () => {
     const page = doc('page.html')
     tree = root([page])
     drive.Document.mockResolvedValue(documentFor('workspaces/web-app', page, { html: '<p>hi</p>' }))
     const wrapper = await mountPane()
     expect(wrapper.find('[data-testid="drive-pane-sandbox"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="drive-pane-frame"]').classes()).toContain('absolute')
-
-    await wrapper.get('[data-testid="drive-pane-frame-expand"]').trigger('click')
-
-    expect(wrapper.get('[data-testid="drive-pane-frame"]').classes()).not.toContain('absolute')
   })
 
-  it('shows no sandbox controls for a markdown document', async () => {
+  it('shows no sandbox notice for a markdown document', async () => {
     const wrapper = await mountPane({ path: plan.path })
     expect(wrapper.find('[data-testid="drive-pane-sandbox"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="drive-pane-frame-expand"]').exists()).toBe(false)
   })
 })

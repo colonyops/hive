@@ -5,8 +5,6 @@ import IconCheck from '~icons/lucide/check'
 import IconCopy from '~icons/lucide/copy'
 import IconDownload from '~icons/lucide/download'
 import IconEllipsis from '~icons/lucide/ellipsis'
-import IconMaximize from '~icons/lucide/maximize-2'
-import IconMinimize from '~icons/lucide/minimize-2'
 import IconShield from '~icons/lucide/shield'
 import DriveEntryMenu from './DriveEntryMenu.vue'
 import AppTooltip from '../ui/AppTooltip.vue'
@@ -25,11 +23,9 @@ const props = defineProps<{
   space: string
   entry: EntryWire
   size?: 'md' | 'lg'
-  /** Derives `-sandbox`, `-frame-expand`, `-copy`, `-download`, `-more`, and the entry menu's ids (DriveEntryMenu). */
+  /** Derives `-sandbox`, `-copy`, `-download`, `-more`, and the entry menu's ids (DriveEntryMenu). */
   testid: string
 }>()
-/** Whether an html document fills the reader. */
-const htmlExpanded = defineModel<boolean>('htmlExpanded', { default: true })
 const emit = defineEmits<{ deleted: [path: string]; moved: [from: string, to: string] }>()
 
 const log = createLogger('drive-document-actions')
@@ -98,14 +94,6 @@ function openMenu(event: MouseEvent): void {
         <IconShield class="size-3.5" aria-label="Sandboxed document" />
       </span>
     </AppTooltip>
-    <IconButton
-      :label="htmlExpanded ? 'Collapse document' : 'Expand to fill the reader'"
-      :icon="htmlExpanded ? IconMinimize : IconMaximize"
-      :size="size"
-      :aria-pressed="htmlExpanded"
-      :data-testid="`${testid}-frame-expand`"
-      @click="htmlExpanded = !htmlExpanded"
-    />
   </template>
   <template v-if="exportable">
     <IconButton
