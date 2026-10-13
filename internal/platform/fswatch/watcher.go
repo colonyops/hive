@@ -38,6 +38,8 @@ const relevantOps = fsnotify.Create | fsnotify.Write | fsnotify.Remove | fsnotif
 
 type options struct {
 	debounce time.Duration
+	// budget caps the descriptors the watches hold; 0 is no cap.
+	budget int
 	// events and errors replace fsnotify's channels in tests, which then
 	// decide which events the pump sees.
 	events <-chan fsnotify.Event
@@ -84,11 +86,14 @@ type Watcher struct {
 	fsw     *fsnotify.Watcher
 	changes chan Change
 
-	// dirs, pending, and resync belong to the pump goroutine after New
-	// returns.
-	dirs    map[string]struct{}
-	pending map[string]struct{}
-	resync  bool
+	// dirs, pending, resync, and the budget fields belong to the pump
+	// goroutine after New returns. dirs maps a watched directory to the
+	// descriptors its watch is counted as holding.
+	dirs         map[string]int
+	pending      map[string]struct{}
+	resync       bool
+	descriptors  int
+	budgetWarned bool
 
 	closeOnce sync.Once
 	stop      chan struct{}
@@ -97,7 +102,8 @@ type Watcher struct {
 
 // New walks root, adds one fsnotify watch per directory, and starts the pump.
 func New(logger zerolog.Logger, root string, opts ...Option) (*Watcher, error) {
-	o := options{debounce: DefaultDebounce}
+	budget, budgetErr := descriptorBudget()
+	o := options{debounce: DefaultDebounce, budget: budget}
 	for _, opt := range opts {
 		opt(&o)
 	}
@@ -132,10 +138,13 @@ func New(logger zerolog.Logger, root string, opts ...Option) (*Watcher, error) {
 		opts:    o,
 		fsw:     fsw,
 		changes: make(chan Change),
-		dirs:    map[string]struct{}{},
+		dirs:    map[string]int{},
 		pending: map[string]struct{}{},
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
+	}
+	if budgetErr != nil {
+		w.logger.Debug().Err(budgetErr).Int("budget", o.budget).Msg("descriptor limit not read; using the default budget")
 	}
 	if err := w.addTree(root); err != nil {
 		_ = fsw.Close()
@@ -298,13 +307,20 @@ func (w *Watcher) watchable(name string) bool {
 // addTree watches dir before reading it, so a file created after the watch
 // exists produces an event and one created before it is found by the
 // consumer's read of dir. A directory already watched is walked again, which
-// is how recover finds the directories it missed.
+// is how recover finds the directories it missed. Past the descriptor budget
+// a directory is left unwatched rather than failing the walk.
 func (w *Watcher) addTree(dir string) error {
-	if _, ok := w.dirs[dir]; !ok {
+	_, watched := w.dirs[dir]
+	if !watched {
+		if w.opts.budget > 0 && w.descriptors >= w.opts.budget {
+			w.warnOverBudget(dir)
+			return nil
+		}
 		if err := w.fsw.Add(dir); err != nil {
 			return err
 		}
-		w.dirs[dir] = struct{}{}
+		w.dirs[dir] = 1
+		w.descriptors++
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -313,6 +329,11 @@ func (w *Watcher) addTree(dir string) error {
 			return nil
 		}
 		return err
+	}
+	if !watched {
+		// kqueue holds a descriptor per entry of a watched directory.
+		w.dirs[dir] += len(entries)
+		w.descriptors += len(entries)
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() || skipDir(entry.Name()) {
@@ -341,6 +362,7 @@ func (w *Watcher) dropTree(dir string) {
 		if tracked != dir && !strings.HasPrefix(tracked, prefix) {
 			continue
 		}
+		w.descriptors -= w.dirs[tracked]
 		delete(w.dirs, tracked)
 		delete(w.pending, tracked)
 		err := w.fsw.Remove(tracked)
@@ -348,4 +370,16 @@ func (w *Watcher) dropTree(dir string) {
 			w.logger.Debug().Err(err).Str("dir", tracked).Msg("unwatch directory failed")
 		}
 	}
+}
+
+// warnOverBudget logs once: the directories past the budget go unwatched for
+// the watcher's lifetime, and a change in one is seen only when its parent's
+// listing changes or an overflow forces a resync.
+func (w *Watcher) warnOverBudget(dir string) {
+	if w.budgetWarned {
+		return
+	}
+	w.budgetWarned = true
+	w.logger.Warn().Int("descriptors", w.descriptors).Int("budget", w.opts.budget).Str("dir", dir).
+		Msg("descriptor budget reached; directories past it are not watched")
 }

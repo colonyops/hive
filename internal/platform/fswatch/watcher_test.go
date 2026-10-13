@@ -27,6 +27,10 @@ func withSources(events <-chan fsnotify.Event, errs <-chan error) Option {
 	}
 }
 
+func withBudget(n int) Option {
+	return func(o *options) { o.budget = n }
+}
+
 func newWatcher(t *testing.T, root string, opts ...Option) *Watcher {
 	t.Helper()
 	opts = append([]Option{WithDebounce(testDebounce)}, opts...)
@@ -352,4 +356,34 @@ func TestNewRejectsMissingAndFileRoots(t *testing.T) {
 	writeFile(t, file)
 	_, err = New(zerolog.Nop(), file)
 	require.Error(t, err)
+}
+
+func TestDirectoriesPastTheBudgetAreNotWatched(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	sub := filepath.Join(root, "sub")
+	require.NoError(t, os.Mkdir(sub, 0o755))
+	writeFile(t, filepath.Join(root, "a.md"))
+	w := newWatcher(t, root, withBudget(1))
+
+	list := w.fsw.WatchList()
+	assert.Contains(t, list, root)
+	assert.NotContains(t, list, sub)
+	writeFile(t, filepath.Join(sub, "b.md"))
+	assertNeverNamed(t, w, sub, root)
+}
+
+func TestOverflowPastTheBudgetStillResyncs(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(root, "sub"), 0o755))
+	events := make(chan fsnotify.Event)
+	errs := make(chan error)
+	w := newWatcher(t, root, withSources(events, errs), withBudget(1))
+
+	errs <- fsnotify.ErrEventOverflow
+
+	change := nextChange(t, w)
+	assert.True(t, change.Resync)
+	assert.Equal(t, []string{root}, change.Dirs)
 }

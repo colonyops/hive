@@ -53,6 +53,12 @@ func waitClosed(t *testing.T, w *watcher) {
 	}
 }
 
+// pastDebounce outlasts any change the watcher could still deliver, so an
+// assertion that nothing arrived means something.
+func pastDebounce() {
+	time.Sleep(10 * testDebounce)
+}
+
 // waitForPath polls Tree until path is present, or absent when present is
 // false.
 func waitForPath(t *testing.T, f fixture, space drive.Space, path string, present bool) {
@@ -186,6 +192,7 @@ func TestCloseStopsTheWatcher(t *testing.T) {
 	waitClosed(t, w)
 
 	f.write(t, acme, "plans/a.md", "# A\n")
+	pastDebounce()
 	assert.Empty(t, f.changes())
 	root, err := f.svc.Tree(t.Context(), acme)
 	require.NoError(t, err)
@@ -211,9 +218,39 @@ func TestWatchEndsWithItsContext(t *testing.T) {
 	cancel()
 	f.svc.watchers.Wait()
 	waitClosed(t, w)
+	assert.Nil(t, f.svc.watch, "an ended watcher is cleared")
 	f.write(t, acme, "plans/a.md", "# A\n")
+	pastDebounce()
 	assert.Empty(t, f.changes())
-	require.NoError(t, f.svc.Close())
+
+	require.NoError(t, f.svc.Watch(t.Context()), "a later Watch starts afresh")
+	t.Cleanup(func() { require.NoError(t, f.svc.Close()) })
+	f.write(t, acme, "plans/b.md", "# B\n")
+	waitForPath(t, f, acme, "plans/b.md", true)
+}
+
+func TestReconfigureRetriesAWatcherThatFailedToStart(t *testing.T) {
+	f := watching(t)
+	blocker := filepath.Join(t.TempDir(), "file")
+	require.NoError(t, os.WriteFile(blocker, nil, 0o644))
+	f.svc.Reconfigure(&config.Config{Context: config.ContextConfig{BaseDir: filepath.Join(blocker, "ctx"), SymlinkName: ".hive"}}, nil)
+	f.svc.mu.RLock()
+	failed := f.svc.watch
+	f.svc.mu.RUnlock()
+	require.Nil(t, failed, "a root under a file cannot be watched")
+
+	good := t.TempDir()
+	f.svc.Reconfigure(&config.Config{Context: config.ContextConfig{BaseDir: good, SymlinkName: ".hive"}}, nil)
+	f.svc.mu.RLock()
+	restarted := f.svc.watch
+	f.svc.mu.RUnlock()
+	require.NotNil(t, restarted)
+
+	_, err := f.svc.Tree(t.Context(), acme)
+	require.NoError(t, err)
+	moved := fixture{svc: f.svc, root: good, bus: f.bus}
+	moved.write(t, acme, "plans/a.md", "# A\n")
+	waitForPath(t, moved, acme, "plans/a.md", true)
 }
 
 func TestReconfigureMovesTheWatcherToTheNewRoot(t *testing.T) {

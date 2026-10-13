@@ -89,6 +89,19 @@ func blockIDs(c drive.Canvas) []string {
 	return ids
 }
 
+// skipIfCaseSensitive skips a test that needs the temp directory to fold
+// case, as APFS and NTFS do by default.
+func skipIfCaseSensitive(t *testing.T, dir string) {
+	t.Helper()
+	probe := filepath.Join(dir, "a")
+	require.NoError(t, os.WriteFile(probe, nil, 0o644))
+	_, err := os.Lstat(filepath.Join(dir, "A"))
+	require.NoError(t, os.Remove(probe))
+	if err != nil {
+		t.Skip("the temp directory is on a case-sensitive file system")
+	}
+}
+
 func paths(entries []drive.Entry) []string {
 	out := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -505,6 +518,16 @@ func TestFirstScanRenamesLegacyCanvasesOnce(t *testing.T) {
 		}
 		return names
 	}
+	f.write(t, acme, "canvases/late.json", `{"blocks":[]}`)
+	f.svc.mu.Lock()
+	delete(f.svc.spaces, acme.Key)
+	f.svc.mu.Unlock()
+	rebuilt, err := f.svc.Tree(t.Context(), acme)
+	require.NoError(t, err)
+	_, ok = drive.Find(rebuilt, "canvases/late.json")
+	assert.True(t, ok, "a rebuilt snapshot does not run the rename again")
+	require.NoError(t, os.Remove(filepath.Join(f.root, "acme", "site", "canvases", "late.json")))
+
 	before := listing()
 	again := newFixture(t, nil)
 	again.svc.cfg = f.svc.cfg
@@ -696,15 +719,9 @@ func TestMoveKeepsACanvasAddressable(t *testing.T) {
 func TestMoveRenamesCaseOnlyOnACaseInsensitiveFileSystem(t *testing.T) {
 	f := newFixture(t, nil)
 	ctx := t.Context()
-	probe := filepath.Join(f.root, "a")
-	require.NoError(t, os.WriteFile(probe, nil, 0o644))
-	_, err := os.Lstat(filepath.Join(f.root, "A"))
-	require.NoError(t, os.Remove(probe))
-	if err != nil {
-		t.Skip("the temp directory is on a case-sensitive file system")
-	}
+	skipIfCaseSensitive(t, f.root)
 	f.write(t, acme, "plan.md", "---\ntitle: P\n---\n")
-	_, err = f.svc.Tree(ctx, acme)
+	_, err := f.svc.Tree(ctx, acme)
 	require.NoError(t, err)
 
 	moved, err := f.svc.Move(ctx, acme, "plan.md", "Plan.md", drive.Author{})
@@ -759,6 +776,83 @@ func TestDeleteRefusesANonEmptyFolder(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"empty"}, paths(root.Children))
 	assert.Len(t, f.changes(), 4, "one event per change, none for a refusal")
+}
+
+func TestDeleteRemovesAFolderHoldingOnlyFinderMetadata(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	f.write(t, acme, "opened/.DS_Store", "x")
+	f.write(t, acme, "vault/.DS_Store", "x")
+	f.write(t, acme, "vault/.obsidian/app.json", "{}")
+	f.write(t, acme, "kept/.DS_Store", "x")
+	f.write(t, acme, "kept/.gitkeep", "")
+
+	require.NoError(t, f.svc.Delete(ctx, acme, "opened", drive.Author{}))
+	assert.NoDirExists(t, filepath.Join(f.root, "acme", "site", "opened"))
+	require.ErrorIs(t, f.svc.Delete(ctx, acme, "vault", drive.Author{}), drive.ErrNotEmpty)
+	require.ErrorIs(t, f.svc.Delete(ctx, acme, "kept", drive.Author{}), drive.ErrNotEmpty)
+	assert.FileExists(t, filepath.Join(f.root, "acme", "site", "kept", ".DS_Store"), "a refused folder keeps its metadata")
+}
+
+// Symbolic links.
+
+func TestADirectoryLinkInsideASpaceIsRefused(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	outside := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(outside, "secret.md"), []byte("secret"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(f.root, "acme", "site"), 0o755))
+	require.NoError(t, os.Symlink(outside, filepath.Join(f.root, "acme", "site", "link")))
+
+	_, err := f.svc.Write(ctx, acme, "link/pwn.md", drive.Author{}, []byte("x"))
+	require.ErrorIs(t, err, drive.ErrInvalidPath)
+	assert.NoFileExists(t, filepath.Join(outside, "pwn.md"))
+	_, _, err = f.svc.Read(ctx, acme, "link/secret.md")
+	require.ErrorIs(t, err, drive.ErrInvalidPath)
+	require.ErrorIs(t, f.svc.Delete(ctx, acme, "link/secret.md", drive.Author{}), drive.ErrInvalidPath)
+	_, err = f.svc.Move(ctx, acme, "link/secret.md", "stolen.md", drive.Author{})
+	require.ErrorIs(t, err, drive.ErrInvalidPath)
+	_, err = f.svc.UpsertBlocks(ctx, acme, "link/x.canvas.json", drive.Author{}, "", "", drive.Block{ID: "a", Kind: drive.BlockKindMarkdown})
+	require.ErrorIs(t, err, drive.ErrInvalidPath)
+	assert.FileExists(t, filepath.Join(outside, "secret.md"))
+}
+
+func TestAFileLinkInsideASpaceIsRefused(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	secret := filepath.Join(t.TempDir(), "secret.md")
+	require.NoError(t, os.WriteFile(secret, []byte("secret"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(f.root, "acme", "site"), 0o755))
+	require.NoError(t, os.Symlink(secret, filepath.Join(f.root, "acme", "site", "leak.md")))
+
+	_, _, err := f.svc.Read(ctx, acme, "leak.md")
+	require.ErrorIs(t, err, drive.ErrInvalidPath)
+	_, err = f.svc.Write(ctx, acme, "leak.md", drive.Author{}, []byte("x"))
+	require.ErrorIs(t, err, drive.ErrInvalidPath)
+	_, err = f.svc.Locate(acme, "leak.md")
+	require.ErrorIs(t, err, drive.ErrInvalidPath)
+	data, err := os.ReadFile(secret)
+	require.NoError(t, err)
+	assert.Equal(t, "secret", string(data))
+
+	root, err := f.svc.Tree(ctx, acme)
+	require.NoError(t, err)
+	assert.Empty(t, root.Children, "the scan still hides links")
+}
+
+func TestASpaceWhoseDirectoryIsALinkWorks(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	elsewhere := t.TempDir()
+	require.NoError(t, os.MkdirAll(filepath.Join(f.root, "acme"), 0o755))
+	require.NoError(t, os.Symlink(elsewhere, filepath.Join(f.root, "acme", "site")))
+
+	_, err := f.svc.Write(ctx, acme, "plans/a.md", drive.Author{}, []byte("# A\n"))
+	require.NoError(t, err)
+	assert.FileExists(t, filepath.Join(elsewhere, "plans", "a.md"))
+	_, data, err := f.svc.Read(ctx, acme, "plans/a.md")
+	require.NoError(t, err)
+	assert.Equal(t, "# A\n", string(data))
 }
 
 // Spaces.
@@ -821,6 +915,44 @@ func TestSpaceForRemote(t *testing.T) {
 	space, ok = SpaceForRemote("git@github.com:acme/site.git")
 	require.True(t, ok)
 	assert.Equal(t, acme, space)
+}
+
+func TestSpaceForRemoteTakesTheOnDiskSpelling(t *testing.T) {
+	f := newFixture(t, stubGit{remote: "git@github.com:ACME/Site.git"})
+	skipIfCaseSensitive(t, f.root)
+	require.NoError(t, os.MkdirAll(filepath.Join(f.root, "acme", "site"), 0o755))
+
+	space, ok := f.svc.SpaceForRemote("git@github.com:ACME/Site.git")
+	require.True(t, ok)
+	assert.Equal(t, acme, space)
+	space, err := f.svc.ResolveSpace(t.Context(), "", false)
+	require.NoError(t, err)
+	assert.Equal(t, acme, space)
+	space, err = f.svc.ResolveSpace(t.Context(), "Acme/SITE", false)
+	require.NoError(t, err)
+	assert.Equal(t, acme, space)
+
+	space, ok = f.svc.SpaceForRemote("git@github.com:Zed/Editor.git")
+	require.True(t, ok)
+	assert.Equal(t, "Zed/Editor", space.Key, "a space with no directory keeps the remote's spelling")
+}
+
+func TestWriteInAnotherCaseKeepsTheNameOnDisk(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	skipIfCaseSensitive(t, f.root)
+	f.write(t, acme, "plans/notes.md", "old")
+	_, err := f.svc.Tree(ctx, acme)
+	require.NoError(t, err)
+
+	entry, err := f.svc.Write(ctx, acme, "Plans/Notes.md", drive.Author{}, []byte("new"))
+	require.NoError(t, err)
+	assert.Equal(t, "plans/notes.md", entry.Path)
+	root, err := f.svc.Tree(ctx, acme)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"plans"}, paths(root.Children))
+	assert.Equal(t, []string{"plans/notes.md"}, paths(root.Children[0].Children))
+	assert.Equal(t, []events.DriveChangedPayload{{Space: acme.Key, Paths: []string{"plans/notes.md"}}}, f.changes())
 }
 
 func TestResolveSpaceAndDir(t *testing.T) {
@@ -893,6 +1025,29 @@ func TestSearchMatchesPathAndTitleAcrossSpaces(t *testing.T) {
 	hits, err = f.svc.Search(ctx, "   ", 0)
 	require.NoError(t, err)
 	assert.Empty(t, hits)
+}
+
+func TestSearchMatchesEveryWordAndTreatsHyphensAsSpaces(t *testing.T) {
+	f := newFixture(t, nil)
+	ctx := t.Context()
+	f.write(t, acme, "design-docs/2026-06-12-session-lifecycle.md", "x")
+	f.write(t, acme, "design-docs/session_notes.md", "---\ntitle: Lifecycle of a Chat\n---\n")
+	f.write(t, acme, "design-docs/other.md", "x")
+
+	search := func(query string) []string {
+		t.Helper()
+		hits, err := f.svc.Search(ctx, query, 0)
+		require.NoError(t, err)
+		got := []string{}
+		for _, hit := range hits {
+			got = append(got, hit.Entry.Path)
+		}
+		return got
+	}
+	assert.Equal(t, []string{"design-docs/2026-06-12-session-lifecycle.md", "design-docs/session_notes.md"}, search("session lifecycle"), "a word may match the path or the title")
+	assert.Equal(t, search("session lifecycle"), search("session-lifecycle"), "a hyphen in the query splits words too")
+	assert.Equal(t, []string{"design-docs/2026-06-12-session-lifecycle.md"}, search("design docs 2026"))
+	assert.Empty(t, search("session nothing"))
 }
 
 // Reconfigure.

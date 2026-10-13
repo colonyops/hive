@@ -31,19 +31,22 @@ type watcher struct {
 // the service wrote it. The root is created first, because a fresh install
 // has none yet. If the root is later removed, the watcher waits for it to be
 // created again and then rescans every scanned space. The watcher runs until
-// ctx is done or Close is called, and a second Watch is a no-op.
+// ctx is done or Close is called, and a second Watch is a no-op. A watcher
+// that fails to start, here or after a Reconfigure, is started again by the
+// next Reconfigure to another root.
 func (s *Service) Watch(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.watch != nil {
 		return nil
 	}
+	s.watchWanted = true
+	s.watchCtx = ctx
 	w, err := s.startWatcher(ctx, s.cfg.ContextDir())
 	if err != nil {
 		return err
 	}
 	s.watch = w
-	s.watchCtx = ctx
 	return nil
 }
 
@@ -53,6 +56,7 @@ func (s *Service) Close() error {
 	s.mu.Lock()
 	w := s.watch
 	s.watch = nil
+	s.watchWanted = false
 	s.mu.Unlock()
 
 	var err error
@@ -82,15 +86,20 @@ func (s *Service) startWatcher(ctx context.Context, root string) (*watcher, erro
 	return w, nil
 }
 
-// restartWatcher moves a running watcher to the current root. The caller
-// holds s.mu for writing. The retired watcher's goroutine ends on its own
-// once its channel closes; it is not waited for here because it may be
-// waiting for s.mu.
+// restartWatcher moves the watcher, running or not, to the current root.
+// The caller holds s.mu for writing. The retired watcher's goroutine ends on
+// its own once its channel closes; it is not waited for here because it may
+// be waiting for s.mu.
 func (s *Service) restartWatcher() {
-	old := s.watch
-	s.watch = nil
-	if err := old.fs.Close(); err != nil {
-		s.logger.Debug().Err(err).Str("root", old.cfgRoot).Msg("previous drive watcher not closed cleanly")
+	if old := s.watch; old != nil {
+		s.watch = nil
+		if err := old.fs.Close(); err != nil {
+			s.logger.Debug().Err(err).Str("root", old.cfgRoot).Msg("previous drive watcher not closed cleanly")
+		}
+	}
+	if s.watchCtx.Err() != nil {
+		s.watchWanted = false
+		return
 	}
 	w, err := s.startWatcher(s.watchCtx, s.cfg.ContextDir())
 	if err != nil {
@@ -102,10 +111,10 @@ func (s *Service) restartWatcher() {
 
 func (s *Service) drain(ctx context.Context, w *watcher) {
 	defer s.watchers.Done()
+	defer s.retire(ctx, w)
 	for {
 		select {
 		case <-ctx.Done():
-			_ = w.fs.Close()
 			return
 		case change, ok := <-w.fs.Changes():
 			if !ok {
@@ -114,6 +123,23 @@ func (s *Service) drain(ctx context.Context, w *watcher) {
 			}
 			s.apply(w, change)
 		}
+	}
+}
+
+// retire runs when w's goroutine ends. If w is still the service's watcher,
+// only ctx can have ended it, so the service stops watching and a later Watch
+// starts afresh; a Reconfigure cannot restart on a dead context.
+func (s *Service) retire(ctx context.Context, w *watcher) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.watch == w {
+		s.watch = nil
+		if err := w.fs.Close(); err != nil {
+			s.logger.Debug().Err(err).Str("root", w.cfgRoot).Msg("drive watcher not closed cleanly")
+		}
+	}
+	if ctx.Err() != nil && s.watchCtx == ctx {
+		s.watchWanted = false
 	}
 }
 
@@ -171,6 +197,7 @@ type spaceDelta struct {
 func (s *Service) apply(w *watcher, change fswatch.Change) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.generation++
 	if s.cfg.ContextDir() != w.cfgRoot {
 		return
 	}
@@ -304,6 +331,7 @@ func (s *Service) rescanDir(snap *spaceSnapshot, space drive.Space, rel string) 
 		}
 		info, err := entry.Info()
 		if err != nil {
+			s.logger.Debug().Err(err).Str("space", space.Key).Str("path", joinPath(rel, name)).Msg("entry vanished during rescan")
 			continue
 		}
 		if !info.IsDir() && !info.Mode().IsRegular() {

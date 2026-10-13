@@ -41,9 +41,12 @@ const (
 	defaultSearchLimit   = 50
 	dirPerm              = 0o755
 	filePerm             = 0o644
+
+	// finderMetadata is the file Finder drops into every folder the user
+	// opens. A folder holding only it looks empty, so Delete removes it.
+	finderMetadata = ".DS_Store"
 )
 
-// Hit is one search result.
 type Hit struct {
 	Space drive.Space `json:"space"`
 	Entry drive.Entry `json:"entry"`
@@ -67,12 +70,21 @@ type Service struct {
 	cfg    *config.Config
 	git    git.Git
 	spaces map[string]*spaceSnapshot
+	// migrated holds the space directories the legacy canvas rename has run
+	// in. It outlives s.spaces, which is dropped and rebuilt often.
+	migrated map[string]struct{}
+	// generation counts the changes that could land in a space while it is
+	// scanned outside s.mu; see scanned.
+	generation uint64
 
 	debounce time.Duration
 	rootPoll time.Duration
 	watch    *watcher
 	watchCtx context.Context
-	watchers sync.WaitGroup
+	// watchWanted survives a watcher that failed to start, so a Reconfigure
+	// to a usable root starts one again.
+	watchWanted bool
+	watchers    sync.WaitGroup
 }
 
 func NewService(logger zerolog.Logger, cfg *config.Config, gitClient git.Git, bus *events.EventBus) *Service {
@@ -84,6 +96,7 @@ func NewService(logger zerolog.Logger, cfg *config.Config, gitClient git.Git, bu
 		cfg:        cfg,
 		git:        gitClient,
 		spaces:     map[string]*spaceSnapshot{},
+		migrated:   map[string]struct{}{},
 		debounce:   fswatch.DefaultDebounce,
 		rootPoll:   defaultRootPoll,
 	}
@@ -102,10 +115,11 @@ func (s *Service) Reconfigure(cfg *config.Config, gitClient git.Git) {
 	if rerooted {
 		dropped = slices.Sorted(maps.Keys(s.spaces))
 		s.spaces = map[string]*spaceSnapshot{}
+		s.generation++
 	}
 	s.cfg = cfg
 	s.git = gitClient
-	if rerooted && s.watch != nil {
+	if rerooted && s.watchWanted {
 		s.restartWatcher()
 	}
 	for _, key := range dropped {
@@ -113,7 +127,6 @@ func (s *Service) Reconfigure(cfg *config.Config, gitClient git.Git) {
 	}
 }
 
-// Root is the drive root: the context directory.
 func (s *Service) Root() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -127,7 +140,7 @@ func (s *Service) Root() string {
 // shared.
 func (s *Service) Spaces(context.Context) ([]drive.Space, error) {
 	root := s.Root()
-	owners, err := subdirectories(root)
+	owners, err := s.subdirectories(root)
 	if err != nil {
 		return nil, fmt.Errorf("drive: list spaces: %w", err)
 	}
@@ -135,7 +148,7 @@ func (s *Service) Spaces(context.Context) ([]drive.Space, error) {
 	for _, owner := range owners {
 		switch {
 		case owner == drive.WorkspacesDir:
-			names, err := subdirectories(filepath.Join(root, owner))
+			names, err := s.subdirectories(filepath.Join(root, owner))
 			if err != nil {
 				return nil, fmt.Errorf("drive: list spaces: %w", err)
 			}
@@ -150,7 +163,7 @@ func (s *Service) Spaces(context.Context) ([]drive.Space, error) {
 		case strings.EqualFold(owner, drive.SharedKey) || strings.EqualFold(owner, drive.WorkspacesDir):
 			continue
 		default:
-			repos, err := subdirectories(filepath.Join(root, owner))
+			repos, err := s.subdirectories(filepath.Join(root, owner))
 			if err != nil {
 				return nil, fmt.Errorf("drive: list spaces: %w", err)
 			}
@@ -172,7 +185,7 @@ func (s *Service) Spaces(context.Context) ([]drive.Space, error) {
 
 // subdirectories names the directories inside dir, following a link to one
 // and skipping dot entries. A dir that does not exist has none.
-func subdirectories(dir string) ([]string, error) {
+func (s *Service) subdirectories(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -185,19 +198,30 @@ func subdirectories(dir string) ([]string, error) {
 		if strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		if info, err := os.Stat(filepath.Join(dir, entry.Name())); err == nil && info.IsDir() {
+		info, err := os.Stat(filepath.Join(dir, entry.Name()))
+		if err != nil {
+			s.logger.Debug().Err(err).Str("dir", dir).Str("name", entry.Name()).Msg("entry not listed as a space")
+			continue
+		}
+		if info.IsDir() {
 			names = append(names, entry.Name())
 		}
 	}
 	return names, nil
 }
 
-// SpaceForRemote is the repository space a git remote URL belongs to.
+// SpaceForRemote is the repository space a git remote URL belongs to, keyed
+// as CanonicalSpace spells it.
 func (s *Service) SpaceForRemote(remote string) (drive.Space, bool) {
-	return SpaceForRemote(remote)
+	space, ok := SpaceForRemote(remote)
+	if !ok {
+		return drive.Space{}, false
+	}
+	return s.CanonicalSpace(space), true
 }
 
-// SpaceForRemote is the repository space a git remote URL belongs to.
+// SpaceForRemote keeps the remote's spelling, which on a case-insensitive
+// file system may not be the key the service uses; prefer the method.
 func SpaceForRemote(remote string) (drive.Space, bool) {
 	owner, repo := git.ExtractOwnerRepo(remote)
 	if owner == "" || repo == "" {
@@ -205,6 +229,69 @@ func SpaceForRemote(remote string) (drive.Space, bool) {
 	}
 	space, err := drive.RepositorySpace(owner, repo)
 	return space, err == nil
+}
+
+// CanonicalSpace respells a repository space's key as the directories on
+// disk spell it, when those directories exist. On a case-insensitive file
+// system ACME/site and acme/site are one directory, but the snapshots and the
+// watcher key a space by its on-disk name, so a space resolved from a remote
+// URL or a --repo flag must use that name to see changes made elsewhere.
+func (s *Service) CanonicalSpace(space drive.Space) drive.Space {
+	if space.Kind != drive.SpaceKindRepository {
+		return space
+	}
+	owner, repo, ok := strings.Cut(space.Key, "/")
+	if !ok {
+		return space
+	}
+	root := s.Root()
+	owner = s.onDiskName(root, owner)
+	repo = s.onDiskName(filepath.Join(root, owner), repo)
+	canonical, err := drive.RepositorySpace(owner, repo)
+	if err != nil {
+		s.logger.Debug().Err(err).Str("space", space.Key).Msg("on-disk spelling is no repository space")
+		return space
+	}
+	return canonical
+}
+
+// onDiskName is how dir's listing spells name: name itself when an entry has
+// exactly that name, otherwise the entry matching it case-insensitively, but
+// only when name resolves to an entry at all. On a case-sensitive file system
+// a name that does not exist is a different, new entry and keeps its case.
+func (s *Service) onDiskName(dir, name string) string {
+	if _, err := os.Lstat(filepath.Join(dir, name)); err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			s.logger.Debug().Err(err).Str("dir", dir).Str("name", name).Msg("entry spelling not checked")
+		}
+		return name
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		s.logger.Debug().Err(err).Str("dir", dir).Msg("folder not listed for an entry's spelling")
+		return name
+	}
+	match := name
+	for _, entry := range entries {
+		if entry.Name() == name {
+			return name
+		}
+		if match == name && strings.EqualFold(entry.Name(), name) {
+			match = entry.Name()
+		}
+	}
+	return match
+}
+
+// onDiskPath is path below dir with every component spelled as on disk.
+func (s *Service) onDiskPath(dir, path string) string {
+	out := ""
+	for seg := range strings.SplitSeq(path, "/") {
+		name := s.onDiskName(dir, seg)
+		out = joinPath(out, name)
+		dir = filepath.Join(dir, name)
+	}
+	return out
 }
 
 // SpaceDir is the directory of a space: Root()/Key. The key is re-parsed so
@@ -261,7 +348,11 @@ func (s *Service) ResolveSpace(ctx context.Context, repo string, shared bool) (d
 		if !ok {
 			return drive.Space{}, fmt.Errorf("invalid repo format, expected owner/repo: %s", repo)
 		}
-		return drive.RepositorySpace(owner, name)
+		space, err := drive.RepositorySpace(owner, name)
+		if err != nil {
+			return drive.Space{}, err
+		}
+		return s.CanonicalSpace(space), nil
 	}
 
 	s.mu.RLock()
@@ -282,20 +373,12 @@ func (s *Service) ResolveSpace(ctx context.Context, repo string, shared bool) (d
 // copy: a caller may keep or change it without touching the snapshot. A space
 // whose directory does not exist is an empty root, not an error.
 func (s *Service) Tree(_ context.Context, space drive.Space) (drive.Entry, error) {
-	s.mu.RLock()
-	if snap, ok := s.spaces[space.Key]; ok {
-		root := cloneEntry(snap.root)
-		s.mu.RUnlock()
-		return root, nil
-	}
-	s.mu.RUnlock()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	snap, err := s.snapshot(space)
+	snap, err := s.scanned(space)
 	if err != nil {
 		return drive.Entry{}, err
 	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return cloneEntry(snap.root), nil
 }
 
@@ -308,19 +391,12 @@ func (s *Service) Entry(_ context.Context, space drive.Space, path string) (driv
 			return drive.Entry{}, err
 		}
 	}
-	s.mu.RLock()
-	if snap, ok := s.spaces[space.Key]; ok {
-		defer s.mu.RUnlock()
-		return entryAt(snap, space, path)
-	}
-	s.mu.RUnlock()
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	snap, err := s.snapshot(space)
+	snap, err := s.scanned(space)
 	if err != nil {
 		return drive.Entry{}, err
 	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	return entryAt(snap, space, path)
 }
 
@@ -343,9 +419,50 @@ func (s *Service) Locate(space drive.Space, path string) (string, error) {
 	return s.documentFile(space, path)
 }
 
-// snapshot answers the space's snapshot, scanning on first use. The legacy
-// canvas rename runs here, once per space, before that first scan. The
-// caller holds s.mu for writing.
+// scanned answers the space's snapshot, scanning on first use. The scan
+// head-reads every document, so it runs without s.mu, keeping readers of
+// other spaces unblocked. A write or a watched change that lands meanwhile
+// bumps s.generation, and the scan is then redone under the lock so the
+// snapshot cannot miss it. The caller holds no lock; the snapshot is read
+// under s.mu.
+func (s *Service) scanned(space drive.Space) (*spaceSnapshot, error) {
+	s.mu.RLock()
+	snap, ok := s.spaces[space.Key]
+	s.mu.RUnlock()
+	if ok {
+		return snap, nil
+	}
+
+	s.mu.Lock()
+	if snap, ok := s.spaces[space.Key]; ok {
+		s.mu.Unlock()
+		return snap, nil
+	}
+	dir, err := spaceDir(s.cfg.ContextDir(), space)
+	if err != nil {
+		s.mu.Unlock()
+		return nil, err
+	}
+	s.migrateOnce(dir)
+	generation := s.generation
+	s.mu.Unlock()
+
+	root, scanErr := s.scan(dir)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if snap, ok := s.spaces[space.Key]; ok {
+		return snap, nil
+	}
+	if scanErr != nil || s.generation != generation {
+		return s.snapshot(space)
+	}
+	snap = &spaceSnapshot{root: root}
+	s.spaces[space.Key] = snap
+	return snap, nil
+}
+
+// snapshot is scanned with s.mu held for writing throughout.
 func (s *Service) snapshot(space drive.Space) (*spaceSnapshot, error) {
 	if snap, ok := s.spaces[space.Key]; ok {
 		return snap, nil
@@ -354,7 +471,7 @@ func (s *Service) snapshot(space drive.Space) (*spaceSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.renameLegacyCanvases(filepath.Join(dir, drive.CanvasesDir))
+	s.migrateOnce(dir)
 	root, err := s.scan(dir)
 	if err != nil {
 		return nil, fmt.Errorf("drive: scan %s: %w", space.Key, err)
@@ -364,14 +481,26 @@ func (s *Service) snapshot(space drive.Space) (*spaceSnapshot, error) {
 	return snap, nil
 }
 
-// Search matches query as a case-insensitive substring of an entry's path or
-// title, in every space, scanning the ones no one has read yet. Hits come
-// grouped in Spaces order and sorted by path inside a space, without
-// children; limit caps them, and 0 means defaultSearchLimit. An empty query
-// matches nothing.
+// migrateOnce runs the legacy canvas rename the first time dir, a space
+// directory, is scanned in this process. The caller holds s.mu for writing.
+func (s *Service) migrateOnce(dir string) {
+	if _, done := s.migrated[dir]; done {
+		return
+	}
+	s.migrated[dir] = struct{}{}
+	s.renameLegacyCanvases(filepath.Join(dir, drive.CanvasesDir))
+}
+
+// Search splits query into words and answers the entries in every space
+// whose path or title holds each word, case-insensitively; a hyphen or an
+// underscore matches a space, so "session lifecycle" finds
+// 2026-06-12-session-lifecycle.md. Spaces no one has read yet are scanned,
+// in order, until limit is reached. Hits come grouped in Spaces order and
+// sorted by path inside a space, without children; limit caps them, and 0
+// means defaultSearchLimit. An empty query matches nothing.
 func (s *Service) Search(ctx context.Context, query string, limit int) ([]Hit, error) {
-	needle := strings.ToLower(strings.TrimSpace(query))
-	if needle == "" {
+	terms := strings.Fields(searchText(query))
+	if len(terms) == 0 {
 		return []Hit{}, nil
 	}
 	if limit <= 0 {
@@ -382,22 +511,15 @@ func (s *Service) Search(ctx context.Context, query string, limit int) ([]Hit, e
 		return nil, err
 	}
 
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	hits := []Hit{}
 	for _, space := range spaces {
-		snap, err := s.snapshot(space)
+		snap, err := s.scanned(space)
 		if err != nil {
 			return nil, err
 		}
-		var found []Hit
-		for _, entry := range flatten(snap.root) {
-			if strings.Contains(strings.ToLower(entry.Path), needle) || strings.Contains(strings.ToLower(entry.Title), needle) {
-				entry.Children = nil
-				found = append(found, Hit{Space: space, Entry: cloneEntry(entry)})
-			}
-		}
-		slices.SortFunc(found, func(a, b Hit) int { return strings.Compare(a.Entry.Path, b.Entry.Path) })
+		s.mu.RLock()
+		found := searchSnapshot(snap, space, terms)
+		s.mu.RUnlock()
 		hits = append(hits, found...)
 		if len(hits) >= limit {
 			break
@@ -407,6 +529,37 @@ func (s *Service) Search(ctx context.Context, query string, limit int) ([]Hit, e
 		hits = hits[:limit]
 	}
 	return hits, nil
+}
+
+func searchSnapshot(snap *spaceSnapshot, space drive.Space, terms []string) []Hit {
+	var found []Hit
+	for _, entry := range flatten(snap.root) {
+		if !matchesEvery(entry, terms) {
+			continue
+		}
+		entry.Children = nil
+		found = append(found, Hit{Space: space, Entry: cloneEntry(entry)})
+	}
+	slices.SortFunc(found, func(a, b Hit) int { return strings.Compare(a.Entry.Path, b.Entry.Path) })
+	return found
+}
+
+// matchesEvery separates path and title with a newline so no word matches
+// across the two.
+func matchesEvery(entry drive.Entry, terms []string) bool {
+	haystack := searchText(entry.Path) + "\n" + searchText(entry.Title)
+	for _, term := range terms {
+		if !strings.Contains(haystack, term) {
+			return false
+		}
+	}
+	return true
+}
+
+var searchSeparators = strings.NewReplacer("-", " ", "_", " ")
+
+func searchText(text string) string {
+	return strings.ToLower(searchSeparators.Replace(text))
 }
 
 // Read is the entry at path, built from the file as it is now, and the file's
@@ -461,7 +614,7 @@ func (s *Service) Write(_ context.Context, space drive.Space, path string, autho
 	if err != nil {
 		return drive.Entry{}, err
 	}
-	s.publish(space, author, path)
+	s.publish(space, author, entry.Path)
 	return entry, nil
 }
 
@@ -486,7 +639,7 @@ func (s *Service) CreateFolder(_ context.Context, space drive.Space, path string
 	if err != nil {
 		return drive.Entry{}, err
 	}
-	s.publish(space, author, path)
+	s.publish(space, author, entry.Path)
 	return entry, nil
 }
 
@@ -570,7 +723,7 @@ func checkKeepsKind(from, to string) error {
 }
 
 // Delete removes a document or an empty folder. A folder with anything in
-// it, hidden files included, is ErrNotEmpty.
+// it but Finder's .DS_Store, hidden files included, is ErrNotEmpty.
 func (s *Service) Delete(_ context.Context, space drive.Space, path string, author drive.Author) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -586,12 +739,11 @@ func (s *Service) Delete(_ context.Context, space drive.Space, path string, auth
 		return fmt.Errorf("drive: delete %s/%s: %w", space.Key, path, err)
 	}
 	if info.IsDir() {
-		entries, err := os.ReadDir(full)
-		if err != nil {
+		if err := clearEmptyFolder(full); err != nil {
+			if errors.Is(err, drive.ErrNotEmpty) {
+				return fmt.Errorf("%w: %q", drive.ErrNotEmpty, path)
+			}
 			return fmt.Errorf("drive: delete %s/%s: %w", space.Key, path, err)
-		}
-		if len(entries) > 0 {
-			return fmt.Errorf("%w: %q", drive.ErrNotEmpty, path)
 		}
 	}
 	if err := os.Remove(full); err != nil {
@@ -602,6 +754,24 @@ func (s *Service) Delete(_ context.Context, space drive.Space, path string, auth
 	}
 	s.publish(space, author, path)
 	return nil
+}
+
+// clearEmptyFolder removes the finderMetadata file from a folder that holds
+// nothing else, and is ErrNotEmpty for a folder that holds anything else.
+func clearEmptyFolder(full string) error {
+	entries, err := os.ReadDir(full)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.Name() != finderMetadata || entry.IsDir() {
+			return drive.ErrNotEmpty
+		}
+	}
+	if len(entries) == 0 {
+		return nil
+	}
+	return os.Remove(filepath.Join(full, finderMetadata))
 }
 
 // LoadCanvas is one canvas, reporting false without error when no file
@@ -750,13 +920,12 @@ func (s *Service) ClearCanvas(_ context.Context, space drive.Space, path string,
 // ListCanvases is every canvas in the space's snapshot, most recently
 // updated first. A canvas file that cannot be parsed fails the listing.
 func (s *Service) ListCanvases(_ context.Context, space drive.Space) ([]drive.CanvasMeta, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	snap, err := s.snapshot(space)
+	snap, err := s.scanned(space)
 	if err != nil {
 		return nil, err
 	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	metas := []drive.CanvasMeta{}
 	for _, entry := range flatten(snap.root) {
 		if entry.Kind != drive.KindCanvas {
@@ -810,7 +979,10 @@ func (s *Service) CreateSymlink(dir string) (bool, error) {
 
 	if info, err := os.Lstat(symlinkPath); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
-			target, _ := os.Readlink(symlinkPath)
+			target, err := os.Readlink(symlinkPath)
+			if err != nil {
+				return false, fmt.Errorf("read symlink %s: %w", symlinkName, err)
+			}
 			if target == dir {
 				return true, nil
 			}
@@ -848,6 +1020,7 @@ func (s *Service) Prune(dir string, olderThan time.Duration) (int, error) {
 		}
 		info, err := entry.Info()
 		if err != nil {
+			s.logger.Debug().Err(err).Str("dir", dir).Str("name", entry.Name()).Msg("entry vanished before prune")
 			continue
 		}
 		if info.ModTime().Before(cutoff) {
@@ -895,17 +1068,21 @@ func (s *Service) forget(dir string) {
 	defer s.mu.Unlock()
 	rel, err := filepath.Rel(s.cfg.ContextDir(), dir)
 	if err != nil {
+		s.logger.Debug().Err(err).Str("dir", dir).Msg("changed folder is not under the root")
 		return
 	}
 	space, err := drive.ParseSpaceKey(filepath.ToSlash(rel))
 	if err != nil {
+		s.logger.Debug().Err(err).Str("dir", dir).Msg("changed folder is not a space directory")
 		return
 	}
 	delete(s.spaces, space.Key)
 	s.publish(space, drive.Author{})
 }
 
+// publish is called with s.mu held for writing.
 func (s *Service) publish(space drive.Space, author drive.Author, paths ...string) {
+	s.generation++
 	s.bus.PublishDriveChanged(events.DriveChangedPayload{Space: space.Key, Paths: paths, Author: author})
 }
 
@@ -913,7 +1090,10 @@ func notFound(space drive.Space, path string) error {
 	return fmt.Errorf("%w: %s/%s", drive.ErrNotFound, space.Key, path)
 }
 
-// documentFile is the absolute path of a document. The caller holds s.mu.
+// documentFile is the absolute path of a document. A symbolic link below
+// the space directory is refused, since following one reads or writes
+// outside the root and the scan never lists one. The space directory itself
+// may be reached through a link. The caller holds s.mu.
 func (s *Service) documentFile(space drive.Space, path string) (string, error) {
 	if err := drive.ValidatePath(path); err != nil {
 		return "", err
@@ -922,7 +1102,29 @@ func (s *Service) documentFile(space drive.Space, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := refuseLinks(dir, path); err != nil {
+		return "", err
+	}
 	return filepath.Join(dir, filepath.FromSlash(path)), nil
+}
+
+// refuseLinks stops at the first component of path that does not exist:
+// whatever a write creates below it is a plain folder.
+func refuseLinks(dir, path string) error {
+	for seg := range strings.SplitSeq(path, "/") {
+		dir = filepath.Join(dir, seg)
+		info, err := os.Lstat(dir)
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("drive: stat %s: %w", path, err)
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			return fmt.Errorf("%w: %q passes through a symbolic link", drive.ErrInvalidPath, path)
+		}
+	}
+	return nil
 }
 
 func (s *Service) canvasFile(space drive.Space, path string) (string, error) {
@@ -993,13 +1195,16 @@ func (s *Service) writeCanvas(space drive.Space, c drive.Canvas, author drive.Au
 }
 
 // refresh rebuilds the entry at path from disk and files it in the space's
-// snapshot, with any folder above it the snapshot lacks. An unscanned space
-// has no snapshot to keep current. The caller holds s.mu for writing.
+// snapshot, with any folder above it the snapshot lacks. The entry takes the
+// spelling on disk, which on a case-insensitive file system can differ from
+// path's. An unscanned space has no snapshot to keep current. The caller
+// holds s.mu for writing.
 func (s *Service) refresh(space drive.Space, path string) (drive.Entry, error) {
 	dir, err := spaceDir(s.cfg.ContextDir(), space)
 	if err != nil {
 		return drive.Entry{}, err
 	}
+	path = s.onDiskPath(dir, path)
 	entry, err := s.scanPath(dir, path)
 	if err != nil {
 		return drive.Entry{}, err
@@ -1266,7 +1471,6 @@ func removeNode(root *drive.Entry, path string) (drive.Entry, bool) {
 	return removed, true
 }
 
-// rekey moves entry and its subtree to path.
 func rekey(entry *drive.Entry, path string) {
 	entry.Path = path
 	entry.Name = baseName(path)
