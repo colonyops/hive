@@ -38,20 +38,22 @@ export function selectionToRange(sel: Selection, root: HTMLElement): SourceRange
 }
 
 const commentClass = 'has-review-comment'
+const activeClass = 'is-active-review'
 
 /**
  * Marks the blocks under root that each comment covers: the innermost blocks
  * whose source lines overlap it get the has-review-comment class and list the
  * comment's id in data-review-ids, and the first of them carries the
- * comment's number, from 1, in data-review-marker. Earlier marks are removed
- * first.
+ * comment's number, from 1, in data-review-marker. The blocks of the active
+ * comment also get is-active-review. Earlier marks are removed first.
  */
 export function markReviewedBlocks(
   root: HTMLElement,
   comments: readonly { id: string; startLine: number; endLine: number }[],
+  active: string | null = null,
 ): void {
   for (const marked of root.querySelectorAll<HTMLElement>(`.${commentClass}`)) {
-    marked.classList.remove(commentClass)
+    marked.classList.remove(commentClass, activeClass)
     marked.removeAttribute('data-review-ids')
     marked.removeAttribute('data-review-marker')
   }
@@ -69,6 +71,7 @@ export function markReviewedBlocks(
     )
     innermost.forEach(({ element }, position) => {
       element.classList.add(commentClass)
+      if (comment.id === active) element.classList.add(activeClass)
       element.dataset.reviewIds = [element.dataset.reviewIds, comment.id].filter(Boolean).join(' ')
       if (position === 0) {
         element.dataset.reviewMarker = [element.dataset.reviewMarker, String(index + 1)].filter(Boolean).join(',')

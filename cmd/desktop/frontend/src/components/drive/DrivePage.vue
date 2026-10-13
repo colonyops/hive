@@ -10,7 +10,7 @@ import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
 import DriveDocumentActions from './DriveDocumentActions.vue'
 import DriveReader from './DriveReader.vue'
-import DriveReviewPanel from './DriveReviewPanel.vue'
+import DriveReviewSidebar from './DriveReviewSidebar.vue'
 import AppSelect, { type AppSelectOption } from '../ui/AppSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import EmptyState from '../ui/EmptyState.vue'
@@ -25,6 +25,7 @@ import { relativeAge } from '../../lib/age'
 import { entryLabel, entryTime, movedPath, spaceGroup, spaceGroups, type DriveScope } from '../../lib/drive'
 import { useCanvasSettings } from '../../stores/useCanvasSettings'
 import { useDrive } from '../../stores/useDrive'
+import { useDriveReview } from '../../stores/useDriveReview'
 
 const props = defineProps<{ scope: DriveScope }>()
 const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope': [scope: DriveScope]; setup: [] }>()
@@ -108,6 +109,14 @@ const offerSetup = computed(
 )
 
 const reader = ref<HTMLElement | null>(null)
+const measure = ref<HTMLElement | null>(null)
+
+const review = useDriveReview()
+const reviewed = computed(() => {
+  const doc = document.value
+  if (!doc || doc.entry.kind !== 'markdown' || !review.inReview(doc.space.key, doc.entry.path)) return null
+  return { space: doc.space.key, path: doc.entry.path }
+})
 watch(shown, () => {
   if (reader.value) reader.value.scrollTop = 0
 })
@@ -201,12 +210,6 @@ useEscapeToClose(() => emit('close'))
           <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
         </template>
       </ViewHeader>
-      <DriveReviewPanel
-        v-if="document?.entry.kind === 'markdown'"
-        :space="document.space.key"
-        :path="document.entry.path"
-        testid="drive-page"
-      />
 
       <InlineError v-if="spacesError && !spaces.length" class="m-4" :message="spacesError" testid="drive-page-error" />
       <EmptyState
@@ -222,29 +225,40 @@ useEscapeToClose(() => emit('close'))
           class="hive-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-app"
           data-testid="drive-page-reader"
         >
-          <div
-            class="mx-auto flex w-full flex-1 flex-col px-10 py-8"
-            :class="pageWidthClass"
-            data-testid="drive-page-measure"
-          >
-            <DriveReader
-              :document="document"
-              :paths="paths"
-              :loading="loading"
-              :error="error"
-              testid="drive-page"
-              @open-url="emit('open-url', $event)"
-              @open="openDocument"
-            />
-            <div v-if="offerSetup" class="mt-3 flex flex-col items-start gap-2" data-testid="drive-page-setup">
-              <p class="text-xs leading-relaxed text-text-3">
-                An agent in a Code session of this repository can write here once its own MCP configuration lists the
-                Hive Drive server.
-              </p>
-              <BaseButton variant="secondary" size="xs" data-testid="drive-page-setup-open" @click="emit('setup')">
-                Set up an agent
-              </BaseButton>
+          <div class="flex min-w-0 flex-1">
+            <div
+              ref="measure"
+              class="mx-auto flex w-full min-w-0 flex-1 flex-col px-10 py-8"
+              :class="pageWidthClass"
+              data-testid="drive-page-measure"
+            >
+              <DriveReader
+                :document="document"
+                :paths="paths"
+                :loading="loading"
+                :error="error"
+                testid="drive-page"
+                @open-url="emit('open-url', $event)"
+                @open="openDocument"
+              />
+              <div v-if="offerSetup" class="mt-3 flex flex-col items-start gap-2" data-testid="drive-page-setup">
+                <p class="text-xs leading-relaxed text-text-3">
+                  An agent in a Code session of this repository can write here once its own MCP configuration lists the
+                  Hive Drive server.
+                </p>
+                <BaseButton variant="secondary" size="xs" data-testid="drive-page-setup-open" @click="emit('setup')">
+                  Set up an agent
+                </BaseButton>
+              </div>
             </div>
+            <DriveReviewSidebar
+              v-if="reviewed"
+              class="mr-6 bg-app py-5"
+              :space="reviewed.space"
+              :path="reviewed.path"
+              :align-to="measure"
+              testid="drive-page"
+            />
           </div>
         </div>
       </div>

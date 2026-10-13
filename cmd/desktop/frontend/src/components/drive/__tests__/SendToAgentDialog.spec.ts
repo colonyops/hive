@@ -55,19 +55,19 @@ describe('SendToAgentDialog', () => {
     expect(text.indexOf('Code')).toBeLessThan(text.indexOf('Chats'))
     expect(row(1).disabled).toBe(true)
     expect(row(1).textContent).toContain('Waiting on a prompt')
-    expect(row(0).getAttribute('aria-checked')).toBe('false')
+    expect(row(0).getAttribute('aria-selected')).toBe('false')
   })
 
   it('lists and preselects the surface agent first', async () => {
     await mountDialog({ kind: 'chat', id: 'c1', pane: '' })
     expect(row(0).textContent).toContain('ws / chat')
-    expect(row(0).getAttribute('aria-checked')).toBe('true')
+    expect(row(0).getAttribute('aria-selected')).toBe('true')
     expect(document.querySelector('[data-testid="r-send-warning"]')!.textContent).toContain('mid-turn')
   })
 
   it('does not preselect an agent on a prompt', async () => {
     await mountDialog({ kind: 'session', id: 's2', pane: '' })
-    expect(document.querySelector('[aria-checked="true"]')).toBeNull()
+    expect(document.querySelector('[aria-selected="true"]')).toBeNull()
   })
 
   it('sends to the pick and closes', async () => {

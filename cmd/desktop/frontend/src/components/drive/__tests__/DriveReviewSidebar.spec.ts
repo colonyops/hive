@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import DriveReviewPanel from '../DriveReviewPanel.vue'
+import DriveReviewSidebar from '../DriveReviewSidebar.vue'
 import type { DocumentReviewWire } from '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 vi.mock('../../../composables/useWailsEvent', () => ({ useWailsEvent: vi.fn() }))
@@ -36,7 +36,7 @@ function reviewOf(overrides: Partial<DocumentReviewWire> = {}): DocumentReviewWi
 }
 
 async function mountPanel() {
-  const wrapper = mount(DriveReviewPanel, {
+  const wrapper = mount(DriveReviewSidebar, {
     props: { space: 'workspaces/ws', path: 'plans/p.md', testid: 'r' },
     attachTo: document.body,
   })
@@ -44,26 +44,24 @@ async function mountPanel() {
   return wrapper
 }
 
-describe('DriveReviewPanel', () => {
+describe('DriveReviewSidebar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     reviews.Review.mockResolvedValue(reviewOf())
   })
 
-  it('renders nothing without comments or a note', async () => {
-    reviews.Review.mockResolvedValue({ sessionId: '', current: true, comments: [] })
+  it('counts the comments in its header', async () => {
     const wrapper = await mountPanel()
-    expect(wrapper.find('[data-testid="r-review"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="r-review"]').text()).toContain('Comments · 2')
   })
 
-  it('lists each comment with its lines, the first line of its quote, and its text', async () => {
+  it('shows each comment with its lines, its quote, and its text', async () => {
     const wrapper = await mountPanel()
-    const second = wrapper.get('[data-testid="r-review-row-2"]')
+    const second = wrapper.get('[data-testid="r-review-card-2"]')
     expect(second.text()).toContain('L8-10')
     expect(second.text()).toContain('Long')
-    expect(second.text()).not.toContain('quote')
     expect(second.text()).toContain('Why?')
-    expect(wrapper.get('[data-testid="r-review-row-1"]').text()).toContain('L6')
+    expect(wrapper.get('[data-testid="r-review-card-1"]').text()).toContain('L6')
   })
 
   it('edits and deletes a comment', async () => {
@@ -97,7 +95,13 @@ describe('DriveReviewPanel', () => {
     await wrapper.get('[data-testid="r-review-confirm-confirm"]').trigger('click')
     await flushPromises()
     expect(reviews.Clear).toHaveBeenCalledWith('workspaces/ws', 'plans/p.md')
-    expect(wrapper.find('[data-testid="r-review"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="r-review-card-1"]').exists()).toBe(false)
+  })
+
+  it('points at a comment when its card is clicked', async () => {
+    const wrapper = await mountPanel()
+    await wrapper.get('[data-testid="r-review-card-2"]').trigger('click')
+    expect(wrapper.get('[data-testid="r-review-card-2"]').classes()).toContain('border-accent')
   })
 
   it('shows comments on an earlier version with a way to discard them', async () => {

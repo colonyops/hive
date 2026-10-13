@@ -29,6 +29,13 @@ export type ReviewResult = string | null
 export const useDriveReview = defineStore('driveReview', () => {
   const reviews = new Map<string, Resource<DocumentReviewWire>>()
   const notes = shallowRef<ReadonlyMap<string, string>>(new Map())
+  // The comment the user last pointed at, from its card or its block, so the
+  // reader and the sidebar highlight the same one.
+  const active = shallowRef<string | null>(null)
+
+  function setActive(id: string | null): void {
+    active.value = id
+  }
 
   const keyOf = (space: string, path: string) => `${space}\n${path}`
 
@@ -90,6 +97,11 @@ export const useDriveReview = defineStore('driveReview', () => {
     return act(space, path, () => DeleteComment(space, path, id), 'Could not delete the comment.')
   }
 
+  /** Whether a document has comments or a note in progress, which is when its sidebar shows. */
+  function inReview(space: string, path: string): boolean {
+    return (resource(space, path).data.value.comments?.length ?? 0) > 0 || note(space, path) !== ''
+  }
+
   function note(space: string, path: string): string {
     return notes.value.get(keyOf(space, path)) ?? ''
   }
@@ -139,7 +151,10 @@ export const useDriveReview = defineStore('driveReview', () => {
   })
 
   return {
+    active: computed(() => active.value),
+    setActive,
     review,
+    inReview,
     note,
     setNote,
     add,

@@ -135,10 +135,19 @@ watch(reviewed, endComment)
 // renders again), so the markers follow every change to it, not only to the
 // comments. The markers set attributes, which this does not observe.
 function mark(): void {
-  if (body.value) markReviewedBlocks(body.value, current.value ? comments.value : [])
+  if (body.value) markReviewedBlocks(body.value, current.value ? comments.value : [], reviewStore.active.value)
 }
 useMutationObserver(body, mark, { childList: true, subtree: true })
-watch([body, comments, current], mark, { flush: 'post' })
+watch([body, comments, current, reviewStore.active], mark, { flush: 'post' })
+
+// A click on a commented block points at its comment; a link inside it still
+// follows.
+useEventListener(body, 'click', (event: MouseEvent) => {
+  const target = event.target
+  if (!(target instanceof Element) || target.closest('a') || !globalThis.getSelection()?.isCollapsed) return
+  const ids = target.closest<HTMLElement>('[data-review-ids]')?.dataset.reviewIds
+  if (ids) reviewStore.setActive(ids.split(' ')[0])
+})
 
 function follow(href: string): void {
   const target = linkTarget(href, props.document?.entry.path ?? '', props.paths)
@@ -344,6 +353,13 @@ function onBodyClick(event: MouseEvent): void {
   border-radius: 4px;
   background: var(--color-accent-tint);
   box-shadow: -6px 0 0 var(--color-accent-tint);
+}
+.canvas-reading-body.markdown-body :deep(.has-review-comment) {
+  cursor: pointer;
+}
+.canvas-reading-body.markdown-body :deep(.is-active-review) {
+  background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+  box-shadow: -6px 0 0 color-mix(in oklab, var(--color-accent) 22%, transparent);
 }
 .canvas-reading-body.markdown-body :deep([data-review-marker]) {
   position: relative;

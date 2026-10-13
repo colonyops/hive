@@ -5,17 +5,19 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconMaximize2 from '~icons/lucide/maximize-2'
+import IconMessageSquare from '~icons/lucide/message-square'
 import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
 import DriveDocumentActions from './DriveDocumentActions.vue'
 import DriveReader from './DriveReader.vue'
-import DriveReviewPanel from './DriveReviewPanel.vue'
+import DriveReviewSidebar from './DriveReviewSidebar.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import IconButton from '../ui/IconButton.vue'
 import PanelResizeHandle from '../ui/PanelResizeHandle.vue'
 import { useDriveDocument } from '../../composables/useDriveDocument'
 import { useResizablePanel } from '../../composables/useResizablePanel'
 import { useDriveActivity } from '../../stores/useDriveActivity'
+import { useDriveReview } from '../../stores/useDriveReview'
 import { entryLabel, movedPath, newestDocument, type DriveAuthor } from '../../lib/drive'
 import type { AgentTargetRef } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
@@ -94,6 +96,29 @@ watch(shown, () => {
 
 const empty = computed(() => !!tree.value && !tree.value.children?.length)
 
+// The pane is too narrow for a comments column beside the document, so the
+// comments overlay it. They open on a new comment or a click on a commented
+// block.
+const review = useDriveReview()
+const reviewed = computed(() => {
+  const doc = document.value
+  if (!doc || doc.entry.kind !== 'markdown' || !review.inReview(doc.space.key, doc.entry.path)) return null
+  return { space: doc.space.key, path: doc.entry.path }
+})
+const commentCount = computed(() =>
+  reviewed.value ? (review.review(reviewed.value.space, reviewed.value.path).data.value.comments?.length ?? 0) : 0,
+)
+const commentsOpen = ref(false)
+watch(commentCount, (count, before) => {
+  if (count > before) commentsOpen.value = true
+})
+watch(review.active, (id) => {
+  if (id) commentsOpen.value = true
+})
+watch(reviewed, (next) => {
+  if (!next) commentsOpen.value = false
+})
+
 const {
   size: paneWidth,
   startResize: startPaneResize,
@@ -141,6 +166,14 @@ const {
         @moved="documentMoved"
       />
       <IconButton
+        v-if="reviewed"
+        :label="commentsOpen ? 'Hide comments' : `Show comments (${commentCount})`"
+        :icon="IconMessageSquare"
+        :active="commentsOpen"
+        data-testid="drive-pane-comments"
+        @click="commentsOpen = !commentsOpen"
+      />
+      <IconButton
         label="Open full page"
         :icon="IconMaximize2"
         data-testid="drive-pane-expand"
@@ -148,14 +181,6 @@ const {
       />
       <IconButton label="Close drive" :icon="IconX" data-testid="drive-pane-close" @click="emit('close')" />
     </div>
-
-    <DriveReviewPanel
-      v-if="!browsing && document?.entry.kind === 'markdown'"
-      :space="document.space.key"
-      :path="document.entry.path"
-      :agent="agent"
-      testid="drive-pane"
-    />
 
     <DriveBrowser
       v-if="browsing"
@@ -196,6 +221,20 @@ const {
             Set up an agent
           </BaseButton>
         </div>
+      </div>
+      <div
+        v-if="reviewed && commentsOpen"
+        class="hive-scroll absolute inset-y-0 right-0 overflow-y-auto border-l border-border bg-pane px-3 pb-3 shadow-popover"
+      >
+        <DriveReviewSidebar
+          class="bg-pane"
+          :space="reviewed.space"
+          :path="reviewed.path"
+          :agent="agent"
+          closable
+          testid="drive-pane"
+          @close="commentsOpen = false"
+        />
       </div>
     </div>
   </aside>
