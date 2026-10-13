@@ -1388,7 +1388,11 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 
 ### Remote Code
 
-Code has separate Local and Remote views. Remote Code accepts a loopback SSH
+Code has separate Local and Remote views. Settings ▸ Remote manages named,
+colored connection profiles in the `useRemoteConnection` store. Only profile
+metadata persists in UI storage; the active endpoint and token stay in memory
+across Settings navigation. One remote is connected at a time.
+Remote Code accepts a loopback SSH
 forward, authenticates discovery at `/api/terminal/remote/sessions`, checks
 control and terminal wire versions, and reuses the terminal client/renderer.
 Session IDs and tmux slugs remain scoped to that endpoint; remote rows never

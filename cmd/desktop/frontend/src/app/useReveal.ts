@@ -1,4 +1,5 @@
 import { computed } from 'vue'
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import type { FlowsSession } from '../pipeline/composables/useFlowsSession'
 import type { ActivityItemLink } from '../lib/activityPresentation'
@@ -40,6 +41,7 @@ export function useReveal(
   showToast: FeedState['showToast'],
   openDrive: (scope: DriveScope) => void,
 ) {
+  const codeInstallation = useCodeInstallation()
   // Sourced from the always-on session, so the chip deep-links with the
   // canvas closed.
   const errorNodeIds = computed(() =>
@@ -124,6 +126,7 @@ export function useReveal(
   async function revealLocation(loc: Location): Promise<void> {
     switch (loc.area) {
       case 'code': {
+        codeInstallation.select('local')
         const query: Record<string, string> = {}
         if (loc.window) query.window = loc.window
         if (loc.canvas) query.doc = docQuery(loc.canvas)

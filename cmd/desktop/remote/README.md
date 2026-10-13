@@ -14,7 +14,7 @@ mise run desktop:dev:prepare
 mise run desktop:dev              # native local Desktop, separate terminal
 ```
 
-In Desktop, open **Code → Remote (preview)**. Use
+In Desktop, open **Settings ▸ Remote**, enter a name and choose a color. Use
 `http://127.0.0.1:19001` and the `token` from
 `.hive-remote/connection.json`. The connection file is private; do not
 commit or share it. After a backend restart, retrieve it again. The private SSH

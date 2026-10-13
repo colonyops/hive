@@ -27,10 +27,16 @@ build tags. The ordinary `desktop:serve` build keeps terminals disabled.
    ssh -N -T -o ExitOnForwardFailure=yes -L 127.0.0.1:19001:127.0.0.1:19001 my-host
    ```
 
-4. Retrieve the JSON file through SSH. In **Code → Remote (preview)**, enter
-   `http://127.0.0.1:19001` and its `token` value.
+4. Retrieve the JSON file through SSH. Open **Settings ▸ Remote**, add a
+   connection name and color, and enter `http://127.0.0.1:19001` and its `token`
+   value. Click **Connect** to open remote Code.
 5. Select an existing session. The command palette also offers **Go to remote
    Code** and the connected remote session names.
+
+Names, tunnel addresses, and colors are saved on this Desktop. Each connection
+has its own color, shown beside its name in Code. Configure a saved connection
+in **Settings ▸ Remote** to reconnect or switch machines; one remote can be
+connected at a time.
 
 Only loopback HTTP addresses are accepted; SSH carries the connection to the
 other machine. The token stays in memory and is cleared by Disconnect or closing

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useRemoteConnection } from '../stores/useRemoteConnection'
 import { useCodeInstallation } from '../stores/useCodeInstallation'
 import TerminalMode from './TerminalMode.vue'
 import RemoteCode from './RemoteCode.vue'
@@ -16,6 +17,7 @@ const emit = defineEmits<{
   'open-drive-page': [scope: DriveScope]
 }>()
 const { installation, select } = useCodeInstallation()
+const { activeProfile, color } = useRemoteConnection()
 const options = [
   { value: 'local' as const, label: 'Local' },
   { value: 'remote' as const, label: 'Remote (preview)' },
@@ -32,7 +34,19 @@ const options = [
         variant="compact"
         aria-label="Code installation"
         testid="code-installation"
-      />
+      >
+        <template #option="{ option }">
+          <span class="flex items-center gap-2">
+            <span
+              v-if="option.value === 'remote' && activeProfile"
+              class="size-2.5 rounded-full border border-strong"
+              :style="{ backgroundColor: color }"
+              aria-hidden="true"
+            />
+            {{ option.value === 'remote' && activeProfile ? activeProfile.name : option.label }}
+          </span>
+        </template>
+      </SegmentedControl>
     </div>
     <TerminalMode
       v-show="installation === 'local'"

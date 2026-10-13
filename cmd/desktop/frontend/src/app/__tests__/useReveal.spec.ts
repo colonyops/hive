@@ -26,6 +26,7 @@ vi.mock('@wailsio/runtime', () => ({
   },
 }))
 
+import { useCodeInstallation } from '../../stores/useCodeInstallation'
 import { useReveal } from '../useReveal'
 
 const push = vi.fn()
@@ -130,10 +131,12 @@ describe('useReveal', () => {
   })
 
   it('opens the link that launched the app', async () => {
+    useCodeInstallation().select('remote')
     mocks.TakeLink.mockResolvedValueOnce({ area: 'code', slug: 'web', window: '@2' })
     setup()
     await flushPromises()
     expect(push).toHaveBeenCalledWith({ name: 'terminal', params: { slug: 'web' }, query: { window: '@2' } })
+    expect(useCodeInstallation().installation.value).toBe('local')
   })
 
   it('routes each link area to its place', async () => {

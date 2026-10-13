@@ -658,7 +658,9 @@ Incident exports live under the resolved reports directory with mode 0600.
 
 ## Remote Code preview
 
-Code → Remote connects to an SSH-forwarded terminal API for existing sessions.
+Settings ▸ Remote saves named connections with individual colors. Connect opens
+Code on an SSH-forwarded terminal API for existing sessions. Names, addresses,
+and colors persist in Desktop UI storage; connection tokens remain in memory.
 The remote backend uses `-tags server,terminals`; `desktop:serve` retains the
 terminal-disabled UI-test behavior. Server builds omit native notifications.
 

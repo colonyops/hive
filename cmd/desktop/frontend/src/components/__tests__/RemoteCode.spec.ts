@@ -1,6 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { useRemoteConnection } from '../../stores/useRemoteConnection'
 import RemoteCode from '../RemoteCode.vue'
+
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
 const mocks = vi.hoisted(() => ({ list: vi.fn() }))
 vi.mock('../../lib/remoteConnection', async (original) => ({
@@ -20,9 +23,10 @@ beforeEach(() => {
   mocks.list.mockReset()
 })
 
-async function connect(wrapper: ReturnType<typeof mount>) {
-  await wrapper.get('[data-testid="remote-token"]').setValue('secret')
-  await wrapper.get('form').trigger('submit')
+async function connect() {
+  const remote = useRemoteConnection()
+  const id = remote.save({ id: '', name: 'Test remote', address: 'http://127.0.0.1:19001', color: '#a78bfa' })
+  await remote.connect(id, 'secret')
   await flushPromises()
 }
 
@@ -30,7 +34,7 @@ describe('remote Code isolation', () => {
   it('keeps last-known rows during an outage and detaches when hidden', async () => {
     mocks.list.mockResolvedValue([{ id: 'one', name: 'Remote', slug: 'same-slug', state: 'active', repo: '' }])
     const wrapper = mount(RemoteCode, { props: { active: true } })
-    await connect(wrapper)
+    await connect()
     await wrapper.get('[data-testid="remote-session-same-slug"]').trigger('click')
     expect(wrapper.get('[data-testid="attached"]').text()).toBe('same-slug')
     mocks.list.mockRejectedValue(new Error('Tunnel disconnected'))
@@ -46,7 +50,7 @@ describe('remote Code isolation', () => {
   it('reattaches when a session is renamed with the same ID', async () => {
     mocks.list.mockResolvedValue([{ id: 'one', name: 'Before', slug: 'before', state: 'active', repo: '' }])
     const wrapper = mount(RemoteCode, { props: { active: true } })
-    await connect(wrapper)
+    await connect()
     await wrapper.get('[data-testid="remote-session-before"]').trigger('click')
     expect(wrapper.get('[data-testid="attached"]').text()).toBe('before')
     mocks.list.mockResolvedValue([{ id: 'one', name: 'After', slug: 'after', state: 'active', repo: '' }])
@@ -59,7 +63,7 @@ describe('remote Code isolation', () => {
   it('does not restore a connection when a refresh completes after disconnect', async () => {
     mocks.list.mockResolvedValue([])
     const wrapper = mount(RemoteCode, { props: { active: true } })
-    await connect(wrapper)
+    await connect()
     let resolve!: (rows: unknown[]) => void
     mocks.list.mockReturnValue(
       new Promise((r) => {
@@ -67,10 +71,10 @@ describe('remote Code isolation', () => {
       }),
     )
     await wrapper.get('[data-testid="remote-refresh"]').trigger('click')
-    await wrapper.get('[data-testid="remote-disconnect"]').trigger('click')
+    useRemoteConnection().disconnect()
     resolve([{ id: 'one', name: 'Remote', slug: 'remote', state: 'active', repo: '' }])
     await flushPromises()
-    expect(wrapper.find('[data-testid="remote-connect"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="remote-not-connected"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="remote-sessions"]').exists()).toBe(false)
     wrapper.unmount()
   })
