@@ -6,7 +6,7 @@
 // defaults to, and changing it never tears down a live pane nor hides another
 // workspace's chats. The one pane the shell itself draws is the zero
 // state: no PTY exists yet, so it says what a chat is and offers to start one,
-// which the new-chat SessionLaunchDialog then asks for. What is borrowed from
+// which the app's New session dialog then asks for. What is borrowed from
 // TerminalMode.vue is narrower — the aside/main split, plus (since ADR agent-workspace-sessions-are-tmux-sessions)
 // the pane's xterm wiring itself: a session is a tmux session, addressed and
 // framed exactly like a hive one, just not discovered through hive.
@@ -22,12 +22,12 @@ import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
 import BaseButton from './ui/BaseButton.vue'
 import RenameDialog from './ui/RenameDialog.vue'
-import SessionLaunchDialog from './SessionLaunchDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useAgentCanvasRoute } from '../composables/useAgentCanvasRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
+import { useNewSession } from '../composables/useNewSession'
 import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXtermPane'
 import { canvasEventAuthor, type CanvasScope } from '../lib/agentCanvas'
 import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentWorkspacesClient'
@@ -228,12 +228,13 @@ watch(
 )
 
 // ── New chat ─────────────────────────────────────────────────────────────────
-// The sidebar's + and the idle pane's button both open the same dialog,
-// prefilled with the focused workspace, so the pane never doubles as a form.
-// Launching stays the pane's: the dialog closes on submit and the opening
+// The sidebar's + and the idle pane's button both open the app's New session
+// dialog on its Chats target, prefilled with the focused workspace. Launching
+// a chat stays the pane's: the dialog closes on submit and the opening
 // overlay — then the zero state, if it fails — is what reports it.
-const newSessionOpen = ref(false)
 const startingSession = ref(false)
+const { openBlank: openNewSession, prefetch: prefetchNewSession } = useNewSession()
+onMounted(prefetchNewSession)
 
 const defaultWorkspaceDir = computed(
   () => selectedWorkspace.value || recents.value[0]?.workspace || workspaces.value[0]?.dir || '',
@@ -242,7 +243,10 @@ const defaultWorkspaceDir = computed(
 const DEFAULT_CHAT_NAME = 'New Chat'
 
 function handleNewSessionRequest(): void {
-  newSessionOpen.value = true
+  void openNewSession('', 'workspace', {
+    workspace: defaultWorkspaceDir.value,
+    launch: ({ workspace, name, prompt }) => startNewSession(workspace, name, prompt),
+  })
 }
 
 // The sidebar's per-workspace +. It names the workspace, which is the only
@@ -253,20 +257,14 @@ function handleStartSessionIn(workspace: string): void {
   void startNewSession(workspace, DEFAULT_CHAT_NAME)
 }
 
-async function submitNewSession(input: { workspace?: string; name: string }): Promise<void> {
-  if (!input.workspace) return
-  newSessionOpen.value = false
-  await startNewSession(input.workspace, input.name)
-}
-
 // Focus follows a new session, which also unfolds the workspace its row lands
 // in (AgentsSidebar watches the prop).
-async function startNewSession(workspace: string, name: string): Promise<void> {
+async function startNewSession(workspace: string, name: string, prompt = ''): Promise<void> {
   if (startingSession.value) return
   startingSession.value = true
   try {
     await selectWorkspace(workspace)
-    await launchIntoPane(workspace, (size) => startSession({ workspace, name, ...size }))
+    await launchIntoPane(workspace, (size) => startSession({ workspace, name, prompt, ...size }))
     void reloadRecents()
   } finally {
     startingSession.value = false
@@ -914,18 +912,6 @@ onBeforeUnmount(() => {
       @close="workspaceEditorOpen = false"
       @save="saveWorkspace"
       @delete="deleteWorkspaceFromEditor"
-    />
-
-    <SessionLaunchDialog
-      v-if="newSessionOpen"
-      :options="{ workspaces }"
-      :initial="{ workspace: defaultWorkspaceDir }"
-      workspace-only
-      :default-name="DEFAULT_CHAT_NAME"
-      :no-workspaces-hint="`No workspaces yet. Author one under ${root}.`"
-      testid="new-chat"
-      @close="newSessionOpen = false"
-      @submit="submitNewSession"
     />
 
     <RenameDialog

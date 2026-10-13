@@ -3,7 +3,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AgentsMode from '../AgentsMode.vue'
 import AgentsSidebar from '../AgentsSidebar.vue'
-import SessionLaunchDialog from '../SessionLaunchDialog.vue'
+import { resetNewSessionForTests, useNewSession } from '../../composables/useNewSession'
 import { createAppRouter } from '../../router'
 import { tooltipFor } from '../../test-utils/tooltip'
 import type { MissingSkillPackage } from '../../lib/agentWorkspacesClient'
@@ -93,11 +93,19 @@ const mocks = vi.hoisted(() => ({
   getAgentsEndpoint: vi.fn(),
   createAgentWorkspacesClient: vi.fn(),
   loadTerminalFaces: vi.fn(),
+  SessionLaunchOptions: vi.fn(),
+  FailedSessionDraft: vi.fn(),
+  CreateSession: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/agentsservice', () => ({
   Available: mocks.Available,
   Endpoint: mocks.Endpoint,
+}))
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
+  SessionLaunchOptions: mocks.SessionLaunchOptions,
+  FailedSessionDraft: mocks.FailedSessionDraft,
+  CreateSession: mocks.CreateSession,
 }))
 vi.mock('../../lib/terminalFaces', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/terminalFaces')>()),
@@ -298,7 +306,7 @@ async function mountAgentsMode(path = '/workspaces') {
 async function startChat(wrapper: VueWrapper, workspace = 'web-app', name = 'New Chat') {
   wrapper.findComponent(AgentsSidebar).vm.$emit('request-new-session')
   await flushPromises()
-  wrapper.findComponent(SessionLaunchDialog).vm.$emit('submit', { workspace, name, inputs: {} })
+  await useNewSession().submit({ workspace, name })
   await flushPromises()
 }
 
@@ -339,6 +347,15 @@ describe('AgentsMode', () => {
     })
     mocks.createAgentWorkspacesClient.mockReturnValue(fakeClient())
     mocks.loadTerminalFaces.mockResolvedValue(undefined)
+    mocks.SessionLaunchOptions.mockResolvedValue({
+      repositories: [],
+      defaultRepository: '',
+      workspaces: [{ dir: 'web-app', name: 'Web App', supportsPrompt: true }],
+      agents: [],
+      defaultAgent: '',
+    })
+    mocks.FailedSessionDraft.mockResolvedValue(null)
+    resetNewSessionForTests()
   })
 
   // #307: a manifest written before packages enumerates skill slugs, and
@@ -818,19 +835,23 @@ describe('AgentsMode', () => {
 
   // The idle pane is a zero state, not a form: it explains itself and hands
   // the new-chat gesture to the same dialog the sidebar's + opens.
-  it('offers the new-chat dialog from the idle pane', async () => {
+  it('offers the new session dialog on Chats from the idle pane', async () => {
     const { wrapper } = await mountAgentsMode('/workspaces/web-app')
     expect(wrapper.find('[data-testid="agents-pane-empty"]').exists()).toBe(true)
-    expect(wrapper.findComponent(SessionLaunchDialog).exists()).toBe(false)
+    const newSession = useNewSession()
+    expect(newSession.open.value).toBe(false)
 
     await wrapper.get('[data-testid="agents-new-session-open"]').trigger('click')
+    await flushPromises()
 
-    expect(wrapper.findComponent(SessionLaunchDialog).exists()).toBe(true)
+    expect(newSession.open.value).toBe(true)
+    expect(newSession.initialTarget.value).toBe('workspace')
+    expect(newSession.initial.value.workspace).toBe('web-app')
   })
 
   // The + is a dialog opener, not a launch: nothing starts until the dialog
-  // submits, and what it submits is what starts.
-  it('starts the chat the dialog names, in the workspace it names', async () => {
+  // submits, and what it submits starts in the pane, not as a background job.
+  it('starts the chat the dialog names in the pane', async () => {
     const client = fakeClient()
     mocks.createAgentWorkspacesClient.mockReturnValue(client)
     const { wrapper } = await mountAgentsMode('/workspaces/web-app')
@@ -838,13 +859,16 @@ describe('AgentsMode', () => {
     wrapper.findComponent(AgentsSidebar).vm.$emit('request-new-session')
     await flushPromises()
     expect(client.startSession).not.toHaveBeenCalled()
-    expect(wrapper.findComponent(SessionLaunchDialog).props('initial')).toEqual({ workspace: 'web-app' })
 
-    wrapper.findComponent(SessionLaunchDialog).vm.$emit('submit', { workspace: 'api', name: 'Ship it', inputs: {} })
+    const newSession = useNewSession()
+    await newSession.submit({ workspace: 'api', name: 'Ship it', prompt: 'Fix the build' })
     await flushPromises()
 
-    expect(client.startSession).toHaveBeenCalledWith(expect.objectContaining({ workspace: 'api', name: 'Ship it' }))
-    expect(wrapper.findComponent(SessionLaunchDialog).exists()).toBe(false)
+    expect(client.startSession).toHaveBeenCalledWith(
+      expect.objectContaining({ workspace: 'api', name: 'Ship it', prompt: 'Fix the build' }),
+    )
+    expect(mocks.CreateSession).not.toHaveBeenCalled()
+    expect(newSession.open.value).toBe(false)
   })
 
   // The canvas is a sibling pane: opening and closing it must never re-key or
@@ -899,15 +923,5 @@ describe('AgentsMode', () => {
     await flushPromises()
     expect(router.currentRoute.value.query.canvas).toBeUndefined()
     expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)
-  })
-
-  // An unnamed chat is still a named chat: the dialog applies the default,
-  // so it is not left to the backend.
-  it('defaults an unnamed chat to New Chat', async () => {
-    const { wrapper } = await mountAgentsMode('/workspaces/web-app')
-    wrapper.findComponent(AgentsSidebar).vm.$emit('request-new-session')
-    await flushPromises()
-
-    expect(wrapper.findComponent(SessionLaunchDialog).props('defaultName')).toBe('New Chat')
   })
 })

@@ -85,6 +85,47 @@ describe('useNewSession', () => {
     expect(s.initialTarget.value).toBe('workspace')
   })
 
+  // The Chats pane shows the chat it starts, so a chat submitted from there
+  // goes to its launcher rather than to a background job.
+  it('hands a chat to the opener that asked to launch it', async () => {
+    const launch = vi.fn().mockResolvedValue(undefined)
+    const s = useNewSession()
+    await s.openBlank('', 'workspace', { workspace: 'alerts', launch })
+    expect(s.initial.value.workspace).toBe('alerts')
+
+    await s.submit({ workspace: 'alerts', name: 'triage', prompt: 'Look at this' })
+
+    expect(launch).toHaveBeenCalledWith({ workspace: 'alerts', name: 'triage', prompt: 'Look at this' })
+    expect(mocks.CreateSession).not.toHaveBeenCalled()
+    expect(s.open.value).toBe(false)
+  })
+
+  it('still creates a repository session when a chat opener switched to Code', async () => {
+    const launch = vi.fn()
+    mocks.CreateSession.mockResolvedValue(1)
+    const s = useNewSession()
+    await s.openBlank('', 'workspace', { workspace: 'alerts', launch })
+
+    await s.submit({ repository: 'acme/site', name: 'fix' })
+
+    expect(launch).not.toHaveBeenCalled()
+    expect(mocks.CreateSession).toHaveBeenCalledOnce()
+  })
+
+  it('forgets the chat launcher when the form closes', async () => {
+    const launch = vi.fn()
+    mocks.CreateSession.mockResolvedValue(1)
+    const s = useNewSession()
+    await s.openBlank('', 'workspace', { workspace: 'alerts', launch })
+    s.cancel()
+    await s.openBlank('', 'workspace')
+
+    await s.submit({ workspace: 'alerts', name: 'triage' })
+
+    expect(launch).not.toHaveBeenCalled()
+    expect(mocks.CreateSession).toHaveBeenCalledOnce()
+  })
+
   it('falls back to the default when the session on screen has no remote', async () => {
     const s = useNewSession()
     await s.openBlank('')

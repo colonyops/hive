@@ -34,8 +34,8 @@ Use **New workspace** in Chats. A workspace chooses:
 
 The command picker includes **Ask**, **Auto**, and **Full** presets for Claude Code and Codex. **Custom** lets you edit the complete command template. Add model or provider flags to the command itself.
 
-Schedules and feed-item launches need a command that passes the opening prompt
-as a shell-quoted argument. Keep this suffix from the shipped presets:
+Schedules, feed-item launches, and chats started with a prompt need a command
+that passes the opening prompt as a shell-quoted argument. Keep this suffix from the shipped presets:
 
 ```text
 {{ if .Prompt }}-- {{ .Prompt | shq }}{{ end }}

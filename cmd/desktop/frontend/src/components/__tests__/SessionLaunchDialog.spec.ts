@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import SessionLaunchDialog from '../SessionLaunchDialog.vue'
 
@@ -330,61 +330,5 @@ describe('SessionLaunchDialog: launched from an action', () => {
     const wrapper = mountAction({ busy: true })
     await wrapper.get('button[aria-label="Close"]').trigger('click')
     expect(wrapper.emitted('close')).toBeUndefined()
-  })
-})
-
-describe('SessionLaunchDialog: new chat', () => {
-  const workspaces = [
-    { dir: 'web-app', name: 'Web App' },
-    { dir: 'api', name: 'API' },
-  ]
-  const mountChat = (overrides: Record<string, unknown> = {}) =>
-    mountDialog({
-      options: { workspaces },
-      initial: { workspace: 'web-app' },
-      workspaceOnly: true,
-      defaultName: 'New Chat',
-      noWorkspacesHint: 'No workspaces yet. Author one under /tmp/agents.',
-      testid: 'new-chat',
-      ...overrides,
-    })
-
-  it('has no target selector', () => {
-    expect(mountChat().find('[data-testid="new-chat-target"]').exists()).toBe(false)
-  })
-
-  it('opens on the given workspace and emits a trimmed name', async () => {
-    const wrapper = mountChat()
-    await wrapper.get('[data-testid="new-chat-name"]').setValue('  Ship it  ')
-    await wrapper.get('[data-testid="new-chat-submit"]').trigger('click')
-    expect(wrapper.emitted('submit')).toEqual([[{ workspace: 'web-app', name: 'Ship it', inputs: {} }]])
-  })
-
-  it('submits an empty name as the default name, unvalidated', async () => {
-    const wrapper = mountChat()
-    await wrapper.get('[data-testid="new-chat-submit"]').trigger('click')
-    await wrapper.get('[data-testid="new-chat-name"]').setValue('Fix #12!')
-    await wrapper.get('[data-testid="new-chat-submit"]').trigger('click')
-    expect(wrapper.emitted('submit')).toEqual([
-      [{ workspace: 'web-app', name: 'New Chat', inputs: {} }],
-      [{ workspace: 'web-app', name: 'Fix #12!', inputs: {} }],
-    ])
-  })
-
-  it('starts the chat in another workspace when one is picked', async () => {
-    const wrapper = mountChat()
-    await wrapper.get('[data-testid="new-chat-workspace"]').trigger('click')
-    await wrapper.vm.$nextTick()
-    document.querySelector<HTMLElement>('[data-testid="new-chat-workspace-option-api"]')!.click()
-    await flushPromises()
-    await wrapper.get('[data-testid="new-chat-submit"]').trigger('click')
-    expect(wrapper.emitted('submit')).toEqual([[{ workspace: 'api', name: 'New Chat', inputs: {} }]])
-  })
-
-  it('names the workspace root when there are no workspaces', async () => {
-    const wrapper = mountChat({ options: { workspaces: [] }, initial: {} })
-    expect(wrapper.get('[data-testid="new-chat-workspace-hint"]').text()).toContain('/tmp/agents')
-    await wrapper.get('[data-testid="new-chat-submit"]').trigger('click')
-    expect(wrapper.emitted('submit')).toBeUndefined()
   })
 })

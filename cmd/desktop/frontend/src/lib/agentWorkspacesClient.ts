@@ -311,6 +311,8 @@ export interface AgentWorkspaceOpenResult {
 export interface StartSessionRequest {
   workspace: string
   name: string
+  /** Opening prompt; the workspace's command must support one. */
+  prompt?: string
   cols?: number
   rows?: number
 }
