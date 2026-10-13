@@ -472,6 +472,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Engine:   func() *hive.Engine { return a.hive },
 		Sessions: a.Stores.AgentSessions,
 		Events:   a.Events,
+		Logger:   cfg.Logger,
 	})
 	a.AgentWorkspaces = newAgentWorkspacesService(AgentWorkspacesDeps{
 		Store:           a.agentWorkspaceStore,
@@ -1264,6 +1265,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	}
 
 	bus := hiveevents.New(64)
+	logDroppedHiveEvents(a.logger, bus)
 	busCtx, cancel := context.WithCancel(ctx)
 	go bus.Start(busCtx)
 
@@ -1298,10 +1300,20 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		func() dispatch.SessionCreator { return a.hive.Sessions() },
 		a.Stores.ItemSessions, a.Activity, cfg.Logger,
 	)
-	// After hive.New so the canvases land under the engine's context root; the
-	// import is idempotent, so a reload that runs it again moves nothing.
+	// After hive.New so the canvases land under the engine's context root.
+	// It runs once per process: ReloadHiveRuntime never repeats it, so a
+	// legacy canvas that appears later moves on the next launch.
 	importLegacyCanvases(ctx, a.logger, a.hive, cfg.Paths)
 	return nil
+}
+
+// logDroppedHiveEvents surfaces what the engine bus drops when its buffer is
+// full. A dropped DriveChanged leaves the drive pane stale until the next
+// change, so the drop must leave a trace.
+func logDroppedHiveEvents(logger zerolog.Logger, bus *hiveevents.EventBus) {
+	bus.OnDrop(func(event hiveevents.Event, _ any) {
+		logger.Warn().Str("event", string(event)).Msg("hive engine event dropped: bus buffer full")
+	})
 }
 
 // forwardDriveChanges republishes every engine drive change on the app bus.

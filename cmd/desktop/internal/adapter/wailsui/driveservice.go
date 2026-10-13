@@ -63,7 +63,6 @@ func (s *DriveService) Export(ctx context.Context, space, path, dest string) err
 	return s.drive.Export(ctx, space, path, dest)
 }
 
-// Delete removes a document or an empty folder.
 func (s *DriveService) Delete(ctx context.Context, space, path string) error {
 	return s.drive.Delete(ctx, space, path)
 }
@@ -102,7 +101,6 @@ func (s *DriveService) Locate(ctx context.Context, space, path string) (string, 
 	return s.drive.Locate(ctx, space, path)
 }
 
-// Reveal shows path in the OS file manager.
 func (s *DriveService) Reveal(ctx context.Context, space, path string) error {
 	return s.drive.Reveal(ctx, space, path)
 }

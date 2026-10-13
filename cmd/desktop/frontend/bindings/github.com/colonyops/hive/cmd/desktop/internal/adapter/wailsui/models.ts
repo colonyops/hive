@@ -199,15 +199,13 @@ export interface DocumentWire {
 /**
  * DriveToggle is the drive:toggle payload: whose pane to open or close, a
  * chat's or a hive session's, and the document to pin when opening (empty
- * leaves the pane's pick). Name is Path's canvas name, for a pane that still
- * pins by name.
+ * leaves the pane's pick).
  */
 export interface DriveToggle {
     "session": string;
     "hiveSession": string;
     "space": string;
     "path": string;
-    "name": string;
     "open": boolean;
 }
 

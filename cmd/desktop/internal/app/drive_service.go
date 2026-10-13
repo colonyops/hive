@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"html"
 	"io/fs"
 	"net/url"
@@ -54,12 +55,14 @@ type DriveService struct {
 	sessions canvasSessionResolver
 	events   *events.Bus
 	reveal   func(string) error
+	logger   zerolog.Logger
 }
 
 type DriveDeps struct {
 	Engine   func() *hive.Engine
 	Sessions canvasSessionResolver
 	Events   *events.Bus
+	Logger   zerolog.Logger
 	// Reveal shows an absolute path in the file manager; nil is osopen.Reveal.
 	Reveal func(string) error
 }
@@ -68,7 +71,7 @@ func newDriveService(d DriveDeps) *DriveService {
 	if d.Reveal == nil {
 		d.Reveal = osopen.Reveal
 	}
-	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal}
+	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, logger: d.Logger}
 }
 
 // driveCaller is who a tool call comes from and the space its canvases
@@ -216,7 +219,6 @@ func (s *DriveService) ClearCanvas(ctx context.Context, session, name string) (d
 	return s.withCanonicalAuthor(ctx, c)
 }
 
-// DeleteCanvas removes one canvas file entirely for an agent caller.
 func (s *DriveService) DeleteCanvas(ctx context.Context, session, name string) error {
 	d, caller, err := s.open(ctx, session)
 	if err != nil {
@@ -247,7 +249,7 @@ func (s *DriveService) ListCanvases(ctx context.Context, session string) ([]driv
 // the user away from something else. Opening with a name requires that
 // canvas to exist; empty leaves the pane's own pick.
 func (s *DriveService) SetPaneOpen(ctx context.Context, session, name string, open bool) error {
-	caller, err := s.resolve(ctx, session)
+	d, caller, err := s.open(ctx, session)
 	if err != nil {
 		return err
 	}
@@ -256,9 +258,16 @@ func (s *DriveService) SetPaneOpen(ctx context.Context, session, name string, op
 	}
 	pinned := ""
 	if open && name != "" {
-		c, err := s.GetCanvas(ctx, session, name)
+		path, err := canvasPath(name)
 		if err != nil {
 			return err
+		}
+		c, ok, err := d.LoadCanvas(ctx, caller.space, path)
+		if err != nil {
+			return driveError(err, name)
+		}
+		if !ok {
+			return canvasNotFound(name)
 		}
 		pinned = c.Path
 	}
@@ -298,9 +307,11 @@ func (s *DriveService) GetCanvasAt(ctx context.Context, space, path string) (dri
 // Markdown is one document as standalone markdown, the reader's copy action:
 // a markdown document's own body, or a canvas rendered. A canvas nothing was
 // written under is not_found: exporting nothing is a mistake worth surfacing,
-// unlike showing it.
+// unlike showing it. An html document or a plain file has no markdown form
+// and is refused here, so the policy does not live only in the frontend.
 func (s *DriveService) Markdown(ctx context.Context, space, path string) (string, error) {
-	if drive.KindOf(path) == drive.KindMarkdown {
+	switch drive.KindOf(path) {
+	case drive.KindMarkdown:
 		d, parsed, err := s.space(space)
 		if err != nil {
 			return "", err
@@ -310,6 +321,26 @@ func (s *DriveService) Markdown(ctx context.Context, space, path string) (string
 			return "", documentError(err, parsed, path)
 		}
 		return string(body), nil
+	case drive.KindHtml:
+		return "", Errorf(KindInvalid, "%q is an html document; only markdown documents and canvases export as markdown", path)
+	case drive.KindFile:
+		// A bare canvas name such as "plan" has a plain file's kind by its
+		// extension, so only a plain file that exists at that exact path is
+		// refused.
+		d, parsed, err := s.space(space)
+		if err != nil {
+			return "", err
+		}
+		if path != "" && drive.ValidatePath(path) == nil {
+			entry, err := d.Entry(ctx, parsed, path)
+			switch {
+			case err == nil && entry.Kind == drive.KindFile:
+				return "", Errorf(KindInvalid, "%q is a plain file; only markdown documents and canvases export as markdown", path)
+			case err != nil && !errors.Is(err, drive.ErrNotFound):
+				return "", documentError(err, parsed, path)
+			}
+		}
+	case drive.KindCanvas, drive.KindDir:
 	}
 	t, err := s.target(space, path)
 	if err != nil {
@@ -404,7 +435,8 @@ func (s *DriveService) Search(ctx context.Context, query string, limit int) ([]d
 
 // Document is one document read for the reader. The kind comes from the
 // name, so a plain file is answered from the snapshot without reading what
-// may be a large binary.
+// may be a large binary, and a canvas is read once, by the canvas load that
+// parses it.
 func (s *DriveService) Document(ctx context.Context, space, path string) (DocumentView, error) {
 	d, parsed, err := s.space(space)
 	if err != nil {
@@ -417,7 +449,8 @@ func (s *DriveService) Document(ctx context.Context, space, path string) (Docume
 		return DocumentView{}, Errorf(KindInvalid, "%q is not a path inside the space", path)
 	}
 	view := DocumentView{Space: parsed}
-	if drive.KindOf(path) == drive.KindFile {
+	switch drive.KindOf(path) {
+	case drive.KindFile, drive.KindCanvas:
 		entry, err := d.Entry(ctx, parsed, path)
 		if err != nil {
 			return DocumentView{}, documentError(err, parsed, path)
@@ -426,25 +459,25 @@ func (s *DriveService) Document(ctx context.Context, space, path string) (Docume
 			return DocumentView{}, Errorf(KindInvalid, "%q is a folder, not a document", path)
 		}
 		view.Entry = entry
+		if entry.Kind == drive.KindCanvas {
+			c, err := s.GetCanvasAt(ctx, space, path)
+			if err != nil {
+				return DocumentView{}, err
+			}
+			view.Canvas = &c
+		}
 		return view, nil
+	case drive.KindMarkdown, drive.KindHtml, drive.KindDir:
 	}
 	entry, body, err := d.Read(ctx, parsed, path)
 	if err != nil {
 		return DocumentView{}, documentError(err, parsed, path)
 	}
 	view.Entry = entry
-	switch entry.Kind {
-	case drive.KindMarkdown:
-		view.Markdown = string(body)
-	case drive.KindHtml:
+	if entry.Kind == drive.KindHtml {
 		view.HTML = canvas.WrapDocument(body)
-	case drive.KindCanvas:
-		c, err := s.GetCanvasAt(ctx, space, path)
-		if err != nil {
-			return DocumentView{}, err
-		}
-		view.Canvas = &c
-	case drive.KindDir, drive.KindFile:
+	} else {
+		view.Markdown = string(body)
 	}
 	return view, nil
 }
@@ -528,7 +561,7 @@ func (s *DriveService) move(ctx context.Context, d *drivesvc.Service, space driv
 	}
 	entry, err := d.Move(ctx, space, from, to, drive.Author{})
 	if err != nil {
-		return drive.Entry{}, moveError(err, space, to)
+		return drive.Entry{}, moveError(err, space, from, to)
 	}
 	return entry, nil
 }
@@ -547,7 +580,11 @@ func (s *DriveService) Delete(ctx context.Context, space, path string) error {
 	if drive.KindOf(path) == drive.KindCanvas {
 		// A canvas that no longer parses is still deleted, just without an
 		// author to wake.
-		if c, ok, err := d.LoadCanvas(ctx, parsed, path); err == nil && ok {
+		c, ok, err := d.LoadCanvas(ctx, parsed, path)
+		switch {
+		case err != nil:
+			s.logger.Debug().Err(err).Str("space", parsed.Key).Str("path", path).Msg("deleting a canvas that does not load; no author to wake")
+		case ok:
 			author = drive.Author{Session: c.Session, HiveSession: c.HiveSession}
 		}
 	}
@@ -678,12 +715,18 @@ func documentNotFound(space drive.Space, path string) error {
 
 // moveError keeps the drive's own reason for refusing a move as the message,
 // since the UI shows only the message: it names the rule the new name broke,
-// such as keeping the extension or a canvas name the tools can address.
-func moveError(err error, space drive.Space, path string) error {
-	if errors.Is(err, drive.ErrInvalidPath) {
+// such as keeping the extension or a canvas name the tools can address. A
+// conflict names the target that already exists; anything else names the
+// source.
+func moveError(err error, space drive.Space, from, to string) error {
+	switch {
+	case errors.Is(err, drive.ErrInvalidPath):
 		return Errorf(KindInvalid, "%s", strings.TrimPrefix(err.Error(), drive.ErrInvalidPath.Error()+": "))
+	case errors.Is(err, drive.ErrExists):
+		return documentError(err, space, to)
+	default:
+		return documentError(err, space, from)
 	}
-	return documentError(err, space, path)
 }
 
 // documentError maps the drive's sentinel errors for every caller that
@@ -762,7 +805,6 @@ func (s *DriveService) engineDrive() (*drivesvc.Service, error) {
 	return engine.Drive(), nil
 }
 
-// open is the drive and the caller every agent operation starts from.
 func (s *DriveService) open(ctx context.Context, session string) (*drivesvc.Service, driveCaller, error) {
 	d, err := s.engineDrive()
 	if err != nil {
@@ -833,8 +875,6 @@ func (s *DriveService) resolve(ctx context.Context, session string) (driveCaller
 	return driveCaller{space: space, author: drive.Author{HiveSession: sess.ID}}, nil
 }
 
-// driveTarget is a UI call's canvas: the drive, the space it named, and the
-// document path its name or path maps to.
 type driveTarget struct {
 	svc   *drivesvc.Service
 	space drive.Space
@@ -992,40 +1032,51 @@ type legacyCanvasImport struct {
 
 // legacyCanvasImports names the shared canvases directory under the desktop
 // data dir and one per workspace directory. Only the desktop knows these
-// roots, which is why the engine's import runs from here.
-func legacyCanvasImports(dataDir, workspacesDir string) ([]legacyCanvasImport, error) {
-	imports := []legacyCanvasImport{{from: filepath.Join(dataDir, drive.CanvasesDir), space: drive.Shared}}
+// roots, which is why the engine's import runs from here. skipped holds a
+// workspace entry that could not be read or named as a space; a plain file
+// beside the workspaces is not one.
+func legacyCanvasImports(dataDir, workspacesDir string) (imports []legacyCanvasImport, skipped []error, err error) {
+	imports = []legacyCanvasImport{{from: filepath.Join(dataDir, drive.CanvasesDir), space: drive.Shared}}
 	entries, err := os.ReadDir(workspacesDir)
 	if errors.Is(err, fs.ErrNotExist) {
-		return imports, nil
+		return imports, nil, nil
 	}
 	if err != nil {
-		return imports, err
+		return imports, nil, err
 	}
 	for _, entry := range entries {
 		name := entry.Name()
 		if strings.HasPrefix(name, ".") {
 			continue
 		}
-		if info, err := os.Stat(filepath.Join(workspacesDir, name)); err != nil || !info.IsDir() {
+		info, err := os.Stat(filepath.Join(workspacesDir, name))
+		if err != nil {
+			skipped = append(skipped, fmt.Errorf("workspace %q: %w", name, err))
+			continue
+		}
+		if !info.IsDir() {
 			continue
 		}
 		space, err := drive.WorkspaceSpace(name)
 		if err != nil {
+			skipped = append(skipped, err)
 			continue
 		}
 		imports = append(imports, legacyCanvasImport{from: filepath.Join(workspacesDir, name, drive.CanvasesDir), space: space})
 	}
-	return imports, nil
+	return imports, skipped, nil
 }
 
 // importLegacyCanvases moves every pre-drive canvas into its space. Each
 // import is idempotent and a failure is logged rather than fatal: a canvas
 // left where it was is still a file the user can move by hand.
 func importLegacyCanvases(ctx context.Context, logger zerolog.Logger, engine *hive.Engine, paths settings.Paths) {
-	imports, err := legacyCanvasImports(paths.DataDir, paths.AgentWorkspacesDir)
+	imports, skipped, err := legacyCanvasImports(paths.DataDir, paths.AgentWorkspacesDir)
 	if err != nil {
 		logger.Warn().Err(err).Str("dir", paths.AgentWorkspacesDir).Msg("workspace canvases not listed for import")
+	}
+	for _, err := range skipped {
+		logger.Warn().Err(err).Str("dir", paths.AgentWorkspacesDir).Msg("workspace skipped for legacy canvas import")
 	}
 	for _, imp := range imports {
 		moved, err := engine.Drive().ImportLegacyCanvases(ctx, imp.from, imp.space)

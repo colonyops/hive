@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
-	"github.com/colonyops/hive/internal/domain/drive"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	wailsnotify "github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -147,7 +146,7 @@ func Subscribe(ctx context.Context, bus *events.Bus, onTrayStale func()) (cancel
 		events.Subscribe(ctx, bus, "wailsui.drive-toggle", events.Coalesce(), func(_ context.Context, e events.DriveToggleRequested) {
 			emitDriveToggle(DriveToggle{
 				Session: e.Session, HiveSession: e.HiveSession,
-				Space: e.Space, Path: e.Path, Name: drive.CanvasName(e.Path), Open: e.Open,
+				Space: e.Space, Path: e.Path, Open: e.Open,
 			})
 		}),
 		events.Subscribe(ctx, bus, "wailsui.schedules", events.Coalesce(), func(_ context.Context, e events.SchedulesUpdated) {
@@ -231,14 +230,12 @@ func emitDriveUpdated(write DriveWrite) {
 
 // DriveToggle is the drive:toggle payload: whose pane to open or close, a
 // chat's or a hive session's, and the document to pin when opening (empty
-// leaves the pane's pick). Name is Path's canvas name, for a pane that still
-// pins by name.
+// leaves the pane's pick).
 type DriveToggle struct {
 	Session     string `json:"session"`
 	HiveSession string `json:"hiveSession"`
 	Space       string `json:"space"`
 	Path        string `json:"path"`
-	Name        string `json:"name"`
 	Open        bool   `json:"open"`
 }
 

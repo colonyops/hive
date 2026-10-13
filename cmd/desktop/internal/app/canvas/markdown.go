@@ -29,7 +29,7 @@ func Markdown(c drive.Canvas) (string, error) {
 	b.Write(header)
 	b.WriteString("---\n\n")
 	if c.Title != "" {
-		b.WriteString("# " + c.Title + "\n\n")
+		b.WriteString("# " + oneLine(c.Title) + "\n\n")
 	}
 	for i, block := range c.Blocks {
 		if i > 0 {
@@ -37,15 +37,15 @@ func Markdown(c drive.Canvas) (string, error) {
 		}
 		switch block.Kind {
 		case drive.BlockKindLink:
-			b.WriteString("[" + block.Title + "](" + block.URL + ")")
+			b.WriteString("[" + linkText(block.Title) + "](" + linkDestination(block.URL) + ")")
 		case drive.BlockKindHTML:
 			if block.Title != "" {
-				b.WriteString("## " + block.Title + "\n\n")
+				b.WriteString("## " + oneLine(block.Title) + "\n\n")
 			}
 			b.WriteString(SanitizeHTML(block.Body))
 		default:
 			if block.Title != "" {
-				b.WriteString("## " + block.Title + "\n\n")
+				b.WriteString("## " + oneLine(block.Title) + "\n\n")
 			}
 			b.WriteString(block.Body)
 		}
@@ -53,6 +53,29 @@ func Markdown(c drive.Canvas) (string, error) {
 	b.WriteString("\n")
 	return b.String(), nil
 }
+
+// oneLine keeps a title on its heading or link line: a newline in it would
+// end the heading and turn the rest into body text.
+func oneLine(title string) string {
+	return strings.Join(strings.FieldsFunc(title, func(r rune) bool { return r == '\n' || r == '\r' }), " ")
+}
+
+var linkTextEscaper = strings.NewReplacer(`\`, `\\`, `[`, `\[`, `]`, `\]`)
+
+func linkText(title string) string {
+	return linkTextEscaper.Replace(oneLine(title))
+}
+
+// linkDestination wraps a URL in angle brackets when it holds a parenthesis
+// or whitespace, either of which ends a bare link destination early.
+func linkDestination(url string) string {
+	if !strings.ContainsAny(url, "() \t\n\r") {
+		return url
+	}
+	return "<" + bracketedURLEscaper.Replace(url) + ">"
+}
+
+var bracketedURLEscaper = strings.NewReplacer("<", "%3C", ">", "%3E", "\n", "%0A", "\r", "%0D")
 
 func markdownFrontmatter(c drive.Canvas) ([]byte, error) {
 	if err := drive.ValidateFrontmatter(c.Frontmatter); err != nil {

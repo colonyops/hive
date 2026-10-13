@@ -678,16 +678,20 @@ func TestLegacyCanvasImportsNameTheRootsOnlyTheDesktopKnows(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(workspaces, "demo"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(workspaces, ".git"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(workspaces, "notes.md"), nil, 0o644))
+	require.NoError(t, os.Symlink(filepath.Join(workspaces, "gone"), filepath.Join(workspaces, "dangling")))
 
-	imports, err := legacyCanvasImports(data, workspaces)
+	imports, skipped, err := legacyCanvasImports(data, workspaces)
 	require.NoError(t, err)
 	assert.Equal(t, []legacyCanvasImport{
 		{from: filepath.Join(data, "canvases"), space: drive.Shared},
 		{from: filepath.Join(workspaces, "demo", "canvases"), space: mustSpace(drive.WorkspaceSpace("demo"))},
 	}, imports)
+	require.Len(t, skipped, 1, "a plain file is not a workspace, but an entry that cannot be read is reported")
+	assert.Contains(t, skipped[0].Error(), `"dangling"`)
 
-	imports, err = legacyCanvasImports(data, filepath.Join(workspaces, "missing"))
+	imports, skipped, err = legacyCanvasImports(data, filepath.Join(workspaces, "missing"))
 	require.NoError(t, err)
+	assert.Empty(t, skipped)
 	assert.Equal(t, []legacyCanvasImport{{from: filepath.Join(data, "canvases"), space: drive.Shared}}, imports,
 		"a workspace root that does not exist yet still imports the shared canvases")
 }
@@ -815,6 +819,21 @@ func TestDriveMarkdownOfAMarkdownDocumentIsItsBody(t *testing.T) {
 	got, err := f.svc.Markdown(t.Context(), "workspaces/ws", "notes.md")
 	require.NoError(t, err)
 	assert.Equal(t, "# Notes\n", got)
+}
+
+func TestDriveMarkdownRefusesHTMLAndPlainFiles(t *testing.T) {
+	f := newDriveFixture(t)
+	ctx := t.Context()
+	f.writeDoc(t, "workspaces/ws", "page.html", "<p>x</p>")
+	f.writeDoc(t, "workspaces/ws", "notes.txt", "x")
+
+	for _, path := range []string{"page.html", "notes.txt"} {
+		_, err := f.svc.Markdown(ctx, "workspaces/ws", path)
+		assert.Equal(t, KindInvalid, KindOf(err), path)
+		assert.Contains(t, errorMessage(t, err), "export as markdown", path)
+		err = f.svc.Export(ctx, "workspaces/ws", path, filepath.Join(t.TempDir(), "out.md"))
+		assert.Equal(t, KindInvalid, KindOf(err), path)
+	}
 }
 
 // Spaces, Tree and Search pass through to the engine, whose tests own their

@@ -73,6 +73,40 @@ func TestMoveDocumentKeepsTheKind(t *testing.T) {
 	assert.Equal(t, "1", updates[1].Session)
 }
 
+func TestReadDocumentReadsPlainTextButNotHiveState(t *testing.T) {
+	f := newDriveFixture(t)
+	ctx := t.Context()
+	f.writeDoc(t, "workspaces/ws", "notes.txt", "plain")
+	f.writeDoc(t, "workspaces/ws", "kv.json", "{}")
+	f.writeDoc(t, "workspaces/ws", "plans/kv.json.lock", "")
+
+	_, body, err := f.svc.ReadDocument(ctx, "1", "notes.txt")
+	require.NoError(t, err)
+	assert.Equal(t, "plain", string(body))
+
+	for _, path := range []string{"kv.json", "plans/kv.json.lock"} {
+		_, _, err = f.svc.ReadDocument(ctx, "1", path)
+		assert.Equal(t, KindNotFound, KindOf(err), "%s is kept out of the tree, so it is not readable either", path)
+	}
+}
+
+func TestMoveDocumentConflictNamesTheTarget(t *testing.T) {
+	f := newDriveFixture(t)
+	ctx := t.Context()
+	for _, path := range []string{"a.md", "b.md"} {
+		_, err := f.svc.WriteDocument(ctx, "1", path, []byte("x"))
+		require.NoError(t, err)
+	}
+
+	_, err := f.svc.MoveDocument(ctx, "1", "a.md", "b.md")
+	assert.Equal(t, KindConflict, KindOf(err))
+	assert.Contains(t, errorMessage(t, err), `"b.md" already exists`)
+
+	_, err = f.svc.MoveDocument(ctx, "1", "ghost.md", "c.md")
+	assert.Equal(t, KindNotFound, KindOf(err))
+	assert.Contains(t, errorMessage(t, err), `"ghost.md"`)
+}
+
 // errorMessage is what the UI shows: the message alone, without the cause.
 func errorMessage(t *testing.T, err error) string {
 	t.Helper()

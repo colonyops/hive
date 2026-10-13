@@ -18,6 +18,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
+	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/multiplexer"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive"
@@ -299,6 +300,13 @@ func (s *SessionsService) resolveLaunchAgent(ctx context.Context, requested stri
 // ListSessions returns every session, whatever its state. Only an active one
 // can be attached to — Slug is its tmux session name — but a recycled or
 // corrupted session still has to be readable and deletable.
+// CanonicalSpace is space spelled as its directory is on disk, so a session
+// whose remote differs only by case from the checkout still names the space
+// the drive watches.
+func (s *SessionsService) CanonicalSpace(space drive.Space) drive.Space {
+	return s.hive.Drive().CanonicalSpace(space)
+}
+
 func (s *SessionsService) ListSessions(ctx context.Context) ([]session.Session, error) {
 	sessions, err := s.hive.Sessions().ListSessions(ctx)
 	if err != nil {

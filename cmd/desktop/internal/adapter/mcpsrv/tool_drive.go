@@ -32,9 +32,10 @@ func (ctrl *DriveController) registerDocuments(srv *mcp.Server) {
 	addTool(srv, &mcp.Tool{
 		Name:  "read_document",
 		Title: "Read a document",
-		Description: "Read one markdown or html document as stored, front matter included, with its entry. A canvas is blocks rather " +
-			"than a body: read it with read_canvas. A folder is listed with list_documents. Use this before rewriting a document " +
-			"another chat or the user may have changed.",
+		Description: "Read one markdown or html document, or any other UTF-8 text file in the space, as stored, front matter " +
+			"included, with its entry. A canvas is blocks rather than a body: read it with read_canvas. A folder is listed " +
+			"with list_documents, and a binary file is refused. Use this before rewriting a document another chat or the " +
+			"user may have changed.",
 	}, ctrl.ReadDocument)
 
 	addTool(srv, &mcp.Tool{
@@ -44,11 +45,11 @@ func (ctrl *DriveController) registerDocuments(srv *mcp.Server) {
 			"created as needed, so file a plan as plans/auth-rewrite.md or a report as reports/2026-10/perf.md. A markdown " +
 			"body may open with YAML front matter between --- lines; title sets the name the user sees, and front matter that " +
 			"does not parse is refused rather than saved. An html document renders as a page of its own in a sandboxed frame: " +
-			"inline styles and scripts run, other resources load only over https or as data: URLs, and forms and frames " +
-			"do not work. It is not sanitized like a canvas html block, and the canvas hv- classes do not apply. The body is " +
-			"capped at 2 MiB. A .canvas.json " +
-			"path is refused: write canvas blocks with put_blocks. Answers with the entry as stored. The pane does not open by " +
-			"itself; use open_document when the user should look now.",
+			"inline styles and scripts run; other scripts, styles and fetches load only over https; images, fonts and media " +
+			"load over https or as data: URLs; forms and frames do not work. It is not sanitized like a canvas html block, " +
+			"and the canvas hv- classes do not apply. The body is capped at 2 MiB. A .canvas.json path is refused: write " +
+			"canvas blocks with put_blocks. Answers with the entry as stored. The pane does not open by itself; use " +
+			"open_document when the user should look now.",
 	}, ctrl.WriteDocument)
 
 	addTool(srv, &mcp.Tool{
@@ -83,14 +84,15 @@ type listDocumentsInput struct {
 	Detail  string `json:"detail,omitempty" jsonschema:"children (default) lists one level; tree lists the whole subtree."`
 }
 
-type documentPathInput struct {
+type readDocumentInput struct {
 	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
-	Path    string `json:"path"    jsonschema:"Document path inside the space, forward slashes, ending in .md or .html; folders are created as needed."`
+	Path    string `json:"path"    jsonschema:"Document path inside the space, forward slashes; it must exist."`
 }
 
 type writeDocumentInput struct {
-	documentPathInput
-	Body string `json:"body" jsonschema:"The whole document. Markdown may start with YAML front matter."`
+	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which uses the one shared space every such agent shares. Never guess or reuse another value."`
+	Path    string `json:"path"    jsonschema:"Document path inside the space, forward slashes, ending in .md or .html; folders are created as needed."`
+	Body    string `json:"body"    jsonschema:"The whole document. Markdown may start with YAML front matter."`
 }
 
 type moveDocumentInput struct {
@@ -160,7 +162,7 @@ func (ctrl *DriveController) ListDocuments(ctx context.Context, _ *mcp.CallToolR
 	return nil, listDocumentsResult{Space: space.Key, documentEntry: documentEntryFrom(entry), Children: children, Detail: in.Detail}, nil
 }
 
-func (ctrl *DriveController) ReadDocument(ctx context.Context, _ *mcp.CallToolRequest, in documentPathInput) (*mcp.CallToolResult, readDocumentResult, error) {
+func (ctrl *DriveController) ReadDocument(ctx context.Context, _ *mcp.CallToolRequest, in readDocumentInput) (*mcp.CallToolResult, readDocumentResult, error) {
 	entry, body, err := ctrl.core.Drive.ReadDocument(ctx, in.Session, in.Path)
 	if err != nil {
 		return nil, readDocumentResult{}, ctrl.toolError(err)

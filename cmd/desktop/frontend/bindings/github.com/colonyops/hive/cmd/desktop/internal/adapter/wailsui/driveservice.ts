@@ -21,9 +21,6 @@ export function CreateFolder(space: string, path: string): $CancellablePromise<$
     return $Call.ByID(3569237839, space, path);
 }
 
-/**
- * Delete removes a document or an empty folder.
- */
 export function Delete(space: string, path: string): $CancellablePromise<void> {
     return $Call.ByID(1095391208, space, path);
 }
@@ -71,9 +68,6 @@ export function Rename(space: string, path: string, name: string): $CancellableP
     return $Call.ByID(1953469489, space, path, name);
 }
 
-/**
- * Reveal shows path in the OS file manager.
- */
 export function Reveal(space: string, path: string): $CancellablePromise<void> {
     return $Call.ByID(2662089214, space, path);
 }

@@ -55,3 +55,22 @@ func TestMarkdownRefusesInvalidFrontmatter(t *testing.T) {
 	_, err := Markdown(drive.Canvas{Frontmatter: drive.Frontmatter{"created_at": "yesterday"}})
 	require.ErrorIs(t, err, drive.ErrInvalidFrontmatter)
 }
+
+func TestMarkdownEscapesTitlesAndLinkDestinations(t *testing.T) {
+	c := drive.Canvas{
+		Title: "Line one\nline two", CreatedAt: 1, UpdatedAt: 2,
+		Blocks: []drive.Block{
+			{ID: "a", Kind: drive.BlockKindMarkdown, Title: "Part\r\nTwo", Body: "x"},
+			{ID: "b", Kind: drive.BlockKindLink, Title: "See [docs]\nhere", URL: "https://example.com/a_(b)"},
+			{ID: "c", Kind: drive.BlockKindLink, Title: "Space", URL: "https://example.com/a b"},
+			{ID: "d", Kind: drive.BlockKindLink, Title: "Plain", URL: "https://example.com/a"},
+		},
+	}
+	markdown, err := Markdown(c)
+	require.NoError(t, err)
+	assert.Contains(t, markdown, "# Line one line two\n\n")
+	assert.Contains(t, markdown, "## Part Two\n\n")
+	assert.Contains(t, markdown, `[See \[docs\] here](<https://example.com/a_(b)>)`)
+	assert.Contains(t, markdown, "[Space](<https://example.com/a b>)")
+	assert.Contains(t, markdown, "[Plain](https://example.com/a)")
+}

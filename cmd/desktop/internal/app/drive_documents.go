@@ -49,8 +49,10 @@ func (s *DriveService) ListDocuments(ctx context.Context, session, path string, 
 	return caller.space, entry, nil
 }
 
-// ReadDocument is one document and its bytes, as stored. A canvas is a
-// structure of blocks rather than a body, so it is read with read_canvas.
+// ReadDocument is one markdown, html, or plain UTF-8 file and its bytes, as
+// stored. A canvas is a structure of blocks rather than a body, so it is read
+// with read_canvas. Hive's own state files answer not_found, as they are
+// absent from every listing.
 func (s *DriveService) ReadDocument(ctx context.Context, session, path string) (drive.Entry, []byte, error) {
 	d, caller, err := s.open(ctx, session)
 	if err != nil {
@@ -59,14 +61,21 @@ func (s *DriveService) ReadDocument(ctx context.Context, session, path string) (
 	if err := drive.ValidatePath(path); err != nil {
 		return drive.Entry{}, nil, documentError(err, caller.space, path)
 	}
+	if drive.IsHiveState(path) {
+		return drive.Entry{}, nil, documentNotFound(caller.space, path)
+	}
 	if drive.KindOf(path) == drive.KindCanvas {
 		return drive.Entry{}, nil, Errorf(KindInvalid, "%q is a canvas; read it with read_canvas and the name %q", path, drive.CanvasName(path))
 	}
+	isDir, err := s.isDir(d, caller.space, path)
+	if err != nil {
+		return drive.Entry{}, nil, err
+	}
+	if isDir {
+		return drive.Entry{}, nil, Errorf(KindInvalid, "%q is a folder; list it with list_documents", path)
+	}
 	entry, body, err := d.Read(ctx, caller.space, path)
 	if err != nil {
-		if errors.Is(err, drive.ErrInvalidPath) {
-			return drive.Entry{}, nil, Errorf(KindInvalid, "%q is a folder; list it with list_documents", path)
-		}
 		return drive.Entry{}, nil, documentError(err, caller.space, path)
 	}
 	if !utf8.Valid(body) {
@@ -139,7 +148,7 @@ func (s *DriveService) MoveDocument(ctx context.Context, session, from, to strin
 	}
 	entry, err := d.Move(ctx, caller.space, from, to, caller.author)
 	if err != nil {
-		return drive.Entry{}, moveError(err, caller.space, from)
+		return drive.Entry{}, moveError(err, caller.space, from, to)
 	}
 	return entry, nil
 }
@@ -175,11 +184,12 @@ func (s *DriveService) OpenDocument(ctx context.Context, session, path string) e
 		if err := drive.ValidatePath(path); err != nil {
 			return documentError(err, caller.space, path)
 		}
-		if _, _, err := d.Read(ctx, caller.space, path); err != nil {
-			if errors.Is(err, drive.ErrInvalidPath) {
-				return Errorf(KindInvalid, "%q is a folder; open a document inside it", path)
-			}
-			return documentError(err, caller.space, path)
+		isDir, err := s.isDir(d, caller.space, path)
+		if err != nil {
+			return err
+		}
+		if isDir {
+			return Errorf(KindInvalid, "%q is a folder; open a document inside it", path)
 		}
 	}
 	s.events.Publish(ctx, events.DriveToggleRequested{

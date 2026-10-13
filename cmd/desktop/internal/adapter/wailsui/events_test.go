@@ -115,7 +115,7 @@ func TestSubscribeEmitsDriveEventsUnderTheirFrontendNames(t *testing.T) {
 	bus.Publish(t.Context(), events.DriveToggleRequested{Session: "7", Space: "workspaces/ws", Path: "canvases/plan.canvas.json", Open: true})
 	require.Equal(t, emitted{
 		name: "drive:toggle",
-		data: DriveToggle{Session: "7", Space: "workspaces/ws", Path: "canvases/plan.canvas.json", Name: "plan", Open: true},
+		data: DriveToggle{Session: "7", Space: "workspaces/ws", Path: "canvases/plan.canvas.json", Open: true},
 	}, receiveEmitted(t, sink))
 }
 

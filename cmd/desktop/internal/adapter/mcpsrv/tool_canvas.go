@@ -108,8 +108,8 @@ func (ctrl *DriveController) registerCanvas(srv *mcp.Server) {
 	addTool(srv, &mcp.Tool{
 		Name:  "list_canvases",
 		Title: "List the canvases",
-		Description: "List every canvas where yours are kept — this chat's workspace, or the repository of this hive " +
-			"session — most recently updated first: name, title, block count and which chat or session created it. " +
+		Description: "List every canvas where yours are kept — this chat's workspace, the repository of this hive " +
+			"session, or the shared space when session is global — most recently updated first: name, title, block count and which chat or session created it. " +
 			"Canvases outlive what made them, so this may include artifacts from earlier conversations — read one " +
 			"before assuming it is yours to overwrite.",
 	}, ctrl.ListCanvases)

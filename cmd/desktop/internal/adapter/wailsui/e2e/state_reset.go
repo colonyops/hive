@@ -108,6 +108,10 @@ func NewStateResetHarnessForInstance(db *queries.DB, st *stores.Stores, core *sq
 	r.driveDirs = map[string]bool{}
 	_ = filepath.WalkDir(r.driveDir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
+			// A drive root the run has not created yet has no baseline to keep.
+			if !errors.Is(err, fs.ErrNotExist) {
+				logger.Warn().Err(err).Str("path", path).Msg("e2e drive baseline skipped an entry; a reset will not restore it")
+			}
 			return nil
 		}
 		if entry.IsDir() {
@@ -115,9 +119,12 @@ func NewStateResetHarnessForInstance(db *queries.DB, st *stores.Stores, core *sq
 			return nil
 		}
 		r.capture(path)
-		if info, err := entry.Info(); err == nil {
-			r.files[len(r.files)-1].modTime = info.ModTime()
+		info, err := entry.Info()
+		if err != nil {
+			logger.Warn().Err(err).Str("path", path).Msg("e2e drive baseline has no mod time; a reset will not restore it")
+			return nil
 		}
+		r.files[len(r.files)-1].modTime = info.ModTime()
 		return nil
 	})
 	return r

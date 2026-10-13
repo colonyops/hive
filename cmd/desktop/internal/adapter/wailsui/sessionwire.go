@@ -3,6 +3,7 @@ package wailsui
 import (
 	"time"
 
+	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/session"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
@@ -20,18 +21,21 @@ type SessionSummary struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
-func sessionSummaryOf(s session.Session) SessionSummary {
+func sessionSummaryOf(canonical func(drive.Space) drive.Space, s session.Session) SessionSummary {
 	space, _ := drivesvc.SpaceForRemote(s.Remote)
+	if space.Key != "" {
+		space = canonical(space)
+	}
 	return SessionSummary{
 		ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, State: string(s.State),
 		CanvasOwner: space.Key, CreatedAt: s.ActivatedAt(),
 	}
 }
 
-func sessionSummariesOf(sessions []session.Session) []SessionSummary {
+func sessionSummariesOf(canonical func(drive.Space) drive.Space, sessions []session.Session) []SessionSummary {
 	out := make([]SessionSummary, 0, len(sessions))
 	for _, s := range sessions {
-		out = append(out, sessionSummaryOf(s))
+		out = append(out, sessionSummaryOf(canonical, s))
 	}
 	return out
 }

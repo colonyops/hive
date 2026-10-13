@@ -45,12 +45,14 @@ What a document is follows from its name:
 - **markdown**, `.md`: GitHub-flavored markdown, optionally opening with
   YAML front matter.
 - **html**, `.html`: a page of its own, shown in a sandboxed frame. Inline
-  styles and scripts run; anything else loads only over `https` or as a
-  `data:` URL, and forms and frames do not work. It is not sanitized the way
+  styles and scripts run. Scripts, styles and fetches load only over `https`;
+  images, fonts and media load over `https` or as a `data:` URL. Forms and
+  frames do not work. It is not sanitized the way
   a canvas html block is, and the `hv-` classes below do not apply to it.
 - **canvas**, `.canvas.json`: an ordered list of blocks that you edit one
   block at a time with the canvas tools.
-- **file**: anything else in the folder. Hive lists it and leaves it alone.
+- **file**: anything else in the folder. Hive lists it and leaves it alone,
+  and `read_document` reads it when it is UTF-8 text.
 
 Folders are created as needed when you write, so file a plan as
 `plans/auth-rewrite.md` without making `plans/` first. Name documents by
@@ -84,8 +86,9 @@ either key in the tool. Copy and save include all of them in a YAML header.
   defaults to `children`, one level down; `tree` returns the whole subtree.
   The answer names the `space` and echoes the `detail` it used. A missing
   folder is `not_found`.
-- `read_document`: one markdown or html document, its entry plus `body`
-  exactly as stored. A canvas is read with `read_canvas`.
+- `read_document`: one markdown or html document, or any other UTF-8 text
+  file, its entry plus `body` exactly as stored. A canvas is read with
+  `read_canvas`, and a binary file is refused.
 - `write_document`: create or replace a whole `.md` or `.html` document,
   up to 2 MiB. A `.canvas.json` path is refused; write canvases with the
   canvas tools. Answers with the entry as stored.
@@ -124,8 +127,8 @@ A canvas is addressed by name or by path. A bare name like `perf` files at
 `reports/2026-10/perf` is `reports/2026-10/perf.canvas.json`, and the folders
 are created on the first write. The last segment is short, lowercase and
 filename-like. `list_canvases` answers each canvas by the name the other
-canvas tools take. A canvas at the space root, which only a move can put
-there, is named `./<stem>`, and the canvas tools accept that form.
+canvas tools take. A canvas at the space root is named `./<stem>`: write
+`./perf` to file one at `perf.canvas.json`.
 
 The canvas tools:
 
