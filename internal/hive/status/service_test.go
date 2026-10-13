@@ -6,6 +6,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -81,15 +82,52 @@ func TestAggregateStatus_FullOrdering(t *testing.T) {
 	}
 }
 
+func TestAgentPanes(t *testing.T) {
+	integration := &fakeTerminalIntegration{
+		statuses: map[string]terminal.Status{"%1": terminal.StatusReady, "%4": terminal.StatusApproval},
+		session:  &terminal.SessionInfo{PaneID: "%1"},
+		panes: []*terminal.SessionInfo{
+			{WindowName: "claude", PaneID: "%1", DetectedTool: "claude"},
+			{WindowName: "codex", PaneID: "%4", DetectedTool: "codex"},
+		},
+	}
+	term := terminal.NewManager([]string{"fake"})
+	term.Register(integration)
+
+	got, err := NewService(zerolog.Nop(), term, 1).AgentPanes(context.Background(), &session.Session{Slug: "sess"})
+
+	require.NoError(t, err)
+	assert.Equal(t, []AgentPane{
+		{PaneID: "%1", WindowName: "claude", Status: terminal.StatusReady, Tool: "claude"},
+		{PaneID: "%4", WindowName: "codex", Status: terminal.StatusApproval, Tool: "codex"},
+	}, got)
+}
+
+func TestAgentPanesNoTerminal(t *testing.T) {
+	term := terminal.NewManager([]string{"fake"})
+	term.Register(&fakeTerminalIntegration{})
+
+	got, err := NewService(zerolog.Nop(), term, 1).AgentPanes(context.Background(), &session.Session{Slug: "sess"})
+
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
 type fakeTerminalIntegration struct {
 	statuses map[string]terminal.Status
+	session  *terminal.SessionInfo
+	panes    []*terminal.SessionInfo
+}
+
+func (f *fakeTerminalIntegration) DiscoverAllPanes(context.Context, string, map[string]string) ([]*terminal.SessionInfo, error) {
+	return f.panes, nil
 }
 
 func (f *fakeTerminalIntegration) Name() string                 { return "fake" }
 func (f *fakeTerminalIntegration) Available() bool              { return true }
 func (f *fakeTerminalIntegration) RefreshCache(context.Context) {}
 func (f *fakeTerminalIntegration) DiscoverSession(context.Context, string, map[string]string) (*terminal.SessionInfo, error) {
-	return nil, nil
+	return f.session, nil
 }
 
 func (f *fakeTerminalIntegration) GetStatus(_ context.Context, info *terminal.SessionInfo) (terminal.Status, error) {
