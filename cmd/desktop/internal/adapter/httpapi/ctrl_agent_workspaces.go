@@ -584,6 +584,7 @@ func (ctrl *Controller) AgentSessions(w http.ResponseWriter, r *http.Request) er
 type agentSessionStartRequest struct {
 	Workspace string `json:"workspace"`
 	Name      string `json:"name"`
+	Prompt    string `json:"prompt"`
 	Cols      int    `json:"cols"`
 	Rows      int    `json:"rows"`
 }
@@ -604,7 +605,7 @@ func (ctrl *Controller) AgentSessionStart(w http.ResponseWriter, r *http.Request
 		return err
 	}
 	view, err := ctrl.core.AgentWorkspaces.StartSession(r.Context(), app.StartSession{
-		Workspace: body.Workspace, Name: body.Name, Cols: body.Cols, Rows: body.Rows,
+		Workspace: body.Workspace, Name: body.Name, Prompt: body.Prompt, Cols: body.Cols, Rows: body.Rows,
 	})
 	if err != nil {
 		return err

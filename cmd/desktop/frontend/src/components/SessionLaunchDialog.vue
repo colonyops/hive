@@ -49,11 +49,7 @@ const props = withDefaults(
     initialTarget?: Target
     /** An action's launch renders its own prompt, so only prompt-capable workspaces qualify. */
     action?: { label: string; inputs?: InputSpec[] | null }
-    workspaceOnly?: boolean
     withPrompt?: boolean
-    /** Makes the name optional; an empty name submits as this. */
-    defaultName?: string
-    noWorkspacesHint?: string
     busy?: boolean
     error?: string | null
     /** The creation this form was handed back from. */
@@ -66,8 +62,6 @@ const props = withDefaults(
     initial: () => ({}),
     initialTarget: undefined,
     action: undefined,
-    defaultName: '',
-    noWorkspacesHint: 'Create a workspace in Chats before starting one here.',
     error: null,
     failure: null,
     testid: 'new-session',
@@ -88,9 +82,7 @@ const targetOptions: SegmentedControlOption<Target>[] = [
 const targetIcons = { repository: IconCode, workspace: IconMessagesSquare }
 const inputs = computed(() => props.action?.inputs ?? [])
 
-const target = seedRef<Target>(() =>
-  props.workspaceOnly ? 'workspace' : (props.initialTarget ?? (props.initial.workspace ? 'workspace' : 'repository')),
-)
+const target = seedRef<Target>(() => props.initialTarget ?? (props.initial.workspace ? 'workspace' : 'repository'))
 const repository = seedRef(() => props.initial.repository || props.options.defaultRepository || '')
 const workspace = seedRef(() => {
   const first =
@@ -115,7 +107,7 @@ const selectedWorkspace = computed(() => props.options.workspaces?.find((item) =
 const canSubmit = computed(() => {
   const selectedTarget = target.value === 'repository' ? repository.value : workspace.value
   if (selectedTarget.trim() === '') return false
-  if (!props.defaultName && name.value.trim() === '') return false
+  if (name.value.trim() === '') return false
   return target.value === 'repository' || !needsPrompt.value || !!selectedWorkspace.value?.supportsPrompt
 })
 const agentOptions = computed(() => [
@@ -139,10 +131,8 @@ function validate(sessionName: string): string {
   if (target.value === 'workspace' && needsPrompt.value && !selectedWorkspace.value?.supportsPrompt) {
     return 'This agent workspace does not accept an opening prompt.'
   }
-  if (!props.defaultName) {
-    if (!sessionName) return 'Session name is required.'
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9 _.:/-]*$/.test(sessionName)) return 'Use letters, numbers, spaces, and - _ : . /.'
-  }
+  if (!sessionName) return 'Session name is required.'
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9 _.:/-]*$/.test(sessionName)) return 'Use letters, numbers, spaces, and - _ : . /.'
   return validateActionInputs(inputs.value, inputValues.value) ?? ''
 }
 
@@ -155,7 +145,7 @@ function submit() {
     ...(target.value === 'workspace'
       ? { workspace: workspace.value.trim() }
       : { repository: repository.value.trim(), ...(agent.value ? { agent: agent.value } : {}) }),
-    name: sessionName || props.defaultName,
+    name: sessionName,
     ...(props.withPrompt ? { prompt: prompt.value.trim() } : {}),
     inputs: { ...inputValues.value },
   })
@@ -180,7 +170,7 @@ useSubmitShortcut(submit)
     :testid="`${testid}-dialog`"
     @close="emit('close')"
   >
-    <template v-if="!workspaceOnly" #header-actions>
+    <template #header-actions>
       <SegmentedControl
         v-model="target"
         variant="compact"
@@ -243,7 +233,7 @@ useSubmitShortcut(submit)
         v-else
         v-slot="{ id }"
         label="Agent workspace"
-        :hint="workspaceOptions.length ? undefined : noWorkspacesHint"
+        :hint="workspaceOptions.length ? undefined : 'Create a workspace in Chats before starting one here.'"
         :testid="`${fieldId}-workspace`"
       >
         <AppSelect
@@ -257,22 +247,19 @@ useSubmitShortcut(submit)
           :disabled="!workspaceOptions.length"
         />
       </FormField>
-      <FormField>
-        <template #label> Session name <span v-if="defaultName" class="text-text-4">(optional)</span> </template>
-        <template #default="{ id }">
-          <!-- A session name slugs into a tmux name and a directory path, so the
-               webview's text substitutions must not touch what was typed. -->
-          <TextInput
-            :id="id"
-            ref="nameInput"
-            v-model="name"
-            autocapitalize="off"
-            autocorrect="off"
-            spellcheck="false"
-            :placeholder="defaultName || 'review-pr-123'"
-            :data-testid="`${fieldId}-name`"
-          />
-        </template>
+      <FormField v-slot="{ id }" label="Session name">
+        <!-- A session name slugs into a tmux name and a directory path, so the
+             webview's text substitutions must not touch what was typed. -->
+        <TextInput
+          :id="id"
+          ref="nameInput"
+          v-model="name"
+          autocapitalize="off"
+          autocorrect="off"
+          spellcheck="false"
+          placeholder="review-pr-123"
+          :data-testid="`${fieldId}-name`"
+        />
       </FormField>
       <FormField v-if="withPrompt">
         <template #label>Prompt <span class="text-text-4">(optional)</span></template>

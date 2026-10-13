@@ -24,6 +24,14 @@ interface Draft {
 }
 export type SessionTarget = 'repository' | 'workspace'
 
+/** Starts a chat where the opener can show it, instead of as a background job. */
+export type ChatLauncher = (input: { workspace: string; name: string; prompt: string }) => Promise<void>
+
+export interface ChatOpener {
+  workspace: string
+  launch: ChatLauncher
+}
+
 // An activity row's metadata as the bindings give it. Forwarded, never read.
 type ActivityMetadata = { [_ in string]?: string } | null
 
@@ -48,6 +56,10 @@ const formKey = ref(0)
 // The items the open form was drafted from. They are not form fields: the
 // backend resolves their identities and the user cannot retarget a draft.
 const itemIDs = ref<number[]>([])
+
+// Set by an opener that shows the chat itself (the Chats pane). A chat from
+// anywhere else, or a repository session, still goes through CreateSession.
+let chatLauncher: ChatLauncher | null = null
 
 // SessionLaunchOptions scans every configured workspace directory (a git call
 // per repo), slow enough that a click blocked on it visibly lags. The last
@@ -91,6 +103,7 @@ export function resetNewSessionForTests(): void {
   failure.value = null
   formKey.value = 0
   itemIDs.value = []
+  chatLauncher = null
 }
 
 function message(e: unknown, fallback: string): string {
@@ -121,6 +134,7 @@ export function useNewSession() {
     detail: SessionCreateFailure | null,
     target: SessionTarget = draft.workspace ? 'workspace' : 'repository',
   ): void {
+    chatLauncher = null
     options.value = opts
     initial.value = draft
     initialTarget.value = target
@@ -147,7 +161,7 @@ export function useNewSession() {
   // backend default — the first configured workspace — is almost never it.
   //
   // A failed attempt outranks both: it is the only copy of what was typed.
-  async function openBlank(preferred = '', target: SessionTarget = 'repository'): Promise<void> {
+  async function openBlank(preferred = '', target: SessionTarget = 'repository', chat?: ChatOpener): Promise<void> {
     if (open.value || loading.value) return
     error.value = null
     loading.value = true
@@ -160,7 +174,7 @@ export function useNewSession() {
       show(
         {
           repository: preferred || opts.defaultRepository || '',
-          workspace: '',
+          workspace: chat?.workspace ?? '',
           name: '',
           prompt: '',
           agent: opts.defaultAgent,
@@ -170,6 +184,7 @@ export function useNewSession() {
         null,
         target,
       )
+      chatLauncher = chat?.launch ?? null
     } catch (e) {
       showToast(message(e, 'Could not load session options.'), { severity: 'error' })
     } finally {
@@ -281,6 +296,7 @@ export function useNewSession() {
     options.value = null
     error.value = null
     itemIDs.value = []
+    chatLauncher = null
   }
 
   async function submit(input: {
@@ -291,6 +307,12 @@ export function useNewSession() {
     agent?: string
   }): Promise<void> {
     if (busy.value) return
+    if (input.workspace && chatLauncher) {
+      const launch = chatLauncher
+      cancel()
+      await launch({ workspace: input.workspace, name: input.name, prompt: input.prompt ?? '' })
+      return
+    }
     busy.value = true
     error.value = null
     try {
