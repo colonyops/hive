@@ -20,7 +20,7 @@ defineProps<{
       :data-testid="`${testid}-frame-bar`"
     >
       <IconShield class="size-3.5 shrink-0 text-text-4" aria-hidden="true" />
-      Sandboxed document. Scripts run inside the frame; it cannot reach Hive or localhost.
+      Sandboxed document. Scripts run inside the frame; it cannot call Hive or send requests to localhost.
     </p>
     <iframe
       sandbox="allow-scripts"

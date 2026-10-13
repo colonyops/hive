@@ -90,25 +90,47 @@ const rows = computed(() => {
 })
 
 const active = ref(0)
-const rowElements = ref<HTMLElement[]>([])
+// By path, not a v-for ref array: Vue appends the rows a fold opens to the
+// end of that array, so its order stops matching rows.
+const rowElements = new Map<string, HTMLElement>()
+
+function setRowElement(path: string, el: unknown): void {
+  if (el instanceof HTMLElement) rowElements.set(path, el)
+  else rowElements.delete(path)
+}
+
+function rowElement(index: number): HTMLElement | undefined {
+  const row = rows.value[index]
+  return row ? rowElements.get(row.entry.path) : undefined
+}
+
 const nav = useListKeyboardNav({
   active,
   count: () => rows.value.length,
   wrap: false,
   homeEnd: () => true,
-  row: (index) => rowElements.value[index],
+  row: rowElement,
 })
 
 watch(query, () => {
   active.value = 0
 })
 
-// The selected document is always reachable: its folders open and its row
-// scrolls into view, without stealing the keyboard highlight's focus.
+function inTree(entry: EntryWire, path: string): boolean {
+  return entry.path === path || (entry.children ?? []).some((child) => inTree(child, path))
+}
+
+// The selected document is revealed once per selection, as soon as it is in
+// the tree. Revealing on every tree replacement (each drive:updated, refocus,
+// or rename) would reopen a folder the user just folded.
+let revealed: string | null = null
 watch(
   () => [props.selected, props.tree] as const,
-  ([selected]) => {
-    if (selected) reveal(selected)
+  ([selected], previous) => {
+    if (previous && selected !== previous[0]) revealed = null
+    if (!selected || selected === revealed || !inTree(props.tree, selected)) return
+    revealed = selected
+    reveal(selected)
   },
   { immediate: true },
 )
@@ -123,7 +145,7 @@ function reveal(path: string): void {
     const index = rows.value.findIndex((row) => row.entry.path === path)
     if (index < 0) return
     active.value = index
-    rowElements.value[index]?.scrollIntoView?.({ block: 'nearest' })
+    rowElement(index)?.scrollIntoView?.({ block: 'nearest' })
   })
 }
 
@@ -175,7 +197,7 @@ function openMenu(row: Row, event: MouseEvent): void {
 
 function openRowMenu(index: number, event: MouseEvent): void {
   const row = rows.value[index]
-  const anchor = rowElements.value[index]
+  const anchor = rowElement(index)
   if (row && anchor) emit('menu', row.entry, anchor, event.currentTarget as HTMLElement)
 }
 
@@ -327,7 +349,7 @@ defineExpose({ onKeydown, startRename, reveal })
     <div
       v-for="(row, index) in rows"
       :key="row.entry.path"
-      ref="rowElements"
+      :ref="(el) => setRowElement(row.entry.path, el)"
       role="treeitem"
       class="drive-row flex cursor-pointer items-center gap-1.5 pr-1 text-small"
       :class="[

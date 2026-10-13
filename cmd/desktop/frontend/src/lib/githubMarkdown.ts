@@ -183,7 +183,7 @@ const svgOpen =
 const copyIcon = `${svgOpen}<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`
 const checkIcon = `${svgOpen}<path d="M20 6 9 17l-5-5"/></svg>`
 export const codeCopyButtonClass = 'markdown-code-copy'
-const codeCopyButton = `<button type="button" class="${codeCopyButtonClass}" aria-label="Copy code" title="Copy code">${copyIcon}${checkIcon}</button>`
+const codeCopyButton = `<button type="button" class="${codeCopyButtonClass}" data-testid="markdown-code-copy" aria-label="Copy code" title="Copy code">${copyIcon}${checkIcon}</button>`
 
 function withCopyButton(rule: RenderRule): RenderRule {
   return (tokens, index, options, env, self) =>

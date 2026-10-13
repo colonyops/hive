@@ -18,7 +18,7 @@ const props = defineProps<{
   paths: ReadonlySet<string>
   loading: boolean
   error: string | null
-  /** Derives `-document`, `-markdown`, `-block-<id>`, `-frame`, `-file`, `-error`, and `-empty`. */
+  /** Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-file`, `-error`, and `-empty`. */
   testid: string
 }>()
 const emit = defineEmits<{ 'open-url': [url: string]; open: [path: string] }>()
@@ -111,6 +111,7 @@ function onBodyClick(event: MouseEvent): void {
             v-else
             class="canvas-reading-body text-text-2 hv-html"
             :style="readerStyle"
+            :data-testid="`${testid}-block-${block.id}-html`"
             @click="onBodyClick"
             v-html="block.body"
           />
@@ -121,6 +122,7 @@ function onBodyClick(event: MouseEvent): void {
           type="button"
           class="canvas-link"
           :title="block.url"
+          :data-testid="`${testid}-block-${block.id}-link`"
           @click="follow(block.url)"
         >
           <span class="canvas-link-text">

@@ -28,7 +28,7 @@ const tree = root([
   doc('notes.txt'),
 ])
 
-function mountTree(props: Partial<{ selected: string | null; filter: string }> = {}) {
+function mountTree(props: Partial<{ selected: string | null; filter: string; tree: typeof tree }> = {}) {
   return mount(DriveTree, {
     props: { space: 'acme/site', tree, selected: null, filter: '', testid: 't', ...props },
     attachTo: document.body,
@@ -135,6 +135,39 @@ describe('DriveTree', () => {
     expect((toggle as HTMLElement).getAttribute('data-testid')).toBe('t-row-plans-menu')
     expect(wrapper.emitted('pick')).toBeUndefined()
     expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
+  })
+
+  it("anchors a later row's menu on that row after a folder opens above it", async () => {
+    const wrapper = mountTree()
+    await wrapper.get('[data-testid="t-row-plans"]').trigger('click')
+    await wrapper.get('[data-testid="t-row-index.html-menu"]').trigger('click')
+    const [entry, anchor] = wrapper.emitted('menu')?.[0] ?? []
+    expect((entry as { path: string }).path).toBe('index.html')
+    expect((anchor as HTMLElement).getAttribute('data-testid')).toBe('t-row-index.html')
+  })
+
+  it('keeps a folder the user folded closed when the tree is replaced', async () => {
+    const wrapper = mountTree({ selected: 'plans/old/a.md' })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('true')
+
+    await wrapper.get('[data-testid="t-row-plans"]').trigger('click')
+    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
+
+    await wrapper.setProps({ tree: structuredClone(tree) })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
+  })
+
+  it('reveals a selected document once it first appears in the tree', async () => {
+    const wrapper = mountTree({ selected: 'plans/old/b.md' })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="t-row-plans"]').attributes('aria-expanded')).toBe('false')
+
+    const grown = root([folder('plans', [folder('plans/old', [doc('plans/old/a.md'), doc('plans/old/b.md')])])])
+    await wrapper.setProps({ tree: grown })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="t-row-plans/old/b.md"]').attributes('aria-selected')).toBe('true')
   })
 
   it('emits menu for the space root on a right click below the rows', async () => {

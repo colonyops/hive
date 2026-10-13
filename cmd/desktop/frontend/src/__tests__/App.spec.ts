@@ -3385,6 +3385,14 @@ describe('App', () => {
     expect(row?.group).toBe('my-workspace')
     expect(row?.kind).toBe('document')
 
+    // Only the title and the path match: a generic "drive" keyword buried the
+    // Drive commands under every document.
+    const documentId = 'document:workspaces/my-workspace:reports/perf.canvas.json'
+    palette.query.value = 'drive'
+    expect(palette.results.value.some((candidate) => candidate.id === documentId)).toBe(false)
+    palette.query.value = 'reports/perf'
+    expect(palette.results.value.some((candidate) => candidate.id === documentId)).toBe(true)
+
     await palette.run(row!)
     await flushPromises()
 

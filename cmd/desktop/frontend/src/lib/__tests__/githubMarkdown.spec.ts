@@ -19,7 +19,7 @@ describe('renderGithubMarkdown', () => {
   it('wraps every code block in a block that carries a copy button', () => {
     const fenced = renderGithubMarkdown('```go\nfunc main() {}\n```')
     expect(fenced).toContain(
-      '<div class="markdown-code"><button type="button" class="markdown-code-copy" aria-label="Copy code"',
+      '<div class="markdown-code"><button type="button" class="markdown-code-copy" data-testid="markdown-code-copy" aria-label="Copy code"',
     )
     expect(fenced).toContain('</button><pre><code class="language-go">func main() {}\n</code></pre>\n</div>')
 

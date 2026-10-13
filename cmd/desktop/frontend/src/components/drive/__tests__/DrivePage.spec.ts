@@ -156,6 +156,18 @@ describe('DrivePage', () => {
     expect(wrapper.get('[data-testid="drive-page-title"]').text()).toBe('E2E Drive Plan')
   })
 
+  it('drops a pinned document from the scope when it is deleted outside the app', async () => {
+    const { wrapper, scope } = await mountPage({ path: report.path })
+    expect(wrapper.get('[data-testid="drive-page-title"]').text()).toBe('E2E Report')
+
+    drive.Tree.mockResolvedValue(root([folder('plans', [plan])]))
+    wailsEvents.fire('drive:updated', { space: 'e2e/repo', paths: [report.path] })
+    await flushPromises()
+
+    expect(scope.value).toEqual({ space: 'e2e/repo', path: null, session: null })
+    expect(wrapper.get('[data-testid="drive-page-title"]').text()).toBe('E2E Drive Plan')
+  })
+
   it('opens a link to another document in place and a web link outside the app', async () => {
     const { wrapper, scope } = await mountPage()
     const [toReport, toPr] = wrapper.findAll('[data-testid="drive-page-markdown"] a')
@@ -213,6 +225,37 @@ describe('DrivePage', () => {
     await flushPromises()
     expect(scope.value).toEqual({ space: 'e2e/repo', path: 'plans/2026-10-11-plan.md', session: null })
     expect(wrapper.get('[data-testid="drive-page-title"]').text()).toBe('E2E Drive Plan')
+  })
+
+  it('says nothing matches only once a search has answered, and walks the hits from the field', async () => {
+    let answer!: (hits: unknown[]) => void
+    drive.Search.mockImplementation(() => new Promise((resolve) => (answer = resolve)))
+    const { wrapper, scope } = await mountPage({ space: 'shared' })
+    const field = wrapper.get('[data-testid="drive-page-search"]')
+    await field.setValue('plan')
+    await vi.waitFor(() => expect(drive.Search).toHaveBeenCalledWith('plan', 50))
+    expect(wrapper.find('[data-testid="drive-page-browse-empty"]').exists()).toBe(false)
+
+    answer([])
+    await flushPromises()
+    expect(wrapper.find('[data-testid="drive-page-browse-empty"]').exists()).toBe(true)
+
+    await field.setValue('notes')
+    expect(wrapper.find('[data-testid="drive-page-browse-empty"]').exists()).toBe(false)
+    await vi.waitFor(() => expect(drive.Search).toHaveBeenCalledWith('notes', 50))
+    answer([
+      { space: space('e2e/repo'), entry: plan },
+      { space: space('shared', 'Shared'), entry: notes },
+    ])
+    await flushPromises()
+    const notesHit = wrapper.get('[data-testid="drive-page-hit-shared:notes.md"]')
+    expect(notesHit.attributes('data-active')).toBeUndefined()
+
+    await field.trigger('keydown', { key: 'ArrowDown' })
+    expect(notesHit.attributes('data-active')).toBe('true')
+    await field.trigger('keydown', { key: 'Enter' })
+    await flushPromises()
+    expect(scope.value).toEqual({ space: 'shared', path: 'notes.md', session: null })
   })
 
   it('falls back to the first space when opened with none', async () => {

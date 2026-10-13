@@ -29,7 +29,9 @@ const props = defineProps<{ scope: DriveScope }>()
 const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope': [scope: DriveScope]; setup: [] }>()
 
 const { spaces, spacesLoaded, error: spacesError } = useDrive()
-const { document, tree, treeError, paths, shown, loading, error, show } = useDriveDocument()
+const { document, tree, treeError, paths, shown, loading, error, show } = useDriveDocument({
+  vanished: (path) => documentDeleted(path),
+})
 const { pageWidthClass } = useCanvasSettings()
 
 // Opened with no space in scope, outside Chats and Code on a fresh launch, the

@@ -35,7 +35,9 @@ const emit = defineEmits<{
   setup: []
 }>()
 
-const { document, tree, treeError, paths, shown, loading, error, show } = useDriveDocument()
+const { document, tree, treeError, paths, shown, loading, error, show } = useDriveDocument({
+  vanished: (path) => documentDeleted(path),
+})
 const activity = useDriveActivity()
 
 watch(

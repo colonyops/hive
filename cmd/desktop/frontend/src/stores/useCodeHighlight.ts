@@ -1,26 +1,6 @@
 import { shallowRef } from 'vue'
 import { createHighlighterCore, type HighlighterCore } from 'shiki/core'
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma'
-import bash from 'shiki/langs/bash.mjs'
-import css from 'shiki/langs/css.mjs'
-import diff from 'shiki/langs/diff.mjs'
-import dockerfile from 'shiki/langs/dockerfile.mjs'
-import go from 'shiki/langs/go.mjs'
-import html from 'shiki/langs/html.mjs'
-import ini from 'shiki/langs/ini.mjs'
-import javascript from 'shiki/langs/javascript.mjs'
-import json from 'shiki/langs/json.mjs'
-import jsx from 'shiki/langs/jsx.mjs'
-import markdown from 'shiki/langs/markdown.mjs'
-import python from 'shiki/langs/python.mjs'
-import rust from 'shiki/langs/rust.mjs'
-import sql from 'shiki/langs/sql.mjs'
-import toml from 'shiki/langs/toml.mjs'
-import tsx from 'shiki/langs/tsx.mjs'
-import typescript from 'shiki/langs/typescript.mjs'
-import vue from 'shiki/langs/vue.mjs'
-import xml from 'shiki/langs/xml.mjs'
-import yaml from 'shiki/langs/yaml.mjs'
 import { useTheme } from '../composables/useTheme'
 import { codeThemes, type CodeTheme } from '../lib/codeThemes'
 import type { Highlight } from '../lib/githubMarkdown'
@@ -42,28 +22,32 @@ const extraAliases: Record<string, string> = {
   console: 'bash',
 }
 
-const languages = [
-  bash,
-  go,
-  typescript,
-  tsx,
-  javascript,
-  jsx,
-  json,
-  yaml,
-  toml,
-  markdown,
-  html,
-  css,
-  vue,
-  sql,
-  python,
-  rust,
-  diff,
-  dockerfile,
-  ini,
-  xml,
-]
+// Dynamic imports keep about a megabyte of grammar source out of the startup
+// chunk: nothing pays for them until the first fence renders.
+function loadLanguages() {
+  return Promise.all([
+    import('shiki/langs/bash.mjs'),
+    import('shiki/langs/go.mjs'),
+    import('shiki/langs/typescript.mjs'),
+    import('shiki/langs/tsx.mjs'),
+    import('shiki/langs/javascript.mjs'),
+    import('shiki/langs/jsx.mjs'),
+    import('shiki/langs/json.mjs'),
+    import('shiki/langs/yaml.mjs'),
+    import('shiki/langs/toml.mjs'),
+    import('shiki/langs/markdown.mjs'),
+    import('shiki/langs/html.mjs'),
+    import('shiki/langs/css.mjs'),
+    import('shiki/langs/vue.mjs'),
+    import('shiki/langs/sql.mjs'),
+    import('shiki/langs/python.mjs'),
+    import('shiki/langs/rust.mjs'),
+    import('shiki/langs/diff.mjs'),
+    import('shiki/langs/dockerfile.mjs'),
+    import('shiki/langs/ini.mjs'),
+    import('shiki/langs/xml.mjs'),
+  ]).then((modules) => modules.map((m) => m.default))
+}
 
 export const cacheLimit = 200
 const sliceMs = 12
@@ -82,7 +66,8 @@ const nextFrame: (run: () => void) => void =
  * emulates the atomic groups these grammars rely on with lookahead and
  * backtracks catastrophically on some input (a one-line Go struct with a
  * block comment took over ten seconds per render and froze the window). The
- * WASM is a dynamic import, so nothing pays for it until a fence renders.
+ * WASM and the grammars are dynamic imports, so nothing pays for them until
+ * a fence renders.
  *
  * A fence is highlighted in the code theme of the app theme in view
  * (lib/codeThemes.ts). The engine starts with that one theme and loads
@@ -125,9 +110,10 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
   function load(): Promise<void> {
     loading ??= (async () => {
       const first = codeTheme()
+      const [registration, langs] = await Promise.all([first.load(), loadLanguages()])
       const core = await createHighlighterCore({
-        themes: [await first.load()],
-        langs: languages,
+        themes: [registration],
+        langs,
         engine: createOnigurumaEngine(import('shiki/wasm')),
       })
       highlighter = core
@@ -232,6 +218,9 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
    * once the engine or the theme is ready and again as queued fences land.
    */
   const highlight: Highlight = (code, lang) => {
+    // Read before any early return: a computed that asked while a theme was
+    // loading must depend on the bump that says it has.
+    void version.value
     const theme = codeTheme()
     if (!ready.value || !highlighter) {
       void load()
@@ -241,7 +230,6 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
       void ensureTheme(theme)
       return null
     }
-    void version.value
     const alias = lang.trim().toLowerCase()
     const resolved = extraAliases[alias] ?? alias
     if (!loaded.has(resolved)) return null

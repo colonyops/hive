@@ -425,7 +425,7 @@ export function useAppPaletteRows(
             order: -2,
             scope: 'goto',
             kind: 'document',
-            keywords: ['document', 'drive', entry.path],
+            keywords: [entry.path],
             icon: IconFileText,
             run: () => appMode.openDrive({ space: space.key, path: entry.path, session: null }),
           })

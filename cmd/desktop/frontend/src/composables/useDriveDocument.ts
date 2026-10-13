@@ -19,8 +19,12 @@ import { usePerf } from './usePerf'
  *
  * The document shown is the requested path when there is one, else the
  * newest document the session wrote, else the newest in the space.
+ *
+ * `vanished` hears of a pinned document that left the tree, deleted or
+ * moved outside the app, so the surface can drop it from its route: a route
+ * that kept the path would pin it again if an agent recreated it.
  */
-export function useDriveDocument() {
+export function useDriveDocument(options: { vanished?: (path: string) => void } = {}) {
   const drive = useDrive()
   const activity = useDriveActivity()
   const perf = usePerf('drive')
@@ -61,6 +65,7 @@ export function useDriveDocument() {
       const pinned = requested.value
       if (pinned && key === listedSpace && listedPaths.has(pinned) && !paths.value.has(pinned)) {
         requested.value = null
+        options.vanished?.(pinned)
       }
       listedSpace = key
       listedPaths = paths.value

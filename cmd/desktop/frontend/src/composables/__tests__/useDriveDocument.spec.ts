@@ -45,12 +45,12 @@ function deferred(): Deferred {
   return { promise, resolve, reject }
 }
 
-function mountSurface(): ReturnType<typeof useDriveDocument> {
+function mountSurface(options: Parameters<typeof useDriveDocument>[0] = {}): ReturnType<typeof useDriveDocument> {
   let api!: ReturnType<typeof useDriveDocument>
   mount(
     defineComponent({
       setup() {
-        api = useDriveDocument()
+        api = useDriveDocument(options)
         return () => null
       },
     }),
@@ -124,5 +124,23 @@ describe('useDriveDocument', () => {
     expect(surface.shown.value).toBe('a.md')
     expect(surface.document.value?.entry.path).toBe('a.md')
     expect(surface.loading.value).toBe(false)
+  })
+
+  it('reports a pinned document that leaves the tree, and not one never listed', async () => {
+    const vanished = vi.fn()
+    const surface = mountSurface({ vanished })
+    surface.show(spaceA, 'a.md', null)
+    await flushPromises()
+
+    drive.Tree.mockResolvedValue(root([doc('c.md')]))
+    await useDrive().reload(spaceA)
+    await flushPromises()
+    expect(vanished).toHaveBeenCalledExactlyOnceWith('a.md')
+
+    surface.show(spaceA, 'later.md', null)
+    await useDrive().reload(spaceA)
+    await flushPromises()
+    expect(vanished).toHaveBeenCalledOnce()
+    expect(surface.shown.value).toBe('later.md')
   })
 })

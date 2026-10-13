@@ -11,6 +11,7 @@ import EmptyState from '../ui/EmptyState.vue'
 import IconButton from '../ui/IconButton.vue'
 import InlineError from '../ui/InlineError.vue'
 import SearchField from '../ui/SearchField.vue'
+import { useListKeyboardNav } from '../../composables/useListKeyboardNav'
 import { errorText } from '../../lib/appError'
 import { entryLabel, entryMatches } from '../../lib/drive'
 import { useDrive } from '../../stores/useDrive'
@@ -31,7 +32,7 @@ const props = defineProps<{
   autofocus?: boolean
   /**
    * Derives `-browse`, `-search`, `-new-folder-open`, `-tree`, `-row-<path>`, `-hit-<space>:<path>`,
-   * `-browse-empty`, and the entry menu's ids (DriveEntryMenu).
+   * `-hits-error`, `-tree-error`, `-browse-empty`, and the entry menu's ids (DriveEntryMenu).
    */
   testid: string
 }>()
@@ -65,6 +66,11 @@ const filter = computed(() => (props.searchEverySpace ? '' : query.value))
 
 const hits = shallowRef<HitWire[]>([])
 const hitsError = ref<string | null>(null)
+// The query the hits on screen answer. "No documents match." waits for it to
+// catch up with the field, so it never shows during the debounce and the
+// round trip.
+const answered = ref('')
+const activeHit = ref(0)
 let generation = 0
 watchDebounced(
   () => (searching.value ? query.value.trim() : ''),
@@ -73,6 +79,7 @@ watchDebounced(
     if (!q) {
       hits.value = []
       hitsError.value = null
+      answered.value = ''
       return
     }
     try {
@@ -84,9 +91,40 @@ watchDebounced(
       if (token !== generation) return
       hitsError.value = errorText(err, 'Could not search the drive.')
     }
+    activeHit.value = 0
+    answered.value = q
   },
   { debounce: 120 },
 )
+const noHits = computed(
+  () => answered.value !== '' && answered.value === query.value.trim() && !hits.value.length && !hitsError.value,
+)
+
+const hitKey = (hit: HitWire) => `${hit.space.key}:${hit.entry.path}`
+const hitElements = new Map<string, HTMLElement>()
+function setHitElement(key: string, el: unknown): void {
+  if (el instanceof HTMLElement) hitElements.set(key, el)
+  else hitElements.delete(key)
+}
+const hitNav = useListKeyboardNav({
+  active: activeHit,
+  count: () => hits.value.length,
+  open: () => searching.value,
+  wrap: false,
+  row: (index) => {
+    const hit = hits.value[index]
+    return hit ? hitElements.get(hitKey(hit)) : undefined
+  },
+})
+
+function onHitKeydown(event: KeyboardEvent): void {
+  if (hitNav.onKeydown(event)) return
+  const hit = hits.value[activeHit.value]
+  if (event.key === 'Enter' && hit) {
+    event.preventDefault()
+    emit('open-hit', hit.space.key, hit.entry.path)
+  }
+}
 
 const empty = computed(() => !searching.value && !!props.tree && !props.tree.children?.length)
 const noMatches = computed(() => {
@@ -97,10 +135,11 @@ const noMatches = computed(() => {
   return !walk(props.tree)
 })
 
-// The field keeps focus while the arrows walk the tree under it, the command
+// The field keeps focus while the arrows walk the tree or the hits under it, the command
 // palette's shape.
 function forwardKey(event: KeyboardEvent): void {
-  if (!searching.value && ['ArrowDown', 'ArrowUp', 'Enter', 'F2'].includes(event.key)) treeRef.value?.onKeydown(event)
+  if (searching.value) onHitKeydown(event)
+  else if (['ArrowDown', 'ArrowUp', 'Enter', 'F2'].includes(event.key)) treeRef.value?.onKeydown(event)
 }
 
 function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | null): void {
@@ -131,13 +170,22 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
     </div>
     <div class="hive-scroll min-h-0 flex-1 overflow-y-auto pb-2 pt-1">
       <template v-if="searching">
-        <InlineError v-if="hitsError" variant="line" class="px-3 py-2 leading-relaxed" :message="hitsError" />
+        <InlineError
+          v-if="hitsError"
+          variant="line"
+          class="px-3 py-2 leading-relaxed"
+          :message="hitsError"
+          :testid="`${testid}-hits-error`"
+        />
         <button
-          v-for="hit in hits"
-          :key="`${hit.space.key}:${hit.entry.path}`"
+          v-for="(hit, index) in hits"
+          :key="hitKey(hit)"
+          :ref="(el) => setHitElement(hitKey(hit), el)"
           type="button"
           class="flex w-full cursor-pointer flex-col items-start gap-0.5 px-3 py-1.5 text-left hover:bg-chip"
-          :data-testid="`${testid}-hit-${hit.space.key}:${hit.entry.path}`"
+          :class="index === activeHit ? 'bg-chip' : ''"
+          :data-active="index === activeHit ? 'true' : undefined"
+          :data-testid="`${testid}-hit-${hitKey(hit)}`"
           @click="emit('open-hit', hit.space.key, hit.entry.path)"
         >
           <span class="w-full truncate text-small text-text-2">{{ entryLabel(hit.entry) }}</span>
@@ -146,7 +194,7 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
           >
         </button>
         <EmptyState
-          v-if="!hits.length && !hitsError"
+          v-if="noHits"
           variant="inline"
           class="px-3 py-2"
           message="No documents match."
@@ -154,7 +202,13 @@ function openMenu(entry: EntryWire, anchor: HTMLElement, toggle: HTMLElement | n
         />
       </template>
       <template v-else>
-        <InlineError v-if="error" variant="line" class="px-3 py-2 leading-relaxed" :message="error" />
+        <InlineError
+          v-if="error"
+          variant="line"
+          class="px-3 py-2 leading-relaxed"
+          :message="error"
+          :testid="`${testid}-tree-error`"
+        />
         <DriveTree
           v-if="tree"
           ref="treeRef"

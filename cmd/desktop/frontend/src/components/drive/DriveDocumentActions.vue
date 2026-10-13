@@ -8,6 +8,9 @@ import IconEllipsis from '~icons/lucide/ellipsis'
 import DriveEntryMenu from './DriveEntryMenu.vue'
 import IconButton from '../ui/IconButton.vue'
 import { useClipboard } from '../../composables/useClipboard'
+import { useToasts } from '../../composables/useToasts'
+import { errorText } from '../../lib/appError'
+import { createLogger } from '../../lib/log'
 import {
   Export,
   Markdown,
@@ -23,6 +26,14 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ deleted: [path: string]; moved: [from: string, to: string] }>()
 
+const log = createLogger('drive-document-actions')
+const { showToast } = useToasts()
+
+function fail(err: unknown, fallback: string): void {
+  log.warn(fallback, { space: props.space, path: props.entry.path, err })
+  showToast(errorText(err, fallback), { severity: 'error' })
+}
+
 // Markdown and canvas documents have a markdown form; html and plain files
 // do not.
 const exportable = computed(() => props.entry.kind === 'markdown' || props.entry.kind === 'canvas')
@@ -37,9 +48,12 @@ const { copy, setStatus: setCopyStatus, status: copyStatus } = useClipboard()
 async function copyDocument(): Promise<void> {
   try {
     await copy(await Markdown(props.space, props.entry.path))
-  } catch {
+  } catch (err) {
     setCopyStatus('error')
+    fail(err, `Could not copy ${props.entry.path}.`)
+    return
   }
+  if (copyStatus.value === 'error') showToast('Could not copy to the clipboard', { severity: 'error' })
 }
 
 // Status mechanics only: the same auto-resetting affordance, driving the
@@ -53,8 +67,9 @@ async function downloadDocument(): Promise<void> {
     if (!dest) return
     await Export(space, path, dest)
     setSaveStatus('success')
-  } catch {
+  } catch (err) {
     setSaveStatus('error')
+    fail(err, `Could not export ${path}.`)
   }
 }
 

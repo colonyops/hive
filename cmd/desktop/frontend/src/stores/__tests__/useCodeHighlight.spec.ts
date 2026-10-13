@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { computed } from 'vue'
 import { useTheme } from '../../composables/useTheme'
 import { cacheLimit, useCodeHighlight } from '../useCodeHighlight'
 
@@ -50,6 +51,31 @@ describe('useCodeHighlight', () => {
       expect(night).not.toMatch(/#f5b23f/i)
       theme.value = 'dark'
       expect(highlight(code, 'go')).toBe(hive)
+    } finally {
+      theme.value = 'dark'
+    }
+  })
+
+  it('re-runs a computed that asked while the new theme was still loading', async () => {
+    const { theme } = useTheme()
+    const { highlight, settle } = useCodeHighlight()
+    const code = 'func themed() {}\n'
+    await highlighted(code, 'go')
+    const runs = vi.fn()
+    const html = computed(() => {
+      runs()
+      return highlight(code, 'go')
+    })
+    const rendered = () => html.value
+    theme.value = 'catppuccin-latte'
+    try {
+      expect(rendered()).toBeNull()
+      await settle()
+      // The bump from the theme load re-runs it, which queues the fence.
+      expect(rendered()).toBeNull()
+      await settle()
+      expect(rendered()).toContain('class="shiki')
+      expect(runs).toHaveBeenCalledTimes(3)
     } finally {
       theme.value = 'dark'
     }

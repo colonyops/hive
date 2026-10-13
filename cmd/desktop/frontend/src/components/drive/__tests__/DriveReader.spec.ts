@@ -83,7 +83,9 @@ describe('DriveReader', () => {
     expect(frame.attributes('sandbox')).toBe('allow-scripts')
     expect(frame.attributes('referrerpolicy')).toBe('no-referrer')
     expect(frame.attributes('srcdoc')).toContain('<body>Hi</body>')
-    expect(wrapper.get('[data-testid="r-frame-bar"]').text()).toContain('cannot reach Hive or localhost')
+    expect(wrapper.get('[data-testid="r-frame-bar"]').text()).toContain(
+      'cannot call Hive or send requests to localhost',
+    )
     expect(wrapper.find('[data-testid="r-frontmatter"]').exists()).toBe(false)
   })
 

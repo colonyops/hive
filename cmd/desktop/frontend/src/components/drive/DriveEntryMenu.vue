@@ -35,7 +35,7 @@ const emit = defineEmits<{
 
 const drive = useDrive()
 const { showToast } = useToasts()
-const { copy } = useClipboard()
+const { copy, status: copyStatus } = useClipboard()
 
 const tree = computed(() => drive.trees.value.get(props.space) ?? null)
 
@@ -129,11 +129,16 @@ async function reveal(entry: EntryWire): Promise<void> {
 }
 
 async function copyPath(entry: EntryWire): Promise<void> {
+  let location: string
   try {
-    await copy(await Locate(props.space, entry.path))
+    location = await Locate(props.space, entry.path)
   } catch (err) {
     showToast(errorText(err, `Could not find ${entry.path || props.space} on disk.`), { severity: 'error' })
+    return
   }
+  await copy(location)
+  if (copyStatus.value === 'success') showToast('Copied the path', { severity: 'success' })
+  else showToast('Could not copy to the clipboard', { severity: 'error' })
 }
 
 function onSelect(id: string): void {
