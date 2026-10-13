@@ -183,6 +183,7 @@ useWailsEvent('flows:updated', () => {
       <DrivePage
         v-if="driveActive"
         :scope="appMode.driveScope.value"
+        :sidebar-collapsed="appMode.driveSidebarCollapsed.value"
         @update:scope="appMode.updateDriveScope"
         @close="appMode.closeDrive"
         @open-url="feed.openUrl"

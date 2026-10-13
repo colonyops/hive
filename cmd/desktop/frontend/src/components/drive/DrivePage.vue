@@ -3,7 +3,7 @@
 // the sidebar's tree, the reader beside it, and a search that spans every
 // space.
 import { useElementSize, useResizeObserver } from '@vueuse/core'
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import IconCode from '~icons/lucide/code'
 import IconGlobe from '~icons/lucide/globe'
 import IconMessagesSquare from '~icons/lucide/messages-square'
@@ -30,7 +30,11 @@ import { useCanvasSettings } from '../../stores/useCanvasSettings'
 import { useDrive } from '../../stores/useDrive'
 import { useDriveReview } from '../../stores/useDriveReview'
 
-const props = defineProps<{ scope: DriveScope }>()
+const props = defineProps<{
+  scope: DriveScope
+  /** The title bar's left toggle: hides the folder tree. */
+  sidebarCollapsed?: boolean
+}>()
 const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope': [scope: DriveScope]; setup: [] }>()
 
 const { spaces, spacesLoaded, error: spacesError } = useDrive()
@@ -132,6 +136,17 @@ const reviewed = computed(() => {
   if (!doc || doc.entry.kind !== 'markdown' || !review.inReview(doc.space.key, doc.entry.path)) return null
   return { space: doc.space.key, path: doc.entry.path }
 })
+// The title bar's right toggle and the comments command hide the column; a
+// new comment brings it back.
+const commentsShown = computed(() => !!reviewed.value && !review.pageCommentsCollapsed.value)
+const commentCount = computed(() =>
+  reviewed.value ? (review.review(reviewed.value.space, reviewed.value.path).data.value.comments?.length ?? 0) : 0,
+)
+watch(commentCount, (count, before) => {
+  if (count > before) review.showPageComments()
+})
+watch(reviewed, (next) => review.setReviewed('page', !!next), { immediate: true })
+onBeforeUnmount(() => review.setReviewed('page', false))
 watch(shown, () => {
   if (reader.value) reader.value.scrollTop = 0
 })
@@ -159,7 +174,7 @@ useEscapeToClose(() => emit('close'))
 <template>
   <div class="flex h-full min-h-0 flex-1" data-testid="drive-page">
     <aside
-      v-if="browsable"
+      v-if="browsable && !sidebarCollapsed"
       class="relative flex shrink-0 flex-col border-r border-border bg-sidebar"
       :style="{ width: sidebarWidth + 'px' }"
       data-testid="drive-page-sidebar"
@@ -228,7 +243,7 @@ useEscapeToClose(() => emit('close'))
           </template>
         </ViewHeader>
         <DriveReviewHeader
-          v-if="reviewed"
+          v-if="reviewed && commentsShown"
           class="shrink-0 border-l"
           :style="{ width: `${360 + gutter}px`, paddingRight: `${16 + gutter}px` }"
           :space="reviewed.space"
@@ -278,7 +293,7 @@ useEscapeToClose(() => emit('close'))
               </div>
             </div>
             <DriveReviewCards
-              v-if="reviewed"
+              v-if="reviewed && commentsShown"
               class="w-[360px] shrink-0 border-l border-row bg-pane"
               :style="{ paddingBottom: `${footerHeight + 16}px` }"
               :space="reviewed.space"
@@ -289,7 +304,7 @@ useEscapeToClose(() => emit('close'))
           </div>
         </div>
         <div
-          v-if="reviewed"
+          v-if="reviewed && commentsShown"
           ref="footer"
           class="absolute bottom-0 w-[360px] border-l border-row"
           :style="{ right: `${gutter}px` }"

@@ -140,7 +140,7 @@ defineExpose({ contains: (node: Node | null) => !!node && !!popover.value?.conta
           :data-testid="`${testid}-comment-save`"
           @click="save"
         >
-          Add comment
+          Add Comment
         </BaseButton>
       </div>
     </div>

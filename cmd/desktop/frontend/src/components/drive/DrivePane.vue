@@ -110,15 +110,28 @@ const reviewed = computed(() => {
 const commentCount = computed(() =>
   reviewed.value ? (review.review(reviewed.value.space, reviewed.value.path).data.value.comments?.length ?? 0) : 0,
 )
-const commentsOpen = ref(false)
+// Shared with the Toggle comments command, which opens and closes the overlay.
+const commentsOpen = computed({
+  get: () => review.paneCommentsOpen.value,
+  set: (open: boolean) => review.setPaneCommentsOpen(open),
+})
 watch(commentCount, (count, before) => {
   if (count > before) commentsOpen.value = true
 })
 watch(review.active, (id) => {
   if (id) commentsOpen.value = true
 })
-watch(reviewed, (next) => {
-  if (!next) commentsOpen.value = false
+watch(
+  reviewed,
+  (next) => {
+    review.setReviewed('pane', !!next)
+    if (!next) commentsOpen.value = false
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => {
+  review.setReviewed('pane', false)
+  commentsOpen.value = false
 })
 
 const {
@@ -169,7 +182,7 @@ const {
       />
       <IconButton
         v-if="reviewed"
-        :label="commentsOpen ? 'Hide comments' : `Show comments (${commentCount})`"
+        :label="commentsOpen ? 'Hide Comments' : `Show Comments (${commentCount})`"
         :icon="IconMessageSquare"
         :active="commentsOpen"
         data-testid="drive-pane-comments"

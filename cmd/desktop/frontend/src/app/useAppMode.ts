@@ -5,6 +5,7 @@ import { useDriveRoute } from '../composables/useDriveRoute'
 import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useDriveActivity } from '../stores/useDriveActivity'
+import { useDriveReview } from '../stores/useDriveReview'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import { createLogger } from '../lib/log'
@@ -32,6 +33,7 @@ export function useAppMode(
   const { route, router } = nav
   const { routeChatId, docRequested, docPath, docUnseen, syncDocQuery } = useDriveRoute()
   const activity = useDriveActivity()
+  const review = useDriveReview()
   const { recents } = useAgentSessionsAll()
   const { sessions: codeSessions } = useTerminalSessions()
 
@@ -118,6 +120,7 @@ export function useAppMode(
   const feedSidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)
   const terminalSidebarCollapsed = useStorage('hive.panel.terminal.sidebar.collapsed', false)
   const agentsSidebarCollapsed = useStorage('hive.panel.agents.sidebar.collapsed', false)
+  const driveSidebarCollapsed = useStorage('hive.panel.drive.sidebar.collapsed', false)
   const previewCollapsed = useStorage('hive.panel.detailpane.collapsed', false)
   // Follows the hub's template fallthrough: the feed renders whenever no other
   // hub page claims the route.
@@ -144,6 +147,7 @@ export function useAppMode(
     if (terminalActive.value) return terminalSidebarCollapsed
     if (agentsActive.value) return agentsSidebarCollapsed
     if (feedViewActive.value) return feedSidebarCollapsed
+    if (driveActive.value) return driveSidebarCollapsed
     return null
   })
   const sidebarCollapsed = computed(() => activeSidebarFlag.value?.value ?? false)
@@ -170,14 +174,21 @@ export function useAppMode(
   // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
   const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
   const driveAvailable = computed(() => agentsDriveAvailable.value || codeDrive.value !== null)
-  const previewToggleCollapsed = computed(() => (driveAvailable.value ? !docRequested.value : previewCollapsed.value))
-  const canTogglePreview = computed(() => feedViewActive.value || driveAvailable.value)
+  // On the Drive page the right edge is the comments column.
+  const previewToggleCollapsed = computed(() => {
+    if (driveActive.value) return review.pageCommentsCollapsed.value
+    return driveAvailable.value ? !docRequested.value : previewCollapsed.value
+  })
+  const canTogglePreview = computed(
+    () => feedViewActive.value || driveAvailable.value || (driveActive.value && review.pageReviewed.value),
+  )
   const previewUnseen = computed(() =>
     agentsDriveAvailable.value ? docUnseen.value : activity.isUnseen(codeDrive.value?.session ?? null),
   )
 
   function togglePreview(): void {
-    if (driveAvailable.value) syncDocQuery(!docRequested.value)
+    if (driveActive.value) review.togglePageComments()
+    else if (driveAvailable.value) syncDocQuery(!docRequested.value)
     else previewCollapsed.value = !previewCollapsed.value
   }
 
@@ -262,6 +273,7 @@ export function useAppMode(
     feedSidebarCollapsed,
     terminalSidebarCollapsed,
     agentsSidebarCollapsed,
+    driveSidebarCollapsed,
     previewCollapsed,
     feedNavActive,
     sidebarCollapsed,

@@ -1,3 +1,4 @@
+import { useStorage } from '@vueuse/core'
 import { computed, shallowRef } from 'vue'
 import {
   AddComment,
@@ -35,6 +36,32 @@ export const useDriveReview = defineStore('driveReview', () => {
 
   function setActive(id: string | null): void {
     active.value = id
+  }
+
+  // Which surface has a reviewed document on screen, so the title bar, the
+  // palette, and the keybindings know there are comments to show or hide.
+  // The Drive page's column is a layout choice that persists; the pane's
+  // overlay covers the document, so it opens per visit.
+  const pageReviewed = shallowRef(false)
+  const paneReviewed = shallowRef(false)
+  const pageCommentsCollapsed = useStorage('hive.panel.drive.comments.collapsed', false)
+  const paneCommentsOpen = shallowRef(false)
+
+  function setReviewed(surface: 'page' | 'pane', reviewed: boolean): void {
+    if (surface === 'page') pageReviewed.value = reviewed
+    else paneReviewed.value = reviewed
+  }
+
+  function setPaneCommentsOpen(open: boolean): void {
+    paneCommentsOpen.value = open
+  }
+
+  function togglePageComments(): void {
+    pageCommentsCollapsed.value = !pageCommentsCollapsed.value
+  }
+
+  function showPageComments(): void {
+    pageCommentsCollapsed.value = false
   }
 
   // The comment under the pointer, from its card or anywhere in its block.
@@ -158,6 +185,14 @@ export const useDriveReview = defineStore('driveReview', () => {
   })
 
   return {
+    pageReviewed: computed(() => pageReviewed.value),
+    paneReviewed: computed(() => paneReviewed.value),
+    setReviewed,
+    pageCommentsCollapsed: computed(() => pageCommentsCollapsed.value),
+    togglePageComments,
+    showPageComments,
+    paneCommentsOpen: computed(() => paneCommentsOpen.value),
+    setPaneCommentsOpen,
     active: computed(() => active.value),
     setActive,
     hovered: computed(() => hovered.value),

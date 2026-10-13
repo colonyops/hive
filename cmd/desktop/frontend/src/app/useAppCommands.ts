@@ -28,6 +28,7 @@ import {
   stepTerminalWindow,
   zoomTerminalPane,
 } from '../lib/terminalTree'
+import { useDriveReview } from '../stores/useDriveReview'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
@@ -68,6 +69,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   // the shell inside it. It opens where the terminal on screen is, else in the
   // user's home (ADR ephemeral-popup-terminals).
   const popupTerminal = usePopupTerminal()
+  const review = useDriveReview()
   const popupTerminalMounted = ref(false)
 
   function togglePopupTerminal(): void {
@@ -131,6 +133,11 @@ export function useAppCommands(deps: AppCommandDeps) {
     'action-runs.toggle': () => overlays.toggleActionRuns(),
     'terminal.popup.toggle': togglePopupTerminal,
     'terminal.toggle-sidebar': appMode.toggleSidebar,
+    'view.toggle-panel': appMode.togglePreview,
+    'drive.toggle-comments': () => {
+      if (appMode.driveActive.value) review.togglePageComments()
+      else review.setPaneCommentsOpen(!review.paneCommentsOpen.value)
+    },
     'terminal.focus-sidebar': () => revealSidebar(terminalSidebarCollapsed, focusTerminalTree),
     'terminal.focus-pane': focusTerminalPane,
     // One combo, dispatched on whichever surface is on screen.
@@ -201,6 +208,10 @@ export function useAppCommands(deps: AppCommandDeps) {
         return agentsActive.value
       case 'sidebar':
         return appMode.canToggleSidebar.value
+      case 'panel':
+        return appMode.canTogglePreview.value
+      case 'review':
+        return appMode.driveActive.value ? review.pageReviewed.value : review.paneReviewed.value
       // Excludes the session picker for terminal-session's reason: with no
       // emulator drawn, the chord would change a size nobody can see.
       case 'any-terminal':

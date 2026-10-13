@@ -3,8 +3,8 @@
 // of the block it comments on and slides down only to clear the card above.
 // Stacked, as over the narrow pane, they follow one another. The highlighted
 // block is the only marker in the document, so the active card is what ties
-// the two together: it draws an outline, a connector to the margin, and its
-// actions.
+// the two together: it draws an outline and a connector to the margin. Edit
+// and Delete show on every card, so each is one click.
 import { useMutationObserver, useResizeObserver } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
 import BaseButton from '../ui/BaseButton.vue'
@@ -226,11 +226,7 @@ function cardStyle(id: string): Record<string, string> | undefined {
         >
           {{ comment.text }}
         </p>
-        <div
-          v-if="store.active.value === comment.id && editing !== comment.id"
-          class="flex gap-3.5 pt-0.5 text-caption text-text-3"
-          @click.stop
-        >
+        <div v-if="editing !== comment.id" class="flex gap-3.5 pt-0.5 text-caption text-text-3" @click.stop>
           <button
             type="button"
             class="-mx-1 cursor-pointer rounded px-1 hover:bg-chip hover:text-text"

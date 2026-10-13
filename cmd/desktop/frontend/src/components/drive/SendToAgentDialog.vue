@@ -95,7 +95,7 @@ async function send(): Promise<void> {
 
 <template>
   <BaseModal
-    title="Send to agent"
+    title="Send to Agent"
     :icon="IconSend"
     :width="460"
     :busy="sending"

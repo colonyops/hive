@@ -1,13 +1,12 @@
 <script setup lang="ts">
-// The comments column's title strip: the count and the actions on every
-// comment at once. It shares the height and rule of the document's own
-// toolbar, so the two read as one bar.
+// The comments column's title strip: the count, and Clear for every comment
+// at once. It shares the height and rule of the document's own toolbar, so
+// the two read as one bar.
 import { computed, ref } from 'vue'
+import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'
 import IconButton from '../ui/IconButton.vue'
-import { useClipboard } from '../../composables/useClipboard'
 import { useToasts } from '../../composables/useToasts'
-import { errorText } from '../../lib/appError'
 import { useDriveReview } from '../../stores/useDriveReview'
 
 const props = defineProps<{
@@ -15,7 +14,7 @@ const props = defineProps<{
   path: string
   /** Shows a close button, for comments that overlay the document. */
   closable?: boolean
-  /** Derives `-review-header`, `-review-count`, `-review-copy`, `-review-clear`, `-review-clear-confirm`, and `-review-close`. */
+  /** Derives `-review-header`, `-review-count`, `-review-clear`, `-review-clear-confirm`, and `-review-close`. */
   testid: string
 }>()
 const emit = defineEmits<{ close: [] }>()
@@ -24,18 +23,6 @@ const store = useDriveReview()
 const { showToast } = useToasts()
 const count = computed(() => store.review(props.space, props.path).data.value.comments?.length ?? 0)
 const confirming = ref(false)
-
-const { copy, setStatus, status } = useClipboard()
-async function copyAll(): Promise<void> {
-  try {
-    await copy(await store.feedback(props.space, props.path))
-  } catch (err) {
-    setStatus('error')
-    showToast(errorText(err, 'Could not build the feedback.'), { severity: 'error' })
-    return
-  }
-  if (status.value === 'error') showToast('Could not copy to the clipboard', { severity: 'error' })
-}
 
 async function clear(): Promise<void> {
   const error = await store.clear(props.space, props.path)
@@ -71,17 +58,17 @@ const action = 'cursor-pointer rounded px-1 text-caption text-text-3 hover:text-
       </button>
       <button type="button" :class="action" @click="confirming = false">Keep</button>
     </template>
-    <template v-else>
-      <button type="button" :class="action" :data-testid="`${testid}-review-copy`" @click="copyAll">
-        {{ status === 'success' ? 'Copied' : 'Copy all' }}
-      </button>
-      <button type="button" :class="action" :data-testid="`${testid}-review-clear`" @click="confirming = true">
-        Clear
-      </button>
-    </template>
+    <IconButton
+      v-else
+      label="Clear All Comments"
+      :icon="IconTrash"
+      tone="danger"
+      :data-testid="`${testid}-review-clear`"
+      @click="confirming = true"
+    />
     <IconButton
       v-if="closable"
-      label="Hide comments"
+      label="Hide Comments"
       :icon="IconX"
       :data-testid="`${testid}-review-close`"
       @click="emit('close')"

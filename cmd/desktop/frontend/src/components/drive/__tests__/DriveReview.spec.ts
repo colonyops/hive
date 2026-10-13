@@ -52,13 +52,9 @@ beforeEach(() => {
 })
 
 describe('DriveReviewHeader', () => {
-  it('counts the comments, copies them all, and asks before clearing', async () => {
+  it('counts the comments and asks before clearing', async () => {
     const wrapper = await mountPart(DriveReviewHeader)
     expect(wrapper.get('[data-testid="r-review-count"]').text()).toBe('2')
-
-    await wrapper.get('[data-testid="r-review-copy"]').trigger('click')
-    await flushPromises()
-    expect(runtime.setText).toHaveBeenCalledWith('Document: /abs/plans/p.md\n')
 
     await wrapper.get('[data-testid="r-review-clear"]').trigger('click')
     expect(reviews.Clear).not.toHaveBeenCalled()
@@ -77,12 +73,10 @@ describe('DriveReviewCards', () => {
     expect(second.text()).not.toContain('quote')
   })
 
-  it('shows the actions of the active card, which edit and delete', async () => {
+  it('edits and deletes from every card in one click', async () => {
     const wrapper = await mountPart(DriveReviewCards)
-    expect(wrapper.find('[data-testid="r-review-edit-1"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="r-review-delete-2"]').exists()).toBe(true)
 
-    await wrapper.get('[data-testid="r-review-card-1"]').trigger('click')
-    expect(wrapper.get('[data-testid="r-review-card-1"]').classes()).toContain('border-accent/45')
     await wrapper.get('[data-testid="r-review-edit-1"]').trigger('click')
     await wrapper.get('[data-testid="r-review-edit-text-1"]').setValue('Tighter')
     await wrapper.get('[data-testid="r-review-edit-save-1"]').trigger('click')
@@ -92,6 +86,12 @@ describe('DriveReviewCards', () => {
     await wrapper.get('[data-testid="r-review-delete-1"]').trigger('click')
     await flushPromises()
     expect(reviews.DeleteComment).toHaveBeenCalledWith('workspaces/ws', 'plans/p.md', 'c1')
+  })
+
+  it('marks the card that was picked', async () => {
+    const wrapper = await mountPart(DriveReviewCards)
+    await wrapper.get('[data-testid="r-review-card-1"]').trigger('click')
+    expect(wrapper.get('[data-testid="r-review-card-1"]').classes()).toContain('border-accent/45')
   })
 
   it('lights the card under the pointer', async () => {
@@ -114,9 +114,14 @@ describe('DriveReviewCards', () => {
 })
 
 describe('DriveReviewFooter', () => {
-  it('counts what is ready and opens the send dialog on ⌘↵ in the note', async () => {
+  it('counts what is ready, copies it all, and opens the send dialog on ⌘↵ in the note', async () => {
     const wrapper = await mountPart(DriveReviewFooter)
     expect(wrapper.get('[data-testid="r-review-ready"]').text()).toBe('2 comments ready')
+
+    await wrapper.get('[data-testid="r-review-copy"]').trigger('click')
+    await flushPromises()
+    expect(reviews.Feedback).toHaveBeenCalledWith('workspaces/ws', 'plans/p.md', '')
+    expect(runtime.setText).toHaveBeenCalledWith('Document: /abs/plans/p.md\n')
 
     const note = wrapper.get('[data-testid="r-review-note"]')
     await note.setValue('Overall fine')
