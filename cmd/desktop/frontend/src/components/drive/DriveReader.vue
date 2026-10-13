@@ -83,7 +83,6 @@ const body = computed(() => (markdownView.value?.$el as HTMLElement | undefined)
 const drafting = ref<SourceRange | null>(null)
 const draftText = ref('')
 const anchorRect = ref<{ top: number; left: number; width: number; height: number } | null>(null)
-const selectionAnchor = ref<HTMLElement | null>(null)
 const popover = ref<{ contains: (node: Node | null) => boolean } | null>(null)
 const saving = ref(false)
 const saveError = ref<string | null>(null)
@@ -255,25 +254,11 @@ function onBodyClick(event: MouseEvent): void {
       :data-testid="`${testid}-file`"
     />
     <EmptyState v-else-if="!loading" variant="inline" message="Nothing here yet." :data-testid="`${testid}-empty`" />
-    <Teleport to="body">
-      <div
-        v-if="drafting && anchorRect"
-        ref="selectionAnchor"
-        class="pointer-events-none fixed"
-        :style="{
-          top: `${anchorRect.top}px`,
-          left: `${anchorRect.left}px`,
-          width: `${anchorRect.width}px`,
-          height: `${anchorRect.height}px`,
-        }"
-        aria-hidden="true"
-      />
-    </Teleport>
     <DriveCommentPopover
-      v-if="drafting"
+      v-if="drafting && anchorRect"
       ref="popover"
       v-model:text="draftText"
-      :anchor="selectionAnchor"
+      :rect="anchorRect"
       :range="drafting"
       :busy="saving"
       :error="saveError"

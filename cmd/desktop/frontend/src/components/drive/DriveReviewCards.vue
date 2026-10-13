@@ -4,18 +4,13 @@
 // Stacked, as over the narrow pane, they follow one another. The highlighted
 // block is the only marker in the document, so the active card is what ties
 // the two together: it draws an outline, a connector to the margin, and its
-// actions. An aligned card can be dragged by its header anywhere over the
-// view, to sit beside whatever it is compared with; it then floats free of
-// the layout until it snaps back.
+// actions.
 import { useMutationObserver, useResizeObserver } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
-import IconUndo from '~icons/lucide/undo-2'
 import BaseButton from '../ui/BaseButton.vue'
-import IconButton from '../ui/IconButton.vue'
 import InlineConfirm from '../ui/InlineConfirm.vue'
 import InlineError from '../ui/InlineError.vue'
 import TextArea from '../ui/TextArea.vue'
-import { startDrag } from '../../composables/useDragGesture'
 import { relativeAge } from '../../lib/age'
 import { useDriveReview } from '../../stores/useDriveReview'
 import type { CommentWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
@@ -106,11 +101,6 @@ function layout(): void {
   for (const comment of comments.value) {
     const target = block(comment.id)
     const wanted = target ? target.getBoundingClientRect().top - base : floor
-    // A dragged card floats from its block's row and makes no room.
-    if (store.offsets.value.has(comment.id)) {
-      next.set(comment.id, Math.max(wanted, 0))
-      continue
-    }
     const top = Math.max(wanted, floor)
     next.set(comment.id, top)
     floor = top + (cardElements.get(comment.id)?.offsetHeight ?? 0) + CARD_GAP
@@ -123,7 +113,7 @@ function relayout(): void {
   void nextTick(layout)
 }
 
-watch([comments, editing, store.active, store.offsets, () => props.alignTo], relayout, {
+watch([comments, editing, store.active, () => props.alignTo], relayout, {
   immediate: true,
   flush: 'post',
 })
@@ -138,51 +128,8 @@ useMutationObserver(() => props.alignTo ?? null, relayout, {
   attributeFilter: ['data-review-ids'],
 })
 
-// Dragging starts past a few pixels, so a click on the header still picks the
-// comment, and the click a drag ends with is swallowed.
-const DRAG_THRESHOLD = 4
-let dragged = false
-
-function startCardDrag(event: PointerEvent, comment: CommentWire): void {
-  if (!props.alignTo || event.button !== 0 || (event.target as Element).closest('button')) return
-  const card = cardElements.get(comment.id)
-  const box = cards.value
-  if (!card || !box) return
-  const origin = store.offsets.value.get(comment.id) ?? { x: 0, y: 0 }
-  const top = tops.value.get(comment.id) ?? 0
-  // Keeps the card inside the view: no further left than the reader's edge,
-  // no further right than the column, and not above the document.
-  const minX = props.alignTo.getBoundingClientRect().left - box.getBoundingClientRect().left
-  dragged = false
-  startDrag(event, {
-    onMove: (move: PointerEvent) => {
-      const dx = move.clientX - event.clientX
-      const dy = move.clientY - event.clientY
-      if (!dragged && Math.hypot(dx, dy) < DRAG_THRESHOLD) return
-      dragged = true
-      store.setOffset(comment.id, {
-        x: Math.min(0, Math.max(minX, origin.x + dx)),
-        y: Math.max(-top, origin.y + dy),
-      })
-    },
-  })
-}
-
-function onCardClick(comment: CommentWire): void {
-  if (dragged) {
-    dragged = false
-    return
-  }
-  pick(comment)
-}
-
 function cardStyle(id: string): Record<string, string> | undefined {
-  if (!props.alignTo) return undefined
-  const offset = store.offsets.value.get(id)
-  return {
-    top: `${(tops.value.get(id) ?? 0) + (offset?.y ?? 0)}px`,
-    transform: offset ? `translateX(${offset.x}px)` : '',
-  }
+  return props.alignTo ? { top: `${tops.value.get(id) ?? 0}px` } : undefined
 }
 </script>
 
@@ -231,9 +178,7 @@ function cardStyle(id: string): Record<string, string> | undefined {
         class="flex cursor-pointer flex-col gap-2 rounded-lg border px-3.5 py-3"
         :class="[
           alignTo ? 'absolute inset-x-0' : 'relative',
-          store.offsets.value.has(comment.id)
-            ? 'z-20 shadow-popover'
-            : 'transition-[top,border-color,background-color] duration-150',
+          'transition-[top,border-color,background-color] duration-150',
           store.active.value === comment.id
             ? 'border-accent/45 bg-raised'
             : store.hovered.value === comment.id
@@ -242,43 +187,23 @@ function cardStyle(id: string): Record<string, string> | undefined {
         ]"
         :style="cardStyle(comment.id)"
         :data-testid="`${testid}-review-card-${index + 1}`"
-        @click="onCardClick(comment)"
+        @click="pick(comment)"
         @mouseenter="store.setHovered(comment.id)"
         @mouseleave="store.setHovered(null)"
       >
         <span
-          v-if="alignTo && store.active.value === comment.id && !store.offsets.value.has(comment.id)"
+          v-if="alignTo && store.active.value === comment.id"
           class="absolute top-[22px] -left-4 h-px w-3 bg-accent/50"
           aria-hidden="true"
         />
-        <div
-          class="flex items-center gap-2"
-          :class="{ 'cursor-grab active:cursor-grabbing': alignTo }"
-          :data-testid="`${testid}-review-grip-${index + 1}`"
-          @pointerdown="startCardDrag($event, comment)"
-          @dblclick="store.setOffset(comment.id, null)"
-        >
+        <div class="flex items-center gap-2">
           <span
             class="flex size-[18px] shrink-0 items-center justify-center rounded-full bg-accent font-mono text-micro font-semibold text-accent-contrast"
             >{{ index + 1 }}</span
           >
           <span class="text-small font-semibold text-text">You</span>
           <span class="text-caption text-text-4">{{ age(comment) }}</span>
-          <IconButton
-            v-if="store.offsets.value.has(comment.id)"
-            label="Snap back to its block"
-            :icon="IconUndo"
-            size="sm"
-            class="ml-auto"
-            :data-testid="`${testid}-review-snap-${index + 1}`"
-            @click.stop="store.setOffset(comment.id, null)"
-          />
-          <span
-            class="font-mono text-micro text-text-4"
-            :class="{ 'ml-auto': !store.offsets.value.has(comment.id) }"
-            :title="comment.context"
-            >{{ lines(comment) }}</span
-          >
+          <span class="ml-auto font-mono text-micro text-text-4" :title="comment.context">{{ lines(comment) }}</span>
         </div>
         <div v-if="editing === comment.id" class="flex flex-col gap-1.5" @click.stop>
           <TextArea v-model="draft" :rows="2" size="sm" :data-testid="`${testid}-review-edit-text-${index + 1}`" />

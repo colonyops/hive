@@ -102,27 +102,6 @@ describe('DriveReviewCards', () => {
     expect(wrapper.get('[data-testid="r-review-card-2"]').classes()).not.toContain('border-strong')
   })
 
-  it('floats a card dragged by its header, and snaps it back', async () => {
-    const reader = document.createElement('div')
-    document.body.append(reader)
-    const wrapper = mount(DriveReviewCards, { props: { ...props, alignTo: reader }, attachTo: document.body })
-    await flushPromises()
-
-    const grip = wrapper.get('[data-testid="r-review-grip-1"]')
-    grip.element.dispatchEvent(
-      new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: 100, clientY: 100 }),
-    )
-    window.dispatchEvent(new PointerEvent('pointermove', { clientX: 100, clientY: 160 }))
-    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 100, clientY: 160 }))
-    await flushPromises()
-
-    const card = wrapper.get('[data-testid="r-review-card-1"]')
-    expect(card.classes()).toContain('z-20')
-    expect((card.element as HTMLElement).style.top).toBe('60px')
-    await wrapper.get('[data-testid="r-review-snap-1"]').trigger('click')
-    expect(wrapper.get('[data-testid="r-review-card-1"]').classes()).not.toContain('z-20')
-  })
-
   it('shows comments on an earlier version with a way to discard them', async () => {
     reviews.Review.mockResolvedValue(reviewOf({ current: false }))
     const wrapper = await mountPart(DriveReviewCards)

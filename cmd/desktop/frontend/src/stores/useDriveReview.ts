@@ -44,18 +44,6 @@ export const useDriveReview = defineStore('driveReview', () => {
     if (hovered.value !== id) hovered.value = id
   }
 
-  // Where the user dragged a card, as an offset from where layout puts it.
-  // Kept for the session only: a review is short-lived, and a position is a
-  // reading aid, not part of the comment.
-  const offsets = shallowRef<ReadonlyMap<string, { x: number; y: number }>>(new Map())
-
-  function setOffset(id: string, offset: { x: number; y: number } | null): void {
-    const next = new Map(offsets.value)
-    if (offset) next.set(id, offset)
-    else next.delete(id)
-    offsets.value = next
-  }
-
   const keyOf = (space: string, path: string) => `${space}\n${path}`
 
   function resource(space: string, path: string): Resource<DocumentReviewWire> {
@@ -174,8 +162,6 @@ export const useDriveReview = defineStore('driveReview', () => {
     setActive,
     hovered: computed(() => hovered.value),
     setHovered,
-    offsets: computed(() => offsets.value),
-    setOffset,
     review,
     inReview,
     note,
