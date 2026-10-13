@@ -47,9 +47,13 @@ function age(comment: CommentWire): string {
   return Number.isNaN(created) ? '' : relativeAge(created)
 }
 
+// The comment's first highlighted line, else its first marked block.
 function block(id: string): HTMLElement | null {
-  return document.querySelector<HTMLElement>(
-    `[data-testid="${props.testid}-document"] [data-review-ids~="${CSS.escape(id)}"]`,
+  const root = `[data-testid="${props.testid}-document"]`
+  const escaped = CSS.escape(id)
+  return (
+    document.querySelector<HTMLElement>(`${root} [data-review-anchor="${escaped}"]`) ??
+    document.querySelector<HTMLElement>(`${root} [data-review-ids~="${escaped}"]`)
   )
 }
 
@@ -125,7 +129,7 @@ useMutationObserver(() => props.alignTo ?? null, relayout, {
   subtree: true,
   childList: true,
   attributes: true,
-  attributeFilter: ['data-review-ids'],
+  attributeFilter: ['data-review-ids', 'style'],
 })
 
 function cardStyle(id: string): Record<string, string> | undefined {

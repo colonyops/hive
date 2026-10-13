@@ -1,11 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  commentAtBlock,
-  commentDepths,
-  markReviewedBlocks,
-  reviewHighlights,
-  selectionToRange,
-} from '../driveReviewSelection'
+import { highlightAt, markReviewedBlocks, quoteRange, selectionToRange } from '../driveReviewSelection'
 
 function mountRoot(html: string): HTMLElement {
   const root = document.createElement('div')
@@ -101,44 +95,35 @@ describe('markReviewedBlocks', () => {
   })
 })
 
-describe('commentDepths', () => {
-  it('nests a comment inside the ones that enclose it', () => {
-    const depths = commentDepths([
-      { id: 'outer', startLine: 40, endLine: 41 },
-      { id: 'inner', startLine: 40, endLine: 40 },
-      { id: 'same', startLine: 40, endLine: 40 },
-      { id: 'apart', startLine: 50, endLine: 50 },
-    ])
-    expect(Object.fromEntries(depths)).toEqual({ outer: 0, inner: 1, same: 2, apart: 0 })
+describe('quoteRange', () => {
+  it('finds one word inside a block', () => {
+    const root = mountRoot(body)
+    const range = quoteRange([root.querySelector('p')!], 'one')
+    expect(range?.toString()).toBe('one')
+  })
+
+  it('finds a quote across blocks whatever the whitespace between them', () => {
+    const root = mountRoot(body)
+    const range = quoteRange([...root.querySelectorAll('li')], 'a\n\nb')
+    expect(range?.toString().replace(/\s+/g, '')).toBe('ab')
+  })
+
+  it('is null for text the blocks do not hold', () => {
+    const root = mountRoot(body)
+    expect(quoteRange([root.querySelector('p')!], 'missing')).toBeNull()
   })
 })
 
-describe('commentAtBlock', () => {
-  const comments = [
-    { id: 'outer', startLine: 40, endLine: 41 },
-    { id: 'inner', startLine: 40, endLine: 40 },
+describe('highlightAt', () => {
+  const highlights = [
+    { id: 'line', boxes: [{ top: 0, left: 0, width: 400, height: 20 }] },
+    { id: 'word', boxes: [{ top: 0, left: 100, width: 40, height: 20 }] },
   ]
 
-  it('picks the innermost comment, then cycles outward', () => {
-    expect(commentAtBlock(['outer', 'inner'], comments)).toBe('inner')
-    expect(commentAtBlock(['outer', 'inner'], comments, 'inner')).toBe('outer')
-    expect(commentAtBlock(['outer', 'inner'], comments, 'outer')).toBe('inner')
-    expect(commentAtBlock([], comments)).toBeNull()
-  })
-})
-
-describe('reviewHighlights', () => {
-  it('draws one box per comment over all of its blocks', () => {
-    const root = mountRoot(body)
-    const comments = [
-      { id: 'b', startLine: 9, endLine: 10 },
-      { id: 'c', startLine: 9, endLine: 9 },
-    ]
-    markReviewedBlocks(root, comments)
-    const highlights = reviewHighlights(root, root, comments)
-    expect(highlights.map((highlight) => [highlight.id, highlight.depth])).toEqual([
-      ['b', 0],
-      ['c', 1],
-    ])
+  it('picks the smallest highlight under the point, then cycles outward', () => {
+    expect(highlightAt(highlights, 110, 10)).toBe('word')
+    expect(highlightAt(highlights, 110, 10, 'word')).toBe('line')
+    expect(highlightAt(highlights, 10, 10)).toBe('line')
+    expect(highlightAt(highlights, 10, 40)).toBeNull()
   })
 })

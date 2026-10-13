@@ -70,72 +70,117 @@ export function markReviewedBlocks(root: HTMLElement, comments: readonly LineCom
   }
 }
 
-const span = (comment: LineComment) => comment.endLine - comment.startLine
+type QuotedComment = LineComment & { context: string }
+
+export type HighlightBox = { top: number; left: number; width: number; height: number }
+export type ReviewHighlight = { id: string; boxes: HighlightBox[] }
 
 /**
- * How many comments enclose each one, so a nested comment draws inside the one
- * around it. Of two comments on the same lines, the later one nests.
+ * The range of quote's text inside blocks, matched with whitespace ignored:
+ * a selection's text joins blocks and lines with newlines that the DOM's
+ * text does not hold. Null when the quote is not there.
  */
-export function commentDepths(comments: readonly LineComment[]): Map<string, number> {
-  const depths = new Map<string, number>()
-  comments.forEach((comment, index) => {
-    let depth = 0
-    comments.forEach((other, otherIndex) => {
-      if (other === comment || other.startLine > comment.startLine || other.endLine < comment.endLine) return
-      if (span(other) > span(comment) || otherIndex < index) depth++
-    })
-    depths.set(comment.id, depth)
-  })
-  return depths
+export function quoteRange(blocks: readonly Element[], quote: string): Range | null {
+  const target = quote.replace(/\s+/g, '')
+  if (!target) return null
+  let text = ''
+  const positions: { node: Text; offset: number }[] = []
+  for (const block of blocks) {
+    const walker = block.ownerDocument.createTreeWalker(block, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+      const value = node.data
+      for (let offset = 0; offset < value.length; offset++) {
+        if (/\s/.test(value[offset])) continue
+        text += value[offset]
+        positions.push({ node, offset })
+      }
+    }
+  }
+  const at = text.indexOf(target)
+  if (at < 0) return null
+  const start = positions[at]
+  const end = positions[at + target.length - 1]
+  const range = blocks[0].ownerDocument.createRange()
+  range.setStart(start.node, start.offset)
+  range.setEnd(end.node, end.offset + 1)
+  return range
+}
+
+// A range's client rects come one per inline fragment; a line reads as one
+// box.
+function lineBoxes(rects: readonly DOMRect[]): DOMRect[] {
+  const lines: DOMRect[] = []
+  for (const rect of rects) {
+    if (rect.width === 0 || rect.height === 0) continue
+    const line = lines.find(
+      (other) => Math.abs(other.top + other.height / 2 - (rect.top + rect.height / 2)) < rect.height / 2,
+    )
+    if (!line) {
+      lines.push(new DOMRect(rect.left, rect.top, rect.width, rect.height))
+      continue
+    }
+    const left = Math.min(line.left, rect.left)
+    const top = Math.min(line.top, rect.top)
+    line.width = Math.max(line.right, rect.right) - left
+    line.height = Math.max(line.bottom, rect.bottom) - top
+    line.x = left
+    line.y = top
+  }
+  return lines
 }
 
 /**
- * The comment a pointer on a block with these ids means: the innermost, or,
- * when current is one of them, the next one out, so repeated clicks cycle
- * through comments that overlap.
- */
-export function commentAtBlock(
-  ids: readonly string[],
-  comments: readonly LineComment[],
-  current: string | null = null,
-): string | null {
-  const here = comments.filter((comment) => ids.includes(comment.id)).sort((a, b) => span(a) - span(b))
-  if (!here.length) return null
-  const at = here.findIndex((comment) => comment.id === current)
-  return at < 0 ? here[0].id : here[(at + 1) % here.length].id
-}
-
-export type ReviewHighlight = { id: string; top: number; left: number; width: number; height: number; depth: number }
-
-/**
- * One box per comment around every block it covers, in layer's coordinates,
- * so a comment across several blocks reads as one highlight.
+ * Where each comment draws, in layer's coordinates: a box per line of the
+ * text it quotes, so a comment on one word marks that word. A quote the
+ * blocks no longer hold, or a block with no text such as a diagram, draws
+ * the comment's blocks whole.
  */
 export function reviewHighlights(
   root: HTMLElement,
   layer: HTMLElement,
-  comments: readonly LineComment[],
+  comments: readonly QuotedComment[],
 ): ReviewHighlight[] {
   const base = layer.getBoundingClientRect()
-  const depths = commentDepths(comments)
   const highlights: ReviewHighlight[] = []
   for (const comment of comments) {
-    const rects = [...root.querySelectorAll<HTMLElement>(`[data-review-ids~="${CSS.escape(comment.id)}"]`)].map(
-      (element) => element.getBoundingClientRect(),
-    )
-    if (!rects.length) continue
-    const top = Math.min(...rects.map((rect) => rect.top))
-    const left = Math.min(...rects.map((rect) => rect.left))
-    const bottom = Math.max(...rects.map((rect) => rect.bottom))
-    const right = Math.max(...rects.map((rect) => rect.right))
+    const blocks = [...root.querySelectorAll<HTMLElement>(`[data-review-ids~="${CSS.escape(comment.id)}"]`)]
+    if (!blocks.length) continue
+    const range = quoteRange(blocks, comment.context)
+    const rects = range ? lineBoxes([...range.getClientRects()]) : blocks.map((block) => block.getBoundingClientRect())
     highlights.push({
       id: comment.id,
-      top: top - base.top,
-      left: left - base.left,
-      width: right - left,
-      height: bottom - top,
-      depth: depths.get(comment.id) ?? 0,
+      boxes: rects.map((rect) => ({
+        top: rect.top - base.top,
+        left: rect.left - base.left,
+        width: rect.width,
+        height: rect.height,
+      })),
     })
   }
   return highlights
+}
+
+const area = (highlight: ReviewHighlight) => highlight.boxes.reduce((sum, box) => sum + box.width * box.height, 0)
+
+/**
+ * The comment at a point in layer's coordinates. Where highlights overlap the
+ * smallest answers, or, when current is one of them, the next larger one, so
+ * repeated clicks cycle through them.
+ */
+export function highlightAt(
+  highlights: readonly ReviewHighlight[],
+  x: number,
+  y: number,
+  current: string | null = null,
+): string | null {
+  const here = highlights
+    .filter((highlight) =>
+      highlight.boxes.some(
+        (box) => x >= box.left && x <= box.left + box.width && y >= box.top && y <= box.top + box.height,
+      ),
+    )
+    .sort((a, b) => area(a) - area(b))
+  if (!here.length) return null
+  const at = here.findIndex((highlight) => highlight.id === current)
+  return at < 0 ? here[0].id : here[(at + 1) % here.length].id
 }

@@ -14,7 +14,7 @@ import { useCanvasSettings } from '../../stores/useCanvasSettings'
 import { useDriveReview } from '../../stores/useDriveReview'
 import { entryTime, frontmatterLineCount, linkTarget, markdownBody, type FrontmatterValue } from '../../lib/drive'
 import {
-  commentAtBlock,
+  highlightAt,
   markReviewedBlocks,
   reviewHighlights,
   selectionToRange,
@@ -142,9 +142,10 @@ watch(reviewed, endComment)
 // renders again), so the marks follow every change to it, not only to the
 // comments. The marks set attributes, which this does not observe.
 //
-// The blocks carry the marks for hit-testing; what the user sees is a layer
-// behind the text with one box per comment. A comment across several blocks
-// is then one shape, and a comment inside another draws inset within it.
+// The blocks carry the marks; what the user sees is a layer behind the text
+// with the exact text each comment quotes highlighted, a box per line, so a
+// comment on one word marks that word. Overlapping comments stack their
+// tints.
 const layer = ref<HTMLElement | null>(null)
 const highlights = ref<ReviewHighlight[]>([])
 const shownComments = computed(() => (current.value ? comments.value : []))
@@ -158,35 +159,24 @@ useMutationObserver(body, mark, { childList: true, subtree: true })
 useResizeObserver(body, mark)
 watch([body, shownComments], mark, { flush: 'post' })
 
-const HIGHLIGHT_PAD = 4
-const NEST_INSET = 3
-function highlightStyle(highlight: ReviewHighlight): Record<string, string> {
-  const pad = HIGHLIGHT_PAD - highlight.depth * NEST_INSET
-  return {
-    top: `${highlight.top - pad}px`,
-    left: `${highlight.left - pad}px`,
-    width: `${highlight.width + pad * 2}px`,
-    height: `${highlight.height + pad * 2}px`,
-  }
+// Hover and click hit the drawn highlights, not the blocks under them, so the
+// rest of a paragraph with a one-word comment stays plain text. Where
+// highlights overlap, the smallest answers, and another click moves out to
+// the next.
+function commentAtPoint(event: MouseEvent, current: string | null = null): string | null {
+  if (!layer.value) return null
+  const base = layer.value.getBoundingClientRect()
+  return highlightAt(highlights.value, event.clientX - base.left, event.clientY - base.top, current)
 }
-
-// Hover and click reach a comment from any element inside its block: a link,
-// a code span, a nested list item. Where comments overlap, the innermost one
-// answers, and another click moves out to the next.
-function commentAt(target: EventTarget | null, current: string | null = null): string | null {
-  if (!(target instanceof Element)) return null
-  const ids = target.closest<HTMLElement>('[data-review-ids]')?.dataset.reviewIds?.split(' ') ?? []
-  return commentAtBlock(ids, shownComments.value, current)
-}
-useEventListener(body, 'mouseover', (event: MouseEvent) => reviewStore.setHovered(commentAt(event.target)))
+useEventListener(body, 'mousemove', (event: MouseEvent) => reviewStore.setHovered(commentAtPoint(event)))
 useEventListener(body, 'mouseleave', () => reviewStore.setHovered(null))
 
-// A click on a commented block points at its comment; a link inside it still
+// A click on a highlight points at its comment; a link inside it still
 // follows.
 useEventListener(body, 'click', (event: MouseEvent) => {
   const target = event.target
   if (!(target instanceof Element) || target.closest('a') || !globalThis.getSelection()?.isCollapsed) return
-  const id = commentAt(target, reviewStore.active.value)
+  const id = commentAtPoint(event, reviewStore.active.value)
   if (id) reviewStore.setActive(id)
 })
 
@@ -213,17 +203,20 @@ function onBodyClick(event: MouseEvent): void {
     :data-testid="`${testid}-document`"
   >
     <div ref="layer" class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
-      <div
-        v-for="highlight in highlights"
-        :key="highlight.id"
-        class="review-highlight"
-        :class="{
-          'is-hovered': reviewStore.hovered.value === highlight.id,
-          'is-active': reviewStore.active.value === highlight.id,
-        }"
-        :style="highlightStyle(highlight)"
-        :data-testid="`${testid}-highlight-${highlight.id}`"
-      />
+      <template v-for="highlight in highlights" :key="highlight.id">
+        <div
+          v-for="(box, index) in highlight.boxes"
+          :key="index"
+          class="review-highlight"
+          :class="{
+            'is-hovered': reviewStore.hovered.value === highlight.id,
+            'is-active': reviewStore.active.value === highlight.id,
+          }"
+          :style="{ top: `${box.top}px`, left: `${box.left}px`, width: `${box.width}px`, height: `${box.height}px` }"
+          :data-review-anchor="index === 0 ? highlight.id : undefined"
+          :data-testid="`${testid}-highlight-${highlight.id}`"
+        />
+      </template>
     </div>
     <DriveFrontmatter
       v-if="properties"
@@ -240,6 +233,7 @@ function onBodyClick(event: MouseEvent): void {
       :style="readerStyle"
       :source="markdownBody(document.markdown)"
       :source-lines="sourceLines"
+      :class="{ 'cursor-pointer': reviewStore.hovered.value }"
       :testid="`${testid}-markdown`"
       :data-testid="`${testid}-markdown`"
       @follow="follow"
@@ -394,27 +388,27 @@ function onBodyClick(event: MouseEvent): void {
 .canvas-reading-body.markdown-body :deep(tr) {
   background: transparent;
 }
-/* The highlight is the only marker of a comment in the document: a quiet
-   tint for every comment, stronger under the pointer, and stronger still with
-   a hairline ring for the active one. Overlapping comments stack their tints,
-   so a nested one reads darker inside the one around it. */
-.canvas-reading-body.markdown-body :deep(.has-review-comment) {
-  cursor: pointer;
-}
+/* The highlight is the only marker of a comment in the document: a light
+   tint with an underline on the quoted text, stronger under the pointer, and
+   a hairline ring for the active one. Overlapping comments stack their
+   tints. */
 .review-highlight {
   position: absolute;
-  border-radius: 5px;
-  background: color-mix(in oklab, var(--color-accent) 7%, transparent);
+  border-radius: 2px;
+  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
+  box-shadow: inset 0 -1.5px 0 color-mix(in oklab, var(--color-accent) 55%, transparent);
   transition:
     background-color 120ms ease,
     box-shadow 120ms ease;
 }
 .review-highlight.is-hovered {
-  background: color-mix(in oklab, var(--color-accent) 12%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 18%, transparent);
 }
 .review-highlight.is-active {
-  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 40%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+  box-shadow:
+    inset 0 -1.5px 0 var(--color-accent),
+    0 0 0 1px color-mix(in oklab, var(--color-accent) 35%, transparent);
 }
 .canvas-link {
   display: flex;
