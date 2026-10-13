@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { markReviewedBlocks, selectionToRange } from '../driveReviewSelection'
+import {
+  commentAtBlock,
+  commentDepths,
+  markReviewedBlocks,
+  reviewHighlights,
+  selectionToRange,
+} from '../driveReviewSelection'
 
 function mountRoot(html: string): HTMLElement {
   const root = document.createElement('div')
@@ -76,26 +82,63 @@ describe('selectionToRange', () => {
 })
 
 describe('markReviewedBlocks', () => {
-  it('marks the innermost overlapping blocks and the active comment', () => {
+  it('marks the innermost overlapping blocks with every comment on them', () => {
     const root = mountRoot(body)
-    markReviewedBlocks(
-      root,
-      [
-        { id: 'a', startLine: 4, endLine: 4 },
-        { id: 'b', startLine: 9, endLine: 10 },
-      ],
-      'b',
-    )
+    markReviewedBlocks(root, [
+      { id: 'a', startLine: 4, endLine: 4 },
+      { id: 'b', startLine: 9, endLine: 10 },
+      { id: 'c', startLine: 9, endLine: 9 },
+    ])
     expect(root.querySelector('h1')!.dataset.reviewIds).toBe('a')
-    expect(root.querySelector('h1')!.classList.contains('is-active-review')).toBe(false)
     const items = root.querySelectorAll('li')
-    expect(items[0].classList.contains('has-review-comment')).toBe(true)
-    expect(items[0].classList.contains('is-active-review')).toBe(true)
+    expect(items[0].dataset.reviewIds).toBe('b c')
     expect(items[1].dataset.reviewIds).toBe('b')
     expect(root.querySelector('ul')!.classList.contains('has-review-comment')).toBe(false)
 
     markReviewedBlocks(root, [])
-    expect(root.querySelectorAll('.has-review-comment, .is-active-review')).toHaveLength(0)
+    expect(root.querySelectorAll('.has-review-comment')).toHaveLength(0)
     expect(root.querySelector('[data-review-ids]')).toBeNull()
+  })
+})
+
+describe('commentDepths', () => {
+  it('nests a comment inside the ones that enclose it', () => {
+    const depths = commentDepths([
+      { id: 'outer', startLine: 40, endLine: 41 },
+      { id: 'inner', startLine: 40, endLine: 40 },
+      { id: 'same', startLine: 40, endLine: 40 },
+      { id: 'apart', startLine: 50, endLine: 50 },
+    ])
+    expect(Object.fromEntries(depths)).toEqual({ outer: 0, inner: 1, same: 2, apart: 0 })
+  })
+})
+
+describe('commentAtBlock', () => {
+  const comments = [
+    { id: 'outer', startLine: 40, endLine: 41 },
+    { id: 'inner', startLine: 40, endLine: 40 },
+  ]
+
+  it('picks the innermost comment, then cycles outward', () => {
+    expect(commentAtBlock(['outer', 'inner'], comments)).toBe('inner')
+    expect(commentAtBlock(['outer', 'inner'], comments, 'inner')).toBe('outer')
+    expect(commentAtBlock(['outer', 'inner'], comments, 'outer')).toBe('inner')
+    expect(commentAtBlock([], comments)).toBeNull()
+  })
+})
+
+describe('reviewHighlights', () => {
+  it('draws one box per comment over all of its blocks', () => {
+    const root = mountRoot(body)
+    const comments = [
+      { id: 'b', startLine: 9, endLine: 10 },
+      { id: 'c', startLine: 9, endLine: 9 },
+    ]
+    markReviewedBlocks(root, comments)
+    const highlights = reviewHighlights(root, root, comments)
+    expect(highlights.map((highlight) => [highlight.id, highlight.depth])).toEqual([
+      ['b', 0],
+      ['c', 1],
+    ])
   })
 })

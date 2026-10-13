@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // One document rendered by kind. The pane and the full-page view share it, so
 // a document reads the same in both and only the width differs.
-import { useDebounceFn, useEventListener, useMutationObserver } from '@vueuse/core'
+import { useDebounceFn, useEventListener, useMutationObserver, useResizeObserver } from '@vueuse/core'
 import { computed, ref, watch, type ComponentPublicInstance } from 'vue'
 import HtmlDocumentFrame from './HtmlDocumentFrame.vue'
 import DriveCommentPopover from './DriveCommentPopover.vue'
@@ -13,7 +13,14 @@ import IconArrowUpRight from '~icons/lucide/arrow-up-right'
 import { useCanvasSettings } from '../../stores/useCanvasSettings'
 import { useDriveReview } from '../../stores/useDriveReview'
 import { entryTime, frontmatterLineCount, linkTarget, markdownBody, type FrontmatterValue } from '../../lib/drive'
-import { markReviewedBlocks, selectionToRange, type SourceRange } from '../../lib/driveReviewSelection'
+import {
+  commentAtBlock,
+  markReviewedBlocks,
+  reviewHighlights,
+  selectionToRange,
+  type ReviewHighlight,
+  type SourceRange,
+} from '../../lib/driveReviewSelection'
 import type { DocumentWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
@@ -132,26 +139,44 @@ async function saveComment(text: string): Promise<void> {
 watch(reviewed, endComment)
 
 // Rendering replaces the body's markup (a highlighter that finishes loading
-// renders again), so the markers follow every change to it, not only to the
-// comments. The markers set attributes, which this does not observe.
+// renders again), so the marks follow every change to it, not only to the
+// comments. The marks set attributes, which this does not observe.
+//
+// The blocks carry the marks for hit-testing; what the user sees is a layer
+// behind the text with one box per comment. A comment across several blocks
+// is then one shape, and a comment inside another draws inset within it.
+const layer = ref<HTMLElement | null>(null)
+const highlights = ref<ReviewHighlight[]>([])
+const shownComments = computed(() => (current.value ? comments.value : []))
+
 function mark(): void {
-  if (body.value) {
-    markReviewedBlocks(
-      body.value,
-      current.value ? comments.value : [],
-      reviewStore.active.value,
-      reviewStore.hovered.value,
-    )
-  }
+  if (!body.value) return
+  markReviewedBlocks(body.value, shownComments.value)
+  highlights.value = layer.value ? reviewHighlights(body.value, layer.value, shownComments.value) : []
 }
 useMutationObserver(body, mark, { childList: true, subtree: true })
-watch([body, comments, current, reviewStore.active, reviewStore.hovered], mark, { flush: 'post' })
+useResizeObserver(body, mark)
+watch([body, shownComments], mark, { flush: 'post' })
 
-// Hover reaches the comment from any element inside its block: a link, a
-// code span, a nested list item.
-function commentAt(target: EventTarget | null): string | null {
+const HIGHLIGHT_PAD = 4
+const NEST_INSET = 3
+function highlightStyle(highlight: ReviewHighlight): Record<string, string> {
+  const pad = HIGHLIGHT_PAD - highlight.depth * NEST_INSET
+  return {
+    top: `${highlight.top - pad}px`,
+    left: `${highlight.left - pad}px`,
+    width: `${highlight.width + pad * 2}px`,
+    height: `${highlight.height + pad * 2}px`,
+  }
+}
+
+// Hover and click reach a comment from any element inside its block: a link,
+// a code span, a nested list item. Where comments overlap, the innermost one
+// answers, and another click moves out to the next.
+function commentAt(target: EventTarget | null, current: string | null = null): string | null {
   if (!(target instanceof Element)) return null
-  return target.closest<HTMLElement>('[data-review-ids]')?.dataset.reviewIds?.split(' ')[0] ?? null
+  const ids = target.closest<HTMLElement>('[data-review-ids]')?.dataset.reviewIds?.split(' ') ?? []
+  return commentAtBlock(ids, shownComments.value, current)
 }
 useEventListener(body, 'mouseover', (event: MouseEvent) => reviewStore.setHovered(commentAt(event.target)))
 useEventListener(body, 'mouseleave', () => reviewStore.setHovered(null))
@@ -161,7 +186,7 @@ useEventListener(body, 'mouseleave', () => reviewStore.setHovered(null))
 useEventListener(body, 'click', (event: MouseEvent) => {
   const target = event.target
   if (!(target instanceof Element) || target.closest('a') || !globalThis.getSelection()?.isCollapsed) return
-  const id = commentAt(target)
+  const id = commentAt(target, reviewStore.active.value)
   if (id) reviewStore.setActive(id)
 })
 
@@ -182,7 +207,24 @@ function onBodyClick(event: MouseEvent): void {
 </script>
 
 <template>
-  <div class="canvas-reader flex min-h-0 flex-col" :style="readerStyle" :data-testid="`${testid}-document`">
+  <div
+    class="canvas-reader relative isolate flex min-h-0 flex-col"
+    :style="readerStyle"
+    :data-testid="`${testid}-document`"
+  >
+    <div ref="layer" class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
+      <div
+        v-for="highlight in highlights"
+        :key="highlight.id"
+        class="review-highlight"
+        :class="{
+          'is-hovered': reviewStore.hovered.value === highlight.id,
+          'is-active': reviewStore.active.value === highlight.id,
+        }"
+        :style="highlightStyle(highlight)"
+        :data-testid="`${testid}-highlight-${highlight.id}`"
+      />
+    </div>
     <DriveFrontmatter
       v-if="properties"
       :frontmatter="properties.frontmatter"
@@ -353,28 +395,26 @@ function onBodyClick(event: MouseEvent): void {
   background: transparent;
 }
 /* The highlight is the only marker of a comment in the document: a quiet
-   tint on every commented block, stronger under the pointer, and stronger
-   still with a hairline outline for the active one. The tint spreads past the
-   block with a shadow and the outline sits in that margin, so neither moves
-   the text. */
+   tint for every comment, stronger under the pointer, and stronger still with
+   a hairline ring for the active one. Overlapping comments stack their tints,
+   so a nested one reads darker inside the one around it. */
 .canvas-reading-body.markdown-body :deep(.has-review-comment) {
-  border-radius: 4px;
-  background: color-mix(in oklab, var(--color-accent) 6%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 6%, transparent);
   cursor: pointer;
+}
+.review-highlight {
+  position: absolute;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--color-accent) 7%, transparent);
   transition:
     background-color 120ms ease,
     box-shadow 120ms ease;
 }
-.canvas-reading-body.markdown-body :deep(.is-hovered-review) {
-  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 10%, transparent);
-}
-.canvas-reading-body.markdown-body :deep(.is-active-review) {
+.review-highlight.is-hovered {
   background: color-mix(in oklab, var(--color-accent) 12%, transparent);
-  box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-accent) 12%, transparent);
-  outline: 1px solid color-mix(in oklab, var(--color-accent) 35%, transparent);
-  outline-offset: 4px;
+}
+.review-highlight.is-active {
+  background: color-mix(in oklab, var(--color-accent) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--color-accent) 40%, transparent);
 }
 .canvas-link {
   display: flex;
