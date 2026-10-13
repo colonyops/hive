@@ -12,6 +12,8 @@ import (
 	"unicode/utf8"
 
 	"charm.land/glamour/v2"
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
 	"github.com/colonyops/hive/internal/domain/drive"
 )
@@ -36,9 +38,10 @@ const TypeOther = "other"
 // Document represents a reviewable file.
 type Document struct {
 	Path          string // Absolute path
-	RelPath       string // ".hive/<path>" for a repository space, "<space key>/<path>" when spaces are mixed
+	RelPath       string // relative to the space, "<space key>/<path>" when spaces are mixed
 	Type          string // front matter "type", else the top folder name, else "other"
 	Space         drive.Space
+	inCheckout    bool // reachable from a repository checkout through the context symlink
 	ModTime       time.Time
 	Content       string   // Raw content
 	RenderedLines []string // Glamour-rendered lines with ANSI (cached)
@@ -108,7 +111,7 @@ var folderTypes = map[string]string{
 // typeFromPath is the type of a document that has no front matter type: its
 // top folder.
 func typeFromPath(relPath string) string {
-	relPath = strings.TrimPrefix(filepath.ToSlash(relPath), ".hive/")
+	relPath = filepath.ToSlash(relPath)
 	if top, _, ok := strings.Cut(relPath, "/"); ok && top != "" {
 		top = strings.ToLower(top)
 		if t, ok := folderTypes[top]; ok {
@@ -128,7 +131,12 @@ func documentType(entry drive.Entry) string {
 	return typeFromPath(entry.Path)
 }
 
-// DocumentsFromTree lists the markdown entries of a space's tree, sorted by
+// isPlainText reports whether a file entry is listed and shown as plain text.
+func isPlainText(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".txt")
+}
+
+// DocumentsFromTree lists the markdown and plain-text entries of a space's tree, sorted by
 // type and then newest first. dir is the space's directory on disk. With
 // qualified, RelPath names the space, so documents of several spaces stay
 // apart.
@@ -145,7 +153,7 @@ func collectDocuments(docs *[]Document, space drive.Space, dir string, entry dri
 			collectDocuments(docs, space, dir, child, qualified)
 			continue
 		}
-		if child.Kind != drive.KindMarkdown {
+		if child.Kind != drive.KindMarkdown && (child.Kind != drive.KindFile || !isPlainText(child.Path)) {
 			continue
 		}
 		doc := spaceDocument(space, dir, child.Path, qualified)
@@ -159,17 +167,25 @@ func collectDocuments(docs *[]Document, space drive.Space, dir string, entry dri
 // dir, with its RelPath named the way the space's listing names it.
 func spaceDocument(space drive.Space, dir, path string, qualified bool) Document {
 	rel := path
-	switch {
-	case qualified:
+	if qualified {
 		rel = space.Key + "/" + path
-	case space.Kind == drive.SpaceKindRepository:
-		rel = ".hive/" + path
 	}
 	return Document{
-		Path:    filepath.Join(dir, filepath.FromSlash(path)),
-		RelPath: rel,
-		Space:   space,
+		Path:       filepath.Join(dir, filepath.FromSlash(path)),
+		RelPath:    rel,
+		Space:      space,
+		inCheckout: !qualified && space.Kind == drive.SpaceKindRepository,
 	}
+}
+
+// CheckoutPath is the path an agent in a repository checkout reaches the
+// document by: RelPath under the context symlink, named symlinkName. A
+// document outside a repository space has no such path and keeps RelPath.
+func (d Document) CheckoutPath(symlinkName string) string {
+	if !d.inCheckout || symlinkName == "" {
+		return d.RelPath
+	}
+	return symlinkName + "/" + d.RelPath
 }
 
 // SortDocuments orders documents by type, then newest first.
@@ -196,8 +212,8 @@ func (d *Document) LoadContent() error {
 	return nil
 }
 
-// Render renders the document content using Glamour with line numbers.
-// Returns a string with ANSI-styled markdown and line numbers.
+// Render renders the document with line numbers: markdown through Glamour, a
+// .txt file as wrapped plain text.
 func (d *Document) Render(width int) (string, error) {
 	// Use cached rendered lines if available and width matches
 	if d.RenderedLines != nil && d.cachedWidth == width {
@@ -211,8 +227,13 @@ func (d *Document) Render(width int) (string, error) {
 		}
 	}
 
-	// Create glamour renderer with Tokyo Night theme
 	wrapWidth := contentWrapWidth(width)
+	if isPlainText(d.Path) {
+		d.RenderedLines = strings.Split(ansi.Wrap(strings.TrimRight(d.Content, "\n"), wrapWidth, ""), "\n")
+		d.cachedWidth = width
+		return d.formatWithLineNumbers(d.RenderedLines), nil
+	}
+
 	r, err := glamour.NewTermRenderer(
 		glamour.WithStyles(styles.GlamourStyle()),
 		glamour.WithWordWrap(wrapWidth),

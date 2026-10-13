@@ -24,8 +24,10 @@ type ReviewOnlyOptions struct {
 	Source      review.Source    // lists documents again on a change
 	Documents   []review.Document
 	InitialDoc  *review.Document
-	Scope       review.Scope // the space whose changes refresh the list
-	FeedbackDir string       // where feedback is saved when the clipboard fails; empty is the working directory
+	Scope       review.Scope        // the space whose changes refresh the list
+	SymlinkName string              // context.symlink_name, which review feedback paths start with
+	FileWatcher *review.FileWatcher // refreshes a file outside every space; nil for none
+	FeedbackDir string              // where feedback is saved when the clipboard fails; empty is the working directory
 	Reviews     corereview.Store
 	CopyCommand string // Shell command for copying to clipboard (e.g., "pbcopy" on macOS)
 }
@@ -33,6 +35,7 @@ type ReviewOnlyOptions struct {
 // ReviewOnlyModel is a minimal TUI for reviewing context documents.
 type ReviewOnlyModel struct {
 	reviewView  review.View
+	fileWatcher *review.FileWatcher
 	initialDoc  *review.Document
 	feedbackDir string
 	copyCommand string
@@ -45,6 +48,7 @@ type ReviewOnlyModel struct {
 // NewReviewOnly creates a new review-only TUI model.
 func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	reviewView := review.New(opts.Logger, opts.Bus, opts.Source, opts.Documents, opts.Scope, opts.Reviews, nil, 0)
+	reviewView.SetSymlinkName(opts.SymlinkName)
 
 	// When opening with a specific document, hide the tree so the document
 	// gets full-width focus. The user can toggle the tree with V to navigate.
@@ -54,6 +58,7 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 
 	return ReviewOnlyModel{
 		reviewView:  reviewView,
+		fileWatcher: opts.FileWatcher,
 		initialDoc:  opts.InitialDoc,
 		feedbackDir: opts.FeedbackDir,
 		copyCommand: opts.CopyCommand,
@@ -66,7 +71,7 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 
 // Init implements tea.Model.
 func (m ReviewOnlyModel) Init() tea.Cmd {
-	return m.reviewView.Init()
+	return tea.Batch(m.reviewView.Init(), m.fileWatcher.Next())
 }
 
 // Update implements tea.Model.
@@ -115,6 +120,11 @@ func (m ReviewOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			// Other action types are not applicable in review-only mode.
 		}
+
+	case review.FileChangedMsg:
+		var cmd tea.Cmd
+		m.reviewView, cmd = m.reviewView.Update(review.DocumentChangeMsg{Documents: []review.Document{msg.Document}})
+		return m, tea.Batch(cmd, m.fileWatcher.Next())
 
 	case review.ReviewFinalizedMsg:
 		// Print feedback to stderr first (so user can retrieve it even if clipboard fails)

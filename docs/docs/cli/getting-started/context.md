@@ -63,17 +63,19 @@ hive drive init
 !!! tip
     Use `hive drive ls` to list documents. Standard `ls` and glob tools do not follow the `.hive` symlink reliably.
 
-`hive drive ls` prints the repository's space with a kind for each entry: `dir`, `markdown`, `html`, `canvas`, or `file`. The kind comes from the file extension. `.canvas.json` is a canvas, a block document that agents write in Hive Desktop.
+`hive drive ls` prints the repository's space with a kind for each entry: `dir`, `markdown`, `html`, `canvas`, or `file`. The kind comes from the file extension. Folders come before files at each level. `.canvas.json` is a canvas, a block document that agents write in Hive Desktop.
 
 ```
 $ hive drive ls
 /Users/you/.local/share/hive/context/my-org/my-repo
+dir       canvases
+canvas    canvases/perf.canvas.json
 dir       plans
 markdown  plans/2026-01-15-auth-refactor.md
 dir       research
 markdown  research/authentication-analysis.md
 html      research/benchmarks.html
-canvas    canvases/perf.canvas.json
+markdown  notes.md
 ```
 
 ```bash

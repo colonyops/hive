@@ -62,12 +62,15 @@ type Source interface {
 	Tree(ctx context.Context, space drive.Space) (drive.Entry, error)
 }
 
+// InDrive reports whether the scope lists drive spaces, so drive changes can
+// refresh it. A file outside every space is not.
+func (s Scope) InDrive() bool {
+	return s.Dir != "" && (s.All || s.Space.Key != "")
+}
+
 // covers reports whether a drive.changed payload for space is this scope's.
 func (s Scope) covers(space string) bool {
-	if s.Dir == "" {
-		return false
-	}
-	return s.All || (s.Space.Key != "" && space == s.Space.Key)
+	return s.InDrive() && (s.All || space == s.Space.Key)
 }
 
 // ListDocuments lists the markdown documents of the scope, sorted. Without a

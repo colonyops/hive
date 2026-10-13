@@ -170,11 +170,11 @@ See the [Recipes](../recipes/index.md) for full multi-agent workflow examples.
 
 When a command runs from the document review view, the focused document is exposed under the `.Doc` namespace:
 
-| Variable       | Description                                                         |
-| -------------- | ------------------------------------------------------------------- |
-| `.Doc.Path`    | Absolute path to the focused document                               |
-| `.Doc.RelPath` | Path relative to the repo (e.g. `.hive/plans/2026-05-06-plan.md`)   |
-| `.Doc.Type`    | Lowercase category: `plan`, `research`, `context`, or `other`       |
+| Variable       | Description                                                                                    |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| `.Doc.Path`    | Absolute path to the focused document                                                          |
+| `.Doc.RelPath` | Path relative to the drive space (e.g. `plans/2026-05-06-plan.md`)                             |
+| `.Doc.Type`    | Lowercase front matter `type:`, else the top folder name (`plans/` gives `plan`), else `other` |
 
 `.Doc.*` fields render as empty strings outside the review view or when no document is focused. Scope the command to `review` so it only appears where these values are populated.
 

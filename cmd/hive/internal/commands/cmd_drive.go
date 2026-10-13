@@ -17,15 +17,10 @@ type DriveCmd struct {
 	flags *Flags
 	app   *app.App
 
-	// Shared flags
-	repo   string
-	shared bool
-
-	// ls and spaces flags
-	all  bool
-	json bool
-
-	// prune flag
+	repo      string
+	shared    bool
+	all       bool
+	json      bool
 	olderThan string
 }
 

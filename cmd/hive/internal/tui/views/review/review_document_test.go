@@ -30,7 +30,9 @@ func TestDocumentsFromTree_Typing(t *testing.T) {
 			md("plans/untyped.md", now, drive.Frontmatter{"type": 3}),
 		}},
 		md("loose.md", now, nil),
-		{Path: "notes.txt", Kind: drive.KindFile},
+		{Path: "research/notes.txt", Kind: drive.KindFile},
+		{Path: "image.png", Kind: drive.KindFile},
+		{Path: "page.html", Kind: drive.KindHtml},
 		{Path: "board.canvas.json", Kind: drive.KindCanvas},
 	}}
 
@@ -41,11 +43,20 @@ func TestDocumentsFromTree_Typing(t *testing.T) {
 		got[d.RelPath] = d.Type
 	}
 	assert.Equal(t, map[string]string{
-		".hive/plans/a.md":       "plan",
-		".hive/plans/design.md":  "design-doc",
-		".hive/plans/untyped.md": "plan",
-		".hive/loose.md":         "other",
-	}, got, "front matter type wins, then the top folder, then other; only markdown is listed")
+		"plans/a.md":         "plan",
+		"plans/design.md":    "design-doc",
+		"plans/untyped.md":   "plan",
+		"loose.md":           "other",
+		"research/notes.txt": "research",
+	}, got, "front matter type wins, then the top folder, then other; only markdown and .txt are listed")
+}
+
+func TestDocument_RenderPlainText(t *testing.T) {
+	doc := Document{Path: "/ctx/notes.txt", Content: "# not a heading\n**not bold**\n"}
+	out, err := doc.Render(80)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"# not a heading", "**not bold**"}, doc.RenderedLines)
+	assert.Contains(t, out, "# not a heading")
 }
 
 func TestDocumentsFromTree_Paths(t *testing.T) {
@@ -54,13 +65,17 @@ func TestDocumentsFromTree_Paths(t *testing.T) {
 	repo := DocumentsFromTree(repoSpace(t), "/ctx/acme/site", root, false)
 	require.Len(t, repo, 1)
 	assert.Equal(t, "/ctx/acme/site/plans/a.md", repo[0].Path)
-	assert.Equal(t, ".hive/plans/a.md", repo[0].RelPath)
+	assert.Equal(t, "plans/a.md", repo[0].RelPath, "RelPath is space-relative, the .Doc.RelPath template contract")
+	assert.Equal(t, ".hive/plans/a.md", repo[0].CheckoutPath(".hive"))
+	assert.Equal(t, ".context/plans/a.md", repo[0].CheckoutPath(".context"))
 
 	shared := DocumentsFromTree(drive.Shared, "/ctx/shared", root, false)
 	assert.Equal(t, "plans/a.md", shared[0].RelPath)
+	assert.Equal(t, "plans/a.md", shared[0].CheckoutPath(".hive"), "no checkout links the shared space")
 
 	all := DocumentsFromTree(repoSpace(t), "/ctx/acme/site", root, true)
 	assert.Equal(t, "acme/site/plans/a.md", all[0].RelPath)
+	assert.Equal(t, "acme/site/plans/a.md", all[0].CheckoutPath(".hive"))
 	assert.Equal(t, repoSpace(t), all[0].Space)
 }
 
@@ -111,7 +126,7 @@ func TestTypeTitle(t *testing.T) {
 
 func TestTypeFromPath(t *testing.T) {
 	assert.Equal(t, "plan", typeFromPath("plans/x.md"))
-	assert.Equal(t, "research", typeFromPath(".hive/research/x.md"))
+	assert.Equal(t, "research", typeFromPath("research/x.md"))
 	assert.Equal(t, "notes", typeFromPath("notes/x.md"), "any other folder is its own type")
 	assert.Equal(t, "other", typeFromPath("x.md"))
 }

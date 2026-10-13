@@ -37,7 +37,7 @@ The review TUI supports document navigation, inline comments, search,
 and document picking. Comments are persisted per-document with session IDs.
 
 With --file, you can review any markdown file without requiring context directory.
-Without --file, the picker lists the markdown documents in your repository's
+Without --file, the picker lists the markdown and .txt documents in your repository's
 Hive Drive space, grouped by the front matter "type:" of each document (for
 example plan, design-doc, research). A document without one is grouped by its
 top folder. With --all, the picker lists the documents of every space.
@@ -114,7 +114,19 @@ func (cmd *ReviewCmd) runWithDirectFile(ctx context.Context) error {
 	}
 
 	scope, doc := review.FileScope(cmd.app.Drive(), targetPath, info.ModTime())
-	return cmd.launchReviewTUI(ctx, []review.Document{doc}, &doc, scope, filepath.Dir(targetPath))
+	documents := []review.Document{doc}
+	if scope.InDrive() {
+		// List the folder up front, so the first drive change does not swap
+		// the one-document list for the folder's.
+		listed, err := review.ListDocuments(ctx, cmd.app.Drive(), scope)
+		switch {
+		case err != nil:
+			cmd.app.Logger.Warn().Err(err).Str("dir", scope.Dir).Msg("folder not listed; showing the file alone")
+		case len(listed) > 0:
+			documents = listed
+		}
+	}
+	return cmd.launchReviewTUI(ctx, documents, &doc, scope, filepath.Dir(targetPath))
 }
 
 // runWithContextDir uses context directory discovery for picker/latest modes.
@@ -141,7 +153,7 @@ func (cmd *ReviewCmd) runWithContextDir(ctx context.Context, c *cli.Command) err
 		if _, err := fmt.Fprintf(c.Root().Writer, "No documents found in %s\n", contextDir); err != nil {
 			return fmt.Errorf("failed to write output: %w", err)
 		}
-		if _, err := fmt.Fprintln(c.Root().Writer, "Create markdown files under .hive/plans/, or add a front matter \"type:\" to a document."); err != nil {
+		if _, err := fmt.Fprintf(c.Root().Writer, "Create .md or .txt files under %s/plans/, or add a front matter \"type:\" to a document.\n", cmd.app.Config.Context.SymlinkName); err != nil {
 			return fmt.Errorf("failed to write output: %w", err)
 		}
 		return nil
@@ -162,26 +174,46 @@ func (cmd *ReviewCmd) runWithContextDir(ctx context.Context, c *cli.Command) err
 	return cmd.launchReviewTUI(ctx, documents, initialDoc, scope, scope.Dir)
 }
 
-// launchReviewTUI runs the review-only TUI. The drive watcher runs for the
-// program's lifetime so a document edited meanwhile refreshes the list.
+// launchReviewTUI runs the review-only TUI. A watcher runs for the program's
+// lifetime so a document edited meanwhile refreshes: the drive watcher for a
+// scope in the drive, a watch on the one file otherwise.
 func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Document, initialDoc *review.Document, scope review.Scope, feedbackDir string) error {
-	drive := cmd.app.Drive()
-	if err := drive.Watch(ctx); err != nil {
-		cmd.app.Logger.Warn().Err(err).Msg("drive watcher unavailable; documents will not refresh while open")
-	}
-	defer func() {
-		if err := drive.Close(); err != nil {
-			cmd.app.Logger.Debug().Err(err).Msg("drive watcher not closed cleanly")
+	logger := cmd.app.Logger
+	var fileWatcher *review.FileWatcher
+	switch {
+	case scope.InDrive():
+		drive := cmd.app.Drive()
+		if err := drive.Watch(ctx); err != nil {
+			logger.Warn().Err(err).Msg("drive watcher unavailable; documents will not refresh while open")
 		}
-	}()
+		defer func() {
+			if err := drive.Close(); err != nil {
+				logger.Debug().Err(err).Msg("drive watcher not closed cleanly")
+			}
+		}()
+	case initialDoc != nil:
+		w, err := review.WatchFile(logger, *initialDoc)
+		if err != nil {
+			logger.Warn().Err(err).Msg("file watcher unavailable; the document will not refresh while open")
+			break
+		}
+		fileWatcher = w
+		defer func() {
+			if err := w.Close(); err != nil {
+				logger.Debug().Err(err).Msg("file watcher not closed cleanly")
+			}
+		}()
+	}
 
 	m := tui.NewReviewOnly(tui.ReviewOnlyOptions{
-		Logger:      cmd.app.Logger,
+		Logger:      logger,
 		Bus:         cmd.app.Bus(),
 		Source:      cmd.app.Drive(),
 		Documents:   documents,
 		InitialDoc:  initialDoc,
 		Scope:       scope,
+		SymlinkName: cmd.app.Config.Context.SymlinkName,
+		FileWatcher: fileWatcher,
 		FeedbackDir: feedbackDir,
 		Reviews:     cmd.app.Reviews(),
 		CopyCommand: cmd.app.Config.CopyCommand,

@@ -65,7 +65,7 @@ func TestDriveChangeForTheViewsSpaceRediscoversDocuments(t *testing.T) {
 	msg, ok := cmd().(DocumentChangeMsg)
 	require.True(t, ok)
 	require.Len(t, msg.Documents, 1)
-	assert.Equal(t, ".hive/plans/a.md", msg.Documents[0].RelPath)
+	assert.Equal(t, "plans/a.md", msg.Documents[0].RelPath)
 }
 
 func TestDriveChangesArriveFromTheBus(t *testing.T) {
@@ -152,9 +152,10 @@ func TestFileInASpaceFolderListsThatFolderOnAChange(t *testing.T) {
 		paths = append(paths, d.Path)
 		assert.FileExists(t, d.Path)
 	}
-	assert.ElementsMatch(t, []string{".hive/plans/x.md", ".hive/plans/y.md"}, rels)
+	assert.ElementsMatch(t, []string{"plans/x.md", "plans/y.md"}, rels)
 	assert.Contains(t, paths, doc.Path)
-	assert.Equal(t, ".hive/plans/x.md", doc.RelPath)
+	assert.Equal(t, "plans/x.md", doc.RelPath)
+	assert.Equal(t, ".hive/plans/x.md", doc.CheckoutPath(".hive"))
 }
 
 func TestFileOutsideEverySpaceIsListedAlone(t *testing.T) {
@@ -164,9 +165,32 @@ func TestFileOutsideEverySpaceIsListedAlone(t *testing.T) {
 
 	scope, doc := FileScope(svc, path, time.Now())
 	assert.Equal(t, Scope{Dir: filepath.Dir(path)}, scope)
+	assert.False(t, scope.InDrive(), "the drive watcher has nothing to refresh")
 	assert.Equal(t, path, doc.Path)
 
 	view := New(zerolog.Nop(), nil, svc, []Document{doc}, scope, nil, nil, 0)
 	_, cmd := view.Update(DriveChangedMsg{Payload: events.DriveChangedPayload{Space: "acme/site"}})
 	assert.Nil(t, cmd)
+}
+
+func TestFeedbackNamesTheDocumentThroughTheConfiguredSymlink(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, filepath.Join(dir, "plans", "a.md"))
+	root := drive.Entry{Kind: drive.KindDir, Children: []drive.Entry{
+		{Path: "plans", Kind: drive.KindDir, Children: []drive.Entry{{Path: "plans/a.md", Kind: drive.KindMarkdown}}},
+	}}
+	docs := DocumentsFromTree(repoScope(t, dir).Space, dir, root, false)
+	require.Len(t, docs, 1)
+
+	view := New(zerolog.Nop(), nil, nil, docs, repoScope(t, dir), nil, nil, 0)
+	view.SetSymlinkName(".context")
+	view.SetSize(100, 30)
+	view.LoadDocument(&docs[0])
+	view.activeSession = &Session{ID: "s", DocPath: docs[0].Path, Comments: []Comment{
+		{ID: "c", StartLine: 1, EndLine: 1, ContextText: "# doc", CommentText: "tighten"},
+	}}
+
+	view, _ = view.Update(keyMsg("f"))
+	assert.Contains(t, view.feedbackGenerated, ".context/plans/a.md")
+	assert.NotContains(t, view.feedbackGenerated, ".hive/")
 }

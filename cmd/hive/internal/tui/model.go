@@ -100,7 +100,7 @@ type Deps struct {
 	// Optional; nil disables the corresponding feature.
 	MsgStore      *msgsvc.Service
 	Reviews       corereview.Store
-	Drive         review.Source
+	Drive         DriveSource
 	Bus           *events.EventBus
 	KVStore       corekv.KV
 	BuildInfo     BuildInfo
@@ -123,6 +123,7 @@ type Model struct {
 	baseLogger     zerolog.Logger // no cmp label; handed to the components the model creates later
 	cfg            *config.Config
 	service        *sessionsvc.Service
+	drive          DriveSource
 	cmdService     *command.Service
 	handler        *KeybindingResolver
 	state          UIState
@@ -325,7 +326,7 @@ func New(deps Deps, opts Opts) Model {
 	var repoKey string
 	var scope review.Scope
 	if opts.LocalRemote != "" {
-		scope, repoKey, _ = remoteReviewScope(cfg, opts.LocalRemote)
+		scope, repoKey, _ = remoteReviewScope(cfg, deps.Drive, opts.LocalRemote)
 	}
 
 	tasksView := tasks.New(deps.Logger, deps.Honeycomb, repoKey, handler, deps.KVStore, cfg.Views.Tasks.SplitRatio)
@@ -339,6 +340,7 @@ func New(deps Deps, opts Opts) Model {
 
 	reviewView := review.New(deps.Logger, deps.Bus, deps.Drive, docs, scope, deps.Reviews, handler, cfg.Views.Review.SplitRatioOrDefault(30))
 	reviewView.SetRepoKey(repoKey)
+	reviewView.SetSymlinkName(cfg.Context.SymlinkName)
 
 	toastCtrl := NewToastController()
 	toastView := NewToastView(toastCtrl)
@@ -375,6 +377,7 @@ func New(deps Deps, opts Opts) Model {
 		logger:           logger,
 		baseLogger:       deps.Logger,
 		cfg:              cfg,
+		drive:            deps.Drive,
 		service:          service,
 		cmdService:       cmdService,
 		handler:          handler,
@@ -455,7 +458,6 @@ func (m Model) Init() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
-	// The review view waits for drive changes from the bus.
 	if m.reviewView != nil {
 		if cmd := m.reviewView.Init(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -1882,7 +1884,7 @@ func (m Model) syncDocsRepoFromSessions() tea.Cmd {
 		return nil
 	}
 
-	scope, repoKey, ok := remoteReviewScope(m.cfg, remote)
+	scope, repoKey, ok := remoteReviewScope(m.cfg, m.drive, remote)
 	if !ok || scope == m.reviewView.Scope() {
 		return nil
 	}

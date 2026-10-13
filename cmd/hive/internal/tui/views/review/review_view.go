@@ -50,6 +50,7 @@ type View struct {
 	source            Source
 	changes           <-chan events.DriveChangedPayload
 	repoKey           string // owner/repo display label
+	symlinkName       string // context.symlink_name: how a checkout reaches its space
 	store             corereview.Store
 	width             int
 	height            int
@@ -234,6 +235,12 @@ func (v View) Scope() Scope {
 // ContextDir is the directory the view's documents are discovered from.
 func (v View) ContextDir() string {
 	return v.scope.Dir
+}
+
+// SetSymlinkName sets the name of the context symlink in a repository
+// checkout, which review feedback and checkout paths start with.
+func (v *View) SetSymlinkName(name string) {
+	v.symlinkName = name
 }
 
 // SetRepoKey sets the owner/repo display label shown in the header.
@@ -482,7 +489,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				var docPath, docRel string
 				if v.selectedDoc != nil {
 					docPath = v.selectedDoc.Path
-					docRel = v.selectedDoc.RelPath
+					docRel = v.selectedDoc.CheckoutPath(v.symlinkName)
 				}
 				return v, func() tea.Msg {
 					return ReviewFinalizedMsg{Feedback: feedback, DocumentPath: docPath, DocumentRel: docRel}
@@ -522,7 +529,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 
 				// Otherwise, it's a finalization confirmation
 				// Generate feedback and finalize
-				feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.RelPath)
+				feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.CheckoutPath(v.symlinkName))
 				v.feedbackGenerated = feedback
 				v.confirmModal = nil
 
@@ -541,7 +548,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				var docPath, docRel string
 				if v.selectedDoc != nil {
 					docPath = v.selectedDoc.Path
-					docRel = v.selectedDoc.RelPath
+					docRel = v.selectedDoc.CheckoutPath(v.symlinkName)
 				}
 				return v, func() tea.Msg {
 					return ReviewFinalizedMsg{Feedback: feedback, DocumentPath: docPath, DocumentRel: docRel}
@@ -662,7 +669,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				// Finalize review - show finalization options if there are comments
 				if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
 					// Generate feedback now so we can pass it to the modal
-					feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.RelPath)
+					feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.CheckoutPath(v.symlinkName))
 					modal := NewFinalizationModal(feedback, v.width, v.height)
 					v.finalizationModal = &modal
 					v.feedbackGenerated = feedback
@@ -2460,18 +2467,16 @@ type OpenDocumentMsg struct {
 }
 
 // OpenDocumentByPath attempts to open a specific document by path.
-// Path can be absolute, relative to context directory, or prefixed with ".hive/"
-// (the symlink name agents use to reference context files from the repo root).
+// Path can be absolute, relative to the space, or prefixed with the context
+// symlink name, the way agents reference context files from the repo root.
 // Returns a command that sends an OpenDocumentMsg.
 func (v *View) OpenDocumentByPath(path string) tea.Cmd {
+	symlinkPrefix := v.symlinkName + "/"
 	return func() tea.Msg {
-		// Resolve .hive/ prefix: the .hive symlink in the repo root points to contextDir,
-		// so ".hive/foo" is equivalent to contextDir/foo. Agents use .hive/-prefixed paths
-		// in URIs, but a space's own listing may carry no prefix.
 		absPath := path
 		relPath := path
-		if v.scope.Dir != "" && strings.HasPrefix(path, ".hive/") {
-			rel := strings.TrimPrefix(path, ".hive/")
+		if v.scope.Dir != "" && v.symlinkName != "" && strings.HasPrefix(path, symlinkPrefix) {
+			rel := strings.TrimPrefix(path, symlinkPrefix)
 			absPath = filepath.Join(v.scope.Dir, rel)
 			relPath = rel
 		}
@@ -2485,8 +2490,8 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 				break
 			}
 
-			// Check suffix match to handle stored paths that include a leading
-			// symlink component (e.g. ".hive/plans/doc.md" vs RelPath "plans/doc.md").
+			// A stored path may carry a symlink component the configured name
+			// does not match, e.g. ".hive/plans/doc.md" vs RelPath "plans/doc.md".
 			if strings.HasSuffix(ti.Document.Path, "/"+path) ||
 				strings.HasSuffix(path, "/"+ti.Document.RelPath) {
 				doc := ti.Document

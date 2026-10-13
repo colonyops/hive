@@ -51,8 +51,9 @@ a leftover the user can move or delete.
 
 **`@global` becomes the shared space.** Global canvases move from
 `<data>/canvases/` to `<ctx>/shared/canvases/`. The MCP `session: "global"`
-argument stays and resolves to the shared space. The `@global` owner key is
-gone. The shared space has no pane: `open_document`, `open_canvas` and
+argument stays and resolves to the shared space. The `@global` store is
+gone. Canvas tool results keep `@global` as the owner key of a shared
+canvas, for compatibility with agents and links that match on it. The shared space has no pane: `open_document`, `open_canvas` and
 `close_canvas` refuse it, and the user reads it in the Drive page.
 
 **A canvas file is `<name>.canvas.json`.** A space holds files Hive did not
@@ -68,9 +69,10 @@ left it. A document is a whole page that owns its look and fills the pane,
 so the two reasons ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary
 rejected an iframe for blocks do not apply. The document renders in
 `<iframe sandbox="allow-scripts" srcdoc=...>` with no `allow-same-origin`,
-and Hive injects a CSP `<meta>` that allows `https:` and `data:` sources
-only, so the page cannot reach the loopback MCP server. Isolation, not
-sanitization, is the boundary for a document. Hive parses nothing out of an
+and Hive injects a CSP `<meta>` that loads scripts, styles, and fetches
+over `https:` only and allows `data:` only for images, fonts, and media, so
+the page cannot call Hive's bindings or send requests to localhost.
+Isolation, not sanitization, is the boundary for a document. Hive parses nothing out of an
 HTML document: no front matter, no title.
 
 **One engine service owns the tree; the desktop renders it.**
@@ -104,7 +106,9 @@ lives in `hive.db`.
 
 - Three file moves, each idempotent and each a rename on one filesystem.
   The engine renames `<space>/canvases/<name>.json` to `<name>.canvas.json`
-  on the first scan of a space, only when the JSON has a `blocks` key. The
+  before the first scan of a space, only when the JSON has a `blocks` key.
+  The service records the spaces it migrated, so the rename runs once per
+  space and a later rescan does not repeat it. The
   desktop, after the engine starts, moves `<data>/canvases/*.json` to
   `<ctx>/shared/canvases/` and `<workspace>/canvases/*.json` to
   `<ctx>/workspaces/<name>/canvases/`, because only it knows those paths.

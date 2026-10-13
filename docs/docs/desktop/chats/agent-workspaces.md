@@ -123,7 +123,7 @@ Search in the pane or on the page looks across every space. Copy a document as M
 ### Document kinds
 
 - **Markdown** (`.md`) renders with its front matter shown above it.
-- **HTML** (`.html`) runs in a sandbox. Scripts run inside the frame, and the page cannot reach Hive or anything on your computer. It can load `https:` content.
+- **HTML** (`.html`) runs in a sandbox. Scripts run inside the frame. The page cannot call Hive or send requests to localhost. It can load `https:` content.
 - **Canvas** (`.canvas.json`) is a document of blocks that an agent builds: Markdown, Mermaid diagrams, sanitized HTML, and links.
 
 Use a standalone `mermaid` fence inside a Markdown block for a diagram. Mermaid diagrams follow the current theme. Drag a diagram to pan, use its controls to zoom or fit it, or hold Control/Command while scrolling to zoom around the pointer. An invalid diagram shows an error in place without hiding the rest of the canvas.
@@ -159,7 +159,7 @@ An agent with **Hive Drive** enabled can publish documents beside its chat. The 
 - `delete_document`
 - `open_document`
 
-The ten canvas tools remain. A canvas name can include folders, so `reports/perf` is filed as `reports/perf.canvas.json`, and a bare name is filed under `canvases/`. An agent can only write `.md` and `.html` documents with `write_document`.
+The ten canvas tools remain. A canvas name can include folders, so `reports/perf` is filed as `reports/perf.canvas.json`, and a bare name is filed under `canvases/`. An agent can only write `.md` and `.html` documents with `write_document`. `read_document` reads markdown, html, and any other text file in the space.
 
 A repository with no documents yet links to the setup in **Settings ▸ MCP servers**.
 

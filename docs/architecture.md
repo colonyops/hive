@@ -2275,7 +2275,10 @@ fsnotify watch per directory, adds one when a directory appears, skips dot
 directories, and debounces at 100 ms. `Service.Watch` re-reads each changed
 directory and diffs it into the snapshot, then publishes `drive.changed` with
 the space and the changed paths, once per change and only when something
-differed. The CLI starts the same watcher for `hive review`.
+differed. The CLI starts the same watcher for the `hive` TUI and for `hive
+review`. `hive review -f` on a file outside every space starts none; it
+watches that file's directory alone, because the directory may be as large
+as a home directory.
 
 **The desktop adds the UI surface and the agent surface.**
 `app.DriveService` serves the agent tools, which resolve a `session` argument
@@ -2300,7 +2303,9 @@ existing agent configurations. It has sixteen tools: the ten canvas tools,
 whose `canvas` argument is a name or a path (`reports/perf` files at
 `reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), and six document
 tools: `list_documents`, `read_document`, `write_document`, `move_document`,
-`delete_document` and `open_document`. An app-hosted catalogue entry declares
+`delete_document` and `open_document`. `read_document` reads markdown, html
+and any other UTF-8 text file, and answers `not_found` for hive state files
+(`kv.json`, `kv.json.lock`). An app-hosted catalogue entry declares
 its mount as `Descriptor.RuntimePath`, joined with the live loopback base when
 the catalogue is rendered; a pinning test in `mcpsrv` keeps those paths
 agreeing with the adapter's constants. The app does not wire the server into a
@@ -2310,6 +2315,9 @@ configuration, and Settings ▸ MCP servers lists it.
 **A session resolves to a space.** The `session` argument is `global`, a chat's
 record id, or the caller's working directory. `global` is the `shared` space,
 which has no pane: `open_document`, `open_canvas` and `close_canvas` refuse it.
+The `@global` store is gone, but canvas tool results still name the shared
+space's owner `@global`, so agents and `hive://canvas` links that match on it
+keep working.
 A chat's record names its workspace space. A directory maps to the active hive
 session whose checkout holds it (`Sessions().SessionAtPath`) and from there to
 the repository space; a directory inside no session stays `not_found`. A
@@ -2320,9 +2328,12 @@ write; the frontend uses it for the unseen dot. A chat's space outlives the
 chat, and deleting a workspace leaves its space behind
 (ADR deleting-a-workspace-deletes-its-directory).
 
-**Three idempotent migrations move older canvases.** Once per space, on the first scan of
-that space and nowhere else, the engine renames `canvases/<name>.json` to `<name>.canvas.json` when
-the file has a `blocks` key. After the engine starts, the desktop calls
+**Three idempotent migrations move older canvases.** Before the first scan of
+a space, and nowhere else, the engine renames `canvases/<name>.json` to
+`<name>.canvas.json` when the file has a `blocks` key. The service records
+each space it has migrated, so the rename runs once per space for the life of
+the service: a rescan after `Reconfigure` or after the watcher recovers does
+not run it again. After the engine starts, the desktop calls
 `ImportLegacyCanvases` for the desktop data directory's `canvases/`, which
 moves to `shared/canvases/`, and for each workspace folder's `canvases/`,
 which moves to `workspaces/<name>/canvases/`. A target that exists is skipped
@@ -2368,11 +2379,12 @@ untrusted GitHub bodies and stays as strict as they require, which is why an
 html block renders under its own `.hv-html` scope.
 
 An **`.html` document** is a whole page. `canvas.WrapDocument` injects a CSP
-`<meta>` first in `<head>` (`DocumentCSP`: `https:` and `data:` sources only,
-no frames, no form submission), and the frontend renders it in
+`<meta>` first in `<head>` (`DocumentCSP`: scripts, styles and fetches over
+`https:` only, `data:` only for images, fonts and media, no frames, no form
+submission), and the frontend renders it in
 `<iframe sandbox="allow-scripts" srcdoc>` with no `allow-same-origin`. The page
-runs in an opaque origin and cannot reach the Wails bindings or the loopback
-server. Isolation is the boundary for a document; Hive parses nothing out of it.
+runs in an opaque origin and cannot call Hive's bindings or send requests to
+localhost. Isolation is the boundary for a document; Hive parses nothing out of it.
 
 A top-level **`mermaid` fence in a markdown block** renders as a diagram. The
 canvas reader splits these fences from the markdown it sends through the shared

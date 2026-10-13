@@ -420,6 +420,7 @@ type docsRepoKeysLoadedMsg struct {
 func (m Model) loadDocsRepoKeys() tea.Cmd {
 	svc := m.service
 	cfg := m.cfg
+	drv := m.drive
 	return func() tea.Msg {
 		sessions, err := svc.ListSessions(context.Background())
 		if err != nil {
@@ -428,7 +429,7 @@ func (m Model) loadDocsRepoKeys() tea.Cmd {
 		seen := map[string]bool{}
 		var repos []docsRepoEntry
 		for _, s := range sessions {
-			scope, key, ok := remoteReviewScope(cfg, s.Remote)
+			scope, key, ok := remoteReviewScope(cfg, drv, s.Remote)
 			if !ok || seen[key] {
 				continue
 			}
@@ -512,7 +513,7 @@ func (m Model) handleReviewAction(msg review.ActionRequestMsg) (tea.Model, tea.C
 	if m.reviewView != nil {
 		if doc := m.reviewView.SelectedDoc(); doc != nil {
 			docPath = doc.Path
-			docRelPath = doc.RelPath
+			docRelPath = doc.CheckoutPath(m.cfg.Context.SymlinkName)
 		}
 	}
 
@@ -1329,7 +1330,7 @@ func resolveReviewURI(uriValue, remote string, cfg *config.Config) string {
 		return uriValue
 	}
 	contextDir := cfg.RepoContextDir(owner, repo)
-	rel := strings.TrimPrefix(uriValue, ".hive/")
+	rel := strings.TrimPrefix(uriValue, cfg.Context.SymlinkName+"/")
 	return filepath.Join(contextDir, rel)
 }
 
