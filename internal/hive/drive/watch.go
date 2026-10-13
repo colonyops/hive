@@ -9,6 +9,9 @@ import (
 	"slices"
 	"time"
 
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/platform/fswatch"
 )
@@ -106,6 +109,7 @@ func (s *Service) restartWatcher() {
 		s.logger.Warn().Err(err).Str("root", s.cfg.ContextDir()).Msg("drive watcher not restarted after the context directory moved")
 		return
 	}
+	s.logger.Info().Str("root", s.cfg.ContextDir()).Msg("drive watcher moved to the new context directory")
 	s.watch = w
 }
 
@@ -121,7 +125,7 @@ func (s *Service) drain(ctx context.Context, w *watcher) {
 				s.awaitRoot(ctx, w)
 				return
 			}
-			s.apply(w, change)
+			s.apply(ctx, w, change)
 		}
 	}
 }
@@ -177,6 +181,7 @@ func (s *Service) restartOnRoot(ctx context.Context, w *watcher) bool {
 		return false
 	}
 	s.watch = next
+	s.logger.Info().Str("root", w.cfgRoot).Msg("drive watcher restarted after the root came back")
 	s.resyncSpaces()
 	return true
 }
@@ -194,7 +199,15 @@ type spaceDelta struct {
 // and an owner directory hold spaces rather than documents, and Spaces reads
 // the disk, so a change there only reconciles the scanned spaces. A resync
 // rescans every scanned space whole.
-func (s *Service) apply(w *watcher, change fswatch.Change) {
+func (s *Service) apply(ctx context.Context, w *watcher, change fswatch.Change) {
+	// A change on disk is a cause entering the app, so it roots its own
+	// trace rather than joining whatever span ctx carried at Watch.
+	ctx, span := tracer.Start(ctx, "drive.watch change", trace.WithNewRoot(), trace.WithAttributes(
+		attribute.Int(attrWatchDirs, len(change.Dirs)),
+		attribute.Bool(attrWatchResync, change.Resync),
+	))
+	defer span.End()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.generation++
@@ -202,6 +215,7 @@ func (s *Service) apply(w *watcher, change fswatch.Change) {
 		return
 	}
 	if change.Resync {
+		watchChanges.Add(ctx, 1, watchAttrs[watchResync])
 		s.resyncSpaces()
 		return
 	}
@@ -243,6 +257,15 @@ func (s *Service) apply(w *watcher, change fswatch.Change) {
 	if aboveSpaces {
 		s.reconcileSpaces(record)
 	}
+
+	span.SetAttributes(attribute.Int(attrWatchSpaces, len(deltas)))
+	if len(deltas) == 0 {
+		watchChanges.Add(ctx, 1, watchAttrs[watchUnchanged])
+		return
+	}
+	watchChanges.Add(ctx, 1, watchAttrs[watchPublished])
+	s.logger.Debug().Ctx(ctx).Int("dirs", len(change.Dirs)).Strs("spaces", slices.Sorted(maps.Keys(deltas))).
+		Msg("documents changed outside the drive")
 
 	for _, key := range slices.Sorted(maps.Keys(deltas)) {
 		d := deltas[key]

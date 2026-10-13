@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
+	"github.com/colonyops/hive/pkg/logutils"
 )
 
 // DrivePathPrefix is where main mounts the drive server on the loopback
@@ -36,7 +37,7 @@ type DriveController struct {
 }
 
 func NewDrive(core *app.App, log zerolog.Logger, opts Options) *DriveController {
-	return &DriveController{core: core, log: log, opts: opts}
+	return &DriveController{core: core, log: logutils.Component(log, "mcp.drive"), opts: opts}
 }
 
 // Server builds the drive MCP server with its tool table registered.

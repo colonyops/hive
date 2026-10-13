@@ -21,6 +21,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/colonyops/hive/internal/config"
 	"github.com/colonyops/hive/internal/domain/drive"
@@ -498,7 +500,9 @@ func (s *Service) migrateOnce(dir string) {
 // in order, until limit is reached. Hits come grouped in Spaces order and
 // sorted by path inside a space, without children; limit caps them, and 0
 // means defaultSearchLimit. An empty query matches nothing.
-func (s *Service) Search(ctx context.Context, query string, limit int) ([]Hit, error) {
+func (s *Service) Search(ctx context.Context, query string, limit int) (hits []Hit, err error) {
+	defer recordOp(ctx, opSearch, actorNone, time.Now(), &err)
+	defer func() { trace.SpanFromContext(ctx).SetAttributes(attribute.Int(attrHits, len(hits))) }()
 	terms := strings.Fields(searchText(query))
 	if len(terms) == 0 {
 		return []Hit{}, nil
@@ -511,7 +515,7 @@ func (s *Service) Search(ctx context.Context, query string, limit int) ([]Hit, e
 		return nil, err
 	}
 
-	hits := []Hit{}
+	hits = []Hit{}
 	for _, space := range spaces {
 		snap, err := s.scanned(space)
 		if err != nil {
@@ -564,7 +568,9 @@ func searchText(text string) string {
 
 // Read is the entry at path, built from the file as it is now, and the file's
 // bytes. A folder is not a document and is ErrInvalidPath.
-func (s *Service) Read(_ context.Context, space drive.Space, path string) (drive.Entry, []byte, error) {
+func (s *Service) Read(ctx context.Context, space drive.Space, path string) (_ drive.Entry, _ []byte, err error) {
+	defer recordOp(ctx, opRead, actorNone, time.Now(), &err)
+	annotate(ctx, space, path)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	full, err := s.documentFile(space, path)
@@ -591,7 +597,9 @@ func (s *Service) Read(_ context.Context, space drive.Space, path string) (drive
 // Write replaces a markdown or html document with body, creating the folders
 // above it. Anything else is ErrNotWritable: a canvas changes through the
 // canvas operations, and the drive writes no other kind.
-func (s *Service) Write(_ context.Context, space drive.Space, path string, author drive.Author, body []byte) (drive.Entry, error) {
+func (s *Service) Write(ctx context.Context, space drive.Space, path string, author drive.Author, body []byte) (_ drive.Entry, err error) {
+	defer recordOp(ctx, opWrite, actorOf(author), time.Now(), &err)
+	annotate(ctx, space, path, attribute.Int(attrBytes, len(body)))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	full, err := s.documentFile(space, path)
@@ -614,13 +622,17 @@ func (s *Service) Write(_ context.Context, space drive.Space, path string, autho
 	if err != nil {
 		return drive.Entry{}, err
 	}
+	s.logger.Debug().Ctx(ctx).Str("space", space.Key).Str("path", entry.Path).Int("bytes", len(body)).
+		Str("session", author.Session).Str("hive_session", author.HiveSession).Msg("document written")
 	s.publish(space, author, entry.Path)
 	return entry, nil
 }
 
 // CreateFolder makes one folder, and the folders above it. A path that
 // exists, as anything, is ErrExists.
-func (s *Service) CreateFolder(_ context.Context, space drive.Space, path string, author drive.Author) (drive.Entry, error) {
+func (s *Service) CreateFolder(ctx context.Context, space drive.Space, path string, author drive.Author) (_ drive.Entry, err error) {
+	defer recordOp(ctx, opCreateFolder, actorOf(author), time.Now(), &err)
+	annotate(ctx, space, path)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	full, err := s.documentFile(space, path)
@@ -650,7 +662,9 @@ func (s *Service) CreateFolder(_ context.Context, space drive.Space, path string
 // rename that changes only case is allowed on a case-insensitive file system,
 // where the target is the source itself. A moved folder's descendants are
 // re-keyed in the snapshot rather than rescanned.
-func (s *Service) Move(_ context.Context, space drive.Space, from, to string, author drive.Author) (drive.Entry, error) {
+func (s *Service) Move(ctx context.Context, space drive.Space, from, to string, author drive.Author) (_ drive.Entry, err error) {
+	defer recordOp(ctx, opMove, actorOf(author), time.Now(), &err)
+	annotate(ctx, space, from, attribute.String(attrTarget, to))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	src, err := s.documentFile(space, from)
@@ -703,6 +717,8 @@ func (s *Service) Move(_ context.Context, space drive.Space, from, to string, au
 			return drive.Entry{}, err
 		}
 	}
+	s.logger.Info().Ctx(ctx).Str("space", space.Key).Str("from", from).Str("to", to).
+		Str("session", author.Session).Str("hive_session", author.HiveSession).Msg("drive entry moved")
 	s.publish(space, author, from, to)
 	return entry, nil
 }
@@ -724,7 +740,9 @@ func checkKeepsKind(from, to string) error {
 
 // Delete removes a document or an empty folder. A folder with anything in
 // it but Finder's .DS_Store, hidden files included, is ErrNotEmpty.
-func (s *Service) Delete(_ context.Context, space drive.Space, path string, author drive.Author) error {
+func (s *Service) Delete(ctx context.Context, space drive.Space, path string, author drive.Author) (err error) {
+	defer recordOp(ctx, opDelete, actorOf(author), time.Now(), &err)
+	annotate(ctx, space, path)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	full, err := s.documentFile(space, path)
@@ -752,6 +770,8 @@ func (s *Service) Delete(_ context.Context, space drive.Space, path string, auth
 	if snap, ok := s.spaces[space.Key]; ok {
 		removeNode(&snap.root, path)
 	}
+	s.logger.Info().Ctx(ctx).Str("space", space.Key).Str("path", path).Bool("folder", info.IsDir()).
+		Str("session", author.Session).Str("hive_session", author.HiveSession).Msg("drive entry deleted")
 	s.publish(space, author, path)
 	return nil
 }
@@ -777,7 +797,9 @@ func clearEmptyFolder(full string) error {
 // LoadCanvas is one canvas, reporting false without error when no file
 // exists at path. A file that cannot be parsed is an error, never a blank
 // canvas.
-func (s *Service) LoadCanvas(_ context.Context, space drive.Space, path string) (drive.Canvas, bool, error) {
+func (s *Service) LoadCanvas(ctx context.Context, space drive.Space, path string) (_ drive.Canvas, _ bool, err error) {
+	defer recordOp(ctx, opLoadCanvas, actorNone, time.Now(), &err)
+	annotate(ctx, space, path)
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.loadCanvas(space, path)
@@ -790,7 +812,9 @@ func (s *Service) LoadCanvas(_ context.Context, space drive.Space, path string) 
 // existing id then moves there, still keeping its CreatedAt. author is
 // recorded at creation and never changes; a non-empty title replaces the
 // stored one.
-func (s *Service) UpsertBlocks(_ context.Context, space drive.Space, path string, author drive.Author, title, before string, blocks ...drive.Block) (drive.Canvas, error) {
+func (s *Service) UpsertBlocks(ctx context.Context, space drive.Space, path string, author drive.Author, title, before string, blocks ...drive.Block) (_ drive.Canvas, err error) {
+	defer recordOp(ctx, opUpsertBlocks, actorOf(author), time.Now(), &err)
+	annotate(ctx, space, path, attribute.Int(attrBlocks, len(blocks)))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -844,7 +868,9 @@ func blockIndex(blocks []drive.Block, id string) int {
 
 // RemoveBlock deletes one block by id, reporting whether it was present. A
 // canvas that does not exist is ErrNotFound.
-func (s *Service) RemoveBlock(_ context.Context, space drive.Space, path, blockID string, author drive.Author) (drive.Canvas, bool, error) {
+func (s *Service) RemoveBlock(ctx context.Context, space drive.Space, path, blockID string, author drive.Author) (_ drive.Canvas, _ bool, err error) {
+	defer recordOp(ctx, opRemoveBlock, actorOf(author), time.Now(), &err)
+	annotate(ctx, space, path)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -870,7 +896,9 @@ func (s *Service) RemoveBlock(_ context.Context, space drive.Space, path, blockI
 // SetCanvasFrontmatter replaces every editable metadata field on an existing
 // canvas. created_at and updated_at derive from the canvas timestamps and are
 // never stored in this map.
-func (s *Service) SetCanvasFrontmatter(_ context.Context, space drive.Space, path string, author drive.Author, fm drive.Frontmatter) (drive.Canvas, error) {
+func (s *Service) SetCanvasFrontmatter(ctx context.Context, space drive.Space, path string, author drive.Author, fm drive.Frontmatter) (_ drive.Canvas, err error) {
+	defer recordOp(ctx, opSetFrontmatter, actorOf(author), time.Now(), &err)
+	annotate(ctx, space, path)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -898,7 +926,9 @@ func (s *Service) SetCanvasFrontmatter(_ context.Context, space drive.Space, pat
 // ClearCanvas empties an existing canvas but keeps it: the file, its title
 // and its CreatedAt survive, so a clear reads as a fresh layout in the same
 // pane, not a deletion.
-func (s *Service) ClearCanvas(_ context.Context, space drive.Space, path string, author drive.Author) (drive.Canvas, error) {
+func (s *Service) ClearCanvas(ctx context.Context, space drive.Space, path string, author drive.Author) (_ drive.Canvas, err error) {
+	defer recordOp(ctx, opClearCanvas, actorOf(author), time.Now(), &err)
+	annotate(ctx, space, path)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -919,7 +949,9 @@ func (s *Service) ClearCanvas(_ context.Context, space drive.Space, path string,
 
 // ListCanvases is every canvas in the space's snapshot, most recently
 // updated first. A canvas file that cannot be parsed fails the listing.
-func (s *Service) ListCanvases(_ context.Context, space drive.Space) ([]drive.CanvasMeta, error) {
+func (s *Service) ListCanvases(ctx context.Context, space drive.Space) (_ []drive.CanvasMeta, err error) {
+	defer recordOp(ctx, opListCanvases, actorNone, time.Now(), &err)
+	annotate(ctx, space, "")
 	snap, err := s.scanned(space)
 	if err != nil {
 		return nil, err
@@ -1244,6 +1276,7 @@ func (s *Service) ensureAncestors(root *drive.Entry, space drive.Space, path str
 // scan walks a space directory into its root entry. A directory that does
 // not exist is an empty root.
 func (s *Service) scan(dir string) (drive.Entry, error) {
+	start := time.Now()
 	info, err := os.Stat(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return drive.Entry{Kind: drive.KindDir}, nil
@@ -1257,6 +1290,8 @@ func (s *Service) scan(dir string) (drive.Entry, error) {
 		return drive.Entry{}, err
 	}
 	root.Children = s.scanEntries(dir, "", entries)
+	n := recordScan(start, root)
+	s.logger.Debug().Str("dir", dir).Int("entries", n).Dur("took", time.Since(start)).Msg("space scanned")
 	return root, nil
 }
 

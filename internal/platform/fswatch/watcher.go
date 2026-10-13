@@ -11,6 +11,7 @@
 package fswatch
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -148,6 +149,7 @@ func New(logger zerolog.Logger, root string, opts ...Option) (*Watcher, error) {
 	}
 	if err := w.addTree(root); err != nil {
 		_ = fsw.Close()
+		w.holdDescriptors(-w.descriptors)
 		return nil, fmt.Errorf("fswatch: watch %s: %w", root, err)
 	}
 
@@ -172,6 +174,7 @@ func (w *Watcher) Close() error {
 func (w *Watcher) run() {
 	defer close(w.done)
 	defer close(w.changes)
+	defer func() { w.holdDescriptors(-w.descriptors) }()
 
 	var (
 		window <-chan time.Time
@@ -201,6 +204,7 @@ func (w *Watcher) run() {
 			}
 			if errors.Is(err, fsnotify.ErrEventOverflow) {
 				w.logger.Warn().Err(err).Msg("events lost; resyncing every watched directory")
+				overflows.Add(context.Background(), 1)
 				w.recover()
 			} else {
 				w.logger.Warn().Err(err).Msg("watch error")
@@ -320,7 +324,7 @@ func (w *Watcher) addTree(dir string) error {
 			return err
 		}
 		w.dirs[dir] = 1
-		w.descriptors++
+		w.holdDescriptors(1)
 	}
 
 	entries, err := os.ReadDir(dir)
@@ -333,7 +337,7 @@ func (w *Watcher) addTree(dir string) error {
 	if !watched {
 		// kqueue holds a descriptor per entry of a watched directory.
 		w.dirs[dir] += len(entries)
-		w.descriptors += len(entries)
+		w.holdDescriptors(len(entries))
 	}
 	for _, entry := range entries {
 		if !entry.IsDir() || skipDir(entry.Name()) {
@@ -362,7 +366,7 @@ func (w *Watcher) dropTree(dir string) {
 		if tracked != dir && !strings.HasPrefix(tracked, prefix) {
 			continue
 		}
-		w.descriptors -= w.dirs[tracked]
+		w.holdDescriptors(-w.dirs[tracked])
 		delete(w.dirs, tracked)
 		delete(w.pending, tracked)
 		err := w.fsw.Remove(tracked)
@@ -380,6 +384,12 @@ func (w *Watcher) warnOverBudget(dir string) {
 		return
 	}
 	w.budgetWarned = true
+	budgetExhausted.Add(context.Background(), 1)
 	w.logger.Warn().Int("descriptors", w.descriptors).Int("budget", w.opts.budget).Str("dir", dir).
 		Msg("descriptor budget reached; directories past it are not watched")
+}
+
+func (w *Watcher) holdDescriptors(n int) {
+	w.descriptors += n
+	heldDescriptors.Add(context.Background(), int64(n))
 }

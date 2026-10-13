@@ -23,6 +23,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/hive"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
+	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/colonyops/hive/pkg/osopen"
 )
 
@@ -71,7 +72,7 @@ func newDriveService(d DriveDeps) *DriveService {
 	if d.Reveal == nil {
 		d.Reveal = osopen.Reveal
 	}
-	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, logger: d.Logger}
+	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, logger: logutils.Component(d.Logger, "desktop.drive")}
 }
 
 // driveCaller is who a tool call comes from and the space its canvases

@@ -9,6 +9,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/fsnotify/fsnotify"
 	"github.com/rs/zerolog"
+
+	"github.com/colonyops/hive/pkg/logutils"
 )
 
 const fileWatchDebounce = 100 * time.Millisecond
@@ -33,6 +35,7 @@ type FileChangedMsg struct {
 
 // WatchFile starts watching doc's directory for changes to doc.
 func WatchFile(logger zerolog.Logger, doc Document) (*FileWatcher, error) {
+	logger = logutils.Component(logger, "tui.review.watch")
 	fsw, err := fsnotify.NewWatcher()
 	if err != nil {
 		return nil, fmt.Errorf("watch %s: %w", doc.Path, err)

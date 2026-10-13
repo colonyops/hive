@@ -177,7 +177,7 @@ func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 		application.NewService(NewJobService(core.Jobs)),
 		application.NewService(NewActionRunService(core.ActionRuns)),
 		application.NewService(NewTasksService(core.Tasks)),
-		application.NewService(NewDriveService(core.Drive)),
+		application.NewService(NewDriveService(core.Drive, u.logger)),
 		application.NewService(NewSystemService(core.System, opts.Build.Version, opts.Build.Commit, opts.Build.Date)),
 		application.NewService(NewHiveConfigService(core.HiveConfig)),
 		application.NewService(NewSettingsService(core.Settings)),

@@ -318,7 +318,7 @@ func TestResyncRescansEveryScannedSpace(t *testing.T) {
 	f.write(t, acme, "plans/a.md", "# A\n")
 	f.write(t, ws, "notes.md", "# N\n")
 
-	f.svc.apply(&watcher{cfgRoot: f.svc.Root()}, fswatch.Change{Resync: true})
+	f.svc.apply(ctx, &watcher{cfgRoot: f.svc.Root()}, fswatch.Change{Resync: true})
 
 	assert.Equal(t, []events.DriveChangedPayload{{Space: acme.Key}, {Space: ws.Key}}, f.changes())
 	root, err := f.svc.Tree(ctx, acme)

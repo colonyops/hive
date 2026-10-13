@@ -1171,6 +1171,11 @@ statement within it.
 target: `ingest.source github`, `http.github GET`. Unbounded identity — a source
 id, a repository, a session slug — is an attribute, where it costs nothing.
 
+**Work that is neither annotates the span it runs under.** A drive operation
+is a few local file system calls, so it opens no span: it sets `drive.space`
+and `drive.path` on whatever span the context carries (`mcp.tool <name>`,
+`ui.drive <command>`) and records `drive.operation.duration`.
+
 **Trace correlation in logs is a `zerolog.Hook`, not a writer arm** — the
 mirror of the log bridge above, and for the same reason. A Hook cannot read an
 event's fields but it is the only thing that can *add* them, so
