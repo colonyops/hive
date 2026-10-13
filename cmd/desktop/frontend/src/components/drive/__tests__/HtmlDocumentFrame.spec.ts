@@ -11,40 +11,25 @@ function mountFrame() {
 }
 
 describe('HtmlDocumentFrame', () => {
-  it('expands the same frame over its drive view, so a running demo keeps its state', async () => {
+  it('opens filling the reader without counting as a modal', () => {
+    const wrapper = mountFrame()
+
+    expect(wrapper.classes()).toContain('absolute')
+    expect(useOpenModalCount().value).toBe(0)
+    wrapper.unmount()
+  })
+
+  it('collapses and expands the same frame, so a running demo keeps its state', async () => {
     const wrapper = mountFrame()
     const frame = wrapper.get('[data-testid="r-frame"]').element
 
     await wrapper.get('[data-testid="r-frame-expand"]').trigger('click')
+    expect(wrapper.classes()).not.toContain('absolute')
+    expect(wrapper.get('[data-testid="r-frame"]').element).toBe(frame)
 
+    await wrapper.get('[data-testid="r-frame-expand"]').trigger('click')
     expect(wrapper.classes()).toContain('absolute')
     expect(wrapper.get('[data-testid="r-frame"]').element).toBe(frame)
-    expect(useOpenModalCount().value).toBe(1)
-
-    await wrapper.get('[data-testid="r-frame-expand"]').trigger('click')
-    expect(wrapper.classes()).not.toContain('absolute')
-    expect(useOpenModalCount().value).toBe(0)
     wrapper.unmount()
-  })
-
-  it('collapses on Escape', async () => {
-    const wrapper = mountFrame()
-    await wrapper.get('[data-testid="r-frame-expand"]').trigger('click')
-
-    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.classes()).not.toContain('absolute')
-    expect(useOpenModalCount().value).toBe(0)
-    wrapper.unmount()
-  })
-
-  it('releases the modal count when unmounted while expanded', async () => {
-    const wrapper = mountFrame()
-    await wrapper.get('[data-testid="r-frame-expand"]').trigger('click')
-
-    wrapper.unmount()
-
-    expect(useOpenModalCount().value).toBe(0)
   })
 })

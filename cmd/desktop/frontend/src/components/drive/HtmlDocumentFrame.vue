@@ -4,13 +4,11 @@
 // and the CSP Go puts first in <head> keeps it off localhost. allow-popups
 // is left out until it is verified on WKWebView (ADR
 // hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it).
-import { effectScope, onScopeDispose, ref, watch, type EffectScope } from 'vue'
+import { ref } from 'vue'
 import IconMaximize from '~icons/lucide/maximize-2'
 import IconMinimize from '~icons/lucide/minimize-2'
 import IconShield from '~icons/lucide/shield'
 import IconButton from '../ui/IconButton.vue'
-import { useEscapeToClose } from '../../composables/useEscapeToClose'
-import { useRegisterOpenModal } from '../../composables/useOpenModalCount'
 
 defineProps<{
   html: string
@@ -18,25 +16,12 @@ defineProps<{
   testid: string
 }>()
 
-// Expanding fills the reader it sits in, the nearest positioned ancestor in
+// Expanded fills the reader it sits in, the nearest positioned ancestor in
 // DrivePage and DrivePane, and leaves the tree and the document header in
-// place. It restyles the same element rather than teleporting it: moving an
-// iframe in the DOM reloads it, and a demo would lose its state.
-const expanded = ref(false)
-
-// While expanded the global keys stop as they do under a modal. Escape
-// reaches this only while focus is outside the frame; keys typed inside it
-// stay in its own document.
-let modalScope: EffectScope | null = null
-watch(expanded, (on) => {
-  modalScope?.stop()
-  modalScope = null
-  if (!on) return
-  modalScope = effectScope()
-  modalScope.run(useRegisterOpenModal)
-})
-onScopeDispose(() => modalScope?.stop())
-useEscapeToClose(() => (expanded.value = false), { enabled: expanded })
+// place, so it is not a modal and does not stop the global keys. It restyles
+// the same element rather than teleporting it: moving an iframe in the DOM
+// reloads it, and a demo would lose its state.
+const expanded = ref(true)
 </script>
 
 <template>
