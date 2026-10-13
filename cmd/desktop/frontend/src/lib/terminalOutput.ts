@@ -135,7 +135,6 @@ export class TerminalOutputWriter {
 }
 
 const ESC = 0x1b
-const BEL = 0x07
 const CAN = 0x18
 const SUB = 0x1a
 const LOWERCASE_K = 0x6b
@@ -151,8 +150,9 @@ const LONE_ESC = Uint8Array.of(ESC)
  * %output notifications, so the state carries across chunks; an ESC that ends
  * a chunk is held until the next byte says whether it opens one.
  *
- * The string ends the way tmux ends it: ST or BEL, CAN or SUB abort it, and
- * any other ESC ends it and starts a new sequence.
+ * The string ends the way tmux ends it, so the pane matches tmux's grid: ST
+ * ends it, CAN or SUB abort it, and any other ESC ends it and starts a new
+ * sequence. BEL does not end it.
  */
 export class ScreenTitleFilter {
   private state: 'ground' | 'escape' | 'title' | 'titleEscape' = 'ground'
@@ -183,10 +183,7 @@ export class ScreenTitleFilter {
           break
         case 'title':
           if (byte === ESC) this.state = 'titleEscape'
-          else if (byte === BEL) {
-            this.state = 'ground'
-            run = i + 1
-          } else if (byte === CAN || byte === SUB) {
+          else if (byte === CAN || byte === SUB) {
             this.state = 'ground'
             run = i
           }

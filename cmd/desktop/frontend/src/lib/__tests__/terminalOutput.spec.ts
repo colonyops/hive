@@ -173,8 +173,8 @@ describe('ScreenTitleFilter', () => {
     expect(strip(data, 'x')).toBe(data + 'x')
   })
 
-  it('ends the name on BEL, and on an ESC that starts another sequence', () => {
-    expect(strip('\x1bkgit\x07a', '\x1bkvim\x1b[1mb')).toBe('a\x1b[1mb')
+  it('ends the name on an ESC that starts another sequence, not on BEL', () => {
+    expect(strip('a\x1bkgit\x07hidden', '\x1b[1mb')).toBe('a\x1b[1mb')
   })
 
   it('aborts the name on CAN', () => {
