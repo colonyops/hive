@@ -41,12 +41,10 @@ type CommentInput struct {
 
 type agentInput interface {
 	SendText(ctx context.Context, pane string, text []byte, submitDelay time.Duration) error
-	FirstPane(ctx context.Context, session string) (string, error)
 }
 
 type chatAgents interface {
-	AllSessions(ctx context.Context) ([]SessionView, error)
-	SessionActivity(ctx context.Context, dir string) ([]SessionActivityItem, error)
+	RunningChats(ctx context.Context) ([]RunningChat, error)
 }
 
 // ReviewDeps builds a ReviewService.

@@ -2,7 +2,8 @@ package app
 
 import (
 	"context"
-	"slices"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/domain/terminal"
@@ -33,7 +34,7 @@ type AgentTarget struct {
 
 type codeAgents interface {
 	ListSessions(ctx context.Context) ([]session.Session, error)
-	AgentPanes(ctx context.Context, sess *session.Session) ([]statussvc.AgentPane, error)
+	AgentPanes(ctx context.Context, sessions []*session.Session) map[string][]statussvc.AgentPane
 }
 
 type engineCodeAgents struct{ engine *hive.Engine }
@@ -42,8 +43,8 @@ func (e engineCodeAgents) ListSessions(ctx context.Context) ([]session.Session, 
 	return e.engine.Sessions().ListSessions(ctx)
 }
 
-func (e engineCodeAgents) AgentPanes(ctx context.Context, sess *session.Session) ([]statussvc.AgentPane, error) {
-	return e.engine.Status().AgentPanes(ctx, sess)
+func (e engineCodeAgents) AgentPanes(ctx context.Context, sessions []*session.Session) map[string][]statussvc.AgentPane {
+	return e.engine.Status().AgentPanes(ctx, sessions)
 }
 
 // resolvedTarget is a target with the pane Send delivers to, which a chat's
@@ -56,14 +57,19 @@ type resolvedTarget struct {
 // AgentTargets lists the agents that can take text: classified agent panes in
 // active Code sessions, and running chats. A pane with no detected tool or no
 // status may be a shell, which would run the feedback as commands, so it is
-// left out.
+// left out. The two lists are read at the same time.
 func (s *ReviewService) AgentTargets(ctx context.Context) ([]AgentTarget, error) {
-	code, err := s.codeTargets(ctx, "")
-	if err != nil {
-		return nil, err
-	}
-	chats, err := s.chatTargets(ctx, "")
-	if err != nil {
+	var code, chats []resolvedTarget
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.Go(func() (err error) {
+		code, err = s.codeTargets(groupCtx, "")
+		return err
+	})
+	group.Go(func() (err error) {
+		chats, err = s.chatTargets(groupCtx, "")
+		return err
+	})
+	if err := group.Wait(); err != nil {
 		return nil, err
 	}
 	targets := make([]AgentTarget, 0, len(code)+len(chats))
@@ -107,18 +113,17 @@ func (s *ReviewService) codeTargets(ctx context.Context, id string) ([]resolvedT
 	if err != nil {
 		return nil, Wrap(err, KindInternal, "listing sessions")
 	}
-	var targets []resolvedTarget
+	var active []*session.Session
 	for i := range sessions {
-		sess := &sessions[i]
-		if sess.State != session.StateActive || (id != "" && sess.ID != id) {
-			continue
+		if sessions[i].State == session.StateActive && (id == "" || sessions[i].ID == id) {
+			active = append(active, &sessions[i])
 		}
-		panes, err := s.code.AgentPanes(ctx, sess)
-		if err != nil {
-			s.log.Debug().Ctx(ctx).Err(err).Str("session", sess.ID).Msg("agent pane discovery failed")
-			continue
-		}
-		for _, pane := range panes {
+	}
+	panes := s.code.AgentPanes(ctx, active)
+
+	var targets []resolvedTarget
+	for _, sess := range active {
+		for _, pane := range panes[sess.ID] {
 			status := pane.Status.Simplified()
 			if pane.Tool == "" || !sendable(status) {
 				continue
@@ -143,40 +148,19 @@ func (s *ReviewService) codeTargets(ctx context.Context, id string) ([]resolvedT
 	return targets, nil
 }
 
-// chatTargets lists running chats, or the one chat id when it is set. The
-// agent is the first pane of the chat's tmux session, where it was launched.
+// chatTargets lists running chats, or the one chat id when it is set.
 func (s *ReviewService) chatTargets(ctx context.Context, id string) ([]resolvedTarget, error) {
-	if s.chats == nil || s.input == nil {
+	if s.chats == nil {
 		return nil, nil
 	}
-	chats, err := s.chats.AllSessions(ctx)
+	chats, err := s.chats.RunningChats(ctx)
 	if err != nil {
 		return nil, err
 	}
-	chats = slices.DeleteFunc(chats, func(c SessionView) bool {
-		return c.TerminalID == "" || (id != "" && c.ID != id)
-	})
-	if len(chats) == 0 {
-		return nil, nil
-	}
-	activity, err := s.chats.SessionActivity(ctx, "")
-	if err != nil {
-		return nil, err
-	}
-	statuses := make(map[string]terminal.Status, len(activity))
-	for _, a := range activity {
-		statuses[a.ID] = terminal.Status(a.Status).Simplified()
-	}
-
 	var targets []resolvedTarget
 	for _, chat := range chats {
-		status, ok := statuses[chat.ID]
-		if !ok || !sendable(status) {
-			continue
-		}
-		pane, err := s.input.FirstPane(ctx, chat.TerminalID)
-		if err != nil {
-			s.log.Debug().Ctx(ctx).Err(err).Str("chat", chat.ID).Msg("chat pane lookup failed")
+		status := chat.Status.Simplified()
+		if (id != "" && chat.ID != id) || !sendable(status) {
 			continue
 		}
 		targets = append(targets, resolvedTarget{
@@ -184,7 +168,7 @@ func (s *ReviewService) chatTargets(ctx context.Context, id string) ([]resolvedT
 			ID:        chat.ID,
 			Label:     chat.Workspace + " / " + chat.Name,
 			Status:    string(status),
-			deliverTo: pane,
+			deliverTo: chat.Pane,
 		})
 	}
 	return targets, nil

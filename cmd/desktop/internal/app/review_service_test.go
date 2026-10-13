@@ -36,7 +36,7 @@ func newReviewFixture(t *testing.T) reviewFixture {
 		drive: newDriveFixture(t),
 		code:  &fakeCodeAgents{panes: map[string][]statussvc.AgentPane{}},
 		chats: &fakeChatAgents{},
-		input: &fakeAgentInput{firstPanes: map[string]string{}},
+		input: &fakeAgentInput{},
 	}
 	f.drive.writeDoc(t, "workspaces/ws", "plans/p.md", reviewDoc)
 	f.drive.writeDoc(t, "workspaces/ws", "page.html", "<p>x</p>")
@@ -213,13 +213,10 @@ func TestReviewAgentTargets(t *testing.T) {
 		{PaneID: "%4", WindowName: "ask", Status: terminal.StatusQuestion, Tool: "claude"},
 	}
 	f.code.panes["s2"] = []statussvc.AgentPane{{PaneID: "%9", Status: terminal.StatusReady, Tool: "claude"}}
-	f.chats.sessions = []SessionView{
-		{ID: "c1", Workspace: "ws", Name: "chat", TerminalID: "agentws-c1"},
-		{ID: "c2", Workspace: "ws", Name: "stopped"},
-		{ID: "c3", Workspace: "ws", Name: "unknown", TerminalID: "agentws-c3"},
+	f.chats.running = []RunningChat{
+		{ID: "c1", Workspace: "ws", Name: "chat", Pane: "%20", Status: terminal.StatusActive},
+		{ID: "c3", Workspace: "ws", Name: "unknown", Pane: "%21", Status: terminal.StatusMissing},
 	}
-	f.chats.activity = []SessionActivityItem{{ID: "c1", Status: "active"}}
-	f.input.firstPanes["agentws-c1"] = "%20"
 
 	got, err := f.svc.AgentTargets(t.Context())
 	require.NoError(t, err)
@@ -238,9 +235,7 @@ func TestReviewSend(t *testing.T) {
 		{PaneID: "%1", Status: terminal.StatusReady, Tool: "claude"},
 		{PaneID: "%4", Status: terminal.StatusApproval, Tool: "claude"},
 	}
-	f.chats.sessions = []SessionView{{ID: "c1", Workspace: "ws", Name: "chat", TerminalID: "agentws-c1"}}
-	f.chats.activity = []SessionActivityItem{{ID: "c1", Status: "ready"}}
-	f.input.firstPanes["agentws-c1"] = "%20"
+	f.chats.running = []RunningChat{{ID: "c1", Workspace: "ws", Name: "chat", Pane: "%20", Status: terminal.StatusReady}}
 
 	err := f.svc.Send(ctx, "workspaces/ws", "plans/p.md", "", AgentTargetRef{Kind: AgentTargetSession, ID: "s1", Pane: "%1"})
 	assert.Equal(t, KindInvalid, KindOf(err), "nothing to send")
@@ -279,20 +274,19 @@ func (f *fakeCodeAgents) ListSessions(context.Context) ([]session.Session, error
 	return f.sessions, nil
 }
 
-func (f *fakeCodeAgents) AgentPanes(_ context.Context, sess *session.Session) ([]statussvc.AgentPane, error) {
-	return f.panes[sess.ID], nil
+func (f *fakeCodeAgents) AgentPanes(_ context.Context, sessions []*session.Session) map[string][]statussvc.AgentPane {
+	out := map[string][]statussvc.AgentPane{}
+	for _, sess := range sessions {
+		out[sess.ID] = f.panes[sess.ID]
+	}
+	return out
 }
 
 type fakeChatAgents struct {
-	sessions []SessionView
-	activity []SessionActivityItem
+	running []RunningChat
 }
 
-func (f *fakeChatAgents) AllSessions(context.Context) ([]SessionView, error) { return f.sessions, nil }
-
-func (f *fakeChatAgents) SessionActivity(context.Context, string) ([]SessionActivityItem, error) {
-	return f.activity, nil
-}
+func (f *fakeChatAgents) RunningChats(context.Context) ([]RunningChat, error) { return f.running, nil }
 
 type sentText struct {
 	pane string
@@ -300,20 +294,11 @@ type sentText struct {
 }
 
 type fakeAgentInput struct {
-	firstPanes map[string]string
-	sent       []sentText
-	err        error
+	sent []sentText
+	err  error
 }
 
 func (f *fakeAgentInput) SendText(_ context.Context, pane string, text []byte, _ time.Duration) error {
 	f.sent = append(f.sent, sentText{pane: pane, text: string(text)})
 	return f.err
-}
-
-func (f *fakeAgentInput) FirstPane(_ context.Context, session string) (string, error) {
-	pane, ok := f.firstPanes[session]
-	if !ok {
-		return "", errors.New("no session")
-	}
-	return pane, nil
 }

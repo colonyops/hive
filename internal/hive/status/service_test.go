@@ -94,23 +94,21 @@ func TestAgentPanes(t *testing.T) {
 	term := terminal.NewManager([]string{"fake"})
 	term.Register(integration)
 
-	got, err := NewService(zerolog.Nop(), term, 1).AgentPanes(context.Background(), &session.Session{Slug: "sess"})
+	got := NewService(zerolog.Nop(), term, 1).AgentPanes(context.Background(), []*session.Session{{ID: "s1", Slug: "sess"}})
 
-	require.NoError(t, err)
-	assert.Equal(t, []AgentPane{
+	assert.Equal(t, map[string][]AgentPane{"s1": {
 		{PaneID: "%1", WindowName: "claude", Status: terminal.StatusReady, Tool: "claude"},
 		{PaneID: "%4", WindowName: "codex", Status: terminal.StatusApproval, Tool: "codex"},
-	}, got)
+	}}, got)
 }
 
 func TestAgentPanesNoTerminal(t *testing.T) {
 	term := terminal.NewManager([]string{"fake"})
 	term.Register(&fakeTerminalIntegration{})
 
-	got, err := NewService(zerolog.Nop(), term, 1).AgentPanes(context.Background(), &session.Session{Slug: "sess"})
+	got := NewService(zerolog.Nop(), term, 1).AgentPanes(context.Background(), []*session.Session{{ID: "s1", Slug: "sess"}})
 
-	require.NoError(t, err)
-	assert.Empty(t, got)
+	assert.Empty(t, got["s1"])
 }
 
 type fakeTerminalIntegration struct {

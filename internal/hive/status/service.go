@@ -276,15 +276,41 @@ type AgentPane struct {
 	Tool       string
 }
 
-// AgentPanes lists the agent panes of one session, with their live status. A
-// session with no terminal, or an integration that cannot discover panes,
-// has none.
-func (s *Service) AgentPanes(ctx context.Context, sess *session.Session) ([]AgentPane, error) {
-	if !s.Available() {
-		return nil, nil
+// AgentPanes lists the agent panes of each session, with their live status,
+// keyed by session id. It refreshes the integration caches once for the
+// batch. A session whose discovery fails is logged and left out; a session
+// with no terminal maps to no panes.
+func (s *Service) AgentPanes(ctx context.Context, sessions []*session.Session) map[string][]AgentPane {
+	results := make(map[string][]AgentPane, len(sessions))
+	if len(sessions) == 0 || !s.Available() {
+		return results
 	}
 	s.term.RefreshAll(ctx)
 
+	var mu sync.Mutex
+	sem := make(chan struct{}, s.workers)
+	var wg sync.WaitGroup
+	for _, sess := range sessions {
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			fetchCtx, cancel := context.WithTimeout(ctx, terminalStatusTimeout)
+			defer cancel()
+			panes, err := s.sessionAgentPanes(fetchCtx, sess)
+			if err != nil {
+				s.logger.Debug().Err(err).Str("session", sess.Slug).Msg("agent pane discovery failed")
+				return
+			}
+			mu.Lock()
+			results[sess.ID] = panes
+			mu.Unlock()
+		})
+	}
+	wg.Wait()
+	return results
+}
+
+func (s *Service) sessionAgentPanes(ctx context.Context, sess *session.Session) ([]AgentPane, error) {
 	metadata := sessionMetadata(sess)
 	info, integration, err := s.term.DiscoverSession(ctx, sess.Slug, metadata)
 	if err != nil {
