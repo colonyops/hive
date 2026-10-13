@@ -3,7 +3,7 @@
 // screen, then the application settings, which answer to every mode. Each entry is a palette command, so the menu, the palette and the
 // keymap stay one surface and a rebound key shows up here as its hint.
 import { computed, ref } from 'vue'
-import IconBookOpen from '~icons/lucide/book-open'
+import IconFolderTree from '~icons/lucide/folder-tree'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconListTodo from '~icons/lucide/list-todo'
 import IconSettings from '~icons/lucide/settings'
@@ -45,10 +45,10 @@ const entries = computed<MenuEntry[]>(() => [
   {
     kind: 'action',
     id: 'canvas.toggle',
-    label: 'Canvases',
-    icon: IconBookOpen,
+    label: 'Drive',
+    icon: IconFolderTree,
     kbd: kbdFor('canvas.toggle'),
-    testid: 'titlebar-menu-canvases',
+    testid: 'titlebar-menu-drive',
   },
   { kind: 'separator' },
   {

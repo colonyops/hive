@@ -30,9 +30,6 @@
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 2
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "src/components/CommandPalette.vue": {
@@ -241,11 +238,6 @@
       "count": 2
     }
   },
-  "src/composables/useAgentCanvasRoute.ts": {
-    "no-restricted-syntax": {
-      "count": 1
-    }
-  },
   "src/composables/useAppFont.ts": {
     "no-restricted-syntax": {
       "count": 2
@@ -412,7 +404,7 @@
   },
   "src/lib/agentWorkspacesClient.ts": {
     "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 6
+      "count": 3
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1

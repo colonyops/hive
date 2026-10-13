@@ -264,10 +264,10 @@ needs no lint edit:
 | --- | --- | --- | --- | --- |
 | Kit | `pkg/` | Hive-agnostic helpers: `atomicfile`, `executil`, `pathutil`, `tmpl`, `buildinfo` | stdlib, third party except charm and Wails | `kit-is-hive-agnostic` |
 | Domain | `internal/domain/` | Models, rules, enums, sentinel errors, and the ports the engine needs. No I/O, no config | `pkg/`, other `domain/*` | `domain-is-pure` |
-| Platform | `internal/platform/` | Drivers for one outside system each: git, tmux, SQLite, process inspection, the login-shell environment, credentials, secrets, the OTel API | `pkg/`, `domain/`, other `platform/*` | `platform-is-a-driver` |
+| Platform | `internal/platform/` | Drivers for one outside system each: git, tmux, SQLite, process inspection, the login-shell environment, credentials, secrets, the OTel API, the directory-tree file watcher (`fswatch`) | `pkg/`, `domain/`, other `platform/*` | `platform-is-a-driver` |
 | Store | `internal/store/` | `hive.db`: sqlc output, migrations, one store per aggregate | `pkg/`, `domain/`, `platform/sqlite` | `store-is-persistence` |
 | Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer | `pkg/`, `domain/` | `config-is-data` |
-| Engine | `internal/hive/` | One subpackage per application service, the event bus, and `hive.Engine`, which composes them | everything above | |
+| Engine | `internal/hive/` | One subpackage per application service (`drive` owns the document tree under the context root), the event bus, and `hive.Engine`, which composes them | everything above | |
 | Programs | `cmd/hive/internal/`, `cmd/desktop/internal/` | Input, rendering, program-only features, program-only config | any shared layer except the stores, their own tree | `core`, `programs-use-services`, `cli-no-desktop-deps`, `desktop-no-cli-deps` |
 
 `shared-surface-free` keeps charm, Wails and both programs out of all of
@@ -507,6 +507,10 @@ internal/                         # the hive engine both programs run on (see
                                   #   transport, no UI), bin/ (tmuxbin, where the
                                   #   binary is: paths.tmux, then PATH, then
                                   #   package prefixes; ADR tmux-discovery)
+    fswatch/                      #   one fsnotify watch per directory, re-walked
+                                  #   on directory create, debounced to changed
+                                  #   directories; Change{Dirs}, Changes(),
+                                  #   Close() are the backend-neutral contract
     proc/                         #   process inspection: process/, classifier/
     sqlite/                       #   Open: DSN, pragmas, _txlock=immediate, pool;
                                   #   hive.db and desktop-pipeline.db both use it
@@ -538,7 +542,7 @@ internal/                         # the hive engine both programs run on (see
                                   #   one accessor per service
     events/                       #   the domain event bus
     session/  status/  hc/        #   one subpackage per application service
-    messaging/  repocontext/
+    messaging/  drive/            #   drive: the document tree under the context root
     todo/  gitstatus/  doctor/
   releasenotes/                   # release tooling, outside the layers: the
                                   #   changelog parser each program's embed feeds:
@@ -1166,6 +1170,11 @@ statement within it.
 **A span name is a search key.** Name the operation and the layer, never the
 target: `ingest.source github`, `http.github GET`. Unbounded identity — a source
 id, a repository, a session slug — is an attribute, where it costs nothing.
+
+**Work that is neither annotates the span it runs under.** A drive operation
+is a few local file system calls, so it opens no span: it sets `drive.space`
+and `drive.path` on whatever span the context carries (`mcp.tool <name>`,
+`ui.drive <command>`) and records `drive.operation.duration`.
 
 **Trace correlation in logs is a `zerolog.Hook`, not a writer arm** — the
 mirror of the log bridge above, and for the same reason. A Hook cannot read an
@@ -2000,9 +2009,10 @@ Three rules govern it, and each is a consequence of that:
   — in two ways, which is the distinction to get right before adding to it.
 
   A command **pierces** when the catalog marks it `piercesPane`: it is claimed
-  on the binding alone, whatever modifiers it carries. The pop-up toggle,
-  `tasks.toggle` and `canvas.toggle`, because the combo that opens an overlay
-  has to close it;
+  on the binding alone, whatever modifiers it carries. The pop-up toggle and
+  `tasks.toggle`, because the combo that opens an overlay has to close it, and
+  `drive.toggle`, because the chat that wrote a document is a focused pane and
+  the chord that opens the page from there has to work from inside it;
   `terminal.focus-sidebar` and `agents.focus-sidebar`, because reaching the list
   is the way back out — only that half of the focus pair, since the chord moving
   focus *into* a pane is unreachable from inside one; and
@@ -2086,10 +2096,10 @@ disabled, matching the launcher palette row's own choice (ADR quick-terminal-lau
 And Go to is global: a row meant to be reachable from anywhere registers at
 the App level (`useAppPaletteRows`) off a module-scoped source
 (`useTerminalSessions`, `useAttachedTerminalWindows`, `useAgentSessionsAll`,
-`useWorkspaceCanvases`), never inside a lazily-mounted mode component, so it exists before that mode
+`useDrive`), never inside a lazily-mounted mode component, so it exists before that mode
 has ever mounted. A row's title and group follow one more rule: a command row
 keeps its catalog verb title unchanged, since Settings › Keyboard reads the
-same string, while a dynamic object row (a feed, a chat, a canvas, a session,
+same string, while a dynamic object row (a feed, a chat, a document, a session,
 a window, a settings section) is titled with the object's own name and grouped under
 its real container — rendering draws the nesting (the group header, or a
 `Container ›` prefix once a query narrows past it) rather than the title
@@ -2106,10 +2116,9 @@ directory splits **authored** files a user (or an agent, via the
 `hive-agent-workspaces` skill) writes — `agent-workspace.yaml`, `AGENTS.md`,
 `docs/` — from **generated** ones `agentws.Generate` produces on every open —
 `CLAUDE.md`, `.mcp.json`, `.codex/config.toml`, `.claude/skills/`,
-`.agents/skills/`, an empty `docs/` seed. A third kind sits beside both:
-`canvases/` holds agent-produced artifacts written through the `hive-canvas`
-MCP tools — durable output, neither reconciled nor regenerated, described
-later in this section. ADR workspace-directories-are-generated-and-disposable is the contract behind that
+`.agents/skills/`, an empty `docs/` seed. Agent-produced documents are not in the folder: they
+live in the workspace's drive space under the context root, described later in
+this section. ADR workspace-directories-are-generated-and-disposable is the contract behind that
 split: generated output is disposable, never drift-tracked, and a hand edit to
 it is silently replaced on the next open, because Hive owns this whole
 subtree. The two skills trees are the exception: Hive owns only the skill
@@ -2206,7 +2215,7 @@ leaves cleanup to the instruction because the agent can read it after the
 launch call has returned.
 
 A chat record has three separate identities. Its UUIDv7 row id addresses the
-HTTP and canvas APIs. Its agent session id addresses the CLI's conversation and
+HTTP API. Its agent session id addresses the CLI's conversation and
 can rotate on a fresh relaunch. Its immutable eight-character `terminal_id`
 addresses tmux as `agentws-<terminal_id>` and is random because isolated app
 databases share the machine-wide tmux namespace
@@ -2246,96 +2255,141 @@ MCP flag, so its generated `.codex/config.toml` is loaded alongside whatever
 the user's own global codex config already has, and the UI states that rather
 than leaving an unbounded tool set looking identical to a bounded one.
 
-A chat's agent may write **canvases** — named surfaces of markdown, html and
-link blocks shown in a pane beside the conversation
-(ADR canvases-are-named-files-in-the-workspace-folder-served-over-their-own-mcp-entry).
-Each is one JSON file at `<workspace>/canvases/<name>.json` in the workspace
-folder, owned by `cmd/desktop/internal/app/canvas` and served by `CanvasService`: a
-canvas is keyed by (workspace, name), carries a display title and the
-creating session as provenance, and outlives the chat that made it — deleting
-a chat never touches the folder, and the generator's reconcile never enters
-`canvases/`. Deleting the workspace does take them, with the directory they
-sit in (ADR deleting-a-workspace-deletes-its-directory). Every agent mutation resolves the workspace
-through the session record — the record is the authority, the agent never
-names the workspace. Block and front matter writes are `hive-canvas` MCP tools
-(a second app-hosted server in `mcpsrv`, mounted at `/mcp/canvas`); the
-frontend reads over the agents HTTP client, addressed by (workspace, name),
-and may delete the selected canvas after user confirmation (ADR canvases-carry-front-matter-and-users-can-delete-them).
-Both paths re-read on the coalesced `canvas:updated` wake-up. The agent can also
-ask to open or close the pane (`open_canvas`/`close_canvas`): pane
-visibility is UI intent, not stored state, so `canvas:toggle` carries the
-whole message — like `notification:activated` — and the frontend honors it
-only for the chat in view, never pulling the user away from another. The
-agent learns its own session id from `HIVE_AGENT_SESSION`, injected at
-launch via `tmux new-session -e`. An app-hosted catalogue entry declares its
-mount as `Descriptor.RuntimePath`, joined with the live loopback base when the
-catalogue is rendered; a pinning test in `mcpsrv` keeps those paths agreeing
-with the adapter's constants.
+**Hive Drive** is one document tree under the context root, shown in a pane
+beside a chat or a Code session and in a full-page overlay
+([ADR hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it](decisions/2026-10-11-hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it.md)).
+A canvas is one document kind in it.
 
-A canvas also opens **full page**: a hub overlay over whatever is on screen,
-like Tasks, with the workspace's listing in a sidebar and the reader beside
-it. `AgentCanvasReader` is the one renderer both surfaces mount, so a canvas
-cannot read differently in the pane and on the page; only the width differs.
-The overlay is not a route. Its scope (workspace, canvas name, preferred
-session) is state in `useHubOverlays`, set by the pane's own button, by a
-canvas row in the palette, or by `canvas.toggle`, which takes the scope from
-the chat on screen when it opens and otherwise keeps the canvas last read.
-Every link on a canvas resolves through `canvasLinkTarget`: `http`, `https`
-and `mailto` open outside the app, a relative reference that names a canvas
-in the same workspace opens that canvas in place, and anything else leads
-nowhere. Only a markdown body can carry such a reference today, because the
-write path holds a link block and an html `href` to those three schemes.
+**The tree is an engine service.** `internal/domain/drive` holds the model:
+a `Space` (`repository`, `workspace`, `shared`) whose key is its path under
+the root (`owner/repo`, `workspaces/<name>`, `shared`), and an `Entry` whose
+`Kind` comes from the extension (`dir`, `markdown`, `html`, `canvas` for
+`.canvas.json`, `file`). `workspaces` and `shared` are reserved owner names.
+`internal/hive/drive.Service` lives on `hive.Engine`, outside the reloaded
+service set, and `Reload` calls its `Reconfigure`. It keeps an in-memory
+snapshot per space, scanned lazily on the first `Tree` or `Search` of that
+space, with front matter read from the head of each markdown file. No index
+sits in `hive.db`. A `Reconfigure` with a new context root publishes one
+`drive.changed` per previously scanned space, with empty paths, so panes
+refresh. Documents are `.md`, `.html` and `.canvas.json`; `Write`
+accepts only the first two, and a canvas changes through its block methods.
+A document is identified by `(space, path)`, so a move is a rename.
 
-A canvas's `frontmatter` is a flat mapping of agent-editable scalars or scalar
-lists. `created_at` and `updated_at` are derived from the canvas timestamps and
-cannot be overwritten. `AgentCanvasReader` renders editable fields as a
-property list and the timestamps as compact text above it. One
-localStorage-backed disclosure state expands or collapses this metadata across
-every canvas.
-Markdown copy and export prepend the combined metadata as YAML.
-`set_frontmatter` replaces the editable mapping in one atomic file write; an
-empty mapping removes it all
-(ADR canvases-carry-front-matter-and-users-can-delete-them).
+**A watcher keeps the snapshot current.** `internal/platform/fswatch` adds one
+fsnotify watch per directory, adds one when a directory appears, skips dot
+directories, and debounces at 100 ms. `Service.Watch` re-reads each changed
+directory and diffs it into the snapshot, then publishes `drive.changed` with
+the space and the changed paths, once per change and only when something
+differed. The CLI starts the same watcher for the `hive` TUI and for `hive
+review`. `hive review -f` on a file outside every space starts none; it
+watches that file's directory alone, because the directory may be as large
+as a home directory.
 
-An agent in a **Code session** writes canvases through the same server
-(ADR a-code-session-s-canvases-belong-to-its-repository-and-live-in-the-hive-context-directory).
-The app does not own that launch, so it wires nothing: the user adds the
-server's address to the agent's own MCP configuration. Settings ▸ MCP servers
-lists the app-hosted servers with their addresses and the setup for each
-agent, and the empty canvas pane in Code leads there. The tool's `session` argument is a string that is either a
-chat's record id or the caller's working directory, and
-`CanvasService.resolve` maps a directory to the active hive session whose
-checkout holds it (`Sessions().SessionAtPath`). That session's canvases
-belong to its repository and are filed in hive's context directory,
-`<context root>/<owner>/<repo>/canvases/`, never in the checkout;
-`repocontext.Prune` skips the directory by name. The owner key `owner/repo`
-travels in the field a workspace name does, and `canvas.Store` tells the two
-apart by the slash. An agent outside every session passes `global`, which
-files its canvases under the owner key `@global` in the desktop data
-directory; a directory inside no session stays `not_found` rather than
-falling back to it
-(ADR agents-outside-every-session-share-one-global-canvas-owner).
-`canvas.Author` records which chat or hive session wrote a canvas first, and
-the two canvas events carry that author; a global write records neither. The frontend
-reaches a session's owner as `SessionSummary.canvasOwner`. The pane in Code
-is the Chats pane, `AgentCanvasPane`, mounted beside the pane column and
-riding `?canvas` on the terminal route (`useTerminalCanvas`), so the title
-bar's right toggle, a reload and `open_canvas` behave the same in both
-areas. Code's own route writes rebuild the query, so that composable puts
-`?canvas` back after any write that was not a close.
+**The desktop adds the UI surface and the agent surface.**
+`app.DriveService` serves the agent tools, which resolve a `session` argument
+to a space, and the UI methods: `Spaces`, `Tree`, `Search`, `Document`,
+`Markdown`, `Export`, `CreateFolder`, `Rename`, `Move` and `Delete`. The Wails
+`DriveService` in `adapter/wailsui` binds the UI methods with camelCase wire
+types; the frontend does not use the HTTP agents client for the drive.
+`drive.changed` carries the space, the changed paths and the author (chat
+session or hive session) of a write. The desktop forwarder passes it through
+and publishes nothing of its own: one change, one event. `wailsui.drive`
+subscribes with `events.Buffer(64)`, not `Coalesce()`, because the payload is a
+per-space delta with an author and must not be dropped. It reaches the
+frontend as `drive:updated`, and a request to open or close the pane as
+`drive:toggle`. Pane visibility is UI intent, not stored state, so
+`drive:toggle` carries the whole message, and the frontend honors it only for
+the chat in view. The agent learns its own session id from
+`HIVE_AGENT_SESSION`, injected at launch via `tmux new-session -e`.
 
-An **html block** is the one place agent-authored markup reaches the webview
+**Agents write through `mcpsrv`.** One app-hosted server, `hive-drive`, mounts
+at `/mcp/drive` and at `/mcp/canvas`; the old address keeps answering for
+existing agent configurations. It has sixteen tools: the ten canvas tools,
+whose `canvas` argument is a name or a path (`reports/perf` files at
+`reports/perf.canvas.json`, a bare name under `canvases/`; a canvas at the space root is `./<stem>`), and six document
+tools: `list_documents`, `read_document`, `write_document`, `move_document`,
+`delete_document` and `open_document`. `read_document` reads markdown, html
+and any other UTF-8 text file, and answers `not_found` for hive state files
+(`kv.json`, `kv.json.lock`). An app-hosted catalogue entry declares
+its mount as `Descriptor.RuntimePath`, joined with the live loopback base when
+the catalogue is rendered; a pinning test in `mcpsrv` keeps those paths
+agreeing with the adapter's constants. The app does not wire the server into a
+Code session's agent: the user adds its address to the agent's own MCP
+configuration, and Settings ▸ MCP servers lists it.
+
+**A session resolves to a space.** The `session` argument is `global`, a chat's
+record id, or the caller's working directory. `global` is the `shared` space,
+which has no pane: `open_document`, `open_canvas` and `close_canvas` refuse it.
+The `@global` store is gone, but canvas tool results still name the shared
+space's owner `@global`, so agents and `hive://canvas` links that match on it
+keep working.
+A chat's record names its workspace space. A directory maps to the active hive
+session whose checkout holds it (`Sessions().SessionAtPath`) and from there to
+the repository space; a directory inside no session stays `not_found`. A
+Code session's checkout links its space as `.hive`, and `Prune` skips the
+`canvases/` directory by name. `drive.Author` records which chat or hive
+session wrote a canvas first, and `drive:updated` carries the author of a
+write; the frontend uses it for the unseen dot. A chat's space outlives the
+chat, and deleting a workspace leaves its space behind
+(ADR deleting-a-workspace-deletes-its-directory).
+
+**Three idempotent migrations move older canvases.** Before the first scan of
+a space, and nowhere else, the engine renames `canvases/<name>.json` to
+`<name>.canvas.json` when the file has a `blocks` key. The service records
+each space it has migrated, so the rename runs once per space for the life of
+the service: a rescan after `Reconfigure` or after the watcher recovers does
+not run it again. After the engine starts, the desktop calls
+`ImportLegacyCanvases` for the desktop data directory's `canvases/`, which
+moves to `shared/canvases/`, and for each workspace folder's `canvases/`,
+which moves to `workspaces/<name>/canvases/`. A target that exists is skipped
+and logged; a `.json` that is not a canvas stays as a plain file.
+
+**The frontend** reads the drive through `stores/useDrive.ts` (spaces, trees by
+space key, search; it reloads a space on `drive:updated` and every loaded space
+when the window regains focus). `components/drive/*` holds the tree, the
+browser, the reader, the pane and the full-page view; `DrivePane` mounts in
+Chats and in Code, riding `?doc=` on the route. `lib/drive.ts` holds the scope,
+the space-group rule and `linkTarget`, which resolves a link in a document:
+`http`, `https` and `mailto` open outside the app, a relative or `.hive/`
+reference that names a document in the space opens it in place, and anything
+else leads nowhere. The full page is the `drive` route, an area of its own
+like Settings, rendered in the main frame; its scope is the route's query
+(`space`, `doc`, `session`), so a document is a link and history restores it.
+`useAppMode` owns the navigation: `drive.toggle`, the views menu, a palette
+row, the pane's expand button and a `hive://drive` link open it, and closing
+returns to the page it was opened from. The reader is one renderer for both
+surfaces, so a document does not read differently in the pane and on the page.
+Fenced code is highlighted by shiki on the oniguruma WASM engine, never
+inside a render: `stores/useCodeHighlight.ts` answers a fence from its cache
+or queues it, drains the queue in slices between frames, and bumps a reactive
+version that re-runs the computed that asked; the renderers in
+`lib/githubMarkdown.ts` take that highlighter per call and stay pure. The JavaScript regex engine was
+dropped because it backtracked for seconds on some Go input, and a render
+that highlights inline froze the window for as long as its fences took. Reorganization (new
+folder, rename, move, delete of a document or an empty folder) is the user's
+only write; the app never edits document content.
+
+**HTML has two tiers.** A canvas **html block** is the one place
+agent-authored markup reaches the app's DOM
 (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).
-`cmd/desktop/internal/app/canvas/html.go` declares the element and attribute allowlists
-once; `canvas.SanitizeHTML` builds a deny-by-default bluemonday policy from
-them, `canvas.RejectedHTML` refuses a write that would be stripped rather than
-letting the agent read its source back intact over a broken layout, and
-`styles/canvas-html.css` styles the `hv-` vocabulary from the theme tokens.
-The store keeps the agent's source; `GetForWorkspace` and
+`cmd/desktop/internal/app/canvas/html.go` declares the element and attribute
+allowlists once; `canvas.SanitizeHTML` builds a deny-by-default bluemonday
+policy from them, `canvas.RejectedHTML` refuses a write that would be stripped
+rather than letting the agent read its source back intact over a broken
+layout, and `styles/canvas-html.css` styles the `hv-` vocabulary from the
+theme tokens. The engine keeps the agent's source; `GetCanvasAt` and
 `canvas.Markdown` are the only two seams that sanitize, so no consumer holds a
-policy of its own. `renderGithubMarkdown` is untouched — it is shared with
+policy of its own. `renderGithubMarkdown` is untouched; it is shared with
 untrusted GitHub bodies and stays as strict as they require, which is why an
-html block renders under its own `.hv-html` scope instead.
+html block renders under its own `.hv-html` scope.
+
+An **`.html` document** is a whole page. `canvas.WrapDocument` injects a CSP
+`<meta>` first in `<head>` (`DocumentCSP`: scripts, styles and fetches over
+`https:` only, `data:` only for images, fonts and media, no frames, no form
+submission), and the frontend renders it in
+`<iframe sandbox="allow-scripts" srcdoc>` with no `allow-same-origin`. The page
+runs in an opaque origin and cannot call Hive's bindings or send requests to
+localhost. Isolation is the boundary for a document; Hive parses nothing out of it.
 
 A top-level **`mermaid` fence in a markdown block** renders as a diagram. The
 canvas reader splits these fences from the markdown it sends through the shared
@@ -2346,8 +2400,18 @@ theme changes. Each SVG uses its `viewBox` as an unbounded pan-and-zoom plane;
 the viewport fits the diagram on load and caps tall diagrams instead of making
 the document absorb their full height. Rendering uses `securityLevel: strict`,
 disables HTML labels and interactive links, and limits source size and edge
-count. A parse failure stays local to that fence, and canvas Markdown export
-preserves the original source.
+count. A parse failure stays local to that fence, and Markdown export preserves
+the original source.
+
+A canvas's `frontmatter` is a flat mapping of agent-editable scalars or scalar
+lists, validated by `drive.ValidateFrontmatter`
+(ADR canvases-carry-front-matter-and-users-can-delete-them). `created_at` and
+`updated_at` are derived from the canvas timestamps and cannot be overwritten.
+`set_frontmatter` replaces the editable mapping in one atomic file write; an
+empty mapping removes it all. A markdown document's front matter is read-only
+to the app. One localStorage-backed disclosure state expands or collapses the
+properties across every document, and Markdown copy and export prepend the
+combined metadata as YAML.
 
 **The allowlists bound what a block can reach, and nothing else**
 (ADR a-canvas-html-block-is-restricted-by-what-it-can-reach-not-by-how-it-looks).

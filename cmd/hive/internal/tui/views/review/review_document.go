@@ -1,14 +1,21 @@
 package review
 
 import (
+	"cmp"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"charm.land/glamour/v2"
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/colonyops/hive/cmd/hive/internal/styles"
+	"github.com/colonyops/hive/internal/domain/drive"
 )
 
 const (
@@ -24,37 +31,17 @@ func contentWrapWidth(viewportWidth int) int {
 	return max(min(viewportWidth-lineNumberReserved, maxContentWidth), 20)
 }
 
-// DocumentType categorizes documents.
-type DocumentType int
-
-const (
-	DocTypePlan DocumentType = iota
-	DocTypeResearch
-	DocTypeContext
-	DocTypeOther
-)
-
-// String returns the string representation of the document type.
-func (t DocumentType) String() string {
-	switch t {
-	case DocTypePlan:
-		return "Plan"
-	case DocTypeResearch:
-		return "Research"
-	case DocTypeContext:
-		return "Context"
-	case DocTypeOther:
-		return "Other"
-	default:
-		return "Unknown"
-	}
-}
+// TypeOther is the type of a document with neither a front matter type nor a
+// folder to take one from.
+const TypeOther = "other"
 
 // Document represents a reviewable file.
 type Document struct {
-	Path          string       // Absolute path
-	RelPath       string       // Relative to repo (e.g., ".hive/plans/...")
-	Type          DocumentType // Plan, Research, Context, Other
+	Path          string // Absolute path
+	RelPath       string // relative to the space, "<space key>/<path>" when spaces are mixed
+	Type          string // front matter "type", else the top folder name, else "other"
+	Space         drive.Space
+	inCheckout    bool // reachable from a repository checkout through the context symlink
 	ModTime       time.Time
 	Content       string   // Raw content
 	RenderedLines []string // Glamour-rendered lines with ANSI (cached)
@@ -81,106 +68,137 @@ type Session struct {
 	ModifiedAt time.Time
 }
 
-// DiscoverDocuments walks the actual context directory and returns categorized documents.
-// It uses the context directory path directly, avoiding symlink issues.
-// Returns documents sorted by type, then by modification time (newest first).
-func DiscoverDocuments(contextDir string) ([]Document, error) {
-	// Check if context directory exists
-	if _, err := os.Stat(contextDir); os.IsNotExist(err) {
-		return []Document{}, nil
+// knownTypes lead every listing, in this order. Other types follow
+// alphabetically and TypeOther comes last.
+var knownTypes = []string{"plan", "design-doc", "research", "review", "reference", "context"}
+
+func typeRank(t string) int {
+	if i := slices.Index(knownTypes, t); i >= 0 {
+		return i
 	}
-
-	var docs []Document
-
-	// Walk directory tree
-	err := filepath.WalkDir(contextDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		if d.IsDir() {
-			return nil
-		}
-
-		// Only include markdown and text files
-		ext := filepath.Ext(path)
-		if ext != ".md" && ext != ".txt" {
-			return nil
-		}
-
-		// Get relative path from context directory root
-		relPath, err := filepath.Rel(contextDir, path)
-		if err != nil {
-			return err
-		}
-
-		// Infer document type from path
-		docType := inferDocumentType(relPath)
-
-		// Get modification time
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-
-		docs = append(docs, Document{
-			Path:    path,
-			RelPath: relPath,
-			Type:    docType,
-			ModTime: info.ModTime(),
-		})
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
+	if t == TypeOther {
+		return len(knownTypes) + 1
 	}
-
-	// Sort by type, then by modification time (newest first within each type)
-	sortDocuments(docs)
-
-	return docs, nil
+	return len(knownTypes)
 }
 
-// inferDocumentType determines the document type based on its path.
-// Expects relPath to be relative to the context directory root.
-func inferDocumentType(relPath string) DocumentType {
-	// Normalize path separators
+func compareTypes(a, b string) int {
+	if c := cmp.Compare(typeRank(a), typeRank(b)); c != 0 {
+		return c
+	}
+	return strings.Compare(a, b)
+}
+
+// typeTitle is the group header of a type: "design-doc" reads "Design doc".
+func typeTitle(t string) string {
+	if t == "" {
+		t = TypeOther
+	}
+	t = strings.ReplaceAll(t, "-", " ")
+	r, size := utf8.DecodeRuneInString(t)
+	return string(unicode.ToUpper(r)) + t[size:]
+}
+
+// folderTypes maps the plural folder names agents write to the singular types
+// front matter uses, so a plan in plans/ groups with one typed "plan".
+var folderTypes = map[string]string{
+	"plans":       "plan",
+	"design-docs": "design-doc",
+	"reviews":     "review",
+	"references":  "reference",
+}
+
+// typeFromPath is the type of a document that has no front matter type: its
+// top folder.
+func typeFromPath(relPath string) string {
 	relPath = filepath.ToSlash(relPath)
-
-	// Check the top-level directory name
-	parts := strings.Split(relPath, "/")
-	if len(parts) > 0 {
-		switch parts[0] {
-		case "plans":
-			return DocTypePlan
-		case "research":
-			return DocTypeResearch
-		case "context":
-			return DocTypeContext
+	if top, _, ok := strings.Cut(relPath, "/"); ok && top != "" {
+		top = strings.ToLower(top)
+		if t, ok := folderTypes[top]; ok {
+			return t
 		}
+		return top
 	}
-
-	return DocTypeOther
+	return TypeOther
 }
 
-// sortDocuments sorts documents by type, then by modification time (newest first).
-func sortDocuments(docs []Document) {
-	// Use simple bubble sort for small collections
-	// Type priority: Plans > Research > Context > Other
-	for i := range docs {
-		for j := i + 1; j < len(docs); j++ {
-			// Compare types first
-			if docs[i].Type > docs[j].Type {
-				docs[i], docs[j] = docs[j], docs[i]
-				continue
-			}
-			// If same type, sort by modification time (newest first)
-			if docs[i].Type == docs[j].Type && docs[i].ModTime.Before(docs[j].ModTime) {
-				docs[i], docs[j] = docs[j], docs[i]
-			}
+func documentType(entry drive.Entry) string {
+	if t, ok := entry.Front["type"].(string); ok {
+		if t = strings.ToLower(strings.TrimSpace(t)); t != "" {
+			return t
 		}
 	}
+	return typeFromPath(entry.Path)
+}
+
+// isPlainText reports whether a file entry is listed and shown as plain text.
+func isPlainText(path string) bool {
+	return strings.EqualFold(filepath.Ext(path), ".txt")
+}
+
+// DocumentsFromTree lists the markdown and plain-text entries of a space's tree, sorted by
+// type and then newest first. dir is the space's directory on disk. With
+// qualified, RelPath names the space, so documents of several spaces stay
+// apart.
+func DocumentsFromTree(space drive.Space, dir string, root drive.Entry, qualified bool) []Document {
+	var docs []Document
+	collectDocuments(&docs, space, dir, root, qualified)
+	SortDocuments(docs)
+	return docs
+}
+
+func collectDocuments(docs *[]Document, space drive.Space, dir string, entry drive.Entry, qualified bool) {
+	for _, child := range entry.Children {
+		if child.Kind == drive.KindDir {
+			collectDocuments(docs, space, dir, child, qualified)
+			continue
+		}
+		if child.Kind != drive.KindMarkdown && (child.Kind != drive.KindFile || !isPlainText(child.Path)) {
+			continue
+		}
+		doc := spaceDocument(space, dir, child.Path, qualified)
+		doc.Type = documentType(child)
+		doc.ModTime = child.Modified
+		*docs = append(*docs, doc)
+	}
+}
+
+// spaceDocument is the document at path, relative to the space directory
+// dir, with its RelPath named the way the space's listing names it.
+func spaceDocument(space drive.Space, dir, path string, qualified bool) Document {
+	rel := path
+	if qualified {
+		rel = space.Key + "/" + path
+	}
+	return Document{
+		Path:       filepath.Join(dir, filepath.FromSlash(path)),
+		RelPath:    rel,
+		Space:      space,
+		inCheckout: !qualified && space.Kind == drive.SpaceKindRepository,
+	}
+}
+
+// CheckoutPath is the path an agent in a repository checkout reaches the
+// document by: RelPath under the context symlink, named symlinkName. A
+// document outside a repository space has no such path and keeps RelPath.
+func (d Document) CheckoutPath(symlinkName string) string {
+	if !d.inCheckout || symlinkName == "" {
+		return d.RelPath
+	}
+	return symlinkName + "/" + d.RelPath
+}
+
+// SortDocuments orders documents by type, then newest first.
+func SortDocuments(docs []Document) {
+	slices.SortStableFunc(docs, func(a, b Document) int {
+		if c := compareTypes(a.Type, b.Type); c != 0 {
+			return c
+		}
+		if c := b.ModTime.Compare(a.ModTime); c != 0 {
+			return c
+		}
+		return strings.Compare(a.RelPath, b.RelPath)
+	})
 }
 
 // LoadContent reads the document content from disk.
@@ -194,8 +212,8 @@ func (d *Document) LoadContent() error {
 	return nil
 }
 
-// Render renders the document content using Glamour with line numbers.
-// Returns a string with ANSI-styled markdown and line numbers.
+// Render renders the document with line numbers: markdown through Glamour, a
+// .txt file as wrapped plain text.
 func (d *Document) Render(width int) (string, error) {
 	// Use cached rendered lines if available and width matches
 	if d.RenderedLines != nil && d.cachedWidth == width {
@@ -209,8 +227,13 @@ func (d *Document) Render(width int) (string, error) {
 		}
 	}
 
-	// Create glamour renderer with Tokyo Night theme
 	wrapWidth := contentWrapWidth(width)
+	if isPlainText(d.Path) {
+		d.RenderedLines = strings.Split(ansi.Wrap(strings.TrimRight(d.Content, "\n"), wrapWidth, ""), "\n")
+		d.cachedWidth = width
+		return d.formatWithLineNumbers(d.RenderedLines), nil
+	}
+
 	r, err := glamour.NewTermRenderer(
 		glamour.WithStyles(styles.GlamourStyle()),
 		glamour.WithWordWrap(wrapWidth),

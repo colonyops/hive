@@ -2,16 +2,22 @@ package mcpsrv
 
 import (
 	"context"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
+	"github.com/colonyops/hive/internal/domain/drive"
 )
 
-// register declares the canvas tool table, under the same rules as
+// register declares the drive tool table, under the same rules as
 // Controller.register: metadata only, thin handlers, descriptions written for
 // a model.
-func (ctrl *CanvasController) register(srv *mcp.Server) {
+func (ctrl *DriveController) register(srv *mcp.Server) {
+	ctrl.registerCanvas(srv)
+	ctrl.registerDocuments(srv)
+}
+
+func (ctrl *DriveController) registerCanvas(srv *mcp.Server) {
 	addTool(srv, &mcp.Tool{
 		Name:  "put_block",
 		Title: "Put a canvas block",
@@ -22,7 +28,7 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 			"instead of stacking copies; before places or moves a block ahead of an existing one instead. kind is " +
 			"markdown (body required, title optional; rendered as GitHub-flavored markdown with raw HTML escaped, not " +
 			"rendered; a standalone fenced mermaid code block renders as a diagram), html (body required; semantic markup " +
-			"laid out with the app's hv- classes — read the hive-canvas docs first, since an unknown tag, class or attribute is " +
+			"laid out with the app's hv- classes — read the hive-drive docs first, since an unknown tag, class or attribute is " +
 			"refused rather than dropped) or link (title and url " +
 			"required; http, https or mailto only). Answers with the canvas metadata and the stored block; read_canvas " +
 			"returns the full surface. The pane does not open by itself: a write while " +
@@ -87,8 +93,8 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 		Description: "Ask Hive to open the canvas pane beside this chat or Code session, optionally pinned to one canvas by name " +
 			"(the name must exist — put_block first). It applies only while the user is viewing it; it never pulls " +
 			"them away from something else, and a write while the pane is closed already shows an unseen dot. Open when " +
-			"you finish something worth looking at, not on every write. A global canvas has no pane; the user reads it in " +
-			"the full-page canvas view.",
+			"you finish something worth looking at, not on every write. A global canvas lives in the shared space, which " +
+			"has no pane; the user reads it in the Drive page.",
 	}, ctrl.OpenCanvas)
 
 	addTool(srv, &mcp.Tool{
@@ -102,8 +108,8 @@ func (ctrl *CanvasController) register(srv *mcp.Server) {
 	addTool(srv, &mcp.Tool{
 		Name:  "list_canvases",
 		Title: "List the canvases",
-		Description: "List every canvas where yours are kept — this chat's workspace, or the repository of this hive " +
-			"session — most recently updated first: name, title, block count and which chat or session created it. " +
+		Description: "List every canvas where yours are kept — this chat's workspace, the repository of this hive " +
+			"session, or the shared space when session is global — most recently updated first: name, title, block count and which chat or session created it. " +
 			"Canvases outlive what made them, so this may include artifacts from earlier conversations — read one " +
 			"before assuming it is yours to overwrite.",
 	}, ctrl.ListCanvases)
@@ -115,12 +121,12 @@ type canvasSessionInput struct {
 
 type canvasNameInput struct {
 	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
-	Canvas  string `json:"canvas"  jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
+	Canvas  string `json:"canvas"  jsonschema:"The canvas name or path. A bare name like perf files at canvases/perf.canvas.json; a path like reports/2026-10/perf files at reports/2026-10/perf.canvas.json, creating the folders. The last segment is short, lowercase and filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). Name or path is the canvas's identity in its space."`
 }
 
 type putBlockInput struct {
 	Session     string `json:"session"               jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
-	Canvas      string `json:"canvas"                jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
+	Canvas      string `json:"canvas"                jsonschema:"The canvas name or path. A bare name like perf files at canvases/perf.canvas.json; a path like reports/2026-10/perf files at reports/2026-10/perf.canvas.json, creating the folders. The last segment is short, lowercase and filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). Name or path is the canvas's identity in its space."`
 	CanvasTitle string `json:"canvasTitle,omitempty" jsonschema:"Display title for the whole canvas, shown in the pane's picker. Set it on the canvas's first write; a later non-empty value renames, empty leaves the stored title unchanged."`
 	Before      string `json:"before,omitempty"      jsonschema:"An existing block id to place this block ahead of — inserting a new id there, or moving a reused one (its createdAt survives the move). Omit to keep a reused id's position or append a new one."`
 	ID          string `json:"id"                    jsonschema:"Your name for the block. Reusing an id updates that block in place; a new id appends."`
@@ -140,20 +146,20 @@ type batchBlockInput struct {
 
 type putBlocksInput struct {
 	Session     string            `json:"session"               jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
-	Canvas      string            `json:"canvas"                jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
+	Canvas      string            `json:"canvas"                jsonschema:"The canvas name or path. A bare name like perf files at canvases/perf.canvas.json; a path like reports/2026-10/perf files at reports/2026-10/perf.canvas.json, creating the folders. The last segment is short, lowercase and filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). Name or path is the canvas's identity in its space."`
 	CanvasTitle string            `json:"canvasTitle,omitempty" jsonschema:"Display title for the whole canvas, shown in the pane's picker. Set it on the canvas's first write; a later non-empty value renames, empty leaves the stored title unchanged."`
 	Blocks      []batchBlockInput `json:"blocks"                jsonschema:"The blocks to write, applied in order (50 max per call)."`
 }
 
 type removeBlockInput struct {
 	Session string `json:"session" jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
-	Canvas  string `json:"canvas"  jsonschema:"The canvas name: short, lowercase, filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). It is the canvas's identity in this workspace and its file name on disk."`
+	Canvas  string `json:"canvas"  jsonschema:"The canvas name or path. A bare name like perf files at canvases/perf.canvas.json; a path like reports/2026-10/perf files at reports/2026-10/perf.canvas.json, creating the folders. The last segment is short, lowercase and filename-like (letters, digits, dots, hyphens, underscores; starts and ends alphanumeric). Name or path is the canvas's identity in its space."`
 	ID      string `json:"id"      jsonschema:"The id of the block to remove, as given to put_block."`
 }
 
 type setFrontmatterInput struct {
 	Session     string         `json:"session"     jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
-	Canvas      string         `json:"canvas"      jsonschema:"The existing canvas whose editable front matter to replace."`
+	Canvas      string         `json:"canvas"      jsonschema:"The existing canvas whose editable front matter to replace, by name or path."`
 	Frontmatter map[string]any `json:"frontmatter" jsonschema:"The complete editable front matter. Keys use letters, digits, dots, hyphens, or underscores. Values are strings, finite numbers, booleans, null, or flat lists of those values. created_at and updated_at are reserved and populated by Hive."`
 }
 
@@ -216,15 +222,15 @@ type deleteCanvasResult struct {
 
 type openCanvasInput struct {
 	Session string `json:"session"          jsonschema:"Who is calling. In a Hive chat it is this process's HIVE_AGENT_SESSION environment variable. In a hive session it is the absolute path of your working directory. Outside both, it is the word global, which files the canvas in one namespace every such agent shares. Never guess or reuse another value."`
-	Canvas  string `json:"canvas,omitempty" jsonschema:"Canvas to pin the pane to, by name; must exist. Omit to open on the pane's own pick."`
+	Canvas  string `json:"canvas,omitempty" jsonschema:"Canvas to pin the pane to, by name or path; must exist. Omit to open on the pane's own pick."`
 }
 
 type paneResult struct {
 	Requested string `json:"requested" jsonschema:"The request handed to the UI: open or close. Delivery is best-effort — it applies only while the user is viewing this chat or session, and there is no acknowledgment either way."`
 }
 
-func (ctrl *CanvasController) PutBlock(ctx context.Context, _ *mcp.CallToolRequest, in putBlockInput) (*mcp.CallToolResult, canvasWriteResult, error) {
-	c, err := ctrl.core.Canvas.PutBlock(ctx, in.Session, in.Canvas, in.CanvasTitle, in.Before, canvas.Block{
+func (ctrl *DriveController) PutBlock(ctx context.Context, _ *mcp.CallToolRequest, in putBlockInput) (*mcp.CallToolResult, canvasWriteResult, error) {
+	c, err := ctrl.core.Drive.PutBlock(ctx, in.Session, in.Canvas, in.CanvasTitle, in.Before, drive.Block{
 		ID: in.ID, Kind: in.Kind, Title: in.Title, Body: in.Body, URL: in.URL,
 	})
 	if err != nil {
@@ -233,89 +239,89 @@ func (ctrl *CanvasController) PutBlock(ctx context.Context, _ *mcp.CallToolReque
 	return nil, canvasWriteResultFrom(c, in.ID), nil
 }
 
-func (ctrl *CanvasController) PutBlocks(ctx context.Context, _ *mcp.CallToolRequest, in putBlocksInput) (*mcp.CallToolResult, canvasWriteResult, error) {
-	blocks := make([]canvas.Block, 0, len(in.Blocks))
+func (ctrl *DriveController) PutBlocks(ctx context.Context, _ *mcp.CallToolRequest, in putBlocksInput) (*mcp.CallToolResult, canvasWriteResult, error) {
+	blocks := make([]drive.Block, 0, len(in.Blocks))
 	for _, b := range in.Blocks {
-		blocks = append(blocks, canvas.Block{ID: b.ID, Kind: b.Kind, Title: b.Title, Body: b.Body, URL: b.URL})
+		blocks = append(blocks, drive.Block{ID: b.ID, Kind: b.Kind, Title: b.Title, Body: b.Body, URL: b.URL})
 	}
-	c, err := ctrl.core.Canvas.PutBlocks(ctx, in.Session, in.Canvas, in.CanvasTitle, blocks)
+	c, err := ctrl.core.Drive.PutBlocks(ctx, in.Session, in.Canvas, in.CanvasTitle, blocks)
 	if err != nil {
 		return nil, canvasWriteResult{}, ctrl.toolError(err)
 	}
 	return nil, canvasWriteResultFrom(c, ""), nil
 }
 
-func (ctrl *CanvasController) RemoveBlock(ctx context.Context, _ *mcp.CallToolRequest, in removeBlockInput) (*mcp.CallToolResult, canvasWriteResult, error) {
-	c, err := ctrl.core.Canvas.RemoveBlock(ctx, in.Session, in.Canvas, in.ID)
+func (ctrl *DriveController) RemoveBlock(ctx context.Context, _ *mcp.CallToolRequest, in removeBlockInput) (*mcp.CallToolResult, canvasWriteResult, error) {
+	c, err := ctrl.core.Drive.RemoveBlock(ctx, in.Session, in.Canvas, in.ID)
 	if err != nil {
 		return nil, canvasWriteResult{}, ctrl.toolError(err)
 	}
 	return nil, canvasWriteResultFrom(c, ""), nil
 }
 
-func (ctrl *CanvasController) SetFrontmatter(ctx context.Context, _ *mcp.CallToolRequest, in setFrontmatterInput) (*mcp.CallToolResult, canvasWriteResult, error) {
-	c, err := ctrl.core.Canvas.SetFrontmatter(ctx, in.Session, in.Canvas, in.Frontmatter)
+func (ctrl *DriveController) SetFrontmatter(ctx context.Context, _ *mcp.CallToolRequest, in setFrontmatterInput) (*mcp.CallToolResult, canvasWriteResult, error) {
+	c, err := ctrl.core.Drive.SetFrontmatter(ctx, in.Session, in.Canvas, in.Frontmatter)
 	if err != nil {
 		return nil, canvasWriteResult{}, ctrl.toolError(err)
 	}
 	return nil, canvasWriteResultFrom(c, ""), nil
 }
 
-func (ctrl *CanvasController) ClearCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasNameInput) (*mcp.CallToolResult, canvasWriteResult, error) {
-	c, err := ctrl.core.Canvas.Clear(ctx, in.Session, in.Canvas)
+func (ctrl *DriveController) ClearCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasNameInput) (*mcp.CallToolResult, canvasWriteResult, error) {
+	c, err := ctrl.core.Drive.ClearCanvas(ctx, in.Session, in.Canvas)
 	if err != nil {
 		return nil, canvasWriteResult{}, ctrl.toolError(err)
 	}
 	return nil, canvasWriteResultFrom(c, ""), nil
 }
 
-func (ctrl *CanvasController) DeleteCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasNameInput) (*mcp.CallToolResult, deleteCanvasResult, error) {
-	if err := ctrl.core.Canvas.Delete(ctx, in.Session, in.Canvas); err != nil {
+func (ctrl *DriveController) DeleteCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasNameInput) (*mcp.CallToolResult, deleteCanvasResult, error) {
+	if err := ctrl.core.Drive.DeleteCanvas(ctx, in.Session, in.Canvas); err != nil {
 		return nil, deleteCanvasResult{}, ctrl.toolError(err)
 	}
 	return nil, deleteCanvasResult{Deleted: in.Canvas}, nil
 }
 
-func (ctrl *CanvasController) ReadCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasNameInput) (*mcp.CallToolResult, canvasResult, error) {
-	c, err := ctrl.core.Canvas.Get(ctx, in.Session, in.Canvas)
+func (ctrl *DriveController) ReadCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasNameInput) (*mcp.CallToolResult, canvasResult, error) {
+	c, err := ctrl.core.Drive.GetCanvas(ctx, in.Session, in.Canvas)
 	if err != nil {
 		return nil, canvasResult{}, ctrl.toolError(err)
 	}
 	return nil, canvasResultFrom(c), nil
 }
 
-func (ctrl *CanvasController) OpenCanvas(ctx context.Context, _ *mcp.CallToolRequest, in openCanvasInput) (*mcp.CallToolResult, paneResult, error) {
-	if err := ctrl.core.Canvas.SetPaneOpen(ctx, in.Session, in.Canvas, true); err != nil {
+func (ctrl *DriveController) OpenCanvas(ctx context.Context, _ *mcp.CallToolRequest, in openCanvasInput) (*mcp.CallToolResult, paneResult, error) {
+	if err := ctrl.core.Drive.SetPaneOpen(ctx, in.Session, in.Canvas, true); err != nil {
 		return nil, paneResult{}, ctrl.toolError(err)
 	}
 	return nil, paneResult{Requested: "open"}, nil
 }
 
-func (ctrl *CanvasController) CloseCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasSessionInput) (*mcp.CallToolResult, paneResult, error) {
-	if err := ctrl.core.Canvas.SetPaneOpen(ctx, in.Session, "", false); err != nil {
+func (ctrl *DriveController) CloseCanvas(ctx context.Context, _ *mcp.CallToolRequest, in canvasSessionInput) (*mcp.CallToolResult, paneResult, error) {
+	if err := ctrl.core.Drive.SetPaneOpen(ctx, in.Session, "", false); err != nil {
 		return nil, paneResult{}, ctrl.toolError(err)
 	}
 	return nil, paneResult{Requested: "close"}, nil
 }
 
-func (ctrl *CanvasController) ListCanvases(ctx context.Context, _ *mcp.CallToolRequest, in canvasSessionInput) (*mcp.CallToolResult, canvasListResult, error) {
-	metas, err := ctrl.core.Canvas.List(ctx, in.Session)
+func (ctrl *DriveController) ListCanvases(ctx context.Context, _ *mcp.CallToolRequest, in canvasSessionInput) (*mcp.CallToolResult, canvasListResult, error) {
+	metas, err := ctrl.core.Drive.ListCanvases(ctx, in.Session)
 	if err != nil {
 		return nil, canvasListResult{}, ctrl.toolError(err)
 	}
 	out := canvasListResult{Canvases: make([]canvasMetaResult, 0, len(metas))}
 	for _, m := range metas {
 		out.Canvases = append(out.Canvases, canvasMetaResult{
-			Name: m.Name, Title: m.Title, Session: m.Session, HiveSession: m.HiveSession,
+			Name: drive.CanvasName(m.Path), Title: m.Title, Session: m.Session, HiveSession: m.HiveSession,
 			CreatedAt: m.CreatedAt, UpdatedAt: m.UpdatedAt, BlockCount: m.BlockCount,
 		})
 	}
 	return nil, out, nil
 }
 
-func canvasWriteResultFrom(c canvas.Canvas, blockID string) canvasWriteResult {
+func canvasWriteResultFrom(c drive.Canvas, blockID string) canvasWriteResult {
 	res := canvasWriteResult{
-		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
+		Workspace: canvasOwner(c.Space), Name: drive.CanvasName(c.Path), Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: c.Frontmatter, BlockCount: len(c.Blocks),
 	}
 	for _, b := range c.Blocks {
@@ -330,7 +336,7 @@ func canvasWriteResultFrom(c canvas.Canvas, blockID string) canvasWriteResult {
 	return res
 }
 
-func canvasResultFrom(c canvas.Canvas) canvasResult {
+func canvasResultFrom(c drive.Canvas) canvasResult {
 	blocks := make([]canvasBlock, 0, len(c.Blocks))
 	for _, b := range c.Blocks {
 		blocks = append(blocks, canvasBlock{
@@ -339,7 +345,23 @@ func canvasResultFrom(c canvas.Canvas) canvasResult {
 		})
 	}
 	return canvasResult{
-		Workspace: c.Workspace, Name: c.Name, Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
+		Workspace: canvasOwner(c.Space), Name: drive.CanvasName(c.Path), Title: c.Title, Session: c.Session, HiveSession: c.HiveSession,
 		CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt, Frontmatter: c.Frontmatter, Blocks: blocks,
 	}
+}
+
+// legacyGlobalOwner is the owner key hive-canvas results still name the shared
+// space by; the @ kept it out of the workspace names hive creates.
+const legacyGlobalOwner = "@global"
+
+// canvasOwner maps a space key onto the owner key the hive-canvas results
+// still name: shared is @global, workspaces/<name> is the name.
+func canvasOwner(spaceKey string) string {
+	if spaceKey == drive.SharedKey {
+		return legacyGlobalOwner
+	}
+	if name, ok := strings.CutPrefix(spaceKey, drive.WorkspacesDir+"/"); ok {
+		return name
+	}
+	return spaceKey
 }

@@ -7,6 +7,11 @@
 //	hive://chats/<workspace>[/<chat>][?canvas=<name>]
 //	hive://inbox/<profile>[/<item>][?feed=<id>]
 //	hive://canvas/<name>?owner=<workspace | owner/repo | @global>
+//	hive://drive/<space-key>[/<path>]
+//
+// A drive link's space key is "shared", "workspaces/<name>", or
+// "<owner>/<repo>", and the segments after it are the document or folder
+// path inside that space. A drive link with no path opens the space.
 //
 // Unknown query parameters are ignored, so a newer link still opens in an
 // older app.
@@ -18,6 +23,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/colonyops/hive/internal/domain/drive"
 )
 
 // Scheme is the URL scheme Hive Desktop registers with the operating system.
@@ -25,7 +32,7 @@ const Scheme = "hive"
 
 // Area is the part of Hive Desktop a link opens.
 //
-// ENUM(code, chats, inbox, canvas)
+// ENUM(code, chats, inbox, canvas, drive)
 type Area string
 
 // Location is one place in Hive Desktop. Which fields apply depends on Area:
@@ -34,6 +41,7 @@ type Area string
 //	chats   Workspace, Chat, Canvas
 //	inbox   Profile, Item, Feed
 //	canvas  Canvas, Owner
+//	drive   Space, Path
 //
 // Slug is a tmux session name, so a code link also reaches a session hive did
 // not create. Canvas on a code or chats link opens the pane beside it; on a
@@ -49,6 +57,8 @@ type Location struct {
 	Feed      string `json:"feed,omitempty"`
 	Canvas    string `json:"canvas,omitempty"`
 	Owner     string `json:"owner,omitempty"`
+	Space     string `json:"space,omitempty"`
+	Path      string `json:"path,omitempty"`
 }
 
 // Parse reads a hive:// URL into the Location it names.
@@ -116,8 +126,35 @@ func Parse(raw string) (Location, error) {
 		if loc.Owner == "" {
 			return Location{}, errors.New("canvas links need an owner")
 		}
+	case AreaDrive:
+		space, path, err := driveTarget(segments)
+		if err != nil {
+			return Location{}, err
+		}
+		loc.Space, loc.Path = space, path
 	}
 	return loc, nil
+}
+
+// driveTarget splits a drive link's segments into the space key and the path
+// inside it. The key's length follows from its first segment, so a path
+// never needs escaping to be told apart from the key; an escaped slash inside
+// a key segment is refused rather than read as a separator.
+func driveTarget(segments []string) (space, path string, err error) {
+	parsed, path, err := drive.SplitSpacePath(strings.Join(segments, "/"))
+	if err != nil {
+		return "", "", fmt.Errorf("drive links name a space: shared, workspaces/<name>, or <owner>/<repo>: %w", err)
+	}
+	keyLen := strings.Count(parsed.Key, "/") + 1
+	if len(segments) < keyLen || strings.Join(segments[:keyLen], "/") != parsed.Key {
+		return "", "", fmt.Errorf("drive link space %q: %w", parsed.Key, drive.ErrInvalidSpace)
+	}
+	if path != "" {
+		if err := drive.ValidatePath(path); err != nil {
+			return "", "", fmt.Errorf("drive link: %w", err)
+		}
+	}
+	return parsed.Key, path, nil
 }
 
 // pathSegments splits the escaped path so a segment can carry an escaped

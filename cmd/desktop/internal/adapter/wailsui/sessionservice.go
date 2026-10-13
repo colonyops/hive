@@ -35,7 +35,7 @@ func (s *SessionService) ListSessions(ctx context.Context) ([]SessionSummary, er
 	if err != nil {
 		return nil, err
 	}
-	return sessionSummariesOf(sessions), nil
+	return sessionSummariesOf(s.sessions.CanonicalSpace, sessions), nil
 }
 
 // SessionStatuses returns the current terminal-detected agent state for each
@@ -132,7 +132,7 @@ func (s *SessionService) RenameSession(ctx context.Context, id, name string) (Se
 	if err != nil {
 		return SessionSummary{}, err
 	}
-	return sessionSummaryOf(renamed), nil
+	return sessionSummaryOf(s.sessions.CanonicalSpace, renamed), nil
 }
 
 // DeleteSession starts the delete as a background job and returns the job id.

@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -27,6 +29,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/tui/components"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/shared"
 	corereview "github.com/colonyops/hive/internal/domain/review"
+	"github.com/colonyops/hive/internal/hive/events"
 )
 
 // ReviewFinalizedMsg is sent when review is finalized and copied to clipboard.
@@ -43,9 +46,11 @@ type reviewDiscardedMsg struct{}
 type View struct {
 	list              list.Model
 	viewport          viewport.Model
-	watcher           *DocumentWatcher
-	contextDir        string
+	scope             Scope
+	source            Source
+	changes           <-chan events.DriveChangedPayload
 	repoKey           string // owner/repo display label
+	symlinkName       string // context.symlink_name: how a checkout reaches its space
 	store             corereview.Store
 	width             int
 	height            int
@@ -91,10 +96,9 @@ type View struct {
 	helpDialog *components.HelpDialog // active help overlay, nil when not shown
 }
 
-// New creates a new review view.
-// If contextDir is non-empty, it will watch for file changes.
-// If store is non-nil, comments will be persisted to the database.
-func New(logger zerolog.Logger, documents []Document, contextDir string, store corereview.Store, handler KeyResolver, splitRatio int) View {
+// New creates a review view over documents. A non-nil bus keeps the list in
+// step with the scope; source lists documents again after a change, and a non-nil store persists comments.
+func New(logger zerolog.Logger, bus *events.EventBus, source Source, documents []Document, scope Scope, store corereview.Store, handler KeyResolver, splitRatio int) View {
 	logger = logutils.Component(logger, "tui.review")
 	items := BuildTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
@@ -116,15 +120,6 @@ func New(logger zerolog.Logger, documents []Document, contextDir string, store c
 	l.Help.Styles.FullSeparator = helpStyle
 	l.Help.ShortSeparator = " • "
 	l.Styles.HelpStyle = styles.ListHelpContainerStyle
-
-	// Initialize watcher if context directory is provided
-	var watcher *DocumentWatcher
-	if contextDir != "" {
-		w, err := NewDocumentWatcher(logger, contextDir)
-		if err == nil {
-			watcher = w
-		}
-	}
 
 	// Create viewport for document preview
 	vp := viewport.New()
@@ -150,8 +145,9 @@ func New(logger zerolog.Logger, documents []Document, contextDir string, store c
 		logger:          logger,
 		list:            l,
 		viewport:        vp,
-		watcher:         watcher,
-		contextDir:      contextDir,
+		scope:           scope,
+		source:          source,
+		changes:         subscribeDriveChanges(logger, bus),
 		store:           store,
 		fullScreen:      false,
 		cursorLine:      1,
@@ -231,9 +227,20 @@ func (v *View) HasActiveEditor() bool {
 	return v.searchMode || v.treeSearchMode || v.commentModal != nil || v.helpDialog != nil || v.finalizationModal != nil || v.confirmModal != nil
 }
 
-// ContextDir returns the current context directory.
+// Scope is the space and directory the view lists.
+func (v View) Scope() Scope {
+	return v.scope
+}
+
+// ContextDir is the directory the view's documents are discovered from.
 func (v View) ContextDir() string {
-	return v.contextDir
+	return v.scope.Dir
+}
+
+// SetSymlinkName sets the name of the context symlink in a repository
+// checkout, which review feedback and checkout paths start with.
+func (v *View) SetSymlinkName(name string) {
+	v.symlinkName = name
 }
 
 // SetRepoKey sets the owner/repo display label shown in the header.
@@ -367,48 +374,19 @@ func (v *View) ToggleTree() tea.Cmd {
 	return v.previewDocument(doc)
 }
 
-// SetContextDir updates the context directory, restarts the file watcher,
-// and returns a cmd that scans and delivers a DocumentChangeMsg.
-func (v *View) SetContextDir(contextDir string) tea.Cmd {
-	if contextDir == v.contextDir {
+// SetScope points the view at another space and directory and answers a
+// command that lists it. The same scope is a no-op.
+func (v *View) SetScope(scope Scope) tea.Cmd {
+	if scope == v.scope {
 		return nil
 	}
-
-	// Stop old watcher
-	if v.watcher != nil {
-		_ = v.watcher.Close()
-		v.watcher = nil
-	}
-
-	v.contextDir = contextDir
-
-	// Start new watcher
-	if contextDir != "" {
-		w, err := NewDocumentWatcher(v.logger, contextDir)
-		if err == nil {
-			v.watcher = w
-		}
-	}
-
-	// Return a cmd that immediately scans the new contextDir and starts watching
-	return func() tea.Msg {
-		if contextDir == "" {
-			return DocumentChangeMsg{Documents: nil}
-		}
-		docs, err := DiscoverDocuments(contextDir)
-		if err != nil {
-			docs = nil
-		}
-		return DocumentChangeMsg{Documents: docs}
-	}
+	v.scope = scope
+	return v.discover()
 }
 
-// Init initializes the review view and starts the file watcher.
+// Init starts waiting for drive changes.
 func (v View) Init() tea.Cmd {
-	if v.watcher != nil {
-		return v.watcher.Start()
-	}
-	return nil
+	return v.listenForDriveChanges()
 }
 
 // Update handles messages.
@@ -426,7 +404,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 		// Rebuild tree with new documents
 		v.logger.Debug().
 			Int("document_count", len(msg.Documents)).
-			Msg("review: rebuilding document tree from file watcher")
+			Msg("review: rebuilding document tree")
 		items := BuildTreeItems(msg.Documents)
 		v.list.SetItems(items)
 		v.rebuildTree()
@@ -443,11 +421,14 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			}
 		}
 
-		// Continue watching for more changes
-		if v.watcher != nil {
-			return v, v.watcher.Start()
-		}
 		return v, nil
+
+	case DriveChangedMsg:
+		next := v.listenForDriveChanges()
+		if !v.scope.covers(msg.Payload.Space) {
+			return v, next
+		}
+		return v, tea.Batch(next, v.discover())
 
 	case reviewDiscardedMsg:
 		// Clear active session and reload document
@@ -508,7 +489,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				var docPath, docRel string
 				if v.selectedDoc != nil {
 					docPath = v.selectedDoc.Path
-					docRel = v.selectedDoc.RelPath
+					docRel = v.selectedDoc.CheckoutPath(v.symlinkName)
 				}
 				return v, func() tea.Msg {
 					return ReviewFinalizedMsg{Feedback: feedback, DocumentPath: docPath, DocumentRel: docRel}
@@ -548,7 +529,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 
 				// Otherwise, it's a finalization confirmation
 				// Generate feedback and finalize
-				feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.RelPath)
+				feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.CheckoutPath(v.symlinkName))
 				v.feedbackGenerated = feedback
 				v.confirmModal = nil
 
@@ -567,7 +548,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				var docPath, docRel string
 				if v.selectedDoc != nil {
 					docPath = v.selectedDoc.Path
-					docRel = v.selectedDoc.RelPath
+					docRel = v.selectedDoc.CheckoutPath(v.symlinkName)
 				}
 				return v, func() tea.Msg {
 					return ReviewFinalizedMsg{Feedback: feedback, DocumentPath: docPath, DocumentRel: docRel}
@@ -688,7 +669,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				// Finalize review - show finalization options if there are comments
 				if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
 					// Generate feedback now so we can pass it to the modal
-					feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.RelPath)
+					feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.CheckoutPath(v.symlinkName))
 					modal := NewFinalizationModal(feedback, v.width, v.height)
 					v.finalizationModal = &modal
 					v.feedbackGenerated = feedback
@@ -1019,10 +1000,10 @@ func (v View) View() string {
 	// --- Repo scope header (1 line above tree) ---
 	repoName := v.repoKey
 	if repoName == "" {
-		repoName = filepath.Base(v.contextDir)
+		repoName = filepath.Base(v.scope.Dir)
 	}
 	if repoName == "" || repoName == "." {
-		repoName = v.contextDir
+		repoName = v.scope.Dir
 	}
 	repoHeader := " " + styles.TextMutedStyle.Render(repoName)
 	repoHeader = shared.EnsureExactWidth(repoHeader, treeWidth)
@@ -1209,7 +1190,7 @@ func (v *View) loadDocument(doc *Document) {
 
 	v.logger.Debug().
 		Str("path", doc.RelPath).
-		Str("type", doc.Type.String()).
+		Str("type", doc.Type).
 		Msg("review: loading document")
 
 	// Enter full-screen reader mode: hide the tree and give the doc full width.
@@ -2266,25 +2247,20 @@ func BuildTreeItems(documents []Document) []list.Item {
 
 	items := make([]list.Item, 0)
 
-	// Group documents by type
-	groups := make(map[DocumentType][]Document)
+	groups := make(map[string][]Document)
 	for _, doc := range documents {
 		groups[doc.Type] = append(groups[doc.Type], doc)
 	}
 
-	// Render in priority order (most relevant types first)
-	typeOrder := []DocumentType{DocTypePlan, DocTypeResearch, DocTypeContext, DocTypeOther}
+	typeOrder := slices.SortedFunc(maps.Keys(groups), compareTypes)
 
 	for _, docType := range typeOrder {
-		docs, exists := groups[docType]
-		if !exists || len(docs) == 0 {
-			continue
-		}
+		docs := groups[docType]
 
 		// Add header
 		header := TreeItem{
 			IsHeader:   true,
-			HeaderName: docType.String(),
+			HeaderName: typeTitle(docType),
 		}
 		items = append(items, header)
 
@@ -2478,7 +2454,7 @@ func (v *View) LoadDocumentFromPath(absPath string) {
 	doc := Document{
 		Path:    absPath,
 		RelPath: relPath,
-		Type:    inferDocumentType(relPath),
+		Type:    typeFromPath(relPath),
 		ModTime: info.ModTime(),
 	}
 	v.loadDocument(&doc)
@@ -2491,19 +2467,17 @@ type OpenDocumentMsg struct {
 }
 
 // OpenDocumentByPath attempts to open a specific document by path.
-// Path can be absolute, relative to context directory, or prefixed with ".hive/"
-// (the symlink name agents use to reference context files from the repo root).
+// Path can be absolute, relative to the space, or prefixed with the context
+// symlink name, the way agents reference context files from the repo root.
 // Returns a command that sends an OpenDocumentMsg.
 func (v *View) OpenDocumentByPath(path string) tea.Cmd {
+	symlinkPrefix := v.symlinkName + "/"
 	return func() tea.Msg {
-		// Resolve .hive/ prefix: the .hive symlink in the repo root points to contextDir,
-		// so ".hive/foo" is equivalent to contextDir/foo. Agents use .hive/-prefixed paths
-		// in URIs, but DiscoverDocuments stores RelPath relative to contextDir (no prefix).
 		absPath := path
 		relPath := path
-		if v.contextDir != "" && strings.HasPrefix(path, ".hive/") {
-			rel := strings.TrimPrefix(path, ".hive/")
-			absPath = filepath.Join(v.contextDir, rel)
+		if v.scope.Dir != "" && v.symlinkName != "" && strings.HasPrefix(path, symlinkPrefix) {
+			rel := strings.TrimPrefix(path, symlinkPrefix)
+			absPath = filepath.Join(v.scope.Dir, rel)
 			relPath = rel
 		}
 
@@ -2516,8 +2490,8 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 				break
 			}
 
-			// Check suffix match to handle stored paths that include a leading
-			// symlink component (e.g. ".hive/plans/doc.md" vs RelPath "plans/doc.md").
+			// A stored path may carry a symlink component the configured name
+			// does not match, e.g. ".hive/plans/doc.md" vs RelPath "plans/doc.md".
 			if strings.HasSuffix(ti.Document.Path, "/"+path) ||
 				strings.HasSuffix(path, "/"+ti.Document.RelPath) {
 				doc := ti.Document
@@ -2541,7 +2515,7 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 				doc := Document{
 					Path:    tryPath,
 					RelPath: relPath,
-					Type:    inferDocumentType(relPath),
+					Type:    typeFromPath(relPath),
 					ModTime: info.ModTime(),
 				}
 				found = &doc

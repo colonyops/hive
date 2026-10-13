@@ -50,22 +50,23 @@ import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedCon
 // no toggle, no history, no palette.
 // mode is the app-level Inbox|Code|Chats switch. A segment is never disabled,
 // because an unavailable terminal or Chats area explains itself inside the
-// mode. Settings is an area too, but not a peer of the three: it is reached
-// from the Views menu, and while it is open no segment is selected.
+// mode. Settings and Drive are areas too, but not peers of the three: they
+// are reached from the Views menu, and while one is open no segment is
+// selected.
 // errorCount (8d) is the count of the active flow's nodes whose last run
 // failed. activityActive marks the Activity icon on when the audit-log page is
 // open; unseenActivity (6d) is the number of events since it was last opened,
 // shown as a pulsing amber dot. sidebarCollapsed drives the panel-toggle glyph;
 // canToggleSidebar disables the toggle in views with no left panel (settings,
 // flows, onboarding). previewCollapsed/canTogglePreview are the same pair for
-// the right-hand pane — the detail preview in Inbox, the canvas in Chats and
+// the right-hand pane — the detail preview in Inbox, the drive in Chats and
 // Code. previewUnseen is that pane's attention dot: an agent wrote to a
-// canvas that is not on screen. updateAvailable renders a click-to-install chip in
+// document that is not on screen. updateAvailable renders a click-to-install chip in
 // the right cluster, independent of profileName so it can show during
 // onboarding too.
 const props = defineProps<{
   profileName?: string
-  mode?: 'hub' | 'terminal' | 'agents' | 'settings'
+  mode?: 'hub' | 'terminal' | 'agents' | 'settings' | 'drive'
   activityActive?: boolean
   actionRunsActive?: boolean
   errorCount?: number
@@ -111,7 +112,7 @@ const modeOptions: SegmentedControlOption<'hub' | 'terminal' | 'agents'>[] = [
   { value: 'agents', label: 'Chats', title: 'Chats' },
 ]
 const modeIcons = { hub: IconInbox, terminal: IconCode, agents: IconMessagesSquare }
-const rightPane = computed(() => (props.mode === 'terminal' || props.mode === 'agents' ? 'canvas' : 'preview'))
+const rightPane = computed(() => (props.mode === 'terminal' || props.mode === 'agents' ? 'drive' : 'preview'))
 const jobsRoot = ref<HTMLElement | null>(null)
 const jobsOpen = ref(false)
 
@@ -186,7 +187,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
         size="sm"
         class="ml-1.5 shrink-0"
         style="--wails-draggable: no-drag"
-        :model-value="mode === 'settings' ? undefined : mode"
+        :model-value="mode === 'settings' || mode === 'drive' ? undefined : mode"
         :options="modeOptions"
         aria-label="App mode"
         testid="titlebar-mode"
@@ -298,7 +299,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       </IconButton>
       <TitleBarMenu
         v-if="profileName"
-        :active="actionRunsActive || mode === 'settings'"
+        :active="actionRunsActive || mode === 'settings' || mode === 'drive'"
         @run-command="(commandId) => emit('run-command', commandId)"
       />
       <IconButton

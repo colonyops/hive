@@ -131,6 +131,11 @@ vi.mock('../../composables/useTerminalWindows', () => ({
 vi.mock('../../composables/useNewSession', () => ({
   useNewSession: () => ({ openBlank: mocks.openBlank, prefetch: vi.fn() }),
 }))
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/driveservice', () => ({
+  Spaces: vi.fn().mockResolvedValue([]),
+  Tree: vi.fn().mockResolvedValue({ path: '', name: '', kind: 'dir', children: [] }),
+  Document: vi.fn(),
+}))
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
   Clipboard: { SetText: mocks.SetClipboardText },
@@ -3886,20 +3891,20 @@ describe('TerminalMode', () => {
     })
   })
 
-  // App.vue resolves whose canvases the attached session reads and hands it
+  // App.vue resolves which space the attached session reads and hands it
   // down; the mode's part is the pane beside the terminal and the route query
   // that opens it.
-  describe('canvas pane', () => {
-    const canvas = { workspace: 'hay-kot/hive', session: '1' }
+  describe('drive pane', () => {
+    const drive = { space: 'hay-kot/hive', session: '1' }
 
-    async function mountWithCanvas(path: string) {
+    async function mountWithDrive(path: string) {
       const session = fakeSession()
       mocks.useTerminalWindows.mockReturnValue(session)
       const router = createAppRouter(createMemoryHistory())
       await router.push(path)
       await router.isReady()
       const wrapper = mount(TerminalMode, {
-        props: { canvas },
+        props: { drive },
         global: { plugins: [router], stubs: { transition: true, 'transition-group': true } },
       })
       await flushPromises()
@@ -3907,50 +3912,50 @@ describe('TerminalMode', () => {
     }
 
     it('stays closed until the route asks for it', async () => {
-      const { wrapper } = await mountWithCanvas('/terminal/hive-fix-parser')
+      const { wrapper } = await mountWithDrive('/terminal/hive-fix-parser')
 
-      expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
 
       wrapper.unmount()
     })
 
     it('opens beside the session and closes back to the terminal alone', async () => {
-      const { wrapper, router } = await mountWithCanvas('/terminal/hive-fix-parser?canvas=1')
+      const { wrapper, router } = await mountWithDrive('/terminal/hive-fix-parser?doc=1')
 
-      expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(true)
+      expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(true)
 
-      await wrapper.get('[data-testid="agent-canvas-close"]').trigger('click')
+      await wrapper.get('[data-testid="drive-pane-close"]').trigger('click')
       await flushPromises()
-      expect(router.currentRoute.value.query.canvas).toBeUndefined()
+      expect(router.currentRoute.value.query.doc).toBeUndefined()
       expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
-      expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
 
       wrapper.unmount()
     })
 
     it('keeps the pane mounted while the active terminal window changes', async () => {
-      const { wrapper, router, session } = await mountWithCanvas(
-        '/terminal/hive-fix-parser?canvas=mermaid-architecture',
+      const { wrapper, router, session } = await mountWithDrive(
+        '/terminal/hive-fix-parser?doc=canvases%2Fmermaid.canvas.json',
       )
-      const pane = wrapper.get('[data-testid="agent-canvas-pane"]').element
+      const pane = wrapper.get('[data-testid="drive-pane"]').element
       const visited: Array<Record<string, unknown>> = []
       router.afterEach((to) => visited.push({ ...to.query }))
 
       session.activeWindowId.value = '@2'
       await flushPromises()
 
-      expect(visited).toEqual([{ window: '@2', canvas: 'mermaid-architecture' }])
-      expect(wrapper.get('[data-testid="agent-canvas-pane"]').element).toBe(pane)
+      expect(visited).toEqual([{ window: '@2', doc: 'canvases/mermaid.canvas.json' }])
+      expect(wrapper.get('[data-testid="drive-pane"]').element).toBe(pane)
 
       wrapper.unmount()
     })
 
-    // No agent client in this spec, so the pane reads no canvases: the state
-    // a session is in before its agent has the server.
+    // The space is empty here: the state a session is in before its agent
+    // has the server.
     it('leads from the empty pane to the MCP settings page', async () => {
-      const { wrapper, router } = await mountWithCanvas('/terminal/hive-fix-parser?canvas=1')
+      const { wrapper, router } = await mountWithDrive('/terminal/hive-fix-parser?doc=1')
 
-      await wrapper.get('[data-testid="agent-canvas-setup-open"]').trigger('click')
+      await wrapper.get('[data-testid="drive-pane-setup-open"]').trigger('click')
       await flushPromises()
 
       expect(router.currentRoute.value.name).toBe('application-settings')
@@ -3960,11 +3965,11 @@ describe('TerminalMode', () => {
     })
 
     it("asks for the full-page view on the session's repository", async () => {
-      const { wrapper } = await mountWithCanvas('/terminal/hive-fix-parser?canvas=1')
+      const { wrapper } = await mountWithDrive('/terminal/hive-fix-parser?doc=1')
 
-      await wrapper.get('[data-testid="agent-canvas-expand"]').trigger('click')
+      await wrapper.get('[data-testid="drive-pane-expand"]').trigger('click')
 
-      expect(wrapper.emitted('open-canvas-page')).toEqual([[{ workspace: 'hay-kot/hive', session: '1', name: null }]])
+      expect(wrapper.emitted('open-drive-page')).toEqual([[{ space: 'hay-kot/hive', session: '1', path: null }]])
 
       wrapper.unmount()
     })

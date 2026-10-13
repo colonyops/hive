@@ -14,9 +14,9 @@ declare module "@wailsio/runtime" {
         interface CustomEvents {
             "actions:updated": string;
             "activity:appended": number;
-            "canvas:toggle": wailsui$0.CanvasToggle;
-            "canvas:updated": wailsui$0.CanvasWrite;
             "connection:updated": string;
+            "drive:toggle": wailsui$0.DriveToggle;
+            "drive:updated": wailsui$0.DriveWrite;
             "flows:updated": string;
             "inbox:updated": string;
             "jobs:updated": string;

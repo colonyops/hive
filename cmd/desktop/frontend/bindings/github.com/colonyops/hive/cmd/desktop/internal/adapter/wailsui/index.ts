@@ -8,6 +8,7 @@ import * as AgentsService from "./agentsservice.js";
 import * as ClientLogService from "./clientlogservice.js";
 import * as DevToolsService from "./devtoolsservice.js";
 import * as DiagnosticsService from "./diagnosticsservice.js";
+import * as DriveService from "./driveservice.js";
 import * as FlowsService from "./flowsservice.js";
 import * as GitHubService from "./githubservice.js";
 import * as GiteaService from "./giteaservice.js";
@@ -43,6 +44,7 @@ export {
     ClientLogService,
     DevToolsService,
     DiagnosticsService,
+    DriveService,
     FlowsService,
     GitHubService,
     GiteaService,
@@ -76,16 +78,21 @@ export type {
     AgentsAvailability,
     AgentsEndpoint,
     AppearanceSettings,
+    BlockWire,
     BuildInfo,
-    CanvasToggle,
-    CanvasWrite,
+    CanvasWire,
     ClientLogEntry,
     DevToolsInfo,
+    DocumentWire,
+    DriveToggle,
+    DriveWrite,
     EditorChoice,
     EditorSettings,
+    EntryWire,
     ExportStatus,
     FlowSummary,
     GithubSettings,
+    HitWire,
     InstalledFonts,
     KeybindingSettings,
     MarkImageView,
@@ -113,6 +120,7 @@ export type {
     SessionDetail,
     SessionGitStatus,
     SessionSummary,
+    SpaceWire,
     SystemInfo,
     TaskDetail,
     TaskItem,

@@ -1,201 +1,132 @@
 package review
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/colonyops/hive/internal/domain/drive"
 )
 
-func TestInferDocumentType(t *testing.T) {
-	tests := []struct {
-		name     string
-		relPath  string
-		expected DocumentType
-	}{
-		{
-			name:     "plan document",
-			relPath:  "plans/2026-02-01-feature.md",
-			expected: DocTypePlan,
-		},
-		{
-			name:     "research document",
-			relPath:  "research/2026-02-01-investigation.md",
-			expected: DocTypeResearch,
-		},
-		{
-			name:     "context document",
-			relPath:  "context/architecture.md",
-			expected: DocTypeContext,
-		},
-		{
-			name:     "other document",
-			relPath:  "notes.md",
-			expected: DocTypeOther,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := inferDocumentType(tt.relPath)
-			assert.Equal(t, tt.expected, result, "inferDocumentType(%q) = %v, want %v", tt.relPath, result, tt.expected)
-		})
-	}
+func md(path string, modified time.Time, front drive.Frontmatter) drive.Entry {
+	return drive.Entry{Path: path, Name: path, Kind: drive.KindMarkdown, Modified: modified, Front: front}
 }
 
-func TestDocumentTypeString(t *testing.T) {
-	tests := []struct {
-		docType  DocumentType
-		expected string
-	}{
-		{DocTypePlan, "Plan"},
-		{DocTypeResearch, "Research"},
-		{DocTypeContext, "Context"},
-		{DocTypeOther, "Other"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.expected, func(t *testing.T) {
-			result := tt.docType.String()
-			assert.Equal(t, tt.expected, result, "DocumentType.String() = %q, want %q", result, tt.expected)
-		})
-	}
+func repoSpace(t *testing.T) drive.Space {
+	t.Helper()
+	space, err := drive.RepositorySpace("acme", "site")
+	require.NoError(t, err)
+	return space
 }
 
-func TestSortDocuments(t *testing.T) {
+func TestDocumentsFromTree_Typing(t *testing.T) {
 	now := time.Now()
-	older := now.Add(-1 * time.Hour)
-	newest := now.Add(1 * time.Hour)
+	root := drive.Entry{Kind: drive.KindDir, Children: []drive.Entry{
+		{Path: "plans", Kind: drive.KindDir, Children: []drive.Entry{
+			md("plans/a.md", now, nil),
+			md("plans/design.md", now, drive.Frontmatter{"type": "design-doc"}),
+			md("plans/untyped.md", now, drive.Frontmatter{"type": 3}),
+		}},
+		md("loose.md", now, nil),
+		{Path: "research/notes.txt", Kind: drive.KindFile},
+		{Path: "image.png", Kind: drive.KindFile},
+		{Path: "page.html", Kind: drive.KindHtml},
+		{Path: "board.canvas.json", Kind: drive.KindCanvas},
+	}}
 
-	docs := []Document{
-		{Type: DocTypeOther, ModTime: now},
-		{Type: DocTypePlan, ModTime: older},
-		{Type: DocTypeResearch, ModTime: newest},
-		{Type: DocTypePlan, ModTime: newest},
-		{Type: DocTypeContext, ModTime: now},
+	docs := DocumentsFromTree(repoSpace(t), "/ctx/acme/site", root, false)
+
+	got := map[string]string{}
+	for _, d := range docs {
+		got[d.RelPath] = d.Type
 	}
-
-	sortDocuments(docs)
-
-	// Expected order:
-	// 1. Plans (newest first)
-	// 2. Research (newest first)
-	// 3. Context (newest first)
-	// 4. Other (newest first)
-	expected := []struct {
-		docType DocumentType
-		modTime time.Time
-	}{
-		{DocTypePlan, newest},
-		{DocTypePlan, older},
-		{DocTypeResearch, newest},
-		{DocTypeContext, now},
-		{DocTypeOther, now},
-	}
-
-	require.Len(t, docs, len(expected), "expected %d documents, got %d", len(expected), len(docs))
-
-	for i, exp := range expected {
-		assert.Equal(t, exp.docType, docs[i].Type, "position %d: expected type %v, got %v", i, exp.docType, docs[i].Type)
-		assert.True(t, docs[i].ModTime.Equal(exp.modTime), "position %d: expected time %v, got %v", i, exp.modTime, docs[i].ModTime)
-	}
+	assert.Equal(t, map[string]string{
+		"plans/a.md":         "plan",
+		"plans/design.md":    "design-doc",
+		"plans/untyped.md":   "plan",
+		"loose.md":           "other",
+		"research/notes.txt": "research",
+	}, got, "front matter type wins, then the top folder, then other; only markdown and .txt are listed")
 }
 
-func TestDiscoverDocuments(t *testing.T) {
-	// Create temporary directory structure (simulating context directory)
-	tmpDir, err := os.MkdirTemp("", "hive-test-*")
+func TestDocument_RenderPlainText(t *testing.T) {
+	doc := Document{Path: "/ctx/notes.txt", Content: "# not a heading\n**not bold**\n"}
+	out, err := doc.Render(80)
 	require.NoError(t, err)
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	// Create context directory structure
-	plansPath := filepath.Join(tmpDir, "plans")
-	researchPath := filepath.Join(tmpDir, "research")
-	contextPath := filepath.Join(tmpDir, "context")
-
-	for _, dir := range []string{plansPath, researchPath, contextPath} {
-		require.NoError(t, os.MkdirAll(dir, 0o755))
-	}
-
-	// Create test files
-	testFiles := []struct {
-		path    string
-		content string
-	}{
-		{filepath.Join(plansPath, "plan1.md"), "# Plan 1"},
-		{filepath.Join(plansPath, "plan2.txt"), "Plan 2"},
-		{filepath.Join(researchPath, "research1.md"), "# Research 1"},
-		{filepath.Join(contextPath, "context1.md"), "# Context 1"},
-		{filepath.Join(tmpDir, "other.md"), "# Other"},
-		{filepath.Join(tmpDir, "ignored.json"), "{}"}, // Should be ignored
-	}
-
-	for _, tf := range testFiles {
-		require.NoError(t, os.WriteFile(tf.path, []byte(tf.content), 0o644))
-	}
-
-	// Discover documents
-	docs, err := DiscoverDocuments(tmpDir)
-	require.NoError(t, err, "DiscoverDocuments() error")
-
-	// Verify count (should exclude .json file)
-	expectedCount := 5
-	assert.Len(t, docs, expectedCount, "expected %d documents, got %d", expectedCount, len(docs))
-
-	// Verify all documents have required fields
-	for i, doc := range docs {
-		assert.NotEmpty(t, doc.Path, "document %d: empty Path", i)
-		assert.NotEmpty(t, doc.RelPath, "document %d: empty RelPath", i)
-		assert.False(t, doc.ModTime.IsZero(), "document %d: zero ModTime", i)
-		// Verify RelPath is relative
-		assert.False(t, filepath.IsAbs(doc.RelPath), "document %d: RelPath should be relative, got %q", i, doc.RelPath)
-	}
-
-	// Verify document types
-	typeCount := make(map[DocumentType]int)
-	for _, doc := range docs {
-		typeCount[doc.Type]++
-	}
-
-	expectedTypes := map[DocumentType]int{
-		DocTypePlan:     2,
-		DocTypeResearch: 1,
-		DocTypeContext:  1,
-		DocTypeOther:    1,
-	}
-
-	for docType, expected := range expectedTypes {
-		assert.Equal(t, expected, typeCount[docType], "expected %d %v documents, got %d", expected, docType, typeCount[docType])
-	}
-
-	// Verify documents are sorted by type
-	var lastType DocumentType
-	for i, doc := range docs {
-		if i > 0 {
-			assert.GreaterOrEqual(t, doc.Type, lastType, "documents not sorted by type: position %d has type %v after %v", i, doc.Type, lastType)
-		}
-		lastType = doc.Type
-	}
+	assert.Equal(t, []string{"# not a heading", "**not bold**"}, doc.RenderedLines)
+	assert.Contains(t, out, "# not a heading")
 }
 
-func TestDiscoverDocuments_NoContextDir(t *testing.T) {
-	// Use a non-existent directory
-	nonExistentDir := "/tmp/hive-test-nonexistent-" + time.Now().Format("20060102150405")
+func TestDocumentsFromTree_Paths(t *testing.T) {
+	root := drive.Entry{Kind: drive.KindDir, Children: []drive.Entry{md("plans/a.md", time.Now(), nil)}}
 
-	docs, err := DiscoverDocuments(nonExistentDir)
-	require.NoError(t, err, "DiscoverDocuments() error")
-	assert.Empty(t, docs, "expected 0 documents, got %d", len(docs))
+	repo := DocumentsFromTree(repoSpace(t), "/ctx/acme/site", root, false)
+	require.Len(t, repo, 1)
+	assert.Equal(t, "/ctx/acme/site/plans/a.md", repo[0].Path)
+	assert.Equal(t, "plans/a.md", repo[0].RelPath, "RelPath is space-relative, the .Doc.RelPath template contract")
+	assert.Equal(t, ".hive/plans/a.md", repo[0].CheckoutPath(".hive"))
+	assert.Equal(t, ".context/plans/a.md", repo[0].CheckoutPath(".context"))
+
+	shared := DocumentsFromTree(drive.Shared, "/ctx/shared", root, false)
+	assert.Equal(t, "plans/a.md", shared[0].RelPath)
+	assert.Equal(t, "plans/a.md", shared[0].CheckoutPath(".hive"), "no checkout links the shared space")
+
+	all := DocumentsFromTree(repoSpace(t), "/ctx/acme/site", root, true)
+	assert.Equal(t, "acme/site/plans/a.md", all[0].RelPath)
+	assert.Equal(t, "acme/site/plans/a.md", all[0].CheckoutPath(".hive"))
+	assert.Equal(t, repoSpace(t), all[0].Space)
 }
 
-func TestDiscoverDocuments_EmptyContextDir(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "hive-test-*")
-	require.NoError(t, err)
-	defer func() { _ = os.RemoveAll(tmpDir) }()
+func TestDocumentsFromTree_SortOrder(t *testing.T) {
+	now := time.Now()
+	older := now.Add(-time.Hour)
+	newest := now.Add(time.Hour)
+	typed := func(path, typ string, at time.Time) drive.Entry {
+		return md(path, at, drive.Frontmatter{"type": typ})
+	}
+	root := drive.Entry{Kind: drive.KindDir, Children: []drive.Entry{
+		md("loose.md", newest, nil),
+		typed("a.md", "zebra", now),
+		typed("b.md", "context", now),
+		typed("c.md", "plan", older),
+		typed("d.md", "apple", now),
+		typed("e.md", "reference", now),
+		typed("f.md", "plan", newest),
+		typed("g.md", "review", now),
+		typed("h.md", "research", now),
+		typed("i.md", "design-doc", now),
+	}}
 
-	// Empty context directory
-	docs, err := DiscoverDocuments(tmpDir)
-	require.NoError(t, err, "DiscoverDocuments() error")
-	assert.Empty(t, docs, "expected 0 documents, got %d", len(docs))
+	docs := DocumentsFromTree(drive.Shared, "/ctx/shared", root, false)
+
+	var order []string
+	for _, d := range docs {
+		order = append(order, d.Path[len("/ctx/shared/"):])
+	}
+	assert.Equal(t, []string{
+		"f.md", "c.md", // plan, newest first
+		"i.md",     // design-doc
+		"h.md",     // research
+		"g.md",     // review
+		"e.md",     // reference
+		"b.md",     // context
+		"d.md",     // apple
+		"a.md",     // zebra
+		"loose.md", // other
+	}, order)
+}
+
+func TestTypeTitle(t *testing.T) {
+	assert.Equal(t, "Plan", typeTitle("plan"))
+	assert.Equal(t, "Design doc", typeTitle("design-doc"))
+	assert.Equal(t, "Other", typeTitle(""))
+}
+
+func TestTypeFromPath(t *testing.T) {
+	assert.Equal(t, "plan", typeFromPath("plans/x.md"))
+	assert.Equal(t, "research", typeFromPath("research/x.md"))
+	assert.Equal(t, "notes", typeFromPath("notes/x.md"), "any other folder is its own type")
+	assert.Equal(t, "other", typeFromPath("x.md"))
 }

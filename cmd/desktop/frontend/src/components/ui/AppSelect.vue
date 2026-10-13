@@ -20,10 +20,15 @@ export interface AppSelectOption {
   hint?: string
   icon?: Component
   disabled?: boolean
+  /** A header drawn above the first option of each run of options that share it. Keep each group's options together. */
+  group?: string
 }
 
 /** `md` matches TextField's metrics (it sits beside one in every form); `sm` is for toolbars and sidebars. */
 export type AppSelectSize = 'sm' | 'md'
+
+/** `outlined` is a form control; `flat` has no border or fill of its own, for a trigger that is a heading of the surface it sits in. */
+export type AppSelectVariant = 'outlined' | 'flat'
 
 const props = withDefaults(
   defineProps<{
@@ -37,12 +42,13 @@ const props = withDefaults(
     editable?: boolean
     disabled?: boolean
     size?: AppSelectSize
+    variant?: AppSelectVariant
     testid?: string
     ariaLabel?: string
     /** Lets a FormField label point at the trigger. */
     id?: string
   }>(),
-  { size: 'md' },
+  { size: 'md', variant: 'outlined' },
 )
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
@@ -74,6 +80,11 @@ function matches(option: AppSelectOption, query: string): boolean {
   return `${option.label} ${option.value} ${option.hint ?? ''}`.toLowerCase().includes(query)
 }
 
+function startsGroup(index: number): boolean {
+  const group = visible.value[index]?.group
+  return !!group && visible.value[index - 1]?.group !== group
+}
+
 const selected = computed(() => props.options.find((option) => option.value === props.modelValue) ?? null)
 const visible = computed(() => {
   if (props.editable) {
@@ -92,6 +103,11 @@ const triggerClass = computed(
       sm: 'gap-1.5 rounded-md px-2 py-1.5 text-caption',
       md: 'gap-2 rounded-lg px-3 py-2.5 text-body',
     })[props.size],
+)
+const chromeClass = computed(() =>
+  props.variant === 'flat'
+    ? ['border border-transparent bg-transparent hover:bg-chip focus-visible:bg-chip', open.value ? 'bg-chip' : '']
+    : ['border bg-app', open.value ? 'border-accent' : 'border-strong'],
 )
 const optionText = computed(() => (props.size === 'sm' ? 'text-small' : 'text-body'))
 
@@ -117,7 +133,7 @@ const nav = useListKeyboardNav({
   open: () => open.value,
   disabled: (index) => !!visible.value[index]?.disabled,
   homeEnd: () => !props.editable,
-  row: (index) => list.value?.children[index]?.firstElementChild,
+  row: (index) => list.value?.children[index]?.querySelector('button'),
 })
 
 function firstEnabled(): number {
@@ -260,8 +276,8 @@ onClickOutside(
         ref="editableInput"
         :value="text"
         type="text"
-        class="w-full border bg-app pr-9 text-left text-text outline-none placeholder:text-text-4 disabled:cursor-not-allowed disabled:opacity-60"
-        :class="[triggerClass, open ? 'border-accent' : 'border-strong']"
+        class="w-full pr-9 text-left text-text outline-none placeholder:text-text-4 disabled:cursor-not-allowed disabled:opacity-60"
+        :class="[triggerClass, chromeClass]"
         :data-testid="testid"
         :aria-label="ariaLabel"
         :placeholder="placeholder ?? ''"
@@ -291,8 +307,8 @@ onClickOutside(
       :id="id"
       ref="trigger"
       type="button"
-      class="flex w-full items-center justify-between border bg-app text-left text-text outline-none disabled:cursor-not-allowed disabled:opacity-60"
-      :class="[triggerClass, open ? 'border-accent' : 'border-strong']"
+      class="flex w-full items-center justify-between text-left text-text outline-none disabled:cursor-not-allowed disabled:opacity-60"
+      :class="[triggerClass, chromeClass]"
       :data-testid="testid"
       :aria-label="ariaLabel"
       :disabled="disabled"
@@ -343,6 +359,14 @@ onClickOutside(
             role="option"
             :aria-selected="option.value === modelValue"
           >
+            <p
+              v-if="startsGroup(index)"
+              class="px-[9px] pb-1 pt-2 text-micro font-medium uppercase tracking-wide text-text-4"
+              :data-testid="testid ? `${testid}-group-${option.group}` : undefined"
+              aria-hidden="true"
+            >
+              {{ option.group }}
+            </p>
             <button
               type="button"
               class="flex w-full gap-2 rounded-md px-[9px] py-[7px] text-left disabled:cursor-not-allowed disabled:opacity-40"

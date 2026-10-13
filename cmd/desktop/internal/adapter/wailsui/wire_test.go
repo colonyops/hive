@@ -12,6 +12,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
+	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/hc"
 	"github.com/colonyops/hive/internal/domain/session"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
@@ -90,7 +91,13 @@ func TestSessionSummaryOfMapsEachField(t *testing.T) {
 	assert.Equal(t, SessionSummary{
 		ID: "s1", Name: "review 81", Slug: "review-81", Repo: "git@github.com:acme/site.git", State: "recycled",
 		CanvasOwner: "acme/site", CreatedAt: createdAt,
-	}, sessionSummaryOf(s))
+	}, sessionSummaryOf(sameSpace, s))
+}
+
+func TestSessionSummaryOfHasNoCanvasOwnerForARemoteWithNoRepository(t *testing.T) {
+	for _, remote := range []string{"", "git@github.com:shared/site.git"} {
+		assert.Empty(t, sessionSummaryOf(sameSpace, session.Session{Remote: remote}).CanvasOwner, remote)
+	}
 }
 
 func TestSessionSummaryOfUsesTheCurrentActivation(t *testing.T) {
@@ -98,11 +105,11 @@ func TestSessionSummaryOfUsesTheCurrentActivation(t *testing.T) {
 	activatedAt := time.Date(2026, time.October, 1, 12, 0, 0, 0, time.UTC)
 	s := session.Session{State: session.StateActive, CreatedAt: createdAt, UpdatedAt: activatedAt}
 
-	assert.Equal(t, activatedAt, sessionSummaryOf(s).CreatedAt)
+	assert.Equal(t, activatedAt, sessionSummaryOf(sameSpace, s).CreatedAt)
 
 	s.MarkActive(activatedAt)
 	s.UpdatedAt = activatedAt.Add(time.Hour)
-	assert.True(t, activatedAt.Equal(sessionSummaryOf(s).CreatedAt))
+	assert.True(t, activatedAt.Equal(sessionSummaryOf(sameSpace, s).CreatedAt))
 }
 
 func TestSessionDetailOfReadsTheWorktreeBranch(t *testing.T) {
@@ -134,3 +141,5 @@ func TestTaskDetailOfFlattensTheItem(t *testing.T) {
 	assert.Equal(t, "done", got.Status)
 	assert.True(t, got.Blocked)
 }
+
+func sameSpace(space drive.Space) drive.Space { return space }

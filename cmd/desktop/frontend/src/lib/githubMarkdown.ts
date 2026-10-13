@@ -17,9 +17,18 @@
 // This is deliberately separate from pipeline/lib/markdown.ts, a tiny
 // hand-rolled renderer for FIRST-PARTY node help.md docs.
 import MarkdownIt from 'markdown-it'
+import type { RenderRule } from 'markdown-it/lib/renderer.mjs'
 import type StateBlock from 'markdown-it/lib/rules_block/state_block.mjs'
 import type Token from 'markdown-it/lib/token.mjs'
 import taskLists from 'markdown-it-task-lists'
+
+/**
+ * Highlighted HTML for a fence, or null to keep markdown-it's escaped
+ * `<pre><code class="language-x">`. The renderers take one per call: the
+ * highlighter is a store (stores/useCodeHighlight.ts), and this module stays
+ * a pure string transform.
+ */
+export type Highlight = (code: string, lang: string) => string | null
 
 const alertTypes = new Map([
   ['NOTE', 'Note'],
@@ -140,7 +149,48 @@ function githubExtensions(md: MarkdownIt) {
   })
 }
 
-const md = new MarkdownIt({ html: true, linkify: true, breaks: true }).use(taskLists).use(githubExtensions)
+// markdown-it binds its highlight hook once, so the one a render was given is
+// held for the length of that synchronous call. An empty string makes
+// markdown-it fall back to its escaped <pre><code class="language-x"> output.
+let activeHighlight: Highlight | null = null
+
+function withHighlight<T>(highlight: Highlight | undefined, render: () => T): T {
+  const previous = activeHighlight
+  activeHighlight = highlight ?? null
+  try {
+    return render()
+  } finally {
+    activeHighlight = previous
+  }
+}
+
+const md = new MarkdownIt({
+  html: true,
+  linkify: true,
+  breaks: true,
+  highlight: (code, lang) => activeHighlight?.(code, lang) ?? '',
+})
+  .use(taskLists)
+  .use(githubExtensions)
+
+// Every code block carries a copy button. The HTML lands in a host through
+// v-html, so the button is plain markup with inline lucide icons, and the
+// host's click handler delegates to composables/useCodeCopy.ts, which reads
+// the code back out of the sibling <pre>. The second svg is the check that
+// shows while the button holds the is-copied class.
+const svgOpen =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+const copyIcon = `${svgOpen}<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>`
+const checkIcon = `${svgOpen}<path d="M20 6 9 17l-5-5"/></svg>`
+export const codeCopyButtonClass = 'markdown-code-copy'
+const codeCopyButton = `<button type="button" class="${codeCopyButtonClass}" data-testid="markdown-code-copy" aria-label="Copy code" title="Copy code">${copyIcon}${checkIcon}</button>`
+
+function withCopyButton(rule: RenderRule): RenderRule {
+  return (tokens, index, options, env, self) =>
+    `<div class="markdown-code">${codeCopyButton}${rule(tokens, index, options, env, self)}</div>`
+}
+md.renderer.rules.fence = withCopyButton(md.renderer.rules.fence!)
+md.renderer.rules.code_block = withCopyButton(md.renderer.rules.code_block!)
 
 // Enabling HTML lets the parser distinguish comments from text. Keep the
 // output safe by escaping every remaining HTML token; whitelisted details
@@ -157,9 +207,9 @@ md.renderer.rules.html_inline = (tokens: Token[], index: number) => {
   return md.utils.escapeHtml(content)
 }
 
-export function renderGithubMarkdown(src: string): string {
+export function renderGithubMarkdown(src: string, highlight?: Highlight): string {
   if (!src.trim()) return ''
-  return md.render(src)
+  return withHighlight(highlight, () => md.render(src))
 }
 
 export type CanvasMarkdownPart = { kind: 'html'; html: string } | { kind: 'mermaid'; source: string }
@@ -168,25 +218,27 @@ function isTopLevelMermaidFence(token: Token): boolean {
   return token.type === 'fence' && token.level === 0 && token.info.trim().toLowerCase() === 'mermaid'
 }
 
-export function renderCanvasMarkdown(src: string): CanvasMarkdownPart[] {
+export function renderCanvasMarkdown(src: string, highlight?: Highlight): CanvasMarkdownPart[] {
   if (!src.trim()) return []
 
-  const env = {}
-  const tokens = md.parse(src, env)
-  const parts: CanvasMarkdownPart[] = []
-  let htmlStart = 0
+  return withHighlight(highlight, () => {
+    const env = {}
+    const tokens = md.parse(src, env)
+    const parts: CanvasMarkdownPart[] = []
+    let htmlStart = 0
 
-  for (let index = 0; index < tokens.length; index++) {
-    const token = tokens[index]
-    if (!isTopLevelMermaidFence(token)) continue
+    for (let index = 0; index < tokens.length; index++) {
+      const token = tokens[index]
+      if (!isTopLevelMermaidFence(token)) continue
 
-    const html = md.renderer.render(tokens.slice(htmlStart, index), md.options, env)
+      const html = md.renderer.render(tokens.slice(htmlStart, index), md.options, env)
+      if (html) parts.push({ kind: 'html', html })
+      parts.push({ kind: 'mermaid', source: token.content })
+      htmlStart = index + 1
+    }
+
+    const html = md.renderer.render(tokens.slice(htmlStart), md.options, env)
     if (html) parts.push({ kind: 'html', html })
-    parts.push({ kind: 'mermaid', source: token.content })
-    htmlStart = index + 1
-  }
-
-  const html = md.renderer.render(tokens.slice(htmlStart), md.options, env)
-  if (html) parts.push({ kind: 'html', html })
-  return parts
+    return parts
+  })
 }

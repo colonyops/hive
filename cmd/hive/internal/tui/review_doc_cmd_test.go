@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -9,6 +11,7 @@ import (
 	"github.com/colonyops/hive/cmd/hive/internal/config"
 	"github.com/colonyops/hive/cmd/hive/internal/plugins"
 	"github.com/colonyops/hive/cmd/hive/internal/tui/views/review"
+	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/events/testbus"
 	"github.com/stretchr/testify/assert"
@@ -48,15 +51,15 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 		{
 			Path:    "/test/plans/doc1.md",
 			RelPath: "plans/doc1.md",
-			Type:    review.DocTypePlan,
+			Type:    "plan",
 		},
 		{
 			Path:    "/test/research/doc2.md",
 			RelPath: "research/doc2.md",
-			Type:    review.DocTypeResearch,
+			Type:    "research",
 		},
 	}
-	reviewView := review.New(zerolog.Nop(), docs, "/test", nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), nil, nil, docs, review.Scope{Dir: "/test"}, nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	// Create a minimal handler for testing
@@ -80,89 +83,69 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 }
 
 func TestOpenDocument(t *testing.T) {
-	// Documents as DiscoverDocuments produces them: RelPath is relative to contextDir,
-	// without any ".hive/" prefix. The contextDir is "/test" here.
-	docs := []review.Document{
-		{
-			Path:    "/test/plans/doc1.md",
-			RelPath: "plans/doc1.md",
-			Type:    review.DocTypePlan,
-		},
-		{
-			Path:    "/test/research/doc2.md",
-			RelPath: "research/doc2.md",
-			Type:    review.DocTypeResearch,
-		},
-	}
-	reviewView := review.New(zerolog.Nop(), docs, "/test", nil, nil, 0)
+	spaceDir := t.TempDir()
+	unlisted := filepath.Join(spaceDir, "notes", "new.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(unlisted), 0o755))
+	require.NoError(t, os.WriteFile(unlisted, []byte("# new\n"), 0o644))
+
+	space, err := drive.RepositorySpace("owner", "repo")
+	require.NoError(t, err)
+	tree := drive.Entry{Kind: drive.KindDir, Children: []drive.Entry{
+		{Path: "plans", Kind: drive.KindDir, Children: []drive.Entry{{Path: "plans/doc1.md", Kind: drive.KindMarkdown}}},
+		{Path: "research", Kind: drive.KindDir, Children: []drive.Entry{{Path: "research/doc2.md", Kind: drive.KindMarkdown}}},
+	}}
+	docs := review.DocumentsFromTree(space, spaceDir, tree, false)
+	reviewView := review.New(zerolog.Nop(), nil, nil, docs, review.Scope{Space: space, Dir: spaceDir}, nil, nil, 0)
+	reviewView.SetSymlinkName(".context")
 	reviewView.SetSize(100, 40)
 
 	tests := []struct {
-		name    string
-		path    string
-		wantErr bool
+		name     string
+		path     string
+		wantPath string
 	}{
-		{
-			name:    "find by full path",
-			path:    "/test/plans/doc1.md",
-			wantErr: false,
-		},
-		{
-			name:    "find by relative path (contextDir-relative, no .hive/ prefix)",
-			path:    "plans/doc1.md",
-			wantErr: false,
-		},
-		{
-			name:    "find by .hive/ prefix path (as agents write URIs)",
-			path:    ".hive/plans/doc1.md",
-			wantErr: false,
-		},
-		{
-			name:    "find by basename",
-			path:    "doc2.md",
-			wantErr: false,
-		},
-		{
-			name:    "not found",
-			path:    "nonexistent.md",
-			wantErr: true,
-		},
+		{name: "full path", path: filepath.Join(spaceDir, "plans", "doc1.md"), wantPath: filepath.Join(spaceDir, "plans", "doc1.md")},
+		{name: "space-relative path", path: "plans/doc1.md", wantPath: filepath.Join(spaceDir, "plans", "doc1.md")},
+		{name: "path through the configured symlink", path: ".context/research/doc2.md", wantPath: filepath.Join(spaceDir, "research", "doc2.md")},
+		{name: "path through another symlink name", path: ".hive/plans/doc1.md", wantPath: filepath.Join(spaceDir, "plans", "doc1.md")},
+		{name: "unlisted file through the configured symlink", path: ".context/notes/new.md", wantPath: unlisted},
+		{name: "basename", path: "doc2.md", wantPath: filepath.Join(spaceDir, "research", "doc2.md")},
+		{name: "not found", path: "nonexistent.md"},
+		{name: "not found through the configured symlink", path: ".context/notes/missing.md"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cmd := reviewView.OpenDocumentByPath(tt.path)
-			msg := cmd()
+			msg := reviewView.OpenDocumentByPath(tt.path)()
 
 			openMsg, ok := msg.(review.OpenDocumentMsg)
 			require.True(t, ok, "Expected OpenDocumentMsg, got %T", msg)
-			if tt.wantErr {
-				assert.Error(t, openMsg.Err, "Expected error but got none")
-			} else {
-				assert.NoError(t, openMsg.Err, "Expected no error but got: %v", openMsg.Err)
+			if tt.wantPath == "" {
+				assert.Error(t, openMsg.Err)
+				return
 			}
+			require.NoError(t, openMsg.Err)
+			assert.Equal(t, tt.wantPath, openMsg.Path)
 		})
 	}
 }
 
-// TestOpenDocument_SuffixMatch covers the production mismatch where DiscoverDocuments
-// produces RelPath relative to the context dir (e.g. "plans/doc.md"), but todos store
-// URIs relative to the repo root (e.g. "review://.hive/plans/doc.md").
+// TestOpenDocument_SuffixMatch covers todo URIs relative to the repo root
+// ("review://.hive/plans/doc.md") with no symlink name configured.
 func TestOpenDocument_SuffixMatch(t *testing.T) {
-	// Simulate docs as produced by DiscoverDocuments: RelPath has no ".hive/" prefix.
 	docs := []review.Document{
 		{
 			Path:    "/real/context/owner/repo/plans/doc1.md",
 			RelPath: "plans/doc1.md",
-			Type:    review.DocTypePlan,
+			Type:    "plan",
 		},
 		{
 			Path:    "/real/context/owner/repo/research/doc2.md",
 			RelPath: "research/doc2.md",
-			Type:    review.DocTypeResearch,
+			Type:    "research",
 		},
 	}
-	reviewView := review.New(zerolog.Nop(), docs, "/real/context/owner/repo", nil, nil, 0)
+	reviewView := review.New(zerolog.Nop(), nil, nil, docs, review.Scope{Dir: "/real/context/owner/repo"}, nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	tests := []struct {
@@ -210,6 +193,7 @@ func TestOpenDocument_SuffixMatch(t *testing.T) {
 
 func TestResolveReviewURI(t *testing.T) {
 	cfg := &config.Config{DataDir: "/data"}
+	cfg.Context.SymlinkName = ".hive"
 
 	tests := []struct {
 		name     string

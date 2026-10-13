@@ -6,6 +6,7 @@ import OnboardingScreen from './components/OnboardingScreen.vue'
 import ProfileSettingsView from './components/ProfileSettingsView.vue'
 import SettingsView from './components/SettingsView.vue'
 import SequenceHint from './components/SequenceHint.vue'
+import DrivePage from './components/drive/DrivePage.vue'
 import FlowsView from './pipeline/components/FlowsView.vue'
 import FeedHub from './app/FeedHub.vue'
 import AppDialogs from './app/AppDialogs.vue'
@@ -58,12 +59,13 @@ const onboarding = useOnboarding(feed, github, router)
 const { active: onboardingActive, screen: onboardingScreen } = onboarding
 const shellLoaded = computed(() => (profilesLoaded.value || !!profilesError.value) && onboarding.loaded.value)
 const appMode = useAppMode(feed, nav, onboardingActive, shellLoaded)
-const { mode, terminalActive, agentsActive, hubActive, settingsActive, terminalMounted, agentsMounted } = appMode
+const { mode, terminalActive, agentsActive, hubActive, settingsActive, driveActive } = appMode
+const { terminalMounted, agentsMounted } = appMode
 const { terminalSidebarCollapsed, agentsSidebarCollapsed, feedSidebarCollapsed, previewCollapsed } = appMode
-const overlays = useHubOverlays(terminalActive, appMode.viewCanvasScope)
-const { tasksOpen, activityOpen, canvasOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
+const overlays = useHubOverlays(terminalActive)
+const { tasksOpen, activityOpen, actionRunsOpen, terminalSessionRepoKey } = overlays
 const update = useSelfUpdate(confirmation, feed.showToast)
-const reveal = useReveal(nav, session, feed.showToast, overlays.openCanvas)
+const reveal = useReveal(nav, session, feed.showToast, appMode.openDrive)
 const feedCommands = useFeedCommands(feed, confirmation)
 const itemDetail = useSelectedItemDetail(feed)
 
@@ -86,7 +88,6 @@ useGlobalKeymap({
   paletteOpen: palette.open,
   activityOpen,
   tasksOpen,
-  canvasOpen,
   actionRunsOpen,
 })
 
@@ -160,8 +161,8 @@ useWailsEvent('flows:updated', () => {
         v-show="terminalActive"
         :active="terminalActive"
         :sidebar-collapsed="terminalSidebarCollapsed"
-        :canvas="appMode.codeCanvas.value"
-        @open-canvas-page="overlays.openCanvas"
+        :drive="appMode.codeDrive.value"
+        @open-drive-page="appMode.openDrive"
         @open-tasks="overlays.toggleTasks"
         @session-repo-key="terminalSessionRepoKey = $event"
       />
@@ -170,7 +171,7 @@ useWailsEvent('flows:updated', () => {
         v-show="agentsActive"
         :active="agentsActive"
         :sidebar-collapsed="agentsSidebarCollapsed"
-        @open-canvas-page="overlays.openCanvas"
+        @open-drive-page="appMode.openDrive"
       />
       <SettingsView
         v-if="settingsActive"
@@ -178,6 +179,14 @@ useWailsEvent('flows:updated', () => {
         :known-feed-types="knownFeedTypes"
         @close="appMode.closeSettings"
         @select-category="nav.selectApplicationSettingsSection"
+      />
+      <DrivePage
+        v-if="driveActive"
+        :scope="appMode.driveScope.value"
+        @update:scope="appMode.updateDriveScope"
+        @close="appMode.closeDrive"
+        @open-url="feed.openUrl"
+        @setup="nav.selectApplicationSettingsSection('mcp')"
       />
       <!-- The profile rail stays mounted across the feed, flows, and profile
            settings pages, so the flows canvas never strands the user. -->

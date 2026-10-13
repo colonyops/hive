@@ -17,19 +17,19 @@ import { useDocumentVisibility } from '@vueuse/core'
 import type { Terminal } from '@xterm/xterm'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconMessagesSquare from '~icons/lucide/messages-square'
-import AgentCanvasPane from './AgentCanvasPane.vue'
 import AgentsSidebar from './AgentsSidebar.vue'
 import AgentWorkspaceEditor from './AgentWorkspaceEditor.vue'
+import DrivePane from './drive/DrivePane.vue'
 import BaseButton from './ui/BaseButton.vue'
 import RenameDialog from './ui/RenameDialog.vue'
 import PaneStatusBar from './PaneStatusBar.vue'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
-import { useAgentCanvasRoute } from '../composables/useAgentCanvasRoute'
+import { useDriveRoute } from '../composables/useDriveRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { useNewSession } from '../composables/useNewSession'
 import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXtermPane'
-import { canvasEventAuthor, type CanvasScope } from '../lib/agentCanvas'
+import { driveEventAuthor, workspaceSpaceKey, type DriveScope } from '../lib/drive'
 import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentWorkspacesClient'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { isEditableTarget } from '../lib/isEditableTarget'
@@ -45,7 +45,7 @@ import '@xterm/xterm/css/xterm.css'
 const ACTIVITY_POLL_MS = 2000
 
 const props = defineProps<{ active?: boolean; sidebarCollapsed?: boolean }>()
-const emit = defineEmits<{ 'open-canvas-page': [scope: CanvasScope] }>()
+const emit = defineEmits<{ 'open-drive-page': [scope: DriveScope] }>()
 
 const {
   checking,
@@ -127,8 +127,7 @@ const paneWorkspaceName = computed(
 // ── Route-driven workspace selection ────────────────────────────────────────
 const route = useRoute()
 const router = useRouter()
-const { routeChatId, canvasRequested, canvasVisible, canvasName, syncCanvasQuery, noteCanvasWrite, clearCanvasUnseen } =
-  useAgentCanvasRoute()
+const { routeChatId, docVisible, docPath, syncDocQuery } = useDriveRoute()
 const selectedWorkspace = computed(() =>
   route.name === 'agents' && typeof route.params.workspace === 'string' ? route.params.workspace : '',
 )
@@ -287,10 +286,10 @@ function syncChatQuery(id: string | null): void {
   if (route.name !== 'agents') return
   const next = id === null ? undefined : String(id)
   if ((typeof route.query.chat === 'string' ? route.query.chat : undefined) === next) return
-  // A closed chat takes its canvas along: ?canvas names a view of the open
+  // A closed chat takes its document along: ?doc names a view of the open
   // chat, so it must not linger and reopen against whatever comes next.
-  const canvas = next === undefined ? undefined : route.query.canvas
-  void router.replace({ name: 'agents', params: route.params, query: { ...route.query, chat: next, canvas } })
+  const doc = next === undefined ? undefined : route.query.doc
+  void router.replace({ name: 'agents', params: route.params, query: { ...route.query, chat: next, doc } })
 }
 
 watch([paneStatus, openSessionId], ([status, id]) => {
@@ -311,27 +310,17 @@ watch(
   { immediate: true },
 )
 
-// ── The canvas pane rides the route too (?canvas[=name]) ────────────────────
-// The query itself is owned by useAgentCanvasRoute, shared with the title bar's
-// right-panel toggle. This view keeps the two Wails listeners, which are its
-// own: both are answers about the chat it has on screen.
-useWailsEvent('canvas:updated', (event) => {
-  const author = canvasEventAuthor(event.data)
-  if (author !== null) noteCanvasWrite(author)
-})
-// Viewing a chat with its pane open clears its dot.
-watch([canvasVisible, routeChatId], ([visible, id]) => {
-  if (visible && id !== null) clearCanvasUnseen(id)
-})
-
-// An agent can ask to open or close the pane (open_canvas / close_canvas).
-// Honored only for the chat in view: an agent must never drag the user away
-// from a different chat — its write already lights the unseen dot there.
-useWailsEvent('canvas:toggle', (event) => {
+// ── The drive pane rides the route too (?doc[=path]) ────────────────────────
+// The query itself is owned by useDriveRoute, shared with the title bar's
+// right-panel toggle. An agent can ask to open or close the pane
+// (open_document, open_canvas, close_canvas), honored only for the chat in
+// view: an agent must never drag the user away from a different chat — its
+// write already lights the unseen dot there.
+useWailsEvent('drive:toggle', (event) => {
   const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
-    { name: string; open: boolean } | undefined
-  if (!payload || canvasEventAuthor(payload) !== routeChatId.value) return
-  syncCanvasQuery(payload.open, payload.name || undefined)
+    { path?: string; open: boolean } | undefined
+  if (!payload || driveEventAuthor(payload) !== routeChatId.value) return
+  syncDocQuery(payload.open, payload.path || undefined)
 })
 
 async function resumeChatFromRoute(id: string): Promise<void> {
@@ -343,7 +332,7 @@ async function resumeChatFromRoute(id: string): Promise<void> {
   if (!session?.terminalId) {
     // The route named a chat that cannot be attached, so the query goes back
     // to naming whatever the pane actually holds. Clearing it outright would
-    // take a live chat's ?canvas down with it.
+    // take a live chat's ?doc down with it.
     syncChatQuery(paneStatus.value === 'live' ? openSessionId.value : null)
     return
   }
@@ -889,18 +878,19 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- A sibling of the pane column, never inside it: the terminal host must
-           not be re-keyed or unmounted by the canvas opening, and the
+           not be re-keyed or unmounted by the drive pane opening, and the
            ResizeObserver absorbs the width change with an ordinary size vote. -->
-      <AgentCanvasPane
-        v-if="canvasVisible && routeChatId !== null"
+      <DrivePane
+        v-if="docVisible && routeChatId !== null"
         :session="routeChatId"
-        :workspace="paneWorkspaceDir"
-        :name="canvasName"
-        :client="client"
-        @close="syncCanvasQuery(false)"
+        :space="workspaceSpaceKey(paneWorkspaceDir)"
+        :path="docPath"
+        @close="syncDocQuery(false)"
         @open-url="openLink"
-        @pick="(name) => syncCanvasQuery(true, name)"
-        @open-page="(name) => emit('open-canvas-page', { workspace: paneWorkspaceDir, name, session: routeChatId })"
+        @pick="(path) => syncDocQuery(true, path)"
+        @open-page="
+          (path) => emit('open-drive-page', { space: workspaceSpaceKey(paneWorkspaceDir), path, session: routeChatId })
+        "
       />
     </div>
 

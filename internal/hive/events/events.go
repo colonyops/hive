@@ -4,6 +4,7 @@ package events
 
 import (
 	"github.com/colonyops/hive/internal/config"
+	"github.com/colonyops/hive/internal/domain/drive"
 	"github.com/colonyops/hive/internal/domain/messaging"
 	"github.com/colonyops/hive/internal/domain/notify"
 	"github.com/colonyops/hive/internal/domain/session"
@@ -18,6 +19,7 @@ var Events = map[string]any{
 	// Keep list sorted A-Z
 	"agent.status-changed":   AgentStatusChangedPayload{},
 	"config.reloaded":        ConfigReloadedPayload{},
+	"drive.changed":          DriveChangedPayload{},
 	"message.received":       MessageReceivedPayload{},
 	"notification.published": NotificationPublishedPayload{},
 	"repo.focused":           RepoFocusedPayload{},
@@ -33,6 +35,16 @@ var Events = map[string]any{
 // from a new config.
 type ConfigReloadedPayload struct {
 	Config *config.Config
+}
+
+// DriveChangedPayload is emitted after the drive service changed a space on
+// disk. Space is the space key; Paths are the document or folder paths that
+// changed, and empty means the whole space. Author is who made the change
+// through the service, and empty for a change found on disk.
+type DriveChangedPayload struct {
+	Space  string
+	Paths  []string
+	Author drive.Author
 }
 
 // SessionCreatedPayload is emitted when a new session is created.

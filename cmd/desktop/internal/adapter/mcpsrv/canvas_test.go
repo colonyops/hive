@@ -3,6 +3,7 @@ package mcpsrv_test
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -17,8 +18,8 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 )
 
-// testCanvasSession is testSession's canvas-server twin: same app, same
-// in-memory transport, the hive-canvas tool table under test instead.
+// testCanvasSession is testSession's drive-server twin: same app, same
+// in-memory transport, the hive-drive tool table under test instead.
 func testCanvasSession(t *testing.T) (*app.App, *mcp.ClientSession) {
 	t.Helper()
 	root := t.TempDir()
@@ -35,7 +36,7 @@ func testCanvasSession(t *testing.T) (*app.App, *mcp.ClientSession) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = core.Close() })
 
-	srv := mcpsrv.NewCanvas(core, zerolog.Nop(), mcpsrv.Options{Version: "test"}).Server()
+	srv := mcpsrv.NewDrive(core, zerolog.Nop(), mcpsrv.Options{Version: "test"}).Server()
 
 	clientTransport, serverTransport := mcp.NewInMemoryTransports()
 	_, err = srv.Connect(t.Context(), serverTransport, nil)
@@ -116,7 +117,10 @@ func TestCanvasToolsListDeclaresEveryToolWithAnObjectInputSchema(t *testing.T) {
 		assert.Equal(t, "object", schema["type"], "tool %s input schema is not type object", tool.Name)
 	}
 
-	assert.ElementsMatch(t, []string{"put_block", "put_blocks", "remove_block", "set_frontmatter", "clear_canvas", "delete_canvas", "read_canvas", "list_canvases", "open_canvas", "close_canvas"}, names)
+	assert.ElementsMatch(t, []string{
+		"put_block", "put_blocks", "remove_block", "set_frontmatter", "clear_canvas", "delete_canvas", "read_canvas", "list_canvases", "open_canvas", "close_canvas",
+		"list_documents", "read_document", "write_document", "move_document", "delete_document", "open_document",
+	}, names)
 }
 
 func TestCanvasRoundTrip(t *testing.T) {
@@ -281,13 +285,17 @@ func TestCanvasCatalogueAgreement(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, mcpsrv.PathPrefix, desktop.RuntimePath)
 
+	driveEntry, ok := mcpcatalog.Lookup("hive-drive")
+	require.True(t, ok)
+	assert.Equal(t, mcpsrv.DrivePathPrefix, driveEntry.RuntimePath)
+
 	canvasEntry, ok := mcpcatalog.Lookup("hive-canvas")
 	require.True(t, ok)
 	assert.Equal(t, mcpsrv.CanvasPathPrefix, canvasEntry.RuntimePath)
 }
 
-// The canvas mount is a second exact-match mux entry beside /mcp; each server
-// answers only its own tools, so the two mounts must not shadow each other.
+// The drive mounts are exact-match mux entries beside /mcp; each server
+// answers only its own tools, so the mounts must not shadow each other.
 func TestCanvasMountedBesideTheDesktopServer(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv(settings.EnvDataDir, filepath.Join(root, "data"))
@@ -305,8 +313,9 @@ func TestCanvasMountedBesideTheDesktopServer(t *testing.T) {
 
 	require.True(t, core.MountAPI(mcpsrv.PathPrefix,
 		mcpsrv.New(core, zerolog.Nop(), mcpsrv.Options{Version: "test"}).Handler()))
-	require.True(t, core.MountAPI(mcpsrv.CanvasPathPrefix,
-		mcpsrv.NewCanvas(core, zerolog.Nop(), mcpsrv.Options{Version: "test"}).Handler()))
+	driveHandler := mcpsrv.NewDrive(core, zerolog.Nop(), mcpsrv.Options{Version: "test"}).Handler()
+	require.True(t, core.MountAPI(mcpsrv.DrivePathPrefix, driveHandler))
+	require.True(t, core.MountAPI(mcpsrv.CanvasPathPrefix, driveHandler))
 	require.NoError(t, core.Start(t.Context()))
 
 	id := seedAgentSession(t, core, "demo", "chat")
@@ -329,6 +338,19 @@ func TestCanvasMountedBesideTheDesktopServer(t *testing.T) {
 	assert.Equal(t, "demo", got.Workspace)
 	assert.Equal(t, "plan", got.Name)
 
+	// Both addresses serve one server: what one wrote, the other reads.
+	driveSession, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "test"}, nil).
+		Connect(t.Context(), &mcp.StreamableClientTransport{
+			Endpoint:             fmt.Sprintf("http://127.0.0.1:%d%s", port, mcpsrv.DrivePathPrefix),
+			DisableStandaloneSSE: true,
+		}, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = driveSession.Close() })
+	assert.Equal(t, toolNames(t, canvasSession), toolNames(t, driveSession))
+	var read canvasView
+	call(t, driveSession, "read_canvas", map[string]any{"session": id, "canvas": "plan"}, &read)
+	require.Len(t, read.Blocks, 1)
+
 	// The desktop server still answers at its own path with its own table.
 	desktopSession, err := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "test"}, nil).
 		Connect(t.Context(), &mcp.StreamableClientTransport{
@@ -346,4 +368,16 @@ func TestCanvasMountedBesideTheDesktopServer(t *testing.T) {
 	}
 	assert.Contains(t, names, "get_status")
 	assert.NotContains(t, names, "put_block", "the canvas table must not leak onto the app-control server")
+}
+
+func toolNames(t *testing.T, session *mcp.ClientSession) []string {
+	t.Helper()
+	res, err := session.ListTools(t.Context(), nil)
+	require.NoError(t, err)
+	names := make([]string, 0, len(res.Tools))
+	for _, tool := range res.Tools {
+		names = append(names, tool.Name)
+	}
+	slices.Sort(names)
+	return names
 }

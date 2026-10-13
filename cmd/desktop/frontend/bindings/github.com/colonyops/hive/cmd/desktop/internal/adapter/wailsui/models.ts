@@ -101,6 +101,16 @@ export interface AppearanceSettings {
     "canvasPageWidth": string;
 }
 
+export interface BlockWire {
+    "id": string;
+    "kind": string;
+    "title": string;
+    "body": string;
+    "url": string;
+    "createdAt": number;
+    "updatedAt": number;
+}
+
 /**
  * BuildInfo describes the running desktop build so users can see and report
  * the exact version they are on from the System settings screen.
@@ -134,24 +144,19 @@ export interface BuildInfo {
 }
 
 /**
- * CanvasToggle is the canvas:toggle payload: whose pane to open or close, a
- * chat's or a hive session's, and the canvas to pin when opening (empty
- * leaves the pane's pick).
+ * CanvasWire is one canvas with its html blocks sanitized. Timestamps are
+ * unix milliseconds, as the canvas file stores them.
  */
-export interface CanvasToggle {
+export interface CanvasWire {
+    "space": string;
+    "path": string;
+    "title": string;
     "session": string;
     "hiveSession": string;
-    "name": string;
-    "open": boolean;
-}
-
-/**
- * CanvasWrite is the canvas:updated payload: the author of the write, a chat
- * (Session) or a hive session (HiveSession), never both.
- */
-export interface CanvasWrite {
-    "session": string;
-    "hiveSession": string;
+    "createdAt": number;
+    "updatedAt": number;
+    "frontmatter": { [_ in string]?: any } | null;
+    "blocks": BlockWire[] | null;
 }
 
 /**
@@ -179,6 +184,45 @@ export interface DevToolsInfo {
 }
 
 /**
+ * DocumentWire is one document for the reader. Markdown is set for a
+ * markdown document, HTML for an html one, Canvas for a canvas; a plain file
+ * carries only its entry.
+ */
+export interface DocumentWire {
+    "space": SpaceWire;
+    "entry": EntryWire;
+    "markdown": string;
+    "html": string;
+    "canvas": CanvasWire | null;
+}
+
+/**
+ * DriveToggle is the drive:toggle payload: whose pane to open or close, a
+ * chat's or a hive session's, and the document to pin when opening (empty
+ * leaves the pane's pick).
+ */
+export interface DriveToggle {
+    "session": string;
+    "hiveSession": string;
+    "space": string;
+    "path": string;
+    "open": boolean;
+}
+
+/**
+ * DriveWrite is the drive:updated payload: the space and the document paths
+ * that changed, and who wrote them when an agent did through the desktop, a
+ * chat (Session) or a hive session (HiveSession), never both. Both are empty
+ * for a change the drive watcher found on disk.
+ */
+export interface DriveWrite {
+    "space": string;
+    "paths": string[] | null;
+    "session": string;
+    "hiveSession": string;
+}
+
+/**
  * EditorChoice is one editor the selector offers: its CLI command, display
  * title, and whether the command resolves on the subprocess PATH right now.
  */
@@ -200,6 +244,24 @@ export interface EditorSettings {
     "command": string;
     "title": string;
     "choices": EditorChoice[] | null;
+}
+
+/**
+ * EntryWire is one row of a space's tree. Path is relative to the space root
+ * with forward slashes, "" for the root itself. Kind is dir, markdown, html,
+ * canvas, or file. Created is the zero time where the file system records no
+ * birth time. Front and Children are never null.
+ */
+export interface EntryWire {
+    "path": string;
+    "name": string;
+    "kind": string;
+    "size": number;
+    "modified": string;
+    "created": string;
+    "title": string;
+    "front": { [_ in string]?: any } | null;
+    "children": EntryWire[] | null;
 }
 
 /**
@@ -246,6 +308,14 @@ export interface FlowSummary {
 export interface GithubSettings {
     "pollIntervalSeconds": number;
     "minPollIntervalSeconds": number;
+}
+
+/**
+ * HitWire is one search result; Entry carries no children.
+ */
+export interface HitWire {
+    "space": SpaceWire;
+    "entry": EntryWire;
 }
 
 /**
@@ -552,6 +622,16 @@ export interface SessionSummary {
     "state": string;
     "canvasOwner": string;
     "createdAt": string;
+}
+
+/**
+ * SpaceWire is one drive space. Key is the identity every DriveService call
+ * takes; Kind is repository, workspace, or shared.
+ */
+export interface SpaceWire {
+    "kind": string;
+    "key": string;
+    "name": string;
 }
 
 /**

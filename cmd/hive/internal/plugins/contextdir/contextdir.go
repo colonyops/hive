@@ -4,7 +4,6 @@ package contextdir
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"runtime"
 
 	"github.com/colonyops/hive/cmd/hive/internal/config"
@@ -13,15 +12,16 @@ import (
 
 // Plugin implements the context directory plugin for Hive.
 type Plugin struct {
-	cfg     config.ContextDirPluginConfig
-	dataDir string
+	cfg  config.ContextDirPluginConfig
+	root string
 }
 
-// New creates a new context directory plugin.
-func New(cfg config.ContextDirPluginConfig, dataDir string) *Plugin {
+// New creates a new context directory plugin. root is the drive root,
+// which context.base_dir moves.
+func New(cfg config.ContextDirPluginConfig, root string) *Plugin {
 	return &Plugin{
-		cfg:     cfg,
-		dataDir: dataDir,
+		cfg:  cfg,
+		root: root,
 	}
 }
 
@@ -40,9 +40,6 @@ func (p *Plugin) Init(_ context.Context) error { return nil }
 func (p *Plugin) Close() error                 { return nil }
 
 func (p *Plugin) Commands() map[string]config.UserCommand {
-	// Get the context base directory
-	contextBase := filepath.Join(p.dataDir, "context")
-
 	var openCmd string
 	if runtime.GOOS == "darwin" {
 		openCmd = "open"
@@ -58,7 +55,7 @@ func (p *Plugin) Commands() map[string]config.UserCommand {
 			Scope:  []string{"sessions"},
 		},
 		"ContextOpenAll": {
-			Sh:     fmt.Sprintf(`%s "%s"`, openCmd, contextBase),
+			Sh:     fmt.Sprintf(`%s "%s"`, openCmd, p.root),
 			Help:   "open all hive context directories",
 			Silent: true,
 			Scope:  []string{"sessions"},

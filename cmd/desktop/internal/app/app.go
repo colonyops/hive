@@ -19,7 +19,6 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/activity"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
-	"github.com/colonyops/hive/cmd/desktop/internal/app/canvas"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/queries"
 	datastores "github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dirwatch"
@@ -135,7 +134,7 @@ type App struct {
 	PopupTerminals  *PopupTerminalsService
 	AgentWorkspaces *AgentWorkspacesService
 	Tasks           *TasksService
-	Canvas          *CanvasService
+	Drive           *DriveService
 	Schedules       *SchedulesService
 
 	// Events is the typed bus adapters project into transport-specific events.
@@ -469,15 +468,11 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.ClientLog = newClientLogService(cfg.Logger)
 	a.Observability = newObservabilityService(cfg.SettingsStore, cfg.Settings.Telemetry, cfg.TelemetryRuntime)
 	a.DevTools = newDevToolsService(cfg.Settings.Development.DevTools.Enabled)
-	a.Canvas = newCanvasService(CanvasDeps{
-		Store: canvas.NewStore(canvas.Roots{
-			Workspaces:   cfg.Paths.AgentWorkspacesDir,
-			Repositories: a.hiveContextDir,
-			Global:       cfg.Paths.DataDir,
-		}),
-		Sessions:     a.Stores.AgentSessions,
-		HiveSessions: hiveSessionsAtPath{a},
-		Events:       a.Events,
+	a.Drive = newDriveService(DriveDeps{
+		Engine:   func() *hive.Engine { return a.hive },
+		Sessions: a.Stores.AgentSessions,
+		Events:   a.Events,
+		Logger:   cfg.Logger,
 	})
 	a.AgentWorkspaces = newAgentWorkspacesService(AgentWorkspacesDeps{
 		Store:           a.agentWorkspaceStore,
@@ -617,6 +612,11 @@ func (a *App) Start(ctx context.Context) error {
 		a.agentWorkspacesWatcher.Start()
 	}
 	a.hiveWatcher.Start(ctx)
+	if a.hive != nil {
+		if err := a.hive.Drive().Watch(ctx); err != nil {
+			a.logger.Warn().Err(err).Msg("drive watcher unavailable; documents written outside the app will not refresh")
+		}
+	}
 	// After the watcher, so the first pass evaluates the workspace set the
 	// watcher is already keeping current. That pass is the catch-up for
 	// everything that came due while the app was closed, so it runs in mock
@@ -779,6 +779,11 @@ func (a *App) Close() error {
 	}
 	if a.hiveWatcher != nil {
 		a.hiveWatcher.Stop()
+	}
+	if a.hive != nil {
+		if err := a.hive.Drive().Close(); err != nil {
+			a.logger.Warn().Err(err).Msg("drive watcher shutdown")
+		}
 	}
 	a.Events.Close()
 
@@ -1260,6 +1265,7 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	}
 
 	bus := hiveevents.New(64)
+	logDroppedHiveEvents(a.logger, bus)
 	busCtx, cancel := context.WithCancel(ctx)
 	go bus.Start(busCtx)
 
@@ -1288,33 +1294,37 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 	a.hive = engine
 	a.hiveDB = database
 	a.hiveBusCancel = cancel
+	forwardDriveChanges(busCtx, bus, a.Events)
 	a.agentCommands.Store(new(agentCommands(hiveCfg)))
 	a.launcher = dispatch.NewRepositoryLauncher(
 		func() dispatch.SessionCreator { return a.hive.Sessions() },
 		a.Stores.ItemSessions, a.Activity, cfg.Logger,
 	)
+	// After hive.New so the canvases land under the engine's context root.
+	// It runs once per process: ReloadHiveRuntime never repeats it, so a
+	// legacy canvas that appears later moves on the next launch.
+	importLegacyCanvases(ctx, a.logger, a.hive, cfg.Paths)
 	return nil
 }
 
-// hiveContextDir is hive's context root as the engine's current config has it.
-// It is empty until the engine starts, which refuses repository canvases
-// rather than filing them under a root that is about to change.
-func (a *App) hiveContextDir() string {
-	if a.hive == nil {
-		return ""
-	}
-	return a.hive.Config().ContextDir()
+// logDroppedHiveEvents surfaces what the engine bus drops when its buffer is
+// full. A dropped DriveChanged leaves the drive pane stale until the next
+// change, so the drop must leave a trace.
+func logDroppedHiveEvents(logger zerolog.Logger, bus *hiveevents.EventBus) {
+	bus.OnDrop(func(event hiveevents.Event, _ any) {
+		logger.Warn().Str("event", string(event)).Msg("hive engine event dropped: bus buffer full")
+	})
 }
 
-// hiveSessionsAtPath reads the engine on each call, because it starts after
-// the services are built and a reload replaces its session service.
-type hiveSessionsAtPath struct{ app *App }
-
-func (h hiveSessionsAtPath) SessionAtPath(ctx context.Context, path string) (session.Session, bool, error) {
-	if h.app.hive == nil {
-		return session.Session{}, false, nil
-	}
-	return h.app.hive.Sessions().SessionAtPath(ctx, path)
+// forwardDriveChanges republishes every engine drive change on the app bus.
+// The engine is the one publisher, so each change reaches the UI once, with
+// the author the engine was given.
+func forwardDriveChanges(ctx context.Context, from *hiveevents.EventBus, to *events.Bus) {
+	from.SubscribeDriveChanged(func(p hiveevents.DriveChangedPayload) {
+		to.Publish(ctx, events.DriveChanged{
+			Space: p.Space, Paths: p.Paths, Session: p.Author.Session, HiveSession: p.Author.HiveSession,
+		})
+	})
 }
 
 // Reloads re-resolve HIVE_CONFIG because it can change between calls, and

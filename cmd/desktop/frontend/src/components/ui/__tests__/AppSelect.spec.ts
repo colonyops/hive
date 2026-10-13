@@ -31,6 +31,17 @@ function vueFiles(dir: string): string[] {
 }
 
 describe('AppSelect', () => {
+  it('draws the flat variant without a border or fill of its own', () => {
+    const outlined = mountSelect().get('[data-testid="action-type"]').classes()
+    expect(outlined).toContain('bg-app')
+    expect(outlined).toContain('border-strong')
+
+    const flat = mountSelect({ variant: 'flat' }).get('[data-testid="action-type"]').classes()
+    expect(flat).toContain('bg-transparent')
+    expect(flat).toContain('border-transparent')
+    expect(flat).not.toContain('border-strong')
+  })
+
   // AppSelect exists because a native picker cannot be themed in the WebKit
   // webview Wails uses — one reintroduced element is a light-mode flash in a
   // dark app, and neither type-checking nor a unit test would notice.
@@ -124,6 +135,26 @@ describe('AppSelect', () => {
     await root.trigger('keydown', { key: 'Escape' })
     expect(document.querySelector('[data-testid="action-type-popover"]')).toBeNull()
     expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('draws a header above each group of options and keeps the walk on the options', async () => {
+    const grouped = [
+      { value: 'acme/site', label: 'acme/site', group: 'Repositories' },
+      { value: 'acme/api', label: 'acme/api', group: 'Repositories' },
+      { value: 'workspaces/demo', label: 'demo', group: 'Workspaces' },
+    ]
+    const wrapper = mountSelect({ modelValue: 'acme/site', options: grouped })
+    const popover = await openSelect(wrapper, 'action-type')
+    expect(
+      Array.from(popover.querySelectorAll('[data-testid^="action-type-group-"]')).map((h) => h.textContent?.trim()),
+    ).toEqual(['Repositories', 'Workspaces'])
+
+    const root = wrapper.get('[data-testid="action-type"]')
+    await root.trigger('keydown', { key: 'ArrowDown' })
+    await root.trigger('keydown', { key: 'ArrowDown' })
+    await root.trigger('keydown', { key: 'Enter' })
+    expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['workspaces/demo'])
     wrapper.unmount()
   })
 

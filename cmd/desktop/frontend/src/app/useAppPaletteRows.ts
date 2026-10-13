@@ -25,8 +25,8 @@ import { terminalSessionGroups, useTerminalSessions } from '../stores/useTermina
 import { useTerminalPinnedChats } from '../stores/useTerminalPinnedChats'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
-import { globalCanvasOwner, globalCanvasOwnerLabel } from '../lib/agentCanvas'
-import { useWorkspaceCanvases } from '../stores/useWorkspaceCanvases'
+import { documentsOf, entryLabel } from '../lib/drive'
+import { useDrive } from '../stores/useDrive'
 import { useAttachedTerminalWindows } from '../composables/useAttachedTerminalWindows'
 import { applicationSettingsSections } from '../router'
 import { applicationSettingsSectionMeta } from '../components/settings/sectionMeta'
@@ -57,7 +57,7 @@ function contextLabel(context: CommandContext): string {
  * Registers every App-level palette row source for the app's lifetime:
  * catalog commands, mode switches, and the hub's own objects (profiles, feeds,
  * themes), plus the Go-to rows for sessions, windows, settings sections,
- * chats, and canvases that are global rather than tied to a lazily mounted
+ * chats, and drive documents that are global rather than tied to a lazily mounted
  * mode.
  */
 export function useAppPaletteRows(
@@ -65,7 +65,7 @@ export function useAppPaletteRows(
   runCommand: (id: string) => void,
   contextActive: (context: CommandContext) => boolean,
 ): void {
-  const { feed, nav, appMode, overlays, shellLoaded, onboardingActive, openNewProfile } = deps
+  const { feed, nav, appMode, shellLoaded, onboardingActive, openNewProfile } = deps
   const { profiles, activeProfile, selectedItem, selectedItemIDs, actions, invokeAction } = feed
   const { router, devToolsEnabled, requestSelectProfile, navigateSidebar, flowsActive, openFlows } = nav
   const { mode, hubActive, onScreenSessionSlug } = appMode
@@ -106,7 +106,7 @@ export function useAppPaletteRows(
     for (const w of agentWorkspaces.value) map.set(w.dir, w.name)
     return map
   })
-  const { canvases, reload: reloadCanvases } = useWorkspaceCanvases()
+  const drive = useDrive()
 
   useCommands(
     computed(() => {
@@ -412,22 +412,24 @@ export function useAppPaletteRows(
         })
       }
 
-      // Canvas rows open full page, so one is reachable with no chat open.
-      // They sit in the chat rows' group: a workspace holds both.
-      for (const meta of canvases.value) {
-        cmds.push({
-          id: `canvas:${meta.workspace}:${meta.name}`,
-          title: meta.title || meta.name,
-          group:
-            workspaceNameByDir.value.get(meta.workspace) ||
-            (meta.workspace === globalCanvasOwner ? globalCanvasOwnerLabel : meta.workspace),
-          order: -2,
-          scope: 'goto',
-          kind: 'canvas',
-          keywords: ['canvas', meta.name],
-          icon: IconFileText,
-          run: () => overlays.openCanvas({ workspace: meta.workspace, name: meta.name, session: null }),
-        })
+      // Document rows open full page, so one is reachable with no chat open.
+      // A workspace's documents sit in its chat rows' group.
+      for (const space of drive.spaces.value) {
+        const dir = space.key.startsWith('workspaces/') ? space.key.slice('workspaces/'.length) : ''
+        const group = (dir && workspaceNameByDir.value.get(dir)) || space.name || space.key
+        for (const entry of documentsOf(drive.trees.value.get(space.key))) {
+          cmds.push({
+            id: `document:${space.key}:${entry.path}`,
+            title: entryLabel(entry),
+            group,
+            order: -2,
+            scope: 'goto',
+            kind: 'document',
+            keywords: [entry.path],
+            icon: IconFileText,
+            run: () => appMode.openDrive({ space: space.key, path: entry.path, session: null }),
+          })
+        }
       }
 
       return cmds
@@ -482,7 +484,7 @@ export function useAppPaletteRows(
     return rows
   })
 
-  // Session, chat, workspace, and canvas rows are read from module singletons
+  // Session, chat, workspace, and document rows are read from module singletons
   // the sidebar trees keep warm elsewhere; a palette open is the moment they
   // are about to be shown, so that is when staleness is worth paying to fix.
   // Every reload keeps last-good rows on failure. Workspaces in particular can
@@ -492,7 +494,9 @@ export function useAppPaletteRows(
     if (!open) return
     void reloadTerminalSessions()
     void reloadRecents()
-    // The canvas listing walks the workspace list, so it follows that reload.
-    void reloadWorkspaces().then(reloadCanvases)
+    void reloadWorkspaces()
+    // Every space's tree, not only the ones a pane has opened: a document is
+    // worth finding before anything showed it.
+    void drive.reload().then(() => Promise.all(drive.spaces.value.map((space) => drive.ensureTree(space.key))))
   })
 }

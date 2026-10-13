@@ -126,7 +126,7 @@ func (ctrl *Controller) agentOperations() []Op {
 			Errors: agentErrors("no such workspace"),
 		},
 		{
-			Method: "POST", Path: AgentWorkspacesPathPrefix + "workspaces/delete", Summary: "Delete a workspace: end every live terminal its sessions hold, remove the workspace directory and everything under it — canvases and authored files included — then delete the session records. Refuses a directory the root does not list as a workspace.",
+			Method: "POST", Path: AgentWorkspacesPathPrefix + "workspaces/delete", Summary: "Delete a workspace: end every live terminal its sessions hold, remove the workspace directory and everything under it — authored files included — then delete the session records. Refuses a directory the root does not list as a workspace.",
 			Request: agentWorkspaceDirRequest{}, Status: http.StatusNoContent, Handler: ctrl.AgentWorkspaceDelete,
 			Errors: agentErrors(""),
 		},
@@ -219,36 +219,6 @@ func (ctrl *Controller) agentOperations() []Op {
 			Method: "POST", Path: AgentWorkspacesPathPrefix + "sessions/delete", Summary: "End any live terminal and delete a session's record.",
 			Request: agentSessionIDRequest{}, Status: http.StatusNoContent, Handler: ctrl.AgentSessionDelete,
 			Errors: agentErrors("no such session"),
-		},
-		{
-			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas", Summary: "Read one canvas by workspace and name: editable front matter and every block in order, as the agent last wrote them. A name nothing was written under answers an empty canvas. Block and front matter mutations have no HTTP surface — the agent writes through the hive-canvas MCP server.",
-			Request: agentCanvasRequest{}, Response: agentCanvasView{}, Handler: ctrl.AgentCanvas,
-			Errors: agentErrors(""),
-		},
-		{
-			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/delete", Summary: "Delete one canvas selected by the user and return its name. The file is removed from its workspace, repository context, or global canvas directory. A name that does not exist is 404.",
-			Request: agentCanvasRequest{}, Response: agentCanvasDeleteResponse{}, Handler: ctrl.AgentCanvasDelete,
-			Errors: agentErrors("no such canvas"),
-		},
-		{
-			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvases", Summary: "List a workspace's canvases, most recently updated first — metadata only (name, title, creating session, timestamps, block count), for the canvas pane's picker. Canvases are files in the workspace folder and outlive the chats that made them.",
-			Request: agentCanvasListRequest{}, Response: agentCanvasListResponse{}, Handler: ctrl.AgentCanvasList,
-			Errors: agentErrors(""),
-		},
-		{
-			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/repositories", Summary: "List the repositories that hold a canvas, as owner/repo keys. A hive session's canvases belong to its repository and live in hive's context directory, so they outlive the session; the key is what the other canvas routes take as workspace.",
-			Request: struct{}{}, Response: agentCanvasRepositoriesResponse{}, Handler: ctrl.AgentCanvasRepositories,
-			Errors: agentErrors(""),
-		},
-		{
-			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/markdown", Summary: "Render one canvas as a standalone markdown document with YAML front matter, for the pane's copy-to-clipboard action. A name nothing was written under is 404 — exporting nothing is a mistake worth surfacing.",
-			Request: agentCanvasRequest{}, Response: agentCanvasMarkdownResponse{}, Handler: ctrl.AgentCanvasMarkdown,
-			Errors: agentErrors("no such canvas"),
-		},
-		{
-			Method: "POST", Path: AgentWorkspacesPathPrefix + "canvas/export", Summary: "Write one canvas's markdown rendering, including YAML front matter, to an absolute path the user chose in the native save dialog. The canvas itself is untouched.",
-			Request: agentCanvasExportRequest{}, Response: agentCanvasExportResponse{}, Handler: ctrl.AgentCanvasExport,
-			Errors: agentErrors("no such canvas"),
 		},
 		{
 			Method: "POST", Path: AgentWorkspacesPathPrefix + "schedules/run", Summary: "Fire one schedule now, outside its timetable, and return the run it recorded. The cursor is untouched, so the next real occurrence still happens. A run whose previous chat is still open, or whose prompt or launch failed, answers 200 with that outcome on the run rather than an error.",

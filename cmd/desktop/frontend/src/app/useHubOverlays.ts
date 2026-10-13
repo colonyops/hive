@@ -1,25 +1,20 @@
 import { ref, type Ref } from 'vue'
-import type { CanvasScope } from '../lib/agentCanvas'
 import { useTasks } from '../stores/useTasks'
 
 /**
- * Tasks, Activity, Action runs and Canvases open over whatever is on screen rather than
+ * Tasks, Activity and Action runs open over whatever is on screen rather than
  * navigating away from it (hay-kot/hive-desktop#441), so they are overlays,
  * not routes. A title-bar icon or a command toggles each one.
  */
-export function useHubOverlays(terminalActive: Ref<boolean>, viewCanvasScope: Ref<CanvasScope | null>) {
+export function useHubOverlays(terminalActive: Ref<boolean>) {
   const tasksOpen = ref(false)
   const activityOpen = ref(false)
-  const canvasOpen = ref(false)
   const actionRunsOpen = ref(false)
   const actionRunsRunId = ref<number | null>(null)
   const { setRepoKey } = useTasks()
   // TerminalMode reports the attached session's owner/repo continuously, so
   // every way of opening Tasks scopes to it the same way.
   const terminalSessionRepoKey = ref('')
-  // Kept across a close, so a reopen from outside Chats returns to the canvas
-  // last read.
-  const canvasScope = ref<CanvasScope>({ workspace: '', name: null, session: null })
 
   // Only an opening toggle re-resolves the scope. Closing never moves it, and
   // no resolved repo leaves the persisted last-picked scope alone.
@@ -46,22 +41,9 @@ export function useHubOverlays(terminalActive: Ref<boolean>, viewCanvasScope: Re
     actionRunsOpen.value = true
   }
 
-  function openCanvas(scope: CanvasScope): void {
-    canvasScope.value = scope
-    canvasOpen.value = true
-  }
-
-  // Tasks' rule: only an opening toggle follows the chat or session on screen.
-  function toggleCanvas(): void {
-    if (!canvasOpen.value && viewCanvasScope.value) canvasScope.value = viewCanvasScope.value
-    canvasOpen.value = !canvasOpen.value
-  }
-
   return {
     tasksOpen,
     activityOpen,
-    canvasOpen,
-    canvasScope,
     actionRunsOpen,
     actionRunsRunId,
     toggleActionRuns,
@@ -69,7 +51,5 @@ export function useHubOverlays(terminalActive: Ref<boolean>, viewCanvasScope: Re
     terminalSessionRepoKey,
     toggleTasks,
     toggleActivity,
-    openCanvas,
-    toggleCanvas,
   }
 }

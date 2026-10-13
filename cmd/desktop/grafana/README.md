@@ -43,8 +43,9 @@ panel filters on both.
 | Runtime  | How heavy is the app and what it spawned?         | `process.*` gauges (`cmd/desktop/internal/app/procstats`), Go runtime metrics, `target_info`                                    |
 | Terminal | Is terminal output keeping up?                    | `tmux.stream.*` (`internal/platform/tmux/control`), `terminal.attach` spans                                                    |
 | Sources  | Why is my feed stale, and am I near a rate limit? | `ingest.tick` and `ingest.source <kind>` spans, `source.*` and otelhttp metrics (`cmd/desktop/internal/app/sources/...`)        |
+| Drive    | Are documents slow, refused, or missing changes?  | `drive.*` (`internal/hive/drive`), `fswatch.*` (`internal/platform/fswatch`), `mcp.server.operation.duration` (`cmd/desktop/internal/adapter/mcpsrv`) |
 | Logs     | What went wrong?                                  | The zerolog bridge, as `service_name="hive-desktop"`                                                                |
-| Traces   | What triggered work, and how long did it take?    | Root spans (including `mcp.tool <name>`, one per agent tool call), error spans, and HTTP spans with no trigger above them |
+| Traces   | What triggered work, and how long did it take?    | Root spans (including `mcp.tool <name>`, one per agent tool call, `ui.drive <command>`, one per Drive command the user gave, and `drive.watch change`, one per change on disk), error spans, and HTTP spans with no trigger above them |
 | Profiles | Where do CPU and memory go in the code?           | Pyroscope CPU, heap-in-use, and allocation profiles                                                                 |
 
 ## From instrument to query
@@ -65,6 +66,14 @@ the unit as a suffix, and `_total` on counters:
 | `source.ratelimit.remaining`       | `source_ratelimit_remaining`                   | `source`                            |
 | `source.rss.fetch`                 | `source_rss_fetch_total`                       | `result`                            |
 | `http.client.request.duration`     | `http_client_request_duration_seconds_bucket`  | `source`, `http_response_status_code`, `error_type` |
+| `drive.operation.duration` (`s`)   | `drive_operation_duration_seconds_bucket`      | `drive_operation`, `drive_actor`: `agent`, `user` (writes only), `result`: `ok`, `refused`, `error` |
+| `drive.scan.duration` (`s`)        | `drive_scan_duration_seconds_bucket`           | `le`                                |
+| `drive.scan.entries`               | `drive_scan_entries_bucket`                    | `le`                                |
+| `drive.watch.changes`              | `drive_watch_changes_total`                    | `outcome`: `published`, `unchanged`, `resync` |
+| `fswatch.descriptors`              | `fswatch_descriptors`                          |                                     |
+| `fswatch.overflows`                | `fswatch_overflows_total`                      |                                     |
+| `fswatch.budget.exhausted`         | `fswatch_budget_exhausted_total`               |                                     |
+| `mcp.server.operation.duration` (`s`) | `mcp_server_operation_duration_seconds_bucket` | `mcp_method_name`, `gen_ai_tool_name`, `error_type`: `tool_error` |
 
 Every series also carries `job="hive-desktop"`, `service_version`,
 `deployment_environment_name`, and `instance` (the per-launch
@@ -74,8 +83,8 @@ the `host_id` label on profiles.
 
 Some behavior is easy to mistake for a broken panel:
 
-- A counter has no series until it first increments. Backlog pauses and RSS
-  fetches stay empty until a pause or an RSS poll happens.
+- A counter has no series until it first increments. Backlog pauses, RSS
+  fetches, and watch overflows stay empty until one happens.
 - TraceQL metrics cover at most 25 hours on Grafana Cloud. Trace-derived panels
   error on a longer range.
 - Grafana Cloud renames HTTP client spans such as `http.github GET` to the bare

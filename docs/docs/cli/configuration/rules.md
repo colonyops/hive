@@ -17,7 +17,7 @@ rules:
         focus: true
       - name: shell
     commands:
-      - hive ctx init
+      - hive drive init
 
   # Override for work repos — use the aider profile
   - pattern: ".*/my-org/.*"

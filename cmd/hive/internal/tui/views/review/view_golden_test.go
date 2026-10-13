@@ -16,20 +16,20 @@ func TestView_ListMode(t *testing.T) {
 		{
 			Path:    "/test/.hive/plans/feature-a.md",
 			RelPath: ".hive/plans/feature-a.md",
-			Type:    DocTypePlan,
+			Type:    "plan",
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 			Content: "# Feature A\n\nImplementation plan for feature A.",
 		},
 		{
 			Path:    "/test/.hive/research/api-design.md",
 			RelPath: ".hive/research/api-design.md",
-			Type:    DocTypeResearch,
+			Type:    "research",
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 			Content: "# API Design\n\nResearch notes for API design.",
 		},
 	}
 
-	view := New(zerolog.Nop(), docs, "", nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, docs, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 
 	output := view.View()
@@ -56,12 +56,12 @@ func TestView_DocumentMode(t *testing.T) {
 	doc := Document{
 		Path:    "/test/document.md",
 		RelPath: "test/document.md",
-		Type:    DocTypePlan,
+		Type:    "plan",
 		ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 		Content: testContent,
 	}
 
-	view := New(zerolog.Nop(), []Document{doc}, "", nil, nil, 0)
+	view := New(zerolog.Nop(), nil, nil, []Document{doc}, Scope{}, nil, nil, 0)
 	view.SetSize(80, 24)
 
 	// Load the document to enter fullscreen mode

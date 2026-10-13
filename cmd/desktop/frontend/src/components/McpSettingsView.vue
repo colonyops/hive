@@ -15,8 +15,9 @@ import SegmentedControl from './ui/SegmentedControl.vue'
 import { mcpSetup, mcpSetupAgents, type McpSetupAgent } from '../lib/mcpSetup'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
 
-// The canvas first: it is the one an agent needs before it can show its work.
-const HOSTED_SERVERS = ['hive-canvas', 'hive-desktop']
+// The drive first: it is the one an agent needs before it can show its work.
+// hive-canvas is the same server at its older address, so it comes last.
+const HOSTED_SERVERS = ['hive-drive', 'hive-desktop', 'hive-canvas']
 
 // The shipped catalogue entry carries the live address, so this page never
 // restates the port or a path.

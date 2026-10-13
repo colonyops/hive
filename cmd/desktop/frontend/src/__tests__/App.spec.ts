@@ -25,6 +25,8 @@ import type { AgentWorkspacesClient } from '../lib/agentWorkspacesClient'
 import { useTasks } from '../stores/useTasks'
 import { applicationSettingsSections, createAppRouter } from '../router'
 import TerminalMode from '../components/TerminalMode.vue'
+import DrivePage from '../components/drive/DrivePage.vue'
+import SettingsView from '../components/SettingsView.vue'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { setTerminalTreeHandles, type TerminalTreeHandles } from '../lib/terminalTree'
 import { ListSessions } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
@@ -104,6 +106,10 @@ const mocks = vi.hoisted(() => ({
   PopupAvailable: vi.fn(),
   PopupEndpoint: vi.fn(),
   PopupLaunchers: vi.fn(),
+  // driveservice
+  DriveSpaces: vi.fn(),
+  DriveTree: vi.fn(),
+  DriveDocument: vi.fn(),
   // agentsservice
   AgentsAvailable: vi.fn(),
   AgentsEndpoint: vi.fn(),
@@ -285,6 +291,13 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   Launchers: mocks.PopupLaunchers,
 }))
 
+vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/driveservice', () => ({
+  Spaces: mocks.DriveSpaces,
+  Tree: mocks.DriveTree,
+  Document: mocks.DriveDocument,
+  Search: vi.fn().mockResolvedValue([]),
+}))
+
 vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/agentsservice', () => ({
   Available: mocks.AgentsAvailable,
   Endpoint: mocks.AgentsEndpoint,
@@ -458,6 +471,9 @@ describe('App', () => {
       avatarUrl: '',
       message: '',
     })
+    mocks.DriveSpaces.mockResolvedValue([])
+    mocks.DriveTree.mockResolvedValue({ path: '', name: '', kind: 'dir', children: [] })
+    mocks.DriveDocument.mockResolvedValue(null)
     mocks.ListFlows.mockResolvedValue([{ id: 'personal', name: 'Personal', enabled: true, valid: true }])
     mocks.GetFlow.mockResolvedValue(flow)
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
@@ -2983,14 +2999,14 @@ describe('App', () => {
   // #432: the canvas is the right-hand pane in Chats, so the title bar's
   // right-panel toggle drives it — the same slot the detail preview uses in
   // Inbox. It used to carry its own button in the pane status bar.
-  it('drives the Chats canvas from the title bar right-panel toggle', async () => {
+  it('drives the Chats drive pane from the title bar right-panel toggle', async () => {
     const { wrapper, router } = await mountAppWithRouter()
 
     await wrapper.get('[data-testid="titlebar-mode-agents"]').trigger('click')
     await vi.waitFor(() => expect(agentsOnScreen(wrapper)).toBe(true))
     await flushPromises()
 
-    // No chat open: the canvas has nothing to show beside, so the slot is off.
+    // No chat open: the drive pane has nothing to show beside, so the slot is off.
     expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('disabled')).toBe('')
 
     await router.replace({ name: 'agents', params: { workspace: 'web-app' }, query: { chat: '7' } })
@@ -2998,16 +3014,16 @@ describe('App', () => {
 
     const toggle = wrapper.get('[data-testid="titlebar-toggle-preview"]')
     expect(toggle.attributes('disabled')).toBeUndefined()
-    expect(toggle.attributes('aria-label')).toBe('Show canvas')
+    expect(toggle.attributes('aria-label')).toBe('Show drive')
 
     await toggle.trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.canvas).toBe('1')
-    expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Hide canvas')
+    expect(router.currentRoute.value.query.doc).toBe('1')
+    expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Hide drive')
 
     await wrapper.get('[data-testid="titlebar-toggle-preview"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.canvas).toBeUndefined()
+    expect(router.currentRoute.value.query.doc).toBeUndefined()
 
     // The Inbox preview is a different pane on the same slot and is untouched.
     expect(localStorage.getItem('hive.panel.detailpane.collapsed')).not.toBe('true')
@@ -3221,26 +3237,71 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('toggles the canvas overlay over the current route with mod+shift+P, and closes it on Escape', async () => {
+  it('opens the Drive page with mod+shift+P and closes it back onto the feed on the chord or Escape', async () => {
     const { wrapper, router } = await mountAppWithRouter()
-    const canvasChord = { key: 'p', metaKey: true, shiftKey: true }
+    const driveChord = { key: 'p', metaKey: true, shiftKey: true }
+    const feedPath = router.currentRoute.value.fullPath
 
-    window.dispatchEvent(new KeyboardEvent('keydown', canvasChord))
+    window.dispatchEvent(new KeyboardEvent('keydown', driveChord))
     await flushPromises()
-    expect(router.currentRoute.value.name).toBe('feed')
-    expect(document.querySelector('[data-testid="canvas-overlay"]')).not.toBeNull()
-    expect(document.querySelector('[data-testid="canvas-page"]')).not.toBeNull()
+    expect(router.currentRoute.value.name).toBe('drive')
+    expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="feed-search"]').exists()).toBe(false)
 
-    window.dispatchEvent(new KeyboardEvent('keydown', canvasChord))
+    window.dispatchEvent(new KeyboardEvent('keydown', driveChord))
     await flushPromises()
-    expect(document.querySelector('[data-testid="canvas-overlay"]')).toBeNull()
+    expect(router.currentRoute.value.fullPath).toBe(feedPath)
+    expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(false)
 
-    window.dispatchEvent(new KeyboardEvent('keydown', canvasChord))
+    window.dispatchEvent(new KeyboardEvent('keydown', driveChord))
     await flushPromises()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="canvas-overlay"]')).toBeNull()
+    expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(false)
+    expect(router.currentRoute.value.fullPath).toBe(feedPath)
+
+    wrapper.unmount()
+  })
+
+  it('closes Settings opened from the Drive page onto the drive, then the drive onto the feed', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    const feedPath = router.currentRoute.value.fullPath
+
+    await router.push({ name: 'drive', query: { space: 'shared' } })
+    await flushPromises()
+    const drivePath = router.currentRoute.value.fullPath
+    wrapper.findComponent(DrivePage).vm.$emit('setup')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('application-settings')
+
+    wrapper.findComponent(SettingsView).vm.$emit('close')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe(drivePath)
+
+    wrapper.findComponent(DrivePage).vm.$emit('close')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe(feedPath)
+
+    wrapper.unmount()
+  })
+
+  it('carries the Drive page scope in the route and reopens on the document last read', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    const driveChord = { key: 'p', metaKey: true, shiftKey: true }
+
+    await router.push({ name: 'drive', query: { space: 'shared', doc: 'notes.md' } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(true)
+    expect(mocks.DriveTree).toHaveBeenCalledWith('shared')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', driveChord))
+    await flushPromises()
     expect(router.currentRoute.value.name).toBe('feed')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', driveChord))
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('drive')
+    expect(router.currentRoute.value.query).toEqual({ space: 'shared', doc: 'notes.md' })
 
     wrapper.unmount()
   })
@@ -3277,71 +3338,80 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  // No chat is open and the Chats area never mounted: a canvas row is a way
-  // to a canvas from anywhere, so it opens the full-page view, not the pane.
-  it('lists a canvas as a palette row under its workspace and opens it full page', async () => {
-    mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
-    const canvas = vi.fn().mockResolvedValue({
-      workspace: 'my-workspace',
-      name: 'perf-report',
+  // No chat is open and the Chats area never mounted: a document row is a
+  // way to a document from anywhere, so it opens the full-page view.
+  it('lists a drive document as a palette row under its space and opens it full page', async () => {
+    const report = {
+      path: 'reports/perf.canvas.json',
+      name: 'perf.canvas.json',
+      kind: 'canvas',
+      size: 1,
+      modified: '2026-10-01T00:00:00Z',
+      created: '2026-10-01T00:00:00Z',
       title: 'Perf report',
-      session: 42,
-      createdAt: 1,
-      updatedAt: 1,
-      blocks: [{ id: 'doc', kind: 'markdown', title: '', body: 'p95 is 96ms', url: '', createdAt: 1, updatedAt: 1 }],
+      front: {},
+      children: [],
+    }
+    const space = { kind: 'workspace', key: 'workspaces/my-workspace', name: 'my-workspace' }
+    mocks.DriveSpaces.mockResolvedValue([space])
+    mocks.DriveTree.mockResolvedValue({ ...report, path: '', name: '', kind: 'dir', title: '', children: [report] })
+    mocks.DriveDocument.mockResolvedValue({
+      space,
+      entry: report,
+      markdown: '',
+      html: '',
+      canvas: {
+        space: space.key,
+        path: report.path,
+        title: 'Perf report',
+        session: '',
+        hiveSession: '',
+        createdAt: 1,
+        updatedAt: 1,
+        frontmatter: {},
+        blocks: [{ id: 'doc', kind: 'markdown', title: '', body: 'p95 is 96ms', url: '', createdAt: 1, updatedAt: 1 }],
+      },
     })
-    mocks.agentsClient = {
-      workspaces: vi.fn().mockResolvedValue({
-        root: '',
-        rootProblem: '',
-        available: true,
-        error: '',
-        editor: { command: '', title: '' },
-        presets: [],
-        workspaces: [{ dir: 'my-workspace', name: 'Travel', command: 'claude', mcps: [], skills: [], schedules: [] }],
-      }),
-      allSessions: vi.fn().mockResolvedValue([]),
-      canvasRepositories: vi.fn().mockResolvedValue([]),
-      canvases: vi.fn().mockResolvedValue([
-        {
-          workspace: 'my-workspace',
-          name: 'perf-report',
-          title: 'Perf report',
-          session: 42,
-          hiveSession: '',
-          createdAt: 1,
-          updatedAt: 1,
-          blockCount: 1,
-        },
-      ]),
-      canvas,
-    } as unknown as AgentWorkspacesClient
     const { wrapper, router } = await mountAppWithRouter()
 
     const palette = useCommandPalette()
     palette.toggle()
     await flushPromises()
     palette.query.value = ''
-    const row = palette.results.value.find((candidate) => candidate.id === 'canvas:my-workspace:perf-report')
+    const row = palette.results.value.find(
+      (candidate) => candidate.id === 'document:workspaces/my-workspace:reports/perf.canvas.json',
+    )
     expect(row?.title).toBe('Perf report')
-    expect(row?.group).toBe('Travel')
-    expect(row?.kind).toBe('canvas')
+    expect(row?.group).toBe('my-workspace')
+    expect(row?.kind).toBe('document')
+
+    // Only the title and the path match: a generic "drive" keyword buried the
+    // Drive commands under every document.
+    const documentId = 'document:workspaces/my-workspace:reports/perf.canvas.json'
+    palette.query.value = 'drive'
+    expect(palette.results.value.some((candidate) => candidate.id === documentId)).toBe(false)
+    palette.query.value = 'reports/perf'
+    expect(palette.results.value.some((candidate) => candidate.id === documentId)).toBe(true)
 
     await palette.run(row!)
     await flushPromises()
 
-    expect(router.currentRoute.value.name).toBe('feed')
-    expect(canvas).toHaveBeenCalledWith('my-workspace', 'perf-report')
-    expect(document.querySelector('[data-testid="canvas-page-block-doc"]')?.textContent).toContain('p95 is 96ms')
+    expect(router.currentRoute.value.name).toBe('drive')
+    expect(router.currentRoute.value.query).toEqual({
+      space: 'workspaces/my-workspace',
+      doc: 'reports/perf.canvas.json',
+    })
+    expect(mocks.DriveDocument).toHaveBeenCalledWith('workspaces/my-workspace', 'reports/perf.canvas.json')
+    expect(wrapper.find('[data-testid="drive-page-block-doc"]').text()).toContain('p95 is 96ms')
 
     wrapper.unmount()
   })
 
-  // A hive session's canvases belong to its repository, so the title bar's
-  // right toggle and the full-page view both work from Code with no chat.
-  it('opens the canvas beside a Code session from the title bar, and the full page on its repository', async () => {
+  // A hive session's documents belong to its repository's space, so the
+  // title bar's right toggle and the full-page view both work from Code with
+  // no chat.
+  it('opens the drive beside a Code session from the title bar, and the full page on its repository', async () => {
     mocks.AgentsAvailable.mockResolvedValue({ available: true, reason: '' })
-    const canvases = vi.fn().mockResolvedValue([])
     mocks.agentsClient = {
       workspaces: vi.fn().mockResolvedValue({
         root: '',
@@ -3353,8 +3423,6 @@ describe('App', () => {
         workspaces: [],
       }),
       allSessions: vi.fn().mockResolvedValue([]),
-      canvasRepositories: vi.fn().mockResolvedValue([]),
-      canvases,
     } as unknown as AgentWorkspacesClient
     vi.mocked(ListSessions).mockResolvedValue([
       {
@@ -3369,7 +3437,7 @@ describe('App', () => {
     ])
     const { wrapper, router } = await mountAppWithRouter()
 
-    // The scratch terminal has no checkout, so it has no canvas to toggle.
+    // The scratch terminal has no checkout, so it has no space to toggle.
     await router.push('/terminal/Scratch')
     await flushPromises()
     expect(wrapper.get('[data-testid="titlebar-toggle-preview"]').attributes('disabled')).toBeDefined()
@@ -3381,13 +3449,15 @@ describe('App', () => {
     )
     await wrapper.get('[data-testid="titlebar-toggle-preview"]').trigger('click')
     await flushPromises()
-    expect(router.currentRoute.value.query.canvas).toBe('1')
+    expect(router.currentRoute.value.query.doc).toBe('1')
     expect(router.currentRoute.value.params.slug).toBe('hive-fix-parser')
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', metaKey: true, shiftKey: true }))
     await flushPromises()
-    expect(document.querySelector('[data-testid="canvas-overlay"]')).not.toBeNull()
-    expect(canvases).toHaveBeenCalledWith('hay-kot/hive')
+    expect(router.currentRoute.value.name).toBe('drive')
+    expect(router.currentRoute.value.query).toEqual({ space: 'hay-kot/hive', session: 's1' })
+    expect(wrapper.find('[data-testid="drive-page"]').exists()).toBe(true)
+    expect(mocks.DriveTree).toHaveBeenCalledWith('hay-kot/hive')
 
     vi.mocked(ListSessions).mockResolvedValue([])
     wrapper.unmount()

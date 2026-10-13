@@ -1,25 +1,27 @@
 import { computed, ref, watch, type Ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Window } from '@wailsio/runtime'
-import { useAgentCanvasRoute } from '../composables/useAgentCanvasRoute'
-import type { CanvasAuthor, CanvasScope } from '../lib/agentCanvas'
+import { useDriveRoute } from '../composables/useDriveRoute'
+import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
+import { useDriveActivity } from '../stores/useDriveActivity'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import { createLogger } from '../lib/log'
 
 const log = createLogger('app-mode')
 
-export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings'
+export type AppMode = 'hub' | 'terminal' | 'agents' | 'settings' | 'drive'
 
 /**
  * Which area owns the frame under the title bar, and that frame's panel chrome.
  * Inbox (the hub) is the feed, flows, and profile settings; Code is terminal
- * mode; Chats is the agents area. Application settings answer to the whole
- * app, so they are an area of their own rather than a page of the Inbox. Terminal and agents are routes, so the title bar
- * stays live inside them and history restores where each was left. A relaunch
- * lands on the hub, so none attaches a tmux client or an agent session
- * unprompted.
+ * mode; Chats is the agents area. Application settings and Hive Drive answer
+ * to the whole app, so each is an area of its own rather than a page of the
+ * Inbox, and closing either returns to the page it was opened from. Terminal
+ * and agents are routes, so the title bar stays live inside them and history
+ * restores where each was left. A relaunch lands on the hub, so none attaches
+ * a tmux client or an agent session unprompted.
  */
 export function useAppMode(
   feed: FeedState,
@@ -28,8 +30,8 @@ export function useAppMode(
   shellLoaded: Ref<boolean>,
 ) {
   const { route, router } = nav
-  const { routeChatId, canvasRequested, canvasName, canvasUnseen, isCanvasUnseen, syncCanvasQuery } =
-    useAgentCanvasRoute()
+  const { routeChatId, docRequested, docPath, docUnseen, syncDocQuery } = useDriveRoute()
+  const activity = useDriveActivity()
   const { recents } = useAgentSessionsAll()
   const { sessions: codeSessions } = useTerminalSessions()
 
@@ -37,6 +39,7 @@ export function useAppMode(
     if (route.name === 'terminal') return 'terminal'
     if (route.name === 'agents') return 'agents'
     if (route.name === 'application-settings') return 'settings'
+    if (route.name === 'drive') return 'drive'
     return 'hub'
   })
   // Each area is its own positive case rather than "not terminal", so a deep
@@ -46,6 +49,7 @@ export function useAppMode(
   const agentsActive = shown('agents')
   const hubActive = shown('hub')
   const settingsActive = shown('settings')
+  const driveActive = shown('drive')
 
   // Mounted on first entry and then only hidden (ADR
   // terminal-mode-is-hidden-not-unmounted): both hold live PTYs and xterm
@@ -70,8 +74,14 @@ export function useAppMode(
   // attach a tmux control client unconditionally.
   let lastHubPath = ''
   let lastTerminalPath = ''
-  // Where closing settings returns to: the last page of any other area.
+  // Where closing settings or the drive returns to. Settings remembers the
+  // drive, so Settings opened from the drive closes back onto it; the drive
+  // skips settings, or the two would each return to the other forever.
   let lastOutsideSettingsPath = ''
+  let lastOutsideDrivePath = ''
+  // The drive reopens on the document last read when no chat or session on
+  // screen names one.
+  let lastDrivePath = ''
   const lastAgentsPath = useStorage('hive.mode.agents.path', '')
   if (!lastAgentsPath.value.startsWith('/workspaces')) lastAgentsPath.value = ''
   watch(
@@ -79,8 +89,10 @@ export function useAppMode(
     (path) => {
       if (!route.name) return
       if (route.name === 'application-settings') return
+      if (route.name !== 'drive') lastOutsideDrivePath = path
       lastOutsideSettingsPath = path
-      if (route.name === 'terminal') lastTerminalPath = path
+      if (route.name === 'drive') lastDrivePath = path
+      else if (route.name === 'terminal') lastTerminalPath = path
       else if (route.name === 'agents') lastAgentsPath.value = path
       else lastHubPath = path
     },
@@ -115,6 +127,7 @@ export function useAppMode(
       !terminalActive.value &&
       !agentsActive.value &&
       !settingsActive.value &&
+      !driveActive.value &&
       !nav.profileSettingsActive.value &&
       !nav.flowsActive.value &&
       !nav.devActive.value &&
@@ -141,47 +154,83 @@ export function useAppMode(
     if (collapsed) collapsed.value = !collapsed.value
   }
 
-  // Whose canvases the session on screen in Code reads: its repository's for
-  // a hive session, its workspace's for a pinned chat. The scratch terminal
-  // has none.
-  const codeCanvas = computed<{ workspace: string; session: CanvasAuthor } | null>(() => {
+  // The space the session on screen in Code reads: its repository's for a
+  // hive session, its workspace's for a pinned chat. The scratch terminal has
+  // none.
+  const codeDrive = computed<{ space: string; session: DriveAuthor } | null>(() => {
     const slug = onScreenSessionSlug.value
     if (!terminalActive.value || !slug) return null
     const chat = recents.value.find((row) => row.slug === slug)
-    if (chat) return { workspace: chat.workspace, session: chat.id }
+    if (chat) return { space: workspaceSpaceKey(chat.workspace), session: chat.id }
     const row = codeSessions.value.find((session) => session.slug === slug)
-    return row?.canvasOwner ? { workspace: row.canvasOwner, session: row.id } : null
+    return row?.canvasOwner ? { space: row.canvasOwner, session: row.id } : null
   })
 
   // One control per frame edge: the right toggle names the detail preview in
-  // Inbox and the canvas in Chats and Code (hay-kot/hive-desktop#432).
-  const agentsCanvasAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
-  const canvasAvailable = computed(() => agentsCanvasAvailable.value || codeCanvas.value !== null)
-  const previewToggleCollapsed = computed(() =>
-    canvasAvailable.value ? !canvasRequested.value : previewCollapsed.value,
-  )
-  const canTogglePreview = computed(() => feedViewActive.value || canvasAvailable.value)
+  // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
+  const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
+  const driveAvailable = computed(() => agentsDriveAvailable.value || codeDrive.value !== null)
+  const previewToggleCollapsed = computed(() => (driveAvailable.value ? !docRequested.value : previewCollapsed.value))
+  const canTogglePreview = computed(() => feedViewActive.value || driveAvailable.value)
   const previewUnseen = computed(() =>
-    agentsCanvasAvailable.value ? canvasUnseen.value : isCanvasUnseen(codeCanvas.value?.session ?? null),
+    agentsDriveAvailable.value ? docUnseen.value : activity.isUnseen(codeDrive.value?.session ?? null),
   )
 
   function togglePreview(): void {
-    if (canvasAvailable.value) syncCanvasQuery(!canvasRequested.value)
+    if (driveAvailable.value) syncDocQuery(!docRequested.value)
     else previewCollapsed.value = !previewCollapsed.value
   }
 
-  // What the canvas pane beside the open chat or Code session shows, or would
-  // show: the full-page view opens on the same canvas. A chat's workspace is
+  // What the drive pane beside the open chat or Code session shows, or would
+  // show: the full-page view opens on the same document. A chat's workspace is
   // its own and need not be the focused one, which is the fallback with no
   // chat open.
-  const viewCanvasScope = computed<CanvasScope | null>(() => {
-    if (codeCanvas.value) return { ...codeCanvas.value, name: canvasName.value }
+  const viewDriveScope = computed<DriveScope | null>(() => {
+    if (codeDrive.value) return { ...codeDrive.value, path: docPath.value }
     if (!agentsActive.value) return null
     const session = routeChatId.value
     const focused = typeof route.params.workspace === 'string' ? route.params.workspace : ''
     const workspace = recents.value.find((chat) => chat.id === session)?.workspace ?? focused
-    return workspace ? { workspace, name: canvasName.value, session } : null
+    return workspace ? { space: workspaceSpaceKey(workspace), path: docPath.value, session } : null
   })
+
+  // The full page's scope is its query, so a document is a link and history
+  // restores it. A pick inside the page replaces rather than pushes, as the
+  // pane's ?doc does, so Back leaves the page instead of walking its picks.
+  const str = (value: unknown) => (typeof value === 'string' ? value : '')
+  const driveScope = computed<DriveScope>(() => ({
+    space: str(route.query.space),
+    path: str(route.query.doc) || null,
+    session: str(route.query.session) || null,
+  }))
+
+  function driveLocation(scope: DriveScope) {
+    const query: Record<string, string> = {}
+    if (scope.space) query.space = scope.space
+    if (scope.path) query.doc = scope.path
+    if (scope.session) query.session = scope.session
+    return { name: 'drive' as const, query }
+  }
+
+  function openDrive(scope: DriveScope): void {
+    void router.push(driveLocation(scope))
+  }
+
+  function updateDriveScope(scope: DriveScope): void {
+    void router.replace(driveLocation(scope))
+  }
+
+  function closeDrive(): void {
+    void router.push(lastOutsideDrivePath || { name: 'feed' })
+  }
+
+  // Opening follows the chat or session on screen; from anywhere else it
+  // returns to the document last read.
+  function toggleDrive(): void {
+    if (mode.value === 'drive') closeDrive()
+    else if (viewDriveScope.value) openDrive(viewDriveScope.value)
+    else void router.push(lastDrivePath || { name: 'drive' })
+  }
 
   // The hidden-inset title bar loses the native double-click-to-zoom, so it is
   // re-implemented here. Guarded for the non-Wails test and browser context.
@@ -200,6 +249,12 @@ export function useAppMode(
     agentsActive,
     hubActive,
     settingsActive,
+    driveActive,
+    driveScope,
+    openDrive,
+    updateDriveScope,
+    closeDrive,
+    toggleDrive,
     closeSettings,
     terminalMounted,
     agentsMounted,
@@ -216,8 +271,8 @@ export function useAppMode(
     canTogglePreview,
     previewUnseen,
     togglePreview,
-    codeCanvas,
-    viewCanvasScope,
+    codeDrive,
+    viewDriveScope,
     toggleMaximise,
   }
 }

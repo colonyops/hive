@@ -23,13 +23,13 @@ vi.mock('@wailsio/runtime', () => ({
 function entry(id: string, overrides: Record<string, unknown> = {}) {
   return {
     id,
-    title: id === 'hive-canvas' ? 'Hive Canvas' : 'Hive Desktop',
+    title: { 'hive-drive': 'Hive Drive', 'hive-canvas': 'Hive Canvas' }[id] ?? 'Hive Desktop',
     description: `${id} description`,
     shipped: true,
     stability: 'stable',
     shadows: '',
     transport: 'http',
-    command: `http://127.0.0.1:4821/mcp${id === 'hive-canvas' ? '/canvas' : ''}`,
+    command: `http://127.0.0.1:4821/mcp${{ 'hive-drive': '/drive', 'hive-canvas': '/canvas' }[id] ?? ''}`,
     problem: '',
     ...overrides,
   }
@@ -48,44 +48,48 @@ describe('McpSettingsView', () => {
     mocks.getAgentsEndpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://x', token: 't' })
     mocks.SetText.mockResolvedValue(undefined)
     mocks.mcpCatalogue.mockResolvedValue([
-      entry('hive-desktop'),
       entry('hive-canvas'),
+      entry('hive-desktop'),
+      entry('hive-drive'),
       entry('playwright', { transport: 'stdio', command: 'npx -y @playwright/mcp' }),
       // A user entry that shadows a shipped id launches the user's command,
       // not this app's server.
-      entry('hive-canvas', { shipped: false, command: 'http://elsewhere.test/mcp' }),
+      entry('hive-drive', { shipped: false, command: 'http://elsewhere.test/mcp' }),
     ])
   })
 
-  it('lists the servers this app hosts with their addresses, the canvas first', async () => {
+  it('lists the servers this app hosts with their addresses, the drive first and its older address last', async () => {
     const wrapper = await mountView()
 
-    expect(wrapper.get('[data-testid="settings-mcp-hive-canvas-url"]').text()).toBe('http://127.0.0.1:4821/mcp/canvas')
+    expect(wrapper.get('[data-testid="settings-mcp-hive-drive-url"]').text()).toBe('http://127.0.0.1:4821/mcp/drive')
     expect(wrapper.get('[data-testid="settings-mcp-hive-desktop-url"]').text()).toBe('http://127.0.0.1:4821/mcp')
+    expect(wrapper.get('[data-testid="settings-mcp-hive-canvas-url"]').text()).toBe('http://127.0.0.1:4821/mcp/canvas')
     expect(wrapper.find('[data-testid="settings-mcp-playwright"]').exists()).toBe(false)
     const titles = wrapper.findAll('section').map((section) => section.attributes('data-testid'))
-    expect(titles.indexOf('settings-mcp-hive-canvas')).toBeLessThan(titles.indexOf('settings-mcp-hive-desktop'))
+    expect(titles.filter((id) => id?.startsWith('settings-mcp-hive-'))).toEqual([
+      'settings-mcp-hive-drive',
+      'settings-mcp-hive-desktop',
+      'settings-mcp-hive-canvas',
+    ])
   })
 
   it('copies the address and the setup for the chosen agent', async () => {
     const wrapper = await mountView()
 
-    await wrapper.get('[data-testid="settings-mcp-hive-canvas-url-copy"]').trigger('click')
+    await wrapper.get('[data-testid="settings-mcp-hive-drive-url-copy"]').trigger('click')
     await flushPromises()
-    expect(mocks.SetText).toHaveBeenLastCalledWith('http://127.0.0.1:4821/mcp/canvas')
+    expect(mocks.SetText).toHaveBeenLastCalledWith('http://127.0.0.1:4821/mcp/drive')
 
-    expect(wrapper.get('[data-testid="settings-mcp-hive-canvas-setup"]').text()).toBe(
-      'claude mcp add --scope user --transport http hive-canvas http://127.0.0.1:4821/mcp/canvas',
+    expect(wrapper.get('[data-testid="settings-mcp-hive-drive-setup"]').text()).toBe(
+      'claude mcp add --scope user --transport http hive-drive http://127.0.0.1:4821/mcp/drive',
     )
 
     await wrapper.get('[data-testid="settings-mcp-agent-codex"]').trigger('click')
-    expect(wrapper.get('[data-testid="settings-mcp-hive-canvas-setup"]').text()).toContain('[mcp_servers.hive-canvas]')
+    expect(wrapper.get('[data-testid="settings-mcp-hive-drive-setup"]').text()).toContain('[mcp_servers.hive-drive]')
 
-    await wrapper.get('[data-testid="settings-mcp-hive-canvas-setup-copy"]').trigger('click')
+    await wrapper.get('[data-testid="settings-mcp-hive-drive-setup-copy"]').trigger('click')
     await flushPromises()
-    expect(mocks.SetText).toHaveBeenLastCalledWith(
-      '[mcp_servers.hive-canvas]\nurl = "http://127.0.0.1:4821/mcp/canvas"',
-    )
+    expect(mocks.SetText).toHaveBeenLastCalledWith('[mcp_servers.hive-drive]\nurl = "http://127.0.0.1:4821/mcp/drive"')
   })
 
   it('says why a server has no address instead of offering setup for it', async () => {

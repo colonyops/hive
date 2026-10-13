@@ -19,6 +19,8 @@ const (
 	AreaInbox Area = "inbox"
 	// AreaCanvas is a Area of type canvas.
 	AreaCanvas Area = "canvas"
+	// AreaDrive is a Area of type drive.
+	AreaDrive Area = "drive"
 )
 
 var ErrInvalidArea = fmt.Errorf("not a valid Area, try [%s]", strings.Join(_AreaNames, ", "))
@@ -28,6 +30,7 @@ var _AreaNames = []string{
 	string(AreaChats),
 	string(AreaInbox),
 	string(AreaCanvas),
+	string(AreaDrive),
 }
 
 // AreaNames returns a list of possible string values of Area.
@@ -54,6 +57,7 @@ var _AreaValue = map[string]Area{
 	"chats":  AreaChats,
 	"inbox":  AreaInbox,
 	"canvas": AreaCanvas,
+	"drive":  AreaDrive,
 }
 
 // ParseArea attempts to convert a string to a Area.

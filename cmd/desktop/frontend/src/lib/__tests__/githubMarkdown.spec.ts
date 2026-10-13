@@ -1,7 +1,33 @@
 import { describe, expect, it } from 'vitest'
 import { renderCanvasMarkdown, renderGithubMarkdown } from '../githubMarkdown'
+import { useCodeHighlight } from '../../stores/useCodeHighlight'
 
 describe('renderGithubMarkdown', () => {
+  it('renders a fence escaped with no highlighter, then highlighted once the queue drains', async () => {
+    const source = '```go\nfunc main() {}\n```'
+    expect(renderGithubMarkdown(source)).toContain('<pre><code class="language-go">func main() {}\n</code></pre>')
+
+    const { highlight, load, settle } = useCodeHighlight()
+    await load()
+    expect(renderGithubMarkdown(source, highlight)).toContain('<pre><code class="language-go">')
+    await settle()
+    const html = renderGithubMarkdown(source, highlight)
+    expect(html).toContain('class="shiki')
+    expect(html).toContain('--shiki-app')
+  })
+
+  it('wraps every code block in a block that carries a copy button', () => {
+    const fenced = renderGithubMarkdown('```go\nfunc main() {}\n```')
+    expect(fenced).toContain(
+      '<div class="markdown-code"><button type="button" class="markdown-code-copy" data-testid="markdown-code-copy" aria-label="Copy code"',
+    )
+    expect(fenced).toContain('</button><pre><code class="language-go">func main() {}\n</code></pre>\n</div>')
+
+    const indented = renderGithubMarkdown('    indented code\n')
+    expect(indented).toContain('class="markdown-code-copy"')
+    expect(indented).toContain('</button><pre><code>indented code\n</code></pre>\n</div>')
+  })
+
   it('returns an empty string for blank input', () => {
     expect(renderGithubMarkdown('')).toBe('')
     expect(renderGithubMarkdown('   \n  ')).toBe('')
@@ -76,10 +102,19 @@ describe('renderGithubMarkdown', () => {
     expect(html).not.toContain('&lt;!--')
   })
 
-  it('preserves comment-like text inside code', () => {
-    const html = renderGithubMarkdown('`<!-- keep me -->`\n\n```html\n<!-- keep me too -->\n```')
-    expect(html).toContain('&lt;!-- keep me --&gt;')
-    expect(html).toContain('&lt;!-- keep me too --&gt;')
+  it('preserves comment-like text inside code', async () => {
+    const source = '`<!-- keep me -->`\n\n```html\n<!-- keep me too -->\n```'
+    const escaped = renderGithubMarkdown(source)
+    expect(escaped).toContain('&lt;!-- keep me --&gt;')
+    expect(escaped).toContain('&lt;!-- keep me too --&gt;')
+
+    const { highlight, load, settle } = useCodeHighlight()
+    await load()
+    renderGithubMarkdown(source, highlight)
+    await settle()
+    const highlighted = renderGithubMarkdown(source, highlight)
+    expect(highlighted).toContain('&lt;!-- keep me --&gt;')
+    expect(highlighted).toContain('&#x3C;!-- keep me too -->')
   })
 
   it('renders fenced code blocks', () => {

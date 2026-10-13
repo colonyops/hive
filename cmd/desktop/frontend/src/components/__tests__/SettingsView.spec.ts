@@ -369,6 +369,16 @@ describe('SettingsView', () => {
     expect(wrapper.find('[data-testid="notification-settings"]').exists()).toBe(true)
   })
 
+  it('exposes a Drive section under Preferences that renders the reading settings', () => {
+    const wrapper = mount(SettingsView, { props: { activeCategory: 'drive' } })
+
+    const entry = wrapper.get('[data-testid="settings-category-drive"]')
+    expect(entry.text()).toContain('Drive')
+    expect(entry.attributes('aria-current')).toBe('true')
+    expect(wrapper.find('[data-testid="settings-drive"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="settings-category-canvas"]').exists()).toBe(false)
+  })
+
   it('exposes a keybindings section that renders the editor', () => {
     const wrapper = mount(SettingsView, { props: { activeCategory: 'keybindings' } })
 

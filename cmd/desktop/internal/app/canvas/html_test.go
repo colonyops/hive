@@ -176,14 +176,14 @@ func TestRejectedHTMLNamesTheFirstOffender(t *testing.T) {
 // but the sanitizer strips is a layout the agent cannot see failing.
 func TestHTMLVocabularyIsStyledAndDocumented(t *testing.T) {
 	css := readDesktopFile(t, "frontend/src/styles/canvas-html.css")
-	doc := readDesktopFile(t, "internal/app/mcpcatalog/docs/hive-canvas.md")
+	doc := readDesktopFile(t, "internal/app/mcpcatalog/docs/hive-drive.md")
 
 	for _, class := range HTMLClasses() {
 		assert.Contains(t, css, "."+class, "canvas-html.css does not style %s", class)
-		assert.Contains(t, doc, "`"+class+"`", "hive-canvas.md does not document %s", class)
+		assert.Contains(t, doc, "`"+class+"`", "hive-drive.md does not document %s", class)
 	}
 	for _, element := range HTMLElements() {
-		assert.Contains(t, doc, "`"+element+"`", "hive-canvas.md does not document <%s>", element)
+		assert.Contains(t, doc, "`"+element+"`", "hive-drive.md does not document <%s>", element)
 	}
 
 	// hv-html is the pane's own root scope, applied by AgentCanvasPane rather

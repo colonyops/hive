@@ -1042,3 +1042,12 @@ body {
   outline: 2px solid var(--color-text-3);
   outline-offset: -2px;
 }
+
+/* Shiki renders a fence in the code theme of the app theme in view
+   (lib/codeThemes.ts) with defaultColor:false, so every token carries one
+   --shiki-app variable and the block background stays on the markdown `pre`
+   styling, which follows the app palette. */
+.shiki,
+.shiki span {
+  color: var(--shiki-app);
+}

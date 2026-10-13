@@ -112,6 +112,14 @@ prepare_server_files() {
   elif [[ "${mode}" != "action-seed" ]]; then
     cp "${FIXTURES}/actions.yml" "${fixture_dir}/actions.yml"
   fi
+  if [[ "${mode}" != "onboarding" ]]; then
+    # hive-e2e.yaml sets no context.base_dir, so the drive root is
+    # ${data_dir}/context and this is the e2e/repo space.
+    local space_dir="${data_dir}/context/e2e/repo"
+    mkdir -p "${space_dir}/plans" "${space_dir}/canvases"
+    cp "${FIXTURES}/drive/plans/2026-10-11-plan.md" "${space_dir}/plans/"
+    cp "${FIXTURES}/drive/canvases/report.canvas.json" "${space_dir}/canvases/"
+  fi
 }
 
 start_server() {

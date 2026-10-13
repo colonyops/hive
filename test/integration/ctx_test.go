@@ -49,28 +49,6 @@ func TestCtxInitIdempotent(t *testing.T) {
 	assert.Contains(t, out2, "already exists")
 }
 
-func TestCtxLs(t *testing.T) {
-	h := NewHarness(t)
-	repo := createBareRepo(t, "ctx-ls-repo")
-
-	workDir := filepath.Join(t.TempDir(), "work")
-	run(t, "git", "clone", repo, workDir)
-
-	// Init to create the context dir
-	_, err := h.RunInDir(workDir, "ctx", "init")
-	require.NoError(t, err)
-
-	// Resolve the symlink target and create a test file
-	target, err := os.Readlink(filepath.Join(workDir, ".hive"))
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(filepath.Join(target, "test.txt"), []byte("hello"), 0o644))
-
-	// ls should show the file
-	out, err := h.RunInDir(workDir, "ctx", "ls")
-	require.NoError(t, err, "ctx ls: %s", out)
-	assert.Contains(t, out, "test.txt")
-}
-
 func TestCtxPrune(t *testing.T) {
 	h := NewHarness(t)
 	repo := createBareRepo(t, "ctx-prune-repo")

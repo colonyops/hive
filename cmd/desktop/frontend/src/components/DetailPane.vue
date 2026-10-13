@@ -5,6 +5,7 @@ import ItemActionMenu from './ItemActionMenu.vue'
 import IconButton from './ui/IconButton.vue'
 import PanelResizeHandle from './ui/PanelResizeHandle.vue'
 import PullRequestMetadata from './PullRequestMetadata.vue'
+import { useCodeCopy } from '../composables/useCodeCopy'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import {
   body,
@@ -19,6 +20,7 @@ import {
 } from '../lib/itemPresentation'
 import { relativeAge, relativeAgo } from '../lib/age'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
+import { useCodeHighlight } from '../stores/useCodeHighlight'
 import { externalMarkdownHref } from '../lib/markdownLinks'
 import IconEllipsisVertical from '~icons/lucide/ellipsis-vertical'
 import IconSettings from '~icons/lucide/settings'
@@ -93,12 +95,16 @@ const itemByline = computed(() => (props.item ? byline(props.item) : ''))
 // Issue/PR bodies are GitHub-flavored markdown from untrusted authors;
 // renderGithubMarkdown parses the GFM and escapes raw HTML / unsafe links, so
 // the result is safe to inject with v-html.
-const bodyHtml = computed(() => (props.item ? renderGithubMarkdown(body(props.item)) : ''))
+const { highlight } = useCodeHighlight()
+const bodyHtml = computed(() => (props.item ? renderGithubMarkdown(body(props.item), highlight) : ''))
 
 // Links inside the rendered body must open in the user's real browser rather
 // than navigate the webview away from the app. Intercept anchor clicks and
 // hand the href up to the parent, which routes it through Wails.
+const { copyCode } = useCodeCopy()
+
 function onBodyClick(event: MouseEvent) {
+  if (copyCode(event)) return
   const href = externalMarkdownHref(event)
   if (href) emit('open-url', href)
 }

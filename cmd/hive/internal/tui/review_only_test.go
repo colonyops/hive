@@ -26,14 +26,13 @@ func TestReviewOnly_QKeyWithActiveEditor(t *testing.T) {
 	doc := review.Document{
 		Path:    "/test/doc.md",
 		RelPath: "doc.md",
-		Type:    review.DocTypePlan,
+		Type:    "plan",
 		Content: "# Test Document\n\nSome content",
 	}
 
 	m := NewReviewOnly(ReviewOnlyOptions{
 		Documents:   []review.Document{doc},
 		InitialDoc:  nil,
-		ContextDir:  "",
 		Reviews:     store.NewReviewStore(dbConn),
 		CopyCommand: "",
 	})
@@ -77,14 +76,13 @@ func TestReviewOnly_CtrlCAlwaysQuits(t *testing.T) {
 	doc := review.Document{
 		Path:    "/test/doc.md",
 		RelPath: "doc.md",
-		Type:    review.DocTypePlan,
+		Type:    "plan",
 		Content: "# Test Document\n\nSome content",
 	}
 
 	m := NewReviewOnly(ReviewOnlyOptions{
 		Documents:   []review.Document{doc},
 		InitialDoc:  nil,
-		ContextDir:  "",
 		Reviews:     store.NewReviewStore(dbConn),
 		CopyCommand: "",
 	})
@@ -102,7 +100,7 @@ func TestReviewOnly_CtrlCAlwaysQuits(t *testing.T) {
 
 // TestReviewView_HasActiveEditor verifies the HasActiveEditor method.
 func TestReviewView_HasActiveEditor(t *testing.T) {
-	v := review.New(zerolog.Nop(), []review.Document{}, "", nil, nil, 0)
+	v := review.New(zerolog.Nop(), nil, nil, []review.Document{}, review.Scope{}, nil, nil, 0)
 
 	assert.False(t, v.HasActiveEditor(), "Should have no active editor initially")
 }

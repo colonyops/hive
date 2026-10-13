@@ -15,10 +15,10 @@ separate id field, so create one by creating the directory. Opening a
 workspace regenerates everything else under `<dir>` (`CLAUDE.md`, `.mcp.json`,
 `.codex/config.toml`, `.claude/`, `.agents/`, an empty `docs/`) from the
 manifest and `AGENTS.md`. None of that generated output is meant to be
-hand-edited — it is silently replaced the next time the workspace opens. One
-directory is neither authored nor regenerated: `canvases/` holds artifacts a
-chat's agent wrote through the `hive-canvas` MCP tools, and Hive leaves it
-alone. Put
+hand-edited — it is silently replaced the next time the workspace opens. The
+documents and canvases a chat's agent writes through the `hive-drive` MCP
+tools are not here: they live in the workspace's Hive Drive space,
+`workspaces/<dir>` under hive's context directory. Put
 prose in `AGENTS.md`, not in the manifest: `agent-workspace.yaml` carries no
 `system_prompt` field.
 {{template "yaml-strict" .}}

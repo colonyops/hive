@@ -1,6 +1,6 @@
 ---
 icon: lucide/link
-description: Open a Code session, a chat, an inbox item, or a canvas in Hive Desktop from a hive:// link.
+description: Open a Code session, a chat, an inbox item, or a Drive document in Hive Desktop from a hive:// link.
 ---
 
 # Links
@@ -23,11 +23,18 @@ A link only navigates. It never creates a session, runs a command, or changes da
 | A profile's inbox | `hive://inbox/<profile>` |
 | A feed | `hive://inbox/<profile>?feed=<feed-id>` |
 | An inbox item | `hive://inbox/<profile>/<item-id>` |
+| A Drive document | `hive://drive/<space-key>/<path>` |
+| A Drive space | `hive://drive/<space-key>` |
 | A canvas | `hive://canvas/<name>?owner=<owner>` |
 
 - `<slug>` is the tmux session name, so a link can open a session that another tool started, as long as it runs on the same tmux server as Hive.
-- Add `canvas=<name>` to a Code or chat link to open the canvas pane beside it.
-- A canvas owner is a Chats workspace, a repository as `owner/repo`, or `@global`.
+- A space key is one of three forms:
+    - `shared` for the Shared space, as in `hive://drive/shared/notes.md`.
+    - `workspaces/<name>` for a Chats workspace, as in `hive://drive/workspaces/hive/canvases/release.canvas.json`.
+    - `<owner>/<repo>` for a repository, as in `hive://drive/colonyops/hive/plans/2026-10-11-drive.md`.
+- The path after the key is the document's path inside the space. A link to a space with no path opens that space.
+- Add `canvas=<name>` to a Code or chat link to open the Drive pane beside it on that canvas.
+- The older canvas link still opens the canvas. Its owner is a Chats workspace, a repository as `owner/repo`, or `@global`.
 - Escape special characters in each part, so a canvas named `release plan` is `hive://canvas/release%20plan?owner=colonyops%2Fhive`.
 
 ## Open a link from the CLI

@@ -151,6 +151,40 @@ func TestStateResetRestoresFreshlySeededBaseline(t *testing.T) {
 	assert.NoFileExists(t, settings.SettingsPath())
 }
 
+func TestStateResetRestoresTheDriveFixture(t *testing.T) {
+	root := setStateResetEnv(t, "feed")
+	space := filepath.Join(root, "context", "e2e", "repo")
+	plan := filepath.Join(space, "plans", "2026-10-11-plan.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(plan), 0o755))
+	require.NoError(t, os.MkdirAll(filepath.Join(space, "canvases"), 0o755))
+	require.NoError(t, os.WriteFile(plan, []byte("# Plan\n"), 0o644))
+	seeded := time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
+	require.NoError(t, os.Chtimes(plan, seeded, seeded))
+
+	db := openStateResetPipelineDB(t)
+	harness := NewStateResetHarness(db, appstores.New(db, appstores.Options{}), nil, zerolog.Nop())
+	require.NotNil(t, harness)
+
+	// The reorganize journey: a new folder, the plan moved into it and
+	// deleted, the emptied seeded folder deleted.
+	require.NoError(t, os.MkdirAll(filepath.Join(space, "archive", "nested"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(space, "archive", "moved.md"), []byte("x"), 0o644))
+	require.NoError(t, os.Remove(plan))
+	require.NoError(t, os.Remove(filepath.Join(space, "plans")))
+	require.NoError(t, os.Remove(filepath.Join(space, "canvases")))
+
+	require.NoError(t, harness.Reset(t.Context()))
+
+	body, err := os.ReadFile(plan)
+	require.NoError(t, err)
+	assert.Equal(t, "# Plan\n", string(body))
+	info, err := os.Stat(plan)
+	require.NoError(t, err)
+	assert.True(t, seeded.Equal(info.ModTime()), "a restored document keeps its age, so it does not become the newest")
+	assert.DirExists(t, filepath.Join(space, "canvases"), "an empty seeded folder comes back")
+	assert.NoDirExists(t, filepath.Join(space, "archive"))
+}
+
 func TestStateResetPipelineModeWipesWithoutReseeding(t *testing.T) {
 	setStateResetEnv(t, "pipeline")
 	ctx := context.Background()

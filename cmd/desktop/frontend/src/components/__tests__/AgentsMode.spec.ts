@@ -5,6 +5,7 @@ import AgentsMode from '../AgentsMode.vue'
 import AgentsSidebar from '../AgentsSidebar.vue'
 import { resetNewSessionForTests, useNewSession } from '../../composables/useNewSession'
 import { createAppRouter } from '../../router'
+import { useDriveActivity } from '../../stores/useDriveActivity'
 import { tooltipFor } from '../../test-utils/tooltip'
 import type { MissingSkillPackage } from '../../lib/agentWorkspacesClient'
 
@@ -118,8 +119,17 @@ vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => ({
   createAgentWorkspacesClient: mocks.createAgentWorkspacesClient,
 }))
 
-// Captures every useWailsEvent registration (AgentsMode's dot and the canvas
-// pane's refetch both listen) so a test can fire canvas:updated by hand.
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/driveservice', () => ({
+  Spaces: vi.fn().mockResolvedValue([]),
+  Tree: vi.fn().mockResolvedValue({ path: '', name: '', kind: 'dir', children: [] }),
+  Document: vi.fn(),
+}))
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
+  Focused: vi.fn().mockResolvedValue(true),
+}))
+
+// Captures every useWailsEvent registration so a test can fire drive:updated
+// and drive:toggle by hand.
 const wailsEvents = vi.hoisted(() => ({
   handlers: [] as Array<[string, (event: { data: unknown }) => void]>,
   fire(name: string, data: unknown) {
@@ -276,16 +286,6 @@ function fakeClient(editor = { command: 'zed', title: 'Zed' }) {
     skillPackages: vi.fn().mockResolvedValue({ packages: [], skills: [], problem: '' }),
     revealSkillPackages: vi.fn().mockResolvedValue(undefined),
     revealSharedSkills: vi.fn().mockResolvedValue(undefined),
-    canvas: vi.fn().mockResolvedValue({
-      workspace: 'web-app',
-      name: 'plan',
-      title: '',
-      session: '7',
-      createdAt: 0,
-      updatedAt: 0,
-      blocks: [],
-    }),
-    canvases: vi.fn().mockResolvedValue([]),
     scheduleRuns: vi.fn().mockResolvedValue([]),
     runSchedule: vi.fn(),
     previewSchedule: vi.fn().mockResolvedValue({ next: [], cronError: '', promptError: '' }),
@@ -310,11 +310,11 @@ async function startChat(wrapper: VueWrapper, workspace = 'web-app', name = 'New
   await flushPromises()
 }
 
-// The canvas toggle lives in the title bar (#432), which these mode-level tests
-// do not mount, so they drive ?canvas directly — the route is the source of
+// The drive toggle lives in the title bar (#432), which these mode-level tests
+// do not mount, so they drive ?doc directly — the route is the source of
 // truth either way.
-async function setCanvas(router: Router, value: string | undefined) {
-  await router.replace({ query: { ...router.currentRoute.value.query, canvas: value } })
+async function setDoc(router: Router, value: string | undefined) {
+  await router.replace({ query: { ...router.currentRoute.value.query, doc: value } })
   await flushPromises()
 }
 
@@ -562,7 +562,7 @@ describe('AgentsMode', () => {
     client.resumeSession.mockResolvedValue({ ...other, windowId: 'w9', cols: 80, rows: 24, resumeAttempted: true })
     const { router } = await mountWithOpenChat(client)
 
-    await router.push({ name: 'agents', params: { workspace: 'web-app' }, query: { chat: '9', canvas: '1' } })
+    await router.push({ name: 'agents', params: { workspace: 'web-app' }, query: { chat: '9', doc: '1' } })
     await flushPromises()
 
     expect(client.resumeSession).toHaveBeenCalledWith({ id: '9' })
@@ -570,19 +570,19 @@ describe('AgentsMode', () => {
   })
 
   // A route naming a chat that cannot be attached leaves the live one alone:
-  // clearing ?chat here would drop ?canvas too and unmount the canvas pane of
+  // clearing ?chat here would drop ?doc too and unmount the drive pane of
   // a chat that is still running.
   it('keeps the live chat in the route when the routed chat is dead', async () => {
     const client = fakeClient()
     client.allSessions.mockResolvedValue([{ ...chatRow, id: '9', name: 'Second', terminalId: '' }])
     const { router } = await mountWithOpenChat(client)
 
-    await router.push({ name: 'agents', params: { workspace: 'web-app' }, query: { chat: '9', canvas: '1' } })
+    await router.push({ name: 'agents', params: { workspace: 'web-app' }, query: { chat: '9', doc: '1' } })
     await flushPromises()
 
     expect(client.resumeSession).not.toHaveBeenCalled()
     expect(router.currentRoute.value.query.chat).toBe('7')
-    expect(router.currentRoute.value.query.canvas).toBe('1')
+    expect(router.currentRoute.value.query.doc).toBe('1')
   })
 
   // Clicking the row already open in the pane must not tear it down and
@@ -871,57 +871,75 @@ describe('AgentsMode', () => {
     expect(newSession.open.value).toBe(false)
   })
 
-  // The canvas is a sibling pane: opening and closing it must never re-key or
+  // The drive pane is a sibling pane: opening and closing it must never re-key or
   // unmount the terminal host — the same element survives the round trip.
-  it('keeps the terminal pane element across a canvas toggle', async () => {
+  it('keeps the terminal pane element across a drive pane toggle', async () => {
     const { wrapper, router } = await mountWithOpenChat()
     const paneBefore = wrapper.find('[data-testid="agents-session-pane"]').element
 
-    await setCanvas(router, '1')
-    expect(router.currentRoute.value.query.canvas).toBe('1')
-    expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(true)
+    await setDoc(router, '1')
+    expect(router.currentRoute.value.query.doc).toBe('1')
+    expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="agents-session-pane"]').element).toBe(paneBefore)
 
-    await setCanvas(router, undefined)
-    expect(router.currentRoute.value.query.canvas).toBeUndefined()
-    expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)
+    await setDoc(router, undefined)
+    expect(router.currentRoute.value.query.doc).toBeUndefined()
+    expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="agents-session-pane"]').element).toBe(paneBefore)
   })
 
-  // ?canvas names a view of the open chat, so with no chat open it renders
+  // ?doc names a view of the open chat, so with no chat open it renders
   // nothing — and closing the chat takes the query along.
-  it('renders no canvas without an open chat, and drops ?canvas with the chat', async () => {
-    const { wrapper: idle } = await mountAgentsMode('/workspaces/web-app?canvas=1')
-    expect(idle.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)
+  it('renders no drive pane without an open chat, and drops ?doc with the chat', async () => {
+    const { wrapper: idle } = await mountAgentsMode('/workspaces/web-app?doc=1')
+    expect(idle.find('[data-testid="drive-pane"]').exists()).toBe(false)
 
     const { wrapper, router } = await mountWithOpenChat()
-    await setCanvas(router, '1')
-    expect(router.currentRoute.value.query.canvas).toBe('1')
+    await setDoc(router, '1')
+    expect(router.currentRoute.value.query.doc).toBe('1')
 
     wrapper.findComponent(AgentsSidebar).vm.$emit('close-session', { ...chatRow })
     await flushPromises()
 
     expect(router.currentRoute.value.query.chat).toBeUndefined()
-    expect(router.currentRoute.value.query.canvas).toBeUndefined()
+    expect(router.currentRoute.value.query.doc).toBeUndefined()
   })
 
-  // open_canvas / close_canvas arrive as canvas:toggle. Only the open chat's
-  // ask is honored — an agent must never drag the user away from another chat.
-  it('opens and closes the pane on canvas:toggle for the open chat only', async () => {
+  // open_document, open_canvas and close_canvas arrive as drive:toggle. Only
+  // the open chat's ask is honored — an agent must never drag the user away
+  // from another chat.
+  it('opens and closes the pane on drive:toggle for the open chat only', async () => {
     const { wrapper, router } = await mountWithOpenChat()
 
-    wailsEvents.fire('canvas:toggle', { session: '99', name: '', open: true })
+    wailsEvents.fire('drive:toggle', { session: '99', path: '', open: true })
     await flushPromises()
-    expect(router.currentRoute.value.query.canvas).toBeUndefined()
+    expect(router.currentRoute.value.query.doc).toBeUndefined()
 
-    wailsEvents.fire('canvas:toggle', { session: '7', name: 'plan', open: true })
+    wailsEvents.fire('drive:toggle', { session: '7', path: 'plans/x.md', open: true })
     await flushPromises()
-    expect(router.currentRoute.value.query.canvas).toBe('plan')
-    expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(true)
+    expect(router.currentRoute.value.query.doc).toBe('plans/x.md')
+    expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(true)
 
-    wailsEvents.fire('canvas:toggle', { session: '7', name: '', open: false })
+    wailsEvents.fire('drive:toggle', { session: '7', path: '', open: false })
     await flushPromises()
-    expect(router.currentRoute.value.query.canvas).toBeUndefined()
-    expect(wrapper.find('[data-testid="agent-canvas-pane"]').exists()).toBe(false)
+    expect(router.currentRoute.value.query.doc).toBeUndefined()
+    expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
+  })
+
+  it("keeps the open chat's write seen when its pane was open for it and then closes", async () => {
+    const { router } = await mountWithOpenChat()
+    await setDoc(router, '1')
+
+    wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: ['x.md'], session: '7', hiveSession: '' })
+    await flushPromises()
+    await setDoc(router, undefined)
+    expect(useDriveActivity().isUnseen('7')).toBe(false)
+
+    wailsEvents.fire('drive:updated', { space: 'workspaces/web-app', paths: ['x.md'], session: '7', hiveSession: '' })
+    await flushPromises()
+    expect(useDriveActivity().isUnseen('7')).toBe(true)
+
+    await setDoc(router, '1')
+    expect(useDriveActivity().isUnseen('7')).toBe(false)
   })
 })

@@ -2,7 +2,7 @@ import { defineComponent } from 'vue'
 import { createRouter, createWebHashHistory, type RouteRecordRaw, type Router, type RouterHistory } from 'vue-router'
 
 export type AppRouteName =
-  'feed' | 'flows' | 'terminal' | 'agents' | 'application-settings' | 'profile-settings' | 'dev'
+  'feed' | 'flows' | 'terminal' | 'agents' | 'application-settings' | 'profile-settings' | 'drive' | 'dev'
 
 // The one list of application settings sections. It builds the route's own
 // section matcher below and backs isApplicationSettingsSection, which App.vue
@@ -12,7 +12,7 @@ export type AppRouteName =
 export const applicationSettingsSections = [
   'general',
   'appearance',
-  'canvas',
+  'drive',
   'notifications',
   'menubar',
   'keybindings',
@@ -83,6 +83,15 @@ export function createAppRouter(history: RouterHistory = createWebHashHistory())
     {
       path: `/profiles/:profileId/settings/:section(${profileSettingsSections.join('|')})?`,
       name: 'profile-settings',
+      component: ShellPage,
+    },
+    {
+      // Hive Drive at full page, app-global like Settings. Its scope rides the
+      // query: ?space=<key> picks the space, ?doc=<path> pins a document, and
+      // ?session=<author> is the chat or Code session whose newest write is
+      // the default document.
+      path: '/drive',
+      name: 'drive',
       component: ShellPage,
     },
   ]

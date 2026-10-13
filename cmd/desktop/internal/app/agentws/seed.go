@@ -130,14 +130,15 @@ const HiveWorkspaceDir = "hive"
 // shipped claude "Ask" preset as its command, so a first launch writes a file
 // that needs no migration and shows the user exactly what a command template
 // looks like. It wires both app-hosted MCP servers: the skills describe the
-// app's files, the servers are how the agent reads the live app and draws
-// into a canvas, and a workspace meant to configure Hive needs both.
+// app's files, the servers are how the agent reads the live app and puts
+// documents in front of the user, and a workspace meant to configure Hive
+// needs both.
 var hiveWorkspaceYAML = fmt.Sprintf(`version: %d
 name: Hive
 command: %s
 mcps:
   - hive-desktop
-  - hive-canvas
+  - hive-drive
 skills:
   - hive
 `, configmigrate.AgentWorkspaceSet.Current, PresetCommand("claude-ask"))
@@ -146,8 +147,8 @@ const hiveAgentsMD = `# Hive
 
 This workspace drives Hive Desktop itself — settings, the feed, flows,
 actions, keybindings, and webhooks — through the "hive" skill package, which
-tracks the skills this build ships, and the hive-desktop and hive-canvas MCP
-servers, which read the running app and draw into its canvases.
+tracks the skills this build ships, and the hive-desktop and hive-drive MCP
+servers, which read the running app and write into its drive.
 
 Its command runs claude with no permission bypass, so nothing here happens
 unprompted. Edit "command" in agent-workspace.yaml to change that.

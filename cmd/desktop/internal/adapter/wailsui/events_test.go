@@ -71,3 +71,68 @@ func TestSubscribeSkipsToastForBannerNotification(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 }
+
+type emitted struct {
+	name string
+	data any
+}
+
+func swapEmitEvent(t *testing.T, sink chan<- emitted) {
+	t.Helper()
+	orig := emitEvent
+	emitEvent = func(name string, data any) { sink <- emitted{name: name, data: data} }
+	t.Cleanup(func() { emitEvent = orig })
+}
+
+func receiveEmitted(t *testing.T, sink <-chan emitted) emitted {
+	t.Helper()
+	select {
+	case got := <-sink:
+		return got
+	case <-time.After(2 * time.Second):
+		t.Fatal("no event was emitted")
+		return emitted{}
+	}
+}
+
+// The event names are the frontend's contract: it listens for drive:updated
+// and drive:toggle by string, so this pins them.
+func TestSubscribeEmitsDriveEventsUnderTheirFrontendNames(t *testing.T) {
+	sink := make(chan emitted, 2)
+	swapEmitEvent(t, sink)
+
+	bus := events.New(zerolog.Nop())
+	t.Cleanup(bus.Close)
+	cancel := Subscribe(t.Context(), bus, nil)
+	t.Cleanup(cancel)
+
+	bus.Publish(t.Context(), events.DriveChanged{Space: "acme/site", Paths: []string{"plans/a.md"}, HiveSession: "abc123"})
+	require.Equal(t, emitted{
+		name: "drive:updated",
+		data: DriveWrite{Space: "acme/site", Paths: []string{"plans/a.md"}, HiveSession: "abc123"},
+	}, receiveEmitted(t, sink))
+
+	bus.Publish(t.Context(), events.DriveToggleRequested{Session: "7", Space: "workspaces/ws", Path: "canvases/plan.canvas.json", Open: true})
+	require.Equal(t, emitted{
+		name: "drive:toggle",
+		data: DriveToggle{Session: "7", Space: "workspaces/ws", Path: "canvases/plan.canvas.json", Open: true},
+	}, receiveEmitted(t, sink))
+}
+
+// One watcher batch publishes a DriveChanged per space back to back, and the
+// frontend reloads only the named space, so none of them may be dropped.
+func TestSubscribeEmitsEveryDriveChangeInOrder(t *testing.T) {
+	sink := make(chan emitted, 2)
+	swapEmitEvent(t, sink)
+
+	bus := events.New(zerolog.Nop())
+	t.Cleanup(bus.Close)
+	cancel := Subscribe(t.Context(), bus, nil)
+	t.Cleanup(cancel)
+
+	bus.Publish(t.Context(), events.DriveChanged{Space: "acme/site", Paths: []string{"a.md"}})
+	bus.Publish(t.Context(), events.DriveChanged{Space: "acme/api", Paths: []string{"b.md"}})
+
+	require.Equal(t, emitted{name: "drive:updated", data: DriveWrite{Space: "acme/site", Paths: []string{"a.md"}}}, receiveEmitted(t, sink))
+	require.Equal(t, emitted{name: "drive:updated", data: DriveWrite{Space: "acme/api", Paths: []string{"b.md"}}}, receiveEmitted(t, sink))
+}

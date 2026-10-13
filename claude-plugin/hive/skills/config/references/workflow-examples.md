@@ -28,7 +28,7 @@ rules:
         focus: true
       - name: shell
     commands:
-      - hive ctx init
+      - hive drive init
 
   - pattern: ".*github\\.com/my-org/.*"
     windows:
@@ -69,7 +69,7 @@ rules:
         focus: true
       - name: shell
     commands:
-      - hive ctx init
+      - hive drive init
       - make dev-setup
       - npm install
     copy:
@@ -83,7 +83,7 @@ rules:
         focus: true
       - name: shell
     commands:
-      - hive ctx init
+      - hive drive init
 ```
 
 ## Git Worktree Pattern
@@ -97,7 +97,7 @@ rules:
         focus: true
       - name: shell
     commands:
-      - hive ctx init
+      - hive drive init
 
 usercommands:
   worktree:

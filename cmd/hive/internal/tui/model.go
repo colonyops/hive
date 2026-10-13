@@ -100,6 +100,7 @@ type Deps struct {
 	// Optional; nil disables the corresponding feature.
 	MsgStore      *msgsvc.Service
 	Reviews       corereview.Store
+	Drive         DriveSource
 	Bus           *events.EventBus
 	KVStore       corekv.KV
 	BuildInfo     BuildInfo
@@ -122,6 +123,7 @@ type Model struct {
 	baseLogger     zerolog.Logger // no cmp label; handed to the components the model creates later
 	cfg            *config.Config
 	service        *sessionsvc.Service
+	drive          DriveSource
 	cmdService     *command.Service
 	handler        *KeybindingResolver
 	state          UIState
@@ -322,25 +324,23 @@ func New(deps Deps, opts Opts) Model {
 	kvView := NewKVView()
 
 	var repoKey string
-	var contextDir string
-	var docs []review.Document
+	var scope review.Scope
 	if opts.LocalRemote != "" {
-		owner, repo := git.ExtractOwnerRepo(opts.LocalRemote)
-		if owner != "" && repo != "" {
-			repoKey = owner + "/" + repo
-			contextDir = cfg.RepoContextDir(owner, repo)
-			docs, _ = review.DiscoverDocuments(contextDir)
-		}
+		scope, repoKey, _ = remoteReviewScope(cfg, deps.Drive, opts.LocalRemote)
 	}
 
 	tasksView := tasks.New(deps.Logger, deps.Honeycomb, repoKey, handler, deps.KVStore, cfg.Views.Tasks.SplitRatio)
-	if contextDir == "" {
-		contextDir = cfg.SharedContextDir()
-		docs, _ = review.DiscoverDocuments(contextDir)
+	if scope.Dir == "" {
+		scope = sharedReviewScope(cfg)
+	}
+	docs, err := review.ListDocuments(context.Background(), deps.Drive, scope)
+	if err != nil {
+		logger.Warn().Err(err).Str("dir", scope.Dir).Msg("documents not listed at startup")
 	}
 
-	reviewView := review.New(deps.Logger, docs, contextDir, deps.Reviews, handler, cfg.Views.Review.SplitRatioOrDefault(30))
+	reviewView := review.New(deps.Logger, deps.Bus, deps.Drive, docs, scope, deps.Reviews, handler, cfg.Views.Review.SplitRatioOrDefault(30))
 	reviewView.SetRepoKey(repoKey)
+	reviewView.SetSymlinkName(cfg.Context.SymlinkName)
 
 	toastCtrl := NewToastController()
 	toastView := NewToastView(toastCtrl)
@@ -377,6 +377,7 @@ func New(deps Deps, opts Opts) Model {
 		logger:           logger,
 		baseLogger:       deps.Logger,
 		cfg:              cfg,
+		drive:            deps.Drive,
 		service:          service,
 		cmdService:       cmdService,
 		handler:          handler,
@@ -457,7 +458,6 @@ func (m Model) Init() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
-	// Start review view file watcher
 	if m.reviewView != nil {
 		if cmd := m.reviewView.Init(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -632,7 +632,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Review delegation
 	case review.DocumentChangeMsg:
-		model, cmd = m.handleReviewDocChange(msg)
+		model, cmd = m.forwardToReview(msg)
+	case review.DriveChangedMsg:
+		model, cmd = m.forwardToReview(msg)
 	case review.ReviewFinalizedMsg:
 		model, cmd = m.handleReviewFinalized(msg)
 	case review.OpenDocumentMsg:
@@ -877,7 +879,7 @@ func (m Model) docTemplateData() *DocTemplateData {
 	return &DocTemplateData{
 		Path:    doc.Path,
 		RelPath: doc.RelPath,
-		Type:    strings.ToLower(doc.Type.String()),
+		Type:    doc.Type,
 	}
 }
 
@@ -1857,7 +1859,7 @@ func (m Model) syncTasksRepoFromSessions() tea.Cmd {
 }
 
 // syncDocsRepoFromSessions extracts the repo from the sessions tree selection
-// and updates the review view context dir if it differs from the current one.
+// and updates the review view scope if it differs from the current one.
 func (m Model) syncDocsRepoFromSessions() tea.Cmd {
 	if m.reviewView == nil {
 		return nil
@@ -1882,18 +1884,13 @@ func (m Model) syncDocsRepoFromSessions() tea.Cmd {
 		return nil
 	}
 
-	owner, repo := git.ExtractOwnerRepo(remote)
-	if owner == "" || repo == "" {
+	scope, repoKey, ok := remoteReviewScope(m.cfg, m.drive, remote)
+	if !ok || scope == m.reviewView.Scope() {
 		return nil
 	}
 
-	contextDir := m.cfg.RepoContextDir(owner, repo)
-	if contextDir == m.reviewView.ContextDir() {
-		return nil
-	}
-
-	m.reviewView.SetRepoKey(owner + "/" + repo)
-	return m.reviewView.SetContextDir(contextDir)
+	m.reviewView.SetRepoKey(repoKey)
+	return m.reviewView.SetScope(scope)
 }
 
 // hasEditorFocus returns true if any text input currently has focus.

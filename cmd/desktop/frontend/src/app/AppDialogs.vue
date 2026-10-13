@@ -4,7 +4,6 @@ import IconLayoutGrid from '~icons/lucide/layout-grid'
 import ActionInputsDialog from '../components/ActionInputsDialog.vue'
 import ActionRunsView from '../components/ActionRunsView.vue'
 import ActivityView from '../components/ActivityView.vue'
-import AgentCanvasPage from '../components/AgentCanvasPage.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import ErrorDialog from '../components/ErrorDialog.vue'
 import ReportProblemDialog from '../components/ReportProblemDialog.vue'
@@ -56,14 +55,9 @@ const {
   createProfileError,
 } = feed
 const { pendingNavigation, unsavedChangesBusy } = nav
-const { tasksOpen, activityOpen, canvasOpen, canvasScope, actionRunsOpen, actionRunsRunId } = overlays
+const { tasksOpen, activityOpen, actionRunsOpen, actionRunsRunId } = overlays
 const { newProfileOpen } = profileActions
 const flowsSession = useFlowsSession()
-
-function openMcpSettings(): void {
-  canvasOpen.value = false
-  nav.selectApplicationSettingsSection('mcp')
-}
 const { open: reportDialogOpen } = useReportDialog()
 const { current: appError, dismissError } = useErrorDialog()
 
@@ -158,14 +152,6 @@ onMounted(() => {
   />
   <HubOverlay v-if="tasksOpen" label="Tasks" testid="tasks-overlay" @close="tasksOpen = false">
     <TasksView @close="tasksOpen = false" />
-  </HubOverlay>
-  <HubOverlay v-if="canvasOpen" label="Canvases" testid="canvas-overlay" @close="canvasOpen = false">
-    <AgentCanvasPage
-      v-model:scope="canvasScope"
-      @close="canvasOpen = false"
-      @open-url="feed.openUrl"
-      @setup="openMcpSettings"
-    />
   </HubOverlay>
   <HubOverlay v-if="actionRunsOpen" label="Action runs" testid="action-runs-overlay" @close="actionRunsOpen = false">
     <ActionRunsView
