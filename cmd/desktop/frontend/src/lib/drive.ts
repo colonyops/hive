@@ -113,10 +113,18 @@ export function driveEventAuthor(data: unknown): DriveAuthor | null {
   return typeof payload?.session === 'string' && payload.session ? payload.session : null
 }
 
+const frontmatterPattern = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/
+
 /** A markdown body without its YAML front matter, which the reader shows as properties. */
 export function markdownBody(source: string): string {
-  const match = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(source)
+  const match = frontmatterPattern.exec(source)
   return match ? source.slice(match[0].length) : source
+}
+
+/** How many source lines markdownBody cuts off the top. */
+export function frontmatterLineCount(source: string): number {
+  const match = frontmatterPattern.exec(source)
+  return match ? match[0].split('\n').length - 1 : 0
 }
 
 export type LinkTarget = { kind: 'url'; url: string } | { kind: 'document'; path: string }

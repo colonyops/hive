@@ -132,6 +132,16 @@ A Markdown document or a canvas can include front matter such as tags, status, o
 
 **Settings ▸ Drive** changes text size, line spacing, and text width for every document, in Chats and in Code. The text runs at a narrow reading width by default. **Wide** fits HTML laid out in columns, and **Full** runs to the edges of the view.
 
+### Comment on a document
+
+Select text in a Markdown document, in the pane or on the Drive page, and choose **Comment**. The comment is anchored to the lines of the file the selection covers, and a numbered marker shows on the commented blocks. The comments panel under the document toolbar lists them; edit or delete one there, or select it to scroll to its marker. Add a general note in the same panel.
+
+- **Copy feedback** puts the comments and the note on the clipboard as plain text that names the document's path. The comments stay.
+- **Send to Agent** opens a list of the agents running now, in Code sessions and chats, with their status. The agent beside the pane is listed first. Sending pastes the feedback into the agent as one message, submits it, and clears the comments. An agent that is working gets it mid-turn; an agent waiting on a prompt cannot be picked until the prompt is answered.
+- **Clear** deletes the comments and the note after asking.
+
+Comments are kept in Hive's database, not in the file, and survive a restart. If the document changes after you comment, the panel says the comments are on an earlier version. Send, copy, or discard them before adding new ones. Renaming or moving a document leaves its comments behind.
+
 ### Reorganize
 
 You can reorganize the tree without an agent running. Create a folder, rename a document or folder, move it into another folder in the same space, or delete it from a row's menu. You can also drag a document onto a folder. Delete works on a document or an empty folder, and asks for confirmation. Deleting a document removes it for every chat or Code session that shares the space.

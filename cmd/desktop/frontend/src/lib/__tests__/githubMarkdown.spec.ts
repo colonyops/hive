@@ -162,3 +162,63 @@ describe('renderCanvasMarkdown', () => {
     expect(renderGithubMarkdown('```mermaid\nA --> B\n```')).toContain('language-mermaid')
   })
 })
+
+describe('renderCanvasMarkdown source lines', () => {
+  const html = (src: string, offset = 0) =>
+    renderCanvasMarkdown(src, undefined, { offset })
+      .map((part) => (part.kind === 'html' ? part.html : ''))
+      .join('')
+
+  it('marks headings, paragraphs, blockquotes and rules with their lines', () => {
+    const out = html('# Title\n\nOne\ntwo\n\n> quoted\n\n---\n')
+    expect(out).toContain('<h1 data-source-start="1" data-source-end="1">Title</h1>')
+    expect(out).toContain('<p data-source-start="3" data-source-end="4">One')
+    expect(out).toContain('<blockquote data-source-start="6" data-source-end="6">')
+    expect(out).toContain('<hr data-source-start="8" data-source-end="8">')
+  })
+
+  it('marks nested list items and tables', () => {
+    const out = html('- a\n  - b\n- c\n\n| x |\n| - |\n| 1 |\n')
+    expect(out).toContain('<ul data-source-start="1" data-source-end="3">')
+    expect(out).toContain('<li data-source-start="2" data-source-end="2">b</li>')
+    expect(out).toContain('<table data-source-start="5" data-source-end="7">')
+  })
+
+  it('puts a fence range on its copy wrapper, highlighted or not', async () => {
+    const source = 'Intro\n\n```go\nfunc main() {}\n```\n'
+    expect(html(source)).toContain('<div class="markdown-code" data-source-start="3" data-source-end="5">')
+
+    const { highlight, load, settle } = useCodeHighlight()
+    await load()
+    renderCanvasMarkdown(source, highlight)
+    await settle()
+    const highlighted = renderCanvasMarkdown(source, highlight, { offset: 0 })
+      .map((part) => (part.kind === 'html' ? part.html : ''))
+      .join('')
+    expect(highlighted).toContain('class="shiki')
+    expect(highlighted).toContain('<div class="markdown-code" data-source-start="3" data-source-end="5">')
+  })
+
+  it('wraps escaped html blocks', () => {
+    expect(html('<section>raw</section>\n')).toContain(
+      '<div data-source-start="1" data-source-end="1">&lt;section&gt;raw&lt;/section&gt;\n</div>',
+    )
+  })
+
+  it('gives mermaid parts their lines', () => {
+    const parts = renderCanvasMarkdown('Before\n\n```mermaid\ngraph TD\n```\n', undefined, { offset: 2 })
+    expect(parts[1]).toEqual({ kind: 'mermaid', source: 'graph TD\n', lines: [5, 7] })
+  })
+
+  it('adds the offset and trims trailing blank lines', () => {
+    expect(html('- a\n\n\n- b\n', 3)).toContain('<li data-source-start="4" data-source-end="4">')
+  })
+
+  it('leaves the output unchanged without sourceLines', () => {
+    const source = '# T\n\n- a\n\n```go\nx\n```\n\n<b>x</b>\n\n---\n\n```mermaid\ngraph\n```\n'
+    const parts = renderCanvasMarkdown(source)
+    expect(JSON.stringify(parts)).not.toContain('data-source')
+    expect(parts.find((part) => part.kind === 'mermaid')).toEqual({ kind: 'mermaid', source: 'graph\n' })
+    expect(renderGithubMarkdown(source)).not.toContain('data-source')
+  })
+})

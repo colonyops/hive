@@ -4,6 +4,7 @@ import {
   documentsOf,
   driveEventAuthor,
   entryMatches,
+  frontmatterLineCount,
   linkTarget,
   markdownBody,
   newestDocument,
@@ -36,6 +37,13 @@ describe('drive', () => {
   it('strips front matter from a markdown body and leaves a body without it alone', () => {
     expect(markdownBody('---\ntype: plan\ntitle: X\n---\n\n# X\n')).toBe('\n# X\n')
     expect(markdownBody('# X\n\n---\n\nmore')).toBe('# X\n\n---\n\nmore')
+  })
+
+  it('counts the lines front matter takes, LF or CRLF', () => {
+    expect(frontmatterLineCount('---\ntype: plan\n---\n\n# X\n')).toBe(3)
+    expect(frontmatterLineCount('---\r\ntype: plan\r\ntitle: X\r\n---\r\n# X\r\n')).toBe(4)
+    expect(frontmatterLineCount('---\na: 1\n---')).toBe(2)
+    expect(frontmatterLineCount('# X\n')).toBe(0)
   })
 
   it('lists documents depth first and picks the newest', () => {

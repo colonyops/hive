@@ -52,3 +52,50 @@ test("the Drive page opens a document from a space and finds it from another", a
   await expect(page.getByTestId("drive-page")).toHaveCount(0);
   await expect(page.getByTestId("feed-item").first()).toBeVisible();
 });
+
+test("a comment on a Drive document survives a reload, then clears", async ({
+  page,
+}) => {
+  await page.goto(
+    `/#/drive?space=e2e%2Frepo&doc=${encodeURIComponent(planPath)}`,
+  );
+  const body = page.getByTestId("drive-page-markdown");
+  await expect(body.getByRole("heading", { name: planTitle })).toBeVisible();
+
+  // The paragraph sits on lines 8-9 of the file: the front matter takes 4.
+  await body
+    .locator("p")
+    .first()
+    .evaluate((paragraph) => {
+      const text = paragraph.firstChild!;
+      const range = document.createRange();
+      range.setStart(text, 0);
+      range.setEnd(text, "This plan".length);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+  await page.getByTestId("drive-page-comment-button").click();
+  await page.getByTestId("drive-page-comment-text").fill("Name the plan");
+  await page.getByTestId("drive-page-comment-save").click();
+
+  const row = page.getByTestId("drive-page-review-row-1");
+  await expect(row).toContainText("L8-9");
+  await expect(row).toContainText("This plan");
+  await expect(row).toContainText("Name the plan");
+  await expect(body.locator("[data-review-marker='1']")).toHaveCount(1);
+
+  await page.reload();
+  await expect(page.getByTestId("drive-page-review-row-1")).toContainText(
+    "Name the plan",
+  );
+  await expect(body.locator("[data-review-marker='1']")).toHaveCount(1);
+
+  await page.getByTestId("drive-page-review-copy").click();
+  await expect(page.getByTestId("drive-page-review-row-1")).toBeVisible();
+
+  await page.getByTestId("drive-page-review-clear").click();
+  await page.getByTestId("drive-page-review-confirm-confirm").click();
+  await expect(page.getByTestId("drive-page-review")).toHaveCount(0);
+  await expect(body.locator(".has-review-comment")).toHaveCount(0);
+});

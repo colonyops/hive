@@ -10,6 +10,7 @@ import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
 import DriveDocumentActions from './DriveDocumentActions.vue'
 import DriveReader from './DriveReader.vue'
+import DriveReviewPanel from './DriveReviewPanel.vue'
 import AppSelect, { type AppSelectOption } from '../ui/AppSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import EmptyState from '../ui/EmptyState.vue'
@@ -200,6 +201,12 @@ useEscapeToClose(() => emit('close'))
           <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
         </template>
       </ViewHeader>
+      <DriveReviewPanel
+        v-if="document?.entry.kind === 'markdown'"
+        :space="document.space.key"
+        :path="document.entry.path"
+        testid="drive-page"
+      />
 
       <InlineError v-if="spacesError && !spaces.length" class="m-4" :message="spacesError" testid="drive-page-error" />
       <EmptyState

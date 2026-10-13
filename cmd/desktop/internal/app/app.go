@@ -135,6 +135,7 @@ type App struct {
 	AgentWorkspaces *AgentWorkspacesService
 	Tasks           *TasksService
 	Drive           *DriveService
+	Review          *ReviewService
 	Schedules       *SchedulesService
 
 	// Events is the typed bus adapters project into transport-specific events.
@@ -518,6 +519,14 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.PopupTerminals = newPopupTerminalsService(PopupTerminalsDeps{Manager: a.popupTerminals, Terminals: a.Terminals, Directory: a.Sessions, Catalog: a.actionStore})
 	a.Diagnostics = &DiagnosticsService{paths: cfg.Paths, jobs: a.Jobs, build: cfg.Build, environ: a.execEnv.Environ, hive: a.HiveConfig, commands: a.profileCommands, webhooks: a.Webhooks, reveal: a.System.revealPath}
 	a.Tasks = newTasksService(a.hive)
+	a.Review = newReviewService(ReviewDeps{
+		Reviews: a.hive.Reviews(),
+		Drive:   a.Drive,
+		Code:    engineCodeAgents{engine: a.hive},
+		Chats:   a.AgentWorkspaces,
+		Input:   a.terminals,
+		Logger:  cfg.Logger,
+	})
 
 	// After AgentWorkspaces: the scheduler launches chats through it, and the
 	// service reads the same workspace store the scheduler takes its specs

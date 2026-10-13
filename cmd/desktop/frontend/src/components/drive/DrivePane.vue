@@ -9,6 +9,7 @@ import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
 import DriveDocumentActions from './DriveDocumentActions.vue'
 import DriveReader from './DriveReader.vue'
+import DriveReviewPanel from './DriveReviewPanel.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import IconButton from '../ui/IconButton.vue'
 import PanelResizeHandle from '../ui/PanelResizeHandle.vue'
@@ -16,6 +17,7 @@ import { useDriveDocument } from '../../composables/useDriveDocument'
 import { useResizablePanel } from '../../composables/useResizablePanel'
 import { useDriveActivity } from '../../stores/useDriveActivity'
 import { entryLabel, movedPath, newestDocument, type DriveAuthor } from '../../lib/drive'
+import type { AgentTargetRef } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = defineProps<{
   /** The open chat or Code session, whose newest write is the default pick. */
@@ -26,6 +28,8 @@ const props = defineProps<{
   path: string | null
   /** Offers the way to connect an agent while the space is empty, where Hive does not wire the agent itself. */
   agentSetup?: boolean
+  /** The surface's own agent, which Send to Agent offers first. */
+  agent?: AgentTargetRef | null
 }>()
 const emit = defineEmits<{
   close: []
@@ -144,6 +148,14 @@ const {
       />
       <IconButton label="Close drive" :icon="IconX" data-testid="drive-pane-close" @click="emit('close')" />
     </div>
+
+    <DriveReviewPanel
+      v-if="!browsing && document?.entry.kind === 'markdown'"
+      :space="document.space.key"
+      :path="document.entry.path"
+      :agent="agent"
+      testid="drive-pane"
+    />
 
     <DriveBrowser
       v-if="browsing"

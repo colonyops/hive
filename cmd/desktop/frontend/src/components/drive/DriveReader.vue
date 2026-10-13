@@ -1,15 +1,20 @@
 <script setup lang="ts">
 // One document rendered by kind. The pane and the full-page view share it, so
 // a document reads the same in both and only the width differs.
-import { computed } from 'vue'
+import { useEventListener, useMutationObserver } from '@vueuse/core'
+import { computed, ref, watch, type ComponentPublicInstance } from 'vue'
 import HtmlDocumentFrame from './HtmlDocumentFrame.vue'
+import DriveCommentPopover from './DriveCommentPopover.vue'
 import DriveFrontmatter from './DriveFrontmatter.vue'
 import CanvasMarkdown from '../CanvasMarkdown.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import InlineError from '../ui/InlineError.vue'
 import IconArrowUpRight from '~icons/lucide/arrow-up-right'
+import IconMessageSquarePlus from '~icons/lucide/message-square-plus'
 import { useCanvasSettings } from '../../stores/useCanvasSettings'
-import { entryTime, linkTarget, markdownBody, type FrontmatterValue } from '../../lib/drive'
+import { useDriveReview } from '../../stores/useDriveReview'
+import { entryTime, frontmatterLineCount, linkTarget, markdownBody, type FrontmatterValue } from '../../lib/drive'
+import { markReviewedBlocks, selectionToRange, type SourceRange } from '../../lib/driveReviewSelection'
 import type { DocumentWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 const props = defineProps<{
@@ -18,7 +23,10 @@ const props = defineProps<{
   paths: ReadonlySet<string>
   loading: boolean
   error: string | null
-  /** Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-file`, `-error`, and `-empty`. */
+  /**
+   * Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-file`, `-error`,
+   * `-empty`, `-comment-button`, and the comment popover's ids (DriveCommentPopover).
+   */
   testid: string
 }>()
 const emit = defineEmits<{ 'open-url': [url: string]; open: [path: string] }>()
@@ -53,6 +61,85 @@ const properties = computed<{ frontmatter: Record<string, FrontmatterValue>; cre
   },
 )
 
+// Comments: a selection in a Markdown body maps to its source lines, which
+// count the front matter the reader shows as properties.
+const reviewStore = useDriveReview()
+const reviewed = computed(() => {
+  const doc = props.document
+  return doc && doc.entry.kind === 'markdown' ? { space: doc.space.key, path: doc.entry.path } : null
+})
+const review = computed(() => (reviewed.value ? reviewStore.review(reviewed.value.space, reviewed.value.path) : null))
+const comments = computed(() => review.value?.data.value.comments ?? [])
+const current = computed(() => review.value?.data.value.current ?? true)
+const sourceLines = computed(() =>
+  props.document && kind.value === 'markdown' ? { offset: frontmatterLineCount(props.document.markdown) } : undefined,
+)
+
+const markdownView = ref<ComponentPublicInstance | null>(null)
+const body = computed(() => (markdownView.value?.$el as HTMLElement | undefined) ?? null)
+
+const selected = ref<SourceRange | null>(null)
+const buttonPosition = ref<{ top: number; left: number } | null>(null)
+const commentButton = ref<HTMLElement | null>(null)
+const drafting = ref<SourceRange | null>(null)
+const saving = ref(false)
+const saveError = ref<string | null>(null)
+
+useEventListener(
+  () => (reviewed.value ? globalThis.document : null),
+  'selectionchange',
+  () => {
+    if (drafting.value) return
+    const selection = globalThis.getSelection()
+    const range = selection && body.value && current.value ? selectionToRange(selection, body.value) : null
+    selected.value = range
+    if (!range || !selection) {
+      buttonPosition.value = null
+      return
+    }
+    const rect = selection.getRangeAt(0).getBoundingClientRect()
+    buttonPosition.value = { top: Math.max(8, rect.top - 34), left: Math.max(8, rect.right - 28) }
+  },
+)
+
+function startComment(): void {
+  drafting.value = selected.value
+  saveError.value = null
+}
+
+function endComment(): void {
+  drafting.value = null
+  selected.value = null
+  buttonPosition.value = null
+  saveError.value = null
+}
+
+async function saveComment(text: string): Promise<void> {
+  const target = reviewed.value
+  const range = drafting.value
+  if (!target || !range) return
+  saving.value = true
+  const error = await reviewStore.add(target.space, target.path, range, text)
+  saving.value = false
+  if (error) {
+    saveError.value = error
+    return
+  }
+  globalThis.getSelection()?.removeAllRanges()
+  endComment()
+}
+
+watch(reviewed, endComment)
+
+// Rendering replaces the body's markup (a highlighter that finishes loading
+// renders again), so the markers follow every change to it, not only to the
+// comments. The markers set attributes, which this does not observe.
+function mark(): void {
+  if (body.value) markReviewedBlocks(body.value, current.value ? comments.value : [])
+}
+useMutationObserver(body, mark, { childList: true, subtree: true })
+watch([body, comments, current], mark, { flush: 'post' })
+
 function follow(href: string): void {
   const target = linkTarget(href, props.document?.entry.path ?? '', props.paths)
   if (target?.kind === 'url') emit('open-url', target.url)
@@ -81,9 +168,11 @@ function onBodyClick(event: MouseEvent): void {
     <InlineError v-if="error" :testid="`${testid}-error`" variant="line" class="leading-relaxed" :message="error" />
     <CanvasMarkdown
       v-else-if="document && kind === 'markdown'"
+      ref="markdownView"
       class="canvas-reading-body text-text-2 markdown-body"
       :style="readerStyle"
       :source="markdownBody(document.markdown)"
+      :source-lines="sourceLines"
       :testid="`${testid}-markdown`"
       :data-testid="`${testid}-markdown`"
       @follow="follow"
@@ -140,6 +229,31 @@ function onBodyClick(event: MouseEvent): void {
       :data-testid="`${testid}-file`"
     />
     <EmptyState v-else-if="!loading" variant="inline" message="Nothing here yet." :data-testid="`${testid}-empty`" />
+    <Teleport to="body">
+      <button
+        v-if="buttonPosition"
+        ref="commentButton"
+        type="button"
+        class="drive-comment-button fixed z-40 flex h-7 cursor-pointer items-center gap-1 rounded-lg border border-card bg-raised px-2 text-small font-medium text-text shadow-popover hover:bg-chip"
+        :style="{ top: `${buttonPosition.top}px`, left: `${buttonPosition.left}px` }"
+        :data-testid="`${testid}-comment-button`"
+        @mousedown.prevent
+        @click="startComment"
+      >
+        <IconMessageSquarePlus class="size-3.5" aria-hidden="true" />
+        Comment
+      </button>
+    </Teleport>
+    <DriveCommentPopover
+      v-if="drafting"
+      :anchor="commentButton"
+      :range="drafting"
+      :busy="saving"
+      :error="saveError"
+      :testid="testid"
+      @save="saveComment"
+      @cancel="endComment"
+    />
   </div>
 </template>
 
@@ -225,6 +339,31 @@ function onBodyClick(event: MouseEvent): void {
 }
 .canvas-reading-body.markdown-body :deep(tr) {
   background: transparent;
+}
+.canvas-reading-body.markdown-body :deep(.has-review-comment) {
+  border-radius: 4px;
+  background: var(--color-accent-tint);
+  box-shadow: -6px 0 0 var(--color-accent-tint);
+}
+.canvas-reading-body.markdown-body :deep([data-review-marker]) {
+  position: relative;
+}
+.canvas-reading-body.markdown-body :deep([data-review-marker])::before {
+  /* Inside the block's right edge: the pane's narrow gutter would clip a
+     badge in the left margin. */
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  content: attr(data-review-marker);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
 }
 .canvas-link {
   display: flex;

@@ -176,11 +176,29 @@ export interface ClientLogEntry {
     "fields"?: { [_ in string]?: any } | null;
 }
 
+export interface CommentWire {
+    "id": string;
+    "startLine": number;
+    "endLine": number;
+    "context": string;
+    "text": string;
+    "createdAt": string;
+}
+
 /**
  * DevToolsInfo is what the frontend needs before it decides to render the pane.
  */
 export interface DevToolsInfo {
     "enabled": boolean;
+}
+
+/**
+ * DocumentReviewWire is app.DocumentReview with its comments converted.
+ */
+export interface DocumentReviewWire {
+    "sessionId": string;
+    "current": boolean;
+    "comments": CommentWire[] | null;
 }
 
 /**

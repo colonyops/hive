@@ -51,6 +51,72 @@ export interface ActionRunSummary {
     "itemTitle"?: string;
 }
 
+export interface AgentTarget {
+    /**
+     * AgentTargetSession or AgentTargetChat
+     */
+    "kind": string;
+
+    /**
+     * hive session id or chat id
+     */
+    "id": string;
+
+    /**
+     * tmux pane id; session targets only
+     */
+    "pane": string;
+
+    /**
+     * "<repo> / <session> · <window>" or "<workspace> / <chat>"
+     */
+    "label": string;
+
+    /**
+     * ready | active | approval
+     */
+    "status": string;
+}
+
+/**
+ * AgentTargetRef names one agent that can take text. The frontend sends it
+ * back as it got it; Send resolves it again and never trusts it as a tmux
+ * target.
+ */
+export interface AgentTargetRef {
+    /**
+     * AgentTargetSession or AgentTargetChat
+     */
+    "kind": string;
+
+    /**
+     * hive session id or chat id
+     */
+    "id": string;
+
+    /**
+     * tmux pane id; session targets only
+     */
+    "pane": string;
+}
+
+/**
+ * CommentInput is a new comment on a source line range.
+ */
+export interface CommentInput {
+    /**
+     * 1-based source line, front matter included
+     */
+    "startLine": number;
+
+    /**
+     * inclusive
+     */
+    "endLine": number;
+    "context": string;
+    "text": string;
+}
+
 export interface DiagnosticsAgents {
     "names": string[] | null;
     "defaultAgent": string;
