@@ -61,6 +61,7 @@ watch(
 // The header title opens the tree over the content (the Grafana-assistant
 // pattern) rather than a dropdown.
 const browsing = ref(false)
+const htmlExpanded = ref(true)
 
 const headerTitle = computed(() => (document.value ? entryLabel(document.value.entry) : shown.value) || 'Drive')
 
@@ -132,6 +133,7 @@ const {
         v-if="document"
         :space="space"
         :entry="document.entry"
+        v-model:html-expanded="htmlExpanded"
         testid="drive-pane"
         @deleted="documentDeleted"
         @moved="documentMoved"
@@ -168,6 +170,7 @@ const {
           :paths="paths"
           :loading="loading"
           :error="error ?? treeError"
+          :html-expanded="htmlExpanded"
           testid="drive-pane"
           @open-url="emit('open-url', $event)"
           @open="pick"

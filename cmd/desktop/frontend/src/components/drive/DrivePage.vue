@@ -95,6 +95,7 @@ const folder = computed(() => {
   return slash < 0 ? '' : path.slice(0, slash)
 })
 const modified = computed(() => (document.value ? entryTime(document.value.entry.modified) : 0))
+const htmlExpanded = ref(true)
 
 // The pane's reason: Hive wires a workspace's agent, never a Code session's.
 const offerSetup = computed(
@@ -192,6 +193,7 @@ useEscapeToClose(() => emit('close'))
             v-if="document"
             :space="space"
             :entry="document.entry"
+            v-model:html-expanded="htmlExpanded"
             size="lg"
             testid="drive-page"
             @deleted="documentDeleted"
@@ -225,6 +227,7 @@ useEscapeToClose(() => emit('close'))
               :paths="paths"
               :loading="loading"
               :error="error"
+              :html-expanded="htmlExpanded"
               testid="drive-page"
               @open-url="emit('open-url', $event)"
               @open="openDocument"

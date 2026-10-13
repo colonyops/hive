@@ -5,7 +5,11 @@ import IconCheck from '~icons/lucide/check'
 import IconCopy from '~icons/lucide/copy'
 import IconDownload from '~icons/lucide/download'
 import IconEllipsis from '~icons/lucide/ellipsis'
+import IconMaximize from '~icons/lucide/maximize-2'
+import IconMinimize from '~icons/lucide/minimize-2'
+import IconShield from '~icons/lucide/shield'
 import DriveEntryMenu from './DriveEntryMenu.vue'
+import AppTooltip from '../ui/AppTooltip.vue'
 import IconButton from '../ui/IconButton.vue'
 import { useClipboard } from '../../composables/useClipboard'
 import { useToasts } from '../../composables/useToasts'
@@ -21,9 +25,11 @@ const props = defineProps<{
   space: string
   entry: EntryWire
   size?: 'md' | 'lg'
-  /** Derives `-copy`, `-download`, `-more`, and the entry menu's ids (DriveEntryMenu). */
+  /** Derives `-sandbox`, `-frame-expand`, `-copy`, `-download`, `-more`, and the entry menu's ids (DriveEntryMenu). */
   testid: string
 }>()
+/** Whether an html document fills the reader. */
+const htmlExpanded = defineModel<boolean>('htmlExpanded', { default: true })
 const emit = defineEmits<{ deleted: [path: string]; moved: [from: string, to: string] }>()
 
 const log = createLogger('drive-document-actions')
@@ -84,6 +90,23 @@ function openMenu(event: MouseEvent): void {
 </script>
 
 <template>
+  <template v-if="entry.kind === 'html'">
+    <AppTooltip
+      text="Sandboxed document. Scripts run inside the frame; it cannot call Hive or send requests to localhost."
+    >
+      <span class="flex size-6 items-center justify-center text-text-4" :data-testid="`${testid}-sandbox`">
+        <IconShield class="size-3.5" aria-label="Sandboxed document" />
+      </span>
+    </AppTooltip>
+    <IconButton
+      :label="htmlExpanded ? 'Collapse document' : 'Expand to fill the reader'"
+      :icon="htmlExpanded ? IconMinimize : IconMaximize"
+      :size="size"
+      :aria-pressed="htmlExpanded"
+      :data-testid="`${testid}-frame-expand`"
+      @click="htmlExpanded = !htmlExpanded"
+    />
+  </template>
   <template v-if="exportable">
     <IconButton
       :label="copyStatus === 'success' ? 'Copied' : 'Copy as Markdown'"

@@ -18,6 +18,8 @@ const props = defineProps<{
   paths: ReadonlySet<string>
   loading: boolean
   error: string | null
+  /** Whether an html document fills the reader; DriveDocumentActions toggles it. */
+  htmlExpanded?: boolean
   /** Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-file`, `-error`, and `-empty`. */
   testid: string
 }>()
@@ -88,7 +90,12 @@ function onBodyClick(event: MouseEvent): void {
       :data-testid="`${testid}-markdown`"
       @follow="follow"
     />
-    <HtmlDocumentFrame v-else-if="document && kind === 'html'" :html="document.html" :testid="testid" />
+    <HtmlDocumentFrame
+      v-else-if="document && kind === 'html'"
+      :html="document.html"
+      :expanded="htmlExpanded ?? true"
+      :testid="testid"
+    />
     <template v-else-if="kind === 'canvas' && blocks.length">
       <article
         v-for="block in blocks"
