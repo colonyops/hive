@@ -160,27 +160,30 @@ const {
       @escape="browsing = false"
     />
 
-    <div v-else ref="reader" class="hive-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
-      <DriveReader
-        :document="document"
-        :paths="paths"
-        :loading="loading"
-        :error="error ?? treeError"
-        testid="drive-pane"
-        @open-url="emit('open-url', $event)"
-        @open="pick"
-      />
-      <div
-        v-if="agentSetup && empty && !loading"
-        class="mt-3 flex flex-col items-start gap-2"
-        data-testid="drive-pane-setup"
-      >
-        <p class="text-xs leading-relaxed text-text-3">
-          An agent in this session can write here once its own MCP configuration lists the Hive Drive server.
-        </p>
-        <BaseButton variant="secondary" size="xs" data-testid="drive-pane-setup-open" @click="emit('setup')">
-          Set up an agent
-        </BaseButton>
+    <!-- Positioned so an expanded html document fills the reader, not the pane. -->
+    <div v-else class="relative flex min-h-0 flex-1 flex-col">
+      <div ref="reader" class="hive-scroll flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
+        <DriveReader
+          :document="document"
+          :paths="paths"
+          :loading="loading"
+          :error="error ?? treeError"
+          testid="drive-pane"
+          @open-url="emit('open-url', $event)"
+          @open="pick"
+        />
+        <div
+          v-if="agentSetup && empty && !loading"
+          class="mt-3 flex flex-col items-start gap-2"
+          data-testid="drive-pane-setup"
+        >
+          <p class="text-xs leading-relaxed text-text-3">
+            An agent in this session can write here once its own MCP configuration lists the Hive Drive server.
+          </p>
+          <BaseButton variant="secondary" size="xs" data-testid="drive-pane-setup-open" @click="emit('setup')">
+            Set up an agent
+          </BaseButton>
+        </div>
       </div>
     </div>
   </aside>

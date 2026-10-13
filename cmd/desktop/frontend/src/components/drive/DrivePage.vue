@@ -208,34 +208,36 @@ useEscapeToClose(() => emit('close'))
         message="No spaces yet. A repository, a workspace, or the shared space appears here once a document is written to it."
         data-testid="drive-page-no-spaces"
       />
-      <div
-        v-else
-        ref="reader"
-        class="hive-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-app"
-        data-testid="drive-page-reader"
-      >
+      <!-- Positioned so an expanded html document fills the reader, not the page. -->
+      <div v-else class="relative flex min-h-0 min-w-0 flex-1 flex-col">
         <div
-          class="mx-auto flex w-full flex-1 flex-col px-10 py-8"
-          :class="pageWidthClass"
-          data-testid="drive-page-measure"
+          ref="reader"
+          class="hive-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-app"
+          data-testid="drive-page-reader"
         >
-          <DriveReader
-            :document="document"
-            :paths="paths"
-            :loading="loading"
-            :error="error"
-            testid="drive-page"
-            @open-url="emit('open-url', $event)"
-            @open="openDocument"
-          />
-          <div v-if="offerSetup" class="mt-3 flex flex-col items-start gap-2" data-testid="drive-page-setup">
-            <p class="text-xs leading-relaxed text-text-3">
-              An agent in a Code session of this repository can write here once its own MCP configuration lists the Hive
-              Drive server.
-            </p>
-            <BaseButton variant="secondary" size="xs" data-testid="drive-page-setup-open" @click="emit('setup')">
-              Set up an agent
-            </BaseButton>
+          <div
+            class="mx-auto flex w-full flex-1 flex-col px-10 py-8"
+            :class="pageWidthClass"
+            data-testid="drive-page-measure"
+          >
+            <DriveReader
+              :document="document"
+              :paths="paths"
+              :loading="loading"
+              :error="error"
+              testid="drive-page"
+              @open-url="emit('open-url', $event)"
+              @open="openDocument"
+            />
+            <div v-if="offerSetup" class="mt-3 flex flex-col items-start gap-2" data-testid="drive-page-setup">
+              <p class="text-xs leading-relaxed text-text-3">
+                An agent in a Code session of this repository can write here once its own MCP configuration lists the
+                Hive Drive server.
+              </p>
+              <BaseButton variant="secondary" size="xs" data-testid="drive-page-setup-open" @click="emit('setup')">
+                Set up an agent
+              </BaseButton>
+            </div>
           </div>
         </div>
       </div>
