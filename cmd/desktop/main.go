@@ -8,6 +8,7 @@ import (
 	"context"
 	"embed"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -21,6 +22,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/adapter/httpapi"
 	"github.com/colonyops/hive/cmd/desktop/internal/adapter/mcpsrv"
+	"github.com/colonyops/hive/cmd/desktop/internal/adapter/remoteconn"
 	"github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui"
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
@@ -305,6 +307,14 @@ func main() {
 
 	mountSpan.End()
 
+	if path := os.Getenv(httpapi.ConnectionFileEnv); path != "" {
+		mux := http.NewServeMux()
+		mux.Handle(httpapi.TerminalPathPrefix, httpapi.New(core, logger, httpapi.Options{TerminalToken: terminalToken}).Handler())
+		streamPath, streamHandler := httpapi.TerminalStreamHandler(core, terminalToken, nil, logger)
+		mux.Handle(streamPath, streamHandler)
+		core.MountRemoteTransport(&remoteconn.Server{Address: cfg.Remote.Address, Directory: filepath.Join(paths.StateDir, "remote-tls"), ConnectionFile: path, Token: terminalToken, Handler: mux, Logger: logger})
+	}
+
 	// Background work starts after the adapter is mounted: the flows watcher
 	// calls event subscribers from its own goroutine, and the tray subscriber
 	// has to exist before it can fire.
@@ -314,16 +324,6 @@ func main() {
 	startupSpan.End()
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if path := os.Getenv(httpapi.ConnectionFileEnv); path != "" {
-		running, port := core.Webhooks.Endpoint(ctx)
-		if !running {
-			log.Fatal("cannot export remote connection: HTTP listener is not running")
-		}
-		if err := httpapi.WriteConnectionFile(path, core.Webhooks.Host(), port, terminalToken); err != nil {
-			log.Fatal(err)
-		}
 	}
 
 	// Registered as a shutdown hook and called again after Run, because which

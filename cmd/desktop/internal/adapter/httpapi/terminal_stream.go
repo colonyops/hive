@@ -206,6 +206,9 @@ func (h *terminalStream) readPump(ctx context.Context, conn *websocket.Conn, slu
 // subprotocol list. It reports which, because a subprotocol offer has to be
 // echoed for the browser to accept the handshake.
 func streamToken(r *http.Request) (token string, fromSubprotocol bool) {
+	if token := bearerToken(r); token != "" {
+		return token, false
+	}
 	if q := r.URL.Query().Get("token"); q != "" {
 		return q, false
 	}

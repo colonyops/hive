@@ -15,7 +15,13 @@ const remote = useRemoteConnection()
 const { profiles, activeProfile, busy, error } = remote
 const installation = useCodeInstallation()
 const router = useRouter()
-const blank = (): RemoteProfile => ({ id: '', name: '', address: 'http://127.0.0.1:19001', color: '#a78bfa' })
+const blank = (): RemoteProfile => ({
+  id: '',
+  name: '',
+  host: '',
+  connectionFile: '~/.config/hive/remote/connection.json',
+  color: '#a78bfa',
+})
 const draft = ref<RemoteProfile>(activeProfile.value ? { ...activeProfile.value } : blank())
 const colors = [
   { name: 'Purple', value: '#a855f7' },
@@ -23,12 +29,10 @@ const colors = [
   { name: 'Green', value: '#4ade80' },
   { name: 'Orange', value: '#fb923c' },
 ]
-const token = ref('')
 const formError = ref<string | null>(null)
 
 function edit(profile?: RemoteProfile): void {
   draft.value = profile ? { ...profile } : blank()
-  token.value = ''
   formError.value = null
 }
 function save(): string | null {
@@ -45,8 +49,7 @@ function save(): string | null {
 async function connect(): Promise<void> {
   const id = save()
   if (!id) return
-  if (await remote.connect(id, token.value)) {
-    token.value = ''
+  if (await remote.connect(id)) {
     installation.select('remote')
     await router.push({ name: 'terminal' })
   }
@@ -61,10 +64,10 @@ function remove(): void {
   <SettingsPage testid="settings-remote">
     <SettingsSection
       title="Remote connections"
-      description="Connect through an SSH tunnel to an existing Hive installation. Only one remote connection is active at a time."
+      description="Connect through SSH to an existing Hive installation. Hive verifies its HTTPS certificate and retrieves its token automatically. Only one remote connection is active at a time."
       boxed
     >
-      <SettingsRow v-for="profile in profiles" :key="profile.id" :label="profile.name" :hint="profile.address">
+      <SettingsRow v-for="profile in profiles" :key="profile.id" :label="profile.name" :hint="profile.host">
         <div class="flex items-center gap-3">
           <span
             class="size-3 rounded-full border border-strong"
@@ -98,15 +101,11 @@ function remove(): void {
             data-testid="remote-name"
             :disabled="busy"
         /></SettingsRow>
-        <SettingsRow label="Tunnel address" hint="The local HTTP address forwarded to the remote Hive terminal API.">
-          <TextInput
-            v-model="draft.address"
-            required
-            type="url"
-            aria-label="Tunnel address"
-            data-testid="remote-address"
-            :disabled="busy"
-          />
+        <SettingsRow
+          label="SSH host"
+          hint="Use a host from your SSH config. Its host key must already be trusted, with a key available through SSH or your agent."
+        >
+          <TextInput v-model="draft.host" required aria-label="SSH host" data-testid="remote-host" :disabled="busy" />
         </SettingsRow>
         <SettingsRow label="Color" hint="Identifies this connection in Inbox, Code, and Chats.">
           <div class="flex items-center gap-2">
@@ -138,16 +137,12 @@ function remove(): void {
             />
           </div>
         </SettingsRow>
-        <SettingsRow
-          label="Connection token"
-          hint="Kept in memory only. Retrieve a fresh token after restarting the remote Hive installation."
-        >
+        <SettingsRow label="Connection file" hint="The private JSON file exported by Hive on the remote machine.">
           <TextInput
-            v-model="token"
-            type="password"
-            autocomplete="off"
-            aria-label="Connection token"
-            data-testid="remote-token"
+            v-model="draft.connectionFile"
+            required
+            aria-label="Remote connection file"
+            data-testid="remote-connection-file"
             :disabled="busy"
           />
         </SettingsRow>

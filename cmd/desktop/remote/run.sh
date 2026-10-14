@@ -18,19 +18,30 @@ case "${1:-up}" in
     "${compose[@]}" up --build --detach --wait
     # Obtain the host key through Docker, not an unauthenticated network scan.
     "${compose[@]}" exec -T remote cat /etc/ssh/keys/ssh_host_ed25519_key.pub | awk -v host="[127.0.0.1]:$ssh_port" '{print host, $1, $2}' > "$HIVE_REMOTE_STATE/known_hosts"
-    echo 'Remote fixture ready. Run mise run desktop:remote:tunnel in another terminal.'
+    echo 'Remote fixture ready. Configure its SSH host in Desktop Settings → Remote.'
     ;;
   tunnel)
-    exec ssh "${ssh_args[@]}" -N -T -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -L "127.0.0.1:$local_port:127.0.0.1:19001" hive@127.0.0.1
+    exec ssh "${ssh_args[@]}" -N -T -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -L "127.0.0.1:$local_port:127.0.0.1:19003" hive@127.0.0.1
+    ;;
+  ssh-config)
+    cat <<CONFIG
+Host $project
+  HostName 127.0.0.1
+  Port $ssh_port
+  User hive
+  IdentityFile "$HIVE_REMOTE_STATE/id_ed25519"
+  UserKnownHostsFile "$HIVE_REMOTE_STATE/known_hosts"
+  IdentitiesOnly yes
+CONFIG
     ;;
   connection)
     ssh "${ssh_args[@]}" hive@127.0.0.1 cat /home/hive/connection.json > "$HIVE_REMOTE_STATE/connection.json"
     chmod 600 "$HIVE_REMOTE_STATE/connection.json"
     echo "Connection credential saved to $HIVE_REMOTE_STATE/connection.json"
-    echo "In Desktop: Settings → Remote. Forwarded address: http://127.0.0.1:$local_port"
+    echo "Desktop retrieves this credential through SSH automatically. See cmd/desktop/remote/README.md."
     ;;
   test) "${compose[@]}" --profile test run --no-deps --build --rm smoke ;;
   shell) exec ssh "${ssh_args[@]}" -t hive@127.0.0.1 ;;
   down) "${compose[@]}" down ;;
-  *) echo 'Usage: run.sh up|tunnel|connection|shell|test|down' >&2; exit 2 ;;
+  *) echo 'Usage: run.sh up|ssh-config|tunnel|connection|shell|test|down' >&2; exit 2 ;;
 esac

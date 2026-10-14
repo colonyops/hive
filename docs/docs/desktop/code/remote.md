@@ -19,38 +19,40 @@ and credentials configured on that machine.
 This preview requires a source-built remote backend with the `server,terminals`
 build tags. The ordinary `desktop:serve` build keeps terminals disabled.
 
-1. Start the remote backend with its own Hive data/config directories and a
-   fixed `HIVE_DESKTOP_HTTP_PORT`, for example `19001`.
-2. Set `HIVE_DESKTOP_CONNECTION_FILE` to a file in an existing private directory.
-   Hive writes a mode-0600 JSON file containing its address and per-run token.
-3. Forward the terminal API through SSH:
+1. Start the remote backend with its own Hive data/config directories. Set
+   `HIVE_DESKTOP_CONNECTION_FILE` to a file in an existing private directory,
+   such as `~/.config/hive/remote/connection.json`.
+2. Hive starts a separate HTTPS API on loopback and writes its address, token,
+   and public certificate to that private file. For a fixed port, set
+   `HIVE_DESKTOP_REMOTE_ADDRESS=127.0.0.1:19003`.
+3. Configure and verify SSH access from your laptop. Desktop uses your SSH
+   config and agent, with strict host-key checks and no password prompts.
+4. Open **Settings ▸ Remote**. Enter an SSH host alias, the remote connection
+   file path, a name, and a color. Click **Connect**.
+5. Select a remote entry in Inbox, Code, or Chats.
 
-   ```sh
-   ssh -N -T -o ExitOnForwardFailure=yes -L 127.0.0.1:19001:127.0.0.1:19001 my-host
-   ```
+Go retrieves the credentials over SSH and verifies HTTPS/WSS with the exported
+certificate. SSH carries encrypted TLS traffic without a local forwarded port.
+Remote tokens stay in Go memory and never enter the webview. Native Desktop
+uses IPC for the remote terminal display. Development and headless browser
+builds still use their local Wails HTTP origin.
 
-4. Retrieve the JSON file through SSH. Open **Settings ▸ Remote**, add a
-   connection name and color, and enter `http://127.0.0.1:19001` and its `token`
-   value. Click **Connect** to open remote Code.
-5. Select an existing session. The command palette also offers **Go to remote
-   Code** and the connected remote session names.
-
-Names, tunnel addresses, and colors are saved on this Desktop. Each connection
-has its own color, shown in Inbox, Code, and Chats. Configure a saved connection
-in **Settings ▸ Remote** to reconnect or switch machines; one remote can be
-connected at a time.
-
-Only loopback HTTP addresses are accepted; SSH carries the connection to the
-other machine. The token stays in memory and is cleared by Disconnect or closing
-Desktop. Keep the backend's listeners on loopback and run one backend per
-installation.
+Profiles persist on your laptop; only one remote connection is active at a
+time. Existing manual tunnel profiles need a new SSH profile. Keep client and
+remote builds compatible. The remote agent uses credentials on its own machine.
 
 ## Reconnect
 
-An interrupted connection leaves the agent running remotely. Restore the tunnel
-and click **Reconnect** to repaint the terminal from tmux. If the backend itself
-restarts, retrieve its new token and connect again. Failed session refreshes keep
-the last known list.
+Disconnect leaves remote agents running. Restore SSH access and click
+**Reconnect** to attach again. Hive retrieves a fresh token automatically when
+an API request reports that the old token expired. A network failure does not
+repeat an action that may already have run.
+
+The TLS identity persists under the remote state directory in
+`remote-tls/identity.pem`. Its certificate expires after one year. To renew it,
+stop the remote backend, remove that identity file, restart, and reconnect from
+Settings. The new certificate is retrieved through verified SSH. Never disable
+certificate verification to work around a connection failure.
 
 ## Remote inboxes and chats
 

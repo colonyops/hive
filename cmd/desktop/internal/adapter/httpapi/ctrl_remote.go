@@ -1,15 +1,9 @@
 package httpapi
 
 import (
-	"encoding/json"
-	"fmt"
-	"net"
 	"net/http"
-	"strconv"
 
 	"github.com/hay-kot/httpkit/server"
-
-	"github.com/colonyops/hive/pkg/atomicfile"
 )
 
 const ConnectionFileEnv = "HIVE_DESKTOP_CONNECTION_FILE"
@@ -50,20 +44,4 @@ func (ctrl *Controller) RemoteSessions(w http.ResponseWriter, r *http.Request) e
 		out.Sessions = append(out.Sessions, remoteSession{ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, State: string(s.State)})
 	}
 	return server.JSON(w, http.StatusOK, out)
-}
-
-// WriteConnectionFile exports a per-run credential for retrieval through SSH.
-// The parent directory must exist; atomic replacement never follows an old symlink.
-func WriteConnectionFile(path, host string, port int, token string) error {
-	data, err := json.Marshal(struct {
-		URL   string `json:"url"`
-		Token string `json:"token"`
-	}{URL: "http://" + net.JoinHostPort(host, strconv.Itoa(port)), Token: token})
-	if err != nil {
-		return fmt.Errorf("encode remote connection: %w", err)
-	}
-	if err := atomicfile.Write(path, append(data, '\n'), 0o600); err != nil {
-		return fmt.Errorf("write remote connection file: %w", err)
-	}
-	return nil
 }

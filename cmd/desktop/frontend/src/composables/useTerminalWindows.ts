@@ -1,3 +1,4 @@
+import type { TerminalStream } from '../lib/managedTransport'
 import { effectScope, markRaw, nextTick, ref, type Ref } from 'vue'
 import { SearchAddon, type ISearchOptions } from '@xterm/addon-search'
 import type { IDisposable, Terminal } from '@xterm/xterm'
@@ -246,7 +247,7 @@ export function useTerminalWindows(
   const expectedWindowClosures = new Set<string>()
   const expectedPaneClosures = new Set<string>()
   const scope = effectScope(true)
-  let socket: WebSocket | null = null
+  let socket: TerminalStream | null = null
   let disposed = false
   let connectionEpoch = 0
   const outcomes = useTerminalOutcomes()

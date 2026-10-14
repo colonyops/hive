@@ -88,6 +88,10 @@ type Config struct {
 // App is the headless core. Driving adapters hold *App and the concrete
 // types on it; there are no driving-port interfaces.
 type App struct {
+	remoteTransport interface {
+		Start(context.Context) error
+		Close() error
+	}
 	// The per-domain services. Driving adapters call these — never the
 	// unexported domain stores further down, which is what they are built
 	// over.
@@ -602,6 +606,11 @@ func compactPipelineStoreAtStartup(ctx context.Context, db pipelineCompactor, pa
 // deliberately skip the worker loop and have no producer, so a fixture run
 // stays deterministic.
 func (a *App) Start(ctx context.Context) error {
+	if a.remoteTransport != nil {
+		if err := a.remoteTransport.Start(ctx); err != nil {
+			return fmt.Errorf("start remote transport: %w", err)
+		}
+	}
 	if a.actionsWatcher != nil {
 		a.actionsWatcher.Start()
 	}
@@ -709,6 +718,11 @@ func (a *App) HiveConn() *sql.DB {
 // tolerates it or a plugs release makes signal registration optional.
 func (a *App) Close() error {
 	a.cancel()
+	if a.remoteTransport != nil {
+		if err := a.remoteTransport.Close(); err != nil {
+			a.logger.Warn().Err(err).Msg("remote transport shutdown")
+		}
+	}
 
 	if a.Observability != nil {
 		if err := a.Observability.close(); err != nil {
@@ -1456,4 +1470,13 @@ func agentCommands(cfg *config.Config) map[string]string {
 		commands[key] = line
 	}
 	return commands
+}
+
+// MountRemoteTransport attaches the optional remote listener before Start.
+func (a *App) MountRemoteTransport(transport interface {
+	Start(context.Context) error
+	Close() error
+},
+) {
+	a.remoteTransport = transport
 }

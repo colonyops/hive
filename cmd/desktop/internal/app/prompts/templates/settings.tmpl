@@ -53,6 +53,9 @@ http:                     # the local loopback server; webhook ingress and the
   host: 127.0.0.1         # loopback only
   port: 0                 # 0 asks the OS to choose
 
+remote:                    # TLS API enabled by HIVE_DESKTOP_CONNECTION_FILE
+  address: 127.0.0.1:0      # loopback IP and port; 0 asks the OS to choose
+
 keybindings:               # sparse overrides keyed by command id
   feed.next: [j, arrowdown]
 

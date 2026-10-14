@@ -1,3 +1,4 @@
+import type { TerminalStream } from '../lib/managedTransport'
 import { markRaw, shallowRef, watch, type Ref, type ShallowRef } from 'vue'
 import { useResizeObserver } from '@vueuse/core'
 import { Browser } from '@wailsio/runtime'
@@ -105,7 +106,7 @@ export function watchTerminalAppearance(
 export function useXtermPane(host: Ref<HTMLElement | null>, onResize: () => void) {
   const term: ShallowRef<Terminal | null> = shallowRef(null)
   let fit: FitAddon | null = null
-  let socket: WebSocket | null = null
+  let socket: TerminalStream | null = null
   let resizeTimer: ReturnType<typeof setTimeout> | undefined
   // An atlas renderer is live on the pane. False after a claim that did not
   // survive, which is what makes claimRenderer retry it (ADR
@@ -172,7 +173,7 @@ export function useXtermPane(host: Ref<HTMLElement | null>, onResize: () => void
     if (!rendered && term.value) loadRenderer(term.value)
   }
 
-  function attach(opened: WebSocket): void {
+  function attach(opened: TerminalStream): void {
     socket = opened
     observedHost.value = host.value
   }

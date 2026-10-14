@@ -269,6 +269,11 @@ type ProfileTelemetrySettings struct {
 // HTTPSettings configures the local loopback HTTP server that hosts both the
 // webhook listener and the agent API. On by default: it is loopback-only, so it
 // is reachable only from this machine.
+type RemoteSettings struct {
+	// Address binds the TLS API when HIVE_DESKTOP_CONNECTION_FILE is set. Requires a loopback IP.
+	Address string `yaml:"address" env:"HIVE_DESKTOP_REMOTE_ADDRESS"`
+}
+
 type HTTPSettings struct {
 	Enabled bool   `yaml:"enabled" env:"HIVE_DESKTOP_HTTP_ENABLED"`
 	Host    string `yaml:"host"    env:"HIVE_DESKTOP_HTTP_HOST"`
@@ -356,6 +361,7 @@ type Settings struct {
 	Appearance      Appearance              `yaml:"appearance"`
 	Profiles        ProfileSettings         `yaml:"profiles,omitempty"`
 	MenuBar         MenuBarSettings         `yaml:"menu_bar,omitempty"`
+	Remote          RemoteSettings          `yaml:"remote"`
 	HTTP            HTTPSettings            `yaml:"http"`
 	Telemetry       TelemetrySettings       `yaml:"telemetry"`
 	Keybindings     map[string][]string     `yaml:"keybindings,omitempty"`
@@ -383,6 +389,7 @@ func DefaultSettings() Settings {
 			TerminalShowSessionAge:          true,
 			TerminalSessionAgeThresholdDays: DefaultTerminalSessionAgeThresholdDays,
 		},
+		Remote:          RemoteSettings{Address: "127.0.0.1:0"},
 		HTTP:            HTTPSettings{Enabled: true, Host: "127.0.0.1", Port: 0},
 		Telemetry:       TelemetrySettings{Enabled: false},
 		AgentWorkspaces: AgentWorkspacesSettings{SessionEndDelay: 10 * time.Second},
@@ -444,6 +451,11 @@ func (s Settings) Validate() error {
 	case DeliveryAuto, DeliverySystem, DeliveryApp:
 	default:
 		return fmt.Errorf("notifications.delivery must be auto, system, or app")
+	}
+	host, portText, err := net.SplitHostPort(s.Remote.Address)
+	port, portErr := strconv.Atoi(portText)
+	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() || portErr != nil || !ValidListenerPort(port) {
+		return fmt.Errorf("remote.address must be a loopback IP and port 0 or between 1024 and 65535")
 	}
 	if !validListenerHost(s.HTTP.Host) {
 		return fmt.Errorf("http.host must be a loopback address")

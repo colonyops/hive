@@ -13,6 +13,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/colonyops/hive/cmd/desktop/internal/adapter/remoteconn"
 	"github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/e2e"
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/dispatch"
@@ -32,6 +33,7 @@ import (
 // the driven ports app.Config asks for — and Mount does everything that needs
 // a built core.
 type UI struct {
+	remotes           *remoteconn.Manager
 	diagnosticsMu     sync.Mutex
 	diagnosticsWindow *application.WebviewWindow
 	logger            zerolog.Logger
@@ -96,6 +98,7 @@ type MountOptions struct {
 // binding.
 func New(mock string, settingsStore *settings.Store, appIcon []byte, logger zerolog.Logger) *UI {
 	ui := &UI{
+		remotes:       remoteconn.NewManager(),
 		logger:        logger,
 		mock:          mock,
 		settingsStore: settingsStore,
@@ -164,6 +167,7 @@ func (u *UI) Mount(ctx context.Context, core *app.App, opts MountOptions) {
 
 func (u *UI) options(core *app.App, opts MountOptions) application.Options {
 	services := []application.Service{
+		application.NewService(NewRemoteService(u.remotes)),
 		application.NewService(NewGitHubService(core.GitHub)),
 		application.NewService(NewGrafanaService(core.Grafana)),
 		application.NewService(NewPostHogService(core.PostHog)),
@@ -475,6 +479,9 @@ func (u *UI) OnShutdown(f func()) {
 
 // Close stops what the adapter owns. The core's own teardown is App.Close.
 func (u *UI) Close() {
+	if u.remotes != nil {
+		u.remotes.Close()
+	}
 	if u.updater != nil {
 		u.updater.Stop()
 	}

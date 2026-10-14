@@ -27,8 +27,14 @@ beforeEach(() => {
 
 async function connect() {
   const remote = useRemoteConnection()
-  const id = remote.save({ id: '', name: 'Test remote', address: 'http://127.0.0.1:19001', color: '#a78bfa' })
-  await remote.connect(id, 'secret')
+  const id = remote.save({
+    id: '',
+    name: 'Test remote',
+    host: 'hive-server',
+    connectionFile: '~/connection.json',
+    color: '#a78bfa',
+  })
+  await remote.connect(id)
   await flushPromises()
 }
 
@@ -84,3 +90,8 @@ describe('remote Code isolation', () => {
     wrapper.unmount()
   })
 })
+
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/remoteservice', () => ({
+  Connect: vi.fn(() => Promise.resolve('remote-one')),
+  Disconnect: vi.fn(async () => {}),
+}))

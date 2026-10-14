@@ -1389,36 +1389,45 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 ### Remote installations
 
 Inbox, Code, and Chats share navigation lists across local and remote entries.
-Selecting a remote entry swaps only the content pane; colored trim and a
-connection tooltip distinguish its origin. Settings ▸ Remote manages named,
-colored connection profiles in the `useRemoteConnection` store. Only profile
-metadata persists in UI storage; the active endpoint and token stay in memory
-across Settings navigation. One remote is connected at a time.
-Remote Code accepts a loopback SSH
-forward, authenticates discovery at `/api/terminal/remote/sessions`, checks
-control and terminal wire versions, and reuses the terminal client/renderer.
-Session IDs and tmux slugs remain scoped to that endpoint; remote rows never
-enter local session caches or filesystem services. The first slice attaches
-existing Code sessions only. The installation choice also gates local terminal
-commands; New Session in Code switches back to Local.
+Selecting a remote entry swaps only the content pane. Colored trim and a
+connection tooltip distinguish its origin. Settings ▸ Remote stores SSH host
+aliases, remote connection-file paths, names, and colors in `useRemoteConnection`.
+Only profile metadata and an opaque active handle reach the webview.
 
-`useRemoteCatalog` owns remote inbox/workspace discovery and selections, scoped
-to the active endpoint. Inbox reads use authenticated `remote/inboxes` and
-`remote/feed` endpoints under `/api/terminal/`; feed reads are capped at 200
-active items. Remote chats reuse the agent-workspace client for open, start,
-and resume, and the existing tmux renderer for attachment. Each area's
-navigation displays the connection color. Endpoint changes clear selections
-and invalidate pending results; local routes and commands explicitly return
-to local context. Inbox triage and Drive remain local-only.
+`adapter/remoteconn.Manager` owns remote transport connections. OpenSSH reads
+credentials through a trusted host configuration and forwards TLS bytes with
+`ssh -W`; there is no local TCP listener. Go verifies the remote certificate
+and hostname and refuses redirects. An HTTP 401 causes one SSH credential
+refresh and retry. Transport failures never replay mutations. Disconnect
+cancels requests and closes streams, idle connections, and SSH processes.
+
+`adapter/wailsui.RemoteService` exposes requests and bounded terminal frame
+batches through native Wails IPC. The shared frontend stream interface keeps
+local HTTP/WebSocket clients compatible. Remote input is ordered and bounded;
+remote output uses a bounded Go queue and request/response batches. These are
+transport calls, not app events. Packaged native scheme requests have no TCP
+hop. Development and headless browser origins still use the Wails HTTP server.
+ADR [go-owns-remote-ssh-and-tls-connections-and-carries-terminal-frames-over-native-ipc](decisions/2026-10-14-go-owns-remote-ssh-and-tls-connections-and-carries-terminal-frames-over-native-ipc.md).
+
+Setting `HIVE_DESKTOP_CONNECTION_FILE` enables a separate, loopback-only TLS
+listener owned by App's lifecycle. It mounts the authenticated terminal routes
+and tmux stream; local MCP, webhook, and diagnostic routes are not exposed.
+`remote.address` sets its bind. The certificate and private key persist under
+StateDir; the mode-0600 connection file exports only the HTTPS URL, current
+bearer token, and public certificate. The key never leaves the remote host.
+
+`useRemoteCatalog` owns inbox/workspace discovery and selections, scoped to the
+active handle. Inbox reads use authenticated `remote/inboxes` and `remote/feed`
+endpoints, with a 200-item cap. Remote chats reuse the agent-workspace API for
+open, start, and resume. IDs and tmux slugs never enter local caches or filesystem
+services. Endpoint changes clear selections and invalidate pending results;
+local routes and commands explicitly return to local context.
 ADR [remote-navigation-reads-inboxes-and-starts-workspace-chats-through-the-authenticated-terminal-api](decisions/2026-10-14-remote-navigation-reads-inboxes-and-starts-workspace-chats-through-the-authenticated-terminal-api.md).
 
 A `server,terminals` build opts into tmux control mode; ordinary `server` builds
-retain the unavailable behavior used by UI tests. Popup PTYs remain disabled.
-Server builds omit native notifications. `HIVE_DESKTOP_CONNECTION_FILE` exports
-the per-run token privately for SSH retrieval; clients keep it in memory.
-The Docker fixture under `cmd/desktop/remote/` exercises this boundary with
-persistent remote state and only an SSH port published on host loopback.
-ADR [remote-code-attaches-through-an-ssh-forwarded-terminal-api](decisions/2026-10-09-remote-code-attaches-through-an-ssh-forwarded-terminal-api.md).
+retain the unavailable behavior used by UI tests. Popup PTYs and native
+notifications remain disabled in server builds. The Docker fixture under
+`cmd/desktop/remote/` uses persistent remote state and publishes only SSH.
 
 ### Terminal sessions
 

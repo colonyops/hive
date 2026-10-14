@@ -28,6 +28,7 @@ ENV HIVE_CONFIG=/home/hive/.config/hive/config.yaml \
     HIVE_DESKTOP_DATA_DIR=/home/hive/.local/share/hive-desktop \
     HIVE_DESKTOP_CONFIG_DIR=/home/hive/.config/hive/desktop \
     HIVE_DESKTOP_HTTP_PORT=19001 \
+    HIVE_DESKTOP_REMOTE_ADDRESS=127.0.0.1:19003 \
     HIVE_DESKTOP_CONNECTION_FILE=/home/hive/connection.json \
     WAILS_SERVER_HOST=127.0.0.1 \
     WAILS_SERVER_PORT=8080
@@ -35,7 +36,7 @@ EXPOSE 22
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
 
 FROM mcr.microsoft.com/playwright:v1.62.1-noble AS smoke
-RUN apt-get update && apt-get install -y --no-install-recommends openssh-client curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client curl procps && rm -rf /var/lib/apt/lists/*
 WORKDIR /smoke
 COPY cmd/desktop/e2e/package*.json ./
 RUN npm ci

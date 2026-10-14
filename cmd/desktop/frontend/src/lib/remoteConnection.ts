@@ -1,3 +1,4 @@
+import { endpointFetch } from './managedTransport'
 import { TERMINAL_WIRE_VERSION, type TerminalEndpoint } from './terminalClient'
 
 export interface RemoteSession {
@@ -8,28 +9,15 @@ export interface RemoteSession {
   state: string
 }
 
-export function remoteEndpoint(address: string, token: string): TerminalEndpoint {
-  const url = new URL(address.trim())
-  if (
-    url.protocol !== 'http:' ||
-    !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash ||
-    url.pathname !== '/'
-  )
-    throw new Error('Use the local HTTP address of your SSH tunnel, such as http://127.0.0.1:19001.')
-  if (!token.trim()) throw new Error('Enter the remote installation’s connection token.')
-  return {
-    httpBaseURL: url.origin,
-    wsURL: `${url.origin.replace('http:', 'ws:')}/api/terminal/stream`,
-    token: token.trim(),
-  }
+export function validateRemoteHost(host: string): string {
+  const value = host.trim()
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_.@:-]*$/.test(value))
+    throw new Error('Enter an SSH host or config alias, optionally with user@.')
+  return value
 }
 
 export async function listRemoteSessions(endpoint: TerminalEndpoint): Promise<RemoteSession[]> {
-  const response = await fetch(`${endpoint.httpBaseURL}/api/terminal/remote/sessions`, {
+  const response = await endpointFetch(endpoint, `/api/terminal/remote/sessions`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${endpoint.token}` },
     redirect: 'error',
