@@ -4,6 +4,7 @@ import { Window } from '@wailsio/runtime'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
+import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { useDriveActivity } from '../stores/useDriveActivity'
 
 import { useCodeInstallation } from '../stores/useCodeInstallation'
@@ -34,6 +35,7 @@ export function useAppMode(
   const { route, router } = nav
   const { routeChatId, docRequested, docPath, docUnseen, syncDocQuery } = useDriveRoute()
   const activity = useDriveActivity()
+  const remoteCatalog = useRemoteCatalog()
 
   const codeInstallation = useCodeInstallation()
   const { recents } = useAgentSessionsAll()
@@ -176,7 +178,9 @@ export function useAppMode(
 
   // One control per frame edge: the right toggle names the detail preview in
   // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
-  const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
+  const agentsDriveAvailable = computed(
+    () => agentsActive.value && !remoteCatalog.workspace.value && routeChatId.value !== null,
+  )
   const driveAvailable = computed(() => agentsDriveAvailable.value || codeDrive.value !== null)
   const previewToggleCollapsed = computed(() => (driveAvailable.value ? !docRequested.value : previewCollapsed.value))
   const canTogglePreview = computed(() => feedViewActive.value || driveAvailable.value)

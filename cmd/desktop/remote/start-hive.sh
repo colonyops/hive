@@ -23,4 +23,21 @@ hive session list --json | python3 -c 'import json,sys; [print(s["id"]) for line
     tmux new-window -t "=$slug" -n second -c "$directory"
   fi
 done
+mkdir -p "$HIVE_DESKTOP_CONFIG_DIR/workspaces/remote-shell" "$HIVE_DESKTOP_CONFIG_DIR/flows"
+if [[ ! -f "$HIVE_DESKTOP_CONFIG_DIR/workspaces/remote-shell/agent-workspace.yaml" ]]; then
+  cat > "$HIVE_DESKTOP_CONFIG_DIR/workspaces/remote-shell/agent-workspace.yaml" <<'YAML'
+version: 5
+name: Remote test shell
+command: bash --noprofile --norc -i
+YAML
+fi
+if [[ ! -f "$HIVE_DESKTOP_CONFIG_DIR/flows/remote-demo.yaml" ]]; then
+  cat > "$HIVE_DESKTOP_CONFIG_DIR/flows/remote-demo.yaml" <<'YAML'
+version: 1
+name: Remote inbox
+nodes:
+  - { id: inbox, type: feed, name: Remote work }
+wires: []
+YAML
+fi
 exec hive-desktop

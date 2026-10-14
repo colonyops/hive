@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemoteNavigation from './RemoteNavigation.vue'
 // The Chats area: AgentsSidebar's tree (workspaces, each holding its own
 // chats) beside a pane the terminal owns under a slim status bar naming the
 // open session's workspace. Focusing a workspace is neither a filter nor a
@@ -733,6 +734,7 @@ onBeforeUnmount(() => {
       >
         Try again
       </button>
+      <RemoteNavigation area="chats" />
     </div>
 
     <div v-else class="flex min-h-0 min-w-0 flex-1">

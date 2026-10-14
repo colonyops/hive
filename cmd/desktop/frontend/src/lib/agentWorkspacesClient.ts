@@ -347,6 +347,8 @@ export function createAgentWorkspacesClient(endpoint: AgentsEndpoint): AgentWork
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.token}` },
       body: JSON.stringify(body),
+      redirect: 'error',
+      signal: AbortSignal.timeout(30000),
     })
     if (!response.ok) throw await failure(response)
     if (response.status === 204) return null

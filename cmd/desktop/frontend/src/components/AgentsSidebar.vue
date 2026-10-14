@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemoteNavigation from './RemoteNavigation.vue'
 // The Chats area's sidebar: workspaces as parent rows with their chats nested
 // beneath, in one scroll region. Position is what states which workspace a chat
 // belongs to, so it holds for every workspace at once; focusing a workspace no
@@ -811,6 +812,7 @@ defineExpose({
       </template>
     </div>
     <PanelResizeHandle edge="right" name="agents-sidebar" :start="startSidebarResize" :step="stepSidebar" />
+    <RemoteNavigation area="chats" />
   </aside>
 
   <ConfirmationDialog

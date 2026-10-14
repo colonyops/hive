@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, useTemplateRef } from 'vue'
+import RemoteInbox from './components/RemoteInbox.vue'
+import { useRemoteCatalog } from './stores/useRemoteCatalog'
 import TitleBar from './components/TitleBar.vue'
 import ProfileRail from './components/ProfileRail.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
@@ -41,9 +43,10 @@ const DevView = defineAsyncComponent(() => import('./components/DevView.vue'))
 // Async so xterm.js stays out of the initial bundle: the hub must not pay for
 // a terminal at startup.
 const TerminalMode = defineAsyncComponent(() => import('./components/CodeMode.vue'))
-const AgentsMode = defineAsyncComponent(() => import('./components/AgentsMode.vue'))
+const AgentsMode = defineAsyncComponent(() => import('./components/ChatsMode.vue'))
 const PopupTerminal = defineAsyncComponent(() => import('./components/PopupTerminal.vue'))
 
+const remoteCatalog = useRemoteCatalog()
 const feed = useFeedState()
 const { profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, items } = feed
 // The flows session is app-lived: the Go engine keeps every flow running with
@@ -193,12 +196,18 @@ useWailsEvent('flows:updated', () => {
       <div v-if="hubActive" class="flex min-h-0 flex-1">
         <ProfileRail
           :profiles="profiles"
-          :active-profile-id="activeProfileId"
-          @select="nav.requestSelectProfile"
+          :active-profile-id="remoteCatalog.inboxId.value ? '' : activeProfileId"
+          @select="
+            (id) => {
+              remoteCatalog.selectInbox('')
+              nav.requestSelectProfile(id)
+            }
+          "
           @add="profileActions.openNewProfile"
           @reorder="feed.reorderProfiles"
         />
-        <DevView v-if="devActive" @close="nav.openFeed()" />
+        <RemoteInbox v-if="remoteCatalog.inboxId.value" />
+        <DevView v-else-if="devActive" @close="nav.openFeed()" />
         <ProfileSettingsView
           v-else-if="profileSettingsActive && activeProfile"
           :profile="activeProfile"

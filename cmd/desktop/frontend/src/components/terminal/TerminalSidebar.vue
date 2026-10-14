@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemoteNavigation from '../RemoteNavigation.vue'
 import { computed, nextTick, proxyRefs, ref, toRef, watch } from 'vue'
 import { useNow } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
@@ -671,6 +672,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
       >
     </div>
     <PanelResizeHandle edge="right" name="terminal-sidebar" :start="startResize" :step="step" />
+    <RemoteNavigation area="code" />
   </aside>
 </template>
 

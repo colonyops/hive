@@ -7,7 +7,8 @@ description: Attach to existing Hive sessions on another machine through SSH.
 
 **Code → Remote (preview)** connects to existing Hive Code sessions on another
 machine. Select a session to view its tmux windows and panes, type, paste text,
-and resize the terminal. Local Code, Inbox, and Chats still use this machine.
+and resize the terminal. Connected remote inboxes, Code sessions, and chat
+workspaces appear in their respective navigation menus with your chosen color.
 
 The remote machine runs Hive, tmux, and your agent CLI. The CLI uses the account
 and credentials configured on that machine.
@@ -34,7 +35,7 @@ build tags. The ordinary `desktop:serve` build keeps terminals disabled.
    Code** and the connected remote session names.
 
 Names, tunnel addresses, and colors are saved on this Desktop. Each connection
-has its own color, shown beside its name in Code. Configure a saved connection
+has its own color, shown in Inbox, Code, and Chats. Configure a saved connection
 in **Settings ▸ Remote** to reconnect or switch machines; one remote can be
 connected at a time.
 
@@ -50,9 +51,21 @@ and click **Reconnect** to repaint the terminal from tmux. If the backend itself
 restarts, retrieve its new token and connect again. Failed session refreshes keep
 the last known list.
 
-Remote session creation, Inbox, Chats, image/file transfer, editor integration,
-and automatic tunnel management are not included yet. Create sessions using
-Hive on the remote machine. **New session** in Desktop switches to Local.
+## Remote inboxes and chats
+
+Choose a colored remote inbox in the Inbox rail to read its feeds. This preview
+shows up to 200 active items per feed and does not change their read or archived
+state.
+
+In Chats, choose a colored remote workspace, enter a chat name, and click
+**New chat**. The workspace's configured command runs on the remote machine.
+Select a previous remote chat to reopen it. Closing the view leaves the remote
+process running. The agent uses the account signed in on that machine.
+
+Remote Code session creation, inbox triage, Drive, image/file transfer, editor
+integration, and automatic tunnel management are not included yet. Create Code
+sessions using Hive on the remote machine. **New session** in Code switches to
+Local.
 
 For a reusable Docker host and local Desktop setup, see the repository's
 [remote fixture instructions](https://github.com/colonyops/hive/tree/main/cmd/desktop/remote).

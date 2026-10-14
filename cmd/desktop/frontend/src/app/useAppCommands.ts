@@ -1,3 +1,4 @@
+import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { Open as openDiagnostics } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/diagnosticsservice'
 import { nextTick, onMounted, ref, type Ref } from 'vue'
 import { useCommandPalette } from '../composables/useCommands'
@@ -70,6 +71,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   // the shell inside it. It opens where the terminal on screen is, else in the
   // user's home (ADR ephemeral-popup-terminals).
   const popupTerminal = usePopupTerminal()
+  const remoteCatalog = useRemoteCatalog()
   const popupTerminalMounted = ref(false)
 
   function togglePopupTerminal(): void {
@@ -161,6 +163,10 @@ export function useAppCommands(deps: AppCommandDeps) {
     'agents.focus-sidebar': () => revealSidebar(agentsSidebarCollapsed, focusAgentsList),
     'agents.focus-pane': focusAgentsPane,
     'session.new': () => {
+      if (agentsActive.value && remoteCatalog.workspace.value) {
+        void remoteCatalog.openChat('New chat')
+        return
+      }
       codeInstallation.select('local')
       void newSession.openBlank(sessionRepository(onScreenSessionSlug.value))
     },
@@ -202,7 +208,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   function contextActive(context: CommandContext): boolean {
     switch (context) {
       case 'feed':
-        return appMode.feedNavActive.value
+        return appMode.feedNavActive.value && !remoteCatalog.inboxId.value
       case 'terminal':
         return terminalActive.value && codeInstallation.installation.value === 'local'
       // Terminal mode with nothing attached is the session picker, which has
@@ -212,6 +218,7 @@ export function useAppCommands(deps: AppCommandDeps) {
       case 'terminal-pane':
         return terminalActive.value && !!onScreenSessionSlug.value && codePaneFocused()
       case 'agents':
+        if (remoteCatalog.workspace.value) return false
         return agentsActive.value
       case 'sidebar':
         return appMode.canToggleSidebar.value

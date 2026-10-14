@@ -17,6 +17,12 @@ const installation = useCodeInstallation()
 const router = useRouter()
 const blank = (): RemoteProfile => ({ id: '', name: '', address: 'http://127.0.0.1:19001', color: '#a78bfa' })
 const draft = ref<RemoteProfile>(activeProfile.value ? { ...activeProfile.value } : blank())
+const colors = [
+  { name: 'Purple', value: '#a855f7' },
+  { name: 'Blue', value: '#60a5fa' },
+  { name: 'Green', value: '#4ade80' },
+  { name: 'Orange', value: '#fb923c' },
+]
 const token = ref('')
 const formError = ref<string | null>(null)
 
@@ -102,15 +108,35 @@ function remove(): void {
             :disabled="busy"
           />
         </SettingsRow>
-        <SettingsRow label="Color" hint="Identifies this connection in Code.">
-          <input
-            v-model="draft.color"
-            type="color"
-            aria-label="Connection color"
-            data-testid="remote-color"
-            class="h-9 w-16 cursor-pointer rounded border border-strong bg-app p-1"
-            :disabled="busy"
-          />
+        <SettingsRow label="Color" hint="Identifies this connection in Inbox, Code, and Chats.">
+          <div class="flex items-center gap-2">
+            <BaseButton
+              v-for="choice in colors"
+              :key="choice.name"
+              variant="ghost"
+              size="xs"
+              :aria-label="choice.name"
+              :aria-pressed="draft.color === choice.value"
+              :title="choice.name"
+              :style="{
+                color: choice.value,
+                border: draft.color === choice.value ? `2px solid ${choice.value}` : '2px solid transparent',
+              }"
+              :disabled="busy"
+              :data-testid="`remote-color-${choice.name.toLowerCase()}`"
+              @click="draft.color = choice.value"
+            >
+              <span class="size-4 rounded-full" :style="{ backgroundColor: choice.value }" aria-hidden="true" />
+            </BaseButton>
+            <input
+              v-model="draft.color"
+              type="color"
+              aria-label="Connection color"
+              data-testid="remote-color"
+              class="h-9 w-16 cursor-pointer rounded border border-strong bg-app p-1"
+              :disabled="busy"
+            />
+          </div>
         </SettingsRow>
         <SettingsRow
           label="Connection token"

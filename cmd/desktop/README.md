@@ -671,5 +671,8 @@ again after a restart. The client accepts loopback HTTP tunnel endpoints and
 keeps credentials in memory. No credentials are added to settings.yaml.
 
 See [the reusable Docker fixture](remote/README.md) for `desktop:remote:*` tasks
-and a local Desktop plus persistent Linux remote setup. Remote creation, inbox,
-Chats, file transfer and automatic SSH management remain outside this preview.
+and a local Desktop plus persistent Linux remote setup. Remote inboxes are
+read-only; remote workspaces support chat creation and resumption through the
+existing authenticated agent API. Navigation uses each connection’s color.
+Remote Code creation, Drive, file transfer and automatic SSH management remain
+outside this preview.

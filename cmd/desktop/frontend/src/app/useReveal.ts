@@ -1,3 +1,4 @@
+import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { computed } from 'vue'
 import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { useWailsEvent } from '../composables/useWailsEvent'
@@ -41,6 +42,7 @@ export function useReveal(
   showToast: FeedState['showToast'],
   openDrive: (scope: DriveScope) => void,
 ) {
+  const remoteCatalog = useRemoteCatalog()
   const codeInstallation = useCodeInstallation()
   // Sourced from the always-on session, so the chip deep-links with the
   // canvas closed.
@@ -57,6 +59,7 @@ export function useReveal(
   }
 
   async function revealInboxItem(profileId: string, itemId: number): Promise<void> {
+    remoteCatalog.selectInbox('')
     let feedId = ''
     try {
       feedId = (await Feed(profileId, itemId)) ?? ''
@@ -134,6 +137,7 @@ export function useReveal(
         return
       }
       case 'chats': {
+        remoteCatalog.selectWorkspace('')
         const query: Record<string, string> = {}
         if (loc.chat) query.chat = loc.chat
         if (loc.canvas) query.doc = docQuery(loc.canvas)
@@ -141,6 +145,7 @@ export function useReveal(
         return
       }
       case 'inbox':
+        remoteCatalog.selectInbox('')
         if (loc.item) await revealInboxItem(loc.profile ?? '', loc.item)
         else
           await nav.router.push({

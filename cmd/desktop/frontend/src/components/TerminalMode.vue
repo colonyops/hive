@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemoteNavigation from './RemoteNavigation.vue'
 import { onMounted, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
@@ -113,6 +114,7 @@ const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, ca
       >
         Try again
       </button>
+      <RemoteNavigation area="code" />
     </div>
 
     <div v-else class="flex min-h-0 min-w-0 flex-1">

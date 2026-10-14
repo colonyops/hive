@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
+import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { useRouter } from 'vue-router'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
 import { useIntervalFn } from '@vueuse/core'
@@ -12,7 +13,8 @@ import RemoteTerminal from './RemoteTerminal.vue'
 const props = defineProps<{ active: boolean }>()
 const router = useRouter()
 const { endpoint, sessions, busy, error, color, activeProfile, reload, disconnect } = useRemoteConnection()
-const selected = ref('')
+const catalog = useRemoteCatalog()
+const selected = catalog.codeId
 const selectedSession = computed(() =>
   sessions.value.find((row) => row.id === selected.value && row.state === 'active'),
 )
@@ -22,10 +24,10 @@ function openSettings(): void {
 }
 
 watch(endpoint, () => {
-  selected.value = ''
+  catalog.selectCode('')
 })
 watch(sessions, (rows) => {
-  if (!rows.some((row) => row.id === selected.value && row.state === 'active')) selected.value = ''
+  if (!rows.some((row) => row.id === selected.value && row.state === 'active')) catalog.selectCode('')
 })
 
 useCommands((): Command[] => {
@@ -48,7 +50,7 @@ useCommands((): Command[] => {
         group: `Remote · ${host}`,
         scope: 'goto',
         run: () => {
-          selected.value = row.id
+          catalog.selectCode(row.id)
         },
       })),
   ]
@@ -94,7 +96,8 @@ useIntervalFn(() => {
             :variant="selected === row.id ? 'primary' : 'ghost'"
             :title="row.repo"
             :data-testid="`remote-session-${row.slug}`"
-            @click="selected = row.id"
+            @click="catalog.selectCode(row.id)"
+            :style="{ color }"
             >{{ row.name }}{{ row.state !== 'active' ? ` (${row.state})` : '' }}</BaseButton
           >
           <EmptyState v-if="!sessions.length" message="No Hive sessions on this installation." />

@@ -56,6 +56,10 @@ func (ctrl *Controller) operations() []Op {
 		Summary:  "List Code sessions and terminal protocol compatibility for a remote client.",
 		Response: remoteSessionsResponse{}, Handler: ctrl.RemoteSessions,
 	})
+	ops = append(ops,
+		Op{Method: "POST", Path: TerminalPathPrefix + "remote/inboxes", Summary: "List remote inboxes and their feeds.", Response: remoteInboxesResponse{}, Handler: ctrl.RemoteInboxes},
+		Op{Method: "POST", Path: TerminalPathPrefix + "remote/feed", Summary: "Read up to 200 active items in a remote inbox feed.", Request: remoteFeedRequest{}, Response: remoteFeedResponse{}, Handler: ctrl.RemoteFeed},
+	)
 	ops = append(ops, ctrl.popupTerminalOperations()...)
 	ops = append(ops, ctrl.agentOperations()...)
 	return ops

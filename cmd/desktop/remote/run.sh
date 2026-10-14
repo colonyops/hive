@@ -27,7 +27,7 @@ case "${1:-up}" in
     ssh "${ssh_args[@]}" hive@127.0.0.1 cat /home/hive/connection.json > "$HIVE_REMOTE_STATE/connection.json"
     chmod 600 "$HIVE_REMOTE_STATE/connection.json"
     echo "Connection credential saved to $HIVE_REMOTE_STATE/connection.json"
-    echo "In Desktop: Code → Remote. Forwarded address: http://127.0.0.1:$local_port"
+    echo "In Desktop: Settings → Remote. Forwarded address: http://127.0.0.1:$local_port"
     ;;
   test) "${compose[@]}" --profile test run --no-deps --build --rm smoke ;;
   shell) exec ssh "${ssh_args[@]}" -t hive@127.0.0.1 ;;
