@@ -48,7 +48,7 @@ test("the Chats area explains its own unavailability and hands the frame back", 
   const reason = page.getByTestId("agents-unavailable-reason");
   await expect(reason).not.toBeEmpty();
   await expect(reason).not.toHaveText(frontendFallbackReason);
-  await expect(page.getByTestId("agents-workspace-sidebar")).toHaveCount(0);
+  await expect(page.getByTestId("agents-workspace-sidebar")).toBeVisible();
 
   // Retry re-probes rather than wedging the panel; the server build answers
   // unavailable again.

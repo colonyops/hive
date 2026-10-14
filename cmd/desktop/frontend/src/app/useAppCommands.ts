@@ -1,3 +1,4 @@
+import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { Open as openDiagnostics } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/diagnosticsservice'
 import { nextTick, onMounted, ref, type Ref } from 'vue'
 import { useCommandPalette } from '../composables/useCommands'
@@ -28,6 +29,7 @@ import {
   stepTerminalWindow,
   zoomTerminalPane,
 } from '../lib/terminalTree'
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
@@ -58,6 +60,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   const { feed, nav, appMode, overlays, feedCommands } = deps
   const { terminalActive, agentsActive, onScreenSessionSlug, terminalSidebarCollapsed, agentsSidebarCollapsed } =
     appMode
+  const codeInstallation = useCodeInstallation()
   const palette = useCommandPalette()
   const report = useReportDialog()
   const newSession = useNewSession()
@@ -68,9 +71,11 @@ export function useAppCommands(deps: AppCommandDeps) {
   // the shell inside it. It opens where the terminal on screen is, else in the
   // user's home (ADR ephemeral-popup-terminals).
   const popupTerminal = usePopupTerminal()
+  const remoteCatalog = useRemoteCatalog()
   const popupTerminalMounted = ref(false)
 
   function togglePopupTerminal(): void {
+    if (terminalActive.value && codeInstallation.installation.value === 'remote') codeInstallation.select('local')
     popupTerminalMounted.value = true
     popupTerminal.toggle({ sessionSlug: onScreenSessionSlug.value || undefined })
   }
@@ -157,7 +162,22 @@ export function useAppCommands(deps: AppCommandDeps) {
     'terminal.focus-pane-down': () => focusTerminalPaneDirection('down'),
     'agents.focus-sidebar': () => revealSidebar(agentsSidebarCollapsed, focusAgentsList),
     'agents.focus-pane': focusAgentsPane,
-    'session.new': () => newSession.openBlank(sessionRepository(onScreenSessionSlug.value)),
+    'session.new': () => {
+      if (agentsActive.value && remoteCatalog.workspace.value) {
+        void remoteCatalog.openChat('New chat')
+        return
+      }
+      codeInstallation.select('local')
+      void newSession.openBlank(sessionRepository(onScreenSessionSlug.value))
+    },
+    'view.go-remote-code': () => {
+      codeInstallation.select('remote')
+      appMode.setMode('terminal')
+    },
+    'view.go-local-code': () => {
+      codeInstallation.select('local')
+      appMode.setMode('terminal')
+    },
     'window.hide': feed.hideWindow,
     'view.go-inbox': () => appMode.setMode('hub'),
     'view.go-code': () => appMode.setMode('terminal'),
@@ -188,9 +208,9 @@ export function useAppCommands(deps: AppCommandDeps) {
   function contextActive(context: CommandContext): boolean {
     switch (context) {
       case 'feed':
-        return appMode.feedNavActive.value
+        return appMode.feedNavActive.value && !remoteCatalog.inboxId.value
       case 'terminal':
-        return terminalActive.value
+        return terminalActive.value && codeInstallation.installation.value === 'local'
       // Terminal mode with nothing attached is the session picker, which has
       // no more terminal to work with than the feed does.
       case 'terminal-session':
@@ -198,6 +218,7 @@ export function useAppCommands(deps: AppCommandDeps) {
       case 'terminal-pane':
         return terminalActive.value && !!onScreenSessionSlug.value && codePaneFocused()
       case 'agents':
+        if (remoteCatalog.workspace.value) return false
         return agentsActive.value
       case 'sidebar':
         return appMode.canToggleSidebar.value

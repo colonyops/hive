@@ -655,3 +655,25 @@ CLI discovery honors HIVE_LOG_FILE, HIVE_DATA_DIR, and XDG_DATA_HOME in the
 resolved launch environment, then the Desktop instance's Hive data directory.
 A CLI invocation with its own --log-file cannot be discovered automatically.
 Incident exports live under the resolved reports directory with mode 0600.
+
+## Remote Code preview
+
+Settings ▸ Remote saves named connections with individual colors. Connect opens
+Code on an SSH-forwarded terminal API for existing sessions. Names, addresses,
+and colors persist in Desktop UI storage; connection tokens remain in memory.
+The remote backend uses `-tags server,terminals`; `desktop:serve` retains the
+terminal-disabled UI-test behavior. Server builds omit native notifications.
+
+`HIVE_DESKTOP_CONNECTION_FILE` optionally names a file in an existing directory
+where startup atomically writes `{url, token}` with mode 0600. It is a per-run
+terminal credential; retrieve it through SSH, keep it private, and retrieve it
+again after a restart. The client accepts loopback HTTP tunnel endpoints and
+keeps credentials in memory. No credentials are added to settings.yaml.
+
+See [the reusable Docker fixture](remote/README.md) for `desktop:remote:*` tasks
+and a local Desktop plus persistent Linux remote setup. Remote inboxes are
+read-only; remote workspaces support chat creation and resumption through the
+existing authenticated agent API. Local and remote entries share each navigation menu, with a narrow edge in the
+connection’s color marking remote entries. Selecting one changes only the content pane.
+Remote Code creation, Drive, file transfer and automatic SSH management remain
+outside this preview.

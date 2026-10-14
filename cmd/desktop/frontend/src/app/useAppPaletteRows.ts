@@ -1,3 +1,6 @@
+import { useRemoteConnection } from '../stores/useRemoteConnection'
+import { useRemoteCatalog } from '../stores/useRemoteCatalog'
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { computed, nextTick, watch } from 'vue'
 import IconFileText from '~icons/lucide/file-text'
 import IconGauge from '~icons/lucide/gauge'
@@ -106,11 +109,38 @@ export function useAppPaletteRows(
     for (const w of agentWorkspaces.value) map.set(w.dir, w.name)
     return map
   })
+  const remote = useRemoteConnection()
+  const remoteCatalog = useRemoteCatalog()
   const drive = useDrive()
 
   useCommands(
     computed(() => {
       const cmds: Command[] = []
+      if (remote.endpoint.value) {
+        const group = `Remote · ${remote.activeProfile.value?.name}`
+        for (const inbox of remoteCatalog.inboxes.value)
+          cmds.push({
+            id: `remote:${remote.activeProfile.value?.id}:inbox:${inbox.id}`,
+            title: inbox.name,
+            group,
+            scope: 'goto',
+            run: () => {
+              remoteCatalog.selectInbox(inbox.id)
+              void router.push({ name: 'feed' })
+            },
+          })
+        for (const workspace of remoteCatalog.workspaces.value)
+          cmds.push({
+            id: `remote:${remote.activeProfile.value?.id}:workspace:${workspace.dir}`,
+            title: workspace.name,
+            group,
+            scope: 'goto',
+            run: () => {
+              remoteCatalog.selectWorkspace(workspace.dir)
+              void router.push({ name: 'agents' })
+            },
+          })
+      }
 
       for (const command of bindableCommands.value) {
         if (command.paletteHidden || !contextActive(command.context)) continue
@@ -360,7 +390,10 @@ export function useAppPaletteRows(
             kind: 'session',
             keywords: [row.slug, group.name, 'session', 'attach', 'switch', 'open'],
             icon: IconTerminal,
-            run: () => void router.push({ name: 'terminal', params: { slug: row.slug } }),
+            run: () => {
+              useCodeInstallation().select('local')
+              void router.push({ name: 'terminal', params: { slug: row.slug } })
+            },
           })
         }
       }
@@ -381,7 +414,10 @@ export function useAppPaletteRows(
             keywords: ['window', 'tab', 'jump', 'switch'],
             icon: IconTerminal,
             hint: hintFor(terminalWindowCommandID(index + 1)),
-            run: () => void router.push({ name: 'terminal', params: { slug }, query: { window: win.windowId } }),
+            run: () => {
+              useCodeInstallation().select('local')
+              void router.push({ name: 'terminal', params: { slug }, query: { window: win.windowId } })
+            },
           })
         })
       }
@@ -401,6 +437,7 @@ export function useAppPaletteRows(
           keywords: ['chat'],
           icon: IconMessagesSquare,
           run: async () => {
+            useRemoteCatalog().selectWorkspace('')
             await router.push({
               name: 'agents',
               params: { workspace: session.workspace },

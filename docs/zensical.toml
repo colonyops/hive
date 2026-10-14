@@ -31,6 +31,7 @@ nav = [
     ]},
     { "Code" = [
       "desktop/code/terminal-mode.md",
+      "desktop/code/remote.md",
     ]},
     { "Chats" = [
       "desktop/chats/agent-workspaces.md",

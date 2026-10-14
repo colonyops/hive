@@ -368,6 +368,16 @@ describe('TerminalMode', () => {
     mocks.SessionPullRequest.mockResolvedValue({ status: 'none' })
   })
 
+  it('keeps the shared sidebar mounted when switching between remote and local panes', async () => {
+    const { wrapper } = await mountAt()
+    const sidebar = wrapper.get('[data-testid="terminal-session-sidebar"]').element
+    await wrapper.setProps({ active: false, remote: true })
+    expect(wrapper.get('[data-testid="terminal-session-sidebar"]').isVisible()).toBe(true)
+    expect(wrapper.get('[data-testid="terminal-session-sidebar"]').element).toBe(sidebar)
+    await wrapper.setProps({ active: true, remote: false })
+    expect(wrapper.get('[data-testid="terminal-session-sidebar"]').element).toBe(sidebar)
+  })
+
   it('renders the unavailable panel with the reason instead of gating the mode', async () => {
     mocks.Available.mockResolvedValue({ available: false, reason: 'tmux is not installed.' })
 
@@ -376,7 +386,7 @@ describe('TerminalMode', () => {
     const panel = wrapper.find('[data-testid="terminal-unavailable"]')
     expect(panel.exists()).toBe(true)
     expect(wrapper.get('[data-testid="terminal-unavailable-reason"]').text()).toBe('tmux is not installed.')
-    expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="terminal-session-sidebar"]').exists()).toBe(true)
   })
 
   it('treats an endpoint failure as unavailable and can retry', async () => {

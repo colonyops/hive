@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemoteNavigation from './RemoteNavigation.vue'
 import IconPause from '~icons/lucide/pause'
 import IconPlus from '~icons/lucide/plus'
 import { dropClass, dropEdge, useDragReorder } from '../composables/useDragReorder'
@@ -91,6 +92,7 @@ function onKeydown(e: KeyboardEvent, id: string): void {
         /></span>
       </button>
     </AppTooltip>
+    <RemoteNavigation area="inbox" compact />
     <IconButton
       label="Add profile"
       :icon="IconPlus"

@@ -24,6 +24,7 @@ export const applicationSettingsSectionMeta: Record<
   ApplicationSettingsSection,
   { label: string; title: string; icon: Component }
 > = {
+  remote: { label: 'Remote', title: 'Remote connections', icon: IconServer },
   general: { label: 'General', title: 'General', icon: IconSliders },
   appearance: { label: 'Appearance', title: 'Appearance', icon: IconPalette },
   drive: { label: 'Drive', title: 'Drive', icon: IconFolderTree },

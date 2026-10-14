@@ -1,0 +1,32 @@
+services:
+  remote:
+    build:
+      context: ../../..
+      dockerfile: cmd/desktop/remote/Dockerfile
+      target: runtime
+    ports:
+      - "127.0.0.1:${HIVE_REMOTE_SSH_PORT:-19222}:22"
+    volumes:
+      - remote-home:/home/hive
+      - remote-ssh:/etc/ssh/keys
+      - ${HIVE_REMOTE_STATE:?}/id_ed25519.pub:/run/client.pub:ro
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:19001/api/status"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+  smoke:
+    profiles: [test]
+    build:
+      context: ../../..
+      dockerfile: cmd/desktop/remote/Dockerfile
+      target: smoke
+    volumes:
+      - ${HIVE_REMOTE_STATE:?}:/run/connection:ro
+    depends_on:
+      remote:
+        condition: service_healthy
+
+volumes:
+  remote-home:
+  remote-ssh:

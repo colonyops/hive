@@ -1,9 +1,11 @@
+import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useEventListener } from '@vueuse/core'
 import { useDevTools } from '../composables/useDevTools'
 import type { useFeedState } from '../composables/useFeedState'
 import type { FlowsSession } from '../pipeline/composables/useFlowsSession'
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { useJobs } from '../stores/useJobs'
 import { ActionRunLocation } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
 import {
@@ -26,6 +28,7 @@ export type AppNavigation = ReturnType<typeof useAppNavigation>
  * step with it, and guards a dirty flow draft against every navigation source.
  */
 export function useAppNavigation(feed: FeedState, session: FlowsSession) {
+  const remoteCatalog = useRemoteCatalog()
   const router = useRouter()
   const route = useRoute()
   const { activeProfileId, activeProfile, profiles, profilesLoaded, selection, unreadOnly, items } = feed
@@ -165,6 +168,7 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
   const discardPendingNavigation = () => settlePendingNavigation(() => session.discardDraft())
 
   function openFeed(profileId = activeProfileId.value): void {
+    remoteCatalog.selectInbox('')
     void router.push({ name: 'feed', params: profileId ? { profileId } : {} })
   }
 
@@ -196,6 +200,7 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
   }
 
   async function requestSelectProfile(id: string): Promise<void> {
+    remoteCatalog.selectInbox('')
     // Returning from the canvas to the already-active profile does not change
     // the route profile id, so the route watcher will not reload its feeds.
     // Refresh explicitly so the sidebar cannot keep the pre-deploy flow
@@ -221,11 +226,14 @@ export function useAppNavigation(feed: FeedState, session: FlowsSession) {
 
   // The route is the attach state (ADR terminal-transport), so opening a
   // session is a navigation and nothing here touches tmux.
+  const codeInstallation = useCodeInstallation()
   function openItemSession(slug: string): void {
+    codeInstallation.select('local')
     void router.push({ name: 'terminal', params: { slug } })
   }
 
   function openItemChat(workspace: string, id: string): void {
+    remoteCatalog.selectWorkspace('')
     void router.push({ name: 'agents', params: { workspace }, query: { chat: String(id) } })
   }
 

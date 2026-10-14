@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useCodeInstallation } from '../../stores/useCodeInstallation'
+import RemoteNavigation from '../RemoteNavigation.vue'
 import { computed, nextTick, proxyRefs, ref, toRef, watch } from 'vue'
 import { useNow } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
@@ -36,6 +38,7 @@ import type { MenuEntry } from '../../types/menu'
 import { useTerminalModeContext } from './terminalModeContext'
 import { useTreeRowMenus, windowMenuKey } from './useTreeRowMenus'
 
+const { installation } = useCodeInstallation()
 const { pool, tree, view, nav, attach, ops, rename, sessions } = useTerminalModeContext()
 const { openBlank: openNewSession } = useNewSession()
 const menus = proxyRefs(useTreeRowMenus({ windowMenuAllowed: ops.rowHasWindowActions }))
@@ -402,7 +405,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     v-if="group.kind !== 'scratch'"
                     class="session-row"
                     :class="{
-                      'session-row-attached': row.slug === pool.activeSlug,
+                      'session-row-attached': installation === 'local' && row.slug === pool.activeSlug,
                       'menu-open': menus.openRow === row.id || menus.openNewWindow === row.id,
                     }"
                     role="button"
@@ -410,7 +413,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
                     :data-testid="group.kind === 'chats' ? 'terminal-chat-row' : 'terminal-session-row'"
                     :data-slug="row.slug"
                     :data-tree-key="`s:${row.id}`"
-                    :data-attached="row.slug === pool.activeSlug"
+                    :data-attached="installation === 'local' && row.slug === pool.activeSlug"
                     @click="nav.clickSession(row)"
                     @keydown.enter.self.prevent="nav.enterSession(row)"
                     @keydown.space.self.prevent="nav.enterSession(row)"
@@ -643,8 +646,8 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
         </div>
         <!-- Last, so they paint over the rows: every row and panel is
              positioned too, and among positioned boxes DOM order decides. -->
-        <TreeRail :rail="rails[0]" data-testid="terminal-session-rail" />
-        <TreeRail :rail="rails[1]" data-testid="terminal-window-rail" />
+        <TreeRail v-if="installation === 'local'" :rail="rails[0]" data-testid="terminal-session-rail" />
+        <TreeRail v-if="installation === 'local'" :rail="rails[1]" data-testid="terminal-window-rail" />
       </div>
       <EmptyState
         v-if="view.note === 'empty'"
@@ -660,6 +663,7 @@ function draggingWindowRow(slug: string, windowId: string): boolean {
         :message="view.noMatchesNote"
         data-testid="terminal-sessions-no-matches"
       />
+      <RemoteNavigation area="code" />
     </div>
     <!-- The tree's keys are not announced anywhere else. The focus chord is read off the
          live keymap because it is rebindable. -->

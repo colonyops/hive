@@ -282,6 +282,23 @@ export const commandCatalog: BindableCommand[] = [
   {
     // This id is persisted in settings.yaml. Keep it even though the command
     // now follows the active sidebar in every app mode.
+    id: 'view.go-remote-code',
+    title: 'Go to remote Code',
+    group: 'View',
+    keywords: ['ssh', 'connection', 'host'],
+    defaultCombos: [],
+    context: 'global',
+    scope: 'goto',
+  },
+  {
+    id: 'view.go-local-code',
+    title: 'Go to local Code',
+    group: 'View',
+    defaultCombos: [],
+    context: 'global',
+    scope: 'goto',
+  },
+  {
     id: 'terminal.toggle-sidebar',
     title: 'Toggle sidebar',
     group: 'View',

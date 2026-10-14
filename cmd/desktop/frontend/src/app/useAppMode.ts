@@ -4,7 +4,10 @@ import { Window } from '@wailsio/runtime'
 import { useDriveRoute } from '../composables/useDriveRoute'
 import { workspaceSpaceKey, type DriveAuthor, type DriveScope } from '../lib/drive'
 import { useAgentSessionsAll } from '../stores/useAgentSessionsAll'
+import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { useDriveActivity } from '../stores/useDriveActivity'
+
+import { useCodeInstallation } from '../stores/useCodeInstallation'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 import { createLogger } from '../lib/log'
@@ -32,6 +35,9 @@ export function useAppMode(
   const { route, router } = nav
   const { routeChatId, docRequested, docPath, docUnseen, syncDocQuery } = useDriveRoute()
   const activity = useDriveActivity()
+  const remoteCatalog = useRemoteCatalog()
+
+  const codeInstallation = useCodeInstallation()
   const { recents } = useAgentSessionsAll()
   const { sessions: codeSessions } = useTerminalSessions()
 
@@ -112,7 +118,11 @@ export function useAppMode(
 
   // The URL is the attach state, so it is also which session is on screen.
   const onScreenSessionSlug = computed(() =>
-    route.name === 'terminal' && typeof route.params.slug === 'string' ? route.params.slug : '',
+    route.name === 'terminal' &&
+    codeInstallation.installation.value === 'local' &&
+    typeof route.params.slug === 'string'
+      ? route.params.slug
+      : '',
   )
 
   const feedSidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)
@@ -168,7 +178,9 @@ export function useAppMode(
 
   // One control per frame edge: the right toggle names the detail preview in
   // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
-  const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
+  const agentsDriveAvailable = computed(
+    () => agentsActive.value && !remoteCatalog.workspace.value && routeChatId.value !== null,
+  )
   const driveAvailable = computed(() => agentsDriveAvailable.value || codeDrive.value !== null)
   const previewToggleCollapsed = computed(() => (driveAvailable.value ? !docRequested.value : previewCollapsed.value))
   const canTogglePreview = computed(() => feedViewActive.value || driveAvailable.value)
