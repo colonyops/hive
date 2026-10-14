@@ -1,3 +1,4 @@
+import { useCodeInstallation } from '../../stores/useCodeInstallation'
 import { useStorage } from '@vueuse/core'
 import { computed, onScopeDispose, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -26,6 +27,7 @@ export function useTerminalAttach(options: {
   active: () => boolean
   onSwitch: () => void
 }) {
+  const installation = useCodeInstallation()
   const { pool, tree } = options
   const { activeSlug, current } = pool
   const route = useRoute()
@@ -187,6 +189,7 @@ export function useTerminalAttach(options: {
   )
 
   function selectSession(slug: string): void {
+    installation.select('local')
     if (slug === activeSlug.value) {
       // Same URL, so the route watcher stays silent. After an end the row is a
       // way back in; on a live session it is an intent to type into it.
@@ -198,6 +201,7 @@ export function useTerminalAttach(options: {
   }
 
   async function goToWindow(row: TerminalSessionRow, win: TreeWindowRow): Promise<void> {
+    installation.select('local')
     if (win.live && row.slug === activeSlug.value) await current.value?.select(win.windowId)
     else {
       void router.push({
@@ -224,6 +228,7 @@ export function useTerminalAttach(options: {
   // chat starts through the Agents area's resume instead: there is no hive
   // session behind its slug to read a spawn configuration from.
   async function startSession(slug: string): Promise<void> {
+    installation.select('local')
     if (!client.value || starting.value) return
     starting.value = slug
     const attempt = outcomes.beginAttempt(slug)

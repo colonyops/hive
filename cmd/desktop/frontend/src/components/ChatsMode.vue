@@ -10,11 +10,12 @@ const { workspace } = useRemoteCatalog()
 <template>
   <div class="flex min-h-0 min-w-0 flex-1">
     <AgentsMode
-      v-show="!workspace"
       :active="active && !workspace"
       :sidebar-collapsed="sidebarCollapsed"
+      :remote="!!workspace"
       @open-drive-page="emit('open-drive-page', $event)"
-    />
-    <RemoteChats v-if="workspace" v-show="active" :active="active" />
+    >
+      <RemoteChats :active="active && !!workspace" />
+    </AgentsMode>
   </div>
 </template>

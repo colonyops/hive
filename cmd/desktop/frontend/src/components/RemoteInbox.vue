@@ -38,13 +38,13 @@ useIntervalFn(() => void resource.value?.reload(), 10000)
 <template>
   <div class="flex min-h-0 flex-1" data-testid="remote-inbox">
     <aside class="flex w-60 shrink-0 flex-col gap-1 border-r border-border p-2">
-      <p class="p-2 text-body font-semibold" :style="{ color }">{{ inbox?.name }} · Remote {{ activeProfile?.name }}</p>
+      <p class="p-2 text-body font-semibold">{{ inbox?.name }} · Remote {{ activeProfile?.name }}</p>
       <BaseButton
         v-for="row in inbox?.feeds"
         :key="row.id"
         variant="ghost"
         class="justify-start"
-        :style="{ color }"
+        :style="{ borderLeft: `3px solid ${color}` }"
         :data-testid="`remote-feed-${row.id}`"
         @click="feedId = row.id"
         >{{ row.name }}</BaseButton

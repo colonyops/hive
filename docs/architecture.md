@@ -1388,7 +1388,9 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 
 ### Remote installations
 
-Code has separate Local and Remote views. Settings ▸ Remote manages named,
+Inbox, Code, and Chats share navigation lists across local and remote entries.
+Selecting a remote entry swaps only the content pane; colored trim and a
+connection tooltip distinguish its origin. Settings ▸ Remote manages named,
 colored connection profiles in the `useRemoteConnection` store. Only profile
 metadata persists in UI storage; the active endpoint and token stay in memory
 across Settings navigation. One remote is connected at a time.

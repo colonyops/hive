@@ -363,6 +363,16 @@ describe('AgentsMode', () => {
   // skills that were in fact installed — by the package sitting in the same
   // list. The banner has to name what the entry is and which package carries
   // it, and keep a genuine typo as its own separate report.
+  it('keeps the shared sidebar mounted when switching between remote and local panes', async () => {
+    const { wrapper } = await mountAgentsMode()
+    const sidebar = wrapper.get('[data-testid="agents-workspace-sidebar"]').element
+    await wrapper.setProps({ active: false, remote: true })
+    expect(wrapper.get('[data-testid="agents-workspace-sidebar"]').isVisible()).toBe(true)
+    expect(wrapper.get('[data-testid="agents-workspace-sidebar"]').element).toBe(sidebar)
+    await wrapper.setProps({ active: true, remote: false })
+    expect(wrapper.get('[data-testid="agents-workspace-sidebar"]').element).toBe(sidebar)
+  })
+
   it('separates an enabled name that is a skill from one that matches nothing', async () => {
     const client = fakeClient()
     client.openWorkspace = vi.fn((_dir: string) =>
@@ -452,7 +462,7 @@ describe('AgentsMode', () => {
     expect(wrapper.get('[data-testid="agents-unavailable-reason"]').text()).toBe(
       'agent workspaces need macOS or Linux and a desktop build.',
     )
-    expect(wrapper.find('[data-testid="agents-workspace-sidebar"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="agents-workspace-sidebar"]').exists()).toBe(true)
   })
 
   it('raises the status bar over an open chat and opens its workspace outside the app', async () => {

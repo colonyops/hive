@@ -810,9 +810,9 @@ defineExpose({
           <TreeRail :rail="rails[0]" data-testid="agents-sidebar-session-rail" />
         </div>
       </template>
+      <RemoteNavigation area="chats" />
     </div>
     <PanelResizeHandle edge="right" name="agents-sidebar" :start="startSidebarResize" :step="stepSidebar" />
-    <RemoteNavigation area="chats" />
   </aside>
 
   <ConfirmationDialog

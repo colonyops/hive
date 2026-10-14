@@ -5,10 +5,11 @@ description: Attach to existing Hive sessions on another machine through SSH.
 
 # Remote sessions
 
-**Code → Remote (preview)** connects to existing Hive Code sessions on another
+**Settings ▸ Remote** connects to existing Hive Code sessions on another
 machine. Select a session to view its tmux windows and panes, type, paste text,
 and resize the terminal. Connected remote inboxes, Code sessions, and chat
-workspaces appear in their respective navigation menus with your chosen color.
+workspaces appear alongside local entries in the same navigation menus. A narrow
+edge in your chosen color marks remote entries; hover to see the connection name.
 
 The remote machine runs Hive, tmux, and your agent CLI. The CLI uses the account
 and credentials configured on that machine.
@@ -53,11 +54,11 @@ the last known list.
 
 ## Remote inboxes and chats
 
-Choose a colored remote inbox in the Inbox rail to read its feeds. This preview
+Choose a remote inbox in the Inbox rail to read its feeds. This preview
 shows up to 200 active items per feed and does not change their read or archived
 state.
 
-In Chats, choose a colored remote workspace, enter a chat name, and click
+In Chats, choose a remote workspace, enter a chat name, and click
 **New chat**. The workspace's configured command runs on the remote machine.
 Select a previous remote chat to reopen it. Closing the view leaves the remote
 process running. The agent uses the account signed in on that machine.

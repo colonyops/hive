@@ -130,6 +130,11 @@ const mocks = vi.hoisted(() => ({
   agentsClient: null as AgentWorkspacesClient | null,
 }))
 
+vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/perfservice', () => ({
+  Info: vi.fn().mockResolvedValue({ enabled: false }),
+  Record: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/flowsservice', () => ({
   ListFlows: mocks.ListFlows,
   GetFlow: mocks.GetFlow,

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import RemoteNavigation from './RemoteNavigation.vue'
 import { onMounted, toRef } from 'vue'
 import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
@@ -33,6 +32,7 @@ import '@xterm/xterm/css/xterm.css'
 // that replaces mount/unmount for anything that must not run off-screen.
 const props = withDefaults(
   defineProps<{
+    remote?: boolean
     sidebarCollapsed?: boolean
     active?: boolean
     /** The space the attached session reads; null for a session with none. */
@@ -92,54 +92,57 @@ const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, ca
 
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-app" data-testid="terminal-mode">
-    <div v-if="checking" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">
-      Checking tmux…
-    </div>
-
-    <div
-      v-else-if="!available"
-      class="flex flex-1 flex-col items-center justify-center gap-3 px-10 text-center"
-      data-testid="terminal-unavailable"
-    >
-      <IconTerminal class="size-6 text-text-4" />
-      <div class="text-body font-semibold">Terminal unavailable</div>
-      <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="terminal-unavailable-reason">
-        {{ reason || 'The terminal is not available in this build.' }}
-      </p>
-      <button
-        type="button"
-        class="mt-1 cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
-        data-testid="terminal-retry"
-        @click="attach.probe"
-      >
-        Try again
-      </button>
-      <RemoteNavigation area="code" />
-    </div>
-
-    <div v-else class="flex min-h-0 min-w-0 flex-1">
+    <div class="flex min-h-0 min-w-0 flex-1">
       <TerminalSidebar v-if="!sidebarCollapsed" />
-      <TerminalPaneColumn
-        :active="props.active"
-        @open-tasks="emit('open-tasks')"
-        @session-repo-key="emit('session-repo-key', $event)"
-      />
-      <!-- A sibling of the pane column, as in Chats: opening it must not
-           re-key a terminal host, and the size vote absorbs the width change. -->
-      <DrivePane
-        v-if="drivePane"
-        :session="drivePane.session"
-        :space="drivePane.space"
-        :path="docPath"
-        :agent-setup="spaceGroup(drivePane.space) === 'Repositories'"
-        @setup="openMcpSettings"
-        @close="syncDocQuery(false)"
-        @open-url="openLink"
-        @pick="(path) => syncDocQuery(true, path)"
-        @open-page="(path) => emit('open-drive-page', { ...drivePane!, path })"
-      />
-    </div>
+      <slot v-if="remote" />
+      <div v-show="!remote" class="flex min-h-0 min-w-0 flex-1">
+        <div v-if="checking" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">
+          Checking tmux…
+        </div>
 
+        <div
+          v-else-if="!available"
+          class="flex flex-1 flex-col items-center justify-center gap-3 px-10 text-center"
+          data-testid="terminal-unavailable"
+        >
+          <IconTerminal class="size-6 text-text-4" />
+          <div class="text-body font-semibold">Terminal unavailable</div>
+          <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="terminal-unavailable-reason">
+            {{ reason || 'The terminal is not available in this build.' }}
+          </p>
+          <button
+            type="button"
+            class="mt-1 cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
+            data-testid="terminal-retry"
+            @click="attach.probe"
+          >
+            Try again
+          </button>
+        </div>
+
+        <div v-else class="flex min-h-0 min-w-0 flex-1">
+          <TerminalPaneColumn
+            :active="props.active"
+            @open-tasks="emit('open-tasks')"
+            @session-repo-key="emit('session-repo-key', $event)"
+          />
+          <!-- A sibling of the pane column, as in Chats: opening it must not
+           re-key a terminal host, and the size vote absorbs the width change. -->
+          <DrivePane
+            v-if="drivePane"
+            :session="drivePane.session"
+            :space="drivePane.space"
+            :path="docPath"
+            :agent-setup="spaceGroup(drivePane.space) === 'Repositories'"
+            @setup="openMcpSettings"
+            @close="syncDocQuery(false)"
+            @open-url="openLink"
+            @pick="(path) => syncDocQuery(true, path)"
+            @open-page="(path) => emit('open-drive-page', { ...drivePane!, path })"
+          />
+        </div>
+      </div>
+    </div>
     <ActionInputsDialog
       v-if="actionInputs"
       :action-label="actionInputs.action.label"

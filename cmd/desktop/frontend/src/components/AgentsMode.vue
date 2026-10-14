@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import RemoteNavigation from './RemoteNavigation.vue'
+import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 // The Chats area: AgentsSidebar's tree (workspaces, each holding its own
 // chats) beside a pane the terminal owns under a slim status bar naming the
 // open session's workspace. Focusing a workspace is neither a filter nor a
@@ -45,7 +45,8 @@ import '@xterm/xterm/css/xterm.css'
 /** Poll period for the M2 approval indicator (hc-ou4o02zx §5), while active. */
 const ACTIVITY_POLL_MS = 2000
 
-const props = defineProps<{ active?: boolean; sidebarCollapsed?: boolean }>()
+const remoteCatalog = useRemoteCatalog()
+const props = defineProps<{ active?: boolean; remote?: boolean; sidebarCollapsed?: boolean }>()
 const emit = defineEmits<{ 'open-drive-page': [scope: DriveScope] }>()
 
 const {
@@ -134,6 +135,7 @@ const selectedWorkspace = computed(() =>
 )
 
 function selectWorkspace(dir: string): Promise<unknown> {
+  remoteCatalog.selectWorkspace('')
   if (dir === selectedWorkspace.value) return Promise.resolve()
   // The query rides along: the focused workspace and the open chat (?chat) are
   // independent axes, and moving one must not drop the other.
@@ -243,6 +245,7 @@ const defaultWorkspaceDir = computed(
 const DEFAULT_CHAT_NAME = 'New Chat'
 
 function handleNewSessionRequest(): void {
+  remoteCatalog.selectWorkspace('')
   void openNewSession('', 'workspace', {
     workspace: defaultWorkspaceDir.value,
     launch: ({ workspace, name, prompt }) => startNewSession(workspace, name, prompt),
@@ -254,6 +257,7 @@ function handleNewSessionRequest(): void {
 // to ask: the chat takes the default name and launches straight into the pane.
 // Renaming it is one entry away on its own row menu.
 function handleStartSessionIn(workspace: string): void {
+  remoteCatalog.selectWorkspace('')
   void startNewSession(workspace, DEFAULT_CHAT_NAME)
 }
 
@@ -347,6 +351,7 @@ async function resumeChatFromRoute(id: string): Promise<void> {
 // order inside their workspace — a resume touches last_opened_at without
 // moving anything.
 async function handleSidebarSelectSession(session: AgentSession): Promise<void> {
+  remoteCatalog.selectWorkspace('')
   // openSessionId alone would strand a failed attach (id set, pane idle) with no retry click.
   // Focus follows the picked chat, as it does a new one: the banners above the
   // pane and the new-chat default read the focused workspace.
@@ -714,36 +719,13 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col bg-app" data-testid="agents-mode">
-    <div v-if="checking" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">Checking…</div>
-
-    <div
-      v-else-if="!available"
-      class="flex flex-1 flex-col items-center justify-center gap-3 px-10 text-center"
-      data-testid="agents-unavailable"
-    >
-      <IconMessagesSquare class="size-6 text-text-4" />
-      <div class="text-body font-semibold">Chats area unavailable</div>
-      <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="agents-unavailable-reason">
-        {{ reason || 'The Chats area is not available in this build.' }}
-      </p>
-      <button
-        type="button"
-        class="mt-1 cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
-        data-testid="agents-retry"
-        @click="loadWorkspaces"
-      >
-        Try again
-      </button>
-      <RemoteNavigation area="chats" />
-    </div>
-
-    <div v-else class="flex min-h-0 min-w-0 flex-1">
+    <div class="flex min-h-0 min-w-0 flex-1">
       <AgentsSidebar
         v-if="!sidebarCollapsed"
         ref="sidebarEl"
         :active="props.active"
-        :selected-workspace="selectedWorkspace"
-        :open-session-id="openSessionId"
+        :selected-workspace="remote ? '' : selectedWorkspace"
+        :open-session-id="remote ? '' : openSessionId"
         :starting-session="startingSession"
         :session-activity="sessionActivity"
         @select-session="handleSidebarSelectSession"
@@ -757,143 +739,172 @@ onBeforeUnmount(() => {
         @commit-rename="commitSessionRename"
         @delete-session="removeRow"
       />
+      <slot v-if="remote" />
+      <div v-show="!remote" class="flex min-h-0 min-w-0 flex-1">
+        <div v-if="checking" class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">
+          Checking…
+        </div>
 
-      <!-- The pane's chrome is conditional strips: the missing-capability
+        <div
+          v-else-if="!available"
+          class="flex flex-1 flex-col items-center justify-center gap-3 px-10 text-center"
+          data-testid="agents-unavailable"
+        >
+          <IconMessagesSquare class="size-6 text-text-4" />
+          <div class="text-body font-semibold">Chats area unavailable</div>
+          <p class="max-w-[420px] text-xs leading-relaxed text-text-3" data-testid="agents-unavailable-reason">
+            {{ reason || 'The Chats area is not available in this build.' }}
+          </p>
+          <button
+            type="button"
+            class="mt-1 cursor-pointer rounded border border-strong px-3 py-1.5 text-xs text-text-2 hover:text-text"
+            data-testid="agents-retry"
+            @click="loadWorkspaces"
+          >
+            Try again
+          </button>
+        </div>
+
+        <div v-else class="flex min-h-0 min-w-0 flex-1">
+          <!-- The pane's chrome is conditional strips: the missing-capability
            warnings, and — while a session is opening or open — a status bar
            naming the session's own workspace, which the focused one need not
            match. -->
-      <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div
-          v-if="selectedWorkspace && missingMCPs.length"
-          class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-caption text-severity-warning"
-          data-testid="agents-missing-mcps"
-        >
-          Missing MCP servers: {{ missingMCPs.join(', ') }}
-        </div>
+          <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+            <div
+              v-if="selectedWorkspace && missingMCPs.length"
+              class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-caption text-severity-warning"
+              data-testid="agents-missing-mcps"
+            >
+              Missing MCP servers: {{ missingMCPs.join(', ') }}
+            </div>
 
-        <div
-          v-if="selectedWorkspace && missingSkillsNotice"
-          class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-caption text-severity-warning"
-          data-testid="agents-missing-skills"
-        >
-          {{ missingSkillsNotice }}
-        </div>
+            <div
+              v-if="selectedWorkspace && missingSkillsNotice"
+              class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-caption text-severity-warning"
+              data-testid="agents-missing-skills"
+            >
+              {{ missingSkillsNotice }}
+            </div>
 
-        <div
-          v-if="selectedWorkspace && unknownPackageNames.length"
-          class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-caption text-severity-warning"
-          data-testid="agents-missing-packages"
-        >
-          Missing skill packages: {{ unknownPackageNames.join(', ') }}
-        </div>
+            <div
+              v-if="selectedWorkspace && unknownPackageNames.length"
+              class="shrink-0 border-b border-border bg-severity-warning-tint px-3 py-1.5 text-caption text-severity-warning"
+              data-testid="agents-missing-packages"
+            >
+              Missing skill packages: {{ unknownPackageNames.join(', ') }}
+            </div>
 
-        <PaneStatusBar
-          v-if="paneStatus !== 'idle'"
-          testid="agents-pane-statusbar"
-          :label="paneWorkspaceName"
-          :path="paneWorkspaceDir"
-          :error="paneActionError"
-          :editor-title="editor.command ? editor.title : ''"
-          @open-editor="openPaneWorkspaceInEditor"
-          @reveal="revealPaneWorkspace"
-        >
-        </PaneStatusBar>
+            <PaneStatusBar
+              v-if="paneStatus !== 'idle'"
+              testid="agents-pane-statusbar"
+              :label="paneWorkspaceName"
+              :path="paneWorkspaceDir"
+              :error="paneActionError"
+              :editor-title="editor.command ? editor.title : ''"
+              @open-editor="openPaneWorkspaceInEditor"
+              @reveal="revealPaneWorkspace"
+            >
+            </PaneStatusBar>
 
-        <div class="relative min-h-0 flex-1 bg-app">
-          <!-- TerminalTab.vue's shape, for the same reasons: xterm opens in the
+            <div class="relative min-h-0 flex-1 bg-app">
+              <!-- TerminalTab.vue's shape, for the same reasons: xterm opens in the
                unpadded inner host so the fit measurement reads the content box
                — measuring the padded wrapper over-proposes the grid by a row
                under border-box — and overflow-auto scrolls a grid tmux sized
                larger than this box instead of painting over the UI below. -->
-          <div
-            v-show="paneLaidOut"
-            class="absolute inset-0 overflow-auto px-2 py-1.5"
-            data-terminal-input-scope
-            data-testid="agents-session-pane"
-            @mousedown="term?.focus()"
-          >
-            <div ref="paneHost" class="size-full" />
-          </div>
+              <div
+                v-show="paneLaidOut"
+                class="absolute inset-0 overflow-auto px-2 py-1.5"
+                data-terminal-input-scope
+                data-testid="agents-session-pane"
+                @mousedown="term?.focus()"
+              >
+                <div ref="paneHost" class="size-full" />
+              </div>
 
-          <!-- The Code view's pill, placed and worded identically: new output
+              <!-- The Code view's pill, placed and worded identically: new output
                keeps landing below the fold while the viewport is scrolled up,
                and this is the way back to the live tail. -->
-          <Transition name="tail-pill">
-            <button
-              v-if="paneScrolledUp && paneStatus === 'live'"
-              type="button"
-              class="absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-caption text-text-2 shadow-lg hover:text-text"
-              data-testid="agents-scroll-to-bottom"
-              @click="scrollPaneToBottom"
-            >
-              <IconArrowDown class="size-3" />Scroll to bottom
-            </button>
-          </Transition>
+              <Transition name="tail-pill">
+                <button
+                  v-if="paneScrolledUp && paneStatus === 'live'"
+                  type="button"
+                  class="absolute bottom-3 right-5 z-10 flex cursor-pointer items-center gap-1.5 rounded-full border border-strong bg-raised/95 px-3 py-1.5 text-caption text-text-2 shadow-lg hover:text-text"
+                  data-testid="agents-scroll-to-bottom"
+                  @click="scrollPaneToBottom"
+                >
+                  <IconArrowDown class="size-3" />Scroll to bottom
+                </button>
+              </Transition>
 
-          <!-- Covers the whole launch, not just the beat before xterm exists:
+              <!-- Covers the whole launch, not just the beat before xterm exists:
                most of a start is spent waiting on tmux after the grid is
                built, and a bare dark pane there reads as nothing happening. -->
-          <div
-            v-if="paneStatus === 'opening'"
-            class="absolute inset-0 z-10 flex items-center justify-center bg-app"
-            data-testid="agents-pane-opening"
-          >
-            <p class="flex items-center gap-2 font-mono text-xs text-text-4"><Spinner />Opening…</p>
-          </div>
-          <!-- The zero state: no PTY exists, so the pane says what a chat is,
+              <div
+                v-if="paneStatus === 'opening'"
+                class="absolute inset-0 z-10 flex items-center justify-center bg-app"
+                data-testid="agents-pane-opening"
+              >
+                <p class="flex items-center gap-2 font-mono text-xs text-text-4"><Spinner />Opening…</p>
+              </div>
+              <!-- The zero state: no PTY exists, so the pane says what a chat is,
                carries whatever ended the last one, and offers the same new-chat
                gesture the sidebar's + does. -->
-          <div
-            v-else-if="paneStatus === 'idle'"
-            class="hive-scroll absolute inset-0 z-10 overflow-y-auto bg-app"
-            data-testid="agents-pane-empty"
-          >
-            <div class="flex min-h-full items-center justify-center px-8 py-10">
-              <div class="flex w-full max-w-[380px] flex-col items-center gap-3 text-center">
-                <IconMessagesSquare class="size-6 text-text-4" />
-                <h2 class="text-body font-semibold text-text">No chat open</h2>
-                <p class="text-xs leading-relaxed text-text-3">
-                  A chat is an agent attached to a workspace's directory. It launches with the workspace's command and
-                  MCP servers.
-                </p>
-                <p v-if="!workspaces.length" class="text-xs leading-relaxed text-text-3">
-                  No workspaces yet. Author one under {{ root }}.
-                </p>
-                <InlineError
-                  v-if="paneError"
-                  testid="agents-pane-error"
-                  variant="line"
-                  class="leading-relaxed"
-                  :message="paneError"
-                />
-                <BaseButton
-                  size="sm"
-                  :disabled="!workspaces.length"
-                  data-testid="agents-new-session-open"
-                  @click="handleNewSessionRequest"
-                  >New chat</BaseButton
-                >
+              <div
+                v-else-if="paneStatus === 'idle'"
+                class="hive-scroll absolute inset-0 z-10 overflow-y-auto bg-app"
+                data-testid="agents-pane-empty"
+              >
+                <div class="flex min-h-full items-center justify-center px-8 py-10">
+                  <div class="flex w-full max-w-[380px] flex-col items-center gap-3 text-center">
+                    <IconMessagesSquare class="size-6 text-text-4" />
+                    <h2 class="text-body font-semibold text-text">No chat open</h2>
+                    <p class="text-xs leading-relaxed text-text-3">
+                      A chat is an agent attached to a workspace's directory. It launches with the workspace's command
+                      and MCP servers.
+                    </p>
+                    <p v-if="!workspaces.length" class="text-xs leading-relaxed text-text-3">
+                      No workspaces yet. Author one under {{ root }}.
+                    </p>
+                    <InlineError
+                      v-if="paneError"
+                      testid="agents-pane-error"
+                      variant="line"
+                      class="leading-relaxed"
+                      :message="paneError"
+                    />
+                    <BaseButton
+                      size="sm"
+                      :disabled="!workspaces.length"
+                      data-testid="agents-new-session-open"
+                      @click="handleNewSessionRequest"
+                      >New chat</BaseButton
+                    >
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
 
-      <!-- A sibling of the pane column, never inside it: the terminal host must
+          <!-- A sibling of the pane column, never inside it: the terminal host must
            not be re-keyed or unmounted by the drive pane opening, and the
            ResizeObserver absorbs the width change with an ordinary size vote. -->
-      <DrivePane
-        v-if="docVisible && routeChatId !== null"
-        :session="routeChatId"
-        :space="workspaceSpaceKey(paneWorkspaceDir)"
-        :path="docPath"
-        @close="syncDocQuery(false)"
-        @open-url="openLink"
-        @pick="(path) => syncDocQuery(true, path)"
-        @open-page="
-          (path) => emit('open-drive-page', { space: workspaceSpaceKey(paneWorkspaceDir), path, session: routeChatId })
-        "
-      />
+          <DrivePane
+            v-if="docVisible && routeChatId !== null"
+            :session="routeChatId"
+            :space="workspaceSpaceKey(paneWorkspaceDir)"
+            :path="docPath"
+            @close="syncDocQuery(false)"
+            @open-url="openLink"
+            @pick="(path) => syncDocQuery(true, path)"
+            @open-page="
+              (path) =>
+                emit('open-drive-page', { space: workspaceSpaceKey(paneWorkspaceDir), path, session: routeChatId })
+            "
+          />
+        </div>
+      </div>
     </div>
 
     <AgentWorkspaceEditor

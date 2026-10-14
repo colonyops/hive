@@ -673,6 +673,7 @@ keeps credentials in memory. No credentials are added to settings.yaml.
 See [the reusable Docker fixture](remote/README.md) for `desktop:remote:*` tasks
 and a local Desktop plus persistent Linux remote setup. Remote inboxes are
 read-only; remote workspaces support chat creation and resumption through the
-existing authenticated agent API. Navigation uses each connection’s color.
+existing authenticated agent API. Local and remote entries share each navigation menu, with a narrow edge in the
+connection’s color marking remote entries. Selecting one changes only the content pane.
 Remote Code creation, Drive, file transfer and automatic SSH management remain
 outside this preview.

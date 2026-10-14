@@ -1,6 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRemoteConnection } from '../../stores/useRemoteConnection'
+import { useRemoteCatalog } from '../../stores/useRemoteCatalog'
+import RemoteNavigation from '../RemoteNavigation.vue'
 import RemoteCode from '../RemoteCode.vue'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
@@ -35,12 +37,14 @@ describe('remote Code isolation', () => {
     mocks.list.mockResolvedValue([{ id: 'one', name: 'Remote', slug: 'same-slug', state: 'active', repo: '' }])
     const wrapper = mount(RemoteCode, { props: { active: true } })
     await connect()
-    await wrapper.get('[data-testid="remote-session-same-slug"]').trigger('click')
+    const navigation = mount(RemoteNavigation, { props: { area: 'code' } })
+    await navigation.get('[data-testid="remote-code-item-one"]').trigger('click')
     expect(wrapper.get('[data-testid="attached"]').text()).toBe('same-slug')
     mocks.list.mockRejectedValue(new Error('Tunnel disconnected'))
     await wrapper.get('[data-testid="remote-refresh"]').trigger('click')
     await flushPromises()
-    expect(wrapper.find('[data-testid="remote-session-same-slug"]').exists()).toBe(true)
+    expect(navigation.find('[data-testid="remote-code-item-one"]').exists()).toBe(true)
+    navigation.unmount()
     expect(wrapper.get('[data-testid="remote-error"]').text()).toContain('Tunnel disconnected')
     await wrapper.setProps({ active: false })
     expect(wrapper.find('[data-testid="attached"]').exists()).toBe(false)
@@ -51,7 +55,8 @@ describe('remote Code isolation', () => {
     mocks.list.mockResolvedValue([{ id: 'one', name: 'Before', slug: 'before', state: 'active', repo: '' }])
     const wrapper = mount(RemoteCode, { props: { active: true } })
     await connect()
-    await wrapper.get('[data-testid="remote-session-before"]').trigger('click')
+    useRemoteCatalog().selectCode('one')
+    await flushPromises()
     expect(wrapper.get('[data-testid="attached"]').text()).toBe('before')
     mocks.list.mockResolvedValue([{ id: 'one', name: 'After', slug: 'after', state: 'active', repo: '' }])
     await wrapper.get('[data-testid="remote-refresh"]').trigger('click')

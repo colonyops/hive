@@ -85,23 +85,6 @@ useIntervalFn(() => {
         <span class="text-xs text-text-4">Existing sessions · file transfer unavailable</span>
       </div>
       <div class="flex min-h-0 flex-1">
-        <aside
-          class="flex w-60 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border p-2"
-          data-testid="remote-sessions"
-        >
-          <BaseButton
-            v-for="row in sessions"
-            :key="row.id"
-            :disabled="row.state !== 'active'"
-            :variant="selected === row.id ? 'primary' : 'ghost'"
-            :title="row.repo"
-            :data-testid="`remote-session-${row.slug}`"
-            @click="catalog.selectCode(row.id)"
-            :style="{ color }"
-            >{{ row.name }}{{ row.state !== 'active' ? ` (${row.state})` : '' }}</BaseButton
-          >
-          <EmptyState v-if="!sessions.length" message="No Hive sessions on this installation." />
-        </aside>
         <RemoteTerminal
           v-if="active && selectedSession"
           :key="`${endpoint.httpBaseURL}/${selectedSession.id}/${selectedSession.slug}`"

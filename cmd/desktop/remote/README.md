@@ -78,7 +78,7 @@ installation/upgrades are manual in this first slice.
 
 The persisted remote home also contains a `Remote inbox` flow and a
 `Remote test shell` workspace. In Desktop, choose purple in Settings ▸ Remote,
-connect, then open their colored entries in Inbox and Chats. **New chat** in
+connect, then open their entries with colored trim in Inbox and Chats. **New chat** in
 that workspace starts Bash inside the container; it does not use an AI account.
 For an agent workspace, configure its command and sign in to the agent on the
 remote machine. The smoke test verifies chat input by reading a file over SSH.
