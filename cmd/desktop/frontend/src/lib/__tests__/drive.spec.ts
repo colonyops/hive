@@ -4,13 +4,11 @@ import {
   documentsOf,
   driveEventAuthor,
   entryMatches,
-  frontmatterLineCount,
-  linkTarget,
-  markdownBody,
   newestDocument,
   spaceGroup,
+  toReaderDocument,
 } from '../drive'
-import { doc, folder, root } from '../../test-utils/drive'
+import { doc, documentFor, folder, root } from '../../test-utils/drive'
 
 describe('drive', () => {
   it('matches a filter against the name or the title, ignoring case and padding', () => {
@@ -34,18 +32,6 @@ describe('drive', () => {
     expect(driveEventAuthor(undefined)).toBeNull()
   })
 
-  it('strips front matter from a markdown body and leaves a body without it alone', () => {
-    expect(markdownBody('---\ntype: plan\ntitle: X\n---\n\n# X\n')).toBe('\n# X\n')
-    expect(markdownBody('# X\n\n---\n\nmore')).toBe('# X\n\n---\n\nmore')
-  })
-
-  it('counts the lines front matter takes, LF or CRLF', () => {
-    expect(frontmatterLineCount('---\ntype: plan\n---\n\n# X\n')).toBe(3)
-    expect(frontmatterLineCount('---\r\ntype: plan\r\ntitle: X\r\n---\r\n# X\r\n')).toBe(4)
-    expect(frontmatterLineCount('---\na: 1\n---')).toBe(2)
-    expect(frontmatterLineCount('# X\n')).toBe(0)
-  })
-
   it('lists documents depth first and picks the newest', () => {
     const tree = root([
       folder('plans', [doc('plans/a.md', { modified: '2026-10-02T00:00:00Z' })]),
@@ -61,44 +47,35 @@ describe('drive', () => {
     expect(ancestorPaths('c.md')).toEqual([])
   })
 
-  describe('linkTarget', () => {
-    const paths = new Set(['plans/x.md', 'canvases/report.canvas.json', 'research/r.md'])
-
-    it('opens web and mail links outside the app', () => {
-      expect(linkTarget('https://example.com', 'plans/x.md', paths)).toEqual({
-        kind: 'url',
-        url: 'https://example.com',
+  describe('toReaderDocument', () => {
+    it('maps a canvas, turning unix millisecond stamps into ISO ones and dropping the block stamps', () => {
+      const wire = documentFor('acme/site', doc('c.canvas.json'), {
+        canvas: {
+          createdAt: Date.parse('2026-10-01T00:00:00Z'),
+          updatedAt: 0,
+          frontmatter: { tags: ['a'] },
+          blocks: [{ id: 'b', kind: 'link', title: 'T', body: '', url: 'https://x.test', createdAt: 5, updatedAt: 6 }],
+        },
       })
-      expect(linkTarget('mailto:a@b.c', 'plans/x.md', paths)).toEqual({ kind: 'url', url: 'mailto:a@b.c' })
-    })
-
-    it('resolves a relative link against the linking document', () => {
-      expect(linkTarget('../canvases/report.canvas.json', 'plans/x.md', paths)).toEqual({
-        kind: 'document',
-        path: 'canvases/report.canvas.json',
-      })
-      expect(linkTarget('./x.md#scope', 'plans/y.md', paths)).toEqual({ kind: 'document', path: 'plans/x.md' })
-    })
-
-    it('resolves a .hive/ link from the space root', () => {
-      expect(linkTarget('.hive/research/r.md', 'plans/x.md', paths)).toEqual({
-        kind: 'document',
-        path: 'research/r.md',
+      expect(toReaderDocument(wire)?.canvas).toEqual({
+        blocks: [{ id: 'b', kind: 'link', title: 'T', body: '', url: 'https://x.test' }],
+        frontmatter: { tags: ['a'] },
+        createdAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: undefined,
       })
     })
 
-    it('finds a canvas by its bare name', () => {
-      expect(linkTarget('report', 'canvases/other.canvas.json', paths)).toEqual({
-        kind: 'document',
-        path: 'canvases/report.canvas.json',
+    it('carries a markdown entry with its front matter and times', () => {
+      const wire = documentFor('acme/site', doc('plans/x.md', { front: { type: 'plan' } }), { markdown: '# X' })
+      expect(toReaderDocument(wire)).toMatchObject({
+        entry: { path: 'plans/x.md', kind: 'markdown', front: { type: 'plan' }, modified: '2026-10-01T00:00:00Z' },
+        markdown: '# X',
+        canvas: undefined,
       })
     })
 
-    it('leads nowhere for an unknown document, an escape, or another scheme', () => {
-      expect(linkTarget('missing.md', 'plans/x.md', paths)).toBeNull()
-      expect(linkTarget('../../x.md', 'plans/x.md', paths)).toBeNull()
-      expect(linkTarget('javascript:alert(1)', 'plans/x.md', paths)).toBeNull()
-      expect(linkTarget('/etc/passwd', 'plans/x.md', paths)).toBeNull()
+    it('has no reader document for a plain file', () => {
+      expect(toReaderDocument(documentFor('acme/site', doc('notes.txt')))).toBeNull()
     })
   })
 })

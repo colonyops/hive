@@ -17,7 +17,8 @@ import {
   SYSTEM_SANS,
   useAppFont,
 } from '../composables/useAppFont'
-import { setTheme, useTheme, type Theme } from '../composables/useTheme'
+import type { Theme } from '@hive/ui/lib/themes'
+import { setTheme, useTheme } from '../composables/useTheme'
 
 const { theme } = useTheme()
 const { sans, mono } = useAppFont()

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
-import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
-import type { FrontmatterScalar, FrontmatterValue } from '../../lib/drive'
-import { useCanvasSettings } from '../../stores/useCanvasSettings'
+import BaseBadge from '../ui/BaseBadge.vue'
+import type { FrontmatterScalar, FrontmatterValue } from '../../lib/document'
 
 const props = defineProps<{
   frontmatter: Record<string, FrontmatterValue>
@@ -11,9 +10,10 @@ const props = defineProps<{
   createdAt: number
   updatedAt: number
   testid: string
+  expanded: boolean
 }>()
 
-const { frontmatterExpanded, toggleFrontmatter } = useCanvasSettings()
+const emit = defineEmits<{ toggle: [] }>()
 
 type Entry = {
   key: string
@@ -70,20 +70,20 @@ function formatValue(value: FrontmatterValue): string {
       <button
         type="button"
         class="flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-caption font-semibold text-text-2 hover:bg-chip"
-        :aria-expanded="frontmatterExpanded"
-        :aria-label="frontmatterExpanded ? 'Collapse properties' : 'Expand properties'"
+        :aria-expanded="expanded"
+        :aria-label="expanded ? 'Collapse properties' : 'Expand properties'"
         :data-testid="`${testid}-frontmatter-toggle`"
-        @click="toggleFrontmatter"
+        @click="emit('toggle')"
       >
         <IconChevronDown
           class="size-3.5 text-text-3 transition-transform"
-          :class="frontmatterExpanded ? '' : '-rotate-90'"
+          :class="expanded ? '' : '-rotate-90'"
           aria-hidden="true"
         />
         Properties
       </button>
 
-      <dl v-if="frontmatterExpanded" class="ml-auto flex min-w-0 flex-wrap items-baseline justify-end gap-x-4 gap-y-1">
+      <dl v-if="expanded" class="ml-auto flex min-w-0 flex-wrap items-baseline justify-end gap-x-4 gap-y-1">
         <div
           v-if="createdAt > 0"
           class="inline-flex items-baseline gap-1.5"
@@ -120,7 +120,7 @@ function formatValue(value: FrontmatterValue): string {
     </div>
 
     <dl
-      v-if="frontmatterExpanded && entries.length"
+      v-if="expanded && entries.length"
       class="mt-2 overflow-hidden rounded-lg border border-border bg-pane text-small"
     >
       <div

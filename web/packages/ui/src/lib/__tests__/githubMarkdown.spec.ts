@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { renderCanvasMarkdown, renderGithubMarkdown } from '../githubMarkdown'
-import { useCodeHighlight } from '../../stores/useCodeHighlight'
+import { createCodeHighlight } from '../highlight'
+import { fakePlatform } from '../../test-utils/platform'
 
 describe('renderGithubMarkdown', () => {
   it('renders a fence escaped with no highlighter, then highlighted once the queue drains', async () => {
     const source = '```go\nfunc main() {}\n```'
     expect(renderGithubMarkdown(source)).toContain('<pre><code class="language-go">func main() {}\n</code></pre>')
 
-    const { highlight, load, settle } = useCodeHighlight()
+    const { highlight, load, settle } = createCodeHighlight(fakePlatform)
     await load()
     expect(renderGithubMarkdown(source, highlight)).toContain('<pre><code class="language-go">')
     await settle()
@@ -108,7 +109,7 @@ describe('renderGithubMarkdown', () => {
     expect(escaped).toContain('&lt;!-- keep me --&gt;')
     expect(escaped).toContain('&lt;!-- keep me too --&gt;')
 
-    const { highlight, load, settle } = useCodeHighlight()
+    const { highlight, load, settle } = createCodeHighlight(fakePlatform)
     await load()
     renderGithubMarkdown(source, highlight)
     await settle()
@@ -190,7 +191,7 @@ describe('renderCanvasMarkdown source lines', () => {
       '<div class="markdown-code" data-source-start="3" data-source-end="5" data-source-code-start="4">',
     )
 
-    const { highlight, load, settle } = useCodeHighlight()
+    const { highlight, load, settle } = createCodeHighlight(fakePlatform)
     await load()
     renderCanvasMarkdown(source, highlight)
     await settle()

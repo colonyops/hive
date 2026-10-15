@@ -2631,12 +2631,14 @@ The repo root is an npm workspace (`package.json`, `package-lock.json`, and
 alike: the theme tokens and palettes (`styles/theme.css`), the markdown and
 canvas HTML styles, the `components/ui` primitives and `AppIcon`, and the
 composables and helpers they use (focus, popovers, keyboard navigation,
-clipboard, `seedRef`, `errorText`). It ships source, with no build step. The
-desktop imports it by `@hive/ui/<path>`.
+clipboard, `seedRef`, `errorText`). It also holds the document renderer: the
+markdown and mermaid renderers with the syntax highlighter, and a props-only
+`DocumentReader` that renders a `ReaderDocument` (`lib/document.ts`). It ships
+source, with no build step. The desktop imports it by `@hive/ui/<path>`.
 
 The package never reaches the host directly. Anything that differs by host
-goes through `HiveUiPlatform` (`platform.ts`): the clipboard, a logger, and
-optional perf spans. The host calls `installHiveUi(app, platform)`, which
+goes through `HiveUiPlatform` (`platform.ts`): the clipboard, a logger, the
+live theme, and optional perf spans and toasts. The host calls `installHiveUi(app, platform)`, which
 `app.provide`s the platform, and the package reads it with
 `useHiveUiPlatform()`, which throws when the app never installed it. The
 desktop's implementation is `cmd/desktop/frontend/src/lib/hiveUiPlatform.ts`

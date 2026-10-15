@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { themes } from '../composables/useTheme'
+import { themes } from '@hive/ui/lib/themes'
 
 // The theme registry (useTheme.ts) and the palette blocks (@hive/ui's
 // theme.css, plus terminal-theme.css for the ANSI palettes) can only drift

@@ -1,4 +1,5 @@
-import { inject, type App, type InjectionKey } from 'vue'
+import { inject, type App, type InjectionKey, type Ref } from 'vue'
+import type { Theme } from './lib/themes'
 
 type LogMethod = (msg: string, fields?: object) => void
 
@@ -10,7 +11,10 @@ type LogMethod = (msg: string, fields?: object) => void
 export interface HiveUiPlatform {
   clipboard: { writeText(text: string): Promise<void> }
   log(name: string): { debug: LogMethod; warn: LogMethod; error: LogMethod }
-  perf?: { start(name: string): unknown; end(handle: unknown): void }
+  perf?: { start(name: string, attrs?: object): unknown; end(handle: unknown, attrs?: object): void }
+  /** The live app theme; the highlighter and diagrams follow it. */
+  theme: Readonly<Ref<Theme>>
+  toast?(msg: string): void
 }
 
 const platformKey: InjectionKey<HiveUiPlatform> = Symbol('HiveUiPlatform')

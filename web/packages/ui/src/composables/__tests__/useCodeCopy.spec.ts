@@ -2,12 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h } from 'vue'
 
-const mocks = vi.hoisted(() => ({ SetText: vi.fn() }))
-vi.mock('@wailsio/runtime', () => ({ Clipboard: { SetText: mocks.SetText } }))
-
 import { renderGithubMarkdown } from '../../lib/githubMarkdown'
 import { useCodeCopy } from '../useCodeCopy'
-import { resetToastsForTests, useToasts } from '../useToasts'
+import { fakePlatform } from '../../test-utils/platform'
 
 // A host the way the panes use the composable: rendered markdown through
 // innerHTML, one delegated click handler, and the handler's answer emitted so
@@ -29,8 +26,6 @@ const source = ['```go', 'a := 1', '```', '', 'between', '', '```go', 'b := 2', 
 
 beforeEach(() => {
   vi.useFakeTimers()
-  mocks.SetText.mockReset().mockResolvedValue(undefined)
-  resetToastsForTests()
 })
 
 afterEach(() => {
@@ -45,8 +40,8 @@ describe('useCodeCopy', () => {
     await button.trigger('click')
     await flushPromises()
 
-    expect(mocks.SetText).toHaveBeenCalledTimes(1)
-    expect(mocks.SetText).toHaveBeenCalledWith('b := 2\nc := 3')
+    expect(fakePlatform.clipboard.writeText).toHaveBeenCalledTimes(1)
+    expect(fakePlatform.clipboard.writeText).toHaveBeenCalledWith('b := 2\nc := 3')
     expect(wrapper.emitted('handled')).toEqual([[true]])
     expect(button.classes()).toContain('is-copied')
 
@@ -60,22 +55,19 @@ describe('useCodeCopy', () => {
     await wrapper.get('p').trigger('click')
     await flushPromises()
 
-    expect(mocks.SetText).not.toHaveBeenCalled()
+    expect(fakePlatform.clipboard.writeText).not.toHaveBeenCalled()
     expect(wrapper.emitted('handled')).toEqual([[false]])
   })
 
   it('reports a failed copy with a toast and no check', async () => {
-    mocks.SetText.mockRejectedValue(new Error('no clipboard'))
+    fakePlatform.clipboard.writeText.mockRejectedValue(new Error('no clipboard'))
     const wrapper = mount(Host, { props: { source } })
     const button = wrapper.get('button.markdown-code-copy')
 
     await button.trigger('click')
     await flushPromises()
 
-    const { toasts } = useToasts()
-    expect(toasts.value.map((toast) => [toast.message, toast.severity])).toEqual([
-      ['Could not copy to the clipboard', 'error'],
-    ])
+    expect(fakePlatform.toast).toHaveBeenCalledExactlyOnceWith('Could not copy to the clipboard')
     expect(button.classes()).not.toContain('is-copied')
   })
 })
