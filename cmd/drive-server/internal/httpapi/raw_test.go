@@ -67,6 +67,28 @@ func TestRawRoutesSendTheLockedDownHeaders(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, "the signed-in route still needs a token")
 }
 
+func TestRawRefusesHTMLOpenedAsAPage(t *testing.T) {
+	s := newServer(t)
+	token := s.token(t, "a@example.com", core.ScopePush)
+	_, htmlSlug := share(t, s, token, "page.html", "")
+	_, mdSlug := share(t, s, token, "note.md", "")
+
+	get := func(target, dest string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, target, nil)
+		if dest != "" {
+			req.Header.Set("Sec-Fetch-Dest", dest)
+		}
+		rec := httptest.NewRecorder()
+		s.h.ServeHTTP(rec, req)
+		return rec
+	}
+
+	assert.Equal(t, http.StatusForbidden, get("/s/"+htmlSlug+"/raw", "document").Code)
+	assert.Equal(t, http.StatusOK, get("/s/"+htmlSlug+"/raw", "iframe").Code)
+	assert.Equal(t, http.StatusOK, get("/s/"+htmlSlug+"/raw", "").Code, "clients that send no label still read the body")
+	assert.Equal(t, http.StatusOK, get("/s/"+mdSlug+"/raw", "document").Code, "markdown never runs script")
+}
+
 func TestPublicEndpoint(t *testing.T) {
 	s := newServer(t)
 	token := s.token(t, "a@example.com", core.ScopePush)
