@@ -1,5 +1,5 @@
 import type { ThemeRegistration } from 'shiki/core'
-import type { Theme } from '../composables/useTheme'
+import type { Theme } from './themes'
 
 /** A code theme for one app theme: the registration's name, and how to get it. */
 export interface CodeTheme {

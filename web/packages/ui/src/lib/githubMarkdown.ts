@@ -25,7 +25,7 @@ import taskLists from 'markdown-it-task-lists'
 /**
  * Highlighted HTML for a fence, or null to keep markdown-it's escaped
  * `<pre><code class="language-x">`. The renderers take one per call: the
- * highlighter is a store (stores/useCodeHighlight.ts), and this module stays
+ * highlighter is stateful (lib/highlight.ts), and this module stays
  * a pure string transform.
  */
 export type Highlight = (code: string, lang: string) => string | null

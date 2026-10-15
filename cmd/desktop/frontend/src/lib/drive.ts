@@ -1,4 +1,8 @@
-import type { EntryWire } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import { entryTime, type ReaderDocument } from '@hive/ui/lib/document'
+import type {
+  DocumentWire,
+  EntryWire,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
 /** Who wrote a document through an agent: a chat by its record id, or a hive session by its id. */
 export type DriveAuthor = string
@@ -21,9 +25,6 @@ export interface DriveScope {
   path: string | null
   session: DriveAuthor | null
 }
-
-export type FrontmatterScalar = string | number | boolean | null
-export type FrontmatterValue = FrontmatterScalar | FrontmatterScalar[] | Record<string, unknown>
 
 export function workspaceSpaceKey(dir: string): string {
   return `workspaces/${dir}`
@@ -60,11 +61,6 @@ export function entryLabel(entry: EntryWire): string {
 export function entryMatches(entry: EntryWire, query: string): boolean {
   const q = query.trim().toLowerCase()
   return entry.name.toLowerCase().includes(q) || entry.title.toLowerCase().includes(q)
-}
-
-export function entryTime(iso: string): number {
-  const ms = Date.parse(iso)
-  return Number.isFinite(ms) && ms > 0 ? ms : 0
 }
 
 /** Every document under root, depth first. */
@@ -113,47 +109,31 @@ export function driveEventAuthor(data: unknown): DriveAuthor | null {
   return typeof payload?.session === 'string' && payload.session ? payload.session : null
 }
 
-/** A markdown body without its YAML front matter, which the reader shows as properties. */
-export function markdownBody(source: string): string {
-  const match = /^---\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/.exec(source)
-  return match ? source.slice(match[0].length) : source
+function isoOrUndefined(unixMs: number): string | undefined {
+  return unixMs > 0 ? new Date(unixMs).toISOString() : undefined
 }
 
-export type LinkTarget = { kind: 'url'; url: string } | { kind: 'document'; path: string }
-
-function resolvePath(base: string[], relative: string): string | null {
-  const parts = [...base]
-  for (const segment of relative.split('/')) {
-    if (segment === '' || segment === '.') continue
-    if (segment === '..') {
-      if (!parts.length) return null
-      parts.pop()
-    } else parts.push(segment)
+/** The reader's view of a document, or null for a kind the reader does not render (a plain file). */
+export function toReaderDocument(doc: DocumentWire): ReaderDocument | null {
+  const { entry, canvas } = doc
+  if (entry.kind !== 'markdown' && entry.kind !== 'html' && entry.kind !== 'canvas') return null
+  return {
+    entry: {
+      path: entry.path,
+      kind: entry.kind,
+      front: entry.front ?? undefined,
+      created: entry.created,
+      modified: entry.modified,
+    },
+    markdown: doc.markdown,
+    html: doc.html,
+    canvas: canvas
+      ? {
+          blocks: (canvas.blocks ?? []).map(({ id, kind, title, body, url }) => ({ id, kind, title, body, url })),
+          frontmatter: canvas.frontmatter ?? undefined,
+          createdAt: isoOrUndefined(canvas.createdAt),
+          updatedAt: isoOrUndefined(canvas.updatedAt),
+        }
+      : undefined,
   }
-  return parts.join('/')
-}
-
-/**
- * Where a link in a document leads. A web or mail address opens outside the
- * app. A path that names a document in the same space opens it: `.hive/...`
- * from the space root, as a checkout's link reads, and anything else from the
- * linking document's folder. A bare canvas name still finds its canvas.
- * Anything else leads nowhere, because the webview must never navigate.
- */
-export function linkTarget(href: string, fromPath: string, paths: ReadonlySet<string>): LinkTarget | null {
-  if (/^(https?:|mailto:)/i.test(href)) return { kind: 'url', url: href }
-  if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('/') || href.startsWith('#')) return null
-  let reference = href.replace(/[?#].*$/, '')
-  try {
-    reference = decodeURIComponent(reference)
-  } catch {
-    return null
-  }
-  const fromRoot = reference.startsWith('.hive/')
-  const base = fromRoot ? [] : fromPath.split('/').slice(0, -1)
-  const resolved = resolvePath(base, fromRoot ? reference.slice('.hive/'.length) : reference)
-  if (!resolved) return null
-  if (paths.has(resolved)) return { kind: 'document', path: resolved }
-  const canvas = `${resolved}.canvas.json`
-  return paths.has(canvas) ? { kind: 'document', path: canvas } : null
 }

@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed } from 'vue'
-import { useTheme } from '../../composables/useTheme'
-import { cacheLimit, useCodeHighlight } from '../useCodeHighlight'
+import { fakePlatform } from '../../test-utils/platform'
+import { cacheLimit, createCodeHighlight, type CodeHighlight } from '../highlight'
+
+let current: CodeHighlight
+const useCodeHighlight = () => current
 
 /** A render asks, the queue drains, the next render finds the fence. */
 async function highlighted(code: string, lang: string): Promise<string | null> {
@@ -11,8 +14,11 @@ async function highlighted(code: string, lang: string): Promise<string | null> {
   return store.highlight(code, lang)
 }
 
-describe('useCodeHighlight', () => {
-  beforeEach(() => useCodeHighlight().load())
+describe('highlight', () => {
+  beforeEach(() => {
+    current = createCodeHighlight(fakePlatform)
+    return current.load()
+  })
 
   it('answers null for a fence it has not highlighted yet, then the cached HTML', async () => {
     const { highlight, settle } = useCodeHighlight()
@@ -36,7 +42,7 @@ describe('useCodeHighlight', () => {
   })
 
   it('re-highlights in the new code theme when the app theme changes, and keeps the old one cached', async () => {
-    const { theme } = useTheme()
+    const { theme } = fakePlatform
     const code = 'func main() {}\n'
     const hive = (await highlighted(code, 'go'))!
     theme.value = 'tokyo-night'
@@ -57,7 +63,7 @@ describe('useCodeHighlight', () => {
   })
 
   it('re-runs a computed that asked while the new theme was still loading', async () => {
-    const { theme } = useTheme()
+    const { theme } = fakePlatform
     const { highlight, settle } = useCodeHighlight()
     const code = 'func themed() {}\n'
     await highlighted(code, 'go')
@@ -124,14 +130,14 @@ describe('useCodeHighlight', () => {
   })
 })
 
-describe('useCodeHighlight with a failing engine', () => {
+describe('highlight with a failing engine', () => {
   async function storeWith(core: () => Promise<unknown>) {
     vi.resetModules()
     vi.doMock('shiki/core', () => ({ createHighlighterCore: core }))
     vi.doMock('shiki/engine/oniguruma', () => ({ createOnigurumaEngine: () => ({}) }))
     vi.doMock('shiki/wasm', () => ({ default: {} }))
-    const { useCodeHighlight } = await import('../useCodeHighlight')
-    return useCodeHighlight()
+    const { createCodeHighlight } = await import('../highlight')
+    return createCodeHighlight(fakePlatform)
   }
 
   afterEach(() => {

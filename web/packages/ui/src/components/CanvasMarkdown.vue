@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useCodeCopy } from '../composables/useCodeCopy'
-import { usePerf } from '../composables/usePerf'
+import { useHiveUiPlatform } from '../platform'
 import { renderCanvasMarkdown } from '../lib/githubMarkdown'
-import { useCodeHighlight } from '../stores/useCodeHighlight'
+import { useCodeHighlight } from '../lib/highlight'
 import CanvasMermaid from './CanvasMermaid.vue'
 
 const props = defineProps<{
@@ -15,12 +15,12 @@ const emit = defineEmits<{
   follow: [href: string]
 }>()
 
-const perf = usePerf('drive')
+const { perf } = useHiveUiPlatform()
 const { highlight } = useCodeHighlight()
 const parts = computed(() => {
-  const end = perf.start('markdown:render', { chars: props.source.length })
+  const span = perf?.start('markdown:render', { chars: props.source.length })
   const rendered = renderCanvasMarkdown(props.source, highlight)
-  end({ parts: rendered.length })
+  if (perf) perf.end(span, { parts: rendered.length })
   return rendered
 })
 

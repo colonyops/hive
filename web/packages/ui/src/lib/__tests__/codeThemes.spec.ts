@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { themes } from '../../composables/useTheme'
+import { themes } from '../themes'
 import { codeThemes } from '../codeThemes'
 
 describe('codeThemes', () => {

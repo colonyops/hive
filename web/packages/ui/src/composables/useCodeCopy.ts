@@ -1,7 +1,7 @@
 import { onScopeDispose } from 'vue'
 import { codeCopyButtonClass } from '../lib/githubMarkdown'
-import { useClipboard } from '@hive/ui/composables/useClipboard'
-import { useToasts } from './useToasts'
+import { useHiveUiPlatform } from '../platform'
+import { useClipboard } from './useClipboard'
 
 const copiedFor = 1500
 
@@ -13,7 +13,7 @@ const copiedFor = 1500
  */
 export function useCodeCopy() {
   const { copy, status } = useClipboard()
-  const { showToast } = useToasts()
+  const platform = useHiveUiPlatform()
   const timers = new Set<ReturnType<typeof setTimeout>>()
 
   function copyCode(event: MouseEvent): boolean {
@@ -30,7 +30,7 @@ export function useCodeCopy() {
   async function copyAndMark(button: HTMLElement, code: string): Promise<void> {
     await copy(code)
     if (status.value !== 'success') {
-      showToast('Could not copy to the clipboard', { severity: 'error' })
+      platform.toast?.('Could not copy to the clipboard')
       return
     }
     button.classList.add('is-copied')

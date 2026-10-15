@@ -37,4 +37,6 @@ Object.defineProperty(globalThis, 'localStorage', {
 beforeEach(() => {
   localStorage.clear()
   vi.mocked(fakePlatform.clipboard.writeText).mockReset().mockResolvedValue(undefined)
+  vi.mocked(fakePlatform.toast).mockReset()
+  fakePlatform.theme.value = 'dark'
 })

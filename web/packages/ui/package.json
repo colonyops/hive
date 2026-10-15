@@ -21,11 +21,16 @@
   },
   "dependencies": {
     "@vueuse/core": "^14.3.0",
+    "markdown-it": "^14.3.0",
+    "markdown-it-task-lists": "^2.1.1",
+    "mermaid": "11.17.2",
+    "shiki": "4.5.0",
     "vue": "^3.2.45"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@iconify-json/lucide": "1.2.140",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "24.19.1",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/test-utils": "2.5.1",

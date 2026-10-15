@@ -4,10 +4,11 @@ import { computed, nextTick, ref, watch } from 'vue'
 import IconMaximize from '~icons/lucide/maximize'
 import IconMinus from '~icons/lucide/minus'
 import IconPlus from '~icons/lucide/plus'
-import InlineError from '@hive/ui/components/ui/InlineError.vue'
-import IconButton from '@hive/ui/components/ui/IconButton.vue'
-import { useTheme, type Theme } from '../composables/useTheme'
+import InlineError from './ui/InlineError.vue'
+import IconButton from './ui/IconButton.vue'
 import { renderMermaid, type MermaidPalette } from '../lib/mermaid'
+import { useHiveUiPlatform } from '../platform'
+import { lightThemes } from '../lib/themes'
 
 const props = defineProps<{
   source: string
@@ -32,17 +33,8 @@ const zoom = ref(1)
 const autoFit = ref(true)
 const dragging = ref(false)
 const dragStart = ref<{ pointer: Point; view: Bounds } | null>(null)
-const { theme } = useTheme()
+const { theme } = useHiveUiPlatform()
 let revision = 0
-
-const lightThemes = new Set<Theme>([
-  'light',
-  'slate-light',
-  'one-light',
-  'tokyo-night-day',
-  'catppuccin-latte',
-  'nord-light',
-])
 
 const viewBox = computed(() => {
   const bounds = viewBounds.value

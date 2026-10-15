@@ -1,13 +1,9 @@
 import { shallowRef } from 'vue'
 import { createHighlighterCore, type HighlighterCore } from 'shiki/core'
 import { createOnigurumaEngine } from 'shiki/engine/oniguruma'
-import { useTheme } from '../composables/useTheme'
-import { codeThemes, type CodeTheme } from '../lib/codeThemes'
-import type { Highlight } from '../lib/githubMarkdown'
-import { createLogger } from '../lib/log'
-import { defineStore } from './defineStore'
-
-const log = createLogger('code-highlight')
+import { useHiveUiPlatform, type HiveUiPlatform } from '../platform'
+import { codeThemes, type CodeTheme } from './codeThemes'
+import type { Highlight } from './githubMarkdown'
 
 // Aliases the grammars do not declare themselves. Shiki already covers sh,
 // shell, zsh, ts, js, yml, md, py, rs and docker.
@@ -60,7 +56,8 @@ const nextFrame: (run: () => void) => void =
   typeof requestAnimationFrame === 'function' ? (run) => requestAnimationFrame(run) : (run) => setTimeout(run, 0)
 
 /**
- * Syntax highlighting for fenced code, shared by every markdown renderer.
+ * Syntax highlighting for fenced code, shared by every markdown renderer of
+ * one app.
  *
  * Oniguruma, not shiki's JavaScript regex engine: the JavaScript engine
  * emulates the atomic groups these grammars rely on with lookahead and
@@ -86,8 +83,9 @@ const nextFrame: (run: () => void) => void =
  * while more fences than that are on screen. Evicting those would drop the
  * hits the next render needs, and the queue would never empty.
  */
-export const useCodeHighlight = defineStore('codeHighlight', () => {
-  const { theme: appTheme } = useTheme()
+export function createCodeHighlight(platform: HiveUiPlatform) {
+  const log = platform.log('code-highlight')
+  const appTheme = platform.theme
   let highlighter: HighlighterCore | null = null
   let loading: Promise<void> | null = null
   const loaded = new Set<string>()
@@ -121,7 +119,7 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
       loadedThemes.add(first.name)
       ready.value = true
     })().catch((err: unknown) => {
-      log.warn('syntax highlighting is unavailable', err)
+      log.warn('syntax highlighting is unavailable', { err })
     })
     return loading
   }
@@ -247,4 +245,21 @@ export const useCodeHighlight = defineStore('codeHighlight', () => {
   }
 
   return { highlight, load, settle }
-})
+}
+
+export type CodeHighlight = ReturnType<typeof createCodeHighlight>
+
+// One highlighter per app: the engine and the cache are expensive, and every
+// renderer in the app asks the same one. Keyed by platform so a second app
+// (or a test) gets its own.
+const instances = new WeakMap<HiveUiPlatform, CodeHighlight>()
+
+export function useCodeHighlight(): CodeHighlight {
+  const platform = useHiveUiPlatform()
+  let instance = instances.get(platform)
+  if (!instance) {
+    instance = createCodeHighlight(platform)
+    instances.set(platform, instance)
+  }
+  return instance
+}
