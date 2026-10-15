@@ -28,7 +28,7 @@ func newSender(cfg config.Config, stdout io.Writer) (mail.Sender, error) {
 			return nil, fmt.Errorf("resolve smtp.password: %w", err)
 		}
 	}
-	s, err := mail.NewSMTP(cfg.SMTP.URL, func() (string, error) { return password, nil }, cfg.SMTP.From)
+	s, err := mail.NewSMTP(cfg.SMTP.URL, password, cfg.SMTP.From)
 	if err != nil {
 		return nil, fmt.Errorf("smtp: %w", err)
 	}

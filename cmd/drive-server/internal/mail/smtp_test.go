@@ -21,35 +21,34 @@ import (
 var epoch = time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
 
 func TestNewSMTP(t *testing.T) {
-	pw := func() (string, error) { return "", nil }
-	s, err := NewSMTP("smtp://user@mail.example.com", pw, "drive@example.com")
+	s, err := NewSMTP("smtp://user@mail.example.com", "", "drive@example.com")
 	require.NoError(t, err)
 	assert.Equal(t, "mail.example.com:587", s.addr)
 	assert.Equal(t, "user", s.user)
 	assert.False(t, s.implicit)
 
-	s, err = NewSMTP("smtps://mail.example.com", pw, "drive@example.com")
+	s, err = NewSMTP("smtps://mail.example.com", "", "drive@example.com")
 	require.NoError(t, err)
 	assert.Equal(t, "mail.example.com:465", s.addr)
 	assert.True(t, s.implicit)
 
 	for _, bad := range []string{"http://mail.example.com", "smtp://", "smtp://user@:25"} {
-		_, err := NewSMTP(bad, pw, "drive@example.com")
+		_, err := NewSMTP(bad, "", "drive@example.com")
 		require.Error(t, err, bad)
 	}
-	_, err = NewSMTP("smtp://mail.example.com", pw, "")
+	_, err = NewSMTP("smtp://mail.example.com", "", "")
 	require.Error(t, err)
-	_, err = NewSMTP("smtp://mail.example.com", pw, "not an address")
+	_, err = NewSMTP("smtp://mail.example.com", "", "not an address")
 	require.Error(t, err)
 
-	s, err = NewSMTP("smtp://mail.example.com", pw, "Hive Drive <drive@example.com>")
+	s, err = NewSMTP("smtp://mail.example.com", "", "Hive Drive <drive@example.com>")
 	require.NoError(t, err)
 	assert.Equal(t, "drive@example.com", s.envelope)
 	assert.Equal(t, `"Hive Drive" <drive@example.com>`, s.from)
 }
 
 func TestSMTPMessageStripsHeaderBreaks(t *testing.T) {
-	s, err := NewSMTP("smtp://mail.example.com", nil, "drive@example.com")
+	s, err := NewSMTP("smtp://mail.example.com", "", "drive@example.com")
 	require.NoError(t, err)
 	msg := string(s.message(core.Mail{ID: "m1", To: "a@example.com", Subject: "x\r\nBcc: evil@example.com", Body: "line1\nline2", CreatedAt: epoch}))
 	assert.Contains(t, msg, "Subject: xBcc: evil@example.com\r\n")
@@ -106,7 +105,7 @@ func plainSMTPServer(t *testing.T) (addr string, data <-chan string) {
 
 func TestSMTPSendsPlainWithoutCredentialsOnLoopback(t *testing.T) {
 	addr, data := plainSMTPServer(t)
-	s, err := NewSMTP("smtp://"+addr, func() (string, error) { return "", errors.New("must not be called") }, "drive@example.com")
+	s, err := NewSMTP("smtp://"+addr, "", "drive@example.com")
 	require.NoError(t, err)
 
 	err = s.Send(t.Context(), core.Mail{ID: "m1", To: "a@example.com", Subject: "Hi", Body: "code 12345678", CreatedAt: epoch})

@@ -27,7 +27,7 @@ type SMTP struct {
 	host     string
 	implicit bool
 	user     string
-	password func() (string, error)
+	password string
 	from     string
 	// envelope is the bare address from `from`, which may carry a display
 	// name: MAIL FROM accepts only the address.
@@ -35,9 +35,8 @@ type SMTP struct {
 }
 
 // NewSMTP parses rawURL (smtp://user@host:587 or smtps://user@host:465; the
-// port defaults by scheme). password runs on every send and is only called
-// when the URL names a user.
-func NewSMTP(rawURL string, password func() (string, error), from string) (*SMTP, error) {
+// port defaults by scheme). password is sent only when the URL names a user.
+func NewSMTP(rawURL, password, from string) (*SMTP, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
 		return nil, fmt.Errorf("smtp url: %w", err)
@@ -104,11 +103,7 @@ func (s *SMTP) Send(ctx context.Context, m core.Mail) error {
 		}
 	}
 	if s.user != "" {
-		pw, err := s.password()
-		if err != nil {
-			return fmt.Errorf("resolve smtp password: %w", err)
-		}
-		if err := c.Auth(smtp.PlainAuth("", s.user, pw, s.host)); err != nil {
+		if err := c.Auth(smtp.PlainAuth("", s.user, s.password, s.host)); err != nil {
 			return fmt.Errorf("smtp auth: %w", err)
 		}
 	}
