@@ -14,7 +14,8 @@ hive drive share plans/ship.md --expires 7d
 - The document must be on the server. [Push it](cli.md#push) first.
 - Sharing a document again returns the same link. Passing `--expires` again changes that link's expiry.
 - `--expires` takes `1d`, `7d`, or `30d`. Without it, a new link does not expire.
-- The server deletes an expired link, and a link whose document is gone.
+- `--expires none` removes the expiry from an existing link.
+- The server deletes an expired link. Deleting a document deletes its link.
 - Link pages ask search engines not to index them. Treat the link as a secret anyway.
 
 ## HTML documents

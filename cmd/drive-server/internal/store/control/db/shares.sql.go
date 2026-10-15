@@ -119,46 +119,6 @@ func (q *Queries) InsertShareLinkIfAbsent(ctx context.Context, arg InsertShareLi
 	return err
 }
 
-const listShareLinksAfter = `-- name: ListShareLinksAfter :many
-SELECT id, slug, user_id, document_id, expires_at, expires_in, created_at FROM share_links WHERE id > ? ORDER BY id LIMIT ?
-`
-
-type ListShareLinksAfterParams struct {
-	ID    string `json:"id"`
-	Limit int64  `json:"limit"`
-}
-
-func (q *Queries) ListShareLinksAfter(ctx context.Context, arg ListShareLinksAfterParams) ([]ShareLink, error) {
-	rows, err := q.db.QueryContext(ctx, listShareLinksAfter, arg.ID, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ShareLink{}
-	for rows.Next() {
-		var i ShareLink
-		if err := rows.Scan(
-			&i.ID,
-			&i.Slug,
-			&i.UserID,
-			&i.DocumentID,
-			&i.ExpiresAt,
-			&i.ExpiresIn,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listShareLinksByUser = `-- name: ListShareLinksByUser :many
 SELECT id, slug, user_id, document_id, expires_at, expires_in, created_at FROM share_links WHERE user_id = ? ORDER BY id
 `

@@ -38,10 +38,10 @@ the user's own file.
 
 The cost is operational. The server keeps an LRU of open user handles and
 migrates each user file on first open after an upgrade. A share link lives
-in `control.db` and its document in a user file, so a delete can leave a
-dangling link; the link resolves to 404 and a sweeper removes it. Backup is
-a directory, taken with `VACUUM INTO` or a stopped container, never a copy
-of a live WAL file. A cross-user isolation test suite guards the
+in `control.db` and its document in a user file. A delete removes the
+links first, then the document. A link whose document is missing resolves
+to 404. Backup is a directory, taken with `VACUUM INTO` or a stopped
+container, never a copy of a live WAL file. A cross-user isolation test suite guards the
 assumption that the store opens the right file.
 
 The HTML frame was reviewed against hostile documents in three browser engines;

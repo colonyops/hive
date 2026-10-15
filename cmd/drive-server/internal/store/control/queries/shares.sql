@@ -14,9 +14,6 @@ SELECT * FROM share_links WHERE user_id = ? AND document_id = ?;
 -- name: ListShareLinksByUser :many
 SELECT * FROM share_links WHERE user_id = ? ORDER BY id;
 
--- name: ListShareLinksAfter :many
-SELECT * FROM share_links WHERE id > ? ORDER BY id LIMIT ?;
-
 -- name: UpdateShareLinkExpiry :exec
 UPDATE share_links SET expires_at = ?, expires_in = ? WHERE id = ?;
 

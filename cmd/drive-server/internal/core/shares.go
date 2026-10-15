@@ -135,9 +135,6 @@ func (s *Shares) Resolve(ctx context.Context, slug string) (Account, driveapi.Do
 
 	doc, body, err := store.GetByID(ctx, link.DocumentID)
 	if IsNotFound(err) {
-		if err := s.links.Delete(ctx, link.ID); err != nil {
-			return Account{}, driveapi.Document{}, nil, fmt.Errorf("delete dangling share link: %w", err)
-		}
 		return Account{}, driveapi.Document{}, nil, notFound
 	}
 	if err != nil {

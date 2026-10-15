@@ -104,7 +104,6 @@ type DocumentStore interface {
 	Spaces(ctx context.Context) ([]SpaceUsage, error)
 	Delete(ctx context.Context, space, path string) (string, error)
 	GetByID(ctx context.Context, id string) (Document, []byte, error)
-	HasID(ctx context.Context, id string) (bool, error)
 	// Search matches q as plain terms, the last one as a prefix, in one space
 	// or in all of them when space is empty. Title and path matches rank above
 	// body matches.
@@ -140,8 +139,6 @@ type ShareStore interface {
 	GetBySlug(ctx context.Context, slug string) (ShareLink, error)
 	GetByDocument(ctx context.Context, userID, documentID string) (ShareLink, error)
 	ListByUser(ctx context.Context, userID string) ([]ShareLink, error)
-	// ListAfter returns up to limit links with an id after afterID, in id order.
-	ListAfter(ctx context.Context, afterID string, limit int) ([]ShareLink, error)
 	UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time, expiresIn string) error
 	Delete(ctx context.Context, id string) error
 	DeleteByDocument(ctx context.Context, userID, documentID string) error

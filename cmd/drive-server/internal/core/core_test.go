@@ -79,7 +79,7 @@ func newEnv(t *testing.T, ps ...config.Policy) *env {
 		tokens:   core.NewTokens(store.Tokens(), store.Accounts(), policies, core.WithClock(c.Now)),
 		docs:     core.NewDocuments(pool.Stores(), store.Shares(), testMaxDocumentSize, core.WithClock(c.Now), core.WithBaseURL(testBaseURL)),
 		shares:   core.NewShares(store.Shares(), store.Accounts(), pool.Stores(), policies, core.WithClock(c.Now), core.WithBaseURL(testBaseURL)),
-		sweeper:  core.NewSweeper(zerolog.Nop(), store.Shares(), store.Codes(), store.Sessions(), pool.Stores(), core.WithClock(c.Now)),
+		sweeper:  core.NewSweeper(zerolog.Nop(), store.Shares(), store.Codes(), store.Sessions(), core.WithClock(c.Now)),
 		users:    pool.Stores(),
 		clock:    c,
 	}

@@ -46,14 +46,6 @@ func (sh shares) ListByUser(ctx context.Context, userID string) ([]core.ShareLin
 	return linksFromRows(rows), nil
 }
 
-func (sh shares) ListAfter(ctx context.Context, afterID string, limit int) ([]core.ShareLink, error) {
-	rows, err := sh.s.q.ListShareLinksAfter(ctx, db.ListShareLinksAfterParams{ID: afterID, Limit: int64(limit)})
-	if err != nil {
-		return nil, wrap("list share links after", err)
-	}
-	return linksFromRows(rows), nil
-}
-
 func (sh shares) UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time, expiresIn string) error {
 	return wrap("update share link expiry", sh.s.q.UpdateShareLinkExpiry(ctx, db.UpdateShareLinkExpiryParams{ExpiresAt: toNullNanos(expiresAt), ExpiresIn: expiresIn, ID: id}))
 }
