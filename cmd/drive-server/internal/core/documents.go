@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/colonyops/hive/internal/domain/drive"
@@ -56,6 +57,7 @@ func (d *Documents) Put(ctx context.Context, p Principal, space drive.Space, pat
 		ID:        randid.UUIDv7(),
 		Space:     space.Key,
 		Path:      path,
+		Title:     DeriveTitle(path, kind, body),
 		Kind:      kind,
 		SHA256:    hex.EncodeToString(sum[:]),
 		Body:      body,
@@ -110,6 +112,33 @@ func (d *Documents) List(ctx context.Context, p Principal, space drive.Space) ([
 			share := toWireShare(d.baseURL, l)
 			out[i].Shared = &share
 		}
+	}
+	return out, nil
+}
+
+// Search looks across the caller's documents, or one space's when space is
+// non-nil. A limit of zero or less returns nothing.
+func (d *Documents) Search(ctx context.Context, p Principal, q string, space *drive.Space, limit int) ([]driveapi.SearchHit, error) {
+	if strings.TrimSpace(q) == "" {
+		return nil, NewError(KindInvalid, "search text is empty")
+	}
+	store, release, err := d.users.Open(ctx, p.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("open user store: %w", err)
+	}
+	defer release()
+
+	key := ""
+	if space != nil {
+		key = space.Key
+	}
+	hits, err := store.Search(ctx, q, key, limit)
+	if err != nil {
+		return nil, fmt.Errorf("search documents: %w", err)
+	}
+	out := make([]driveapi.SearchHit, len(hits))
+	for i, h := range hits {
+		out[i] = driveapi.SearchHit{Document: toWire(h.Document), Snippet: h.Snippet}
 	}
 	return out, nil
 }
@@ -199,5 +228,5 @@ func notFoundOr(err error, op string) error {
 }
 
 func toWire(d Document) driveapi.Document {
-	return driveapi.Document{ID: d.ID, Space: d.Space, Path: d.Path, Kind: d.Kind, SHA256: d.SHA256, Size: d.Size, UpdatedAt: d.UpdatedAt}
+	return driveapi.Document{ID: d.ID, Space: d.Space, Path: d.Path, Title: d.Title, Kind: d.Kind, SHA256: d.SHA256, Size: d.Size, UpdatedAt: d.UpdatedAt}
 }

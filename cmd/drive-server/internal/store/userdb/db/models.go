@@ -17,4 +17,11 @@ type Document struct {
 	Size      int64      `json:"size"`
 	Body      []byte     `json:"body"`
 	UpdatedAt int64      `json:"updated_at"`
+	Title     string     `json:"title"`
+}
+
+type DocumentsFt struct {
+	Title string `json:"title"`
+	Path  string `json:"path"`
+	Body  string `json:"body"`
 }

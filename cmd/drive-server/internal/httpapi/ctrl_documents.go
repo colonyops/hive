@@ -11,6 +11,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 	"github.com/colonyops/hive/internal/domain/drive"
+	"github.com/colonyops/hive/internal/platform/driveapi"
 )
 
 type authenticatedFunc func(scope core.Scope, h errchain.HandlerFunc) http.HandlerFunc
@@ -35,6 +36,7 @@ var spaceRoutes = []spaceRoute{
 func registerDocumentRoutes(mux *http.ServeMux, authenticated authenticatedFunc, docs *core.Documents) {
 	h := documentHandlers{docs}
 	mux.HandleFunc("GET /api/v1/spaces", authenticated(core.ScopeRead, h.spaces))
+	mux.HandleFunc("GET /api/v1/search", authenticated(core.ScopeRead, h.search))
 	for _, sr := range spaceRoutes {
 		doc := sr.prefix + "/docs/{path...}"
 		mux.HandleFunc("GET "+sr.prefix, authenticated(core.ScopeRead, h.list(sr.space)))
@@ -72,6 +74,42 @@ func (h documentHandlers) spaces(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return server.JSON(w, http.StatusOK, spaces)
+}
+
+const (
+	defaultSearchLimit = 50
+	maxSearchLimit     = 200
+)
+
+func (h documentHandlers) search(w http.ResponseWriter, r *http.Request) error {
+	p, ok := principalFrom(r.Context())
+	if !ok {
+		return core.NewError(core.KindUnauthenticated, "not signed in")
+	}
+	query := r.URL.Query()
+
+	var space *drive.Space
+	if key := query.Get("space"); key != "" {
+		s, err := drive.ParseSpaceKey(key)
+		if err != nil {
+			return core.NewError(core.KindInvalid, "invalid space")
+		}
+		space = &s
+	}
+	limit := defaultSearchLimit
+	if raw := query.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			return core.NewError(core.KindInvalid, "limit must be a positive number")
+		}
+		limit = min(n, maxSearchLimit)
+	}
+
+	hits, err := h.docs.Search(r.Context(), p, query.Get("q"), space, limit)
+	if err != nil {
+		return err
+	}
+	return server.JSON(w, http.StatusOK, driveapi.SearchResults{Hits: hits})
 }
 
 func (h documentHandlers) list(space spaceFunc) errchain.HandlerFunc {
