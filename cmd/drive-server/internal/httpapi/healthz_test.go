@@ -14,7 +14,7 @@ import (
 )
 
 func TestHealthz(t *testing.T) {
-	h := New(zerolog.Nop(), buildinfo.Info{})
+	h := New(zerolog.Nop(), buildinfo.Info{}, Services{})
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
@@ -24,7 +24,7 @@ func TestHealthz(t *testing.T) {
 }
 
 func TestVersionReturnsInjectedInfo(t *testing.T) {
-	h := New(zerolog.Nop(), buildinfo.Info{Version: "1.2.3", Commit: "abc", Date: "2026-10-15"})
+	h := New(zerolog.Nop(), buildinfo.Info{Version: "1.2.3", Commit: "abc", Date: "2026-10-15"}, Services{})
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/version", nil))
@@ -36,7 +36,7 @@ func TestVersionReturnsInjectedInfo(t *testing.T) {
 }
 
 func TestUnknownRouteAndWrongMethod(t *testing.T) {
-	h := New(zerolog.Nop(), buildinfo.Info{})
+	h := New(zerolog.Nop(), buildinfo.Info{}, Services{})
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))

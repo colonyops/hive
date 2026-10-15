@@ -1,5 +1,5 @@
-// Package app wires the drive server: the HTTP server and the plugs manager
-// that runs it.
+// Package app wires the drive server: the core services over control.db, the
+// HTTP server, and the plugs manager that runs it.
 package app
 
 import (
@@ -23,6 +23,16 @@ type Options struct {
 
 // Run serves until ctx is done or a plug fails.
 func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Options) error {
+	svc, err := OpenServices(ctx, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := svc.Close(); err != nil {
+			log.Warn().Err(err).Msg("close control store")
+		}
+	}()
+
 	ln, err := net.Listen("tcp", cfg.Listen)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", cfg.Listen, err)
@@ -30,7 +40,7 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	defer func() { _ = ln.Close() }()
 
 	httpLog := logutils.Component(log, "httpapi")
-	handler := httpapi.New(httpLog, opts.Info)
+	handler := httpapi.New(httpLog, opts.Info, httpapi.Services{Tokens: svc.Tokens})
 
 	log.Info().Str("addr", ln.Addr().String()).Str("base_url", cfg.BaseURL).Str("version", opts.Info.Version).Msg("drive server listening")
 
