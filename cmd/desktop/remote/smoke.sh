@@ -28,4 +28,4 @@ for attempt in $(seq 1 60); do
   if curl -fsS http://127.0.0.1:8080 > /dev/null; then break; fi
   sleep 1
 done
-node /smoke/smoke.mjs
+HIVE_SMOKE_APP_PID="$app_pid" node "/smoke/${HIVE_REMOTE_TEST:-smoke}.mjs"
