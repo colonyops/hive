@@ -127,7 +127,10 @@ type ShareLink struct {
 	UserID     string
 	DocumentID string
 	ExpiresAt  *time.Time
-	CreatedAt  time.Time
+	// ExpiresIn is the preset that set ExpiresAt, or empty for no expiry or a
+	// link from before presets were stored.
+	ExpiresIn string
+	CreatedAt time.Time
 }
 
 // ShareStore methods return ErrNotFound for a missing link.
@@ -139,7 +142,7 @@ type ShareStore interface {
 	ListByUser(ctx context.Context, userID string) ([]ShareLink, error)
 	// ListAfter returns up to limit links with an id after afterID, in id order.
 	ListAfter(ctx context.Context, afterID string, limit int) ([]ShareLink, error)
-	UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time) error
+	UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time, expiresIn string) error
 	Delete(ctx context.Context, id string) error
 	DeleteByDocument(ctx context.Context, userID, documentID string) error
 	DeleteExpired(ctx context.Context, now time.Time) (int, error)

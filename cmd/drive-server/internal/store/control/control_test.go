@@ -1,6 +1,9 @@
 package control_test
 
 import (
+	"context"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -9,6 +12,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 	"github.com/colonyops/hive/cmd/drive-server/internal/store/control"
+	"github.com/colonyops/hive/internal/platform/sqlite"
 )
 
 func openStore(t *testing.T) *control.Store {
@@ -118,4 +122,39 @@ func TestOpenIsRepeatable(t *testing.T) {
 	t.Cleanup(func() { _ = second.Close() })
 	_, err = second.Accounts().GetByID(t.Context(), "a1")
 	require.NoError(t, err)
+}
+
+func TestMigrationAddsTheExpiryPresetToExistingLinks(t *testing.T) {
+	dir := t.TempDir()
+	init0001, err := os.ReadFile("migrations/0001_init.up.sql")
+	require.NoError(t, err)
+	conn, err := sqlite.Open(context.Background(), filepath.Join(dir, control.FileName), sqlite.Options{MaxOpenConns: 1})
+	require.NoError(t, err)
+	for _, stmt := range []string{
+		string(init0001),
+		`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at INTEGER NOT NULL)`,
+		`INSERT INTO schema_migrations VALUES (1, 'init', 0)`,
+		`INSERT INTO accounts (id, email, created_at) VALUES ('u1', 'dev@example.com', 0)`,
+		`INSERT INTO share_links (id, slug, user_id, document_id, expires_at, created_at) VALUES ('l1', 's1', 'u1', 'd1', 5000, 0)`,
+	} {
+		_, err := conn.Exec(stmt)
+		require.NoError(t, err, stmt)
+	}
+	require.NoError(t, conn.Close())
+
+	s, err := control.Open(t.Context(), dir)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = s.Close() })
+
+	link, err := s.Shares().GetBySlug(t.Context(), "s1")
+	require.NoError(t, err)
+	assert.Empty(t, link.ExpiresIn)
+	require.NotNil(t, link.ExpiresAt)
+	assert.Equal(t, int64(5000), link.ExpiresAt.UnixNano())
+
+	require.NoError(t, s.Shares().UpdateExpiry(t.Context(), "l1", nil, ""))
+	require.NoError(t, s.Shares().UpdateExpiry(t.Context(), "l1", link.ExpiresAt, "7d"))
+	link, err = s.Shares().GetBySlug(t.Context(), "s1")
+	require.NoError(t, err)
+	assert.Equal(t, "7d", link.ExpiresIn)
 }

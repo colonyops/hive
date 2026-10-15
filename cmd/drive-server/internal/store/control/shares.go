@@ -17,6 +17,7 @@ func (sh shares) InsertIfAbsent(ctx context.Context, l core.ShareLink) error {
 		UserID:     l.UserID,
 		DocumentID: l.DocumentID,
 		ExpiresAt:  toNullNanos(l.ExpiresAt),
+		ExpiresIn:  l.ExpiresIn,
 		CreatedAt:  toNanos(l.CreatedAt),
 	}))
 }
@@ -53,8 +54,8 @@ func (sh shares) ListAfter(ctx context.Context, afterID string, limit int) ([]co
 	return linksFromRows(rows), nil
 }
 
-func (sh shares) UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time) error {
-	return wrap("update share link expiry", sh.s.q.UpdateShareLinkExpiry(ctx, db.UpdateShareLinkExpiryParams{ExpiresAt: toNullNanos(expiresAt), ID: id}))
+func (sh shares) UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time, expiresIn string) error {
+	return wrap("update share link expiry", sh.s.q.UpdateShareLinkExpiry(ctx, db.UpdateShareLinkExpiryParams{ExpiresAt: toNullNanos(expiresAt), ExpiresIn: expiresIn, ID: id}))
 }
 
 func (sh shares) Delete(ctx context.Context, id string) error {
@@ -85,6 +86,7 @@ func linkFromRow(r db.ShareLink) core.ShareLink {
 		UserID:     r.UserID,
 		DocumentID: r.DocumentID,
 		ExpiresAt:  fromNullNanos(r.ExpiresAt),
+		ExpiresIn:  r.ExpiresIn,
 		CreatedAt:  fromNanos(r.CreatedAt),
 	}
 }

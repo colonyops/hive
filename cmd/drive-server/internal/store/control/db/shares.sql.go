@@ -46,7 +46,7 @@ func (q *Queries) DeleteShareLinksByDocument(ctx context.Context, arg DeleteShar
 }
 
 const getShareLinkByDocument = `-- name: GetShareLinkByDocument :one
-SELECT id, slug, user_id, document_id, expires_at, created_at FROM share_links WHERE user_id = ? AND document_id = ?
+SELECT id, slug, user_id, document_id, expires_at, created_at, expires_in FROM share_links WHERE user_id = ? AND document_id = ?
 `
 
 type GetShareLinkByDocumentParams struct {
@@ -64,12 +64,13 @@ func (q *Queries) GetShareLinkByDocument(ctx context.Context, arg GetShareLinkBy
 		&i.DocumentID,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.ExpiresIn,
 	)
 	return i, err
 }
 
 const getShareLinkBySlug = `-- name: GetShareLinkBySlug :one
-SELECT id, slug, user_id, document_id, expires_at, created_at FROM share_links WHERE slug = ?
+SELECT id, slug, user_id, document_id, expires_at, created_at, expires_in FROM share_links WHERE slug = ?
 `
 
 func (q *Queries) GetShareLinkBySlug(ctx context.Context, slug string) (ShareLink, error) {
@@ -82,13 +83,14 @@ func (q *Queries) GetShareLinkBySlug(ctx context.Context, slug string) (ShareLin
 		&i.DocumentID,
 		&i.ExpiresAt,
 		&i.CreatedAt,
+		&i.ExpiresIn,
 	)
 	return i, err
 }
 
 const insertShareLinkIfAbsent = `-- name: InsertShareLinkIfAbsent :exec
-INSERT INTO share_links (id, slug, user_id, document_id, expires_at, created_at)
-SELECT ?1, ?2, ?3, ?4, ?5, ?6
+INSERT INTO share_links (id, slug, user_id, document_id, expires_at, expires_in, created_at)
+SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7
 WHERE NOT EXISTS (
     SELECT 1 FROM share_links WHERE user_id = ?3 AND document_id = ?4
 )
@@ -100,6 +102,7 @@ type InsertShareLinkIfAbsentParams struct {
 	UserID     string        `json:"user_id"`
 	DocumentID string        `json:"document_id"`
 	ExpiresAt  sql.NullInt64 `json:"expires_at"`
+	ExpiresIn  string        `json:"expires_in"`
 	CreatedAt  int64         `json:"created_at"`
 }
 
@@ -110,13 +113,14 @@ func (q *Queries) InsertShareLinkIfAbsent(ctx context.Context, arg InsertShareLi
 		arg.UserID,
 		arg.DocumentID,
 		arg.ExpiresAt,
+		arg.ExpiresIn,
 		arg.CreatedAt,
 	)
 	return err
 }
 
 const listShareLinksAfter = `-- name: ListShareLinksAfter :many
-SELECT id, slug, user_id, document_id, expires_at, created_at FROM share_links WHERE id > ? ORDER BY id LIMIT ?
+SELECT id, slug, user_id, document_id, expires_at, created_at, expires_in FROM share_links WHERE id > ? ORDER BY id LIMIT ?
 `
 
 type ListShareLinksAfterParams struct {
@@ -140,6 +144,7 @@ func (q *Queries) ListShareLinksAfter(ctx context.Context, arg ListShareLinksAft
 			&i.DocumentID,
 			&i.ExpiresAt,
 			&i.CreatedAt,
+			&i.ExpiresIn,
 		); err != nil {
 			return nil, err
 		}
@@ -155,7 +160,7 @@ func (q *Queries) ListShareLinksAfter(ctx context.Context, arg ListShareLinksAft
 }
 
 const listShareLinksByUser = `-- name: ListShareLinksByUser :many
-SELECT id, slug, user_id, document_id, expires_at, created_at FROM share_links WHERE user_id = ? ORDER BY id
+SELECT id, slug, user_id, document_id, expires_at, created_at, expires_in FROM share_links WHERE user_id = ? ORDER BY id
 `
 
 func (q *Queries) ListShareLinksByUser(ctx context.Context, userID string) ([]ShareLink, error) {
@@ -174,6 +179,7 @@ func (q *Queries) ListShareLinksByUser(ctx context.Context, userID string) ([]Sh
 			&i.DocumentID,
 			&i.ExpiresAt,
 			&i.CreatedAt,
+			&i.ExpiresIn,
 		); err != nil {
 			return nil, err
 		}
@@ -189,15 +195,16 @@ func (q *Queries) ListShareLinksByUser(ctx context.Context, userID string) ([]Sh
 }
 
 const updateShareLinkExpiry = `-- name: UpdateShareLinkExpiry :exec
-UPDATE share_links SET expires_at = ? WHERE id = ?
+UPDATE share_links SET expires_at = ?, expires_in = ? WHERE id = ?
 `
 
 type UpdateShareLinkExpiryParams struct {
 	ExpiresAt sql.NullInt64 `json:"expires_at"`
+	ExpiresIn string        `json:"expires_in"`
 	ID        string        `json:"id"`
 }
 
 func (q *Queries) UpdateShareLinkExpiry(ctx context.Context, arg UpdateShareLinkExpiryParams) error {
-	_, err := q.db.ExecContext(ctx, updateShareLinkExpiry, arg.ExpiresAt, arg.ID)
+	_, err := q.db.ExecContext(ctx, updateShareLinkExpiry, arg.ExpiresAt, arg.ExpiresIn, arg.ID)
 	return err
 }

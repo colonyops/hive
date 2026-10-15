@@ -50,7 +50,11 @@ type SpaceSummary struct {
 	Bytes     int64           `json:"bytes"`
 }
 
-// ShareRequest.ExpiresIn is "", "1d", "7d", or "30d".
+// ShareExpiryNone, as ShareRequest.ExpiresIn, removes a link's expiry.
+const ShareExpiryNone = "none"
+
+// ShareRequest.ExpiresIn is "" (keep the link's expiry), "none", "1d", "7d",
+// or "30d".
 type ShareRequest struct {
 	ExpiresIn string `json:"expires_in,omitempty"`
 }
@@ -58,6 +62,9 @@ type ShareRequest struct {
 type Share struct {
 	URL       string     `json:"url"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	// ExpiresIn is the preset behind ExpiresAt: "1d", "7d", "30d", or "" for
+	// no expiry or a link made before presets were stored.
+	ExpiresIn string `json:"expires_in"`
 }
 
 // PublicDocument is what a share link serves to a reader who is not signed

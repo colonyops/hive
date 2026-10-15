@@ -9,7 +9,7 @@ import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
 import { onClickOutside } from '@vueuse/core'
 import { computed, nextTick, onMounted, ref, toRef, watch } from 'vue'
 import { api } from '../api'
-import { formatTime } from '../lib/format'
+import { formatDate, formatTime } from '../lib/format'
 import { useToast } from '../lib/toast'
 import type { Share, ShareExpiry } from '../types'
 
@@ -32,12 +32,12 @@ const expiryOptions: { value: ShareExpiry; label: string; title: string }[] = [
 const toast = useToast()
 const current = ref<Share | null>(null)
 const expiry = ref<ShareExpiry | undefined>('')
-// The server reports a date, not the preset that made it, so a link with an expiry starts with no preset marked.
+// A link with an expiry but no stored preset predates presets, so no option is marked.
 watch(
   () => props.share,
   (share) => {
     current.value = share
-    expiry.value = share?.expires_at ? undefined : ''
+    expiry.value = share?.expires_at && !share.expires_in ? undefined : (share?.expires_in ?? '')
   },
   { immediate: true },
 )
@@ -56,12 +56,7 @@ onMounted(async () => {
 onClickOutside(panel, () => emit('close'), { ignore: [toRef(props, 'anchor')] })
 useEscapeToClose(() => emit('close'))
 
-const summary = computed(() => {
-  if (!current.value) return 'Sharing is off. Only people who sign in can open this document.'
-  if (current.value.expires_at)
-    return `Anyone with the link can read it. Expires ${formatTime(current.value.expires_at)}.`
-  return 'Anyone with the link can read it. The link does not expire.'
-})
+const expiresAt = computed(() => current.value?.expires_at)
 
 async function guarded(fallback: string, work: () => Promise<void>): Promise<void> {
   busy.value = true
@@ -77,9 +72,10 @@ async function guarded(fallback: string, work: () => Promise<void>): Promise<voi
 
 function create(chosen: ShareExpiry): Promise<void> {
   return guarded('Could not share the document.', async () => {
-    current.value = await api.share(props.prefix, props.path, chosen)
-    expiry.value = chosen
-    emit('changed', current.value)
+    const saved = await api.share(props.prefix, props.path, chosen)
+    current.value = saved
+    expiry.value = saved.expires_in
+    emit('changed', saved)
   })
 }
 
@@ -118,7 +114,16 @@ function chooseExpiry(value: ShareExpiry): void {
             data-testid="share-state"
           />
         </h2>
-        <p class="mt-1 text-small text-text-3">{{ summary }}</p>
+        <p v-if="!current" class="mt-1 text-small text-text-3">
+          Sharing is off. Only people who sign in can open this document.
+        </p>
+        <p v-else class="mt-1 text-small text-text-3" data-testid="share-summary">
+          Anyone with the link can read it.
+          <span v-if="expiresAt" :title="formatTime(expiresAt)" data-testid="share-expiry-text"
+            >Expires {{ formatDate(expiresAt) }}</span
+          >
+          <span v-else data-testid="share-expiry-text">No expiry</span>
+        </p>
       </div>
 
       <div v-if="current" class="flex items-center gap-2">

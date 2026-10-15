@@ -83,7 +83,7 @@ export const api = {
   documentBody: async (apiPrefix: string, path: string) => (await send('GET', docUrl(apiPrefix, path))).text(),
   deleteDocument: (apiPrefix: string, path: string) => empty('DELETE', docUrl(apiPrefix, path)),
   share: (apiPrefix: string, path: string, expiresIn: ShareExpiry) =>
-    json<Share>('POST', `${apiPrefix}/shares/${encodePath(path)}`, expiresIn ? { expires_in: expiresIn } : {}),
+    json<Share>('POST', `${apiPrefix}/shares/${encodePath(path)}`, { expires_in: expiresIn || 'none' }),
   unshare: (apiPrefix: string, path: string) => empty('DELETE', `${apiPrefix}/shares/${encodePath(path)}`),
 
   tokens: () => json<Token[]>('GET', '/api/v1/tokens'),
