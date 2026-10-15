@@ -90,6 +90,20 @@ describe('DriveListing', () => {
     expect(router.currentRoute.value.path).toBe('/repos/acme/notes/plan.md')
   })
 
+  it('shows the cursor row only while the list has focus', async () => {
+    const { wrapper } = await mountListing()
+    const list = wrapper.get('[data-testid="entries"]')
+    const highlighted = () => wrapper.findAll('[data-testid="entry"]').filter((row) => row.classes('bg-selection'))
+
+    expect(highlighted()).toHaveLength(0)
+
+    await list.trigger('focusin')
+    expect(highlighted()).toHaveLength(1)
+
+    await list.trigger('focusout', { relatedTarget: null })
+    expect(highlighted()).toHaveLength(0)
+  })
+
   it('switches between list and grid and remembers the choice', async () => {
     const { wrapper } = await mountListing()
     expect(wrapper.get('[data-testid="entries"]').attributes('data-mode')).toBe('list')

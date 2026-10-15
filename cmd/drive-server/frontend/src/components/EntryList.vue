@@ -17,6 +17,8 @@ const props = defineProps<{ entries: ListEntry[]; mode: ViewMode }>()
 const emit = defineEmits<{ open: [entry: ListEntry]; action: [id: string, entry: ListEntry, anchor: HTMLElement] }>()
 
 const active = ref(0)
+// The cursor only means something while the list has focus; drawn at rest it reads as a selection nobody made.
+const focused = ref(false)
 const root = ref<HTMLElement | null>(null)
 const menu = shallowRef<{ entry: ListEntry; anchor: HTMLElement; trigger: HTMLElement } | null>(null)
 
@@ -38,6 +40,10 @@ function icon(entry: ListEntry): Component {
 function iconTone(entry: ListEntry): string {
   if (entry.kind === 'dir') return 'text-text-3'
   return entry.doc?.kind === 'html' ? 'text-node-orange' : 'text-node-blue'
+}
+
+function onFocusOut(event: FocusEvent): void {
+  if (!root.value?.contains(event.relatedTarget as Node | null)) focused.value = false
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -77,6 +83,8 @@ function onSelect(id: string): void {
     data-testid="entries"
     :data-mode="mode"
     @keydown="onKeydown"
+    @focusin="focused = true"
+    @focusout="onFocusOut"
   >
     <div
       v-if="mode === 'list'"
@@ -106,7 +114,7 @@ function onSelect(id: string): void {
           mode === 'list'
             ? ['entry-grid h-13 border-b border-row', { 'has-location': showLocation }]
             : 'relative flex h-36 flex-col rounded-lg border border-card bg-raised p-3 hover:border-strong',
-          index === active
+          focused && index === active
             ? mode === 'list'
               ? 'bg-selection'
               : 'border-accent'
