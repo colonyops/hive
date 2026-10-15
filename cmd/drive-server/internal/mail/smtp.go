@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/mail"
 	"net/netip"
 	"net/smtp"
 	"net/url"
@@ -28,6 +29,9 @@ type SMTP struct {
 	user     string
 	password func() (string, error)
 	from     string
+	// envelope is the bare address from `from`, which may carry a display
+	// name: MAIL FROM accepts only the address.
+	envelope string
 }
 
 // NewSMTP parses rawURL (smtp://user@host:587 or smtps://user@host:465; the
@@ -59,6 +63,12 @@ func NewSMTP(rawURL string, password func() (string, error), from string) (*SMTP
 	if from == "" {
 		return nil, errors.New("smtp.from is required with smtp.url")
 	}
+	addr, err := mail.ParseAddress(from)
+	if err != nil {
+		return nil, fmt.Errorf("smtp.from %q: %w", from, err)
+	}
+	s.from = addr.String()
+	s.envelope = addr.Address
 	if u.User != nil {
 		s.user = u.User.Username()
 	}
@@ -102,7 +112,7 @@ func (s *SMTP) Send(ctx context.Context, m core.Mail) error {
 			return fmt.Errorf("smtp auth: %w", err)
 		}
 	}
-	if err := c.Mail(s.from); err != nil {
+	if err := c.Mail(s.envelope); err != nil {
 		return fmt.Errorf("smtp mail from: %w", err)
 	}
 	if err := c.Rcpt(m.To); err != nil {

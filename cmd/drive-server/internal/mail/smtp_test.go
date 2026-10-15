@@ -38,7 +38,14 @@ func TestNewSMTP(t *testing.T) {
 		require.Error(t, err, bad)
 	}
 	_, err = NewSMTP("smtp://mail.example.com", pw, "")
-	assert.Error(t, err)
+	require.Error(t, err)
+	_, err = NewSMTP("smtp://mail.example.com", pw, "not an address")
+	require.Error(t, err)
+
+	s, err = NewSMTP("smtp://mail.example.com", pw, "Hive Drive <drive@example.com>")
+	require.NoError(t, err)
+	assert.Equal(t, "drive@example.com", s.envelope)
+	assert.Equal(t, `"Hive Drive" <drive@example.com>`, s.from)
 }
 
 func TestSMTPMessageStripsHeaderBreaks(t *testing.T) {
