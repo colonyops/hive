@@ -51,6 +51,18 @@ func (a *Accounts) Ensure(ctx context.Context, email string) (Account, error) {
 	return acct, nil
 }
 
+// Exists reports whether email has an account, whatever the policies say.
+func (a *Accounts) Exists(ctx context.Context, email string) (bool, error) {
+	_, err := a.store.GetByEmail(ctx, NormalizeEmail(email))
+	if IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("look up account: %w", err)
+	}
+	return true, nil
+}
+
 func (a *Accounts) List(ctx context.Context) ([]Account, error) {
 	accts, err := a.store.List(ctx)
 	if err != nil {

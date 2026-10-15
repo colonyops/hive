@@ -162,7 +162,7 @@ func accountsCommand() *cli.Command {
 				Usage: "Manage API tokens",
 				Commands: []*cli.Command{{
 					Name:      "create",
-					Usage:     "Create an API token, creating the account if its email matches a policy",
+					Usage:     "Create an API token, creating the account if its email matches a policy, even when sign_up is false",
 					ArgsUsage: "<email>",
 					Flags: append(configFlags(),
 						&cli.StringFlag{Name: "scope", Usage: "read or push", Required: true},
@@ -187,6 +187,9 @@ func createToken(ctx context.Context, cmd *cli.Command, svc *app.Services) error
 	}
 	ttl, err := app.ParseTTL(cmd.String("expires"))
 	if err != nil {
+		return err
+	}
+	if err := svc.NoteSignUpBypass(ctx, os.Stderr, email); err != nil {
 		return err
 	}
 	secret, _, err := svc.CreateToken(ctx, email, scope, cmd.String("name"), ttl)

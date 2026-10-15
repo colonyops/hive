@@ -54,6 +54,29 @@ func TestCreateTokenCreatesAccountAndAuthenticates(t *testing.T) {
 	assert.Equal(t, "dev@example.com", p.Email)
 }
 
+func TestNoteSignUpBypassNamesNewAccountsUnderClosedPolicy(t *testing.T) {
+	closed := false
+	svc := openServices(t,
+		config.Policy{Name: "invite", Matches: []string{"*@closed.example"}, SignUp: &closed},
+		devPolicy(),
+	)
+	note := func(email string) string {
+		var out bytes.Buffer
+		require.NoError(t, svc.NoteSignUpBypass(t.Context(), &out, email))
+		return out.String()
+	}
+
+	got := note("New@closed.example")
+	assert.Contains(t, got, `policy "invite"`)
+	assert.Contains(t, got, "new@closed.example")
+	assert.Empty(t, note("dev@example.com"), "sign-up is allowed")
+	assert.Empty(t, note("dev@other.example"), "no policy matches; CreateToken refuses it")
+
+	_, _, err := svc.CreateToken(t.Context(), "new@closed.example", core.ScopeRead, "cli", 0)
+	require.NoError(t, err, "minting creates the account despite sign_up: false")
+	assert.Empty(t, note("new@closed.example"), "the account exists now")
+}
+
 func TestCreateTokenNeedsPolicy(t *testing.T) {
 	svc := openServices(t, devPolicy())
 

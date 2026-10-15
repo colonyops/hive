@@ -54,6 +54,10 @@ type Policy struct {
 	Quotas Quotas `yaml:"quotas"`
 }
 
+// SignUpAllowed reports whether an email that matches the policy may create
+// its account by signing in.
+func (p Policy) SignUpAllowed() bool { return p.SignUp == nil || *p.SignUp }
+
 type Quotas struct {
 	Limit Size `yaml:"limit"`
 }

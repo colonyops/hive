@@ -37,6 +37,9 @@ func ParseTTL(s string) (time.Duration, error) {
 
 // CreateToken mints a token for email, creating the account when the email
 // matches a policy. A zero ttl means the token never expires.
+//
+// Minting is an operator action, so it creates the account even when the
+// policy sets sign_up: false. That setting only governs self sign-up.
 func (s *Services) CreateToken(ctx context.Context, email string, scope core.Scope, name string, ttl time.Duration) (string, core.Token, error) {
 	acct, err := s.Accounts.Ensure(ctx, email)
 	if err != nil {
@@ -48,6 +51,23 @@ func (s *Services) CreateToken(ctx context.Context, email string, scope core.Sco
 		expiresAt = &t
 	}
 	return s.Tokens.Mint(ctx, acct.ID, name, scope, expiresAt)
+}
+
+// NoteSignUpBypass writes a note to w when CreateToken would create a new
+// account under a policy that disallows sign-up, so the operator sees that the
+// policy was bypassed on purpose.
+func (s *Services) NoteSignUpBypass(ctx context.Context, w io.Writer, email string) error {
+	policy, ok := s.Policies.Match(email)
+	if !ok || policy.SignUpAllowed() {
+		return nil
+	}
+	exists, err := s.Accounts.Exists(ctx, email)
+	if err != nil || exists {
+		return err
+	}
+	_, err = fmt.Fprintf(w, "Note: policy %q sets sign_up: false. Creating the account for %s anyway; minting a token is an operator action.\n",
+		policy.Name, core.NormalizeEmail(email))
+	return err
 }
 
 // WriteAccounts prints one line per account with the policy that admits it,
