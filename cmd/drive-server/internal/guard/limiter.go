@@ -61,7 +61,7 @@ func (l *Limiter) Allow(key string) (ok bool, retryAfter time.Duration) {
 	e, found := l.entries[key]
 	if !found {
 		if len(l.entries) >= l.maxKeys {
-			l.makeRoom(now)
+			l.makeRoom()
 		}
 		e = &entry{lim: rate.NewLimiter(l.limit, l.burst)}
 		l.entries[key] = e
@@ -86,11 +86,7 @@ func (l *Limiter) sweep(now time.Time) {
 	}
 }
 
-func (l *Limiter) makeRoom(now time.Time) {
-	l.sweep(now)
-	if len(l.entries) < l.maxKeys {
-		return
-	}
+func (l *Limiter) makeRoom() {
 	var oldestKey string
 	var oldest time.Time
 	first := true
