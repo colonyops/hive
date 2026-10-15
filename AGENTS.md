@@ -1,11 +1,12 @@
 # Agent Instructions
 
-One repository, one Go module, four things in it:
+One repository, one Go module, five things in it:
 
 | Path | What | Guide |
 | --- | --- | --- |
 | `cmd/hive/` | The **hive CLI/TUI**: a tmux-native command center that runs coding agents in isolated git clones with live status, shared context, tasks, and inter-agent messaging. The root program (`main.go` keeps `go install github.com/colonyops/hive@latest` working). | This file |
 | `cmd/desktop/` | **Hive Desktop**, the Wails v3 app: an inbox that collects work into feeds, a Code area on the CLI's session engine, and agent chat workspaces. | [`cmd/desktop/AGENTS.md`](cmd/desktop/AGENTS.md) |
+| `cmd/drive-server/` | **Hive Drive Server**, a multi-tenant server that shares Hive Drive documents: email sign-in, one SQLite database per user, API tokens, share links. Ships as the `hive-drive-server` image. | [ADR](docs/decisions/2026-10-15-hive-drive-server-is-a-multi-tenant-program-with-one-sqlite-database-per-user.md) |
 | `internal/` | The hive engine both programs run on, in layers: `domain` (pure models), `platform` (git, tmux, SQLite and other drivers), `store` (`hive.db`), `config` (the engine sections of `config.yaml`), and `hive` (the application services and `hive.Engine`). | [`docs/architecture.md`](docs/architecture.md) |
 | `web/packages/ui/` | `@hive/ui`: the theme, base CSS, and UI primitives that Hive Desktop and web UIs share. A member of the repo-root npm workspace, with no Wails imports (an ESLint rule enforces it). | [`docs/architecture.md`](docs/architecture.md), "Shared frontend package" |
 | `docs/` | hivedesktop.com: the landing page and the product docs for both programs (Zensical; pages under `docs/docs/`). The contributor docs sit beside it: `docs/architecture.md`, `docs/decisions/`, `docs/distribution.md`. | [`docs/AGENTS.md`](docs/AGENTS.md) |

@@ -31,6 +31,10 @@ site/
 .venv/
 .cache/
 
+# Hive Drive Server (cmd/drive-server)
+/hive-drive-server
+cmd/drive-server/bin/
+
 # Hive Desktop (cmd/desktop)
 .DS_Store
 *.log

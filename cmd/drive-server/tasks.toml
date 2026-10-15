@@ -1,0 +1,16 @@
+# Hive Drive Server. Included by the root mise.toml, so these run from anywhere
+# in the repo as `mise run drive-server:<task>`. Every task runs from the repo
+# root, where the module lives.
+
+["drive-server:dev"]
+description = "Run the drive server on ./.data/drive-server with mail printed to stdout"
+env = { HIVE_DRIVE_SERVER_DATA_DIR = "./.data/drive-server", HIVE_DRIVE_SERVER_CONFIG_DIR = "./cmd/drive-server/dev", HIVE_DRIVE_SERVER_BASE_URL = "http://127.0.0.1:8080", HIVE_DRIVE_SERVER_LOG_LEVEL = "debug" }
+run = "go run ./cmd/drive-server serve --dev-log-mail"
+
+["drive-server:test"]
+description = "Run the drive server's Go tests"
+run = "go test ./cmd/drive-server/..."
+
+["drive-server:build"]
+description = "Build the hive-drive-server binary into cmd/drive-server/bin/"
+run = "go build -o cmd/drive-server/bin/hive-drive-server ./cmd/drive-server"
