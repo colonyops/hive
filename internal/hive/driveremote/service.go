@@ -272,17 +272,11 @@ func (s *Service) Pull(ctx context.Context, server string, space drive.Space, pa
 	local := indexTree(root)
 
 	for _, doc := range wanted {
-		_, body, err := client.Get(ctx, space, doc.Path)
+		result, err := s.pullOne(ctx, client, space, local, doc)
+		results = append(results, result)
 		if err != nil {
-			result := PullResult{Path: doc.Path, Action: ActionFailed, Error: err.Error()}
-			results = append(results, result)
-			if isPerDocument(err) {
-				continue
-			}
 			return results, err
 		}
-		result := s.pullOne(ctx, space, local, doc.Path, body)
-		results = append(results, result)
 	}
 	slices.SortFunc(results, func(a, b PullResult) int { return strings.Compare(a.Path, b.Path) })
 	return results, nil
@@ -314,20 +308,47 @@ func selectRemote(remote []driveapi.Document, paths []string) ([]driveapi.Docume
 	return wanted, failed
 }
 
-func (s *Service) pullOne(ctx context.Context, space drive.Space, local *localIndex, p string, body []byte) PullResult {
-	sum := hashOf(body)
-	fail := func(err error) PullResult {
-		return PullResult{Path: p, Action: ActionFailed, SHA256: sum, Error: err.Error()}
+// pullOne compares the listing hash with the local copies first, so an
+// unchanged document costs no download. The error is set only when the
+// download fails for a reason that repeats for every document.
+func (s *Service) pullOne(ctx context.Context, client *driveapi.Client, space drive.Space, local *localIndex, doc driveapi.Document) (PullResult, error) {
+	p := doc.Path
+	matched, err := s.matchesLocal(ctx, space, local, p, doc.SHA256)
+	if err != nil {
+		return PullResult{Path: p, Action: ActionFailed, SHA256: doc.SHA256, Error: err.Error()}, nil
+	}
+	if matched {
+		return PullResult{Path: p, Action: ActionUnchanged, SHA256: doc.SHA256}, nil
 	}
 
+	_, body, err := client.Get(ctx, space, p)
+	if err != nil {
+		result := PullResult{Path: p, Action: ActionFailed, Error: err.Error()}
+		if isPerDocument(err) {
+			return result, nil
+		}
+		return result, err
+	}
+	return s.writeDownload(ctx, space, local, p, body), nil
+}
+
+func (s *Service) matchesLocal(ctx context.Context, space drive.Space, local *localIndex, p, sha string) (bool, error) {
 	for _, candidate := range local.sameDocument(p) {
 		_, current, err := s.files.Read(ctx, space, candidate)
 		if err != nil {
-			return fail(err)
+			return false, err
 		}
-		if hashOf(current) == sum {
-			return PullResult{Path: p, Action: ActionUnchanged, SHA256: sum}
+		if hashOf(current) == sha {
+			return true, nil
 		}
+	}
+	return false, nil
+}
+
+func (s *Service) writeDownload(ctx context.Context, space drive.Space, local *localIndex, p string, body []byte) PullResult {
+	sum := hashOf(body)
+	fail := func(err error) PullResult {
+		return PullResult{Path: p, Action: ActionFailed, SHA256: sum, Error: err.Error()}
 	}
 
 	if _, found := local.lookup(p); !found {

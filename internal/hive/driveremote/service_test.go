@@ -36,6 +36,7 @@ type fakeServer struct {
 	mu       sync.Mutex
 	docs     map[string]string
 	puts     []string
+	gets     []string
 	tokens   []string
 	tooLarge map[string]bool
 	rejected bool
@@ -71,6 +72,7 @@ func newFakeServer(t *testing.T) *fakeServer {
 			f.fail(w, http.StatusNotFound, "not_found")
 			return
 		}
+		f.gets = append(f.gets, r.PathValue("path"))
 		_, _ = io.WriteString(w, body)
 	})
 	mux.HandleFunc("PUT /api/v1/repos/acme/site/docs/{path...}", func(w http.ResponseWriter, r *http.Request) {
@@ -120,6 +122,18 @@ func (f *fakeServer) putCount() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return len(f.puts)
+}
+
+func (f *fakeServer) getCount(p string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n := 0
+	for _, got := range f.gets {
+		if got == p {
+			n++
+		}
+	}
+	return n
 }
 
 func (f *fakeServer) lastToken() string {
@@ -297,6 +311,19 @@ func TestPullCreatesAndSkipsIdentical(t *testing.T) {
 		"same.md":      driveremote.ActionUnchanged,
 	}, pullActions(results))
 	assert.Equal(t, "# New\n", f.readLocal(t, "plans/new.md"))
+}
+
+func TestPullSkipsDownloadOfUnchangedDocument(t *testing.T) {
+	f := newFixture(t)
+	f.server.docs["same.md"] = "same"
+	f.writeLocal(t, "same.md", "same")
+
+	for range 2 {
+		results, err := f.svc.Pull(t.Context(), f.server.URL, f.space, nil)
+		require.NoError(t, err)
+		assert.Equal(t, driveremote.ActionUnchanged, pullActions(results)["same.md"])
+	}
+	assert.Equal(t, 0, f.server.getCount("same.md"), "a matching local copy needs no download")
 }
 
 func TestPullKeepsDifferentLocalFileAndNumbersCopies(t *testing.T) {
