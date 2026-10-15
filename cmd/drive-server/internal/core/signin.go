@@ -58,7 +58,7 @@ func (s *SignIn) Start(ctx context.Context, email string) error {
 		s.log.Info().Msg("sign-in code not sent: email matches no user policy")
 		return nil
 	}
-	if !signUpAllowed(policy.SignUp) {
+	if !policy.SignUpAllowed() {
 		if _, err := s.accounts.GetByEmail(ctx, email); IsNotFound(err) {
 			s.log.Info().Str("policy", policy.Name).Msg("sign-in code not sent: policy disallows sign-up and the account does not exist")
 			return nil
@@ -110,7 +110,7 @@ func (s *SignIn) Verify(ctx context.Context, email, code string) (string, error)
 		return "", NewError(KindForbidden, "email matches no user policy")
 	}
 	if _, err := s.accounts.GetByEmail(ctx, email); IsNotFound(err) {
-		if !signUpAllowed(policy.SignUp) {
+		if !policy.SignUpAllowed() {
 			return "", NewError(KindForbidden, "sign-up is closed for this email")
 		}
 	} else if err != nil {
@@ -126,8 +126,6 @@ func (s *SignIn) Verify(ctx context.Context, email, code string) (string, error)
 	value, _, err := s.sessions.Mint(ctx, acct.ID)
 	return value, err
 }
-
-func signUpAllowed(v *bool) bool { return v == nil || *v }
 
 func newCode() (string, error) {
 	limit := new(big.Int).Exp(big.NewInt(10), big.NewInt(codeDigits), nil)
