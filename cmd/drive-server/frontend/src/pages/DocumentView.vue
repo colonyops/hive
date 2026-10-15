@@ -194,10 +194,11 @@ function requestDelete(): void {
             size="sm"
             class="h-9! py-0!"
             data-testid="share"
+            aria-label="Share"
             @click="shareAnchor = shareAnchor ? null : ($event.currentTarget as HTMLElement)"
           >
             <template #icon><IconShare class="size-4" /></template>
-            Share
+            <span class="max-sm:hidden">Share</span>
           </BaseButton>
           <div class="relative">
             <IconButton
