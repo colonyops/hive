@@ -13,8 +13,7 @@ import (
 
 var errNoMail = errors.New("no way to send sign-in mail: set smtp.url and smtp.from (or HIVE_DRIVE_SERVER_SMTP_URL and HIVE_DRIVE_SERVER_SMTP_FROM), or pass --dev-log-mail for development")
 
-// newSender returns the log sender when cfg asks for it, else SMTP. The
-// SMTP password resolves once here, so a bad reference fails at start.
+// The SMTP password resolves once here, so a bad reference fails at start.
 func newSender(cfg config.Config, stdout io.Writer) (mail.Sender, error) {
 	if cfg.DevLogMail {
 		return &mail.Log{Out: stdout}, nil

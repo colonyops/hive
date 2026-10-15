@@ -28,7 +28,7 @@ export function entryMenu(entry: ListEntry): MenuEntry[] {
   ]
 }
 
-/** The row-menu actions of a listing. `changed` runs after anything that alters a document. */
+/** `changed` runs after anything that alters a document. */
 export function useEntryActions(changed: () => void | Promise<void>) {
   const router = useRouter()
   const me = useMe()

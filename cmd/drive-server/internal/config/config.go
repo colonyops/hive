@@ -20,7 +20,6 @@ const (
 	DefaultConfigDir       = "/config"
 	DefaultMaxDocumentSize = 5 << 20
 
-	// ConfigFileName is the YAML file inside ConfigDir.
 	ConfigFileName = "drive-server.yaml"
 )
 
@@ -36,7 +35,6 @@ type Config struct {
 	UserPolicies    []Policy
 }
 
-// SMTP is read from slice 7 on; Validate only checks its shape.
 type SMTP struct {
 	URL  string `yaml:"url"`
 	From string `yaml:"from"`

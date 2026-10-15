@@ -20,7 +20,6 @@ import (
 
 const shutdownGrace = 10 * time.Second
 
-// Services are the core services the handlers call.
 type Services struct {
 	Tokens    *core.Tokens
 	Sessions  *core.Sessions

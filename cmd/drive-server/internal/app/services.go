@@ -23,8 +23,7 @@ const (
 	userDBIdle     = 5 * time.Minute
 )
 
-// Services are the core services over one control.db. The server and the
-// admin commands build the same set.
+// Services are the core services over one control.db.
 type Services struct {
 	Policies  *core.Policies
 	Accounts  *core.Accounts
@@ -66,7 +65,6 @@ func OpenServices(ctx context.Context, log zerolog.Logger, cfg config.Config) (*
 
 func (s *Services) Close() error { return errors.Join(s.users.Close(), s.control.Close()) }
 
-// HTTP returns the services the HTTP adapter calls.
 func (s *Services) HTTP(baseURL string, trustedProxies []netip.Prefix) httpapi.Services {
 	return httpapi.Services{
 		Tokens:         s.Tokens,

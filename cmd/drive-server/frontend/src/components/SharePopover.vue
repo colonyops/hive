@@ -15,7 +15,6 @@ import type { Share, ShareExpiry } from '../types'
 
 const props = defineProps<{
   anchor: HTMLElement
-  /** The document's space API prefix. */
   prefix: string
   path: string
   share: Share | null

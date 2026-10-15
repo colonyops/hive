@@ -52,8 +52,8 @@ type documentHandlers struct{ docs *core.Documents }
 
 type spaceFunc func(r *http.Request) (drive.Space, error)
 
-// resolve returns the caller and the requested space. A name that is not a
-// valid space is a 404, not a 422: no such space can exist.
+// A name that is not a valid space is a 404, not a 422: no such space can
+// exist.
 func resolve(r *http.Request, space spaceFunc) (core.Principal, drive.Space, error) {
 	p, ok := principalFrom(r.Context())
 	if !ok {

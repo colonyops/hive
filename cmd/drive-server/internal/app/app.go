@@ -28,7 +28,7 @@ const (
 
 type Options struct {
 	Info buildinfo.Info
-	// Reload loads the config again for hot reload. Nil turns hot reload off.
+	// Nil turns hot reload off.
 	Reload LoadConfig
 }
 

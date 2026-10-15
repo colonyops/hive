@@ -22,7 +22,6 @@ import (
 //go:embed migrations/*.up.sql
 var migrationsFS embed.FS
 
-// FileName is control.db's name inside the data directory.
 const FileName = "control.db"
 
 type Store struct {

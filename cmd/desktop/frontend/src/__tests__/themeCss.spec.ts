@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { themes } from '@hive/ui/lib/themes'
 
-// The theme registry (useTheme.ts) and the palette blocks (@hive/ui's
+// The theme registry (@hive/ui's lib/themes.ts) and the palette blocks (@hive/ui's
 // theme.css, plus terminal-theme.css for the ANSI palettes) can only drift
 // apart silently: a registered id without a block renders as the :root
 // palette, and a block without an id is dead weight. Parity is asserted here

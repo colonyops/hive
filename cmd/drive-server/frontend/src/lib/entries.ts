@@ -2,7 +2,6 @@ import type { DriveDocument } from '../types'
 import { documentRoute, spaceFromKey, type SpaceRef } from './space'
 import { buildTree, descendantDocuments, documentLabel, findFolder, type TreeNode } from './tree'
 
-/** One row or tile in a listing: a folder, a document, or a space. */
 export interface ListEntry {
   kind: 'dir' | 'doc'
   key: string

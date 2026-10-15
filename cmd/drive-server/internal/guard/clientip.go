@@ -7,10 +7,10 @@ import (
 	"strings"
 )
 
-// ClientIP strips the port from r.RemoteAddr (netip.ParseAddrPort) and, when
-// that address is inside one of trusted, walks X-Forwarded-For from the right
-// and returns the first entry that is not a trusted proxy. With no trusted
-// proxies the header is ignored, so a sender cannot pick its own bucket.
+// ClientIP takes the address from r.RemoteAddr and, when it is inside one of
+// trusted, walks X-Forwarded-For from the right and returns the first entry
+// that is not a trusted proxy. With no trusted proxies the header is ignored,
+// so a sender cannot pick its own bucket.
 //
 // It returns the zero Addr when RemoteAddr does not parse; callers treat that
 // as one shared bucket.

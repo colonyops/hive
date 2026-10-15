@@ -16,7 +16,7 @@ function load(): typeof defaults {
   }
 }
 
-/** Reader typography. The override lives in this browser only; storage can be blocked, so it is best effort. */
+/** The override lives in this browser only; storage can be blocked, so it is best effort. */
 export function useReaderPrefs() {
   const prefs = ref(load())
 

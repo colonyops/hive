@@ -46,8 +46,6 @@ func registerAuthRoutes(mux *http.ServeMux, chain *errchain.ErrChain, sessionOnl
 	mux.HandleFunc("POST /api/v1/auth/sign-out", sessionOnly(h.signOut))
 }
 
-// allow spends one token from l for key. When none is left it sets
-// Retry-After and returns the rate_limited error.
 func allow(w http.ResponseWriter, l *guard.Limiter, key string) error {
 	ok, wait := l.Allow(key)
 	if ok {

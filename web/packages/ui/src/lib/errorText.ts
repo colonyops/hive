@@ -15,6 +15,5 @@ function causeMessage(error: unknown): string {
  */
 export function errorText(error: unknown, fallback: string): string {
   const message = causeMessage(error) || (error instanceof Error ? error.message : '')
-  // The runtime can reject with a bare string rather than an Error.
   return message || (typeof error === 'string' && error) || fallback
 }

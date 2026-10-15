@@ -10,7 +10,6 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 )
 
-// titleScanBytes bounds how much of a body title derivation reads.
 const titleScanBytes = 64 * 1024
 
 var htmlTitlePattern = regexp.MustCompile(`(?is)<title[^>]*>(.*?)</title>`)

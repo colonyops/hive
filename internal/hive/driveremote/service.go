@@ -203,8 +203,8 @@ func isPerDocument(err error) bool {
 	return ok && apiErr.Status != http.StatusUnauthorized && apiErr.Status != http.StatusForbidden
 }
 
-// pushTargets expands paths into document paths. A path that names nothing
-// pushable is returned as a failed result, not an error.
+// A path that names nothing pushable is returned as a failed result, not an
+// error.
 func (s *Service) pushTargets(ctx context.Context, space drive.Space, paths []string) ([]string, []PushResult, error) {
 	root, err := s.files.Tree(ctx, space)
 	if err != nil {
@@ -346,7 +346,6 @@ func (s *Service) pullOne(ctx context.Context, space drive.Space, local *localIn
 	return PullResult{Path: p, Action: ActionConflict, SHA256: sum, LocalPath: copyPath}
 }
 
-// Share creates the public link of a document already on the server.
 func (s *Service) Share(ctx context.Context, server string, space drive.Space, p, expiresIn string) (driveapi.Share, error) {
 	client, _, err := s.client(server)
 	if err != nil {

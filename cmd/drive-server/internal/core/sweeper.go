@@ -52,7 +52,6 @@ func (s *Sweeper) Tick(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// Run ticks every interval until ctx is done.
 func (s *Sweeper) Run(ctx context.Context, every time.Duration) error {
 	t := time.NewTicker(every)
 	defer t.Stop()

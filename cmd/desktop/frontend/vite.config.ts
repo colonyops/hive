@@ -11,7 +11,6 @@ import icons from 'unplugin-icons/vite'
 // and palette import those files directly through this alias rather than
 // keeping a second copy under nodes/*/help.md — one file, two readers.
 const nodeDocs = fileURLToPath(new URL('../internal/app/flow/docs', import.meta.url))
-// The workspace package resolves through a symlink to a directory outside this root.
 const hiveUi = fileURLToPath(new URL('../../../web/packages/ui', import.meta.url))
 
 // https://vitejs.dev/config/

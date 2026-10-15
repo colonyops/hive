@@ -287,8 +287,6 @@ type shareResult struct {
 	Error     string             `json:"error,omitempty"`
 }
 
-// remoteTarget resolves what push, pull, and share all need: the service,
-// the space, and the server.
 func (cmd *DriveCmd) remoteTarget(ctx context.Context) (*driveremote.Service, drive.Space, string, error) {
 	remote, err := cmd.remote()
 	if err != nil {
@@ -305,8 +303,6 @@ func (cmd *DriveCmd) remoteTarget(ctx context.Context) (*driveremote.Service, dr
 	return remote, space, server, nil
 }
 
-// printResult writes result as a JSON line, or as a text line with the error,
-// if any, on stderr.
 func (cmd *DriveCmd) printResult(result any, action driveremote.Action, line, path, errMsg string) error {
 	if cmd.json {
 		return iojson.WriteLine(os.Stdout, result)

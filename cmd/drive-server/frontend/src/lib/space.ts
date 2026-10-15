@@ -1,9 +1,8 @@
 export interface SpaceRef {
   key: string
   title: string
-  /** The space's `/api/v1/...` prefix. */
   apiPrefix: string
-  /** The space's page route, without a trailing slash. */
+  /** No trailing slash. */
   routePrefix: string
 }
 

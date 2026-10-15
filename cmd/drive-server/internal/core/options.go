@@ -10,10 +10,8 @@ type options struct {
 	baseURL string
 }
 
-// Option configures the core services.
 type Option func(*options)
 
-// WithClock replaces time.Now, so tests can move time.
 func WithClock(now func() time.Time) Option {
 	return func(o *options) { o.now = now }
 }
