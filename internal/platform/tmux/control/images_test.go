@@ -1,6 +1,7 @@
 package tmuxcc
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -57,6 +58,7 @@ func TestAttachRedrawsWindowsThatDrewImages(t *testing.T) {
 	f.awaitCommands(t, "set-option -w -t @1 -u window-size", 1)
 	require.Equal(t, []string{
 		"show-options -w -v -q -t @1 window-size",
+		"show-options -w -v -A -t @1 window-size",
 		"resize-window -t @1 -x 119",
 		"set-option -w -t @1 -u window-size",
 	}, f.commandsMatching("-t @1"))
@@ -71,6 +73,36 @@ func TestARedrawRestoresAWindowsOwnSizeOption(t *testing.T) {
 	attachFake(t, f, Options{})
 
 	f.awaitCommands(t, "set-option -w -t @1 window-size largest", 1)
+}
+
+// resize-window stores the width it set, and a window whose size is manual
+// keeps that width whatever the option is put back to.
+func TestARedrawPutsBackTheWidthOfAManualWindow(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setPanes("", "@1 1")
+	f.setOption(globalOption, "manual")
+	attachFake(t, f, Options{})
+
+	f.awaitCommands(t, "set-option -w -t @1 -u window-size", 1)
+	require.Equal(t, []string{"resize-window -t @1 -x 119", "resize-window -t @1 -x 120"}, f.commandsMatching("resize-window"))
+}
+
+func TestClosingDuringARedrawRestoresTheWindow(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setPanes("", "@1 1")
+	client := attachFake(t, f, Options{})
+	f.awaitCommands(t, "resize-window -t @1", 1)
+
+	require.NoError(t, client.Close(t.Context()))
+
+	sent := f.sentCommands()
+	restore := slices.Index(sent, "set-option -w -t @1 -u window-size")
+	require.NotEqual(t, -1, restore, "the window's size option is put back")
+	require.Less(t, restore, slices.Index(sent, "detach"), "before the detach that ends the gateway")
 }
 
 func TestAttachLeavesWindowsWithoutImagesAlone(t *testing.T) {

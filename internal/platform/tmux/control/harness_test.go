@@ -180,7 +180,10 @@ func (f *fakeTmux) respond(cmd string) {
 		f.reply([]string{reported}, false)
 	case strings.HasPrefix(cmd, "show-options"):
 		f.mu.Lock()
-		values := f.options[argAfter(cmd, "-t")]
+		values, ok := f.options[argAfter(cmd, "-t")]
+		if !ok && strings.Contains(cmd, " -A ") {
+			values = f.options[globalOption]
+		}
 		f.mu.Unlock()
 		f.reply(values, false)
 	case strings.HasPrefix(cmd, "new-window"):
@@ -248,6 +251,10 @@ func (f *fakeTmux) setPanes(window string, lines ...string) {
 	defer f.mu.Unlock()
 	f.panes[window] = lines
 }
+
+// globalOption is the setOption target whose values a show-options -A falls
+// back to when the window has no value of its own.
+const globalOption = "-g"
 
 // setOption sets what show-options answers for one target.
 func (f *fakeTmux) setOption(target string, values ...string) {

@@ -18,6 +18,8 @@ const imagePaneOption = "@hive-kitty-images"
 // first reads as no change at all.
 const imageRedrawPause = 150 * time.Millisecond
 
+const imageRestoreTimeout = 2 * time.Second
+
 var kittyCommandStart = []byte("\x1b_G")
 
 // imageDetector reports the first Kitty graphics command in each pane's
@@ -82,7 +84,8 @@ func (c *Client) markImagePane(ctx context.Context, pane string) {
 // window-size option to manual, and the option then goes back to what it was.
 // A per-window client size would be gentler, but tmux honours it only from
 // the window's latest client, and another app attached to the same session
-// usually is that client.
+// usually is that client. A window whose size is manual anyway keeps the width
+// resize-window stored, so that width is put back explicitly.
 func (c *Client) redrawImageWindows(ctx context.Context) {
 	windows, err := c.imageWindows(ctx)
 	if err != nil {
@@ -91,14 +94,23 @@ func (c *Client) redrawImageWindows(ctx context.Context) {
 		}
 		return
 	}
-	type narrowedWindow struct{ id, size string }
+	type narrowedWindow struct {
+		id, size string
+		width    int
+		manual   bool
+	}
 	var narrowed []narrowedWindow
 	for _, id := range windows {
 		w, ok := c.ctrl.byID(id)
 		if !ok || w.Width < 3 {
 			continue
 		}
-		local, err := c.gw.Send(ctx, "show-options -w -v -q -t "+id+" window-size")
+		local, err := c.windowSizeOption(ctx, id, "-q")
+		if err != nil {
+			c.log.Debug().Err(err).Str("window", id).Msg("reading an image window's size option failed")
+			continue
+		}
+		effective, err := c.windowSizeOption(ctx, id, "-A")
 		if err != nil {
 			c.log.Debug().Err(err).Str("window", id).Msg("reading an image window's size option failed")
 			continue
@@ -107,7 +119,7 @@ func (c *Client) redrawImageWindows(ctx context.Context) {
 			c.log.Debug().Err(err).Str("window", id).Msg("narrowing an image window failed")
 			continue
 		}
-		narrowed = append(narrowed, narrowedWindow{id: id, size: strings.TrimSpace(strings.Join(local, ""))})
+		narrowed = append(narrowed, narrowedWindow{id: id, size: local, width: w.Width, manual: effective == "manual"})
 	}
 	if len(narrowed) == 0 {
 		return
@@ -116,10 +128,17 @@ func (c *Client) redrawImageWindows(ctx context.Context) {
 	case <-time.After(imageRedrawPause):
 	case <-ctx.Done():
 	}
-	// Restored on the client's own context even after cancellation: a window
-	// left on window-size manual keeps the narrow size for every client.
-	restore := context.WithoutCancel(ctx)
+	// Restored even after cancellation: a window left on window-size manual
+	// keeps the narrow size for every client. Close waits for this before it
+	// detaches, so the gateway can still carry it.
+	restore, cancel := context.WithTimeout(context.WithoutCancel(ctx), imageRestoreTimeout)
+	defer cancel()
 	for _, w := range narrowed {
+		if w.manual {
+			if _, err := c.gw.Send(restore, fmt.Sprintf("resize-window -t %s -x %d", w.id, w.width)); err != nil {
+				c.log.Warn().Err(err).Str("window", w.id).Msg("restoring an image window's width failed")
+			}
+		}
 		cmd := "set-option -w -t " + w.id + " -u window-size"
 		if w.size != "" {
 			cmd = "set-option -w -t " + w.id + " window-size " + w.size
@@ -128,6 +147,16 @@ func (c *Client) redrawImageWindows(ctx context.Context) {
 			c.log.Warn().Err(err).Str("window", w.id).Msg("restoring an image window's size failed")
 		}
 	}
+}
+
+// windowSizeOption reads a window's window-size: its own value with -q, or the
+// value in effect, inherited included, with -A.
+func (c *Client) windowSizeOption(ctx context.Context, id, flag string) (string, error) {
+	lines, err := c.gw.Send(ctx, "show-options -w -v "+flag+" -t "+id+" window-size")
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(strings.Join(lines, "")), nil
 }
 
 func (c *Client) imageWindows(ctx context.Context) ([]string, error) {

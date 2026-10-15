@@ -677,6 +677,10 @@ func (c *Client) Close(ctx context.Context) error {
 		// Recorded before the detach round trip: tmux answers it with %exit and
 		// closes the stream, and the reader must not race a different reason in.
 		c.noteExit("detached")
+		// An image redraw in its pause restores the window's size on the way
+		// out; after the detach that command would have nowhere to go.
+		c.cancel()
+		c.bgPaint.Wait()
 		detachCtx, cancel := context.WithTimeout(ctx, detachTimeout)
 		_, _ = c.gw.Send(detachCtx, "detach")
 		cancel()
