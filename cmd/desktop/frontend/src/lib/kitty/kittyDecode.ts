@@ -6,7 +6,7 @@ const RGB = 24
 
 /**
  * Turns a completed transmission into a bitmap. `maxBytes` bounds what a
- * compressed payload may inflate to.
+ * compressed payload may inflate to, and the pixels a PNG may decode to.
  */
 export async function decodeKittyImage(command: KittyCommand, base64: string, maxBytes: number): Promise<ImageBitmap> {
   if (typeof createImageBitmap !== 'function') throw new Error('createImageBitmap is unavailable')
@@ -16,6 +16,7 @@ export async function decodeKittyImage(command: KittyCommand, base64: string, ma
 
   switch (command.format) {
     case PNG:
+      if (pngPixelBytes(bytes) > maxBytes) throw new Error('png exceeds the byte limit')
       return createImageBitmap(new Blob([bytes], { type: 'image/png' }))
     case RGBA:
     case RGB:
@@ -23,6 +24,18 @@ export async function decodeKittyImage(command: KittyCommand, base64: string, ma
     default:
       throw new Error(`unsupported format ${command.format}`)
   }
+}
+
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+
+// A PNG compresses a blank canvas about a thousandfold, so a payload well under
+// the limit can still decode to gigabytes. The size comes from the IHDR chunk,
+// which the format requires first; bytes that are not a PNG are left to the
+// decoder to refuse.
+function pngPixelBytes(bytes: Uint8Array): number {
+  if (bytes.length < 24 || PNG_SIGNATURE.some((byte, i) => bytes[i] !== byte)) return 0
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  return view.getUint32(16) * view.getUint32(20) * 4
 }
 
 function decodeBase64(base64: string): Uint8Array<ArrayBuffer> {
