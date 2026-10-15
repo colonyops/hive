@@ -11,18 +11,24 @@ import (
 	"github.com/hay-kot/httpkit/errchain"
 	"github.com/rs/zerolog"
 
+	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 	"github.com/colonyops/hive/internal/web/mid"
 	"github.com/colonyops/hive/pkg/buildinfo"
 )
 
 const shutdownGrace = 10 * time.Second
 
+// Services are the core services the handlers call.
+type Services struct {
+	Tokens *core.Tokens
+}
+
 // New returns the server's handler. /healthz is quiet in the request log
 // unless it fails, so a probe loop does not flood it.
-func New(log zerolog.Logger, info buildinfo.Info) http.Handler {
-	chain := errchain.New(mid.Errors(log))
+func New(log zerolog.Logger, info buildinfo.Info, svc Services) http.Handler {
+	chain := errchain.New(mid.Errors(log, mapError))
 	mux := http.NewServeMux()
-	registerRoutes(mux, chain, info)
+	registerRoutes(mux, chain, info, svc)
 	return mid.Logger(log, "/healthz")(mux)
 }
 

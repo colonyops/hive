@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $# -ne 1 ]]; then
+  echo "usage: $0 <migration-dir>" >&2
+  exit 2
+fi
+migration_dir=${1%/}
+
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-migration_dir=cmd/desktop/internal/app/data/queries/migrations
 current=$(find "$migration_dir" -maxdepth 1 -type f -name '*.up.sql' -print | LC_ALL=C sort)
 if [[ -z "$current" ]]; then
   echo "no migrations found under $migration_dir" >&2
@@ -39,7 +44,7 @@ base=$(git ls-tree -r --name-only "$base_ref" -- "$migration_dir" | grep '\.up\.
 base_dir=$migration_dir
 
 if [[ -z $base ]]; then
-  echo "migration order valid against $base_ref; it has no desktop migrations"
+  echo "migration order valid against $base_ref; it has no migrations there"
   exit 0
 fi
 
