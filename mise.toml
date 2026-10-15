@@ -256,7 +256,7 @@ description = "List commits since the latest release"
 run = "git log $(git describe --tags --abbrev=0 --match 'v[0-9]*' --match 'desktop-v*')..HEAD --pretty=format:'- %s (%h)'"
 
 [tasks."changelog:new"]
-description = 'Add one release note to a changelog draft: mise run changelog:new -- --product <cli|desktop> --kind <added|changed|fixed> "The note"'
+description = 'Add one release note to a changelog draft: mise run changelog:new -- --product <cli|desktop|drive-server> --kind <added|changed|fixed> "The note"'
 run = "go run ./cmd/tools/release changelog new"
 
 [tasks."changelog:promote"]
