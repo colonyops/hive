@@ -174,9 +174,9 @@ interface PaneRuntime {
   finder: SearchAddon
   output: TerminalOutputWriter
   disposers: IDisposable[]
-  // An atlas renderer is live on this terminal. False after a context loss the
-  // canvas claim did not survive, which is what makes the next activation
-  // retry instead of leaving the pane on the DOM renderer. ADR terminal-renderer-claimed-on-activation.
+  // An atlas renderer is live on this terminal. False after a failed claim or a
+  // context loss, which is what makes the next activation retry instead of
+  // leaving the pane on the DOM renderer. ADR terminal-renderer-claimed-on-activation.
   rendered?: boolean
   // The last value written to the pane's reactive `scrolledUp`, held raw so the
   // per-line refresh can tell "unchanged" without touching a Vue proxy. See
@@ -352,11 +352,6 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
         { dispose: () => output.dispose() },
         silenceDeviceReports(term),
         term.onData((data: string) => sendInput(paneId, data)),
-        // onScroll covers what output does to the buffer — the auto-pin to the
-        // tail, and a trim moving it — but *not* the user scrolling: xterm's
-        // viewport syncs the buffer from its own DOM scroll handler and
-        // suppresses the event to avoid feeding itself. attachPane listens to
-        // that DOM scroll for the other half.
         term.onScroll(() => refreshScrolledUp(paneId)),
         // Entering the alternate screen has no scrollback and fires no scroll
         // event on the way in.
@@ -518,7 +513,6 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     if (!found || !state || state.host) return
     state.host = host
     state.term.open(host)
-    watchViewportScroll(state, paneId, host)
     const releasePaste = installTerminalImages(host, {
       pasteText: (text) => sendPaste(paneId, text),
       capture: () => {
@@ -559,21 +553,6 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   function focusIsInside(windowId: string): boolean {
     const host = windows.get(windowId)?.host
     return !!host && host.contains(document.activeElement)
-  }
-
-  // The only signal that the user scrolled. xterm's own onScroll is suppressed
-  // on this path — the viewport reads its DOM scrollTop, syncs the buffer, and
-  // swallows the event so it cannot feed itself — so a wheel, a trackpad or a
-  // dragged scrollbar moves the viewport off the tail silently, and nothing
-  // would ever offer the way back. The element only exists after open(), and
-  // xterm's own listener is registered inside it, so ours runs second and reads
-  // a buffer already synced.
-  function watchViewportScroll(state: PaneRuntime, paneId: string, host: HTMLElement): void {
-    const viewport = host.querySelector('.xterm-viewport')
-    if (!viewport) return
-    const onScroll = (): void => refreshScrolledUp(paneId)
-    viewport.addEventListener('scroll', onScroll, { passive: true })
-    state.disposers.push({ dispose: () => viewport.removeEventListener('scroll', onScroll) })
   }
 
   function scheduleVote(): void {

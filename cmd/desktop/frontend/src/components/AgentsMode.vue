@@ -606,7 +606,7 @@ function attachStream(created: Terminal, terminalId: string, windowId: string, p
     }),
   })
   pane.track(
-    watchTailPin(created, paneHost.value, (scrolledUp) => {
+    watchTailPin(created, (scrolledUp) => {
       paneScrolledUp.value = scrolledUp
     }),
   )

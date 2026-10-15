@@ -1908,18 +1908,21 @@ session:
   compares its vote against the granted size and names the constraint; nothing
   re-votes to win the size back from the other client.
 
-On the frontend, a pane on screen **always renders through an atlas renderer** —
-WebGL, falling back to 2D canvas — because only an atlas renderer strokes box
+On the frontend, a pane on screen **renders through the WebGL atlas renderer**
+when it can — xterm 6 has no canvas renderer, so the DOM renderer is the only
+fallback — because only an atlas renderer strokes box
 drawing and underlines to the cell's device-pixel bounds; xterm's DOM renderer
 cannot join either across cells at any size or device pixel ratio. Four rules
-follow and are the ones to keep (ADRs terminal-atlas-renderer, terminal-renderer-claimed-on-activation): the renderer is claimed after
+follow and are the ones to keep (ADRs terminal-atlas-renderer, terminal-renderer-claimed-on-activation,
+xterm-6-drops-the-canvas-renderer-so-the-dom-renderer-is-the-only-fallback): the renderer is claimed after
 `term.open()` and never before, and **when the window is first shown rather than
 when a pane mounts** — the pool mounts a host per pane of every window of every
 attached session, and claiming at mount spends a GL context per background pane
 and walks the page past WebKit's per-page limit, where the context it costs is
 another session's pane; a pane that ends up on the DOM renderer is a logged
-degradation path, not a supported one, and a failed canvas claim is recorded so
-the next activation retries rather than stranding the pane there; **do not set
+degradation path, not a supported one, and a failed WebGL claim or a lost
+context is recorded so the next activation retries rather than stranding the
+pane there; **do not set
 `lineHeight` or `letterSpacing`** — every renderer quantises both to whole
 device pixels, so neither can tune a cell onto a cleaner boundary and a
 `lineHeight` above 1 pads the glyph off the edge box drawing has to reach; and

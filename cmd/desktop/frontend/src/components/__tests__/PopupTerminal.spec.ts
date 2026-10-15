@@ -81,7 +81,6 @@ vi.mock('@wailsio/runtime', () => ({
 }))
 vi.mock('@xterm/addon-fit', () => ({ FitAddon: xterm.FakeAddon }))
 vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: xterm.FakeAddon }))
-vi.mock('@xterm/addon-canvas', () => ({ CanvasAddon: xterm.FakeAddon }))
 
 const mocks = vi.hoisted(() => ({
   Available: vi.fn(),
