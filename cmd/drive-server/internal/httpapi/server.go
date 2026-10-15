@@ -4,6 +4,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"io/fs"
 	"net"
 	"net/http"
 	"net/netip"
@@ -26,6 +27,9 @@ type Services struct {
 	SignIn    *core.SignIn
 	Documents *core.Documents
 	Shares    *core.Shares
+
+	// Web is the built web UI. When nil, no UI route is registered.
+	Web fs.FS
 
 	// BaseURL decides the session cookie's name and Secure flag.
 	BaseURL string
