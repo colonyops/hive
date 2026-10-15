@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/colonyops/hive/cmd/desktop/internal/web"
+	"github.com/colonyops/hive/internal/web"
 )
 
 const maxBodyBytes = 1 << 20
