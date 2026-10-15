@@ -128,8 +128,7 @@ type ShareLink struct {
 	UserID     string
 	DocumentID string
 	ExpiresAt  *time.Time
-	// ExpiresIn is the preset that set ExpiresAt, or empty for no expiry or a
-	// link from before presets were stored.
+	// ExpiresIn is the preset that set ExpiresAt, or empty for no expiry.
 	ExpiresIn string
 	CreatedAt time.Time
 }

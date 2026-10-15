@@ -5,7 +5,7 @@ export type TokenScope = 'read' | 'push'
 export interface Share {
   url: string
   expires_at?: string
-  /** The preset behind expires_at; empty for no expiry or a link made before presets were stored. */
+  /** The preset behind expires_at; empty for no expiry. */
   expires_in: ShareExpiry
 }
 

@@ -12,12 +12,12 @@ type Document struct {
 	ID         string     `json:"id"`
 	Space      string     `json:"space"`
 	Path       string     `json:"path"`
+	Title      string     `json:"title"`
 	Kind       drive.Kind `json:"kind"`
 	Sha256     string     `json:"sha256"`
 	Size       int64      `json:"size"`
-	Body       []byte     `json:"body"`
 	UpdatedAt  int64      `json:"updated_at"`
-	Title      string     `json:"title"`
+	Body       []byte     `json:"body"`
 	SearchText string     `json:"search_text"`
 }
 

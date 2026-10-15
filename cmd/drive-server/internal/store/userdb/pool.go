@@ -36,12 +36,11 @@ type Pool struct {
 	maxOpen int
 	idle    time.Duration
 
-	mu       sync.Mutex
-	changed  *sync.Cond // leases dropped or a removal finished
-	entries  map[string]*entry
-	lru      *list.List // front is most recently used
-	migrated map[string]struct{}
-	closed   bool
+	mu      sync.Mutex
+	changed *sync.Cond // leases dropped or a removal finished
+	entries map[string]*entry
+	lru     *list.List // front is most recently used
+	closed  bool
 
 	stop      chan struct{}
 	done      chan struct{}
@@ -53,15 +52,14 @@ type Pool struct {
 // idle close.
 func NewPool(log zerolog.Logger, dir string, maxOpen int, idle time.Duration) *Pool {
 	p := &Pool{
-		log:      logutils.Component(log, "userdb"),
-		dir:      dir,
-		maxOpen:  max(maxOpen, 1),
-		idle:     idle,
-		entries:  map[string]*entry{},
-		lru:      list.New(),
-		migrated: map[string]struct{}{},
-		stop:     make(chan struct{}),
-		done:     make(chan struct{}),
+		log:     logutils.Component(log, "userdb"),
+		dir:     dir,
+		maxOpen: max(maxOpen, 1),
+		idle:    idle,
+		entries: map[string]*entry{},
+		lru:     list.New(),
+		stop:    make(chan struct{}),
+		done:    make(chan struct{}),
 	}
 	p.changed = sync.NewCond(&p.mu)
 	if idle > 0 {
@@ -97,12 +95,10 @@ func (p *Pool) Open(ctx context.Context, userID string) (*UserDB, func(), error)
 		if err := os.MkdirAll(p.dir, 0o700); err != nil {
 			return nil, nil, fmt.Errorf("userdb: create users dir: %w", err)
 		}
-		_, migrated := p.migrated[userID]
-		udb, err := openUserDB(ctx, p.path(userID), migrated)
+		udb, err := openUserDB(ctx, p.path(userID))
 		if err != nil {
 			return nil, nil, err
 		}
-		p.migrated[userID] = struct{}{}
 		p.evictLocked()
 		e = &entry{id: userID, db: udb}
 		e.elem = p.lru.PushFront(e)
@@ -150,7 +146,6 @@ func (p *Pool) Remove(_ context.Context, userID string) error {
 		}
 		p.changed.Wait()
 	}
-	delete(p.migrated, userID)
 
 	var errs []error
 	for _, suffix := range []string{"", "-wal", "-shm"} {

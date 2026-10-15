@@ -38,6 +38,7 @@ CREATE TABLE share_links (
     user_id     TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     document_id TEXT NOT NULL,
     expires_at  INTEGER,
+    expires_in  TEXT NOT NULL DEFAULT '',
     created_at  INTEGER NOT NULL
 );
 

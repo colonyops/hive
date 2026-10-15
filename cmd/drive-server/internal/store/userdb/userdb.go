@@ -27,7 +27,7 @@ type UserDB struct {
 	q    *db.Queries
 }
 
-func openUserDB(ctx context.Context, path string, migrated bool) (*UserDB, error) {
+func openUserDB(ctx context.Context, path string) (*UserDB, error) {
 	// One connection: a query on u.q inside a transaction would wait forever
 	// for the connection the transaction holds, so transactions use the
 	// tx-bound Queries they are handed.
@@ -39,25 +39,14 @@ func openUserDB(ctx context.Context, path string, migrated bool) (*UserDB, error
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	if !migrated {
-		sub, err := fs.Sub(migrationsFS, "migrations")
-		if err == nil {
-			err = migrate.Up(ctx, conn, sub)
-		}
-		if err != nil {
-			return nil, errors.Join(fmt.Errorf("migrate %s: %w", path, err), conn.Close())
-		}
+	sub, err := fs.Sub(migrationsFS, "migrations")
+	if err == nil {
+		err = migrate.Up(ctx, conn, sub)
 	}
-	u := &UserDB{conn: conn, q: db.New(conn)}
-	if !migrated {
-		if err := u.backfillTitles(ctx); err != nil {
-			return nil, errors.Join(fmt.Errorf("backfill titles %s: %w", path, err), conn.Close())
-		}
-		if err := u.backfillSearchText(ctx); err != nil {
-			return nil, errors.Join(fmt.Errorf("backfill search text %s: %w", path, err), conn.Close())
-		}
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("migrate %s: %w", path, err), conn.Close())
 	}
-	return u, nil
+	return &UserDB{conn: conn, q: db.New(conn)}, nil
 }
 
 func (u *UserDB) close() error { return u.conn.Close() }
@@ -204,32 +193,3 @@ func wrap(op string, err error) error {
 }
 
 func fromNanos(n int64) time.Time { return time.Unix(0, n).UTC() }
-
-const backfillBatch = 100
-
-// backfillTitles titles rows written before migration 0002. Titles come from
-// Go, so SQL cannot fill them in the migration.
-func (u *UserDB) backfillTitles(ctx context.Context) error {
-	for {
-		rows, err := u.q.ListUntitledDocuments(ctx, backfillBatch)
-		if err != nil {
-			return err
-		}
-		if len(rows) == 0 {
-			return nil
-		}
-		err = sqlite.WithinTx(ctx, u.conn, func(ctx context.Context, tx *sql.Tx) error {
-			q := u.q.WithTx(tx)
-			for _, row := range rows {
-				title := core.DeriveTitle(row.Path, row.Kind, row.Body)
-				if err := q.SetDocumentTitle(ctx, db.SetDocumentTitleParams{Title: title, ID: row.ID}); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-	}
-}
