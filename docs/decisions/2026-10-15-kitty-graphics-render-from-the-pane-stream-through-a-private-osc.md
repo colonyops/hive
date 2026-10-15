@@ -24,8 +24,10 @@ draws it on a canvas layer over the screen, never into cells.
 The renderer never replies and never moves the cursor. tmux does not move its
 cursor for an APC, and the rule of
 [ADR the-embedded-emulator-never-answers-terminal-queries-on-a-tmux-pane](2026-08-08-the-embedded-emulator-never-answers-terminal-queries-on-a-tmux-pane.md)
-holds. Hive Desktop sets `PI_IMAGE_PROTOCOL=kitty` only on the sessions,
-windows and pop-ups it starts. Without it, Pi turns images off under `$TMUX`.
+holds. Hive Desktop sets `PI_IMAGE_PROTOCOL=kitty` only on the chats,
+sessions, agent windows and pop-ups it starts; a session gets it through its
+tmux session environment, and only when its spawn is `windows:`. Without it, Pi
+turns images off under `$TMUX`.
 
 ## Consequences
 
@@ -34,8 +36,6 @@ them back, the control client marks a pane with `@hive-kitty-images` when its
 output first carries a Kitty command; tmux keeps the mark across app restarts.
 After each paint pass the client narrows every marked window by a column with
 `resize-window` for 150 ms, then puts the window's `window-size` option back.
-A per-window client size would not change it: tmux honours that only from the
-window's latest client, which is often another app attached to the session.
 Pi redraws its whole transcript on a width change, images included. Every
 client attached to the window sees the resize, and a window stays narrow if
 the app dies inside those 150 ms. tmux also treats the APC as a pane title,

@@ -15,9 +15,11 @@ export interface StreamFilter {
   reset(): void
 }
 
-// tmux splits one process write across %output notifications, while xterm 5
-// ignores the synchronized-output markers pi wraps around each redraw. Holding
-// only those marked frames keeps their intermediate rows off the renderer.
+// tmux splits one process write across %output notifications. xterm 6 defers
+// its own row renders inside the synchronized-output markers pi wraps around
+// each redraw, but it still parses each part as it arrives, and the Kitty layer
+// paints from the buffer on its own animation frame. Holding only those marked
+// frames keeps the buffer, and so the images, from showing a half-drawn one.
 export class TerminalOutputWriter {
   private prefix = new Uint8Array()
   private frame: Uint8Array[] = []
