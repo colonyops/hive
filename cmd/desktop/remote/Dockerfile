@@ -42,5 +42,4 @@ COPY cmd/desktop/e2e/package*.json ./
 RUN npm ci
 COPY --from=build /out/ /usr/local/bin/
 COPY cmd/desktop/remote/smoke.* ./
-COPY cmd/desktop/remote/unattended.* ./
 ENTRYPOINT ["/smoke/smoke.sh"]
