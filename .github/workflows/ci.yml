@@ -50,6 +50,7 @@ jobs:
               - 'mise.toml'
               - 'mise.lock'
               - 'cmd/desktop/tasks.toml'
+              - 'cmd/drive-server/**'
               - '.github/workflows/**'
               - '.github/actions/**'
             cli-integration:

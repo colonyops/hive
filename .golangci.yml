@@ -182,6 +182,7 @@ linters:
           files:
             - "**/cmd/hive/**"
             - "**/cmd/desktop/**"
+            - "**/cmd/drive-server/**"
             - "!$test"
           list-mode: lax
           allow:
@@ -196,6 +197,24 @@ linters:
           deny:
             - pkg: github.com/colonyops/hive/cmd/hive
               desc: The desktop must not import the CLI program.
+            - pkg: github.com/colonyops/hive/cmd/drive-server
+              desc: The desktop must not import the drive server program.
+        drive-server-no-program-deps:
+          files:
+            - "**/cmd/drive-server/**"
+          deny:
+            - pkg: github.com/colonyops/hive/cmd/desktop
+              desc: The drive server must not import the desktop program.
+            - pkg: github.com/colonyops/hive/cmd/hive
+              desc: The drive server must not import the CLI program.
+            - pkg: github.com/wailsapp
+              desc: The drive server has no UI runtime.
+            - pkg: github.com/dop251/goja
+              desc: The drive server runs no user code.
+            - pkg: charm.land
+              desc: The drive server does not render a terminal UI.
+            - pkg: github.com/charmbracelet
+              desc: The drive server does not render a terminal UI.
         # web is shared by every program's HTTP surface (ADR http-handler-conventions),
         # so it cannot depend on the engine or the store.
         web-is-plumbing:
@@ -218,6 +237,8 @@ linters:
               desc: The CLI must not depend on the desktop telemetry runtime.
             - pkg: github.com/colonyops/hive/cmd/desktop
               desc: The CLI must not import the desktop program.
+            - pkg: github.com/colonyops/hive/cmd/drive-server
+              desc: The CLI must not import the drive server program.
     exhaustive:
       default-signifies-exhaustive: true
     forbidigo:
