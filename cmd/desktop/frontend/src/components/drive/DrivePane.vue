@@ -99,8 +99,8 @@ watch(shown, () => {
 const empty = computed(() => !!tree.value && !tree.value.children?.length)
 
 // The pane is too narrow for a comments column beside the document, so the
-// comments overlay it. They open on a new comment or a click on a commented
-// block.
+// comments overlay it. They open on a new comment or a click on a
+// highlight.
 const review = useDriveReview()
 const reviewed = computed(() => {
   const doc = document.value

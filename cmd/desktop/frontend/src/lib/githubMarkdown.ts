@@ -228,9 +228,19 @@ const checkIcon = `${svgOpen}<path d="M20 6 9 17l-5-5"/></svg>`
 export const codeCopyButtonClass = 'markdown-code-copy'
 const codeCopyButton = `<button type="button" class="${codeCopyButtonClass}" data-testid="markdown-code-copy" aria-label="Copy code" title="Copy code">${copyIcon}${checkIcon}</button>`
 
+// A fence's range includes its opening fence line; data-source-code-start
+// names the line its code starts on, so a selection inside it counts from
+// there.
+function codeSourceAttrs(token: Token, env: SourceEnv): string {
+  const range = sourceRange(token, env)
+  if (!range) return ''
+  const codeStart = token.type === 'fence' ? ` data-source-code-start="${range[0] + 1}"` : ''
+  return ` data-source-start="${range[0]}" data-source-end="${range[1]}"${codeStart}`
+}
+
 function withCopyButton(rule: RenderRule): RenderRule {
   return (tokens, index, options, env, self) =>
-    `<div class="markdown-code"${sourceAttrs(tokens[index], env as SourceEnv)}>${codeCopyButton}${rule(tokens, index, options, env, self)}</div>`
+    `<div class="markdown-code"${codeSourceAttrs(tokens[index], env as SourceEnv)}>${codeCopyButton}${rule(tokens, index, options, env, self)}</div>`
 }
 md.renderer.rules.fence = withCopyButton(md.renderer.rules.fence!)
 md.renderer.rules.code_block = withCopyButton(md.renderer.rules.code_block!)

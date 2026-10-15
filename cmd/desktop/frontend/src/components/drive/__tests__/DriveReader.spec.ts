@@ -16,6 +16,7 @@ const settingsBindings = vi.hoisted(() => ({
   AppearanceSettings: vi.fn(),
   SetCanvasFontSize: vi.fn(),
   SetCanvasLineSpacing: vi.fn(),
+  ReviewLabels: vi.fn().mockResolvedValue(null),
 }))
 vi.mock(
   '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice',

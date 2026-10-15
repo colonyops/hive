@@ -44,6 +44,7 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
 }))
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   AppearanceSettings: vi.fn().mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '' }),
+  ReviewLabels: vi.fn().mockResolvedValue(null),
 }))
 
 const plan = doc('plans/plan.md', { title: 'The Plan', modified: '2026-10-03T00:00:00Z' })

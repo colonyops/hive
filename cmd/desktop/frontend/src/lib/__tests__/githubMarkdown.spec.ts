@@ -186,7 +186,9 @@ describe('renderCanvasMarkdown source lines', () => {
 
   it('puts a fence range on its copy wrapper, highlighted or not', async () => {
     const source = 'Intro\n\n```go\nfunc main() {}\n```\n'
-    expect(html(source)).toContain('<div class="markdown-code" data-source-start="3" data-source-end="5">')
+    expect(html(source)).toContain(
+      '<div class="markdown-code" data-source-start="3" data-source-end="5" data-source-code-start="4">',
+    )
 
     const { highlight, load, settle } = useCodeHighlight()
     await load()
@@ -196,7 +198,9 @@ describe('renderCanvasMarkdown source lines', () => {
       .map((part) => (part.kind === 'html' ? part.html : ''))
       .join('')
     expect(highlighted).toContain('class="shiki')
-    expect(highlighted).toContain('<div class="markdown-code" data-source-start="3" data-source-end="5">')
+    expect(highlighted).toContain(
+      '<div class="markdown-code" data-source-start="3" data-source-end="5" data-source-code-start="4">',
+    )
   })
 
   it('wraps escaped html blocks', () => {

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // One document rendered by kind. The pane and the full-page view share it, so
 // a document reads the same in both and only the width differs.
-import { useDebounceFn, useEventListener, useMutationObserver, useResizeObserver } from '@vueuse/core'
-import { computed, ref, watch, type ComponentPublicInstance } from 'vue'
+import { useDebounceFn, useEventListener, useMutationObserver, useResizeObserver, useTimeoutFn } from '@vueuse/core'
+import { computed, ref, shallowRef, watch, type ComponentPublicInstance } from 'vue'
 import HtmlDocumentFrame from './HtmlDocumentFrame.vue'
 import DriveCommentPopover from './DriveCommentPopover.vue'
 import DriveFrontmatter from './DriveFrontmatter.vue'
@@ -10,13 +10,18 @@ import CanvasMarkdown from '../CanvasMarkdown.vue'
 import EmptyState from '../ui/EmptyState.vue'
 import InlineError from '../ui/InlineError.vue'
 import IconArrowUpRight from '~icons/lucide/arrow-up-right'
+import IconMessageSquarePlus from '~icons/lucide/message-square-plus'
 import { useCanvasSettings } from '../../stores/useCanvasSettings'
 import { useDriveReview } from '../../stores/useDriveReview'
 import { entryTime, frontmatterLineCount, linkTarget, markdownBody, type FrontmatterValue } from '../../lib/drive'
 import {
+  blockTextRange,
   highlightAt,
   markReviewedBlocks,
+  pickableBlock,
+  rangeBoxes,
   reviewHighlights,
+  type HighlightBox,
   selectionToRange,
   type ReviewHighlight,
   type SourceRange,
@@ -31,7 +36,7 @@ const props = defineProps<{
   error: string | null
   /**
    * Derives `-document`, `-markdown`, `-block-<id>` (with `-html` and `-link`), `-frame`, `-file`, `-error`,
-   * `-empty`, and the comment popover's ids (DriveCommentPopover).
+   * `-empty`, `-block-comment`, and the comment popover's ids (DriveCommentPopover).
    */
   testid: string
 }>()
@@ -88,6 +93,11 @@ const body = computed(() => (markdownView.value?.$el as HTMLElement | undefined)
 // selection to settle, so a drag does not open it at every step, and it
 // leaves an open draft alone once the user is in it or has typed.
 const drafting = ref<SourceRange | null>(null)
+// The selection a draft is for, painted as a pending highlight: clicking into
+// the composer collapses the live selection, and the text it was about must
+// stay marked.
+let draftRange: Range | null = null
+const pending = ref<HighlightBox[]>([])
 const draftText = ref('')
 const anchorRect = ref<{ top: number; left: number; width: number; height: number } | null>(null)
 const popover = ref<{ contains: (node: Node | null) => boolean } | null>(null)
@@ -102,8 +112,10 @@ const onSelectionChange = useDebounceFn(() => {
     endComment()
     return
   }
-  const rect = selection.getRangeAt(0).getBoundingClientRect()
+  const selected = selection.getRangeAt(0)
+  const rect = selected.getBoundingClientRect()
   anchorRect.value = { top: rect.top, left: rect.left, width: rect.width, height: rect.height }
+  draftRange = selected.cloneRange()
   drafting.value = range
   saveError.value = null
 }, 200)
@@ -115,6 +127,8 @@ useEventListener(
 )
 
 function endComment(): void {
+  draftRange = null
+  pending.value = []
   drafting.value = null
   draftText.value = ''
   anchorRect.value = null
@@ -142,7 +156,7 @@ watch(reviewed, endComment)
 // renders again), so the marks follow every change to it, not only to the
 // comments. The marks set attributes, which this does not observe.
 //
-// The blocks carry the marks; what the user sees is a layer behind the text
+// The blocks carry the marks; what the user sees is a layer over the text
 // with the exact text each comment quotes highlighted, a box per line, so a
 // comment on one word marks that word. Overlapping comments stack their
 // tints.
@@ -154,10 +168,14 @@ function mark(): void {
   if (!body.value) return
   markReviewedBlocks(body.value, shownComments.value)
   highlights.value = layer.value ? reviewHighlights(body.value, layer.value, shownComments.value) : []
+  pending.value = layer.value && draftRange ? rangeBoxes(draftRange, layer.value) : []
 }
 useMutationObserver(body, mark, { childList: true, subtree: true })
 useResizeObserver(body, mark)
-watch([body, shownComments], mark, { flush: 'post' })
+// The layer spans the whole reader, so it also resizes when the front matter
+// above the body opens or closes and moves the body without resizing it.
+useResizeObserver(layer, mark)
+watch([body, shownComments, drafting], mark, { flush: 'post' })
 
 // Hover and click hit the drawn highlights, not the blocks under them, so the
 // rest of a paragraph with a one-word comment stays plain text. Where
@@ -180,6 +198,83 @@ useEventListener(body, 'click', (event: MouseEvent) => {
   if (id) reviewStore.setActive(id)
 })
 
+// A handle in the gutter beside the block under the pointer selects that
+// whole block, which opens the composer the way any selection does. It stays
+// out of the way of a drag that selects text and of an open draft.
+const root = ref<HTMLElement | null>(null)
+const pickedBlock = shallowRef<HTMLElement | null>(null)
+const handleBox = ref<{ top: number; left: number } | null>(null)
+const blockPreview = ref<HighlightBox | null>(null)
+const handleSize = 24
+const handleGap = 10
+
+function pointBlock(block: HTMLElement | null): void {
+  pickedBlock.value = block
+  blockPreview.value = null
+  if (!block || !root.value) {
+    handleBox.value = null
+    return
+  }
+  const base = root.value.getBoundingClientRect()
+  const rect = block.getBoundingClientRect()
+  const lineHeight = Number.parseFloat(getComputedStyle(block).lineHeight) || handleSize
+  const firstLine = block.matches('.markdown-code, table, .canvas-mermaid') ? handleSize + 8 : lineHeight
+  // The reader's own padding is the gutter; the narrow pane's is thinner
+  // than the handle, which then overlaps the text's edge rather than clips.
+  const gutter = base.left - (root.value.parentElement?.getBoundingClientRect().left ?? base.left)
+  handleBox.value = {
+    top: rect.top - base.top + (Math.min(rect.height, firstLine) - handleSize) / 2,
+    left: Math.max(rect.left - base.left - handleSize - handleGap, -gutter),
+  }
+}
+
+// Moving left from the text to the handle crosses space that belongs to no
+// block, or to an enclosing list's indent: while the pointer stays on the
+// picked block's rows, that block stays picked.
+function onPickedRows(event: MouseEvent): boolean {
+  const rect = pickedBlock.value?.getBoundingClientRect()
+  return !!rect && event.clientY >= rect.top && event.clientY <= rect.bottom && event.clientX <= rect.right
+}
+
+// The handle sits in the gutter, partly outside the reader, so leaving the
+// reader on the way to it hides it only after a pause the handle cancels.
+const hideHandle = useTimeoutFn(() => pointBlock(null), 300, { immediate: false })
+
+useEventListener(root, 'mousemove', (event: MouseEvent) => {
+  hideHandle.stop()
+  if (!body.value || !current.value || drafting.value || event.buttons) {
+    if (pickedBlock.value) pointBlock(null)
+    return
+  }
+  if (event.target instanceof Element && event.target.closest('[data-block-comment-handle]')) return
+  const block = pickableBlock(event.target, body.value)
+  if (block === pickedBlock.value) return
+  if ((!block || block.contains(pickedBlock.value)) && onPickedRows(event)) return
+  pointBlock(block)
+})
+useEventListener(root, 'mouseleave', () => hideHandle.start())
+
+function previewBlock(on: boolean): void {
+  const block = pickedBlock.value
+  if (!on || !block || !layer.value) {
+    blockPreview.value = null
+    return
+  }
+  const base = layer.value.getBoundingClientRect()
+  const rect = block.getBoundingClientRect()
+  blockPreview.value = { top: rect.top - base.top, left: rect.left - base.left, width: rect.width, height: rect.height }
+}
+
+function commentOnBlock(): void {
+  const block = pickedBlock.value
+  const range = block ? blockTextRange(block) : null
+  const selection = globalThis.getSelection()
+  if (!range || !selection) return
+  selection.removeAllRanges()
+  selection.addRange(range)
+  pointBlock(null)
+}
+
 function follow(href: string): void {
   const target = linkTarget(href, props.document?.entry.path ?? '', props.paths)
   if (target?.kind === 'url') emit('open-url', target.url)
@@ -198,11 +293,12 @@ function onBodyClick(event: MouseEvent): void {
 
 <template>
   <div
+    ref="root"
     class="canvas-reader relative isolate flex min-h-0 flex-col"
     :style="readerStyle"
     :data-testid="`${testid}-document`"
   >
-    <div ref="layer" class="pointer-events-none absolute inset-0 -z-10" aria-hidden="true">
+    <div ref="layer" class="pointer-events-none absolute inset-0 z-10" aria-hidden="true">
       <template v-for="highlight in highlights" :key="highlight.id">
         <div
           v-for="(box, index) in highlight.boxes"
@@ -217,7 +313,39 @@ function onBodyClick(event: MouseEvent): void {
           :data-testid="`${testid}-highlight-${highlight.id}`"
         />
       </template>
+      <div
+        v-for="(box, index) in pending"
+        :key="`pending-${index}`"
+        class="review-highlight is-pending"
+        :style="{ top: `${box.top}px`, left: `${box.left}px`, width: `${box.width}px`, height: `${box.height}px` }"
+        :data-testid="`${testid}-highlight-pending`"
+      />
+      <div
+        v-if="blockPreview"
+        class="review-block-preview"
+        :style="{
+          top: `${blockPreview.top}px`,
+          left: `${blockPreview.left}px`,
+          width: `${blockPreview.width}px`,
+          height: `${blockPreview.height}px`,
+        }"
+      />
     </div>
+    <button
+      v-if="handleBox"
+      type="button"
+      data-block-comment-handle
+      class="review-block-handle"
+      :style="{ top: `${handleBox.top}px`, left: `${handleBox.left}px` }"
+      aria-label="Comment on this block"
+      :data-testid="`${testid}-block-comment`"
+      @mousedown.prevent
+      @mouseenter="(hideHandle.stop(), previewBlock(true))"
+      @mouseleave="previewBlock(false)"
+      @click="commentOnBlock"
+    >
+      <IconMessageSquarePlus class="size-3.5" aria-hidden="true" />
+    </button>
     <DriveFrontmatter
       v-if="properties"
       :frontmatter="properties.frontmatter"
@@ -388,27 +516,66 @@ function onBodyClick(event: MouseEvent): void {
 .canvas-reading-body.markdown-body :deep(tr) {
   background: transparent;
 }
-/* The highlight is the only marker of a comment in the document: a light
-   tint with an underline on the quoted text, stronger under the pointer, and
-   a hairline ring for the active one. Overlapping comments stack their
-   tints. */
+/* The highlight is the only marker of a comment in the document: a tint over
+   the quoted text, bleeding 2px past the glyphs, stronger under the pointer,
+   and ringed for the active one. It sits over the text rather than behind it
+   because inline code and other chips paint opaque backgrounds that would
+   cut holes in it, so its tint stays light enough to read through. The
+   pending highlight marks a selection being commented on. Overlapping
+   highlights stack their tints. */
 .review-highlight {
   position: absolute;
+  margin-left: -2px;
+  padding: 0 2px;
+  box-sizing: content-box;
   border-radius: 2px;
-  background: color-mix(in oklab, var(--color-accent) 10%, transparent);
-  box-shadow: inset 0 -1.5px 0 color-mix(in oklab, var(--color-accent) 55%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 16%, transparent);
   transition:
     background-color 120ms ease,
     box-shadow 120ms ease;
 }
 .review-highlight.is-hovered {
-  background: color-mix(in oklab, var(--color-accent) 18%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 24%, transparent);
 }
 .review-highlight.is-active {
-  background: color-mix(in oklab, var(--color-accent) 22%, transparent);
-  box-shadow:
-    inset 0 -1.5px 0 var(--color-accent),
-    0 0 0 1px color-mix(in oklab, var(--color-accent) 35%, transparent);
+  background: color-mix(in oklab, var(--color-accent) 28%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-accent) 55%, transparent);
+}
+.review-highlight.is-pending {
+  background: color-mix(in oklab, var(--color-accent) 28%, transparent);
+}
+.review-block-preview {
+  position: absolute;
+  margin: -3px 0 0 -4px;
+  padding: 3px 4px;
+  box-sizing: content-box;
+  border-radius: 4px;
+  outline: 1px dashed color-mix(in oklab, var(--color-accent) 70%, transparent);
+}
+.review-block-handle {
+  position: absolute;
+  z-index: 20;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 6px;
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-accent) 45%, transparent);
+}
+/* The bridge spans the gap to the text, so the pointer never leaves the
+   handle's hover on its way over. */
+.review-block-handle::after {
+  content: '';
+  position: absolute;
+  inset: -6px -10px -6px -6px;
+}
+.review-block-handle:hover {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
 }
 .canvas-link {
   display: flex;

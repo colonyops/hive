@@ -39,7 +39,10 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/ada
 vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/windowservice', () => ({
   Focused: vi.fn().mockResolvedValue(true),
 }))
-const settingsBindings = vi.hoisted(() => ({ AppearanceSettings: vi.fn() }))
+const settingsBindings = vi.hoisted(() => ({
+  AppearanceSettings: vi.fn(),
+  ReviewLabels: vi.fn().mockResolvedValue(null),
+}))
 vi.mock(
   '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice',
   () => settingsBindings,

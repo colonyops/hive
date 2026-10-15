@@ -30,7 +30,7 @@ export type ReviewResult = string | null
 export const useDriveReview = defineStore('driveReview', () => {
   const reviews = new Map<string, Resource<DocumentReviewWire>>()
   const notes = shallowRef<ReadonlyMap<string, string>>(new Map())
-  // The comment the user last pointed at, from its card or its block, so the
+  // The comment the user last pointed at, from its card or its highlight, so the
   // reader and the sidebar highlight the same one.
   const active = shallowRef<string | null>(null)
 
@@ -64,7 +64,7 @@ export const useDriveReview = defineStore('driveReview', () => {
     pageCommentsCollapsed.value = false
   }
 
-  // The comment under the pointer, from its card or anywhere in its block.
+  // The comment under the pointer, from its card or its highlight.
   const hovered = shallowRef<string | null>(null)
 
   function setHovered(id: string | null): void {

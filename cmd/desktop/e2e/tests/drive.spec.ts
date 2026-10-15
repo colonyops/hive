@@ -62,7 +62,7 @@ test("a comment on a Drive document survives a reload, then clears", async ({
   const body = page.getByTestId("drive-page-markdown");
   await expect(body.getByRole("heading", { name: planTitle })).toBeVisible();
 
-  // The paragraph sits on lines 8-9 of the file: the front matter takes 4.
+  // "This plan" is on line 8 of the file: the front matter takes 4.
   await body
     .locator("p")
     .first()
@@ -82,7 +82,7 @@ test("a comment on a Drive document survives a reload, then clears", async ({
   await page.getByTestId("drive-page-comment-save").click();
 
   const row = page.getByTestId("drive-page-review-card-1");
-  await expect(row).toContainText("L8–9");
+  await expect(row).toContainText("L8");
   await expect(row).toContainText("Name the plan");
   await expect(body.locator(".has-review-comment")).toHaveCount(1);
 

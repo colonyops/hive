@@ -118,6 +118,17 @@ const offerSetup = computed(
 const reader = ref<HTMLElement | null>(null)
 const measure = ref<HTMLElement | null>(null)
 const footer = ref<HTMLElement | null>(null)
+const {
+  size: commentsWidth,
+  startResize: startCommentsResize,
+  step: stepComments,
+} = useResizablePanel({
+  storageKey: 'hive.panel.drive.comments',
+  defaultSize: 360,
+  min: 260,
+  max: 600,
+  edge: 'left',
+})
 const { height: footerHeight } = useElementSize(footer)
 
 // The reader's scrollbar takes width inside the scroller, which moves the
@@ -245,7 +256,7 @@ useEscapeToClose(() => emit('close'))
         <DriveReviewHeader
           v-if="reviewed && commentsShown"
           class="shrink-0 border-l"
-          :style="{ width: `${360 + gutter}px`, paddingRight: `${16 + gutter}px` }"
+          :style="{ width: `${commentsWidth + gutter}px`, paddingRight: `${16 + gutter}px` }"
           :space="reviewed.space"
           :path="reviewed.path"
           testid="drive-page"
@@ -292,22 +303,27 @@ useEscapeToClose(() => emit('close'))
                 </BaseButton>
               </div>
             </div>
-            <DriveReviewCards
+            <div
               v-if="reviewed && commentsShown"
-              class="w-[360px] shrink-0 border-l border-row bg-pane"
-              :style="{ paddingBottom: `${footerHeight + 16}px` }"
-              :space="reviewed.space"
-              :path="reviewed.path"
-              :align-to="measure"
-              testid="drive-page"
-            />
+              class="relative shrink-0 border-l border-row bg-pane"
+              :style="{ width: `${commentsWidth}px` }"
+            >
+              <PanelResizeHandle edge="left" name="drive-comments" :start="startCommentsResize" :step="stepComments" />
+              <DriveReviewCards
+                :style="{ paddingBottom: `${footerHeight + 16}px` }"
+                :space="reviewed.space"
+                :path="reviewed.path"
+                :align-to="measure"
+                testid="drive-page"
+              />
+            </div>
           </div>
         </div>
         <div
           v-if="reviewed && commentsShown"
           ref="footer"
-          class="absolute bottom-0 w-[360px] border-l border-row"
-          :style="{ right: `${gutter}px` }"
+          class="absolute bottom-0 border-l border-row"
+          :style="{ right: `${gutter}px`, width: `${commentsWidth}px` }"
         >
           <DriveReviewFooter :space="reviewed.space" :path="reviewed.path" testid="drive-page" />
         </div>

@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { highlightAt, markReviewedBlocks, quoteRange, selectionToRange } from '../driveReviewSelection'
+import {
+  blockTextRange,
+  highlightAt,
+  markReviewedBlocks,
+  pickableBlock,
+  quoteRange,
+  selectionToRange,
+} from '../driveReviewSelection'
+import { renderCanvasMarkdown } from '../githubMarkdown'
 
 function mountRoot(html: string): HTMLElement {
   const root = document.createElement('div')
@@ -19,6 +27,11 @@ function select(start: Node, startOffset: number, end: Node, endOffset: number):
 }
 
 const text = (root: HTMLElement, selector: string) => root.querySelector(selector)!.firstChild!
+
+const rendered = (source: string) =>
+  renderCanvasMarkdown(source, undefined, { offset: 0 })
+    .map((part) => (part.kind === 'html' ? part.html : ''))
+    .join('')
 
 const body = `
   <h1 data-source-start="4" data-source-end="4">Plan</h1>
@@ -41,6 +54,26 @@ describe('selectionToRange', () => {
     const root = mountRoot(body)
     const node = text(root, 'p')
     expect(selectionToRange(select(node, 0, node, 9), root)).toEqual({ startLine: 6, endLine: 7, context: 'Step one.' })
+  })
+
+  it("counts a paragraph's line breaks", () => {
+    const root = mountRoot(
+      '<p data-source-start="3" data-source-end="5">Date: x<br>\nStatus: Proposed<br>\nAuthor: y</p>',
+    )
+    const status = root.querySelector('p')!.childNodes[2]
+    expect(selectionToRange(select(status, 9, status, 17), root)).toMatchObject({ startLine: 4, endLine: 4 })
+  })
+
+  it("counts a fenced block's lines from below its opening fence", () => {
+    const root = mountRoot(rendered('Intro\n\n```\na\nb\nc\n```\n'))
+    const code = root.querySelector('code')!.firstChild!
+    expect(selectionToRange(select(code, 2, code, 3), root)).toMatchObject({ startLine: 5, endLine: 5 })
+  })
+
+  it("counts an indented block's lines from its first line", () => {
+    const root = mountRoot(rendered('Intro\n\n    a\n    b\n'))
+    const code = root.querySelector('code')!.firstChild!
+    expect(selectionToRange(select(code, 2, code, 3), root)).toMatchObject({ startLine: 4, endLine: 4 })
   })
 
   it('spans the blocks at both ends of a selection', () => {
@@ -112,6 +145,13 @@ describe('quoteRange', () => {
     const root = mountRoot(body)
     expect(quoteRange([root.querySelector('p')!], 'missing')).toBeNull()
   })
+
+  it("picks the repeat that starts on the comment's first line", () => {
+    const root = mountRoot('<p data-source-start="3" data-source-end="4">same<br>\nsame</p>')
+    const range = quoteRange([root.querySelector('p')!], 'same', 4)
+    expect(range?.startContainer).toBe(root.querySelector('p')!.childNodes[2])
+    expect(quoteRange([root.querySelector('p')!], 'same')?.startContainer).toBe(root.querySelector('p')!.firstChild)
+  })
 })
 
 describe('highlightAt', () => {
@@ -125,5 +165,43 @@ describe('highlightAt', () => {
     expect(highlightAt(highlights, 110, 10, 'word')).toBe('line')
     expect(highlightAt(highlights, 10, 10)).toBe('line')
     expect(highlightAt(highlights, 10, 40)).toBeNull()
+  })
+})
+
+describe('block picking', () => {
+  it('selects a whole fenced block to its first and last code lines, without the copy button', () => {
+    const root = mountRoot(rendered('Intro\n\n```\na\nb\nc\n```\n'))
+    const block = pickableBlock(root.querySelector('code'), root)!
+    expect(block.classList.contains('markdown-code')).toBe(true)
+    const range = blockTextRange(block)!
+    expect(range.toString()).toBe('a\nb\nc')
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    expect(selectionToRange(selection, root)).toMatchObject({ startLine: 4, endLine: 6 })
+  })
+
+  it('picks a table whole from any cell', () => {
+    const root = mountRoot(rendered('| x | y |\n| - | - |\n| 1 | 2 |\n'))
+    const block = pickableBlock(root.querySelector('td'), root)!
+    expect(block.tagName).toBe('TABLE')
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(blockTextRange(block)!)
+    expect(selectionToRange(selection, root)).toMatchObject({ startLine: 1, endLine: 3 })
+  })
+
+  it('picks a paragraph across its line breaks', () => {
+    const root = mountRoot(rendered('one\ntwo\n'))
+    const block = pickableBlock(root.querySelector('p'), root)!
+    const selection = window.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(blockTextRange(block)!)
+    expect(selectionToRange(selection, root)).toMatchObject({ startLine: 1, endLine: 2, context: 'one\ntwo' })
+  })
+
+  it('skips a block with no text', () => {
+    const root = mountRoot(rendered('---\n'))
+    expect(pickableBlock(root.querySelector('hr'), root)).toBeNull()
   })
 })
