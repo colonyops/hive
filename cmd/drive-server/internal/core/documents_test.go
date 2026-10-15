@@ -16,7 +16,7 @@ import (
 
 func principalFor(t *testing.T, e *env, email string) core.Principal {
 	t.Helper()
-	acct, err := e.accounts.Ensure(t.Context(), email)
+	acct, _, err := e.accounts.Ensure(t.Context(), email, false)
 	require.NoError(t, err)
 	pol, ok := e.policies.Match(email)
 	require.True(t, ok)

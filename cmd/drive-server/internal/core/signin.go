@@ -103,18 +103,7 @@ func (s *SignIn) Verify(ctx context.Context, email, code string) (string, error)
 		return "", NewError(KindUnauthenticated, fmt.Sprintf("invalid code; %d attempts left", left))
 	}
 
-	policy, matched := s.policies.Match(email)
-	if !matched {
-		return "", NewError(KindForbidden, "email matches no user policy")
-	}
-	if _, err := s.accounts.GetByEmail(ctx, email); IsNotFound(err) {
-		if !policy.SignUpAllowed() {
-			return "", NewError(KindForbidden, "sign-up is closed for this email")
-		}
-	} else if err != nil {
-		return "", fmt.Errorf("look up account: %w", err)
-	}
-	acct, err := s.ensure.Ensure(ctx, email)
+	acct, _, err := s.ensure.Ensure(ctx, email, false)
 	if err != nil {
 		return "", err
 	}

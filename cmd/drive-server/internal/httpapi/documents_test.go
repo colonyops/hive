@@ -54,7 +54,7 @@ func newServerAt(t *testing.T, baseURL string) *server {
 
 func (s *server) token(t *testing.T, email string, scope core.Scope) string {
 	t.Helper()
-	secret, _, err := s.svc.CreateToken(t.Context(), email, scope, "test", 0)
+	secret, _, _, err := s.svc.CreateToken(t.Context(), email, scope, "test", 0)
 	require.NoError(t, err)
 	return secret
 }

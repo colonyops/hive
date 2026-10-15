@@ -18,7 +18,7 @@ func devPolicy() config.Policy {
 
 func mint(t *testing.T, e *env, email string, scope core.Scope, expiresAt *time.Time) (string, core.Account) {
 	t.Helper()
-	acct, err := e.accounts.Ensure(t.Context(), email)
+	acct, _, err := e.accounts.Ensure(t.Context(), email, false)
 	require.NoError(t, err)
 	secret, _, err := e.tokens.Mint(t.Context(), acct.ID, "cli", scope, expiresAt)
 	require.NoError(t, err)
@@ -90,7 +90,7 @@ func TestTokenExpiry(t *testing.T) {
 
 func TestTokenMintValidatesInput(t *testing.T) {
 	e := newEnv(t, devPolicy())
-	acct, err := e.accounts.Ensure(t.Context(), "dev@example.com")
+	acct, _, err := e.accounts.Ensure(t.Context(), "dev@example.com", false)
 	require.NoError(t, err)
 
 	past := e.clock.Now().Add(-time.Minute)
@@ -172,18 +172,18 @@ func TestTokenLastUsedIsThrottled(t *testing.T) {
 func TestAccountsEnsure(t *testing.T) {
 	e := newEnv(t, devPolicy())
 
-	a, err := e.accounts.Ensure(t.Context(), "  Dev@Example.com ")
+	a, _, err := e.accounts.Ensure(t.Context(), "  Dev@Example.com ", false)
 	require.NoError(t, err)
 	assert.Equal(t, "dev@example.com", a.Email)
 	assert.NotEmpty(t, a.ID)
 
-	again, err := e.accounts.Ensure(t.Context(), "dev@example.com")
+	again, _, err := e.accounts.Ensure(t.Context(), "dev@example.com", false)
 	require.NoError(t, err)
 	assert.Equal(t, a.ID, again.ID)
 
-	_, err = e.accounts.Ensure(t.Context(), "dev@other.example")
+	_, _, err = e.accounts.Ensure(t.Context(), "dev@other.example", false)
 	requireKind(t, err, core.KindForbidden)
-	_, err = e.accounts.Ensure(t.Context(), " ")
+	_, _, err = e.accounts.Ensure(t.Context(), " ", false)
 	requireKind(t, err, core.KindInvalid)
 }
 

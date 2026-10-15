@@ -39,34 +39,25 @@ func ParseTTL(s string) (time.Duration, error) {
 // matches a policy. A zero ttl means the token never expires.
 //
 // Minting is an operator action, so it creates the account even when the
-// policy sets sign_up: false. That setting only governs self sign-up.
-func (s *Services) CreateToken(ctx context.Context, email string, scope core.Scope, name string, ttl time.Duration) (string, core.Token, error) {
-	acct, err := s.Accounts.Ensure(ctx, email)
+// policy sets sign_up: false. That setting only governs self sign-up. When
+// it did so, bypassed names the policy; otherwise bypassed is empty.
+func (s *Services) CreateToken(ctx context.Context, email string, scope core.Scope, name string, ttl time.Duration) (secret string, token core.Token, bypassed string, err error) {
+	acct, created, err := s.Accounts.Ensure(ctx, email, true)
 	if err != nil {
-		return "", core.Token{}, err
+		return "", core.Token{}, "", err
+	}
+	if created {
+		if policy, ok := s.Policies.Match(acct.Email); ok && !policy.SignUpAllowed() {
+			bypassed = policy.Name
+		}
 	}
 	var expiresAt *time.Time
 	if ttl > 0 {
 		t := time.Now().Add(ttl)
 		expiresAt = &t
 	}
-	return s.Tokens.Mint(ctx, acct.ID, name, scope, expiresAt)
-}
-
-// NoteSignUpBypass writes a note to w when CreateToken would create a new
-// account under a policy that disallows sign-up.
-func (s *Services) NoteSignUpBypass(ctx context.Context, w io.Writer, email string) error {
-	policy, ok := s.Policies.Match(email)
-	if !ok || policy.SignUpAllowed() {
-		return nil
-	}
-	exists, err := s.Accounts.Exists(ctx, email)
-	if err != nil || exists {
-		return err
-	}
-	_, err = fmt.Fprintf(w, "Note: policy %q sets sign_up: false. Creating the account for %s anyway; minting a token is an operator action.\n",
-		policy.Name, core.NormalizeEmail(email))
-	return err
+	secret, token, err = s.Tokens.Mint(ctx, acct.ID, name, scope, expiresAt)
+	return secret, token, bypassed, err
 }
 
 // WriteAccounts prints one line per account with the policy that admits it,

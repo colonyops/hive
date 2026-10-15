@@ -20,47 +20,42 @@ func NewAccounts(store AccountStore, users UserStores, policies *Policies, opts 
 	return &Accounts{store: store, users: users, policies: policies, now: newOptions(opts).now}
 }
 
-// Ensure returns the account for email, creating it on first use. An email
-// that matches no policy gets no account.
-func (a *Accounts) Ensure(ctx context.Context, email string) (Account, error) {
+// Ensure returns the account for email, creating it on first use, and
+// reports whether this call created it. An email that matches no policy gets
+// no account. A policy with sign_up: false refuses to create one unless
+// operator is set.
+func (a *Accounts) Ensure(ctx context.Context, email string, operator bool) (Account, bool, error) {
 	email = NormalizeEmail(email)
 	if email == "" {
-		return Account{}, NewError(KindInvalid, "email is required")
+		return Account{}, false, NewError(KindInvalid, "email is required")
 	}
-	if _, ok := a.policies.Match(email); !ok {
-		return Account{}, NewError(KindForbidden, "email matches no user policy")
+	policy, ok := a.policies.Match(email)
+	if !ok {
+		return Account{}, false, NewError(KindForbidden, "email matches no user policy")
 	}
 
 	acct, err := a.store.GetByEmail(ctx, email)
 	if err == nil {
-		return acct, nil
+		return acct, false, nil
 	}
 	if !IsNotFound(err) {
-		return Account{}, fmt.Errorf("look up account: %w", err)
+		return Account{}, false, fmt.Errorf("look up account: %w", err)
+	}
+	if !operator && !policy.SignUpAllowed() {
+		return Account{}, false, NewError(KindForbidden, "sign-up is closed for this email")
 	}
 
-	if err := a.store.Insert(ctx, Account{ID: randid.UUIDv7(), Email: email, CreatedAt: a.now()}); err != nil {
-		return Account{}, fmt.Errorf("create account: %w", err)
+	fresh := Account{ID: randid.UUIDv7(), Email: email, CreatedAt: a.now()}
+	if err := a.store.Insert(ctx, fresh); err != nil {
+		return Account{}, false, fmt.Errorf("create account: %w", err)
 	}
-	// Read back rather than return the inserted value: a concurrent Ensure
-	// may have won the insert, and its id is the one that stuck.
+	// Read back rather than return fresh: a concurrent Ensure may have won
+	// the insert, and its id is the one that stuck.
 	acct, err = a.store.GetByEmail(ctx, email)
 	if err != nil {
-		return Account{}, fmt.Errorf("read back account: %w", err)
+		return Account{}, false, fmt.Errorf("read back account: %w", err)
 	}
-	return acct, nil
-}
-
-// Exists reports whether email has an account, whatever the policies say.
-func (a *Accounts) Exists(ctx context.Context, email string) (bool, error) {
-	_, err := a.store.GetByEmail(ctx, NormalizeEmail(email))
-	if IsNotFound(err) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("look up account: %w", err)
-	}
-	return true, nil
+	return acct, acct.ID == fresh.ID, nil
 }
 
 func (a *Accounts) List(ctx context.Context) ([]Account, error) {

@@ -25,7 +25,7 @@ type tenant struct {
 func setupTenants(t *testing.T, s *server) (a, b tenant) {
 	t.Helper()
 	mk := func(email string) tenant {
-		acct, err := s.svc.Accounts.Ensure(t.Context(), email)
+		acct, _, err := s.svc.Accounts.Ensure(t.Context(), email, false)
 		require.NoError(t, err)
 		return tenant{id: acct.ID, token: s.token(t, email, core.ScopePush)}
 	}
