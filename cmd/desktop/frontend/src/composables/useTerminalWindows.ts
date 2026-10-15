@@ -21,6 +21,7 @@ import { activePaneOf, paneGrids, windowPanes } from '../lib/terminalLayout'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
 import { TerminalOutputWriter } from '../lib/terminalOutput'
 import { installTerminalImages } from '../lib/terminalImages'
+import { installKittyGraphics, type KittyGraphics } from '../lib/kitty/kittyGraphics'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
 import { appClaimsPaneKey, claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
@@ -173,6 +174,7 @@ interface PaneRuntime {
   term: Terminal
   finder: SearchAddon
   output: TerminalOutputWriter
+  graphics: KittyGraphics
   disposers: IDisposable[]
   // An atlas renderer is live on this terminal. False after a failed claim or a
   // context loss, which is what makes the next activation retry instead of
@@ -320,6 +322,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     const term = createTerminal({ allowProposedApi: true })
     const finder = markRaw(new SearchAddon())
     term.loadAddon(finder)
+    const graphics = markRaw(installKittyGraphics(term))
     const output = markRaw(
       new TerminalOutputWriter((data) => {
         if (painted.value) term.write(data)
@@ -327,7 +330,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
           term.write(data, () => {
             painted.value = true
           })
-      }),
+      }, graphics.filter),
     )
     // Before any output reaches it: xterm re-wraps its buffer on resize, so a
     // grid sized after the first paint mangles the snapshot it just drew.
@@ -347,9 +350,11 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
       term,
       finder,
       output,
+      graphics,
       disposers: [
         finder,
         { dispose: () => output.dispose() },
+        graphics,
         silenceDeviceReports(term),
         term.onData((data: string) => sendInput(paneId, data)),
         term.onScroll(() => refreshScrolledUp(paneId)),
@@ -685,6 +690,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     for (const [paneId, state] of panes) {
       state.output.reset()
       state.term.reset()
+      state.graphics.clear()
       refreshScrolledUp(paneId)
     }
   }

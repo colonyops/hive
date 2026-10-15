@@ -230,6 +230,27 @@ const xterm = vi.hoisted(() => {
 const wails = vi.hoisted(() => ({ OpenURL: vi.fn(() => Promise.resolve()) }))
 
 vi.mock('@xterm/xterm', () => ({ Terminal: xterm.FakeTerminal }))
+
+// The renderer itself is covered against a real xterm in kittyGraphics.spec.ts;
+// these fakes have none of the parser or render surface it registers on.
+const kitty = vi.hoisted(() => {
+  const installed: {
+    filter: { rewrite: ReturnType<typeof vi.fn>; reset: ReturnType<typeof vi.fn> }
+    clear: ReturnType<typeof vi.fn>
+    dispose: ReturnType<typeof vi.fn>
+  }[] = []
+  const installKittyGraphics = vi.fn(() => {
+    const graphics = {
+      filter: { rewrite: vi.fn((data: Uint8Array) => data), reset: vi.fn() },
+      clear: vi.fn(),
+      dispose: vi.fn(),
+    }
+    installed.push(graphics)
+    return graphics
+  })
+  return { installed, installKittyGraphics }
+})
+vi.mock('../../lib/kitty/kittyGraphics', () => ({ installKittyGraphics: kitty.installKittyGraphics }))
 vi.mock('@xterm/addon-search', () => ({ SearchAddon: xterm.FakeSearchAddon }))
 vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: xterm.FakeWebglAddon }))
 vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: xterm.FakeWebLinksAddon }))
@@ -447,6 +468,7 @@ async function attached(client: MockedClient = fakeClient()) {
 
 describe('useTerminalWindows', () => {
   beforeEach(() => {
+    kitty.installed.length = 0
     sockets = []
     loadedFaces = []
     paneMayAutoFocus.value = true
@@ -781,6 +803,18 @@ describe('useTerminalWindows', () => {
     await session.select('@1')
 
     expect(xterm.FakeWebglAddon.instances).toHaveLength(3)
+  })
+
+  it('runs pane output through the Kitty graphics filter and disposes it with the pane', async () => {
+    const { session, socket } = await attached()
+
+    socket.onmessage?.({ data: outputFrame('@1', '%1', 'hello') })
+
+    const rewritten = kitty.installed.flatMap((graphics) => graphics.filter.rewrite.mock.calls as [Uint8Array][])
+    expect(rewritten.map(([data]) => new TextDecoder().decode(data))).toEqual(['hello'])
+
+    session.dispose()
+    for (const installed of kitty.installed) expect(installed.dispose).toHaveBeenCalled()
   })
 
   // xterm disposes its core before its addons, and a renderer addon restores a
@@ -1217,6 +1251,10 @@ describe('useTerminalWindows', () => {
     // Both panes, not just the streaming one: the backlog is the session's and
     // the repaint behind it covers every window.
     for (const term of xterm.FakeTerminal.instances) expect(term.reset).toHaveBeenCalled()
+    for (const graphics of kitty.installed) {
+      expect(graphics.filter.reset).toHaveBeenCalled()
+      expect(graphics.clear).toHaveBeenCalled()
+    }
 
     socket.onmessage?.({ data: outputFrame('@1', '%1', 'REPAINTED') })
     const write = session.tabs.value[0].panes[0].term.write as ReturnType<typeof vi.fn>

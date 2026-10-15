@@ -9,6 +9,12 @@ const SYNCHRONIZED_OUTPUT_TIMEOUT_MS = 1000
 // holding megabytes and a second of latency.
 const MAX_SYNCHRONIZED_FRAME_BYTES = 1 << 20
 
+/** A stateful rewrite of the pane's bytes that runs ahead of the writer's own filters. */
+export interface StreamFilter {
+  rewrite(data: Uint8Array): Uint8Array
+  reset(): void
+}
+
 // tmux splits one process write across %output notifications, while xterm 5
 // ignores the synchronized-output markers pi wraps around each redraw. Holding
 // only those marked frames keeps their intermediate rows off the renderer.
@@ -21,10 +27,13 @@ export class TerminalOutputWriter {
   private timer: ReturnType<typeof setTimeout> | undefined
   private readonly titles = new ScreenTitleFilter()
 
-  constructor(private readonly sink: (data: Uint8Array) => void) {}
+  constructor(
+    private readonly sink: (data: Uint8Array) => void,
+    private readonly filter?: StreamFilter,
+  ) {}
 
   write(data: Uint8Array): void {
-    this.forward(this.titles.strip(data))
+    this.forward(this.titles.strip(this.filter ? this.filter.rewrite(data) : data))
   }
 
   private forward(data: Uint8Array): void {
@@ -65,6 +74,7 @@ export class TerminalOutputWriter {
    * the timeout — would paint pre-repaint output over the snapshot.
    */
   reset(): void {
+    this.filter?.reset()
     this.titles.reset()
     clearTimeout(this.timer)
     this.timer = undefined
