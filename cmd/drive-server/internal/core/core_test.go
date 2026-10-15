@@ -18,7 +18,10 @@ import (
 	"github.com/colonyops/hive/internal/platform/sqlite"
 )
 
-const testMaxDocumentSize = 1024
+const (
+	testMaxDocumentSize = 1024
+	testBaseURL         = "https://drive.test"
+)
 
 type clock struct {
 	mu  sync.Mutex
@@ -44,6 +47,9 @@ type env struct {
 	accounts *core.Accounts
 	tokens   *core.Tokens
 	docs     *core.Documents
+	shares   *core.Shares
+	sweeper  *core.Sweeper
+	users    core.UserStores
 	clock    *clock
 }
 
@@ -65,7 +71,10 @@ func newEnv(t *testing.T, ps ...config.Policy) *env {
 		policies: policies,
 		accounts: core.NewAccounts(store.Accounts(), pool.Stores(), policies, core.WithClock(c.Now)),
 		tokens:   core.NewTokens(store.Tokens(), store.Accounts(), policies, core.WithClock(c.Now)),
-		docs:     core.NewDocuments(pool.Stores(), testMaxDocumentSize, core.WithClock(c.Now)),
+		docs:     core.NewDocuments(pool.Stores(), store.Shares(), testMaxDocumentSize, core.WithClock(c.Now), core.WithBaseURL(testBaseURL)),
+		shares:   core.NewShares(store.Shares(), store.Accounts(), pool.Stores(), policies, core.WithClock(c.Now), core.WithBaseURL(testBaseURL)),
+		sweeper:  core.NewSweeper(zerolog.Nop(), store.Shares(), pool.Stores(), core.WithClock(c.Now)),
+		users:    pool.Stores(),
 		clock:    c,
 	}
 }

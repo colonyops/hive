@@ -98,12 +98,11 @@ func (h documentHandlers) get(space spaceFunc) errchain.HandlerFunc {
 		if err != nil {
 			return err
 		}
-		contentType := "text/markdown; charset=utf-8"
-		if doc.Kind == drive.KindHtml {
-			contentType = "text/html; charset=utf-8"
+		if r.URL.Query().Get("raw") == "1" {
+			return writeRaw(w, doc, body)
 		}
 		hdr := w.Header()
-		hdr.Set("Content-Type", contentType)
+		hdr.Set("Content-Type", contentType(doc.Kind))
 		hdr.Set("ETag", `"`+doc.SHA256+`"`)
 		hdr.Set("Content-Length", strconv.Itoa(len(body)))
 		// A stored HTML document must not run in this origin if a browser

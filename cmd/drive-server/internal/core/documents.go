@@ -15,14 +15,17 @@ import (
 
 type Documents struct {
 	users   UserStores
+	shares  ShareStore
 	maxSize int64
+	baseURL string
 	now     func() time.Time
 }
 
 // NewDocuments returns the document service. A maxDocumentSize of zero or
 // less means no cap.
-func NewDocuments(users UserStores, maxDocumentSize int64, opts ...Option) *Documents {
-	return &Documents{users: users, maxSize: maxDocumentSize, now: newOptions(opts).now}
+func NewDocuments(users UserStores, shares ShareStore, maxDocumentSize int64, opts ...Option) *Documents {
+	o := newOptions(opts)
+	return &Documents{users: users, shares: shares, maxSize: maxDocumentSize, baseURL: o.baseURL, now: o.now}
 }
 
 // MaxDocumentSize is the largest accepted body, or zero for no cap.
@@ -92,9 +95,21 @@ func (d *Documents) List(ctx context.Context, p Principal, space drive.Space) ([
 	if err != nil {
 		return nil, fmt.Errorf("list documents: %w", err)
 	}
+	links, err := d.shares.ListByUser(ctx, p.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("list share links: %w", err)
+	}
+	byDoc := make(map[string]ShareLink, len(links))
+	for _, l := range links {
+		byDoc[l.DocumentID] = l
+	}
 	out := make([]driveapi.Document, len(docs))
 	for i, doc := range docs {
 		out[i] = toWire(doc)
+		if l, ok := byDoc[doc.ID]; ok {
+			share := toWireShare(d.baseURL, l)
+			out[i].Shared = &share
+		}
 	}
 	return out, nil
 }
@@ -131,7 +146,16 @@ func (d *Documents) Delete(ctx context.Context, p Principal, space drive.Space, 
 	}
 	defer release()
 
-	return notFoundOr(store.Delete(ctx, space.Key, path), "delete document")
+	id, err := store.Delete(ctx, space.Key, path)
+	if err != nil {
+		return notFoundOr(err, "delete document")
+	}
+	// A failure here leaves a dangling link, which Resolve and the sweeper
+	// drop.
+	if err := d.shares.DeleteByDocument(ctx, p.UserID, id); err != nil {
+		return fmt.Errorf("delete share links: %w", err)
+	}
+	return nil
 }
 
 func (d *Documents) Usage(ctx context.Context, p Principal) (int64, error) {

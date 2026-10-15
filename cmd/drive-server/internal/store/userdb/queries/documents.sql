@@ -20,8 +20,14 @@ FROM documents WHERE space = ? ORDER BY path;
 SELECT space, COUNT(*) AS documents, CAST(SUM(size) AS INTEGER) AS bytes
 FROM documents GROUP BY space ORDER BY space;
 
--- name: DeleteDocument :execrows
-DELETE FROM documents WHERE space = ? AND path = ?;
+-- name: DeleteDocument :one
+DELETE FROM documents WHERE space = ? AND path = ? RETURNING id;
+
+-- name: HasDocument :one
+SELECT EXISTS (SELECT 1 FROM documents WHERE id = ?);
+
+-- name: GetDocumentByID :one
+SELECT * FROM documents WHERE id = ?;
 
 -- name: SumDocumentSize :one
 SELECT CAST(COALESCE(SUM(size), 0) AS INTEGER) AS bytes FROM documents;

@@ -17,6 +17,8 @@ import (
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
+const sweepEvery = time.Minute
+
 type Options struct {
 	Info buildinfo.Info
 }
@@ -40,7 +42,7 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	defer func() { _ = ln.Close() }()
 
 	httpLog := logutils.Component(log, "httpapi")
-	handler := httpapi.New(httpLog, opts.Info, httpapi.Services{Tokens: svc.Tokens, Documents: svc.Documents})
+	handler := httpapi.New(httpLog, opts.Info, httpapi.Services{Tokens: svc.Tokens, Documents: svc.Documents, Shares: svc.Shares})
 
 	log.Info().Str("addr", ln.Addr().String()).Str("base_url", cfg.BaseURL).Str("version", opts.Info.Version).Msg("drive server listening")
 
@@ -51,6 +53,9 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	)
 	mgr.Add(plugs.PluginFunc("http", func(ctx context.Context) error {
 		return httpapi.Serve(ctx, ln, handler, httpLog)
+	}))
+	mgr.Add(plugs.PluginFunc("sweeper", func(ctx context.Context) error {
+		return svc.Sweeper.Run(ctx, sweepEvery)
 	}))
 	return mgr.Start(ctx)
 }
