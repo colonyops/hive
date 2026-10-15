@@ -267,7 +267,7 @@ needs no lint edit:
 | --- | --- | --- | --- | --- |
 | Kit | `pkg/` | Hive-agnostic helpers: `atomicfile`, `executil`, `pathutil`, `tmpl`, `buildinfo` | stdlib, third party except charm and Wails | `kit-is-hive-agnostic` |
 | Domain | `internal/domain/` | Models, rules, enums, sentinel errors, and the ports the engine needs. No I/O, no config | `pkg/`, other `domain/*` | `domain-is-pure` |
-| Platform | `internal/platform/` | Drivers for one outside system each: git, tmux, SQLite, process inspection, the login-shell environment, credentials, secrets, the OTel API, the directory-tree file watcher (`fswatch`) | `pkg/`, `domain/`, other `platform/*` | `platform-is-a-driver` |
+| Platform | `internal/platform/` | Drivers for one outside system each: git, tmux, SQLite, process inspection, the login-shell environment, credentials, secrets, the OTel API, the directory-tree file watcher (`fswatch`), the debounced directory watcher (`dirwatch`) | `pkg/`, `domain/`, other `platform/*` | `platform-is-a-driver` |
 | Store | `internal/store/` | `hive.db`: sqlc output, migrations, one store per aggregate | `pkg/`, `domain/`, `platform/sqlite` | `store-is-persistence` |
 | Config | `internal/config/` | The engine sections of `config.yaml`: load, validate, the comment-preserving writer | `pkg/`, `domain/` | `config-is-data` |
 | Web | `internal/web/` | Shared HTTP plumbing every program's HTTP surface uses: the error wire shape, `mid/` middleware, `extractors/` input decoding | everything except `hive/` and `store/` | `web-is-plumbing` |
@@ -423,8 +423,6 @@ cmd/desktop/internal/
                                   #   declared — consumer-defined, no notify/ package
     actions/                      # actions.yml catalog, editable model
       docs/                       # per-action-type markdown
-    dirwatch/                     # the debounced directory watcher behind actions,
-                                  #   flows, and agentws hot-reload
     configmigrate/                # versioned migrations for settings.yaml, flows, actions.yml
     prompts/                      # Go-owned LLM prompt templates + registry (ADR go-owned-llm-prompts)
       templates/                 #   .tmpl files the registry renders
@@ -522,6 +520,9 @@ internal/                         # the hive engine both programs run on (see
                                   #   transport, no UI), bin/ (tmuxbin, where the
                                   #   binary is: paths.tmux, then PATH, then
                                   #   package prefixes; ADR tmux-discovery)
+    dirwatch/                     #   debounced callback on matching files in one
+                                  #   directory (actions, flows, agentws, and
+                                  #   drive-server hot reload)
     fswatch/                      #   one fsnotify watch per directory, re-walked
                                   #   on directory create, debounced to changed
                                   #   directories; Change{Dirs}, Changes(),
