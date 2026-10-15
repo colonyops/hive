@@ -241,9 +241,7 @@ function requestDelete(): void {
         />
       </header>
       <div class="min-h-0 flex-1" :class="isHtml ? 'overflow-hidden' : 'overflow-y-auto'">
-        <!-- isolate: the HTML frame carries its own z-index; keep it inside this
-             context so header menus and popovers always paint above it. -->
-        <div class="relative isolate" :class="isHtml ? 'h-full' : 'mx-auto max-w-5xl px-6 py-6'">
+        <div class="relative" :class="isHtml ? 'h-full' : 'mx-auto max-w-5xl px-6 py-6'">
           <DocumentReader
             :document="readerDocument"
             :font-size-px="prefs.fontSizePx"

@@ -284,7 +284,7 @@ describe('DrivePane', () => {
     drive.Document.mockResolvedValue(documentFor('workspaces/web-app', page, { html: '<p>hi</p>' }))
     const wrapper = await mountPane()
     expect(wrapper.find('[data-testid="drive-pane-sandbox"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="drive-pane-frame"]').classes()).toContain('absolute')
+    expect(wrapper.get('[data-testid="drive-pane-frame"]').element.parentElement?.classList).toContain('absolute')
   })
 
   it('shows no sandbox notice for a markdown document', async () => {
