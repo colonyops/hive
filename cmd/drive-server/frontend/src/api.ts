@@ -79,6 +79,8 @@ export const api = {
     if (space) params.set('space', space)
     return json<SearchResults>('GET', `/api/v1/search?${params.toString()}`)
   },
+  recent: (limit = 100) => json<DriveDocument[]>('GET', `/api/v1/recent?limit=${limit}`),
+  sharedLinks: () => json<DriveDocument[]>('GET', '/api/v1/shared-links'),
   documents: (apiPrefix: string) => json<DriveDocument[]>('GET', apiPrefix),
   documentBody: async (apiPrefix: string, path: string) => (await send('GET', docUrl(apiPrefix, path))).text(),
   deleteDocument: (apiPrefix: string, path: string) => empty('DELETE', docUrl(apiPrefix, path)),
