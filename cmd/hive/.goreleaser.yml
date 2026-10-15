@@ -31,9 +31,27 @@ builds:
       - arm64
     goarm:
       - "7"
+  # Hive Drive Server ships as a container image, not an archive (dockers_v2
+  # below). The web UI is built before goreleaser runs; see publish.yml.
+  - id: hive-drive-server
+    main: ./cmd/drive-server
+    binary: hive-drive-server
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .Date }}
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
 
 archives:
-  - formats: [tar.gz]
+  - ids: [hive]
+    formats: [tar.gz]
     # this name template makes the OS and Arch compatible with the results of uname.
     name_template: >-
       {{ .ProjectName }}_
@@ -48,6 +66,27 @@ checksum:
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
+
+# Hive Drive Server ships as a multi-arch image, ghcr.io/colonyops/hive-drive-server,
+# tagged with the shared version and latest. dockers_v2 builds every platform
+# in one buildx run and pushes the manifest list itself.
+dockers_v2:
+  - id: hive-drive-server
+    ids: [hive-drive-server]
+    dockerfile: cmd/drive-server/Dockerfile
+    images:
+      - ghcr.io/colonyops/hive-drive-server
+    tags:
+      - "{{ .Version }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    labels:
+      org.opencontainers.image.source: https://github.com/colonyops/hive
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.created: "{{ .Date }}"
 
 # The release body is every program's promoted release notes, which the
 # publish workflow passes with --release-notes. GoReleaser then builds no

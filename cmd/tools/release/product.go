@@ -7,6 +7,7 @@ import (
 	"path"
 
 	desktopnotes "github.com/colonyops/hive/cmd/desktop/releasenotes"
+	drivenotes "github.com/colonyops/hive/cmd/drive-server/releasenotes"
 	clinotes "github.com/colonyops/hive/cmd/hive/releasenotes"
 	"github.com/colonyops/hive/internal/releasenotes"
 )
@@ -40,7 +41,13 @@ var (
 		dir:       "cmd/desktop/releasenotes/changelog",
 		changelog: desktopnotes.Changelog,
 	}
-	products = []product{cliProduct, desktopProduct}
+	driveProduct = product{
+		name:      "drive-server",
+		title:     "Hive Drive Server",
+		dir:       "cmd/drive-server/releasenotes/changelog",
+		changelog: drivenotes.Changelog,
+	}
+	products = []product{cliProduct, desktopProduct, driveProduct}
 )
 
 func productNames() []string {

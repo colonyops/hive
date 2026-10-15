@@ -50,3 +50,20 @@ run = "npm run test -w drive-server-frontend"
 description = "Check the drive server web UI formatting (Prettier)"
 dir = "{{config_root}}"
 run = "npm run format:check -w drive-server-frontend"
+
+["drive-server:image"]
+description = "Build the hive-drive-server container image locally as hive-drive-server:dev, with the web UI embedded"
+depends = ["drive-server:build"]
+run = """
+set -euo pipefail
+ctx=$(mktemp -d)
+trap 'rm -rf "$ctx"' EXIT
+# The Dockerfile copies from <os>/<arch>/hive-drive-server, the layout
+# goreleaser's dockers_v2 hands it, so the local build lays the binary out the
+# same way.
+arch=$(go env GOARCH)
+mkdir -p "$ctx/linux/$arch"
+GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -o "$ctx/linux/$arch/hive-drive-server" ./cmd/drive-server
+cp cmd/drive-server/Dockerfile "$ctx/Dockerfile"
+docker build --platform "linux/$arch" -t hive-drive-server:dev "$ctx"
+"""

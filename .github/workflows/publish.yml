@@ -7,9 +7,10 @@ permissions:
   packages: write
 
 # The maintainer's `release` run dispatches this after it has published the
-# desktop and pushed the release tag. It builds the CLI from that tag, creates
-# the one GitHub release for every program with the promoted release notes,
-# and deploys the site (ADR every-program-ships-under-one-shared-version).
+# desktop and pushed the release tag. It builds the CLI and pushes the Hive
+# Drive Server image from that tag, creates the one GitHub release for every
+# program with the promoted release notes, and deploys the site (ADR
+# every-program-ships-under-one-shared-version).
 #
 # There is no CI job here on purpose. It would run on main, not on the tag,
 # and the desktop is already live when this runs, so an unrelated red main
@@ -59,6 +60,21 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # The drive server embeds its web UI, so the UI must exist before
+      # GoReleaser compiles the server.
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: "22.23.2"
+      - name: Build the drive server web UI
+        run: |
+          npm ci
+          npm run build -w drive-server-frontend
+          test -f cmd/drive-server/frontend/dist/index.html
+      # GoReleaser builds the hive-drive-server image for linux/amd64 and
+      # linux/arm64 in one buildx run; the arm64 half needs QEMU on this amd64
+      # runner.
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           distribution: goreleaser
