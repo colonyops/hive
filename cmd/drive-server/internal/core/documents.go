@@ -102,6 +102,66 @@ func (d *Documents) List(ctx context.Context, p Principal, space drive.Space) ([
 	if err != nil {
 		return nil, fmt.Errorf("list share links: %w", err)
 	}
+	return d.withShares(docs, links), nil
+}
+
+// DefaultRecentLimit and MaxRecentLimit bound Recent.
+const (
+	DefaultRecentLimit = 50
+	MaxRecentLimit     = 200
+)
+
+// Recent returns the caller's newest documents across all spaces. A limit
+// outside 1..MaxRecentLimit falls back to the default or the maximum.
+func (d *Documents) Recent(ctx context.Context, p Principal, limit int) ([]driveapi.Document, error) {
+	switch {
+	case limit < 1:
+		limit = DefaultRecentLimit
+	case limit > MaxRecentLimit:
+		limit = MaxRecentLimit
+	}
+	store, release, err := d.users.Open(ctx, p.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("open user store: %w", err)
+	}
+	defer release()
+
+	docs, err := store.Recent(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list recent documents: %w", err)
+	}
+	links, err := d.shares.ListByUser(ctx, p.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("list share links: %w", err)
+	}
+	return d.withShares(docs, links), nil
+}
+
+// SharedLinks returns every document of the caller that has a share link,
+// newest first. A link whose document is gone is left out.
+func (d *Documents) SharedLinks(ctx context.Context, p Principal) ([]driveapi.Document, error) {
+	links, err := d.shares.ListByUser(ctx, p.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("list share links: %w", err)
+	}
+	ids := make([]string, len(links))
+	for i, l := range links {
+		ids[i] = l.DocumentID
+	}
+	store, release, err := d.users.Open(ctx, p.UserID)
+	if err != nil {
+		return nil, fmt.Errorf("open user store: %w", err)
+	}
+	defer release()
+
+	docs, err := store.ListByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("list shared documents: %w", err)
+	}
+	return d.withShares(docs, links), nil
+}
+
+func (d *Documents) withShares(docs []Document, links []ShareLink) []driveapi.Document {
 	byDoc := make(map[string]ShareLink, len(links))
 	for _, l := range links {
 		byDoc[l.DocumentID] = l
@@ -114,7 +174,7 @@ func (d *Documents) List(ctx context.Context, p Principal, space drive.Space) ([
 			out[i].Shared = &share
 		}
 	}
-	return out, nil
+	return out
 }
 
 // Search looks across the caller's documents, or one space's when space is

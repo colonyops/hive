@@ -10,6 +10,9 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 )
 
+// Document is an element of the JSON arrays that GET /api/v1/{space},
+// GET /api/v1/recent?limit= (newest first, default 50, at most 200), and
+// GET /api/v1/shared-links (every document with a link, newest first) return.
 type Document struct {
 	ID    string `json:"id"`
 	Space string `json:"space"`

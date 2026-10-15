@@ -12,7 +12,6 @@ export interface DriveData {
   loadSpaces(): Promise<void>
   /** Loads a space's documents; a loaded space is kept unless `force` is set. */
   load(space: string, force?: boolean): Promise<void>
-  loadAll(): Promise<void>
 }
 
 export const driveDataKey: InjectionKey<DriveData> = Symbol('driveData')
@@ -47,12 +46,7 @@ export function createDriveData(): DriveData {
     }
   }
 
-  async function loadAll(): Promise<void> {
-    if (!spaces.value) await loadSpaces()
-    await Promise.all((spaces.value ?? []).map((s) => load(s.space)))
-  }
-
-  return { spaces, spacesError, documents, errors, loadSpaces, load, loadAll }
+  return { spaces, spacesError, documents, errors, loadSpaces, load }
 }
 
 export function useDriveData(): DriveData {

@@ -120,6 +120,40 @@ func (u *UserDB) List(ctx context.Context, space string) ([]core.Document, error
 	return out, nil
 }
 
+func (u *UserDB) Recent(ctx context.Context, limit int) ([]core.Document, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := u.q.ListRecentDocuments(ctx, int64(limit))
+	if err != nil {
+		return nil, wrap("list recent documents", err)
+	}
+	out := make([]core.Document, len(rows))
+	for i, row := range rows {
+		out[i] = listedDocument(db.ListDocumentsRow(row))
+	}
+	return out, nil
+}
+
+func (u *UserDB) ListByIDs(ctx context.Context, ids []string) ([]core.Document, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	rows, err := u.q.ListDocumentsByIDs(ctx, ids)
+	if err != nil {
+		return nil, wrap("list documents by id", err)
+	}
+	out := make([]core.Document, len(rows))
+	for i, row := range rows {
+		out[i] = listedDocument(db.ListDocumentsRow(row))
+	}
+	return out, nil
+}
+
+func listedDocument(row db.ListDocumentsRow) core.Document {
+	return core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Title: row.Title, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}
+}
+
 func (u *UserDB) Spaces(ctx context.Context) ([]core.SpaceUsage, error) {
 	rows, err := u.q.ListSpaceUsage(ctx)
 	if err != nil {

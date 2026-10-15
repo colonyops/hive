@@ -1,33 +1,34 @@
 <script setup lang="ts">
-// Recent and Shared links: documents gathered from every space.
+// Recent and Shared links: documents gathered from every space by one request each.
 import { computed, onMounted, ref } from 'vue'
+import { api } from '../api'
 import DriveListing from '../components/DriveListing.vue'
 import { useDriveData } from '../lib/driveData'
-import { documentEntries, recentDocuments } from '../lib/entries'
+import { documentEntries } from '../lib/entries'
 import type { DriveDocument } from '../types'
 
 const props = defineProps<{ feed: 'recent' | 'links' }>()
 
 const data = useDriveData()
-const loaded = ref(false)
+const documents = ref<DriveDocument[] | null>(null)
+const error = ref<string | null>(null)
 
 async function load(): Promise<void> {
-  await data.loadAll()
-  loaded.value = true
+  try {
+    documents.value = await (props.feed === 'recent' ? api.recent() : api.sharedLinks())
+    error.value = null
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : 'Could not load documents.'
+  }
 }
 onMounted(load)
 
+// A share or delete here also changes the space lists the nav and folders cache.
 async function reload(): Promise<void> {
-  await data.loadSpaces()
-  await Promise.all(Object.keys(data.documents).map((key) => data.load(key, true)))
+  await Promise.all([load(), data.loadSpaces(), ...Object.keys(data.documents).map((key) => data.load(key, true))])
 }
 
-const all = computed<DriveDocument[]>(() => Object.values(data.documents).flatMap((docs) => docs ?? []))
-const entries = computed(() => {
-  if (!loaded.value) return null
-  const docs = props.feed === 'recent' ? recentDocuments(all.value) : recentDocuments(all.value.filter((d) => d.shared))
-  return documentEntries(docs)
-})
+const entries = computed(() => (documents.value ? documentEntries(documents.value) : null))
 const title = computed(() => (props.feed === 'recent' ? 'Recent' : 'Shared links'))
 const emptyMessage = computed(() =>
   props.feed === 'recent'
@@ -40,7 +41,7 @@ const emptyMessage = computed(() =>
   <DriveListing
     :crumbs="[{ label: title, to: feed === 'recent' ? '/recent' : '/links' }]"
     :entries="entries"
-    :error="data.spacesError.value"
+    :error="error ?? data.spacesError.value"
     :empty-message="emptyMessage"
     @changed="reload"
   />

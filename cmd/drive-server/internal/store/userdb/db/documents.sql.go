@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"strings"
 
 	"github.com/colonyops/hive/internal/domain/drive"
 )
@@ -128,6 +129,112 @@ func (q *Queries) ListDocuments(ctx context.Context, space string) ([]ListDocume
 	items := []ListDocumentsRow{}
 	for rows.Next() {
 		var i ListDocumentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Space,
+			&i.Path,
+			&i.Title,
+			&i.Kind,
+			&i.Sha256,
+			&i.Size,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDocumentsByIDs = `-- name: ListDocumentsByIDs :many
+SELECT id, space, path, title, kind, sha256, size, updated_at
+FROM documents WHERE id IN (/*SLICE:ids*/?) ORDER BY updated_at DESC, space, path
+`
+
+type ListDocumentsByIDsRow struct {
+	ID        string     `json:"id"`
+	Space     string     `json:"space"`
+	Path      string     `json:"path"`
+	Title     string     `json:"title"`
+	Kind      drive.Kind `json:"kind"`
+	Sha256    string     `json:"sha256"`
+	Size      int64      `json:"size"`
+	UpdatedAt int64      `json:"updated_at"`
+}
+
+func (q *Queries) ListDocumentsByIDs(ctx context.Context, ids []string) ([]ListDocumentsByIDsRow, error) {
+	query := listDocumentsByIDs
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDocumentsByIDsRow{}
+	for rows.Next() {
+		var i ListDocumentsByIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Space,
+			&i.Path,
+			&i.Title,
+			&i.Kind,
+			&i.Sha256,
+			&i.Size,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRecentDocuments = `-- name: ListRecentDocuments :many
+SELECT id, space, path, title, kind, sha256, size, updated_at
+FROM documents ORDER BY updated_at DESC, space, path LIMIT ?
+`
+
+type ListRecentDocumentsRow struct {
+	ID        string     `json:"id"`
+	Space     string     `json:"space"`
+	Path      string     `json:"path"`
+	Title     string     `json:"title"`
+	Kind      drive.Kind `json:"kind"`
+	Sha256    string     `json:"sha256"`
+	Size      int64      `json:"size"`
+	UpdatedAt int64      `json:"updated_at"`
+}
+
+func (q *Queries) ListRecentDocuments(ctx context.Context, limit int64) ([]ListRecentDocumentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRecentDocuments, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRecentDocumentsRow{}
+	for rows.Next() {
+		var i ListRecentDocumentsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Space,

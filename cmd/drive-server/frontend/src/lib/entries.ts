@@ -79,8 +79,3 @@ export function documentEntries(documents: readonly DriveDocument[]): ListEntry[
     return fileEntry(doc, doc.path, folder ? `${title} / ${folder}` : title)
   })
 }
-
-/** The newest documents across spaces. */
-export function recentDocuments(documents: readonly DriveDocument[], limit = 100): DriveDocument[] {
-  return [...documents].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, limit)
-}

@@ -37,6 +37,8 @@ func registerDocumentRoutes(mux *http.ServeMux, authenticated authenticatedFunc,
 	h := documentHandlers{docs}
 	mux.HandleFunc("GET /api/v1/spaces", authenticated(core.ScopeRead, h.spaces))
 	mux.HandleFunc("GET /api/v1/search", authenticated(core.ScopeRead, h.search))
+	mux.HandleFunc("GET /api/v1/recent", authenticated(core.ScopeRead, h.recent))
+	mux.HandleFunc("GET /api/v1/shared-links", authenticated(core.ScopeRead, h.sharedLinks))
 	for _, sr := range spaceRoutes {
 		doc := sr.prefix + "/docs/{path...}"
 		mux.HandleFunc("GET "+sr.prefix, authenticated(core.ScopeRead, h.list(sr.space)))
@@ -110,6 +112,38 @@ func (h documentHandlers) search(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	return server.JSON(w, http.StatusOK, driveapi.SearchResults{Hits: hits})
+}
+
+func (h documentHandlers) recent(w http.ResponseWriter, r *http.Request) error {
+	p, ok := principalFrom(r.Context())
+	if !ok {
+		return core.NewError(core.KindUnauthenticated, "not signed in")
+	}
+	limit := core.DefaultRecentLimit
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 {
+			return core.NewError(core.KindInvalid, "limit must be a positive number")
+		}
+		limit = min(n, core.MaxRecentLimit)
+	}
+	docs, err := h.docs.Recent(r.Context(), p, limit)
+	if err != nil {
+		return err
+	}
+	return server.JSON(w, http.StatusOK, docs)
+}
+
+func (h documentHandlers) sharedLinks(w http.ResponseWriter, r *http.Request) error {
+	p, ok := principalFrom(r.Context())
+	if !ok {
+		return core.NewError(core.KindUnauthenticated, "not signed in")
+	}
+	docs, err := h.docs.SharedLinks(r.Context(), p)
+	if err != nil {
+		return err
+	}
+	return server.JSON(w, http.StatusOK, docs)
 }
 
 func (h documentHandlers) list(space spaceFunc) errchain.HandlerFunc {

@@ -100,6 +100,10 @@ type DocumentStore interface {
 	// Get returns the document and its body.
 	Get(ctx context.Context, space, path string) (Document, []byte, error)
 	List(ctx context.Context, space string) ([]Document, error)
+	// Recent returns the newest documents across all spaces, newest first.
+	Recent(ctx context.Context, limit int) ([]Document, error)
+	// ListByIDs returns the documents that exist among ids, newest first.
+	ListByIDs(ctx context.Context, ids []string) ([]Document, error)
 	Spaces(ctx context.Context) ([]SpaceUsage, error)
 	// Delete returns the id of the document it removed.
 	Delete(ctx context.Context, space, path string) (string, error)

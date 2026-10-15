@@ -50,3 +50,11 @@ ORDER BY id LIMIT ?;
 
 -- name: SetDocumentSearchText :exec
 UPDATE documents SET search_text = ? WHERE id = ?;
+
+-- name: ListRecentDocuments :many
+SELECT id, space, path, title, kind, sha256, size, updated_at
+FROM documents ORDER BY updated_at DESC, space, path LIMIT ?;
+
+-- name: ListDocumentsByIDs :many
+SELECT id, space, path, title, kind, sha256, size, updated_at
+FROM documents WHERE id IN (sqlc.slice('ids')) ORDER BY updated_at DESC, space, path;

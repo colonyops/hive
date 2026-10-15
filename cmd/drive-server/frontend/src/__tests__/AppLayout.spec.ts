@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   me: vi.fn(),
   spaces: vi.fn(),
   documents: vi.fn(),
+  recent: vi.fn(),
+  sharedLinks: vi.fn(),
   documentBody: vi.fn(),
   search: vi.fn(),
 }))
@@ -62,6 +64,13 @@ describe('drive shell', () => {
       ),
     )
     mocks.documentBody.mockResolvedValue('# Hello')
+    mocks.recent.mockResolvedValue([
+      doc({ path: 'plan.md', title: 'Plan' }),
+      doc({ space: 'workspaces/scratch', path: 'todo.md', title: 'Todo' }),
+    ])
+    mocks.sharedLinks.mockResolvedValue([
+      doc({ space: 'workspaces/scratch', path: 'todo.md', shared: { url: 'http://x/s/1', expires_in: '' } }),
+    ])
   })
 
   it('lists the spaces flat in the nav, marks the open one, and shows the folder contents', async () => {
@@ -99,6 +108,23 @@ describe('drive shell', () => {
     const { app } = await mountAt('/links')
 
     expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['todo'])
+    expect(mocks.sharedLinks).toHaveBeenCalledTimes(1)
+    expect(mocks.documents).not.toHaveBeenCalled()
+  })
+
+  it('lists recent documents with one request instead of one per space', async () => {
+    const { app } = await mountAt('/recent')
+
+    expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['Plan', 'Todo'])
+    expect(mocks.recent).toHaveBeenCalledTimes(1)
+    expect(mocks.documents).not.toHaveBeenCalled()
+  })
+
+  it('shows the error when the feed request fails', async () => {
+    mocks.recent.mockRejectedValue(new Error('boom'))
+    const { app } = await mountAt('/recent')
+
+    expect(app.text()).toContain('boom')
   })
 
   it('drills into a folder and leaves the rows alone while typing in search', async () => {
