@@ -11,11 +11,21 @@ export interface DriveDocument {
   id: string
   space: string
   path: string
+  title: string
   kind: DocumentKind
   sha256: string
   size: number
   updated_at: string
   shared?: Share
+}
+
+export interface SearchHit {
+  document: DriveDocument
+  snippet: string
+}
+
+export interface SearchResults {
+  hits: SearchHit[]
 }
 
 export interface SpaceSummary {

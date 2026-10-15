@@ -4,6 +4,7 @@ import type {
   DriveDocument,
   Me,
   PublicDocument,
+  SearchResults,
   Share,
   ShareExpiry,
   SpaceSummary,
@@ -73,6 +74,11 @@ export const api = {
   signOut: () => empty('POST', '/api/v1/auth/sign-out'),
 
   spaces: () => json<SpaceSummary[]>('GET', '/api/v1/spaces'),
+  search: (query: string, space?: string, limit = 20) => {
+    const params = new URLSearchParams({ q: query, limit: String(limit) })
+    if (space) params.set('space', space)
+    return json<SearchResults>('GET', `/api/v1/search?${params.toString()}`)
+  },
   documents: (apiPrefix: string) => json<DriveDocument[]>('GET', apiPrefix),
   documentBody: async (apiPrefix: string, path: string) => (await send('GET', docUrl(apiPrefix, path))).text(),
   deleteDocument: (apiPrefix: string, path: string) => empty('DELETE', docUrl(apiPrefix, path)),

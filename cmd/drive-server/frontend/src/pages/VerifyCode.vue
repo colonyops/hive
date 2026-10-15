@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AuthLayout from '../components/AuthLayout.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import FormField from '@hive/ui/components/ui/FormField.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
@@ -36,11 +37,7 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <main class="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-5 px-4">
-    <div>
-      <h1 class="text-heading font-semibold text-text">Enter your code</h1>
-      <p class="mt-1 text-body text-text-3">Use the 8-digit code we mailed to you. It expires soon.</p>
-    </div>
+  <AuthLayout title="Enter your code" subtitle="Use the 8-digit code we mailed to you. It expires soon.">
     <form class="flex flex-col gap-4" data-testid="verify-form" @submit.prevent="submit">
       <FormField label="Email">
         <template #default="{ id }">
@@ -65,5 +62,5 @@ async function submit(): Promise<void> {
       </BaseButton>
       <RouterLink :to="{ name: 'sign-in' }" class="text-small text-text-3 hover:text-text">Send a new code</RouterLink>
     </form>
-  </main>
+  </AuthLayout>
 </template>

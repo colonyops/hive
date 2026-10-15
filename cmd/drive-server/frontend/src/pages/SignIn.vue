@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AuthLayout from '../components/AuthLayout.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import FormField from '@hive/ui/components/ui/FormField.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
@@ -33,11 +34,7 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <main class="mx-auto flex min-h-screen max-w-sm flex-col justify-center gap-5 px-4">
-    <div>
-      <h1 class="text-heading font-semibold text-text">Hive Drive</h1>
-      <p class="mt-1 text-body text-text-3">Enter your email. We send you a sign-in code.</p>
-    </div>
+  <AuthLayout title="Hive Drive" subtitle="Enter your email. We send you a sign-in code.">
     <form class="flex flex-col gap-4" data-testid="sign-in-form" @submit.prevent="submit">
       <FormField label="Email">
         <template #default="{ id }">
@@ -49,5 +46,5 @@ async function submit(): Promise<void> {
         Send code
       </BaseButton>
     </form>
-  </main>
+  </AuthLayout>
 </template>
