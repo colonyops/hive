@@ -1,12 +1,13 @@
 -- name: UpsertDocument :one
-INSERT INTO documents (id, space, path, title, kind, sha256, size, body, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO documents (id, space, path, title, kind, sha256, size, body, search_text, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (space, path) DO UPDATE SET
-    title      = excluded.title,
-    kind       = excluded.kind,
-    sha256     = excluded.sha256,
-    size       = excluded.size,
-    body       = excluded.body,
+    title       = excluded.title,
+    kind        = excluded.kind,
+    sha256      = excluded.sha256,
+    size        = excluded.size,
+    body        = excluded.body,
+    search_text = excluded.search_text,
     updated_at = excluded.updated_at
 RETURNING id, space, path, title, kind, sha256, size, updated_at;
 
@@ -41,3 +42,11 @@ SELECT id, path, kind, body FROM documents WHERE title = '' LIMIT ?;
 
 -- name: SetDocumentTitle :exec
 UPDATE documents SET title = ? WHERE id = ?;
+
+-- name: ListUnindexedHTMLDocuments :many
+SELECT id, body FROM documents
+WHERE kind = 'html' AND search_text = '' AND id > ?
+ORDER BY id LIMIT ?;
+
+-- name: SetDocumentSearchText :exec
+UPDATE documents SET search_text = ? WHERE id = ?;

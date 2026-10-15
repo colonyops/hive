@@ -54,14 +54,15 @@ func (d *Documents) Put(ctx context.Context, p Principal, space drive.Space, pat
 	defer release()
 
 	doc, err := store.Put(ctx, NewDocument{
-		ID:        randid.UUIDv7(),
-		Space:     space.Key,
-		Path:      path,
-		Title:     DeriveTitle(path, kind, body),
-		Kind:      kind,
-		SHA256:    hex.EncodeToString(sum[:]),
-		Body:      body,
-		UpdatedAt: d.now(),
+		ID:         randid.UUIDv7(),
+		Space:      space.Key,
+		Path:       path,
+		Title:      DeriveTitle(path, kind, body),
+		Kind:       kind,
+		SHA256:     hex.EncodeToString(sum[:]),
+		Body:       body,
+		SearchText: SearchText(kind, body),
+		UpdatedAt:  d.now(),
 	}, quota)
 	if err != nil {
 		return driveapi.Document{}, fmt.Errorf("put document: %w", err)
