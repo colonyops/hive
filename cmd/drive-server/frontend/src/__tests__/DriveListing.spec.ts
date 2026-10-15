@@ -13,7 +13,7 @@ vi.mock('../api', async (importOriginal) => ({ ...(await importOriginal<typeof i
 
 const space = spaceFromKey('acme/notes')
 const docs = [
-  doc({ path: 'plan.md', title: 'Plan', shared: { url: 'http://drive.test/s/x' } }),
+  doc({ path: 'plan.md', title: 'Plan', shared: { url: 'http://drive.test/s/x', expires_in: '' } }),
   doc({ path: 'docs/guide.md', title: 'Guide' }),
 ]
 
@@ -117,7 +117,7 @@ describe('DriveListing', () => {
   })
 
   it('opens the share popover from the row menu and shares', async () => {
-    api.share.mockResolvedValue({ url: 'http://drive.test/s/new' })
+    api.share.mockResolvedValue({ url: 'http://drive.test/s/new', expires_in: '' })
     const entries = documentEntries([doc({ path: 'a.md' })])
     const { wrapper } = await mountListing(entries)
 

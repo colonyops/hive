@@ -1,0 +1,1 @@
+ALTER TABLE share_links ADD COLUMN expires_in TEXT NOT NULL DEFAULT '';

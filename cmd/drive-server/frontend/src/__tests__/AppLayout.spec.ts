@@ -53,7 +53,7 @@ describe('drive shell', () => {
     mocks.documents.mockImplementation((prefix: string) =>
       Promise.resolve(
         prefix.includes('scratch')
-          ? [doc({ space: 'workspaces/scratch', path: 'todo.md', shared: { url: 'http://x/s/1' } })]
+          ? [doc({ space: 'workspaces/scratch', path: 'todo.md', shared: { url: 'http://x/s/1', expires_in: '' } })]
           : [
               doc({ path: 'docs/guide.md', title: 'Guide' }),
               doc({ path: 'docs/api/auth.md', title: 'Auth' }),

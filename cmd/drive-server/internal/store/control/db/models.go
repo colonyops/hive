@@ -53,6 +53,7 @@ type ShareLink struct {
 	DocumentID string        `json:"document_id"`
 	ExpiresAt  sql.NullInt64 `json:"expires_at"`
 	CreatedAt  int64         `json:"created_at"`
+	ExpiresIn  string        `json:"expires_in"`
 }
 
 type SignInCode struct {

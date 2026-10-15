@@ -35,14 +35,20 @@ func NewShares(links ShareStore, accounts AccountStore, users UserStores, polici
 }
 
 // Create returns the document's share link, making one when it has none. A
-// non-empty expiresIn sets the expiry of a new or existing link; an empty one
-// leaves an existing link's expiry as it is.
+// preset expiresIn ("1d", "7d", "30d") or driveapi.ShareExpiryNone sets the
+// expiry of a new or existing link; an empty one leaves an existing link's
+// expiry as it is.
 func (s *Shares) Create(ctx context.Context, p Principal, space drive.Space, path, expiresIn string) (driveapi.Share, error) {
 	var expiresAt *time.Time
-	if expiresIn != "" {
+	preset := expiresIn
+	switch expiresIn {
+	case "":
+	case driveapi.ShareExpiryNone:
+		preset = ""
+	default:
 		lifetime, ok := shareLifetimes[expiresIn]
 		if !ok {
-			return driveapi.Share{}, NewError(KindInvalid, `expires_in must be "", "1d", "7d", or "30d"`)
+			return driveapi.Share{}, NewError(KindInvalid, `expires_in must be "", "none", "1d", "7d", or "30d"`)
 		}
 		t := s.now().Add(lifetime)
 		expiresAt = &t
@@ -62,6 +68,7 @@ func (s *Shares) Create(ctx context.Context, p Principal, space drive.Space, pat
 		UserID:     p.UserID,
 		DocumentID: doc.ID,
 		ExpiresAt:  expiresAt,
+		ExpiresIn:  preset,
 		CreatedAt:  s.now(),
 	})
 	if err != nil {
@@ -71,11 +78,11 @@ func (s *Shares) Create(ctx context.Context, p Principal, space drive.Space, pat
 	if err != nil {
 		return driveapi.Share{}, fmt.Errorf("read back share link: %w", err)
 	}
-	if expiresAt != nil {
-		if err := s.links.UpdateExpiry(ctx, link.ID, expiresAt); err != nil {
+	if expiresIn != "" {
+		if err := s.links.UpdateExpiry(ctx, link.ID, expiresAt, preset); err != nil {
 			return driveapi.Share{}, fmt.Errorf("update share expiry: %w", err)
 		}
-		link.ExpiresAt = expiresAt
+		link.ExpiresAt, link.ExpiresIn = expiresAt, preset
 	}
 	return toWireShare(s.baseURL, link), nil
 }
@@ -165,5 +172,5 @@ func newSlug() (string, error) {
 }
 
 func toWireShare(baseURL string, l ShareLink) driveapi.Share {
-	return driveapi.Share{URL: baseURL + "/s/" + l.Slug, ExpiresAt: l.ExpiresAt}
+	return driveapi.Share{URL: baseURL + "/s/" + l.Slug, ExpiresAt: l.ExpiresAt, ExpiresIn: l.ExpiresIn}
 }

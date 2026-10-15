@@ -129,3 +129,24 @@ func TestListShowsShared(t *testing.T) {
 	assert.Equal(t, out.URL, docs[0].Shared.URL)
 	assert.NotNil(t, docs[0].Shared.ExpiresAt)
 }
+
+func TestShareJSONCarriesTheExpiryPreset(t *testing.T) {
+	s := newServer(t)
+	token := s.token(t, "a@example.com", core.ScopePush)
+	out, _ := share(t, s, token, "note.md", `{"expires_in":"30d"}`)
+	assert.Equal(t, "30d", out.ExpiresIn)
+
+	route := "/api/v1/shared/shares/note.md"
+	rec := s.do(http.MethodPost, route, token, `{"expires_in":"none"}`)
+	require.Equal(t, http.StatusOK, rec.Code)
+	var raw map[string]any
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
+	assert.Empty(t, raw["expires_in"])
+	assert.NotContains(t, raw, "expires_at")
+
+	require.Equal(t, http.StatusOK, s.do(http.MethodPost, route, token, `{"expires_in":"1d"}`).Code)
+	var docs []driveapi.Document
+	require.NoError(t, json.Unmarshal(s.do(http.MethodGet, "/api/v1/shared", token, "").Body.Bytes(), &docs))
+	require.Len(t, docs, 1)
+	assert.Equal(t, "1d", docs[0].Shared.ExpiresIn)
+}

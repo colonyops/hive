@@ -92,7 +92,7 @@ describe('DocumentView', () => {
   })
 
   it('shares from the popover and then offers a quick copy', async () => {
-    mocks.share.mockResolvedValue({ url: 'http://drive.test/s/abc' })
+    mocks.share.mockResolvedValue({ url: 'http://drive.test/s/abc', expires_in: '' })
     const { wrapper } = await mountView('a.md')
 
     await wrapper.get('[data-testid="share"]').trigger('click')
@@ -107,7 +107,7 @@ describe('DocumentView', () => {
   })
 
   it('starts from an existing share link', async () => {
-    documents = [doc({ path: 'a.md', shared: { url: 'http://drive.test/s/old' } })]
+    documents = [doc({ path: 'a.md', shared: { url: 'http://drive.test/s/old', expires_in: '' } })]
     const { wrapper } = await mountView('a.md')
 
     await wrapper.get('[data-testid="share"]').trigger('click')

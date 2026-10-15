@@ -65,6 +65,7 @@ func TestCreateExpiry(t *testing.T) {
 	again, err := e.shares.Create(t.Context(), p, drive.Shared, "a.md", "")
 	require.NoError(t, err)
 	assert.Equal(t, share.ExpiresAt, again.ExpiresAt, "an empty expiry leaves the existing one")
+	assert.Equal(t, "1d", again.ExpiresIn)
 
 	longer, err := e.shares.Create(t.Context(), p, drive.Shared, "a.md", "30d")
 	require.NoError(t, err)
@@ -233,4 +234,64 @@ func TestListFillsShared(t *testing.T) {
 	require.NotNil(t, docs[0].Shared)
 	assert.Equal(t, share, *docs[0].Shared)
 	assert.Nil(t, docs[1].Shared)
+}
+
+func TestCreateStoresThePresetAndSwitchesIt(t *testing.T) {
+	e := newEnv(t, devPolicy())
+	p := principalFor(t, e, "dev@example.com")
+	now := e.clock.Now()
+
+	first, slug := sharedDoc(t, e, p, "a.md", "7d")
+	assert.Equal(t, "7d", first.ExpiresIn)
+
+	for _, step := range []struct {
+		in, wantIn string
+		wantAt     time.Duration
+	}{
+		{"30d", "30d", 30 * 24 * time.Hour},
+		{driveapi.ShareExpiryNone, "", 0},
+		{"1d", "1d", 24 * time.Hour},
+	} {
+		got, err := e.shares.Create(t.Context(), p, drive.Shared, "a.md", step.in)
+		require.NoError(t, err)
+		assert.Equal(t, first.URL, got.URL)
+		assert.Equal(t, step.wantIn, got.ExpiresIn)
+		if step.wantAt == 0 {
+			assert.Nil(t, got.ExpiresAt)
+		} else {
+			require.NotNil(t, got.ExpiresAt)
+			assert.Equal(t, now.Add(step.wantAt), *got.ExpiresAt)
+		}
+
+		again, err := e.shares.Create(t.Context(), p, drive.Shared, "a.md", "")
+		require.NoError(t, err)
+		assert.Equal(t, got, again, "an empty expiry reads the stored state back")
+	}
+
+	_, err := e.shares.Create(t.Context(), p, drive.Shared, "a.md", driveapi.ShareExpiryNone)
+	require.NoError(t, err)
+	e.clock.Advance(365 * 24 * time.Hour)
+	require.NoError(t, resolveErr(t, e, slug), "a cleared expiry never lapses")
+}
+
+func TestCreateWithNoExpiryMakesALinkWithoutOne(t *testing.T) {
+	e := newEnv(t, devPolicy())
+	p := principalFor(t, e, "dev@example.com")
+	share, _ := sharedDoc(t, e, p, "a.md", driveapi.ShareExpiryNone)
+	assert.Nil(t, share.ExpiresAt)
+	assert.Empty(t, share.ExpiresIn)
+}
+
+func TestLegacyLinkKeepsItsExpiryWithoutAPreset(t *testing.T) {
+	e := newEnv(t, devPolicy())
+	p := principalFor(t, e, "dev@example.com")
+	_, slug := sharedDoc(t, e, p, "a.md", "7d")
+	_, err := e.rawDB(t).Exec(`UPDATE share_links SET expires_in = '' WHERE slug = ?`, slug)
+	require.NoError(t, err)
+
+	got, err := e.shares.Create(t.Context(), p, drive.Shared, "a.md", "")
+	require.NoError(t, err)
+	assert.Empty(t, got.ExpiresIn)
+	require.NotNil(t, got.ExpiresAt)
+	assert.Equal(t, e.clock.Now().Add(7*24*time.Hour), *got.ExpiresAt)
 }
