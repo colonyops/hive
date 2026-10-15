@@ -123,12 +123,20 @@ async function copyLink(): Promise<void> {
   toast.show('Link copied')
 }
 
-const moreEntries: MenuEntry[] = [
+const textSizeEntries: MenuEntry[] = [
   { kind: 'action', id: 'larger', label: 'Larger text', icon: IconAArrowUp, testid: 'menu-larger' },
   { kind: 'action', id: 'smaller', label: 'Smaller text', icon: IconAArrowDown, testid: 'menu-smaller' },
   { kind: 'separator' },
-  { kind: 'action', id: 'delete', label: 'Delete document', icon: IconTrash, testid: 'delete-document' },
 ]
+const deleteEntry: MenuEntry = {
+  kind: 'action',
+  id: 'delete',
+  label: 'Delete document',
+  icon: IconTrash,
+  testid: 'delete-document',
+}
+// Text size scales the markdown reader only; an HTML document sets its own type.
+const moreEntries = computed<MenuEntry[]>(() => (isHtml.value ? [deleteEntry] : [...textSizeEntries, deleteEntry]))
 
 // The text-size entries leave the menu open so a few steps need one visit.
 function onMore(id: string): void {
@@ -232,8 +240,10 @@ function requestDelete(): void {
           @close="shareAnchor = null"
         />
       </header>
-      <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="relative mx-auto max-w-5xl px-6 py-6" :class="doc.kind === 'html' ? 'h-full' : ''">
+      <div class="min-h-0 flex-1" :class="isHtml ? 'overflow-hidden' : 'overflow-y-auto'">
+        <!-- isolate: the HTML frame carries its own z-index; keep it inside this
+             context so header menus and popovers always paint above it. -->
+        <div class="relative isolate" :class="isHtml ? 'h-full' : 'mx-auto max-w-5xl px-6 py-6'">
           <DocumentReader
             :document="readerDocument"
             :font-size-px="prefs.fontSizePx"

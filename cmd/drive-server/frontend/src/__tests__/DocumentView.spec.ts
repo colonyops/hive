@@ -68,6 +68,20 @@ describe('DocumentView', () => {
     )
   })
 
+  it('offers text size for markdown but only Delete for an html document', async () => {
+    const md = await mountView('a.md')
+    await md.wrapper.get('[data-testid="more-actions"]').trigger('click')
+    expect(md.wrapper.find('[data-testid="menu-larger"]').exists()).toBe(true)
+    expect(md.wrapper.find('[data-testid="menu-smaller"]').exists()).toBe(true)
+    md.wrapper.unmount()
+
+    const html = await mountView('page.html')
+    await html.wrapper.get('[data-testid="more-actions"]').trigger('click')
+    expect(html.wrapper.find('[data-testid="menu-larger"]').exists()).toBe(false)
+    expect(html.wrapper.find('[data-testid="menu-smaller"]').exists()).toBe(false)
+    expect(html.wrapper.find('[data-testid="delete-document"]').exists()).toBe(true)
+  })
+
   it('deletes only after confirmation, then refreshes storage and returns to the list', async () => {
     const { router, wrapper, refresh } = await mountView('a.md')
 
