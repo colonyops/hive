@@ -5,7 +5,6 @@ export interface TreeNode {
   /** The last path segment. */
   name: string
   path: string
-  label: string
   doc?: DriveDocument
   children: TreeNode[]
 }
@@ -28,7 +27,7 @@ function sortNodes(nodes: TreeNode[]): void {
 
 /** Folders come first, then both sort by file name. */
 export function buildTree(documents: readonly DriveDocument[]): TreeNode {
-  const root: TreeNode = { kind: 'dir', name: '', path: '', label: '', children: [] }
+  const root: TreeNode = { kind: 'dir', name: '', path: '', children: [] }
   const dirs = new Map<string, TreeNode>([['', root]])
 
   for (const doc of documents) {
@@ -39,7 +38,7 @@ export function buildTree(documents: readonly DriveDocument[]): TreeNode {
       const path = segments.slice(0, i + 1).join('/')
       let dir = dirs.get(path)
       if (!dir) {
-        dir = { kind: 'dir', name: segments[i], path, label: segments[i], children: [] }
+        dir = { kind: 'dir', name: segments[i], path, children: [] }
         dirs.set(path, dir)
         parent.children.push(dir)
       }
@@ -49,7 +48,6 @@ export function buildTree(documents: readonly DriveDocument[]): TreeNode {
       kind: 'doc',
       name: segments[segments.length - 1],
       path: doc.path,
-      label: documentLabel(doc),
       doc,
       children: [],
     })

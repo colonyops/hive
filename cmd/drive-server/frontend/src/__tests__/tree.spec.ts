@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { folderContents } from '../lib/entries'
 import { spaceFromKey } from '../lib/space'
-import { ancestorDirs, buildTree, findFolder, type TreeNode } from '../lib/tree'
+import { ancestorDirs, buildTree, documentLabel, findFolder, type TreeNode } from '../lib/tree'
 import { doc } from './fixtures'
 
 const docs = [
@@ -37,14 +37,14 @@ describe('buildTree', () => {
   it('labels a document by its title and a folder by its name', () => {
     const root = buildTree(docs)
 
-    expect(root.children.find((n) => n.name === 'readme.md')?.label).toBe('Read me')
-    expect(root.children.find((n) => n.name === 'docs')?.label).toBe('docs')
+    expect(documentLabel(root.children.find((n) => n.name === 'readme.md')!.doc!)).toBe('Read me')
+    expect(root.children.find((n) => n.name === 'docs')?.name).toBe('docs')
   })
 
   it('falls back to the file name without a title', () => {
     const root = buildTree([doc({ path: 'a/b.md', title: '' })])
 
-    expect(findFolder(root, 'a')?.children[0].label).toBe('b.md')
+    expect(documentLabel(findFolder(root, 'a')!.children[0].doc!)).toBe('b.md')
   })
 })
 
