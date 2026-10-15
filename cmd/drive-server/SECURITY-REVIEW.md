@@ -6,16 +6,16 @@ reach the network, the Hive Drive page around it, or the visitor's session.
 
 ## Decision
 
-HTML sharing stays enabled. Every automated check passes in Chromium,
-Firefox, and WebKit.
+HTML sharing stays enabled. The automated suite passed in Chromium,
+Firefox, and WebKit when this review was written.
 
 The review found one escape that the headers alone did not close: a
 document opened as a top-level page could navigate itself to any URL. The
 raw route now refuses that request (see "Finding"). No gate on
 `Shares.Create` is needed.
 
-The manual browser checks below are pending. A maintainer must run them
-before the first release that ships the server.
+A maintainer runs the manual browser checks below before the first release
+that ships the server (hc-ai5o20ff).
 
 ## Defences under test
 
@@ -74,20 +74,10 @@ Views covered:
 | `/s/{slug}/raw` and `?raw=1` as a top-level page | Refused with 403 (see below) |
 | The same two responses, forced to render top level | The test answers the browser request with the real response, so only the CSP is in effect |
 
-## Results
+## Reading the results
 
-Engines: Chromium, Firefox, WebKit (Playwright 1.62.1). 60 tests, 60 passed
-(20 per engine).
-
-| Check | Chromium | Firefox | WebKit |
-| --- | --- | --- | --- |
-| Framed, public share: no attack escapes, canary quiet, frame origin `null` | pass | pass | pass |
-| Framed, signed-in view: same | pass | pass | pass |
-| Framed, 6 navigation documents, both views: canary quiet, page not navigated | pass | pass | pass |
-| Top level, CSP only: origin `null`, cookie and storage unreadable, no network | pass | pass | pass |
-| Top level, real request: refused with 403, no document script runs | pass | pass | pass |
-
-Chromium also reported a `securitypolicyviolation` for `connect-src`,
+The suite runs in Chromium, Firefox, and WebKit. Chromium reports a
+`securitypolicyviolation` for `connect-src`,
 `img-src`, `style-src-elem`, `font-src`, `script-src-elem`, and `frame-src`
 inside the frame. Chromium emits a request event for a request that CSP
 blocks, then a failure. The suite therefore counts a request outside the
@@ -128,17 +118,18 @@ Limits that remain:
 
 ## Manual verification
 
-Pending: run by a maintainer. The automated suite cannot drive the real
-desktop browsers. For each browser, upload the `hostile.html` document built in
+The automated suite cannot drive the real desktop browsers. In Chrome,
+Firefox, and Safari, upload the `hostile.html` document built in
 `cmd/drive-server/e2e/tests/hostile.ts` as an HTML document, share it, run a
 listener on a second port (for example `python3 -m http.server 9141`), and
-edit the canary address in the document to match.
+edit the canary address in the document to match. Then check:
 
-| Check | Chrome | Firefox | Safari |
-| --- | --- | --- | --- |
-| Public share view: the listener sees no request | pending: run by a maintainer | pending: run by a maintainer | pending: run by a maintainer |
-| Signed-in view: the listener sees no request | pending: run by a maintainer | pending: run by a maintainer | pending: run by a maintainer |
-| Results block in the document shows no `escaped` entry | pending: run by a maintainer | pending: run by a maintainer | pending: run by a maintainer |
-| `window.open` and `top.location =` do nothing | pending: run by a maintainer | pending: run by a maintainer | pending: run by a maintainer |
-| `/s/{slug}/raw` typed into the address bar answers 403 | pending: run by a maintainer | pending: run by a maintainer | pending: run by a maintainer |
-| The page URL and session stay unchanged after the document loads | pending: run by a maintainer | pending: run by a maintainer | pending: run by a maintainer |
+- Public share view: the listener sees no request.
+- Signed-in view: the listener sees no request.
+- The results block in the document shows no `escaped` entry.
+- `window.open` and `top.location =` do nothing.
+- `/s/{slug}/raw` typed into the address bar answers 403.
+- The page URL and session stay unchanged after the document loads.
+
+hc-ai5o20ff tracks the run. Record the date and outcome here when it is
+done.
