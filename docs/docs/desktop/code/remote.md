@@ -5,6 +5,9 @@ description: Attach to existing Hive sessions on another machine through SSH.
 
 # Remote sessions
 
+For a machine without a GUI, use the
+[Ubuntu server installation guide](../getting-started/ubuntu-server.md).
+
 **Settings ▸ Remote** connects to existing Hive Code sessions on another
 machine. Select a session to view its tmux windows and panes, type, paste text,
 and resize the terminal. Connected remote inboxes, Code sessions, and chat

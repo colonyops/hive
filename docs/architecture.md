@@ -1388,6 +1388,15 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 
 ### Remote installations
 
+The Linux server bundle uses `server,production,terminals` and installs as two
+systemd user services under the SSH/agent account. A foreground tmux daemon
+owns an isolated `TMUX_TMPDIR`; the backend depends on that service. Restarting
+the backend leaves the daemon's control group and live panes intact. Both
+services retain normal systemd process cleanup. Account lingering enables
+boot startup without a login. The install uses separate config and data roots
+and existing provider-wide credential environment overrides for headless use.
+ADR [run-the-headless-server-and-its-tmux-daemon-as-separate-user-services](decisions/2026-10-15-run-the-headless-server-and-its-tmux-daemon-as-separate-user-services.md).
+
 Inbox, Code, and Chats share navigation lists across local and remote entries.
 Selecting a remote entry swaps only the content pane. Colored trim and a
 connection tooltip distinguish its origin. Settings ▸ Remote stores SSH host

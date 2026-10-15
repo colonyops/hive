@@ -1,0 +1,15 @@
+[Unit]
+Description=Hive terminal server
+
+[Service]
+Type=exec
+WorkingDirectory=%h
+EnvironmentFile=%h/.config/hive-server/environment
+RuntimeDirectory=hive-server
+RuntimeDirectoryMode=0700
+ExecStart=%h/.local/share/hive-server/launch.sh tmux
+ExecStartPost=%h/.local/share/hive-server/launch.sh wait-tmux
+Restart=on-failure
+RestartSec=5
+UMask=0077
+

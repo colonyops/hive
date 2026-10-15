@@ -1,0 +1,8 @@
+# systemd EnvironmentFile syntax: KEY=value. Do not use export or shell expansion.
+# Keep this file private (chmod 600). Existing values survive installer upgrades.
+# Optional single-account connector credential, independent of agent CLI login:
+# HIVE_GITHUB_TOKEN=replace-with-your-token
+# HIVE_GRAFANA_TOKEN=replace-with-your-token
+# Add agent binary directories using an absolute PATH, or use an absolute
+# command in the workspace manifest. $HOME and $PATH are not expanded here.
+# PATH=/home/you/.local/bin:/usr/local/bin:/usr/bin:/bin

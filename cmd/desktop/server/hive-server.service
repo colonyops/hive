@@ -1,0 +1,19 @@
+[Unit]
+Description=Hive headless server
+Requires=hive-server-tmux.service
+After=hive-server-tmux.service
+PartOf=hive-server-tmux.service
+
+[Service]
+Type=exec
+WorkingDirectory=%h
+EnvironmentFile=%h/.config/hive-server/environment
+ExecStart=%h/.local/share/hive-server/launch.sh serve
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+UMask=0077
+
+[Install]
+WantedBy=default.target
+
