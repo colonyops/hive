@@ -37,6 +37,13 @@ export const router = createRouter({
       component: () => import('./pages/AppLayout.vue'),
       children: [
         { path: '', name: 'spaces', component: () => import('./pages/Spaces.vue') },
+        {
+          path: 'recent',
+          name: 'recent',
+          component: () => import('./pages/DocumentFeed.vue'),
+          props: { feed: 'recent' },
+        },
+        { path: 'links', name: 'links', component: () => import('./pages/DocumentFeed.vue'), props: { feed: 'links' } },
         { path: 'tokens', name: 'tokens', component: () => import('./pages/Tokens.vue') },
         { path: 'repos/:owner/:repo/:path(.*)*', name: 'repo', component: () => import('./pages/SpaceRoute.vue') },
         { path: 'workspaces/:name/:path(.*)*', name: 'workspace', component: () => import('./pages/SpaceRoute.vue') },

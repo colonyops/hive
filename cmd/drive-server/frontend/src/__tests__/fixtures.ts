@@ -4,6 +4,7 @@ export function doc(overrides: Partial<DriveDocument> & Pick<DriveDocument, 'pat
   return {
     id: overrides.path,
     space: 'acme/notes',
+    title: overrides.path.slice(overrides.path.lastIndexOf('/') + 1).replace(/\.[^.]+$/, ''),
     kind: 'markdown',
     sha256: 'abc',
     size: 2048,

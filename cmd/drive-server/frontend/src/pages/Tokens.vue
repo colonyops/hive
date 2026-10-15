@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
+import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
 import CopyButton from '@hive/ui/components/ui/CopyButton.vue'
@@ -76,7 +77,7 @@ function requestRevoke(token: Token): void {
 </script>
 
 <template>
-  <main class="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
+  <div class="mx-auto flex max-w-3xl flex-col gap-6 px-6 py-6">
     <h1 class="text-heading font-semibold text-text">Tokens</h1>
     <p class="text-body text-text-3">
       A token lets the hive CLI sign in to this server. Read tokens pull. Push tokens also upload and share.
@@ -129,18 +130,24 @@ function requestRevoke(token: Token): void {
         data-testid="token-row"
       >
         <span class="min-w-0 flex-1 truncate text-body text-text">{{ token.name }}</span>
-        <span class="text-small text-text-3">{{ token.scope }}</span>
+        <BaseBadge tone="neutral" class="px-2 py-0.5 text-caption">{{ token.scope }}</BaseBadge>
         <span class="text-small text-text-3">
           {{ token.expires_at ? `expires ${formatTime(token.expires_at)}` : 'never expires' }}
         </span>
         <span class="text-small text-text-3">
           {{ token.last_used_at ? `used ${formatTime(token.last_used_at)}` : 'never used' }}
         </span>
-        <BaseButton variant="danger-outline" size="xs" data-testid="token-revoke" @click="requestRevoke(token)">
+        <BaseButton
+          variant="danger-outline"
+          size="xs"
+          class="h-7"
+          data-testid="token-revoke"
+          @click="requestRevoke(token)"
+        >
           Revoke
         </BaseButton>
       </li>
     </ul>
     <ConfirmationHost :confirmation="confirmation" />
-  </main>
+  </div>
 </template>

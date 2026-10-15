@@ -5,10 +5,10 @@ import { createMemoryHistory, createRouter } from 'vue-router'
 import { meKey } from '../lib/me'
 import { spaceFromKey } from '../lib/space'
 import DocumentView from '../pages/DocumentView.vue'
+import type { DriveDocument } from '../types'
 import { doc, frameStub } from './fixtures'
 
 const mocks = vi.hoisted(() => ({
-  documents: vi.fn(),
   documentBody: vi.fn(),
   deleteDocument: vi.fn(),
   share: vi.fn(),
@@ -21,6 +21,8 @@ vi.mock('../api', async (importOriginal) => ({
 
 const space = spaceFromKey('acme/notes')
 
+let documents: DriveDocument[] = []
+
 async function mountView(path: string) {
   const router = createRouter({
     history: createMemoryHistory(),
@@ -29,7 +31,7 @@ async function mountView(path: string) {
   await router.push(`/repos/acme/notes/${path}`)
   const refresh = vi.fn().mockResolvedValue(undefined)
   const wrapper = mount(DocumentView, {
-    props: { space, path },
+    props: { space, path, documents, loadError: null },
     attachTo: document.body,
     global: {
       plugins: [router],
@@ -44,7 +46,7 @@ async function mountView(path: string) {
 describe('DocumentView', () => {
   beforeEach(() => {
     Object.values(mocks).forEach((m) => m.mockReset())
-    mocks.documents.mockResolvedValue([doc({ path: 'a.md' }), doc({ path: 'page.html', kind: 'html' })])
+    documents = [doc({ path: 'a.md' }), doc({ path: 'page.html', kind: 'html' })]
     mocks.documentBody.mockResolvedValue('# Hello\n\nBody text.')
     mocks.deleteDocument.mockResolvedValue(undefined)
   })
@@ -98,7 +100,7 @@ describe('DocumentView', () => {
   })
 
   it('starts from an existing share link', async () => {
-    mocks.documents.mockResolvedValue([doc({ path: 'a.md', shared: { url: 'http://drive.test/s/old' } })])
+    documents = [doc({ path: 'a.md', shared: { url: 'http://drive.test/s/old' } })]
     const { wrapper } = await mountView('a.md')
 
     expect(wrapper.get('[data-testid="share-url"]').text()).toBe('http://drive.test/s/old')

@@ -1,15 +1,22 @@
 <script setup lang="ts">
-import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import { computed, onMounted, provide, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { api } from '../api'
-import { formatBytes } from '../lib/format'
+import AccountMenu from '../components/AccountMenu.vue'
+import HiveMark from '../components/HiveMark.vue'
+import NavSidebar from '../components/NavSidebar.vue'
+import ToolbarSearch from '../components/ToolbarSearch.vue'
+import { createDriveData, driveDataKey } from '../lib/driveData'
 import { meKey } from '../lib/me'
-import { forgetSignIn } from '../router'
+import { searchQueryKey } from '../lib/search'
+import { fromRouteParams } from '../lib/space'
+import { ancestorDirs } from '../lib/tree'
 import type { Me } from '../types'
 
-const router = useRouter()
+const route = useRoute()
 const me = ref<Me | null>(null)
+const query = ref('')
+const data = createDriveData()
 
 async function refresh(): Promise<void> {
   try {
@@ -19,48 +26,45 @@ async function refresh(): Promise<void> {
   }
 }
 provide(meKey, { me, refresh })
+provide(searchQueryKey, query)
+provide(driveDataKey, data)
 onMounted(refresh)
 
-const quotaPercent = computed(() => {
-  const quota = me.value?.quota
-  if (!quota?.limit) return 0
-  return Math.min(100, Math.round((quota.used / quota.limit) * 100))
-})
+const inSpace = computed(() => ['repo', 'workspace', 'shared'].includes(String(route.name)))
+const target = computed(() => (inSpace.value ? fromRouteParams(route.params) : null))
+const space = computed(() => target.value?.space ?? null)
 
-async function signOut(): Promise<void> {
-  await api.signOut()
-  forgetSignIn()
-  await router.push({ name: 'sign-in' })
-}
+// A document marks its folder in the nav tree.
+const folder = computed(() => {
+  if (!target.value) return null
+  const path = target.value.path.replace(/\/+$/, '')
+  const isDocument = !!data.documents[target.value.space.key]?.some((d) => d.path === path)
+  const dir = isDocument ? (ancestorDirs(path).pop() ?? '') : path
+  return dir || null
+})
 </script>
 
 <template>
-  <div class="min-h-screen">
-    <header class="flex min-h-12 flex-wrap items-center gap-x-4 gap-y-1 border-b border-row bg-sidebar px-4 py-2">
-      <RouterLink :to="{ name: 'spaces' }" class="text-title font-semibold text-text">Hive Drive</RouterLink>
-      <nav class="flex gap-3 text-body text-text-3">
-        <RouterLink :to="{ name: 'spaces' }" class="hover:text-text">Spaces</RouterLink>
-        <RouterLink :to="{ name: 'tokens' }" class="hover:text-text">Tokens</RouterLink>
-      </nav>
-      <div class="flex-1" />
-      <div v-if="me" class="flex items-center gap-3 text-small text-text-3" data-testid="storage-meter">
-        <span>{{ me.email }}</span>
-        <span v-if="me.quota.limit" class="flex items-center gap-2">
-          <span
-            class="h-1.5 w-24 overflow-hidden rounded-full bg-chip"
-            role="progressbar"
-            :aria-valuenow="quotaPercent"
-            aria-valuemin="0"
-            aria-valuemax="100"
-          >
-            <span class="block h-full bg-accent" :style="{ width: `${quotaPercent}%` }" />
-          </span>
-          {{ formatBytes(me.quota.used) }} of {{ formatBytes(me.quota.limit) }}
-        </span>
-        <span v-else>{{ formatBytes(me.quota.used) }} used</span>
+  <div class="flex h-screen flex-col bg-app">
+    <header class="flex h-12 shrink-0 items-center gap-3 border-b border-row bg-sidebar px-3">
+      <RouterLink
+        :to="{ name: 'spaces' }"
+        class="flex shrink-0 items-center gap-2 pr-2 text-title font-semibold text-text md:w-60"
+        data-testid="brand"
+      >
+        <HiveMark :size="22" />
+        Hive Drive
+      </RouterLink>
+      <div class="flex min-w-0 flex-1 justify-center">
+        <ToolbarSearch v-model="query" :space="space" />
       </div>
-      <BaseButton variant="ghost" size="xs" data-testid="sign-out" @click="signOut">Sign out</BaseButton>
+      <AccountMenu />
     </header>
-    <RouterView />
+    <div class="flex min-h-0 flex-1 flex-col md:flex-row">
+      <NavSidebar :space="space" :folder="folder" />
+      <main class="min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <RouterView />
+      </main>
+    </div>
   </div>
 </template>
