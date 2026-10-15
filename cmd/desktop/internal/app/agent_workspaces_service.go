@@ -21,6 +21,7 @@ import (
 	"github.com/colonyops/hive/cmd/desktop/internal/app/events"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/mcpcatalog"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/prompts"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/schedule"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	"github.com/colonyops/hive/internal/domain/terminal/assess"
@@ -1583,6 +1584,7 @@ func (s *AgentWorkspacesService) launchTerminal(ctx context.Context, rec stores.
 	env := []string{
 		"HIVE_AGENT_SESSION=" + rec.ID,
 		"HIVE_AGENT_WORKSPACE=" + opts.dir,
+		ptyterm.ImageProtocolEnv,
 	}
 	if rec.EndToken != "" {
 		env = append(env, "HIVE_AGENT_SESSION_TOKEN="+rec.EndToken)

@@ -58,6 +58,10 @@ Drag image files or paste clipboard screenshots into a chat's terminal to give
 the agent visual context. See [Image input](../code/terminal-mode.md#image-input)
 for supported formats, limits, and saved clipboard images.
 
+Images that Pi draws show in the chat's terminal. Hive sets
+`PI_IMAGE_PROTOCOL=kitty` for chats it starts. See
+[Images in output](../code/terminal-mode.md#images-in-output).
+
 An Inbox item's **…** menu offers **Create Session** for Code and **Create Chat**
 for Chats. Both open the same dialog on the requested target; use its compact
 **Code** / **Chats** switch to change targets. A chat keeps the generated item

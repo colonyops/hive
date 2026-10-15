@@ -81,6 +81,16 @@ you no longer need from that directory to free space; conversations that still
 reference removed files cannot read them again. Dragged files stay at their
 original location.
 
+### Images in output
+
+Images that Pi draws with the Kitty graphics protocol show in Chats, Code
+panes, and pop-up terminals. Hive sets `PI_IMAGE_PROTOCOL=kitty` for sessions
+that Hive Desktop starts. For a session started elsewhere, set
+`PI_IMAGE_PROTOCOL=kitty` in its environment yourself.
+
+An image shows only while Pi has it on screen. If you reopen a session or the
+terminal resyncs, you see the text until Pi draws the image again.
+
 ### Navigation
 
 - Select a window from the sidebar to attach to it.
