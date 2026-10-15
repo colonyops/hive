@@ -15,6 +15,10 @@ describe('BaseButton', () => {
     expect(wrapper.classes()).toContain(className)
   })
 
+  it('has a fixed 36px control size', () => {
+    expect(mount(BaseButton, { props: { size: 'control' } }).classes()).toContain('h-9')
+  })
+
   it('disables while busy and honors submit type', () => {
     const wrapper = mount(BaseButton, { props: { busy: true, type: 'submit' } })
     expect(wrapper.attributes('disabled')).toBeDefined()

@@ -23,6 +23,10 @@ async function hover(wrapper: ReturnType<typeof mountButton>) {
 }
 
 describe('IconButton', () => {
+  it('has a 36px control size', () => {
+    expect(mountButton({ size: 'control' }).classes()).toContain('size-9')
+  })
+
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => {
     vi.useRealTimers()

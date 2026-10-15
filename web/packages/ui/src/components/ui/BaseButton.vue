@@ -5,7 +5,7 @@ import Spinner from './Spinner.vue'
 const props = withDefaults(
   defineProps<{
     variant?: 'primary' | 'secondary' | 'danger' | 'danger-outline' | 'ghost'
-    size?: 'xs' | 'sm' | 'md'
+    size?: 'xs' | 'sm' | 'md' | 'control'
     busy?: boolean
     disabled?: boolean
     type?: 'button' | 'submit'
@@ -28,6 +28,7 @@ const classes = computed(() => [
     xs: 'px-3 py-1.5 text-small font-medium',
     sm: 'px-3.5 py-2 text-body font-medium',
     md: 'px-4 py-2.5 text-body font-semibold',
+    control: 'h-9 px-3.5 text-body font-medium',
   }[props.size],
   {
     primary: 'bg-accent text-accent-contrast hover:brightness-110',
