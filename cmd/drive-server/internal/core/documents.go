@@ -235,14 +235,17 @@ func (d *Documents) Delete(ctx context.Context, p Principal, space drive.Space, 
 	}
 	defer release()
 
-	id, err := store.Delete(ctx, space.Key, path)
+	doc, _, err := store.Get(ctx, space.Key, path)
 	if err != nil {
-		return notFoundOr(err, "delete document")
+		return notFoundOr(err, "get document")
 	}
-	// A failure here leaves a dangling link, which Resolve and the sweeper
-	// drop.
-	if err := d.shares.DeleteByDocument(ctx, p.UserID, id); err != nil {
+	// Links go first: a failure after this leaves an unshared document, while
+	// the reverse order would leave a public link to a deleted document.
+	if err := d.shares.DeleteByDocument(ctx, p.UserID, doc.ID); err != nil {
 		return fmt.Errorf("delete share links: %w", err)
+	}
+	if _, err := store.Delete(ctx, space.Key, path); err != nil {
+		return notFoundOr(err, "delete document")
 	}
 	return nil
 }

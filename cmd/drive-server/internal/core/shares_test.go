@@ -159,48 +159,38 @@ func linkRows(t *testing.T, e *env) int {
 	return n
 }
 
-func TestResolveRemovesADanglingRow(t *testing.T) {
+func TestResolveOfAMissingDocumentIsNotFoundAndKeepsTheRow(t *testing.T) {
 	e := newEnv(t, devPolicy())
 	p := principalFor(t, e, "dev@example.com")
 	_, slug := sharedDoc(t, e, p, "a.md", "")
 
 	removeDocumentOnly(t, e, p, "a.md")
-	require.Equal(t, 1, linkRows(t, e))
 	requireGone(t, e, slug)
-	assert.Zero(t, linkRows(t, e))
+	assert.Equal(t, 1, linkRows(t, e))
 }
 
-func TestSweeperDropsExpiredAndDanglingLinks(t *testing.T) {
+func TestDeletingADocumentRemovesItsLink(t *testing.T) {
 	e := newEnv(t, devPolicy())
 	p := principalFor(t, e, "dev@example.com")
-	other := principalFor(t, e, "other@example.com")
+	_, slug := sharedDoc(t, e, p, "a.md", "")
+
+	require.NoError(t, e.docs.Delete(t.Context(), p, drive.Shared, "a.md"))
+	assert.Zero(t, linkRows(t, e))
+	requireGone(t, e, slug)
+}
+
+func TestSweeperDropsExpiredLinks(t *testing.T) {
+	e := newEnv(t, devPolicy())
+	p := principalFor(t, e, "dev@example.com")
 
 	_, keep := sharedDoc(t, e, p, "keep.md", "")
 	sharedDoc(t, e, p, "expires.md", "1d")
-	sharedDoc(t, e, p, "dangling.md", "")
-	sharedDoc(t, e, other, "other-dangling.md", "")
-	removeDocumentOnly(t, e, p, "dangling.md")
-	removeDocumentOnly(t, e, other, "other-dangling.md")
 	e.clock.Advance(48 * time.Hour)
-	require.Equal(t, 4, linkRows(t, e))
+	require.Equal(t, 2, linkRows(t, e))
 
 	require.NoError(t, e.sweeper.Tick(t.Context()))
 	assert.Equal(t, 1, linkRows(t, e))
-	err := resolveErr(t, e, keep)
-	require.NoError(t, err)
-}
-
-func TestSweeperWalksMoreThanOneBatch(t *testing.T) {
-	e := newEnv(t, devPolicy())
-	p := principalFor(t, e, "dev@example.com")
-	for i := range 250 {
-		path := "doc-" + strings.Repeat("x", i%3) + string(rune('a'+i%26)) + string(rune('a'+i/26)) + ".md"
-		sharedDoc(t, e, p, path, "")
-		removeDocumentOnly(t, e, p, path)
-	}
-	require.Equal(t, 250, linkRows(t, e))
-	require.NoError(t, e.sweeper.Tick(t.Context()))
-	assert.Zero(t, linkRows(t, e))
+	require.NoError(t, resolveErr(t, e, keep))
 }
 
 func TestLockedOwnersLinkStops(t *testing.T) {

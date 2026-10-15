@@ -56,7 +56,7 @@ func OpenServices(ctx context.Context, log zerolog.Logger, cfg config.Config) (*
 		Shares:    core.NewShares(store.Shares(), store.Accounts(), users.Stores(), policies, core.WithBaseURL(cfg.BaseURL)),
 		Sessions:  sessions,
 		SignIn:    core.NewSignIn(log, store.Codes(), store.Accounts(), store.Outbox(), policies, accounts, sessions, core.WithBaseURL(cfg.BaseURL)),
-		Sweeper:   core.NewSweeper(log, store.Shares(), store.Codes(), store.Sessions(), users.Stores()),
+		Sweeper:   core.NewSweeper(log, store.Shares(), store.Codes(), store.Sessions()),
 		Outbox:    store.Outbox(),
 		control:   store,
 		users:     users,

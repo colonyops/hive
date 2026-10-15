@@ -93,17 +93,6 @@ func (q *Queries) GetDocumentSize(ctx context.Context, arg GetDocumentSizeParams
 	return size, err
 }
 
-const hasDocument = `-- name: HasDocument :one
-SELECT EXISTS (SELECT 1 FROM documents WHERE id = ?)
-`
-
-func (q *Queries) HasDocument(ctx context.Context, id string) (bool, error) {
-	row := q.db.QueryRowContext(ctx, hasDocument, id)
-	var exists bool
-	err := row.Scan(&exists)
-	return exists, err
-}
-
 const listDocuments = `-- name: ListDocuments :many
 SELECT id, space, path, title, kind, sha256, size, updated_at
 FROM documents WHERE space = ? ORDER BY path

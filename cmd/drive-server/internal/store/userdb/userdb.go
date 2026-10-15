@@ -171,11 +171,6 @@ func (u *UserDB) GetByID(ctx context.Context, id string) (core.Document, []byte,
 	return core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Title: row.Title, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}, row.Body, nil
 }
 
-func (u *UserDB) HasID(ctx context.Context, id string) (bool, error) {
-	ok, err := u.q.HasDocument(ctx, id)
-	return ok, wrap("has document", err)
-}
-
 func (u *UserDB) Usage(ctx context.Context) (int64, error) {
 	n, err := u.q.SumDocumentSize(ctx)
 	return n, wrap("sum sizes", err)

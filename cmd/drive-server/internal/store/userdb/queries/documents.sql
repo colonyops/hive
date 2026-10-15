@@ -25,9 +25,6 @@ FROM documents GROUP BY space ORDER BY space;
 -- name: DeleteDocument :one
 DELETE FROM documents WHERE space = ? AND path = ? RETURNING id;
 
--- name: HasDocument :one
-SELECT EXISTS (SELECT 1 FROM documents WHERE id = ?);
-
 -- name: GetDocumentByID :one
 SELECT * FROM documents WHERE id = ?;
 
