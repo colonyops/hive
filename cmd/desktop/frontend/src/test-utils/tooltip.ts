@@ -1,6 +1,6 @@
 import type { VueWrapper } from '@vue/test-utils'
-import AppTooltip from '../components/ui/AppTooltip.vue'
-import IconButton from '../components/ui/IconButton.vue'
+import AppTooltip from '@hive/ui/components/ui/AppTooltip.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 
 /**
  * The tooltip text for the element carrying `testid`: an IconButton's

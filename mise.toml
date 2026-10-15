@@ -189,6 +189,24 @@ run = [
   { tasks = ["check:adr", "desktop:check:migrations", "check:tidy", "lint", "test", "cli:check:goreleaser"] },
 ]
 
+# @hive/ui (web/packages/ui) is a member of the repo-root npm workspace; the
+# scripts live in the root package.json. Run `mise run desktop:frontend:install`
+# first on a fresh clone.
+[tasks."ui:test"]
+description = "Run the @hive/ui unit tests (vitest)"
+dir = "{{config_root}}"
+run = "npm run ui:test"
+
+[tasks."ui:lint"]
+description = "Lint @hive/ui (ESLint, type-aware, with the Wails boundary rules)"
+dir = "{{config_root}}"
+run = "npm run ui:lint"
+
+[tasks."ui:format:check"]
+description = "Check @hive/ui formatting (Prettier)"
+dir = "{{config_root}}"
+run = "npm run ui:format:check"
+
 [tasks."lint:workflows"]
 description = "Lint GitHub workflows and local actions"
 run = "actionlint"
@@ -206,6 +224,7 @@ run = [
   { tasks = ["lint", "lint:workflows", "test", "check:deadcode", "check:vuln", "cli:check:goreleaser"] },
   { tasks = ["docs:build", "desktop:frontend:install"] },
   { tasks = ["desktop:frontend:build", "desktop:frontend:test", "desktop:frontend:format:check", "desktop:frontend:lint"] },
+  { tasks = ["ui:test", "ui:format:check", "ui:lint"] },
   { tasks = ["cli:integration"] },
   { tasks = ["desktop:e2e"] },
 ]

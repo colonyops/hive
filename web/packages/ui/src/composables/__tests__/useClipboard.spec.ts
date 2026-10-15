@@ -1,21 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { effectScope } from 'vue'
-
-const mocks = vi.hoisted(() => ({ SetText: vi.fn() }))
-vi.mock('@wailsio/runtime', () => ({ Clipboard: { SetText: mocks.SetText } }))
-
+import { createApp, effectScope } from 'vue'
+import { installHiveUi } from '../../platform'
+import { fakePlatform } from '../../test-utils/platform'
 import { useClipboard } from '../useClipboard'
 
+const mocks = { SetText: fakePlatform.clipboard.writeText }
+
 // Run the composable inside an effect scope so onScopeDispose has a scope to
-// register against (and so scope.stop() exercises the timer cleanup).
+// register against (and so scope.stop() exercises the timer cleanup). The app
+// context is what lets it inject the platform outside a component.
 function inScope(resetDelay = 1000) {
+  const app = createApp({})
+  installHiveUi(app, fakePlatform)
   const scope = effectScope()
-  const api = scope.run(() => useClipboard({ resetDelay }))!
+  const api = app.runWithContext(() => scope.run(() => useClipboard({ resetDelay })))!
   return { api, scope }
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
   vi.useFakeTimers()
 })
 afterEach(() => {
@@ -23,7 +25,7 @@ afterEach(() => {
 })
 
 describe('useClipboard', () => {
-  it('writes through the native Wails clipboard and flags success, then resets', async () => {
+  it('writes through the platform clipboard and flags success, then resets', async () => {
     mocks.SetText.mockResolvedValue(undefined)
     const { api, scope } = inScope()
 
@@ -39,7 +41,7 @@ describe('useClipboard', () => {
     scope.stop()
   })
 
-  it('flags error when the native clipboard rejects', async () => {
+  it('flags error when the platform clipboard rejects', async () => {
     mocks.SetText.mockRejectedValue(new Error('no clipboard'))
     const { api, scope } = inScope()
 

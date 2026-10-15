@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import IconButton from './ui/IconButton.vue'
-import InlineError from './ui/InlineError.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useWindowSize } from '@vueuse/core'
 import type { Terminal } from '@xterm/xterm'

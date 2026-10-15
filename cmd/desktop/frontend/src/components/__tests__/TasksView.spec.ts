@@ -1,6 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { chooseOption, openSelect } from '../../test-utils/select'
+import { chooseOption, openSelect } from '@hive/ui/test-utils/select'
 
 const mocks = vi.hoisted(() => ({
   ListTasks: vi.fn(),

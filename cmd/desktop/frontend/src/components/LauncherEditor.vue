@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import InlineError from './ui/InlineError.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { nextTick, onMounted, ref } from 'vue'
 import IconTerminal from '~icons/lucide/terminal'
-import BaseButton from './ui/BaseButton.vue'
-import DrawerSheet from './ui/DrawerSheet.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import DrawerSheet from '@hive/ui/components/ui/DrawerSheet.vue'
 import { SelectField, TextField } from '../pipeline/fields'
 import { launcherIconOptions } from '../lib/launcherIcons'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { launcherCommandID } from '../keybindings/catalog'
 import type { Launcher } from '../composables/useActionsSettings'
-import Kbd from './ui/Kbd.vue'
+import Kbd from '@hive/ui/components/ui/Kbd.vue'
 
 const props = defineProps<{
   isNew: boolean

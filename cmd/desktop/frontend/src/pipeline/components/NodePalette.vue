@@ -7,12 +7,12 @@
 // click-to-add — a single click landing a node with no control over
 // position was bad UX, so real drag-and-drop is the only way to add a node.
 import { computed, ref } from 'vue'
-import SearchField from '../../components/ui/SearchField.vue'
+import SearchField from '@hive/ui/components/ui/SearchField.vue'
 import { palette } from '../registry'
 import { NODE_TYPE_MIME } from '../lib/dragTypes'
 import { summarize } from '../lib/markdown'
 import type { NodeCategory, NodeTypeDefinition } from '../nodeType'
-import EmptyState from '../../components/ui/EmptyState.vue'
+import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 
 const query = ref('')
 

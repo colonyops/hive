@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import AppMenu from './ui/AppMenu.vue'
+import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import IconInfo from '~icons/lucide/info'
 import IconPencil from '~icons/lucide/pencil'
 import IconPlay from '~icons/lucide/play'
@@ -8,7 +8,7 @@ import IconRecycle from '~icons/lucide/recycle'
 import IconSquare from '~icons/lucide/square'
 import IconTrash from '~icons/lucide/trash-2'
 import type { SessionSummary } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
-import type { MenuEntry } from '../types/menu'
+import type { MenuEntry } from '@hive/ui/types/menu'
 
 // The one menu for a hive session, opened from the session row. It owns the
 // session's own operations; anything a *host* contributes — a new tab per

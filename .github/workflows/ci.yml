@@ -73,6 +73,9 @@ jobs:
             desktop-frontend:
               - 'cmd/desktop/frontend/**'
               - 'cmd/desktop/internal/app/flow/docs/**'
+              - 'web/**'
+              - 'package.json'
+              - 'package-lock.json'
               - '.github/workflows/ci.yml'
 
   go:
@@ -161,9 +164,6 @@ jobs:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.desktop-frontend == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cmd/desktop/frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -171,27 +171,28 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: cmd/desktop/frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
 
       - name: Check formatting
-        run: npm run format:check
+        run: |
+          npm run format:check -w frontend
+          npm run ui:format:check
 
       - name: Lint
-        run: npm run lint
+        run: |
+          npm run lint -w frontend
+          npm run ui:lint
 
       - name: Build frontend
-        run: npm run build
+        run: npm run build -w frontend
 
   desktop-frontend-test:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.desktop-frontend == 'true'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cmd/desktop/frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -199,13 +200,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: cmd/desktop/frontend/package-lock.json
+          cache-dependency-path: package-lock.json
 
       - name: Install frontend dependencies
         run: npm ci
 
       - name: Test frontend
-        run: npm test
+        run: |
+          npm test -w frontend
+          npm run ui:test
 
   site:
     needs: changes

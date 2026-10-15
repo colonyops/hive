@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import DevView from '../DevView.vue'
-import { chooseOption, selectedLabel } from '../../test-utils/select'
+import { chooseOption, selectedLabel } from '@hive/ui/test-utils/select'
 
 // Only the leaf seams are mocked: useNotify itself runs for real, so the
 // reported outcome of an "auto" send is the one its own delivery decision

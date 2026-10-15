@@ -2,11 +2,11 @@
 import { computed, ref } from 'vue'
 import ActionCard from './ActionCard.vue'
 import ItemActionMenu from './ItemActionMenu.vue'
-import IconButton from './ui/IconButton.vue'
-import PanelResizeHandle from './ui/PanelResizeHandle.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import PanelResizeHandle from '@hive/ui/components/ui/PanelResizeHandle.vue'
 import PullRequestMetadata from './PullRequestMetadata.vue'
 import { useCodeCopy } from '../composables/useCodeCopy'
-import { useResizablePanel } from '../composables/useResizablePanel'
+import { useResizablePanel } from '@hive/ui/composables/useResizablePanel'
 import {
   body,
   byline,

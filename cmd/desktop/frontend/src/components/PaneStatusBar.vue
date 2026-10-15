@@ -5,7 +5,7 @@
 import IconCode from '~icons/lucide/code'
 import IconFolder from '~icons/lucide/folder'
 import IconFolderOpen from '~icons/lucide/folder-open'
-import IconButton from './ui/IconButton.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 
 withDefaults(
   defineProps<{

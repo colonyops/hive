@@ -17,8 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /workspace
 COPY go.mod go.sum ./
 RUN go mod download
-COPY cmd/desktop/frontend/package.json cmd/desktop/frontend/package-lock.json cmd/desktop/frontend/.npmrc ./cmd/desktop/frontend/
-RUN cd cmd/desktop/frontend && npm ci
+COPY package.json package-lock.json .npmrc ./
+COPY web/packages/ui/package.json ./web/packages/ui/
+COPY cmd/desktop/frontend/package.json ./cmd/desktop/frontend/
+RUN npm ci
 COPY cmd/desktop/e2e/package.json cmd/desktop/e2e/package-lock.json ./cmd/desktop/e2e/
 RUN cd cmd/desktop/e2e && npm ci
 COPY . .

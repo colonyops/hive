@@ -7,7 +7,7 @@ import ReviewLabelsEditor from './settings/ReviewLabelsEditor.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
-import SegmentedControl from './ui/SegmentedControl.vue'
+import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
 import {
   canvasFontSizeLabels,
   canvasFontSizePx,

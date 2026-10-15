@@ -136,8 +136,8 @@ run = "npm run build"
 # them when node_modules is absent, and that stays a skip rather than becoming
 # an install nobody asked for mid-push.
 ["desktop:frontend:install"]
-description = "Install desktop frontend dependencies when they are missing"
-dir = "{{config_root}}/cmd/desktop/frontend"
+description = "Install the npm workspace dependencies (desktop frontend and @hive/ui) when they are missing"
+dir = "{{config_root}}"
 run = "test -d node_modules || npm ci"
 
 ["desktop:frontend:format:check"]

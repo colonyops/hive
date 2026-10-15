@@ -5,12 +5,12 @@
 import { nextTick, ref, watch } from 'vue'
 import IconPlus from '~icons/lucide/plus'
 import IconTrash2 from '~icons/lucide/trash-2'
-import AppSelect from '../ui/AppSelect.vue'
-import BaseButton from '../ui/BaseButton.vue'
-import IconButton from '../ui/IconButton.vue'
-import InlineError from '../ui/InlineError.vue'
-import Kbd from '../ui/Kbd.vue'
-import TextInput from '../ui/TextInput.vue'
+import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
+import Kbd from '@hive/ui/components/ui/Kbd.vue'
+import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import {
   defaultReviewLabelSettings,
   maxReviewLabels,

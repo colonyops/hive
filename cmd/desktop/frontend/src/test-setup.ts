@@ -1,4 +1,5 @@
-import { enableAutoUnmount } from '@vue/test-utils'
+import { installHiveUi } from '@hive/ui/platform'
+import { config, enableAutoUnmount } from '@vue/test-utils'
 import { afterAll, afterEach, beforeEach, vi } from 'vitest'
 import { resetStores } from './stores/defineStore'
 
@@ -100,6 +101,11 @@ Object.defineProperty(globalThis, 'fetch', {
   configurable: true,
 })
 
-beforeEach(() => {
+// Loaded per test, not at setup time: a spec's vi.mock('@wailsio/runtime')
+// registers after this file runs, and an import made now would keep the real
+// Clipboard.
+beforeEach(async () => {
   localStorage.clear()
+  const { hiveUiPlatform } = await import('./lib/hiveUiPlatform')
+  config.global.plugins = [[installHiveUi, hiveUiPlatform]]
 })

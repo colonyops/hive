@@ -1,5 +1,5 @@
 import { ref, watch } from 'vue'
-import type { Confirmation } from '../composables/useConfirmation'
+import type { Confirmation } from '@hive/ui/composables/useConfirmation'
 import type { useGitHubConnection } from '../composables/useGitHubConnection'
 import type { AppNavigation, FeedState } from './useAppNavigation'
 

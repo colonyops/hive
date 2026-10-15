@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import AppMenu from './ui/AppMenu.vue'
+import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import { ActionViews } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
 import { actionTypeMeta } from '../lib/actionPresentation'
@@ -14,7 +14,7 @@ import IconMessagesSquare from '~icons/lucide/messages-square'
 import IconSquarePlus from '~icons/lucide/square-plus'
 import type { ActionView } from '../types/action'
 import type { InboxItem } from '../types/feed'
-import type { MenuEntry } from '../types/menu'
+import type { MenuEntry } from '@hive/ui/types/menu'
 import { createLogger } from '../lib/log'
 
 const log = createLogger('item-action-menu')
