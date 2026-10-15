@@ -188,12 +188,13 @@ func createToken(ctx context.Context, cmd *cli.Command, svc *app.Services) error
 	if err != nil {
 		return err
 	}
-	if err := svc.NoteSignUpBypass(ctx, os.Stderr, email); err != nil {
-		return err
-	}
-	secret, _, err := svc.CreateToken(ctx, email, scope, cmd.String("name"), ttl)
+	secret, _, bypassed, err := svc.CreateToken(ctx, email, scope, cmd.String("name"), ttl)
 	if err != nil {
 		return err
+	}
+	if bypassed != "" {
+		fmt.Fprintf(os.Stderr, "Note: policy %q sets sign_up: false. Created the account for %s anyway; minting a token is an operator action.\n",
+			bypassed, core.NormalizeEmail(email))
 	}
 	fmt.Fprintln(os.Stderr, "This token is shown once. Store it now.")
 	_, err = fmt.Fprintln(os.Stdout, secret)

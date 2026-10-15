@@ -45,7 +45,7 @@ func TestParseTTL(t *testing.T) {
 func TestCreateTokenCreatesAccountAndAuthenticates(t *testing.T) {
 	svc := openServices(t, devPolicy())
 
-	secret, tok, err := svc.CreateToken(t.Context(), "Dev@example.com", core.ScopePush, "cli", 24*time.Hour)
+	secret, tok, _, err := svc.CreateToken(t.Context(), "Dev@example.com", core.ScopePush, "cli", 24*time.Hour)
 	require.NoError(t, err)
 	require.NotNil(t, tok.ExpiresAt)
 
@@ -54,33 +54,28 @@ func TestCreateTokenCreatesAccountAndAuthenticates(t *testing.T) {
 	assert.Equal(t, "dev@example.com", p.Email)
 }
 
-func TestNoteSignUpBypassNamesNewAccountsUnderClosedPolicy(t *testing.T) {
+func TestCreateTokenReportsBypassedPolicyForNewAccounts(t *testing.T) {
 	closed := false
 	svc := openServices(t,
 		config.Policy{Name: "invite", Matches: []string{"*@closed.example"}, SignUp: &closed},
 		devPolicy(),
 	)
-	note := func(email string) string {
-		var out bytes.Buffer
-		require.NoError(t, svc.NoteSignUpBypass(t.Context(), &out, email))
-		return out.String()
+	bypassed := func(email string) string {
+		_, _, got, err := svc.CreateToken(t.Context(), email, core.ScopeRead, "cli", 0)
+		require.NoError(t, err)
+		return got
 	}
 
-	got := note("New@closed.example")
-	assert.Contains(t, got, `policy "invite"`)
-	assert.Contains(t, got, "new@closed.example")
-	assert.Empty(t, note("dev@example.com"), "sign-up is allowed")
-	assert.Empty(t, note("dev@other.example"), "no policy matches; CreateToken refuses it")
-
-	_, _, err := svc.CreateToken(t.Context(), "new@closed.example", core.ScopeRead, "cli", 0)
-	require.NoError(t, err, "minting creates the account despite sign_up: false")
-	assert.Empty(t, note("new@closed.example"), "the account exists now")
+	assert.Equal(t, "invite", bypassed("New@closed.example"), "minting creates the account despite sign_up: false")
+	assert.Empty(t, bypassed("new@closed.example"), "the account exists now")
+	assert.Empty(t, bypassed("dev@example.com"), "sign-up is allowed")
 }
 
 func TestCreateTokenNeedsPolicy(t *testing.T) {
 	svc := openServices(t, devPolicy())
 
-	_, _, err := svc.CreateToken(t.Context(), "dev@other.example", core.ScopeRead, "cli", 0)
+	secret, _, _, err := svc.CreateToken(t.Context(), "dev@other.example", core.ScopeRead, "cli", 0)
+	assert.Empty(t, secret)
 	var coreErr *core.Error
 	require.ErrorAs(t, err, &coreErr)
 	assert.Equal(t, core.KindForbidden, coreErr.Kind)
@@ -88,8 +83,9 @@ func TestCreateTokenNeedsPolicy(t *testing.T) {
 
 func TestWriteAccountsShowsLocked(t *testing.T) {
 	svc := openServices(t, devPolicy())
-	_, _, err := svc.CreateToken(t.Context(), "dev@example.com", core.ScopeRead, "cli", 0)
+	secret, _, _, err := svc.CreateToken(t.Context(), "dev@example.com", core.ScopeRead, "cli", 0)
 	require.NoError(t, err)
+	require.NotEmpty(t, secret)
 
 	var out bytes.Buffer
 	require.NoError(t, svc.WriteAccounts(t.Context(), &out))

@@ -60,7 +60,7 @@ func TestMeRequiresValidToken(t *testing.T) {
 
 func TestMeReturnsPrincipal(t *testing.T) {
 	h, svc := newMeServer(t, devPolicy(config.Size{Bytes: 1000}))
-	secret, _, err := svc.CreateToken(t.Context(), "dev@example.com", core.ScopeRead, "cli", 0)
+	secret, _, _, err := svc.CreateToken(t.Context(), "dev@example.com", core.ScopeRead, "cli", 0)
 	require.NoError(t, err)
 
 	rec := getMe(h, "Bearer "+secret)
@@ -70,7 +70,7 @@ func TestMeReturnsPrincipal(t *testing.T) {
 
 func TestMeUnlimitedQuotaIsNull(t *testing.T) {
 	h, svc := newMeServer(t, devPolicy(config.Size{Unlimited: true}))
-	secret, _, err := svc.CreateToken(t.Context(), "dev@example.com", core.ScopePush, "cli", 0)
+	secret, _, _, err := svc.CreateToken(t.Context(), "dev@example.com", core.ScopePush, "cli", 0)
 	require.NoError(t, err)
 
 	rec := getMe(h, "bearer "+secret)
@@ -80,7 +80,7 @@ func TestMeUnlimitedQuotaIsNull(t *testing.T) {
 
 func TestMeRejectsLockedAccount(t *testing.T) {
 	h, svc := newMeServer(t, devPolicy(config.Size{Bytes: 1000}))
-	secret, _, err := svc.CreateToken(t.Context(), "dev@example.com", core.ScopeRead, "cli", 0)
+	secret, _, _, err := svc.CreateToken(t.Context(), "dev@example.com", core.ScopeRead, "cli", 0)
 	require.NoError(t, err)
 
 	svc.Policies.Swap(nil)

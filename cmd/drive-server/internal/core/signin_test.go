@@ -127,7 +127,7 @@ func TestSignInClosedPolicyAdmitsExistingAccountsOnly(t *testing.T) {
 	require.NoError(t, e.signIn.Start(t.Context(), "new@example.com"))
 	assert.Empty(t, e.mails(t), "no account and sign_up is false")
 
-	_, err := e.accounts.Ensure(t.Context(), "old@example.com")
+	_, _, err := e.accounts.Ensure(t.Context(), "old@example.com", true)
 	require.NoError(t, err)
 	code := e.start(t, "old@example.com")
 	_, err = e.signIn.Verify(t.Context(), "old@example.com", code)
@@ -147,7 +147,7 @@ func TestSignInClosedPolicyBlocksVerifyForNewAccount(t *testing.T) {
 
 func TestSessionSlidesAtMostHourlyAndExpires(t *testing.T) {
 	e := newEnv(t, devPolicy())
-	acct, err := e.accounts.Ensure(t.Context(), "dev@example.com")
+	acct, _, err := e.accounts.Ensure(t.Context(), "dev@example.com", false)
 	require.NoError(t, err)
 	value, sess, err := e.sessions.Mint(t.Context(), acct.ID)
 	require.NoError(t, err)
@@ -176,7 +176,7 @@ func TestSessionSlidesAtMostHourlyAndExpires(t *testing.T) {
 
 func TestSessionRevokeAndPolicyRecheck(t *testing.T) {
 	e := newEnv(t, devPolicy())
-	acct, err := e.accounts.Ensure(t.Context(), "dev@example.com")
+	acct, _, err := e.accounts.Ensure(t.Context(), "dev@example.com", false)
 	require.NoError(t, err)
 	value, _, err := e.sessions.Mint(t.Context(), acct.ID)
 	require.NoError(t, err)
@@ -200,7 +200,7 @@ func TestSessionRevokeAndPolicyRecheck(t *testing.T) {
 
 func TestSweeperDeletesExpiredCodesAndSessions(t *testing.T) {
 	e := newEnv(t, devPolicy())
-	acct, err := e.accounts.Ensure(t.Context(), "dev@example.com")
+	acct, _, err := e.accounts.Ensure(t.Context(), "dev@example.com", false)
 	require.NoError(t, err)
 	_, _, err = e.sessions.Mint(t.Context(), acct.ID)
 	require.NoError(t, err)
