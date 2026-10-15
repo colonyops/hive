@@ -1,8 +1,58 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import DriveCommentPopover from '../DriveCommentPopover.vue'
 
+const settings = vi.hoisted(() => ({ ReviewLabels: vi.fn().mockResolvedValue(null) }))
+vi.mock(
+  '../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice',
+  () => settings,
+)
+
+function mountPopover() {
+  return mount(DriveCommentPopover, {
+    props: {
+      rect: { top: 100, left: 50, width: 900, height: 60 },
+      range: { startLine: 8, endLine: 9, context: 'This plan' },
+      busy: false,
+      error: null,
+      testid: 'r',
+    },
+    attachTo: document.body,
+  })
+}
+
+afterEach(() => settings.ReviewLabels.mockResolvedValue(null))
+
+const press = (key: string) => document.body.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+
 describe('DriveCommentPopover', () => {
+  it('starts the comment from a typed letter while nothing has focus', async () => {
+    mountPopover()
+    await flushPromises()
+    press('W')
+    press('h')
+    await flushPromises()
+    const field = document.querySelector<HTMLTextAreaElement>('[data-testid="r-comment-text"]')!
+    expect(field.value).toBe('Wh')
+    expect(document.activeElement).toBe(field)
+  })
+
+  it('applies a label from its key', async () => {
+    const wrapper = mountPopover()
+    await flushPromises()
+    press('3')
+    expect(wrapper.emitted('save')).toEqual([['Needs tests']])
+  })
+
+  it('offers the labels settings.yaml configures', async () => {
+    settings.ReviewLabels.mockResolvedValue([{ title: 'Nit', icon: 'scissors' }])
+    const wrapper = mountPopover()
+    await flushPromises()
+    expect(document.querySelector('[data-testid="r-comment-label-2"]')).toBeNull()
+    press('1')
+    expect(wrapper.emitted('save')).toEqual([['Nit']])
+  })
+
   it('floats under the selection at its own width and drags by its top row', async () => {
     mount(DriveCommentPopover, {
       props: {

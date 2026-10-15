@@ -120,6 +120,7 @@ export type {
     ReportInput,
     ReportPreview,
     ReportResult,
+    ReviewLabel,
     RuntimeStats,
     SessionDetail,
     SessionGitStatus,

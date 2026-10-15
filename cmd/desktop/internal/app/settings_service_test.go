@@ -269,3 +269,25 @@ func TestSettingsServiceTerminalShowWindowsOffSurvivesUnrelatedSaves(t *testing.
 	require.NoError(t, err)
 	require.False(t, got.TerminalShowWindows)
 }
+
+func TestSettingsServiceSetReviewLabels(t *testing.T) {
+	t.Setenv(settings.EnvConfigDir, filepath.Join(t.TempDir(), "config"))
+	service := NewSettingsService(settings.NewStore(settings.SettingsPath()))
+	ctx := t.Context()
+
+	require.NoError(t, service.SetReviewLabels(ctx, []settings.ReviewLabel{{Title: " Nit ", Icon: "scissors"}}))
+	got, err := service.ReviewLabels(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []settings.ReviewLabel{{Title: "Nit", Icon: "scissors"}}, got)
+
+	err = service.SetReviewLabels(ctx, []settings.ReviewLabel{{Title: "a"}, {Title: "a"}})
+	require.Equal(t, KindInvalid, KindOf(err))
+
+	require.NoError(t, service.SetReviewLabels(ctx, settings.DefaultReviewLabels))
+	data, err := os.ReadFile(settings.SettingsPath())
+	require.NoError(t, err)
+	require.NotContains(t, string(data), "review:", "the shipped labels are stored as no labels")
+	got, err = service.ReviewLabels(ctx)
+	require.NoError(t, err)
+	require.Equal(t, settings.DefaultReviewLabels, got)
+}

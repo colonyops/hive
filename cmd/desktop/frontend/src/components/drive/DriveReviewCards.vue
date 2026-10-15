@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // The comment cards. Aligned, as on the Drive page, each card sits on the row
-// of the block it comments on and slides down only to clear the card above.
-// Stacked, as over the narrow pane, they follow one another. The highlighted
-// block is the only marker in the document, so the active card is what ties
+// of the text it quotes and slides down only to clear the card above.
+// Stacked, as over the narrow pane, they follow one another. The highlight is
+// the only marker in the document, so the active card is what ties
 // the two together: it draws an outline and a connector to the margin. Edit
 // and Delete show on every card, so each is one click.
 import { useMutationObserver, useResizeObserver } from '@vueuse/core'
@@ -12,6 +12,8 @@ import InlineConfirm from '../ui/InlineConfirm.vue'
 import InlineError from '../ui/InlineError.vue'
 import TextArea from '../ui/TextArea.vue'
 import { relativeAge } from '../../lib/age'
+import { labelOf } from '../../lib/reviewLabels'
+import { useReviewLabels } from '../../stores/useReviewLabels'
 import { useDriveReview } from '../../stores/useDriveReview'
 import type { CommentWire } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
 
@@ -28,6 +30,7 @@ const props = defineProps<{
 }>()
 
 const store = useDriveReview()
+const { labels } = useReviewLabels()
 const review = computed(() => store.review(props.space, props.path))
 const comments = computed(() => review.value.data.value.comments ?? [])
 const current = computed(() => review.value.data.value.current)
@@ -225,10 +228,16 @@ function cardStyle(id: string): Record<string, string> | undefined {
         </div>
         <p
           v-else
-          class="text-small leading-normal break-words whitespace-pre-wrap"
+          class="flex items-start gap-1.5 text-small leading-normal break-words whitespace-pre-wrap"
           :class="store.active.value === comment.id ? 'text-text' : 'text-text-2'"
         >
-          {{ comment.text }}
+          <component
+            :is="labelOf(labels, comment.text)!.icon"
+            v-if="labelOf(labels, comment.text)"
+            class="mt-[3px] size-3.5 shrink-0 text-accent"
+            aria-hidden="true"
+          />
+          <span class="min-w-0">{{ comment.text }}</span>
         </p>
         <div v-if="editing !== comment.id" class="flex gap-3.5 pt-0.5 text-caption text-text-3" @click.stop>
           <button

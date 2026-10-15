@@ -102,6 +102,12 @@ appearance:
   terminal_session_age_threshold_days: 5
 retention:
   action_runs: 100
+review:
+  labels:
+    - title: Clarify this
+      icon: circle-help
+    - title: Needs tests
+      icon: flask-conical
 ```
 
 - `polling.interval` has a minimum of 60 seconds.
@@ -110,6 +116,7 @@ retention:
 - `editor.command` accepts an executable name or absolute path without arguments.
 - `agent_workspaces.dir` changes where Chats workspaces are stored.
 - `retention.action_runs` is how many finished action runs **Action runs** keeps, each with its full log. It defaults to 100 and accepts 1 through 10,000. A change takes effect the next time Hive starts.
+- `review.labels` replaces the labels the comment box on a Drive document offers, up to four. **Settings ▸ Drive ▸ Comment labels** edits the same list. Keys <kbd>1</kbd> to <kbd>4</kbd> follow the list order. `icon` is one of `circle-help`, `search-check`, `flask-conical`, `check`, `tag`, `triangle-alert`, `lightbulb`, `scissors`, or `x`; any other value shows a tag. Titles must be unique. Leave the key out for the default four. A change shows the next time the comment box opens.
 - `appearance.terminal_show_session_age` shows a whole-day age badge in the Code sidebar after `terminal_session_age_threshold_days` days. It defaults to on with a five-day threshold. The threshold accepts 1 through 365.
 
 Every scalar setting can be overridden for one launch with an environment variable based on its YAML path. For example, `polling.interval` becomes `HIVE_DESKTOP_POLLING_INTERVAL`.

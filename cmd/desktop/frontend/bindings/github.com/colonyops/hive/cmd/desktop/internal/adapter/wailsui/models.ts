@@ -572,6 +572,16 @@ export interface ReportResult {
     "dir": string;
 }
 
+/**
+ * ReviewLabel is a preset comment the Drive comment composer applies with
+ * the key of its position, 1 to 4. Icon is carried verbatim: the frontend
+ * owns the icon set and draws an unknown name as a tag.
+ */
+export interface ReviewLabel {
+    "title": string;
+    "icon": string;
+}
+
 export interface RuntimeStats {
     "sampledAtUnixMs": number;
     "uptimeMs": number;

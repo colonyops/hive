@@ -2,16 +2,21 @@
 // The comment composer a text selection opens. It floats over the document,
 // placed under the selection (above it when there is no room below), and
 // drags by its top row out of the way of what the user is reading. It does
-// not take focus on open: the selection stays live for a copy, and a click
-// into the field starts the comment.
+// not take focus on open, so the selection stays live for a copy. Instead
+// the keyboard reaches it while nothing else has focus: a label's key applies
+// that label, and any other printable key starts the comment with that key.
 import { useEventListener } from '@vueuse/core'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import IconGripHorizontal from '~icons/lucide/grip-horizontal'
 import BaseButton from '../ui/BaseButton.vue'
+import IconButton from '../ui/IconButton.vue'
 import InlineError from '../ui/InlineError.vue'
 import { startDrag } from '../../composables/useDragGesture'
 import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import type { SourceRange } from '../../lib/driveReviewSelection'
+import { isEditableTarget } from '../../lib/isEditableTarget'
+import { labelText, type ReviewLabel } from '../../lib/reviewLabels'
+import { useReviewLabels } from '../../stores/useReviewLabels'
 
 export type SelectionRect = { top: number; left: number; width: number; height: number }
 
@@ -28,6 +33,7 @@ const emit = defineEmits<{ save: [text: string]; cancel: [] }>()
 
 const text = defineModel<string>('text', { default: '' })
 const popover = ref<HTMLElement | null>(null)
+const field = ref<HTMLTextAreaElement | null>(null)
 const position = ref({ top: 0, left: 0 })
 
 const GAP = 8
@@ -78,8 +84,16 @@ const lines = computed(() =>
 
 useEscapeToClose(() => emit('cancel'))
 
+const reviewLabels = useReviewLabels()
+const labels = reviewLabels.labels
+void reviewLabels.reload()
+
 function save(): void {
   if (text.value.trim() && !props.busy) emit('save', text.value)
+}
+
+function applyLabel(label: ReviewLabel): void {
+  if (!props.busy) emit('save', labelText(label, text.value))
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -88,6 +102,27 @@ function onKeydown(event: KeyboardEvent): void {
     save()
   }
 }
+
+// Captured, so a key meant for the composer does not also reach the app's
+// bare-key bindings (g, j, k, digits).
+useEventListener(
+  document,
+  'keydown',
+  (event: KeyboardEvent) => {
+    if (event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target)) return
+    if (event.key.length !== 1 || event.key === ' ') return
+    event.preventDefault()
+    event.stopPropagation()
+    const label = labels.value.find((candidate) => candidate.key === event.key)
+    if (label) {
+      applyLabel(label)
+      return
+    }
+    text.value += event.key
+    field.value?.focus()
+  },
+  { capture: true },
+)
 
 defineExpose({ contains: (node: Node | null) => !!node && !!popover.value?.contains(node) })
 </script>
@@ -114,23 +149,31 @@ defineExpose({ contains: (node: Node | null) => !!node && !!popover.value?.conta
         <span class="ml-auto shrink-0">Esc</span>
       </div>
       <textarea
+        ref="field"
         v-model="text"
         rows="3"
-        placeholder="Ask or instruct the agent…"
+        placeholder="Type to comment, or pick a label…"
         class="w-full resize-none rounded-lg border border-strong bg-app px-[11px] py-[9px] text-body text-text outline-none placeholder:text-text-4 focus:border-accent/60 focus:ring-3 focus:ring-accent/12"
         :data-testid="`${testid}-comment-text`"
         @keydown="onKeydown"
       />
+      <div class="flex items-center gap-0.5" role="toolbar" aria-label="Labels">
+        <IconButton
+          v-for="label in labels"
+          :key="label.key"
+          :label="label.title"
+          :tooltip="`${label.title} (${label.key})`"
+          :icon="label.icon"
+          size="md"
+          :disabled="busy"
+          :data-testid="`${testid}-comment-label-${label.key}`"
+          @click="applyLabel(label)"
+        />
+      </div>
       <InlineError v-if="error" variant="line" :message="error" :testid="`${testid}-comment-error`" />
-      <div class="flex items-center gap-2.5">
-        <span class="font-mono text-micro text-text-4">⌘↵ to add</span>
-        <BaseButton
-          variant="ghost"
-          size="xs"
-          class="ml-auto"
-          :data-testid="`${testid}-comment-cancel`"
-          @click="emit('cancel')"
-        >
+      <div class="flex items-center gap-2">
+        <span class="ml-auto font-mono text-micro text-text-4">⌘↵</span>
+        <BaseButton variant="ghost" size="xs" :data-testid="`${testid}-comment-cancel`" @click="emit('cancel')">
           Cancel
         </BaseButton>
         <BaseButton
