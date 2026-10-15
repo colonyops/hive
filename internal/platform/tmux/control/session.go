@@ -60,8 +60,9 @@ func (m *Manager) NewSession(ctx context.Context, name, dir, command string, env
 }
 
 // NewCommandWindow runs a command in a peer window using the same environment
-// and login-shell contract as NewSession. It never creates a missing session.
-func (m *Manager) NewCommandWindow(ctx context.Context, slug, dir, name, command string) (string, error) {
+// and login-shell contract as NewSession. env entries are KEY=VALUE pairs set
+// for this window only. It never creates a missing session.
+func (m *Manager) NewCommandWindow(ctx context.Context, slug, dir, name, command string, env []string) (string, error) {
 	exists, err := m.HasSession(ctx, slug)
 	if err != nil {
 		return "", err
@@ -69,7 +70,11 @@ func (m *Manager) NewCommandWindow(ctx context.Context, slug, dir, name, command
 	if !exists {
 		return "", fmt.Errorf("%w: %s is not running", ErrNotAttached, slug)
 	}
-	args := []string{"new-window", "-t", "=" + slug + ":", "-c", dir, "-n", name, "-P", "-F", "#{window_id}", "--"}
+	args := []string{"new-window", "-t", "=" + slug + ":", "-c", dir, "-n", name, "-P", "-F", "#{window_id}"}
+	for _, pair := range env {
+		args = append(args, "-e", pair)
+	}
+	args = append(args, "--")
 	args = append(args, loginShellArgv(command)...)
 	lines, err := m.oneShot(ctx, args...)
 	if err != nil {

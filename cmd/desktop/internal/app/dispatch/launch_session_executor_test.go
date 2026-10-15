@@ -17,6 +17,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/actions"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/models"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/ptyterm"
 	"github.com/colonyops/hive/internal/domain/session"
 	sessionsvc "github.com/colonyops/hive/internal/hive/session"
 	"github.com/colonyops/hive/internal/platform/promptfile"
@@ -270,6 +271,7 @@ func TestRepositoryLauncher_MapsRequestToSessionService(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []sessionsvc.LaunchRequest{{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://example.test/repo.git", CollisionSuffix: "7",
+		Env: []string{ptyterm.ImageProtocolEnv},
 	}}, creator.calls)
 }
 

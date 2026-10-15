@@ -11,6 +11,7 @@ import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { loadTerminalFont, useXtermPane } from '../composables/useXtermPane'
 import { decodeFrame, encodeInputFrames, type PopupTerminalState } from '../lib/popupTerminalClient'
 import { installTerminalImages } from '../lib/terminalImages'
+import { installKittyGraphics } from '../lib/kitty/kittyGraphics'
 import '@xterm/xterm/css/xterm.css'
 
 // The floating pop-up terminal: one PTY this process owns, rendered over
@@ -118,6 +119,8 @@ async function openTerminal(): Promise<void> {
 function attachStream(created: Terminal, state: PopupTerminalState): void {
   if (!client.value || !host.value) return
 
+  const graphics = installKittyGraphics(created)
+  pane.track(graphics)
   pane.track(created.onData((data) => pane.send(encodeInputFrames(data))))
   // The server applies whatever size it is told, so the grid xterm measured is
   // the grid the process is given — there is nothing to reconcile afterwards.
@@ -145,7 +148,7 @@ function attachStream(created: Terminal, state: PopupTerminalState): void {
   opened.onmessage = (event: MessageEvent<ArrayBuffer>) => {
     const frame = decodeFrame(event.data)
     if (!frame) return
-    if (frame.type === 'output') created.write(frame.data)
+    if (frame.type === 'output') created.write(graphics.filter.rewrite(frame.data))
     else exited()
   }
   opened.onerror = () => fail('The terminal connection dropped.')

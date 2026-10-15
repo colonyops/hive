@@ -98,7 +98,7 @@ individual choices; this document describes the shape everything fits into.
 
 One headless core, several thin adapters, all in one process.
 
-```
+```text
                     ┌──────────────────────────────┐
    Wails UI ───────►│                              │
    HTTP API ───────►│      cmd/desktop/internal/app (core)     │──► SQLite, GitHub, keychain,
@@ -234,7 +234,7 @@ something has gone wrong.
 
 ## Layers and the dependency rule
 
-```
+```text
 desktop adapter/*  ──►  desktop app/*        cmd/hive/internal/*     programs
                              │                     │
                              └──────────┬──────────┘
@@ -320,7 +320,7 @@ production program code; the handle (`store/db`) and the migration runner
 
 ## Directory structure
 
-```
+```text
 cmd/hive/                         # the hive CLI/TUI
   releasenotes/                   # the CLI's embedded changelog
   internal/                       # CLI-only: app/ (composition root over
@@ -1903,28 +1903,40 @@ session:
   window measured, or `0x0`, which sets no client size at all — tmux ignores a
   control client until it sets one, so the session keeps the size its other
   clients gave it. A placeholder would resize the session, and the agent
-  redrawing inside it, before anything had been measured.
+  redrawing inside it, before anything had been measured. The one deliberate
+  exception is the image redraw: after a paint pass the client narrows each
+  window marked `@hive-kitty-images` by a column with `resize-window` and puts
+  its `window-size` back 150 ms later, so Pi draws its images again
+  (ADR kitty-graphics-render-from-the-pane-stream-through-a-private-osc).
 - **A vote tmux does not grant is reported, not retried.** The frontend
   compares its vote against the granted size and names the constraint; nothing
   re-votes to win the size back from the other client.
 
-On the frontend, a pane on screen **always renders through an atlas renderer** —
-WebGL, falling back to 2D canvas — because only an atlas renderer strokes box
+On the frontend, a pane on screen **renders through the WebGL atlas renderer**
+when it can — xterm 6 has no canvas renderer, so the DOM renderer is the only
+fallback — because only an atlas renderer strokes box
 drawing and underlines to the cell's device-pixel bounds; xterm's DOM renderer
 cannot join either across cells at any size or device pixel ratio. Four rules
-follow and are the ones to keep (ADRs terminal-atlas-renderer, terminal-renderer-claimed-on-activation): the renderer is claimed after
+follow and are the ones to keep (ADRs terminal-atlas-renderer, terminal-renderer-claimed-on-activation,
+xterm-6-drops-the-canvas-renderer-so-the-dom-renderer-is-the-only-fallback): the renderer is claimed after
 `term.open()` and never before, and **when the window is first shown rather than
 when a pane mounts** — the pool mounts a host per pane of every window of every
 attached session, and claiming at mount spends a GL context per background pane
 and walks the page past WebKit's per-page limit, where the context it costs is
 another session's pane; a pane that ends up on the DOM renderer is a logged
-degradation path, not a supported one, and a failed canvas claim is recorded so
-the next activation retries rather than stranding the pane there; **do not set
+degradation path, not a supported one, and a failed WebGL claim or a lost
+context is recorded so the next activation retries rather than stranding the
+pane there; **do not set
 `lineHeight` or `letterSpacing`** — every renderer quantises both to whole
 device pixels, so neither can tune a cell onto a cleaner boundary and a
 `lineHeight` above 1 pads the glyph off the edge box drawing has to reach; and
 the addon majors are pinned to the xterm core major, since they reach into
 `Terminal._core` for private services.
+
+Kitty graphics bypass the cells. A stream filter in front of `term.write`
+rewrites each Kitty APC into a private OSC carrying a per-terminal nonce, and
+`lib/kitty` draws its placements on a canvas layer over the screen, anchored to
+xterm markers (ADR kitty-graphics-render-from-the-pane-stream-through-a-private-osc).
 
 #### Pop-up terminals
 

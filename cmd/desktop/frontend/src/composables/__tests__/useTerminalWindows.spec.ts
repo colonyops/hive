@@ -175,18 +175,6 @@ const xterm = vi.hoisted(() => {
     }
   }
 
-  class FakeCanvasAddon {
-    static instances: FakeCanvasAddon[] = []
-    static unavailable = false
-    dispose = vi.fn()
-    activate = vi.fn()
-
-    constructor() {
-      if (FakeCanvasAddon.unavailable) throw new Error('no 2d context')
-      FakeCanvasAddon.instances.push(this)
-    }
-  }
-
   class FakeWebLinksAddon {
     static instances: FakeWebLinksAddon[] = []
     dispose = vi.fn()
@@ -236,15 +224,35 @@ const xterm = vi.hoisted(() => {
     }
   }
 
-  return { FakeTerminal, FakeWebglAddon, FakeCanvasAddon, FakeSearchAddon, FakeWebLinksAddon }
+  return { FakeTerminal, FakeWebglAddon, FakeSearchAddon, FakeWebLinksAddon }
 })
 
 const wails = vi.hoisted(() => ({ OpenURL: vi.fn(() => Promise.resolve()) }))
 
 vi.mock('@xterm/xterm', () => ({ Terminal: xterm.FakeTerminal }))
+
+// The renderer itself is covered against a real xterm in kittyGraphics.spec.ts;
+// these fakes have none of the parser or render surface it registers on.
+const kitty = vi.hoisted(() => {
+  const installed: {
+    filter: { rewrite: ReturnType<typeof vi.fn>; reset: ReturnType<typeof vi.fn> }
+    clear: ReturnType<typeof vi.fn>
+    dispose: ReturnType<typeof vi.fn>
+  }[] = []
+  const installKittyGraphics = vi.fn(() => {
+    const graphics = {
+      filter: { rewrite: vi.fn((data: Uint8Array) => data), reset: vi.fn() },
+      clear: vi.fn(),
+      dispose: vi.fn(),
+    }
+    installed.push(graphics)
+    return graphics
+  })
+  return { installed, installKittyGraphics }
+})
+vi.mock('../../lib/kitty/kittyGraphics', () => ({ installKittyGraphics: kitty.installKittyGraphics }))
 vi.mock('@xterm/addon-search', () => ({ SearchAddon: xterm.FakeSearchAddon }))
 vi.mock('@xterm/addon-webgl', () => ({ WebglAddon: xterm.FakeWebglAddon }))
-vi.mock('@xterm/addon-canvas', () => ({ CanvasAddon: xterm.FakeCanvasAddon }))
 vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: xterm.FakeWebLinksAddon }))
 vi.mock('@wailsio/runtime', () => ({ Browser: { OpenURL: wails.OpenURL }, Events: { On: vi.fn(() => vi.fn()) } }))
 // The font store hydrates from settings.yaml on first use; an empty answer keeps
@@ -368,14 +376,8 @@ function open(client: MockedClient) {
 // happy-dom lays nothing out, so a plain div measures 0×0 — which the
 // composable rightly refuses to vote from. A pane meant to be visible
 // stubs its box.
-// term.open() builds .xterm-viewport inside the host and the composable hangs
-// its scroll listener off it. The fake Terminal opens nothing, so the host has
-// to stand in for what xterm would have put there.
 function paneHost(): HTMLElement {
   const host = document.createElement('div')
-  const viewport = document.createElement('div')
-  viewport.className = 'xterm-viewport'
-  host.appendChild(viewport)
   resizeHost(host, 80, 24)
   return host
 }
@@ -466,6 +468,7 @@ async function attached(client: MockedClient = fakeClient()) {
 
 describe('useTerminalWindows', () => {
   beforeEach(() => {
+    kitty.installed.length = 0
     sockets = []
     loadedFaces = []
     paneMayAutoFocus.value = true
@@ -475,11 +478,9 @@ describe('useTerminalWindows', () => {
     resetTerminalFacesForTests()
     xterm.FakeTerminal.instances = []
     xterm.FakeWebglAddon.instances = []
-    xterm.FakeCanvasAddon.instances = []
     xterm.FakeSearchAddon.instances = []
     xterm.FakeSearchAddon.results = { resultIndex: 0, resultCount: 1 }
     xterm.FakeWebglAddon.unavailable = false
-    xterm.FakeCanvasAddon.unavailable = false
     xterm.FakeWebLinksAddon.instances = []
     wails.OpenURL.mockClear()
     FakeResizeObserver.instances = []
@@ -644,14 +645,13 @@ describe('useTerminalWindows', () => {
       term.buffer.active.baseY = 180
       term.buffer.active.viewportY = 60
     }
-    term.scrollToBottom.mockClear()
 
     socket.onmessage?.({
       data: windowFrame('layout-changed', '@1', { name: 'agent', active: true, width: 100, height: 30 }),
     })
 
-    expect(term.scrollToBottom).toHaveBeenCalledTimes(1)
-    expect(term.resize.mock.invocationCallOrder.at(-1)).toBeLessThan(term.scrollToBottom.mock.invocationCallOrder[0])
+    expect(term.scrollToLine).toHaveBeenCalledWith(180)
+    expect(term.resize.mock.invocationCallOrder.at(-1)).toBeLessThan(term.scrollToLine.mock.invocationCallOrder.at(-1)!)
     expect(term.buffer.active.viewportY).toBe(180)
     expect(session.tabs.value[0].panes[0].scrolledUp).toBe(false)
   })
@@ -682,7 +682,7 @@ describe('useTerminalWindows', () => {
 
     expect(term.registerMarker).toHaveBeenCalledWith(-84)
     expect(term.scrollToLine).toHaveBeenCalledWith(52)
-    expect(term.scrollToBottom).not.toHaveBeenCalled()
+    expect(term.scrollToLine).not.toHaveBeenCalledWith(160)
     expect(term.markers[0].dispose).toHaveBeenCalledTimes(1)
     expect(session.tabs.value[0].panes[0].scrolledUp).toBe(true)
   })
@@ -749,25 +749,14 @@ describe('useTerminalWindows', () => {
 
     const term = xterm.FakeTerminal.instances[0]
     expect(xterm.FakeWebglAddon.instances).toHaveLength(1)
-    expect(xterm.FakeCanvasAddon.instances).toHaveLength(0)
     const loaded = term.loadAddon.mock.calls.findIndex((call) => call[0] instanceof xterm.FakeWebglAddon)
     expect(term.open.mock.invocationCallOrder[0]).toBeLessThan(term.loadAddon.mock.invocationCallOrder[loaded])
   })
 
-  it('falls back to the canvas renderer where WebGL2 is missing', async () => {
+  // No WebGL leaves the DOM renderer, which draws with the #131 seams —
+  // degraded, but never a pane that failed to open.
+  it('still opens the pane when WebGL2 is missing', async () => {
     xterm.FakeWebglAddon.unavailable = true
-    const { session } = await attached()
-
-    mountWindow(session, '@1')
-
-    expect(xterm.FakeCanvasAddon.instances).toHaveLength(1)
-  })
-
-  // Both atlas renderers gone leaves the DOM renderer, which draws with the
-  // #131 seams — degraded, but never a pane that failed to open.
-  it('still opens the pane when no renderer context exists at all', async () => {
-    xterm.FakeWebglAddon.unavailable = true
-    xterm.FakeCanvasAddon.unavailable = true
     const { session } = await attached()
 
     mountWindow(session, '@1')
@@ -776,14 +765,14 @@ describe('useTerminalWindows', () => {
     expect(session.status.value).toBe('live')
   })
 
-  it('claims the canvas renderer when a WebGL context is lost for good', async () => {
+  it('drops to the DOM renderer when a WebGL context is lost for good', async () => {
     const { session } = await attached()
     mountWindow(session, '@1')
 
     xterm.FakeWebglAddon.instances[0].loseContext()
 
     expect(xterm.FakeWebglAddon.instances[0].dispose).toHaveBeenCalledTimes(1)
-    expect(xterm.FakeCanvasAddon.instances).toHaveLength(1)
+    expect(xterm.FakeWebglAddon.instances).toHaveLength(1)
   })
 
   // Every pooled session mounts a pane per window, so claiming a context at
@@ -802,22 +791,30 @@ describe('useTerminalWindows', () => {
     expect(xterm.FakeWebglAddon.instances).toHaveLength(2)
   })
 
-  // The canvas claim is all that stands between a lost context and the DOM
-  // renderer, so a failed one must not strand the pane there for good.
-  it('retries the renderer on the next activation when the canvas claim failed', async () => {
+  // A lost context must not strand the pane on the DOM renderer for good.
+  it('reclaims WebGL on the next activation after a lost context', async () => {
     const { session } = await attached()
     mountWindow(session, '@1')
     mountWindow(session, '@2')
 
-    xterm.FakeCanvasAddon.unavailable = true
     xterm.FakeWebglAddon.instances[0].loseContext()
-    expect(xterm.FakeCanvasAddon.instances).toHaveLength(0)
 
-    xterm.FakeCanvasAddon.unavailable = false
     await session.select('@2')
     await session.select('@1')
 
     expect(xterm.FakeWebglAddon.instances).toHaveLength(3)
+  })
+
+  it('runs pane output through the Kitty graphics filter and disposes it with the pane', async () => {
+    const { session, socket } = await attached()
+
+    socket.onmessage?.({ data: outputFrame('@1', '%1', 'hello') })
+
+    const rewritten = kitty.installed.flatMap((graphics) => graphics.filter.rewrite.mock.calls as [Uint8Array][])
+    expect(rewritten.map(([data]) => new TextDecoder().decode(data))).toEqual(['hello'])
+
+    session.dispose()
+    for (const installed of kitty.installed) expect(installed.dispose).toHaveBeenCalled()
   })
 
   // xterm disposes its core before its addons, and a renderer addon restores a
@@ -1254,6 +1251,10 @@ describe('useTerminalWindows', () => {
     // Both panes, not just the streaming one: the backlog is the session's and
     // the repaint behind it covers every window.
     for (const term of xterm.FakeTerminal.instances) expect(term.reset).toHaveBeenCalled()
+    for (const graphics of kitty.installed) {
+      expect(graphics.filter.reset).toHaveBeenCalled()
+      expect(graphics.clear).toHaveBeenCalled()
+    }
 
     socket.onmessage?.({ data: outputFrame('@1', '%1', 'REPAINTED') })
     const write = session.tabs.value[0].panes[0].term.write as ReturnType<typeof vi.fn>
@@ -1714,24 +1715,17 @@ describe('useTerminalWindows', () => {
     expect(session.status.value).toBe('live')
   })
 
-  // xterm suppresses onScroll for a wheel, a trackpad and a dragged scrollbar:
-  // its viewport syncs the buffer from the DOM scroll and swallows the event.
-  // Without the DOM listener nothing notices the viewport leaving the tail on an
-  // idle session, and the way back is never offered.
-  it('offers the way back to the tail when the user scrolls, which xterm does not announce', async () => {
+  // On an idle session the user's own scroll is the only thing that moves the
+  // viewport off the tail.
+  it('offers the way back to the tail when the user scrolls', async () => {
     const { session } = await attached()
-    const host = paneHost()
-    mountWindow(session, '@1', host)
+    mountWindow(session, '@1')
     const term = xterm.FakeTerminal.instances[0]
-    const viewport = host.querySelector('.xterm-viewport')!
 
-    term.buffer.active.viewportY = 40
-    term.buffer.active.baseY = 120
-    viewport.dispatchEvent(new Event('scroll'))
+    term.scrollTo(40, 120)
     expect(session.tabs.value[0].panes[0].scrolledUp).toBe(true)
 
-    term.buffer.active.viewportY = 120
-    viewport.dispatchEvent(new Event('scroll'))
+    term.scrollTo(120, 120)
     expect(session.tabs.value[0].panes[0].scrolledUp).toBe(false)
   })
 

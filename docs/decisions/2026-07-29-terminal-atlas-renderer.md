@@ -3,8 +3,10 @@
 - **Status:** accepted (decision 1's *timing* — a renderer per pane at mount —
   amended by [terminal-renderer-claimed-on-activation](2026-07-30-terminal-renderer-claimed-on-activation.md), which
   claims one when a window is first shown; decision 4 superseded by
-  [terminal-line-height-and-letter-spacing](2026-07-31-terminal-line-height-and-letter-spacing.md); the atlas-over-DOM
-  substance stands)
+  [terminal-line-height-and-letter-spacing](2026-07-31-terminal-line-height-and-letter-spacing.md); the canvas
+  fallback in decisions 1 and 3 superseded by
+  [xterm-6-drops-the-canvas-renderer-so-the-dom-renderer-is-the-only-fallback](2026-10-15-xterm-6-drops-the-canvas-renderer-so-the-dom-renderer-is-the-only-fallback.md);
+  the atlas-over-DOM substance stands)
 - **Date:** 2026-07-29
 
 ## Context

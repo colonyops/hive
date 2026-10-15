@@ -26,6 +26,13 @@ const (
 	minDimension = 1
 	maxDimension = 1000
 
+	// ImageProtocolEnv tells Pi to draw images with the Kitty graphics
+	// protocol. Pi disables images under $TMUX unless told otherwise, and Hive's
+	// terminal renderer draws them. Set it only where Hive Desktop starts the
+	// process, never in tmux's global environment: the same session may be
+	// viewed from a terminal that cannot draw them.
+	ImageProtocolEnv = "PI_IMAGE_PROTOCOL=kitty"
+
 	// defaultCols/defaultRows size a terminal opened before anything measured
 	// the pane. A PTY has to open at some size, and nothing else is attached
 	// whose size could be inherited.
@@ -397,8 +404,8 @@ func title(command string, argv []string) string {
 // been launched from inside tmux; inherited client variables would tell the
 // shell it is in a multiplexer that is not on the other end of this PTY.
 func terminalEnv(base []string) []string {
-	out := executil.WithoutEnv(base, "TERM", "COLORTERM", "TERM_PROGRAM", "TMUX", "TMUX_PANE")
-	return append(out, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=hive-desktop")
+	out := executil.WithoutEnv(base, "TERM", "COLORTERM", "TERM_PROGRAM", "TMUX", "TMUX_PANE", "PI_IMAGE_PROTOCOL")
+	return append(out, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=hive-desktop", ImageProtocolEnv)
 }
 
 func validateDir(dir string) error {

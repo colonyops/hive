@@ -1084,6 +1084,7 @@ func TestStartScheduledSessionFramesThePromptAndHandsOutTheToken(t *testing.T) {
 	assert.Contains(t, args, `scheduled task "Weekly summary" in the "Demo" workspace`)
 	assert.Contains(t, args, "Summarize the week.")
 	assert.Contains(t, args, "you MUST end this session")
+	assert.Contains(t, env, "PI_IMAGE_PROTOCOL=kitty\n")
 	assert.Contains(t, env, "HIVE_AGENT_SESSION_TOKEN="+rec.EndToken+"\n")
 	assert.Contains(t, env, "HIVE_AGENT_SESSION_END_URL=http://127.0.0.1:4321"+AgentSessionEndPath+"\n")
 }

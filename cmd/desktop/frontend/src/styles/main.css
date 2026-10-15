@@ -991,13 +991,19 @@
   }
 }
 
-/* xterm's canvas covers its viewport scrollbar. Wheel input still exposes
-   scrollback without the native track taking space from the terminal grid. */
+/* Terminals show no scrollbar; the wheel still reaches scrollback, and the
+   window grid vote reserves no column for a track. xterm 6 draws its own
+   slider, and still styles its now-empty .xterm-viewport with
+   overflow-y: scroll, which would paint a native track. */
 .xterm .xterm-viewport {
   scrollbar-width: none;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.xterm .xterm-scrollable-element > .scrollbar {
   display: none;
 }
 
