@@ -45,6 +45,8 @@ pre-commit:
         - "cmd/desktop/internal/app/data/queries/migrations/*.sql"
         - "cmd/drive-server/internal/store/control/queries/*.sql"
         - "cmd/drive-server/internal/store/control/migrations/*.sql"
+        - "cmd/drive-server/internal/store/userdb/queries/*.sql"
+        - "cmd/drive-server/internal/store/userdb/migrations/*.sql"
         - "cmd/drive-server/internal/core/scope.go"
         - "cmd/desktop/internal/app/activity/activity.go"
         - "cmd/desktop/internal/app/jobs/jobs.go"

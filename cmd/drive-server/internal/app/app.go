@@ -23,7 +23,7 @@ type Options struct {
 
 // Run serves until ctx is done or a plug fails.
 func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Options) error {
-	svc, err := OpenServices(ctx, cfg)
+	svc, err := OpenServices(ctx, log, cfg)
 	if err != nil {
 		return err
 	}
@@ -40,7 +40,7 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	defer func() { _ = ln.Close() }()
 
 	httpLog := logutils.Component(log, "httpapi")
-	handler := httpapi.New(httpLog, opts.Info, httpapi.Services{Tokens: svc.Tokens})
+	handler := httpapi.New(httpLog, opts.Info, httpapi.Services{Tokens: svc.Tokens, Documents: svc.Documents})
 
 	log.Info().Str("addr", ln.Addr().String()).Str("base_url", cfg.BaseURL).Str("version", opts.Info.Version).Msg("drive server listening")
 

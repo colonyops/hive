@@ -16,5 +16,6 @@ func registerRoutes(mux *http.ServeMux, chain *errchain.ErrChain, info buildinfo
 
 	mux.HandleFunc("GET /healthz", healthz)
 	mux.HandleFunc("GET /version", chain.ToHandlerFunc(version(info)))
-	mux.HandleFunc("GET /api/v1/me", authenticated(core.ScopeRead, me))
+	mux.HandleFunc("GET /api/v1/me", authenticated(core.ScopeRead, me(svc.Documents)))
+	registerDocumentRoutes(mux, authenticated, svc.Documents)
 }

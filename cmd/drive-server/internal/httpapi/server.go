@@ -20,7 +20,8 @@ const shutdownGrace = 10 * time.Second
 
 // Services are the core services the handlers call.
 type Services struct {
-	Tokens *core.Tokens
+	Tokens    *core.Tokens
+	Documents *core.Documents
 }
 
 // New returns the server's handler. /healthz is quiet in the request log

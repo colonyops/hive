@@ -81,6 +81,8 @@ sources = [
   "cmd/desktop/internal/app/data/queries/migrations/*.up.sql",
   "cmd/drive-server/internal/store/control/queries/*.sql",
   "cmd/drive-server/internal/store/control/migrations/*.up.sql",
+  "cmd/drive-server/internal/store/userdb/queries/*.sql",
+  "cmd/drive-server/internal/store/userdb/migrations/*.up.sql",
   "sqlc.yaml",
 ]
 outputs = { auto = true }
