@@ -64,7 +64,6 @@ export const useDriveReview = defineStore('driveReview', () => {
     pageCommentsCollapsed.value = false
   }
 
-  // The comment under the pointer, from its card or its highlight.
   const hovered = shallowRef<string | null>(null)
 
   function setHovered(id: string | null): void {

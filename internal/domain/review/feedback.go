@@ -10,9 +10,8 @@ import (
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 // Feedback formats comments on the document at docPath as the text an agent
-// reads: a heading, the document, a count, then one numbered entry each, in
-// document order, with a non-empty note leading as general feedback. It
-// returns "" when there are no comments and no note.
+// reads, in document order, with a non-empty note leading as general
+// feedback. It returns "" when there are no comments and no note.
 //
 // Format:
 //

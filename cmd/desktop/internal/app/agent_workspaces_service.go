@@ -1844,8 +1844,8 @@ type RunningChat struct {
 
 // RunningChats lists the live chats with their agent pane and status. One
 // tmux call finds the live sessions, so the cost follows the running chats
-// rather than every chat ever saved; those are read concurrently. A chat
-// whose pane cannot be read is left out.
+// rather than every chat ever saved. A chat whose pane cannot be read is
+// left out.
 func (s *AgentWorkspacesService) RunningChats(ctx context.Context) ([]RunningChat, error) {
 	records, err := s.sessions.ListAll(ctx)
 	if err != nil {

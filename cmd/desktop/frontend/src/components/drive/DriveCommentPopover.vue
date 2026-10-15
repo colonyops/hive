@@ -1,8 +1,6 @@
 <script setup lang="ts">
-// The comment composer a text selection opens. It floats over the document,
-// placed under the selection (above it when there is no room below), and
-// drags by its top row out of the way of what the user is reading. It does
-// not take focus on open, so the selection stays live for a copy. Instead
+// The comment composer a text selection opens. It does not take focus on
+// open, so the selection stays live for a copy. Instead
 // the keyboard reaches it while nothing else has focus: a label's key applies
 // that label, and any other printable key starts the comment with that key.
 import { useEventListener } from '@vueuse/core'

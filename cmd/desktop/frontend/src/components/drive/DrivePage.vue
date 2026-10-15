@@ -32,7 +32,6 @@ import { useDriveReview } from '../../stores/useDriveReview'
 
 const props = defineProps<{
   scope: DriveScope
-  /** The title bar's left toggle: hides the folder tree. */
   sidebarCollapsed?: boolean
 }>()
 const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope': [scope: DriveScope]; setup: [] }>()
@@ -147,8 +146,6 @@ const reviewed = computed(() => {
   if (!doc || doc.entry.kind !== 'markdown' || !review.inReview(doc.space.key, doc.entry.path)) return null
   return { space: doc.space.key, path: doc.entry.path }
 })
-// The title bar's right toggle and the comments command hide the column; a
-// new comment brings it back.
 const commentsShown = computed(() => !!reviewed.value && !review.pageCommentsCollapsed.value)
 const commentCount = computed(() =>
   reviewed.value ? (review.review(reviewed.value.space, reviewed.value.path).data.value.comments?.length ?? 0) : 0,
@@ -223,7 +220,6 @@ useEscapeToClose(() => emit('close'))
     </aside>
 
     <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <!-- The comments header shares the document's bar, so the column reads as part of the page. -->
       <div class="flex shrink-0">
         <ViewHeader class="min-w-0 flex-1">
           <template #title>

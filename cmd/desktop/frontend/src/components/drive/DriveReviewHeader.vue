@@ -1,7 +1,6 @@
 <script setup lang="ts">
-// The comments column's title strip: the count, and Clear for every comment
-// at once. It shares the height and rule of the document's own toolbar, so
-// the two read as one bar.
+// Shares the height and rule of the document's own toolbar, so the two read
+// as one bar.
 import { computed, ref } from 'vue'
 import IconTrash from '~icons/lucide/trash-2'
 import IconX from '~icons/lucide/x'

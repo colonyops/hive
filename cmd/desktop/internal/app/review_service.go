@@ -47,7 +47,6 @@ type chatAgents interface {
 	RunningChats(ctx context.Context) ([]RunningChat, error)
 }
 
-// ReviewDeps builds a ReviewService.
 type ReviewDeps struct {
 	Reviews review.Store
 	Drive   *DriveService
@@ -209,7 +208,6 @@ func (s *ReviewService) feedback(ctx context.Context, space, path string, doc re
 	return review.Feedback(full, doc.review.Comments, strings.TrimSpace(note)), nil
 }
 
-// Clear deletes the open review and its comments.
 func (s *ReviewService) Clear(ctx context.Context, space, path string) error {
 	doc, err := s.load(ctx, space, path)
 	if err != nil {

@@ -1,10 +1,7 @@
 <script setup lang="ts">
 // The comment cards. Aligned, as on the Drive page, each card sits on the row
 // of the text it quotes and slides down only to clear the card above.
-// Stacked, as over the narrow pane, they follow one another. The highlight is
-// the only marker in the document, so the active card is what ties
-// the two together: it draws an outline and a connector to the margin. Edit
-// and Delete show on every card, so each is one click.
+// Stacked, as over the narrow pane, they follow one another.
 import { useMutationObserver, useResizeObserver } from '@vueuse/core'
 import { computed, nextTick, ref, watch } from 'vue'
 import BaseButton from '../ui/BaseButton.vue'

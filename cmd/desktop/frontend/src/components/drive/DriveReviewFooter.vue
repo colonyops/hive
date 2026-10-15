@@ -1,6 +1,4 @@
 <script setup lang="ts">
-// The last step of a review: a note for the agent, then the feedback copied
-// or sent.
 import { computed, ref } from 'vue'
 import IconCheck from '~icons/lucide/check'
 import IconCopy from '~icons/lucide/copy'

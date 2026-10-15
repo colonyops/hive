@@ -99,8 +99,7 @@ watch(shown, () => {
 const empty = computed(() => !!tree.value && !tree.value.children?.length)
 
 // The pane is too narrow for a comments column beside the document, so the
-// comments overlay it. They open on a new comment or a click on a
-// highlight.
+// comments overlay it.
 const review = useDriveReview()
 const reviewed = computed(() => {
   const doc = document.value
@@ -110,7 +109,6 @@ const reviewed = computed(() => {
 const commentCount = computed(() =>
   reviewed.value ? (review.review(reviewed.value.space, reviewed.value.path).data.value.comments?.length ?? 0) : 0,
 )
-// Shared with the Toggle comments command, which opens and closes the overlay.
 const commentsOpen = computed({
   get: () => review.paneCommentsOpen.value,
   set: (open: boolean) => review.setPaneCommentsOpen(open),

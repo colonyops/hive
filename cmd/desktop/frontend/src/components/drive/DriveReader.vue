@@ -72,8 +72,7 @@ const properties = computed<{ frontmatter: Record<string, FrontmatterValue>; cre
   },
 )
 
-// Comments: a selection in a Markdown body maps to its source lines, which
-// count the front matter the reader shows as properties.
+// Source lines count the front matter, which the reader shows as properties.
 const reviewStore = useDriveReview()
 const reviewed = computed(() => {
   const doc = props.document
@@ -89,9 +88,6 @@ const sourceLines = computed(() =>
 const markdownView = ref<ComponentPublicInstance | null>(null)
 const body = computed(() => (markdownView.value?.$el as HTMLElement | undefined) ?? null)
 
-// A finished selection opens the comment popover under it. It waits for the
-// selection to settle, so a drag does not open it at every step, and it
-// leaves an open draft alone once the user is in it or has typed.
 const drafting = ref<SourceRange | null>(null)
 // The selection a draft is for, painted as a pending highlight: clicking into
 // the composer collapses the live selection, and the text it was about must
@@ -155,11 +151,6 @@ watch(reviewed, endComment)
 // Rendering replaces the body's markup (a highlighter that finishes loading
 // renders again), so the marks follow every change to it, not only to the
 // comments. The marks set attributes, which this does not observe.
-//
-// The blocks carry the marks; what the user sees is a layer over the text
-// with the exact text each comment quotes highlighted, a box per line, so a
-// comment on one word marks that word. Overlapping comments stack their
-// tints.
 const layer = ref<HTMLElement | null>(null)
 const highlights = ref<ReviewHighlight[]>([])
 const shownComments = computed(() => (current.value ? comments.value : []))
@@ -178,9 +169,7 @@ useResizeObserver(layer, mark)
 watch([body, shownComments, drafting], mark, { flush: 'post' })
 
 // Hover and click hit the drawn highlights, not the blocks under them, so the
-// rest of a paragraph with a one-word comment stays plain text. Where
-// highlights overlap, the smallest answers, and another click moves out to
-// the next.
+// rest of a paragraph with a one-word comment stays plain text.
 function commentAtPoint(event: MouseEvent, current: string | null = null): string | null {
   if (!layer.value) return null
   const base = layer.value.getBoundingClientRect()
@@ -189,8 +178,6 @@ function commentAtPoint(event: MouseEvent, current: string | null = null): strin
 useEventListener(body, 'mousemove', (event: MouseEvent) => reviewStore.setHovered(commentAtPoint(event)))
 useEventListener(body, 'mouseleave', () => reviewStore.setHovered(null))
 
-// A click on a highlight points at its comment; a link inside it still
-// follows.
 useEventListener(body, 'click', (event: MouseEvent) => {
   const target = event.target
   if (!(target instanceof Element) || target.closest('a') || !globalThis.getSelection()?.isCollapsed) return
@@ -199,8 +186,7 @@ useEventListener(body, 'click', (event: MouseEvent) => {
 })
 
 // A handle in the gutter beside the block under the pointer selects that
-// whole block, which opens the composer the way any selection does. It stays
-// out of the way of a drag that selects text and of an open draft.
+// whole block, which opens the composer the way any selection does.
 const root = ref<HTMLElement | null>(null)
 const pickedBlock = shallowRef<HTMLElement | null>(null)
 const handleBox = ref<{ top: number; left: number } | null>(null)
@@ -516,13 +502,9 @@ function onBodyClick(event: MouseEvent): void {
 .canvas-reading-body.markdown-body :deep(tr) {
   background: transparent;
 }
-/* The highlight is the only marker of a comment in the document: a tint over
-   the quoted text, bleeding 2px past the glyphs, stronger under the pointer,
-   and ringed for the active one. It sits over the text rather than behind it
-   because inline code and other chips paint opaque backgrounds that would
-   cut holes in it, so its tint stays light enough to read through. The
-   pending highlight marks a selection being commented on. Overlapping
-   highlights stack their tints. */
+/* The highlight sits over the text rather than behind it because inline code
+   and other chips paint opaque backgrounds that would cut holes in it, so its
+   tint stays light enough to read through. */
 .review-highlight {
   position: absolute;
   margin-left: -2px;

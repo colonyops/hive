@@ -8,10 +8,8 @@ import { defaultReviewLabelSettings, resolveReviewLabels, type ReviewLabelSettin
 import { defineStore } from './defineStore'
 import { useResource } from './useResource'
 
-// The preset comments settings.yaml configures, shared by the composer that
-// applies them, the cards that show their icons, and Settings ▸ Drive that
-// edits them. A hand edit to the file shows up the next time the composer
-// opens, which reloads.
+// A hand edit to settings.yaml shows up the next time the composer opens,
+// which reloads.
 export const useReviewLabels = defineStore('reviewLabels', () => {
   const configured = useResource<readonly ReviewLabelSetting[]>(
     async () => {

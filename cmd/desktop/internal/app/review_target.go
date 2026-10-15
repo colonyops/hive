@@ -57,7 +57,7 @@ type resolvedTarget struct {
 // AgentTargets lists the agents that can take text: classified agent panes in
 // active Code sessions, and running chats. A pane with no detected tool or no
 // status may be a shell, which would run the feedback as commands, so it is
-// left out. The two lists are read at the same time.
+// left out.
 func (s *ReviewService) AgentTargets(ctx context.Context) ([]AgentTarget, error) {
 	var code, chats []resolvedTarget
 	group, groupCtx := errgroup.WithContext(ctx)
