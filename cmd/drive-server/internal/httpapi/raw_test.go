@@ -67,15 +67,6 @@ func TestRawRoutesSendTheLockedDownHeaders(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code, "the signed-in route still needs a token")
 }
 
-func TestSlugRedirectsToRaw(t *testing.T) {
-	s := newServer(t)
-	_, slug := share(t, s, s.token(t, "a@example.com", core.ScopePush), "page.html", "")
-
-	rec := s.do(http.MethodGet, "/s/"+slug, "", "")
-	assert.Equal(t, http.StatusFound, rec.Code)
-	assert.Equal(t, "/s/"+slug+"/raw", rec.Header().Get("Location"))
-}
-
 func TestPublicEndpoint(t *testing.T) {
 	s := newServer(t)
 	token := s.token(t, "a@example.com", core.ScopePush)

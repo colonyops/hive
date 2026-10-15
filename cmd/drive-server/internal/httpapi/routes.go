@@ -26,6 +26,9 @@ func registerRoutes(mux *http.ServeMux, chain *errchain.ErrChain, info buildinfo
 	registerAuthRoutes(mux, chain, sessionOnly, svc, cookies)
 	registerTokenRoutes(mux, sessionOnly, svc.Tokens)
 	if svc.Web != nil {
-		mux.HandleFunc("GET /", chain.ToHandlerFunc(spa(svc.Web)))
+		page := spa(svc.Web)
+		mux.HandleFunc("GET /", chain.ToHandlerFunc(page))
+		// Specific so that the share page carries noindex; the SPA reads the link itself.
+		mux.HandleFunc("GET /s/{slug}", chain.ToHandlerFunc(noindex(page)))
 	}
 }

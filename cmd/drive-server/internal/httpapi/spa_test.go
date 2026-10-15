@@ -69,3 +69,12 @@ func TestSPAKeepsSpecificRoutes(t *testing.T) {
 
 	assert.Equal(t, "ok", rec.Body.String())
 }
+
+func TestSPAShareLinkPageIsNoindex(t *testing.T) {
+	rec := getSPA(t, builtUI, "/s/abc123")
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "<html>app</html>", rec.Body.String())
+	assert.Equal(t, "noindex", rec.Header().Get("X-Robots-Tag"))
+	assert.Equal(t, pageCSP, rec.Header().Get("Content-Security-Policy"))
+}

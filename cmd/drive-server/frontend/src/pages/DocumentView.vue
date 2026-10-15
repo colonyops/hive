@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import DocumentReader from '@hive/ui/components/drive/DocumentReader.vue'
+import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
 import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
+import CopyButton from '@hive/ui/components/ui/CopyButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import { useConfirmation } from '@hive/ui/composables/useConfirmation'
 import { linkTarget, type ReaderDocument } from '@hive/ui/lib/document'
@@ -11,8 +13,9 @@ import { useRouter } from 'vue-router'
 import { api, docUrl } from '../api'
 import { useMe } from '../lib/me'
 import { useReaderPrefs } from '../lib/readerPrefs'
+import { formatTime } from '../lib/format'
 import { documentRoute, type SpaceRef } from '../lib/space'
-import type { DriveDocument } from '../types'
+import type { DriveDocument, Share, ShareExpiry } from '../types'
 
 const props = defineProps<{ space: SpaceRef; path: string }>()
 
@@ -21,7 +24,18 @@ const me = useMe()
 const confirmation = useConfirmation()
 const { prefs, resize } = useReaderPrefs()
 
+const expiryOptions = [
+  { value: '', label: 'No expiry' },
+  { value: '1d', label: 'Expires in 1 day' },
+  { value: '7d', label: 'Expires in 7 days' },
+  { value: '30d', label: 'Expires in 30 days' },
+]
+
 const doc = ref<DriveDocument | null>(null)
+const share = ref<Share | null>(null)
+const shareExpiry = ref<ShareExpiry>('')
+const sharing = ref(false)
+const shareError = ref<string | null>(null)
 const body = ref('')
 const paths = ref<ReadonlySet<string>>(new Set())
 const error = ref<string | null>(null)
@@ -37,6 +51,7 @@ onMounted(async () => {
       return
     }
     doc.value = found
+    share.value = found.shared ?? null
     if (found.kind === 'markdown') body.value = await api.documentBody(props.space.apiPrefix, props.path)
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : 'Could not load the document.'
@@ -58,6 +73,31 @@ function openLink(href: string): void {
   const target = linkTarget(href, props.path, paths.value)
   if (target?.kind === 'url') window.open(target.url, '_blank', 'noopener,noreferrer')
   else if (target?.kind === 'document') void router.push(documentRoute(props.space, target.path))
+}
+
+async function createShare(): Promise<void> {
+  sharing.value = true
+  shareError.value = null
+  try {
+    share.value = await api.share(props.space.apiPrefix, props.path, shareExpiry.value)
+  } catch (cause) {
+    shareError.value = cause instanceof Error ? cause.message : 'Could not share the document.'
+  } finally {
+    sharing.value = false
+  }
+}
+
+async function removeShare(): Promise<void> {
+  sharing.value = true
+  shareError.value = null
+  try {
+    await api.unshare(props.space.apiPrefix, props.path)
+    share.value = null
+  } catch (cause) {
+    shareError.value = cause instanceof Error ? cause.message : 'Could not stop sharing the document.'
+  } finally {
+    sharing.value = false
+  }
 }
 
 function requestDelete(): void {
@@ -91,6 +131,27 @@ function requestDelete(): void {
           Delete
         </BaseButton>
       </div>
+      <section class="mb-4 flex flex-wrap items-center gap-2" data-testid="share-panel">
+        <template v-if="share">
+          <a :href="share.url" class="min-w-0 truncate text-small text-accent" data-testid="share-url">{{
+            share.url
+          }}</a>
+          <span class="text-small text-text-3">
+            {{ share.expires_at ? `expires ${formatTime(share.expires_at)}` : 'no expiry' }}
+          </span>
+          <CopyButton :text="share.url" label="Copy link" />
+          <BaseButton variant="secondary" size="xs" :busy="sharing" data-testid="unshare" @click="removeShare">
+            Unshare
+          </BaseButton>
+        </template>
+        <template v-else>
+          <AppSelect v-model="shareExpiry" :options="expiryOptions" size="sm" aria-label="Share expiry" />
+          <BaseButton variant="secondary" size="xs" :busy="sharing" data-testid="share" @click="createShare">
+            Share
+          </BaseButton>
+        </template>
+        <InlineError v-if="shareError" variant="line" :message="shareError" testid="share-error" />
+      </section>
       <div class="relative" :class="doc.kind === 'html' ? 'h-[70vh] min-h-96' : ''">
         <DocumentReader
           :document="readerDocument"
