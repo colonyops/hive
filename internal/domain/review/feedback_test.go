@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const header = "# Document Feedback\n\nDocument: plans/test.md\n\n"
+
 func TestFeedback(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -19,42 +21,45 @@ func TestFeedback(t *testing.T) {
 		},
 		{
 			name:     "single comment",
-			comments: []Comment{{StartLine: 5, EndLine: 5, ContextText: "This is the context", CommentText: "This needs improvement"}},
-			want:     "Document: plans/test.md\nComments: 1\n\nLine 5:\n> This is the context\nThis needs improvement\n",
+			comments: []Comment{{StartLine: 5, EndLine: 5, ContextText: "proposal", CommentText: "Call it an RFC"}},
+			want: header + "I've reviewed this document and have 1 piece of feedback:\n\n" +
+				"## 1. (line 5) Feedback on: \"proposal\"\n> Call it an RFC\n",
 		},
 		{
-			name: "multiple comments sorted by line",
+			name: "comments sorted by line, note first",
 			comments: []Comment{
-				{StartLine: 15, EndLine: 17, ContextText: "Second context", CommentText: "Second feedback"},
-				{StartLine: 5, EndLine: 5, ContextText: "First context", CommentText: "First feedback"},
+				{StartLine: 15, EndLine: 17, ContextText: "Second", CommentText: "Second feedback"},
+				{StartLine: 5, EndLine: 5, ContextText: "First", CommentText: "First feedback"},
 			},
-			want: "Document: plans/test.md\nComments: 2\n\nLine 5:\n> First context\nFirst feedback\n\nLines 15-17:\n> Second context\nSecond feedback\n",
+			note: "Overall fine",
+			want: header + "I've reviewed this document and have 3 pieces of feedback:\n\n" +
+				"## 1. General feedback\n> Overall fine\n\n" +
+				"## 2. (line 5) Feedback on: \"First\"\n> First feedback\n\n" +
+				"## 3. (lines 15-17) Feedback on: \"Second\"\n> Second feedback\n",
 		},
 		{
-			name:     "multiline context",
-			comments: []Comment{{StartLine: 10, EndLine: 12, ContextText: "Line 1\nLine 2\nLine 3", CommentText: "Check these lines"}},
-			want:     "Document: plans/test.md\nComments: 1\n\nLines 10-12:\n> Line 1\n> Line 2\n> Line 3\nCheck these lines\n",
+			name:     "multi-line quote and comment",
+			comments: []Comment{{StartLine: 10, EndLine: 12, ContextText: "Line 1\nLine 2", CommentText: "Check\n\nthese"}},
+			want: header + "I've reviewed this document and have 1 piece of feedback:\n\n" +
+				"## 1. (lines 10-12) Feedback on: \"Line 1\\nLine 2\"\n> Check\n>\n> these\n",
 		},
 		{
-			name:     "ansi codes stripped from context",
+			name:     "ansi codes stripped from the quote",
 			comments: []Comment{{StartLine: 1, EndLine: 1, ContextText: "\x1b[1mbold\x1b[0m", CommentText: "ok"}},
-			want:     "Document: plans/test.md\nComments: 1\n\nLine 1:\n> bold\nok\n",
+			want: header + "I've reviewed this document and have 1 piece of feedback:\n\n" +
+				"## 1. (line 1) Feedback on: \"bold\"\n> ok\n",
 		},
 		{
-			name:     "empty context",
+			name:     "no quote",
 			comments: []Comment{{StartLine: 2, EndLine: 3, CommentText: "no quote"}},
-			want:     "Document: plans/test.md\nComments: 1\n\nLines 2-3:\nno quote\n",
-		},
-		{
-			name:     "note with comments",
-			comments: []Comment{{StartLine: 5, EndLine: 5, ContextText: "ctx", CommentText: "fix"}},
-			note:     "Overall fine",
-			want:     "General Notes:\nOverall fine\n\n---\n\nDocument: plans/test.md\nComments: 1\n\nLine 5:\n> ctx\nfix\n",
+			want: header + "I've reviewed this document and have 1 piece of feedback:\n\n" +
+				"## 1. (lines 2-3)\n> no quote\n",
 		},
 		{
 			name: "note only",
 			note: "Rethink the approach",
-			want: "General Notes:\nRethink the approach\n\n---\n\nDocument: plans/test.md\nComments: 0\n",
+			want: header + "I've reviewed this document and have 1 piece of feedback:\n\n" +
+				"## 1. General feedback\n> Rethink the approach\n",
 		},
 	}
 
