@@ -152,7 +152,7 @@ useEventListener(window, 'keydown', (event: KeyboardEvent) => {
         <EmptyState
           v-else-if="unavailable"
           variant="inline"
-          message="This server has no content search yet. The list filters by title and path."
+          message="This server has no content search yet."
           data-testid="search-unavailable"
         />
         <span v-else-if="loading" class="flex items-center gap-2 text-body text-text-3">

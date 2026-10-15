@@ -3,14 +3,14 @@ import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
-import { ref, shallowRef, type Component } from 'vue'
-import IconEllipsis from '~icons/lucide/ellipsis'
-import IconFileCode from '~icons/lucide/file-code'
-import IconFileText from '~icons/lucide/file-text'
-import IconFolder from '~icons/lucide/folder'
+import { computed, ref, shallowRef, type Component } from 'vue'
+import IconCode from '~icons/material-symbols/code-blocks'
+import IconFile from '~icons/material-symbols/description'
+import IconFolder from '~icons/material-symbols/folder'
+import IconMore from '~icons/material-symbols/more-vert'
 import { entryMenu } from '../lib/entryActions'
 import type { ListEntry } from '../lib/entries'
-import { formatBytes, formatTime } from '../lib/format'
+import { formatBytes, formatDate, formatTime } from '../lib/format'
 import type { ViewMode } from '../lib/viewMode'
 
 const props = defineProps<{ entries: ListEntry[]; mode: ViewMode }>()
@@ -28,9 +28,16 @@ const nav = useListKeyboardNav({
   row: (index) => root.value?.querySelector(`[data-entry-index="${index}"]`),
 })
 
+const showLocation = computed(() => props.entries.some((entry) => entry.location !== null))
+
 function icon(entry: ListEntry): Component {
   if (entry.kind === 'dir') return IconFolder
-  return entry.doc?.kind === 'html' ? IconFileCode : IconFileText
+  return entry.doc?.kind === 'html' ? IconCode : IconFile
+}
+
+function iconTone(entry: ListEntry): string {
+  if (entry.kind === 'dir') return 'text-text-3'
+  return entry.doc?.kind === 'html' ? 'text-node-orange' : 'text-node-blue'
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -74,9 +81,11 @@ function onSelect(id: string): void {
     <div
       v-if="mode === 'list'"
       class="entry-grid sticky top-0 border-b border-row bg-app py-2.5 text-small font-medium text-text-4"
+      :class="{ 'has-location': showLocation }"
       aria-hidden="true"
     >
       <span>Name</span>
+      <span v-if="showLocation" class="entry-wide">Location</span>
       <span class="entry-wide">Modified</span>
       <span class="entry-wide text-right">Size</span>
       <span class="entry-wide">Shared</span>
@@ -91,11 +100,12 @@ function onSelect(id: string): void {
         :data-entry-index="index"
         :data-kind="entry.kind"
         data-testid="entry"
+        :title="entry.secondary"
         class="group cursor-pointer"
         :class="[
           mode === 'list'
-            ? 'entry-grid h-13 border-b border-row'
-            : 'relative flex flex-col gap-2 rounded-lg border border-card bg-raised p-3 hover:border-strong',
+            ? ['entry-grid h-13 border-b border-row', { 'has-location': showLocation }]
+            : 'relative flex h-36 flex-col rounded-lg border border-card bg-raised p-3 hover:border-strong',
           index === active
             ? mode === 'list'
               ? 'bg-selection'
@@ -109,30 +119,29 @@ function onSelect(id: string): void {
         @contextmenu.prevent="openMenu(entry, $event)"
       >
         <template v-if="mode === 'list'">
-          <span class="flex min-w-0 items-center gap-2.5">
-            <component
-              :is="icon(entry)"
-              class="size-5 shrink-0"
-              :class="entry.kind === 'dir' ? 'text-accent' : 'text-text-3'"
-              aria-hidden="true"
-            />
-            <span class="min-w-0">
-              <span class="block truncate text-body text-text" data-testid="entry-label">{{ entry.label }}</span>
-              <span class="block truncate text-small text-text-4" :title="entry.secondary">{{ entry.secondary }}</span>
+          <span class="flex min-w-0 items-center gap-3">
+            <span class="flex size-6 shrink-0 items-center justify-center">
+              <component :is="icon(entry)" class="size-6" :class="iconTone(entry)" aria-hidden="true" />
             </span>
+            <span class="min-w-0 truncate text-body text-text" data-testid="entry-label">{{ entry.label }}</span>
           </span>
-          <span class="entry-wide truncate text-small text-text-3">{{
-            entry.modified ? formatTime(entry.modified) : '-'
+          <span v-if="showLocation" class="entry-wide truncate text-small text-text-3" data-testid="entry-location">{{
+            entry.location
           }}</span>
+          <span
+            class="entry-wide truncate text-small text-text-3"
+            :title="entry.modified ? formatTime(entry.modified) : undefined"
+            >{{ entry.modified ? formatDate(entry.modified) : '—' }}</span
+          >
           <span class="entry-wide text-right text-small text-text-3">{{
-            entry.size === null ? '-' : formatBytes(entry.size)
+            entry.kind === 'dir' || entry.size === null ? '—' : formatBytes(entry.size)
           }}</span>
           <span class="entry-wide">
             <BaseBadge v-if="entry.shared" tone="accent" class="px-2.5 py-0.5 text-small">Shared</BaseBadge>
           </span>
           <IconButton
             :label="`Actions for ${entry.label}`"
-            :icon="IconEllipsis"
+            :icon="IconMore"
             size="xl"
             data-testid="entry-menu"
             @click.stop="openMenu(entry, $event)"
@@ -140,27 +149,24 @@ function onSelect(id: string): void {
         </template>
         <template v-else>
           <div class="flex items-start justify-between">
-            <component
-              :is="icon(entry)"
-              class="size-10"
-              :class="entry.kind === 'dir' ? 'text-accent' : 'text-text-3'"
-              aria-hidden="true"
-            />
+            <component :is="icon(entry)" class="size-10" :class="iconTone(entry)" aria-hidden="true" />
             <IconButton
               :label="`Actions for ${entry.label}`"
-              :icon="IconEllipsis"
+              :icon="IconMore"
               size="xl"
               data-testid="entry-menu"
               @click.stop="openMenu(entry, $event)"
             />
           </div>
-          <div class="min-w-0">
-            <span class="block truncate text-body font-medium text-text" data-testid="entry-label">{{
-              entry.label
+          <span class="mt-auto block truncate text-body font-medium text-text" data-testid="entry-label">{{
+            entry.label
+          }}</span>
+          <div class="mt-1 flex h-6 items-center gap-2">
+            <span class="min-w-0 flex-1 truncate text-small text-text-4">{{
+              entry.modified ? formatDate(entry.modified) : '—'
             }}</span>
-            <span class="block truncate text-small text-text-4" :title="entry.secondary">{{ entry.secondary }}</span>
+            <BaseBadge v-if="entry.shared" tone="accent" class="px-2.5 py-0.5 text-small">Shared</BaseBadge>
           </div>
-          <BaseBadge v-if="entry.shared" tone="accent" class="w-fit px-2.5 py-0.5 text-small">Shared</BaseBadge>
         </template>
       </div>
     </div>
@@ -188,7 +194,10 @@ function onSelect(id: string): void {
 }
 @media (min-width: 768px) {
   .entry-grid {
-    grid-template-columns: minmax(0, 1fr) 12rem 6rem 6rem 2.125rem;
+    grid-template-columns: minmax(0, 1fr) 8rem 6rem 6rem 2.125rem;
+  }
+  .entry-grid.has-location {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 14rem) 8rem 6rem 6rem 2.125rem;
   }
   .entry-wide {
     display: block;

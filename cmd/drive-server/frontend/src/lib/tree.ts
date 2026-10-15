@@ -58,27 +58,6 @@ export function buildTree(documents: readonly DriveDocument[]): TreeNode {
   return root
 }
 
-function matches(node: TreeNode, query: string): boolean {
-  return node.label.toLowerCase().includes(query) || node.path.toLowerCase().includes(query)
-}
-
-/**
- * Keeps the documents whose title or path contains the query, with the folders
- * above them. A folder whose own name matches keeps its whole subtree.
- */
-export function filterTree(root: TreeNode, query: string): TreeNode {
-  const q = query.trim().toLowerCase()
-  if (!q) return root
-  const keep = (nodes: TreeNode[]): TreeNode[] =>
-    nodes.flatMap((node) => {
-      if (node.kind === 'doc') return matches(node, q) ? [node] : []
-      if (node.name.toLowerCase().includes(q)) return [node]
-      const children = keep(node.children)
-      return children.length ? [{ ...node, children }] : []
-    })
-  return { ...root, children: keep(root.children) }
-}
-
 /** The node at a folder path ('' is the root), or null when no document lives there. */
 export function findFolder(root: TreeNode, folderPath: string): TreeNode | null {
   let node = root
@@ -94,11 +73,6 @@ export function findFolder(root: TreeNode, folderPath: string): TreeNode | null 
 export function descendantDocuments(node: TreeNode): DriveDocument[] {
   if (node.kind === 'doc') return node.doc ? [node.doc] : []
   return node.children.flatMap(descendantDocuments)
-}
-
-/** The documents whose title or path contains the query, as a flat list in tree order. */
-export function matchingDocuments(root: TreeNode, query: string): DriveDocument[] {
-  return descendantDocuments(filterTree(root, query))
 }
 
 /** The folders above a path, outermost first. */

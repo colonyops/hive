@@ -4,15 +4,12 @@ import { useRoute } from 'vue-router'
 import type { Crumb } from '../components/Breadcrumb.vue'
 import DriveListing from '../components/DriveListing.vue'
 import { useDriveData } from '../lib/driveData'
-import { documentEntries, folderContents } from '../lib/entries'
-import { useSearchQuery } from '../lib/search'
+import { folderContents } from '../lib/entries'
 import { documentRoute, fromRouteParams } from '../lib/space'
-import { buildTree, matchingDocuments } from '../lib/tree'
 import DocumentView from './DocumentView.vue'
 
 const route = useRoute()
 const data = useDriveData()
-const query = useSearchQuery()
 
 const target = computed(() => fromRouteParams(route.params))
 const space = computed(() => target.value.space)
@@ -27,11 +24,9 @@ watch(
   { immediate: true },
 )
 
-const filtering = computed(() => query.value.trim() !== '')
 const contents = computed(() => {
   const docs = documents.value
   if (!docs) return null
-  if (filtering.value) return documentEntries(matchingDocuments(buildTree(docs), query.value), false)
   return folderContents(docs, space.value, path.value)
 })
 
@@ -53,7 +48,6 @@ const crumbs = computed<Crumb[]>(() => {
 })
 
 const emptyMessage = computed(() => {
-  if (filtering.value) return `No documents match "${query.value.trim()}".`
   return path.value ? 'This folder is empty.' : 'This space has no documents.'
 })
 

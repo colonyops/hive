@@ -92,7 +92,7 @@ describe('drive shell', () => {
     expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['todo'])
   })
 
-  it('drills into a folder from the listing and filters it from the search field', async () => {
+  it('drills into a folder and leaves the rows alone while typing in search', async () => {
     const { app, router } = await mountAt('/repos/acme/notes')
 
     await app.get('[data-testid="entry"][data-kind="dir"]').trigger('dblclick')
@@ -101,7 +101,7 @@ describe('drive shell', () => {
 
     await app.get('[data-testid="search-input"]').setValue('guide')
     await flushPromises()
-    expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['Guide'])
+    expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['api', 'Guide'])
   })
 
   it('shows the email and both items in the account menu', async () => {

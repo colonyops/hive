@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import IconChevronRight from '~icons/lucide/chevron-right'
+import IconChevronRight from '~icons/material-symbols/chevron-right'
 
 export interface Crumb {
   label: string
