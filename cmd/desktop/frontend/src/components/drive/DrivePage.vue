@@ -2,7 +2,8 @@
 // Every space's documents at full page: the space picker in the header over
 // the sidebar's tree, the reader beside it, and a search that spans every
 // space.
-import { computed, ref, watch } from 'vue'
+import { useElementSize, useResizeObserver } from '@vueuse/core'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import IconCode from '~icons/lucide/code'
 import IconGlobe from '~icons/lucide/globe'
 import IconMessagesSquare from '~icons/lucide/messages-square'
@@ -10,6 +11,9 @@ import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
 import DriveDocumentActions from './DriveDocumentActions.vue'
 import DriveReader from './DriveReader.vue'
+import DriveReviewCards from './DriveReviewCards.vue'
+import DriveReviewFooter from './DriveReviewFooter.vue'
+import DriveReviewHeader from './DriveReviewHeader.vue'
 import AppSelect, { type AppSelectOption } from '../ui/AppSelect.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import EmptyState from '../ui/EmptyState.vue'
@@ -24,8 +28,12 @@ import { relativeAge } from '../../lib/age'
 import { entryLabel, entryTime, movedPath, spaceGroup, spaceGroups, type DriveScope } from '../../lib/drive'
 import { useCanvasSettings } from '../../stores/useCanvasSettings'
 import { useDrive } from '../../stores/useDrive'
+import { useDriveReview } from '../../stores/useDriveReview'
 
-const props = defineProps<{ scope: DriveScope }>()
+const props = defineProps<{
+  scope: DriveScope
+  sidebarCollapsed?: boolean
+}>()
 const emit = defineEmits<{ close: []; 'open-url': [url: string]; 'update:scope': [scope: DriveScope]; setup: [] }>()
 
 const { spaces, spacesLoaded, error: spacesError } = useDrive()
@@ -107,6 +115,46 @@ const offerSetup = computed(
 )
 
 const reader = ref<HTMLElement | null>(null)
+const measure = ref<HTMLElement | null>(null)
+const footer = ref<HTMLElement | null>(null)
+const {
+  size: commentsWidth,
+  startResize: startCommentsResize,
+  step: stepComments,
+} = useResizablePanel({
+  storageKey: 'hive.panel.drive.comments',
+  defaultSize: 360,
+  min: 260,
+  max: 600,
+  edge: 'left',
+})
+const { height: footerHeight } = useElementSize(footer)
+
+// The reader's scrollbar takes width inside the scroller, which moves the
+// cards column left of the header and the composer above and below it; both
+// shift by the same width so the column reads as one.
+const gutter = ref(0)
+function measureGutter(): void {
+  gutter.value = reader.value ? reader.value.offsetWidth - reader.value.clientWidth : 0
+}
+useResizeObserver(reader, measureGutter)
+useResizeObserver(measure, measureGutter)
+
+const review = useDriveReview()
+const reviewed = computed(() => {
+  const doc = document.value
+  if (!doc || doc.entry.kind !== 'markdown' || !review.inReview(doc.space.key, doc.entry.path)) return null
+  return { space: doc.space.key, path: doc.entry.path }
+})
+const commentsShown = computed(() => !!reviewed.value && !review.pageCommentsCollapsed.value)
+const commentCount = computed(() =>
+  reviewed.value ? (review.review(reviewed.value.space, reviewed.value.path).data.value.comments?.length ?? 0) : 0,
+)
+watch(commentCount, (count, before) => {
+  if (count > before) review.showPageComments()
+})
+watch(reviewed, (next) => review.setReviewed('page', !!next), { immediate: true })
+onBeforeUnmount(() => review.setReviewed('page', false))
 watch(shown, () => {
   if (reader.value) reader.value.scrollTop = 0
 })
@@ -134,7 +182,7 @@ useEscapeToClose(() => emit('close'))
 <template>
   <div class="flex h-full min-h-0 flex-1" data-testid="drive-page">
     <aside
-      v-if="browsable"
+      v-if="browsable && !sidebarCollapsed"
       class="relative flex shrink-0 flex-col border-r border-border bg-sidebar"
       :style="{ width: sidebarWidth + 'px' }"
       data-testid="drive-page-sidebar"
@@ -172,34 +220,44 @@ useEscapeToClose(() => emit('close'))
     </aside>
 
     <div class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <ViewHeader>
-        <template #title>
-          <span
-            class="min-w-0 truncate text-body font-semibold text-text"
-            :title="document?.entry.path"
-            data-testid="drive-page-title"
-            >{{ title }}</span
-          >
-          <span
-            v-if="document && (folder || modified)"
-            class="shrink-0 font-mono text-caption text-text-4"
-            data-testid="drive-page-folder"
-            >{{ folder }}<template v-if="folder && modified"> · </template
-            ><template v-if="modified">{{ relativeAge(modified) }}</template></span
-          >
-          <div class="flex-1" />
-          <DriveDocumentActions
-            v-if="document"
-            :space="space"
-            :entry="document.entry"
-            size="lg"
-            testid="drive-page"
-            @deleted="documentDeleted"
-            @moved="documentMoved"
-          />
-          <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
-        </template>
-      </ViewHeader>
+      <div class="flex shrink-0">
+        <ViewHeader class="min-w-0 flex-1">
+          <template #title>
+            <span
+              class="min-w-0 truncate text-body font-semibold text-text"
+              :title="document?.entry.path"
+              data-testid="drive-page-title"
+              >{{ title }}</span
+            >
+            <span
+              v-if="document && (folder || modified)"
+              class="shrink-0 font-mono text-caption text-text-4"
+              data-testid="drive-page-folder"
+              >{{ folder }}<template v-if="folder && modified"> · </template
+              ><template v-if="modified">{{ relativeAge(modified) }}</template></span
+            >
+            <div class="flex-1" />
+            <DriveDocumentActions
+              v-if="document"
+              :space="space"
+              :entry="document.entry"
+              size="lg"
+              testid="drive-page"
+              @deleted="documentDeleted"
+              @moved="documentMoved"
+            />
+            <IconButton label="Close" :icon="IconX" size="lg" data-testid="drive-page-close" @click="emit('close')" />
+          </template>
+        </ViewHeader>
+        <DriveReviewHeader
+          v-if="reviewed && commentsShown"
+          class="shrink-0 border-l"
+          :style="{ width: `${commentsWidth + gutter}px`, paddingRight: `${16 + gutter}px` }"
+          :space="reviewed.space"
+          :path="reviewed.path"
+          testid="drive-page"
+        />
+      </div>
 
       <InlineError v-if="spacesError && !spaces.length" class="m-4" :message="spacesError" testid="drive-page-error" />
       <EmptyState
@@ -215,30 +273,55 @@ useEscapeToClose(() => emit('close'))
           class="hive-scroll flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto bg-app"
           data-testid="drive-page-reader"
         >
-          <div
-            class="mx-auto flex w-full flex-1 flex-col px-10 py-8"
-            :class="pageWidthClass"
-            data-testid="drive-page-measure"
-          >
-            <DriveReader
-              :document="document"
-              :paths="paths"
-              :loading="loading"
-              :error="error"
-              testid="drive-page"
-              @open-url="emit('open-url', $event)"
-              @open="openDocument"
-            />
-            <div v-if="offerSetup" class="mt-3 flex flex-col items-start gap-2" data-testid="drive-page-setup">
-              <p class="text-xs leading-relaxed text-text-3">
-                An agent in a Code session of this repository can write here once its own MCP configuration lists the
-                Hive Drive server.
-              </p>
-              <BaseButton variant="secondary" size="xs" data-testid="drive-page-setup-open" @click="emit('setup')">
-                Set up an agent
-              </BaseButton>
+          <div class="flex min-w-0 flex-1">
+            <div
+              ref="measure"
+              class="mx-auto flex w-full min-w-0 flex-1 flex-col px-10 py-8"
+              :class="pageWidthClass"
+              data-testid="drive-page-measure"
+            >
+              <DriveReader
+                :document="document"
+                :paths="paths"
+                :loading="loading"
+                :error="error"
+                testid="drive-page"
+                @open-url="emit('open-url', $event)"
+                @open="openDocument"
+              />
+              <div v-if="offerSetup" class="mt-3 flex flex-col items-start gap-2" data-testid="drive-page-setup">
+                <p class="text-xs leading-relaxed text-text-3">
+                  An agent in a Code session of this repository can write here once its own MCP configuration lists the
+                  Hive Drive server.
+                </p>
+                <BaseButton variant="secondary" size="xs" data-testid="drive-page-setup-open" @click="emit('setup')">
+                  Set up an agent
+                </BaseButton>
+              </div>
+            </div>
+            <div
+              v-if="reviewed && commentsShown"
+              class="relative shrink-0 border-l border-row bg-pane"
+              :style="{ width: `${commentsWidth}px` }"
+            >
+              <PanelResizeHandle edge="left" name="drive-comments" :start="startCommentsResize" :step="stepComments" />
+              <DriveReviewCards
+                :style="{ paddingBottom: `${footerHeight + 16}px` }"
+                :space="reviewed.space"
+                :path="reviewed.path"
+                :align-to="measure"
+                testid="drive-page"
+              />
             </div>
           </div>
+        </div>
+        <div
+          v-if="reviewed && commentsShown"
+          ref="footer"
+          class="absolute bottom-0 border-l border-row"
+          :style="{ right: `${gutter}px`, width: `${commentsWidth}px` }"
+        >
+          <DriveReviewFooter :space="reviewed.space" :path="reviewed.path" testid="drive-page" />
         </div>
       </div>
     </div>

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -91,6 +92,38 @@ type AppearanceSettings struct {
 	CanvasFontSize                  string
 	CanvasLineSpacing               string
 	CanvasPageWidth                 string
+}
+
+// ReviewLabels are the preset comments the Drive comment composer offers, the
+// shipped ones when settings.yaml names none.
+func (s *SettingsService) ReviewLabels(context.Context) ([]settings.ReviewLabel, error) {
+	cfg, err := s.store.Effective()
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "reading settings")
+	}
+	return cfg.Review.EffectiveLabels(), nil
+}
+
+// SetReviewLabels persists the composer's labels in order. A list equal to
+// the shipped one, or an empty one, clears the key so settings.yaml keeps no
+// copy of the defaults.
+func (s *SettingsService) SetReviewLabels(_ context.Context, labels []settings.ReviewLabel) error {
+	trimmed := make([]settings.ReviewLabel, 0, len(labels))
+	for _, label := range labels {
+		trimmed = append(trimmed, settings.ReviewLabel{Title: strings.TrimSpace(label.Title), Icon: strings.TrimSpace(label.Icon)})
+	}
+	if slices.Equal(trimmed, settings.DefaultReviewLabels) {
+		trimmed = nil
+	}
+	review := settings.ReviewSettings{Labels: trimmed}
+	if err := review.Validate(); err != nil {
+		return Wrap(err, KindInvalid, "saving the review labels")
+	}
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Review = review
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
 }
 
 func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error) {

@@ -215,13 +215,7 @@ func (s *Service) FetchSession(ctx context.Context, sess *session.Session) Termi
 		Status: terminal.StatusMissing,
 	}
 
-	// Inject session path into metadata for multi-window disambiguation
-	metadata := sess.Metadata
-	if sess.Path != "" {
-		metadata = make(map[string]string, len(sess.Metadata)+1)
-		maps.Copy(metadata, sess.Metadata)
-		metadata[terminal.SessionPathKey] = sess.Path
-	}
+	metadata := sessionMetadata(sess)
 
 	// Try to discover terminal session
 	info, integration, err := s.term.DiscoverSession(ctx, sess.Slug, metadata)
@@ -272,6 +266,90 @@ func (s *Service) FetchSession(ctx context.Context, sess *session.Session) Termi
 	}
 
 	return status
+}
+
+// AgentPane is one pane that pane discovery classifies as an agent.
+type AgentPane struct {
+	PaneID     string
+	WindowName string
+	Status     terminal.Status
+	Tool       string
+}
+
+// AgentPanes lists the agent panes of each session, with their live status,
+// keyed by session id. It refreshes the integration caches once for the
+// batch. A session whose discovery fails is logged and left out; a session
+// with no terminal maps to no panes.
+func (s *Service) AgentPanes(ctx context.Context, sessions []*session.Session) map[string][]AgentPane {
+	results := make(map[string][]AgentPane, len(sessions))
+	if len(sessions) == 0 || !s.Available() {
+		return results
+	}
+	s.term.RefreshAll(ctx)
+
+	var mu sync.Mutex
+	sem := make(chan struct{}, s.workers)
+	var wg sync.WaitGroup
+	for _, sess := range sessions {
+		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			fetchCtx, cancel := context.WithTimeout(ctx, terminalStatusTimeout)
+			defer cancel()
+			panes, err := s.sessionAgentPanes(fetchCtx, sess)
+			if err != nil {
+				s.logger.Debug().Err(err).Str("session", sess.Slug).Msg("agent pane discovery failed")
+				return
+			}
+			mu.Lock()
+			results[sess.ID] = panes
+			mu.Unlock()
+		})
+	}
+	wg.Wait()
+	return results
+}
+
+func (s *Service) sessionAgentPanes(ctx context.Context, sess *session.Session) ([]AgentPane, error) {
+	metadata := sessionMetadata(sess)
+	info, integration, err := s.term.DiscoverSession(ctx, sess.Slug, metadata)
+	if err != nil {
+		return nil, err
+	}
+	if info == nil || integration == nil {
+		return nil, nil
+	}
+	disc, ok := integration.(terminal.AllPanesDiscoverer)
+	if !ok {
+		return nil, nil
+	}
+	infos, err := disc.DiscoverAllPanes(ctx, sess.Slug, metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	panes := make([]AgentPane, 0, len(infos))
+	for _, info := range infos {
+		status, err := integration.GetStatus(ctx, info)
+		if err != nil {
+			s.logger.Debug().Err(err).Str("session", sess.Slug).Str("pane", info.PaneID).Msg("per-pane status failed, marking missing")
+			status = terminal.StatusMissing
+		}
+		panes = append(panes, AgentPane{PaneID: info.PaneID, WindowName: info.WindowName, Status: status, Tool: info.DetectedTool})
+	}
+	return panes, nil
+}
+
+// sessionMetadata adds the session path to the metadata, which tells windows
+// of the same name apart.
+func sessionMetadata(sess *session.Session) map[string]string {
+	if sess.Path == "" {
+		return sess.Metadata
+	}
+	metadata := make(map[string]string, len(sess.Metadata)+1)
+	maps.Copy(metadata, sess.Metadata)
+	metadata[terminal.SessionPathKey] = sess.Path
+	return metadata
 }
 
 func (s *Service) groupPaneStatuses(ctx context.Context, integration terminal.Integration, slug string, infos []*terminal.SessionInfo) []WindowStatus {

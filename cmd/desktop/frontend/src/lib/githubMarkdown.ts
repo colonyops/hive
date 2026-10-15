@@ -149,6 +149,48 @@ function githubExtensions(md: MarkdownIt) {
   })
 }
 
+/**
+ * Asks a render to mark each block with the source lines it came from, as
+ * data-source-start and data-source-end (1-based, inclusive). offset is the
+ * number of lines cut off the top of the source before rendering, such as
+ * front matter.
+ */
+export type SourceLines = { offset: number }
+
+type SourceEnv = { sourceLines?: SourceLines & { lines: string[] } }
+
+// A block's map ends past its trailing blank lines; a comment on it should
+// not.
+function sourceRange(token: Token, env: SourceEnv): [number, number] | null {
+  const source = env.sourceLines
+  if (!source || !token.map) return null
+  const [first, last] = token.map
+  let end = last
+  while (end > first + 1 && !source.lines[end - 1]?.trim()) end--
+  return [first + 1 + source.offset, end + source.offset]
+}
+
+function sourceAttrs(token: Token, env: SourceEnv): string {
+  const range = sourceRange(token, env)
+  return range ? ` data-source-start="${range[0]}" data-source-end="${range[1]}"` : ''
+}
+
+// Tags open blocks and rules, whose renderers print token.attrs. Code and raw
+// HTML blocks render through their own rules, which wrap them.
+function sourceLineAttrs(md: MarkdownIt) {
+  md.core.ruler.push('source_lines', (state) => {
+    const env = state.env as SourceEnv
+    if (!env.sourceLines) return
+    for (const token of state.tokens) {
+      if (token.nesting !== 1 && token.type !== 'hr') continue
+      const range = sourceRange(token, env)
+      if (!range) continue
+      token.attrSet('data-source-start', String(range[0]))
+      token.attrSet('data-source-end', String(range[1]))
+    }
+  })
+}
+
 // markdown-it binds its highlight hook once, so the one a render was given is
 // held for the length of that synchronous call. An empty string makes
 // markdown-it fall back to its escaped <pre><code class="language-x"> output.
@@ -172,6 +214,7 @@ const md = new MarkdownIt({
 })
   .use(taskLists)
   .use(githubExtensions)
+  .use(sourceLineAttrs)
 
 // Every code block carries a copy button. The HTML lands in a host through
 // v-html, so the button is plain markup with inline lucide icons, and the
@@ -185,9 +228,19 @@ const checkIcon = `${svgOpen}<path d="M20 6 9 17l-5-5"/></svg>`
 export const codeCopyButtonClass = 'markdown-code-copy'
 const codeCopyButton = `<button type="button" class="${codeCopyButtonClass}" data-testid="markdown-code-copy" aria-label="Copy code" title="Copy code">${copyIcon}${checkIcon}</button>`
 
+// A fence's range includes its opening fence line; data-source-code-start
+// names the line its code starts on, so a selection inside it counts from
+// there.
+function codeSourceAttrs(token: Token, env: SourceEnv): string {
+  const range = sourceRange(token, env)
+  if (!range) return ''
+  const codeStart = token.type === 'fence' ? ` data-source-code-start="${range[0] + 1}"` : ''
+  return ` data-source-start="${range[0]}" data-source-end="${range[1]}"${codeStart}`
+}
+
 function withCopyButton(rule: RenderRule): RenderRule {
   return (tokens, index, options, env, self) =>
-    `<div class="markdown-code">${codeCopyButton}${rule(tokens, index, options, env, self)}</div>`
+    `<div class="markdown-code"${codeSourceAttrs(tokens[index], env as SourceEnv)}>${codeCopyButton}${rule(tokens, index, options, env, self)}</div>`
 }
 md.renderer.rules.fence = withCopyButton(md.renderer.rules.fence!)
 md.renderer.rules.code_block = withCopyButton(md.renderer.rules.code_block!)
@@ -197,7 +250,10 @@ md.renderer.rules.code_block = withCopyButton(md.renderer.rules.code_block!)
 // elements never pass through these renderer rules because the block plugin
 // emits dedicated token types for them.
 const renderEscapedHtml = (tokens: Token[], index: number) => md.utils.escapeHtml(tokens[index].content)
-md.renderer.rules.html_block = renderEscapedHtml
+md.renderer.rules.html_block = (tokens, index, _options, env) => {
+  const attrs = sourceAttrs(tokens[index], env as SourceEnv)
+  return attrs ? `<div${attrs}>${renderEscapedHtml(tokens, index)}</div>` : renderEscapedHtml(tokens, index)
+}
 md.renderer.rules.html_inline = (tokens: Token[], index: number) => {
   const content = tokens[index].content
   // markdown-it-task-lists emits this fixed, disabled checkbox as an HTML
@@ -212,17 +268,22 @@ export function renderGithubMarkdown(src: string, highlight?: Highlight): string
   return withHighlight(highlight, () => md.render(src))
 }
 
-export type CanvasMarkdownPart = { kind: 'html'; html: string } | { kind: 'mermaid'; source: string }
+export type CanvasMarkdownPart =
+  { kind: 'html'; html: string } | { kind: 'mermaid'; source: string; lines?: [number, number] }
 
 function isTopLevelMermaidFence(token: Token): boolean {
   return token.type === 'fence' && token.level === 0 && token.info.trim().toLowerCase() === 'mermaid'
 }
 
-export function renderCanvasMarkdown(src: string, highlight?: Highlight): CanvasMarkdownPart[] {
+export function renderCanvasMarkdown(
+  src: string,
+  highlight?: Highlight,
+  sourceLines?: SourceLines,
+): CanvasMarkdownPart[] {
   if (!src.trim()) return []
 
   return withHighlight(highlight, () => {
-    const env = {}
+    const env: SourceEnv = sourceLines ? { sourceLines: { ...sourceLines, lines: src.split(/\r?\n/) } } : {}
     const tokens = md.parse(src, env)
     const parts: CanvasMarkdownPart[] = []
     let htmlStart = 0
@@ -233,7 +294,8 @@ export function renderCanvasMarkdown(src: string, highlight?: Highlight): Canvas
 
       const html = md.renderer.render(tokens.slice(htmlStart, index), md.options, env)
       if (html) parts.push({ kind: 'html', html })
-      parts.push({ kind: 'mermaid', source: token.content })
+      const lines = sourceRange(token, env)
+      parts.push(lines ? { kind: 'mermaid', source: token.content, lines } : { kind: 'mermaid', source: token.content })
       htmlStart = index + 1
     }
 

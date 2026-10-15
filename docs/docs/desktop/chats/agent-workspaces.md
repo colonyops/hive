@@ -136,6 +136,22 @@ A Markdown document or a canvas can include front matter such as tags, status, o
 
 **Settings ▸ Drive** changes text size, line spacing, and text width for every document, in Chats and in Code. The text runs at a narrow reading width by default. **Wide** fits HTML laid out in columns, and **Full** runs to the edges of the view.
 
+### Comment on a document
+
+Select text in a Markdown document, in the pane or on the Drive page, and a comment box floats under it with the selection marked; drag it by its top row to move it out of the way. To comment on a whole paragraph, list item, heading, code block, or table, point at it and click the comment button beside it in the margin. While nothing else has focus, the keyboard goes to the box:
+
+- Start typing to write a comment, then press <kbd>⌘↵</kbd> or **Add Comment**.
+- Press <kbd>1</kbd> to <kbd>4</kbd> to apply a label: **Clarify this**, **Verify this**, **Needs tests**, or **Looks good**. The icons in the box are the same labels. Text you typed first follows the label. Change them under **Settings ▸ Drive ▸ Comment labels**, or with `review.labels` in [settings](../configuration/settings.md).
+- Press <kbd>Esc</kbd> to close the box.
+
+A comment is anchored to the text you selected and the lines it is on, and that text is highlighted. On the Drive page, comments sit in a column beside the document, each on the row of its text; drag the column's edge to resize it. In the pane, the comments button in the pane header shows them over the document. On the Drive page, the title bar's right button shows or hides the column. **Toggle comments** in the command palette, or <kbd>⌘⇧M</kbd>, does the same on either surface. Select a comment to scroll to its text, or highlighted text to find its comment; every comment has **Edit** and **Delete**. Write a note for the agent at the bottom of the column.
+
+- **Copy All** puts the feedback on the clipboard: the document's path, then a numbered entry for the note and for each comment in document order, with its lines and the text it is about. The comments stay.
+- **Send to Agent** (<kbd>⌘↵</kbd> in the note) opens a list of the agents running now, in Code sessions and chats, with their status. The agent beside the pane is listed first. Sending pastes the feedback into the agent as one message, submits it, and clears the comments. An agent that is working gets it mid-turn; an agent waiting on a prompt cannot be picked until the prompt is answered.
+- **Clear**, the trash button in the comments header, deletes the comments and the note after asking.
+
+Comments are kept in Hive's database, not in the file, and survive a restart. If the document changes after you comment, the panel says the comments are on an earlier version. Send, copy, or discard them before adding new ones. Renaming or moving a document leaves its comments behind.
+
 ### Reorganize
 
 You can reorganize the tree without an agent running. Create a folder, rename a document or folder, move it into another folder in the same space, or delete it from a row's menu. You can also drag a document onto a folder. Delete works on a document or an empty folder, and asks for confirmation. Deleting a document removes it for every chat or Code session that shares the space.

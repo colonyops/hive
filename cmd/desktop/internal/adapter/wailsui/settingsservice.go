@@ -6,6 +6,7 @@ import (
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/fonts"
+	"github.com/colonyops/hive/cmd/desktop/internal/app/settings"
 )
 
 // SettingsService exposes user-tunable settings to the frontend. The JSON
@@ -102,6 +103,34 @@ func (s *SettingsService) KeybindingSettings(ctx context.Context) (KeybindingSet
 
 func (s *SettingsService) SetKeybindingSettings(ctx context.Context, in KeybindingSettings) error {
 	return s.settings.SetKeybindings(ctx, in.Overrides)
+}
+
+// ReviewLabel is a preset comment the Drive comment composer applies with
+// the key of its position, 1 to 4. Icon is carried verbatim: the frontend
+// owns the icon set and draws an unknown name as a tag.
+type ReviewLabel struct {
+	Title string `json:"title"`
+	Icon  string `json:"icon"`
+}
+
+func (s *SettingsService) ReviewLabels(ctx context.Context) ([]ReviewLabel, error) {
+	labels, err := s.settings.ReviewLabels(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]ReviewLabel, 0, len(labels))
+	for _, label := range labels {
+		out = append(out, ReviewLabel{Title: label.Title, Icon: label.Icon})
+	}
+	return out, nil
+}
+
+func (s *SettingsService) SetReviewLabels(ctx context.Context, labels []ReviewLabel) error {
+	in := make([]settings.ReviewLabel, 0, len(labels))
+	for _, label := range labels {
+		in = append(in, settings.ReviewLabel{Title: label.Title, Icon: label.Icon})
+	}
+	return s.settings.SetReviewLabels(ctx, in)
 }
 
 func (s *SettingsService) AppearanceSettings(ctx context.Context) (AppearanceSettings, error) {

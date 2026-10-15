@@ -102,6 +102,22 @@ func (m *Manager) CapturePane(ctx context.Context, name string) (string, error) 
 	return strings.Join(lines, "\n"), nil
 }
 
+// CapturePaneID is CapturePane for one pane by its id, for a caller that acts
+// on that pane and must judge the same screen whichever pane is active.
+func (m *Manager) CapturePaneID(ctx context.Context, pane string) (string, error) {
+	if !validPaneID(pane) {
+		return "", fmt.Errorf("tmuxcc: capture pane: %q is not a pane id", pane)
+	}
+	if err := m.Available(ctx); err != nil {
+		return "", err
+	}
+	lines, err := m.oneShot(ctx, "capture-pane", "-t", pane, "-p", "-J")
+	if err != nil {
+		return "", fmt.Errorf("tmuxcc: capture pane %s: %w", pane, err)
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
 // SessionNames lists every live tmux session name carrying prefix. A server
 // with no sessions at all — or none matching — reports zero names rather than
 // an error, the same tolerance ListAllWindows extends to an empty tmux server.

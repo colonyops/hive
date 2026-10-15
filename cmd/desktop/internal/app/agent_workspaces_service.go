@@ -7,13 +7,16 @@ import (
 	"os"
 	osexec "os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/colonyops/hive/pkg/osopen"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/colonyops/hive/cmd/desktop/internal/app/agentws"
 	"github.com/colonyops/hive/cmd/desktop/internal/app/data/stores"
@@ -1867,6 +1870,75 @@ func skillIDFromSlug(slug string) (id string, ok bool) {
 	}
 	id = strings.TrimPrefix(slug, prefix)
 	return id, id != ""
+}
+
+// RunningChat is a chat whose tmux session is live, with its agent's pane
+// and status.
+type RunningChat struct {
+	ID        string
+	Workspace string
+	Name      string
+	// Pane is the first pane of the chat's tmux session, where the agent was
+	// launched.
+	Pane   string
+	Status terminal.Status
+}
+
+// RunningChats lists the live chats with their agent pane and status. One
+// tmux call finds the live sessions, so the cost follows the running chats
+// rather than every chat ever saved. A chat whose pane cannot be read is
+// left out.
+func (s *AgentWorkspacesService) RunningChats(ctx context.Context) ([]RunningChat, error) {
+	records, err := s.sessions.ListAll(ctx)
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "listing all sessions")
+	}
+	names := make([]string, 0, len(records))
+	for _, rec := range records {
+		names = append(names, sessionName(rec))
+	}
+	live, err := s.terminals.ListIndexedWindows(ctx, names)
+	if err != nil {
+		return nil, Wrap(err, KindInternal, "listing running chats")
+	}
+
+	var (
+		mu      sync.Mutex
+		running []RunningChat
+		group   errgroup.Group
+	)
+	group.SetLimit(maxConcurrentAgentSessions)
+	for _, rec := range records {
+		name := sessionName(rec)
+		if len(live[name]) == 0 {
+			continue
+		}
+		group.Go(func() error {
+			pane, err := s.terminals.FirstPane(ctx, name)
+			if err != nil {
+				return nil
+			}
+			screen, err := s.terminals.CapturePaneID(ctx, pane)
+			if err != nil {
+				return nil
+			}
+			chat := RunningChat{
+				ID: rec.ID, Workspace: rec.Workspace, Name: rec.Name,
+				Pane: pane, Status: classifyAgentScreen(rec.Agent, screen),
+			}
+			mu.Lock()
+			running = append(running, chat)
+			mu.Unlock()
+			return nil
+		})
+	}
+	_ = group.Wait()
+	order := make(map[string]int, len(records))
+	for i, rec := range records {
+		order[rec.ID] = i
+	}
+	slices.SortFunc(running, func(a, b RunningChat) int { return order[a.ID] - order[b.ID] })
+	return running, nil
 }
 
 // AllSessions lists every session across every workspace, newest record

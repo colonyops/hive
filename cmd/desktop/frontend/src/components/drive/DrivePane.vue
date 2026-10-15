@@ -5,17 +5,23 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconMaximize2 from '~icons/lucide/maximize-2'
+import IconMessageSquare from '~icons/lucide/message-square'
 import IconX from '~icons/lucide/x'
 import DriveBrowser from './DriveBrowser.vue'
 import DriveDocumentActions from './DriveDocumentActions.vue'
 import DriveReader from './DriveReader.vue'
+import DriveReviewCards from './DriveReviewCards.vue'
+import DriveReviewFooter from './DriveReviewFooter.vue'
+import DriveReviewHeader from './DriveReviewHeader.vue'
 import BaseButton from '../ui/BaseButton.vue'
 import IconButton from '../ui/IconButton.vue'
 import PanelResizeHandle from '../ui/PanelResizeHandle.vue'
 import { useDriveDocument } from '../../composables/useDriveDocument'
 import { useResizablePanel } from '../../composables/useResizablePanel'
 import { useDriveActivity } from '../../stores/useDriveActivity'
+import { useDriveReview } from '../../stores/useDriveReview'
 import { entryLabel, movedPath, newestDocument, type DriveAuthor } from '../../lib/drive'
+import type { AgentTargetRef } from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 
 const props = defineProps<{
   /** The open chat or Code session, whose newest write is the default pick. */
@@ -26,6 +32,8 @@ const props = defineProps<{
   path: string | null
   /** Offers the way to connect an agent while the space is empty, where Hive does not wire the agent itself. */
   agentSetup?: boolean
+  /** The surface's own agent, which Send to Agent offers first. */
+  agent?: AgentTargetRef | null
 }>()
 const emit = defineEmits<{
   close: []
@@ -90,6 +98,40 @@ watch(shown, () => {
 
 const empty = computed(() => !!tree.value && !tree.value.children?.length)
 
+// The pane is too narrow for a comments column beside the document, so the
+// comments overlay it.
+const review = useDriveReview()
+const reviewed = computed(() => {
+  const doc = document.value
+  if (!doc || doc.entry.kind !== 'markdown' || !review.inReview(doc.space.key, doc.entry.path)) return null
+  return { space: doc.space.key, path: doc.entry.path }
+})
+const commentCount = computed(() =>
+  reviewed.value ? (review.review(reviewed.value.space, reviewed.value.path).data.value.comments?.length ?? 0) : 0,
+)
+const commentsOpen = computed({
+  get: () => review.paneCommentsOpen.value,
+  set: (open: boolean) => review.setPaneCommentsOpen(open),
+})
+watch(commentCount, (count, before) => {
+  if (count > before) commentsOpen.value = true
+})
+watch(review.active, (id) => {
+  if (id) commentsOpen.value = true
+})
+watch(
+  reviewed,
+  (next) => {
+    review.setReviewed('pane', !!next)
+    if (!next) commentsOpen.value = false
+  },
+  { immediate: true },
+)
+onBeforeUnmount(() => {
+  review.setReviewed('pane', false)
+  commentsOpen.value = false
+})
+
 const {
   size: paneWidth,
   startResize: startPaneResize,
@@ -135,6 +177,14 @@ const {
         testid="drive-pane"
         @deleted="documentDeleted"
         @moved="documentMoved"
+      />
+      <IconButton
+        v-if="reviewed"
+        :label="commentsOpen ? 'Hide Comments' : `Show Comments (${commentCount})`"
+        :icon="IconMessageSquare"
+        :active="commentsOpen"
+        data-testid="drive-pane-comments"
+        @click="commentsOpen = !commentsOpen"
       />
       <IconButton
         label="Open full page"
@@ -184,6 +234,26 @@ const {
             Set up an agent
           </BaseButton>
         </div>
+      </div>
+      <div
+        v-if="reviewed && commentsOpen"
+        class="absolute inset-y-0 right-0 flex w-[min(360px,100%)] flex-col border-l border-row bg-pane shadow-popover"
+        data-testid="drive-pane-comments-panel"
+      >
+        <DriveReviewHeader
+          :space="reviewed.space"
+          :path="reviewed.path"
+          closable
+          testid="drive-pane"
+          @close="commentsOpen = false"
+        />
+        <DriveReviewCards
+          class="hive-scroll min-h-0 flex-1 overflow-y-auto"
+          :space="reviewed.space"
+          :path="reviewed.path"
+          testid="drive-pane"
+        />
+        <DriveReviewFooter :space="reviewed.space" :path="reviewed.path" :agent="agent" testid="drive-pane" />
       </div>
     </div>
   </aside>

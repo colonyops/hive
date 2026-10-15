@@ -469,10 +469,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				generalComment := v.finalizationModal.GeneralComment()
 				v.finalizationModal = nil
 
-				feedback := v.feedbackGenerated
-				if generalComment != "" {
-					feedback = "General Notes:\n" + generalComment + "\n\n---\n\n" + feedback
-				}
+				feedback := v.sessionFeedback(generalComment)
 
 				// Finalize session in database if store is available
 				if v.store != nil && v.activeSession != nil {
@@ -529,7 +526,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 
 				// Otherwise, it's a finalization confirmation
 				// Generate feedback and finalize
-				feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.CheckoutPath(v.symlinkName))
+				feedback := v.sessionFeedback("")
 				v.feedbackGenerated = feedback
 				v.confirmModal = nil
 
@@ -669,7 +666,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				// Finalize review - show finalization options if there are comments
 				if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
 					// Generate feedback now so we can pass it to the modal
-					feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.CheckoutPath(v.symlinkName))
+					feedback := v.sessionFeedback("")
 					modal := NewFinalizationModal(feedback, v.width, v.height)
 					v.finalizationModal = &modal
 					v.feedbackGenerated = feedback
@@ -2528,4 +2525,23 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 
 		return OpenDocumentMsg{Path: found.Path}
 	}
+}
+
+func (v *View) sessionFeedback(note string) string {
+	if v.activeSession == nil || len(v.activeSession.Comments) == 0 {
+		return ""
+	}
+	comments := make([]corereview.Comment, len(v.activeSession.Comments))
+	for i, c := range v.activeSession.Comments {
+		comments[i] = corereview.Comment{
+			ID:          c.ID,
+			SessionID:   c.SessionID,
+			StartLine:   c.StartLine,
+			EndLine:     c.EndLine,
+			ContextText: c.ContextText,
+			CommentText: c.CommentText,
+			CreatedAt:   c.CreatedAt,
+		}
+	}
+	return corereview.Feedback(v.selectedDoc.CheckoutPath(v.symlinkName), comments, note)
 }

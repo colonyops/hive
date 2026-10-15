@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -169,6 +170,61 @@ func (m MenuBarSettings) Validate() error {
 		if pin.Limit < 0 || pin.Limit > MaxMenuBarItemLimit {
 			return fmt.Errorf("menu_bar.feeds: %q limit must be between 1 and %d, or omitted for the default", pin.Feed, MaxMenuBarItemLimit)
 		}
+	}
+	return nil
+}
+
+// MaxReviewLabels is how many labels the comment composer offers: one per
+// key, 1 to 4.
+const MaxReviewLabels = 4
+
+// ReviewSettings shapes commenting on Drive documents.
+type ReviewSettings struct {
+	// Labels are the preset comments the composer applies with keys 1 to 4,
+	// in order. Empty is DefaultReviewLabels.
+	Labels []ReviewLabel `yaml:"labels,omitempty"`
+}
+
+// ReviewLabel is one preset comment. Icon names a lucide icon from the set
+// the frontend bundles; the frontend draws an unknown or empty one as a tag.
+type ReviewLabel struct {
+	Title string `yaml:"title"`
+	Icon  string `yaml:"icon,omitempty"`
+}
+
+// DefaultReviewLabels ship when settings.yaml names none.
+var DefaultReviewLabels = []ReviewLabel{
+	{Title: "Clarify this", Icon: "circle-help"},
+	{Title: "Verify this", Icon: "search-check"},
+	{Title: "Needs tests", Icon: "flask-conical"},
+	{Title: "Looks good", Icon: "check"},
+}
+
+// EffectiveLabels is Labels, or DefaultReviewLabels when it is empty.
+func (r ReviewSettings) EffectiveLabels() []ReviewLabel {
+	if len(r.Labels) == 0 {
+		return slices.Clone(DefaultReviewLabels)
+	}
+	return r.Labels
+}
+
+func (r ReviewSettings) Validate() error {
+	if len(r.Labels) > MaxReviewLabels {
+		return fmt.Errorf("review.labels allows at most %d labels", MaxReviewLabels)
+	}
+	seen := make(map[string]bool, len(r.Labels))
+	for _, label := range r.Labels {
+		title := strings.TrimSpace(label.Title)
+		if title == "" {
+			return fmt.Errorf("review.labels: every label needs a title")
+		}
+		if title != label.Title {
+			return fmt.Errorf("review.labels: %q has leading or trailing space", label.Title)
+		}
+		if seen[title] {
+			return fmt.Errorf("review.labels: %q is listed twice", title)
+		}
+		seen[title] = true
 	}
 	return nil
 }
@@ -363,6 +419,7 @@ type Settings struct {
 	Editor          EditorSettings          `yaml:"editor,omitempty"`
 	Retention       RetentionSettings       `yaml:"retention,omitempty"`
 	AgentWorkspaces AgentWorkspacesSettings `yaml:"agent_workspaces,omitempty"`
+	Review          ReviewSettings          `yaml:"review,omitempty"`
 	Onboarding      OnboardingSettings      `yaml:"onboarding,omitempty"`
 	Development     DevelopmentSettings     `yaml:"development"`
 
@@ -461,6 +518,9 @@ func (s Settings) Validate() error {
 		return err
 	}
 	if err := s.Retention.Validate(); err != nil {
+		return err
+	}
+	if err := s.Review.Validate(); err != nil {
 		return err
 	}
 	if len(strings.Fields(s.Editor.Command)) > 1 {

@@ -233,6 +233,9 @@ agent_workspaces:
   session_end_delay: 10s # grace between a chat asking to end its own session and the session being ended
 retention:
   action_runs: 100 # finished action runs kept, each with its full log (1-10000)
+review:
+  labels: [] # up to 4 {title, icon} preset comments, keys 1-4 by position;
+             # empty is Clarify this / Verify this / Needs tests / Looks good
 onboarding:
   completed: false # written by the app when first run ends; remove the key to walk first run again
 paths:

@@ -894,6 +894,7 @@ onBeforeUnmount(() => {
         v-if="docVisible && routeChatId !== null"
         :session="routeChatId"
         :space="workspaceSpaceKey(paneWorkspaceDir)"
+        :agent="{ kind: 'chat', id: routeChatId, pane: '' }"
         :path="docPath"
         @close="syncDocQuery(false)"
         @open-url="openLink"

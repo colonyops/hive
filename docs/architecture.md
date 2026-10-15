@@ -2381,6 +2381,22 @@ that highlights inline froze the window for as long as its fences took. Reorgani
 folder, rename, move, delete of a document or an empty folder) is the user's
 only write; the app never edits document content.
 
+**Review comments live in `hive.db`, not in the document.** A comment on a
+Markdown document is a `review_comments` row in a review session keyed
+`drive://<space>/<path>` with the sha256 of the raw file, so the rule above
+holds. `app.ReviewService` owns them over `Engine.Reviews()`. The key is apart
+from the TUI's absolute-path key on purpose: the TUI anchors a comment to a
+rendered line and Desktop to a source line, which the reader learns from the
+`data-source-start`/`data-source-end` attributes `renderCanvasMarkdown` adds
+when it is passed `sourceLines`. A review is never finalized and never cleaned
+up as stale: Send and Clear delete it, and a rewritten document keeps its
+comments, shown as on an earlier version. Send resolves its target in Go every
+time, to an agent pane that `status.Service.AgentPanes` classifies or the first
+pane of a running chat, and delivers through `tmuxcc.Manager.SendText`: a
+bracketed paste from a named buffer, then Enter. A pane with no detected agent
+is never a target, because a shell would run the feedback, and an agent on a
+prompt is refused, because the Enter would answer it.
+
 **HTML has two tiers.** A canvas **html block** is the one place
 agent-authored markup reaches the app's DOM
 (ADR canvas-html-blocks-are-sanitized-in-go-and-styled-by-an-app-owned-class-vocabulary).

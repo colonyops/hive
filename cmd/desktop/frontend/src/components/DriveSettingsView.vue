@@ -3,6 +3,7 @@
 // page, in Chats and in Code alike. They keep their canvas_* keys in
 // settings.yaml so existing values carry over.
 import CanvasTypographyPreview from './settings/CanvasTypographyPreview.vue'
+import ReviewLabelsEditor from './settings/ReviewLabelsEditor.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
@@ -85,6 +86,14 @@ const pageWidthOptions = canvasPageWidths.map((value) => ({
           @update:model-value="setPageWidth($event as CanvasPageWidth)"
         />
       </SettingsRow>
+    </SettingsSection>
+
+    <SettingsSection
+      title="Comment labels"
+      description="Preset comments the comment box applies with keys 1 to 4, in this order. Up to four."
+      boxed
+    >
+      <ReviewLabelsEditor />
     </SettingsSection>
   </SettingsPage>
 </template>
