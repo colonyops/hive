@@ -190,3 +190,13 @@ run = "./cmd/desktop/remote/run.sh test"
 description = "Verify remote schedules and inbox processing while the local Desktop process is stopped"
 depends = ["desktop:remote:up"]
 run = "./cmd/desktop/remote/run.sh test-unattended"
+
+["desktop:server:package"]
+description = "Build a Linux server bundle (HIVE_SERVER_ARCH=amd64 or arm64)"
+depends = ["desktop:frontend:build"]
+run = "./cmd/desktop/server/package.sh"
+
+["desktop:server:test"]
+description = "Test the server installer and backend restart on Ubuntu without a GUI"
+depends = ["desktop:server:package"]
+run = "./cmd/desktop/server/test.sh"

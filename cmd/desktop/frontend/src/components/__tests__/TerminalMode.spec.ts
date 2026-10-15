@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ref } from 'vue'
 import { createMemoryHistory } from 'vue-router'
 import TerminalMode from '../TerminalMode.vue'
+import CodeMode from '../CodeMode.vue'
+import { useCodeInstallation } from '../../stores/useCodeInstallation'
 import { useTerminalSessions } from '../../stores/useTerminalSessions'
 import { resetSessionStatusesForTests, useSessionStatuses } from '../../composables/useSessionStatuses'
 import { useTerminalShowWindows } from '../../stores/useTerminalShowWindows'
@@ -366,6 +368,29 @@ describe('TerminalMode', () => {
       error: '',
     })
     mocks.SessionPullRequest.mockResolvedValue({ status: 'none' })
+  })
+
+  it('loads local sessions and scratch when Code first opens on a remote', async () => {
+    useCodeInstallation().select('remote')
+    localStorage.setItem('hive.terminal.restore', JSON.stringify({ slug: 'hive-fix-parser', window: '@1' }))
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/terminal')
+    await router.isReady()
+    const wrapper = mount(CodeMode, {
+      global: {
+        plugins: [router],
+        stubs: { RemoteCode: true, transition: true, 'transition-group': true },
+      },
+    })
+    await flushPromises()
+
+    expect(mocks.ListSessions).toHaveBeenCalled()
+    expect(mocks.Scratch).toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="terminal-session-sidebar"]').text()).toContain('Terminals')
+    expect(wrapper.get('[data-testid="terminal-session-sidebar"]').text()).toContain('hay-kot/hive')
+    expect(wrapper.find('[data-testid="terminal-sessions-loading"]').exists()).toBe(false)
+    expect(router.currentRoute.value.path).toBe('/terminal')
+    expect(useCodeInstallation().installation.value).toBe('remote')
   })
 
   it('keeps the shared sidebar mounted when switching between remote and local panes', async () => {

@@ -20,7 +20,7 @@ const { installation } = useCodeInstallation()
 <template>
   <div class="flex min-h-0 min-w-0 flex-1 flex-col">
     <TerminalMode
-      :active="active && installation === 'local'"
+      :active="active"
       :sidebar-collapsed="sidebarCollapsed"
       :drive="drive"
       :remote="installation === 'remote'"

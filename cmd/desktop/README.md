@@ -2,6 +2,16 @@
 
 This directory is the Wails v3 Vue + TypeScript shell for Hive.
 
+## Headless Ubuntu installation
+
+`mise run desktop:server:package` builds a Linux bundle with the server, CLI,
+installer, and systemd user units. Set `HIVE_SERVER_ARCH=amd64` or `arm64` for
+the target machine. `mise run desktop:server:test` verifies it in Ubuntu Docker.
+See the [Ubuntu server guide](../../docs/docs/desktop/getting-started/ubuntu-server.md)
+for installation and operation. The bundle uses `server,production,terminals`;
+`desktop:serve` remains the frontend development harness. A separate tmux user
+service lets backend restarts preserve live terminals.
+
 ## Native shell
 
 On macOS, the shell uses `application.MacOptions.ActivationPolicy` set to
