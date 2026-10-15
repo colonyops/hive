@@ -192,15 +192,13 @@ function requestDelete(): void {
             v-if="share"
             label="Copy share link"
             :icon="IconLink"
-            size="xl"
+            size="control"
             variant="outline"
-            class="size-9!"
             data-testid="copy-link"
             @click="copyLink"
           />
           <BaseButton
-            size="sm"
-            class="h-9! py-0!"
+            size="control"
             data-testid="share"
             aria-label="Share"
             @click="shareAnchor = shareAnchor ? null : ($event.currentTarget as HTMLElement)"
@@ -212,9 +210,8 @@ function requestDelete(): void {
             <IconButton
               label="More actions"
               :icon="IconEllipsis"
-              size="xl"
+              size="control"
               variant="outline"
-              class="size-9!"
               :active="!!moreAnchor"
               data-testid="more-actions"
               @click="moreAnchor = moreAnchor ? null : ($event.currentTarget as HTMLElement)"
