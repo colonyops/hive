@@ -38,6 +38,14 @@ type Share struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
+// PublicDocument is what a share link serves to a reader who is not signed
+// in. Body is set for markdown only; HTML is served from the raw route.
+type PublicDocument struct {
+	OwnerEmail string   `json:"owner_email"`
+	Document   Document `json:"document"`
+	Body       string   `json:"body,omitempty"`
+}
+
 type Me struct {
 	Email  string `json:"email"`
 	Policy string `json:"policy"`

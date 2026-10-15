@@ -11,8 +11,8 @@ import (
 	"github.com/colonyops/hive/internal/domain/drive"
 )
 
-const deleteDocument = `-- name: DeleteDocument :execrows
-DELETE FROM documents WHERE space = ? AND path = ?
+const deleteDocument = `-- name: DeleteDocument :one
+DELETE FROM documents WHERE space = ? AND path = ? RETURNING id
 `
 
 type DeleteDocumentParams struct {
@@ -20,12 +20,11 @@ type DeleteDocumentParams struct {
 	Path  string `json:"path"`
 }
 
-func (q *Queries) DeleteDocument(ctx context.Context, arg DeleteDocumentParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteDocument, arg.Space, arg.Path)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
+func (q *Queries) DeleteDocument(ctx context.Context, arg DeleteDocumentParams) (string, error) {
+	row := q.db.QueryRowContext(ctx, deleteDocument, arg.Space, arg.Path)
+	var id string
+	err := row.Scan(&id)
+	return id, err
 }
 
 const getDocument = `-- name: GetDocument :one
@@ -39,6 +38,26 @@ type GetDocumentParams struct {
 
 func (q *Queries) GetDocument(ctx context.Context, arg GetDocumentParams) (Document, error) {
 	row := q.db.QueryRowContext(ctx, getDocument, arg.Space, arg.Path)
+	var i Document
+	err := row.Scan(
+		&i.ID,
+		&i.Space,
+		&i.Path,
+		&i.Kind,
+		&i.Sha256,
+		&i.Size,
+		&i.Body,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getDocumentByID = `-- name: GetDocumentByID :one
+SELECT id, space, path, kind, sha256, size, body, updated_at FROM documents WHERE id = ?
+`
+
+func (q *Queries) GetDocumentByID(ctx context.Context, id string) (Document, error) {
+	row := q.db.QueryRowContext(ctx, getDocumentByID, id)
 	var i Document
 	err := row.Scan(
 		&i.ID,
@@ -67,6 +86,17 @@ func (q *Queries) GetDocumentSize(ctx context.Context, arg GetDocumentSizeParams
 	var size int64
 	err := row.Scan(&size)
 	return size, err
+}
+
+const hasDocument = `-- name: HasDocument :one
+SELECT EXISTS (SELECT 1 FROM documents WHERE id = ?)
+`
+
+func (q *Queries) HasDocument(ctx context.Context, id string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, hasDocument, id)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const listDocuments = `-- name: ListDocuments :many

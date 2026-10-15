@@ -121,15 +121,25 @@ func (u *UserDB) Spaces(ctx context.Context) ([]core.SpaceUsage, error) {
 	return out, nil
 }
 
-func (u *UserDB) Delete(ctx context.Context, space, path string) error {
-	n, err := u.q.DeleteDocument(ctx, db.DeleteDocumentParams{Space: space, Path: path})
+func (u *UserDB) Delete(ctx context.Context, space, path string) (string, error) {
+	id, err := u.q.DeleteDocument(ctx, db.DeleteDocumentParams{Space: space, Path: path})
 	if err != nil {
-		return wrap("delete document", err)
+		return "", wrap("delete document", err)
 	}
-	if n == 0 {
-		return core.ErrNotFound
+	return id, nil
+}
+
+func (u *UserDB) GetByID(ctx context.Context, id string) (core.Document, []byte, error) {
+	row, err := u.q.GetDocumentByID(ctx, id)
+	if err != nil {
+		return core.Document{}, nil, wrap("get document by id", err)
 	}
-	return nil
+	return core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}, row.Body, nil
+}
+
+func (u *UserDB) HasID(ctx context.Context, id string) (bool, error) {
+	ok, err := u.q.HasDocument(ctx, id)
+	return ok, wrap("has document", err)
 }
 
 func (u *UserDB) Usage(ctx context.Context) (int64, error) {

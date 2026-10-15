@@ -150,3 +150,56 @@ func TestIsolationHostilePathsAndNoUserIDRoutes(t *testing.T) {
 	}
 	assert.Equal(t, map[string]bool{a.id + ".db": true, b.id + ".db": true}, dbs)
 }
+
+func TestIsolationSharesAreOwnerOnly(t *testing.T) {
+	s := newServer(t)
+	a, b := setupTenants(t, s)
+
+	for name, space := range mustSpace(t) {
+		route := driveapi.SpacePrefix(space) + "/shares/only-a.md"
+		assert.Equal(t, http.StatusNotFound, s.do(http.MethodPost, route, b.token, "").Code, name)
+		assert.Equal(t, http.StatusNotFound, s.do(http.MethodDelete, route, b.token, "").Code, name)
+
+		rec := s.do(http.MethodPost, route, a.token, "")
+		require.Equal(t, http.StatusOK, rec.Code, name)
+		assert.Equal(t, http.StatusNoContent, s.do(http.MethodDelete, route, a.token, "").Code, name)
+		assert.Equal(t, http.StatusNotFound, s.do(http.MethodPost, route, b.token, "").Code, name)
+	}
+}
+
+func TestIsolationLinkServesOnlyItsDocumentReadOnly(t *testing.T) {
+	s := newServer(t)
+	a, b := setupTenants(t, s)
+	_, slug := share(t, s, a.token, "linked.md", "")
+	assert.Equal(t, http.StatusOK, s.do(http.MethodPut, "/api/v1/shared/docs/b-own.md", b.token, "B").Code)
+
+	rec := s.do(http.MethodGet, "/s/"+slug+"/raw", "", "")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "<p>hi</p>", rec.Body.String())
+	rec = s.do(http.MethodGet, "/s/"+slug+"/raw", b.token, "")
+	assert.Equal(t, "<p>hi</p>", rec.Body.String(), "a token changes nothing on a public route")
+
+	for _, method := range []string{http.MethodPut, http.MethodPost, http.MethodDelete, http.MethodPatch} {
+		for _, target := range []string{"/s/" + slug + "/raw", "/s/" + slug, "/api/v1/public/" + slug} {
+			got := s.do(method, target, a.token, "x")
+			assert.Contains(t, []int{http.StatusMethodNotAllowed, http.StatusNotFound}, got.Code, "%s %s", method, target)
+		}
+	}
+	for _, target := range []string{"/s/" + slug + "/../only-a.md", "/s/" + slug + "/raw/only-a.md", "/s/" + slug + "/other"} {
+		assert.NotContains(t, s.do(http.MethodGet, target, "", "").Body.String(), "only A", target)
+	}
+
+	assert.Equal(t, "body of A", s.do(http.MethodGet, "/api/v1/shared/docs/shared-path.md", a.token, "").Body.String())
+	assert.Equal(t, "<p>hi</p>", s.do(http.MethodGet, "/s/"+slug+"/raw", "", "").Body.String())
+}
+
+func TestIsolationLockedOwnersLinkIs404(t *testing.T) {
+	s := newServer(t)
+	a, _ := setupTenants(t, s)
+	_, slug := share(t, s, a.token, "linked.md", "")
+	require.Equal(t, http.StatusOK, s.do(http.MethodGet, "/s/"+slug+"/raw", "", "").Code)
+
+	s.svc.Policies.Swap(nil)
+	assert.Equal(t, http.StatusNotFound, s.do(http.MethodGet, "/s/"+slug+"/raw", "", "").Code)
+	assert.Equal(t, http.StatusNotFound, s.do(http.MethodGet, "/api/v1/public/"+slug, "", "").Code)
+}

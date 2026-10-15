@@ -28,6 +28,8 @@ type Services struct {
 	Accounts  *core.Accounts
 	Tokens    *core.Tokens
 	Documents *core.Documents
+	Shares    *core.Shares
+	Sweeper   *core.Sweeper
 
 	control *control.Store
 	users   *userdb.Pool
@@ -44,7 +46,9 @@ func OpenServices(ctx context.Context, log zerolog.Logger, cfg config.Config) (*
 		Policies:  policies,
 		Accounts:  core.NewAccounts(store.Accounts(), users.Stores(), policies),
 		Tokens:    core.NewTokens(store.Tokens(), store.Accounts(), policies),
-		Documents: core.NewDocuments(users.Stores(), cfg.MaxDocumentSize.Bytes),
+		Documents: core.NewDocuments(users.Stores(), store.Shares(), cfg.MaxDocumentSize.Bytes, core.WithBaseURL(cfg.BaseURL)),
+		Shares:    core.NewShares(store.Shares(), store.Accounts(), users.Stores(), policies, core.WithBaseURL(cfg.BaseURL)),
+		Sweeper:   core.NewSweeper(log, store.Shares(), users.Stores()),
 		control:   store,
 		users:     users,
 	}, nil

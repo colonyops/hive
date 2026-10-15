@@ -89,7 +89,10 @@ type DocumentStore interface {
 	Get(ctx context.Context, space, path string) (Document, []byte, error)
 	List(ctx context.Context, space string) ([]Document, error)
 	Spaces(ctx context.Context) ([]SpaceUsage, error)
-	Delete(ctx context.Context, space, path string) error
+	// Delete returns the id of the document it removed.
+	Delete(ctx context.Context, space, path string) (string, error)
+	GetByID(ctx context.Context, id string) (Document, []byte, error)
+	HasID(ctx context.Context, id string) (bool, error)
 	// Usage is the sum of all stored body sizes.
 	Usage(ctx context.Context) (int64, error)
 }
@@ -101,4 +104,29 @@ type UserStores interface {
 	Open(ctx context.Context, userID string) (store DocumentStore, release func(), err error)
 	// Remove deletes everything stored for userID, once its leases are released.
 	Remove(ctx context.Context, userID string) error
+}
+
+// ShareLink is the public link to one document. A document has at most one.
+type ShareLink struct {
+	ID         string
+	Slug       string
+	UserID     string
+	DocumentID string
+	ExpiresAt  *time.Time
+	CreatedAt  time.Time
+}
+
+// ShareStore methods return ErrNotFound for a missing link.
+type ShareStore interface {
+	// InsertIfAbsent stores l unless its document already has a link.
+	InsertIfAbsent(ctx context.Context, l ShareLink) error
+	GetBySlug(ctx context.Context, slug string) (ShareLink, error)
+	GetByDocument(ctx context.Context, userID, documentID string) (ShareLink, error)
+	ListByUser(ctx context.Context, userID string) ([]ShareLink, error)
+	// ListAfter returns up to limit links with an id after afterID, in id order.
+	ListAfter(ctx context.Context, afterID string, limit int) ([]ShareLink, error)
+	UpdateExpiry(ctx context.Context, id string, expiresAt *time.Time) error
+	Delete(ctx context.Context, id string) error
+	DeleteByDocument(ctx context.Context, userID, documentID string) error
+	DeleteExpired(ctx context.Context, now time.Time) (int, error)
 }

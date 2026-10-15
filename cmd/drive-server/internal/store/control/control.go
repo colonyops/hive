@@ -62,6 +62,7 @@ func (s *Store) Close() error { return s.conn.Close() }
 
 func (s *Store) Accounts() core.AccountStore { return accounts{s} }
 func (s *Store) Tokens() core.TokenStore     { return tokens{s} }
+func (s *Store) Shares() core.ShareStore     { return shares{s} }
 
 func wrap(op string, err error) error {
 	switch {

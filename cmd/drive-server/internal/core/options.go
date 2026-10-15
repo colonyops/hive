@@ -1,17 +1,26 @@
 package core
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type options struct {
-	now func() time.Time
+	now     func() time.Time
+	baseURL string
 }
 
-// Option configures Accounts and Tokens.
+// Option configures the core services.
 type Option func(*options)
 
 // WithClock replaces time.Now, so tests can move time.
 func WithClock(now func() time.Time) Option {
 	return func(o *options) { o.now = now }
+}
+
+// WithBaseURL sets the public origin that share URLs are built on.
+func WithBaseURL(u string) Option {
+	return func(o *options) { o.baseURL = strings.TrimRight(u, "/") }
 }
 
 func newOptions(opts []Option) options {
