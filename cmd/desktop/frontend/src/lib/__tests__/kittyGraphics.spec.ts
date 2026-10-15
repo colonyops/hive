@@ -137,14 +137,24 @@ describe('installKittyGraphics', () => {
     vi.restoreAllMocks()
   })
 
-  it("draws Pi's image at the cursor cell, stretched over its cells", async () => {
+  it("draws Pi's image at the cursor cell, fitted inside its cells", async () => {
     const { write, context, cursor } = harness()
     await write('line one\r\nline two\r\n  ')
     await write(apc('a=T,f=100,q=2,C=1,c=4,r=2,i=7', png('cat')))
     await settle()
 
-    expect(context.frame).toEqual([{ label: 'cat', source: [0, 0, 40, 20], x: 20, y: 40, width: 40, height: 40 }])
+    expect(context.frame).toEqual([{ label: 'cat', source: [0, 0, 40, 20], x: 20, y: 40, width: 40, height: 20 }])
     expect(cursor()).toEqual([2, 2])
+  })
+
+  // Pi sizes the box against tmux's 16x32 cell; stretching it to this
+  // renderer's cells is what squished a real screenshot.
+  it('keeps the aspect ratio when the box is wider than the image', async () => {
+    const { write, context } = harness()
+    await write(apc('a=T,f=100,q=2,C=1,c=8,r=1,i=7', png('cat')))
+    await settle()
+
+    expect(context.frame).toEqual([{ label: 'cat', source: [0, 0, 40, 20], x: 0, y: 0, width: 40, height: 20 }])
   })
 
   it('adds a canvas inside the screen, above the text and out of the way of the pointer', async () => {
@@ -291,7 +301,7 @@ describe('installKittyGraphics', () => {
     expect(canvas.width).toBe(310)
     expect(canvas.height).toBe(175)
     expect(canvas.style.width).toBe('155px')
-    expect(context.frame[0]).toMatchObject({ x: 16, y: 0, width: 46, height: 70 })
+    expect(context.frame[0]).toMatchObject({ x: 16, y: 0, width: 46, height: 23 })
   })
 
   it('redraws at the new cell size after a font change', async () => {
@@ -299,12 +309,12 @@ describe('installKittyGraphics', () => {
     await write('\r\n ')
     await write(apc('a=T,f=100,c=2,r=1,i=1', png('a')))
     await settle()
-    expect(context.frame[0]).toMatchObject({ x: 10, y: 20, width: 20, height: 20 })
+    expect(context.frame[0]).toMatchObject({ x: 10, y: 20, width: 20, height: 10 })
 
     cell = { width: 12, height: 24 }
     term.options.fontSize = 20
     await settle()
-    expect(context.frame[0]).toMatchObject({ x: 12, y: 24, width: 24, height: 24 })
+    expect(context.frame[0]).toMatchObject({ x: 12, y: 24, width: 24, height: 12 })
   })
 
   describe('delete', () => {

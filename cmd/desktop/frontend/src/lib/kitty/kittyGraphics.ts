@@ -411,9 +411,12 @@ class KittyRenderer implements KittyGraphics {
     return draws
   }
 
-  // c and r stretch the image over that many cells; with one of them the other
-  // follows the aspect ratio; with neither the image keeps its pixel size,
-  // which Kitty counts in device pixels.
+  // With c and r the image fits inside that many cells from the top-left,
+  // keeping its aspect ratio, where Kitty would stretch it. A program sizes the
+  // box against the cell size it was told, and on a tmux pane that is tmux's
+  // 16x32 guess, not this renderer's cell, so a stretch distorts the image.
+  // With one of them the other follows the aspect ratio; with neither the
+  // image keeps its pixel size, which Kitty counts in device pixels.
   private box(placement: Placement, bitmap: ImageBitmap, cell: CellSize): Box | null {
     const ratio = window.devicePixelRatio || 1
     const x = Math.min(Math.max(placement.crop.x, 0), bitmap.width)
@@ -424,8 +427,12 @@ class KittyRenderer implements KittyGraphics {
     let width: number
     let height: number
     if (placement.columns && placement.rows) {
-      width = placement.columns * cell.width
-      height = placement.rows * cell.height
+      const scale = Math.min(
+        (placement.columns * cell.width) / sourceWidth,
+        (placement.rows * cell.height) / sourceHeight,
+      )
+      width = sourceWidth * scale
+      height = sourceHeight * scale
     } else if (placement.columns) {
       width = placement.columns * cell.width
       height = (width * sourceHeight) / sourceWidth
