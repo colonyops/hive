@@ -556,18 +556,6 @@ func (m *Manager) ListAllWindows(ctx context.Context, slugs []string) (map[strin
 	return windows, nil
 }
 
-// oneShot runs a one-shot tmux command with the binary the availability probe
-// resolved (ADR tmux-discovery) — never a bare "tmux", which a desktop launch may not
-// have on $PATH. Callers go through Available first, which is what sets it.
-//
-// The resolved environment goes with it because a pane inherits the client
-// that created it, so this is what puts an agent binary on NewSession's PATH
-// (ADR tmux-runs-in-the-resolved-environment).
-//
-// The span is named for the subcommand, which every call site passes as a
-// literal, so the name stays a bounded search key. It records no error status:
-// a non-zero exit is how has-session answers "no" and how kill-session reports
-// nothing to kill, so only the caller knows whether this failed.
 // SendText pastes text into a pane as one bracketed paste and presses Enter
 // after submitDelay. It needs no attached client. The program in the pane
 // decides whether the paste stays one message: it must have turned on
@@ -646,6 +634,18 @@ func (m *Manager) FirstPane(ctx context.Context, session string) (string, error)
 	return first.id, nil
 }
 
+// oneShot runs a one-shot tmux command with the binary the availability probe
+// resolved (ADR tmux-discovery) — never a bare "tmux", which a desktop launch may not
+// have on $PATH. Callers go through Available first, which is what sets it.
+//
+// The resolved environment goes with it because a pane inherits the client
+// that created it, so this is what puts an agent binary on NewSession's PATH
+// (ADR tmux-runs-in-the-resolved-environment).
+//
+// The span is named for the subcommand, which every call site passes as a
+// literal, so the name stays a bounded search key. It records no error status:
+// a non-zero exit is how has-session answers "no" and how kill-session reports
+// nothing to kill, so only the caller knows whether this failed.
 func (m *Manager) oneShot(ctx context.Context, args ...string) ([]string, error) {
 	ctx, span := observe.StartConditionalSpan(ctx, tracer, "tmux."+args[0])
 	defer span.End()

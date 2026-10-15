@@ -127,6 +127,9 @@ func TestManagerSendTextRealTmux(t *testing.T) {
 	first, err := m.FirstPane(t.Context(), "send")
 	require.NoError(t, err)
 	require.Equal(t, pane, first)
+	screen, err := m.CapturePaneID(t.Context(), first)
+	require.NoError(t, err)
+	require.Contains(t, screen, "^[[200~line1", "the first pane, not the split that is now active")
 }
 
 func sendBuffers(names string) []string {

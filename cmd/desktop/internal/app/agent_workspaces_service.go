@@ -1872,11 +1872,11 @@ func (s *AgentWorkspacesService) RunningChats(ctx context.Context) ([]RunningCha
 			continue
 		}
 		group.Go(func() error {
-			screen, err := s.terminals.CapturePane(ctx, name)
+			pane, err := s.terminals.FirstPane(ctx, name)
 			if err != nil {
 				return nil
 			}
-			pane, err := s.terminals.FirstPane(ctx, name)
+			screen, err := s.terminals.CapturePaneID(ctx, pane)
 			if err != nil {
 				return nil
 			}
