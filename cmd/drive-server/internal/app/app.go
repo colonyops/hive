@@ -27,6 +27,8 @@ const (
 
 type Options struct {
 	Info buildinfo.Info
+	// Reload loads the config again for hot reload. Nil turns hot reload off.
+	Reload LoadConfig
 }
 
 // Run serves until ctx is done or a plug fails.
@@ -75,6 +77,11 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	mgr.Add(plugs.PluginFunc("sweeper", func(ctx context.Context) error {
 		return svc.Sweeper.Run(ctx, sweepEvery)
 	}))
+	if opts.Reload != nil {
+		mgr.Add(plugs.PluginFunc("reload", func(ctx context.Context) error {
+			return watchConfig(ctx, log, cfg, svc.Policies, opts.Reload)
+		}))
+	}
 	return mgr.Start(ctx)
 }
 
