@@ -25,6 +25,8 @@ type LaunchRequest struct {
 	// Tags label the session for a reader inside hive. Empty and repeated
 	// tags are dropped.
 	Tags []string
+	// Env holds KEY=VALUE pairs for the session's tmux environment.
+	Env []string
 }
 
 // LaunchError is a failed CreateFromRequest, carrying what a caller needs to
@@ -70,6 +72,7 @@ func (req LaunchRequest) createOptions(repo LaunchRepository, progress io.Writer
 		Background:      true,
 		CollisionSuffix: req.CollisionSuffix,
 		Tags:            uniqueTags(req.Tags),
+		Env:             req.Env,
 		Progress:        progress,
 	}
 }

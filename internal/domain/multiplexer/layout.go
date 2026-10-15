@@ -38,4 +38,7 @@ type SessionSpec struct {
 	WorkingDirectory string
 	Windows          []WindowSpec
 	Background       bool
+	// Env holds KEY=VALUE pairs for the new session's environment, which
+	// every pane in the session inherits.
+	Env []string
 }

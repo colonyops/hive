@@ -68,6 +68,9 @@ type CreateOptions struct {
 	AgentKey string
 	// Tags are user-defined labels attached to the session for external provider tracking.
 	Tags []string
+	// Env holds KEY=VALUE pairs for the session's tmux environment. Only a
+	// windows: spawn applies them; spawn: commands run the user's own scripts.
+	Env []string
 	// CollisionSuffix is appended to a Name whose slug is taken. Use an id that
 	// is stable across retries, so a retry collides with its own earlier session.
 	CollisionSuffix string
@@ -372,7 +375,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		}
 		switch {
 		case strategy.IsWindows():
-			if err := s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background, renderer); err != nil {
+			if err := s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background, renderer, opts.Env); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
 		case len(strategy.Commands) > 0:
