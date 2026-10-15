@@ -798,6 +798,9 @@ func TestVerbsOnADepartedPaneAreRefused(t *testing.T) {
 	f.setWindows("@1 1 %2 120 40 0 f91d,120x40,0,0{60x40,0,0,1,59x40,61,0,2} claude")
 	client := attachFake(t, f, Options{})
 	ctx := t.Context()
+	// The background paint pass ends by listing image panes; let it finish so
+	// its command is not counted against the verbs below.
+	f.awaitCommands(t, "list-panes -s", 1)
 
 	f.setWindows("@1 1 %1 120 40 0 b25f,120x40,0,0,1 claude")
 	f.emit("%layout-change @1 b25f,120x40,0,0,1 b25f,120x40,0,0,1 *")

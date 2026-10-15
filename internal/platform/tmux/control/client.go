@@ -181,6 +181,8 @@ type Client struct {
 	// Wait.
 	repaintMu     sync.Mutex
 	reconcileReq  chan struct{}
+	images        *imageDetector
+	imagePanes    chan string
 	handshake     chan struct{}
 	attached      chan struct{}
 	handshakeOnce sync.Once
@@ -224,6 +226,8 @@ func Attach(ctx, lifetime context.Context, opts Options) (*Client, error) {
 		readerDone:   make(chan struct{}),
 		workerDone:   make(chan struct{}),
 		reconcileReq: make(chan struct{}, 1),
+		images:       newImageDetector(),
+		imagePanes:   make(chan string, 16),
 		handshake:    make(chan struct{}),
 		attached:     make(chan struct{}),
 		relinking:    map[string]int{},
@@ -831,13 +835,14 @@ func (c *Client) holdPanes(windows []Window) (shown, deferred []paintTarget) {
 //
 // Every pane is released on every path: a pane left held buffers its output for
 // the life of the client and renders nothing.
+//
+// The pass ends by redrawing image windows, so the resize that asks for the
+// redraw never lands while a snapshot is still being captured.
 func (c *Client) startBackgroundPaint(targets []paintTarget) {
-	if len(targets) == 0 {
-		return
-	}
 	c.bgPaint.Go(func() { //nolint:contextcheck // the client's lifetime, not the request's — see lifeCtx
 		ctx, cancel := context.WithTimeout(c.lifeCtx, attachTimeout)
 		defer cancel()
+		defer c.redrawImageWindows(c.lifeCtx)
 		for i, target := range targets {
 			if err := c.firstPaint(ctx, target.pane, target.rows); err != nil {
 				// A failure here is not fatal to the attach that already
@@ -1087,6 +1092,8 @@ func (c *Client) worker(ctx context.Context) {
 				return
 			}
 			c.runReconcile(ctx)
+		case pane := <-c.imagePanes:
+			c.markImagePane(ctx, pane)
 		}
 	}
 }
@@ -1227,6 +1234,7 @@ func (c *Client) emitOutput(pane string, data []byte, at time.Time) {
 		return
 	}
 	streamedBytes.Add(c.lifeCtx, int64(len(data)))
+	c.noteImages(pane, data)
 	if c.onEmit != nil {
 		c.onEmit()
 	}

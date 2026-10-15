@@ -29,8 +29,13 @@ windows and pop-ups it starts. Without it, Pi turns images off under `$TMUX`.
 
 ## Consequences
 
-Images are live only. First paint, resync and reset rebuild from text, so an
-image returns when Pi draws it again. tmux also treats the APC as a pane title,
+Images are live only. First paint, resync and reset rebuild from text. To get
+them back, the control client marks a pane with `@hive-kitty-images` when its
+output first carries a Kitty command; tmux keeps the mark across app restarts.
+After each paint pass the client narrows every marked window by a column
+through its per-window size for 150 ms, then clears the size. Pi redraws its
+whole transcript on a width change, images included. Other clients attached
+to the window see the resize too. tmux also treats the APC as a pane title,
 so a Pi pane's title becomes the image payload until Pi sets it again.
 Classification still resolves to `pi`, through the unanchored title pattern and
 the process tier. Placements live on xterm markers, so an erase that disposes a line's marker

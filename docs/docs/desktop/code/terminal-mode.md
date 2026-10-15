@@ -88,8 +88,9 @@ panes, and pop-up terminals. Hive sets `PI_IMAGE_PROTOCOL=kitty` for sessions
 that Hive Desktop starts. For a session started elsewhere, set
 `PI_IMAGE_PROTOCOL=kitty` in its environment yourself.
 
-An image shows only while Pi has it on screen. If you reopen a session or the
-terminal resyncs, you see the text until Pi draws the image again.
+When you reopen a session or the terminal resyncs, Hive narrows the window by
+one column for a moment so Pi redraws its images. A program that does not
+redraw on a resize shows its text without the image.
 
 ### Navigation
 
