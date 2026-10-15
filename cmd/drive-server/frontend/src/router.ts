@@ -28,7 +28,13 @@ export const router = createRouter({
     {
       path: '/',
       component: () => import('./pages/AppLayout.vue'),
-      children: [{ path: '', name: 'spaces', component: () => import('./pages/Spaces.vue') }],
+      children: [
+        { path: '', name: 'spaces', component: () => import('./pages/Spaces.vue') },
+        { path: 'tokens', name: 'tokens', component: () => import('./pages/Tokens.vue') },
+        { path: 'repos/:owner/:repo/:path(.*)*', name: 'repo', component: () => import('./pages/SpaceRoute.vue') },
+        { path: 'workspaces/:name/:path(.*)*', name: 'workspace', component: () => import('./pages/SpaceRoute.vue') },
+        { path: 'shared/:path(.*)*', name: 'shared', component: () => import('./pages/SpaceRoute.vue') },
+      ],
     },
   ],
 })
