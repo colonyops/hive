@@ -14,8 +14,9 @@ export default defineConfig({
     port: 5173,
     fs: { allow: ['.', hiveUi] },
     proxy: {
-      '/api': 'http://127.0.0.1:8080',
-      '/s': 'http://127.0.0.1:8080',
+      // Anchored: a bare '/s' would also proxy the dev server's own /src modules.
+      '^/api/': 'http://127.0.0.1:8080',
+      '^/s/': 'http://127.0.0.1:8080',
     },
   },
   plugins: [

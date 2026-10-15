@@ -14,11 +14,11 @@ import { formatBytes, formatTime } from '../lib/format'
 import type { ViewMode } from '../lib/viewMode'
 
 const props = defineProps<{ entries: ListEntry[]; mode: ViewMode }>()
-const emit = defineEmits<{ open: [entry: ListEntry]; action: [id: string, entry: ListEntry] }>()
+const emit = defineEmits<{ open: [entry: ListEntry]; action: [id: string, entry: ListEntry, anchor: HTMLElement] }>()
 
 const active = ref(0)
 const root = ref<HTMLElement | null>(null)
-const menu = shallowRef<{ entry: ListEntry; anchor: HTMLElement } | null>(null)
+const menu = shallowRef<{ entry: ListEntry; anchor: HTMLElement; trigger: HTMLElement } | null>(null)
 
 const nav = useListKeyboardNav({
   active,
@@ -47,14 +47,16 @@ function onKeydown(event: KeyboardEvent): void {
   }
 }
 
+// The menu anchors to the whole row: an anchored menu is as wide as its anchor, and a button is too narrow.
 function openMenu(entry: ListEntry, event: MouseEvent): void {
-  menu.value = { entry, anchor: event.currentTarget as HTMLElement }
+  const target = event.currentTarget as HTMLElement
+  menu.value = { entry, anchor: target.closest<HTMLElement>('[data-entry-index]') ?? target, trigger: target }
 }
 
 function onSelect(id: string): void {
   const target = menu.value
   menu.value = null
-  if (target) emit('action', id, target.entry)
+  if (target) emit('action', id, target.entry, target.trigger)
 }
 </script>
 
@@ -71,7 +73,7 @@ function onSelect(id: string): void {
   >
     <div
       v-if="mode === 'list'"
-      class="entry-grid sticky top-0 border-b border-row bg-app py-1.5 text-caption font-medium text-text-4"
+      class="entry-grid sticky top-0 border-b border-row bg-app py-2.5 text-small font-medium text-text-4"
       aria-hidden="true"
     >
       <span>Name</span>
@@ -80,7 +82,7 @@ function onSelect(id: string): void {
       <span class="entry-wide">Shared</span>
       <span />
     </div>
-    <div :class="mode === 'grid' ? 'grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-3 p-4' : ''">
+    <div :class="mode === 'grid' ? 'grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-4 p-6' : ''">
       <div
         v-for="(entry, index) in entries"
         :key="entry.key"
@@ -92,7 +94,7 @@ function onSelect(id: string): void {
         class="group cursor-pointer"
         :class="[
           mode === 'list'
-            ? 'entry-grid h-10 border-b border-row'
+            ? 'entry-grid h-13 border-b border-row'
             : 'relative flex flex-col gap-2 rounded-lg border border-card bg-raised p-3 hover:border-strong',
           index === active
             ? mode === 'list'
@@ -110,15 +112,13 @@ function onSelect(id: string): void {
           <span class="flex min-w-0 items-center gap-2.5">
             <component
               :is="icon(entry)"
-              class="size-4 shrink-0"
+              class="size-5 shrink-0"
               :class="entry.kind === 'dir' ? 'text-accent' : 'text-text-3'"
               aria-hidden="true"
             />
             <span class="min-w-0">
-              <span class="block truncate text-small text-text" data-testid="entry-label">{{ entry.label }}</span>
-              <span class="block truncate text-caption text-text-4" :title="entry.secondary">{{
-                entry.secondary
-              }}</span>
+              <span class="block truncate text-body text-text" data-testid="entry-label">{{ entry.label }}</span>
+              <span class="block truncate text-small text-text-4" :title="entry.secondary">{{ entry.secondary }}</span>
             </span>
           </span>
           <span class="entry-wide truncate text-small text-text-3">{{
@@ -128,12 +128,12 @@ function onSelect(id: string): void {
             entry.size === null ? '-' : formatBytes(entry.size)
           }}</span>
           <span class="entry-wide">
-            <BaseBadge v-if="entry.shared" tone="accent" class="px-2 py-0.5 text-caption">Shared</BaseBadge>
+            <BaseBadge v-if="entry.shared" tone="accent" class="px-2.5 py-0.5 text-small">Shared</BaseBadge>
           </span>
           <IconButton
             :label="`Actions for ${entry.label}`"
             :icon="IconEllipsis"
-            size="lg"
+            size="xl"
             data-testid="entry-menu"
             @click.stop="openMenu(entry, $event)"
           />
@@ -142,25 +142,25 @@ function onSelect(id: string): void {
           <div class="flex items-start justify-between">
             <component
               :is="icon(entry)"
-              class="size-8"
+              class="size-10"
               :class="entry.kind === 'dir' ? 'text-accent' : 'text-text-3'"
               aria-hidden="true"
             />
             <IconButton
               :label="`Actions for ${entry.label}`"
               :icon="IconEllipsis"
-              size="lg"
+              size="xl"
               data-testid="entry-menu"
               @click.stop="openMenu(entry, $event)"
             />
           </div>
           <div class="min-w-0">
-            <span class="block truncate text-small font-medium text-text" data-testid="entry-label">{{
+            <span class="block truncate text-body font-medium text-text" data-testid="entry-label">{{
               entry.label
             }}</span>
-            <span class="block truncate text-caption text-text-4" :title="entry.secondary">{{ entry.secondary }}</span>
+            <span class="block truncate text-small text-text-4" :title="entry.secondary">{{ entry.secondary }}</span>
           </div>
-          <BaseBadge v-if="entry.shared" tone="accent" class="w-fit px-2 py-0.5 text-caption">Shared</BaseBadge>
+          <BaseBadge v-if="entry.shared" tone="accent" class="w-fit px-2.5 py-0.5 text-small">Shared</BaseBadge>
         </template>
       </div>
     </div>
@@ -178,17 +178,17 @@ function onSelect(id: string): void {
 <style scoped>
 .entry-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 1.75rem;
+  grid-template-columns: minmax(0, 1fr) 2.125rem;
   align-items: center;
   column-gap: 0.75rem;
-  padding-inline: 1rem;
+  padding-inline: 1.5rem;
 }
 .entry-wide {
   display: none;
 }
 @media (min-width: 768px) {
   .entry-grid {
-    grid-template-columns: minmax(0, 1fr) 11rem 5rem 5rem 1.75rem;
+    grid-template-columns: minmax(0, 1fr) 12rem 6rem 6rem 2.125rem;
   }
   .entry-wide {
     display: block;

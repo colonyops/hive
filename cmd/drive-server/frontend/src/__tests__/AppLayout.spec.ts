@@ -26,7 +26,6 @@ async function mountAt(path: string) {
           { path: 'links', name: 'links', component: DocumentFeed, props: { feed: 'links' } },
           { path: 'recent', name: 'recent', component: DocumentFeed, props: { feed: 'recent' } },
           { path: 'tokens', name: 'tokens', component: {} },
-          { path: '', name: 'spaces', component: {} },
           { path: 'repos/:owner/:repo/:path(.*)*', name: 'repo', component: SpaceRoute },
         ],
       },
@@ -65,15 +64,18 @@ describe('drive shell', () => {
     mocks.documentBody.mockResolvedValue('# Hello')
   })
 
-  it('shows grouped spaces, the folder tree of the open space, and the folder contents', async () => {
+  it('lists the spaces flat in the nav, marks the open one, and shows the folder contents', async () => {
     const { app } = await mountAt('/repos/acme/notes/docs')
 
-    expect(app.get('[data-testid="sidebar"]').text()).toContain('Repositories')
-    expect(app.get('[data-testid="sidebar"]').text()).toContain('Workspaces')
+    const sidebar = app.get('[data-testid="sidebar"]')
+    expect(sidebar.text()).toContain('Repositories')
+    expect(sidebar.text()).toContain('Workspaces')
+    expect(sidebar.findAll('[data-testid="nav-space"]').map((e) => e.text())).toEqual(['acme/notes3', 'scratch1'])
+    expect(sidebar.find('[data-testid^="tree-row"]').exists()).toBe(false)
+    const current = sidebar.findAll('[aria-current="page"]')
+    expect(current.map((e) => e.attributes('title'))).toEqual(['acme/notes'])
     expect(app.get('[data-testid="storage-meter"]').text()).toContain('2.0 KB of 4.0 KB')
-    expect(app.find('[data-testid="tree-row-docs/api"]').exists()).toBe(true)
-    const labels = app.findAll('[data-testid="entry-label"]').map((e) => e.text())
-    expect(labels).toEqual(['api', 'Guide'])
+    expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['api', 'Guide'])
     expect(app.get('[data-testid="breadcrumb"]').text()).toContain('docs')
   })
 
@@ -90,15 +92,27 @@ describe('drive shell', () => {
     expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['todo'])
   })
 
-  it('navigates into a folder from the nav tree and filters it from the search field', async () => {
+  it('drills into a folder from the listing and filters it from the search field', async () => {
     const { app, router } = await mountAt('/repos/acme/notes')
 
-    await app.get('[data-testid="tree-row-docs"]').trigger('click')
+    await app.get('[data-testid="entry"][data-kind="dir"]').trigger('dblclick')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/repos/acme/notes/docs')
 
-    await app.get('[data-testid="search-input"]').setValue('plan')
+    await app.get('[data-testid="search-input"]').setValue('guide')
     await flushPromises()
-    expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['Plan'])
+    expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['Guide'])
+  })
+
+  it('shows the email and both items in the account menu', async () => {
+    const { app } = await mountAt('/links')
+
+    expect(app.find('[data-testid="account-menu-panel"]').exists()).toBe(false)
+    await app.get('[data-testid="account-menu"]').trigger('click')
+
+    const panel = app.get('[data-testid="account-menu-panel"]')
+    expect(panel.text()).toContain('ada@example.com')
+    expect(panel.get('[data-testid="account-tokens"]').text()).toBe('API tokens')
+    expect(panel.get('[data-testid="sign-out"]').text()).toBe('Sign out')
   })
 })

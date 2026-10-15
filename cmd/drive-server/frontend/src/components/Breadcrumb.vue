@@ -6,18 +6,32 @@ export interface Crumb {
   to: string
 }
 
-defineProps<{ items: Crumb[] }>()
+defineProps<{
+  items: Crumb[]
+  /** A small, muted trail above a page title. Without it the trail is the page title. */
+  compact?: boolean
+}>()
 </script>
 
 <template>
   <nav aria-label="Breadcrumb" data-testid="breadcrumb">
-    <ol class="flex flex-wrap items-center gap-1 text-body">
-      <li v-for="(item, index) in items" :key="item.to" class="flex items-center gap-1">
-        <IconChevronRight v-if="index > 0" class="size-3 text-text-4" aria-hidden="true" />
-        <span v-if="index === items.length - 1" class="font-medium text-text" aria-current="page">{{
+    <ol class="flex flex-wrap items-center gap-x-1.5 gap-y-0.5" :class="compact ? 'text-small' : 'text-page'">
+      <li v-for="(item, index) in items" :key="item.to" class="flex min-w-0 items-center gap-1.5">
+        <IconChevronRight
+          v-if="index > 0"
+          :class="compact ? 'size-4' : 'size-5'"
+          class="text-text-4"
+          aria-hidden="true"
+        />
+        <span
+          v-if="!compact && index === items.length - 1"
+          class="truncate font-semibold text-text"
+          aria-current="page"
+          >{{ item.label }}</span
+        >
+        <RouterLink v-else :to="item.to" class="truncate rounded-md px-1.5 text-text-3 hover:bg-chip hover:text-text">{{
           item.label
-        }}</span>
-        <RouterLink v-else :to="item.to" class="text-text-3 hover:text-text">{{ item.label }}</RouterLink>
+        }}</RouterLink>
       </li>
     </ol>
   </nav>
