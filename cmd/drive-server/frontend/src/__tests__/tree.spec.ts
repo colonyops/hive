@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { folderContents } from '../lib/entries'
 import { spaceFromKey } from '../lib/space'
-import {
-  ancestorDirs,
-  buildTree,
-  filterTree,
-  findFolder,
-  flattenTree,
-  foldersOnly,
-  matchingDocuments,
-} from '../lib/tree'
+import { ancestorDirs, buildTree, filterTree, findFolder, type TreeNode, matchingDocuments } from '../lib/tree'
 import { doc } from './fixtures'
 
 const docs = [
@@ -20,15 +12,17 @@ const docs = [
   doc({ path: 'archive/old.md', title: 'Old notes', size: 100, updated_at: '2026-01-01T00:00:00Z' }),
 ]
 
-function labels(rows: ReturnType<typeof flattenTree>): string[] {
-  return rows.map((row) => `${row.depth}:${row.node.name}`)
+function outline(root: TreeNode): string[] {
+  const walk = (nodes: TreeNode[], depth: number): string[] =>
+    nodes.flatMap((node) => [`${depth}:${node.name}`, ...walk(node.children, depth + 1)])
+  return walk(root.children, 0)
 }
 
 describe('buildTree', () => {
   it('nests folders, puts them first, and sorts names naturally', () => {
-    const rows = flattenTree(buildTree(docs), () => true)
+    const rows = buildTree(docs)
 
-    expect(labels(rows)).toEqual([
+    expect(outline(rows)).toEqual([
       '0:archive',
       '1:old.md',
       '0:docs',
@@ -52,19 +46,13 @@ describe('buildTree', () => {
 
     expect(findFolder(root, 'a')?.children[0].label).toBe('b.md')
   })
-
-  it('shows only open folders', () => {
-    const rows = flattenTree(buildTree(docs), (path) => path === 'docs')
-
-    expect(labels(rows)).toEqual(['0:archive', '0:docs', '1:api', '1:2-setup.md', '1:10-faq.md', '0:readme.md'])
-  })
 })
 
 describe('filterTree', () => {
   it('keeps documents whose title or path matches, with their folders', () => {
-    const rows = flattenTree(filterTree(buildTree(docs), 'setup'), () => true)
+    const rows = filterTree(buildTree(docs), 'setup')
 
-    expect(labels(rows)).toEqual(['0:docs', '1:2-setup.md'])
+    expect(outline(rows)).toEqual(['0:docs', '1:2-setup.md'])
   })
 
   it('matches the path as well as the title, ignoring case', () => {
@@ -72,10 +60,10 @@ describe('filterTree', () => {
   })
 
   it('keeps the whole subtree of a folder whose name matches', () => {
-    const rows = flattenTree(filterTree(buildTree(docs), 'docs'), () => true)
+    const rows = filterTree(buildTree(docs), 'docs')
 
-    expect(labels(rows)).toContain('1:10-faq.md')
-    expect(labels(rows)).toContain('2:auth.html')
+    expect(outline(rows)).toContain('1:10-faq.md')
+    expect(outline(rows)).toContain('2:auth.html')
   })
 
   it('returns the tree untouched for a blank query', () => {
@@ -89,12 +77,6 @@ describe('tree helpers', () => {
   it('lists the folders above a path', () => {
     expect(ancestorDirs('docs/api/auth.html')).toEqual(['docs', 'docs/api'])
     expect(ancestorDirs('readme.md')).toEqual([])
-  })
-
-  it('strips documents for the navigation tree', () => {
-    const rows = flattenTree(foldersOnly(buildTree(docs)), () => true)
-
-    expect(labels(rows)).toEqual(['0:archive', '0:docs', '1:api'])
   })
 })
 

@@ -36,7 +36,7 @@ export const router = createRouter({
       path: '/',
       component: () => import('./pages/AppLayout.vue'),
       children: [
-        { path: '', name: 'spaces', component: () => import('./pages/Spaces.vue') },
+        { path: '', redirect: { name: 'recent' } },
         {
           path: 'recent',
           name: 'recent',

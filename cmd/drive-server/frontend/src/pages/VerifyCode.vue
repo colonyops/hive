@@ -23,7 +23,7 @@ async function submit(): Promise<void> {
   try {
     await api.verifySignIn(email.value.trim(), code.value.trim())
     forgetSignIn()
-    await router.replace({ name: 'spaces' })
+    await router.replace({ name: 'recent' })
   } catch (cause) {
     if (cause instanceof ApiError && cause.status === 429) {
       error.value = `Too many attempts. Try again in ${cause.retryAfter ?? 60} seconds.`

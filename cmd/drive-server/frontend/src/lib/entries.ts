@@ -1,4 +1,4 @@
-import type { DriveDocument, SpaceSummary } from '../types'
+import type { DriveDocument } from '../types'
 import { documentRoute, spaceFromKey, type SpaceRef } from './space'
 import { buildTree, descendantDocuments, documentLabel, findFolder, type TreeNode } from './tree'
 
@@ -70,23 +70,6 @@ export function folderContents(
 /** Documents as a flat listing. A row names its folder, and its space when the list spans spaces. */
 export function documentEntries(documents: readonly DriveDocument[], showSpace: boolean): ListEntry[] {
   return documents.map((doc) => fileEntry(doc, showSpace ? `${spaceFromKey(doc.space).title} / ${doc.path}` : doc.path))
-}
-
-export function spaceEntries(spaces: readonly SpaceSummary[]): ListEntry[] {
-  return spaces.map((summary) => {
-    const space = spaceFromKey(summary.space)
-    return {
-      kind: 'dir',
-      key: summary.space,
-      label: space.title,
-      secondary: plural(summary.documents),
-      path: '',
-      space,
-      modified: '',
-      size: summary.bytes,
-      shared: false,
-    }
-  })
 }
 
 /** The newest documents across spaces. */

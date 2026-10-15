@@ -1,3 +1,4 @@
+import { fakePlatform } from '@hive/ui/test-utils/platform'
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -97,16 +98,29 @@ describe('DriveListing', () => {
     expect(wrapper.get('[data-testid="listing-empty"]').text()).toBe('Nothing here.')
   })
 
-  it('shares a document from the row menu', async () => {
+  it('opens the share popover from the row menu and shares', async () => {
     api.share.mockResolvedValue({ url: 'http://drive.test/s/new' })
     const entries = documentEntries([doc({ path: 'a.md' })], false)
     const { wrapper } = await mountListing(entries)
 
     await wrapper.get('[data-testid="entry-menu"]').trigger('click')
+    expect(document.body.querySelector('[data-testid="menu-copy-link"]')).toBeNull()
     document.body.querySelector<HTMLElement>('[data-testid="menu-share"]')!.click()
+    await flushPromises()
+    document.body.querySelector<HTMLElement>('[data-testid="share-create"]')!.click()
     await flushPromises()
 
     expect(api.share).toHaveBeenCalledWith('/api/v1/repos/acme/notes', 'a.md', '')
     expect(wrapper.emitted('changed')).toBeTruthy()
+  })
+
+  it('copies the link of a shared document from the row menu', async () => {
+    const { wrapper } = await mountListing()
+
+    await wrapper.findAll('[data-testid="entry-menu"]')[1].trigger('click')
+    document.body.querySelector<HTMLElement>('[data-testid="menu-copy-link"]')!.click()
+    await flushPromises()
+
+    expect(fakePlatform.clipboard.writeText).toHaveBeenCalledWith('http://drive.test/s/x')
   })
 })

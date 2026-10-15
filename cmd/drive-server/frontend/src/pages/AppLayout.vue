@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, provide, ref } from 'vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import { computed, onMounted, provide, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api'
 import AccountMenu from '../components/AccountMenu.vue'
+import IconMenu from '~icons/lucide/menu'
 import HiveMark from '../components/HiveMark.vue'
 import NavSidebar from '../components/NavSidebar.vue'
+import ToastHost from '../components/ToastHost.vue'
 import ToolbarSearch from '../components/ToolbarSearch.vue'
 import { createDriveData, driveDataKey } from '../lib/driveData'
 import { meKey } from '../lib/me'
 import { searchQueryKey } from '../lib/search'
 import { fromRouteParams } from '../lib/space'
-import { ancestorDirs } from '../lib/tree'
+import { createToast, toastKey } from '../lib/toast'
 import type { Me } from '../types'
 
 const route = useRoute()
@@ -28,32 +31,42 @@ async function refresh(): Promise<void> {
 provide(meKey, { me, refresh })
 provide(searchQueryKey, query)
 provide(driveDataKey, data)
+provide(toastKey, createToast())
 onMounted(refresh)
 
 const inSpace = computed(() => ['repo', 'workspace', 'shared'].includes(String(route.name)))
 const target = computed(() => (inSpace.value ? fromRouteParams(route.params) : null))
 const space = computed(() => target.value?.space ?? null)
 
-// A document marks its folder in the nav tree.
-const folder = computed(() => {
-  if (!target.value) return null
-  const path = target.value.path.replace(/\/+$/, '')
-  const isDocument = !!data.documents[target.value.space.key]?.some((d) => d.path === path)
-  const dir = isDocument ? (ancestorDirs(path).pop() ?? '') : path
-  return dir || null
-})
+// Below the md breakpoint the nav is a panel the menu button opens.
+const navOpen = ref(false)
+watch(
+  () => route.fullPath,
+  () => {
+    navOpen.value = false
+  },
+)
 </script>
 
 <template>
-  <div class="flex h-screen flex-col bg-app">
-    <header class="flex h-12 shrink-0 items-center gap-3 border-b border-row bg-sidebar px-3">
+  <div class="relative flex h-screen flex-col bg-app">
+    <header class="flex h-16 shrink-0 items-center gap-2 border-b md:gap-3 border-row bg-sidebar px-4">
+      <IconButton
+        label="Navigation"
+        :icon="IconMenu"
+        size="xl"
+        class="md:hidden"
+        :active="navOpen"
+        data-testid="nav-toggle"
+        @click="navOpen = !navOpen"
+      />
       <RouterLink
-        :to="{ name: 'spaces' }"
-        class="flex shrink-0 items-center gap-2 pr-2 text-title font-semibold text-text md:w-60"
+        :to="{ name: 'recent' }"
+        class="flex shrink-0 items-center gap-2.5 text-heading font-semibold text-text md:w-64"
         data-testid="brand"
       >
-        <HiveMark :size="22" />
-        Hive Drive
+        <HiveMark :size="28" />
+        <span class="hidden sm:inline">Hive Drive</span>
       </RouterLink>
       <div class="flex min-w-0 flex-1 justify-center">
         <ToolbarSearch v-model="query" :space="space" />
@@ -61,10 +74,11 @@ const folder = computed(() => {
       <AccountMenu />
     </header>
     <div class="flex min-h-0 flex-1 flex-col md:flex-row">
-      <NavSidebar :space="space" :folder="folder" />
+      <NavSidebar :space="space" :class="navOpen ? 'absolute inset-x-0 bottom-0 top-16 z-20' : 'hidden md:flex'" />
       <main class="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <RouterView />
       </main>
     </div>
+    <ToastHost />
   </div>
 </template>

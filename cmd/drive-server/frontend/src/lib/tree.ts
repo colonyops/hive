@@ -10,11 +10,6 @@ export interface TreeNode {
   children: TreeNode[]
 }
 
-export interface TreeRow {
-  node: TreeNode
-  depth: number
-}
-
 // Numeric so "2-setup" sorts before "10-faq".
 const collator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' })
 
@@ -82,26 +77,6 @@ export function filterTree(root: TreeNode, query: string): TreeNode {
       return children.length ? [{ ...node, children }] : []
     })
   return { ...root, children: keep(root.children) }
-}
-
-/** The tree as visible rows, descending only into the folders `isOpen` accepts. */
-export function flattenTree(root: TreeNode, isOpen: (dirPath: string) => boolean): TreeRow[] {
-  const rows: TreeRow[] = []
-  const walk = (nodes: TreeNode[], depth: number) => {
-    for (const node of nodes) {
-      rows.push({ node, depth })
-      if (node.kind === 'dir' && isOpen(node.path)) walk(node.children, depth + 1)
-    }
-  }
-  walk(root.children, 0)
-  return rows
-}
-
-/** The folders only, for a navigation tree. */
-export function foldersOnly(root: TreeNode): TreeNode {
-  const strip = (nodes: TreeNode[]): TreeNode[] =>
-    nodes.filter((node) => node.kind === 'dir').map((node) => ({ ...node, children: strip(node.children) }))
-  return { ...root, children: strip(root.children) }
 }
 
 /** The node at a folder path ('' is the root), or null when no document lives there. */

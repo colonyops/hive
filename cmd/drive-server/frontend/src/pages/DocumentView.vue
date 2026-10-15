@@ -1,30 +1,32 @@
 <script setup lang="ts">
 import DocumentReader from '@hive/ui/components/drive/DocumentReader.vue'
-import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
+import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
 import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
 import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
-import CopyButton from '@hive/ui/components/ui/CopyButton.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
-import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
 import Spinner from '@hive/ui/components/ui/Spinner.vue'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useConfirmation } from '@hive/ui/composables/useConfirmation'
 import { linkTarget, type ReaderDocument } from '@hive/ui/lib/document'
-import { computed, ref, watch } from 'vue'
+import type { MenuEntry } from '@hive/ui/types/menu'
+import { computed, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import IconAArrowDown from '~icons/lucide/a-arrow-down'
 import IconAArrowUp from '~icons/lucide/a-arrow-up'
-import IconArrowLeft from '~icons/lucide/arrow-left'
+import IconEllipsis from '~icons/lucide/ellipsis'
 import IconLink from '~icons/lucide/link'
+import IconShare from '~icons/lucide/share-2'
 import IconTrash from '~icons/lucide/trash-2'
 import { api, docUrl } from '../api'
 import Breadcrumb, { type Crumb } from '../components/Breadcrumb.vue'
-import { formatTime } from '../lib/format'
+import SharePopover from '../components/SharePopover.vue'
 import { useMe } from '../lib/me'
 import { useReaderPrefs } from '../lib/readerPrefs'
 import { documentRoute, type SpaceRef } from '../lib/space'
+import { useToast } from '../lib/toast'
 import { ancestorDirs, documentLabel } from '../lib/tree'
-import type { DriveDocument, Share, ShareExpiry } from '../types'
+import type { DriveDocument, Share } from '../types'
 
 const props = defineProps<{
   space: SpaceRef
@@ -39,13 +41,8 @@ const router = useRouter()
 const me = useMe()
 const confirmation = useConfirmation()
 const { prefs, resize } = useReaderPrefs()
-
-const expiryOptions: { value: ShareExpiry; label: string; title: string }[] = [
-  { value: '', label: 'No expiry', title: 'Link never expires' },
-  { value: '1d', label: '1 day', title: 'Link expires in 1 day' },
-  { value: '7d', label: '7 days', title: 'Link expires in 7 days' },
-  { value: '30d', label: '30 days', title: 'Link expires in 30 days' },
-]
+const clipboard = useClipboard()
+const toast = useToast()
 
 const doc = computed(() => props.documents?.find((d) => d.path === props.path) ?? null)
 const paths = computed<ReadonlySet<string>>(() => new Set((props.documents ?? []).map((d) => d.path)))
@@ -54,16 +51,14 @@ const folderRoute = computed(() => {
   const parent = folders.value[folders.value.length - 1]
   return parent ? documentRoute(props.space, parent) : props.space.routePrefix
 })
-const crumbs = computed<Crumb[]>(() => [
+const folderCrumbs = computed<Crumb[]>(() => [
   { label: props.space.title, to: props.space.routePrefix },
   ...folders.value.map((dir) => ({ label: dir.slice(dir.lastIndexOf('/') + 1), to: documentRoute(props.space, dir) })),
-  { label: doc.value ? documentLabel(doc.value) : props.path, to: documentRoute(props.space, props.path) },
 ])
 
 const share = ref<Share | null>(null)
-const shareExpiry = ref<ShareExpiry>('')
-const sharing = ref(false)
-const shareError = ref<string | null>(null)
+const shareAnchor = shallowRef<HTMLElement | null>(null)
+const moreAnchor = shallowRef<HTMLElement | null>(null)
 const body = ref('')
 const bodyError = ref<string | null>(null)
 const loadingBody = ref(false)
@@ -110,33 +105,33 @@ function openLink(href: string): void {
   else if (target?.kind === 'document') void router.push(documentRoute(props.space, target.path))
 }
 
-async function createShare(): Promise<void> {
-  sharing.value = true
-  shareError.value = null
-  try {
-    share.value = await api.share(props.space.apiPrefix, props.path, shareExpiry.value)
-    emit('changed')
-  } catch (cause) {
-    shareError.value = cause instanceof Error ? cause.message : 'Could not share the document.'
-  } finally {
-    sharing.value = false
-  }
+function onShareChanged(next: Share | null): void {
+  share.value = next
+  emit('changed')
 }
 
-async function removeShare(): Promise<void> {
-  sharing.value = true
-  shareError.value = null
-  try {
-    await api.unshare(props.space.apiPrefix, props.path)
-    share.value = null
-    emit('changed')
-  } catch (cause) {
-    shareError.value = cause instanceof Error ? cause.message : 'Could not stop sharing the document.'
-  } finally {
-    sharing.value = false
-  }
+async function copyLink(): Promise<void> {
+  if (!share.value) return
+  await clipboard.copy(share.value.url)
+  toast.show('Link copied')
 }
 
+const moreEntries: MenuEntry[] = [
+  { kind: 'action', id: 'larger', label: 'Larger text', icon: IconAArrowUp, testid: 'menu-larger' },
+  { kind: 'action', id: 'smaller', label: 'Smaller text', icon: IconAArrowDown, testid: 'menu-smaller' },
+  { kind: 'separator' },
+  { kind: 'action', id: 'delete', label: 'Delete document', icon: IconTrash, testid: 'delete-document' },
+]
+
+// The text-size entries leave the menu open so a few steps need one visit.
+function onMore(id: string): void {
+  if (id === 'larger') resize(1)
+  else if (id === 'smaller') resize(-1)
+  else {
+    moreAnchor.value = null
+    requestDelete()
+  }
+}
 function requestDelete(): void {
   confirmation.request({
     title: 'Delete this document?',
@@ -158,74 +153,63 @@ function requestDelete(): void {
     <InlineError v-if="error" class="m-4" :message="error" testid="document-load-error" />
     <Spinner v-else-if="!doc || !readerDocument" class="m-4" />
     <template v-else>
-      <header class="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-row px-4 py-2.5">
-        <IconButton label="Back to folder" :icon="IconArrowLeft" size="lg" @click="router.push(folderRoute)" />
+      <header class="flex shrink-0 flex-wrap items-start gap-x-4 gap-y-2 border-b border-row px-6 py-4">
         <div class="min-w-0 flex-1">
-          <h1 class="truncate text-title font-semibold text-text" data-testid="document-title">
+          <Breadcrumb :items="folderCrumbs" compact />
+          <h1 class="mt-1 truncate text-page font-semibold text-text" data-testid="document-title">
             {{ documentLabel(doc) }}
           </h1>
-          <Breadcrumb :items="crumbs" />
         </div>
-        <div class="flex flex-wrap items-center gap-1.5" data-testid="share-panel">
-          <template v-if="share">
-            <a
-              :href="share.url"
-              class="inline-flex h-7 min-w-0 max-w-64 items-center truncate rounded-lg bg-chip px-2.5 text-small text-accent hover:underline"
-              data-testid="share-url"
-              >{{ share.url }}</a
-            >
-            <BaseBadge tone="muted" class="px-2 py-0.5 text-caption">
-              {{ share.expires_at ? `expires ${formatTime(share.expires_at)}` : 'no expiry' }}
-            </BaseBadge>
-            <CopyButton :text="share.url" label="Copy link" size="xs" class="h-7" />
-            <BaseButton
-              variant="secondary"
-              size="xs"
-              class="h-7"
-              :busy="sharing"
-              data-testid="unshare"
-              @click="removeShare"
-            >
-              Unshare
-            </BaseButton>
-          </template>
-          <template v-else>
-            <SegmentedControl
-              v-model="shareExpiry"
-              variant="compact"
-              size="sm"
-              aria-label="Share expiry"
-              :options="expiryOptions"
-              testid="share-expiry"
-            />
-            <BaseButton
-              variant="secondary"
-              size="xs"
-              class="h-7"
-              :busy="sharing"
-              data-testid="share"
-              @click="createShare"
-            >
-              <template #icon><IconLink class="size-3.5" /></template>
-              Share
-            </BaseButton>
-          </template>
-          <span class="mx-1 h-4 w-px bg-border" aria-hidden="true" />
-          <IconButton label="Smaller text" :icon="IconAArrowDown" size="lg" @click="resize(-1)" />
-          <IconButton label="Larger text" :icon="IconAArrowUp" size="lg" @click="resize(1)" />
+        <div class="flex items-center gap-2" data-testid="share-panel">
           <IconButton
-            label="Delete document"
-            :icon="IconTrash"
-            size="lg"
-            tone="danger"
-            data-testid="delete-document"
-            @click="requestDelete"
+            v-if="share"
+            label="Copy share link"
+            :icon="IconLink"
+            size="xl"
+            variant="outline"
+            data-testid="copy-link"
+            @click="copyLink"
           />
+          <BaseButton
+            data-testid="share"
+            @click="shareAnchor = shareAnchor ? null : ($event.currentTarget as HTMLElement)"
+          >
+            <template #icon><IconShare class="size-4" /></template>
+            Share
+          </BaseButton>
+          <div class="relative">
+            <IconButton
+              label="More actions"
+              :icon="IconEllipsis"
+              size="xl"
+              variant="outline"
+              :active="!!moreAnchor"
+              data-testid="more-actions"
+              @click="moreAnchor = moreAnchor ? null : ($event.currentTarget as HTMLElement)"
+            />
+            <AppMenu
+              v-if="moreAnchor"
+              :entries="moreEntries"
+              :ignore="[moreAnchor]"
+              width="14rem"
+              testid="more-menu"
+              @select="onMore"
+              @close="moreAnchor = null"
+            />
+          </div>
         </div>
-        <InlineError v-if="shareError" variant="line" class="w-full" :message="shareError" testid="share-error" />
+        <SharePopover
+          v-if="shareAnchor"
+          :anchor="shareAnchor"
+          :prefix="space.apiPrefix"
+          :path="path"
+          :share="share"
+          @changed="onShareChanged"
+          @close="shareAnchor = null"
+        />
       </header>
       <div class="min-h-0 flex-1 overflow-y-auto">
-        <div class="relative mx-auto max-w-5xl px-6 py-5" :class="doc.kind === 'html' ? 'h-full' : ''">
+        <div class="relative mx-auto max-w-5xl px-6 py-6" :class="doc.kind === 'html' ? 'h-full' : ''">
           <DocumentReader
             :document="readerDocument"
             :font-size-px="prefs.fontSizePx"

@@ -4,7 +4,7 @@ import type { SearchHit } from '../types'
 
 const debounceMs = 200
 
-/** The toolbar's search text, shared with the sidebar tree so one field filters both. */
+/** The toolbar's search text, shared with the folder listing, which it filters. */
 export const searchQueryKey: InjectionKey<Ref<string>> = Symbol('searchQuery')
 
 export function useSearchQuery(): Ref<string> {
@@ -13,7 +13,7 @@ export function useSearchQuery(): Ref<string> {
 
 /**
  * Debounced full-text search. `unavailable` is set when the server has no
- * search endpoint (404), so the UI can fall back to the tree filter.
+ * search endpoint (404), so the UI can fall back to the listing filter.
  */
 export function useSearch(query: () => string, space: () => string | undefined) {
   const hits = ref<SearchHit[]>([])

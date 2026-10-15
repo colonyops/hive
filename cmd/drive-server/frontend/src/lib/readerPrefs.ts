@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 
 const key = 'drive.reader'
-const defaults = { fontSizePx: 15, lineHeight: 1.65 }
+const defaults = { fontSizePx: 17, lineHeight: 1.65 }
 const fontRange = { min: 12, max: 24 }
 
 function load(): typeof defaults {

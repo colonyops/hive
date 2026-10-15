@@ -6,3 +6,38 @@
 @source "../../../../../web/packages/ui/src";
 /* Docs quote the arbitrary classes the lint rejects; scanning them would emit those rules. */
 @source not "../../../../../web/packages/ui/src/**/*.md";
+
+/* The shared tokens are tuned for a dense desktop app. A website reads at larger sizes, so this app
+   rescales the type steps for every surface, popovers teleported to <body> included. */
+@theme {
+  --text-page: 24px;
+}
+:root {
+  --text-micro: 12px;
+  --text-caption: 13px;
+  --text-small: 14px;
+  --text-body: 15px;
+  --text-reading: 16px;
+  --text-title: 17px;
+  --text-lead: 18px;
+  --text-heading: 20px;
+}
+
+/* Menu rows are sized for a dense toolbar; a website menu needs larger targets. */
+[role="menu"] .app-menu-entry {
+  padding: 10px 12px;
+  font-size: var(--text-body);
+}
+[role="menu"] .app-menu-entry svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+/* SearchField sizes its icon and input for a toolbar; the top bar search is a larger pill. */
+.drive-search svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+.drive-search input {
+  font-size: var(--text-lead);
+}

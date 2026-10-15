@@ -17,15 +17,15 @@ const options: { value: ViewMode; label: string; title: string }[] = [
   <SegmentedControl
     :model-value="modelValue"
     variant="compact"
-    size="sm"
+    size="md"
     aria-label="Layout"
     :options="options"
     testid="view-toggle"
     @update:model-value="emit('update:modelValue', $event)"
   >
     <template #option="{ option }">
-      <IconList v-if="option.value === 'list'" class="size-3.5" aria-hidden="true" />
-      <IconLayoutGrid v-else class="size-3.5" aria-hidden="true" />
+      <IconList v-if="option.value === 'list'" class="size-4" aria-hidden="true" />
+      <IconLayoutGrid v-else class="size-4" aria-hidden="true" />
     </template>
   </SegmentedControl>
 </template>
