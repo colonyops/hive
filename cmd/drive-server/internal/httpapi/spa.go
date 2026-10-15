@@ -64,3 +64,11 @@ func isFile(fsys fs.FS, name string) bool {
 	info, err := f.Stat()
 	return err == nil && info.Mode().IsRegular()
 }
+
+// noindex keeps a share page out of search results, as the raw route does.
+func noindex(next errchain.HandlerFunc) errchain.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) error {
+		w.Header().Set("X-Robots-Tag", "noindex")
+		return next(w, r)
+	}
+}

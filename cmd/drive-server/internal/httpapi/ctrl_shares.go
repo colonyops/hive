@@ -26,7 +26,6 @@ func registerShareRoutes(mux *http.ServeMux, chain *errchain.ErrChain, authentic
 		mux.HandleFunc("POST "+route, authenticated(core.ScopePush, h.create(sr.space)))
 		mux.HandleFunc("DELETE "+route, authenticated(core.ScopePush, h.revoke(sr.space)))
 	}
-	mux.HandleFunc("GET /s/{slug}", chain.ToHandlerFunc(h.redirect))
 	mux.HandleFunc("GET /s/{slug}/raw", chain.ToHandlerFunc(h.raw))
 	mux.HandleFunc("GET /api/v1/public/{slug}", chain.ToHandlerFunc(h.public))
 }
@@ -63,11 +62,6 @@ func (h shareHandlers) revoke(space spaceFunc) errchain.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 		return nil
 	}
-}
-
-func (h shareHandlers) redirect(w http.ResponseWriter, r *http.Request) error {
-	http.Redirect(w, r, "/s/"+r.PathValue("slug")+"/raw", http.StatusFound)
-	return nil
 }
 
 func (h shareHandlers) raw(w http.ResponseWriter, r *http.Request) error {

@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   documents: vi.fn(),
   documentBody: vi.fn(),
   deleteDocument: vi.fn(),
+  share: vi.fn(),
+  unshare: vi.fn(),
 }))
 vi.mock('../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -75,5 +77,30 @@ describe('DocumentView', () => {
     expect(mocks.deleteDocument).toHaveBeenCalledWith('/api/v1/repos/acme/notes', 'a.md')
     expect(refresh).toHaveBeenCalled()
     expect(router.currentRoute.value.path).toBe('/repos/acme/notes')
+  })
+
+  it('shares with the chosen expiry, shows the link, and unshares', async () => {
+    mocks.share.mockResolvedValue({ url: 'http://drive.test/s/abc' })
+    mocks.unshare.mockResolvedValue(undefined)
+    const { wrapper } = await mountView('a.md')
+
+    await wrapper.get('[data-testid="share"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.share).toHaveBeenCalledWith('/api/v1/repos/acme/notes', 'a.md', '')
+    expect(wrapper.get('[data-testid="share-url"]').text()).toBe('http://drive.test/s/abc')
+
+    await wrapper.get('[data-testid="unshare"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.unshare).toHaveBeenCalledWith('/api/v1/repos/acme/notes', 'a.md')
+    expect(wrapper.find('[data-testid="share-url"]').exists()).toBe(false)
+  })
+
+  it('starts from an existing share link', async () => {
+    mocks.documents.mockResolvedValue([doc({ path: 'a.md', shared: { url: 'http://drive.test/s/old' } })])
+    const { wrapper } = await mountView('a.md')
+
+    expect(wrapper.get('[data-testid="share-url"]').text()).toBe('http://drive.test/s/old')
   })
 })

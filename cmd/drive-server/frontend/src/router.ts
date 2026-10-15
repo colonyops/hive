@@ -26,6 +26,13 @@ export const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/s/:slug',
+      name: 'share',
+      component: () => import('./pages/ShareView.vue'),
+      props: true,
+      meta: { public: true },
+    },
+    {
       path: '/',
       component: () => import('./pages/AppLayout.vue'),
       children: [
