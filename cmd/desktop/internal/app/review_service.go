@@ -24,11 +24,11 @@ const sendSubmitDelay = 500 * time.Millisecond
 
 // DocumentReview is the open review of one Drive document.
 type DocumentReview struct {
-	SessionID string `json:"sessionId"` // "" until the first comment
+	SessionID string // "" until the first comment
 	// Current is false when the comments belong to an earlier version of the
 	// document.
-	Current  bool             `json:"current"`
-	Comments []review.Comment `json:"-"` // by StartLine; the adapter converts
+	Current  bool
+	Comments []review.Comment // by StartLine
 }
 
 // CommentInput is a new comment on a source line range.
@@ -294,7 +294,13 @@ func (s *ReviewService) load(ctx context.Context, space, path string) (reviewedD
 	if err != nil {
 		return reviewedDocument{}, Wrap(err, KindInternal, "reading the comments on %s", path)
 	}
-	doc.review = DocumentReview{SessionID: sess.ID, Current: sess.ContentHash == doc.hash, Comments: comments}
+	current := sess.ContentHash == doc.hash
+	// A session on an earlier version whose comments were all deleted holds
+	// nothing to send, so it must not block comments on this version.
+	if !current && len(comments) == 0 {
+		return doc, nil
+	}
+	doc.review = DocumentReview{SessionID: sess.ID, Current: current, Comments: comments}
 	return doc, nil
 }
 

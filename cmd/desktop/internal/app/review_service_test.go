@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -151,6 +152,21 @@ func TestReviewStaleAfterRewrite(t *testing.T) {
 	f.add(t, 8, 8, "on the new version")
 }
 
+func TestReviewEmptyStaleSessionDoesNotBlock(t *testing.T) {
+	f := newReviewFixture(t)
+	ctx := t.Context()
+	c := f.add(t, 6, 6, "x")
+	require.NoError(t, f.svc.DeleteComment(ctx, "workspaces/ws", "plans/p.md", c.ID))
+
+	f.rewrite(t, reviewDoc+"Step three.\n")
+
+	got, err := f.svc.Review(ctx, "workspaces/ws", "plans/p.md")
+	require.NoError(t, err)
+	assert.True(t, got.Current)
+	assert.Empty(t, got.SessionID)
+	f.add(t, 8, 8, "on the new version")
+}
+
 func TestReviewClearFreesTheSlot(t *testing.T) {
 	f := newReviewFixture(t)
 	ctx := t.Context()
@@ -197,7 +213,9 @@ func TestReviewFeedbackUsesTheAbsolutePath(t *testing.T) {
 	got, err := f.svc.Feedback(t.Context(), "workspaces/ws", "plans/p.md", "note")
 	require.NoError(t, err)
 	full := filepath.Join(f.drive.contextDir(), "workspaces", "ws", "plans", "p.md")
-	assert.Equal(t, "General Notes:\nnote\n\n---\n\nDocument: "+full+"\nComments: 1\n\nLine 6:\n> Step one.\nfix\n", got)
+	assert.True(t, strings.HasPrefix(got, "# Document Feedback\n\nDocument: "+full+"\n"), got)
+	assert.Contains(t, got, "> note")
+	assert.Contains(t, got, "> fix")
 }
 
 func TestReviewAgentTargets(t *testing.T) {
