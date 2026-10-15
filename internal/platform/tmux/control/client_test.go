@@ -143,6 +143,7 @@ func TestUnsizedAttachSetsNoClientSizeUntilResized(t *testing.T) {
 
 	require.Zero(t, f.countCommands("refresh-client"))
 	require.Equal(t, 120, client.Windows()[0].Width, "the session keeps the size its other clients gave it")
+	f.awaitCommands(t, "list-panes -s", 1)
 
 	require.NoError(t, client.Resize(ctx, 213, 55))
 	require.Equal(t, "refresh-client -C 213,55", f.sentCommands()[len(f.sentCommands())-1])
