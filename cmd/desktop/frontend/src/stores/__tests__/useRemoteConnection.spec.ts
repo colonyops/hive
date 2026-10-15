@@ -12,7 +12,13 @@ beforeEach(() => {
   list.mockReset()
   localStorage.clear()
 })
-const profile = (name = 'Remote', color = '#a78bfa') => ({ id: '', name, address: 'http://127.0.0.1:19001', color })
+const profile = (name = 'Remote', color = '#a78bfa') => ({
+  id: '',
+  name,
+  host: 'hive-server',
+  connectionFile: '~/connection.json',
+  color,
+})
 
 describe('remote connections', () => {
   it('saves independent names and colors without persisting credentials', async () => {
@@ -20,14 +26,14 @@ describe('remote connections', () => {
     const a = remote.save(profile('First', '#ff0000'))
     remote.save(profile('Second', '#00ff00'))
     list.mockResolvedValue([])
-    await remote.connect(a, 'private-token')
+    await remote.connect(a)
     await nextTick()
     expect(remote.color.value).toBe('#ff0000')
     expect(remote.profiles.value.map((row) => row.color)).toEqual(['#ff0000', '#00ff00'])
-    expect(localStorage.getItem('hive.remote.profiles')).not.toContain('private-token')
+    expect(localStorage.getItem('hive.remote.sshProfiles')).not.toContain('private-token')
     remote.save({ ...remote.profiles.value[0], color: '#0000ff' })
     expect(remote.color.value).toBe('#0000ff')
-    expect(remote.endpoint.value?.token).toBe('private-token')
+    expect(remote.endpoint.value?.token).toBe('')
     await nextTick()
     resetStores()
     const reopened = useRemoteConnection()
@@ -44,7 +50,7 @@ describe('remote connections', () => {
         resolve = r
       }),
     )
-    const pending = remote.connect(id, 'secret')
+    const pending = remote.connect(id)
     remote.remove(id)
     resolve([])
     expect(await pending).toBe(false)
@@ -54,8 +60,13 @@ describe('remote connections', () => {
     const remote = useRemoteConnection()
     const id = remote.save(profile())
     list.mockResolvedValue([])
-    await remote.connect(id, 'secret')
-    remote.save({ ...profile(), id, address: 'http://127.0.0.1:19002' })
+    await remote.connect(id)
+    remote.save({ ...profile(), id, host: 'other-server' })
     expect(remote.endpoint.value).toBeNull()
   })
 })
+
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/remoteservice', () => ({
+  Connect: vi.fn(() => Promise.resolve('remote-one')),
+  Disconnect: vi.fn(async () => {}),
+}))

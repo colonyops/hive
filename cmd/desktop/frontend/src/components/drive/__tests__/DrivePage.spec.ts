@@ -26,6 +26,11 @@ vi.mock('@wailsio/runtime', () => ({
   Dialogs: { SaveFile: vi.fn().mockResolvedValue('') },
 }))
 
+vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/perfservice', () => ({
+  Info: vi.fn().mockResolvedValue({ enabled: false }),
+  Record: vi.fn().mockResolvedValue(undefined),
+}))
+
 const drive = vi.hoisted(() => ({
   Spaces: vi.fn(),
   Tree: vi.fn(),

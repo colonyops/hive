@@ -7,7 +7,7 @@ PubkeyAuthentication yes
 AuthorizedKeysFile .ssh/authorized_keys
 AllowUsers hive
 AllowTcpForwarding local
-PermitOpen 127.0.0.1:19001
+PermitOpen 127.0.0.1:19003
 X11Forwarding no
 AllowAgentForwarding no
 UsePAM no

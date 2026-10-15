@@ -16,14 +16,14 @@ it('connects from Settings and retains the connection after navigating to Code',
   const wrapper = mount(RemoteSettingsView)
   await wrapper.get('[data-testid="remote-name"]').setValue('Build machine')
   await wrapper.get('[data-testid="remote-color-purple"]').trigger('click')
-  await wrapper.get('[data-testid="remote-token"]').setValue('private-token')
+  await wrapper.get('[data-testid="remote-host"]').setValue('hive-server')
   await wrapper.get('form').trigger('submit')
   await flushPromises()
   expect(mocks.push).toHaveBeenCalledWith({ name: 'terminal' })
   expect(useCodeInstallation().installation.value).toBe('remote')
-  expect((wrapper.get('[data-testid="remote-token"]').element as HTMLInputElement).value).toBe('')
+  expect(wrapper.find('[data-testid="remote-token"]').exists()).toBe(false)
   wrapper.unmount()
-  expect(useRemoteConnection().endpoint.value?.token).toBe('private-token')
+  expect(useRemoteConnection().endpoint.value?.token).toBe('')
   const reopened = mount(RemoteSettingsView)
   expect((reopened.get('[data-testid="remote-name"]').element as HTMLInputElement).value).toBe('Build machine')
   expect((reopened.get('[data-testid="remote-color"]').element as HTMLInputElement).value).toBe('#a855f7')
@@ -31,3 +31,8 @@ it('connects from Settings and retains the connection after navigating to Code',
   expect(useRemoteConnection().endpoint.value).toBeNull()
   reopened.unmount()
 })
+
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/remoteservice', () => ({
+  Connect: vi.fn(() => Promise.resolve('remote-one')),
+  Disconnect: vi.fn(async () => {}),
+}))

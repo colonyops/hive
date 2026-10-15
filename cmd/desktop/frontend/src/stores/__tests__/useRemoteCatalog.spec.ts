@@ -29,8 +29,14 @@ beforeEach(() => {
 async function connected() {
   const catalog = useRemoteCatalog()
   const remote = useRemoteConnection()
-  const id = remote.save({ id: '', name: 'Purple', address: 'http://127.0.0.1:19001', color: '#a855f7' })
-  await remote.connect(id, 'secret')
+  const id = remote.save({
+    id: '',
+    name: 'Purple',
+    host: 'hive-server',
+    connectionFile: '~/connection.json',
+    color: '#a855f7',
+  })
+  await remote.connect(id)
   await flushPromises()
   return { catalog, remote }
 }
@@ -68,3 +74,8 @@ it('discards catalogs and a pending chat result when disconnected', async () => 
   expect(catalog.inboxId.value).toBe('')
   expect(catalog.workspace.value).toBe('')
 })
+
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/remoteservice', () => ({
+  Connect: vi.fn(() => Promise.resolve('remote-one')),
+  Disconnect: vi.fn(async () => {}),
+}))

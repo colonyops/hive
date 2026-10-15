@@ -26,6 +26,7 @@ import * as PopupTerminalService from "./popupterminalservice.js";
 import * as PostHogService from "./posthogservice.js";
 import * as PromptsService from "./promptsservice.js";
 import * as ReleaseNotesService from "./releasenotesservice.js";
+import * as RemoteService from "./remoteservice.js";
 import * as ReportService from "./reportservice.js";
 import * as SessionService from "./sessionservice.js";
 import * as SettingsService from "./settingsservice.js";
@@ -62,6 +63,7 @@ export {
     PostHogService,
     PromptsService,
     ReleaseNotesService,
+    RemoteService,
     ReportService,
     SessionService,
     SettingsService,

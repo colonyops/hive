@@ -1,3 +1,4 @@
+import { endpointFetch, type TerminalStream } from './managedTransport'
 // The Agents area's control-plane transport: plain fetch calls against
 // /api/terminal/agents/*, using the bearer token AgentsService.Endpoint()
 // hands the webview (cmd/desktop/internal/adapter/httpapi/ctrl_agent_workspaces.go). The
@@ -333,7 +334,7 @@ export interface AgentWorkspacesClient {
   /** Validates an unsaved edit and reports what it would do. */
   previewSchedule(request: SchedulePreviewRequest): Promise<AgentSchedulePreview>
   /** The shared tmux stream a session's terminalId addresses (ADR agent-workspace-sessions-are-tmux-sessions). */
-  openStream(name: string): WebSocket
+  openStream(name: string): TerminalStream
 }
 
 /** Resolves the transport the webview was handed, or rejects with the reason. */
@@ -343,7 +344,7 @@ export async function getAgentsEndpoint(): Promise<AgentsEndpoint> {
 
 export function createAgentWorkspacesClient(endpoint: AgentsEndpoint): AgentWorkspacesClient {
   async function post<T>(path: string, body: unknown): Promise<T | null> {
-    const response = await fetch(`${endpoint.httpBaseURL}/api/terminal/agents${path}`, {
+    const response = await endpointFetch(endpoint, `/api/terminal/agents${path}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.token}` },
       body: JSON.stringify(body),

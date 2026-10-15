@@ -76,7 +76,7 @@ useIntervalFn(() => {
             :style="{ backgroundColor: color }"
             aria-hidden="true"
           />
-          {{ activeProfile?.name }} · {{ endpoint.httpBaseURL }}
+          {{ activeProfile?.name }} · {{ activeProfile?.host }}
         </span>
         <BaseButton size="xs" :busy="busy" data-testid="remote-refresh" @click="reload">Refresh</BaseButton>
         <BaseButton size="xs" variant="secondary" data-testid="remote-open-settings" @click="openSettings"

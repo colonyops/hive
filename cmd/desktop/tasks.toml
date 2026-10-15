@@ -161,6 +161,10 @@ run = "npm test"
 description = "Build and start the persistent SSH remote Hive fixture"
 run = "./cmd/desktop/remote/run.sh up"
 
+["desktop:remote:ssh-config"]
+description = "Print an SSH config entry for the remote Hive fixture"
+run = "./cmd/desktop/remote/run.sh ssh-config"
+
 ["desktop:remote:tunnel"]
 description = "Forward the remote fixture terminal API through SSH (foreground)"
 run = "./cmd/desktop/remote/run.sh tunnel"

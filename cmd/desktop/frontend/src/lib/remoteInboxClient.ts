@@ -1,3 +1,4 @@
+import { endpointFetch } from './managedTransport'
 import type { TerminalEndpoint } from './terminalClient'
 
 export interface RemoteInbox {
@@ -15,7 +16,7 @@ export interface RemoteInboxItem {
 }
 export function createRemoteInboxClient(endpoint: TerminalEndpoint) {
   async function post<T>(path: string, body = {}): Promise<T> {
-    const response = await fetch(`${endpoint.httpBaseURL}/api/terminal/remote/${path}`, {
+    const response = await endpointFetch(endpoint, `/api/terminal/remote/${path}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${endpoint.token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

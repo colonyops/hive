@@ -1,84 +1,65 @@
 # Remote Hive fixture
 
-This fixture runs a real Hive Desktop backend and CLI in a persistent Linux
-container. SSH is its only published port. It seeds `remote-demo` with two shell
-windows; it never imports host repositories or agent credentials.
-
-From the repository root:
+The persistent Linux fixture runs Hive Desktop, the CLI, tmux, a test inbox,
+and a shell workspace. SSH is its only published port. It imports no host
+repositories or agent credentials.
 
 ```sh
 mise run desktop:remote:up
-mise run desktop:remote:tunnel     # keep running in a second terminal
-mise run desktop:remote:connection
-mise run desktop:dev:prepare
-mise run desktop:dev              # native local Desktop, separate terminal
+mise run desktop:remote:ssh-config
 ```
 
-In Desktop, open **Settings ▸ Remote**, enter a name and choose a color. Use
-`http://127.0.0.1:19001` and the `token` from
-`.hive-remote/connection.json`. The connection file is private; do not
-commit or share it. After a backend restart, retrieve it again. The private SSH
-key stays in this worktree's `.hive-remote/` directory. Host keys are
-retrieved through Docker and pinned in that directory's `known_hosts`.
+Add the printed block to `~/.ssh/config`. It references the private key and
+Docker-verified host key in this checkout's `.hive-remote/` directory. Open
+Desktop **Settings ▸ Remote** and enter:
 
-Select `remote-demo`, switch between its windows, type in its shell and resize
-the app. Stop the tunnel to exercise connection loss, restart it, and click
-**Reconnect**. Closing the remote view detaches; it does not kill the shells.
-Local Code, inbox and Chats continue using the local installation.
+- SSH host: the `Host` alias printed above.
+- Connection file: `/home/hive/connection.json`.
+- Name and color: your choice.
+
+Click **Connect**. Go retrieves the token and public certificate and opens
+HTTPS/WSS through SSH stdio forwarding. No manual tunnel or pasted token is
+needed. The fixture permits forwarding only to its TLS API at `127.0.0.1:19003`.
+Local MCP and health checks use `127.0.0.1:19001`; that port is not SSH-forwardable.
+
+Select `remote-demo` to use its two shell windows. In Chats, select **Remote
+test shell** and create a chat. These shells use no AI account. For an agent
+workspace, configure its command and sign in on the remote host.
 
 ```sh
-mise run desktop:remote:shell     # an interactive SSH session as hive
-mise run desktop:remote:down      # retains volumes; up starts them again
+mise run desktop:remote:shell
+mise run desktop:remote:down
 ```
 
-The fixture's home and SSH host keys live in named Docker volumes scoped to
-this checkout. Rebuilding retains them. Tmux processes survive client/tunnel
-loss, but not a container restart; startup restores the demo session’s terminals. The fixture intentionally uses Bash, not a paid agent.
-Install/authenticate a CLI inside the container if testing actual agent usage.
+Named volumes retain the remote home, TLS identity, and SSH host keys across
+rebuilds. Tmux survives client disconnects, but not container restarts. Startup
+restores the demo terminals. `HIVE_REMOTE_SSH_PORT` changes the published SSH
+port from `19222`; regenerate the config block after a change.
 
-`HIVE_REMOTE_SSH_PORT` changes the host SSH port (default `19222`).
-`HIVE_REMOTE_LOCAL_PORT` changes the tunnel's local port (default `19001`).
-Set these consistently across tasks when running several fixtures. None of the
-HTTP ports is published. Inside the container, the terminal API listens on
-`127.0.0.1:19001` and the Wails browser UI on `127.0.0.1:8080`.
-
-## Automated smoke test
+## Tests
 
 ```sh
 mise run desktop:remote:test
 ```
 
-This builds the fixture and runs a second container as the client. The test
-checks token rejection, session discovery, terminal input, window discovery,
-tunnel loss/reconnect, and session survival after detaching. Browser tooling
-and tmux testing stay inside Docker. The remote volume remains reusable after
-the test.
+A second Docker container acts as the client. It checks SSH credential retrieval,
+HTTPS discovery, terminal input, resize, windows, SSH stream loss/reconnect,
+inbox reads, and remote chat creation. It also checks that the browser does not
+contact the remote endpoint. Browser and tmux tests stay inside Docker.
 
-## Other SSH hosts
+## Other hosts
 
-Build the backend with `go build -tags server,terminals -o hive-desktop ./cmd/desktop`
-after building the frontend. Configure its normal Hive data/config directories,
-set `HIVE_DESKTOP_HTTP_PORT` to a stable loopback port and
-`HIVE_DESKTOP_CONNECTION_FILE` to a file in an existing private directory. Start
-only one Desktop backend against that installation. Keep the Wails server bound
-to loopback too.
+Build the remote backend with `server,terminals`. Set its normal Hive data and
+config directories and `HIVE_DESKTOP_CONNECTION_FILE` to a file in a private
+existing directory. Optionally set `HIVE_DESKTOP_REMOTE_ADDRESS=127.0.0.1:19003`
+for a fixed TLS port. Run one backend per installation. Keep the Wails browser
+server on loopback too.
 
-Forward that API port with OpenSSH, for example:
+Desktop uses the normal OpenSSH config, agent, and host-key verification.
+Trust the host through your normal SSH setup first. Password prompts and new
+host-key prompts are not supported inside Desktop. Restricted SSH accounts
+must allow `cat` on the connection file and TCP forwarding to the TLS port.
 
-```sh
-ssh -N -T -o ExitOnForwardFailure=yes -L 127.0.0.1:19001:127.0.0.1:19001 my-host
-```
-
-Retrieve the connection file through SSH and enter its token in Desktop. Your
-normal SSH host-key verification, keys and Tailscale routing apply. Keep the
-client and backend on compatible builds. SSH lifecycle management and remote
-installation/upgrades are manual in this first slice.
-
-## Inbox and workspace fixture
-
-The persisted remote home also contains a `Remote inbox` flow and a
-`Remote test shell` workspace. In Desktop, choose purple in Settings ▸ Remote,
-connect, then open their entries with colored trim in Inbox and Chats. **New chat** in
-that workspace starts Bash inside the container; it does not use an AI account.
-For an agent workspace, configure its command and sign in to the agent on the
-remote machine. The smoke test verifies chat input by reading a file over SSH.
+`desktop:remote:connection` retrieves a private local copy for diagnostics.
+`desktop:remote:tunnel` provides a diagnostic TLS port forward; it is not needed
+by Desktop. Never share or commit connection files.

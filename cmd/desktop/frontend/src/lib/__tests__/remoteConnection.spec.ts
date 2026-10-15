@@ -1,52 +1,42 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { listRemoteSessions, remoteEndpoint } from '../remoteConnection'
-
-const endpoint = remoteEndpoint('http://127.0.0.1:19001', 'secret')
+import { listRemoteSessions, validateRemoteHost } from '../remoteConnection'
+import { connectManaged } from '../managedTransport'
+import {
+  Connect,
+  Request,
+} from '../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/remoteservice'
+vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/remoteservice', () => ({
+  Connect: vi.fn(() => Promise.resolve('opaque-connection')),
+  Request: vi.fn(),
+}))
 afterEach(() => vi.unstubAllGlobals())
-
 describe('remote connection', () => {
-  it.each([
-    'https://127.0.0.1:1',
-    'http://example.com',
-    'http://user@localhost',
-    'http://localhost/api',
-    'http://localhost?token=x',
-  ])('rejects a destination outside the SSH tunnel origin: %s', (address) => {
-    expect(() => remoteEndpoint(address, 'secret')).toThrow()
-  })
-  it('derives the stream from the forwarded address', () => {
-    expect(endpoint.wsURL).toBe('ws://127.0.0.1:19001/api/terminal/stream')
-  })
-  it('authenticates discovery without putting the token in the URL', async () => {
-    const fetcher = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          protocolVersion: 1,
-          terminalWireVersion: '2',
-          sessions: [{ id: 'one', slug: 'same-as-local' }],
-        }),
-      ),
-    )
+  it.each(['-oProxyCommand=bad', 'http://example.com', 'host;command', 'host\ncommand'])(
+    'rejects invalid SSH destinations: %s',
+    (host) => {
+      expect(() => validateRemoteHost(host)).toThrow()
+    },
+  )
+  it('passes SSH configuration to Go and receives no credentials', async () => {
+    const endpoint = await connectManaged('hive-server', '~/connection.json')
+    expect(Connect).toHaveBeenCalledWith({ host: 'hive-server', connectionFile: '~/connection.json' })
+    expect(endpoint).toEqual({ httpBaseURL: 'hive-remote://opaque-connection', wsURL: '', token: '' })
+    vi.mocked(Request).mockResolvedValue({
+      status: 200,
+      body: JSON.stringify({ protocolVersion: 1, terminalWireVersion: '2', sessions: [{ id: 'one' }] }),
+    })
+    const fetcher = vi.fn()
     vi.stubGlobal('fetch', fetcher)
     expect(await listRemoteSessions(endpoint)).toHaveLength(1)
-    expect(fetcher).toHaveBeenCalledWith(
-      'http://127.0.0.1:19001/api/terminal/remote/sessions',
-      expect.objectContaining({ headers: { Authorization: 'Bearer secret' }, redirect: 'error' }),
-    )
+    expect(fetcher).not.toHaveBeenCalled()
+    expect(Request).toHaveBeenCalledWith('opaque-connection', '/api/terminal/remote/sessions', '{}')
   })
-  it('rejects protocol mismatches before attaching', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(JSON.stringify({ protocolVersion: 2, terminalWireVersion: '2', sessions: [] })),
-        ),
-    )
+  it('rejects protocol mismatches before attachment', async () => {
+    const endpoint = await connectManaged('hive-server', '~/connection.json')
+    vi.mocked(Request).mockResolvedValue({
+      status: 200,
+      body: JSON.stringify({ protocolVersion: 2, terminalWireVersion: '2', sessions: [] }),
+    })
     await expect(listRemoteSessions(endpoint)).rejects.toThrow('incompatible protocol')
-  })
-  it('explains expired credentials', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 401 })))
-    await expect(listRemoteSessions(endpoint)).rejects.toThrow('fresh token')
   })
 })

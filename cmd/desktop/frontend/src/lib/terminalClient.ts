@@ -1,3 +1,4 @@
+import { endpointFetch, managedID, openManagedStream, type TerminalStream } from './managedTransport'
 // The terminal transport. Control actions are plain fetch calls against the
 // loopback HTTP API; the data plane is a native WebSocket carrying the binary
 // frames defined in cmd/desktop/internal/adapter/httpapi/terminal_stream.go:
@@ -178,7 +179,7 @@ export interface TerminalClient {
   /** Toggles a pane between filling its window and its place in the layout. */
   zoomPane(slug: string, paneId: string): Promise<void>
   detach(slug: string): Promise<void>
-  openStream(slug: string): WebSocket
+  openStream(slug: string): TerminalStream
 }
 
 const encoder = new TextEncoder()
@@ -191,7 +192,7 @@ export async function getTerminalEndpoint(): Promise<TerminalEndpoint> {
 
 export function createTerminalClient(endpoint: TerminalEndpoint): TerminalClient {
   async function post<T>(path: string, body: unknown): Promise<T | null> {
-    const response = await fetch(endpoint.httpBaseURL + path, {
+    const response = await endpointFetch(endpoint, path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.token}` },
       body: JSON.stringify(body),
@@ -283,6 +284,8 @@ export function createTerminalClient(endpoint: TerminalEndpoint): TerminalClient
       await post('/api/terminal/detach', { slug })
     },
     openStream(slug) {
+      const id = managedID(endpoint)
+      if (id) return openManagedStream(id, slug)
       const socket = new WebSocket(streamURL(endpoint, slug))
       socket.binaryType = 'arraybuffer'
       return socket

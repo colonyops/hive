@@ -658,22 +658,33 @@ Incident exports live under the resolved reports directory with mode 0600.
 
 ## Remote Code preview
 
-Settings ▸ Remote saves named connections with individual colors. Connect opens
-Code on an SSH-forwarded terminal API for existing sessions. Names, addresses,
-and colors persist in Desktop UI storage; connection tokens remain in memory.
-The remote backend uses `-tags server,terminals`; `desktop:serve` retains the
-terminal-disabled UI-test behavior. Server builds omit native notifications.
+Settings ▸ Remote saves SSH host aliases, remote connection-file paths, names,
+and colors. Go uses the system OpenSSH configuration and agent with strict host
+key checks and noninteractive authentication. It reads the current token and
+public TLS certificate over SSH. Tokens stay in Go memory.
 
-`HIVE_DESKTOP_CONNECTION_FILE` optionally names a file in an existing directory
-where startup atomically writes `{url, token}` with mode 0600. It is a per-run
-terminal credential; retrieve it through SSH, keep it private, and retrieve it
-again after a restart. The client accepts loopback HTTP tunnel endpoints and
-keeps credentials in memory. No credentials are added to settings.yaml.
+Set `HIVE_DESKTOP_CONNECTION_FILE` to a file in an existing private directory
+on the remote server. The `server,terminals` build starts a dedicated TLS API
+and atomically writes `{url, token, certificate}` with mode 0600. Configure
+`remote.address` (`HIVE_DESKTOP_REMOTE_ADDRESS`, default `127.0.0.1:0`) for a
+fixed TLS port. Only loopback IP addresses are allowed. The persistent identity
+is `<StateDir>/remote-tls/identity.pem`; its private key never enters the
+connection file. The certificate expires after one year. Stop the server,
+remove the identity file, restart, and reconnect to renew it.
 
-See [the reusable Docker fixture](remote/README.md) for `desktop:remote:*` tasks
-and a local Desktop plus persistent Linux remote setup. Remote inboxes are
-read-only; remote workspaces support chat creation and resumption through the
-existing authenticated agent API. Local and remote entries share each navigation menu, with a narrow edge in the
-connection’s color marking remote entries. Selecting one changes only the content pane.
-Remote Code creation, Drive, file transfer and automatic SSH management remain
-outside this preview.
+Remote HTTPS/WSS runs through SSH stdio forwarding, without a local TCP
+forward. Go verifies the exported certificate and hostname, refuses redirects,
+and refreshes the token through SSH once after an HTTP 401. Network failures
+never replay mutations. Reconnect after a certificate change.
+
+Native Wails IPC carries requests and bounded terminal batches between Go and
+the packaged webview. Remote credentials never reach JavaScript. Development
+and headless browser builds still use their Wails HTTP origin; the native IPC
+property applies to packaged native operation. Local terminal HTTP/WebSocket
+clients and local agent MCP endpoints retain their existing transports.
+
+See [the reusable Docker fixture](remote/README.md) for setup and tests. Remote
+inboxes are read-only. Remote workspaces support chat creation and resumption.
+Local and remote entries share each menu, with colored trim on remote entries.
+Remote inbox actions, notifications, local handoff, Code creation, and Drive
+remain future work. Existing manual tunnel profiles need a new SSH profile.
