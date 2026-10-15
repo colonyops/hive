@@ -8,13 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/cmd/drive-server/internal/config"
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 	"github.com/colonyops/hive/cmd/drive-server/internal/store/control"
+	"github.com/colonyops/hive/cmd/drive-server/internal/store/userdb"
 	"github.com/colonyops/hive/internal/platform/sqlite"
 )
+
+const testMaxDocumentSize = 1024
 
 type clock struct {
 	mu  sync.Mutex
@@ -39,6 +43,7 @@ type env struct {
 	policies *core.Policies
 	accounts *core.Accounts
 	tokens   *core.Tokens
+	docs     *core.Documents
 	clock    *clock
 }
 
@@ -49,14 +54,18 @@ func newEnv(t *testing.T, ps ...config.Policy) *env {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 
+	pool := userdb.NewPool(zerolog.Nop(), filepath.Join(dir, "users"), 8, 0)
+	t.Cleanup(func() { _ = pool.Close() })
+
 	c := &clock{now: time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)}
 	policies := core.NewPolicies(ps)
 	return &env{
 		dataDir:  dir,
 		store:    store,
 		policies: policies,
-		accounts: core.NewAccounts(store.Accounts(), policies, core.WithClock(c.Now)),
+		accounts: core.NewAccounts(store.Accounts(), pool.Stores(), policies, core.WithClock(c.Now)),
 		tokens:   core.NewTokens(store.Tokens(), store.Accounts(), policies, core.WithClock(c.Now)),
+		docs:     core.NewDocuments(pool.Stores(), testMaxDocumentSize, core.WithClock(c.Now)),
 		clock:    c,
 	}
 }

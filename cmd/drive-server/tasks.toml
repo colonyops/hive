@@ -17,4 +17,7 @@ run = "go build -o cmd/drive-server/bin/hive-drive-server ./cmd/drive-server"
 
 ["drive-server:check:migrations"]
 description = "Verify the drive server's SQLite migrations are ordered and released history is immutable"
-run = "./scripts/check-migration-order.sh cmd/drive-server/internal/store/control/migrations"
+run = [
+  "./scripts/check-migration-order.sh cmd/drive-server/internal/store/control/migrations",
+  "./scripts/check-migration-order.sh cmd/drive-server/internal/store/userdb/migrations",
+]

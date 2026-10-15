@@ -55,3 +55,22 @@ sql:
             go_type:
               import: "github.com/colonyops/hive/cmd/drive-server/internal/core"
               type: "Scope"
+  - engine: "sqlite"
+    queries:
+      - "cmd/drive-server/internal/store/userdb/queries"
+    schema: "cmd/drive-server/internal/store/userdb/migrations"
+    gen:
+      go:
+        package: "db"
+        out: "cmd/drive-server/internal/store/userdb/db"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: false
+        emit_exact_table_names: false
+        emit_empty_slices: true
+        emit_result_struct_pointers: false
+        overrides:
+          - column: "documents.kind"
+            go_type:
+              import: "github.com/colonyops/hive/internal/domain/drive"
+              type: "Kind"

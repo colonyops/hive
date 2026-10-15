@@ -119,7 +119,7 @@ func withServices(fn func(ctx context.Context, cmd *cli.Command, svc *app.Servic
 		if err != nil {
 			return err
 		}
-		svc, err := app.OpenServices(ctx, cfg)
+		svc, err := app.OpenServices(ctx, zerolog.Nop(), cfg)
 		if err != nil {
 			return err
 		}

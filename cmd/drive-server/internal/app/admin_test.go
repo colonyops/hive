@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -15,7 +16,7 @@ import (
 
 func openServices(t *testing.T, policies ...config.Policy) *app.Services {
 	t.Helper()
-	svc, err := app.OpenServices(t.Context(), config.Config{DataDir: t.TempDir(), UserPolicies: policies})
+	svc, err := app.OpenServices(t.Context(), zerolog.Nop(), config.Config{DataDir: t.TempDir(), UserPolicies: policies})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = svc.Close() })
 	return svc

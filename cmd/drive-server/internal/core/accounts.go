@@ -11,12 +11,13 @@ import (
 
 type Accounts struct {
 	store    AccountStore
+	users    UserStores
 	policies *Policies
 	now      func() time.Time
 }
 
-func NewAccounts(store AccountStore, policies *Policies, opts ...Option) *Accounts {
-	return &Accounts{store: store, policies: policies, now: newOptions(opts).now}
+func NewAccounts(store AccountStore, users UserStores, policies *Policies, opts ...Option) *Accounts {
+	return &Accounts{store: store, users: users, policies: policies, now: newOptions(opts).now}
 }
 
 // Ensure returns the account for email, creating it on first use. An email
@@ -58,15 +59,28 @@ func (a *Accounts) List(ctx context.Context) ([]Account, error) {
 	return accts, nil
 }
 
-// Delete removes the account's control rows. It does not need a matching
-// policy, so a locked account can still be cleaned up.
+// Delete removes the account's control rows, then its document file. It does
+// not need a matching policy, so a locked account can still be cleaned up.
+// The order matters: once the control rows are gone no request resolves to
+// the user, so nothing recreates the file after Remove.
 func (a *Accounts) Delete(ctx context.Context, email string) error {
-	err := a.store.DeleteByEmail(ctx, NormalizeEmail(email))
+	email = NormalizeEmail(email)
+	acct, err := a.store.GetByEmail(ctx, email)
+	if errors.Is(err, ErrNotFound) {
+		return NewError(KindNotFound, "account not found")
+	}
+	if err != nil {
+		return fmt.Errorf("look up account: %w", err)
+	}
+	err = a.store.DeleteByEmail(ctx, email)
 	if errors.Is(err, ErrNotFound) {
 		return NewError(KindNotFound, "account not found")
 	}
 	if err != nil {
 		return fmt.Errorf("delete account: %w", err)
+	}
+	if err := a.users.Remove(ctx, acct.ID); err != nil {
+		return fmt.Errorf("remove user documents: %w", err)
 	}
 	return nil
 }
