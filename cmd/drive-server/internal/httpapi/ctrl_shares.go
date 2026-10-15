@@ -70,7 +70,7 @@ func (h shareHandlers) raw(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	return writeRaw(w, doc, body)
+	return writeRaw(w, r, doc, body)
 }
 
 func (h shareHandlers) public(w http.ResponseWriter, r *http.Request) error {
@@ -87,6 +87,15 @@ func (h shareHandlers) public(w http.ResponseWriter, r *http.Request) error {
 	return server.JSON(w, http.StatusOK, out)
 }
 
+func mayRenderHTML(dest string) bool {
+	switch dest {
+	case "", "iframe", "empty":
+		return true
+	default:
+		return false
+	}
+}
+
 func contentType(k drive.Kind) string {
 	if k == drive.KindHtml {
 		return "text/html; charset=utf-8"
@@ -96,7 +105,16 @@ func contentType(k drive.Kind) string {
 
 // writeRaw sends a stored body under the raw rules: a browser that renders
 // it gets no access to the server's origin or the network.
-func writeRaw(w http.ResponseWriter, doc driveapi.Document, body []byte) error {
+//
+// A CSP sandbox cannot stop a document from navigating itself, so an HTML
+// document opened as a page, not framed, could send what a visitor types to
+// any URL. Browsers label such a request Sec-Fetch-Dest: document, and the
+// route refuses it. Clients that send no label, such as the CLI, still get
+// the body. See SECURITY-REVIEW.md.
+func writeRaw(w http.ResponseWriter, r *http.Request, doc driveapi.Document, body []byte) error {
+	if doc.Kind == drive.KindHtml && !mayRenderHTML(r.Header.Get("Sec-Fetch-Dest")) {
+		return core.NewError(core.KindForbidden, "HTML documents open only inside the Hive Drive page")
+	}
 	hdr := w.Header()
 	hdr.Set("Content-Type", contentType(doc.Kind))
 	hdr.Set("Content-Length", strconv.Itoa(len(body)))

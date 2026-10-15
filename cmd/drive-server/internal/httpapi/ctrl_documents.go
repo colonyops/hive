@@ -171,7 +171,7 @@ func (h documentHandlers) get(space spaceFunc) errchain.HandlerFunc {
 			return err
 		}
 		if r.URL.Query().Get("raw") == "1" {
-			return writeRaw(w, doc, body)
+			return writeRaw(w, r, doc, body)
 		}
 		hdr := w.Header()
 		hdr.Set("Content-Type", contentType(doc.Kind))
