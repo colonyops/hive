@@ -27,6 +27,7 @@ jobs:
       cli-integration: ${{ steps.filter.outputs.cli-integration }}
       site: ${{ steps.filter.outputs.site }}
       desktop-frontend: ${{ steps.filter.outputs.desktop-frontend }}
+      drive-server-frontend: ${{ steps.filter.outputs.drive-server-frontend }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -74,6 +75,12 @@ jobs:
             desktop-frontend:
               - 'cmd/desktop/frontend/**'
               - 'cmd/desktop/internal/app/flow/docs/**'
+              - 'web/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/ci.yml'
+            drive-server-frontend:
+              - 'cmd/drive-server/frontend/**'
               - 'web/**'
               - 'package.json'
               - 'package-lock.json'
@@ -211,6 +218,34 @@ jobs:
           npm test -w frontend
           npm run ui:test
 
+  drive-server-frontend:
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.drive-server-frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Check formatting
+        run: npm run format:check -w drive-server-frontend
+
+      - name: Lint
+        run: npm run lint -w drive-server-frontend
+
+      - name: Build frontend
+        run: npm run build -w drive-server-frontend
+
+      - name: Test frontend
+        run: npm test -w drive-server-frontend
+
   site:
     needs: changes
     if: github.event_name != 'pull_request' || needs.changes.outputs.site == 'true'
@@ -234,7 +269,7 @@ jobs:
   # fails here.
   ci-ok:
     if: always()
-    needs: [changes, go, go-lint, integration, desktop-frontend-build, desktop-frontend-test, site]
+    needs: [changes, go, go-lint, integration, desktop-frontend-build, desktop-frontend-test, drive-server-frontend, site]
     runs-on: ubuntu-latest
     steps:
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')

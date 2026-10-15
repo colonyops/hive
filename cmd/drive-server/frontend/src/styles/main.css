@@ -1,0 +1,8 @@
+@import "tailwindcss";
+@import "@hive/ui/styles/theme.css";
+@import "@hive/ui/styles/markdown.css";
+@import "@hive/ui/styles/canvas-html.css";
+/* Tailwind v4 does not scan the symlinked workspace package on its own. */
+@source "../../../../../web/packages/ui/src";
+/* Docs quote the arbitrary classes the lint rejects; scanning them would emit those rules. */
+@source not "../../../../../web/packages/ui/src/**/*.md";

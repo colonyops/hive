@@ -114,6 +114,45 @@ pre-push:
         fi
         mise run desktop:frontend:lint
 
+    - name: drive-server-frontend-test
+      glob:
+        - "cmd/drive-server/frontend/*"
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
+      run: |
+        if [ ! -d node_modules ]; then
+          echo "SKIP drive server frontend tests: node_modules is missing (run 'mise run drive-server:frontend:install')." >&2
+          exit 0
+        fi
+        mise run drive-server:frontend:test
+
+    - name: drive-server-frontend-format
+      glob:
+        - "cmd/drive-server/frontend/*"
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
+      run: |
+        if [ ! -d node_modules ]; then
+          echo "SKIP drive server frontend format check: node_modules is missing (run 'mise run drive-server:frontend:install')." >&2
+          exit 0
+        fi
+        mise run drive-server:frontend:format:check
+
+    - name: drive-server-frontend-lint
+      glob:
+        - "cmd/drive-server/frontend/*"
+        - "web/**"
+        - "package.json"
+        - "package-lock.json"
+      run: |
+        if [ ! -d node_modules ]; then
+          echo "SKIP drive server frontend lint: node_modules is missing (run 'mise run drive-server:frontend:install')." >&2
+          exit 0
+        fi
+        mise run drive-server:frontend:lint
+
     - name: ui-test
       glob:
         - "web/**"
