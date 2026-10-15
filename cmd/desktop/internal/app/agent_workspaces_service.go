@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -216,6 +217,45 @@ func (s *AgentWorkspacesService) lookPath() func(context.Context, string) (strin
 		return nil
 	}
 	return s.execEnv.LookPath
+}
+
+// AddDriveMCP installs Hive Drive in the selected agent's user configuration.
+func (s *AgentWorkspacesService) AddDriveMCP(ctx context.Context, agent, url string) error {
+	var command string
+	var args []string
+	switch agent {
+	case "claude":
+		command = "claude"
+		args = []string{"mcp", "add", "--scope", "user", "--transport", "http", "hive-drive", url}
+	case "codex":
+		command = "codex"
+		args = []string{"mcp", "add", "hive-drive", "--url", url}
+	default:
+		return Errorf(KindInvalid, "MCP setup is not supported for agent %q", agent)
+	}
+	var path string
+	var err error
+	if s.execEnv == nil {
+		path, err = osexec.LookPath(command)
+	} else {
+		path, err = s.execEnv.LookPath(ctx, command)
+	}
+	if err != nil {
+		return Wrap(err, KindUnavailable, "could not find %s on the login-shell PATH", command)
+	}
+	cmd := osexec.CommandContext(ctx, path, args...)
+	if s.execEnv != nil {
+		cmd.Env = s.execEnv.Environ(ctx)
+	}
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		message := strings.TrimSpace(string(output))
+		if message == "" {
+			return Wrap(err, KindInternal, "adding Hive Drive to %s", agent)
+		}
+		return Wrap(err, KindInternal, "adding Hive Drive to %s: %s", agent, message)
+	}
+	return nil
 }
 
 // WorkspaceView is one row of the area's list. Command is on it because a
