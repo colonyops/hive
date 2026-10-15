@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, toRef } from 'vue'
+import { onMounted, toRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import IconTerminal from '~icons/lucide/terminal'
 import ActionInputsDialog from './ActionInputsDialog.vue'
@@ -45,13 +45,22 @@ const emit = defineEmits<{
   'session-repo-key': [repoKey: string]
   'open-drive-page': [scope: DriveScope]
 }>()
-const active = (): boolean => props.active
+const active = (): boolean => props.active && !props.remote
 
-const { checking, available, reason } = useTerminalAvailability()
+const { checking, available, reason, probe } = useTerminalAvailability()
 const { poolSize } = useTerminalPoolSize()
 
 const pool = useTerminalPool({ size: poolSize, onEvicted: () => tree.sweepListings() })
-const tree = useTerminalTree({ pool, active })
+const tree = useTerminalTree({ pool, active: () => props.active })
+watch(
+  () => props.active && props.remote,
+  (remoteActive) => {
+    if (!remoteActive) return
+    void tree.reloadSessions()
+    void probe()
+  },
+  { immediate: true },
+)
 const view = useSessionTreeView(tree)
 const rename = useWindowRename(pool.visible)
 const attach = useTerminalAttach({ pool, tree, active, onSwitch: () => (rename.windowId.value = '') })
@@ -122,7 +131,7 @@ const { confirmation, detail, closeDetail, renaming, renameBusy, renameError, ca
 
         <div v-else class="flex min-h-0 min-w-0 flex-1">
           <TerminalPaneColumn
-            :active="props.active"
+            :active="active()"
             @open-tasks="emit('open-tasks')"
             @session-repo-key="emit('session-repo-key', $event)"
           />
