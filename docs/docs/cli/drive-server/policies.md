@@ -61,9 +61,9 @@ When no policy matches an account's email any more, the account is locked. Its d
 The `accounts` commands open the databases directly. Run them where the server's data and config directories are visible, for example with `docker exec`. They accept `--config-dir`, `--data-dir`, and `--base-url` like `serve`.
 
 ```bash
-docker exec drive-server hive-drive-server accounts list
-docker exec drive-server hive-drive-server accounts delete ana@example.org --yes
-docker exec drive-server hive-drive-server accounts token create ana@example.org --scope push --expires 30d
+docker exec drive-server /hive-drive-server accounts list
+docker exec drive-server /hive-drive-server accounts delete ana@example.org --yes
+docker exec drive-server /hive-drive-server accounts token create ana@example.org --scope push --expires 30d
 ```
 
 - `accounts list` prints each email, ID, creation date, and the policy that admits it. A locked account shows `locked`.

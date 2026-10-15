@@ -23,8 +23,10 @@ docker run -d --name drive-server \
   -e HIVE_DRIVE_SERVER_SMTP_FROM="Hive Drive <drive@example.com>" \
   -e HIVE_DRIVE_SERVER_SMTP_PASSWORD=env:SMTP_PASSWORD \
   -e SMTP_PASSWORD \
-  ghcr.io/colonyops/hive-drive-server serve
+  ghcr.io/colonyops/hive-drive-server
 ```
+
+The image's entrypoint is `hive-drive-server serve`, so any arguments after the image name are `serve` flags.
 
 The same setup as a compose file:
 
@@ -32,7 +34,6 @@ The same setup as a compose file:
 services:
   drive-server:
     image: ghcr.io/colonyops/hive-drive-server
-    command: serve
     restart: unless-stopped
     ports:
       - "8080:8080"
@@ -104,7 +105,7 @@ trusted_proxies:
 docker run --rm -p 8080:8080 \
   -v "$PWD/config:/config" \
   -e HIVE_DRIVE_SERVER_BASE_URL=http://127.0.0.1:8080 \
-  ghcr.io/colonyops/hive-drive-server serve --dev-log-mail
+  ghcr.io/colonyops/hive-drive-server --dev-log-mail
 ```
 
 ## Mount the config directory
