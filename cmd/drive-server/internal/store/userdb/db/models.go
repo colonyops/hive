@@ -9,19 +9,20 @@ import (
 )
 
 type Document struct {
-	ID        string     `json:"id"`
-	Space     string     `json:"space"`
-	Path      string     `json:"path"`
-	Kind      drive.Kind `json:"kind"`
-	Sha256    string     `json:"sha256"`
-	Size      int64      `json:"size"`
-	Body      []byte     `json:"body"`
-	UpdatedAt int64      `json:"updated_at"`
-	Title     string     `json:"title"`
+	ID         string     `json:"id"`
+	Space      string     `json:"space"`
+	Path       string     `json:"path"`
+	Kind       drive.Kind `json:"kind"`
+	Sha256     string     `json:"sha256"`
+	Size       int64      `json:"size"`
+	Body       []byte     `json:"body"`
+	UpdatedAt  int64      `json:"updated_at"`
+	Title      string     `json:"title"`
+	SearchText string     `json:"search_text"`
 }
 
 type DocumentsFt struct {
-	Title string `json:"title"`
-	Path  string `json:"path"`
-	Body  string `json:"body"`
+	Title      string `json:"title"`
+	Path       string `json:"path"`
+	SearchText string `json:"search_text"`
 }

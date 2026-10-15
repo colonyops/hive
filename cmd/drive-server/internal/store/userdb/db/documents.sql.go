@@ -28,7 +28,7 @@ func (q *Queries) DeleteDocument(ctx context.Context, arg DeleteDocumentParams) 
 }
 
 const getDocument = `-- name: GetDocument :one
-SELECT id, space, path, kind, sha256, size, body, updated_at, title FROM documents WHERE space = ? AND path = ?
+SELECT id, space, path, kind, sha256, size, body, updated_at, title, search_text FROM documents WHERE space = ? AND path = ?
 `
 
 type GetDocumentParams struct {
@@ -49,12 +49,13 @@ func (q *Queries) GetDocument(ctx context.Context, arg GetDocumentParams) (Docum
 		&i.Body,
 		&i.UpdatedAt,
 		&i.Title,
+		&i.SearchText,
 	)
 	return i, err
 }
 
 const getDocumentByID = `-- name: GetDocumentByID :one
-SELECT id, space, path, kind, sha256, size, body, updated_at, title FROM documents WHERE id = ?
+SELECT id, space, path, kind, sha256, size, body, updated_at, title, search_text FROM documents WHERE id = ?
 `
 
 func (q *Queries) GetDocumentByID(ctx context.Context, id string) (Document, error) {
@@ -70,6 +71,7 @@ func (q *Queries) GetDocumentByID(ctx context.Context, id string) (Document, err
 		&i.Body,
 		&i.UpdatedAt,
 		&i.Title,
+		&i.SearchText,
 	)
 	return i, err
 }
@@ -183,6 +185,45 @@ func (q *Queries) ListSpaceUsage(ctx context.Context) ([]ListSpaceUsageRow, erro
 	return items, nil
 }
 
+const listUnindexedHTMLDocuments = `-- name: ListUnindexedHTMLDocuments :many
+SELECT id, body FROM documents
+WHERE kind = 'html' AND search_text = '' AND id > ?
+ORDER BY id LIMIT ?
+`
+
+type ListUnindexedHTMLDocumentsParams struct {
+	ID    string `json:"id"`
+	Limit int64  `json:"limit"`
+}
+
+type ListUnindexedHTMLDocumentsRow struct {
+	ID   string `json:"id"`
+	Body []byte `json:"body"`
+}
+
+func (q *Queries) ListUnindexedHTMLDocuments(ctx context.Context, arg ListUnindexedHTMLDocumentsParams) ([]ListUnindexedHTMLDocumentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUnindexedHTMLDocuments, arg.ID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnindexedHTMLDocumentsRow{}
+	for rows.Next() {
+		var i ListUnindexedHTMLDocumentsRow
+		if err := rows.Scan(&i.ID, &i.Body); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUntitledDocuments = `-- name: ListUntitledDocuments :many
 SELECT id, path, kind, body FROM documents WHERE title = '' LIMIT ?
 `
@@ -222,6 +263,20 @@ func (q *Queries) ListUntitledDocuments(ctx context.Context, limit int64) ([]Lis
 	return items, nil
 }
 
+const setDocumentSearchText = `-- name: SetDocumentSearchText :exec
+UPDATE documents SET search_text = ? WHERE id = ?
+`
+
+type SetDocumentSearchTextParams struct {
+	SearchText string `json:"search_text"`
+	ID         string `json:"id"`
+}
+
+func (q *Queries) SetDocumentSearchText(ctx context.Context, arg SetDocumentSearchTextParams) error {
+	_, err := q.db.ExecContext(ctx, setDocumentSearchText, arg.SearchText, arg.ID)
+	return err
+}
+
 const setDocumentTitle = `-- name: SetDocumentTitle :exec
 UPDATE documents SET title = ? WHERE id = ?
 `
@@ -248,28 +303,30 @@ func (q *Queries) SumDocumentSize(ctx context.Context) (int64, error) {
 }
 
 const upsertDocument = `-- name: UpsertDocument :one
-INSERT INTO documents (id, space, path, title, kind, sha256, size, body, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO documents (id, space, path, title, kind, sha256, size, body, search_text, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (space, path) DO UPDATE SET
-    title      = excluded.title,
-    kind       = excluded.kind,
-    sha256     = excluded.sha256,
-    size       = excluded.size,
-    body       = excluded.body,
+    title       = excluded.title,
+    kind        = excluded.kind,
+    sha256      = excluded.sha256,
+    size        = excluded.size,
+    body        = excluded.body,
+    search_text = excluded.search_text,
     updated_at = excluded.updated_at
 RETURNING id, space, path, title, kind, sha256, size, updated_at
 `
 
 type UpsertDocumentParams struct {
-	ID        string     `json:"id"`
-	Space     string     `json:"space"`
-	Path      string     `json:"path"`
-	Title     string     `json:"title"`
-	Kind      drive.Kind `json:"kind"`
-	Sha256    string     `json:"sha256"`
-	Size      int64      `json:"size"`
-	Body      []byte     `json:"body"`
-	UpdatedAt int64      `json:"updated_at"`
+	ID         string     `json:"id"`
+	Space      string     `json:"space"`
+	Path       string     `json:"path"`
+	Title      string     `json:"title"`
+	Kind       drive.Kind `json:"kind"`
+	Sha256     string     `json:"sha256"`
+	Size       int64      `json:"size"`
+	Body       []byte     `json:"body"`
+	SearchText string     `json:"search_text"`
+	UpdatedAt  int64      `json:"updated_at"`
 }
 
 type UpsertDocumentRow struct {
@@ -293,6 +350,7 @@ func (q *Queries) UpsertDocument(ctx context.Context, arg UpsertDocumentParams) 
 		arg.Sha256,
 		arg.Size,
 		arg.Body,
+		arg.SearchText,
 		arg.UpdatedAt,
 	)
 	var i UpsertDocumentRow

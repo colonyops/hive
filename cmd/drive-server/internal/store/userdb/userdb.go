@@ -53,6 +53,9 @@ func openUserDB(ctx context.Context, path string, migrated bool) (*UserDB, error
 		if err := u.backfillTitles(ctx); err != nil {
 			return nil, errors.Join(fmt.Errorf("backfill titles %s: %w", path, err), conn.Close())
 		}
+		if err := u.backfillSearchText(ctx); err != nil {
+			return nil, errors.Join(fmt.Errorf("backfill search text %s: %w", path, err), conn.Close())
+		}
 	}
 	return u, nil
 }
@@ -77,15 +80,16 @@ func (u *UserDB) Put(ctx context.Context, d core.NewDocument, quota *int64) (cor
 			}
 		}
 		row, err := q.UpsertDocument(ctx, db.UpsertDocumentParams{
-			ID:        d.ID,
-			Space:     d.Space,
-			Path:      d.Path,
-			Title:     d.Title,
-			Kind:      d.Kind,
-			Sha256:    d.SHA256,
-			Size:      int64(len(d.Body)),
-			Body:      d.Body,
-			UpdatedAt: d.UpdatedAt.UnixNano(),
+			ID:         d.ID,
+			Space:      d.Space,
+			Path:       d.Path,
+			Title:      d.Title,
+			Kind:       d.Kind,
+			Sha256:     d.SHA256,
+			Size:       int64(len(d.Body)),
+			Body:       d.Body,
+			SearchText: d.SearchText,
+			UpdatedAt:  d.UpdatedAt.UnixNano(),
 		})
 		if err != nil {
 			return wrap("upsert document", err)

@@ -61,14 +61,16 @@ type Document struct {
 // does not exist yet; an existing row keeps its id so share links follow a
 // re-upload.
 type NewDocument struct {
-	ID        string
-	Space     string
-	Path      string
-	Title     string
-	Kind      drive.Kind
-	SHA256    string
-	Body      []byte
-	UpdatedAt time.Time
+	ID     string
+	Space  string
+	Path   string
+	Title  string
+	Kind   drive.Kind
+	SHA256 string
+	Body   []byte
+	// SearchText is what the search index reads; see SearchText.
+	SearchText string
+	UpdatedAt  time.Time
 }
 
 // SearchHit is one match. Snippet wraps each matched run in
