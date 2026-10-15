@@ -82,9 +82,13 @@ func SpacePrefix(s drive.Space) string {
 // DocPath is the route of one document. A document path is escaped per
 // segment, so a space, "#", or "?" in a name stays part of the path.
 func DocPath(s drive.Space, path string) string {
+	return SpacePrefix(s) + "/docs/" + escapePath(path)
+}
+
+func escapePath(path string) string {
 	segments := strings.Split(path, "/")
 	for i, seg := range segments {
 		segments[i] = url.PathEscape(seg)
 	}
-	return SpacePrefix(s) + "/docs/" + strings.Join(segments, "/")
+	return strings.Join(segments, "/")
 }

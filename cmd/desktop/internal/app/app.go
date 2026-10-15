@@ -1296,6 +1296,8 @@ func (a *App) openHiveRuntime(ctx context.Context, cfg Config) error {
 		Mux:      hiveMultiplexer{Client: tmuxClient, renamer: a.terminals},
 		DataDir:  dataDir,
 		Logger:   a.logger,
+
+		Credentials: a.credentials,
 	}
 	// Mock modes have no tmux to read, so status stays off.
 	if a.mock == "" {

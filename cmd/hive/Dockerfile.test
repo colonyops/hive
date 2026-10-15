@@ -31,6 +31,10 @@ RUN go mod download
 # Copy integration tests and the internal packages they exercise directly.
 COPY internal/ ./internal/
 COPY pkg/ ./pkg/
+COPY cmd/drive-server/ ./cmd/drive-server/
 COPY test/integration/ ./test/integration/
+
+# The drive server is a separate binary that the remote-drive tests run.
+RUN go build -o /usr/local/bin/hive-drive-server ./cmd/drive-server
 
 CMD ["go", "test", "-v", "-tags", "integration", "-count=1", "./test/integration/..."]

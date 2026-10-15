@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/doctor"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/session/scripts"
+	"github.com/colonyops/hive/internal/platform/credentials"
 	tmuxexec "github.com/colonyops/hive/internal/platform/tmux/exec"
 	"github.com/colonyops/hive/internal/store/db"
 	"github.com/colonyops/hive/pkg/buildinfo"
@@ -248,6 +250,10 @@ Run 'hive new' to create a new session from the current repository.`,
 				Stdout:     os.Stdout,
 				Stderr:     os.Stderr,
 				Logger:     logger,
+				Credentials: credentials.NewKeychainStoreWithService(
+					filepath.Join(flags.DataDir, "drive", "credentials.json"),
+					os.Getenv(credentials.EnvKeyringService),
+				),
 			})
 			if err != nil {
 				return ctx, err
