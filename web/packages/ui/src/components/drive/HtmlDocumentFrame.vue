@@ -6,8 +6,12 @@
 // hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it).
 //
 // The frame fills the positioned DocumentReader. DocumentReader stretches to
-// the available height for HTML because this absolute frame contributes no layout
-// height.
+// the available height for HTML because this absolute frame contributes no
+// layout height.
+//
+// The wrapper is its own stacking context. The frame must paint over the
+// reader's content, but a z-index set on the frame itself competes with menus
+// and popovers of the host app in the root context, and the frame wins.
 defineProps<{
   html: string
   /** A URL the frame loads instead of `html`, for a host that serves the document itself. */
@@ -18,13 +22,15 @@ defineProps<{
 </script>
 
 <template>
-  <iframe
-    sandbox="allow-scripts"
-    :src="src"
-    :srcdoc="src ? undefined : html"
-    referrerpolicy="no-referrer"
-    title="HTML document"
-    class="absolute inset-0 z-30 h-full w-full border-0 bg-white"
-    :data-testid="`${testid}-frame`"
-  />
+  <div class="absolute inset-0 isolate">
+    <iframe
+      sandbox="allow-scripts"
+      :src="src"
+      :srcdoc="src ? undefined : html"
+      referrerpolicy="no-referrer"
+      title="HTML document"
+      class="size-full border-0 bg-white"
+      :data-testid="`${testid}-frame`"
+    />
+  </div>
 </template>
