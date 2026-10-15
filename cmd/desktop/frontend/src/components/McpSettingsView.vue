@@ -8,12 +8,14 @@ import { computed, onMounted, ref } from 'vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
+import BaseButton from './ui/BaseButton.vue'
 import CopyButton from './ui/CopyButton.vue'
 import EmptyState from './ui/EmptyState.vue'
 import InlineError from './ui/InlineError.vue'
 import SegmentedControl from './ui/SegmentedControl.vue'
 import { mcpSetup, mcpSetupAgents, type McpSetupAgent } from '../lib/mcpSetup'
 import { useAgentWorkspaces } from '../stores/useAgentWorkspaces'
+import { AddDriveMCP } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/agentsservice'
 
 // The drive first: it is the one an agent needs before it can show its work.
 // hive-canvas is the same server at its older address, so it comes last.
@@ -27,9 +29,28 @@ const servers = computed(() =>
 )
 
 const agent = ref<McpSetupAgent>('claude')
+const addingDrive = ref(false)
+const addDriveError = ref<string | null>(null)
+const addDriveSuccess = ref(false)
 
 function onAgentChange(value: string): void {
   agent.value = value as McpSetupAgent
+  addDriveError.value = null
+  addDriveSuccess.value = false
+}
+
+async function addDrive(): Promise<void> {
+  addingDrive.value = true
+  addDriveError.value = null
+  addDriveSuccess.value = false
+  try {
+    await AddDriveMCP(agent.value)
+    addDriveSuccess.value = true
+  } catch (error) {
+    addDriveError.value = error instanceof Error ? error.message : String(error)
+  } finally {
+    addingDrive.value = false
+  }
 }
 
 onMounted(() => {
@@ -41,7 +62,7 @@ onMounted(() => {
   <SettingsPage testid="settings-mcp">
     <SettingsSection
       title="Connect an agent"
-      description="Hive hosts these servers on this machine. A Chats workspace that enables one is set up for you. Any other agent, such as the one a Code session runs, connects once you add the server to that agent's own configuration. Hive does not edit it."
+      description="Hive hosts these servers on this machine. A Chats workspace that enables one is set up for you. Add Hive Drive to Claude Code or Codex here for Code sessions; other agents can use the setup details below."
       boxed
     >
       <SettingsRow label="Agent" hint="The setup under each server is written for this agent.">
@@ -97,6 +118,26 @@ onMounted(() => {
             class="hive-scroll overflow-x-auto rounded-lg border border-card bg-app p-3 font-mono text-caption leading-relaxed text-text-2"
             :data-testid="`settings-mcp-${server.id}-setup`"
             >{{ mcpSetup(agent, server.id, server.command).text }}</pre>
+          <div v-if="server.id === 'hive-drive'" class="flex flex-wrap items-center gap-3">
+            <BaseButton
+              size="sm"
+              :busy="addingDrive"
+              :disabled="agent === 'json'"
+              data-testid="settings-mcp-hive-drive-add"
+              @click="addDrive"
+            >
+              Add to {{ agent === 'claude' ? 'Claude Code' : 'Codex' }}
+            </BaseButton>
+            <span v-if="addDriveSuccess" role="status" class="text-small text-text-3">
+              Added to {{ agent === 'claude' ? 'Claude Code' : 'Codex' }}. Restart its sessions to connect.
+            </span>
+            <InlineError
+              v-if="addDriveError"
+              variant="line"
+              :message="addDriveError"
+              testid="settings-mcp-hive-drive-add-error"
+            />
+          </div>
         </div>
       </template>
     </SettingsSection>

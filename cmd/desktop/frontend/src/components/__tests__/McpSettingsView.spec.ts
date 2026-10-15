@@ -6,10 +6,12 @@ const mocks = vi.hoisted(() => ({
   Available: vi.fn(),
   getAgentsEndpoint: vi.fn(),
   mcpCatalogue: vi.fn(),
+  AddDriveMCP: vi.fn(),
   SetText: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/agentsservice', () => ({
   Available: mocks.Available,
+  AddDriveMCP: mocks.AddDriveMCP,
 }))
 vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../lib/agentWorkspacesClient')>()),
@@ -19,7 +21,6 @@ vi.mock('../../lib/agentWorkspacesClient', async (importOriginal) => ({
 vi.mock('@wailsio/runtime', () => ({
   Clipboard: { SetText: mocks.SetText },
 }))
-
 function entry(id: string, overrides: Record<string, unknown> = {}) {
   return {
     id,
@@ -47,6 +48,7 @@ describe('McpSettingsView', () => {
     mocks.Available.mockResolvedValue({ available: true, reason: '' })
     mocks.getAgentsEndpoint.mockResolvedValue({ httpBaseURL: 'http://127.0.0.1:1', wsURL: 'ws://x', token: 't' })
     mocks.SetText.mockResolvedValue(undefined)
+    mocks.AddDriveMCP.mockResolvedValue(undefined)
     mocks.mcpCatalogue.mockResolvedValue([
       entry('hive-canvas'),
       entry('hive-desktop'),
@@ -90,6 +92,21 @@ describe('McpSettingsView', () => {
     await wrapper.get('[data-testid="settings-mcp-hive-drive-setup-copy"]').trigger('click')
     await flushPromises()
     expect(mocks.SetText).toHaveBeenLastCalledWith('[mcp_servers.hive-drive]\nurl = "http://127.0.0.1:4821/mcp/drive"')
+  })
+
+  it('adds Hive Drive to the selected CLI user configuration', async () => {
+    const wrapper = await mountView()
+
+    await wrapper.get('[data-testid="settings-mcp-hive-drive-add"]').trigger('click')
+    await flushPromises()
+    expect(mocks.AddDriveMCP).toHaveBeenCalledWith('claude')
+    expect(wrapper.get('[role="status"]').text()).toContain('Added to Claude Code')
+
+    await wrapper.get('[data-testid="settings-mcp-agent-codex"]').trigger('click')
+    await wrapper.get('[data-testid="settings-mcp-hive-drive-add"]').trigger('click')
+    await flushPromises()
+    expect(mocks.AddDriveMCP).toHaveBeenLastCalledWith('codex')
+    expect(wrapper.get('[role="status"]').text()).toContain('Added to Codex')
   })
 
   it('says why a server has no address instead of offering setup for it', async () => {
