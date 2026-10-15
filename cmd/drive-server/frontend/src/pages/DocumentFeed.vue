@@ -26,7 +26,7 @@ const all = computed<DriveDocument[]>(() => Object.values(data.documents).flatMa
 const entries = computed(() => {
   if (!loaded.value) return null
   const docs = props.feed === 'recent' ? recentDocuments(all.value) : recentDocuments(all.value.filter((d) => d.shared))
-  return documentEntries(docs, true)
+  return documentEntries(docs)
 })
 const title = computed(() => (props.feed === 'recent' ? 'Recent' : 'Shared links'))
 const emptyMessage = computed(() =>

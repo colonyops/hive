@@ -37,15 +37,33 @@ describe('DriveListing', () => {
     Object.values(api).forEach((m) => m.mockReset())
   })
 
-  it('lists folders first with title, file name, and shared marker', async () => {
+  it('lists folders first with the title as name and the file name as tooltip', async () => {
     const { wrapper } = await mountListing()
 
     const rows = wrapper.findAll('[data-testid="entry"]')
     expect(rows.map((r) => r.attributes('data-kind'))).toEqual(['dir', 'doc'])
     expect(rows[1].text()).toContain('Plan')
-    expect(rows[1].text()).toContain('plan.md')
+    expect(rows[1].text()).not.toContain('plan.md')
+    expect(rows[1].attributes('title')).toBe('plan.md')
     expect(rows[1].text()).toContain('Shared')
     expect(rows[0].text()).not.toContain('Shared')
+  })
+
+  it('renders every list row as a single-line name cell', async () => {
+    const { wrapper } = await mountListing()
+
+    for (const row of wrapper.findAll('[data-testid="entry"]')) {
+      const label = row.get('[data-testid="entry-label"]')
+      expect(label.classes()).toContain('truncate')
+      expect(label.element.children).toHaveLength(0)
+      expect(row.classes()).toContain('h-13')
+    }
+    expect(wrapper.find('[data-testid="entry-location"]').exists()).toBe(false)
+  })
+
+  it('shows a Location column only in cross-space listings', async () => {
+    const across = await mountListing(documentEntries([doc({ space: 'acme/notes', path: 'docs/guide.md' })]))
+    expect(across.wrapper.get('[data-testid="entry-location"]').text()).toBe('acme/notes / docs')
   })
 
   it('opens a folder or a document on double click', async () => {
@@ -100,7 +118,7 @@ describe('DriveListing', () => {
 
   it('opens the share popover from the row menu and shares', async () => {
     api.share.mockResolvedValue({ url: 'http://drive.test/s/new' })
-    const entries = documentEntries([doc({ path: 'a.md' })], false)
+    const entries = documentEntries([doc({ path: 'a.md' })])
     const { wrapper } = await mountListing(entries)
 
     await wrapper.get('[data-testid="entry-menu"]').trigger('click')

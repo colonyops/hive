@@ -7,8 +7,10 @@ export interface ListEntry {
   kind: 'dir' | 'doc'
   key: string
   label: string
-  /** The file name of a document, the location of a result, or what a folder holds. */
+  /** Row tooltip: the file name of a document or what a folder holds. */
   secondary: string
+  /** Space and folder of a document in a cross-space or search listing; null in a folder listing. */
+  location: string | null
   path: string
   space: SpaceRef
   doc?: DriveDocument
@@ -26,12 +28,13 @@ function plural(count: number): string {
   return `${count} ${count === 1 ? 'document' : 'documents'}`
 }
 
-function fileEntry(doc: DriveDocument, secondary: string): ListEntry {
+function fileEntry(doc: DriveDocument, secondary: string, location: string | null = null): ListEntry {
   return {
     kind: 'doc',
     key: `${doc.space}\n${doc.path}`,
     label: documentLabel(doc),
     secondary,
+    location,
     path: doc.path,
     space: spaceFromKey(doc.space),
     doc,
@@ -48,6 +51,7 @@ function folderEntry(node: TreeNode, space: SpaceRef): ListEntry {
     key: `${space.key}\n${node.path}/`,
     label: node.name,
     secondary: plural(docs.length),
+    location: null,
     path: node.path,
     space,
     modified: docs.reduce((newest, doc) => (doc.updated_at > newest ? doc.updated_at : newest), ''),
@@ -67,9 +71,13 @@ export function folderContents(
   return folder.children.map((node) => (node.doc ? fileEntry(node.doc, node.name) : folderEntry(node, space)))
 }
 
-/** Documents as a flat listing. A row names its folder, and its space when the list spans spaces. */
-export function documentEntries(documents: readonly DriveDocument[], showSpace: boolean): ListEntry[] {
-  return documents.map((doc) => fileEntry(doc, showSpace ? `${spaceFromKey(doc.space).title} / ${doc.path}` : doc.path))
+/** Documents as a flat listing whose Location column names the space and folder. */
+export function documentEntries(documents: readonly DriveDocument[]): ListEntry[] {
+  return documents.map((doc) => {
+    const folder = doc.path.includes('/') ? doc.path.slice(0, doc.path.lastIndexOf('/')) : ''
+    const title = spaceFromKey(doc.space).title
+    return fileEntry(doc, doc.path, folder ? `${title} / ${folder}` : title)
+  })
 }
 
 /** The newest documents across spaces. */

@@ -4,14 +4,13 @@ import { computed, onMounted, provide, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../api'
 import AccountMenu from '../components/AccountMenu.vue'
-import IconMenu from '~icons/lucide/menu'
+import IconMenu from '~icons/material-symbols/menu'
 import HiveMark from '../components/HiveMark.vue'
 import NavSidebar from '../components/NavSidebar.vue'
 import ToastHost from '../components/ToastHost.vue'
 import ToolbarSearch from '../components/ToolbarSearch.vue'
 import { createDriveData, driveDataKey } from '../lib/driveData'
 import { meKey } from '../lib/me'
-import { searchQueryKey } from '../lib/search'
 import { fromRouteParams } from '../lib/space'
 import { createToast, toastKey } from '../lib/toast'
 import type { Me } from '../types'
@@ -29,7 +28,6 @@ async function refresh(): Promise<void> {
   }
 }
 provide(meKey, { me, refresh })
-provide(searchQueryKey, query)
 provide(driveDataKey, data)
 provide(toastKey, createToast())
 onMounted(refresh)

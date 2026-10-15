@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { folderContents } from '../lib/entries'
 import { spaceFromKey } from '../lib/space'
-import { ancestorDirs, buildTree, filterTree, findFolder, type TreeNode, matchingDocuments } from '../lib/tree'
+import { ancestorDirs, buildTree, findFolder, type TreeNode } from '../lib/tree'
 import { doc } from './fixtures'
 
 const docs = [
@@ -45,31 +45,6 @@ describe('buildTree', () => {
     const root = buildTree([doc({ path: 'a/b.md', title: '' })])
 
     expect(findFolder(root, 'a')?.children[0].label).toBe('b.md')
-  })
-})
-
-describe('filterTree', () => {
-  it('keeps documents whose title or path matches, with their folders', () => {
-    const rows = filterTree(buildTree(docs), 'setup')
-
-    expect(outline(rows)).toEqual(['0:docs', '1:2-setup.md'])
-  })
-
-  it('matches the path as well as the title, ignoring case', () => {
-    expect(matchingDocuments(buildTree(docs), 'API/AUTH').map((d) => d.path)).toEqual(['docs/api/auth.html'])
-  })
-
-  it('keeps the whole subtree of a folder whose name matches', () => {
-    const rows = filterTree(buildTree(docs), 'docs')
-
-    expect(outline(rows)).toContain('1:10-faq.md')
-    expect(outline(rows)).toContain('2:auth.html')
-  })
-
-  it('returns the tree untouched for a blank query', () => {
-    const root = buildTree(docs)
-
-    expect(filterTree(root, '  ')).toBe(root)
   })
 })
 

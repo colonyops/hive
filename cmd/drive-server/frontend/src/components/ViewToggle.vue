@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
-import IconLayoutGrid from '~icons/lucide/layout-grid'
-import IconList from '~icons/lucide/list'
+import IconLayoutGrid from '~icons/material-symbols/grid-view'
+import IconList from '~icons/material-symbols/view-list'
 import type { ViewMode } from '../lib/viewMode'
 
 defineProps<{ modelValue: ViewMode }>()
