@@ -6,7 +6,6 @@ import { spaceFromKey } from './space'
 export interface DriveData {
   spaces: Ref<SpaceSummary[] | null>
   spacesError: Ref<string | null>
-  /** Documents by space key, once loaded. */
   documents: Record<string, DriveDocument[] | undefined>
   errors: Record<string, string | undefined>
   loadSpaces(): Promise<void>

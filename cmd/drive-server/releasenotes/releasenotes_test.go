@@ -9,7 +9,6 @@ import (
 	"github.com/colonyops/hive/internal/releasenotes"
 )
 
-// TestChangelogParses keeps a malformed entry or fragment from shipping.
 func TestChangelogParses(t *testing.T) {
 	entries, err := releasenotes.Load(Changelog)
 	require.NoError(t, err)

@@ -105,7 +105,6 @@ func (d *Documents) List(ctx context.Context, p Principal, space drive.Space) ([
 	return d.withShares(docs, links), nil
 }
 
-// DefaultRecentLimit and MaxRecentLimit bound Recent.
 const (
 	DefaultRecentLimit = 50
 	MaxRecentLimit     = 200

@@ -46,7 +46,6 @@ func newAuthServer(t *testing.T, baseURL string) *authServer {
 
 var codeInMail = regexp.MustCompile(`\b\d{8}\b`)
 
-// latestCode delivers the outbox and returns the code in the newest mail.
 func (s *authServer) latestCode(t *testing.T, email string) string {
 	t.Helper()
 	require.NoError(t, s.mailer.Drain(t.Context()))

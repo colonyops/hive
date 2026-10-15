@@ -109,7 +109,6 @@ func loadConfig(cmd *cli.Command) (config.Config, []string, error) {
 	return cfg, warnings, nil
 }
 
-// withServices runs fn over the services of an opened control.db.
 func withServices(fn func(ctx context.Context, cmd *cli.Command, svc *app.Services) error) cli.ActionFunc {
 	return func(ctx context.Context, cmd *cli.Command) (err error) {
 		cfg, warnings, err := loadConfig(cmd)

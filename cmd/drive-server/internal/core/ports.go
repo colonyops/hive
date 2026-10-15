@@ -61,14 +61,13 @@ type Document struct {
 // does not exist yet; an existing row keeps its id so share links follow a
 // re-upload.
 type NewDocument struct {
-	ID     string
-	Space  string
-	Path   string
-	Title  string
-	Kind   drive.Kind
-	SHA256 string
-	Body   []byte
-	// SearchText is what the search index reads; see SearchText.
+	ID         string
+	Space      string
+	Path       string
+	Title      string
+	Kind       drive.Kind
+	SHA256     string
+	Body       []byte
 	SearchText string
 	UpdatedAt  time.Time
 }
@@ -97,15 +96,12 @@ type DocumentStore interface {
 	// Put checks the quota and upserts in one transaction. A nil quota means
 	// unlimited.
 	Put(ctx context.Context, d NewDocument, quota *int64) (Document, error)
-	// Get returns the document and its body.
 	Get(ctx context.Context, space, path string) (Document, []byte, error)
 	List(ctx context.Context, space string) ([]Document, error)
-	// Recent returns the newest documents across all spaces, newest first.
 	Recent(ctx context.Context, limit int) ([]Document, error)
 	// ListByIDs returns the documents that exist among ids, newest first.
 	ListByIDs(ctx context.Context, ids []string) ([]Document, error)
 	Spaces(ctx context.Context) ([]SpaceUsage, error)
-	// Delete returns the id of the document it removed.
 	Delete(ctx context.Context, space, path string) (string, error)
 	GetByID(ctx context.Context, id string) (Document, []byte, error)
 	HasID(ctx context.Context, id string) (bool, error)
@@ -117,7 +113,6 @@ type DocumentStore interface {
 	Usage(ctx context.Context) (int64, error)
 }
 
-// UserStores hands out per-user DocumentStores.
 type UserStores interface {
 	// Open returns userID's store, creating an empty one on first use. The
 	// caller must call release when done; the store stays valid until then.
@@ -156,7 +151,6 @@ type ShareStore interface {
 
 // CodeStore holds at most one pending sign-in code per email.
 type CodeStore interface {
-	// Put replaces email's pending code.
 	Put(ctx context.Context, email, codeHash string, expiresAt time.Time) error
 	// Consume checks codeHash against email's pending code. A match burns the
 	// code and returns ok. A miss counts an attempt; the code burns on the

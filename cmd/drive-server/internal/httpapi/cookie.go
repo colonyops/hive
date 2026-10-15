@@ -12,8 +12,8 @@ const (
 	plainCookieName = "hive_drive_session"
 )
 
-// cookies sets and clears the session cookie. The __Host- prefix needs
-// Secure, so a plain-http loopback base_url (local development) drops both.
+// The __Host- prefix needs Secure, so a plain-http loopback base_url (local
+// development) drops both.
 type cookies struct {
 	name   string
 	secure bool

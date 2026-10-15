@@ -20,8 +20,6 @@ const (
 	codeMaxAttempts = 5
 )
 
-// SignIn runs the email-code flow: Start mails a code, Verify trades it for a
-// session.
 type SignIn struct {
 	log      zerolog.Logger
 	codes    CodeStore

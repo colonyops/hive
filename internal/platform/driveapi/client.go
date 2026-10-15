@@ -183,7 +183,7 @@ func (c *Client) Share(ctx context.Context, space drive.Space, path, expiresIn s
 	return decode[Share](resp)
 }
 
-// decode reads a JSON response. The caller closes the body.
+// The caller closes the body.
 func decode[T any](resp *http.Response) (T, error) {
 	var zero T
 	if err := checkStatus(resp); err != nil {

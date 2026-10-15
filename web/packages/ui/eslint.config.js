@@ -82,8 +82,6 @@ export default defineConfig(
     },
   },
 
-  // The package runs in the desktop webview and in a plain browser. Anything
-  // host-specific reaches it through HiveUiPlatform (src/platform.ts).
   {
     files: ['src/**/*.{ts,vue}'],
     rules: {

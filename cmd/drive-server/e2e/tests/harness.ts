@@ -12,7 +12,6 @@ export interface Seeded {
 const projects = ['chromium', 'firefox', 'webkit']
 const seedFile = `${runDir}/seed.json`
 
-/** Signs in one account per browser project and shares every hostile document. */
 export async function seedAll(): Promise<void> {
   const all: Record<string, Seeded> = {}
   for (const project of projects) all[project] = await doSeed(`${project}@example.com`)

@@ -3,7 +3,6 @@ import { api, ApiError } from './api'
 
 let signedIn = false
 
-/** Forget the cached sign-in so the next page navigation asks the server again. */
 export function forgetSignIn(): void {
   signedIn = false
 }

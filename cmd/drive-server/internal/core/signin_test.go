@@ -28,7 +28,6 @@ func (e *env) mails(t *testing.T) []core.Mail {
 	return mails
 }
 
-// start requests a code and returns the one in the newest mail.
 func (e *env) start(t *testing.T, email string) string {
 	t.Helper()
 	before := len(e.mails(t))

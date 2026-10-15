@@ -12,7 +12,7 @@ function load(): ViewMode {
   }
 }
 
-/** The listing layout. It lives in this browser only; storage can be blocked, so it is best effort. */
+/** It lives in this browser only; storage can be blocked, so it is best effort. */
 export function useViewMode() {
   const mode = ref<ViewMode>(load())
   function set(next: ViewMode): void {

@@ -26,7 +26,7 @@ function sortNodes(nodes: TreeNode[]): void {
   for (const node of nodes) sortNodes(node.children)
 }
 
-/** Builds the folder tree of a space from its document paths. Folders come first, then both sort by file name. */
+/** Folders come first, then both sort by file name. */
 export function buildTree(documents: readonly DriveDocument[]): TreeNode {
   const root: TreeNode = { kind: 'dir', name: '', path: '', label: '', children: [] }
   const dirs = new Map<string, TreeNode>([['', root]])
@@ -69,7 +69,6 @@ export function findFolder(root: TreeNode, folderPath: string): TreeNode | null 
   return node
 }
 
-/** Every document under a node, at any depth. */
 export function descendantDocuments(node: TreeNode): DriveDocument[] {
   if (node.kind === 'doc') return node.doc ? [node.doc] : []
   return node.children.flatMap(descendantDocuments)

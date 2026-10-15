@@ -1,6 +1,4 @@
-# Hive Drive Server. Included by the root mise.toml, so these run from anywhere
-# in the repo as `mise run drive-server:<task>`. Every task runs from the repo
-# root, where the module lives.
+# Every task runs from the repo root, where the module lives.
 
 ["drive-server:dev"]
 description = "Run the drive server on ./.data/drive-server with mail printed to stdout"

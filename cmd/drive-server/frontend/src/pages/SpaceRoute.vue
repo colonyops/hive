@@ -13,7 +13,6 @@ const data = useDriveData()
 
 const target = computed(() => fromRouteParams(route.params))
 const space = computed(() => target.value.space)
-// A path that names a document opens it; any other path is a folder.
 const path = computed(() => target.value.path.replace(/\/+$/, ''))
 const documents = computed(() => data.documents[space.value.key] ?? null)
 const isDocument = computed(() => !!path.value && !!documents.value?.some((d) => d.path === path.value))

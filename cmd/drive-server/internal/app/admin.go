@@ -54,8 +54,7 @@ func (s *Services) CreateToken(ctx context.Context, email string, scope core.Sco
 }
 
 // NoteSignUpBypass writes a note to w when CreateToken would create a new
-// account under a policy that disallows sign-up, so the operator sees that the
-// policy was bypassed on purpose.
+// account under a policy that disallows sign-up.
 func (s *Services) NoteSignUpBypass(ctx context.Context, w io.Writer, email string) error {
 	policy, ok := s.Policies.Match(email)
 	if !ok || policy.SignUpAllowed() {

@@ -211,8 +211,7 @@ func (cmd *DriveCmd) runLsAll(ctx context.Context) error {
 	return nil
 }
 
-// printEntries prints one line per entry. A non-nil status adds a column
-// for the uploaded or changed documents.
+// A non-nil status adds a column for the uploaded or changed documents.
 func printEntries(root drive.Entry, status map[string]driveremote.UploadStatus) {
 	for _, entry := range root.Children {
 		if status == nil {

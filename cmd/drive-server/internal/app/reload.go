@@ -60,8 +60,6 @@ func reloadPolicies(log zerolog.Logger, running config.Config, policies *core.Po
 	}
 }
 
-// restartFields names the settings that differ from the running config and
-// take effect only after a restart.
 func restartFields(running, next config.Config) []string {
 	checks := []struct {
 		name string
