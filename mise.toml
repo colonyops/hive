@@ -221,7 +221,7 @@ run = "actionlint"
 # dropped from CI for being too slow, so local is the only place it runs.
 # Needs Docker, Node, Python, and the network.
 [tasks.ci]
-description = "Run every gate locally: Go, the desktop bindings and frontend, the site, the CLI integration tests, and the e2e suite CI does not run"
+description = "Run every gate locally: Go, the desktop bindings and frontend, the drive server frontend, the site, the CLI integration tests, and the e2e suite CI does not run"
 run = [
   { tasks = ["check:generate"] },
   { tasks = ["desktop:check:bindings", "check:adr", "desktop:check:migrations", "drive-server:check:migrations", "check:tidy"] },
@@ -231,6 +231,7 @@ run = [
   { tasks = ["docs:build", "desktop:frontend:install"] },
   { tasks = ["desktop:frontend:build", "desktop:frontend:test", "desktop:frontend:format:check", "desktop:frontend:lint"] },
   { tasks = ["ui:test", "ui:format:check", "ui:lint"] },
+  { tasks = ["drive-server:frontend:build", "drive-server:frontend:test", "drive-server:frontend:format:check", "drive-server:frontend:lint"] },
   { tasks = ["cli:integration"] },
   { tasks = ["desktop:e2e"] },
 ]

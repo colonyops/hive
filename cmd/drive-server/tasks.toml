@@ -12,7 +12,8 @@ description = "Run the drive server's Go tests"
 run = "go test ./cmd/drive-server/..."
 
 ["drive-server:build"]
-description = "Build the hive-drive-server binary into cmd/drive-server/bin/"
+description = "Build the hive-drive-server binary (web UI embedded) into cmd/drive-server/bin/"
+depends = ["drive-server:frontend:build"]
 run = "go build -o cmd/drive-server/bin/hive-drive-server ./cmd/drive-server"
 
 ["drive-server:check:migrations"]
@@ -21,3 +22,31 @@ run = [
   "./scripts/check-migration-order.sh cmd/drive-server/internal/store/control/migrations",
   "./scripts/check-migration-order.sh cmd/drive-server/internal/store/userdb/migrations",
 ]
+
+# The npm workspace root is the repo root, so one install serves the desktop
+# frontend, @hive/ui, and this frontend.
+["drive-server:frontend:install"]
+description = "Install the npm workspace dependencies when they are missing"
+dir = "{{config_root}}"
+run = "test -d node_modules || npm ci"
+
+["drive-server:frontend:build"]
+description = "Typecheck and build the drive server web UI into cmd/drive-server/frontend/dist"
+depends = ["drive-server:frontend:install"]
+dir = "{{config_root}}"
+run = "npm run build -w drive-server-frontend"
+
+["drive-server:frontend:lint"]
+description = "Lint the drive server web UI (ESLint, type-aware)"
+dir = "{{config_root}}"
+run = "npm run lint -w drive-server-frontend"
+
+["drive-server:frontend:test"]
+description = "Run the drive server web UI unit tests (vitest)"
+dir = "{{config_root}}"
+run = "npm run test -w drive-server-frontend"
+
+["drive-server:frontend:format:check"]
+description = "Check the drive server web UI formatting (Prettier)"
+dir = "{{config_root}}"
+run = "npm run format:check -w drive-server-frontend"
