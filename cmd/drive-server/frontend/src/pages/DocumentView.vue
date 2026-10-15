@@ -12,6 +12,9 @@ import { linkTarget, type ReaderDocument } from '@hive/ui/lib/document'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { computed, ref, shallowRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import IconBack from '~icons/material-symbols/arrow-back'
+import IconCode from '~icons/material-symbols/code-blocks'
+import IconFile from '~icons/material-symbols/description'
 import IconAArrowDown from '~icons/material-symbols/text-decrease'
 import IconAArrowUp from '~icons/material-symbols/text-increase'
 import IconEllipsis from '~icons/material-symbols/more-vert'
@@ -55,6 +58,10 @@ const folderCrumbs = computed<Crumb[]>(() => [
   { label: props.space.title, to: props.space.routePrefix },
   ...folders.value.map((dir) => ({ label: dir.slice(dir.lastIndexOf('/') + 1), to: documentRoute(props.space, dir) })),
 ])
+
+const isHtml = computed(() => doc.value?.kind === 'html')
+const kindIcon = computed(() => (isHtml.value ? IconCode : IconFile))
+const kindTone = computed(() => (isHtml.value ? 'text-node-orange' : 'text-node-blue'))
 
 const share = ref<Share | null>(null)
 const shareAnchor = shallowRef<HTMLElement | null>(null)
@@ -153,24 +160,39 @@ function requestDelete(): void {
     <InlineError v-if="error" class="m-4" :message="error" testid="document-load-error" />
     <Spinner v-else-if="!doc || !readerDocument" class="m-4" />
     <template v-else>
-      <header class="flex shrink-0 flex-wrap items-start gap-x-4 gap-y-2 border-b border-row px-6 py-4">
+      <header class="flex h-16 shrink-0 items-center gap-3 border-b border-row px-6">
+        <IconButton
+          label="Back to folder"
+          :icon="IconBack"
+          size="xl"
+          data-testid="back"
+          @click="router.push(folderRoute)"
+        />
+        <component :is="kindIcon" class="size-6 shrink-0" :class="kindTone" aria-hidden="true" />
         <div class="min-w-0 flex-1">
-          <Breadcrumb :items="folderCrumbs" compact />
-          <h1 class="mt-1 truncate text-page font-semibold text-text" data-testid="document-title">
+          <h1
+            class="truncate text-heading leading-snug font-medium text-text"
+            :title="documentLabel(doc)"
+            data-testid="document-title"
+          >
             {{ documentLabel(doc) }}
           </h1>
+          <Breadcrumb :items="folderCrumbs" compact />
         </div>
-        <div class="flex items-center gap-2" data-testid="share-panel">
+        <div class="flex shrink-0 items-center gap-2" data-testid="share-panel">
           <IconButton
             v-if="share"
             label="Copy share link"
             :icon="IconLink"
             size="xl"
             variant="outline"
+            class="size-9!"
             data-testid="copy-link"
             @click="copyLink"
           />
           <BaseButton
+            size="sm"
+            class="h-9! py-0!"
             data-testid="share"
             @click="shareAnchor = shareAnchor ? null : ($event.currentTarget as HTMLElement)"
           >
@@ -183,6 +205,7 @@ function requestDelete(): void {
               :icon="IconEllipsis"
               size="xl"
               variant="outline"
+              class="size-9!"
               :active="!!moreAnchor"
               data-testid="more-actions"
               @click="moreAnchor = moreAnchor ? null : ($event.currentTarget as HTMLElement)"

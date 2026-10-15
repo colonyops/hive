@@ -79,6 +79,15 @@ describe('drive shell', () => {
     expect(app.get('[data-testid="breadcrumb"]').text()).toContain('docs')
   })
 
+  it('goes back to the containing folder from the document header', async () => {
+    const { app, router } = await mountAt('/repos/acme/notes/docs/guide.md')
+
+    await app.get('[data-testid="back"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.path).toBe('/repos/acme/notes/docs')
+  })
+
   it('opens a document path in the viewer', async () => {
     const { app } = await mountAt('/repos/acme/notes/docs/guide.md')
 
