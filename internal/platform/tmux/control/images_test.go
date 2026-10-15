@@ -54,8 +54,23 @@ func TestAttachRedrawsWindowsThatDrewImages(t *testing.T) {
 	f.setPanes("", "@1 1", "@2 ")
 	attachFake(t, f, Options{})
 
-	f.awaitCommands(t, "refresh-client -C @1:", 2)
-	require.Equal(t, []string{"refresh-client -C @1:119x40", "refresh-client -C @1:"}, f.commandsMatching("refresh-client -C @"))
+	f.awaitCommands(t, "set-option -w -t @1 -u window-size", 1)
+	require.Equal(t, []string{
+		"show-options -w -v -q -t @1 window-size",
+		"resize-window -t @1 -x 119",
+		"set-option -w -t @1 -u window-size",
+	}, f.commandsMatching("-t @1"))
+}
+
+func TestARedrawRestoresAWindowsOwnSizeOption(t *testing.T) {
+	t.Parallel()
+
+	f := newFakeTmux(t, "hive-demo")
+	f.setPanes("", "@1 1")
+	f.setOption("@1", "largest")
+	attachFake(t, f, Options{})
+
+	f.awaitCommands(t, "set-option -w -t @1 window-size largest", 1)
 }
 
 func TestAttachLeavesWindowsWithoutImagesAlone(t *testing.T) {
@@ -66,5 +81,5 @@ func TestAttachLeavesWindowsWithoutImagesAlone(t *testing.T) {
 	attachFake(t, f, Options{})
 
 	f.awaitCommands(t, "list-panes -s", 1)
-	require.Empty(t, f.commandsMatching("refresh-client -C @"))
+	require.Empty(t, f.commandsMatching("resize-window"))
 }

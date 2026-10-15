@@ -42,6 +42,7 @@ type fakeTmux struct {
 	captures  map[string][]string
 	histories map[string][]string
 	cursors   map[string]string
+	options   map[string][]string
 	failures  map[string]string
 	splitPane string
 	onCommand func(cmd string)
@@ -64,6 +65,7 @@ func newFakeTmux(t *testing.T, slug string) *fakeTmux {
 		captures:  map[string][]string{},
 		histories: map[string][]string{},
 		cursors:   map[string]string{},
+		options:   map[string][]string{},
 		failures:  map[string]string{},
 	}
 	t.Cleanup(f.closeStreams)
@@ -176,6 +178,11 @@ func (f *fakeTmux) respond(cmd string) {
 			return
 		}
 		f.reply([]string{reported}, false)
+	case strings.HasPrefix(cmd, "show-options"):
+		f.mu.Lock()
+		values := f.options[argAfter(cmd, "-t")]
+		f.mu.Unlock()
+		f.reply(values, false)
 	case strings.HasPrefix(cmd, "new-window"):
 		f.reply([]string{"@9"}, false)
 	case strings.HasPrefix(cmd, "split-window"):
@@ -240,6 +247,13 @@ func (f *fakeTmux) setPanes(window string, lines ...string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.panes[window] = lines
+}
+
+// setOption sets what show-options answers for one target.
+func (f *fakeTmux) setOption(target string, values ...string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.options[target] = values
 }
 
 func (f *fakeTmux) setOnCommand(hook func(cmd string)) {

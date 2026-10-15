@@ -816,6 +816,9 @@ func TestVerbsOnADepartedPaneAreRefused(t *testing.T) {
 		}
 	}
 	require.True(t, departed, "the one-pane layout reached the subscriber")
+	// The layout change also queues a reconcile; let its list-windows land
+	// before counting.
+	f.awaitCommands(t, "list-windows", 2)
 
 	before := len(f.sentCommands())
 	require.ErrorIs(t, client.KillPane(ctx, "%2"), ErrUnknownPane)
