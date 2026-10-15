@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -236,4 +237,39 @@ func TestIsolationSessionSeesOnlyOwnData(t *testing.T) {
 	rec = s.send(call{method: http.MethodGet, target: "/api/v1/tokens", cookie: cookie})
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listed))
 	assert.Len(t, listed, 2, "B's setup token and the new one, never A's")
+}
+
+func TestIsolationSearchNeverReturnsOtherUsersDocuments(t *testing.T) {
+	s := newServer(t)
+	a, b := setupTenants(t, s)
+
+	search := func(tn tenant, q string) []driveapi.SearchHit {
+		rec := s.do(http.MethodGet, "/api/v1/search?q="+url.QueryEscape(q), tn.token, "")
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		var res driveapi.SearchResults
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+		return res.Hits
+	}
+
+	assert.Empty(t, search(b, "only"), "only A has this document")
+	assert.Len(t, search(a, "only"), 3)
+	for _, h := range search(b, "body") {
+		assert.Contains(t, h.Snippet, "B", "snippet came from B's own body")
+		assert.NotContains(t, h.Snippet, "of A")
+	}
+	assert.Len(t, search(b, "body"), 3)
+}
+
+func TestSearchEndpointValidation(t *testing.T) {
+	s := newServer(t)
+	tok := s.token(t, "dev@example.com", core.ScopeRead)
+
+	for _, target := range []string{
+		"/api/v1/search", "/api/v1/search?q=", "/api/v1/search?q=%20%20",
+		"/api/v1/search?q=a&limit=0", "/api/v1/search?q=a&limit=x", "/api/v1/search?q=a&space=bogus",
+	} {
+		assert.Equal(t, http.StatusUnprocessableEntity, s.do(http.MethodGet, target, tok, "").Code, target)
+	}
+	assert.Equal(t, http.StatusOK, s.do(http.MethodGet, "/api/v1/search?q=a&limit=9999&space=shared", tok, "").Code)
+	assert.Equal(t, http.StatusUnauthorized, s.do(http.MethodGet, "/api/v1/search?q=a", "", "").Code)
 }

@@ -48,7 +48,13 @@ func openUserDB(ctx context.Context, path string, migrated bool) (*UserDB, error
 			return nil, errors.Join(fmt.Errorf("migrate %s: %w", path, err), conn.Close())
 		}
 	}
-	return &UserDB{conn: conn, q: db.New(conn)}, nil
+	u := &UserDB{conn: conn, q: db.New(conn)}
+	if !migrated {
+		if err := u.backfillTitles(ctx); err != nil {
+			return nil, errors.Join(fmt.Errorf("backfill titles %s: %w", path, err), conn.Close())
+		}
+	}
+	return u, nil
 }
 
 func (u *UserDB) close() error { return u.conn.Close() }
@@ -74,6 +80,7 @@ func (u *UserDB) Put(ctx context.Context, d core.NewDocument, quota *int64) (cor
 			ID:        d.ID,
 			Space:     d.Space,
 			Path:      d.Path,
+			Title:     d.Title,
 			Kind:      d.Kind,
 			Sha256:    d.SHA256,
 			Size:      int64(len(d.Body)),
@@ -83,7 +90,7 @@ func (u *UserDB) Put(ctx context.Context, d core.NewDocument, quota *int64) (cor
 		if err != nil {
 			return wrap("upsert document", err)
 		}
-		out = core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}
+		out = core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Title: row.Title, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}
 		return nil
 	})
 	return out, err
@@ -94,7 +101,7 @@ func (u *UserDB) Get(ctx context.Context, space, path string) (core.Document, []
 	if err != nil {
 		return core.Document{}, nil, wrap("get document", err)
 	}
-	return core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}, row.Body, nil
+	return core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Title: row.Title, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}, row.Body, nil
 }
 
 func (u *UserDB) List(ctx context.Context, space string) ([]core.Document, error) {
@@ -104,7 +111,7 @@ func (u *UserDB) List(ctx context.Context, space string) ([]core.Document, error
 	}
 	out := make([]core.Document, len(rows))
 	for i, row := range rows {
-		out[i] = core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}
+		out[i] = core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Title: row.Title, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}
 	}
 	return out, nil
 }
@@ -134,7 +141,7 @@ func (u *UserDB) GetByID(ctx context.Context, id string) (core.Document, []byte,
 	if err != nil {
 		return core.Document{}, nil, wrap("get document by id", err)
 	}
-	return core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}, row.Body, nil
+	return core.Document{ID: row.ID, Space: row.Space, Path: row.Path, Title: row.Title, Kind: row.Kind, SHA256: row.Sha256, Size: row.Size, UpdatedAt: fromNanos(row.UpdatedAt)}, row.Body, nil
 }
 
 func (u *UserDB) HasID(ctx context.Context, id string) (bool, error) {
@@ -159,3 +166,32 @@ func wrap(op string, err error) error {
 }
 
 func fromNanos(n int64) time.Time { return time.Unix(0, n).UTC() }
+
+const backfillBatch = 100
+
+// backfillTitles titles rows written before migration 0002. Titles come from
+// Go, so SQL cannot fill them in the migration.
+func (u *UserDB) backfillTitles(ctx context.Context) error {
+	for {
+		rows, err := u.q.ListUntitledDocuments(ctx, backfillBatch)
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			return nil
+		}
+		err = sqlite.WithinTx(ctx, u.conn, func(ctx context.Context, tx *sql.Tx) error {
+			q := u.q.WithTx(tx)
+			for _, row := range rows {
+				title := core.DeriveTitle(row.Path, row.Kind, row.Body)
+				if err := q.SetDocumentTitle(ctx, db.SetDocumentTitleParams{Title: title, ID: row.ID}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+}

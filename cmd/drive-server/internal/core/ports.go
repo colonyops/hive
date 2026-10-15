@@ -50,6 +50,7 @@ type Document struct {
 	ID        string
 	Space     string
 	Path      string
+	Title     string
 	Kind      drive.Kind
 	SHA256    string
 	Size      int64
@@ -63,10 +64,18 @@ type NewDocument struct {
 	ID        string
 	Space     string
 	Path      string
+	Title     string
 	Kind      drive.Kind
 	SHA256    string
 	Body      []byte
 	UpdatedAt time.Time
+}
+
+// SearchHit is one match. Snippet wraps each matched run in
+// driveapi.SnippetMatchStart and driveapi.SnippetMatchEnd.
+type SearchHit struct {
+	Document Document
+	Snippet  string
 }
 
 type SpaceUsage struct {
@@ -94,6 +103,10 @@ type DocumentStore interface {
 	Delete(ctx context.Context, space, path string) (string, error)
 	GetByID(ctx context.Context, id string) (Document, []byte, error)
 	HasID(ctx context.Context, id string) (bool, error)
+	// Search matches q as plain terms, the last one as a prefix, in one space
+	// or in all of them when space is empty. Title and path matches rank above
+	// body matches.
+	Search(ctx context.Context, q, space string, limit int) ([]SearchHit, error)
 	// Usage is the sum of all stored body sizes.
 	Usage(ctx context.Context) (int64, error)
 }

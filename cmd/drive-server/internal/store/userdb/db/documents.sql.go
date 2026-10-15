@@ -28,7 +28,7 @@ func (q *Queries) DeleteDocument(ctx context.Context, arg DeleteDocumentParams) 
 }
 
 const getDocument = `-- name: GetDocument :one
-SELECT id, space, path, kind, sha256, size, body, updated_at FROM documents WHERE space = ? AND path = ?
+SELECT id, space, path, kind, sha256, size, body, updated_at, title FROM documents WHERE space = ? AND path = ?
 `
 
 type GetDocumentParams struct {
@@ -48,12 +48,13 @@ func (q *Queries) GetDocument(ctx context.Context, arg GetDocumentParams) (Docum
 		&i.Size,
 		&i.Body,
 		&i.UpdatedAt,
+		&i.Title,
 	)
 	return i, err
 }
 
 const getDocumentByID = `-- name: GetDocumentByID :one
-SELECT id, space, path, kind, sha256, size, body, updated_at FROM documents WHERE id = ?
+SELECT id, space, path, kind, sha256, size, body, updated_at, title FROM documents WHERE id = ?
 `
 
 func (q *Queries) GetDocumentByID(ctx context.Context, id string) (Document, error) {
@@ -68,6 +69,7 @@ func (q *Queries) GetDocumentByID(ctx context.Context, id string) (Document, err
 		&i.Size,
 		&i.Body,
 		&i.UpdatedAt,
+		&i.Title,
 	)
 	return i, err
 }
@@ -100,7 +102,7 @@ func (q *Queries) HasDocument(ctx context.Context, id string) (bool, error) {
 }
 
 const listDocuments = `-- name: ListDocuments :many
-SELECT id, space, path, kind, sha256, size, updated_at
+SELECT id, space, path, title, kind, sha256, size, updated_at
 FROM documents WHERE space = ? ORDER BY path
 `
 
@@ -108,6 +110,7 @@ type ListDocumentsRow struct {
 	ID        string     `json:"id"`
 	Space     string     `json:"space"`
 	Path      string     `json:"path"`
+	Title     string     `json:"title"`
 	Kind      drive.Kind `json:"kind"`
 	Sha256    string     `json:"sha256"`
 	Size      int64      `json:"size"`
@@ -127,6 +130,7 @@ func (q *Queries) ListDocuments(ctx context.Context, space string) ([]ListDocume
 			&i.ID,
 			&i.Space,
 			&i.Path,
+			&i.Title,
 			&i.Kind,
 			&i.Sha256,
 			&i.Size,
@@ -179,6 +183,59 @@ func (q *Queries) ListSpaceUsage(ctx context.Context) ([]ListSpaceUsageRow, erro
 	return items, nil
 }
 
+const listUntitledDocuments = `-- name: ListUntitledDocuments :many
+SELECT id, path, kind, body FROM documents WHERE title = '' LIMIT ?
+`
+
+type ListUntitledDocumentsRow struct {
+	ID   string     `json:"id"`
+	Path string     `json:"path"`
+	Kind drive.Kind `json:"kind"`
+	Body []byte     `json:"body"`
+}
+
+func (q *Queries) ListUntitledDocuments(ctx context.Context, limit int64) ([]ListUntitledDocumentsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUntitledDocuments, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUntitledDocumentsRow{}
+	for rows.Next() {
+		var i ListUntitledDocumentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Path,
+			&i.Kind,
+			&i.Body,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setDocumentTitle = `-- name: SetDocumentTitle :exec
+UPDATE documents SET title = ? WHERE id = ?
+`
+
+type SetDocumentTitleParams struct {
+	Title string `json:"title"`
+	ID    string `json:"id"`
+}
+
+func (q *Queries) SetDocumentTitle(ctx context.Context, arg SetDocumentTitleParams) error {
+	_, err := q.db.ExecContext(ctx, setDocumentTitle, arg.Title, arg.ID)
+	return err
+}
+
 const sumDocumentSize = `-- name: SumDocumentSize :one
 SELECT CAST(COALESCE(SUM(size), 0) AS INTEGER) AS bytes FROM documents
 `
@@ -191,21 +248,23 @@ func (q *Queries) SumDocumentSize(ctx context.Context) (int64, error) {
 }
 
 const upsertDocument = `-- name: UpsertDocument :one
-INSERT INTO documents (id, space, path, kind, sha256, size, body, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO documents (id, space, path, title, kind, sha256, size, body, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (space, path) DO UPDATE SET
+    title      = excluded.title,
     kind       = excluded.kind,
     sha256     = excluded.sha256,
     size       = excluded.size,
     body       = excluded.body,
     updated_at = excluded.updated_at
-RETURNING id, space, path, kind, sha256, size, updated_at
+RETURNING id, space, path, title, kind, sha256, size, updated_at
 `
 
 type UpsertDocumentParams struct {
 	ID        string     `json:"id"`
 	Space     string     `json:"space"`
 	Path      string     `json:"path"`
+	Title     string     `json:"title"`
 	Kind      drive.Kind `json:"kind"`
 	Sha256    string     `json:"sha256"`
 	Size      int64      `json:"size"`
@@ -217,6 +276,7 @@ type UpsertDocumentRow struct {
 	ID        string     `json:"id"`
 	Space     string     `json:"space"`
 	Path      string     `json:"path"`
+	Title     string     `json:"title"`
 	Kind      drive.Kind `json:"kind"`
 	Sha256    string     `json:"sha256"`
 	Size      int64      `json:"size"`
@@ -228,6 +288,7 @@ func (q *Queries) UpsertDocument(ctx context.Context, arg UpsertDocumentParams) 
 		arg.ID,
 		arg.Space,
 		arg.Path,
+		arg.Title,
 		arg.Kind,
 		arg.Sha256,
 		arg.Size,
@@ -239,6 +300,7 @@ func (q *Queries) UpsertDocument(ctx context.Context, arg UpsertDocumentParams) 
 		&i.ID,
 		&i.Space,
 		&i.Path,
+		&i.Title,
 		&i.Kind,
 		&i.Sha256,
 		&i.Size,

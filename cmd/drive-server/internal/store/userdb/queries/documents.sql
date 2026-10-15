@@ -1,19 +1,20 @@
 -- name: UpsertDocument :one
-INSERT INTO documents (id, space, path, kind, sha256, size, body, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO documents (id, space, path, title, kind, sha256, size, body, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (space, path) DO UPDATE SET
+    title      = excluded.title,
     kind       = excluded.kind,
     sha256     = excluded.sha256,
     size       = excluded.size,
     body       = excluded.body,
     updated_at = excluded.updated_at
-RETURNING id, space, path, kind, sha256, size, updated_at;
+RETURNING id, space, path, title, kind, sha256, size, updated_at;
 
 -- name: GetDocument :one
 SELECT * FROM documents WHERE space = ? AND path = ?;
 
 -- name: ListDocuments :many
-SELECT id, space, path, kind, sha256, size, updated_at
+SELECT id, space, path, title, kind, sha256, size, updated_at
 FROM documents WHERE space = ? ORDER BY path;
 
 -- name: ListSpaceUsage :many
@@ -34,3 +35,9 @@ SELECT CAST(COALESCE(SUM(size), 0) AS INTEGER) AS bytes FROM documents;
 
 -- name: GetDocumentSize :one
 SELECT size FROM documents WHERE space = ? AND path = ?;
+
+-- name: ListUntitledDocuments :many
+SELECT id, path, kind, body FROM documents WHERE title = '' LIMIT ?;
+
+-- name: SetDocumentTitle :exec
+UPDATE documents SET title = ? WHERE id = ?;
