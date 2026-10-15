@@ -11,14 +11,36 @@ import (
 )
 
 type Document struct {
-	ID        string     `json:"id"`
-	Space     string     `json:"space"`
-	Path      string     `json:"path"`
+	ID    string `json:"id"`
+	Space string `json:"space"`
+	Path  string `json:"path"`
+	// Title is the frontmatter title, else the first "# " heading, else the
+	// file name without its extension.
+	Title     string     `json:"title"`
 	Kind      drive.Kind `json:"kind"`
 	SHA256    string     `json:"sha256"`
 	Size      int64      `json:"size"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	Shared    *Share     `json:"shared,omitempty"`
+}
+
+// Snippet markers wrap each matched run in SearchHit.Snippet. They are
+// private-use characters, so a client escapes the text and then turns the
+// markers into highlight elements without parsing HTML from the server.
+const (
+	SnippetMatchStart = "\ue000"
+	SnippetMatchEnd   = "\ue001"
+)
+
+// SearchHit is one result of GET /api/v1/search. Title matches rank above
+// body matches.
+type SearchHit struct {
+	Document Document `json:"document"`
+	Snippet  string   `json:"snippet"`
+}
+
+type SearchResults struct {
+	Hits []SearchHit `json:"hits"`
 }
 
 type SpaceSummary struct {
