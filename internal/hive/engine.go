@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sync"
 	"sync/atomic"
 
@@ -21,6 +22,7 @@ import (
 	"github.com/colonyops/hive/internal/domain/review"
 	"github.com/colonyops/hive/internal/domain/terminal"
 	drivesvc "github.com/colonyops/hive/internal/hive/drive"
+	"github.com/colonyops/hive/internal/hive/driveremote"
 	"github.com/colonyops/hive/internal/hive/events"
 	"github.com/colonyops/hive/internal/hive/gitstatus"
 	hcsvc "github.com/colonyops/hive/internal/hive/hc"
@@ -29,6 +31,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/session/scripts"
 	statussvc "github.com/colonyops/hive/internal/hive/status"
 	todosvc "github.com/colonyops/hive/internal/hive/todo"
+	"github.com/colonyops/hive/internal/platform/credentials"
 	"github.com/colonyops/hive/internal/platform/git"
 	"github.com/colonyops/hive/internal/store"
 	"github.com/colonyops/hive/internal/store/db"
@@ -56,6 +59,8 @@ type Ports struct {
 	Stdout io.Writer
 	Stderr io.Writer
 	Logger zerolog.Logger
+	// Credentials holds the drive server token. Nil disables DriveRemote.
+	Credentials credentials.Store
 }
 
 // services is everything one config decides. It is never mutated after
@@ -85,6 +90,7 @@ type Engine struct {
 	notifications notify.Store
 	reviews       review.Store
 	drive         *drivesvc.Service
+	driveRemote   *driveremote.Service
 	reloadMu      sync.Mutex
 	current       atomic.Pointer[services]
 }
@@ -141,6 +147,9 @@ func New(cfg *config.Config, p Ports) (*Engine, error) {
 	}
 	e.current.Store(built)
 	e.drive = drivesvc.NewService(p.Logger, cfg, built.git, p.Bus)
+	if p.Credentials != nil {
+		e.driveRemote = driveremote.New(p.Logger, e.drive, store.NewDriveUploadStore(p.DB), p.Credentials, os.Getenv)
+	}
 	return e, nil
 }
 
@@ -241,6 +250,10 @@ func (e *Engine) Messages() *msgsvc.Service { return e.load().messages }
 
 // Drive returns the Hive Drive service. Reload keeps it and re-roots it.
 func (e *Engine) Drive() *drivesvc.Service { return e.drive }
+
+// DriveRemote returns the drive server client service, or nil when the
+// program gave the engine no credential store.
+func (e *Engine) DriveRemote() *driveremote.Service { return e.driveRemote }
 
 func (e *Engine) Todos() *todosvc.Service { return e.load().todos }
 
