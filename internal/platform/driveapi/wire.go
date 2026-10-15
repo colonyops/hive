@@ -66,7 +66,7 @@ type Share struct {
 	URL       string     `json:"url"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// ExpiresIn is the preset behind ExpiresAt: "1d", "7d", "30d", or "" for
-	// no expiry or a link made before presets were stored.
+	// no expiry.
 	ExpiresIn string `json:"expires_in"`
 }
 

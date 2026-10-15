@@ -29,7 +29,7 @@ func (q *Queries) DeleteDocument(ctx context.Context, arg DeleteDocumentParams) 
 }
 
 const getDocument = `-- name: GetDocument :one
-SELECT id, space, path, kind, sha256, size, body, updated_at, title, search_text FROM documents WHERE space = ? AND path = ?
+SELECT id, space, path, title, kind, sha256, size, updated_at, body, search_text FROM documents WHERE space = ? AND path = ?
 `
 
 type GetDocumentParams struct {
@@ -44,19 +44,19 @@ func (q *Queries) GetDocument(ctx context.Context, arg GetDocumentParams) (Docum
 		&i.ID,
 		&i.Space,
 		&i.Path,
+		&i.Title,
 		&i.Kind,
 		&i.Sha256,
 		&i.Size,
-		&i.Body,
 		&i.UpdatedAt,
-		&i.Title,
+		&i.Body,
 		&i.SearchText,
 	)
 	return i, err
 }
 
 const getDocumentByID = `-- name: GetDocumentByID :one
-SELECT id, space, path, kind, sha256, size, body, updated_at, title, search_text FROM documents WHERE id = ?
+SELECT id, space, path, title, kind, sha256, size, updated_at, body, search_text FROM documents WHERE id = ?
 `
 
 func (q *Queries) GetDocumentByID(ctx context.Context, id string) (Document, error) {
@@ -66,12 +66,12 @@ func (q *Queries) GetDocumentByID(ctx context.Context, id string) (Document, err
 		&i.ID,
 		&i.Space,
 		&i.Path,
+		&i.Title,
 		&i.Kind,
 		&i.Sha256,
 		&i.Size,
-		&i.Body,
 		&i.UpdatedAt,
-		&i.Title,
+		&i.Body,
 		&i.SearchText,
 	)
 	return i, err
@@ -292,112 +292,6 @@ func (q *Queries) ListSpaceUsage(ctx context.Context) ([]ListSpaceUsageRow, erro
 	return items, nil
 }
 
-const listUnindexedHTMLDocuments = `-- name: ListUnindexedHTMLDocuments :many
-SELECT id, body FROM documents
-WHERE kind = 'html' AND search_text = '' AND id > ?
-ORDER BY id LIMIT ?
-`
-
-type ListUnindexedHTMLDocumentsParams struct {
-	ID    string `json:"id"`
-	Limit int64  `json:"limit"`
-}
-
-type ListUnindexedHTMLDocumentsRow struct {
-	ID   string `json:"id"`
-	Body []byte `json:"body"`
-}
-
-func (q *Queries) ListUnindexedHTMLDocuments(ctx context.Context, arg ListUnindexedHTMLDocumentsParams) ([]ListUnindexedHTMLDocumentsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUnindexedHTMLDocuments, arg.ID, arg.Limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListUnindexedHTMLDocumentsRow{}
-	for rows.Next() {
-		var i ListUnindexedHTMLDocumentsRow
-		if err := rows.Scan(&i.ID, &i.Body); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listUntitledDocuments = `-- name: ListUntitledDocuments :many
-SELECT id, path, kind, body FROM documents WHERE title = '' LIMIT ?
-`
-
-type ListUntitledDocumentsRow struct {
-	ID   string     `json:"id"`
-	Path string     `json:"path"`
-	Kind drive.Kind `json:"kind"`
-	Body []byte     `json:"body"`
-}
-
-func (q *Queries) ListUntitledDocuments(ctx context.Context, limit int64) ([]ListUntitledDocumentsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUntitledDocuments, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListUntitledDocumentsRow{}
-	for rows.Next() {
-		var i ListUntitledDocumentsRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Path,
-			&i.Kind,
-			&i.Body,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const setDocumentSearchText = `-- name: SetDocumentSearchText :exec
-UPDATE documents SET search_text = ? WHERE id = ?
-`
-
-type SetDocumentSearchTextParams struct {
-	SearchText string `json:"search_text"`
-	ID         string `json:"id"`
-}
-
-func (q *Queries) SetDocumentSearchText(ctx context.Context, arg SetDocumentSearchTextParams) error {
-	_, err := q.db.ExecContext(ctx, setDocumentSearchText, arg.SearchText, arg.ID)
-	return err
-}
-
-const setDocumentTitle = `-- name: SetDocumentTitle :exec
-UPDATE documents SET title = ? WHERE id = ?
-`
-
-type SetDocumentTitleParams struct {
-	Title string `json:"title"`
-	ID    string `json:"id"`
-}
-
-func (q *Queries) SetDocumentTitle(ctx context.Context, arg SetDocumentTitleParams) error {
-	_, err := q.db.ExecContext(ctx, setDocumentTitle, arg.Title, arg.ID)
-	return err
-}
-
 const sumDocumentSize = `-- name: SumDocumentSize :one
 SELECT CAST(COALESCE(SUM(size), 0) AS INTEGER) AS bytes FROM documents
 `
@@ -410,7 +304,7 @@ func (q *Queries) SumDocumentSize(ctx context.Context) (int64, error) {
 }
 
 const upsertDocument = `-- name: UpsertDocument :one
-INSERT INTO documents (id, space, path, title, kind, sha256, size, body, search_text, updated_at)
+INSERT INTO documents (id, space, path, title, kind, sha256, size, updated_at, body, search_text)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (space, path) DO UPDATE SET
     title       = excluded.title,
@@ -431,9 +325,9 @@ type UpsertDocumentParams struct {
 	Kind       drive.Kind `json:"kind"`
 	Sha256     string     `json:"sha256"`
 	Size       int64      `json:"size"`
+	UpdatedAt  int64      `json:"updated_at"`
 	Body       []byte     `json:"body"`
 	SearchText string     `json:"search_text"`
-	UpdatedAt  int64      `json:"updated_at"`
 }
 
 type UpsertDocumentRow struct {
@@ -456,9 +350,9 @@ func (q *Queries) UpsertDocument(ctx context.Context, arg UpsertDocumentParams) 
 		arg.Kind,
 		arg.Sha256,
 		arg.Size,
+		arg.UpdatedAt,
 		arg.Body,
 		arg.SearchText,
-		arg.UpdatedAt,
 	)
 	var i UpsertDocumentRow
 	err := row.Scan(

@@ -30,13 +30,12 @@ const expiryOptions: { value: ShareExpiry; label: string; title: string }[] = [
 
 const toast = useToast()
 const current = ref<Share | null>(null)
-const expiry = ref<ShareExpiry | undefined>('')
-// A link with an expiry but no stored preset predates presets, so no option is marked.
+const expiry = ref<ShareExpiry>('')
 watch(
   () => props.share,
   (share) => {
     current.value = share
-    expiry.value = share?.expires_at && !share.expires_in ? undefined : (share?.expires_in ?? '')
+    expiry.value = share?.expires_in ?? ''
   },
   { immediate: true },
 )
@@ -169,7 +168,7 @@ function chooseExpiry(value: ShareExpiry): void {
         >
           Stop sharing
         </BaseButton>
-        <BaseButton v-else size="sm" :busy="busy" data-testid="share-create" @click="create(expiry ?? '')">
+        <BaseButton v-else size="sm" :busy="busy" data-testid="share-create" @click="create(expiry)">
           Create link
         </BaseButton>
       </div>

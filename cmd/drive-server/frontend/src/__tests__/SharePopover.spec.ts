@@ -98,12 +98,6 @@ describe('SharePopover', () => {
     expect(pick('share-expiry-text').textContent).toBe('No expiry')
   })
 
-  it('marks no option for a link that has an expiry but no preset', () => {
-    mountPopover({ url, expires_in: '', expires_at: '2026-11-14T13:46:57Z' })
-
-    for (const id of ['', '1d', '7d', '30d']) expect(pressed(id)).toBe('false')
-  })
-
   it('clears the expiry when None is chosen and keeps the new state', async () => {
     api.share.mockResolvedValue({ url, expires_in: '' })
     const wrapper = mountPopover({ url, expires_in: '30d', expires_at: '2026-11-14T13:46:57Z' })

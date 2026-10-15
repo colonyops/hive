@@ -1,5 +1,5 @@
 -- name: UpsertDocument :one
-INSERT INTO documents (id, space, path, title, kind, sha256, size, body, search_text, updated_at)
+INSERT INTO documents (id, space, path, title, kind, sha256, size, updated_at, body, search_text)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (space, path) DO UPDATE SET
     title       = excluded.title,
@@ -36,20 +36,6 @@ SELECT CAST(COALESCE(SUM(size), 0) AS INTEGER) AS bytes FROM documents;
 
 -- name: GetDocumentSize :one
 SELECT size FROM documents WHERE space = ? AND path = ?;
-
--- name: ListUntitledDocuments :many
-SELECT id, path, kind, body FROM documents WHERE title = '' LIMIT ?;
-
--- name: SetDocumentTitle :exec
-UPDATE documents SET title = ? WHERE id = ?;
-
--- name: ListUnindexedHTMLDocuments :many
-SELECT id, body FROM documents
-WHERE kind = 'html' AND search_text = '' AND id > ?
-ORDER BY id LIMIT ?;
-
--- name: SetDocumentSearchText :exec
-UPDATE documents SET search_text = ? WHERE id = ?;
 
 -- name: ListRecentDocuments :many
 SELECT id, space, path, title, kind, sha256, size, updated_at
