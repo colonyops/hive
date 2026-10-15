@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 	"github.com/colonyops/hive/cmd/drive-server/internal/store/control/db"
@@ -33,6 +34,13 @@ func (a accounts) GetByID(ctx context.Context, id string) (core.Account, error) 
 		return core.Account{}, wrap("get account by id", err)
 	}
 	return accountFromRow(row), nil
+}
+
+func (a accounts) SetLastSignIn(ctx context.Context, id string, at time.Time) error {
+	return wrap("set last sign-in", a.s.q.SetAccountLastSignIn(ctx, db.SetAccountLastSignInParams{
+		LastSignInAt: sql.NullInt64{Int64: toNanos(at), Valid: true},
+		ID:           id,
+	}))
 }
 
 func (a accounts) List(ctx context.Context) ([]core.Account, error) {

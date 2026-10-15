@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"time"
 
 	"github.com/hay-kot/httpkit/errchain"
@@ -21,8 +22,15 @@ const shutdownGrace = 10 * time.Second
 // Services are the core services the handlers call.
 type Services struct {
 	Tokens    *core.Tokens
+	Sessions  *core.Sessions
+	SignIn    *core.SignIn
 	Documents *core.Documents
 	Shares    *core.Shares
+
+	// BaseURL decides the session cookie's name and Secure flag.
+	BaseURL string
+	// TrustedProxies are the proxies whose X-Forwarded-For names the client.
+	TrustedProxies []netip.Prefix
 }
 
 // New returns the server's handler. /healthz is quiet in the request log
@@ -31,7 +39,9 @@ func New(log zerolog.Logger, info buildinfo.Info, svc Services) http.Handler {
 	chain := errchain.New(mid.Errors(log, mapError))
 	mux := http.NewServeMux()
 	registerRoutes(mux, chain, info, svc)
-	return mid.Logger(log, "/healthz")(mux)
+	// Cookie requests are cross-origin-checked here; bearer calls send no
+	// Origin and pass.
+	return mid.Logger(log, "/healthz")(http.NewCrossOriginProtection().Handler(mux))
 }
 
 // Serve runs h on ln until ctx is done, then gives in-flight requests

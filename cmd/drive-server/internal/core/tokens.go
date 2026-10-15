@@ -20,6 +20,14 @@ const (
 	touchInterval = time.Hour
 )
 
+var tokenLifetimes = map[string]time.Duration{
+	"1d":   24 * time.Hour,
+	"7d":   7 * 24 * time.Hour,
+	"30d":  30 * 24 * time.Hour,
+	"90d":  90 * 24 * time.Hour,
+	"365d": 365 * 24 * time.Hour,
+}
+
 type Tokens struct {
 	tokens   TokenStore
 	accounts AccountStore
@@ -104,6 +112,21 @@ func (t *Tokens) Resolve(ctx context.Context, secret string) (Principal, error) 
 		}
 	}
 	return Principal{UserID: acct.ID, Email: acct.Email, Scope: tok.Scope, Policy: policy}, nil
+}
+
+// MintFor is Mint with an expiry named as the API names it: "", "1d", "7d",
+// "30d", "90d", or "365d".
+func (t *Tokens) MintFor(ctx context.Context, userID, name string, scope Scope, expiresIn string) (string, Token, error) {
+	var expiresAt *time.Time
+	if expiresIn != "" {
+		lifetime, ok := tokenLifetimes[expiresIn]
+		if !ok {
+			return "", Token{}, NewError(KindInvalid, `expires_in must be "", "1d", "7d", "30d", "90d", or "365d"`)
+		}
+		at := t.now().Add(lifetime)
+		expiresAt = &at
+	}
+	return t.Mint(ctx, userID, name, scope, expiresAt)
 }
 
 func (t *Tokens) List(ctx context.Context, userID string) ([]Token, error) {

@@ -58,6 +58,38 @@ type Quota struct {
 	Limit *int64 `json:"limit"`
 }
 
+type SignInStart struct {
+	Email string `json:"email"`
+}
+
+type SignInVerify struct {
+	Email string `json:"email"`
+	Code  string `json:"code"`
+}
+
+// CreateToken.Scope is "read" or "push". ExpiresIn is "", "1d", "7d", "30d",
+// "90d", or "365d"; "" never expires.
+type CreateToken struct {
+	Name      string `json:"name"`
+	Scope     string `json:"scope"`
+	ExpiresIn string `json:"expires_in,omitempty"`
+}
+
+type Token struct {
+	ID         string     `json:"id"`
+	Name       string     `json:"name"`
+	Scope      string     `json:"scope"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
+// CreatedToken is the only response that carries the secret.
+type CreatedToken struct {
+	Secret string `json:"secret"`
+	Token
+}
+
 // ErrorBody is the JSON shape of every error response. It matches
 // internal/web.ErrorBody, which a platform package may not import.
 type ErrorBody struct {

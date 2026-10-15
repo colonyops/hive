@@ -17,3 +17,6 @@ DELETE FROM accounts WHERE email = ?;
 
 -- name: DeleteSignInCodesByEmail :exec
 DELETE FROM sign_in_codes WHERE email = ?;
+
+-- name: SetAccountLastSignIn :exec
+UPDATE accounts SET last_sign_in_at = ? WHERE id = ?;

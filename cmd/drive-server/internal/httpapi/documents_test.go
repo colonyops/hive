@@ -32,19 +32,21 @@ type server struct {
 	dataDir string
 }
 
-func newServer(t *testing.T) *server {
+func newServer(t *testing.T) *server { return newServerAt(t, testBaseURL) }
+
+func newServerAt(t *testing.T, baseURL string) *server {
 	t.Helper()
 	dir := t.TempDir()
 	svc, err := app.OpenServices(t.Context(), zerolog.Nop(), config.Config{
 		DataDir:         dir,
-		BaseURL:         testBaseURL,
+		BaseURL:         baseURL,
 		MaxDocumentSize: config.Size{Bytes: testMaxDocumentSize},
 		UserPolicies:    []config.Policy{devPolicy(config.Size{Bytes: 1 << 20})},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = svc.Close() })
 	return &server{
-		h:       httpapi.New(zerolog.Nop(), buildinfo.Info{}, httpapi.Services{Tokens: svc.Tokens, Documents: svc.Documents, Shares: svc.Shares}),
+		h:       httpapi.New(zerolog.Nop(), buildinfo.Info{}, svc.HTTP(baseURL, nil)),
 		svc:     svc,
 		dataDir: dir,
 	}

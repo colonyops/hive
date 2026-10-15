@@ -22,7 +22,7 @@ func newMeServer(t *testing.T, policy config.Policy) (http.Handler, *app.Service
 	svc, err := app.OpenServices(t.Context(), zerolog.Nop(), config.Config{DataDir: t.TempDir(), UserPolicies: []config.Policy{policy}})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = svc.Close() })
-	return httpapi.New(zerolog.Nop(), buildinfo.Info{}, httpapi.Services{Tokens: svc.Tokens, Documents: svc.Documents}), svc
+	return httpapi.New(zerolog.Nop(), buildinfo.Info{}, svc.HTTP("https://drive.test", nil)), svc
 }
 
 func getMe(h http.Handler, authorization string) *httptest.ResponseRecorder {

@@ -21,20 +21,45 @@ func principalFrom(ctx context.Context) (core.Principal, bool) {
 	return p, ok
 }
 
-// Authenticate turns an "Authorization: Bearer hds_..." header into a
-// Principal in the request context.
-func Authenticate(tokens *core.Tokens) errchain.Middleware {
+// Authenticate turns an "Authorization: Bearer hds_..." header, or else the
+// session cookie, into a Principal in the request context. A request that
+// sends a bearer header is judged on it alone, so a stale cookie cannot
+// override a token.
+func Authenticate(tokens *core.Tokens, sessions *core.Sessions, cookieName string) errchain.Middleware {
 	return func(next errchain.Handler) errchain.Handler {
 		return errchain.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-			secret := bearer(r)
-			if secret == "" {
-				return core.NewError(core.KindUnauthenticated, "missing token")
-			}
-			p, err := tokens.Resolve(r.Context(), secret)
+			p, err := resolvePrincipal(r, tokens, sessions, cookieName)
 			if err != nil {
 				return err
 			}
 			return next.ServeHTTP(w, r.WithContext(withPrincipal(r.Context(), p)))
+		})
+	}
+}
+
+func resolvePrincipal(r *http.Request, tokens *core.Tokens, sessions *core.Sessions, cookieName string) (core.Principal, error) {
+	if secret := bearer(r); secret != "" {
+		return tokens.Resolve(r.Context(), secret)
+	}
+	if c, err := r.Cookie(cookieName); err == nil && c.Value != "" {
+		return sessions.Resolve(r.Context(), c.Value)
+	}
+	return core.Principal{}, core.NewError(core.KindUnauthenticated, "missing token")
+}
+
+// RequireSession rejects a request that did not authenticate by session
+// cookie, so a token cannot mint more tokens. It runs after Authenticate.
+func RequireSession() errchain.Middleware {
+	return func(next errchain.Handler) errchain.Handler {
+		return errchain.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
+			p, ok := principalFrom(r.Context())
+			if !ok {
+				return core.NewError(core.KindUnauthenticated, "not signed in")
+			}
+			if !p.ViaSession {
+				return core.NewError(core.KindForbidden, "this request needs a signed-in browser session, not a token")
+			}
+			return next.ServeHTTP(w, r)
 		})
 	}
 }

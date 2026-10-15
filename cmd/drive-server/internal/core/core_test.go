@@ -49,6 +49,8 @@ type env struct {
 	docs     *core.Documents
 	shares   *core.Shares
 	sweeper  *core.Sweeper
+	sessions *core.Sessions
+	signIn   *core.SignIn
 	users    core.UserStores
 	clock    *clock
 }
@@ -65,15 +67,19 @@ func newEnv(t *testing.T, ps ...config.Policy) *env {
 
 	c := &clock{now: time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)}
 	policies := core.NewPolicies(ps)
+	accounts := core.NewAccounts(store.Accounts(), pool.Stores(), policies, core.WithClock(c.Now))
+	sessions := core.NewSessions(store.Sessions(), store.Accounts(), policies, core.WithClock(c.Now))
 	return &env{
 		dataDir:  dir,
+		sessions: sessions,
+		signIn:   core.NewSignIn(zerolog.Nop(), store.Codes(), store.Accounts(), store.Outbox(), policies, accounts, sessions, core.WithClock(c.Now), core.WithBaseURL(testBaseURL)),
 		store:    store,
 		policies: policies,
-		accounts: core.NewAccounts(store.Accounts(), pool.Stores(), policies, core.WithClock(c.Now)),
+		accounts: accounts,
 		tokens:   core.NewTokens(store.Tokens(), store.Accounts(), policies, core.WithClock(c.Now)),
 		docs:     core.NewDocuments(pool.Stores(), store.Shares(), testMaxDocumentSize, core.WithClock(c.Now), core.WithBaseURL(testBaseURL)),
 		shares:   core.NewShares(store.Shares(), store.Accounts(), pool.Stores(), policies, core.WithClock(c.Now), core.WithBaseURL(testBaseURL)),
-		sweeper:  core.NewSweeper(zerolog.Nop(), store.Shares(), pool.Stores(), core.WithClock(c.Now)),
+		sweeper:  core.NewSweeper(zerolog.Nop(), store.Shares(), store.Codes(), store.Sessions(), pool.Stores(), core.WithClock(c.Now)),
 		users:    pool.Stores(),
 		clock:    c,
 	}

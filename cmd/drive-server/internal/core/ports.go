@@ -30,6 +30,7 @@ type AccountStore interface {
 	Insert(ctx context.Context, a Account) error
 	GetByEmail(ctx context.Context, email string) (Account, error)
 	GetByID(ctx context.Context, id string) (Account, error)
+	SetLastSignIn(ctx context.Context, id string, at time.Time) error
 	List(ctx context.Context) ([]Account, error)
 	// DeleteByEmail removes the account, and with it everything that
 	// references it: tokens, sessions, share links, and pending sign-in codes.
@@ -129,4 +130,52 @@ type ShareStore interface {
 	Delete(ctx context.Context, id string) error
 	DeleteByDocument(ctx context.Context, userID, documentID string) error
 	DeleteExpired(ctx context.Context, now time.Time) (int, error)
+}
+
+// CodeStore holds at most one pending sign-in code per email.
+type CodeStore interface {
+	// Put replaces email's pending code.
+	Put(ctx context.Context, email, codeHash string, expiresAt time.Time) error
+	// Consume checks codeHash against email's pending code. A match burns the
+	// code and returns ok. A miss counts an attempt; the code burns on the
+	// maxAttempts-th miss. left is the attempts remaining, and 0 when no live
+	// code remains.
+	Consume(ctx context.Context, email, codeHash string, now time.Time, maxAttempts int) (ok bool, left int, err error)
+	DeleteExpired(ctx context.Context, now time.Time) (int, error)
+}
+
+type Session struct {
+	ID        string
+	UserID    string
+	ExpiresAt time.Time
+	CreatedAt time.Time
+}
+
+// SessionStore methods return ErrNotFound for a missing session.
+type SessionStore interface {
+	Insert(ctx context.Context, s Session, valueHash string) error
+	GetByValueHash(ctx context.Context, valueHash string) (Session, error)
+	SetExpiry(ctx context.Context, id string, expiresAt time.Time) error
+	// DeleteByValueHash does nothing when the session is already gone.
+	DeleteByValueHash(ctx context.Context, valueHash string) error
+	DeleteExpired(ctx context.Context, now time.Time) (int, error)
+}
+
+type Mail struct {
+	ID        string
+	To        string
+	Subject   string
+	Body      string
+	Attempts  int
+	NextAt    time.Time
+	CreatedAt time.Time
+}
+
+type OutboxStore interface {
+	Append(ctx context.Context, m Mail) error
+	// Due returns up to limit mails whose NextAt is not after now, oldest first.
+	Due(ctx context.Context, now time.Time, limit int) ([]Mail, error)
+	// MarkSent removes m: the outbox holds only mail still to send.
+	MarkSent(ctx context.Context, id string) error
+	MarkFailed(ctx context.Context, id string, nextAt time.Time) error
 }

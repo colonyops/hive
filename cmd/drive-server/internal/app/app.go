@@ -6,18 +6,24 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"time"
 
 	"github.com/hay-kot/appkit/plugs"
 	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/cmd/drive-server/internal/config"
+	"github.com/colonyops/hive/cmd/drive-server/internal/guard"
 	"github.com/colonyops/hive/cmd/drive-server/internal/httpapi"
+	"github.com/colonyops/hive/cmd/drive-server/internal/mail"
 	"github.com/colonyops/hive/pkg/buildinfo"
 	"github.com/colonyops/hive/pkg/logutils"
 )
 
-const sweepEvery = time.Minute
+const (
+	sweepEvery = time.Minute
+	mailEvery  = 5 * time.Second
+)
 
 type Options struct {
 	Info buildinfo.Info
@@ -25,6 +31,14 @@ type Options struct {
 
 // Run serves until ctx is done or a plug fails.
 func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Options) error {
+	sender, err := newSender(cfg, os.Stdout)
+	if err != nil {
+		return err
+	}
+	trusted, err := guard.ParseProxies(cfg.TrustedProxies)
+	if err != nil {
+		return err
+	}
 	svc, err := OpenServices(ctx, log, cfg)
 	if err != nil {
 		return err
@@ -42,7 +56,7 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	defer func() { _ = ln.Close() }()
 
 	httpLog := logutils.Component(log, "httpapi")
-	handler := httpapi.New(httpLog, opts.Info, httpapi.Services{Tokens: svc.Tokens, Documents: svc.Documents, Shares: svc.Shares})
+	handler := httpapi.New(httpLog, opts.Info, svc.HTTP(cfg.BaseURL, trusted))
 
 	log.Info().Str("addr", ln.Addr().String()).Str("base_url", cfg.BaseURL).Str("version", opts.Info.Version).Msg("drive server listening")
 
@@ -53,6 +67,10 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	)
 	mgr.Add(plugs.PluginFunc("http", func(ctx context.Context) error {
 		return httpapi.Serve(ctx, ln, handler, httpLog)
+	}))
+	mailer := mail.NewMailer(log, svc.Outbox, sender, nil)
+	mgr.Add(plugs.PluginFunc("mailer", func(ctx context.Context) error {
+		return mailer.Run(ctx, mailEvery)
 	}))
 	mgr.Add(plugs.PluginFunc("sweeper", func(ctx context.Context) error {
 		return svc.Sweeper.Run(ctx, sweepEvery)
