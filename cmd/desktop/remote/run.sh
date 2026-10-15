@@ -41,7 +41,8 @@ CONFIG
     echo "Desktop retrieves this credential through SSH automatically. See cmd/desktop/remote/README.md."
     ;;
   test) "${compose[@]}" --profile test run --no-deps --build --rm smoke ;;
+  test-unattended) "${compose[@]}" --profile test run --no-deps --build --rm -e HIVE_REMOTE_TEST=unattended smoke ;;
   shell) exec ssh "${ssh_args[@]}" -t hive@127.0.0.1 ;;
   down) "${compose[@]}" down ;;
-  *) echo 'Usage: run.sh up|ssh-config|tunnel|connection|shell|test|down' >&2; exit 2 ;;
+  *) echo 'Usage: run.sh up|ssh-config|tunnel|connection|shell|test|test-unattended|down' >&2; exit 2 ;;
 esac

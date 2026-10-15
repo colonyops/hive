@@ -47,6 +47,23 @@ HTTPS discovery, terminal input, resize, windows, SSH stream loss/reconnect,
 inbox reads, and remote chat creation. It also checks that the browser does not
 contact the remote endpoint. Browser and tmux tests stay inside Docker.
 
+```sh
+mise run desktop:remote:test-unattended
+```
+
+The unattended test connects a local Desktop, disconnects it, then stops both
+the local backend process and browser. While they are stopped, the remote's
+real scheduler launches a chat and an incoming webhook launches an inbox worker.
+A deterministic Python command stands in for the AI agent: it posts result
+items and marks the incoming item done. The test checks the scheduler history,
+worker receipts, and archived inbox item before it restarts Desktop. It then
+reconnects through SSH/TLS and checks that both result items appear in the UI.
+
+Each run uses a unique workspace, flow, and item IDs, and deletes its workspace
+and flow afterward. No AI login, host tmux, direct database reads, or forced
+scheduler ticks are needed. This covers incoming webhook notifications and
+inbox processing; it does not assert OS notification banners or AI reasoning.
+
 ## Other hosts
 
 Build the remote backend with `server,terminals`. Set its normal Hive data and
