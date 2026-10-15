@@ -172,7 +172,8 @@ func (c *Client) List(ctx context.Context, space drive.Space) ([]Document, error
 }
 
 // Share creates the document's public link, or returns the existing one.
-// expiresIn is "", "1d", "7d", or "30d".
+// expiresIn is "", "1d", "7d", "30d", or "none". "" leaves an existing link's expiry
+// unchanged and gives a new link none. "none" clears the expiry.
 func (c *Client) Share(ctx context.Context, space drive.Space, path, expiresIn string) (Share, error) {
 	resp, err := c.http.Post(ctx, SpacePrefix(space)+"/shares/"+escapePath(path),
 		httpclient.JSONBody(ShareRequest{ExpiresIn: expiresIn}), httpclient.JSONContent())

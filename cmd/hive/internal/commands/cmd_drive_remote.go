@@ -234,7 +234,8 @@ func (cmd *DriveCmd) shareCmd() *cli.Command {
 		Description: `Creates a public /s/<slug> link for a document that was pushed. Anyone with
 the link can read it. Sharing again returns the same link.
 
---expires takes 1d, 7d, or 30d. Without it the link does not expire.
+--expires takes 1d, 7d, 30d, or none. Without it, a new link does not expire and an
+existing link keeps its expiry. none removes an existing expiry.
 
 Example: hive drive share plans/ship.md --expires 7d`,
 		Flags: []cli.Flag{
@@ -242,7 +243,7 @@ Example: hive drive share plans/ship.md --expires 7d`,
 			cmd.jsonFlag(),
 			&cli.StringFlag{
 				Name:        "expires",
-				Usage:       "link lifetime: 1d, 7d, or 30d",
+				Usage:       "link lifetime: 1d, 7d, 30d, or none",
 				Destination: &cmd.expires,
 			},
 		},
