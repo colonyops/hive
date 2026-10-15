@@ -2,12 +2,12 @@
 // Terminal settings: everything that governs a terminal wherever one is drawn
 // — the Code tab, the pop-up panel, and the Agents area's chats.
 import { computed, defineAsyncComponent, onMounted } from 'vue'
-import AppSelect from './ui/AppSelect.vue'
-import AppSwitch from './ui/AppSwitch.vue'
+import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
+import AppSwitch from '@hive/ui/components/ui/AppSwitch.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
-import SegmentedControl from './ui/SegmentedControl.vue'
+import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
 import SettingsStepper from './settings/SettingsStepper.vue'
 import {
   maxTerminalFontSizePx,

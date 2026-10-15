@@ -7,10 +7,10 @@ import { ref, shallowRef } from 'vue'
 import IconEllipsisVertical from '~icons/lucide/ellipsis-vertical'
 import IconPlus from '~icons/lucide/plus'
 import IconRotateCw from '~icons/lucide/rotate-cw'
-import AppMenu from '../ui/AppMenu.vue'
-import IconButton from '../ui/IconButton.vue'
-import SearchField from '../ui/SearchField.vue'
-import type { MenuEntry } from '../../types/menu'
+import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import SearchField from '@hive/ui/components/ui/SearchField.vue'
+import type { MenuEntry } from '@hive/ui/types/menu'
 
 defineOptions({ inheritAttrs: false })
 

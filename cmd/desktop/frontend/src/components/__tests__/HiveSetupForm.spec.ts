@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
-import AppSelect from '../ui/AppSelect.vue'
+import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
 import HiveSetupForm from '../HiveSetupForm.vue'
 
 const AGENTS = [

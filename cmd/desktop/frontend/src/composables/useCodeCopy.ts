@@ -1,6 +1,6 @@
 import { onScopeDispose } from 'vue'
 import { codeCopyButtonClass } from '../lib/githubMarkdown'
-import { useClipboard } from './useClipboard'
+import { useClipboard } from '@hive/ui/composables/useClipboard'
 import { useToasts } from './useToasts'
 
 const copiedFor = 1500

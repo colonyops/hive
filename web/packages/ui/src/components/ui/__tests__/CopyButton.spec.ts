@@ -1,14 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-
-const mocks = vi.hoisted(() => ({ SetText: vi.fn() }))
-vi.mock('@wailsio/runtime', () => ({ Clipboard: { SetText: mocks.SetText } }))
-
+import { fakePlatform } from '../../../test-utils/platform'
 import CopyButton from '../CopyButton.vue'
 
 beforeEach(() => {
   vi.useFakeTimers()
-  mocks.SetText.mockReset().mockResolvedValue(undefined)
 })
 
 afterEach(() => {
@@ -21,7 +17,7 @@ describe('CopyButton', () => {
 
     await wrapper.trigger('click')
     await flushPromises()
-    expect(mocks.SetText).toHaveBeenCalledWith('abc123')
+    expect(fakePlatform.clipboard.writeText).toHaveBeenCalledWith('abc123')
     expect(wrapper.text()).toBe('Copied')
 
     vi.advanceTimersByTime(2000)
@@ -35,7 +31,7 @@ describe('CopyButton', () => {
     await wrapper.trigger('click')
     await flushPromises()
 
-    expect(mocks.SetText).not.toHaveBeenCalled()
+    expect(fakePlatform.clipboard.writeText).not.toHaveBeenCalled()
     expect(wrapper.text()).toBe('Copy')
   })
 

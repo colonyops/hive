@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { errorText } from '../lib/appError'
+import { errorText } from '../lib/errorText'
 
 /**
  * One line of the dialog's checklist: `danger` marks work the operation

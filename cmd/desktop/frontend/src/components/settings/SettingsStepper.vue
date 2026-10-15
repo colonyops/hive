@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // SegmentedControl's strip for a setting whose range is open rather than a
 // handful of named options, where it would need a button per rung.
-import FormField from '../ui/FormField.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
 
 const props = defineProps<{
   label?: string

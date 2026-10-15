@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import BaseButton from '../ui/BaseButton.vue'
-import FormField from '../ui/FormField.vue'
+import BaseButton from '@hive/ui/components/ui/BaseButton.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
 
 const props = defineProps<{
   accounts: string[]

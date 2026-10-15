@@ -12,8 +12,8 @@ import IconChevronDown from '~icons/lucide/chevron-down'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconSearch from '~icons/lucide/search'
 import type { SessionLaunchRepository } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
-import { useAnchoredPopover } from '../composables/useAnchoredPopover'
-import { useListKeyboardNav } from '../composables/useListKeyboardNav'
+import { useAnchoredPopover } from '@hive/ui/composables/useAnchoredPopover'
+import { useListKeyboardNav } from '@hive/ui/composables/useListKeyboardNav'
 import { highlightSegments, rankRepositories, repoDisplayName, toChoices } from '../lib/repositories'
 
 const props = defineProps<{

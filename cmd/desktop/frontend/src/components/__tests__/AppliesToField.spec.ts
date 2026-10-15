@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import AppliesToField from '../AppliesToField.vue'
-import AppTooltip from '../ui/AppTooltip.vue'
+import AppTooltip from '@hive/ui/components/ui/AppTooltip.vue'
 
 function mountField(modelValue: string[] | null = [], knownTypes = ['PR', 'Issue']) {
   return mount(AppliesToField, { props: { modelValue, knownTypes }, attachTo: document.body })

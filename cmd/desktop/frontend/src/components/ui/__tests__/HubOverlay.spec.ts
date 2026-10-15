@@ -28,7 +28,7 @@ vi.mock('@wailsio/runtime', () => ({
 }))
 
 import { h } from 'vue'
-import HubOverlay from '../HubOverlay.vue'
+import HubOverlay from '@hive/ui/components/ui/HubOverlay.vue'
 import TasksView from '../../TasksView.vue'
 
 function el<T extends HTMLElement>(testid: string): T {

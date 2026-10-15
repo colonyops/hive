@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import SidebarToolbar from '../SidebarToolbar.vue'
-import type { MenuEntry } from '../../../types/menu'
+import type { MenuEntry } from '@hive/ui/types/menu'
 
 const entries: MenuEntry[] = [{ kind: 'action', id: 'expand-all', label: 'Expand all', testid: 'entry-expand' }]
 

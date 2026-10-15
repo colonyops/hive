@@ -17,10 +17,10 @@ import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
 import JobsPopover from './JobsPopover.vue'
 import TitleBarMenu from './TitleBarMenu.vue'
 import type { Job } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/jobs/models'
-import IconButton from './ui/IconButton.vue'
-import Kbd from './ui/Kbd.vue'
-import Spinner from './ui/Spinner.vue'
-import SegmentedControl, { type SegmentedControlOption } from './ui/SegmentedControl.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import Kbd from '@hive/ui/components/ui/Kbd.vue'
+import Spinner from '@hive/ui/components/ui/Spinner.vue'
+import SegmentedControl, { type SegmentedControlOption } from '@hive/ui/components/ui/SegmentedControl.vue'
 
 // One button grammar for the whole chrome, with a fixed slot per zone. The bar
 // is two clusters, not three centered columns — a window-centered palette sat

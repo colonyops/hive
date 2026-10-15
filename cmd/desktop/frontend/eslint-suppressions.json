@@ -162,28 +162,8 @@
       "count": 1
     }
   },
-  "src/components/ui/AppCheckbox.vue": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/components/ui/AppSelect.vue": {
-    "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    }
-  },
-  "src/components/ui/__tests__/ConfirmationDialog.spec.ts": {
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
   "src/components/ui/__tests__/DrawerSheet.spec.ts": {
     "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
-  "src/composables/__tests__/useDragGesture.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
@@ -211,11 +191,6 @@
     },
     "@typescript-eslint/require-await": {
       "count": 1
-    }
-  },
-  "src/composables/__tests__/useResizablePanel.spec.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 2
     }
   },
   "src/composables/__tests__/useSessionStatus.spec.ts": {
@@ -322,11 +297,6 @@
   "src/composables/useNotificationSettings.ts": {
     "no-restricted-syntax": {
       "count": 7
-    }
-  },
-  "src/composables/useOpenModalCount.ts": {
-    "no-restricted-syntax": {
-      "count": 1
     }
   },
   "src/composables/usePaletteRecents.ts": {
@@ -738,11 +708,6 @@
   "src/pipeline/types.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
-    }
-  },
-  "src/test-utils/select.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
     }
   }
 }

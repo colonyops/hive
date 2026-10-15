@@ -1,0 +1,285 @@
+:root,
+[data-theme="dark"] {
+  /* Terminal ANSI palette — sampled by lib/terminalTheme.ts for xterm, which
+     paints to a canvas and cannot read CSS variables; not Tailwind tokens.
+     Midnight inherits this set from :root, the same way it inherits
+     severity-*. */
+
+  /* Unstyled terminal output, and deliberately not --hv-text. That colour is
+     tuned for small UI labels on panels and lands near 16:1 against --hv-app,
+     which is glare over a full screen of monospace; established terminal
+     schemes sit around 8-12:1. A theme that omits this falls back to
+     --hv-text, which is what the light themes want — their ANSI white is a
+     pale grey that would vanish on a white background. */
+  --hv-term-foreground: #c4c8cf;
+  --hv-term-black: #1b2029;
+  --hv-term-red: #ef7183;
+  --hv-term-green: #8fd67f;
+  --hv-term-yellow: #e6b45a;
+  --hv-term-blue: #6ba8f0;
+  --hv-term-magenta: #b98ef0;
+  --hv-term-cyan: #5fc8de;
+  --hv-term-white: #b8c1cf;
+  --hv-term-bright-black: #55606f;
+  --hv-term-bright-red: #ff8b9b;
+  --hv-term-bright-green: #a6e695;
+  --hv-term-bright-yellow: #f5c973;
+  --hv-term-bright-blue: #86bcff;
+  --hv-term-bright-magenta: #cba6ff;
+  --hv-term-bright-cyan: #7adcf0;
+  --hv-term-bright-white: #e9edf4;
+}
+
+[data-theme="light"] {
+  /* A darker ANSI set — the stock palette is built for dark backgrounds and
+     washes out on white. */
+  --hv-term-foreground: #121722;
+  --hv-term-black: #121722;
+  --hv-term-red: #b02436;
+  --hv-term-green: #2f6b2a;
+  --hv-term-yellow: #8a5c08;
+  --hv-term-blue: #1657b8;
+  --hv-term-magenta: #7b2aa8;
+  --hv-term-cyan: #0e6a80;
+  --hv-term-white: #cbd2dc;
+  --hv-term-bright-black: #4b5568;
+  --hv-term-bright-red: #cf3348;
+  --hv-term-bright-green: #3f8a36;
+  --hv-term-bright-yellow: #a8740f;
+  --hv-term-bright-blue: #2168d8;
+  --hv-term-bright-magenta: #9438c9;
+  --hv-term-bright-cyan: #12829c;
+  --hv-term-bright-white: #eceff4;
+}
+
+[data-theme="midnight"] {
+  /* The one terminal colour midnight sets: it inherits the rest of the ANSI
+     palette from :root, but that foreground is a neutral grey and this theme
+     is the bluest of the set. */
+  --hv-term-foreground: #c3c9db;
+}
+
+[data-theme="gruvbox"] {
+  /* The canonical gruvbox-dark terminal palette. fg1, not the fg0 --hv-text
+     carries: fg0 is gruvbox's high-contrast variant, fg1 its body text. */
+  --hv-term-foreground: #ebdbb2;
+  --hv-term-black: #282828;
+  --hv-term-red: #cc241d;
+  --hv-term-green: #98971a;
+  --hv-term-yellow: #d79921;
+  --hv-term-blue: #458588;
+  --hv-term-magenta: #b16286;
+  --hv-term-cyan: #689d6a;
+  --hv-term-white: #a89984;
+  --hv-term-bright-black: #928374;
+  --hv-term-bright-red: #fb4934;
+  --hv-term-bright-green: #b8bb26;
+  --hv-term-bright-yellow: #fabd2f;
+  --hv-term-bright-blue: #83a598;
+  --hv-term-bright-magenta: #d3869b;
+  --hv-term-bright-cyan: #8ec07c;
+  --hv-term-bright-white: #ebdbb2;
+}
+
+[data-theme="slate"] {
+  --hv-term-foreground: #c2c9d8;
+  --hv-term-black: #1b2029;
+  --hv-term-red: #f2778f;
+  --hv-term-green: #9fd96a;
+  --hv-term-yellow: #ecb44f;
+  --hv-term-blue: #7aa7f8;
+  --hv-term-magenta: #c39bf9;
+  --hv-term-cyan: #6fd3f2;
+  --hv-term-white: #b8c2d9;
+  --hv-term-bright-black: #565f89;
+  --hv-term-bright-red: #ff8fa3;
+  --hv-term-bright-green: #b4e97e;
+  --hv-term-bright-yellow: #f7c96b;
+  --hv-term-bright-blue: #94bcff;
+  --hv-term-bright-magenta: #d3b2ff;
+  --hv-term-bright-cyan: #8ce2fb;
+  --hv-term-bright-white: #e6ecf7;
+}
+
+[data-theme="slate-light"] {
+  --hv-term-foreground: #10151c;
+  --hv-term-black: #1b2029;
+  --hv-term-red: #b3261e;
+  --hv-term-green: #2f6b1f;
+  --hv-term-yellow: #8a5300;
+  --hv-term-blue: #1653b8;
+  --hv-term-magenta: #8b2a9c;
+  --hv-term-cyan: #0f6a80;
+  --hv-term-white: #cbd3de;
+  --hv-term-bright-black: #4a5567;
+  --hv-term-bright-red: #d13a2e;
+  --hv-term-bright-green: #3f8a28;
+  --hv-term-bright-yellow: #a86a00;
+  --hv-term-bright-blue: #2168d8;
+  --hv-term-bright-magenta: #a83ab8;
+  --hv-term-bright-cyan: #14829c;
+  --hv-term-bright-white: #f2f4f7;
+}
+
+[data-theme="one-dark"] {
+  /* One Dark's own foreground. */
+  --hv-term-foreground: #abb2bf;
+  --hv-term-black: #282c34;
+  --hv-term-red: #e06c75;
+  --hv-term-green: #98c379;
+  --hv-term-yellow: #e5c07b;
+  --hv-term-blue: #61afef;
+  --hv-term-magenta: #c678dd;
+  --hv-term-cyan: #56b6c2;
+  --hv-term-white: #abb2bf;
+  --hv-term-bright-black: #5c6370;
+  --hv-term-bright-red: #ff7a85;
+  --hv-term-bright-green: #a8d98a;
+  --hv-term-bright-yellow: #f0cd8c;
+  --hv-term-bright-blue: #74bcff;
+  --hv-term-bright-magenta: #d68eea;
+  --hv-term-bright-cyan: #66c7d3;
+  --hv-term-bright-white: #eef1f7;
+}
+
+[data-theme="one-light"] {
+  --hv-term-foreground: #1f2228;
+  --hv-term-black: #383a42;
+  --hv-term-red: #e45649;
+  --hv-term-green: #50a14f;
+  --hv-term-yellow: #c18401;
+  --hv-term-blue: #4078f2;
+  --hv-term-magenta: #a626a4;
+  --hv-term-cyan: #0184bc;
+  --hv-term-white: #cdd2d9;
+  --hv-term-bright-black: #4a4f58;
+  --hv-term-bright-red: #d0382c;
+  --hv-term-bright-green: #3f8b3e;
+  --hv-term-bright-yellow: #a87400;
+  --hv-term-bright-blue: #2f68e0;
+  --hv-term-bright-magenta: #91218f;
+  --hv-term-bright-cyan: #0172a3;
+  --hv-term-bright-white: #f2f3f5;
+}
+
+[data-theme="tokyo-night"] {
+  --hv-term-foreground: #a9b1d6;
+  --hv-term-black: #15161e;
+  --hv-term-red: #f7768e;
+  --hv-term-green: #9ece6a;
+  --hv-term-yellow: #e0af68;
+  --hv-term-blue: #7aa2f7;
+  --hv-term-magenta: #bb9af7;
+  --hv-term-cyan: #7dcfff;
+  --hv-term-white: #a9b1d6;
+  --hv-term-bright-black: #414868;
+  --hv-term-bright-red: #ff7a93;
+  --hv-term-bright-green: #b9f27c;
+  --hv-term-bright-yellow: #ff9e64;
+  --hv-term-bright-blue: #7da6ff;
+  --hv-term-bright-magenta: #bb9af7;
+  --hv-term-bright-cyan: #0db9d7;
+  --hv-term-bright-white: #c0caf5;
+}
+
+[data-theme="tokyo-night-day"] {
+  --hv-term-foreground: #1b1f33;
+  --hv-term-black: #b4b5b9;
+  --hv-term-red: #f52a65;
+  --hv-term-green: #587539;
+  --hv-term-yellow: #8c6c3e;
+  --hv-term-blue: #2e7de9;
+  --hv-term-magenta: #9854f1;
+  --hv-term-cyan: #007197;
+  --hv-term-white: #6172b0;
+  --hv-term-bright-black: #a1a6c5;
+  --hv-term-bright-red: #c31c4b;
+  --hv-term-bright-green: #476128;
+  --hv-term-bright-yellow: #755a2e;
+  --hv-term-bright-blue: #1c5fc4;
+  --hv-term-bright-magenta: #7f3fd6;
+  --hv-term-bright-cyan: #005f80;
+  --hv-term-bright-white: #3760bf;
+}
+
+[data-theme="catppuccin-mocha"] {
+  --hv-term-foreground: #bac2de;
+  --hv-term-black: #45475a;
+  --hv-term-red: #f38ba8;
+  --hv-term-green: #a6e3a1;
+  --hv-term-yellow: #f9e2af;
+  --hv-term-blue: #89b4fa;
+  --hv-term-magenta: #cba6f7;
+  --hv-term-cyan: #94e2d5;
+  --hv-term-white: #bac2de;
+  --hv-term-bright-black: #585b70;
+  --hv-term-bright-red: #f5a3bc;
+  --hv-term-bright-green: #b4e8af;
+  --hv-term-bright-yellow: #fbe9c2;
+  --hv-term-bright-blue: #9dc1fb;
+  --hv-term-bright-magenta: #d5b8f9;
+  --hv-term-bright-cyan: #a5e9de;
+  --hv-term-bright-white: #cdd6f4;
+}
+
+[data-theme="catppuccin-latte"] {
+  --hv-term-foreground: #3c3f52;
+  --hv-term-black: #5c5f77;
+  --hv-term-red: #d20f39;
+  --hv-term-green: #40a02b;
+  --hv-term-yellow: #df8e1d;
+  --hv-term-blue: #1e66f5;
+  --hv-term-magenta: #8839ef;
+  --hv-term-cyan: #179299;
+  --hv-term-white: #acb0be;
+  --hv-term-bright-black: #6c6f85;
+  --hv-term-bright-red: #b00c30;
+  --hv-term-bright-green: #347f22;
+  --hv-term-bright-yellow: #a06a12;
+  --hv-term-bright-blue: #1552c8;
+  --hv-term-bright-magenta: #7124d0;
+  --hv-term-bright-cyan: #127a80;
+  --hv-term-bright-white: #dce0e8;
+}
+
+[data-theme="nord"] {
+  /* Nord4, Nord's text colour — --hv-text carries Nord6, the brightest snow
+     shade, which is a surface colour upstream rather than a text one. */
+  --hv-term-foreground: #d8dee9;
+  --hv-term-black: #3b4252;
+  --hv-term-red: #bf616a;
+  --hv-term-green: #a3be8c;
+  --hv-term-yellow: #ebcb8b;
+  --hv-term-blue: #81a1c1;
+  --hv-term-magenta: #b48ead;
+  --hv-term-cyan: #88c0d0;
+  --hv-term-white: #e5e9f0;
+  --hv-term-bright-black: #4c566a;
+  --hv-term-bright-red: #d08770;
+  --hv-term-bright-green: #b5cc9a;
+  --hv-term-bright-yellow: #f0d9a5;
+  --hv-term-bright-blue: #9ab5cf;
+  --hv-term-bright-magenta: #c4a2bf;
+  --hv-term-bright-cyan: #8fbcbb;
+  --hv-term-bright-white: #eceff4;
+}
+
+[data-theme="nord-light"] {
+  --hv-term-foreground: #2e3440;
+  --hv-term-black: #3b4252;
+  --hv-term-red: #a33a44;
+  --hv-term-green: #4e6b34;
+  --hv-term-yellow: #8a6b1f;
+  --hv-term-blue: #3f6d95;
+  --hv-term-magenta: #7b4f78;
+  --hv-term-cyan: #2f6f74;
+  --hv-term-white: #b6bfcc;
+  --hv-term-bright-black: #4c566a;
+  --hv-term-bright-red: #bf4b56;
+  --hv-term-bright-green: #5f8040;
+  --hv-term-bright-yellow: #a37f2a;
+  --hv-term-bright-blue: #4c7fab;
+  --hv-term-bright-magenta: #8f5f8c;
+  --hv-term-bright-cyan: #3a8388;
+  --hv-term-bright-white: #eceff4;
+}

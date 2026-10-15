@@ -47,10 +47,10 @@ import { canConnect, hasInputPort, outputPortCount } from '../lib/ports'
 import { classify, statusColor, statusLabel, statusPulses } from '../lib/runStatus'
 import { gridPosition, type EditorFlow, type NodePosition, type NodeRunRecord, type WireLayout } from '../lib/wireFlow'
 import { isEditableTarget } from '../../lib/isEditableTarget'
-import { startDrag } from '../../composables/useDragGesture'
+import { startDrag } from '@hive/ui/composables/useDragGesture'
 import type { FlowNode, Wire } from '../types'
 import NodeEditorDrawer from './NodeEditorDrawer.vue'
-import EmptyState from '../../components/ui/EmptyState.vue'
+import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 
 const props = defineProps<{
   flow: EditorFlow

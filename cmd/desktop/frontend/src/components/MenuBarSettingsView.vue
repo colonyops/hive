@@ -4,9 +4,9 @@ import { computed, onMounted, ref } from 'vue'
 import IconArrowDown from '~icons/lucide/arrow-down'
 import IconArrowUp from '~icons/lucide/arrow-up'
 import IconX from '~icons/lucide/x'
-import IconButton from './ui/IconButton.vue'
-import AppSelect from './ui/AppSelect.vue'
-import InlineError from './ui/InlineError.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import AppSelect from '@hive/ui/components/ui/AppSelect.vue'
+import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import SettingsPage from './settings/SettingsPage.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
@@ -20,7 +20,7 @@ import type {
   MenuBarFeedChoice,
   MenuBarPin,
 } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
-import EmptyState from './ui/EmptyState.vue'
+import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 
 const pins = ref<MenuBarPin[]>([])
 const choices = ref<MenuBarFeedChoice[]>([])

@@ -12,7 +12,7 @@
 // up with the rendered tokens; scrolling the textarea (by wheel or by
 // typing past the visible area) re-syncs the other two's scrollTop/
 // scrollLeft in onScroll/onInput below.
-import FormField from '../../components/ui/FormField.vue'
+import FormField from '@hive/ui/components/ui/FormField.vue'
 import { computed, ref } from 'vue'
 import { codeLineCount, highlightCode } from '../lib/highlightCode'
 

@@ -10,7 +10,7 @@ export interface CodeTheme {
 /**
  * The hues a Hive syntax theme is drawn with. bg, fg, comment and punctuation
  * mirror the app theme's raised, text, text-3 and text-2 tokens in
- * styles/main.css; a palette edit there is a palette edit here. Shiki inlines
+ * @hive/ui's styles/theme.css; a palette edit there is a palette edit here. Shiki inlines
  * hex colours, so these cannot be CSS variables.
  */
 interface Palette {

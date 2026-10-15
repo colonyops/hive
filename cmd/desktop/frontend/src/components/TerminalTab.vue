@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import TerminalPane from './TerminalPane.vue'
-import { startDrag } from '../composables/useDragGesture'
+import { startDrag } from '@hive/ui/composables/useDragGesture'
 import type { TerminalWindowTab, UseTerminalWindows } from '../composables/useTerminalWindows'
 import { dividerTouches, draggedExtent, paneDividers, visiblePaneRects, type PaneDivider } from '../lib/terminalLayout'
 

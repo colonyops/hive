@@ -14,7 +14,7 @@ import type { TerminalWindowTab } from '../../composables/useTerminalWindows'
 import { activePaneOf } from '../../lib/terminalLayout'
 import { paneMayAutoFocus, setTerminalTreeHandles } from '../../lib/terminalTree'
 import type { TerminalSessionRow } from '../../stores/useTerminalSessions'
-import type { MenuActionEntry, MenuEntry } from '../../types/menu'
+import type { MenuActionEntry, MenuEntry } from '@hive/ui/types/menu'
 import type { TerminalModeContext } from './terminalModeContext'
 import { windowKey } from './useTreeKeyboardNav'
 

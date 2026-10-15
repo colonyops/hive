@@ -9,9 +9,9 @@ import IconListTodo from '~icons/lucide/list-todo'
 import IconSettings from '~icons/lucide/settings'
 import IconSquareTerminal from '~icons/lucide/square-terminal'
 import { formatCombo, useKeybindings } from '../composables/useKeybindings'
-import type { MenuEntry } from '../types/menu'
-import AppMenu from './ui/AppMenu.vue'
-import IconButton from './ui/IconButton.vue'
+import type { MenuEntry } from '@hive/ui/types/menu'
+import AppMenu from '@hive/ui/components/ui/AppMenu.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
 
 defineProps<{ active?: boolean }>()
 const emit = defineEmits<{ 'run-command': [commandId: string] }>()

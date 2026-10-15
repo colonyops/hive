@@ -332,6 +332,10 @@ cmd/hive/                         # the hive CLI/TUI
                                   #   config.yaml), commands/, tui/, action/,
                                   #   theme/, plugins/, sources/
 cmd/tools/                        # repo-wide tooling: adr, release
+web/packages/ui/                  # @hive/ui: theme, base CSS, and UI primitives
+                                  #   shared by the desktop frontend and web UIs
+                                  #   (Shared frontend package)
+package.json  package-lock.json   # the repo-root npm workspace
 main.go  go.mod                   # one module for every program
 
 cmd/drive-server/                 # Hive Drive Server: `hive-drive-server`, the shared-document server
@@ -2599,6 +2603,45 @@ because a workspace need not declare the app's server for its schedules to
 work. `prompts.ScheduledRun` frames the prompt with what started it and the
 exact `curl` to run when done
 (ADR a-scheduled-chat-ends-itself-through-a-capability-token-its-launch-handed-it).
+
+### Shared frontend package
+
+The repo root is an npm workspace (`package.json`, `package-lock.json`, and
+`.npmrc` at the root). Its members are `web/packages/*` and
+`cmd/desktop/frontend`. There is one lockfile and one `node_modules`, so
+`npm ci` runs once at the root.
+
+`@hive/ui` (`web/packages/ui`) holds what more than one web surface renders
+alike: the theme tokens and palettes (`styles/theme.css`), the markdown and
+canvas HTML styles, the `components/ui` primitives and `AppIcon`, and the
+composables and helpers they use (focus, popovers, keyboard navigation,
+clipboard, `seedRef`, `errorText`). It ships source, with no build step. The
+desktop imports it by `@hive/ui/<path>`.
+
+The package never reaches the host directly. Anything that differs by host
+goes through `HiveUiPlatform` (`platform.ts`): the clipboard, a logger, and
+optional perf spans. The host calls `installHiveUi(app, platform)`, which
+`app.provide`s the platform, and the package reads it with
+`useHiveUiPlatform()`, which throws when the app never installed it. The
+desktop's implementation is `cmd/desktop/frontend/src/lib/hiveUiPlatform.ts`
+and is where the Wails calls live.
+
+The boundary is a lint rule. `web/packages/ui/eslint.config.js` forbids
+`@wailsio/*`, any `bindings/` path, and any import of an app
+(`**/cmd/**`, `**/frontend/**`). The package's specs run against a fake
+platform (`src/test-setup.ts`), never the Wails runtime.
+
+The desktop keeps what is specific to it: the `--hv-term-*` ANSI palettes
+(`src/styles/terminal-theme.css`, one block per theme), the terminal fonts,
+and its own `main.css`. `themeCss.spec.ts` stays in the desktop and asserts
+that every registered theme has a block in both the package theme and
+`terminal-theme.css`.
+
+Tailwind v4 does not scan a package it reaches through the workspace symlink,
+so the classes in `@hive/ui` produce no CSS unless the app's stylesheet names
+it. The desktop's `main.css` carries
+`@source "../../../../../web/packages/ui/src"`. Any app that renders `@hive/ui`
+needs the same line, relative to its own stylesheet.
 
 ## Execution model
 

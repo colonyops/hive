@@ -255,7 +255,7 @@ Tailwind cannot express (a pseudo-element, a keyframe, a child of
 
 ## Tokens
 
-All tokens live in `src/styles/main.css` under `@theme`. Use them instead of
+All tokens live in `src/styles/theme.css` under `@theme`. Use them instead of
 arbitrary values; the lint rejects `text-[Npx]`, `rounded-[Npx]`, and
 `shadow-[...]` in a `.vue` file. In a scoped `<style>` block, use the
 variables: `var(--text-small)`, `var(--radius-lg)`, `var(--shadow-popover)`.

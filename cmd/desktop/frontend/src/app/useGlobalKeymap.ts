@@ -1,7 +1,7 @@
 import { computed, onScopeDispose, watch, type Ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
 import { comboFromEvent, SEQUENCE_TIMEOUT_MS, terminalEscapeCombo, useKeybindings } from '../composables/useKeybindings'
-import { useOpenModalCount } from '../composables/useOpenModalCount'
+import { useOpenModalCount } from '@hive/ui/composables/useOpenModalCount'
 import { commandById, commandPiercesPane, launcherActionID, type CommandContext } from '../keybindings/catalog'
 import { isEditableTarget, isTerminalTarget } from '../lib/isEditableTarget'
 

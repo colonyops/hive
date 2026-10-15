@@ -12,9 +12,9 @@ import IconLayers from '~icons/lucide/layers'
 import IconTerminal from '~icons/lucide/terminal'
 import { relativeAge } from '../lib/age'
 import { statusMeta, type TaskTreeNode } from '../lib/tasksPresentation'
-import AppTooltip from './ui/AppTooltip.vue'
-import IconButton from './ui/IconButton.vue'
-import BaseBadge from './ui/BaseBadge.vue'
+import AppTooltip from '@hive/ui/components/ui/AppTooltip.vue'
+import IconButton from '@hive/ui/components/ui/IconButton.vue'
+import BaseBadge from '@hive/ui/components/ui/BaseBadge.vue'
 
 const props = defineProps<{
   node: TaskTreeNode
