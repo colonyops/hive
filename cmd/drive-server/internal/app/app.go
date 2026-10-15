@@ -12,6 +12,7 @@ import (
 	"github.com/hay-kot/appkit/plugs"
 	"github.com/rs/zerolog"
 
+	"github.com/colonyops/hive/cmd/drive-server/frontend"
 	"github.com/colonyops/hive/cmd/drive-server/internal/config"
 	"github.com/colonyops/hive/cmd/drive-server/internal/guard"
 	"github.com/colonyops/hive/cmd/drive-server/internal/httpapi"
@@ -58,7 +59,9 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 	defer func() { _ = ln.Close() }()
 
 	httpLog := logutils.Component(log, "httpapi")
-	handler := httpapi.New(httpLog, opts.Info, svc.HTTP(cfg.BaseURL, trusted))
+	httpSvc := svc.HTTP(cfg.BaseURL, trusted)
+	httpSvc.Web = frontend.Dist()
+	handler := httpapi.New(httpLog, opts.Info, httpSvc)
 
 	log.Info().Str("addr", ln.Addr().String()).Str("base_url", cfg.BaseURL).Str("version", opts.Info.Version).Msg("drive server listening")
 

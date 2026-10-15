@@ -25,4 +25,7 @@ func registerRoutes(mux *http.ServeMux, chain *errchain.ErrChain, info buildinfo
 	registerShareRoutes(mux, chain, authenticated, svc.Shares)
 	registerAuthRoutes(mux, chain, sessionOnly, svc, cookies)
 	registerTokenRoutes(mux, sessionOnly, svc.Tokens)
+	if svc.Web != nil {
+		mux.HandleFunc("GET /", chain.ToHandlerFunc(spa(svc.Web)))
+	}
 }
