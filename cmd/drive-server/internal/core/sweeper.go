@@ -13,16 +13,19 @@ import (
 
 const sweepBatch = 100
 
-// Sweeper deletes expired share links and links whose document is gone.
+// Sweeper deletes expired share links, links whose document is gone, and
+// expired sign-in codes and sessions.
 type Sweeper struct {
-	links ShareStore
-	users UserStores
-	log   zerolog.Logger
-	now   func() time.Time
+	links    ShareStore
+	codes    CodeStore
+	sessions SessionStore
+	users    UserStores
+	log      zerolog.Logger
+	now      func() time.Time
 }
 
-func NewSweeper(log zerolog.Logger, links ShareStore, users UserStores, opts ...Option) *Sweeper {
-	return &Sweeper{links: links, users: users, log: logutils.Component(log, "sweeper"), now: newOptions(opts).now}
+func NewSweeper(log zerolog.Logger, links ShareStore, codes CodeStore, sessions SessionStore, users UserStores, opts ...Option) *Sweeper {
+	return &Sweeper{links: links, codes: codes, sessions: sessions, users: users, log: logutils.Component(log, "sweeper"), now: newOptions(opts).now}
 }
 
 // Tick runs one sweep. A failed step is logged and does not stop the rest.
@@ -32,6 +35,16 @@ func (s *Sweeper) Tick(ctx context.Context) error {
 		errs = append(errs, s.warn(err, "delete expired share links"))
 	} else if n > 0 {
 		s.log.Debug().Int("links", n).Msg("swept expired share links")
+	}
+	if n, err := s.codes.DeleteExpired(ctx, s.now()); err != nil {
+		errs = append(errs, s.warn(err, "delete expired sign-in codes"))
+	} else if n > 0 {
+		s.log.Debug().Int("codes", n).Msg("swept expired sign-in codes")
+	}
+	if n, err := s.sessions.DeleteExpired(ctx, s.now()); err != nil {
+		errs = append(errs, s.warn(err, "delete expired sessions"))
+	} else if n > 0 {
+		s.log.Debug().Int("sessions", n).Msg("swept expired sessions")
 	}
 	if err := s.dropDangling(ctx); err != nil {
 		errs = append(errs, err)

@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 )
 
 const deleteAccountByEmail = `-- name: DeleteAccountByEmail :execrows
@@ -109,4 +110,18 @@ func (q *Queries) ListAccounts(ctx context.Context) ([]Account, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setAccountLastSignIn = `-- name: SetAccountLastSignIn :exec
+UPDATE accounts SET last_sign_in_at = ? WHERE id = ?
+`
+
+type SetAccountLastSignInParams struct {
+	LastSignInAt sql.NullInt64 `json:"last_sign_in_at"`
+	ID           string        `json:"id"`
+}
+
+func (q *Queries) SetAccountLastSignIn(ctx context.Context, arg SetAccountLastSignInParams) error {
+	_, err := q.db.ExecContext(ctx, setAccountLastSignIn, arg.LastSignInAt, arg.ID)
+	return err
 }

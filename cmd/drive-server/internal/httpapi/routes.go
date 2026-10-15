@@ -10,8 +10,12 @@ import (
 )
 
 func registerRoutes(mux *http.ServeMux, chain *errchain.ErrChain, info buildinfo.Info, svc Services) {
+	cookies := newCookies(svc.BaseURL)
 	authenticated := func(scope core.Scope, h errchain.HandlerFunc) http.HandlerFunc {
-		return chain.ToHandlerFunc(h, Authenticate(svc.Tokens), Require(scope))
+		return chain.ToHandlerFunc(h, Authenticate(svc.Tokens, svc.Sessions, cookies.name), Require(scope))
+	}
+	sessionOnly := func(h errchain.HandlerFunc) http.HandlerFunc {
+		return chain.ToHandlerFunc(h, Authenticate(svc.Tokens, svc.Sessions, cookies.name), RequireSession())
 	}
 
 	mux.HandleFunc("GET /healthz", healthz)
@@ -19,4 +23,6 @@ func registerRoutes(mux *http.ServeMux, chain *errchain.ErrChain, info buildinfo
 	mux.HandleFunc("GET /api/v1/me", authenticated(core.ScopeRead, me(svc.Documents)))
 	registerDocumentRoutes(mux, authenticated, svc.Documents)
 	registerShareRoutes(mux, chain, authenticated, svc.Shares)
+	registerAuthRoutes(mux, chain, sessionOnly, svc, cookies)
+	registerTokenRoutes(mux, sessionOnly, svc.Tokens)
 }

@@ -203,3 +203,37 @@ func TestIsolationLockedOwnersLinkIs404(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, s.do(http.MethodGet, "/s/"+slug+"/raw", "", "").Code)
 	assert.Equal(t, http.StatusNotFound, s.do(http.MethodGet, "/api/v1/public/"+slug, "", "").Code)
 }
+
+func TestIsolationSessionSeesOnlyOwnData(t *testing.T) {
+	s := newAuthServer(t, testBaseURL)
+	a, _ := setupTenants(t, s.server)
+	cookie := s.signIn(t, "b@example.com")
+
+	for name, space := range mustSpace(t) {
+		get := func(target string) *httptest.ResponseRecorder {
+			return s.send(call{method: http.MethodGet, target: target, cookie: cookie})
+		}
+		assert.Equal(t, "body of B", get(driveapi.DocPath(space, "shared-path.md")).Body.String(), name)
+		assert.Equal(t, http.StatusNotFound, get(driveapi.DocPath(space, "only-a.md")).Code, name)
+
+		var docs []driveapi.Document
+		require.NoError(t, json.Unmarshal(get(driveapi.SpacePrefix(space)).Body.Bytes(), &docs))
+		require.Len(t, docs, 1, name)
+
+		del := s.send(call{method: http.MethodDelete, target: driveapi.DocPath(space, "only-a.md"), cookie: cookie})
+		assert.Equal(t, http.StatusNotFound, del.Code, name)
+		assert.Equal(t, "only A has this", s.do(http.MethodGet, driveapi.DocPath(space, "only-a.md"), a.token, "").Body.String(), name)
+	}
+
+	var me driveapi.Me
+	rec := s.send(call{method: http.MethodGet, target: "/api/v1/me", cookie: cookie})
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &me))
+	assert.Equal(t, "b@example.com", me.Email)
+	assert.EqualValues(t, 3*len("body of B"), me.Quota.Used)
+
+	var listed []driveapi.Token
+	require.Equal(t, http.StatusCreated, s.send(call{method: http.MethodPost, target: "/api/v1/tokens", cookie: cookie, body: `{"name":"b","scope":"read"}`}).Code)
+	rec = s.send(call{method: http.MethodGet, target: "/api/v1/tokens", cookie: cookie})
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listed))
+	assert.Len(t, listed, 2, "B's setup token and the new one, never A's")
+}
