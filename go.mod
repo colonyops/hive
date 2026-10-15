@@ -143,4 +143,4 @@ require (
 	modernc.org/memory v1.12.1 // indirect
 )
 
-ignore ./cmd/desktop/frontend/node_modules
+ignore node_modules
