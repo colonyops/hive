@@ -45,3 +45,36 @@ func TestRemoteInboxDiscoveryAndFeedIsolation(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoteCodeOperationsAuthenticateBeforeReadingInput(t *testing.T) {
+	h := newTerminalHarness(t)
+	for _, path := range []string{"session-options", "create-session", "job", "session-statuses"} {
+		for _, token := range []string{"", "wrong"} {
+			response := h.post(t, TerminalPathPrefix+"remote/"+path, token, nil)
+			assert.Equal(t, http.StatusUnauthorized, response.StatusCode, path)
+			require.NoError(t, response.Body.Close())
+		}
+	}
+}
+
+func TestRemoteCodeJobOutcome(t *testing.T) {
+	h := newTerminalHarness(t)
+	id := h.core.Jobs.Begin(t.Context(), "Create session", "test", "remote-only")
+	h.core.Jobs.Fail(t.Context(), id, "clone failed")
+	response := h.post(t, TerminalPathPrefix+"remote/job", testToken, remoteJobRequest{ID: id})
+	require.Equal(t, http.StatusOK, response.StatusCode)
+	var job struct {
+		Status string `json:"status"`
+		Error  string `json:"error"`
+	}
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&job))
+	require.NoError(t, response.Body.Close())
+	assert.Equal(t, "failed", job.Status)
+	assert.Equal(t, "clone failed", job.Error)
+	response = h.post(t, TerminalPathPrefix+"remote/job", testToken, remoteJobRequest{ID: id + 1})
+	assert.Equal(t, http.StatusNotFound, response.StatusCode)
+	require.NoError(t, response.Body.Close())
+	response = h.post(t, TerminalPathPrefix+"remote/create-session", testToken, remoteCreateSessionRequest{Name: "no-repository"})
+	assert.Equal(t, http.StatusBadRequest, response.StatusCode)
+	require.NoError(t, response.Body.Close())
+}

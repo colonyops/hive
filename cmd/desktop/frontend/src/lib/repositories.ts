@@ -23,6 +23,8 @@ export function repoDisplayName(remote: string): string {
 
 /** A repository as the picker shows it: what you read, what the form submits. */
 export interface RepositoryChoice {
+  installation?: string
+  color?: string
   /** The git remote — the value a session is created with. */
   remote: string
   /** "owner/name", the primary row text. */

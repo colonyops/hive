@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { InboxItem } from '../../types/feed'
 
 const mocks = vi.hoisted(() => ({
+  RemoteCreate: vi.fn(),
   SessionLaunchOptions: vi.fn(),
   CreateSession: vi.fn(),
   NewSessionDraft: vi.fn(),
@@ -19,6 +20,8 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/pipelineservice', () => ({
   NewSessionDraft: mocks.NewSessionDraft,
 }))
+
+vi.mock('../../stores/useRemoteCode', () => ({ useRemoteCode: () => ({ create: mocks.RemoteCreate }) }))
 
 import { resetNewSessionForTests, useNewSession } from '../useNewSession'
 import { resetToastsForTests, useToasts } from '../useToasts'
@@ -66,6 +69,26 @@ beforeEach(() => {
 })
 
 describe('useNewSession', () => {
+  it('creates only on the selected remote and keeps a failed form editable', async () => {
+    const s = useNewSession()
+    await s.openBlank('acme/site')
+    mocks.RemoteCreate.mockRejectedValueOnce(new Error('Remote clone failed'))
+    const input = { remoteId: 'home', repository: 'acme/site', name: 'review', agent: 'shell' }
+    await s.submit(input)
+    expect(mocks.CreateSession).not.toHaveBeenCalled()
+    expect(s.open.value).toBe(true)
+    expect(s.error.value).toBe('Remote clone failed')
+    mocks.RemoteCreate.mockResolvedValueOnce(undefined)
+    await s.submit(input)
+    expect(mocks.RemoteCreate).toHaveBeenLastCalledWith('home', {
+      repository: 'acme/site',
+      name: 'review',
+      prompt: '',
+      agent: 'shell',
+    })
+    expect(s.open.value).toBe(false)
+  })
+
   it('opens blank with the default repository', async () => {
     const s = useNewSession()
     await s.openBlank()

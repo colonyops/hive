@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import ActionInputsDialog from '../components/ActionInputsDialog.vue'
 import ActionRunsView from '../components/ActionRunsView.vue'
@@ -7,6 +7,8 @@ import ActivityView from '../components/ActivityView.vue'
 import CommandPalette from '../components/CommandPalette.vue'
 import ErrorDialog from '../components/ErrorDialog.vue'
 import ReportProblemDialog from '../components/ReportProblemDialog.vue'
+import { useRemoteCode } from '../stores/useRemoteCode'
+import { useRemoteConnection } from '../stores/useRemoteConnection'
 import SessionLaunchDialog from '../components/SessionLaunchDialog.vue'
 import TasksView from '../components/TasksView.vue'
 import ToastStack from '../components/ToastStack.vue'
@@ -87,6 +89,14 @@ const {
   checkOnLaunch: checkReleaseNotes,
   dismiss: dismissWhatsNew,
 } = useReleaseNotes()
+const remoteCode = useRemoteCode()
+const remoteConnection = useRemoteConnection()
+const remoteLaunch = computed(() => {
+  const profile = remoteConnection.activeProfile.value
+  const options = remoteCode.options.value
+  return profile && options ? { id: profile.id, name: profile.name, color: profile.color, options } : undefined
+})
+
 onMounted(() => {
   void checkReleaseNotes()
 })
@@ -119,6 +129,8 @@ onMounted(() => {
     v-if="newSessionOpen && newSessionOptions"
     :key="newSessionFormKey"
     :options="newSessionOptions"
+    :remote="remoteLaunch"
+    :remote-error="remoteCode.optionsError.value"
     :initial="newSessionInitial"
     :initial-target="newSessionInitialTarget"
     with-prompt

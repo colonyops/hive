@@ -8,6 +8,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 850 } })
 const ssh = ['-i', '/tmp/remote-key', '-o', 'UserKnownHostsFile=/tmp/known_hosts', '-o', 'StrictHostKeyChecking=yes', '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes']
 const browserRequests = []
 page.on('request', (request) => browserRequests.push(request.url()))
+let createdSessionID = ''
 try {
   await page.goto('http://127.0.0.1:8080')
   await page.getByTestId('onboarding-hive-skip').click()
@@ -24,7 +25,7 @@ try {
   await page.getByTestId('remote-settings-error').filter({ hasText: 'SSH' }).waitFor()
   await page.getByTestId('remote-connection-file').fill('/home/hive/connection.json')
   await page.getByTestId('remote-connect').click()
-  await expect(page.getByTestId('remote-code-menu').getByRole('button', { name: /remote-demo/ })).toHaveCSS('border-left-color', 'rgb(168, 85, 247)')
+  await expect(page.getByTestId('remote-code-repo').filter({ hasText: 'repos/demo' }).locator('..')).toHaveCSS('border-left-color', 'rgb(168, 85, 247)')
   await page.getByTestId('remote-code-menu').getByRole('button', { name: /remote-demo/ }).click()
   await page.getByTestId('remote-terminal-status').filter({ hasText: 'live' }).waitFor()
   const input = page.locator('[data-testid="remote-terminal"] .xterm-helper-textarea').first()
@@ -37,13 +38,35 @@ try {
   const previousWidth = terminalWidth()
   await page.setViewportSize({ width: 1000, height: 700 })
   await expect.poll(terminalWidth).not.toBe(previousWidth)
-  await page.getByTestId('remote-terminal').getByRole('button', { name: 'second', exact: true }).click()
+  await page.getByTestId('remote-code-window').filter({ hasText: 'second' }).click()
+  await expect(page.getByTestId('remote-terminal').getByRole('button', { name: 'second', exact: true })).toBeVisible()
   execFileSync('pkill', ['-f', '^ssh .* -W '])
   await page.getByTestId('remote-terminal-status').filter({ hasText: 'ended' }).waitFor()
   await page.getByTestId('remote-reconnect').click()
   await page.getByTestId('remote-terminal-status').filter({ hasText: 'live' }).waitFor()
   await expect(page.getByTestId('remote-code-menu')).toBeVisible()
   await expect(page.getByTestId('terminal-session-sidebar')).toBeVisible()
+  const codeName = `smoke-code-${randomUUID().slice(0, 8)}`
+  await page.getByTestId('terminal-new-session').click()
+  await page.getByTestId('new-session-repository').click()
+  await page.getByTestId('new-session-repository-option').filter({ hasText: 'Docker Hive' }).filter({ hasText: 'repos/demo' }).first().click()
+  await page.getByTestId('new-session-name').fill(codeName)
+  await page.getByTestId('new-session-submit').click()
+  await expect(page.getByTestId('new-session-dialog')).toBeHidden({ timeout: 90000 })
+  const codeRow = page.getByTestId('remote-code-menu').getByRole('button', { name: new RegExp(codeName) })
+  await expect(codeRow).toBeVisible()
+  await codeRow.click()
+  await page.getByTestId('remote-terminal-status').filter({ hasText: 'live' }).waitFor()
+  const sessionRows = execFileSync('ssh', [...ssh, 'hive@remote', 'hive session list --json'], { encoding: 'utf8' }).trim().split('\n').map(line => JSON.parse(line))
+  createdSessionID = sessionRows.find(row => row.name === codeName)?.id
+  assert.ok(createdSessionID, 'new session is stored on the remote installation')
+  await codeRow.getByTestId('remote-new-window').click()
+  await page.getByTestId('new-window-agent-shell').click()
+  await expect.poll(() => execFileSync('ssh', [...ssh, 'hive@remote', `tmux list-windows -t =${codeName} -F '#{window_id}'`], { encoding: 'utf8' }).trim().split('\n').length).toBeGreaterThan(2)
+  const beforeShortcut = execFileSync('ssh', [...ssh, 'hive@remote', `tmux list-windows -t =${codeName} -F '#{window_id}'`], { encoding: 'utf8' }).trim().split('\n').length
+  await page.getByTestId('remote-terminal-status').click()
+  await page.keyboard.press('Control+t')
+  await expect.poll(() => execFileSync('ssh', [...ssh, 'hive@remote', `tmux list-windows -t =${codeName} -F '#{window_id}'`], { encoding: 'utf8' }).trim().split('\n').length).toBe(beforeShortcut + 1)
   await page.getByTestId('titlebar-mode-hub').click()
   const inbox = page.getByTestId('remote-inbox-item-remote-demo')
   await expect(inbox).toHaveCSS('border-left-color', 'rgb(168, 85, 247)')
@@ -73,5 +96,6 @@ try {
   console.error('Page:', await page.locator('body').innerText())
   throw error
 } finally {
+  if (createdSessionID) execFileSync('ssh', [...ssh, 'hive@remote', `hive session delete ${createdSessionID}`])
   await browser.close()
 }

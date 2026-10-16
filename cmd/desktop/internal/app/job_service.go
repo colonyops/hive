@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"math"
 
 	"github.com/rs/zerolog"
 
@@ -36,6 +37,20 @@ func (s *JobService) CancelCommand(_ context.Context, commandID int64) error {
 		return Errorf(KindConflict, "action run %d is not running", commandID)
 	}
 	return nil
+}
+
+func (s *JobService) Get(ctx context.Context, id int64) (jobs.Job, error) {
+	if id <= 0 || id == math.MaxInt64 {
+		return jobs.Job{}, Errorf(KindInvalid, "invalid job id")
+	}
+	rows, err := s.List(ctx, id+1, 1)
+	if err != nil {
+		return jobs.Job{}, err
+	}
+	if len(rows) == 0 || rows[0].ID != id {
+		return jobs.Job{}, Errorf(KindNotFound, "job not found")
+	}
+	return rows[0], nil
 }
 
 // List defaults limits outside 1..1000 to 200.

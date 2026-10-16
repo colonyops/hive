@@ -45,6 +45,19 @@ export interface TerminalTreeHandles {
 }
 
 let handles: TerminalTreeHandles | null = null
+let handlesActive: () => boolean = () => true
+let override: Partial<TerminalTreeHandles> | null = null
+function currentHandles(): Partial<TerminalTreeHandles> | null {
+  if (override) return { ...handles, ...override }
+  return handlesActive() ? handles : null
+}
+
+export function overrideTerminalTreeHandles(next: Partial<TerminalTreeHandles>): () => void {
+  override = next
+  return () => {
+    if (override === next) override = null
+  }
+}
 
 /** Whether focus is currently inside the session tree. Drives the hint bar. */
 export const terminalTreeFocused: Ref<boolean> = ref(false)
@@ -59,52 +72,53 @@ export const terminalTreeFocused: Ref<boolean> = ref(false)
 // chord, the scroll pill) call focusActive() directly and do not consult it.
 export const paneMayAutoFocus: Ref<boolean> = ref(true)
 
-export function setTerminalTreeHandles(next: TerminalTreeHandles | null): void {
+export function setTerminalTreeHandles(next: TerminalTreeHandles | null, active: () => boolean = () => true): void {
   handles = next
+  handlesActive = active
 }
 
 export function focusTerminalTree(): void {
-  handles?.focusTree()
+  currentHandles()?.focusTree?.()
 }
 
 export function focusTerminalPane(): void {
-  handles?.focusPane()
+  currentHandles()?.focusPane?.()
 }
 
 export function focusTerminalFilter(): void {
-  handles?.focusFilter()
+  currentHandles()?.focusFilter?.()
 }
 
 export function selectTerminalWindow(position: number): void {
-  handles?.selectWindow(position)
+  currentHandles()?.selectWindow?.(position)
 }
 
 export function newTerminalWindow(): void {
-  handles?.newWindow()
+  currentHandles()?.newWindow?.()
 }
 
 export function closeTerminalWindow(): void {
-  handles?.closeWindow()
+  currentHandles()?.closeWindow?.()
 }
 
 export function stepTerminalWindow(delta: number): void {
-  handles?.stepWindow(delta)
+  currentHandles()?.stepWindow?.(delta)
 }
 
 export function splitTerminalPane(direction: SplitDirection): void {
-  handles?.splitPane(direction)
+  currentHandles()?.splitPane?.(direction)
 }
 
 export function closeTerminalPane(): void {
-  handles?.closePane()
+  currentHandles()?.closePane?.()
 }
 
 export function zoomTerminalPane(): void {
-  handles?.zoomPane()
+  currentHandles()?.zoomPane?.()
 }
 
 export function findInTerminal(): void {
-  handles?.find()
+  currentHandles()?.find?.()
 }
 
 /**
@@ -116,5 +130,5 @@ export function codePaneFocused(): boolean {
 }
 
 export function focusTerminalPaneDirection(direction: PaneDirection): void {
-  handles?.focusPaneDirection(direction)
+  currentHandles()?.focusPaneDirection?.(direction)
 }

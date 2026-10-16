@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
+import { useRemoteCode } from '../stores/useRemoteCode'
 import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { useRouter } from 'vue-router'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
@@ -14,6 +15,7 @@ const props = defineProps<{ active: boolean }>()
 const router = useRouter()
 const { endpoint, sessions, busy, error, color, activeProfile, reload, disconnect } = useRemoteConnection()
 const catalog = useRemoteCatalog()
+const code = useRemoteCode()
 const selected = catalog.codeId
 const selectedSession = computed(() =>
   sessions.value.find((row) => row.id === selected.value && row.state === 'active'),
@@ -82,7 +84,6 @@ useIntervalFn(() => {
         <BaseButton size="xs" variant="secondary" data-testid="remote-open-settings" @click="openSettings"
           >Remote settings</BaseButton
         >
-        <span class="text-xs text-text-4">Existing sessions · file transfer unavailable</span>
       </div>
       <div class="flex min-h-0 flex-1">
         <RemoteTerminal
@@ -90,6 +91,9 @@ useIntervalFn(() => {
           :key="`${endpoint.httpBaseURL}/${selectedSession.id}/${selectedSession.slug}`"
           :slug="selectedSession.slug"
           :endpoint="endpoint"
+          :window-id="code.selectedWindow.value"
+          code
+          @selected="code.selectWindow"
         />
         <EmptyState v-else message="Select a remote session to attach." />
       </div>
