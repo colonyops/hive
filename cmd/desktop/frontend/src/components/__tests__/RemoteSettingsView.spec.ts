@@ -1,3 +1,5 @@
+import { nextTick } from 'vue'
+import { resetStores } from '../../stores/defineStore'
 import { flushPromises, mount } from '@vue/test-utils'
 import { expect, it, vi } from 'vitest'
 import RemoteSettingsView from '../RemoteSettingsView.vue'
@@ -36,3 +38,17 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Connect: vi.fn(() => Promise.resolve('remote-one')),
   Disconnect: vi.fn(async () => {}),
 }))
+
+it('Connect saves the profile even if the remote is unreachable', async () => {
+  mocks.list.mockRejectedValue(new Error('Remote unavailable'))
+  const wrapper = mount(RemoteSettingsView)
+  await wrapper.get('[data-testid="remote-name"]').setValue('Saved offline')
+  await wrapper.get('[data-testid="remote-host"]').setValue('offline-server')
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(useRemoteConnection().profiles.value.some((row) => row.name === 'Saved offline')).toBe(true)
+  await nextTick()
+  wrapper.unmount()
+  resetStores()
+  expect(useRemoteConnection().profiles.value.some((row) => row.name === 'Saved offline')).toBe(true)
+})

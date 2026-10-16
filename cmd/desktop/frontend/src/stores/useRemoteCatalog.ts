@@ -77,14 +77,19 @@ export const useRemoteCatalog = defineStore('remoteCatalog', () => {
       if (request === generation) chatBusy.value = false
     }
   }
+  let profileID: string | undefined
   watch(
     remote.endpoint,
     (endpoint) => {
       generation++
-      inboxId.value = ''
-      workspace.value = ''
-      codeId.value = ''
-      chat.value = null
+      const nextProfile = remote.activeProfile.value?.id
+      if (!endpoint || nextProfile !== profileID) {
+        inboxId.value = ''
+        workspace.value = ''
+        codeId.value = ''
+        chat.value = null
+      }
+      profileID = nextProfile
       chatBusy.value = false
       chatError.value = null
       catalog.value = endpoint ? createCatalog(endpoint) : null

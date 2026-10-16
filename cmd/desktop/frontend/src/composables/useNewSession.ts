@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { useRemoteCode } from '../stores/useRemoteCode'
 import {
   CreateSession,
   DismissFailedSession,
@@ -16,6 +17,7 @@ import type { InboxItem } from '../types/feed'
 import { useToasts } from './useToasts'
 
 interface Draft {
+  remoteId?: string
   repository: string
   workspace: string
   name: string
@@ -161,19 +163,25 @@ export function useNewSession() {
   // backend default — the first configured workspace — is almost never it.
   //
   // A failed attempt outranks both: it is the only copy of what was typed.
-  async function openBlank(preferred = '', target: SessionTarget = 'repository', chat?: ChatOpener): Promise<void> {
+  async function openBlank(
+    preferred = '',
+    target: SessionTarget = 'repository',
+    chat?: ChatOpener,
+    remoteId = '',
+  ): Promise<void> {
     if (open.value || loading.value) return
     error.value = null
     loading.value = true
     try {
       const [opts, pending] = await Promise.all([resolveOptions(), pendingDraft()])
-      if (pending?.failure) {
+      if (pending?.failure && !remoteId) {
         show(restored(pending, opts), opts, draftItemIDs(pending), pending.failure)
         return
       }
       show(
         {
           repository: preferred || opts.defaultRepository || '',
+          ...(remoteId ? { remoteId } : {}),
           workspace: chat?.workspace ?? '',
           name: '',
           prompt: '',
@@ -300,6 +308,7 @@ export function useNewSession() {
   }
 
   async function submit(input: {
+    remoteId?: string
     repository?: string
     workspace?: string
     name: string
@@ -319,15 +328,27 @@ export function useNewSession() {
       // Creation (including any clone) runs as a background job. A failure
       // arrives later through sessions:create-failed, which is what hands the
       // form back; only validation errors reject here.
-      await CreateSession({
-        repository: input.repository ?? '',
-        workspace: input.workspace ?? '',
-        name: input.name,
-        prompt: input.prompt ?? '',
-        agent: input.agent ?? '',
-        itemIds: [...itemIDs.value],
+      if (input.remoteId) {
+        if (input.workspace || itemIDs.value.length)
+          throw new Error('Remote Code sessions must start from a repository.')
+        await useRemoteCode().create(input.remoteId, {
+          repository: input.repository ?? '',
+          name: input.name,
+          prompt: input.prompt ?? '',
+          agent: input.agent ?? '',
+        })
+      } else
+        await CreateSession({
+          repository: input.repository ?? '',
+          workspace: input.workspace ?? '',
+          name: input.name,
+          prompt: input.prompt ?? '',
+          agent: input.agent ?? '',
+          itemIds: [...itemIDs.value],
+        })
+      showToast(input.remoteId ? `Created remote session ${input.name}` : `Creating session ${input.name}…`, {
+        severity: 'info',
       })
-      showToast(`Creating session ${input.name}…`, { severity: 'info' })
       open.value = false
       options.value = null
       failure.value = null

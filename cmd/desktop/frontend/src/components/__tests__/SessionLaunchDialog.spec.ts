@@ -39,6 +39,48 @@ describe('SessionLaunchDialog: new session', () => {
   const mountNew = (overrides: Record<string, unknown> = {}) =>
     mountDialog({ initial: blank, withPrompt: true, busy: false, error: null, failure: null, ...overrides })
 
+  it('distinguishes the same repository on two machines and uses the selected machine agents', async () => {
+    const wrapper = mountNew({
+      remote: {
+        id: 'server',
+        name: 'Home server',
+        color: '#a78bfa',
+        options: { ...options, agents: ['shell'], defaultAgent: 'shell' },
+      },
+    })
+    await wrapper.get('[data-testid="new-session-repository"]').trigger('click')
+    const rows = wrapper.findAll('[data-testid="new-session-repository-option"]')
+    expect(rows).toHaveLength(2)
+    expect(rows.map((row) => row.text())).toEqual(
+      expect.arrayContaining([expect.stringContaining('Local'), expect.stringContaining('Home server')]),
+    )
+    await wrapper.get('[data-installation="server"]').trigger('click')
+    await wrapper.get('[data-testid="new-session-name"]').setValue('remote-review')
+    await wrapper.get('[data-testid="new-session-submit"]').trigger('click')
+    expect(wrapper.emitted('submit')?.[0]).toEqual([
+      {
+        repository: options.defaultRepository,
+        remoteId: 'server',
+        agent: 'shell',
+        name: 'remote-review',
+        prompt: '',
+        inputs: {},
+      },
+    ])
+    await wrapper.get('[data-testid="new-session-repository"]').trigger('click')
+    await wrapper.get('[data-installation="local"]').trigger('click')
+    await wrapper.get('[data-testid="new-session-submit"]').trigger('click')
+    expect(wrapper.emitted('submit')?.[1]).toEqual([
+      {
+        repository: options.defaultRepository,
+        agent: 'claude',
+        name: 'remote-review',
+        prompt: '',
+        inputs: {},
+      },
+    ])
+  })
+
   it('puts the compact Code and Chats selector with icons in the header', () => {
     const wrapper = mountNew()
     const selector = wrapper.get('header').get('[data-testid="new-session-target"]')

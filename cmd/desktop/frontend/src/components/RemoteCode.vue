@@ -1,19 +1,23 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
+import { useRemoteCode } from '../stores/useRemoteCode'
 import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { useRouter } from 'vue-router'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
-import { useIntervalFn } from '@vueuse/core'
 import { useCommands, type Command } from '../composables/useCommands'
 import BaseButton from './ui/BaseButton.vue'
 import EmptyState from './ui/EmptyState.vue'
 import InlineError from './ui/InlineError.vue'
 import RemoteTerminal from './RemoteTerminal.vue'
+import RemoteSessionStatusBar from './RemoteSessionStatusBar.vue'
+import { useTerminalStatusBar } from '../stores/useTerminalStatusBar'
 
 const props = defineProps<{ active: boolean }>()
 const router = useRouter()
-const { endpoint, sessions, busy, error, color, activeProfile, reload, disconnect } = useRemoteConnection()
+const { endpoint, sessions, error, reload, disconnect } = useRemoteConnection()
 const catalog = useRemoteCatalog()
+const code = useRemoteCode()
+const { showStatusBar } = useTerminalStatusBar()
 const selected = catalog.codeId
 const selectedSession = computed(() =>
   sessions.value.find((row) => row.id === selected.value && row.state === 'active'),
@@ -23,9 +27,6 @@ function openSettings(): void {
   void router.push({ name: 'application-settings', params: { section: 'remote' } })
 }
 
-watch(endpoint, () => {
-  catalog.selectCode('')
-})
 watch(sessions, (rows) => {
   if (!rows.some((row) => row.id === selected.value && row.state === 'active')) catalog.selectCode('')
 })
@@ -55,10 +56,6 @@ useCommands((): Command[] => {
       })),
   ]
 })
-
-useIntervalFn(() => {
-  if (props.active) void reload()
-}, 10000)
 </script>
 
 <template>
@@ -69,27 +66,21 @@ useIntervalFn(() => {
     </div>
     <InlineError v-if="error" :message="error" testid="remote-error" />
     <template v-if="endpoint">
-      <div class="flex items-center gap-3 border-b border-border px-3 py-2">
-        <span class="flex items-center gap-2 text-xs text-text-3">
-          <span
-            class="size-2.5 rounded-full border border-strong"
-            :style="{ backgroundColor: color }"
-            aria-hidden="true"
-          />
-          {{ activeProfile?.name }} · {{ activeProfile?.host }}
-        </span>
-        <BaseButton size="xs" :busy="busy" data-testid="remote-refresh" @click="reload">Refresh</BaseButton>
-        <BaseButton size="xs" variant="secondary" data-testid="remote-open-settings" @click="openSettings"
-          >Remote settings</BaseButton
-        >
-        <span class="text-xs text-text-4">Existing sessions · file transfer unavailable</span>
-      </div>
+      <RemoteSessionStatusBar
+        v-if="showStatusBar && active && selectedSession"
+        :key="`${endpoint.httpBaseURL}/${selectedSession.id}`"
+        :endpoint="endpoint"
+        :session-id="selectedSession.id"
+      />
       <div class="flex min-h-0 flex-1">
         <RemoteTerminal
           v-if="active && selectedSession"
           :key="`${endpoint.httpBaseURL}/${selectedSession.id}/${selectedSession.slug}`"
           :slug="selectedSession.slug"
           :endpoint="endpoint"
+          :window-id="code.selectedWindow.value"
+          code
+          @selected="code.selectWindow"
         />
         <EmptyState v-else message="Select a remote session to attach." />
       </div>

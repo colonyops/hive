@@ -1,0 +1,250 @@
+/* Pinned under the tree: a legend that scrolls away cannot be consulted when it is needed. */
+.tree-hints {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-top: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  color: var(--color-text-4);
+  user-select: none;
+}
+
+/* The headings hold controls, which a button cannot contain, so every row is a
+   div wearing a button's role. */
+.repo-group,
+.group-row,
+.session-row,
+.window-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.group-row,
+.session-row,
+.window-row {
+  position: relative;
+}
+.repo-group,
+.group-row {
+  height: 36px;
+}
+.session-row {
+  height: 30px;
+  padding-left: 20px;
+  color: var(--color-text);
+}
+.window-row {
+  height: 28px;
+  padding-left: 40px;
+  color: var(--color-text-2);
+}
+:is(.repo-group, .group-row, .session-row, .window-row):is(:hover, .menu-open) {
+  background: var(--color-chip);
+}
+/* No focus styling of their own: the walk activates the row it lands on, so
+   the rail and the accent already follow the cursor. The UA outline has to be
+   removed explicitly. */
+:is(.repo-group, .group-row, .session-row, .window-row):focus-visible {
+  outline: none;
+}
+/* No fill: the rail and the accent find the attached row, and the surface keeps its hover feedback. */
+.session-row-attached,
+.window-row-active {
+  font-weight: 500;
+  color: var(--color-accent);
+}
+
+/* One cell, two occupants: the count is what the row says at rest, the add
+   button what it offers under the pointer. */
+.group-trailing {
+  display: grid;
+  margin-left: auto;
+  min-width: 18px;
+  height: 18px;
+  flex: none;
+  align-self: center;
+}
+.group-count,
+.group-add {
+  grid-area: 1 / 1;
+}
+.group-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.repo-group:hover .group-count,
+.group-trailing:focus-within .group-count {
+  opacity: 0;
+}
+.repo-group:hover .group-add,
+.group-add:focus-visible {
+  opacity: 1;
+}
+
+/* The tree connector is drawn, not typed: a box-drawing glyph is only as tall as
+   its font size, so stacked rows would show gaps. ::before is the vertical,
+   stopped at the elbow on the last row; ::after is the tick into the name. */
+.window-row::before {
+  content: "";
+  position: absolute;
+  left: 26px;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid var(--color-strong);
+}
+.window-row::after {
+  content: "";
+  position: absolute;
+  left: 26px;
+  top: 50%;
+  width: 9px;
+  border-top: 1px solid var(--color-strong);
+}
+.window-row-last::before {
+  bottom: 50%;
+}
+/* The scratch section lists its tabs where a repository lists its sessions, so
+   they take that row's box and drop the connector. */
+.window-row-flush {
+  height: 30px;
+  padding-left: 20px;
+}
+.window-row-flush::before,
+.window-row-flush::after {
+  display: none;
+}
+
+/* On the slot because the row's own ::before and ::after are the connector. */
+.window-slot {
+  position: relative;
+}
+.window-slot.drop-before {
+  box-shadow: inset 0 2px 0 0 var(--color-accent);
+}
+.window-slot.drop-after {
+  box-shadow: inset 0 -2px 0 0 var(--color-accent);
+}
+
+/* Fast enough to read as instant. A leaving row drops out of flow so its
+   neighbors glide up through .tree-move (FLIP) instead of snapping. */
+.tree-enter-active,
+.tree-leave-active,
+.tree-move {
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+.tree-enter-from,
+.tree-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+.tree-leave-active {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+/* Decelerating: ease-in-out spends its first frames barely moving and reads as lag. */
+.tree-expand-enter-active,
+.tree-expand-leave-active {
+  overflow: hidden;
+  transition: height 0.18s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.tree-settling
+  :is(.tree-enter-active, .tree-leave-active, .tree-move, .tree-expand-enter-active, .tree-expand-leave-active) {
+  transition: none;
+}
+
+/* The badge sits over the trailing cells left empty at rest and gives way to
+   the controls hover reveals. 40px is both cells plus the status dot's inset,
+   so its right edge lines up with the dots on other rows; a running row keeps
+   its dot and the badge stops 6px short of it. */
+.session-age {
+  margin-right: -40px;
+  position: relative;
+  z-index: 1;
+  transition: opacity 0.15s ease;
+}
+.session-row:has(.row-status) .session-age {
+  margin-right: -24px;
+}
+.session-row:is(:hover, .menu-open, :has(.row-trailing:focus-within)) .session-age {
+  opacity: 0;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tree-enter-active,
+  .tree-leave-active,
+  .tree-move,
+  .tree-expand-enter-active,
+  .tree-expand-leave-active,
+  .session-age {
+    transition: none;
+  }
+}
+
+/* Two fixed columns keep session and window names aligned. The second holds the
+   status glyph, and the control that replaces it on hover shares that cell.
+   A listed window has no live client to close, so it keeps its status and
+   tooltip there; .has-swap says otherwise. */
+.row-trailing,
+.window-trailing {
+  display: grid;
+  grid-template-columns: 18px 18px;
+  width: 36px;
+  height: 18px;
+  flex: none;
+  align-self: center;
+}
+.row-lead {
+  grid-area: 1 / 1;
+}
+.row-status,
+.window-status,
+.row-swap {
+  grid-area: 1 / 2;
+}
+.row-status,
+.window-status {
+  display: flex;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+.row-status,
+.window-row.has-swap .window-status {
+  pointer-events: none;
+}
+.row-action {
+  opacity: 0;
+}
+.row-action:hover,
+.row-action[aria-expanded="true"] {
+  background: var(--color-app);
+  color: var(--color-text);
+}
+:is(.session-row, .group-row, .window-row):is(:hover, .menu-open) .row-action,
+.row-action:focus-visible {
+  opacity: 1;
+}
+:is(.session-row, .group-row):is(:hover, .menu-open) .row-status,
+.row-trailing:focus-within .row-status {
+  opacity: 0;
+}
+.window-row.has-swap:hover .window-status,
+.window-row.has-swap .window-trailing:focus-within .window-status {
+  opacity: 0;
+}

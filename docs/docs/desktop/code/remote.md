@@ -1,6 +1,6 @@
 ---
 icon: lucide/network
-description: Attach to existing Hive sessions on another machine through SSH.
+description: Create and attach to Hive sessions on another machine through SSH.
 ---
 
 # Remote sessions
@@ -8,7 +8,7 @@ description: Attach to existing Hive sessions on another machine through SSH.
 For a machine without a GUI, use the
 [Ubuntu server installation guide](../getting-started/ubuntu-server.md).
 
-**Settings ▸ Remote** connects to existing Hive Code sessions on another
+**Settings ▸ Remote** connects to Hive Code sessions on another
 machine. Select a session to view its tmux windows and panes, type, paste text,
 and resize the terminal. Connected remote inboxes, Code sessions, and chat
 workspaces appear alongside local entries in the same navigation menus. A narrow
@@ -68,10 +68,42 @@ In Chats, choose a remote workspace, enter a chat name, and click
 Select a previous remote chat to reopen it. Closing the view leaves the remote
 process running. The agent uses the account signed in on that machine.
 
-Remote Code session creation, inbox triage, Drive, image/file transfer, editor
-integration, and automatic tunnel management are not included yet. Create Code
-sessions using Hive on the remote machine. **New session** in Code switches to
-Local.
+## Code repositories and sessions
+
+Code lists remote repositories alongside local repositories, with the connection
+color marking the remote groups. Expand a repository to see its sessions and
+the agent and terminal windows under each session. Select a window to attach.
+The session's **New window** menu offers a terminal and the remote machine's
+configured agents.
+
+**New session** opens the same form for both machines. The repository picker
+shows **Local** or the remote connection name beside each choice. The same
+repository can appear twice, once for each machine. Selecting a remote choice
+uses that machine's agent profiles and creates the checkout there. The form
+waits for the remote creation job and shows any failure without discarding your
+input. The repository's **+** button preselects that repository and machine.
+
+The session status bar shows the remote checkout's branch, changes, and pull
+request using the remote machine's forge credentials. It follows the same
+status-bar visibility setting as local sessions.
+
+If a terminal loses its connection, **Reconnect server** reconnects the entire
+remote installation and reattaches its open terminals. Your selected inbox,
+workspace, chat, Code session, and terminal window are preserved. Remote tmux
+processes keep running while Desktop is disconnected.
+
+Inbox triage, Drive, image/file transfer, and editor integration remain local-only.
+Only one remote connection can be active at a time.
 
 For a reusable Docker host and local Desktop setup, see the repository's
 [remote fixture instructions](https://github.com/colonyops/hive/tree/main/cmd/desktop/remote).
+
+Clicking **Connect** saves the connection profile before attempting to reach the
+server. A failed attempt leaves the profile available for later use; only host
+settings are saved, not the remote token.
+
+Hive checks the connected server every ten seconds. A failed check or lost
+terminal stream shows a **Disconnected** banner with **Reconnect server**,
+even while viewing another area. This monitors the Hive transport, not the
+internal connections of an agent running inside tmux. An agent's own server
+error can require restarting that agent while the Hive connection remains live.

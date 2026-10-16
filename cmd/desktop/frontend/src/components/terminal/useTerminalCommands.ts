@@ -189,45 +189,48 @@ export function useTerminalCommands(context: TerminalModeContext, active: () => 
   }
 
   onMounted(() =>
-    setTerminalTreeHandles({
-      focusTree: nav.focusTree,
-      focusFilter: nav.focusFilter,
-      focusPane: (): void => current.value?.focusActive(),
-      // Counted along the strip rather than clamped: ⌘3 means the third window.
-      selectWindow: (position: number): void => goToWindow(current.value?.tabs.value[position - 1]),
-      stepWindow: (delta: number): void => goToWindow(relativeWindow(delta)),
-      newWindow: (): void => {
-        const row = tree.attachedRow.value
-        if (!row) return
-        paneMayAutoFocus.value = true
-        // tmux names the window, so there is no key to point the cursor at yet;
-        // it falls back to the active window, which is the new one once it lands.
-        nav.cursorRequest.value = ''
-        void ops.newWindowIn(row)
+    setTerminalTreeHandles(
+      {
+        focusTree: nav.focusTree,
+        focusFilter: nav.focusFilter,
+        focusPane: (): void => current.value?.focusActive(),
+        // Counted along the strip rather than clamped: ⌘3 means the third window.
+        selectWindow: (position: number): void => goToWindow(current.value?.tabs.value[position - 1]),
+        stepWindow: (delta: number): void => goToWindow(relativeWindow(delta)),
+        newWindow: (): void => {
+          const row = tree.attachedRow.value
+          if (!row) return
+          paneMayAutoFocus.value = true
+          // tmux names the window, so there is no key to point the cursor at yet;
+          // it falls back to the active window, which is the new one once it lands.
+          nav.cursorRequest.value = ''
+          void ops.newWindowIn(row)
+        },
+        closeWindow: (): void => {
+          const windowId = current.value?.activeWindowId.value
+          if (windowId) void ops.requestCloseWindow(activeSlug.value, windowId, activeTab()?.name ?? '')
+        },
+        splitPane: (direction): void => {
+          paneMayAutoFocus.value = true
+          void current.value?.splitPane(direction)
+        },
+        closePane: (): void => {
+          const tab = activeTab()
+          const pane = tab && activePaneOf(tab)
+          if (tab && pane) void ops.requestClosePane(activeSlug.value, pane.paneId, tab.name)
+        },
+        zoomPane: (): void => {
+          paneMayAutoFocus.value = true
+          void current.value?.zoomPane()
+        },
+        focusPaneDirection: (direction): void => {
+          paneMayAutoFocus.value = true
+          void current.value?.focusPane(direction)
+        },
+        find: (): void => current.value?.openSearch(),
       },
-      closeWindow: (): void => {
-        const windowId = current.value?.activeWindowId.value
-        if (windowId) void ops.requestCloseWindow(activeSlug.value, windowId, activeTab()?.name ?? '')
-      },
-      splitPane: (direction): void => {
-        paneMayAutoFocus.value = true
-        void current.value?.splitPane(direction)
-      },
-      closePane: (): void => {
-        const tab = activeTab()
-        const pane = tab && activePaneOf(tab)
-        if (tab && pane) void ops.requestClosePane(activeSlug.value, pane.paneId, tab.name)
-      },
-      zoomPane: (): void => {
-        paneMayAutoFocus.value = true
-        void current.value?.zoomPane()
-      },
-      focusPaneDirection: (direction): void => {
-        paneMayAutoFocus.value = true
-        void current.value?.focusPane(direction)
-      },
-      find: (): void => current.value?.openSearch(),
-    }),
+      active,
+    ),
   )
   onBeforeUnmount(() => setTerminalTreeHandles(null))
 }

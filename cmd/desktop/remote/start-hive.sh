@@ -4,6 +4,18 @@ mkdir -p "$(dirname "$HIVE_CONFIG")" "$HIVE_DESKTOP_CONFIG_DIR" /home/hive/repos
 if [[ ! -f "$HIVE_CONFIG" ]]; then
   cp /etc/hive-fixture.yaml "$HIVE_CONFIG"
 fi
+# Existing fixture volumes keep their configuration across image upgrades.
+python3 - <<'PYCONFIG'
+import os
+from pathlib import Path
+import yaml
+path = Path(os.environ["HIVE_CONFIG"])
+config = yaml.safe_load(path.read_text())
+defaults = yaml.safe_load(Path("/etc/hive-fixture.yaml").read_text())
+if "codex" not in config.setdefault("agents", {}):
+    config["agents"]["codex"] = defaults["agents"]["codex"]
+    path.write_text(yaml.safe_dump(config, sort_keys=False))
+PYCONFIG
 if [[ ! -d /home/hive/repos/demo/.git ]]; then
   git init -b main /home/hive/repos/demo
   git -C /home/hive/repos/demo config user.name 'Hive Remote Fixture'
@@ -29,6 +41,14 @@ if [[ ! -f "$HIVE_DESKTOP_CONFIG_DIR/workspaces/remote-shell/agent-workspace.yam
 version: 5
 name: Remote test shell
 command: bash --noprofile --norc -i
+YAML
+fi
+mkdir -p "$HIVE_DESKTOP_CONFIG_DIR/workspaces/remote-codex"
+if [[ ! -f "$HIVE_DESKTOP_CONFIG_DIR/workspaces/remote-codex/agent-workspace.yaml" ]]; then
+  cat > "$HIVE_DESKTOP_CONFIG_DIR/workspaces/remote-codex/agent-workspace.yaml" <<'YAML'
+version: 5
+name: Remote Codex
+command: codex --sandbox workspace-write --ask-for-approval on-request
 YAML
 fi
 if [[ ! -f "$HIVE_DESKTOP_CONFIG_DIR/flows/remote-demo.yaml" ]]; then

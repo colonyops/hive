@@ -180,6 +180,8 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   Log: vi.fn().mockResolvedValue({ lines: [], nextAfterId: 0, more: false }),
 }))
 vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice', () => ({
+  SessionGitStatus: vi.fn().mockResolvedValue({ resolved: false }),
+  SessionPullRequest: vi.fn().mockResolvedValue({ status: 'none' }),
   SessionLaunchOptions: mocks.SessionLaunchOptions,
   CreateSession: mocks.CreateSession,
   FailedSessionDraft: mocks.FailedSessionDraft,

@@ -1,50 +1,31 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useIntervalFn } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
 import { useRemoteCatalog } from '../stores/useRemoteCatalog'
-import { useCodeInstallation } from '../stores/useCodeInstallation'
 import BaseButton from './ui/BaseButton.vue'
 import InlineError from './ui/InlineError.vue'
 import IconMessagesSquare from '~icons/lucide/messages-square'
 
-const props = defineProps<{ area: 'inbox' | 'code' | 'chats'; compact?: boolean }>()
-const { endpoint, activeProfile, color, sessions, reload } = useRemoteConnection()
+const props = defineProps<{ area: 'inbox' | 'chats'; compact?: boolean }>()
+const { endpoint, activeProfile, color } = useRemoteConnection()
 const catalog = useRemoteCatalog()
-const installation = useCodeInstallation()
 const router = useRouter()
-useIntervalFn(() => {
-  if (props.area === 'code' && endpoint.value) void reload()
-}, 10000)
 const rows = computed(() => {
   if (props.area === 'inbox') return catalog.inboxes.value
-  if (props.area === 'chats') return catalog.workspaces.value.map((row) => ({ id: row.dir, name: row.name }))
-  return sessions.value.filter((row) => row.state === 'active')
+  return catalog.workspaces.value.map((row) => ({ id: row.dir, name: row.name }))
 })
 const error = computed(() =>
   props.area === 'inbox' ? catalog.inboxError.value : props.area === 'chats' ? catalog.workspaceError.value : null,
 )
-const selected = computed(() =>
-  props.area === 'inbox'
-    ? catalog.inboxId.value
-    : props.area === 'chats'
-      ? catalog.workspace.value
-      : installation.installation.value === 'remote'
-        ? catalog.codeId.value
-        : '',
-)
+const selected = computed(() => (props.area === 'inbox' ? catalog.inboxId.value : catalog.workspace.value))
 function select(id: string): void {
   if (props.area === 'inbox') {
     catalog.selectInbox(id)
     void router.push({ name: 'feed' })
-  } else if (props.area === 'chats') {
+  } else {
     catalog.selectWorkspace(id)
     void router.push({ name: 'agents' })
-  } else {
-    catalog.selectCode(id)
-    installation.select('remote')
-    void router.push({ name: 'terminal' })
   }
 }
 function selectChat(workspace: string, id: string): void {

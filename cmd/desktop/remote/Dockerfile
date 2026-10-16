@@ -15,11 +15,17 @@ COPY --from=frontend /src/cmd/desktop/frontend/dist ./cmd/desktop/frontend/dist
 RUN CGO_ENABLED=0 go build -tags server,terminals -o /out/hive-desktop ./cmd/desktop && \
     CGO_ENABLED=0 go build -o /out/hive .
 
-FROM debian:bookworm-slim AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends openssh-server tmux git bash ca-certificates curl python3 && \
+FROM node:22-bookworm-slim AS runtime
+ARG CODEX_VERSION=0.161.0
+RUN codex_arch="$(node -p process.arch)" && \
+    npm install --global "@openai/codex@${CODEX_VERSION}" \
+      "@openai/codex-linux-${codex_arch}@npm:@openai/codex@${CODEX_VERSION}-linux-${codex_arch}" && \
+    codex --version && npm cache clean --force
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-server tmux git bash ca-certificates curl python3 python3-yaml bubblewrap && \
     rm -rf /var/lib/apt/lists/* && useradd -m -s /bin/bash hive && passwd -d hive && mkdir /run/sshd
 COPY --from=build /out/ /usr/local/bin/
 COPY cmd/desktop/remote/entrypoint.sh cmd/desktop/remote/start-hive.sh /usr/local/bin/
+COPY cmd/desktop/remote/codex-auth.py /usr/local/bin/codex-auth.py
 COPY cmd/desktop/remote/sshd_config /etc/ssh/sshd_config
 COPY cmd/desktop/remote/hive.yaml /etc/hive-fixture.yaml
 ENV HIVE_CONFIG=/home/hive/.config/hive/config.yaml \

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, useId } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCode from '~icons/lucide/code'
 import IconMessagesSquare from '~icons/lucide/messages-square'
@@ -32,6 +32,7 @@ import { seedRef } from '../lib/seedRef'
 type Target = 'repository' | 'workspace'
 
 interface SessionLaunchInput {
+  remoteId?: string
   repository?: string
   workspace?: string
   name: string
@@ -45,7 +46,9 @@ const props = withDefaults(
     options: Partial<Omit<SessionLaunchOptions, 'workspaces'>> & {
       workspaces: readonly { dir: string; name: string; supportsPrompt?: boolean }[] | null
     }
-    initial?: Partial<Record<'repository' | 'workspace' | 'name' | 'prompt' | 'agent', string>>
+    initial?: Partial<Record<'repository' | 'workspace' | 'name' | 'prompt' | 'agent' | 'remoteId', string>>
+    remote?: { id: string; name: string; color: string; options: SessionLaunchOptions }
+    remoteError?: string | null
     initialTarget?: Target
     /** An action's launch renders its own prompt, so only prompt-capable workspaces qualify. */
     action?: { label: string; inputs?: InputSpec[] | null }
@@ -60,6 +63,8 @@ const props = withDefaults(
   }>(),
   {
     initial: () => ({}),
+    remote: undefined,
+    remoteError: null,
     initialTarget: undefined,
     action: undefined,
     error: null,
@@ -83,6 +88,10 @@ const targetIcons = { repository: IconCode, workspace: IconMessagesSquare }
 const inputs = computed(() => props.action?.inputs ?? [])
 
 const target = seedRef<Target>(() => props.initialTarget ?? (props.initial.workspace ? 'workspace' : 'repository'))
+const remoteId = seedRef(() => props.initial.remoteId ?? '')
+const launchOptions = computed(() =>
+  remoteId.value && props.remote?.id === remoteId.value ? props.remote.options : props.options,
+)
 const repository = seedRef(() => props.initial.repository || props.options.defaultRepository || '')
 const workspace = seedRef(() => {
   const first =
@@ -93,26 +102,33 @@ const workspace = seedRef(() => {
 })
 const name = seedRef(() => props.initial.name ?? '')
 const prompt = seedRef(() => props.initial.prompt ?? '')
-const agent = seedRef(() => props.initial.agent ?? '')
+const agent = seedRef(() => (remoteId.value ? (launchOptions.value.defaultAgent ?? '') : (props.initial.agent ?? '')))
+watch(remoteId, () => {
+  agent.value = launchOptions.value.defaultAgent ?? ''
+})
+watch(target, (value) => {
+  if (value === 'workspace') remoteId.value = ''
+})
 const inputValues = seedRef<ActionInputValues>(() => initialActionInputs(inputs.value))
 const validationError = ref('')
 const nameInput = ref<{ focus: () => void } | null>(null)
 
 const needsPrompt = computed(() => !!props.action || prompt.value.trim() !== '')
 const promptUsesTempFile = computed(() => {
-  const threshold = props.options.promptFileThresholdBytes ?? 0
+  const threshold = launchOptions.value.promptFileThresholdBytes ?? 0
   return threshold > 0 && new TextEncoder().encode(prompt.value).byteLength > threshold
 })
 const selectedWorkspace = computed(() => props.options.workspaces?.find((item) => item.dir === workspace.value))
 const canSubmit = computed(() => {
   const selectedTarget = target.value === 'repository' ? repository.value : workspace.value
+  if (remoteId.value && props.remote?.id !== remoteId.value) return false
   if (selectedTarget.trim() === '') return false
   if (name.value.trim() === '') return false
   return target.value === 'repository' || !needsPrompt.value || !!selectedWorkspace.value?.supportsPrompt
 })
 const agentOptions = computed(() => [
   { value: '', label: props.action ? 'Use action default' : 'Default agent' },
-  ...(props.options.agents ?? []).map((key) => ({ value: key, label: key })),
+  ...(launchOptions.value.agents ?? []).map((key) => ({ value: key, label: key })),
 ])
 const workspaceOptions = computed<AppSelectOption[]>(() =>
   (props.options.workspaces ?? []).map((item) => ({
@@ -145,6 +161,7 @@ function submit() {
     ...(target.value === 'workspace'
       ? { workspace: workspace.value.trim() }
       : { repository: repository.value.trim(), ...(agent.value ? { agent: agent.value } : {}) }),
+    ...(remoteId.value ? { remoteId: remoteId.value } : {}),
     name: sessionName,
     ...(props.withPrompt ? { prompt: prompt.value.trim() } : {}),
     inputs: { ...inputValues.value },
@@ -225,6 +242,12 @@ useSubmitShortcut(submit)
           :id="id"
           :model-value="repository"
           :repositories="options.repositories"
+          v-model:installation="remoteId"
+          :remote="
+            remote
+              ? { id: remote.id, name: remote.name, color: remote.color, repositories: remote.options.repositories }
+              : undefined
+          "
           :testid="`${fieldId}-repository`"
           @update:model-value="repository = $event"
         />
@@ -247,6 +270,7 @@ useSubmitShortcut(submit)
           :disabled="!workspaceOptions.length"
         />
       </FormField>
+      <InlineError v-if="remoteError" :message="remoteError" :testid="`${fieldId}-remote-error`" />
       <FormField v-slot="{ id }" label="Session name">
         <!-- A session name slugs into a tmux name and a directory path, so the
              webview's text substitutions must not touch what was typed. -->

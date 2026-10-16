@@ -1,3 +1,4 @@
+import { useRemoteConnection } from '../stores/useRemoteConnection'
 import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { Open as openDiagnostics } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/diagnosticsservice'
 import { nextTick, onMounted, ref, type Ref } from 'vue'
@@ -72,6 +73,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   // user's home (ADR ephemeral-popup-terminals).
   const popupTerminal = usePopupTerminal()
   const remoteCatalog = useRemoteCatalog()
+  const remoteConnection = useRemoteConnection()
   const popupTerminalMounted = ref(false)
 
   function togglePopupTerminal(): void {
@@ -167,8 +169,10 @@ export function useAppCommands(deps: AppCommandDeps) {
         void remoteCatalog.openChat('New chat')
         return
       }
-      codeInstallation.select('local')
-      void newSession.openBlank(sessionRepository(onScreenSessionSlug.value))
+      if (terminalActive.value && codeInstallation.installation.value === 'remote') {
+        const row = remoteConnection.sessions.value.find((row) => row.id === remoteCatalog.codeId.value)
+        void newSession.openBlank(row?.repo ?? '', 'repository', undefined, remoteConnection.activeProfile.value?.id)
+      } else void newSession.openBlank(sessionRepository(onScreenSessionSlug.value))
     },
     'view.go-remote-code': () => {
       codeInstallation.select('remote')
@@ -210,13 +214,24 @@ export function useAppCommands(deps: AppCommandDeps) {
       case 'feed':
         return appMode.feedNavActive.value && !remoteCatalog.inboxId.value
       case 'terminal':
-        return terminalActive.value && codeInstallation.installation.value === 'local'
+        return terminalActive.value
       // Terminal mode with nothing attached is the session picker, which has
       // no more terminal to work with than the feed does.
       case 'terminal-session':
-        return terminalActive.value && !!onScreenSessionSlug.value
+        return (
+          terminalActive.value &&
+          (codeInstallation.installation.value === 'remote'
+            ? !!remoteCatalog.codeId.value
+            : !!onScreenSessionSlug.value)
+        )
       case 'terminal-pane':
-        return terminalActive.value && !!onScreenSessionSlug.value && codePaneFocused()
+        return (
+          terminalActive.value &&
+          (codeInstallation.installation.value === 'remote'
+            ? !!remoteCatalog.codeId.value
+            : !!onScreenSessionSlug.value) &&
+          codePaneFocused()
+        )
       case 'agents':
         if (remoteCatalog.workspace.value) return false
         return agentsActive.value

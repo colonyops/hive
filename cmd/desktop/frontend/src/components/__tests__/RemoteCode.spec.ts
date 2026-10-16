@@ -2,10 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRemoteConnection } from '../../stores/useRemoteConnection'
 import { useRemoteCatalog } from '../../stores/useRemoteCatalog'
-import RemoteNavigation from '../RemoteNavigation.vue'
+import RemoteCodeTree from '../terminal/RemoteCodeTree.vue'
 import RemoteCode from '../RemoteCode.vue'
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('vue-router', () => ({ useRoute: () => ({ name: 'terminal' }), useRouter: () => ({ push: vi.fn() }) }))
 
 const mocks = vi.hoisted(() => ({ list: vi.fn() }))
 vi.mock('../../lib/remoteConnection', async (original) => ({
@@ -43,11 +43,11 @@ describe('remote Code isolation', () => {
     mocks.list.mockResolvedValue([{ id: 'one', name: 'Remote', slug: 'same-slug', state: 'active', repo: '' }])
     const wrapper = mount(RemoteCode, { props: { active: true } })
     await connect()
-    const navigation = mount(RemoteNavigation, { props: { area: 'code' } })
+    const navigation = mount(RemoteCodeTree)
     await navigation.get('[data-testid="remote-code-item-one"]').trigger('click')
     expect(wrapper.get('[data-testid="attached"]').text()).toBe('same-slug')
     mocks.list.mockRejectedValue(new Error('Tunnel disconnected'))
-    await wrapper.get('[data-testid="remote-refresh"]').trigger('click')
+    void useRemoteConnection().reload()
     await flushPromises()
     expect(navigation.find('[data-testid="remote-code-item-one"]').exists()).toBe(true)
     navigation.unmount()
@@ -65,7 +65,7 @@ describe('remote Code isolation', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="attached"]').text()).toBe('before')
     mocks.list.mockResolvedValue([{ id: 'one', name: 'After', slug: 'after', state: 'active', repo: '' }])
-    await wrapper.get('[data-testid="remote-refresh"]').trigger('click')
+    void useRemoteConnection().reload()
     await flushPromises()
     expect(wrapper.get('[data-testid="attached"]').text()).toBe('after')
     wrapper.unmount()
@@ -81,7 +81,7 @@ describe('remote Code isolation', () => {
         resolve = r
       }),
     )
-    await wrapper.get('[data-testid="remote-refresh"]').trigger('click')
+    void useRemoteConnection().reload()
     useRemoteConnection().disconnect()
     resolve([{ id: 'one', name: 'Remote', slug: 'remote', state: 'active', repo: '' }])
     await flushPromises()

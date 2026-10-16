@@ -12,7 +12,7 @@ import SettingsSection from './settings/SettingsSection.vue'
 import SettingsRow from './settings/SettingsRow.vue'
 
 const remote = useRemoteConnection()
-const { profiles, activeProfile, busy, error } = remote
+const { profiles, activeProfile, busy, error, status } = remote
 const installation = useCodeInstallation()
 const router = useRouter()
 const blank = (): RemoteProfile => ({
@@ -74,7 +74,12 @@ function remove(): void {
             :style="{ backgroundColor: profile.color }"
             aria-hidden="true"
           />
-          <span v-if="activeProfile?.id === profile.id" class="text-small text-text-3">Connected</span>
+          <span
+            v-if="activeProfile?.id === profile.id"
+            class="text-small text-text-3"
+            data-testid="remote-profile-status"
+            >{{ status === 'connecting' ? 'Connecting…' : status === 'connected' ? 'Connected' : 'Disconnected' }}</span
+          >
           <BaseButton
             size="xs"
             variant="secondary"

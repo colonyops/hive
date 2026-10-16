@@ -18,12 +18,14 @@ import { highlightSegments, rankRepositories, repoDisplayName, toChoices } from 
 
 const props = defineProps<{
   modelValue: string
+  installation?: string
+  remote?: { id: string; name: string; color: string; repositories: SessionLaunchRepository[] | null }
   repositories: SessionLaunchRepository[] | null | undefined
   testid?: string
   id?: string
 }>()
 
-const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+const emit = defineEmits<{ 'update:modelValue': [value: string]; 'update:installation': [value: string] }>()
 
 const listboxId = useId()
 const root = ref<HTMLElement | null>(null)
@@ -35,7 +37,15 @@ const open = ref(false)
 const query = ref('')
 const active = ref(0)
 
-const choices = computed(() => toChoices(props.repositories))
+const choices = computed(() => [
+  ...toChoices(props.repositories).map((row) => ({ ...row, hint: props.remote ? 'Local' : row.hint })),
+  ...toChoices(props.remote?.repositories).map((row) => ({
+    ...row,
+    installation: props.remote?.id,
+    color: props.remote?.color,
+    hint: props.remote?.name ?? '',
+  })),
+])
 const ranked = computed(() => rankRepositories(choices.value, query.value, props.modelValue))
 
 // A remote that is not on disk yet is still a valid answer, so the typed query
@@ -83,7 +93,8 @@ function toggle(): void {
   open.value ? close() : openList()
 }
 
-function choose(remote: string): void {
+function choose(remote: string, installation = ''): void {
+  emit('update:installation', installation)
   if (remote !== props.modelValue) emit('update:modelValue', remote)
   close()
 }
@@ -91,10 +102,10 @@ function choose(remote: string): void {
 function commitActive(): void {
   const row = ranked.value[active.value]
   if (row) {
-    choose(row.remote)
+    choose(row.remote, row.installation)
     return
   }
-  if (custom.value) choose(custom.value)
+  if (custom.value) choose(custom.value, props.installation)
 }
 
 function onKeydown(event: KeyboardEvent): void {
@@ -158,6 +169,7 @@ onClickOutside(
       <span class="min-w-0 flex-1 truncate" :class="modelValue ? '' : 'text-text-4'">{{
         modelValue ? selectedLabel : 'Choose a repository'
       }}</span>
+      <span v-if="remote" class="text-caption text-text-4">{{ installation ? remote.name : 'Local' }}</span>
       <IconChevronDown class="size-4 shrink-0 text-text-3 transition-transform" :class="open ? 'rotate-180' : ''" />
     </button>
 
@@ -192,20 +204,26 @@ onClickOutside(
         >
           <li
             v-for="(repo, index) in ranked"
-            :key="repo.remote"
+            :key="`${repo.installation ?? 'local'}:${repo.remote}`"
             role="option"
-            :aria-selected="repo.remote === modelValue"
+            :aria-selected="repo.remote === modelValue && (repo.installation ?? '') === (installation ?? '')"
           >
             <button
               type="button"
               class="flex w-full items-center gap-2 rounded-md px-[9px] py-[7px] text-left text-body"
               :class="
-                index === active ? 'bg-hover text-text' : repo.remote === modelValue ? 'text-text' : 'text-text-2'
+                index === active
+                  ? 'bg-hover text-text'
+                  : repo.remote === modelValue && (repo.installation ?? '') === (installation ?? '')
+                    ? 'text-text'
+                    : 'text-text-2'
               "
               :data-testid="testid ? `${testid}-option` : undefined"
               :title="repo.remote"
+              :data-installation="repo.installation || 'local'"
+              :style="repo.color ? { borderLeft: `3px solid ${repo.color}` } : undefined"
               @mousedown.prevent
-              @click="choose(repo.remote)"
+              @click="choose(repo.remote, repo.installation)"
               @mousemove="active = index"
             >
               <span class="min-w-0 flex-1 truncate">
@@ -217,7 +235,11 @@ onClickOutside(
                 >
               </span>
               <span v-if="repo.hint" class="shrink-0 truncate text-caption text-text-4">{{ repo.hint }}</span>
-              <IconCheck v-if="repo.remote === modelValue" class="size-3.5 shrink-0 text-accent" :stroke-width="3" />
+              <IconCheck
+                v-if="repo.remote === modelValue && (repo.installation ?? '') === (installation ?? '')"
+                class="size-3.5 shrink-0 text-accent"
+                :stroke-width="3"
+              />
             </button>
           </li>
           <li v-if="custom" role="option" :aria-selected="false">
@@ -227,10 +249,12 @@ onClickOutside(
               :class="active === ranked.length ? 'bg-hover text-text' : 'text-text-2'"
               :data-testid="testid ? `${testid}-custom` : undefined"
               @mousedown.prevent
-              @click="choose(custom)"
+              @click="choose(custom, installation)"
               @mousemove="active = ranked.length"
             >
-              <span class="shrink-0 text-text-4">Use</span>
+              <span class="shrink-0 text-text-4"
+                >Use{{ remote ? ` on ${installation ? remote.name : 'Local'}` : '' }}</span
+              >
               <span class="min-w-0 flex-1 truncate">{{ custom }}</span>
             </button>
           </li>
