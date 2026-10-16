@@ -90,3 +90,46 @@ it('coalesces reconnect requests and replaces the server endpoint for all consum
   expect(await first).toBe(true)
   expect(remote.endpoint.value).not.toBe(previous)
 })
+
+it('reports failed server probes and recovers without dropping saved sessions', async () => {
+  const remote = useRemoteConnection()
+  const rows = [{ id: 'one', slug: 'demo', name: 'Demo', state: 'active', repo: '' }]
+  list.mockResolvedValue(rows)
+  await remote.connect(remote.save(profile()))
+  expect(remote.status.value).toBe('connected')
+  list.mockRejectedValue(new Error('SSH stream closed'))
+  await remote.reload()
+  expect(remote.status.value).toBe('disconnected')
+  expect(remote.sessions.value).toEqual(rows)
+  list.mockResolvedValue(rows)
+  await remote.reconnect()
+  expect(remote.status.value).toBe('connected')
+})
+it('keeps a dropped stream visible until reconnect and ignores old connection reports', async () => {
+  const remote = useRemoteConnection()
+  list.mockResolvedValue([])
+  await remote.connect(remote.save(profile()))
+  const old = remote.endpoint.value!
+  remote.reportStreamFailure(old)
+  await remote.reload()
+  expect(remote.status.value).toBe('disconnected')
+  await remote.reconnect()
+  remote.reportStreamFailure(old)
+  expect(remote.status.value).toBe('connected')
+})
+
+it('detects an outage without any terminal view mounted', async () => {
+  vi.useFakeTimers()
+  try {
+    const remote = useRemoteConnection()
+    list.mockResolvedValue([])
+    await remote.connect(remote.save(profile()))
+    list.mockRejectedValue(new Error('Remote unavailable'))
+    await vi.advanceTimersByTimeAsync(10000)
+    expect(remote.status.value).toBe('disconnected')
+    expect(remote.error.value).toContain('Remote unavailable')
+  } finally {
+    resetStores()
+    vi.useRealTimers()
+  }
+})

@@ -1,7 +1,7 @@
 import { createLogger } from '../lib/log'
 import { connectManaged, disconnectManaged } from '../lib/managedTransport'
 import { computed, onScopeDispose, readonly, ref, shallowRef } from 'vue'
-import { useStorage } from '@vueuse/core'
+import { useIntervalFn, useStorage } from '@vueuse/core'
 import { defineStore } from './defineStore'
 import { useResource, type Resource } from './useResource'
 import { errorText } from '../lib/appError'
@@ -26,6 +26,12 @@ export const useRemoteConnection = defineStore('remoteConnection', () => {
   const color = computed(() => activeProfile.value?.color ?? '#a78bfa')
   const connecting = ref(false)
   const connectError = ref<string | null>(null)
+  const streamError = ref<string | null>(null)
+  const status = computed(() => {
+    if (connecting.value) return 'connecting'
+    if (!connection.value) return 'disconnected'
+    return streamError.value || connection.value.sessions.error.value ? 'disconnected' : 'connected'
+  })
   let generation = 0
 
   async function connect(id: string): Promise<boolean> {
@@ -50,6 +56,7 @@ export const useRemoteConnection = defineStore('remoteConnection', () => {
         return false
       }
       if (connection.value) release(connection.value.endpoint)
+      streamError.value = null
       connection.value = { id, endpoint, sessions }
       pending = null
       return true
@@ -77,6 +84,13 @@ export const useRemoteConnection = defineStore('remoteConnection', () => {
     await connection.value?.sessions.reload()
   }
 
+  function reportStreamFailure(endpoint: TerminalEndpoint): void {
+    if (connection.value?.endpoint === endpoint)
+      streamError.value =
+        'The terminal connection was interrupted. Reconnect the remote server to restore its terminals.'
+  }
+  useIntervalFn(() => void reload(), 10000)
+
   function release(endpoint: TerminalEndpoint): void {
     void disconnectManaged(endpoint).catch((error: unknown) => log.warn('Remote disconnect failed', error))
   }
@@ -85,6 +99,7 @@ export const useRemoteConnection = defineStore('remoteConnection', () => {
     generation++
     if (connection.value) release(connection.value.endpoint)
     connection.value = null
+    streamError.value = null
     connecting.value = false
     connectError.value = null
   }
@@ -125,13 +140,15 @@ export const useRemoteConnection = defineStore('remoteConnection', () => {
   return {
     profiles: readonly(profiles),
     activeProfile,
+    status,
+    reportStreamFailure,
     save,
     remove,
     color,
     endpoint: computed(() => connection.value?.endpoint ?? null),
     sessions: computed<readonly RemoteSession[]>(() => connection.value?.sessions.data.value ?? []),
     busy: computed(() => connecting.value || !!connection.value?.sessions.loading.value),
-    error: computed(() => connectError.value ?? connection.value?.sessions.error.value ?? null),
+    error: computed(() => connectError.value ?? streamError.value ?? connection.value?.sessions.error.value ?? null),
     connect,
     reconnect,
     reload,

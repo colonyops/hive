@@ -7,7 +7,12 @@ const mocks = vi.hoisted(() => ({ reconnect: vi.fn(), attach: vi.fn(), dispose: 
 const status = ref('live')
 const remoteBusy = ref(false)
 vi.mock('../../stores/useRemoteConnection', () => ({
-  useRemoteConnection: () => ({ reconnect: mocks.reconnect, busy: remoteBusy, error: ref(null) }),
+  useRemoteConnection: () => ({
+    reportStreamFailure: vi.fn(),
+    reconnect: mocks.reconnect,
+    busy: remoteBusy,
+    error: ref(null),
+  }),
 }))
 vi.mock('../../lib/terminalClient', () => ({ createTerminalClient: vi.fn() }))
 vi.mock('../../composables/useTerminalWindows', () => ({

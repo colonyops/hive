@@ -97,3 +97,13 @@ Only one remote connection can be active at a time.
 
 For a reusable Docker host and local Desktop setup, see the repository's
 [remote fixture instructions](https://github.com/colonyops/hive/tree/main/cmd/desktop/remote).
+
+Clicking **Connect** saves the connection profile before attempting to reach the
+server. A failed attempt leaves the profile available for later use; only host
+settings are saved, not the remote token.
+
+Hive checks the connected server every ten seconds. A failed check or lost
+terminal stream shows a **Disconnected** banner with **Reconnect server**,
+even while viewing another area. This monitors the Hive transport, not the
+internal connections of an agent running inside tmux. An agent's own server
+error can require restarting that agent while the Hive connection remains live.

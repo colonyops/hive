@@ -33,13 +33,6 @@ function close(kind: 'window' | 'pane'): void {
   })
 }
 useCommands((): Command[] => [
-  {
-    id: 'remote:reconnect',
-    title: 'Reconnect remote server',
-    group: `Remote · ${props.slug}`,
-    scope: 'actions',
-    run: () => void remote.reconnect(),
-  },
   ...tabs.value.map((tab): Command => ({
     id: `remote:${props.endpoint.httpBaseURL}:${props.slug}:${tab.windowId}`,
     title: tab.name,
@@ -55,6 +48,9 @@ watch(
   },
 )
 watch(activeWindowId, (id) => emit('selected', id))
+watch(status, (value) => {
+  if (value === 'ended' && session.endReason.value === 'disconnected') remote.reportStreamFailure(props.endpoint)
+})
 onMounted(async () => {
   if (props.code)
     releaseHandles = overrideTerminalTreeHandles({

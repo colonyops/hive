@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RemoteConnectionStatus from './components/RemoteConnectionStatus.vue'
 import { computed, defineAsyncComponent, useTemplateRef } from 'vue'
 import RemoteInbox from './components/RemoteInbox.vue'
 import { useRemoteCatalog } from './stores/useRemoteCatalog'
@@ -150,6 +151,7 @@ useWailsEvent('flows:updated', () => {
         @open-palette="palette.toggle()"
         @toggle-maximise="appMode.toggleMaximise"
       />
+      <RemoteConnectionStatus />
       <!-- An empty frame until the profiles resolve, so a returning user never
            sees onboarding flash by. A load failure falls through to the shell,
            which renders the error with a retry. -->

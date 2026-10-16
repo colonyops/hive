@@ -4,7 +4,6 @@ import { useRemoteCode } from '../stores/useRemoteCode'
 import { useRemoteCatalog } from '../stores/useRemoteCatalog'
 import { useRouter } from 'vue-router'
 import { useRemoteConnection } from '../stores/useRemoteConnection'
-import { useIntervalFn } from '@vueuse/core'
 import { useCommands, type Command } from '../composables/useCommands'
 import BaseButton from './ui/BaseButton.vue'
 import EmptyState from './ui/EmptyState.vue'
@@ -57,10 +56,6 @@ useCommands((): Command[] => {
       })),
   ]
 })
-
-useIntervalFn(() => {
-  if (props.active) void reload()
-}, 10000)
 </script>
 
 <template>
