@@ -113,3 +113,48 @@ func (ctrl *Controller) RemoteSessionStatuses(w http.ResponseWriter, r *http.Req
 	}
 	return server.JSON(w, http.StatusOK, snapshot)
 }
+
+func (ctrl *Controller) RemoteSessionGitStatus(w http.ResponseWriter, r *http.Request) error {
+	body, err := terminalBody[struct {
+		ID string `json:"id"`
+	}](ctrl, w, r)
+	if err != nil {
+		return err
+	}
+	status, err := ctrl.core.Sessions.SessionGitStatus(r.Context(), body.ID)
+	if err != nil {
+		return err
+	}
+	detail := ""
+	if err := status.Error(); err != nil {
+		detail = err.Error()
+	}
+	return server.JSON(w, http.StatusOK, struct {
+		Path      string `json:"path"`
+		Branch    string `json:"branch"`
+		Dirty     bool   `json:"dirty"`
+		Unpushed  bool   `json:"unpushed"`
+		Additions int    `json:"additions"`
+		Deletions int    `json:"deletions"`
+		Host      string `json:"host"`
+		Owner     string `json:"owner"`
+		Repo      string `json:"repo"`
+		Resolved  bool   `json:"resolved"`
+		Error     string `json:"error"`
+	}{status.Path, status.Branch, status.Dirty, status.Unpushed, status.Additions, status.Deletions, status.Host, status.Owner, status.Repo, status.Resolved, detail})
+}
+
+func (ctrl *Controller) RemoteSessionPullRequest(w http.ResponseWriter, r *http.Request) error {
+	body, err := terminalBody[struct {
+		Key     app.SessionPullRequestKey `json:"key"`
+		Refresh bool                      `json:"refresh"`
+	}](ctrl, w, r)
+	if err != nil {
+		return err
+	}
+	result, err := ctrl.core.Sessions.SessionPullRequest(r.Context(), body.Key, body.Refresh)
+	if err != nil {
+		return err
+	}
+	return server.JSON(w, http.StatusOK, result)
+}

@@ -39,10 +39,13 @@ export const useRemoteCode = defineStore('remoteCode', () => {
       ),
     }
   }
+  let profileID: string | undefined
   watch(
     remote.endpoint,
     (endpoint) => {
-      selectedWindow.value = ''
+      const nextProfile = remote.activeProfile.value?.id
+      if (!endpoint || nextProfile !== profileID) selectedWindow.value = ''
+      profileID = nextProfile
       resources.value = endpoint ? createResources(endpoint) : null
       if (resources.value) void resources.value.options.reload()
     },

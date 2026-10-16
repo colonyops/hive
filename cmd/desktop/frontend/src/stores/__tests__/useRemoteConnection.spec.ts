@@ -70,3 +70,23 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Connect: vi.fn(() => Promise.resolve('remote-one')),
   Disconnect: vi.fn(async () => {}),
 }))
+
+it('coalesces reconnect requests and replaces the server endpoint for all consumers', async () => {
+  const remote = useRemoteConnection()
+  list.mockResolvedValue([])
+  await remote.connect(remote.save(profile()))
+  const previous = remote.endpoint.value
+  let resolve!: (rows: unknown[]) => void
+  list.mockReturnValue(
+    new Promise((r) => {
+      resolve = r
+    }),
+  )
+  const first = remote.reconnect()
+  const second = remote.reconnect()
+  expect(first).toBe(second)
+  await nextTick()
+  resolve([])
+  expect(await first).toBe(true)
+  expect(remote.endpoint.value).not.toBe(previous)
+})

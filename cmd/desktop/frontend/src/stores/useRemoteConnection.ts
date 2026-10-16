@@ -62,6 +62,17 @@ export const useRemoteConnection = defineStore('remoteConnection', () => {
     }
   }
 
+  let reconnecting: Promise<boolean> | null = null
+  function reconnect(): Promise<boolean> {
+    if (reconnecting) return reconnecting
+    const id = connection.value?.id
+    if (!id) return Promise.resolve(false)
+    reconnecting = connect(id).finally(() => {
+      reconnecting = null
+    })
+    return reconnecting
+  }
+
   async function reload(): Promise<void> {
     await connection.value?.sessions.reload()
   }
@@ -122,6 +133,7 @@ export const useRemoteConnection = defineStore('remoteConnection', () => {
     busy: computed(() => connecting.value || !!connection.value?.sessions.loading.value),
     error: computed(() => connectError.value ?? connection.value?.sessions.error.value ?? null),
     connect,
+    reconnect,
     reload,
     disconnect,
   }

@@ -79,3 +79,18 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Connect: vi.fn(() => Promise.resolve('remote-one')),
   Disconnect: vi.fn(async () => {}),
 }))
+
+it('preserves selected inbox, code and chat across a server reconnect', async () => {
+  const { catalog, remote } = await connected()
+  catalog.selectInbox('shared-name')
+  catalog.selectCode('code-one')
+  catalog.selectWorkspace('shared-name')
+  mocks.startSession.mockResolvedValue({ id: 'remote-chat', terminalId: 'agentws-remote' })
+  await catalog.openChat('Chat')
+  await remote.reconnect()
+  await flushPromises()
+  expect(catalog.inboxId.value).toBe('shared-name')
+  expect(catalog.codeId.value).toBe('code-one')
+  expect(catalog.workspace.value).toBe('shared-name')
+  expect(catalog.chat.value?.id).toBe('remote-chat')
+})

@@ -47,7 +47,7 @@ describe('remote Code isolation', () => {
     await navigation.get('[data-testid="remote-code-item-one"]').trigger('click')
     expect(wrapper.get('[data-testid="attached"]').text()).toBe('same-slug')
     mocks.list.mockRejectedValue(new Error('Tunnel disconnected'))
-    await wrapper.get('[data-testid="remote-refresh"]').trigger('click')
+    void useRemoteConnection().reload()
     await flushPromises()
     expect(navigation.find('[data-testid="remote-code-item-one"]').exists()).toBe(true)
     navigation.unmount()
@@ -65,7 +65,7 @@ describe('remote Code isolation', () => {
     await flushPromises()
     expect(wrapper.get('[data-testid="attached"]').text()).toBe('before')
     mocks.list.mockResolvedValue([{ id: 'one', name: 'After', slug: 'after', state: 'active', repo: '' }])
-    await wrapper.get('[data-testid="remote-refresh"]').trigger('click')
+    void useRemoteConnection().reload()
     await flushPromises()
     expect(wrapper.get('[data-testid="attached"]').text()).toBe('after')
     wrapper.unmount()
@@ -81,7 +81,7 @@ describe('remote Code isolation', () => {
         resolve = r
       }),
     )
-    await wrapper.get('[data-testid="remote-refresh"]').trigger('click')
+    void useRemoteConnection().reload()
     useRemoteConnection().disconnect()
     resolve([{ id: 'one', name: 'Remote', slug: 'remote', state: 'active', repo: '' }])
     await flushPromises()

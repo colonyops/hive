@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch } from 'vue'
+import IconRefresh from '~icons/lucide/refresh-cw'
+import { useRemoteConnection } from '../stores/useRemoteConnection'
 import { overrideTerminalTreeHandles } from '../lib/terminalTree'
 import { useConfirmation } from '../composables/useConfirmation'
 import ConfirmationHost from './ui/ConfirmationHost.vue'
@@ -17,6 +19,7 @@ const emit = defineEmits<{ selected: [id: string] }>()
 // eslint-disable-next-line vue/no-setup-props-reactivity-loss
 const session = useTerminalWindows(props.slug, createTerminalClient(props.endpoint), { localImages: false })
 const { tabs, activeWindowId, status, error, actionError, outputDropped } = session
+const remote = useRemoteConnection()
 const confirmation = useConfirmation()
 let releaseHandles: (() => void) | undefined
 function close(kind: 'window' | 'pane'): void {
@@ -32,10 +35,10 @@ function close(kind: 'window' | 'pane'): void {
 useCommands((): Command[] => [
   {
     id: 'remote:reconnect',
-    title: 'Reconnect terminal',
+    title: 'Reconnect remote server',
     group: `Remote · ${props.slug}`,
     scope: 'actions',
-    run: () => void session.reconnect(),
+    run: () => void remote.reconnect(),
   },
   ...tabs.value.map((tab): Command => ({
     id: `remote:${props.endpoint.httpBaseURL}:${props.slug}:${tab.windowId}`,
@@ -84,27 +87,24 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="remote-terminal">
-    <div class="flex items-center gap-2 border-b border-border px-3 py-2">
-      <span class="text-xs text-text-3" data-testid="remote-terminal-status">{{ status }}</span>
-      <BaseButton
-        size="xs"
-        :disabled="status === 'connecting'"
-        data-testid="remote-reconnect"
-        @click="session.reconnect"
-        >Reconnect</BaseButton
-      >
-      <BaseButton
-        v-for="tab in tabs"
-        :key="tab.windowId"
-        size="xs"
-        :variant="activeWindowId === tab.windowId ? 'primary' : 'ghost'"
-        @click="session.select(tab.windowId)"
-        >{{ tab.name }}</BaseButton
-      >
+  <div class="flex min-h-0 min-w-0 flex-1 flex-col" data-testid="remote-terminal" :data-status="status">
+    <div
+      v-if="status === 'ended'"
+      class="flex flex-col items-center justify-center gap-3 border-b border-border bg-sunken px-6 py-4 text-center"
+      data-testid="remote-terminal-disconnected"
+    >
+      <span class="text-body font-semibold text-text-1">{{
+        session.endReason.value === 'terminated' ? 'Tmux session terminated' : 'Terminal connection lost'
+      }}</span>
+      <p class="text-caption text-text-3">{{ error }}</p>
+      <BaseButton size="sm" :busy="remote.busy.value" data-testid="remote-reconnect" @click="remote.reconnect">
+        <IconRefresh class="size-3.5" aria-hidden="true" />Reconnect server
+      </BaseButton>
+      <InlineError v-if="remote.error.value" :message="remote.error.value" />
     </div>
+    <span v-else-if="status === 'connecting'" class="px-3 py-2 text-caption text-text-3">Connecting…</span>
     <ConfirmationHost :confirmation="confirmation" />
-    <InlineError v-if="error || actionError" :message="error || actionError" testid="remote-terminal-error" />
+    <InlineError v-if="actionError" :message="actionError" testid="remote-terminal-error" />
     <p v-if="outputDropped" class="px-3 py-2 text-xs text-text-3">
       Output was interrupted. The panes have been repainted from remote tmux.
     </p>

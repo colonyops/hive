@@ -48,7 +48,7 @@ func TestRemoteInboxDiscoveryAndFeedIsolation(t *testing.T) {
 
 func TestRemoteCodeOperationsAuthenticateBeforeReadingInput(t *testing.T) {
 	h := newTerminalHarness(t)
-	for _, path := range []string{"session-options", "create-session", "job", "session-statuses"} {
+	for _, path := range []string{"session-options", "create-session", "job", "session-statuses", "session-git-status", "session-pull-request"} {
 		for _, token := range []string{"", "wrong"} {
 			response := h.post(t, TerminalPathPrefix+"remote/"+path, token, nil)
 			assert.Equal(t, http.StatusUnauthorized, response.StatusCode, path)

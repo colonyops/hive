@@ -65,6 +65,8 @@ func (ctrl *Controller) operations() []Op {
 		Op{Method: "POST", Path: TerminalPathPrefix + "remote/create-session", Summary: "Create a Code session on this installation.", Request: remoteCreateSessionRequest{}, Response: remoteCreateSessionResponse{}, Status: http.StatusAccepted, Handler: ctrl.RemoteCreateSession},
 		Op{Method: "POST", Path: TerminalPathPrefix + "remote/job", Summary: "Read a remote job's progress and outcome.", Request: remoteJobRequest{}, Handler: ctrl.RemoteJob},
 		Op{Method: "POST", Path: TerminalPathPrefix + "remote/session-statuses", Summary: "Read remote session and agent activity.", Handler: ctrl.RemoteSessionStatuses},
+		Op{Method: "POST", Path: TerminalPathPrefix + "remote/session-git-status", Summary: "Read the remote checkout status.", Handler: ctrl.RemoteSessionGitStatus},
+		Op{Method: "POST", Path: TerminalPathPrefix + "remote/session-pull-request", Summary: "Read the remote branch pull request.", Handler: ctrl.RemoteSessionPullRequest},
 	)
 	ops = append(ops, ctrl.popupTerminalOperations()...)
 	ops = append(ops, ctrl.agentOperations()...)

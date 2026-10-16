@@ -1,5 +1,10 @@
 import type { SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
-import type { SessionStatusSnapshot } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
+import type { SessionGitStatus } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/models'
+import type {
+  SessionPullRequest,
+  SessionPullRequestKey,
+  SessionStatusSnapshot,
+} from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/models'
 import { endpointFetch } from './managedTransport'
 import type { TerminalEndpoint } from './terminalClient'
 
@@ -26,6 +31,9 @@ export function createRemoteCodeClient(endpoint: TerminalEndpoint) {
     return (await response.json()) as T
   }
   return {
+    gitStatus: (id: string) => post<SessionGitStatus>('session-git-status', { id }),
+    pullRequest: (key: SessionPullRequestKey, refresh: boolean) =>
+      post<SessionPullRequest>('session-pull-request', { key, refresh }),
     options: () => post<SessionLaunchOptions>('session-options'),
     statuses: () => post<SessionStatusSnapshot>('session-statuses'),
     create: (input: RemoteCodeInput) => post<{ jobId: number }>('create-session', input),

@@ -16,7 +16,13 @@ const POLL_INTERVAL_MS = 15_000
  * The attached session's checkout, for the session status bar. Scoped to one
  * session: a full read costs several git subprocesses.
  */
-export function useSessionStatus(sessionId: Ref<string>): {
+export function useSessionStatus(
+  sessionId: Ref<string>,
+  reader: {
+    gitStatus: (id: string) => Promise<SessionGitStatus>
+    pullRequest: (...args: Parameters<typeof ReadPullRequest>) => Promise<SessionPullRequest>
+  } = { gitStatus: ReadGitStatus, pullRequest: ReadPullRequest },
+): {
   git: Ref<SessionGitStatus | null>
   pullRequest: Ref<SessionPullRequest | null>
   /** Why the lookup failed, which is never the same as the branch having none. */
@@ -51,7 +57,7 @@ export function useSessionStatus(sessionId: Ref<string>): {
 
     let status: SessionGitStatus
     try {
-      status = await ReadGitStatus(id)
+      status = await reader.gitStatus(id)
     } catch {
       // A transient failure must not blank a bar that had an answer.
       return
@@ -67,7 +73,7 @@ export function useSessionStatus(sessionId: Ref<string>): {
       return
     }
     try {
-      const pr = await ReadPullRequest(
+      const pr = await reader.pullRequest(
         { host: status.host, owner: status.owner, repo: status.repo, branch: status.branch },
         options.refreshPullRequest ?? false,
       )

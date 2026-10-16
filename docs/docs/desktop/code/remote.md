@@ -83,6 +83,15 @@ uses that machine's agent profiles and creates the checkout there. The form
 waits for the remote creation job and shows any failure without discarding your
 input. The repository's **+** button preselects that repository and machine.
 
+The session status bar shows the remote checkout's branch, changes, and pull
+request using the remote machine's forge credentials. It follows the same
+status-bar visibility setting as local sessions.
+
+If a terminal loses its connection, **Reconnect server** reconnects the entire
+remote installation and reattaches its open terminals. Your selected inbox,
+workspace, chat, Code session, and terminal window are preserved. Remote tmux
+processes keep running while Desktop is disconnected.
+
 Inbox triage, Drive, image/file transfer, and editor integration remain local-only.
 Only one remote connection can be active at a time.
 

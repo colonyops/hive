@@ -71,3 +71,15 @@ describe('remote Code', () => {
     expect(mocks.reload).not.toHaveBeenCalled()
   })
 })
+
+it('preserves the selected window only when reconnecting the same profile', async () => {
+  const code = useRemoteCode()
+  code.selectWindow('@2')
+  remote.endpoint.value = { httpBaseURL: 'hive-remote://reconnected', token: '', wsURL: '' }
+  await flushPromises()
+  expect(code.selectedWindow.value).toBe('@2')
+  remote.activeProfile.value = { id: 'two' }
+  remote.endpoint.value = { httpBaseURL: 'hive-remote://other', token: '', wsURL: '' }
+  await flushPromises()
+  expect(code.selectedWindow.value).toBe('')
+})
