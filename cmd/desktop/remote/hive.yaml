@@ -4,6 +4,9 @@ workspaces:
   - /home/hive/repos
 agents:
   default: shell
+  codex:
+    command: codex
+    flags: [--sandbox, workspace-write, --ask-for-approval, on-request]
   shell:
     command: bash
 rules:

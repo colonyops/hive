@@ -1,8 +1,8 @@
 # Remote Hive fixture
 
 The persistent Linux fixture runs Hive Desktop, the CLI, tmux, a test inbox,
-and a shell workspace. SSH is its only published port. It imports no host
-repositories or agent credentials.
+and shell and Codex workspaces. SSH is its only published port. It imports no
+host repositories. Agent credentials are imported only by an explicit command.
 
 ```sh
 mise run desktop:remote:up
@@ -35,6 +35,49 @@ Named volumes retain the remote home, TLS identity, and SSH host keys across
 rebuilds. Tmux survives client disconnects, but not container restarts. Startup
 restores the demo terminals. `HIVE_REMOTE_SSH_PORT` changes the published SSH
 port from `19222`; regenerate the config block after a change.
+
+## Test Codex with your ChatGPT subscription
+
+The fixture image includes Codex CLI 0.161.0. Rebuild the fixture, then explicitly
+copy your local ChatGPT login into its persistent home:
+
+```sh
+mise run desktop:remote:up
+mise run desktop:remote:codex-auth
+```
+
+The import reads `$CODEX_HOME/auth.json` (default `~/.codex/auth.json`). Set
+`HIVE_REMOTE_CODEX_AUTH_FILE` to use another file. Sign in locally with
+`codex login` first if the file does not exist; a login stored only in the OS
+keyring must first be made available through Codex's file credential storage.
+The importer accepts ChatGPT credentials, not API keys, and verifies the login
+method with `codex login status` inside the container.
+
+Credentials travel through Docker exec stdin into `/home/hive/.codex/auth.json`,
+owned by `hive` with mode `0600`. They never enter the Docker image, build
+arguments, command arguments, or this checkout. The container has its own
+writable copy so Codex can refresh it; host configuration, history, and secrets
+are not mounted. Re-run the import if the copied login stops working, or use
+`codex login --device-auth` in `desktop:remote:shell` for a separate login.
+See [Codex authentication](https://learn.chatgpt.com/docs/auth#fallback-authenticate-locally-and-copy-your-auth-cache).
+
+Reconnect Desktop after rebuilding. In **Code**, choose a remote repository in
+**New session**, then choose **codex** as the agent. An existing session's
+**New window** menu also offers Codex. In **Chats**, select **Remote Codex** and
+create a chat. Both request workspace-write sandboxing and on-request approvals;
+complete Codex's first-use prompts in the terminal. Docker's default seccomp
+policy blocks the user/mount namespaces needed by Codex's shell sandbox on the
+tested Docker host. Authentication and model responses work, but shell tools
+remain blocked until a compatible container security policy is configured.
+These tasks do not disable either sandbox or make the container privileged. Shell remains the default
+agent so automated smoke tests never spend your subscription allowance.
+
+The credential copy survives `down` and rebuilds, just like the rest of the
+remote home. Remove that copy without changing your host login with:
+
+```sh
+mise run desktop:remote:codex-logout
+```
 
 ## Tests
 

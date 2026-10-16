@@ -40,9 +40,21 @@ CONFIG
     echo "Connection credential saved to $HIVE_REMOTE_STATE/connection.json"
     echo "Desktop retrieves this credential through SSH automatically. See cmd/desktop/remote/README.md."
     ;;
+  codex-auth)
+    auth_file="${HIVE_REMOTE_CODEX_AUTH_FILE:-${CODEX_HOME:-$HOME/.codex}/auth.json}"
+    if [[ ! -f "$auth_file" ]]; then
+      echo 'No Codex auth.json found. Run codex login locally or set HIVE_REMOTE_CODEX_AUTH_FILE.' >&2
+      exit 1
+    fi
+    "${compose[@]}" exec -T --user hive remote python3 /usr/local/bin/codex-auth.py < "$auth_file"
+    "${compose[@]}" exec -T --user hive remote codex login status
+    ;;
+  codex-logout)
+    "${compose[@]}" exec -T --user hive remote codex logout
+    ;;
   test) "${compose[@]}" --profile test run --no-deps --build --rm smoke ;;
   test-unattended) "${compose[@]}" --profile test run --no-deps --build --rm -e HIVE_REMOTE_TEST=unattended smoke ;;
   shell) exec ssh "${ssh_args[@]}" -t hive@127.0.0.1 ;;
   down) "${compose[@]}" down ;;
-  *) echo 'Usage: run.sh up|ssh-config|tunnel|connection|shell|test|test-unattended|down' >&2; exit 2 ;;
+  *) echo 'Usage: run.sh up|ssh-config|tunnel|connection|shell|codex-auth|codex-logout|test|test-unattended|down' >&2; exit 2 ;;
 esac
