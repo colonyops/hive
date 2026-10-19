@@ -21,6 +21,10 @@ vi.mock('../../../composables/useWailsEvent', () => ({
   },
 }))
 
+vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/perfservice', () => ({
+  Info: vi.fn().mockResolvedValue({ enabled: false }),
+}))
+
 vi.mock('@wailsio/runtime', () => ({
   Clipboard: { SetText: vi.fn().mockResolvedValue(undefined) },
   Dialogs: { SaveFile: vi.fn().mockResolvedValue('') },
