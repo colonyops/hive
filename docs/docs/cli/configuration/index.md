@@ -6,6 +6,31 @@ icon: lucide/settings
 
 Config file: `~/.config/hive/config.yaml`
 
+## Reload configuration
+
+After editing the config file, open the command palette with <kbd>:</kbd> and
+run `ReloadConfig`. Hive re-reads the file selected at startup, including a
+custom `--config` path. The reload applies CLI settings and shared engine
+settings together, while keeping your active view, session selection, and filters.
+Agent and session creation settings affect future operations; running agents continue.
+
+Invalid, missing, or empty files leave the current settings in place and show
+an error. Use `{}` to explicitly restore defaults for reloadable settings.
+
+Changes to `database`, `plugins`, `context`, `workspaces`,
+`tui.update_checker`, and `todos.notifications.toast` require a restart.
+If any of these change, Hive rejects the whole reload and names the settings
+that need a restart. The data directory is also fixed at startup.
+
+To assign a reload shortcut:
+
+```yaml
+views:
+  global:
+    keybindings:
+      ctrl+r: { cmd: ReloadConfig }
+```
+
 ## Example
 
 ```yaml

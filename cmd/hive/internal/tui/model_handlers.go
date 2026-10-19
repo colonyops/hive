@@ -351,6 +351,8 @@ func (m Model) taskUpdateStatus(status hc.Status) tea.Cmd {
 // Used as a fallback when a view receives an action it doesn't own.
 func (m Model) handleGlobalAction(a Action) (tea.Model, tea.Cmd) {
 	switch a.Type {
+	case act.TypeReloadConfig:
+		return m.startConfigReload()
 	case act.TypeHiveInfo:
 		return m.showHiveInfo()
 	case act.TypeHiveDoctor:

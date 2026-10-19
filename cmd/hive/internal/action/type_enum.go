@@ -53,6 +53,8 @@ const (
 	TypeKillWindow Type = "KillWindow"
 	// TypeHiveInfo is a Type of type HiveInfo.
 	TypeHiveInfo Type = "HiveInfo"
+	// TypeReloadConfig is a Type of type ReloadConfig.
+	TypeReloadConfig Type = "ReloadConfig"
 	// TypeHiveDoctor is a Type of type HiveDoctor.
 	TypeHiveDoctor Type = "HiveDoctor"
 	// TypeGroupSet is a Type of type GroupSet.
@@ -149,6 +151,7 @@ var _TypeNames = []string{
 	string(TypeSpawnWindows),
 	string(TypeKillWindow),
 	string(TypeHiveInfo),
+	string(TypeReloadConfig),
 	string(TypeHiveDoctor),
 	string(TypeGroupSet),
 	string(TypeGroupToggle),
@@ -248,6 +251,8 @@ var _TypeValue = map[string]Type{
 	"killwindow":                 TypeKillWindow,
 	"HiveInfo":                   TypeHiveInfo,
 	"hiveinfo":                   TypeHiveInfo,
+	"ReloadConfig":               TypeReloadConfig,
+	"reloadconfig":               TypeReloadConfig,
 	"HiveDoctor":                 TypeHiveDoctor,
 	"hivedoctor":                 TypeHiveDoctor,
 	"GroupSet":                   TypeGroupSet,

@@ -107,6 +107,7 @@ type Deps struct {
 	DoctorService *doctor.Service
 	Honeycomb     *hcsvc.Service
 	Sources       *sources.Registry
+	ReloadConfig  func() (Deps, error)
 }
 
 // Opts holds runtime options that are not service dependencies.
@@ -158,8 +159,9 @@ type Model struct {
 
 	reviewView *review.View
 
-	kvStore corekv.KV
-	kvView  *KVView
+	kvStore       corekv.KV
+	kvView        *KVView
+	kvPollStarted bool
 
 	tasksView *tasks.View
 
@@ -180,6 +182,8 @@ type Model struct {
 	updateInfo    *updatecheck.Result
 	doctorService *doctor.Service
 	configPath    string
+	reloadConfig  func() (Deps, error)
+	reloading     bool
 
 	sourceRegistry     *sources.Registry
 	pendingSourceScope sourcePickerScope
@@ -394,6 +398,7 @@ func New(deps Deps, opts Opts) Model {
 		reviewView:       &reviewView,
 		kvStore:          deps.KVStore,
 		kvView:           kvView,
+		kvPollStarted:    cfg.TUI.Store,
 		tasksView:        tasksView,
 		notifyStore:      deps.Notifications,
 		notifyBuffer:     notifyBuffer,
@@ -407,6 +412,7 @@ func New(deps Deps, opts Opts) Model {
 		updateChecker:    updateChecker,
 		doctorService:    deps.DoctorService,
 		configPath:       opts.ConfigPath,
+		reloadConfig:     deps.ReloadConfig,
 		startupWarnings:  opts.Warnings,
 		sourceRegistry:   deps.Sources,
 	}
@@ -536,7 +542,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd   tea.Cmd
 	)
 
+	if m.reloading {
+		if key, ok := msg.(tea.KeyPressMsg); ok {
+			if key.String() == keyCtrlC {
+				return m.quit()
+			}
+			return m, nil
+		}
+	}
 	switch msg := msg.(type) {
+	case configReloadedMsg:
+		model, cmd = m.handleConfigReloaded(msg)
 	// Window
 	case tea.WindowSizeMsg:
 		model, cmd = m.handleWindowSize(msg)
@@ -1318,6 +1334,11 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			return m, nil
 		}
 
+		if entry.Command.Action == act.TypeReloadConfig {
+			m.state = stateNormal
+			return m.startConfigReload()
+		}
+
 		if entry.Command.Action == act.TypeHiveInfo {
 			m.state = stateNormal
 			return m.showHiveInfo()
@@ -1531,7 +1552,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 		return m.handleTabKey(-1)
 	}
 
-	if m.isGlobalAction(keyStr, act.TypeQuit) || m.isGlobalAction(keyStr, act.TypeShowHelp) {
+	if m.isGlobalAction(keyStr, act.TypeQuit) || m.isGlobalAction(keyStr, act.TypeShowHelp) || m.isGlobalAction(keyStr, act.TypeReloadConfig) {
 		if a, ok := m.handler.ResolveAction(keyStr); ok {
 			return m.handleGlobalAction(a)
 		}

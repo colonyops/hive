@@ -763,3 +763,9 @@ func (v *View) clampScroll() {
 	maxOffset := max(len(v.flatNodes)-visibleRows, 0)
 	v.scrollOffset = max(min(v.scrollOffset, maxOffset), 0)
 }
+
+// SetSplitRatio applies the configured panel proportions.
+func (v *View) SetSplitRatio(ratio int) {
+	v.splitRatio = ratio
+	v.SetSize(v.width, v.height)
+}

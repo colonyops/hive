@@ -25,6 +25,7 @@ package action
 //	SpawnWindows
 //	KillWindow
 //	HiveInfo
+//	ReloadConfig
 //	HiveDoctor
 //	GroupSet
 //	GroupToggle

@@ -968,3 +968,11 @@ func schedulePollTick() tea.Cmd {
 		return pollTickMsg{}
 	})
 }
+
+// Reconfigure updates message settings while preserving the current selection.
+func (v *View) Reconfigure(store *msgsvc.Service, copyCommand string, splitRatio int) {
+	v.msgStore = store
+	v.copyCommand = copyCommand
+	v.splitRatio = splitRatio
+	v.SetSize(v.width, v.height)
+}

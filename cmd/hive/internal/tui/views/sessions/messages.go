@@ -118,7 +118,7 @@ type pluginStatusUpdateMsg struct {
 }
 
 // sessionRefreshTickMsg triggers a periodic session refresh.
-type sessionRefreshTickMsg struct{}
+type sessionRefreshTickMsg struct{ generation uint64 }
 
 // animationTickMsg triggers a status animation frame advance.
 type animationTickMsg struct{}

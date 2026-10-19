@@ -162,6 +162,11 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "show build and config info",
 		Silent: true,
 	},
+	"ReloadConfig": {
+		Action: action.TypeReloadConfig,
+		Help:   "reload configuration from disk",
+		Silent: true,
+	},
 	"HiveDoctor": {
 		Action: action.TypeHiveDoctor,
 		Help:   "run health checks",
@@ -631,12 +636,15 @@ func DefaultConfig() Config {
 // Load reads configuration from the given path and sets the data directory.
 // If configPath is empty or doesn't exist, returns defaults with the provided dataDir.
 func Load(configPath, dataDir string) (*Config, error) {
-	cfg := DefaultConfig()
-
 	data, err := config.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
+	return loadBytes(data, dataDir)
+}
+
+func loadBytes(data []byte, dataDir string) (*Config, error) {
+	cfg := DefaultConfig()
 	if data != nil {
 		if err := yaml.Unmarshal(data, &cfg); err != nil {
 			return nil, fmt.Errorf("parse config file: %w", err)
