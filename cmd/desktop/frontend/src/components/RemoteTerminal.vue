@@ -42,9 +42,12 @@ useCommands((): Command[] => [
   })),
 ])
 watch(
-  () => props.windowId,
+  () => {
+    const id = props.windowId
+    return tabs.value.some((tab) => tab.windowId === id) ? id : undefined
+  },
   (id) => {
-    if (id && tabs.value.some((tab) => tab.windowId === id)) void session.select(id)
+    if (id && id !== activeWindowId.value) void session.select(id)
   },
 )
 watch(activeWindowId, (id) => emit('selected', id))

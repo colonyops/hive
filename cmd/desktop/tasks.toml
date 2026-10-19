@@ -194,6 +194,11 @@ description = "Run browser/SSH/terminal smoke coverage in an isolated Docker cli
 depends = ["desktop:remote:up"]
 run = "./cmd/desktop/remote/run.sh test"
 
+["desktop:remote:test-codex"]
+description = "Verify interactive Codex trust, sandboxed tools and reconnect (uses imported ChatGPT login)"
+depends = ["desktop:remote:up"]
+run = "./cmd/desktop/remote/run.sh test-codex"
+
 ["desktop:remote:test-unattended"]
 description = "Verify remote schedules and inbox processing while the local Desktop process is stopped"
 depends = ["desktop:remote:up"]

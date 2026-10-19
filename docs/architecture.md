@@ -1437,6 +1437,9 @@ A `server,terminals` build opts into tmux control mode; ordinary `server` builds
 retain the unavailable behavior used by UI tests. Popup PTYs and native
 notifications remain disabled in server builds. The Docker fixture under
 `cmd/desktop/remote/` uses persistent remote state and publishes only SSH.
+Its remote service applies a pinned Moby seccomp profile with five namespace
+and mount syscall allowances so Codex can keep its workspace sandbox.
+ADR [allow-nested-codex-sandbox-namespaces-only-in-the-remote-development-fixture](decisions/2026-10-19-allow-nested-codex-sandbox-namespaces-only-in-the-remote-development-fixture.md).
 
 ### Terminal sessions
 

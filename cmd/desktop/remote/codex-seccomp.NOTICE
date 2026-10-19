@@ -1,0 +1,7 @@
+codex-seccomp.json is derived from Moby profiles' seccomp/default.json:
+https://github.com/moby/profiles/blob/4b8214fc4971e06172938a1f1554ccff6647ee80/seccomp/default.json
+
+Upstream is licensed under Apache-2.0; see codex-seccomp.LICENSE.
+Modified by Hive contributors, 2026-10-19: append an SCMP_ACT_ALLOW rule
+for clone, unshare, mount, umount2 and pivot_root. All upstream rules,
+architecture mappings and the default-deny action are unchanged.

@@ -49,4 +49,5 @@ RUN npm ci
 COPY --from=build /out/ /usr/local/bin/
 COPY cmd/desktop/remote/smoke.* ./
 COPY cmd/desktop/remote/unattended.* ./
+COPY cmd/desktop/remote/codex.mjs ./
 ENTRYPOINT ["/smoke/smoke.sh"]
