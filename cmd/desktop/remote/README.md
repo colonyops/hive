@@ -65,11 +65,16 @@ Reconnect Desktop after rebuilding. In **Code**, choose a remote repository in
 **New session**, then choose **codex** as the agent. An existing session's
 **New window** menu also offers Codex. In **Chats**, select **Remote Codex** and
 create a chat. Both request workspace-write sandboxing and on-request approvals;
-complete Codex's first-use prompts in the terminal. Docker's default seccomp
-policy blocks the user/mount namespaces needed by Codex's shell sandbox on the
-tested Docker host. Authentication and model responses work, but shell tools
-remain blocked until a compatible container security policy is configured.
-These tasks do not disable either sandbox or make the container privileged. Shell remains the default
+complete Codex's first-use prompts in the terminal. The remote service uses
+`codex-seccomp.json`, derived from the pinned Moby default profile cited in
+`codex-seccomp.NOTICE`. It adds `clone`, `unshare`, `mount`, `umount2`, and
+`pivot_root` for bubblewrap's nested user/mount namespaces. All other upstream
+rules and the default-deny action remain intact. No capabilities are added;
+the container is neither privileged nor unconfined. The smoke client keeps
+Docker's default policy. This exception is scoped to the development fixture,
+not the installed Linux server. Hosts with additional AppArmor or disabled
+unprivileged user namespaces may still reject sandbox creation; this fixture
+does not change host security settings. Shell remains the default
 agent so automated smoke tests never spend your subscription allowance.
 
 The credential copy survives `down` and rebuilds, just like the rest of the
@@ -85,10 +90,37 @@ mise run desktop:remote:codex-logout
 mise run desktop:remote:test
 ```
 
-A second Docker container acts as the client. It checks SSH credential retrieval,
+A second Docker container acts as the client. Before starting the browser, it
+checks nested bubblewrap read/write access and denial of writes outside its
+writable directory, without an AI account. It checks SSH credential retrieval,
 HTTPS discovery, terminal input, resize, windows, SSH stream loss/reconnect,
 inbox reads, and remote chat creation. It also checks that the browser does not
 contact the remote endpoint. Browser and tmux tests stay inside Docker.
+
+For opt-in acceptance with real Codex tool calls (uses the imported ChatGPT
+subscription), run:
+
+```sh
+mise run desktop:remote:codex-auth
+mise run desktop:remote:test-codex
+```
+
+This creates a fresh remote Hive session, opens **New window → Codex**, skips
+any CLI update prompt, accepts folder trust through the terminal, and checks
+that trust was saved. It asks Codex to read a repository file, edit the
+workspace, and attempt a forbidden write outside it. After dropping the SSH
+streams it reconnects Hive and asks for another real shell call. The test
+deletes its Hive session afterward. It is intentionally separate from CI and
+the account-free smoke test.
+
+The image pins the installed CLI, not Codex's managed app-server daemon; that
+daemon can update independently. A `config/batchWrite` error saying
+`remote app-server worker channel is closed` is distinct from a bubblewrap
+namespace denial. Exit and reopen Codex, then retry folder trust. Reconnecting
+Hive preserves the running terminal process, so it does not restart a stale
+Codex client. Record both CLI and daemon versions when diagnosing this error;
+a daemon update was observed alongside the original failure, but causation
+has not been established.
 
 ```sh
 mise run desktop:remote:test-unattended

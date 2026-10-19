@@ -4,6 +4,8 @@ services:
       context: ../../..
       dockerfile: cmd/desktop/remote/Dockerfile
       target: runtime
+    security_opt:
+      - seccomp=codex-seccomp.json
     ports:
       - "127.0.0.1:${HIVE_REMOTE_SSH_PORT:-19222}:22"
     volumes:

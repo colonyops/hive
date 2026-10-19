@@ -3,8 +3,9 @@ import { ref } from 'vue'
 import { beforeEach, expect, it, vi } from 'vitest'
 import RemoteTerminal from '../RemoteTerminal.vue'
 
-const mocks = vi.hoisted(() => ({ reconnect: vi.fn(), attach: vi.fn(), dispose: vi.fn() }))
+const mocks = vi.hoisted(() => ({ reconnect: vi.fn(), attach: vi.fn(), dispose: vi.fn(), select: vi.fn() }))
 const status = ref('live')
+const tabs = ref([{ windowId: '@1', uid: 'one', name: 'bash' }])
 const remoteBusy = ref(false)
 vi.mock('../../stores/useRemoteConnection', () => ({
   useRemoteConnection: () => ({
@@ -17,7 +18,8 @@ vi.mock('../../stores/useRemoteConnection', () => ({
 vi.mock('../../lib/terminalClient', () => ({ createTerminalClient: vi.fn() }))
 vi.mock('../../composables/useTerminalWindows', () => ({
   useTerminalWindows: () => ({
-    tabs: ref([{ windowId: '@1', uid: 'one', name: 'bash' }]),
+    tabs,
+    select: mocks.select,
     activeWindowId: ref('@1'),
     status,
     endReason: ref('disconnected'),
@@ -30,6 +32,7 @@ vi.mock('../../composables/useTerminalWindows', () => ({
 }))
 vi.mock('../TerminalTab.vue', () => ({ default: { template: '<div />' } }))
 beforeEach(() => {
+  tabs.value = [{ windowId: '@1', uid: 'one', name: 'bash' }]
   status.value = 'live'
   remoteBusy.value = false
   vi.clearAllMocks()
@@ -48,4 +51,17 @@ it('shows no pane toolbar while live and reconnects the server after disconnecti
   expect(mocks.reconnect).toHaveBeenCalledOnce()
   wrapper.unmount()
   expect(mocks.dispose).toHaveBeenCalledOnce()
+})
+
+it('selects a requested window when its stream tab arrives after the sidebar selection', async () => {
+  const wrapper = mount(RemoteTerminal, {
+    props: { slug: 'demo', endpoint: { httpBaseURL: 'hive-remote://one', token: '', wsURL: '' } },
+  })
+  await flushPromises()
+  await wrapper.setProps({ windowId: '@2' })
+  expect(mocks.select).not.toHaveBeenCalled()
+  tabs.value.push({ windowId: '@2', uid: 'two', name: 'codex' })
+  await flushPromises()
+  expect(mocks.select).toHaveBeenCalledWith('@2')
+  wrapper.unmount()
 })

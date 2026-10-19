@@ -4,6 +4,16 @@ set -euo pipefail
 install -m 600 /run/connection/id_ed25519 /tmp/remote-key
 awk '{$1="remote"; print}' /run/connection/known_hosts > /tmp/known_hosts
 ssh_args=(-i /tmp/remote-key -o UserKnownHostsFile=/tmp/known_hosts -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o BatchMode=yes)
+ssh "${ssh_args[@]}" hive@remote bash -s <<'SANDBOX'
+set -euo pipefail
+probe=$(mktemp -d)
+trap 'rm -rf "$probe"' EXIT
+printf 'sandbox probe\n' > "$probe/input"
+bwrap --unshare-user --unshare-pid --ro-bind / / --dev /dev --bind "$probe" "$probe" \
+  bash -c 'set -eu; cat "$1/input" > "$1/output"; if touch /home/hive/sandbox-must-not-write 2>/dev/null; then exit 1; fi' bash "$probe"
+cmp "$probe/input" "$probe/output"
+echo 'PASS: nested sandbox read/write and outside-write denial (no AI account)'
+SANDBOX
 mkdir -p "$HOME/.ssh"
 chmod 700 "$HOME/.ssh"
 cat > "$HOME/.ssh/config" <<'CONFIG'
