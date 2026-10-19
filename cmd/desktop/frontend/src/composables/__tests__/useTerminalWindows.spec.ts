@@ -120,7 +120,13 @@ const xterm = vi.hoisted(() => {
     }
 
     press(event: Partial<KeyboardEvent>): boolean {
-      return this.keyHandler?.({ type: 'keydown', preventDefault: () => {}, ...event } as KeyboardEvent) ?? true
+      return (
+        this.keyHandler?.(
+          event instanceof KeyboardEvent
+            ? event
+            : ({ type: 'keydown', preventDefault: () => {}, ...event } as KeyboardEvent),
+        ) ?? true
+      )
     }
 
     type(data: string): void {
@@ -1867,6 +1873,23 @@ describe('useTerminalWindows', () => {
     expect(term.press({ key: 't', ctrlKey: true })).toBe(true)
     expect(term.press({ key: 'w', ctrlKey: true })).toBe(true)
     expect(socket.sent).toHaveLength(0)
+  })
+
+  it('leaves native cycling uncanceled and keeps Control-backtick off the terminal wire on macOS', async () => {
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Macintosh' })
+    useKeybindings().addBinding('terminal.popup.toggle', 'ctrl+`')
+    await attached()
+    const term = xterm.FakeTerminal.instances[0]
+    for (const [key, shiftKey] of [
+      ['`', false],
+      ['~', true],
+    ] as const) {
+      const event = new KeyboardEvent('keydown', { key, shiftKey, metaKey: true, cancelable: true })
+      expect(term.press(event)).toBe(false)
+      expect(event.defaultPrevented).toBe(false)
+    }
+    expect(term.press({ key: '`', ctrlKey: true })).toBe(false)
+    expect(term.press({ key: '`' })).toBe(true)
   })
 
   it.each(['Macintosh', 'Windows', 'Linux'])('keeps the sidebar shortcut off the wire on %s', async (userAgent) => {

@@ -85,16 +85,17 @@ const NAMED_CODES = /^(Arrow(Up|Down|Left|Right)|Enter|Escape|Tab|Backspace|Dele
 
 // ─── Pure helpers (exported for tests) ─────────────────────────────────────────
 
-/** Meta/Ctrl → `mod`, Alt/Option → `alt`; anything else is not a modifier. */
+/** Control stays distinct from Command on macOS; elsewhere it is `mod`. */
 function normalizeModifier(token: string): string | null {
   switch (token) {
     case 'mod':
     case 'meta':
     case 'cmd':
     case 'command':
+      return 'mod'
     case 'ctrl':
     case 'control':
-      return 'mod'
+      return detectMac() ? 'ctrl' : 'mod'
     case 'alt':
     case 'option':
     case 'opt':
@@ -122,7 +123,7 @@ function shouldRecordShift(base: string): boolean {
 
 /**
  * Canonicalize a combo string to its single spelling: modifiers collapsed
- * (Meta/Ctrl → `mod`), lowercased, ordered `mod, ctrl, alt, shift`, then the
+ * (platform primary → `mod`), lowercased, ordered `mod, ctrl, alt, shift`, then the
  * base key. Returns '' for a combo with no base key, or whose key contains
  * whitespace — that spelling belongs to a sequence, not a single step.
  */
@@ -186,7 +187,7 @@ export type SequenceTransition =
   | { kind: 'swallow' }
   /**
    * No sequence involvement: dispatch normally. Also returned when pending
-   * existed but the combo carries the primary modifier (see stepSequence) —
+   * existed but the combo carries Command or Control (see stepSequence) —
    * the caller clears pending and proceeds through normal dispatch.
    */
   | { kind: 'pass' }
@@ -233,7 +234,8 @@ export function comboFromEvent(e: KeyboardEvent): string | null {
   if (!base) return null
 
   const mods = new Set<string>()
-  if (e.metaKey || e.ctrlKey) mods.add('mod')
+  if (e.metaKey) mods.add('mod')
+  if (e.ctrlKey) mods.add(detectMac() ? 'ctrl' : 'mod')
   if (e.altKey) mods.add('alt')
   if (e.shiftKey && shouldRecordShift(base)) mods.add('shift')
 
@@ -247,8 +249,7 @@ export function comboFromEvent(e: KeyboardEvent): string | null {
  *
  * A pane owns every key it can use, so only modifiers a terminal never wants
  * qualify: Cmd on macOS, Ctrl+Shift elsewhere. comboFromEvent cannot make that
- * call on its own — it collapses Meta and Ctrl into one `mod` token, so `mod+k`
- * cannot tell ⌘K from Ctrl+K, and Ctrl+K is readline's kill-to-end-of-line.
+ * call on its own — Ctrl+K is readline's kill-to-end-of-line on macOS and elsewhere.
  *
  * The Shift is dropped from the Ctrl form before resolving: on a platform
  * without Cmd, Ctrl+Shift is how a terminal emulator spells an app chord
@@ -259,7 +260,11 @@ export function comboFromEvent(e: KeyboardEvent): string | null {
  * commands whose macOS chord is shifted.
  */
 export function terminalEscapeCombo(e: KeyboardEvent): string | null {
-  const escapes = e.ctrlKey ? e.shiftKey && !e.metaKey : e.metaKey && !e.altKey
+  const escapes = detectMac()
+    ? e.metaKey && !e.ctrlKey && !e.altKey
+    : e.ctrlKey
+      ? e.shiftKey && !e.metaKey
+      : e.metaKey && !e.altKey
   if (!escapes) return null
   const combo = comboFromEvent(e)
   if (!combo) return null
@@ -561,9 +566,9 @@ function conflicts(binding: string, excludeId?: string): string[] {
   return ids
 }
 
-/** True when `combo` carries the platform's primary modifier (Cmd/Ctrl). */
-function hasPrimaryModifier(combo: string): boolean {
-  return combo.split('+').includes('mod')
+function hasCommandModifier(combo: string): boolean {
+  const tokens = combo.split('+')
+  return tokens.includes('mod') || tokens.includes('ctrl')
 }
 
 /**
@@ -594,7 +599,7 @@ export function stepSequence(pending: PendingSequence | null, combo: string): Se
   // A bound-elsewhere modifier chord (e.g. ⌘K) is a command in its own right
   // even mid-sequence, so it falls through to normal dispatch rather than
   // being eaten; only a bare/unmodified miss is swallowed as a typo.
-  return hasPrimaryModifier(combo) ? { kind: 'pass' } : { kind: 'swallow' }
+  return hasCommandModifier(combo) ? { kind: 'pass' } : { kind: 'swallow' }
 }
 
 export function useKeybindings() {
@@ -616,4 +621,11 @@ export function useKeybindings() {
     clearPendingSequence,
     paneSequencePending,
   }
+}
+
+/** AppKit owns window cycling, including when an emulator has focus. */
+export function isNativeWindowCycle(e: KeyboardEvent): boolean {
+  return (
+    detectMac() && e.metaKey && !e.ctrlKey && !e.altKey && (e.key === '`' || e.key === '~' || e.code === 'Backquote')
+  )
 }

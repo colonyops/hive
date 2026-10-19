@@ -10,6 +10,7 @@ import { appClaimsPaneKey, claimsShiftEnter } from '../lib/terminalKeys'
 import { xtermTheme } from '../lib/terminalTheme'
 import { useTerminalFont } from '../stores/useTerminalFont'
 import { useTheme } from './useTheme'
+import { isNativeWindowCycle } from './useKeybindings'
 
 const RESIZE_DEBOUNCE_MS = 80
 
@@ -131,6 +132,7 @@ export function useXtermPane(host: Ref<HTMLElement | null>, onResize: () => void
     const fitAddon = markRaw(new FitAddon())
     created.loadAddon(fitAddon)
     created.attachCustomKeyEventHandler((event) => {
+      if (isNativeWindowCycle(event)) return false
       if (event.type === 'keydown' && appClaimsPaneKey(event)) return false
       return !claimsShiftEnter(created, event)
     })

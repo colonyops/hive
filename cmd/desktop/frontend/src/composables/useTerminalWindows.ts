@@ -23,6 +23,7 @@ import { TerminalOutputWriter } from '../lib/terminalOutput'
 import { installTerminalImages } from '../lib/terminalImages'
 import { installKittyGraphics, type KittyGraphics } from '../lib/kitty/kittyGraphics'
 import { pasteTerminalImage } from '../lib/terminalImagesClient'
+import { isNativeWindowCycle } from './useKeybindings'
 import { appClaimsPaneKey, claimsShiftEnter } from '../lib/terminalKeys'
 import { silenceDeviceReports } from '../lib/terminalReports'
 import { scrolledOffTail } from '../lib/terminalTail'
@@ -336,6 +337,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     // grid sized after the first paint mangles the snapshot it just drew.
     term.resize(grid?.cols || unreportedSize().cols, grid?.rows || unreportedSize().rows)
     term.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      if (isNativeWindowCycle(event)) return false
       if (event.type !== 'keydown') return !claimsShiftEnter(term, event)
       // These fire from App.vue's window listener, which runs after this one.
       // Returning false only stops xterm from *also* sending the key to the

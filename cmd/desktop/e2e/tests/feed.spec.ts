@@ -179,7 +179,9 @@ test('opens, filters, runs, and dismisses the command palette', async ({ page })
   await expect(palette).toBeHidden()
 
   await page.keyboard.press('Control+k')
-  await expect(palette).toBeVisible()
+  const mac = await page.evaluate(() => /Mac/i.test(navigator.userAgent))
+  if (mac) await expect(palette).toBeHidden()
+  else await expect(palette).toBeVisible()
 })
 
 test('a sigil enters its scope tab and Backspace/Tab move between them', async ({ page }) => {

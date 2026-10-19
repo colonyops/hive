@@ -16,6 +16,25 @@ The visible 1360×864 Hive window uses native hidden-inset titlebar chrome: a
 across macOS versions, and `InvisibleTitleBarHeight: 42` so the traffic
 lights center on the 42px HTML titlebar.
 
+On macOS, Terminal pop-up defaults to Control-backtick. Control stays distinct
+from Command in saved shortcuts. Command-backtick and Shift-Command-backtick
+pass through to native forward/reverse window navigation, even with terminal
+focus. Windows/Linux retain Control-backtick through `mod`.
+
+The Window menu stays registered with AppKit and includes Diagnostics. Both
+main and Diagnostics windows use normal Wails window behavior; its default
+collection behavior is `FullScreenPrimary`, and neither window excludes
+itself from the native cycle. Diagnostics mounts a separate root without the
+main window's shortcut dispatcher.
+
+[Apple documents cycling as windows of the front app](https://support.apple.com/en-us/102650).
+Separate dev and main builds are separate processes. Their shared bundle ID
+(`com.hivedesktop.app`) and display name (Hive) do not merge their AppKit window
+lists. Use macOS app switching or Mission Control between builds; this fix
+adds no cross-process window control. Native verification requires both main
+and Diagnostics windows visible, both cycle directions, and terminal focus.
+Browser and Wails MCP DOM events cannot prove AppKit focus changes.
+
 Closing the window hides it rather than destroying it, via a `WindowClosing`
 hook registered with `RegisterHook`. It must be a hook, not `OnWindowEvent`:
 hooks run synchronously before listeners, so `Cancel()` reliably aborts
