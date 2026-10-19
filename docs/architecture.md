@@ -1033,6 +1033,12 @@ worktree-isolated. ADR desktop-configuration records the
 configuration decision, and ADR both-programs-run-on-one-layered-hive-engine
 adds the `HIVE_DATA_DIR` fallback.
 
+Clone URLs generated from canonical item repositories use `app/gitremote.Resolve`
+with `git.clone_protocol`. Drafts, action availability checks, and dispatch read
+this preference from effective settings. `OutputData.ItemRemote` shares the
+resolver. Explicit URLs, paths, and custom template output remain unchanged.
+Existing action files opt in through their repository template.
+
 ### Settings panes
 
 Application settings are sectioned by **the surface a value changes**, not by

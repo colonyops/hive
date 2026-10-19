@@ -48,3 +48,16 @@ func TestLoadSettingsRejectsNewerVersionAndLeavesFileUntouched(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, contents, string(raw), "the load path is pure Apply and must never write")
 }
+
+func TestCloneProtocolYAML(t *testing.T) {
+	path := isolateSettings(t)
+	for _, protocol := range []string{"https", "ssh"} {
+		require.NoError(t, os.WriteFile(path, []byte("git:\n  clone_protocol: "+protocol+"\n"), 0o600))
+		cfg, err := NewStore(path).Effective()
+		require.NoError(t, err)
+		require.Equal(t, protocol, cfg.Git.CloneProtocol)
+	}
+	require.NoError(t, os.WriteFile(path, []byte("git:\n  clone_protocol: git\n"), 0o600))
+	_, err := NewStore(path).Effective()
+	require.ErrorContains(t, err, "git.clone_protocol must be https or ssh")
+}

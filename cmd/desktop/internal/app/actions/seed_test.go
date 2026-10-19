@@ -54,7 +54,7 @@ func TestDefaultActionsYAMLParsesValidatesAndRenders(t *testing.T) {
 	render := func(t *testing.T, name, template string) {
 		t.Helper()
 		for shape, payload := range decoded {
-			out, err := renderer.Render(template, map[string]any{"Payload": payload})
+			out, err := renderer.Render(template, map[string]any{"Payload": payload, "ItemRemote": "https://github.com/colonyops/hive.git"})
 			require.NoErrorf(t, err, "%s over %s payload", name, shape)
 			assert.NotEmptyf(t, strings.TrimSpace(out), "%s over %s payload rendered blank", name, shape)
 		}

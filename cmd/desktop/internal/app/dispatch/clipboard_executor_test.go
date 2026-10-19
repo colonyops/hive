@@ -44,13 +44,13 @@ func TestClipboardExecutor_RendersTerminalTargetData(t *testing.T) {
 }
 
 func TestRenderClipboardText_ShqIsAvailable(t *testing.T) {
-	text, err := RenderClipboardText(clipboardAction("{{ .Payload.title | shq }}"), "k", []byte(`{"title":"a b"}`), nil)
+	text, err := RenderClipboardText(clipboardAction("{{ .Payload.title | shq }}"), "k", []byte(`{"title":"a b"}`), nil, "https")
 	require.NoError(t, err)
 	assert.Equal(t, "'a b'", text)
 }
 
 func TestRenderClipboardText_BlankRenderIsError(t *testing.T) {
-	_, err := RenderClipboardText(clipboardAction("{{ .Payload.empty }}"), "k", []byte(`{"empty":""}`), nil)
+	_, err := RenderClipboardText(clipboardAction("{{ .Payload.empty }}"), "k", []byte(`{"empty":""}`), nil, "https")
 	require.Error(t, err)
 }
 

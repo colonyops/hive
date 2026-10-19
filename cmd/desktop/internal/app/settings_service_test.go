@@ -291,3 +291,34 @@ func TestSettingsServiceSetReviewLabels(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, settings.DefaultReviewLabels, got)
 }
+
+func TestCloneProtocolSettings(t *testing.T) {
+	store := settings.NewStore(filepath.Join(t.TempDir(), "settings.yaml"))
+	service := NewSettingsService(store)
+	protocol, err := service.CloneProtocol(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, "https", protocol)
+	require.NoError(t, service.SetEditor(t.Context(), "zed"))
+	for _, value := range []string{"ssh", "https"} {
+		require.NoError(t, service.SetCloneProtocol(t.Context(), value))
+		protocol, err = service.CloneProtocol(t.Context())
+		require.NoError(t, err)
+		require.Equal(t, value, protocol)
+	}
+	require.Error(t, service.SetCloneProtocol(t.Context(), "git"))
+	cfg, err := store.Persisted()
+	require.NoError(t, err)
+	require.Equal(t, "https", cfg.Git.CloneProtocol)
+	require.Equal(t, "zed", cfg.Editor.Command)
+	t.Setenv("HIVE_DESKTOP_GIT_CLONE_PROTOCOL", "ssh")
+	protocol, err = service.CloneProtocol(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, "ssh", protocol)
+	require.NoError(t, service.SetEditor(t.Context(), "code"))
+	cfg, err = store.Persisted()
+	require.NoError(t, err)
+	require.Equal(t, "https", cfg.Git.CloneProtocol)
+	t.Setenv("HIVE_DESKTOP_GIT_CLONE_PROTOCOL", "invalid")
+	_, err = service.CloneProtocol(t.Context())
+	require.Error(t, err)
+}

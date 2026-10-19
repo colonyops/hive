@@ -174,7 +174,7 @@ func TestWorker_AutoApplyAction_ExecutesAndMarksDone(t *testing.T) {
 
 	exec := &fakeExecutor{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"spawn-review": launchSessionAction("spawn-review", true)},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 
 	worker.Tick(t.Context())
 	waitForWorker(t, worker)
@@ -195,7 +195,7 @@ func TestWorker_HeadlessActionExecutesAndConsumesQueue(t *testing.T) {
 
 	exec := &fakeExecutor{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"headless-action": launchSessionAction("headless-action", false)},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	worker.Tick(t.Context())
 	waitForWorker(t, worker)
 
@@ -215,7 +215,7 @@ func TestWorker_ConfirmRequiresApprovalBeforeRerunningCompletedCommand(t *testin
 
 	exec := &fakeExecutor{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"review-action": launchSessionAction("review-action", false)},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	worker.Tick(t.Context())
 	waitForWorker(t, worker)
 
@@ -249,7 +249,7 @@ func TestWorker_ConfirmRecordsJobLifecycleWithoutReplay(t *testing.T) {
 	exec := &fakeExecutor{}
 	recorder := &fakeJobRecorder{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"review-action": launchSessionAction("review-action", false)},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	worker.SetJobRecorder(recorder)
 
 	_, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`), models.ItemRef{}, ActionInvocationInput{})
@@ -272,7 +272,7 @@ func TestWorker_ConfirmUnknownActionCreatesNoJob(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)
 	recorder := &fakeJobRecorder{}
-	worker := NewWorker(testOutputCommands(db), fakeActionLister{}, NewDispatcher(nil), 0, zerolog.Nop())
+	worker := NewWorker(testOutputCommands(db), fakeActionLister{}, NewDispatcher(nil, nil), 0, zerolog.Nop())
 	worker.SetJobRecorder(recorder)
 
 	_, err := worker.Confirm(t.Context(), "missing", "item-1", []byte(`{}`), models.ItemRef{}, ActionInvocationInput{})
@@ -285,7 +285,7 @@ func TestWorker_ConfirmCreatesCommandWhenNoActionNodeProducedOne(t *testing.T) {
 	db := openTestPipelineDB(t)
 	exec := &fakeExecutor{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"review-action": launchSessionAction("review-action", false)},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 
 	_, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`), models.ItemRef{}, ActionInvocationInput{})
 	require.NoError(t, err)
@@ -310,7 +310,7 @@ func TestWorker_RespectsBatchBoundAndResumesQueue(t *testing.T) {
 
 	exec := &fakeExecutor{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"headless-action": launchSessionAction("headless-action", true)},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	worker.autoSlots = make(chan struct{}, DefaultOutputWorkerBatch+1)
 	worker.Tick(t.Context())
 	waitForWorker(t, worker)
@@ -335,7 +335,7 @@ func TestWorker_ActionCatalogChangeStillExecutesHeadlessCommand(t *testing.T) {
 
 	actionsByID := fakeActionLister{"review-action": launchSessionAction("review-action", true)}
 	exec := &fakeExecutor{}
-	worker := NewWorker(testOutputCommands(db), actionsByID, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker := NewWorker(testOutputCommands(db), actionsByID, NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	actionsByID["review-action"] = launchSessionAction("review-action", false)
 	worker.Tick(t.Context())
 	waitForWorker(t, worker)
@@ -349,7 +349,7 @@ func TestWorker_UnknownActionRecordsRetryableError(t *testing.T) {
 
 	exec := &fakeExecutor{}
 	recorder := &fakeJobRecorder{}
-	worker := NewWorker(testOutputCommands(db), fakeActionLister{}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker := NewWorker(testOutputCommands(db), fakeActionLister{}, NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	worker.SetJobRecorder(recorder)
 	worker.retryDelay = 0
 	worker.Tick(t.Context())
@@ -377,7 +377,7 @@ func TestWorker_FailingExecutor_KeepsOneRunningJobUntilTerminalFailure(t *testin
 	exec := &fakeExecutor{err: fmt.Errorf("boom")}
 	recorder := &fakeJobRecorder{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"spawn-review": launchSessionAction("spawn-review", true)},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	worker.SetJobRecorder(recorder)
 	worker.retryDelay = 0
 
@@ -387,7 +387,7 @@ func TestWorker_FailingExecutor_KeepsOneRunningJobUntilTerminalFailure(t *testin
 		assert.Equal(t, []string{"Begin", "Running"}, recorder.calls, "retryable failures leave the existing job running")
 		if attempt == 0 {
 			worker = NewWorker(testOutputCommands(db), fakeActionLister{"spawn-review": launchSessionAction("spawn-review", true)},
-				NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+				NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 			worker.SetJobRecorder(recorder)
 			worker.retryDelay = 0
 		}
@@ -405,7 +405,7 @@ func TestWorker_FailingExecutor_RetriesThenMarksFailed(t *testing.T) {
 
 	exec := &fakeExecutor{err: fmt.Errorf("boom")}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"spawn-review": launchSessionAction("spawn-review", true)},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	worker.retryDelay = 0
 
 	for i := range MaxOutputCommandAttempts - 1 {
@@ -440,7 +440,7 @@ func TestWorker_ConfirmFailureReturnsPersistedDiagnostics(t *testing.T) {
 	db := openTestPipelineDB(t)
 	exec := &fakeExecutor{err: fmt.Errorf("boom"), result: ExecutionResult{Attempted: true, Log: ExecutionLog{Stdout: "partial output", Stderr: "failure output"}}}
 	recorder := &fakeJobRecorder{}
-	worker := NewWorker(testOutputCommands(db), fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker := NewWorker(testOutputCommands(db), fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	worker.SetJobRecorder(recorder)
 	view, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`), models.ItemRef{}, ActionInvocationInput{})
 	require.NoError(t, err)
@@ -467,7 +467,7 @@ func TestWorker_DoesNotRetryInterruptedInteractiveCommandAfterReopen(t *testing.
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, reopened.Close()) })
 	exec := &fakeExecutor{}
-	worker := NewWorker(testOutputCommands(reopened), fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker := NewWorker(testOutputCommands(reopened), fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 	worker.Tick(t.Context())
 
 	assert.Zero(t, exec.callCount(), "recovery must never retry an interactive command without its input")
@@ -484,7 +484,7 @@ func TestWorker_BadPayload_FailsWithoutCallingExecutor(t *testing.T) {
 
 	exec := &fakeExecutor{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"spawn-review": launchSessionAction("spawn-review", true)},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": exec}, nil), 0, zerolog.Nop())
 
 	worker.Tick(t.Context())
 	waitForWorker(t, worker)
@@ -510,7 +510,7 @@ func TestWorker_LongManualActionDoesNotBlockAutomaticDispatch(t *testing.T) {
 	worker := NewWorker(testOutputCommands(db), catalog, NewDispatcher(map[string]Executor{
 		"launch-session":  blocker,
 		"publish-message": quick,
-	}), 0, zerolog.Nop())
+	}, nil), 0, zerolog.Nop())
 
 	manual, err := worker.Confirm(t.Context(), "manual", "manual-item", []byte(`{}`), models.ItemRef{}, ActionInvocationInput{})
 	require.NoError(t, err)
@@ -536,7 +536,7 @@ func TestWorker_CancelStopsRunningActionWithoutRetry(t *testing.T) {
 	db := openTestPipelineDB(t)
 	blocker := &blockingExecutor{started: make(chan OutputData, 1), release: make(chan struct{})}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"manual": launchSessionAction("manual", false)},
-		NewDispatcher(map[string]Executor{"launch-session": blocker}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"launch-session": blocker}, nil), 0, zerolog.Nop())
 
 	view, err := worker.Confirm(t.Context(), "manual", "item-1", []byte(`{}`), models.ItemRef{}, ActionInvocationInput{})
 	require.NoError(t, err)
@@ -552,7 +552,7 @@ func TestWorker_CancelStopsRunningActionWithoutRetry(t *testing.T) {
 
 func TestDispatcher_UnknownType_IsError(t *testing.T) {
 	t.Parallel()
-	d := NewDispatcher(map[string]Executor{})
+	d := NewDispatcher(map[string]Executor{}, nil)
 	_, err := d.Execute(t.Context(), actions.Action{ID: "x", Type: "no-such-type"}, OutputData{}, ActionInvocationInput{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no-such-type")

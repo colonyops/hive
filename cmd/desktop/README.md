@@ -172,13 +172,26 @@ accidentally.
 **Resolution happens once, at startup: assume every change needs a relaunch.**
 Editing `settings.yaml` while the app runs, or flipping a flag the running
 process already mounted, does not reach it — the exceptions are
+`git.clone_protocol` (re-read for each draft and launch),
 `notifications.*` (re-read on every delivery) and the poll interval when changed
 through Settings ▸ Integrations rather than by hand. Making reload dynamic or
 triggerable is [#151](https://github.com/hay-kot/hive-desktop/issues/151).
 
+Settings ▸ General exposes `git.clone_protocol` (`https` by default, or `ssh`).
+`HIVE_DESKTOP_GIT_CLONE_PROTOCOL` overrides it. It affects generated URLs in
+session drafts and action `repo_template: "{{ .ItemRemote }}"` values, preserving
+the item's host and port. Explicit remotes and paths are unchanged.
+Existing actions.yml files are never reseeded: opt in by replacing only the
+chosen action's `repo_template` with `"{{ .ItemRemote }}"`. Custom templates,
+existing checkouts, stored remote identities, and global Git config are untouched.
+Git `insteadOf` and `gh` protocol preferences do not set this preference.
+
 A fully expanded safe configuration is:
 
 ```yaml
+git:
+  clone_protocol: https    # https (default) or ssh; generated clone URLs only
+
 polling:
   interval: 5m
 updates:

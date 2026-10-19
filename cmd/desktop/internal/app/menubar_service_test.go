@@ -97,7 +97,7 @@ func TestMenuBarItemCarriesApplicableActions(t *testing.T) {
 	row, err := stores.New(f.db, stores.Options{}).InboxItems.GetByID(t.Context(), pr)
 	require.NoError(t, err)
 
-	item := menuBarItem(row, f.service.runnableActions())
+	item := menuBarItem(row, f.service.runnableActions(), "https")
 
 	assert.Equal(t, []MenuBarAction{
 		{ID: "review-pr", Label: "Review PR"},

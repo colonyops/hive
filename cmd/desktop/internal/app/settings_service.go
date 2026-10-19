@@ -429,3 +429,19 @@ func (s *SettingsService) SetEditor(_ context.Context, command string) error {
 func (s *SettingsService) EditorChoices(ctx context.Context) []EditorChoice {
 	return detectEditors(ctx, s.lookPath)
 }
+
+func (s *SettingsService) CloneProtocol(context.Context) (string, error) {
+	cfg, err := s.store.Effective()
+	return cfg.Git.CloneProtocol, Wrap(err, KindInternal, "reading settings")
+}
+
+func (s *SettingsService) SetCloneProtocol(_ context.Context, protocol string) error {
+	if protocol != "https" && protocol != "ssh" {
+		return Errorf(KindInvalid, "clone protocol must be https or ssh")
+	}
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Git.CloneProtocol = protocol
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
+}

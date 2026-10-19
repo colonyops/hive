@@ -85,7 +85,7 @@ about, then open an editor on it:
   label: Review PR
   type: launch-session
   applies_to: [pr]
-  repo_template: "https://github.com/{{ .Payload.repo }}.git"
+  repo_template: "{{ .ItemRemote }}"
   prompt_template: "Review pull request #{{ .Payload.num }}"
   post_hook: "gh pr checkout {{ .Payload.num }} && zed ."
 ```
@@ -119,3 +119,10 @@ exposes `{{ .Payload.repo }}`, `{{ .Payload.title }}`, `{{ .Payload.url }}`,
 `{{ .Payload.body }}`, `{{ .Payload.num }}`, and `{{ .Payload.author }}`. A
 webhook-sourced item exposes whatever its payload carries, so reshape it with a
 `function` node first if you want stable names.
+
+`{{ .ItemRemote }}` derives a clone URL from `.Payload.repo`
+and `.Payload.url` using `git.clone_protocol` (HTTPS by default). Hosts and ports
+are retained; explicit remotes and local paths pass through. A canonical repo
+without a usable HTTP(S) item URL resolves blank. Existing actions are never
+rewritten: replace only their `repo_template` with `"{{ .ItemRemote }}"` to opt in.
+Custom templates render verbatim regardless of the preference.

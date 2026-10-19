@@ -20,6 +20,10 @@ export function AppearanceSettings(): $CancellablePromise<$models.AppearanceSett
     return $Call.ByID(1460512141);
 }
 
+export function CloneProtocol(): $CancellablePromise<string> {
+    return $Call.ByID(3314040219);
+}
+
 export function EditorSettings(): $CancellablePromise<$models.EditorSettings> {
     return $Call.ByID(3922245462);
 }
@@ -66,6 +70,10 @@ export function SetCanvasLineSpacing(spacing: string): $CancellablePromise<void>
 
 export function SetCanvasPageWidth(width: string): $CancellablePromise<void> {
     return $Call.ByID(2718406111, width);
+}
+
+export function SetCloneProtocol(protocol: string): $CancellablePromise<void> {
+    return $Call.ByID(2481995099, protocol);
 }
 
 /**

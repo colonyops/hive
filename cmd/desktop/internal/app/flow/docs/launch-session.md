@@ -71,3 +71,6 @@ lists the session, and selecting it opens the session's terminal.
 
 Recomputing a flow on startup or deploy never launches anything: replay
 commits feed memberships only.
+
+`{{ .ItemRemote }}` follows `git.clone_protocol` (HTTPS by default). Explicit
+clone URLs and paths retain their values.

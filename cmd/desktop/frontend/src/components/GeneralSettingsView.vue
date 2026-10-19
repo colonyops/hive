@@ -10,6 +10,11 @@ import SettingsSection from './settings/SettingsSection.vue'
 import AppSelect, { type AppSelectOption } from './ui/AppSelect.vue'
 import { useEditorSettings } from '../composables/useEditorSettings'
 
+import SegmentedControl from './ui/SegmentedControl.vue'
+import { useGitSettings } from '../stores/useGitSettings'
+
+const { protocol, error: gitError, setProtocol } = useGitSettings()
+
 const { command, choices, error, refresh, setCommand } = useEditorSettings()
 
 // "None" plus the detected commands, each labelled by whether it resolves right
@@ -31,6 +36,25 @@ onMounted(() => {
 <template>
   <SettingsPage testid="settings-general">
     <InlineError v-if="error" :message="error" testid="general-error" />
+
+    <InlineError v-if="gitError" :message="gitError" testid="git-error" />
+    <SettingsSection title="Git" boxed testid="general-git">
+      <SettingsRow
+        label="Clone protocol"
+        hint="Used for generated repository URLs. Existing actions with fixed URLs keep their protocol; use {{ .ItemRemote }} in their repository template to follow this setting."
+      >
+        <SegmentedControl
+          :model-value="protocol"
+          :options="[
+            { value: 'https', label: 'HTTPS' },
+            { value: 'ssh', label: 'SSH' },
+          ]"
+          aria-label="Clone protocol"
+          testid="git-clone-protocol"
+          @update:model-value="setProtocol"
+        />
+      </SettingsRow>
+    </SettingsSection>
 
     <SettingsSection
       title="Editor"

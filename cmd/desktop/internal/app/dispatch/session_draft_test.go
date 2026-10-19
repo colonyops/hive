@@ -23,7 +23,7 @@ func TestRenderSessionDraft_DerivesCloneableRepository(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			draft, err := RenderSessionDraft("Fix it", tt.url, []byte(tt.payload))
+			draft, err := RenderSessionDraft("Fix it", tt.url, []byte(tt.payload), "https")
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, draft.Repository)
 		})
@@ -32,7 +32,7 @@ func TestRenderSessionDraft_DerivesCloneableRepository(t *testing.T) {
 
 func TestRenderSessionDraft_NameAndPrompt(t *testing.T) {
 	draft, err := RenderSessionDraft("Fix the crash", "https://github.com/acme/site/issues/1",
-		[]byte(`{"repo":"acme/site","body":"Steps to repro"}`))
+		[]byte(`{"repo":"acme/site","body":"Steps to repro"}`), "https")
 	require.NoError(t, err)
 	assert.Equal(t, "fix-the-crash", draft.Name)
 	assert.Contains(t, draft.Prompt, "Fix the crash")
@@ -44,7 +44,7 @@ func TestRenderSessionDraftItemsCombinesOnePromptInOrder(t *testing.T) {
 	draft, err := RenderSessionDraftItems([]SessionDraftItem{
 		{Title: "Fix first", URL: "https://github.com/acme/site/issues/1", Payload: []byte(`{"repo":"acme/site","body":"First body"}`)},
 		{Title: "Fix second", URL: "https://github.com/acme/site/issues/2", Payload: []byte(`{"repo":"acme/site","body":"Second body"}`)},
-	})
+	}, "https")
 	require.NoError(t, err)
 	assert.Equal(t, "https://github.com/acme/site.git", draft.Repository)
 	assert.Regexp(t, `^inbox-selection-[0-9a-f]{8}$`, draft.Name)
@@ -55,7 +55,7 @@ func TestRenderSessionDraftItemsCombinesOnePromptInOrder(t *testing.T) {
 	mixed, err := RenderSessionDraftItems([]SessionDraftItem{
 		{Title: "One", URL: "https://github.com/acme/one/issues/1", Payload: []byte(`{"repo":"acme/one"}`)},
 		{Title: "Two", URL: "https://github.com/acme/two/issues/2", Payload: []byte(`{"repo":"acme/two"}`)},
-	})
+	}, "https")
 	require.NoError(t, err)
 	assert.Empty(t, mixed.Repository)
 }

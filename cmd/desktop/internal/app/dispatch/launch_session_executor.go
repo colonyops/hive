@@ -96,7 +96,7 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 		return ExecutionResult{}, err
 	}
 
-	repo, err := renderRepoTemplate(cfg.RepoTemplate, data.Key, data.Raw, data.Inputs)
+	repo, err := renderRepoTemplate(cfg.RepoTemplate, data.Key, data.Raw, data.Inputs, data.cloneProtocol)
 	if err != nil {
 		return ExecutionResult{}, fmt.Errorf("launch-session: %s: %w", repoField, err)
 	}

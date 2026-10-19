@@ -28,7 +28,7 @@ actions:
     type: launch-session
     applies_to: [pr]
     show_in_detail: true
-    repo_template: "https://github.com/{{ .Payload.repo }}.git"
+    repo_template: "{{ .ItemRemote }}"
     prompt_template: |
       Review pull request {{ .Payload.title }}
 
@@ -37,6 +37,8 @@ launchers: []
 ```
 
 This action appears for pull requests and starts a session with the repository and prompt rendered from the item.
+
+The `.ItemRemote` repository template follows the [Git clone protocol setting](../configuration/settings.md#git-clone-protocol). Existing fixed templates remain unchanged.
 
 Use `workspace` instead of `repo_template` to send an item to an agent workspace:
 
@@ -106,7 +108,7 @@ A `launch-session` action can run a `post_hook` once the session exists. The com
   label: Review PR
   type: launch-session
   applies_to: [pr]
-  repo_template: "https://github.com/{{ .Payload.repo }}.git"
+  repo_template: "{{ .ItemRemote }}"
   prompt_template: "Review pull request #{{ .Payload.num }}"
   post_hook: "gh pr checkout {{ .Payload.num }} && zed ."
   post_hook_timeout: "2m"

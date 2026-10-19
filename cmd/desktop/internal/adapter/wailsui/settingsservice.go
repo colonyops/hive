@@ -339,3 +339,11 @@ func (s *SettingsService) SetGithubSettings(ctx context.Context, in GithubSettin
 		PollInterval: time.Duration(in.PollIntervalSeconds) * time.Second,
 	})
 }
+
+func (s *SettingsService) CloneProtocol(ctx context.Context) (string, error) {
+	return s.settings.CloneProtocol(ctx)
+}
+
+func (s *SettingsService) SetCloneProtocol(ctx context.Context, protocol string) error {
+	return s.settings.SetCloneProtocol(ctx, protocol)
+}

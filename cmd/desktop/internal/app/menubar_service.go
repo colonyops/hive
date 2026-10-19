@@ -165,7 +165,7 @@ func (s *MenuBarService) Snapshot(ctx context.Context) (MenuBarSnapshot, error) 
 			Items: make([]MenuBarItem, 0, len(rows)),
 		}
 		for _, row := range rows {
-			view.Items = append(view.Items, menuBarItem(row, runnable))
+			view.Items = append(view.Items, menuBarItem(row, runnable, cfg.Git.CloneProtocol))
 		}
 		snapshot.Pinned = append(snapshot.Pinned, view)
 	}
@@ -191,7 +191,7 @@ func (s *MenuBarService) runnableActions() []actions.Action {
 	return out
 }
 
-func menuBarItem(row stores.InboxItem, runnable []actions.Action) MenuBarItem {
+func menuBarItem(row stores.InboxItem, runnable []actions.Action, protocol string) MenuBarItem {
 	item := MenuBarItem{
 		ID: row.ID, Title: row.Title, URL: row.URL, Unread: row.Unread,
 		Actions: []MenuBarAction{},
@@ -201,7 +201,7 @@ func menuBarItem(row stores.InboxItem, runnable []actions.Action) MenuBarItem {
 		return item
 	}
 	for _, action := range runnable {
-		if ok, _ := dispatch.ActionApplicability(action, decoded); !ok {
+		if ok, _ := dispatch.ActionApplicability(action, decoded, protocol); !ok {
 			continue
 		}
 		_, clipboard := action.Config.(*actions.ClipboardConfig)

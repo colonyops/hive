@@ -5,10 +5,14 @@ import GeneralSettingsView from '../GeneralSettingsView.vue'
 const mocks = vi.hoisted(() => ({
   EditorSettings: vi.fn(),
   SetEditor: vi.fn(),
+  CloneProtocol: vi.fn(),
+  SetCloneProtocol: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
   EditorSettings: mocks.EditorSettings,
   SetEditor: mocks.SetEditor,
+  CloneProtocol: mocks.CloneProtocol,
+  SetCloneProtocol: mocks.SetCloneProtocol,
 }))
 
 function editorSettings(overrides: Record<string, unknown> = {}) {
@@ -34,6 +38,8 @@ beforeEach(() => {
   vi.useFakeTimers()
   mocks.EditorSettings.mockResolvedValue(editorSettings())
   mocks.SetEditor.mockResolvedValue(undefined)
+  mocks.CloneProtocol.mockResolvedValue('https')
+  mocks.SetCloneProtocol.mockResolvedValue(undefined)
   document.body.innerHTML = ''
 })
 
@@ -146,4 +152,27 @@ describe('GeneralSettingsView', () => {
 
     expect(mocks.SetEditor).toHaveBeenCalledWith('nvim')
   })
+})
+
+it('loads and persists the clone protocol', async () => {
+  const wrapper = mount(GeneralSettingsView)
+  await flushPromises()
+  expect(wrapper.get('[data-testid="git-clone-protocol-https"]').attributes('aria-pressed')).toBe('true')
+  mocks.CloneProtocol.mockResolvedValue('ssh')
+  await wrapper.get('[data-testid="git-clone-protocol-ssh"]').trigger('click')
+  await flushPromises()
+  expect(mocks.SetCloneProtocol).toHaveBeenCalledWith('ssh')
+  expect(wrapper.get('[data-testid="git-clone-protocol-ssh"]').attributes('aria-pressed')).toBe('true')
+  wrapper.unmount()
+})
+
+it('keeps the accepted protocol and displays a rejected save', async () => {
+  mocks.SetCloneProtocol.mockRejectedValue(new Error('write failed'))
+  const wrapper = mount(GeneralSettingsView)
+  await flushPromises()
+  await wrapper.get('[data-testid="git-clone-protocol-ssh"]').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[data-testid="git-clone-protocol-https"]').attributes('aria-pressed')).toBe('true')
+  expect(wrapper.get('[data-testid="git-error"]').text()).toContain('write failed')
+  wrapper.unmount()
 })

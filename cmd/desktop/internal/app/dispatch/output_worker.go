@@ -36,32 +36,40 @@ var ErrDispatchBusy = errors.New("action dispatch is busy")
 const ActionTypeLaunchSession = "launch-session"
 
 type OutputData struct {
-	Key       string
-	Payload   map[string]any
-	Raw       json.RawMessage
-	Inputs    map[string]string
-	Session   *SessionTarget
-	Window    *WindowTarget
-	CreatedAt int64
-	CommandID int64
-	IsRerun   bool
-	Origin    models.ItemRef
+	Key           string
+	Payload       map[string]any
+	Raw           json.RawMessage
+	Inputs        map[string]string
+	Session       *SessionTarget
+	Window        *WindowTarget
+	CreatedAt     int64
+	CommandID     int64
+	IsRerun       bool
+	Origin        models.ItemRef
+	cloneProtocol string
 }
 
 func (d OutputData) ItemRemote() string {
 	repo, _ := d.Payload["repo"].(string)
 	itemURL, _ := d.Payload["url"].(string)
-	return draftRepository(repo, itemURL)
+	return draftRepository(repo, itemURL, d.cloneProtocol)
 }
 
 type Executor interface {
 	Execute(context.Context, actions.Action, OutputData, ActionInvocationInput) (ExecutionResult, error)
 }
 
-type Dispatcher struct{ executors map[string]Executor }
+type CloneProtocolSettings interface {
+	CloneProtocol(context.Context) (string, error)
+}
 
-func NewDispatcher(executors map[string]Executor) *Dispatcher {
-	return &Dispatcher{executors: executors}
+type Dispatcher struct {
+	executors map[string]Executor
+	settings  CloneProtocolSettings
+}
+
+func NewDispatcher(executors map[string]Executor, settings CloneProtocolSettings) *Dispatcher {
+	return &Dispatcher{executors: executors, settings: settings}
 }
 
 func (d *Dispatcher) Execute(ctx context.Context, a actions.Action, data OutputData, input ActionInvocationInput) (result ExecutionResult, err error) {
@@ -77,6 +85,12 @@ func (d *Dispatcher) Execute(ctx context.Context, a actions.Action, data OutputD
 	ex, ok := d.executors[a.Type]
 	if !ok {
 		return ExecutionResult{}, fmt.Errorf("dispatcher: no executor registered for action type %q", a.Type)
+	}
+	if d.settings != nil {
+		data.cloneProtocol, err = d.settings.CloneProtocol(ctx)
+		if err != nil {
+			return ExecutionResult{}, err
+		}
 	}
 	result, err = ex.Execute(ctx, a, data, input)
 	span.SetAttributes(attribute.Bool(attrAttempted, result.Attempted))

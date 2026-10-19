@@ -8,6 +8,9 @@ read once and take effect on the next launch.
 ## Schema
 
 ```yaml
+git:
+  clone_protocol: https    # https (default) or ssh; generated clone URLs only
+
 polling:
   interval: 5m            # Go duration; minimum 60s. Default 5m.
 

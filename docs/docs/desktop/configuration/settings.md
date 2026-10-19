@@ -66,6 +66,39 @@ A `settings.yaml` key this version does not know, for example one a newer versio
 !!! tip "Ask the Hive workspace"
     The **Hive** workspace in **Chats** can update settings with the `hive-settings` skill. For example, ask it to change the polling interval or terminal font.
 
+## Git clone protocol
+
+Choose **Settings ▸ General ▸ Clone protocol**, or set:
+
+```yaml
+git:
+  clone_protocol: ssh
+```
+
+`https` is the default; `ssh` generates `git@host:owner/repo.git`.
+`HIVE_DESKTOP_GIT_CLONE_PROTOCOL` overrides the file. Changes apply to the next
+session draft or action launch without restarting.
+
+Hive uses the item's URL host, including enterprise hosts. An explicit port is
+retained; SSH uses `ssh://git@host:port/owner/repo.git` in that case. If the web
+and SSH ports differ, supply an explicit clone URL in the action or session form.
+Explicit clone URLs and local paths keep their values. Existing checkouts and
+stored remote identities are unchanged, and Hive does not edit global Git config.
+Git `insteadOf` rules and `gh`'s protocol preference do not change Hive's generated
+or stored remote URL.
+
+New default actions follow this setting. Existing `actions.yml` files are
+preserved, including previously seeded actions and custom SSH templates. To opt
+an action in, change only its repository template in **Settings ▸ Actions** or
+`actions.yml`:
+
+```yaml
+repo_template: "{{ .ItemRemote }}"
+```
+
+This value resolves the item's `repo` using its `url` and the clone preference.
+Keep a fixed template when an action needs a particular host, port, or protocol.
+
 ## Hive CLI compatibility config
 
 Hive Desktop includes the Hive runtime it needs. A separately installed [Hive CLI](../../cli/getting-started/index.md) is not required.

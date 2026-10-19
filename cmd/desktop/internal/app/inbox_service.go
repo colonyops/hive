@@ -20,6 +20,7 @@ import (
 // talks to the store directly — routing them through a service would only put
 // a facade between two parts of the core with no caller in between.
 type InboxService struct {
+	settings *SettingsService
 	items    *stores.InboxItemStore
 	commands *stores.OutputCommandStore
 	nodeRuns *stores.NodeRunStore
@@ -28,6 +29,7 @@ type InboxService struct {
 }
 
 type InboxDeps struct {
+	Settings *SettingsService
 	Items    *stores.InboxItemStore
 	Commands *stores.OutputCommandStore
 	NodeRuns *stores.NodeRunStore
@@ -36,7 +38,7 @@ type InboxDeps struct {
 }
 
 func newInboxService(d InboxDeps) *InboxService {
-	return &InboxService{items: d.Items, commands: d.Commands, nodeRuns: d.NodeRuns, actions: d.Catalog, worker: d.Worker}
+	return &InboxService{settings: d.Settings, items: d.Items, commands: d.Commands, nodeRuns: d.NodeRuns, actions: d.Catalog, worker: d.Worker}
 }
 
 func (s *InboxService) ListByFeed(ctx context.Context, profileID, feedID string, limit int) ([]stores.InboxItem, error) {
@@ -153,6 +155,11 @@ func (s *InboxService) FindItems(ctx context.Context, profileID, externalID stri
 // shown-in-detail, applies_to matches the item's canonical kind, and every
 // hard template capability is satisfiable for the item's payload.
 func (s *InboxService) ActionViews(ctx context.Context, itemID int64) ([]actions.View, error) {
+	protocol, protocolErr := s.cloneProtocol(ctx)
+	if protocolErr != nil {
+		return nil, protocolErr
+	}
+
 	item, err := s.decodeItem(ctx, itemID)
 	if err != nil {
 		return nil, err
@@ -162,7 +169,7 @@ func (s *InboxService) ActionViews(ctx context.Context, itemID int64) ([]actions
 		if !action.ShowInDetail {
 			continue
 		}
-		if ok, _ := dispatch.ActionApplicability(action, item); !ok {
+		if ok, _ := dispatch.ActionApplicability(action, item, protocol); !ok {
 			continue
 		}
 		views = append(views, action.View())
@@ -193,7 +200,12 @@ func (s *InboxService) NewSessionDraft(ctx context.Context, itemIDs []int64) (di
 		orderedIDs = append(orderedIDs, itemID)
 		items = append(items, dispatch.SessionDraftItem{Title: item.Title, URL: item.URL, Payload: item.Payload})
 	}
-	draft, err := dispatch.RenderSessionDraftItems(items)
+	protocol, err := s.cloneProtocol(ctx)
+	if err != nil {
+		return dispatch.SessionDraft{}, err
+	}
+
+	draft, err := dispatch.RenderSessionDraftItems(items, protocol)
 	if err != nil {
 		return dispatch.SessionDraft{}, Wrap(err, KindInternal, "rendering session draft for %d items", len(items))
 	}
@@ -215,6 +227,11 @@ type InvokeActionRequest struct {
 // kind, and the item must have an id. Executable configuration is always
 // re-resolved from the catalog rather than taken from the caller.
 func (s *InboxService) InvokeAction(ctx context.Context, req InvokeActionRequest) (dispatch.ActionRunView, error) {
+	protocol, protocolErr := s.cloneProtocol(ctx)
+	if protocolErr != nil {
+		return dispatch.ActionRunView{}, protocolErr
+	}
+
 	item, err := s.decodeItem(ctx, req.ItemID)
 	if err != nil {
 		return dispatch.ActionRunView{}, err
@@ -232,7 +249,7 @@ func (s *InboxService) InvokeAction(ctx context.Context, req InvokeActionRequest
 		// worker never sees it and re-copying never prompts for a rerun.
 		return dispatch.ActionRunView{}, Errorf(KindInvalid, "action %q is a clipboard action; copy it from the detail pane instead", req.ActionID)
 	}
-	if applicable, reason := dispatch.ActionApplicability(action, item); !applicable {
+	if applicable, reason := dispatch.ActionApplicability(action, item, protocol); !applicable {
 		return dispatch.ActionRunView{}, Errorf(KindInvalid, "action %q does not apply to item %d: %s", req.ActionID, req.ItemID, reason)
 	}
 	if item.ID == "" {
@@ -262,6 +279,11 @@ func (s *InboxService) InvokeAction(ctx context.Context, req InvokeActionRequest
 // joins the entries into the single block the desktop writes to the clipboard.
 // It never enqueues an output command, so copying remains repeatable.
 func (s *InboxService) RenderClipboardAction(ctx context.Context, actionID string, itemIDs []int64, inputs map[string]string) (string, error) {
+	protocol, protocolErr := s.cloneProtocol(ctx)
+	if protocolErr != nil {
+		return "", protocolErr
+	}
+
 	action, ok := s.actions.Get(actionID)
 	if !ok {
 		return "", Errorf(KindNotFound, "unknown action %q", actionID)
@@ -285,13 +307,13 @@ func (s *InboxService) RenderClipboardAction(ctx context.Context, actionID strin
 		if err != nil {
 			return "", err
 		}
-		if applicable, reason := dispatch.ActionApplicability(action, item); !applicable {
+		if applicable, reason := dispatch.ActionApplicability(action, item, protocol); !applicable {
 			return "", Errorf(KindInvalid, "action %q does not apply to item %d: %s", actionID, itemID, reason)
 		}
 		if item.ID == "" {
 			return "", Errorf(KindInvalid, "action %q: item id is required", actionID)
 		}
-		text, err := dispatch.RenderClipboardText(action, item.ID, item.Payload, resolved)
+		text, err := dispatch.RenderClipboardText(action, item.ID, item.Payload, resolved, protocol)
 		if err != nil {
 			return "", Wrap(err, KindInvalid, "rendering clipboard action %q for item %d", actionID, itemID)
 		}
@@ -384,4 +406,11 @@ func (s *InboxService) decodeItem(ctx context.Context, itemID int64) (dispatch.D
 		return dispatch.DecodedActionItem{}, Wrap(err, KindInvalid, "decoding inbox item %d payload", itemID)
 	}
 	return item, nil
+}
+
+func (s *InboxService) cloneProtocol(ctx context.Context) (string, error) {
+	if s.settings == nil {
+		return "https", nil
+	}
+	return s.settings.CloneProtocol(ctx)
 }

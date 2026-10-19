@@ -38,7 +38,7 @@ func TestRenderClipboardText_RendersCollectedInputs(t *testing.T) {
 		&actions.ClipboardConfig{TextTemplate: "flux suspend hr {{ .Payload.name }} # {{ .Inputs.reason }}"},
 		actions.InputSpec{Name: "reason", Type: actions.InputTypeText, Required: true})
 
-	text, err := RenderClipboardText(action, "k", []byte(`{"name":"grafana"}`), map[string]string{"reason": "flapping"})
+	text, err := RenderClipboardText(action, "k", []byte(`{"name":"grafana"}`), map[string]string{"reason": "flapping"}, "https")
 	require.NoError(t, err)
 	assert.Equal(t, "flux suspend hr grafana # flapping", text)
 }
@@ -50,14 +50,14 @@ func TestRenderClipboardText_UndeclaredInputIsARenderError(t *testing.T) {
 	t.Parallel()
 
 	action := inputAction("copy", "clipboard", &actions.ClipboardConfig{TextTemplate: "echo {{ .Inputs.reason }}"})
-	_, err := RenderClipboardText(action, "k", []byte(`{}`), nil)
+	_, err := RenderClipboardText(action, "k", []byte(`{}`), nil, "https")
 	require.ErrorContains(t, err, "reason")
 
 	declared := inputAction("copy", "clipboard", &actions.ClipboardConfig{TextTemplate: "echo {{ .Inputs.reason }}"},
 		actions.InputSpec{Name: "reason", Type: actions.InputTypeText})
 	resolved, err := declared.ResolveInputs(nil)
 	require.NoError(t, err)
-	text, err := RenderClipboardText(declared, "k", []byte(`{}`), resolved)
+	text, err := RenderClipboardText(declared, "k", []byte(`{}`), resolved, "https")
 	require.NoError(t, err)
 	assert.Equal(t, "echo", text)
 }
@@ -75,7 +75,7 @@ func TestWorker_AutomaticRunResolvesDeclaredDefaults(t *testing.T) {
 
 	exec := &fakeExecutor{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"notify-oncall": action},
-		NewDispatcher(map[string]Executor{"publish-message": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"publish-message": exec}, nil), 0, zerolog.Nop())
 	worker.Tick(t.Context())
 	waitForWorker(t, worker)
 
@@ -93,7 +93,7 @@ func TestWorker_ConfirmThreadsCollectedInputsToTheExecutor(t *testing.T) {
 
 	exec := &fakeExecutor{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"ignore": action},
-		NewDispatcher(map[string]Executor{"shell": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"shell": exec}, nil), 0, zerolog.Nop())
 
 	view, err := worker.Confirm(t.Context(), "ignore", "item-1", []byte(`{"title":"Fix bug"}`), models.ItemRef{},
 		ActionInvocationInput{Inputs: map[string]string{"reason": "flapping"}})
@@ -116,7 +116,7 @@ func TestWorker_MissingRequiredInputFailsWithoutDispatching(t *testing.T) {
 
 	exec := &fakeExecutor{}
 	worker := NewWorker(testOutputCommands(db), fakeActionLister{"ignore": action},
-		NewDispatcher(map[string]Executor{"shell": exec}), 0, zerolog.Nop())
+		NewDispatcher(map[string]Executor{"shell": exec}, nil), 0, zerolog.Nop())
 
 	_, err := worker.Confirm(t.Context(), "ignore", "item-1", []byte(`{}`), models.ItemRef{}, ActionInvocationInput{})
 	require.ErrorContains(t, err, `input "reason" is required`)
@@ -133,19 +133,19 @@ func TestActionApplicability_RepoProbeUsesDeclaredDefaults(t *testing.T) {
 	withDefault := inputAction("launch", "launch-session",
 		&actions.LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "https://github.com/{{ .Payload.repo }}.git#{{ .Inputs.branch }}"},
 		actions.InputSpec{Name: "branch", Type: actions.InputTypeText, Default: "main"})
-	ok, reason := ActionApplicability(withDefault, item)
+	ok, reason := ActionApplicability(withDefault, item, "https")
 	assert.True(t, ok, reason)
 
 	inputs, err := withDefault.ResolveInputs(nil)
 	require.NoError(t, err)
-	repo, err := RenderRepoTarget(withDefault, item.ID, item.Payload, inputs)
+	repo, err := RenderRepoTarget(withDefault, item.ID, item.Payload, inputs, "https")
 	require.NoError(t, err)
 	assert.Equal(t, "https://github.com/acme/app.git#main", repo)
 
 	required := inputAction("launch", "launch-session",
 		&actions.LaunchSessionConfig{PromptTemplate: "go", RepoTemplate: "https://github.com/{{ .Payload.repo }}.git"},
 		actions.InputSpec{Name: "reason", Type: actions.InputTypeText, Required: true})
-	ok, reason = ActionApplicability(required, item)
+	ok, reason = ActionApplicability(required, item, "https")
 	assert.True(t, ok, reason)
 	assert.False(t, required.HeadlessCapable())
 }
