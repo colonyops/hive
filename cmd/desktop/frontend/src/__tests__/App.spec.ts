@@ -197,6 +197,8 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
 }))
 
 vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
+  CloneProtocol: vi.fn().mockResolvedValue('https'),
+  SetCloneProtocol: vi.fn(),
   NotificationSettings: mocks.NotificationSettings,
   SetNotificationSettings: mocks.SetNotificationSettings,
   OnboardingSettings: mocks.OnboardingSettings,

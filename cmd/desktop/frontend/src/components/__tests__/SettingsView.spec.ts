@@ -6,6 +6,8 @@ import { setTheme } from '../../composables/useTheme'
 import { applicationSettingsSections } from '../../router'
 
 vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/settingsservice', () => ({
+  CloneProtocol: vi.fn().mockResolvedValue('https'),
+  SetCloneProtocol: vi.fn(),
   GithubSettings: vi.fn().mockResolvedValue({ pollIntervalSeconds: 60, minPollIntervalSeconds: 60 }),
   SetGithubSettings: vi.fn(),
   NotificationSettings: vi
