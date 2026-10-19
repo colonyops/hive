@@ -157,16 +157,16 @@ export function useAppCommands(deps: AppCommandDeps) {
     'terminal.close-pane': closeTerminalPane,
     'terminal.zoom-pane': zoomTerminalPane,
     'terminal.find': findInTerminal,
-    'terminal.text-size-increase': () => {
-      terminalFont.stepFontSize(1)
-      if (appMode.drivePaneVisible.value) canvasSettings.stepFontSize(1)
+    'terminal.text-size-increase': async () => {
+      await terminalFont.stepFontSize(1)
+      if (appMode.drivePaneVisible.value) await canvasSettings.stepFontSize(1)
     },
-    'terminal.text-size-decrease': () => {
-      terminalFont.stepFontSize(-1)
-      if (appMode.drivePaneVisible.value) canvasSettings.stepFontSize(-1)
+    'terminal.text-size-decrease': async () => {
+      await terminalFont.stepFontSize(-1)
+      if (appMode.drivePaneVisible.value) await canvasSettings.stepFontSize(-1)
     },
-    'terminal.text-size-reset': () => {
-      terminalFont.resetFontSize()
+    'terminal.text-size-reset': async () => {
+      await terminalFont.resetFontSize()
       if (appMode.drivePaneVisible.value) canvasSettings.resetFontSize()
     },
     'terminal.focus-pane-left': () => focusTerminalPaneDirection('left'),

@@ -105,7 +105,8 @@ export const useCanvasSettings = defineStore('canvasSettings', () => {
     write: (next) => PersistCanvasPageWidth(next),
     label: 'the canvas page width',
   })
-  function stepFontSize(direction: 1 | -1): void {
+  async function stepFontSize(direction: 1 | -1): Promise<void> {
+    await fontSize.whenHydrated()
     const index = canvasFontSizes.indexOf(fontSize.value.value)
     const next = canvasFontSizes[index + direction]
     if (next) fontSize.set(next)

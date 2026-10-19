@@ -52,25 +52,40 @@ describe('useCanvasSettings', () => {
     const settings = useCanvasSettings()
     await flushPromises()
 
-    settings.stepFontSize(-1)
-    settings.stepFontSize(-1)
+    await settings.stepFontSize(-1)
+    await settings.stepFontSize(-1)
     expect(settings.fontSize.value).toBe('small')
-    settings.stepFontSize(1)
-    settings.stepFontSize(1)
-    settings.stepFontSize(1)
-    settings.stepFontSize(1)
+    await settings.stepFontSize(1)
+    await settings.stepFontSize(1)
+    await settings.stepFontSize(1)
+    await settings.stepFontSize(1)
     expect(settings.fontSize.value).toBe('xl')
     settings.resetFontSize()
     expect(settings.fontSize.value).toBe('medium')
     await flushPromises()
 
-    expect(mocks.SetCanvasFontSize.mock.calls.map(([size]) => size)).toEqual([
-      'small',
-      'medium',
-      'large',
-      'xl',
-      'medium',
-    ])
+    expect(mocks.SetCanvasFontSize).toHaveBeenCalledTimes(5)
+    for (const [index, size] of ['small', 'medium', 'large', 'xl', 'medium'].entries()) {
+      expect(mocks.SetCanvasFontSize).toHaveBeenNthCalledWith(index + 1, size)
+    }
+  })
+
+  it('steps from the saved size when hydration is still in flight', async () => {
+    let resolveRead: (value: { canvasFontSize: string }) => void = () => {}
+    mocks.AppearanceSettings.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRead = resolve
+      }),
+    )
+    const settings = useCanvasSettings()
+
+    const step = settings.stepFontSize(-1)
+    resolveRead({ canvasFontSize: 'xl' })
+    await step
+    await flushPromises()
+
+    expect(settings.fontSize.value).toBe('large')
+    expect(mocks.SetCanvasFontSize).toHaveBeenCalledWith('large')
   })
 
   it('maps the page width preset to a measure and persists a change', async () => {
