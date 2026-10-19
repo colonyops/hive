@@ -48,7 +48,8 @@ test("the Drive page opens a document from a space and finds it from another", a
     /#\/drive\?space=e2e(%2F|\/)repo&doc=plans(%2F|\/)2026-10-11-plan\.md/,
   );
 
-  await page.keyboard.press("ControlOrMeta+Shift+P");
+  const modifier = await page.evaluate(() => /Mac/i.test(navigator.userAgent) ? "Meta" : "Control");
+  await page.keyboard.press(`${modifier}+Shift+P`);
   await expect(page.getByTestId("drive-page")).toHaveCount(0);
   await expect(page.getByTestId("feed-item").first()).toBeVisible();
 });
