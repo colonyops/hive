@@ -178,6 +178,28 @@ describe('groupTerminalSessions', () => {
     expect(groups[1].sessions.map((s) => s.name)).toEqual(['alpha', 'zeta'])
   })
 
+  it('merges SSH and HTTPS remotes without changing session transport URLs', () => {
+    const ssh = row('zeta', 'git@github.com:grafana/ai-sdk.git')
+    const https = row('alpha', 'https://github.com/grafana/ai-sdk.git')
+    const groups = groupTerminalSessions([ssh, https])
+
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toMatchObject({ key: 'github.com/grafana/ai-sdk', name: 'grafana/ai-sdk' })
+    expect(groups[0].sessions).toEqual([https, ssh])
+    expect(ssh.repo).toBe('git@github.com:grafana/ai-sdk.git')
+    expect(https.repo).toBe('https://github.com/grafana/ai-sdk.git')
+    expect(groupTerminalSessions([https, ssh])[0].key).toBe(groups[0].key)
+  })
+
+  it('keeps matching repository paths on distinct hosts separate', () => {
+    const groups = groupTerminalSessions([
+      row('one', 'git@github.com:grafana/ai-sdk.git'),
+      row('two', 'https://gitlab.com/grafana/ai-sdk.git'),
+    ])
+    expect(groups.map((group) => group.key)).toEqual(['github.com/grafana/ai-sdk', 'gitlab.com/grafana/ai-sdk'])
+    expect(groups.map((group) => group.sessions.length)).toEqual([1, 1])
+  })
+
   it('collects sessions without a remote under one label', () => {
     const groups = groupTerminalSessions([row('scratch', ''), row('local', '/Users/x/repos/scratchpad')])
 

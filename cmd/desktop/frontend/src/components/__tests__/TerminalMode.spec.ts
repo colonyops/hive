@@ -614,6 +614,36 @@ describe('TerminalMode', () => {
     expect(mocks.openBlank).toHaveBeenCalledWith('hay-kot/hive')
   })
 
+  it.each([
+    'git://github.com/grafana/ai-sdk.git',
+    'git@github.com:grafana/ai-sdk.git',
+    'https://github.com/grafana/ai-sdk.git',
+  ])('starts sessions with the original remote %s from a normalized group', async (remote) => {
+    mocks.ListSessions.mockResolvedValue([
+      { id: '1', name: 'alpha', slug: 'alpha', repo: remote, state: 'active', canvasOwner: '', createdAt: '' },
+      {
+        id: '2',
+        name: 'zeta',
+        slug: 'zeta',
+        repo: 'ssh://git@github.com/grafana/ai-sdk.git',
+        state: 'active',
+        canvasOwner: '',
+        createdAt: '',
+      },
+    ])
+    const { wrapper } = await mountAvailable()
+    expect(wrapper.findAll('[data-testid="terminal-repo-group"]')).toHaveLength(1)
+    expect(wrapper.get('[data-testid="terminal-repo-group"]').attributes('data-repo')).toBe('github.com/grafana/ai-sdk')
+    await wrapper.get('[data-testid="terminal-repo-new-session"]').trigger('click')
+    expect(mocks.openBlank).toHaveBeenCalledWith(remote)
+    const group = wrapper.get('[data-testid="terminal-repo-group"]')
+    if (group.attributes('aria-expanded') === 'false') await group.trigger('click')
+    expect(sessionRows(wrapper).map((row) => row.get('span[title]').attributes('title'))).toEqual([
+      `alpha\n${remote}`,
+      'zeta\nssh://git@github.com/grafana/ai-sdk.git',
+    ])
+  })
+
   // The group stays collapsed-or-not: the button is inside the header, and a
   // click that reached the header would toggle the whole repository shut.
   it('does not toggle the group when its add button is clicked', async () => {
