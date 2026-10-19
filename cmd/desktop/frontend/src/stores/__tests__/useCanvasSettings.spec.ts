@@ -48,6 +48,31 @@ describe('useCanvasSettings', () => {
     expect(mocks.SetCanvasLineSpacing).toHaveBeenCalledWith('compact')
   })
 
+  it('steps within the presets and persists the default on reset', async () => {
+    const settings = useCanvasSettings()
+    await flushPromises()
+
+    settings.stepFontSize(-1)
+    settings.stepFontSize(-1)
+    expect(settings.fontSize.value).toBe('small')
+    settings.stepFontSize(1)
+    settings.stepFontSize(1)
+    settings.stepFontSize(1)
+    settings.stepFontSize(1)
+    expect(settings.fontSize.value).toBe('xl')
+    settings.resetFontSize()
+    expect(settings.fontSize.value).toBe('medium')
+    await flushPromises()
+
+    expect(mocks.SetCanvasFontSize.mock.calls.map(([size]) => size)).toEqual([
+      'small',
+      'medium',
+      'large',
+      'xl',
+      'medium',
+    ])
+  })
+
   it('maps the page width preset to a measure and persists a change', async () => {
     mocks.AppearanceSettings.mockResolvedValue({ canvasFontSize: '', canvasLineSpacing: '', canvasPageWidth: 'wide' })
 
