@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { fuzzyMatch, highlightSegments, rankRepositories, repoDisplayName, toChoices } from '../repositories'
+import {
+  fuzzyMatch,
+  highlightSegments,
+  rankRepositories,
+  repoDisplayName,
+  repoIdentity,
+  toChoices,
+} from '../repositories'
 
 describe('repoDisplayName', () => {
   it('reduces every remote spelling to owner/name', () => {
@@ -112,5 +119,28 @@ describe('highlightSegments', () => {
 
   it('returns one plain segment when nothing matched', () => {
     expect(highlightSegments('hive', [])).toEqual([{ text: 'hive', matched: false }])
+  })
+})
+
+describe('repoIdentity', () => {
+  it.each([
+    'git://github.com/grafana/ai-sdk.git',
+    'git@github.com:grafana/ai-sdk.git',
+    'https://github.com/grafana/ai-sdk.git',
+    'ssh://git@GITHUB.COM/grafana/ai-sdk.git/',
+    'https://github.com/grafana/ai-sdk/',
+  ])('normalizes %s', (remote) => {
+    expect(repoIdentity(remote)).toBe('github.com/grafana/ai-sdk')
+  })
+
+  it.each(['', '/Users/x/repos/project.git', 'owner/repo', 'file:///Users/x/repo.git', 'https://'])(
+    'preserves local or unrecognized remotes: %s',
+    (remote) => {
+      expect(repoIdentity(remote)).toBe(remote)
+    },
+  )
+
+  it('retains nested paths, path case and explicit SSH ports', () => {
+    expect(repoIdentity('ssh://git@example.com:2222/team/sub/Repo.git')).toBe('example.com:2222/team/sub/Repo')
   })
 })
