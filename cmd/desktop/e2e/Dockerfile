@@ -1,6 +1,6 @@
 # Browser image version matches cmd/desktop/e2e/package-lock.json's @playwright/test.
 # Index digests retain the upstream multi-architecture manifests.
-FROM golang:1.27-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61 AS go
+FROM golang:1.27.3-bookworm@sha256:21ade014faf952365b9ecbd8dbdb87176fbacb82fac9fb132d9f2a7b8cc3f132 AS go
 
 FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
 COPY --from=go /usr/local/go /usr/local/go
