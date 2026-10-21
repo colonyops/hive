@@ -342,12 +342,15 @@ cmd/drive-server/                 # Hive Drive Server: `hive-drive-server`, the 
   main.go                         # urfave/cli root: serve
   tasks.toml                      # the drive-server:* mise tasks
   dev/drive-server.yaml           # the dev policy set `drive-server:dev` loads
+  frontend/                       # the embedded Vue SPA
   internal/
     config/                       # Config, Policy, Size: env, flags, and drive-server.yaml
     app/                          # composition root: the appkit/plugs manager
+    core/                         # accounts, sign-in, tokens, documents, shares
+    store/                        # control/ (control.db), userdb/ (users/<id>.db)
     httpapi/                      # ServeMux routes over httpkit errchain and internal/web/mid
-    # Later slices add control/ (control.db), users/ (users/<id>.db), docs/, shares/,
-    # auth/, mail/, and frontend/ (the embedded SPA).
+    guard/                        # rate limits and client IP
+    mail/                         # the SMTP sender and the outbox
 
 cmd/desktop/                      # Wails app package — stays `main`, stays here
   main.go                         # bootstrap → build App → mount adapters → run
