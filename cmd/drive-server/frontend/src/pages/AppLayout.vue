@@ -36,7 +36,6 @@ const inSpace = computed(() => ['repo', 'workspace', 'shared'].includes(String(r
 const target = computed(() => (inSpace.value ? fromRouteParams(route.params) : null))
 const space = computed(() => target.value?.space ?? null)
 
-// Below the md breakpoint the nav is a panel the menu button opens.
 const navOpen = ref(false)
 watch(
   () => route.fullPath,

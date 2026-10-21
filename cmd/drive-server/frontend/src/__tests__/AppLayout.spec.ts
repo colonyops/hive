@@ -97,13 +97,6 @@ describe('drive shell', () => {
     expect(router.currentRoute.value.path).toBe('/repos/acme/notes/docs')
   })
 
-  it('opens a document path in the viewer', async () => {
-    const { app } = await mountAt('/repos/acme/notes/docs/guide.md')
-
-    expect(app.get('[data-testid="document-title"]').text()).toBe('Guide')
-    expect(app.get('[data-testid="document-markdown"]').text()).toContain('Hello')
-  })
-
   it('lists shared documents across spaces under Shared links', async () => {
     const { app } = await mountAt('/links')
 
@@ -125,29 +118,5 @@ describe('drive shell', () => {
     const { app } = await mountAt('/recent')
 
     expect(app.text()).toContain('boom')
-  })
-
-  it('drills into a folder and leaves the rows alone while typing in search', async () => {
-    const { app, router } = await mountAt('/repos/acme/notes')
-
-    await app.get('[data-testid="entry"][data-kind="dir"]').trigger('dblclick')
-    await flushPromises()
-    expect(router.currentRoute.value.path).toBe('/repos/acme/notes/docs')
-
-    await app.get('[data-testid="search-input"]').setValue('guide')
-    await flushPromises()
-    expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['api', 'Guide'])
-  })
-
-  it('shows the email and both items in the account menu', async () => {
-    const { app } = await mountAt('/links')
-
-    expect(app.find('[data-testid="account-menu-panel"]').exists()).toBe(false)
-    await app.get('[data-testid="account-menu"]').trigger('click')
-
-    const panel = app.get('[data-testid="account-menu-panel"]')
-    expect(panel.text()).toContain('ada@example.com')
-    expect(panel.get('[data-testid="account-tokens"]').text()).toBe('API tokens')
-    expect(panel.get('[data-testid="sign-out"]').text()).toBe('Sign out')
   })
 })

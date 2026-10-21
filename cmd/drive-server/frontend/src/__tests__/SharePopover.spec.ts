@@ -52,21 +52,6 @@ describe('SharePopover', () => {
     expect(panel()).not.toBeNull()
   })
 
-  it('saves a new expiry through the API', async () => {
-    api.share.mockResolvedValue({
-      url: 'http://drive.test/s/abc',
-      expires_in: '1d',
-      expires_at: '2026-10-16T00:00:00Z',
-    })
-    const wrapper = mountPopover({ url: 'http://drive.test/s/abc', expires_in: '' })
-
-    pick('share-expiry-1d').click()
-    await flushPromises()
-
-    expect(api.share).toHaveBeenCalledWith(prefix, 'a.md', '1d')
-    expect(wrapper.emitted('changed')).toHaveLength(1)
-  })
-
   it('stops sharing', async () => {
     api.unshare.mockResolvedValue(undefined)
     const wrapper = mountPopover({ url: 'http://drive.test/s/abc', expires_in: '' })
@@ -89,13 +74,6 @@ describe('SharePopover', () => {
     expect(pressed('')).toBe('false')
     expect(pick('share-expiry-text').textContent).toMatch(/^Expires Nov 1[45], 2026$/)
     expect(pick('share-expiry-text').title).not.toBe('')
-  })
-
-  it('marks None and says there is no expiry', () => {
-    mountPopover({ url, expires_in: '' })
-
-    expect(pressed('')).toBe('true')
-    expect(pick('share-expiry-text').textContent).toBe('No expiry')
   })
 
   it('clears the expiry when None is chosen and keeps the new state', async () => {

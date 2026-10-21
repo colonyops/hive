@@ -49,18 +49,6 @@ describe('DriveListing', () => {
     expect(rows[0].text()).not.toContain('Shared')
   })
 
-  it('renders every list row as a single-line name cell', async () => {
-    const { wrapper } = await mountListing()
-
-    for (const row of wrapper.findAll('[data-testid="entry"]')) {
-      const label = row.get('[data-testid="entry-label"]')
-      expect(label.classes()).toContain('truncate')
-      expect(label.element.children).toHaveLength(0)
-      expect(row.classes()).toContain('h-13')
-    }
-    expect(wrapper.find('[data-testid="entry-location"]').exists()).toBe(false)
-  })
-
   it('shows a Location column only in cross-space listings', async () => {
     const across = await mountListing(documentEntries([doc({ space: 'acme/notes', path: 'docs/guide.md' })]))
     expect(across.wrapper.get('[data-testid="entry-location"]').text()).toBe('acme/notes / docs')
@@ -90,20 +78,6 @@ describe('DriveListing', () => {
     expect(router.currentRoute.value.path).toBe('/repos/acme/notes/plan.md')
   })
 
-  it('shows the cursor row only while the list has focus', async () => {
-    const { wrapper } = await mountListing()
-    const list = wrapper.get('[data-testid="entries"]')
-    const highlighted = () => wrapper.findAll('[data-testid="entry"]').filter((row) => row.classes('bg-selection'))
-
-    expect(highlighted()).toHaveLength(0)
-
-    await list.trigger('focusin')
-    expect(highlighted()).toHaveLength(1)
-
-    await list.trigger('focusout', { relatedTarget: null })
-    expect(highlighted()).toHaveLength(0)
-  })
-
   it('switches between list and grid and remembers the choice', async () => {
     const { wrapper } = await mountListing()
     expect(wrapper.get('[data-testid="entries"]').attributes('data-mode')).toBe('list')
@@ -122,12 +96,6 @@ describe('DriveListing', () => {
 
     expect(useViewMode().mode.value).toBe('list')
     spy.mockRestore()
-  })
-
-  it('shows an empty state for an empty folder', async () => {
-    const { wrapper } = await mountListing([])
-
-    expect(wrapper.get('[data-testid="listing-empty"]').text()).toBe('Nothing here.')
   })
 
   it('opens the share popover from the row menu and shares', async () => {

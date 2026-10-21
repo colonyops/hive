@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// Recent and Shared links: documents gathered from every space by one request each.
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
 import DriveListing from '../components/DriveListing.vue'
