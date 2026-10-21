@@ -24,6 +24,8 @@ func TestLimiterBurstThenDenyWithRoundedRetry(t *testing.T) {
 	ok, wait := l.Allow("a")
 	assert.False(t, ok)
 	assert.Equal(t, 20*time.Minute, wait)
+	_, wait = l.Allow("a")
+	assert.Equal(t, 20*time.Minute, wait, "a denied call spends no token")
 
 	ok, _ = l.Allow("b")
 	assert.True(t, ok, "keys are independent")
@@ -31,16 +33,6 @@ func TestLimiterBurstThenDenyWithRoundedRetry(t *testing.T) {
 	now = now.Add(20 * time.Minute)
 	ok, _ = l.Allow("a")
 	assert.True(t, ok, "one token refills per window/count")
-}
-
-func TestLimiterDeniedCallSpendsNothing(t *testing.T) {
-	now := time.Date(2026, 10, 15, 12, 0, 0, 0, time.UTC)
-	l := guard.NewLimiter(1, time.Minute, 10, time.Hour, func() time.Time { return now })
-	l.Allow("a")
-	for range 5 {
-		_, wait := l.Allow("a")
-		assert.Equal(t, time.Minute, wait)
-	}
 }
 
 func TestLimiterEvictsOldestWhenFull(t *testing.T) {

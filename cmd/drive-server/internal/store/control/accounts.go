@@ -58,7 +58,7 @@ func (a accounts) List(ctx context.Context) ([]core.Account, error) {
 func (a accounts) DeleteByEmail(ctx context.Context, email string) error {
 	return sqlite.WithinTx(ctx, a.s.conn, func(ctx context.Context, tx *sql.Tx) error {
 		q := a.s.q.WithTx(tx)
-		if err := q.DeleteSignInCodesByEmail(ctx, email); err != nil {
+		if err := q.DeleteSignInCodesForEmail(ctx, email); err != nil {
 			return wrap("delete sign-in codes", err)
 		}
 		n, err := q.DeleteAccountByEmail(ctx, email)

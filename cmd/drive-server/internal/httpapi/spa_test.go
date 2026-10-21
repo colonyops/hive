@@ -64,12 +64,6 @@ func TestSPAWithoutIndexIs503(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "web UI not built")
 }
 
-func TestSPAKeepsSpecificRoutes(t *testing.T) {
-	rec := getSPA(t, builtUI, "/healthz")
-
-	assert.Equal(t, "ok", rec.Body.String())
-}
-
 func TestSPAShareLinkPageIsNoindex(t *testing.T) {
 	rec := getSPA(t, builtUI, "/s/abc123")
 

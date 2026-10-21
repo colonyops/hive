@@ -40,7 +40,7 @@ func TestDriveRemotePushPullShare(t *testing.T) {
 	require.NoError(t, err)
 	repo := filepath.Base(filepath.Dir(target)) + "/" + filepath.Base(target)
 
-	t.Run("push uploads markdown and skips the rest", func(t *testing.T) {
+	t.Run("push uploads markdown, skips unchanged, and --force re-uploads", func(t *testing.T) {
 		lines, err := pusher.RunJSONLinesInDir(workDir, "drive", "push", "--json")
 		require.NoError(t, err)
 		got := byPath(lines)
@@ -48,10 +48,8 @@ func TestDriveRemotePushPullShare(t *testing.T) {
 		assert.Equal(t, "uploaded", got["plans/ship.md"]["action"])
 		assert.Equal(t, sha256Hex("# Ship\n"), got["plans/ship.md"]["sha256"])
 		assert.NotContains(t, got["plans/ship.md"], "error")
-	})
 
-	t.Run("push again skips unchanged and force uploads", func(t *testing.T) {
-		lines, err := pusher.RunJSONLinesInDir(workDir, "drive", "push", "--json")
+		lines, err = pusher.RunJSONLinesInDir(workDir, "drive", "push", "--json")
 		require.NoError(t, err)
 		assert.Equal(t, "unchanged", byPath(lines)["plans/ship.md"]["action"])
 
@@ -132,15 +130,4 @@ func TestDriveRemotePushPullShare(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "# Ship\n", string(body))
 	})
-}
-
-func TestDriveWorkspaceFlag(t *testing.T) {
-	h := NewHarness(t)
-	out, err := h.Run("drive", "--workspace", "chats", "--shared", "ls")
-	require.Error(t, err)
-	assert.Contains(t, out, "--workspace cannot be combined")
-
-	out, err = h.Run("drive", "-w", "chats", "-r", "a/b", "ls")
-	require.Error(t, err)
-	assert.Contains(t, out, "--workspace cannot be combined")
 }

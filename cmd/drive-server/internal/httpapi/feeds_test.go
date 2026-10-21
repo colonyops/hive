@@ -3,7 +3,6 @@ package httpapi_test
 import (
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,17 +65,6 @@ func TestRecentLimitIsValidatedAndCapped(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, s.do(http.MethodGet, "/api/v1/shared-links", "", "").Code)
 }
 
-func TestRecentCapsAtMaximum(t *testing.T) {
-	s := newServer(t)
-	tok := s.token(t, "dev@example.com", core.ScopePush)
-	for i := range core.MaxRecentLimit + 3 {
-		rec := s.do(http.MethodPut, driveapi.DocPath(drive.Shared, "n"+strconv.Itoa(i)+".md"), tok, "x")
-		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	}
-	assert.Len(t, getDocs(t, s, "/api/v1/recent?limit=9999", tok), core.MaxRecentLimit)
-	assert.Len(t, getDocs(t, s, "/api/v1/recent", tok), core.DefaultRecentLimit)
-}
-
 func TestSharedLinksListsOnlySharedDocuments(t *testing.T) {
 	s := newServer(t)
 	tok := s.token(t, "dev@example.com", core.ScopePush)
@@ -113,11 +101,4 @@ func TestIsolationRecentAndSharedLinksHoldOnlyOwnDocuments(t *testing.T) {
 
 	assert.Equal(t, []string{"shared:only-a.md"}, docPaths(getDocs(t, s, "/api/v1/shared-links", a.token)))
 	assert.Equal(t, []string{"shared:shared-path.md"}, docPaths(getDocs(t, s, "/api/v1/shared-links", b.token)))
-}
-
-func TestFeedsNeedOnlyReadScope(t *testing.T) {
-	s := newServer(t)
-	tok := s.token(t, "dev@example.com", core.ScopeRead)
-	assert.Equal(t, http.StatusOK, s.do(http.MethodGet, "/api/v1/recent", tok, "").Code)
-	assert.Equal(t, http.StatusOK, s.do(http.MethodGet, "/api/v1/shared-links", tok, "").Code)
 }

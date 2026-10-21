@@ -3,6 +3,7 @@ package userdb_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func put(t *testing.T, s core.DocumentStore, path string) {
 func TestOpenRejectsNonCanonicalIDs(t *testing.T) {
 	p, dir := newPool(t, 4, 0)
 	upper := uuid.NewString()
-	for _, id := range []string{"../x", "not-a-uuid", "", "a/b", `..\x`, "{" + upper + "}", "URN:UUID:" + upper} {
+	for _, id := range []string{"../x", "not-a-uuid", "", "a/b", `..\x`, "{" + upper + "}", "URN:UUID:" + upper, strings.ToUpper(upper)} {
 		_, _, err := p.Open(t.Context(), id)
 		require.Error(t, err, id)
 	}
@@ -45,22 +46,6 @@ func TestOpenRejectsNonCanonicalIDs(t *testing.T) {
 	_, release, err := p.Open(t.Context(), uuid.NewString())
 	require.NoError(t, err)
 	release()
-}
-
-func TestOpenRejectsUppercaseID(t *testing.T) {
-	p, _ := newPool(t, 4, 0)
-	id := uuid.NewString()
-	upper := []byte(id)
-	for i, c := range upper {
-		if c >= 'a' && c <= 'f' {
-			upper[i] = c - 32
-		}
-	}
-	if string(upper) == id {
-		t.Skip("id has no letters")
-	}
-	_, _, err := p.Open(t.Context(), string(upper))
-	require.Error(t, err)
 }
 
 func TestEvictionNeverClosesALeasedHandle(t *testing.T) {

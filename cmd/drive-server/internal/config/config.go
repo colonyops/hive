@@ -102,7 +102,7 @@ func (c Config) validateBaseURL() error {
 	switch u.Scheme {
 	case "https":
 	case "http":
-		if !isLoopback(u.Hostname()) {
+		if !IsLoopback(u.Hostname()) {
 			return fmt.Errorf("base_url %q: http is only allowed on a loopback host", c.BaseURL)
 		}
 	default:
@@ -111,7 +111,8 @@ func (c Config) validateBaseURL() error {
 	return nil
 }
 
-func isLoopback(host string) bool {
+// IsLoopback reports whether host is localhost or a loopback address.
+func IsLoopback(host string) bool {
 	if host == "localhost" {
 		return true
 	}

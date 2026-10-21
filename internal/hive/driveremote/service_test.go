@@ -311,18 +311,6 @@ func TestPullCreatesAndSkipsIdentical(t *testing.T) {
 		"same.md":      driveremote.ActionUnchanged,
 	}, pullActions(results))
 	assert.Equal(t, "# New\n", f.readLocal(t, "plans/new.md"))
-}
-
-func TestPullSkipsDownloadOfUnchangedDocument(t *testing.T) {
-	f := newFixture(t)
-	f.server.docs["same.md"] = "same"
-	f.writeLocal(t, "same.md", "same")
-
-	for range 2 {
-		results, err := f.svc.Pull(t.Context(), f.server.URL, f.space, nil)
-		require.NoError(t, err)
-		assert.Equal(t, driveremote.ActionUnchanged, pullActions(results)["same.md"])
-	}
 	assert.Equal(t, 0, f.server.getCount("same.md"), "a matching local copy needs no download")
 }
 
@@ -351,20 +339,11 @@ func TestPullKeepsDifferentLocalFileAndNumbersCopies(t *testing.T) {
 	assert.Equal(t, "remote v2", f.readLocal(t, "plan-2.md"))
 }
 
-func TestPullSkipsCaseOnlyVariantWithSameContent(t *testing.T) {
-	f := newFixture(t)
-	f.writeLocal(t, "plan.md", "same")
-	f.server.docs["Plan.md"] = "same"
-
-	results, err := f.svc.Pull(t.Context(), f.server.URL, f.space, nil)
-	require.NoError(t, err)
-	assert.Equal(t, driveremote.ActionUnchanged, results[0].Action)
-	assert.NoFileExists(t, filepath.Join(f.root, "acme", "site", "Plan-1.md"))
-}
-
 func TestPullTreatsCaseOnlyDifferencesAsCollisions(t *testing.T) {
 	f := newFixture(t)
 	f.writeLocal(t, "plan.md", "local")
+	f.writeLocal(t, "same.md", "same")
+	f.server.docs["Same.md"] = "same"
 	f.server.docs["Plan.md"] = "remote upper"
 	f.server.docs["Notes.md"] = "remote notes"
 	f.server.docs["notes.md"] = "remote notes lower"
@@ -378,6 +357,8 @@ func TestPullTreatsCaseOnlyDifferencesAsCollisions(t *testing.T) {
 	assert.Equal(t, "Plan-1.md", byPath["Plan.md"].LocalPath, "plan.md is local, so Plan.md must not replace it")
 	assert.Equal(t, driveremote.ActionCreated, byPath["Notes.md"].Action)
 	assert.Equal(t, "notes-1.md", byPath["notes.md"].LocalPath, "two remote names that fold together do not overwrite each other")
+	assert.Equal(t, driveremote.ActionUnchanged, byPath["Same.md"].Action, "a case-only variant with the same content is not copied")
+	assert.NoFileExists(t, filepath.Join(f.root, "acme", "site", "Same-1.md"))
 	assert.Equal(t, "local", f.readLocal(t, "plan.md"))
 	assert.Equal(t, "remote notes", f.readLocal(t, "Notes.md"))
 }
@@ -389,7 +370,7 @@ func TestPullReportsMissingRemotePath(t *testing.T) {
 	assert.Equal(t, driveremote.ActionFailed, results[0].Action)
 }
 
-func TestLoginStoresTokenAfterServerAcceptsIt(t *testing.T) {
+func TestLoginStoresOnlyAcceptedTokens(t *testing.T) {
 	f := newFixture(t)
 	creds := credentials.NewMemoryStore()
 	svc := driveremote.New(zerolog.Nop(), f.files, nil, creds, func(string) string { return "" })
@@ -401,19 +382,14 @@ func TestLoginStoresTokenAfterServerAcceptsIt(t *testing.T) {
 	got, err := creds.Get(credentials.Ref{Provider: "drive", Account: f.host(t)})
 	require.NoError(t, err)
 	assert.Equal(t, "fresh-token", got)
-}
 
-func TestLoginStoresNothingWhenRejected(t *testing.T) {
-	f := newFixture(t)
 	f.server.rejectAll()
-	creds := credentials.NewMemoryStore()
-	svc := driveremote.New(zerolog.Nop(), f.files, nil, creds, func(string) string { return "" })
-
-	_, err := svc.Login(t.Context(), f.server.URL, "bad")
+	rejected := credentials.NewMemoryStore()
+	_, err = driveremote.New(zerolog.Nop(), f.files, nil, rejected, func(string) string { return "" }).Login(t.Context(), f.server.URL, "bad")
 	require.Error(t, err)
-	refs, err := creds.List()
+	refs, err := rejected.List()
 	require.NoError(t, err)
-	assert.Empty(t, refs)
+	assert.Empty(t, refs, "a rejected token is never stored")
 }
 
 func TestEnvTokenWinsOverStoredToken(t *testing.T) {

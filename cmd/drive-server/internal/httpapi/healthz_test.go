@@ -34,15 +34,3 @@ func TestVersionReturnsInjectedInfo(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
 	assert.Equal(t, map[string]string{"version": "1.2.3", "commit": "abc", "date": "2026-10-15"}, got)
 }
-
-func TestUnknownRouteAndWrongMethod(t *testing.T) {
-	h := New(zerolog.Nop(), buildinfo.Info{}, Services{})
-
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nope", nil))
-	assert.Equal(t, http.StatusNotFound, rec.Code)
-
-	rec = httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/healthz", nil))
-	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
-}

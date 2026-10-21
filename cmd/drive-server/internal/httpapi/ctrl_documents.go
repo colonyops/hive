@@ -55,9 +55,9 @@ type spaceFunc func(r *http.Request) (drive.Space, error)
 // A name that is not a valid space is a 404, not a 422: no such space can
 // exist.
 func resolve(r *http.Request, space spaceFunc) (core.Principal, drive.Space, error) {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		return core.Principal{}, drive.Space{}, core.NewError(core.KindUnauthenticated, "not signed in")
+	p, err := principal(r)
+	if err != nil {
+		return core.Principal{}, drive.Space{}, err
 	}
 	s, err := space(r)
 	if err != nil {
@@ -67,9 +67,9 @@ func resolve(r *http.Request, space spaceFunc) (core.Principal, drive.Space, err
 }
 
 func (h documentHandlers) spaces(w http.ResponseWriter, r *http.Request) error {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		return core.NewError(core.KindUnauthenticated, "not signed in")
+	p, err := principal(r)
+	if err != nil {
+		return err
 	}
 	spaces, err := h.docs.Spaces(r.Context(), p)
 	if err != nil {
@@ -83,10 +83,21 @@ const (
 	maxSearchLimit     = 200
 )
 
+func parseLimit(raw string, def, maxLimit int) (int, error) {
+	if raw == "" {
+		return def, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 1 {
+		return 0, core.NewError(core.KindInvalid, "limit must be a positive number")
+	}
+	return min(n, maxLimit), nil
+}
+
 func (h documentHandlers) search(w http.ResponseWriter, r *http.Request) error {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		return core.NewError(core.KindUnauthenticated, "not signed in")
+	p, err := principal(r)
+	if err != nil {
+		return err
 	}
 	query := r.URL.Query()
 
@@ -98,13 +109,9 @@ func (h documentHandlers) search(w http.ResponseWriter, r *http.Request) error {
 		}
 		space = &s
 	}
-	limit := defaultSearchLimit
-	if raw := query.Get("limit"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 1 {
-			return core.NewError(core.KindInvalid, "limit must be a positive number")
-		}
-		limit = min(n, maxSearchLimit)
+	limit, err := parseLimit(query.Get("limit"), defaultSearchLimit, maxSearchLimit)
+	if err != nil {
+		return err
 	}
 
 	hits, err := h.docs.Search(r.Context(), p, query.Get("q"), space, limit)
@@ -115,17 +122,13 @@ func (h documentHandlers) search(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (h documentHandlers) recent(w http.ResponseWriter, r *http.Request) error {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		return core.NewError(core.KindUnauthenticated, "not signed in")
+	p, err := principal(r)
+	if err != nil {
+		return err
 	}
-	limit := core.DefaultRecentLimit
-	if raw := r.URL.Query().Get("limit"); raw != "" {
-		n, err := strconv.Atoi(raw)
-		if err != nil || n < 1 {
-			return core.NewError(core.KindInvalid, "limit must be a positive number")
-		}
-		limit = min(n, core.MaxRecentLimit)
+	limit, err := parseLimit(r.URL.Query().Get("limit"), core.DefaultRecentLimit, core.MaxRecentLimit)
+	if err != nil {
+		return err
 	}
 	docs, err := h.docs.Recent(r.Context(), p, limit)
 	if err != nil {
@@ -135,9 +138,9 @@ func (h documentHandlers) recent(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (h documentHandlers) sharedLinks(w http.ResponseWriter, r *http.Request) error {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		return core.NewError(core.KindUnauthenticated, "not signed in")
+	p, err := principal(r)
+	if err != nil {
+		return err
 	}
 	docs, err := h.docs.SharedLinks(r.Context(), p)
 	if err != nil {

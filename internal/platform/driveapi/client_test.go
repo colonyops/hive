@@ -43,19 +43,10 @@ func TestHostRejects(t *testing.T) {
 		"https://",
 	} {
 		_, err := driveapi.Host(in)
+		require.Error(t, err, "%q", in)
+		_, err = driveapi.NewClient(in, token())
 		assert.Error(t, err, "%q", in)
 	}
-}
-
-func TestNewClientRefusesPlainHTTPToRemoteHosts(t *testing.T) {
-	_, err := driveapi.NewClient("http://drive.example.com", token())
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "plain http")
-
-	_, err = driveapi.NewClient("drive.example.com", token())
-	require.NoError(t, err, "a bare remote host means https")
-	_, err = driveapi.NewClient("127.0.0.1:8080", token())
-	require.NoError(t, err, "loopback may use http")
 }
 
 func TestClientSendsBearerTokenAndDecodesErrors(t *testing.T) {

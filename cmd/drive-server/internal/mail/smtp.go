@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"net"
 	"net/mail"
-	"net/netip"
 	"net/smtp"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/cmd/drive-server/internal/config"
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 )
 
@@ -98,7 +98,7 @@ func (s *SMTP) Send(ctx context.Context, m core.Mail) error {
 			if err := c.StartTLS(&tls.Config{ServerName: s.host, MinVersion: tls.VersionTLS12}); err != nil {
 				return fmt.Errorf("smtp starttls: %w", err)
 			}
-		} else if !isLoopback(s.host) {
+		} else if !config.IsLoopback(s.host) {
 			return fmt.Errorf("smtp server %s does not offer STARTTLS", s.addr)
 		}
 	}
@@ -164,12 +164,4 @@ func (s *SMTP) message(m core.Mail) []byte {
 // stripCRLF keeps a subject or address from injecting headers.
 func stripCRLF(s string) string {
 	return strings.NewReplacer("\r", "", "\n", "").Replace(s)
-}
-
-func isLoopback(host string) bool {
-	if host == "localhost" {
-		return true
-	}
-	ip, err := netip.ParseAddr(host)
-	return err == nil && ip.IsLoopback()
 }
