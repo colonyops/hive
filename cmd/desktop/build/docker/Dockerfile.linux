@@ -14,13 +14,13 @@
 #   docker build -t hive-linux-builder -f Dockerfile.linux \
 #     --build-arg WAILS3_VERSION=v3.0.0-alpha2.117 .
 
-ARG GO_IMAGE=golang:1.27.2-trixie@sha256:e58d6f83b3416618d8bcac2b3dde1b7f7e3c4a77d25e88637f8bbae81536c48d
+ARG GO_IMAGE=golang:1.27.3-trixie@sha256:604106102d33b1084e37ca08adf98ac0813624ae8595bd0d7f3965ecebded09c
 ARG NODE_IMAGE=node:22-bookworm@sha256:5647be709086c696ff32edaaf1c70cd26d1da6ab2b39c32f3c7b4c4a31957e37
 
 FROM ${GO_IMAGE} AS toolchain
 FROM ${NODE_IMAGE} AS node
 
-FROM ubuntu:24.04@sha256:4fbb8e6a8395de5a7550b33509421a2bafbc0aab6c06ba2cef9ebffbc7092d90
+FROM ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac
 
 # The repo's pinned Go, not Ubuntu's — go.mod's toolchain is what CI resolves.
 COPY --from=toolchain /usr/local/go /usr/local/go
