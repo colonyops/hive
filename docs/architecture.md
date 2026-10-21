@@ -2417,7 +2417,10 @@ An **`.html` document** is a whole page. `canvas.WrapDocument` injects a CSP
 submission), and the frontend renders it in
 `<iframe sandbox="allow-scripts" srcdoc>` with no `allow-same-origin`. The page
 runs in an opaque origin and cannot call Hive's bindings or send requests to
-localhost. Isolation is the boundary for a document; Hive parses nothing out of it.
+localhost. `WrapDocument` also puts `<base href="about:srcdoc">` ahead of the
+policy: a `srcdoc` frame otherwise resolves links against the app's own URL,
+so a `#fragment` link loaded Hive inside the frame. Against that base a
+fragment scrolls the page and a relative link does nothing. Isolation is the boundary for a document; Hive parses nothing out of it.
 
 A top-level **`mermaid` fence in a markdown block** renders as a diagram. The
 canvas reader splits these fences from the markdown it sends through the shared

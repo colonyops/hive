@@ -100,3 +100,33 @@ test("a comment on a Drive document survives a reload, then clears", async ({
   await expect(page.getByTestId("drive-page-review-header")).toHaveCount(0);
   await expect(body.locator(".has-review-comment")).toHaveCount(0);
 });
+
+// A srcdoc frame inherits the app's base URL, so without its own base a
+// fragment or relative link loads Hive inside the frame.
+test("links in an html document stay inside the document", async ({
+  page,
+  browserName,
+}) => {
+  await page.goto(
+    `/#/drive?space=e2e%2Frepo&doc=${encodeURIComponent("pages/links.html")}`,
+  );
+  const frameElement = page.getByTestId("drive-page-frame");
+  const doc = page.frameLocator('[data-testid="drive-page-frame"]');
+  const frameURL = async () =>
+    (await (await frameElement.elementHandle())!.contentFrame())!.url();
+
+  await doc.locator("#to-section").click();
+  await expect(doc.locator("#section")).toBeInViewport();
+  await expect.poll(frameURL).toBe("about:srcdoc#section");
+  await expect(doc.locator("#app")).toHaveCount(0);
+
+  await doc.locator("#to-plan").click();
+  await expect.poll(frameURL).not.toMatch(/^http/);
+  await expect(page).toHaveURL(/doc=pages(%2F|\/)links\.html/);
+  // A relative path cannot resolve against about:srcdoc. WebKit, which both
+  // shipped webviews are, then does nothing; Chromium blanks the frame.
+  if (browserName === "webkit") {
+    await expect.poll(frameURL).toBe("about:srcdoc#section");
+    await expect(doc.locator("#to-plan")).toBeAttached();
+  }
+});
