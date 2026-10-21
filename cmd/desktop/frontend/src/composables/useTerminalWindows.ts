@@ -1,4 +1,4 @@
-import { effectScope, markRaw, nextTick, ref, type Ref } from 'vue'
+import { effectScope, markRaw, nextTick, ref, watch, type Ref } from 'vue'
 import { SearchAddon, type ISearchOptions } from '@xterm/addon-search'
 import type { IDisposable, Terminal } from '@xterm/xterm'
 // Rides the async terminal chunk on purpose: ~10MB of glyphs nobody pays for
@@ -16,6 +16,7 @@ import {
   type WindowState,
 } from '../lib/terminalClient'
 import { resetTerminalFacesForTests } from '../lib/terminalFaces'
+import { scrollbarWidthFor, useTerminalScrollbars } from '../stores/useTerminalScrollbars'
 import { proposeGrid, terminalCellSize, type CellSize } from '../lib/terminalGrid'
 import { activePaneOf, paneGrids, windowPanes } from '../lib/terminalLayout'
 import { claimAtlasRenderer } from '../lib/terminalRenderer'
@@ -238,6 +239,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   const cell = ref<CellSize | null>(null)
   const search = ref<TerminalSearch>({ open: false, query: '', matches: 0, index: 0 })
 
+  const { showScrollbars } = useTerminalScrollbars()
   const windows = new Map<string, WindowRuntime>()
   const panes = new Map<string, PaneRuntime>()
   const expectedWindowClosures = new Set<string>()
@@ -267,6 +269,13 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   let pendingActivate = ''
   // New-window commands deferred until tmux reports the target pane.
   const pendingCommands = new Map<string, () => boolean>()
+
+  scope.run(() => {
+    watch(() => {
+      const tab = findTab(activeWindowId.value)
+      return tab ? scrollbarWidthFor(tab, showScrollbars.value) : 0
+    }, scheduleVote)
+  })
 
   // New cell metrics change how many cells fit the same box, so the vote
   // must re-run; the grid itself stays at tmux's size until tmux answers.
@@ -599,7 +608,7 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
   }
 
   // Vote the whole window box against shared cell metrics; tmux remains
-  // authoritative for the actual grid. Hidden scrollbars reserve no column.
+  // authoritative for the actual grid. Only a single visible pane gets a gutter.
   function voteSize(): void {
     const tab = findTab(activeWindowId.value)
     const host = tab ? windows.get(tab.windowId)?.host : undefined
@@ -611,7 +620,10 @@ export function useTerminalWindows(slug: string, client: TerminalClient): UseTer
     if (!host.clientWidth || !host.clientHeight) return
     const measured = measureCell()
     if (!measured) return
-    const proposed = proposeGrid({ width: host.clientWidth, height: host.clientHeight }, measured)
+    const proposed = proposeGrid(
+      { width: host.clientWidth - scrollbarWidthFor(tab, showScrollbars.value), height: host.clientHeight },
+      measured,
+    )
     if (!proposed) return
     scheduleConstraintCheck()
     if (vote && proposed.cols === vote.cols && proposed.rows === vote.rows) return

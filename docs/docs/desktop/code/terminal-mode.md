@@ -148,6 +148,12 @@ An agent outside any chat or Code session, such as one you start in a plain term
 
 <kbd>⌘+</kbd> and <kbd>⌘-</kbd> step the text size by 2px from a terminal without opening Settings, up to 64px, and <kbd>⌘0</kbd> puts it back to 13px. On Linux, use <kbd>Ctrl+Shift</kbd> with the same keys.
 
+Enable **Show scrollbars** in **Settings ▸ Terminal** to drag through scrollback
+in single-pane and zoomed Code terminals. It is off by default and applies to
+open terminals immediately. Scrollbars stay hidden while split panes are visible;
+wheel scrolling and **Scroll to bottom** remain available. Programs using an
+alternate screen may have no scrollback.
+
 ## Shared tmux sizing
 
 All clients attached to a tmux session share one grid size. If the terminal does not fill the available pane, another attached client may be setting the size.

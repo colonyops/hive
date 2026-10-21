@@ -991,10 +991,8 @@
   }
 }
 
-/* Terminals show no scrollbar; the wheel still reaches scrollback, and the
-   window grid vote reserves no column for a track. xterm 6 draws its own
-   slider, and still styles its now-empty .xterm-viewport with
-   overflow-y: scroll, which would paint a native track. */
+/* xterm draws its own slider. Keep the empty native viewport track hidden;
+   Code panes can opt into the slider and reserve a gutter beside the screen. */
 .xterm .xterm-viewport {
   scrollbar-width: none;
 }

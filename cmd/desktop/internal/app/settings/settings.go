@@ -95,6 +95,8 @@ type Appearance struct {
 	// extra tracking" unselectable.
 	TerminalLineHeight    float64 `yaml:"terminal_line_height,omitempty"    env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_LINE_HEIGHT"`
 	TerminalLetterSpacing int     `yaml:"terminal_letter_spacing,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_LETTER_SPACING"`
+	// TerminalShowScrollbars shows scrollbars in single-pane and zoomed Code terminals.
+	TerminalShowScrollbars bool `yaml:"terminal_show_scrollbars,omitempty" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_SHOW_SCROLLBARS"`
 	// TerminalShowWindows lists every active session's tmux windows in the
 	// terminal sidebar, not just the attached session's. On by default.
 	TerminalShowWindows bool `yaml:"terminal_show_windows" env:"HIVE_DESKTOP_APPEARANCE_TERMINAL_SHOW_WINDOWS"`

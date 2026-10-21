@@ -136,6 +136,10 @@ export function SetTerminalSessionAge(enabled: boolean, thresholdDays: number): 
     return $Call.ByID(1787640393, enabled, thresholdDays);
 }
 
+export function SetTerminalShowScrollbars(show: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3661089012, show);
+}
+
 export function SetTerminalShowStatusBar(show: boolean): $CancellablePromise<void> {
     return $Call.ByID(1260520894, show);
 }

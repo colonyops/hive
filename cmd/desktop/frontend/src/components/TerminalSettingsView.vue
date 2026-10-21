@@ -31,6 +31,7 @@ import {
   useTerminalSessionAge,
 } from '../stores/useTerminalSessionAge'
 import { useTerminalStatusBar } from '../stores/useTerminalStatusBar'
+import { useTerminalScrollbars } from '../stores/useTerminalScrollbars'
 import { useTerminalShowWindows } from '../stores/useTerminalShowWindows'
 
 // Async so xterm and its addons stay on the terminal chunk rather than joining
@@ -52,6 +53,7 @@ const {
   setLetterSpacing,
 } = useTerminalFont()
 const { monospace: fontFamilies } = useInstalledFonts()
+const { showScrollbars, setShowScrollbars } = useTerminalScrollbars()
 const { showWindows, setShowWindows } = useTerminalShowWindows()
 const { showStatusBar, setShowStatusBar } = useTerminalStatusBar()
 const { poolSize, setPoolSize } = useTerminalPoolSize()
@@ -198,6 +200,20 @@ onMounted(() => {
         />
       </SettingsRow>
       <div class="px-4 py-3.5"><TerminalPreview /></div>
+    </SettingsSection>
+
+    <SettingsSection title="Appearance" boxed>
+      <SettingsRow
+        label="Show scrollbars"
+        hint="Show a draggable scrollbar in single-pane and zoomed Code terminals. Scrollbars stay hidden while split panes are visible."
+      >
+        <AppSwitch
+          :model-value="showScrollbars"
+          aria-label="Show scrollbars"
+          testid="settings-terminal-show-scrollbars"
+          @update:model-value="setShowScrollbars"
+        />
+      </SettingsRow>
     </SettingsSection>
 
     <SettingsSection title="Behaviour" description="What the terminal keeps on hand while you work." boxed>
