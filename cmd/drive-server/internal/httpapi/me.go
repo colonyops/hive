@@ -12,9 +12,9 @@ import (
 
 func me(docs *core.Documents) errchain.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		p, ok := principalFrom(r.Context())
-		if !ok {
-			return core.NewError(core.KindUnauthenticated, "not signed in")
+		p, err := principal(r)
+		if err != nil {
+			return err
 		}
 		used, err := docs.Usage(r.Context(), p)
 		if err != nil {

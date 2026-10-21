@@ -46,27 +46,14 @@ func Load(getenv func(string) string, flags Flags) (Config, error) {
 	}
 
 	cfg := Config{
-		Listen:          DefaultListen,
-		DataDir:         DefaultDataDir,
+		BaseURL:         valueOr(f.BaseURL, ""),
+		Listen:          valueOr(f.Listen, DefaultListen),
+		DataDir:         valueOr(f.DataDir, DefaultDataDir),
 		ConfigDir:       configDir,
-		MaxDocumentSize: Size{Bytes: DefaultMaxDocumentSize},
+		MaxDocumentSize: valueOr(f.MaxDocumentSize, Size{Bytes: DefaultMaxDocumentSize}),
+		SMTP:            valueOr(f.SMTP, SMTP{}),
 		TrustedProxies:  f.TrustedProxies,
 		UserPolicies:    f.UserPolicies,
-	}
-	if f.BaseURL != nil {
-		cfg.BaseURL = *f.BaseURL
-	}
-	if f.Listen != nil {
-		cfg.Listen = *f.Listen
-	}
-	if f.DataDir != nil {
-		cfg.DataDir = *f.DataDir
-	}
-	if f.MaxDocumentSize != nil {
-		cfg.MaxDocumentSize = *f.MaxDocumentSize
-	}
-	if f.SMTP != nil {
-		cfg.SMTP = *f.SMTP
 	}
 
 	cfg.BaseURL = first(flags.BaseURL, env("BASE_URL"), cfg.BaseURL)
@@ -96,6 +83,13 @@ func Load(getenv func(string) string, flags Flags) (Config, error) {
 		cfg.DevLogMail = b
 	}
 	return cfg, nil
+}
+
+func valueOr[T any](p *T, def T) T {
+	if p == nil {
+		return def
+	}
+	return *p
 }
 
 // readFile returns an empty config when the file or its directory is

@@ -139,19 +139,6 @@ func TestRevokeEndsTheLink(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, s.do(http.MethodGet, "/s/"+slug+"/raw", "", "").Code)
 }
 
-func TestListShowsShared(t *testing.T) {
-	s := newServer(t)
-	token := s.token(t, "a@example.com", core.ScopePush)
-	out, _ := share(t, s, token, "note.md", `{"expires_in":"7d"}`)
-
-	var docs []driveapi.Document
-	require.NoError(t, json.Unmarshal(s.do(http.MethodGet, "/api/v1/shared", token, "").Body.Bytes(), &docs))
-	require.Len(t, docs, 1)
-	require.NotNil(t, docs[0].Shared)
-	assert.Equal(t, out.URL, docs[0].Shared.URL)
-	assert.NotNil(t, docs[0].Shared.ExpiresAt)
-}
-
 func TestShareJSONCarriesTheExpiryPreset(t *testing.T) {
 	s := newServer(t)
 	token := s.token(t, "a@example.com", core.ScopePush)

@@ -1,7 +1,6 @@
 package core_test
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,35 +28,22 @@ func searchPaths(t *testing.T, e *env, p core.Principal, q string, space *drive.
 	return paths
 }
 
-func TestPutFillsTitle(t *testing.T) {
-	e := newEnv(t, devPolicy())
-	p := principalFor(t, e, "dev@example.com")
-	doc, err := e.docs.Put(t.Context(), p, drive.Shared, "a.md", []byte("# Hello\n"))
-	require.NoError(t, err)
-	assert.Equal(t, "Hello", doc.Title)
-
-	docs, err := e.docs.List(t.Context(), p, drive.Shared)
-	require.NoError(t, err)
-	require.Len(t, docs, 1)
-	assert.Equal(t, "Hello", docs[0].Title)
-}
-
-func TestSearchRanksTitleAboveBody(t *testing.T) {
+func TestSearchRanksTitleAndPathAboveBody(t *testing.T) {
 	e := newEnv(t, devPolicy())
 	p := principalFor(t, e, "dev@example.com")
 	mustPut(t, e, p, drive.Shared, "a-body.md", "# Notes\n\nwe talk about kubernetes here, and kubernetes there")
 	mustPut(t, e, p, drive.Shared, "z-title.md", "# Kubernetes\n\nshort")
 
 	assert.Equal(t, []string{"z-title.md", "a-body.md"}, searchPaths(t, e, p, "kubernetes", nil))
-}
 
-func TestSearchMatchesPathAboveBody(t *testing.T) {
-	e := newEnv(t, devPolicy())
-	p := principalFor(t, e, "dev@example.com")
-	mustPut(t, e, p, drive.Shared, "a-body.md", "# Notes\n\nthe roadmap is here")
 	mustPut(t, e, p, drive.Shared, "roadmap/z.md", "# Plans\n\nnothing")
+	mustPut(t, e, p, drive.Shared, "b-body.md", "# Notes\n\nthe roadmap is here")
+	assert.Equal(t, []string{"roadmap/z.md", "b-body.md"}, searchPaths(t, e, p, "roadmap", nil))
 
-	assert.Equal(t, []string{"roadmap/z.md", "a-body.md"}, searchPaths(t, e, p, "roadmap", nil))
+	hits, err := e.docs.Search(t.Context(), p, "kubernetes", nil, 10)
+	require.NoError(t, err)
+	assert.Contains(t, hits[1].Snippet, driveapi.SnippetMatchStart+"kubernetes"+driveapi.SnippetMatchEnd)
+	assert.NotEmpty(t, hits[0].Snippet, "a title-only match still has a snippet")
 }
 
 func TestSearchPrefixesTheLastTermOnly(t *testing.T) {
@@ -68,29 +54,6 @@ func TestSearchPrefixesTheLastTermOnly(t *testing.T) {
 	assert.Equal(t, []string{"a.md"}, searchPaths(t, e, p, "quick bro", nil))
 	assert.Equal(t, []string{"a.md"}, searchPaths(t, e, p, "qui", nil))
 	assert.Empty(t, searchPaths(t, e, p, "qui brown", nil))
-}
-
-func TestSearchSnippetMarksMatches(t *testing.T) {
-	e := newEnv(t, devPolicy())
-	p := principalFor(t, e, "dev@example.com")
-	mustPut(t, e, p, drive.Shared, "a.md", "# Doc\n\nthe quick brown fox jumps")
-
-	hits, err := e.docs.Search(t.Context(), p, "brown", nil, 10)
-	require.NoError(t, err)
-	require.Len(t, hits, 1)
-	assert.Contains(t, hits[0].Snippet, driveapi.SnippetMatchStart+"brown"+driveapi.SnippetMatchEnd)
-	assert.Equal(t, "Doc", hits[0].Document.Title)
-}
-
-func TestSearchTitleOnlyMatchStillHasSnippet(t *testing.T) {
-	e := newEnv(t, devPolicy())
-	p := principalFor(t, e, "dev@example.com")
-	mustPut(t, e, p, drive.Shared, "a.md", "# Zebra\n\nunrelated text")
-
-	hits, err := e.docs.Search(t.Context(), p, "zebra", nil, 10)
-	require.NoError(t, err)
-	require.Len(t, hits, 1)
-	assert.NotEmpty(t, hits[0].Snippet)
 }
 
 func TestSearchHostileInputDoesNotError(t *testing.T) {
@@ -146,11 +109,22 @@ func TestSearchSpaceFilterAndLimit(t *testing.T) {
 	assert.Len(t, hits, 1)
 }
 
-func TestSearchIndexesHTML(t *testing.T) {
+func TestSearchIndexesHTMLText(t *testing.T) {
 	e := newEnv(t, devPolicy())
 	p := principalFor(t, e, "dev@example.com")
-	mustPut(t, e, p, drive.Shared, "r.html", "<html><title>Quarterly</title><body>"+strings.Repeat("x ", 10)+"revenue</body></html>")
+	mustPut(t, e, p, drive.Shared, "page.html", `<!doctype html><html><head><style>.zebra{color:red}</style>
+<script>var secret = "hidden";</script></head>
+<body><!-- note --><div class="x">hello &amp; welcome</div></body></html>`)
 
-	assert.Equal(t, []string{"r.html"}, searchPaths(t, e, p, "quarterly", nil))
-	assert.Equal(t, []string{"r.html"}, searchPaths(t, e, p, "revenue", nil))
+	assert.Equal(t, []string{"page.html"}, searchPaths(t, e, p, "hello", nil))
+	assert.Equal(t, []string{"page.html"}, searchPaths(t, e, p, "welcome", nil))
+	for _, q := range []string{"div", "class", "zebra", "secret", "note", "amp"} {
+		assert.Empty(t, searchPaths(t, e, p, q, nil), q)
+	}
+
+	hits, err := e.docs.Search(t.Context(), p, "hello", nil, 10)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	assert.NotContains(t, hits[0].Snippet, "<")
+	assert.Contains(t, hits[0].Snippet, driveapi.SnippetMatchStart+"hello"+driveapi.SnippetMatchEnd)
 }

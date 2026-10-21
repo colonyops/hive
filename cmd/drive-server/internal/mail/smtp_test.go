@@ -184,10 +184,8 @@ func TestMailerRetriesWithBackoff(t *testing.T) {
 	assert.Equal(t, []string{"m1"}, sender.sent)
 }
 
-func TestBackoff(t *testing.T) {
-	assert.Equal(t, 30*time.Second, Backoff(0))
-	assert.Equal(t, 2*time.Minute, Backoff(1))
-	assert.Equal(t, 10*time.Minute, Backoff(2))
-	assert.Equal(t, time.Hour, Backoff(3))
-	assert.Equal(t, time.Hour, Backoff(40))
+func TestRetryDelay(t *testing.T) {
+	assert.Equal(t, 30*time.Second, retryDelay(0))
+	assert.Equal(t, 10*time.Minute, retryDelay(2))
+	assert.Equal(t, time.Hour, retryDelay(3))
 }

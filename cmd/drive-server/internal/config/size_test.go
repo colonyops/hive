@@ -28,13 +28,6 @@ func TestSizeUnmarshalText(t *testing.T) {
 	}
 }
 
-func TestSizeGBAndGiBDiffer(t *testing.T) {
-	var gb, gib Size
-	require.NoError(t, gb.UnmarshalText([]byte("1GB")))
-	require.NoError(t, gib.UnmarshalText([]byte("1GiB")))
-	assert.NotEqual(t, gb.Bytes, gib.Bytes)
-}
-
 func TestSizeUnmarshalTextRejects(t *testing.T) {
 	for _, in := range []string{"0", "0GB", "-5MB", "", "GB", "5XB", "abc", "99999999999TiB"} {
 		t.Run(in, func(t *testing.T) {

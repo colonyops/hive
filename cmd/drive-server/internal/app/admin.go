@@ -12,8 +12,6 @@ import (
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 )
 
-const day = 24 * time.Hour
-
 // ParseTTL reads "30d" or any time.ParseDuration value. An empty string means
 // no expiry and returns zero.
 func ParseTTL(s string) (time.Duration, error) {
@@ -26,7 +24,7 @@ func ParseTTL(s string) (time.Duration, error) {
 		if err != nil || n <= 0 {
 			return 0, fmt.Errorf("invalid expiry %q: want a positive number of days, like 30d", s)
 		}
-		return time.Duration(n) * day, nil
+		return time.Duration(n) * 24 * time.Hour, nil
 	}
 	d, err := time.ParseDuration(s)
 	if err != nil || d <= 0 {

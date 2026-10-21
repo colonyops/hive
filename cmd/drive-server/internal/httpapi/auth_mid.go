@@ -21,6 +21,14 @@ func principalFrom(ctx context.Context) (core.Principal, bool) {
 	return p, ok
 }
 
+func principal(r *http.Request) (core.Principal, error) {
+	p, ok := principalFrom(r.Context())
+	if !ok {
+		return core.Principal{}, core.NewError(core.KindUnauthenticated, "not signed in")
+	}
+	return p, nil
+}
+
 // Authenticate turns an "Authorization: Bearer hds_..." header, or else the
 // session cookie, into a Principal in the request context. A request that
 // sends a bearer header is judged on it alone, so a stale cookie cannot
@@ -52,9 +60,9 @@ func resolvePrincipal(r *http.Request, tokens *core.Tokens, sessions *core.Sessi
 func RequireSession() errchain.Middleware {
 	return func(next errchain.Handler) errchain.Handler {
 		return errchain.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-			p, ok := principalFrom(r.Context())
-			if !ok {
-				return core.NewError(core.KindUnauthenticated, "not signed in")
+			p, err := principal(r)
+			if err != nil {
+				return err
 			}
 			if !p.ViaSession {
 				return core.NewError(core.KindForbidden, "this request needs a signed-in browser session, not a token")
@@ -69,9 +77,9 @@ func RequireSession() errchain.Middleware {
 func Require(scope core.Scope) errchain.Middleware {
 	return func(next errchain.Handler) errchain.Handler {
 		return errchain.HandlerFunc(func(w http.ResponseWriter, r *http.Request) error {
-			p, ok := principalFrom(r.Context())
-			if !ok {
-				return core.NewError(core.KindUnauthenticated, "not signed in")
+			p, err := principal(r)
+			if err != nil {
+				return err
 			}
 			if !p.Scope.Covers(scope) {
 				return core.NewError(core.KindForbidden, "token scope does not allow this request")

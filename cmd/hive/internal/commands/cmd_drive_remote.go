@@ -20,7 +20,7 @@ import (
 func (cmd *DriveCmd) serverFlag() cli.Flag {
 	return &cli.StringFlag{
 		Name:        "server",
-		Usage:       "drive server URL or host (default: HIVE_DRIVE_SERVER, else the one server you are signed in to)",
+		Usage:       "drive server URL or host (default: $HIVE_DRIVE_SERVER, else your one login)",
 		Destination: &cmd.server,
 	}
 }
@@ -46,14 +46,11 @@ func (cmd *DriveCmd) loginCmd() *cli.Command {
 		Name:      "login",
 		Usage:     "Sign in to a drive server with an API token",
 		ArgsUsage: "<server>",
-		Description: `Checks the token with the server, then stores it in the OS keychain under
-the server's host. Mint a token in the server's web UI, or with
-'hive-drive-server accounts token create'.
-
-The token is read from a prompt, or from one line of stdin with --token-stdin.
-
-Without a keychain (headless Linux, CI), skip login and set HIVE_DRIVE_SERVER
-and HIVE_DRIVE_TOKEN instead.
+		Description: `Checks the token with the server, then stores it in the OS keychain.
+Mint a token in the server's web UI, or with
+'hive-drive-server accounts token create'. The token is read from a prompt, or from
+stdin with --token-stdin. Without a keychain, set HIVE_DRIVE_SERVER and
+HIVE_DRIVE_TOKEN instead.
 
 Example: echo "$TOKEN" | hive drive login drive.hivedesktop.com --token-stdin`,
 		Flags: []cli.Flag{
@@ -133,12 +130,9 @@ func (cmd *DriveCmd) pushCmd() *cli.Command {
 		Name:      "push",
 		Usage:     "Copy documents to a drive server",
 		ArgsUsage: "[paths...]",
-		Description: `Uploads markdown and html documents. With no paths, every such document in
-the space goes up. A folder path pushes everything under it. A document whose
-content matches its last upload is skipped unless --force is set.
-
-The exit status is non-zero when any path fails. With --json, each path is one
-object with path, action, sha256, and error.
+		Description: `Uploads markdown and html documents: the whole space, or the given paths
+(a folder pushes everything under it). Unchanged documents are skipped unless
+--force is set. The exit status is non-zero when any path fails.
 
 Example: hive drive push --repo colonyops/hive plans/`,
 		Flags: []cli.Flag{
@@ -159,23 +153,10 @@ func (cmd *DriveCmd) runPush(ctx context.Context, c *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	results, pushErr := remote.Push(ctx, server, space, c.Args().Slice(), cmd.force)
-	failed := 0
-	for _, r := range results {
-		if r.Action == driveremote.ActionFailed {
-			failed++
-		}
-		if err := cmd.printResult(r, r.Action, r.Path, r.Path, r.Error); err != nil {
-			return err
-		}
-	}
-	if pushErr != nil {
-		return pushErr
-	}
-	if failed > 0 {
-		return fmt.Errorf("%d of %d documents failed", failed, len(results))
-	}
-	return nil
+	results, runErr := remote.Push(ctx, server, space, c.Args().Slice(), cmd.force)
+	return reportResults(cmd, results, runErr, func(r driveremote.PushResult) resultRow {
+		return resultRow{action: r.Action, line: r.Path, path: r.Path, err: r.Error}
+	})
 }
 
 func (cmd *DriveCmd) pullCmd() *cli.Command {
@@ -183,11 +164,9 @@ func (cmd *DriveCmd) pullCmd() *cli.Command {
 		Name:      "pull",
 		Usage:     "Copy documents from a drive server",
 		ArgsUsage: "[paths...]",
-		Description: `Downloads documents. With no paths, every document of the space comes down.
-
-Nothing local is overwritten or deleted. A download that differs from the
-local document is written beside it as <name>-1.md, <name>-2.md, and so on,
-using the first free number.
+		Description: `Downloads documents: the whole space, or the given paths. Nothing local is
+overwritten or deleted. A download that differs from the local document is
+written beside it as <name>-1.md, <name>-2.md, and so on.
 
 Example: hive drive pull --repo colonyops/hive`,
 		Flags: []cli.Flag{
@@ -203,27 +182,14 @@ func (cmd *DriveCmd) runPull(ctx context.Context, c *cli.Command) error {
 	if err != nil {
 		return err
 	}
-	results, pullErr := remote.Pull(ctx, server, space, c.Args().Slice())
-	failed := 0
-	for _, r := range results {
-		if r.Action == driveremote.ActionFailed {
-			failed++
-		}
+	results, runErr := remote.Pull(ctx, server, space, c.Args().Slice())
+	return reportResults(cmd, results, runErr, func(r driveremote.PullResult) resultRow {
 		line := r.Path
 		if r.LocalPath != "" {
-			line = r.Path + " -> " + r.LocalPath
+			line += " -> " + r.LocalPath
 		}
-		if err := cmd.printResult(r, r.Action, line, r.Path, r.Error); err != nil {
-			return err
-		}
-	}
-	if pullErr != nil {
-		return pullErr
-	}
-	if failed > 0 {
-		return fmt.Errorf("%d of %d documents failed", failed, len(results))
-	}
-	return nil
+		return resultRow{action: r.Action, line: line, path: r.Path, err: r.Error}
+	})
 }
 
 func (cmd *DriveCmd) shareCmd() *cli.Command {
@@ -231,11 +197,9 @@ func (cmd *DriveCmd) shareCmd() *cli.Command {
 		Name:      "share",
 		Usage:     "Print a public link to a document on a drive server",
 		ArgsUsage: "<path>",
-		Description: `Creates a public /s/<slug> link for a document that was pushed. Anyone with
-the link can read it. Sharing again returns the same link.
-
---expires takes 1d, 7d, 30d, or none. Without it, a new link does not expire and an
-existing link keeps its expiry. none removes an existing expiry.
+		Description: `Creates a public /s/<slug> link for a pushed document. Sharing again returns
+the same link. Without --expires, a new link does not expire and an existing
+link keeps its expiry; none removes an existing expiry.
 
 Example: hive drive share plans/ship.md --expires 7d`,
 		Flags: []cli.Flag{
@@ -304,13 +268,38 @@ func (cmd *DriveCmd) remoteTarget(ctx context.Context) (*driveremote.Service, dr
 	return remote, space, server, nil
 }
 
-func (cmd *DriveCmd) printResult(result any, action driveremote.Action, line, path, errMsg string) error {
-	if cmd.json {
-		return iojson.WriteLine(os.Stdout, result)
+type resultRow struct {
+	action driveremote.Action
+	line   string
+	path   string
+	err    string
+}
+
+// reportResults prints every result before it returns runErr, so a push
+// that stopped early still shows what it finished.
+func reportResults[T any](cmd *DriveCmd, results []T, runErr error, row func(T) resultRow) error {
+	failed := 0
+	for _, r := range results {
+		rr := row(r)
+		if rr.action == driveremote.ActionFailed {
+			failed++
+		}
+		if cmd.json {
+			if err := iojson.WriteLine(os.Stdout, r); err != nil {
+				return err
+			}
+			continue
+		}
+		fmt.Printf("%-9s  %s\n", rr.action, rr.line)
+		if rr.err != "" {
+			fmt.Fprintf(os.Stderr, "  %s: %s\n", rr.path, rr.err)
+		}
 	}
-	fmt.Printf("%-9s  %s\n", action, line)
-	if errMsg != "" {
-		fmt.Fprintf(os.Stderr, "  %s: %s\n", path, errMsg)
+	if runErr != nil {
+		return runErr
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d documents failed", failed, len(results))
 	}
 	return nil
 }

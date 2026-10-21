@@ -26,21 +26,24 @@ func NewSweeper(log zerolog.Logger, links ShareStore, codes CodeStore, sessions 
 
 // Tick runs one sweep. A failed step is logged and does not stop the rest.
 func (s *Sweeper) Tick(ctx context.Context) error {
+	steps := []struct {
+		what   string
+		field  string
+		delete func(context.Context, time.Time) (int, error)
+	}{
+		{"share links", "links", s.links.DeleteExpired},
+		{"sign-in codes", "codes", s.codes.DeleteExpired},
+		{"sessions", "sessions", s.sessions.DeleteExpired},
+	}
 	var errs []error
-	if n, err := s.links.DeleteExpired(ctx, s.now()); err != nil {
-		errs = append(errs, s.warn(err, "delete expired share links"))
-	} else if n > 0 {
-		s.log.Debug().Int("links", n).Msg("swept expired share links")
-	}
-	if n, err := s.codes.DeleteExpired(ctx, s.now()); err != nil {
-		errs = append(errs, s.warn(err, "delete expired sign-in codes"))
-	} else if n > 0 {
-		s.log.Debug().Int("codes", n).Msg("swept expired sign-in codes")
-	}
-	if n, err := s.sessions.DeleteExpired(ctx, s.now()); err != nil {
-		errs = append(errs, s.warn(err, "delete expired sessions"))
-	} else if n > 0 {
-		s.log.Debug().Int("sessions", n).Msg("swept expired sessions")
+	for _, step := range steps {
+		n, err := step.delete(ctx, s.now())
+		if err != nil {
+			s.log.Warn().Err(err).Msg("sweep: delete expired " + step.what)
+			errs = append(errs, fmt.Errorf("sweep: delete expired %s: %w", step.what, err))
+		} else if n > 0 {
+			s.log.Debug().Int(step.field, n).Msg("swept expired " + step.what)
+		}
 	}
 	return errors.Join(errs...)
 }
@@ -56,9 +59,4 @@ func (s *Sweeper) Run(ctx context.Context, every time.Duration) error {
 		case <-t.C:
 		}
 	}
-}
-
-func (s *Sweeper) warn(err error, msg string) error {
-	s.log.Warn().Err(err).Msg("sweep: " + msg)
-	return fmt.Errorf("sweep: %s: %w", msg, err)
 }

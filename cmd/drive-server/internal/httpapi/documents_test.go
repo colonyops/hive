@@ -36,12 +36,21 @@ func newServer(t *testing.T) *server { return newServerAt(t, testBaseURL) }
 
 func newServerAt(t *testing.T, baseURL string) *server {
 	t.Helper()
+	return newServerWithPolicy(t, baseURL, devPolicy(config.Size{Bytes: 1 << 20}))
+}
+
+func devPolicy(limit config.Size) config.Policy {
+	return config.Policy{Name: "dev", Matches: []string{"*@example.com"}, Quotas: config.Quotas{Limit: limit}}
+}
+
+func newServerWithPolicy(t *testing.T, baseURL string, policy config.Policy) *server {
+	t.Helper()
 	dir := t.TempDir()
 	svc, err := app.OpenServices(t.Context(), zerolog.Nop(), config.Config{
 		DataDir:         dir,
 		BaseURL:         baseURL,
 		MaxDocumentSize: config.Size{Bytes: testMaxDocumentSize},
-		UserPolicies:    []config.Policy{devPolicy(config.Size{Bytes: 1 << 20})},
+		UserPolicies:    []config.Policy{policy},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = svc.Close() })

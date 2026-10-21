@@ -31,11 +31,7 @@ func TestPutRejectsOtherKindsAndBadPaths(t *testing.T) {
 	e := newEnv(t, devPolicy())
 	p := principalFor(t, e, "dev@example.com")
 
-	for _, path := range []string{"notes.txt", "board.canvas.json", "data.json", "noext"} {
-		_, err := e.docs.Put(t.Context(), p, drive.Shared, path, []byte("x"))
-		requireKind(t, err, core.KindInvalid)
-	}
-	for _, path := range []string{"", "../a.md", "/a.md", ".hidden/a.md", "a//b.md"} {
+	for _, path := range []string{"notes.txt", "board.canvas.json", "data.json", "noext", "", "../a.md", "/a.md", ".hidden/a.md", "a//b.md"} {
 		_, err := e.docs.Put(t.Context(), p, drive.Shared, path, []byte("x"))
 		requireKind(t, err, core.KindInvalid)
 	}

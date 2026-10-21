@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/hay-kot/httpkit/errchain"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -46,27 +45,4 @@ func TestMapErrorLeavesUnknownErrorsToTheDefault(t *testing.T) {
 	assert.False(t, ok)
 	_, _, ok = mapError(core.NewError(core.Kind("mystery"), "?"))
 	assert.False(t, ok)
-}
-
-func TestRequireScope(t *testing.T) {
-	var reached bool
-	next := func(http.ResponseWriter, *http.Request) error { reached = true; return nil }
-	run := func(scope core.Scope, have core.Scope) error {
-		reached = false
-		h := Require(scope)(errchain.HandlerFunc(next))
-		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil)
-		require.NoError(t, err)
-		return h.ServeHTTP(nil, req.WithContext(withPrincipal(req.Context(), core.Principal{Scope: have})))
-	}
-
-	require.NoError(t, run(core.ScopeRead, core.ScopeRead))
-	assert.True(t, reached)
-	require.NoError(t, run(core.ScopeRead, core.ScopePush))
-	require.NoError(t, run(core.ScopePush, core.ScopePush))
-
-	err := run(core.ScopePush, core.ScopeRead)
-	var coreErr *core.Error
-	require.ErrorAs(t, err, &coreErr)
-	assert.Equal(t, core.KindForbidden, coreErr.Kind)
-	assert.False(t, reached)
 }

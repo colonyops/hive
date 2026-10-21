@@ -21,9 +21,9 @@ func registerTokenRoutes(mux *http.ServeMux, sessionOnly func(errchain.HandlerFu
 type tokenHandlers struct{ tokens *core.Tokens }
 
 func (h tokenHandlers) create(w http.ResponseWriter, r *http.Request) error {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		return core.NewError(core.KindUnauthenticated, "not signed in")
+	p, err := principal(r)
+	if err != nil {
+		return err
 	}
 	body, err := extractors.Body[driveapi.CreateToken](w, r)
 	if err != nil {
@@ -41,9 +41,9 @@ func (h tokenHandlers) create(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (h tokenHandlers) list(w http.ResponseWriter, r *http.Request) error {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		return core.NewError(core.KindUnauthenticated, "not signed in")
+	p, err := principal(r)
+	if err != nil {
+		return err
 	}
 	toks, err := h.tokens.List(r.Context(), p.UserID)
 	if err != nil {
@@ -57,9 +57,9 @@ func (h tokenHandlers) list(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (h tokenHandlers) revoke(w http.ResponseWriter, r *http.Request) error {
-	p, ok := principalFrom(r.Context())
-	if !ok {
-		return core.NewError(core.KindUnauthenticated, "not signed in")
+	p, err := principal(r)
+	if err != nil {
+		return err
 	}
 	if err := h.tokens.Revoke(r.Context(), p.UserID, r.PathValue("id")); err != nil {
 		return err

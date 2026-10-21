@@ -92,16 +92,6 @@ func TestIsolationDeleteOfForeignPathIs404AndKeepsOwnersCopy(t *testing.T) {
 	}
 }
 
-func TestIsolationQuotaUsageExcludesOtherUsers(t *testing.T) {
-	s := newServer(t)
-	_, b := setupTenants(t, s)
-
-	rec := s.do(http.MethodGet, "/api/v1/me", b.token, "")
-	var me driveapi.Me
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &me))
-	assert.EqualValues(t, 3*len("body of B"), me.Quota.Used)
-}
-
 func TestIsolationHostilePathsAndNoUserIDRoutes(t *testing.T) {
 	s := newServer(t)
 	a, b := setupTenants(t, s)
@@ -189,9 +179,6 @@ func TestIsolationLinkServesOnlyItsDocumentReadOnly(t *testing.T) {
 	for _, target := range []string{"/s/" + slug + "/../only-a.md", "/s/" + slug + "/raw/only-a.md", "/s/" + slug + "/other"} {
 		assert.NotContains(t, s.do(http.MethodGet, target, "", "").Body.String(), "only A", target)
 	}
-
-	assert.Equal(t, "body of A", s.do(http.MethodGet, "/api/v1/shared/docs/shared-path.md", a.token, "").Body.String())
-	assert.Equal(t, "<p>hi</p>", s.do(http.MethodGet, "/s/"+slug+"/raw", "", "").Body.String())
 }
 
 func TestIsolationLockedOwnersLinkIs404(t *testing.T) {

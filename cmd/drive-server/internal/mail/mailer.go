@@ -66,7 +66,7 @@ func (m *Mailer) Drain(ctx context.Context) error {
 			return err
 		}
 		if err := m.sender.Send(ctx, mail); err != nil {
-			next := m.now().Add(Backoff(mail.Attempts))
+			next := m.now().Add(retryDelay(mail.Attempts))
 			m.log.Warn().Err(err).Str("id", mail.ID).Int("attempt", mail.Attempts+1).Time("next", next).Msg("mail send failed")
 			if err := m.outbox.MarkFailed(ctx, mail.ID, next); err != nil {
 				errs = append(errs, fmt.Errorf("mark %s failed: %w", mail.ID, err))
@@ -80,11 +80,9 @@ func (m *Mailer) Drain(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// Backoff is the wait before retrying a mail that has already failed
-// attempts times.
-func Backoff(attempts int) time.Duration {
+func retryDelay(attempts int) time.Duration {
 	if attempts < len(backoff) {
-		return backoff[max(attempts, 0)]
+		return backoff[attempts]
 	}
 	return backoffCeiling
 }

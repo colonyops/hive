@@ -22,15 +22,6 @@ func (q *Queries) DeleteAccountByEmail(ctx context.Context, email string) (int64
 	return result.RowsAffected()
 }
 
-const deleteSignInCodesByEmail = `-- name: DeleteSignInCodesByEmail :exec
-DELETE FROM sign_in_codes WHERE email = ?
-`
-
-func (q *Queries) DeleteSignInCodesByEmail(ctx context.Context, email string) error {
-	_, err := q.db.ExecContext(ctx, deleteSignInCodesByEmail, email)
-	return err
-}
-
 const getAccountByEmail = `-- name: GetAccountByEmail :one
 SELECT id, email, created_at, last_sign_in_at FROM accounts WHERE email = ?
 `

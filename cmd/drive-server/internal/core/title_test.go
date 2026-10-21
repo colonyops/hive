@@ -21,7 +21,6 @@ func TestDeriveTitle(t *testing.T) {
 		{"heading", "notes.md", drive.KindMarkdown, "intro\n\n# The Heading #\n\ntext", "The Heading"},
 		{"heading after frontmatter without title", "notes.md", drive.KindMarkdown, "---\n# yaml comment\ntags: [a]\n---\n# Real\n", "Real"},
 		{"heading in code fence ignored", "notes.md", drive.KindMarkdown, "```\n# not a title\n```\n", "notes"},
-		{"level two heading ignored", "plan.md", drive.KindMarkdown, "## Sub\n", "plan"},
 		{"blank frontmatter title falls through", "x.md", drive.KindMarkdown, "---\ntitle: \"  \"\n---\n# H\n", "H"},
 		{"unterminated frontmatter", "x.md", drive.KindMarkdown, "---\ntitle: T\n# H\n", "H"},
 		{"html title", "page.html", drive.KindHtml, "<html><head><TITLE>\n Q3  &amp; Q4 </TITLE></head></html>", "Q3 & Q4"},

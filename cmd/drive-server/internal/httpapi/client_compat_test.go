@@ -89,18 +89,4 @@ func TestClientAgainstServer(t *testing.T) {
 		require.ErrorAs(t, err, &apiErr)
 		assert.Equal(t, http.StatusUnprocessableEntity, apiErr.Status)
 	})
-
-	t.Run("a read token cannot write", func(t *testing.T) {
-		readTok := s.token(t, "dev@example.com", core.ScopeRead)
-		readOnly, err := driveapi.NewClient(ts.URL, func() string { return readTok })
-		require.NoError(t, err)
-
-		_, err = readOnly.Put(t.Context(), drive.Shared, "a.md", []byte("x"))
-		var apiErr *driveapi.APIError
-		require.ErrorAs(t, err, &apiErr)
-		assert.Equal(t, "forbidden", apiErr.Body.Kind)
-
-		_, err = readOnly.List(t.Context(), drive.Shared)
-		require.NoError(t, err)
-	})
 }

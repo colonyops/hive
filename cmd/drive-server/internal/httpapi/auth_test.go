@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/cmd/drive-server/internal/config"
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 	"github.com/colonyops/hive/cmd/drive-server/internal/mail"
 	"github.com/colonyops/hive/internal/platform/driveapi"
@@ -205,13 +206,39 @@ func TestVerifyIsRateLimitedPerEmail(t *testing.T) {
 	assert.NotEmpty(t, rec.Header().Get("Retry-After"))
 }
 
-func TestPolicySwapLocksSessionOut(t *testing.T) {
+func TestPolicySwapLocksSessionAndTokenOut(t *testing.T) {
 	s := newAuthServer(t, testBaseURL)
 	c := s.signIn(t, "dev@example.com")
+	tok := s.token(t, "dev@example.com", core.ScopeRead)
 	require.Equal(t, http.StatusOK, s.send(call{method: http.MethodGet, target: "/api/v1/me", cookie: c}).Code)
+	require.Equal(t, http.StatusOK, s.send(call{method: http.MethodGet, target: "/api/v1/me", token: tok}).Code)
 
 	s.svc.Policies.Swap(nil)
 	assert.Equal(t, http.StatusUnauthorized, s.send(call{method: http.MethodGet, target: "/api/v1/me", cookie: c}).Code)
+	assert.Equal(t, http.StatusUnauthorized, s.send(call{method: http.MethodGet, target: "/api/v1/me", token: tok}).Code)
+}
+
+func TestMeRejectsBadCredentials(t *testing.T) {
+	s := newAuthServer(t, testBaseURL)
+
+	for name, header := range map[string]string{
+		"no header":    "",
+		"wrong scheme": "Basic abc",
+		"bad token":    "Bearer hds_nope",
+		"not a token":  "Bearer nope",
+	} {
+		rec := s.send(call{method: http.MethodGet, target: "/api/v1/me", header: map[string]string{"Authorization": header}})
+		assert.Equal(t, http.StatusUnauthorized, rec.Code, name)
+		assert.Equal(t, "unauthenticated", errorKind(t, rec), name)
+	}
+}
+
+func TestMeUnlimitedQuotaIsNull(t *testing.T) {
+	s := newServerWithPolicy(t, testBaseURL, devPolicy(config.Size{Unlimited: true}))
+
+	rec := s.do(http.MethodGet, "/api/v1/me", s.token(t, "dev@example.com", core.ScopePush), "")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"email":"dev@example.com","policy":"dev","quota":{"used":0,"limit":null}}`, rec.Body.String())
 }
 
 func TestSessionMintsListsAndRevokesTokens(t *testing.T) {

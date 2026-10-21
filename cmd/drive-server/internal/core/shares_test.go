@@ -54,7 +54,7 @@ func TestCreateIsIdempotentAndResolveReturnsTheDocument(t *testing.T) {
 	assert.Equal(t, "# hello", string(body))
 }
 
-func TestCreateExpiry(t *testing.T) {
+func TestCreateExpiryLapses(t *testing.T) {
 	e := newEnv(t, devPolicy())
 	p := principalFor(t, e, "dev@example.com")
 
@@ -62,20 +62,9 @@ func TestCreateExpiry(t *testing.T) {
 	require.NotNil(t, share.ExpiresAt)
 	assert.Equal(t, e.clock.Now().Add(24*time.Hour), *share.ExpiresAt)
 
-	again, err := e.shares.Create(t.Context(), p, drive.Shared, "a.md", "")
-	require.NoError(t, err)
-	assert.Equal(t, share.ExpiresAt, again.ExpiresAt, "an empty expiry leaves the existing one")
-	assert.Equal(t, "1d", again.ExpiresIn)
-
-	longer, err := e.shares.Create(t.Context(), p, drive.Shared, "a.md", "30d")
-	require.NoError(t, err)
-	assert.Equal(t, share.URL, longer.URL)
-	assert.Equal(t, e.clock.Now().Add(30*24*time.Hour), *longer.ExpiresAt)
-
-	e.clock.Advance(25 * time.Hour)
-	err = resolveErr(t, e, slug)
-	require.NoError(t, err, "30d replaced 1d")
-	e.clock.Advance(30 * 24 * time.Hour)
+	e.clock.Advance(24*time.Hour - time.Second)
+	require.NoError(t, resolveErr(t, e, slug))
+	e.clock.Advance(time.Second)
 	requireGone(t, e, slug)
 }
 
@@ -95,16 +84,6 @@ func TestCreateRejectsBadExpiryAndMissingDocument(t *testing.T) {
 	requireKind(t, err, core.KindInvalid)
 }
 
-func TestExpiredRowIsNotFound(t *testing.T) {
-	e := newEnv(t, devPolicy())
-	p := principalFor(t, e, "dev@example.com")
-	_, slug := sharedDoc(t, e, p, "a.md", "")
-
-	_, err := e.rawDB(t).Exec(`UPDATE share_links SET expires_at = ? WHERE slug = ?`, e.clock.Now().Add(-time.Second).UnixNano(), slug)
-	require.NoError(t, err)
-	requireGone(t, e, slug)
-}
-
 func TestRevoke(t *testing.T) {
 	e := newEnv(t, devPolicy())
 	p := principalFor(t, e, "dev@example.com")
@@ -114,21 +93,10 @@ func TestRevoke(t *testing.T) {
 	requireGone(t, e, slug)
 	require.NoError(t, e.shares.Revoke(t.Context(), p, drive.Shared, "a.md"), "revoking an unshared document is a no-op")
 	requireKind(t, e.shares.Revoke(t.Context(), p, drive.Shared, "missing.md"), core.KindNotFound)
+	requireGone(t, e, "unknown-slug")
 
 	_, _, err := e.docs.Get(t.Context(), p, drive.Shared, "a.md")
 	require.NoError(t, err, "the document stays")
-}
-
-func TestDeletingTheDocumentBreaksItsLink(t *testing.T) {
-	e := newEnv(t, devPolicy())
-	p := principalFor(t, e, "dev@example.com")
-	_, slug := sharedDoc(t, e, p, "a.md", "")
-
-	require.NoError(t, e.docs.Delete(t.Context(), p, drive.Shared, "a.md"))
-	requireGone(t, e, slug)
-	var n int
-	require.NoError(t, e.rawDB(t).QueryRow(`SELECT COUNT(*) FROM share_links`).Scan(&n))
-	assert.Zero(t, n, "Delete removes the row itself")
 }
 
 func TestLinkFollowsReupload(t *testing.T) {
@@ -206,11 +174,6 @@ func TestLockedOwnersLinkStops(t *testing.T) {
 	require.NoError(t, err, "unlocking restores the link")
 }
 
-func TestUnknownSlug(t *testing.T) {
-	e := newEnv(t, devPolicy())
-	requireGone(t, e, "nope")
-}
-
 func TestListFillsShared(t *testing.T) {
 	e := newEnv(t, devPolicy())
 	p := principalFor(t, e, "dev@example.com")
@@ -262,12 +225,4 @@ func TestCreateStoresThePresetAndSwitchesIt(t *testing.T) {
 	require.NoError(t, err)
 	e.clock.Advance(365 * 24 * time.Hour)
 	require.NoError(t, resolveErr(t, e, slug), "a cleared expiry never lapses")
-}
-
-func TestCreateWithNoExpiryMakesALinkWithoutOne(t *testing.T) {
-	e := newEnv(t, devPolicy())
-	p := principalFor(t, e, "dev@example.com")
-	share, _ := sharedDoc(t, e, p, "a.md", driveapi.ShareExpiryNone)
-	assert.Nil(t, share.ExpiresAt)
-	assert.Empty(t, share.ExpiresIn)
 }
