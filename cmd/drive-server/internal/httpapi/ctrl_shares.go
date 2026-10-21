@@ -110,7 +110,7 @@ func contentType(k drive.Kind) string {
 // document opened as a page, not framed, could send what a visitor types to
 // any URL. Browsers label such a request Sec-Fetch-Dest: document, and the
 // route refuses it. Clients that send no label, such as the CLI, still get
-// the body. See SECURITY-REVIEW.md.
+// the body.
 func writeRaw(w http.ResponseWriter, r *http.Request, doc driveapi.Document, body []byte) error {
 	if doc.Kind == drive.KindHtml && !mayRenderHTML(r.Header.Get("Sec-Fetch-Dest")) {
 		return core.NewError(core.KindForbidden, "HTML documents open only inside the Hive Drive page")
