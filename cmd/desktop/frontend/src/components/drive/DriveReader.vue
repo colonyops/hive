@@ -281,6 +281,7 @@ function onBodyClick(event: MouseEvent): void {
   <div
     ref="root"
     class="canvas-reader relative isolate flex min-h-0 flex-col"
+    :class="{ 'flex-1': kind === 'html' }"
     :style="readerStyle"
     :data-testid="`${testid}-document`"
   >
