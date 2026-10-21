@@ -44,5 +44,5 @@ to 404. Backup is a directory, taken with `VACUUM INTO` or a stopped
 container, never a copy of a live WAL file. A cross-user isolation test suite guards the
 assumption that the store opens the right file.
 
-The HTML frame was reviewed against hostile documents in three browser engines;
-see [SECURITY-REVIEW.md](../../cmd/drive-server/SECURITY-REVIEW.md).
+`mise run drive-server:e2e` runs hostile HTML documents against the frame in
+three browser engines.
