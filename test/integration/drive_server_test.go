@@ -54,7 +54,7 @@ func (h *Harness) StartDriveServer(t *testing.T) DriveServer {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var logs bytes.Buffer
-	serve := exec.CommandContext(ctx, "hive-drive-server", "serve", "--listen", addr)
+	serve := exec.CommandContext(ctx, "hive-drive-server", "serve", "--listen", addr, "--dev-log-mail")
 	serve.Env = env
 	serve.Stdout, serve.Stderr = &logs, &logs
 	require.NoError(t, serve.Start())
