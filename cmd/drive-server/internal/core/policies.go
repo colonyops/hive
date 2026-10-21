@@ -8,7 +8,8 @@ import (
 	"github.com/colonyops/hive/cmd/drive-server/internal/config"
 )
 
-// Policies is the set of user policies, swappable while requests read it.
+// Policies is the set of user policies. Swap lets tests change them on a
+// running server, as a restart with a new config would.
 type Policies struct {
 	cur atomic.Pointer[[]config.Policy]
 }

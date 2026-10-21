@@ -1,8 +1,6 @@
 package core_test
 
 import (
-	"fmt"
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,23 +39,4 @@ func TestPoliciesMatch(t *testing.T) {
 	assert.False(t, ok)
 	_, ok = core.NewPolicies(nil).Match("dev@example.com")
 	assert.False(t, ok, "an empty list admits nobody")
-}
-
-func TestPoliciesSwapRacingMatch(t *testing.T) {
-	p := core.NewPolicies([]config.Policy{policy("a", "*")})
-
-	var wg sync.WaitGroup
-	for i := range 4 {
-		wg.Go(func() {
-			for j := range 200 {
-				if i%2 == 0 {
-					p.Swap([]config.Policy{policy(fmt.Sprintf("p%d", j), "*")})
-				} else {
-					_, ok := p.Match("dev@example.com")
-					assert.True(t, ok)
-				}
-			}
-		})
-	}
-	wg.Wait()
 }

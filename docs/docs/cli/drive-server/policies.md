@@ -72,8 +72,6 @@ docker exec drive-server /hive-drive-server accounts token create ana@example.or
 
 A `read` token lists and gets documents. A `push` token also writes, deletes, and shares. People can also create tokens in the web UI after they sign in. Use a token with [`hive drive login`](cli.md#sign-in).
 
-## Hot reload
+## Changing policies
 
-The server watches the config directory. When `drive-server.yaml` changes, it reloads `user_policies` without a restart. An invalid file is rejected, and the server keeps the running policies and logs why.
-
-Every other key needs a restart. When one changes, the log says `restart required` and names the key.
+The server reads `drive-server.yaml` at startup. Restart it after you change `user_policies` or any other key.

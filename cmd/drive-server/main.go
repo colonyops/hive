@@ -73,7 +73,7 @@ func serveCommand(info buildinfo.Info) *cli.Command {
 			if err != nil {
 				return err
 			}
-			return app.Run(ctx, cfg, log, app.Options{Info: info, Reload: func() (config.Config, []string, error) { return loadConfig(cmd) }})
+			return app.Run(ctx, cfg, log, app.Options{Info: info})
 		},
 	}
 }
