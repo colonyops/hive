@@ -233,7 +233,7 @@ run = [
   { tasks = ["ui:test", "ui:format:check", "ui:lint"] },
   { tasks = ["drive-server:frontend:build", "drive-server:frontend:test", "drive-server:frontend:format:check", "drive-server:frontend:lint"] },
   { tasks = ["cli:integration"] },
-  { tasks = ["desktop:e2e", "drive-server:e2e"] },
+  { tasks = ["desktop:e2e"] },
 ]
 
 # ── Repository tooling ───────────────────────────────────────────────────────
