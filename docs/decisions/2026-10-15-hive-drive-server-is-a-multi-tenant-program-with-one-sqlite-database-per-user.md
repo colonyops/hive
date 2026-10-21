@@ -44,5 +44,7 @@ to 404. Backup is a directory, taken with `VACUUM INTO` or a stopped
 container, never a copy of a live WAL file. A cross-user isolation test suite guards the
 assumption that the store opens the right file.
 
-`mise run drive-server:e2e` runs hostile HTML documents against the frame in
-three browser engines.
+Shared HTML relies on the raw route's CSP, the sandboxed iframe, and the
+refusal of top-level page loads. Go tests check those headers and the
+refusal. No browser suite checks them yet: the HTML view will change too
+much before release for one to stay useful.

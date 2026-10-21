@@ -65,7 +65,3 @@ GOOS=linux GOARCH="$arch" CGO_ENABLED=0 go build -o "$ctx/linux/$arch/hive-drive
 cp cmd/drive-server/Dockerfile "$ctx/Dockerfile"
 docker build --platform "linux/$arch" -t hive-drive-server:dev "$ctx"
 """
-
-["drive-server:e2e"]
-description = "Run the HTML frame security suite in the pinned Docker/Playwright environment"
-run = "./cmd/drive-server/e2e/scripts/run-docker.sh"
