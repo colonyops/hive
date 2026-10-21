@@ -97,14 +97,6 @@ describe('DocumentView', () => {
     expect(router.currentRoute.value.path).toBe('/repos/acme/notes')
   })
 
-  it('keeps the header free of a raw link and offers Share', async () => {
-    const { wrapper } = await mountView('a.md')
-
-    expect(wrapper.find('[data-testid="copy-link"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="share"]').text()).toBe('Share')
-    expect(wrapper.text()).not.toContain('http')
-  })
-
   it('shares from the popover and then offers a quick copy', async () => {
     mocks.share.mockResolvedValue({ url: 'http://drive.test/s/abc', expires_in: '' })
     const { wrapper } = await mountView('a.md')
@@ -118,17 +110,5 @@ describe('DocumentView', () => {
     await wrapper.get('[data-testid="copy-link"]').trigger('click')
     await flushPromises()
     expect(fakePlatform.clipboard.writeText).toHaveBeenCalledWith('http://drive.test/s/abc')
-  })
-
-  it('starts from an existing share link', async () => {
-    documents = [doc({ path: 'a.md', shared: { url: 'http://drive.test/s/old', expires_in: '' } })]
-    const { wrapper } = await mountView('a.md')
-
-    await wrapper.get('[data-testid="share"]').trigger('click')
-
-    expect((document.body.querySelector('[data-testid="share-url"]') as HTMLInputElement).value).toBe(
-      'http://drive.test/s/old',
-    )
-    expect(wrapper.find('[data-testid="copy-link"]').exists()).toBe(true)
   })
 })

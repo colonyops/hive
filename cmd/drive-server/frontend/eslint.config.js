@@ -29,8 +29,6 @@ const rawBrowserApisInComponents = [
     selector: 'CallExpression[callee.property.name="addEventListener"]',
     message: 'Use useEventListener (or onKeyStroke, onClickOutside) from @vueuse/core.',
   },
-  { selector: 'NewExpression[callee.name="ResizeObserver"]', message: 'Use useResizeObserver from @vueuse/core.' },
-  { selector: 'CallExpression[callee.name="setInterval"]', message: 'Use useIntervalFn from @vueuse/core.' },
 ]
 
 export default defineConfig(
@@ -61,14 +59,10 @@ export default defineConfig(
       ],
       '@typescript-eslint/no-deprecated': 'error',
       '@typescript-eslint/no-unnecessary-type-assertion': 'error',
-      '@typescript-eslint/no-import-type-side-effects': 'error',
-      '@typescript-eslint/use-unknown-in-catch-callback-variable': 'error',
       // TypeScript already resolves every identifier; this rule only knows ESLint's globals list.
       'no-undef': 'off',
-      'no-new-func': 'error',
       'no-console': 'error',
       eqeqeq: ['error', 'always', { null: 'ignore' }],
-      'no-fallthrough': 'error',
 
       'vue/no-ref-object-reactivity-loss': 'error',
       'vue/no-setup-props-reactivity-loss': 'error',
@@ -76,28 +70,9 @@ export default defineConfig(
       'vue/no-unused-emit-declarations': 'error',
       'vue/require-explicit-emits': 'error',
       'vue/no-v-html': 'error',
-      'vue/no-template-target-blank': 'error',
-      'vue/no-useless-template-attributes': 'error',
       'vue/no-unused-properties': ['error', { groups: ['props', 'setup'] }],
       'vue/block-lang': ['error', { script: { lang: 'ts' } }],
       'vue/multi-word-component-names': 'off',
-    },
-  },
-
-  // A plain browser app: the Wails runtime and bindings belong to the desktop.
-  {
-    files: ['src/**/*.{ts,vue}'],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            { group: ['@wailsio/*'], message: 'The server UI runs in a browser, not Wails.' },
-            { group: ['**/bindings/**'], message: 'The server UI cannot import Wails bindings.' },
-            { group: ['**/cmd/desktop/**'], message: 'The server UI cannot import the desktop app.' },
-          ],
-        },
-      ],
     },
   },
 

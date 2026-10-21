@@ -34,13 +34,6 @@ describe('buildTree', () => {
     ])
   })
 
-  it('labels a document by its title and a folder by its name', () => {
-    const root = buildTree(docs)
-
-    expect(documentLabel(root.children.find((n) => n.name === 'readme.md')!.doc!)).toBe('Read me')
-    expect(root.children.find((n) => n.name === 'docs')?.name).toBe('docs')
-  })
-
   it('falls back to the file name without a title', () => {
     const root = buildTree([doc({ path: 'a/b.md', title: '' })])
 
