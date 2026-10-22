@@ -375,3 +375,36 @@ describe('useGlobalKeymap over a focused terminal', () => {
     expect(runCommand).not.toHaveBeenCalled()
   })
 })
+
+describe('macOS native window shortcuts', () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Macintosh' })
+    m.useKeybindings().addBinding('terminal.popup.toggle', 'ctrl+`')
+  })
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'userAgent')
+  })
+
+  it.each([false, true])('leaves both cycle directions uncanceled (terminal focus: %s)', (terminalFocus) => {
+    const target = terminalFocus ? document.body.appendChild(document.createElement('textarea')) : window
+    if (target instanceof HTMLElement) target.setAttribute('data-terminal-input-scope', '')
+    const kb = m.useKeybindings()
+    kb.addBinding('terminal.popup.toggle', 'mod+`')
+    kb.addBinding('terminal.popup.toggle', 'mod+~')
+    kb.addBinding('settings.open', 'mod+g i')
+    for (const [key, shiftKey] of [
+      ['`', false],
+      ['~', true],
+    ] as const) {
+      press('g', { metaKey: true }, target)
+      expect(kb.pendingSequence.value).not.toBeNull()
+      const event = press(key, { metaKey: true, shiftKey, code: 'Backquote' }, target)
+      expect(event.defaultPrevented).toBe(false)
+      expect(kb.pendingSequence.value).toBeNull()
+      expect(runCommand).not.toHaveBeenCalled()
+    }
+    const toggle = press('`', { ctrlKey: true }, target)
+    expect(toggle.defaultPrevented).toBe(true)
+    expect(runCommand).toHaveBeenCalledExactlyOnceWith('terminal.popup.toggle')
+  })
+})

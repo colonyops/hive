@@ -100,6 +100,7 @@ describe('useXtermPane', () => {
 
   afterEach(() => {
     scope?.stop()
+    Reflect.deleteProperty(navigator, 'userAgent')
     vi.useRealTimers()
   })
 
@@ -119,6 +120,23 @@ describe('useXtermPane', () => {
 
     expect(mocks.OpenURL).toHaveBeenCalledWith('https://example.test/osc8')
     expect(mocks.OpenURL).toHaveBeenCalledWith('https://example.test/bare')
+  })
+
+  it('leaves native window shortcuts uncanceled in the Diagnostics terminal', () => {
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Macintosh' })
+    const { pane } = setup(boxedHost())
+    const created = pane.build() as unknown as InstanceType<typeof xterm.FakeTerminal>
+    for (const type of ['keydown', 'keypress', 'keyup']) {
+      for (const [key, shiftKey] of [
+        ['`', false],
+        ['~', true],
+      ] as const) {
+        const event = new KeyboardEvent(type, { key, shiftKey, metaKey: true, cancelable: true })
+        expect(created.keyHandler?.(event)).toBe(false)
+        expect(event.defaultPrevented).toBe(false)
+      }
+    }
+    expect(created.keyHandler?.(new KeyboardEvent('keydown', { key: '`' }))).toBe(true)
   })
 
   it('builds nothing without a host', () => {

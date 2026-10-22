@@ -1,6 +1,12 @@
 import { computed, onScopeDispose, watch, type Ref } from 'vue'
 import { useEventListener } from '@vueuse/core'
-import { comboFromEvent, SEQUENCE_TIMEOUT_MS, terminalEscapeCombo, useKeybindings } from '../composables/useKeybindings'
+import {
+  comboFromEvent,
+  isNativeWindowCycle,
+  SEQUENCE_TIMEOUT_MS,
+  terminalEscapeCombo,
+  useKeybindings,
+} from '../composables/useKeybindings'
 import { useOpenModalCount } from '../composables/useOpenModalCount'
 import { commandById, commandPiercesPane, launcherActionID, type CommandContext } from '../keybindings/catalog'
 import { isEditableTarget, isTerminalTarget } from '../lib/isEditableTarget'
@@ -177,6 +183,10 @@ export function useGlobalKeymap({
   }
 
   function onKeydown(e: KeyboardEvent): void {
+    if (isNativeWindowCycle(e)) {
+      resetSequence()
+      return
+    }
     if (isTerminalTarget(e.target)) {
       onPaneKeydown(e)
       return

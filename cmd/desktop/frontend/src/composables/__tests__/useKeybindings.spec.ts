@@ -631,3 +631,35 @@ describe('override storage sanitization', () => {
     await vi.waitFor(() => expect(lastPersisted()).toEqual({}))
   })
 })
+
+describe('macOS Control and native window cycling', () => {
+  beforeEach(() => {
+    Object.defineProperty(navigator, 'userAgent', { configurable: true, value: 'Macintosh' })
+  })
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, 'userAgent')
+  })
+
+  it.each([{}, { 'terminal.popup.toggle': ['ctrl+`'] }])(
+    'resolves the popup without claiming Command from settings %j',
+    async (overrides) => {
+      seedStoredOverrides(overrides)
+      const { initializeKeybindings, useKeybindings, comboFromEvent, canonicalizeCombo, stepSequence } =
+        await import('../useKeybindings')
+      initializeKeybindings()
+      await nextTick()
+      const kb = useKeybindings()
+      expect(canonicalizeCombo('control+`')).toBe('ctrl+`')
+      expect(stepSequence({ steps: ['g'], continuations: [] }, 'ctrl+`')).toEqual({ kind: 'pass' })
+      expect(kb.resolve(comboFromEvent(ev({ key: '`', ctrlKey: true }))!)).toBe('terminal.popup.toggle')
+      expect(kb.resolve(comboFromEvent(ev({ key: '`', metaKey: true }))!)).toBeNull()
+      expect(kb.resolve(comboFromEvent(ev({ key: '~', metaKey: true, shiftKey: true }))!)).toBeNull()
+      expect(comboFromEvent(ev({ key: 'k', metaKey: true, ctrlKey: true }))).toBe('mod+ctrl+k')
+    },
+  )
+
+  it('leaves Control-Shift to the terminal on macOS', async () => {
+    const { terminalEscapeCombo } = await import('../useKeybindings')
+    expect(terminalEscapeCombo(ev({ key: 'K', ctrlKey: true, shiftKey: true }))).toBeNull()
+  })
+})

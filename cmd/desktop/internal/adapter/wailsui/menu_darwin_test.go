@@ -41,3 +41,14 @@ func TestRemoveRolesTakesTheZoomItemsOutOfTheViewMenu(t *testing.T) {
 		require.False(t, view.ItemAt(i).IsSeparator() && view.ItemAt(i-1).IsSeparator(), "adjacent separators at %d", i)
 	}
 }
+
+func TestZoomRemovalPreservesNativeWindowMenu(t *testing.T) {
+	menu := application.NewMenu()
+	menu.AddRole(application.ViewMenu)
+	menu.AddRole(application.WindowMenu)
+	removeRoles(menu, zoomRoles)
+	require.NotNil(t, menu.FindByRole(application.WindowMenu))
+	require.NotNil(t, menu.FindByRole(application.Minimise))
+	require.NotNil(t, menu.FindByRole(application.Zoom))
+	require.NotNil(t, menu.FindByRole(application.Front))
+}
