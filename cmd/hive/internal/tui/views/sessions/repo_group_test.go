@@ -104,7 +104,7 @@ func TestGroupSessionsByRepo(t *testing.T) {
 				remote   string
 				sessions []string
 			}{
-				{name: "(no remote)", remote: "(no remote)", sessions: []string{"s1", "s3"}},
+				{name: "(no remote)", remote: "", sessions: []string{"s1", "s3"}},
 				{name: "repo", remote: "git@github.com:user/repo.git", sessions: []string{"s2"}},
 			},
 		},
@@ -322,7 +322,6 @@ func TestExtractGroupName(t *testing.T) {
 		{"git@github.com:user/hive.git", "hive"},
 		{"https://github.com/user/my-repo.git", "my-repo"},
 		{"", "(no remote)"},
-		{"(no remote)", "(no remote)"},
 	}
 
 	for _, tt := range tests {

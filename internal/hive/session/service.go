@@ -870,9 +870,32 @@ func (s *Service) SessionLaunchOptions(ctx context.Context) (LaunchOptions, erro
 	return options, nil
 }
 
-// ResolveSessionLaunchRepository selects a known local checkout when the
-// requested remote is equivalent (git.EquivalentRemote). Local paths match
-// only by their exact spelling.
+// GeneratedRemote returns the clone URL hive generates for an item's repo. An
+// explicit remote passes through trimmed, and a repo that cannot be expanded
+// returns "". The protocol is the configured preference for either spelling of
+// the repo, and https when none is set.
+func (s *Service) GeneratedRemote(repo, itemURL string) string {
+	repo = strings.TrimSpace(repo)
+	if git.IsExplicitRemote(repo) {
+		return repo
+	}
+	loc, ok := git.ItemRepoLocation(repo, itemURL)
+	if !ok {
+		return ""
+	}
+	protocol := s.config.GetCloneProtocol(loc.Candidates()...)
+	if protocol == "" {
+		protocol = session.CloneProtocolHttps
+	}
+	return loc.CloneURL(protocol)
+}
+
+// ResolveSessionLaunchRepository finds the known local checkout whose remote
+// is equivalent to remote (git.EquivalentRemote; local paths match only by
+// exact spelling), which supplies the file-copy Source. The returned Remote is
+// the request's spelling when a clone protocol preference applies to it, so
+// the preference decides what is cloned. With no preference it is the
+// checkout's own spelling.
 func (s *Service) ResolveSessionLaunchRepository(ctx context.Context, remote string) (LaunchRepository, error) {
 	options, err := s.SessionLaunchOptions(ctx)
 	if err != nil {
@@ -880,6 +903,9 @@ func (s *Service) ResolveSessionLaunchRepository(ctx context.Context, remote str
 	}
 	for _, repo := range options.Repositories {
 		if git.EquivalentRemote(repo.Remote, remote) {
+			if s.config.GetCloneProtocol(remote) != "" {
+				repo.Remote = remote
+			}
 			return repo, nil
 		}
 	}

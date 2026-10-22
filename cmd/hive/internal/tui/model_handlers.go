@@ -1129,11 +1129,28 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 		return "", "", err
 	}
 
+	itemURL, _ := result.Item.Fields["url"].(string)
+	request := m.launches.GeneratedRemote(scope.Search, itemURL)
+	if request == "" {
+		request = scope.Remote
+	}
+	if request == "" {
+		return "", "", fmt.Errorf("cannot determine a clone URL for %q: the item has no url and the scope has no remote", scope.Search)
+	}
+	launch, err := m.launches.ResolveSessionLaunchRepository(ctx, request)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve launch repository for %q: %w", request, err)
+	}
+	source := scope.Source
+	if source == "" {
+		source = launch.Source
+	}
+
 	exec := m.cmdService.NewCreateExecutor(sessionsvc.CreateOptions{
 		Name:            rendered.Name,
 		Prompt:          rendered.Prompt,
-		Remote:          scope.Remote,
-		Source:          scope.Source,
+		Remote:          launch.Remote,
+		Source:          source,
 		UseBatchSpawn:   true,
 		Background:      true,
 		CollisionSuffix: session.Slugify(result.Item.ID),

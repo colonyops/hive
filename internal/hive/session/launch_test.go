@@ -147,6 +147,25 @@ func TestCreateFromRequestPrefersAnEquivalentConfiguredCheckout(t *testing.T) {
 	assert.Equal(t, []string{"acme/repo#1", "acme/repo#2"}, sess.Tags)
 }
 
+func TestCreateFromRequestKeepsTheRequestedSpellingWhenAProtocolIsSet(t *testing.T) {
+	workspaceDir := filepath.Join(t.TempDir(), "workspaces")
+	require.NoError(t, mkdirGitDir(filepath.Join(workspaceDir, "hive")))
+
+	cfg := &config.Config{
+		DataDir:    t.TempDir(),
+		Workspaces: []string{workspaceDir},
+		Git:        config.GitConfig{CloneProtocol: session.CloneProtocolSsh},
+	}
+	svc := newTestService(t, newMockStore(), cfg)
+	svc.git = &launchOptionsGit{remote: "https://github.com/colonyops/hive.git"}
+
+	sess, err := svc.CreateFromRequest(t.Context(), LaunchRequest{
+		Name: "review-pr-2", Repo: "git@github.com:colonyops/hive.git",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "git@github.com:colonyops/hive.git", sess.Remote)
+}
+
 // A taken name is the caller's to resolve with another name, so it arrives
 // as the sentinel rather than as a failure draft.
 func TestCreateFromRequestPassesADuplicateNameThrough(t *testing.T) {

@@ -59,6 +59,7 @@ Hive watches configured workspace directories and rescans them when repositories
 | `copy_command`                | `string`   | `pbcopy` (macOS)     | Command to copy to clipboard                |
 | `auto_delete_corrupted`       | `bool`     | `true`               | Auto-delete corrupted sessions on prune     |
 | `history.max_entries`         | `int`      | `100`                | Max command palette history entries         |
+| `git.clone_protocol`          | `string`   | unset                | Transport for clone URLs hive builds from an issue or pull request: `https` or `ssh`. Unset builds HTTPS URLs and clones from the local checkout's own remote. Override per repository with `rules[].clone_protocol`. See [Clone protocol](rules.md#clone-protocol) |
 
 ## Environment Overrides
 
