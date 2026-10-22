@@ -193,8 +193,9 @@ export function useAppMode(
 
   function togglePreview(): void {
     if (driveActive.value) review.togglePageComments()
-    else if (driveAvailable.value) syncDocQuery(!docRequested.value)
-    else previewCollapsed.value = !previewCollapsed.value
+    else if (driveAvailable.value) {
+      void syncDocQuery(!docRequested.value).catch((error: unknown) => log.warn('Could not toggle Drive pane', error))
+    } else previewCollapsed.value = !previewCollapsed.value
   }
 
   // What the drive pane beside the open chat or Code session shows, or would

@@ -149,8 +149,6 @@ vi.mock('../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapte
   Focused: vi.fn().mockResolvedValue(true),
 }))
 
-// Captures every useWailsEvent registration so a test can fire drive:updated
-// and drive:toggle by hand.
 const wailsEvents = vi.hoisted(() => ({
   handlers: [] as Array<[string, (event: { data: unknown }) => void]>,
   fire(name: string, data: unknown) {

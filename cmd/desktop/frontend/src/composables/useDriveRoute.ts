@@ -41,7 +41,7 @@ export function useDriveRoute() {
       params: route.params,
       query: { ...route.query, doc: next },
     })
-    if (isNavigationFailure(failure)) throw failure
+    if (isNavigationFailure(failure)) throw new Error(failure.message)
   }
 
   const docUnseen = computed(() => activity.isUnseen(routeChatId.value))

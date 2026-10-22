@@ -25,8 +25,9 @@ describe('Drive pane requests', () => {
   function setup(session: string | null) {
     const current = ref(session)
     const open = ref(false)
-    const navigate = vi.fn(async (value: boolean, _path?: string) => {
+    const navigate = vi.fn((value: boolean, _path?: string) => {
       open.value = value
+      return Promise.resolve()
     })
     const wrapper = mount(
       defineComponent({
@@ -75,8 +76,9 @@ describe('Drive pane requests', () => {
 
   it('does not claim success after the user switches sessions', async () => {
     const { wrapper, navigate, current } = setup('abc')
-    navigate.mockImplementation(async () => {
+    navigate.mockImplementation(() => {
       current.value = 'another'
+      return Promise.resolve()
     })
     mocks.listener!({ data: { requestId: 'switched', hiveSession: 'abc', open: true } })
     await flushPromises()

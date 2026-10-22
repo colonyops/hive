@@ -1,7 +1,10 @@
 import { computed, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDriveRoute } from '../../composables/useDriveRoute'
-import { type DriveAuthor } from '../../lib/drive'
+import type { DriveAuthor } from '../../lib/drive'
+import { createLogger } from '../../lib/log'
+
+const log = createLogger('terminal-drive')
 
 /** The space the attached session reads, and who it is as an author. */
 export interface TerminalDriveTarget {
@@ -35,7 +38,9 @@ export function useTerminalDrive(target: Ref<TerminalDriveTarget | null>) {
       if (!now.slug || !before.slug || before.doc === undefined || now.doc !== undefined) return
       const sameSession = now.slug === before.slug
       if (sameSession && now.window === before.window) return
-      syncDocQuery(true, sameSession && typeof before.doc === 'string' ? before.doc : '1')
+      void syncDocQuery(true, sameSession && typeof before.doc === 'string' ? before.doc : '1').catch(
+        (error: unknown) => log.warn('Could not restore Drive pane', error),
+      )
     },
   )
 

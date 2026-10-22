@@ -92,7 +92,7 @@ describe('useTerminalDrive', () => {
   it('closes when only the doc query is dropped', async () => {
     const { api, router } = await mountAt('/terminal/fix-login?window=%402&doc=plans%2Fx.md')
 
-    api.syncDocQuery(false)
+    await api.syncDocQuery(false)
     await flushPromises()
 
     expect(router.currentRoute.value.query).toEqual({ window: '@2' })
