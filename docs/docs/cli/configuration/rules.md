@@ -60,7 +60,7 @@ rules:
 
 ## Clone Protocol
 
-When hive builds a clone URL from an issue or pull request, such as in the TUI issue picker, it picks HTTPS or SSH from `git.clone_protocol`. A rule with `clone_protocol` overrides that for the repositories it matches. With no setting, hive builds HTTPS URLs and keeps the spelling of a matching local checkout.
+When hive builds a clone URL from an issue or pull request, such as in the TUI issue picker, it picks HTTPS or SSH from `git.clone_protocol`. A rule with `clone_protocol` overrides that for the repositories it matches. With no setting, the TUI issue picker clones the remote of the selected session or repository. Elsewhere, hive builds HTTPS URLs and keeps the spelling of a matching local checkout.
 
 ```yaml
 git:
@@ -76,7 +76,7 @@ When a protocol is set, hive clones with the URL it built, even if a local check
 
 A `clone_protocol` rule matches if its pattern matches either the HTTPS or the SSH spelling, so patterns like `git@host:` and `https://host/` both work. Every other rule field matches the final URL, which can be either spelling. Write those patterns to work with both, for example `.*[:/]owner/repo`.
 
-SSH URLs never carry a port. For a forge whose SSH host or port differs from its web address, use an explicit `repo_template`.
+SSH URLs never carry a port. For a forge whose SSH host or port differs from its web address, add a rule that sets `clone_protocol: https` for it. In Hive Desktop, an action can also spell out the URL in its `repo_template`.
 
 ## Agent Overrides
 

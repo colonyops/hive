@@ -1139,12 +1139,22 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 	if request == "" {
 		request = m.launches.GeneratedRemote(scope.Search, itemURL)
 	}
-	if request == "" {
+	// An unscoped picker lists the items of the cwd repository, and
+	// CreateSession clones the cwd origin for an empty remote.
+	var launch sessionsvc.LaunchRepository
+	switch {
+	case request != "":
+		launch, err = m.launches.ResolveSessionLaunchRepository(ctx, request)
+		if err != nil {
+			return "", "", fmt.Errorf("resolve launch repository for %q: %w", request, err)
+		}
+	case scope.Search != "":
 		return "", "", fmt.Errorf("cannot determine a clone URL for %q: the item has no url and the scope has no remote", scope.Search)
 	}
-	launch, err := m.launches.ResolveSessionLaunchRepository(ctx, request)
-	if err != nil {
-		return "", "", fmt.Errorf("resolve launch repository for %q: %w", request, err)
+	if request == scope.Remote {
+		// The resolver swaps in an equivalent checkout's spelling when no
+		// preference applies; the scope's own spelling must still win.
+		launch.Remote = scope.Remote
 	}
 	source := scope.Source
 	if source == "" {
