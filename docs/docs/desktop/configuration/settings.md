@@ -89,7 +89,7 @@ git:
   clone_protocol: ssh # or https
 ```
 
-With the key unset, a repository you already have on disk keeps the remote it was cloned with. A `rules[].clone_protocol` entry overrides the key for the repositories it matches, and a remote you spell out in an action is never changed. Actions that ship with Hive follow the key. An `actions.yml` you wrote keeps a fixed URL until you set its `repo_template` to `"{{ .ItemRemote }}"`.
+With the key unset, a repository you already have on disk keeps the remote it was cloned with. A `rules[].clone_protocol` entry overrides the key for the repositories it matches. Neither one rewrites a remote you spell out in an action. The built-in actions in a new `actions.yml` follow the key. Hive writes that file only once, so if yours came from an earlier version, its `launch-session` actions still have a fixed URL such as `https://github.com/{{ .Payload.repo }}.git`. Change each `repo_template` to `"{{ .ItemRemote }}"` to make them follow the key.
 
 See the hive CLI [configuration reference](../../cli/configuration/index.md) and [clone protocol rules](../../cli/configuration/rules.md#clone-protocol) for how the key and the per-rule override resolve.
 
