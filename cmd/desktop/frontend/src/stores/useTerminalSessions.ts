@@ -16,8 +16,8 @@ export interface TerminalSessionRow {
   name: string
   slug: string
   repo: string
-  /** Groups rows whose remotes name the same repository over different transports. */
-  repoKey: string
+  /** git.RemoteIdentity of repo: rows that share it are one repository over different transports. */
+  repoIdentity: string
   state: string
   /** The owner key of the session's canvases, its repository as owner/repo. Empty for a row with none. */
   canvasOwner: string
@@ -49,17 +49,21 @@ const SCRATCH_GROUP_KEY = 'scratch'
 export function groupTerminalSessions(rows: readonly TerminalSessionRow[]): TerminalSessionGroup[] {
   const groups = new Map<string, TerminalSessionGroup>()
   for (const row of rows) {
-    const key = row.repoKey
+    const key = row.repoIdentity
     let group = groups.get(key)
     if (!group) {
-      group = { key, name: groupDisplayName(row.repo), sessions: [], kind: 'repo' }
+      group = { key, name: '', sessions: [], kind: 'repo' }
       groups.set(key, group)
     }
     group.sessions.push(row)
   }
-  const sorted = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name))
-  for (const group of sorted) group.sessions.sort((a, b) => a.name.localeCompare(b.name))
-  return sorted
+  // Remotes in one group can be spelled differently, so the first session by
+  // name picks the label, as the TUI's GroupSessionsByRepo does.
+  for (const group of groups.values()) {
+    group.sessions.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+    group.name = groupDisplayName(group.sessions[0].repo)
+  }
+  return [...groups.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 function groupDisplayName(remote: string): string {
@@ -122,7 +126,7 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
         name: declared.name,
         slug: declared.slug,
         repo: '',
-        repoKey: '',
+        repoIdentity: '',
         state: 'active',
         canvasOwner: '',
         createdAt: '',

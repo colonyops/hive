@@ -35,6 +35,11 @@ func TestNewNewSessionForm(t *testing.T) {
 		assert.Equal(t, 1, idx)
 	})
 
+	t.Run("preselects a repo whose remote uses another transport", func(t *testing.T) {
+		form := NewNewSessionForm(repos, "https://github.com/user/beta", nil, nil)
+		assert.Equal(t, 1, form.repoSelect.SelectedIndex())
+	})
+
 	t.Run("defaults to first repo when no match", func(t *testing.T) {
 		form := NewNewSessionForm(repos, "git@github.com:user/unknown.git", nil, nil)
 		idx := form.repoSelect.SelectedIndex()

@@ -64,7 +64,7 @@ describe('useTerminalPinnedChats', () => {
         name: 'api-refactor',
         slug: 'agentws-7',
         repo: '',
-        repoKey: '',
+        repoIdentity: '',
         state: 'active',
         canvasOwner: '',
         createdAt: '',

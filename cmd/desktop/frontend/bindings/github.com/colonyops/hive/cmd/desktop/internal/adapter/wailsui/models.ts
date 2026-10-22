@@ -648,7 +648,7 @@ export interface SessionSummary {
     "name": string;
     "slug": string;
     "repo": string;
-    "repoKey": string;
+    "repoIdentity": string;
     "state": string;
     "canvasOwner": string;
     "createdAt": string;

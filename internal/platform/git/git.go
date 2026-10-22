@@ -96,15 +96,21 @@ func remoteHostPath(remote string) (host, path string, ok bool) {
 
 	// Git reads [user@]host:path as SCP-style SSH only when no slash comes
 	// before the first colon; otherwise it is a local path.
-	colon := strings.Index(remote, ":")
-	if colon <= 0 || strings.Contains(remote[:colon], "/") {
+	host, path, found := strings.Cut(remote, ":")
+	if !found || host == "" || strings.Contains(host, "/") {
 		return "", "", false
 	}
-	host = remote[:colon]
+	user := ""
 	if at := strings.LastIndex(host, "@"); at != -1 {
-		host = host[at+1:]
+		user, host = host[:at], host[at+1:]
 	}
-	return host, remote[colon+1:], host != ""
+	// A relative path is relative to the user's home, so alice@host:repo and
+	// bob@host:repo are different repositories. Forges serve every repository
+	// as git@, so that user is dropped to match the HTTPS spelling.
+	if user != "" && user != "git" && !strings.HasPrefix(path, "/") {
+		host = user + "@" + host
+	}
+	return host, path, host != ""
 }
 
 // ExtractRepoName extracts the repository name from a git remote URL.

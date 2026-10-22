@@ -19,7 +19,7 @@ const session: SessionSummary = {
   name: 'review 81',
   slug: 'review-81',
   repo: 'acme/site',
-  repoKey: 'acme/site',
+  repoIdentity: 'acme/site',
   state: 'active',
   canvasOwner: '',
   createdAt: '2026-10-01T12:00:00Z',

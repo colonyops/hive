@@ -43,6 +43,8 @@ func TestRemoteIdentity_KeepsDistinctRepositoriesApart(t *testing.T) {
 	assert.False(t, EquivalentRemote("/repos/owner/repo", "/other/owner/repo"))
 	assert.True(t, EquivalentRemote("/repos/owner/repo", "/repos/owner/repo"))
 	assert.False(t, EquivalentRemote("", ""))
+	assert.False(t, EquivalentRemote("alice@git.example.test:repo.git", "bob@git.example.test:repo.git"))
+	assert.True(t, EquivalentRemote("alice@git.example.test:/srv/repo.git", "ssh://bob@git.example.test/srv/repo"))
 }
 
 func TestRemoteIdentity_ReturnsUnrecognizedRemotesUnchanged(t *testing.T) {

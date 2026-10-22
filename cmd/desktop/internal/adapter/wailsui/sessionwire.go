@@ -13,14 +13,14 @@ import (
 // SessionSummary is the session row shown in Code. CreatedAt starts with the
 // current logical session even when Hive reuses an older clone record.
 type SessionSummary struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`
-	Repo        string    `json:"repo"`
-	RepoKey     string    `json:"repoKey"`
-	State       string    `json:"state"`
-	CanvasOwner string    `json:"canvasOwner"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Slug         string    `json:"slug"`
+	Repo         string    `json:"repo"`
+	RepoIdentity string    `json:"repoIdentity"`
+	State        string    `json:"state"`
+	CanvasOwner  string    `json:"canvasOwner"`
+	CreatedAt    time.Time `json:"createdAt"`
 }
 
 func sessionSummaryOf(canonical func(drive.Space) drive.Space, s session.Session) SessionSummary {
@@ -29,7 +29,7 @@ func sessionSummaryOf(canonical func(drive.Space) drive.Space, s session.Session
 		space = canonical(space)
 	}
 	return SessionSummary{
-		ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, RepoKey: git.RemoteIdentity(s.Remote), State: string(s.State),
+		ID: s.ID, Name: s.Name, Slug: s.Slug, Repo: s.Remote, RepoIdentity: git.RemoteIdentity(s.Remote), State: string(s.State),
 		CanvasOwner: space.Key, CreatedAt: s.ActivatedAt(),
 	}
 }

@@ -331,7 +331,7 @@ describe('TerminalMode', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
       },
       {
@@ -339,7 +339,7 @@ describe('TerminalMode', () => {
         name: 'bump deps',
         slug: 'hive-bump-deps',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
       },
     ])
@@ -450,7 +450,7 @@ describe('TerminalMode', () => {
         name: 'old session',
         slug: 'old-session',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
         createdAt: new Date(Date.now() - 6 * day).toISOString(),
       },
@@ -459,7 +459,7 @@ describe('TerminalMode', () => {
         name: 'recent session',
         slug: 'recent-session',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
         createdAt: new Date(Date.now() - 2 * day).toISOString(),
       },
@@ -486,8 +486,15 @@ describe('TerminalMode', () => {
 
   it('shows session liveness on sessions and agent activity on windows with icons', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'live', slug: 'live', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'stopped', slug: 'stopped', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
+      { id: '1', name: 'live', slug: 'live', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      {
+        id: '2',
+        name: 'stopped',
+        slug: 'stopped',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
     ])
     mocks.createTerminalClient.mockReturnValue({
       listWindows: fakeListWindows({
@@ -641,7 +648,7 @@ describe('TerminalMode', () => {
         name: 'alpha',
         slug: 'alpha',
         repo: remote,
-        repoKey: 'github.com/grafana/ai-sdk',
+        repoIdentity: 'github.com/grafana/ai-sdk',
         state: 'active',
         canvasOwner: '',
         createdAt: '',
@@ -651,7 +658,7 @@ describe('TerminalMode', () => {
         name: 'zeta',
         slug: 'zeta',
         repo: 'ssh://git@github.com/grafana/ai-sdk.git',
-        repoKey: 'github.com/grafana/ai-sdk',
+        repoIdentity: 'github.com/grafana/ai-sdk',
         state: 'active',
         canvasOwner: '',
         createdAt: '',
@@ -991,10 +998,10 @@ describe('TerminalMode', () => {
 
   it('detaches the least recently used session past the pool limit', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'aaa', slug: 'hive-aaa', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'bbb', slug: 'hive-bbb', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
-      { id: '3', name: 'ccc', slug: 'hive-ccc', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
-      { id: '4', name: 'ddd', slug: 'hive-ddd', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
+      { id: '1', name: 'aaa', slug: 'hive-aaa', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '2', name: 'bbb', slug: 'hive-bbb', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '3', name: 'ccc', slug: 'hive-ccc', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '4', name: 'ddd', slug: 'hive-ddd', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
     ])
     const sessions = [fakeSession(), fakeSession(), fakeSession(), fakeSession()]
     for (const session of sessions) mocks.useTerminalWindows.mockReturnValueOnce(session)
@@ -1013,10 +1020,10 @@ describe('TerminalMode', () => {
 
   it('does not bring back a window closed while attached once the session is evicted', async () => {
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'aaa', slug: 'hive-aaa', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
-      { id: '2', name: 'bbb', slug: 'hive-bbb', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
-      { id: '3', name: 'ccc', slug: 'hive-ccc', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
-      { id: '4', name: 'ddd', slug: 'hive-ddd', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
+      { id: '1', name: 'aaa', slug: 'hive-aaa', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '2', name: 'bbb', slug: 'hive-bbb', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '3', name: 'ccc', slug: 'hive-ccc', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
+      { id: '4', name: 'ddd', slug: 'hive-ddd', repo: 'hay-kot/hive', repoIdentity: 'hay-kot/hive', state: 'active' },
     ])
     const tmux: Record<string, FakeWindow[]> = {
       'hive-aaa': [
@@ -1879,7 +1886,7 @@ describe('TerminalMode', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
       },
       {
@@ -1887,7 +1894,7 @@ describe('TerminalMode', () => {
         name: 'old work',
         slug: 'hive-old-work',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'recycled',
       },
       {
@@ -1895,7 +1902,7 @@ describe('TerminalMode', () => {
         name: 'broken',
         slug: 'hive-broken',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'corrupted',
       },
     ])
@@ -1915,7 +1922,7 @@ describe('TerminalMode', () => {
       name: 'fix the parser',
       slug: 'hive-fix-parser',
       repo: 'hay-kot/hive',
-      repoKey: 'hay-kot/hive',
+      repoIdentity: 'hay-kot/hive',
       state: 'active',
       path: '/tmp/hive-fix-parser',
       cloneStrategy: 'full',
@@ -2077,7 +2084,7 @@ describe('TerminalMode', () => {
       name: 'parse it',
       slug: 'parse-it',
       repo: 'hay-kot/hive',
-      repoKey: 'hay-kot/hive',
+      repoIdentity: 'hay-kot/hive',
       state: 'active',
     })
     const { wrapper, router } = await mountAvailable()
@@ -2094,13 +2101,20 @@ describe('TerminalMode', () => {
     // The list still holds the old slug at this point, which is what lets the
     // rename recognise the renamed session as the attached one.
     mocks.ListSessions.mockResolvedValue([
-      { id: '1', name: 'parse it', slug: 'parse-it', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
+      {
+        id: '1',
+        name: 'parse it',
+        slug: 'parse-it',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
       {
         id: '2',
         name: 'bump deps',
         slug: 'hive-bump-deps',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
       },
     ])
@@ -2121,7 +2135,7 @@ describe('TerminalMode', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
       },
       {
@@ -2129,7 +2143,7 @@ describe('TerminalMode', () => {
         name: 'old work',
         slug: 'hive-old-work',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'recycled',
       },
       {
@@ -2137,7 +2151,7 @@ describe('TerminalMode', () => {
         name: 'broken',
         slug: 'hive-broken',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'corrupted',
       },
     ])
@@ -2167,7 +2181,7 @@ describe('TerminalMode', () => {
           name: 'bump deps',
           slug: 'hive-bump-deps',
           repo: 'hay-kot/hive',
-          repoKey: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
           state: 'active',
         },
       ],
@@ -2180,7 +2194,7 @@ describe('TerminalMode', () => {
           name: 'fix the parser',
           slug: 'hive-fix-parser',
           repo: 'hay-kot/hive',
-          repoKey: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
           state: 'recycled',
         },
         {
@@ -2188,7 +2202,7 @@ describe('TerminalMode', () => {
           name: 'bump deps',
           slug: 'hive-bump-deps',
           repo: 'hay-kot/hive',
-          repoKey: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
           state: 'active',
         },
       ],
@@ -2222,7 +2236,7 @@ describe('TerminalMode', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
       },
       {
@@ -2230,10 +2244,17 @@ describe('TerminalMode', () => {
         name: 'bump deps',
         slug: 'hive-bump-deps',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
       },
-      { id: '3', name: 'task1', slug: 'hive-task1', repo: 'hay-kot/hive', repoKey: 'hay-kot/hive', state: 'active' },
+      {
+        id: '3',
+        name: 'task1',
+        slug: 'hive-task1',
+        repo: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
+        state: 'active',
+      },
     ])
     handler!()
     await flushPromises()
@@ -2909,7 +2930,7 @@ describe('TerminalMode', () => {
           name: 'fix the parser',
           slug: 'hive-fix-parser',
           repo: 'hay-kot/hive',
-          repoKey: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
           state: 'active',
         },
         {
@@ -2917,7 +2938,7 @@ describe('TerminalMode', () => {
           name: 'landing copy',
           slug: 'site-landing-copy',
           repo: 'hay-kot/haykot.dev',
-          repoKey: 'hay-kot/haykot.dev',
+          repoIdentity: 'hay-kot/haykot.dev',
           state: 'active',
         },
       ])
@@ -3022,7 +3043,7 @@ describe('TerminalMode', () => {
         name: 'fix the parser',
         slug: 'hive-fix-parser',
         repo: 'hay-kot/hive',
-        repoKey: 'hay-kot/hive',
+        repoIdentity: 'hay-kot/hive',
         state: 'active',
       },
       {
@@ -3030,7 +3051,7 @@ describe('TerminalMode', () => {
         name: 'landing copy',
         slug: 'site-landing-copy',
         repo: 'hay-kot/haykot.dev',
-        repoKey: 'hay-kot/haykot.dev',
+        repoIdentity: 'hay-kot/haykot.dev',
         state: 'active',
       },
     ]
@@ -3523,7 +3544,7 @@ describe('TerminalMode', () => {
           name: 'bump deps',
           slug: 'hive-bump-deps',
           repo: 'hay-kot/hive',
-          repoKey: 'hay-kot/hive',
+          repoIdentity: 'hay-kot/hive',
           state: 'active',
         },
       ])
