@@ -13,6 +13,8 @@ import (
 // Document is an element of the JSON arrays that GET /api/v1/{space},
 // GET /api/v1/recent?limit= (newest first, default 50, at most 200), and
 // GET /api/v1/shared-links (every document with a link, newest first) return.
+//
+//tygo:emit export type DocumentKind = "markdown" | "html"
 type Document struct {
 	ID    string `json:"id"`
 	Space string `json:"space"`
@@ -20,7 +22,7 @@ type Document struct {
 	// Title is the frontmatter title, else the first "# " heading, else the
 	// file name without its extension.
 	Title     string     `json:"title"`
-	Kind      drive.Kind `json:"kind"`
+	Kind      drive.Kind `json:"kind"             tstype:"DocumentKind"`
 	SHA256    string     `json:"sha256"`
 	Size      int64      `json:"size"`
 	UpdatedAt time.Time  `json:"updated_at"`
@@ -48,7 +50,7 @@ type SearchResults struct {
 
 type SpaceSummary struct {
 	Space     string          `json:"space"`
-	Kind      drive.SpaceKind `json:"kind"`
+	Kind      drive.SpaceKind `json:"kind"      tstype:"'repository' | 'workspace' | 'shared'"`
 	Documents int             `json:"documents"`
 	Bytes     int64           `json:"bytes"`
 }
@@ -62,12 +64,13 @@ type ShareRequest struct {
 	ExpiresIn string `json:"expires_in,omitempty"`
 }
 
+//tygo:emit export type ShareExpiry = "" | "1d" | "7d" | "30d"
 type Share struct {
 	URL       string     `json:"url"`
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// ExpiresIn is the preset behind ExpiresAt: "1d", "7d", "30d", or "" for
 	// no expiry.
-	ExpiresIn string `json:"expires_in"`
+	ExpiresIn string `json:"expires_in" tstype:"ShareExpiry"`
 }
 
 // PublicDocument is what a share link serves to a reader who is not signed
@@ -87,7 +90,7 @@ type Me struct {
 // Quota.Limit is nil for an unlimited policy.
 type Quota struct {
 	Used  int64  `json:"used"`
-	Limit *int64 `json:"limit"`
+	Limit *int64 `json:"limit" tstype:"number | null,required"`
 }
 
 type SignInStart struct {
@@ -101,16 +104,18 @@ type SignInVerify struct {
 
 // CreateToken.Scope is "read" or "push". ExpiresIn is "", "1d", "7d", "30d",
 // "90d", or "365d"; "" never expires.
+//
+//tygo:emit export type TokenScope = "read" | "push"
 type CreateToken struct {
 	Name      string `json:"name"`
-	Scope     string `json:"scope"`
+	Scope     string `json:"scope"                tstype:"TokenScope"`
 	ExpiresIn string `json:"expires_in,omitempty"`
 }
 
 type Token struct {
 	ID         string     `json:"id"`
 	Name       string     `json:"name"`
-	Scope      string     `json:"scope"`
+	Scope      string     `json:"scope"                  tstype:"TokenScope"`
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 	LastUsedAt *time.Time `json:"last_used_at,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
@@ -119,7 +124,7 @@ type Token struct {
 // CreatedToken is the only response that carries the secret.
 type CreatedToken struct {
 	Secret string `json:"secret"`
-	Token
+	Token  `tstype:",extends"`
 }
 
 // ErrorBody is the JSON shape of every error response. It matches

@@ -48,6 +48,8 @@ pre-commit:
         - "cmd/drive-server/internal/store/userdb/queries/*.sql"
         - "cmd/drive-server/internal/store/userdb/migrations/*.sql"
         - "cmd/drive-server/internal/core/scope.go"
+        - "internal/platform/driveapi/wire.go"
+        - "tygo.yaml"
         - "cmd/desktop/internal/app/activity/activity.go"
         - "cmd/desktop/internal/app/jobs/jobs.go"
         - "cmd/desktop/internal/app/data/models/classify.go"

@@ -89,9 +89,15 @@ sources = [
 outputs = { auto = true }
 run = "sqlc generate"
 
+[tasks."generate:tygo"]
+description = "Generate the drive server web UI's wire types from internal/platform/driveapi"
+sources = ["internal/platform/driveapi/wire.go", "tygo.yaml"]
+outputs = ["cmd/drive-server/frontend/src/wire.gen.ts"]
+run = "go tool tygo generate"
+
 [tasks.generate]
 description = "Run all code generators"
-depends = ["generate:enums", "generate:sqlc"]
+depends = ["generate:enums", "generate:sqlc", "generate:tygo"]
 sources = ["internal/hive/events/events.go"]
 outputs = ["internal/hive/events/eventbus.gen.go"]
 run = "go generate ./..."
@@ -142,15 +148,15 @@ go mod tidy -diff || {
 """
 
 [tasks."check:generate"]
-description = "Verify generated code (enums, sqlc, gobusgen) matches its sources"
+description = "Verify generated code (enums, sqlc, gobusgen, tygo) matches its sources"
 run = """
 mise run --force generate
 # -N registers files the generators created that the checkout lacks: plain
 # git diff cannot see an untracked file, so a brand-new enum or query output
 # would pass unnoticed. The diff is against the index, not HEAD, so it also
 # answers correctly as a pre-commit hook.
-git add -N internal cmd/hive/internal cmd/desktop/internal cmd/drive-server/internal
-git diff --exit-code -- '*_enum.go' '*.gen.go' 'internal/store/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' 'cmd/drive-server/internal/store/*/db/*.go' || {
+git add -N internal cmd/hive/internal cmd/desktop/internal cmd/drive-server/internal cmd/drive-server/frontend/src/wire.gen.ts
+git diff --exit-code -- '*_enum.go' '*.gen.go' 'cmd/drive-server/frontend/src/wire.gen.ts' 'internal/store/db/*.go' 'cmd/desktop/internal/app/data/queries/*.go' 'cmd/drive-server/internal/store/*/db/*.go' || {
   echo "Generated files are out of date. Run 'mise run generate' and commit the result." >&2
   exit 1
 }
