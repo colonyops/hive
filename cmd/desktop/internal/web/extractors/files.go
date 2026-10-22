@@ -19,12 +19,12 @@ func Files(w http.ResponseWriter, r *http.Request, field string, maxBytes int64,
 	}
 	if err != nil {
 		cleanup()
-		return nil, func() {}, &web.BadRequestError{Msg: "invalid or oversized image upload", Err: err}
+		return nil, func() {}, &web.BadRequestError{Msg: "invalid or oversized attachment upload", Err: err}
 	}
 	files := r.MultipartForm.File[field]
 	if len(r.MultipartForm.Value) != 0 || len(r.MultipartForm.File) != 1 || len(files) < 1 || len(files) > maxFiles {
 		cleanup()
-		return nil, func() {}, &web.BadRequestError{Msg: "upload must contain between 1 and 10 images and no other fields"}
+		return nil, func() {}, &web.BadRequestError{Msg: "upload must contain between 1 and 10 files and no other fields"}
 	}
 	return files, cleanup, nil
 }

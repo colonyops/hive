@@ -67,21 +67,22 @@ async function terminalFixture(page: Page) {
   return { pastes, ptyInput }
 }
 
-async function imageGesture(page: Page, kind: 'paste' | 'drop') {
-  const png = readFileSync(new URL('./testdata/terminal-image.png', import.meta.url)).toString('base64')
+async function imageGesture(page: Page, kind: 'paste' | 'drop', format: 'png' | 'pdf' = 'png') {
+  const fixture = format === 'pdf' ? '../../internal/app/terminalimg/testdata/document.pdf' : './testdata/terminal-image.png'
+  const data = readFileSync(new URL(fixture, import.meta.url)).toString('base64')
   const pane = page.locator('[data-file-drop-target]:visible').last()
   await expect(pane).toBeVisible()
-  await pane.evaluate((host, { kind, png }) => {
+  await pane.evaluate((host, { kind, data, format }) => {
     const transfer = new DataTransfer()
-    const bytes = Uint8Array.from(atob(png), (char) => char.charCodeAt(0))
-    transfer.items.add(new File([bytes], 'screenshot.png', { type: 'image/png' }))
+    const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0))
+    transfer.items.add(new File([bytes], `attachment.${format}`, { type: format === 'pdf' ? 'application/pdf' : 'image/png' }))
     if (kind === 'paste') host.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: transfer }))
     else host.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: transfer }))
-  }, { kind, png })
+  }, { kind, data, format })
 }
 
 for (const surface of ['Code', 'Chats', 'popup'] as const) {
-  test(`${surface} image input uploads bytes and pastes a path without submitting (mock terminal)`, async ({ page }) => {
+  test(`${surface} PDF and image input uploads bytes and pastes a path without submitting (mock terminal)`, async ({ page }) => {
     const { pastes, ptyInput } = await terminalFixture(page)
     await page.goto(surface === 'Code' ? '/#/terminal/image-session' : surface === 'Chats' ? '/#/workspaces/images?chat=42' : '/')
     if (surface === 'popup') await page.keyboard.press('Control+Backquote')
@@ -101,6 +102,19 @@ for (const surface of ['Code', 'Chats', 'popup'] as const) {
     }
     await imageGesture(page, 'drop')
     if (surface !== 'popup') await expect.poll(() => pastes.length).toBe(2)
+    for (const kind of ['paste', 'drop'] as const) {
+      await imageGesture(page, kind, 'pdf')
+      const count = kind === 'paste' ? 1 : 2
+      if (surface === 'popup') {
+        await expect.poll(() => Buffer.concat(ptyInput).toString().match(/\.pdf /g)?.length ?? 0).toBe(count)
+        expect(Buffer.concat(ptyInput).toString()).not.toMatch(/[\r\n]/)
+      } else {
+        await expect.poll(() => pastes.length).toBe(2 + count)
+        expect(pastes.at(-1)).toMatchObject({ slug: surface === 'Code' ? 'image-session' : session.terminalId, paneId: '%1' })
+        expect(pastes.at(-1)!.text).toMatch(/\.pdf $/)
+        expect(pastes.at(-1)!.text).not.toMatch(/[\r\n]/)
+      }
+    }
     await page.route('**/api/terminal/images/upload', (route) => route.fulfill({ status: 400, headers: { 'Access-Control-Allow-Origin': '*' }, json: { kind: 'invalid', message: 'Image rejected for testing' } }))
     await imageGesture(page, 'paste')
     await expect(page.getByText('Image rejected for testing')).toBeVisible()

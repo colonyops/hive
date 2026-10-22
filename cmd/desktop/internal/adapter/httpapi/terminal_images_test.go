@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"mime/multipart"
 	"net/http"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,6 +18,8 @@ func TestTerminalImageUploadAuthenticationAndValidation(t *testing.T) {
 	h := newTerminalHarness(t)
 	var raw bytes.Buffer
 	require.NoError(t, png.Encode(&raw, image.NewRGBA(image.Rect(0, 0, 2, 2))))
+	pdf, err := os.ReadFile("../../app/terminalimg/testdata/document.pdf")
+	require.NoError(t, err)
 	for _, tc := range []struct {
 		name, token, field string
 		data               []byte
@@ -27,6 +30,7 @@ func TestTerminalImageUploadAuthenticationAndValidation(t *testing.T) {
 		{"wrong field", testToken, "other", raw.Bytes(), http.StatusBadRequest},
 		{"invalid image", testToken, "images", []byte("not an image"), http.StatusBadRequest},
 		{"valid", testToken, "images", raw.Bytes(), http.StatusOK},
+		{"PDF with untrusted image filename", testToken, "images", pdf, http.StatusOK},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var body bytes.Buffer
@@ -49,6 +53,9 @@ func TestTerminalImageUploadAuthenticationAndValidation(t *testing.T) {
 				require.NoError(t, json.NewDecoder(resp.Body).Decode(&result))
 				require.Len(t, result.Pastes, 1)
 				assert.NotContains(t, result.Pastes[0], "untrusted")
+				if bytes.Equal(tc.data, pdf) {
+					assert.True(t, bytes.HasSuffix([]byte(result.Pastes[0]), []byte(".pdf ")))
+				}
 			}
 		})
 	}

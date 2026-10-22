@@ -115,6 +115,40 @@ describe('terminal image input', () => {
     expect(mocks.prepare).not.toHaveBeenCalled()
   })
 
+  it.each(['files', 'items'])(
+    'captures clipboard PDFs exposed through %s without pasting alternate text',
+    async (source) => {
+      mocks.prepare.mockResolvedValue(['/report.pdf '])
+      const p = pane()
+      const file = new File(['%PDF-1.4'], 'report.pdf', { type: 'application/pdf' })
+      const event = new Event('paste', { bubbles: true, cancelable: true })
+      Object.defineProperty(event, 'clipboardData', {
+        value: {
+          files: source === 'files' ? [file] : [],
+          items: [{ kind: 'file', getAsFile: () => file }],
+          getData: () => 'report.pdf',
+        },
+      })
+      p.textarea.dispatchEvent(event)
+      await flushPromises()
+      expect(event.defaultPrevented).toBe(true)
+      expect(mocks.prepare).toHaveBeenCalledWith([file], expect.any(AbortSignal))
+      expect(p.paste).toHaveBeenCalledWith('/report.pdf ', expect.any(AbortSignal))
+      expect(p.text).not.toHaveBeenCalled()
+    },
+  )
+
+  it('routes a native PDF drop to its target pane', async () => {
+    mocks.prepare.mockResolvedValue(['/report.pdf '])
+    const first = pane()
+    const second = pane()
+    drop(second.host, ['/report.pdf'])
+    await flushPromises()
+    expect(mocks.prepare).toHaveBeenCalledWith(['/report.pdf'], expect.any(AbortSignal))
+    expect(first.paste).not.toHaveBeenCalled()
+    expect(second.paste).toHaveBeenCalledWith('/report.pdf ', expect.any(AbortSignal))
+  })
+
   it('does not paste after switching chats during upload', async () => {
     let finish!: (pastes: string[]) => void
     mocks.prepare.mockReturnValue(
