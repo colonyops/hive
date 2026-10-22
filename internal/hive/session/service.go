@@ -780,8 +780,8 @@ func (s *Service) DetectRemote(ctx context.Context, dir string) (string, error) 
 }
 
 // SessionLaunchOptions lists repositories from configured workspaces followed
-// by existing on-disk Hive sessions. Equivalent GitHub remote spellings are
-// coalesced so a local configured checkout wins over a Hive clone without
+// by existing on-disk Hive sessions. Equivalent remotes (git.EquivalentRemote)
+// are coalesced so a local configured checkout wins over a Hive clone without
 // rewriting either configured URL.
 func (s *Service) SessionLaunchOptions(ctx context.Context) (LaunchOptions, error) {
 	workspaceRepos, err := workspace.ScanRepoDirs(ctx, s.log, s.config.Workspaces, s.git)
