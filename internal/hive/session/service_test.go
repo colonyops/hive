@@ -69,6 +69,7 @@ type mockGit struct {
 	// failSetURLTo makes SetRemoteURL fail when asked to set exactly this URL.
 	failSetURLTo string
 	pullErr      error
+	fetchErr     error
 	pulled       []string
 	cloned       []string
 }
@@ -98,12 +99,13 @@ func (m *mockGit) SetRemoteURL(_ context.Context, dir, url string) error {
 	m.remotes[dir] = url
 	return nil
 }
-func (m *mockGit) IsClean(_ context.Context, _ string) (bool, error)            { return true, nil }
-func (m *mockGit) Branch(_ context.Context, _ string) (string, error)           { return "main", nil }
-func (m *mockGit) CloneBare(_ context.Context, _, _ string) error               { return nil }
-func (m *mockGit) WorktreeAdd(_ context.Context, _, _, _ string) error          { return nil }
-func (m *mockGit) WorktreeRemove(_ context.Context, _, _, _ string) error       { return nil }
-func (m *mockGit) Fetch(_ context.Context, _ string) error                      { return nil }
+func (m *mockGit) IsClean(_ context.Context, _ string) (bool, error)      { return true, nil }
+func (m *mockGit) Branch(_ context.Context, _ string) (string, error)     { return "main", nil }
+func (m *mockGit) CloneBare(_ context.Context, _, _ string) error         { return nil }
+func (m *mockGit) WorktreeAdd(_ context.Context, _, _, _ string) error    { return nil }
+func (m *mockGit) WorktreeRemove(_ context.Context, _, _, _ string) error { return nil }
+func (m *mockGit) Fetch(_ context.Context, _ string) error                { return m.fetchErr }
+
 func (m *mockGit) HasUnpushedCommits(_ context.Context, _ string) (bool, error) { return false, nil }
 
 func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
@@ -1810,6 +1812,20 @@ func TestEnsureBareClone_ExistingCloneFollowsRequestedOrigin(t *testing.T) {
 
 	assert.Equal(t, bareDir, got)
 	assert.Equal(t, []string{bareDir + "=" + sshSiteRemote}, g.setURLCalls)
+}
+
+func TestEnsureBareClone_FetchFailureRestoresOrigin(t *testing.T) {
+	g := &mockGit{fetchErr: errors.New("permission denied")}
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+	svc := newTestServiceWithGit(t, newMockStore(), cfg, g)
+	bareDir := svc.bareDirForRemote(context.Background(), sshSiteRemote)
+	require.NoError(t, os.MkdirAll(bareDir, 0o755))
+	g.remotes = map[string]string{bareDir: httpsSiteRemote}
+
+	_, err := svc.ensureBareClone(context.Background(), sshSiteRemote, io.Discard)
+	require.Error(t, err)
+
+	assert.Equal(t, httpsSiteRemote, g.remotes[bareDir], "worktrees share the bare origin, so a failed spelling must not stick")
 }
 
 func TestRemoteIdentity_NonDefaultPortIsDistinct(t *testing.T) {

@@ -1065,15 +1065,24 @@ func (s *Service) ensureBareClone(ctx context.Context, remote string, progress i
 			return "", fmt.Errorf("bare clone: %w", err)
 		}
 	} else {
+		previous := ""
 		if current, err := s.git.RemoteURL(ctx, bareDir); err != nil {
 			s.log.Warn().Err(err).Str("dir", bareDir).Msg("could not read bare clone origin")
 		} else if current != remote {
 			if err := s.git.SetRemoteURL(ctx, bareDir, remote); err != nil {
 				return "", fmt.Errorf("set bare origin: %w", err)
 			}
+			previous = current
 		}
 		writeProgressf(progress, "Fetching latest changes...")
 		if err := s.git.Fetch(ctx, bareDir); err != nil {
+			// Every worktree shares this origin; a spelling that cannot fetch
+			// must not break the sessions that already work.
+			if previous != "" {
+				if restoreErr := s.git.SetRemoteURL(ctx, bareDir, previous); restoreErr != nil {
+					s.log.Warn().Err(restoreErr).Str("dir", bareDir).Str("remote", previous).Msg("failed to restore bare clone origin")
+				}
+			}
 			return "", fmt.Errorf("fetch bare: %w", err)
 		}
 	}
