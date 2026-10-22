@@ -1,7 +1,6 @@
 package httpapi_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -61,9 +60,7 @@ func TestIsolationListingsHoldOnlyOwnDocuments(t *testing.T) {
 	s := newServer(t)
 	_, b := setupTenants(t, s)
 
-	var spaces []driveapi.SpaceSummary
-	rec := s.do(http.MethodGet, "/api/v1/spaces", b.token, "")
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &spaces))
+	spaces := decode[[]driveapi.SpaceSummary](t, s.do(http.MethodGet, "/api/v1/spaces", b.token, ""))
 	require.Len(t, spaces, 3)
 	for _, sp := range spaces {
 		assert.Equal(t, 1, sp.Documents, sp.Space)
@@ -71,9 +68,7 @@ func TestIsolationListingsHoldOnlyOwnDocuments(t *testing.T) {
 	}
 
 	for name, space := range mustSpace(t) {
-		var docs []driveapi.Document
-		rec := s.do(http.MethodGet, driveapi.SpacePrefix(space), b.token, "")
-		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &docs))
+		docs := decode[[]driveapi.Document](t, s.do(http.MethodGet, driveapi.SpacePrefix(space), b.token, ""))
 		require.Len(t, docs, 1, name)
 		assert.Equal(t, "shared-path.md", docs[0].Path)
 	}
@@ -117,14 +112,8 @@ func TestIsolationHostilePathsAndNoUserIDRoutes(t *testing.T) {
 	}
 
 	// A user id in a query or header must change nothing.
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/spaces?user_id="+a.id, nil)
-	require.NoError(t, err)
-	req.Header.Set("Authorization", "Bearer "+b.token)
-	req.Header.Set("X-User-Id", a.id)
-	rec := httptest.NewRecorder()
-	s.h.ServeHTTP(rec, req)
-	var spaces []driveapi.SpaceSummary
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &spaces))
+	rec := s.send(call{method: http.MethodGet, target: "/api/v1/spaces?user_id=" + a.id, token: b.token, header: map[string]string{"X-User-Id": a.id}})
+	spaces := decode[[]driveapi.SpaceSummary](t, rec)
 	for _, sp := range spaces {
 		assert.EqualValues(t, len("body of B"), sp.Bytes)
 	}
@@ -204,8 +193,7 @@ func TestIsolationSessionSeesOnlyOwnData(t *testing.T) {
 		assert.Equal(t, "body of B", get(driveapi.DocPath(space, "shared-path.md")).Body.String(), name)
 		assert.Equal(t, http.StatusNotFound, get(driveapi.DocPath(space, "only-a.md")).Code, name)
 
-		var docs []driveapi.Document
-		require.NoError(t, json.Unmarshal(get(driveapi.SpacePrefix(space)).Body.Bytes(), &docs))
+		docs := decode[[]driveapi.Document](t, get(driveapi.SpacePrefix(space)))
 		require.Len(t, docs, 1, name)
 
 		del := s.send(call{method: http.MethodDelete, target: driveapi.DocPath(space, "only-a.md"), cookie: cookie})
@@ -213,16 +201,12 @@ func TestIsolationSessionSeesOnlyOwnData(t *testing.T) {
 		assert.Equal(t, "only A has this", s.do(http.MethodGet, driveapi.DocPath(space, "only-a.md"), a.token, "").Body.String(), name)
 	}
 
-	var me driveapi.Me
-	rec := s.send(call{method: http.MethodGet, target: "/api/v1/me", cookie: cookie})
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &me))
+	me := decode[driveapi.Me](t, s.send(call{method: http.MethodGet, target: "/api/v1/me", cookie: cookie}))
 	assert.Equal(t, "b@example.com", me.Email)
 	assert.EqualValues(t, 3*len("body of B"), me.Quota.Used)
 
-	var listed []driveapi.Token
 	require.Equal(t, http.StatusCreated, s.send(call{method: http.MethodPost, target: "/api/v1/tokens", cookie: cookie, body: `{"name":"b","scope":"read"}`}).Code)
-	rec = s.send(call{method: http.MethodGet, target: "/api/v1/tokens", cookie: cookie})
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listed))
+	listed := decode[[]driveapi.Token](t, s.send(call{method: http.MethodGet, target: "/api/v1/tokens", cookie: cookie}))
 	assert.Len(t, listed, 2, "B's setup token and the new one, never A's")
 }
 
@@ -233,8 +217,7 @@ func TestIsolationSearchNeverReturnsOtherUsersDocuments(t *testing.T) {
 	search := func(tn tenant, q string) []driveapi.SearchHit {
 		rec := s.do(http.MethodGet, "/api/v1/search?q="+url.QueryEscape(q), tn.token, "")
 		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-		var res driveapi.SearchResults
-		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &res))
+		res := decode[driveapi.SearchResults](t, rec)
 		return res.Hits
 	}
 

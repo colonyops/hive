@@ -1,8 +1,6 @@
 package httpapi_test
 
 import (
-	"bytes"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -68,21 +66,9 @@ func (s *server) token(t *testing.T, email string, scope core.Scope) string {
 	return secret
 }
 
-func (s *server) do(method, target, token, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, target, bytes.NewBufferString(body))
-	if token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	rec := httptest.NewRecorder()
-	s.h.ServeHTTP(rec, req)
-	return rec
-}
-
 func errorKind(t *testing.T, rec *httptest.ResponseRecorder) string {
 	t.Helper()
-	var body driveapi.ErrorBody
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body), rec.Body.String())
-	return body.Kind
+	return decode[driveapi.ErrorBody](t, rec).Kind
 }
 
 func mustSpace(t *testing.T) map[string]drive.Space {
@@ -104,8 +90,7 @@ func TestDocumentRoundTripPerSpaceKind(t *testing.T) {
 
 			put := s.do(http.MethodPut, url, tok, "# hello")
 			require.Equal(t, http.StatusOK, put.Code, put.Body.String())
-			var doc driveapi.Document
-			require.NoError(t, json.Unmarshal(put.Body.Bytes(), &doc))
+			doc := decode[driveapi.Document](t, put)
 			assert.Equal(t, space.Key, doc.Space)
 			assert.Equal(t, drive.KindMarkdown, doc.Kind)
 
@@ -121,8 +106,7 @@ func TestDocumentRoundTripPerSpaceKind(t *testing.T) {
 
 			list := s.do(http.MethodGet, driveapi.SpacePrefix(space), tok, "")
 			require.Equal(t, http.StatusOK, list.Code)
-			var docs []driveapi.Document
-			require.NoError(t, json.Unmarshal(list.Body.Bytes(), &docs))
+			docs := decode[[]driveapi.Document](t, list)
 			require.Len(t, docs, 2)
 			assert.Equal(t, "page.html", docs[0].Path)
 			assert.Equal(t, doc.SHA256, docs[1].SHA256)
@@ -146,8 +130,7 @@ func TestDocPathRoundTripsAwkwardNames(t *testing.T) {
 		assert.Equal(t, "x", got.Body.String())
 	}
 	list := s.do(http.MethodGet, "/api/v1/shared", tok, "")
-	var docs []driveapi.Document
-	require.NoError(t, json.Unmarshal(list.Body.Bytes(), &docs))
+	docs := decode[[]driveapi.Document](t, list)
 	paths := make([]string, len(docs))
 	for i, d := range docs {
 		paths[i] = d.Path
@@ -205,8 +188,7 @@ func TestSpacesAndMeUsage(t *testing.T) {
 
 	rec := s.do(http.MethodGet, "/api/v1/spaces", tok, "")
 	require.Equal(t, http.StatusOK, rec.Code)
-	var got []driveapi.SpaceSummary
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	got := decode[[]driveapi.SpaceSummary](t, rec)
 	assert.Equal(t, []driveapi.SpaceSummary{
 		{Space: "colonyops/hive", Kind: drive.SpaceKindRepository, Documents: 1, Bytes: 5},
 		{Space: "shared", Kind: drive.SpaceKindShared, Documents: 1, Bytes: 3},

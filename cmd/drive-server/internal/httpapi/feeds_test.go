@@ -1,7 +1,6 @@
 package httpapi_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -17,8 +16,7 @@ func getDocs(t *testing.T, s *server, target, token string) []driveapi.Document 
 	t.Helper()
 	rec := s.do(http.MethodGet, target, token, "")
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	var docs []driveapi.Document
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &docs))
+	docs := decode[[]driveapi.Document](t, rec)
 	return docs
 }
 

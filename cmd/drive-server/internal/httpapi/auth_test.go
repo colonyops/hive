@@ -2,7 +2,6 @@ package httpapi_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"regexp"
@@ -67,30 +66,6 @@ func (s *authServer) sent() int {
 	return len(s.mails.sent)
 }
 
-type call struct {
-	method, target, body string
-	token                string
-	cookie               *http.Cookie
-	header               map[string]string
-}
-
-func (s *authServer) send(c call) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(c.method, c.target, strings.NewReader(c.body))
-	req.Host = "drive.test"
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-	if c.cookie != nil {
-		req.AddCookie(c.cookie)
-	}
-	for k, v := range c.header {
-		req.Header.Set(k, v)
-	}
-	rec := httptest.NewRecorder()
-	s.h.ServeHTTP(rec, req)
-	return rec
-}
-
 func (s *authServer) start(email string) *httptest.ResponseRecorder {
 	return s.send(call{method: http.MethodPost, target: "/api/v1/auth/code", body: `{"email":"` + email + `"}`})
 }
@@ -116,8 +91,7 @@ func TestSignInRoundTripOverHTTPLoopback(t *testing.T) {
 
 	rec := s.send(call{method: http.MethodGet, target: "/api/v1/me", cookie: c})
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	var me driveapi.Me
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &me))
+	me := decode[driveapi.Me](t, rec)
 	assert.Equal(t, "dev@example.com", me.Email)
 
 	rec = s.send(call{method: http.MethodPost, target: "/api/v1/auth/sign-out", cookie: c})
@@ -247,8 +221,7 @@ func TestSessionMintsListsAndRevokesTokens(t *testing.T) {
 
 	rec := s.send(call{method: http.MethodPost, target: "/api/v1/tokens", cookie: c, body: `{"name":"laptop","scope":"read","expires_in":"7d"}`})
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
-	var created driveapi.CreatedToken
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &created))
+	created := decode[driveapi.CreatedToken](t, rec)
 	require.NotEmpty(t, created.Secret)
 	assert.Equal(t, "laptop", created.Name)
 	assert.Equal(t, "read", created.Scope)
@@ -259,8 +232,7 @@ func TestSessionMintsListsAndRevokesTokens(t *testing.T) {
 	rec = s.send(call{method: http.MethodGet, target: "/api/v1/tokens", cookie: c})
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.NotContains(t, rec.Body.String(), created.Secret, "the secret is shown once")
-	var listed []driveapi.Token
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listed))
+	listed := decode[[]driveapi.Token](t, rec)
 	require.Len(t, listed, 1)
 	assert.Equal(t, created.ID, listed[0].ID)
 
@@ -301,4 +273,12 @@ func TestBearerHeaderWinsOverCookie(t *testing.T) {
 
 	rec := s.send(call{method: http.MethodGet, target: "/api/v1/me", cookie: c, token: "hds_bogus"})
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestOversizedJSONBodyIsTooLarge(t *testing.T) {
+	s := newAuthServer(t, testBaseURL)
+
+	rec := s.send(call{method: http.MethodPost, target: "/api/v1/auth/code", body: `{"email":"` + strings.Repeat("x", 1<<20) + `"}`})
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+	assert.Equal(t, "too_large", errorKind(t, rec))
 }

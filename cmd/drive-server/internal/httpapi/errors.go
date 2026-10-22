@@ -8,13 +8,9 @@ import (
 	"github.com/colonyops/hive/internal/web"
 )
 
-// mapError renders core errors and oversized bodies. Malformed input
-// (web.BadRequestError, 400) is handled before mappers run, so it never
-// reaches here.
+// mapError renders core errors. Malformed input (400) and oversized bodies
+// (413) are handled by mid.Errors before mappers run.
 func mapError(err error) (int, any, bool) {
-	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
-		return http.StatusRequestEntityTooLarge, web.ErrorBody{Kind: string(core.KindTooLarge), Message: "request body too large"}, true
-	}
 	coreErr, ok := errors.AsType[*core.Error](err)
 	if !ok {
 		return 0, nil, false

@@ -69,7 +69,7 @@ func Run(ctx context.Context, cfg config.Config, log zerolog.Logger, opts Option
 		plugs.WithMaxAttempts(3),
 	)
 	mgr.Add(plugs.PluginFunc("http", func(ctx context.Context) error {
-		return httpapi.Serve(ctx, ln, handler, httpLog)
+		return httpapi.Serve(ctx, ln, handler, httpLog, cfg.MaxDocumentSize.Bytes)
 	}))
 	mailer := mail.NewMailer(log, svc.Outbox, sender, nil)
 	mgr.Add(plugs.PluginFunc("mailer", func(ctx context.Context) error {

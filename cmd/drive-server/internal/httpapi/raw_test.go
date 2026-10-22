@@ -1,7 +1,6 @@
 package httpapi_test
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,8 +33,7 @@ func share(t *testing.T, s *server, token, path, body string) (driveapi.Share, s
 	require.Equal(t, http.StatusOK, s.do(http.MethodPut, docURL, token, "<p>hi</p>").Code)
 	rec := s.do(http.MethodPost, driveapi.SpacePrefix(drive.Shared)+"/shares/"+path, token, body)
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-	var out driveapi.Share
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &out))
+	out := decode[driveapi.Share](t, rec)
 	slug, ok := strings.CutPrefix(out.URL, testBaseURL+"/s/")
 	require.True(t, ok, out.URL)
 	return out, slug
@@ -74,13 +72,11 @@ func TestRawRefusesHTMLOpenedAsAPage(t *testing.T) {
 	_, mdSlug := share(t, s, token, "note.md", "")
 
 	get := func(target, dest string) *httptest.ResponseRecorder {
-		req := httptest.NewRequest(http.MethodGet, target, nil)
+		c := call{method: http.MethodGet, target: target}
 		if dest != "" {
-			req.Header.Set("Sec-Fetch-Dest", dest)
+			c.header = map[string]string{"Sec-Fetch-Dest": dest}
 		}
-		rec := httptest.NewRecorder()
-		s.h.ServeHTTP(rec, req)
-		return rec
+		return s.send(c)
 	}
 
 	assert.Equal(t, http.StatusForbidden, get("/s/"+htmlSlug+"/raw", "document").Code)
@@ -98,15 +94,13 @@ func TestPublicEndpoint(t *testing.T) {
 	rec := s.do(http.MethodGet, "/api/v1/public/"+mdSlug, "", "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "noindex", rec.Header().Get("X-Robots-Tag"))
-	var got driveapi.PublicDocument
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
+	got := decode[driveapi.PublicDocument](t, rec)
 	assert.Equal(t, "a@example.com", got.OwnerEmail)
 	assert.Equal(t, "note.md", got.Document.Path)
 	assert.Equal(t, "<p>hi</p>", got.Body)
 
 	rec = s.do(http.MethodGet, "/api/v1/public/"+htmlSlug, "", "")
-	var html driveapi.PublicDocument
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &html))
+	html := decode[driveapi.PublicDocument](t, rec)
 	assert.Empty(t, html.Body, "HTML is served from the raw route only")
 
 	rec = s.do(http.MethodGet, "/api/v1/public/unknown", "", "")
@@ -148,14 +142,12 @@ func TestShareJSONCarriesTheExpiryPreset(t *testing.T) {
 	route := "/api/v1/shared/shares/note.md"
 	rec := s.do(http.MethodPost, route, token, `{"expires_in":"none"}`)
 	require.Equal(t, http.StatusOK, rec.Code)
-	var raw map[string]any
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &raw))
+	raw := decode[map[string]any](t, rec)
 	assert.Empty(t, raw["expires_in"])
 	assert.NotContains(t, raw, "expires_at")
 
 	require.Equal(t, http.StatusOK, s.do(http.MethodPost, route, token, `{"expires_in":"1d"}`).Code)
-	var docs []driveapi.Document
-	require.NoError(t, json.Unmarshal(s.do(http.MethodGet, "/api/v1/shared", token, "").Body.Bytes(), &docs))
+	docs := decode[[]driveapi.Document](t, s.do(http.MethodGet, "/api/v1/shared", token, ""))
 	require.Len(t, docs, 1)
 	assert.Equal(t, "1d", docs[0].Shared.ExpiresIn)
 }

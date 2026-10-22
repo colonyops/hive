@@ -19,12 +19,12 @@ import (
 // nothing else: no network, no forms, no framing by other origins.
 const rawCSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; form-action 'none'; frame-src 'none'; base-uri 'none'; frame-ancestors 'self'; sandbox allow-scripts"
 
-func registerShareRoutes(mux *http.ServeMux, chain *errchain.ErrChain, authenticated authenticatedFunc, shares *core.Shares) {
+func registerShareRoutes(mux router, chain *errchain.ErrChain, authenticated authenticatedFunc, shares *core.Shares) {
 	h := shareHandlers{shares}
 	for _, sr := range spaceRoutes {
 		route := sr.prefix + "/shares/{path...}"
-		mux.HandleFunc("POST "+route, authenticated(core.ScopePush, h.create(sr.space)))
-		mux.HandleFunc("DELETE "+route, authenticated(core.ScopePush, h.revoke(sr.space)))
+		mux.HandleFunc("POST "+route, authenticated(core.ScopePush, authed(http.StatusOK, h.create(sr.space))))
+		mux.HandleFunc("DELETE "+route, authenticated(core.ScopePush, authedNoContent(h.revoke(sr.space))))
 	}
 	mux.HandleFunc("GET /s/{slug}/raw", chain.ToHandlerFunc(h.raw))
 	mux.HandleFunc("GET /api/v1/public/{slug}", chain.ToHandlerFunc(h.public))
@@ -32,35 +32,27 @@ func registerShareRoutes(mux *http.ServeMux, chain *errchain.ErrChain, authentic
 
 type shareHandlers struct{ shares *core.Shares }
 
-func (h shareHandlers) create(space spaceFunc) errchain.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) error {
-		p, s, err := resolve(r, space)
+func (h shareHandlers) create(space spaceFunc) func(http.ResponseWriter, *http.Request, core.Principal) (driveapi.Share, error) {
+	return func(w http.ResponseWriter, r *http.Request, p core.Principal) (driveapi.Share, error) {
+		s, err := spaceOf(r, space)
 		if err != nil {
-			return err
+			return driveapi.Share{}, err
 		}
 		req, err := extractors.Body[driveapi.ShareRequest](w, r)
 		if err != nil && !errors.Is(err, io.EOF) {
-			return err
+			return driveapi.Share{}, err
 		}
-		share, err := h.shares.Create(r.Context(), p, s, r.PathValue("path"), req.ExpiresIn)
-		if err != nil {
-			return err
-		}
-		return server.JSON(w, http.StatusOK, share)
+		return h.shares.Create(r.Context(), p, s, r.PathValue("path"), req.ExpiresIn)
 	}
 }
 
-func (h shareHandlers) revoke(space spaceFunc) errchain.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) error {
-		p, s, err := resolve(r, space)
+func (h shareHandlers) revoke(space spaceFunc) func(*http.Request, core.Principal) error {
+	return func(r *http.Request, p core.Principal) error {
+		s, err := spaceOf(r, space)
 		if err != nil {
 			return err
 		}
-		if err := h.shares.Revoke(r.Context(), p, s, r.PathValue("path")); err != nil {
-			return err
-		}
-		w.WriteHeader(http.StatusNoContent)
-		return nil
+		return h.shares.Revoke(r.Context(), p, s, r.PathValue("path"))
 	}
 }
 

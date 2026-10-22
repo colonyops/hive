@@ -28,7 +28,6 @@ func TestMapError(t *testing.T) {
 		{"too large", core.NewError(core.KindTooLarge, "big"), http.StatusRequestEntityTooLarge, "too_large"},
 		{"rate limited", core.NewError(core.KindRateLimited, "slow"), http.StatusTooManyRequests, "rate_limited"},
 		{"wrapped", fmt.Errorf("op: %w", core.NewError(core.KindForbidden, "no")), http.StatusForbidden, "forbidden"},
-		{"max bytes", fmt.Errorf("read: %w", &http.MaxBytesError{Limit: 10}), http.StatusRequestEntityTooLarge, "too_large"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

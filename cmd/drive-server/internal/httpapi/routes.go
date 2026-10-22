@@ -9,7 +9,13 @@ import (
 	"github.com/colonyops/hive/pkg/buildinfo"
 )
 
-func registerRoutes(mux *http.ServeMux, chain *errchain.ErrChain, info buildinfo.Info, svc Services) {
+// router is the part of *http.ServeMux that registration uses, so a test can
+// record every pattern.
+type router interface {
+	HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request))
+}
+
+func registerRoutes(mux router, chain *errchain.ErrChain, info buildinfo.Info, svc Services) {
 	cookies := newCookies(svc.BaseURL)
 	authenticated := func(scope core.Scope, h errchain.HandlerFunc) http.HandlerFunc {
 		return chain.ToHandlerFunc(h, Authenticate(svc.Tokens, svc.Sessions, cookies.name), Require(scope))

@@ -1,36 +1,31 @@
-package httpapi
+package httpapi_test
 
 import (
-	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/cmd/drive-server/internal/httpapi"
 	"github.com/colonyops/hive/pkg/buildinfo"
 )
 
 func TestHealthz(t *testing.T) {
-	h := New(zerolog.Nop(), buildinfo.Info{}, Services{})
+	h := httpapi.New(zerolog.Nop(), buildinfo.Info{}, httpapi.Services{})
 
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	rec := serve(h, call{method: http.MethodGet, target: "/healthz"})
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "ok", rec.Body.String())
 }
 
 func TestVersionReturnsInjectedInfo(t *testing.T) {
-	h := New(zerolog.Nop(), buildinfo.Info{Version: "1.2.3", Commit: "abc", Date: "2026-10-15"}, Services{})
+	h := httpapi.New(zerolog.Nop(), buildinfo.Info{Version: "1.2.3", Commit: "abc", Date: "2026-10-15"}, httpapi.Services{})
 
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/version", nil))
+	rec := serve(h, call{method: http.MethodGet, target: "/version"})
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	var got map[string]string
-	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &got))
-	assert.Equal(t, map[string]string{"version": "1.2.3", "commit": "abc", "date": "2026-10-15"}, got)
+	assert.Equal(t, map[string]string{"version": "1.2.3", "commit": "abc", "date": "2026-10-15"}, decode[map[string]string](t, rec))
 }

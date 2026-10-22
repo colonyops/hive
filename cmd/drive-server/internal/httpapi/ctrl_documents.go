@@ -7,7 +7,6 @@ import (
 	"strconv"
 
 	"github.com/hay-kot/httpkit/errchain"
-	"github.com/hay-kot/httpkit/server"
 
 	"github.com/colonyops/hive/cmd/drive-server/internal/core"
 	"github.com/colonyops/hive/internal/domain/drive"
@@ -33,18 +32,18 @@ var spaceRoutes = []spaceRoute{
 	}},
 }
 
-func registerDocumentRoutes(mux *http.ServeMux, authenticated authenticatedFunc, docs *core.Documents) {
+func registerDocumentRoutes(mux router, authenticated authenticatedFunc, docs *core.Documents) {
 	h := documentHandlers{docs}
-	mux.HandleFunc("GET /api/v1/spaces", authenticated(core.ScopeRead, h.spaces))
-	mux.HandleFunc("GET /api/v1/search", authenticated(core.ScopeRead, h.search))
-	mux.HandleFunc("GET /api/v1/recent", authenticated(core.ScopeRead, h.recent))
-	mux.HandleFunc("GET /api/v1/shared-links", authenticated(core.ScopeRead, h.sharedLinks))
+	mux.HandleFunc("GET /api/v1/spaces", authenticated(core.ScopeRead, authed(http.StatusOK, h.spaces)))
+	mux.HandleFunc("GET /api/v1/search", authenticated(core.ScopeRead, authed(http.StatusOK, h.search)))
+	mux.HandleFunc("GET /api/v1/recent", authenticated(core.ScopeRead, authed(http.StatusOK, h.recent)))
+	mux.HandleFunc("GET /api/v1/shared-links", authenticated(core.ScopeRead, authed(http.StatusOK, h.sharedLinks)))
 	for _, sr := range spaceRoutes {
 		doc := sr.prefix + "/docs/{path...}"
-		mux.HandleFunc("GET "+sr.prefix, authenticated(core.ScopeRead, h.list(sr.space)))
+		mux.HandleFunc("GET "+sr.prefix, authenticated(core.ScopeRead, authed(http.StatusOK, h.list(sr.space))))
 		mux.HandleFunc("GET "+doc, authenticated(core.ScopeRead, h.get(sr.space)))
-		mux.HandleFunc("PUT "+doc, authenticated(core.ScopePush, h.put(sr.space)))
-		mux.HandleFunc("DELETE "+doc, authenticated(core.ScopePush, h.delete(sr.space)))
+		mux.HandleFunc("PUT "+doc, authenticated(core.ScopePush, authed(http.StatusOK, h.put(sr.space))))
+		mux.HandleFunc("DELETE "+doc, authenticated(core.ScopePush, authedNoContent(h.delete(sr.space))))
 	}
 }
 
@@ -52,30 +51,8 @@ type documentHandlers struct{ docs *core.Documents }
 
 type spaceFunc func(r *http.Request) (drive.Space, error)
 
-// A name that is not a valid space is a 404, not a 422: no such space can
-// exist.
-func resolve(r *http.Request, space spaceFunc) (core.Principal, drive.Space, error) {
-	p, err := principal(r)
-	if err != nil {
-		return core.Principal{}, drive.Space{}, err
-	}
-	s, err := space(r)
-	if err != nil {
-		return core.Principal{}, drive.Space{}, core.NewError(core.KindNotFound, "space not found")
-	}
-	return p, s, nil
-}
-
-func (h documentHandlers) spaces(w http.ResponseWriter, r *http.Request) error {
-	p, err := principal(r)
-	if err != nil {
-		return err
-	}
-	spaces, err := h.docs.Spaces(r.Context(), p)
-	if err != nil {
-		return err
-	}
-	return server.JSON(w, http.StatusOK, spaces)
+func (h documentHandlers) spaces(_ http.ResponseWriter, r *http.Request, p core.Principal) ([]driveapi.SpaceSummary, error) {
+	return h.docs.Spaces(r.Context(), p)
 }
 
 const (
@@ -94,78 +71,58 @@ func parseLimit(raw string, def, maxLimit int) (int, error) {
 	return min(n, maxLimit), nil
 }
 
-func (h documentHandlers) search(w http.ResponseWriter, r *http.Request) error {
-	p, err := principal(r)
-	if err != nil {
-		return err
-	}
+func (h documentHandlers) search(_ http.ResponseWriter, r *http.Request, p core.Principal) (driveapi.SearchResults, error) {
 	query := r.URL.Query()
 
 	var space *drive.Space
 	if key := query.Get("space"); key != "" {
 		s, err := drive.ParseSpaceKey(key)
 		if err != nil {
-			return core.NewError(core.KindInvalid, "invalid space")
+			return driveapi.SearchResults{}, core.NewError(core.KindInvalid, "invalid space")
 		}
 		space = &s
 	}
 	limit, err := parseLimit(query.Get("limit"), defaultSearchLimit, maxSearchLimit)
 	if err != nil {
-		return err
+		return driveapi.SearchResults{}, err
 	}
 
 	hits, err := h.docs.Search(r.Context(), p, query.Get("q"), space, limit)
 	if err != nil {
-		return err
+		return driveapi.SearchResults{}, err
 	}
-	return server.JSON(w, http.StatusOK, driveapi.SearchResults{Hits: hits})
+	return driveapi.SearchResults{Hits: hits}, nil
 }
 
-func (h documentHandlers) recent(w http.ResponseWriter, r *http.Request) error {
-	p, err := principal(r)
-	if err != nil {
-		return err
-	}
+func (h documentHandlers) recent(_ http.ResponseWriter, r *http.Request, p core.Principal) ([]driveapi.Document, error) {
 	limit, err := parseLimit(r.URL.Query().Get("limit"), core.DefaultRecentLimit, core.MaxRecentLimit)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	docs, err := h.docs.Recent(r.Context(), p, limit)
-	if err != nil {
-		return err
-	}
-	return server.JSON(w, http.StatusOK, docs)
+	return h.docs.Recent(r.Context(), p, limit)
 }
 
-func (h documentHandlers) sharedLinks(w http.ResponseWriter, r *http.Request) error {
-	p, err := principal(r)
-	if err != nil {
-		return err
-	}
-	docs, err := h.docs.SharedLinks(r.Context(), p)
-	if err != nil {
-		return err
-	}
-	return server.JSON(w, http.StatusOK, docs)
+func (h documentHandlers) sharedLinks(_ http.ResponseWriter, r *http.Request, p core.Principal) ([]driveapi.Document, error) {
+	return h.docs.SharedLinks(r.Context(), p)
 }
 
-func (h documentHandlers) list(space spaceFunc) errchain.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) error {
-		p, s, err := resolve(r, space)
+func (h documentHandlers) list(space spaceFunc) func(http.ResponseWriter, *http.Request, core.Principal) ([]driveapi.Document, error) {
+	return func(_ http.ResponseWriter, r *http.Request, p core.Principal) ([]driveapi.Document, error) {
+		s, err := spaceOf(r, space)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		docs, err := h.docs.List(r.Context(), p, s)
-		if err != nil {
-			return err
-		}
-		return server.JSON(w, http.StatusOK, docs)
+		return h.docs.List(r.Context(), p, s)
 	}
 }
 
 func (h documentHandlers) get(space spaceFunc) errchain.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) error {
-		p, s, err := resolve(r, space)
+		p, err := principal(r)
+		if err != nil {
+			return err
+		}
+		s, err := spaceOf(r, space)
 		if err != nil {
 			return err
 		}
@@ -189,11 +146,11 @@ func (h documentHandlers) get(space spaceFunc) errchain.HandlerFunc {
 	}
 }
 
-func (h documentHandlers) put(space spaceFunc) errchain.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) error {
-		p, s, err := resolve(r, space)
+func (h documentHandlers) put(space spaceFunc) func(http.ResponseWriter, *http.Request, core.Principal) (driveapi.Document, error) {
+	return func(w http.ResponseWriter, r *http.Request, p core.Principal) (driveapi.Document, error) {
+		s, err := spaceOf(r, space)
 		if err != nil {
-			return err
+			return driveapi.Document{}, err
 		}
 		body := r.Body
 		if limit := h.docs.MaxDocumentSize(); limit > 0 {
@@ -202,28 +159,20 @@ func (h documentHandlers) put(space spaceFunc) errchain.HandlerFunc {
 		data, err := io.ReadAll(body)
 		if err != nil {
 			if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
-				return err
+				return driveapi.Document{}, err
 			}
-			return core.NewError(core.KindInvalid, "could not read the request body")
+			return driveapi.Document{}, core.NewError(core.KindInvalid, "could not read the request body")
 		}
-		doc, err := h.docs.Put(r.Context(), p, s, r.PathValue("path"), data)
-		if err != nil {
-			return err
-		}
-		return server.JSON(w, http.StatusOK, doc)
+		return h.docs.Put(r.Context(), p, s, r.PathValue("path"), data)
 	}
 }
 
-func (h documentHandlers) delete(space spaceFunc) errchain.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) error {
-		p, s, err := resolve(r, space)
+func (h documentHandlers) delete(space spaceFunc) func(*http.Request, core.Principal) error {
+	return func(r *http.Request, p core.Principal) error {
+		s, err := spaceOf(r, space)
 		if err != nil {
 			return err
 		}
-		if err := h.docs.Delete(r.Context(), p, s, r.PathValue("path")); err != nil {
-			return err
-		}
-		w.WriteHeader(http.StatusNoContent)
-		return nil
+		return h.docs.Delete(r.Context(), p, s, r.PathValue("path"))
 	}
 }

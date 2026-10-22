@@ -33,7 +33,7 @@ type authHandlers struct {
 	verifyPerEmail *guard.Limiter
 }
 
-func registerAuthRoutes(mux *http.ServeMux, chain *errchain.ErrChain, sessionOnly func(errchain.HandlerFunc) http.HandlerFunc, svc Services, c cookies) {
+func registerAuthRoutes(mux router, chain *errchain.ErrChain, sessionOnly func(errchain.HandlerFunc) http.HandlerFunc, svc Services, c cookies) {
 	h := authHandlers{
 		svc:            svc,
 		cookies:        c,
