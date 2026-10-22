@@ -116,16 +116,19 @@ workspaces:
 	require.NoError(t, err)
 	assert.Equal(t, `# my hive setup
 copy_command: pbcopy
+
 # these matter to me
 rules:
   - pattern: ""
     max_recycled: 3
+
 agents:
   default: codex
   agent_selector: true
   codex:
     command: codex
     flags: [--full-auto]
+
 workspaces:
   - `+repos+`
 `, string(raw))
@@ -503,4 +506,28 @@ func TestYAMLScalarQuotesWhatWouldChangeMeaning(t *testing.T) {
 	assert.Equal(t, "plain", config.YAMLScalar("plain"))
 	assert.Equal(t, `'a: b'`, config.YAMLScalar("a: b"))
 	assert.Equal(t, `"yes"`, config.YAMLScalar("yes"))
+}
+
+func TestApplyKeepsBlankLinesInsideABlockScalarOnce(t *testing.T) {
+	repos := workspaceDir(t, 1)
+	path := write(t, t.TempDir(), `commands:
+  share:
+    sh: |
+      one
+
+      two
+
+workspaces:
+  - /old/place
+`)
+
+	require.NoError(t, apply(t, path, config.Edit{
+		DefaultAgent: "codex",
+		Profiles:     []config.EditProfile{{Name: "codex", Command: "codex"}},
+		Workspaces:   []string{repos},
+	}))
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(string(raw), "commands:\n  share:\n    sh: |\n      one\n\n      two\n\nworkspaces:\n"), string(raw))
 }
