@@ -32,5 +32,5 @@ func imageInputError(err error) error {
 	if errors.Is(err, terminalimg.ErrQuota) {
 		return Wrap(err, KindConflict, "%s", err)
 	}
-	return Wrap(err, KindInternal, "Could not prepare the image. Check that image storage is writable and has free space.")
+	return Wrap(err, KindInternal, "Could not prepare the attachment. Check that attachment storage is writable and has free space.")
 }

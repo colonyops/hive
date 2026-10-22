@@ -76,6 +76,63 @@ func TestSaveRollsBackInvalidBatch(t *testing.T) {
 	assert.Empty(t, entries)
 }
 
+func TestPDFAttachments(t *testing.T) {
+	raw, err := os.ReadFile("testdata/document.pdf")
+	require.NoError(t, err)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "report (final).PDF")
+	require.NoError(t, os.WriteFile(path, raw, 0o600))
+	store := NewStore(filepath.Join(dir, "attachments"))
+	pastes, err := store.Prepare(t.Context(), []string{path})
+	require.NoError(t, err)
+	resolved, err := filepath.EvalSymlinks(path)
+	require.NoError(t, err)
+	assert.Equal(t, []string{quotePath(resolved)}, pastes)
+	_, err = os.Stat(store.dir)
+	require.ErrorIs(t, err, os.ErrNotExist)
+
+	imageBytes := testPNG(t)
+	pastes, err = store.Save(t.Context(), []io.Reader{bytes.NewReader(raw), bytes.NewReader(imageBytes)})
+	require.NoError(t, err)
+	require.Len(t, pastes, 2)
+	for i, want := range [][]byte{raw, imageBytes} {
+		saved := unquote(t, pastes[i])
+		assert.Equal(t, []string{".pdf", ".png"}[i], filepath.Ext(saved))
+		got, err := os.ReadFile(saved)
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
+		_, err = NewStore(store.dir).Prepare(t.Context(), []string{saved})
+		require.NoError(t, err)
+		assert.NotContains(t, pastes[i], "\n")
+	}
+}
+
+func TestPDFLimitsAndInvalidBatch(t *testing.T) {
+	raw, err := os.ReadFile("testdata/document.pdf")
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name   string
+		inputs []io.Reader
+	}{
+		{"oversized PDF", []io.Reader{io.MultiReader(bytes.NewReader(raw), bytes.NewReader(make([]byte, MaxFileBytes)))}},
+		{"invalid mixed batch", []io.Reader{bytes.NewReader(raw), strings.NewReader("not a PDF")}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewStore(t.TempDir())
+			pastes, err := store.Save(t.Context(), tc.inputs)
+			require.ErrorIs(t, err, ErrInvalid)
+			assert.Nil(t, pastes)
+			entries, err := os.ReadDir(store.dir)
+			require.NoError(t, err)
+			assert.Empty(t, entries)
+		})
+	}
+	path := filepath.Join(t.TempDir(), "fake.pdf")
+	require.NoError(t, os.WriteFile(path, []byte("not a PDF"), 0o600))
+	_, err = NewStore(t.TempDir()).Prepare(t.Context(), []string{path})
+	require.ErrorIs(t, err, ErrInvalid)
+}
+
 func TestPrepareEscapesPathsWithoutExecutingThem(t *testing.T) {
 	dir := t.TempDir()
 	for _, name := range []string{"space image.png", "quote'\".png", "图.png", "$(touch injected)`touch injected`(1).png", "back\\slash.png"} {

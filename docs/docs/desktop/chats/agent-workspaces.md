@@ -54,9 +54,9 @@ Create several named chats inside a workspace and use the sidebar to see whether
 
 Stopping an agent keeps its chat record. Restarting a stopped chat resumes the conversation when its command and agent support it. You can also rename or delete a chat, filter the sidebar, and open recent chats from the command palette.
 
-Drag image files or paste clipboard screenshots into a chat's terminal to give
-the agent visual context. See [Image input](../code/terminal-mode.md#image-input)
-for supported formats, limits, and saved clipboard images.
+Drag PDFs or image files, or paste files or screenshots into a chat's terminal.
+See [PDF and image input](../code/terminal-mode.md#image-input) for supported formats,
+limits, and saved clipboard files.
 
 Images that Pi draws show in the chat's terminal. Hive sets
 `PI_IMAGE_PROTOCOL=kitty` for chats it starts. See

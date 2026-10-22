@@ -282,8 +282,8 @@ func (ctrl *Controller) baseOperations() []Op {
 
 func (ctrl *Controller) terminalOperations() []Op {
 	return []Op{
-		{Method: "POST", Path: TerminalPathPrefix + "images/paths", Summary: "Prepare local image paths for terminal paste.", Request: terminalImagePathsRequest{}, Response: terminalImagesResponse{}, Handler: ctrl.TerminalImagePaths},
-		{Method: "POST", Path: TerminalPathPrefix + "images/upload", Summary: "Store clipboard images and return separate path pastes.", Response: terminalImagesResponse{}, Handler: ctrl.TerminalImageUpload},
+		{Method: "POST", Path: TerminalPathPrefix + "images/paths", Summary: "Prepare local PDF and image paths for terminal paste.", Request: terminalImagePathsRequest{}, Response: terminalImagesResponse{}, Handler: ctrl.TerminalImagePaths},
+		{Method: "POST", Path: TerminalPathPrefix + "images/upload", Summary: "Store clipboard PDFs and images and return separate path pastes.", Response: terminalImagesResponse{}, Handler: ctrl.TerminalImageUpload},
 		{Method: "POST", Path: TerminalPathPrefix + "panes/paste", Summary: "Paste text into the named pane without submitting it.", Request: terminalPasteRequest{}, Status: http.StatusNoContent, Handler: ctrl.TerminalPaste},
 		{
 			Method: "POST", Path: "/api/terminal/attach", Summary: "Attach a tmux control-mode client to a session slug and return its windows. Attaching never spawns: a slug tmux is not running answers 404, and POST /api/terminal/start is what creates it. cols/rows are the opening size vote; 0x0 attaches without setting a client size, leaving the session at the size its other clients gave it. The data plane is a WebSocket served at " + TerminalStreamPath + ", outside this operations table.",

@@ -48,11 +48,11 @@ func (ctrl *Controller) TerminalImageUpload(w http.ResponseWriter, r *http.Reque
 	readers := make([]io.Reader, 0, len(files))
 	for _, file := range files {
 		if file.Size > terminalimg.MaxFileBytes {
-			return app.Errorf(app.KindInvalid, "Each image must be at most 20 MiB.")
+			return app.Errorf(app.KindInvalid, "Each file must be at most 20 MiB.")
 		}
 		input, err := file.Open()
 		if err != nil {
-			return app.Wrap(err, app.KindInternal, "Could not read the uploaded image.")
+			return app.Wrap(err, app.KindInternal, "Could not read the uploaded attachment.")
 		}
 		defer func() { _ = input.Close() }()
 		readers = append(readers, input)

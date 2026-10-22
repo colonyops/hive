@@ -39,7 +39,7 @@ export function installTerminalImages(host: HTMLElement, options: ImageInputOpti
     queue = queue
       .then(async () => {
         if (!current()) return
-        const toast = showToast('Preparing image…', { duration: 0 })
+        const toast = showToast('Preparing attachment…', { duration: 0 })
         try {
           const pastes = await prepareTerminalImages(input, controller.signal)
           for (const text of pastes) {
@@ -49,7 +49,9 @@ export function installTerminalImages(host: HTMLElement, options: ImageInputOpti
           if (current()) target.focus()
         } catch (error) {
           if (current())
-            showToast(error instanceof Error ? error.message : 'Could not insert the image.', { severity: 'error' })
+            showToast(error instanceof Error ? error.message : 'Could not insert the attachment.', {
+              severity: 'error',
+            })
         } finally {
           dismissToast(toast)
         }
@@ -66,7 +68,7 @@ export function installTerminalImages(host: HTMLElement, options: ImageInputOpti
   }
 
   // Native Wails owns OS drops. Browser File drops are used by the headless
-  // surface; handling both in Wails would insert the same image twice.
+  // surface; handling both in Wails would insert the same attachment twice.
   const native =
     (window as Window & { _wails?: { flags?: { enableFileDrop?: boolean } } })._wails?.flags?.enableFileDrop === true
   const releasePaste = interceptPaste(host, options.pasteText, receive)

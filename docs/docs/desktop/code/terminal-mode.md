@@ -61,20 +61,21 @@ Hide the panel to keep its shell running, or use **End this terminal** to stop i
 
 ## Working in Code
 
-### Image input
+### PDF and image input {#image-input}
 
-Drag image files onto the terminal pane, or paste a screenshot from your
-clipboard with <kbd>⌘V</kbd> on macOS. This works in Code, Chats, and pop-up
-terminals. Hive inserts an image reference; add your instructions and submit
-the prompt yourself. The agent must support image input and run on the same
+Drag PDFs or image files onto the terminal pane, or paste files or a screenshot
+from your clipboard with <kbd>⌘V</kbd> on macOS. This works in Code, Chats, and pop-up
+terminals. Hive inserts a file reference; add your instructions and submit
+the prompt yourself. The agent must support the file format and run on the same
 filesystem as Hive.
 
-PNG, JPEG, GIF, and WebP files are supported, up to 20 MiB and 64 megapixels
-each. A gesture can include up to 10 images totaling 64 MiB. Unsupported or
-oversized images show an error. Switching away during preparation cancels
+PDF, PNG, JPEG, GIF, and WebP files are supported, up to 20 MiB each.
+Images can have up to 64 megapixels. A gesture can include up to 10 files
+totaling 64 MiB. Unsupported or oversized files show an error.
+Switching away during preparation cancels
 insertion; a paste already sent can finish in its original pane.
 
-Clipboard images are saved under `desktop/assets/terminal-images/` inside the
+Clipboard files are saved under `desktop/assets/terminal-images/` inside the
 data directory shown in **Settings ▸ System**. They survive restarts so resumed
 conversations can still read them. Storage is limited to 1 GiB. Remove files
 you no longer need from that directory to free space; conversations that still

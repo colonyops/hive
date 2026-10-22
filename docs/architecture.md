@@ -1388,10 +1388,11 @@ place that turns a `Location` into a route or an overlay. A new area adds an
 
 ### Terminal sessions
 
-**Image input is local file references.** Wails routes native drops to a specific
-terminal host; that host captures clipboard images from webview paste events. `TerminalImagesService`
+**Attachment input is local file references.** Wails routes native drops to a specific
+terminal host; that host captures clipboard files from webview paste events. `TerminalImagesService`
 validates original paths or saves clipboard bytes through `terminalimg` under
-StateDir. Images are pasted one path at a time, with no submission, into a target
+StateDir. It accepts PDF signatures and decodable PNG, JPEG, GIF and WebP images.
+Attachments are pasted one path at a time, with no submission, into a target
 captured before asynchronous preparation. The authenticated HTTP control plane
 acknowledges tmux pastes; popup terminals use xterm's paste mode over their PTY.
 Completed clipboard files survive detach, restart and session deletion, with a
