@@ -1,11 +1,11 @@
 import { fakePlatform } from '@hive/ui/test-utils/platform'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMemoryHistory, createRouter } from 'vue-router'
 import DriveListing from '../components/DriveListing.vue'
 import { documentEntries, folderContents } from '../lib/entries'
 import { spaceFromKey } from '../lib/space'
 import { useViewMode } from '../lib/viewMode'
+import { mountWithRouter } from '../test-utils/mount'
 import { doc } from './fixtures'
 
 const api = vi.hoisted(() => ({ share: vi.fn(), unshare: vi.fn(), deleteDocument: vi.fn() }))
@@ -17,23 +17,15 @@ const docs = [
   doc({ path: 'docs/guide.md', title: 'Guide' }),
 ]
 
-async function mountListing(entries = folderContents(docs, space, '')) {
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/repos/:owner/:repo/:path(.*)*', component: {} }],
-  })
-  await router.push('/repos/acme/notes')
-  const wrapper = mount(DriveListing, {
+function mountListing(entries = folderContents(docs, space, '')) {
+  return mountWithRouter(DriveListing, {
+    path: '/repos/acme/notes',
     props: { crumbs: [{ label: 'acme/notes', to: '/repos/acme/notes' }], entries, emptyMessage: 'Nothing here.' },
-    attachTo: document.body,
-    global: { plugins: [router] },
   })
-  return { router, wrapper }
 }
 
 describe('DriveListing', () => {
   beforeEach(() => {
-    localStorage.clear()
     Object.values(api).forEach((m) => m.mockReset())
   })
 
@@ -114,13 +106,26 @@ describe('DriveListing', () => {
     expect(wrapper.emitted('changed')).toBeTruthy()
   })
 
-  it('copies the link of a shared document from the row menu', async () => {
-    const { wrapper } = await mountListing()
-
-    await wrapper.findAll('[data-testid="entry-menu"]')[1].trigger('click')
+  async function copyFromRowMenu() {
+    const mounted = await mountListing()
+    await mounted.wrapper.findAll('[data-testid="entry-menu"]')[1].trigger('click')
     document.body.querySelector<HTMLElement>('[data-testid="menu-copy-link"]')!.click()
     await flushPromises()
+    return mounted
+  }
+
+  it('copies the link of a shared document from the row menu', async () => {
+    const { toast } = await copyFromRowMenu()
 
     expect(fakePlatform.clipboard.writeText).toHaveBeenCalledWith('http://drive.test/s/x')
+    expect(toast.show).toHaveBeenCalledWith('Link copied')
+  })
+
+  it('reports a copy the clipboard refused instead of claiming success', async () => {
+    fakePlatform.clipboard.writeText.mockRejectedValueOnce(new Error('denied'))
+    const { toast } = await copyFromRowMenu()
+
+    expect(toast.show).toHaveBeenCalledWith('Could not copy the link')
+    expect(toast.show).not.toHaveBeenCalledWith('Link copied')
   })
 })

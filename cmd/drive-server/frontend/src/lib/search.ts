@@ -1,3 +1,4 @@
+import { errorText } from '@hive/ui/lib/errorText'
 import { onScopeDispose, ref, watch } from 'vue'
 import { api, ApiError } from '../api'
 import type { SearchHit } from '../types'
@@ -29,7 +30,7 @@ export function useSearch(query: () => string, space: () => string | undefined) 
       if (id !== latest) return
       hits.value = []
       if (cause instanceof ApiError && cause.status === 404) unavailable.value = true
-      else error.value = cause instanceof Error ? cause.message : 'Search failed.'
+      else error.value = errorText(cause, 'Search failed.')
     } finally {
       if (id === latest) loading.value = false
     }

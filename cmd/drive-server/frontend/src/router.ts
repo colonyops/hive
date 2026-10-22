@@ -1,10 +1,21 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { api, ApiError } from './api'
+import { api, ApiError, onUnauthorized } from './api'
+import { redirectQuery } from './lib/redirect'
+import type { Me } from './types'
 
-let signedIn = false
+let signedInAs: Me | null = null
 
 export function forgetSignIn(): void {
-  signedIn = false
+  signedInAs = null
+}
+
+/** The account the route guard signed in, so the layout does not ask again. */
+export function signedInUser(): Me | null {
+  return signedInAs
+}
+
+export function rememberSignIn(me: Me): void {
+  signedInAs = me
 }
 
 export const router = createRouter({
@@ -16,7 +27,7 @@ export const router = createRouter({
       component: () => import('./pages/SignIn.vue'),
       meta: { public: true },
       // The sign-in mail links here with the address filled in.
-      beforeEnter: (to) => (to.query.email ? { name: 'verify', query: { email: to.query.email } } : true),
+      beforeEnter: (to) => (to.query.email ? { name: 'verify', query: to.query } : true),
     },
     {
       path: '/sign-in/code',
@@ -53,13 +64,19 @@ export const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
-  if (to.meta.public || signedIn) return true
+  if (to.meta.public || signedInAs) return true
   try {
-    await api.me()
-    signedIn = true
+    signedInAs = await api.me()
     return true
   } catch (error) {
-    if (error instanceof ApiError && error.status === 401) return { name: 'sign-in' }
+    if (error instanceof ApiError && error.status === 401) return { name: 'sign-in', query: redirectQuery(to.fullPath) }
     throw error
   }
+})
+
+// Before the guard has signed anyone in, a 401 is the guard's to handle.
+onUnauthorized(() => {
+  if (!signedInAs) return
+  forgetSignIn()
+  void router.push({ name: 'sign-in', query: redirectQuery(router.currentRoute.value.fullPath) })
 })

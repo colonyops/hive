@@ -1,10 +1,12 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMemoryHistory, createRouter } from 'vue-router'
 import AppLayout from '../pages/AppLayout.vue'
 import DocumentFeed from '../pages/DocumentFeed.vue'
 import SpaceRoute from '../pages/SpaceRoute.vue'
-import { doc, frameStub } from './fixtures'
+import { forgetSignIn, rememberSignIn } from '../router'
+import { mountWithRouter, routerShell } from '../test-utils/mount'
+import type { Me } from '../types'
+import { doc } from './fixtures'
 
 const mocks = vi.hoisted(() => ({
   me: vi.fn(),
@@ -18,8 +20,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../api')>()), api: mocks }))
 
 async function mountAt(path: string) {
-  const router = createRouter({
-    history: createMemoryHistory(),
+  const { router, wrapper: app } = await mountWithRouter(routerShell, {
+    path,
     routes: [
       {
         path: '/',
@@ -34,20 +36,16 @@ async function mountAt(path: string) {
       { path: '/sign-in', name: 'sign-in', component: {} },
     ],
   })
-  await router.push(path)
-  const app = mount(
-    { template: '<RouterView />' },
-    { attachTo: document.body, global: { plugins: [router], stubs: { HtmlDocumentFrame: frameStub } } },
-  )
-  await flushPromises()
   return { router, app }
 }
 
+const ada: Me = { email: 'ada@example.com', policy: 'x', quota: { used: 2048, limit: 4096 } }
+
 describe('drive shell', () => {
   beforeEach(() => {
-    localStorage.clear()
+    forgetSignIn()
     Object.values(mocks).forEach((m) => m.mockReset())
-    mocks.me.mockResolvedValue({ email: 'ada@example.com', policy: 'x', quota: { used: 2048, limit: 4096 } })
+    mocks.me.mockResolvedValue(ada)
     mocks.spaces.mockResolvedValue([
       { space: 'acme/notes', kind: 'repository', documents: 3, bytes: 3000 },
       { space: 'workspaces/scratch', kind: 'workspace', documents: 1, bytes: 10 },
@@ -111,6 +109,14 @@ describe('drive shell', () => {
     expect(app.findAll('[data-testid="entry-label"]').map((e) => e.text())).toEqual(['Plan', 'Todo'])
     expect(mocks.recent).toHaveBeenCalledTimes(1)
     expect(mocks.documents).not.toHaveBeenCalled()
+  })
+
+  it('reuses the account the route guard already fetched', async () => {
+    rememberSignIn(ada)
+    const { app } = await mountAt('/recent')
+
+    expect(mocks.me).not.toHaveBeenCalled()
+    expect(app.get('[data-testid="storage-meter"]').text()).toContain('2.0 KB of 4.0 KB')
   })
 
   it('shows the error when the feed request fails', async () => {

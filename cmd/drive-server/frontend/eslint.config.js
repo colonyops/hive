@@ -30,6 +30,14 @@ const rawBrowserApisInComponents = [
     message: 'Use useEventListener (or onKeyStroke, onClickOutside) from @vueuse/core.',
   },
 ]
+// useStorage survives blocked storage and keeps every reader of a key in step.
+const rawStorage = {
+  'no-restricted-globals': ['error', { name: 'localStorage', message: 'Use useStorage from @vueuse/core.' }],
+  'no-restricted-properties': [
+    'error',
+    { object: 'window', property: 'localStorage', message: 'Use useStorage from @vueuse/core.' },
+  ],
+}
 
 export default defineConfig(
   globalIgnores(['dist/']),
@@ -82,11 +90,7 @@ export default defineConfig(
     files: ['src/**/*.vue'],
     rules: {
       'no-restricted-syntax': ['error', ...rawBrowserApisInComponents],
-      'no-restricted-globals': ['error', { name: 'localStorage', message: 'Use useStorage from @vueuse/core.' }],
-      'no-restricted-properties': [
-        'error',
-        { object: 'window', property: 'localStorage', message: 'Use useStorage from @vueuse/core.' },
-      ],
+      ...rawStorage,
       // The rule has no custom message: use the text, radius, and shadow
       // tokens in web/packages/ui/src/components/ui/README.md ("Tokens") instead.
       'vue/no-restricted-class': [
@@ -100,7 +104,7 @@ export default defineConfig(
   {
     files: ['src/**/*.ts'],
     ignores: ['**/*.spec.ts', 'src/test-utils/**', 'src/test-setup.ts'],
-    rules: { 'no-restricted-syntax': ['error', ...stateOutsideApp] },
+    rules: { 'no-restricted-syntax': ['error', ...stateOutsideApp], ...rawStorage },
   },
 
   {

@@ -1,3 +1,4 @@
+import { errorText } from '@hive/ui/lib/errorText'
 import type {
   CreatedToken,
   CreateTokenRequest,
@@ -26,7 +27,27 @@ export class ApiError extends Error {
   }
 }
 
-async function fail(res: Response): Promise<never> {
+// These answer 401 for a wrong code or a dead link, not for an expired session.
+const sessionless = ['/api/v1/auth/', '/api/v1/public/']
+
+let unauthorized: (() => void) | undefined
+
+/** `handler` runs when a call that needs the session answers 401. */
+export function onUnauthorized(handler: () => void): void {
+  unauthorized = handler
+}
+
+/** The text to show for a failed call: a rate limit names its wait. */
+export function describeApiError(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.status === 429) {
+    const wait = error.retryAfter ? `Try again in ${error.retryAfter} seconds.` : 'Try again later.'
+    return `Too many attempts. ${wait}`
+  }
+  return errorText(error, fallback)
+}
+
+async function fail(path: string, res: Response): Promise<never> {
+  if (res.status === 401 && !sessionless.some((prefix) => path.startsWith(prefix))) unauthorized?.()
   let kind = 'unknown'
   let message = `Request failed (${res.status}).`
   try {
@@ -47,7 +68,7 @@ async function send(method: string, path: string, body?: unknown): Promise<Respo
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
-  if (!res.ok) await fail(res)
+  if (!res.ok) await fail(path, res)
   return res
 }
 

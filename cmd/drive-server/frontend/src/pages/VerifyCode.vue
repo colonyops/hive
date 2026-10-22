@@ -6,7 +6,8 @@ import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api, ApiError } from '../api'
+import { api, describeApiError } from '../api'
+import { redirectQuery, safeRedirect } from '../lib/redirect'
 import { forgetSignIn } from '../router'
 
 const route = useRoute()
@@ -15,6 +16,7 @@ const email = ref(typeof route.query.email === 'string' ? route.query.email : ''
 const code = ref('')
 const busy = ref(false)
 const error = ref<string | null>(null)
+const destination = safeRedirect(route.query.redirect)
 
 async function submit(): Promise<void> {
   if (busy.value || !email.value.trim() || !code.value.trim()) return
@@ -23,13 +25,9 @@ async function submit(): Promise<void> {
   try {
     await api.verifySignIn(email.value.trim(), code.value.trim())
     forgetSignIn()
-    await router.replace({ name: 'recent' })
+    await router.replace(destination ?? { name: 'recent' })
   } catch (cause) {
-    if (cause instanceof ApiError && cause.status === 429) {
-      error.value = `Too many attempts. Try again in ${cause.retryAfter ?? 60} seconds.`
-    } else {
-      error.value = cause instanceof Error ? cause.message : 'Could not verify the code.'
-    }
+    error.value = describeApiError(cause, 'Could not verify the code.')
   } finally {
     busy.value = false
   }
@@ -60,7 +58,11 @@ async function submit(): Promise<void> {
       <BaseButton type="submit" :busy="busy" :disabled="!email.trim() || !code.trim()" data-testid="verify-submit">
         Sign in
       </BaseButton>
-      <RouterLink :to="{ name: 'sign-in' }" class="text-small text-text-3 hover:text-text">Send a new code</RouterLink>
+      <RouterLink
+        :to="{ name: 'sign-in', query: redirectQuery(destination) }"
+        class="text-small text-text-3 hover:text-text"
+        >Send a new code</RouterLink
+      >
     </form>
   </AuthLayout>
 </template>

@@ -28,38 +28,50 @@ export function entryMenu(entry: ListEntry): MenuEntry[] {
   ]
 }
 
-/** `changed` runs after anything that alters a document. */
-export function useEntryActions(changed: () => void | Promise<void>) {
-  const router = useRouter()
+/** Copy-link and delete for one document, shared by the listings and the document page. */
+export function useDocumentActions() {
   const me = useMe()
   const confirmation = useConfirmation()
   const clipboard = useClipboard()
   const toast = useToast()
 
+  async function copyLink(url: string): Promise<void> {
+    toast.show((await clipboard.copy(url)) ? 'Link copied' : 'Could not copy the link')
+  }
+
+  /** `after` runs once the document is gone and the storage meter has caught up. */
+  function requestDelete(apiPrefix: string, path: string, after: () => void | Promise<void>): void {
+    confirmation.request({
+      title: 'Delete this document?',
+      description: `${path} is deleted from the server. Local copies stay. Any share link stops working.`,
+      confirmLabel: 'Delete',
+      testid: 'delete-dialog',
+      onConfirm: async () => {
+        await api.deleteDocument(apiPrefix, path)
+        await me?.refresh()
+        await after()
+      },
+    })
+  }
+
+  return { confirmation, copyLink, requestDelete }
+}
+
+/** `changed` runs after anything that alters a document. */
+export function useEntryActions(changed: () => void | Promise<void>) {
+  const router = useRouter()
+  const { confirmation, copyLink, requestDelete } = useDocumentActions()
+
   async function run(id: string, entry: ListEntry): Promise<void> {
-    const prefix = entry.space.apiPrefix
     switch (id) {
       case 'open':
         await router.push(entryRoute(entry))
         break
       case 'copy-link':
-        if (entry.doc?.shared) {
-          await clipboard.copy(entry.doc.shared.url)
-          toast.show('Link copied')
-        }
+        if (entry.doc?.shared) await copyLink(entry.doc.shared.url)
         break
       case 'delete':
-        confirmation.request({
-          title: 'Delete this document?',
-          description: `${entry.path} is deleted from the server. Local copies stay. Any share link stops working.`,
-          confirmLabel: 'Delete',
-          testid: 'delete-dialog',
-          onConfirm: async () => {
-            await api.deleteDocument(prefix, entry.path)
-            await me?.refresh()
-            await changed()
-          },
-        })
+        requestDelete(entry.space.apiPrefix, entry.path, changed)
         break
     }
   }

@@ -12,9 +12,3 @@ export function doc(overrides: Partial<DriveDocument> & Pick<DriveDocument, 'pat
     ...overrides,
   }
 }
-
-// happy-dom would fetch an iframe's src for real, so specs read the src from a stand-in.
-export const frameStub = {
-  props: ['src', 'html', 'testid'],
-  template: '<div data-testid="frame" :data-src="src" />',
-}

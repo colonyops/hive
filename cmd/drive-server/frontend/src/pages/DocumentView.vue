@@ -6,8 +6,6 @@ import ConfirmationHost from '@hive/ui/components/ui/ConfirmationHost.vue'
 import IconButton from '@hive/ui/components/ui/IconButton.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import Spinner from '@hive/ui/components/ui/Spinner.vue'
-import { useClipboard } from '@hive/ui/composables/useClipboard'
-import { useConfirmation } from '@hive/ui/composables/useConfirmation'
 import { linkTarget, type ReaderDocument } from '@hive/ui/lib/document'
 import type { MenuEntry } from '@hive/ui/types/menu'
 import { computed, ref, shallowRef, watch } from 'vue'
@@ -24,10 +22,10 @@ import IconTrash from '~icons/material-symbols/delete'
 import { api, docUrl } from '../api'
 import Breadcrumb, { type Crumb } from '../components/Breadcrumb.vue'
 import SharePopover from '../components/SharePopover.vue'
-import { useMe } from '../lib/me'
+import { useDocumentActions } from '../lib/entryActions'
+import { useLoad } from '../lib/load'
 import { useReaderPrefs } from '../lib/readerPrefs'
 import { documentRoute, type SpaceRef } from '../lib/space'
-import { useToast } from '../lib/toast'
 import { ancestorDirs, documentLabel } from '../lib/tree'
 import type { DriveDocument, Share } from '../types'
 
@@ -41,11 +39,8 @@ const props = defineProps<{
 const emit = defineEmits<{ changed: [] }>()
 
 const router = useRouter()
-const me = useMe()
-const confirmation = useConfirmation()
+const { confirmation, copyLink: copy, requestDelete } = useDocumentActions()
 const { prefs, resize } = useReaderPrefs()
-const clipboard = useClipboard()
-const toast = useToast()
 
 const doc = computed(() => props.documents?.find((d) => d.path === props.path) ?? null)
 const paths = computed<ReadonlySet<string>>(() => new Set((props.documents ?? []).map((d) => d.path)))
@@ -66,27 +61,24 @@ const kindTone = computed(() => (isHtml.value ? 'text-node-orange' : 'text-node-
 const share = ref<Share | null>(null)
 const shareAnchor = shallowRef<HTMLElement | null>(null)
 const moreAnchor = shallowRef<HTMLElement | null>(null)
-const body = ref('')
-const bodyError = ref<string | null>(null)
-const loadingBody = ref(false)
+const {
+  data: body,
+  error: bodyError,
+  loading: loadingBody,
+  reload: loadBody,
+} = useLoad(() => api.documentBody(props.space.apiPrefix, props.path), 'Could not load the document.', {
+  immediate: false,
+})
 
 // The body loads once, when the document first appears in the list.
 let started = false
 watch(
   doc,
-  async (found) => {
+  (found) => {
     if (!found || started) return
     started = true
     share.value = found.shared ?? null
-    if (found.kind !== 'markdown') return
-    loadingBody.value = true
-    try {
-      body.value = await api.documentBody(props.space.apiPrefix, props.path)
-    } catch (cause) {
-      bodyError.value = cause instanceof Error ? cause.message : 'Could not load the document.'
-    } finally {
-      loadingBody.value = false
-    }
+    if (found.kind === 'markdown') void loadBody()
   },
   { immediate: true },
 )
@@ -100,7 +92,7 @@ const error = computed(() => {
 const readerDocument = computed<ReaderDocument | null>(() => {
   if (!doc.value) return null
   const entry = { path: doc.value.path, kind: doc.value.kind, modified: doc.value.updated_at }
-  return doc.value.kind === 'markdown' ? { entry, markdown: body.value } : { entry }
+  return doc.value.kind === 'markdown' ? { entry, markdown: body.value ?? '' } : { entry }
 })
 const htmlSrc = computed(() =>
   doc.value?.kind === 'html' ? `${docUrl(props.space.apiPrefix, props.path)}?raw=1` : undefined,
@@ -118,9 +110,7 @@ function onShareChanged(next: Share | null): void {
 }
 
 async function copyLink(): Promise<void> {
-  if (!share.value) return
-  await clipboard.copy(share.value.url)
-  toast.show('Link copied')
+  if (share.value) await copy(share.value.url)
 }
 
 const textSizeEntries: MenuEntry[] = [
@@ -144,22 +134,11 @@ function onMore(id: string): void {
   else if (id === 'smaller') resize(-1)
   else {
     moreAnchor.value = null
-    requestDelete()
-  }
-}
-function requestDelete(): void {
-  confirmation.request({
-    title: 'Delete this document?',
-    description: `${props.path} is deleted from the server. Local copies stay. Any share link stops working.`,
-    confirmLabel: 'Delete',
-    testid: 'delete-dialog',
-    onConfirm: async () => {
-      await api.deleteDocument(props.space.apiPrefix, props.path)
-      await me?.refresh()
+    requestDelete(props.space.apiPrefix, props.path, async () => {
       await router.push(folderRoute.value)
       emit('changed')
-    },
-  })
+    })
+  }
 }
 </script>
 

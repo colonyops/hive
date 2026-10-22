@@ -5,9 +5,11 @@ import FormField from '@hive/ui/components/ui/FormField.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { api, ApiError } from '../api'
+import { useRoute, useRouter } from 'vue-router'
+import { api, describeApiError } from '../api'
+import { redirectQuery } from '../lib/redirect'
 
+const route = useRoute()
 const router = useRouter()
 const email = ref('')
 const busy = ref(false)
@@ -19,14 +21,12 @@ async function submit(): Promise<void> {
   error.value = null
   try {
     await api.startSignIn(email.value.trim())
-    await router.push({ name: 'verify', query: { email: email.value.trim() } })
+    await router.push({
+      name: 'verify',
+      query: { email: email.value.trim(), ...redirectQuery(route.query.redirect) },
+    })
   } catch (cause) {
-    if (cause instanceof ApiError && cause.status === 429) {
-      const wait = cause.retryAfter ? ` Try again in ${cause.retryAfter} seconds.` : ' Try again later.'
-      error.value = `Too many sign-in attempts.${wait}`
-    } else {
-      error.value = cause instanceof Error ? cause.message : 'Could not start sign-in.'
-    }
+    error.value = describeApiError(cause, 'Could not start sign-in.')
   } finally {
     busy.value = false
   }

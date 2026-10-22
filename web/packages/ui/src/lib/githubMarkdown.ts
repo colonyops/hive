@@ -16,6 +16,9 @@
 //
 // This is deliberately separate from pipeline/lib/markdown.ts, a tiny
 // hand-rolled renderer for FIRST-PARTY node help.md docs.
+// A consumer's tsconfig includes only its own src, so the shim travels with the import.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference -- an `import` of a .d.ts has no runtime module
+/// <reference path="../types/markdown-it-task-lists.d.ts" />
 import MarkdownIt from 'markdown-it'
 import type { RenderRule } from 'markdown-it/lib/renderer.mjs'
 import type StateBlock from 'markdown-it/lib/rules_block/state_block.mjs'

@@ -1,13 +1,11 @@
 import { fakePlatform } from '@hive/ui/test-utils/platform'
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
-import { createMemoryHistory, createRouter } from 'vue-router'
-import { meKey } from '../lib/me'
 import { spaceFromKey } from '../lib/space'
 import DocumentView from '../pages/DocumentView.vue'
+import { mountWithRouter } from '../test-utils/mount'
 import type { DriveDocument } from '../types'
-import { doc, frameStub } from './fixtures'
+import { doc } from './fixtures'
 
 const mocks = vi.hoisted(() => ({
   documentBody: vi.fn(),
@@ -24,24 +22,19 @@ const space = spaceFromKey('acme/notes')
 
 let documents: DriveDocument[] = []
 
-async function mountView(path: string) {
-  const router = createRouter({
-    history: createMemoryHistory(),
-    routes: [{ path: '/repos/:owner/:repo/:path(.*)*', component: {} }],
-  })
-  await router.push(`/repos/acme/notes/${path}`)
-  const refresh = vi.fn().mockResolvedValue(undefined)
-  const wrapper = mount(DocumentView, {
+function mountView(path: string) {
+  return mountWithRouter(DocumentView, {
+    path: `/repos/acme/notes/${path}`,
     props: { space, path, documents, loadError: null },
-    attachTo: document.body,
-    global: {
-      plugins: [router],
-      stubs: { HtmlDocumentFrame: frameStub },
-      provide: { [meKey as symbol]: { me: ref(null), refresh } },
-    },
   })
+}
+
+async function shareAndCopy(wrapper: Awaited<ReturnType<typeof mountView>>['wrapper']) {
+  await wrapper.get('[data-testid="share"]').trigger('click')
+  document.body.querySelector<HTMLElement>('[data-testid="share-create"]')!.click()
   await flushPromises()
-  return { router, wrapper, refresh }
+  await wrapper.get('[data-testid="copy-link"]').trigger('click')
+  await flushPromises()
 }
 
 describe('DocumentView', () => {
@@ -99,16 +92,24 @@ describe('DocumentView', () => {
 
   it('shares from the popover and then offers a quick copy', async () => {
     mocks.share.mockResolvedValue({ url: 'http://drive.test/s/abc', expires_in: '' })
-    const { wrapper } = await mountView('a.md')
+    const { wrapper, toast } = await mountView('a.md')
 
-    await wrapper.get('[data-testid="share"]').trigger('click')
-    document.body.querySelector<HTMLElement>('[data-testid="share-create"]')!.click()
-    await flushPromises()
+    await shareAndCopy(wrapper)
 
     expect(mocks.share).toHaveBeenCalledWith('/api/v1/repos/acme/notes', 'a.md', '')
     expect(wrapper.emitted('changed')).toBeTruthy()
-    await wrapper.get('[data-testid="copy-link"]').trigger('click')
-    await flushPromises()
     expect(fakePlatform.clipboard.writeText).toHaveBeenCalledWith('http://drive.test/s/abc')
+    expect(toast.show).toHaveBeenLastCalledWith('Link copied')
+  })
+
+  it('says so when the link does not reach the clipboard', async () => {
+    mocks.share.mockResolvedValue({ url: 'http://drive.test/s/abc', expires_in: '' })
+    fakePlatform.clipboard.writeText.mockRejectedValueOnce(new Error('denied'))
+    const { wrapper, toast } = await mountView('a.md')
+
+    await shareAndCopy(wrapper)
+
+    expect(toast.show).toHaveBeenLastCalledWith('Could not copy the link')
+    expect(toast.show).not.toHaveBeenCalledWith('Link copied')
   })
 })

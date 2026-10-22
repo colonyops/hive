@@ -1,3 +1,4 @@
+import { errorText } from '@hive/ui/lib/errorText'
 import { inject, reactive, ref, type InjectionKey, type Ref } from 'vue'
 import { api } from '../api'
 import type { DriveDocument, SpaceSummary } from '../types'
@@ -15,10 +16,6 @@ export interface DriveData {
 
 export const driveDataKey: InjectionKey<DriveData> = Symbol('driveData')
 
-function message(cause: unknown, fallback: string): string {
-  return cause instanceof Error ? cause.message : fallback
-}
-
 /** One cache of the spaces and their document lists, so the nav, folders, and Recent share requests. */
 export function createDriveData(): DriveData {
   const spaces = ref<SpaceSummary[] | null>(null)
@@ -31,7 +28,7 @@ export function createDriveData(): DriveData {
       spaces.value = await api.spaces()
       spacesError.value = null
     } catch (cause) {
-      spacesError.value = message(cause, 'Could not load spaces.')
+      spacesError.value = errorText(cause, 'Could not load spaces.')
     }
   }
 
@@ -41,7 +38,7 @@ export function createDriveData(): DriveData {
       documents[space] = await api.documents(spaceFromKey(space).apiPrefix)
       errors[space] = undefined
     } catch (cause) {
-      errors[space] = message(cause, 'Could not load documents.')
+      errors[space] = errorText(cause, 'Could not load documents.')
     }
   }
 

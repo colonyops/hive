@@ -1,7 +1,7 @@
-import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import ShareView from '../pages/ShareView.vue'
-import { doc, frameStub } from './fixtures'
+import { mountWithRouter } from '../test-utils/mount'
+import { doc } from './fixtures'
 
 // Stubbing fetch instead of api.ts exercises the real URL and the 404 decoding.
 const fetchMock = vi.fn<typeof fetch>()
@@ -12,9 +12,7 @@ function respond(status: number, body: unknown): void {
 }
 
 async function mountShare(slug: string) {
-  const wrapper = mount(ShareView, { props: { slug }, global: { stubs: { HtmlDocumentFrame: frameStub } } })
-  await flushPromises()
-  return wrapper
+  return (await mountWithRouter(ShareView, { props: { slug } })).wrapper
 }
 
 describe('ShareView', () => {
@@ -47,5 +45,13 @@ describe('ShareView', () => {
 
     expect(wrapper.get('[data-testid="share-missing"]').text()).toContain('does not exist')
     expect(wrapper.find('[data-testid="document-markdown"]').exists()).toBe(false)
+  })
+
+  it('shows any other failure as an error', async () => {
+    respond(500, { kind: 'internal', message: 'storage offline' })
+    const wrapper = await mountShare('abc')
+
+    expect(wrapper.get('[data-testid="share-error"]').text()).toContain('storage offline')
+    expect(wrapper.find('[data-testid="share-missing"]').exists()).toBe(false)
   })
 })

@@ -23,7 +23,7 @@ export function createToast(): Toast {
   }
 }
 
-/** The layout's toast; outside the layout a confirmation is dropped. */
+/** The app's toast; a component mounted without it drops the message. */
 export function useToast(): Toast {
   return inject(toastKey, { message: ref(''), show: () => {} })
 }

@@ -8,11 +8,14 @@ import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import FormField from '@hive/ui/components/ui/FormField.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
+import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import { useConfirmation } from '@hive/ui/composables/useConfirmation'
-import { onMounted, ref } from 'vue'
+import { errorText } from '@hive/ui/lib/errorText'
+import { ref } from 'vue'
 import { api } from '../api'
 import { formatTime } from '../lib/format'
+import { useLoad } from '../lib/load'
 import type { CreatedToken, Token, TokenScope } from '../types'
 
 const expiryOptions = [
@@ -29,7 +32,7 @@ const scopeOptions: { value: TokenScope; label: string }[] = [
 ]
 
 const confirmation = useConfirmation()
-const tokens = ref<Token[]>([])
+const { data: tokens, error: loadError, reload: load } = useLoad(() => api.tokens(), 'Could not load tokens.')
 const name = ref('')
 const scope = ref<TokenScope>('read')
 const expiresIn = ref('')
@@ -37,15 +40,6 @@ const busy = ref(false)
 const error = ref<string | null>(null)
 // The secret is never stored by the server again, so it lives in this page only.
 const created = ref<CreatedToken | null>(null)
-
-async function load(): Promise<void> {
-  try {
-    tokens.value = await api.tokens()
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load tokens.'
-  }
-}
-onMounted(load)
 
 async function create(): Promise<void> {
   if (busy.value || !name.value.trim()) return
@@ -56,7 +50,7 @@ async function create(): Promise<void> {
     name.value = ''
     await load()
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not create the token.'
+    error.value = errorText(cause, 'Could not create the token.')
   } finally {
     busy.value = false
   }
@@ -117,9 +111,16 @@ function requestRevoke(token: Token): void {
       </div>
     </form>
 
-    <EmptyState v-if="!tokens.length" variant="boxed" message="No tokens yet." />
+    <InlineError v-if="loadError" :message="loadError" testid="tokens-error" />
+    <Spinner v-if="!tokens && !loadError" data-testid="tokens-loading" />
+    <EmptyState
+      v-else-if="tokens && !tokens.length"
+      variant="boxed"
+      message="No tokens yet."
+      data-testid="tokens-empty"
+    />
     <ul
-      v-else
+      v-else-if="tokens"
       class="flex flex-col divide-y divide-border rounded-lg border border-card bg-raised"
       data-testid="tokens"
     >

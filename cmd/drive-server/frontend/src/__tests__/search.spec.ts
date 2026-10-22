@@ -1,11 +1,11 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createMemoryHistory, createRouter } from 'vue-router'
 import SearchSnippet from '../components/SearchSnippet.vue'
 import ToolbarSearch from '../components/ToolbarSearch.vue'
 import { ApiError } from '../api'
 import { snippetParts } from '../lib/snippet'
 import { spaceFromKey } from '../lib/space'
+import { mountWithRouter } from '../test-utils/mount'
 import { doc } from './fixtures'
 
 const search = vi.hoisted(() => vi.fn())
@@ -44,25 +44,25 @@ describe('SearchSnippet', () => {
   })
 })
 
-function mountSearch(spaceKey: string | null = 'acme/notes') {
-  const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p(.*)*', component: {} }] })
-  const wrapper = mount(ToolbarSearch, {
-    props: {
-      space: spaceKey ? spaceFromKey(spaceKey) : null,
-      modelValue: '',
-      'onUpdate:modelValue': (value: string) => wrapper.setProps({ modelValue: value }),
-    },
-    attachTo: document.body,
-    global: { plugins: [router] },
-  })
-  return { router, wrapper }
+async function mountSearch(spaceKey: string | null = 'acme/notes') {
+  const mounted: { wrapper?: VueWrapper } = {}
+  return Object.assign(
+    mounted,
+    await mountWithRouter(ToolbarSearch, {
+      props: {
+        space: spaceKey ? spaceFromKey(spaceKey) : null,
+        modelValue: '',
+        'onUpdate:modelValue': (value: string) => mounted.wrapper?.setProps({ modelValue: value }),
+      },
+    }),
+  )
 }
 
 const input = () => document.body.querySelector<HTMLInputElement>('[data-testid="search-input"]')!
 
 describe('ToolbarSearch keyboard', () => {
-  it('focuses the field on "/" and on Ctrl+K', () => {
-    mountSearch()
+  it('focuses the field on "/" and on Ctrl+K', async () => {
+    await mountSearch()
 
     window.dispatchEvent(new KeyboardEvent('keydown', { key: '/', cancelable: true }))
     expect(document.activeElement).toBe(input())
@@ -72,8 +72,8 @@ describe('ToolbarSearch keyboard', () => {
     expect(document.activeElement).toBe(input())
   })
 
-  it('leaves "/" alone while the user types in another field', () => {
-    mountSearch()
+  it('leaves "/" alone while the user types in another field', async () => {
+    await mountSearch()
     const other = document.createElement('input')
     document.body.append(other)
     other.focus()
@@ -92,22 +92,21 @@ describe('ToolbarSearch results', () => {
   })
   afterEach(() => vi.useRealTimers())
 
-  async function type(wrapper: ReturnType<typeof mountSearch>['wrapper'], text: string) {
+  async function type(text: string) {
     input().focus()
     input().value = text
     input().dispatchEvent(new Event('input'))
     await vi.advanceTimersByTimeAsync(250)
     await flushPromises()
-    void wrapper
   }
 
   it('debounces, scopes to the current space, and shows title, path, and marked snippet', async () => {
     search.mockResolvedValue({
       hits: [{ document: doc({ path: 'docs/setup.md', title: 'Setup' }), snippet: `how to ${start}install${end}` }],
     })
-    const { wrapper } = mountSearch()
+    await mountSearch()
 
-    await type(wrapper, 'inst')
+    await type('inst')
 
     expect(search).toHaveBeenCalledTimes(1)
     expect(search).toHaveBeenCalledWith('inst', 'acme/notes')
@@ -119,8 +118,8 @@ describe('ToolbarSearch results', () => {
 
   it('searches every space after the toggle', async () => {
     search.mockResolvedValue({ hits: [] })
-    const { wrapper } = mountSearch()
-    await type(wrapper, 'inst')
+    await mountSearch()
+    await type('inst')
 
     document.body.querySelector<HTMLElement>('[data-testid="search-scope-all"]')!.click()
     await vi.advanceTimersByTimeAsync(250)
@@ -131,8 +130,8 @@ describe('ToolbarSearch results', () => {
 
   it('opens the highlighted hit with Enter', async () => {
     search.mockResolvedValue({ hits: [{ document: doc({ path: 'a b.md' }), snippet: '' }] })
-    const { wrapper, router } = mountSearch()
-    await type(wrapper, 'a')
+    const { router } = await mountSearch()
+    await type('a')
 
     input().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
     await flushPromises()
@@ -142,9 +141,9 @@ describe('ToolbarSearch results', () => {
 
   it('stays usable when the server has no search endpoint', async () => {
     search.mockRejectedValue(new ApiError(404, 'not_found', 'no such endpoint'))
-    const { wrapper } = mountSearch()
+    await mountSearch()
 
-    await type(wrapper, 'inst')
+    await type('inst')
 
     expect(document.body.querySelector('[data-testid="search-unavailable"]')).not.toBeNull()
     expect(document.body.querySelector('[data-testid="search-error"]')).toBeNull()

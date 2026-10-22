@@ -25,6 +25,18 @@ describe('CopyButton', () => {
     expect(wrapper.text()).toBe('Copy id')
   })
 
+  it('reports whether the copy reached the clipboard', async () => {
+    fakePlatform.clipboard.writeText.mockRejectedValueOnce(new Error('denied'))
+    const wrapper = mount(CopyButton, { props: { text: 'abc' } })
+
+    await wrapper.trigger('click')
+    await flushPromises()
+    await wrapper.trigger('click')
+    await flushPromises()
+
+    expect(wrapper.emitted('copy')).toEqual([[false], [true]])
+  })
+
   it('does nothing with empty text', async () => {
     const wrapper = mount(CopyButton, { props: { text: '' } })
 

@@ -4,27 +4,19 @@ import EmptyState from '@hive/ui/components/ui/EmptyState.vue'
 import InlineError from '@hive/ui/components/ui/InlineError.vue'
 import Spinner from '@hive/ui/components/ui/Spinner.vue'
 import type { ReaderDocument } from '@hive/ui/lib/document'
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import HiveMark from '../components/HiveMark.vue'
 import { api, ApiError } from '../api'
+import { useLoad } from '../lib/load'
 import { useReaderPrefs } from '../lib/readerPrefs'
-import type { PublicDocument } from '../types'
 
 const props = defineProps<{ slug: string }>()
 
 const { prefs } = useReaderPrefs()
-const shared = ref<PublicDocument | null>(null)
-const missing = ref(false)
-const error = ref<string | null>(null)
-
-onMounted(async () => {
-  try {
-    shared.value = await api.publicDocument(props.slug)
-  } catch (cause) {
-    if (cause instanceof ApiError && cause.status === 404) missing.value = true
-    else error.value = cause instanceof Error ? cause.message : 'Could not load the shared document.'
-  }
-})
+const load = useLoad(() => api.publicDocument(props.slug), 'Could not load the shared document.')
+const shared = load.data
+const missing = computed(() => load.failure.value instanceof ApiError && load.failure.value.status === 404)
+const error = computed(() => (missing.value ? null : load.error.value))
 
 const readerDocument = computed<ReaderDocument | null>(() => {
   const value = shared.value

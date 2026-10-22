@@ -1,26 +1,19 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed } from 'vue'
 import { api } from '../api'
 import DriveListing from '../components/DriveListing.vue'
 import { useDriveData } from '../lib/driveData'
 import { documentEntries } from '../lib/entries'
-import type { DriveDocument } from '../types'
+import { useLoad } from '../lib/load'
 
 const props = defineProps<{ feed: 'recent' | 'links' }>()
 
 const data = useDriveData()
-const documents = ref<DriveDocument[] | null>(null)
-const error = ref<string | null>(null)
-
-async function load(): Promise<void> {
-  try {
-    documents.value = await (props.feed === 'recent' ? api.recent() : api.sharedLinks())
-    error.value = null
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : 'Could not load documents.'
-  }
-}
-onMounted(load)
+const {
+  data: documents,
+  error,
+  reload: load,
+} = useLoad(() => (props.feed === 'recent' ? api.recent() : api.sharedLinks()), 'Could not load documents.')
 
 // A share or delete here also changes the space lists the nav and folders cache.
 async function reload(): Promise<void> {

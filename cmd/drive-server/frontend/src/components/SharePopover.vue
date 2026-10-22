@@ -6,6 +6,7 @@ import SegmentedControl from '@hive/ui/components/ui/SegmentedControl.vue'
 import TextInput from '@hive/ui/components/ui/TextInput.vue'
 import { useAnchoredPopover } from '@hive/ui/composables/useAnchoredPopover'
 import { useEscapeToClose } from '@hive/ui/composables/useEscapeToClose'
+import { errorText } from '@hive/ui/lib/errorText'
 import { onClickOutside } from '@vueuse/core'
 import { computed, nextTick, onMounted, ref, toRef, watch } from 'vue'
 import { api } from '../api'
@@ -62,7 +63,7 @@ async function guarded(fallback: string, work: () => Promise<void>): Promise<voi
   try {
     await work()
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : fallback
+    error.value = errorText(cause, fallback)
   } finally {
     busy.value = false
   }
@@ -139,7 +140,7 @@ function chooseExpiry(value: ShareExpiry): void {
           label="Copy"
           size="sm"
           data-testid="share-copy"
-          @click="toast.show('Link copied')"
+          @copy="(ok: boolean) => toast.show(ok ? 'Link copied' : 'Could not copy the link')"
         />
       </div>
 

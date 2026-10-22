@@ -7,30 +7,31 @@ import AccountMenu from '../components/AccountMenu.vue'
 import IconMenu from '~icons/material-symbols/menu'
 import HiveMark from '../components/HiveMark.vue'
 import NavSidebar from '../components/NavSidebar.vue'
-import ToastHost from '../components/ToastHost.vue'
 import ToolbarSearch from '../components/ToolbarSearch.vue'
 import { createDriveData, driveDataKey } from '../lib/driveData'
 import { meKey } from '../lib/me'
 import { fromRouteParams } from '../lib/space'
-import { createToast, toastKey } from '../lib/toast'
+import { rememberSignIn, signedInUser } from '../router'
 import type { Me } from '../types'
 
 const route = useRoute()
-const me = ref<Me | null>(null)
+const me = ref<Me | null>(signedInUser())
 const query = ref('')
 const data = createDriveData()
 
 async function refresh(): Promise<void> {
   try {
     me.value = await api.me()
+    rememberSignIn(me.value)
   } catch {
     // The meter is secondary; a page's own request reports a real failure.
   }
 }
 provide(meKey, { me, refresh })
 provide(driveDataKey, data)
-provide(toastKey, createToast())
-onMounted(refresh)
+onMounted(() => {
+  if (!me.value) void refresh()
+})
 
 const inSpace = computed(() => ['repo', 'workspace', 'shared'].includes(String(route.name)))
 const target = computed(() => (inSpace.value ? fromRouteParams(route.params) : null))
@@ -76,6 +77,5 @@ watch(
         <RouterView />
       </main>
     </div>
-    <ToastHost />
   </div>
 </template>
