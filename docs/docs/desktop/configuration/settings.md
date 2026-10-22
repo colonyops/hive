@@ -80,6 +80,19 @@ Change any of it later by editing the file yourself, then restarting Hive Deskto
 
 `HIVE_DEFAULT_AGENT` takes precedence over the default agent you choose, when it names a configured profile. The screen says so when the variable is set.
 
+### Clone protocol
+
+Hive builds a clone URL for the repository of an inbox item, such as a pull request or issue. It uses HTTPS unless you set `git.clone_protocol` in the hive CLI config, then restart Hive Desktop:
+
+```yaml
+git:
+  clone_protocol: ssh # or https
+```
+
+With the key unset, a repository you already have on disk keeps the remote it was cloned with. A `rules[].clone_protocol` entry overrides the key for the repositories it matches, and a remote you spell out in an action is never changed. Actions that ship with Hive follow the key. An `actions.yml` you wrote keeps a fixed URL until you set its `repo_template` to `"{{ .ItemRemote }}"`.
+
+See the hive CLI [configuration reference](../../cli/configuration/index.md) and [clone protocol rules](../../cli/configuration/rules.md#clone-protocol) for how the key and the per-rule override resolve.
+
 ## Advanced configuration
 
 Most users can use the Settings screens. Edit `settings.yaml` for values that are not exposed there or when you manage configuration with dotfiles.
