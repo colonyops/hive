@@ -22,8 +22,7 @@ type CommandSet struct {
 }
 
 // NewCommandSet constructs a CommandSet seeded with system and user commands.
-// Either map may be nil (treated as empty). System and user are immutable
-// after construction; if a config-reload story arrives later, add setters then.
+// Either map may be nil (treated as empty).
 func NewCommandSet(system, user map[string]config.UserCommand) *CommandSet {
 	return &CommandSet{
 		system:  cloneCommands(system),
@@ -102,4 +101,11 @@ func cloneCommands(m map[string]config.UserCommand) map[string]config.UserComman
 	out := make(map[string]config.UserCommand, len(m))
 	maps.Copy(out, m)
 	return out
+}
+
+// SetUser replaces all user overrides, including removing deleted commands.
+func (s *CommandSet) SetUser(cmds map[string]config.UserCommand) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.user = cloneCommands(cmds)
 }

@@ -52,6 +52,7 @@ type App struct {
 	CommandSet  *plugins.CommandSet
 	Build       BuildInfo
 	Sources     *sources.Registry
+	pluginInfos []doctor.PluginInfo
 }
 
 // NewApp wraps an engine built from &cfg.Config with the CLI pieces. Doctor
@@ -74,5 +75,6 @@ func NewApp(
 		Multiplexer: multiplexer,
 		Plugins:     pluginMgr,
 		CommandSet:  commandSet,
+		pluginInfos: pluginInfos,
 	}
 }

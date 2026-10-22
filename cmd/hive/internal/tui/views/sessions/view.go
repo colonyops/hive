@@ -113,11 +113,12 @@ type View struct {
 	workspaceScanGeneration uint64
 
 	// Layout state
-	width       int
-	height      int
-	active      bool
-	refreshing  bool
-	modalActive bool
+	width             int
+	height            int
+	active            bool
+	refreshing        bool
+	refreshGeneration uint64
+	modalActive       bool
 
 	// Pending selection — overrides saveSelection on next applyFilter.
 	pendingSelectID string
@@ -278,6 +279,9 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 	case WorkspaceChangedMsg:
 		return v.handleWorkspaceChanged(msg)
 	case sessionRefreshTickMsg:
+		if msg.generation != v.refreshGeneration {
+			return nil
+		}
 		return v.handleSessionRefreshTick()
 	case animationTickMsg:
 		return v.handleAnimationTick()
@@ -1385,8 +1389,9 @@ func (v *View) selectedWindowStatus() *statussvc.WindowStatus {
 
 // loadSessions returns a command that loads sessions from the service.
 func (v *View) loadSessions() tea.Cmd {
+	service := v.service
 	return func() tea.Msg {
-		sessions, err := v.service.ListSessions(context.Background())
+		sessions, err := service.ListSessions(context.Background())
 		return sessionsLoadedMsg{sessions: sessions, err: err}
 	}
 }
@@ -1395,8 +1400,9 @@ func (v *View) loadSessions() tea.Cmd {
 func (v *View) scanRepoDirs() tea.Cmd {
 	v.workspaceScanGeneration++
 	generation := v.workspaceScanGeneration
+	git := v.service.Git()
 	return func() tea.Msg {
-		repos, err := workspace.ScanRepoDirs(context.Background(), v.logger, v.workspaces, v.service.Git())
+		repos, err := workspace.ScanRepoDirs(context.Background(), v.logger, v.workspaces, git)
 		if err != nil {
 			v.logger.Warn().Err(err).Msg("repo directory scan encountered errors")
 		}
@@ -1466,8 +1472,9 @@ func (v *View) scheduleSessionRefresh() tea.Cmd {
 	if interval == 0 {
 		return nil // Disabled
 	}
+	generation := v.refreshGeneration
 	return tea.Tick(interval, func(time.Time) tea.Msg {
-		return sessionRefreshTickMsg{}
+		return sessionRefreshTickMsg{generation: generation}
 	})
 }
 
@@ -1915,4 +1922,26 @@ func ensureExactHeight(content string, n int) string {
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// Reconfigure adopts new services without discarding selection or filters.
+func (v *View) Reconfigure(opts ViewOpts) tea.Cmd {
+	old := v.cfg
+	v.cfg = opts.Cfg
+	v.service = opts.Service
+	v.status = opts.Status
+	v.gitStatus = opts.GitStatus
+	v.renderer = opts.Renderer
+	if old.Views.Sessions.GroupBy != v.cfg.Views.Sessions.GroupBy {
+		v.groupBy = v.cfg.Views.Sessions.GroupBy
+	}
+	if old.Views.Sessions.PreviewEnabled != v.cfg.Views.Sessions.PreviewEnabled {
+		v.previewEnabled = v.cfg.Views.Sessions.PreviewEnabled
+	}
+	v.previewTemplates = ParsePreviewTemplates(v.cfg.Views.Sessions.PreviewTitle, v.cfg.Views.Sessions.PreviewStatus)
+	v.treeDelegate.IconsEnabled = v.cfg.TUI.IconsEnabled()
+	v.list.SetDelegate(v.treeDelegate)
+	v.SetSize(v.width, v.height)
+	v.refreshGeneration++
+	return tea.Batch(v.applyFilter(), v.scheduleSessionRefresh(), v.loadSessions())
 }

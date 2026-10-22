@@ -610,3 +610,33 @@ func TestSelectAtRow_PreviewEnabled_ClickInList_Selects(t *testing.T) {
 	v.SelectAtRow(10, 1)
 	assert.Equal(t, 1, v.list.Index(), "click in list pane should select item")
 }
+
+func TestReconfigurePreservesSelectionAndInvalidatesOldRefreshTicks(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Views.Sessions.RefreshInterval = time.Second
+	v := newTestView(nil, 0)
+	v.cfg = &cfg
+	v.gitStatuses = kvcache.New[string, GitStatus]()
+	v.terminalStatuses = kvcache.New[string, statussvc.TerminalStatus]()
+	v.columnWidths = &ColumnWidths{}
+	v.allSessions = []session.Session{
+		{ID: "one", Name: "one", Remote: "https://github.com/acme/repo", State: session.StateActive},
+		{ID: "two", Name: "two", Remote: "https://github.com/acme/repo", State: session.StateActive},
+	}
+	v.groupBy = config.GroupByRepo
+	v.pendingSelectID = "two"
+	v.applyFilter()
+	require.Equal(t, "two", v.SelectedSession().ID)
+	oldTick := sessionRefreshTickMsg{generation: v.refreshGeneration}
+	next := cfg
+	next.Views.Sessions.RefreshInterval = 0
+	next.Views.Sessions.GroupBy = config.GroupByGroup
+	v.Reconfigure(ViewOpts{Cfg: &next})
+	assert.Equal(t, "two", v.SelectedSession().ID)
+	assert.Nil(t, v.Update(oldTick), "the old timer must not start another polling chain")
+	assert.Nil(t, v.scheduleSessionRefresh(), "zero disables periodic refresh")
+	nextAgain := next
+	nextAgain.Views.Sessions.RefreshInterval = time.Second
+	v.Reconfigure(ViewOpts{Cfg: &nextAgain})
+	assert.NotNil(t, v.scheduleSessionRefresh(), "reload can enable polling again")
+}

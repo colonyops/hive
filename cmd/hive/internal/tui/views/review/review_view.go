@@ -2545,3 +2545,9 @@ func (v *View) sessionFeedback(note string) string {
 	}
 	return corereview.Feedback(v.selectedDoc.CheckoutPath(v.symlinkName), comments, note)
 }
+
+// SetSplitRatio applies the configured panel proportions.
+func (v *View) SetSplitRatio(ratio int) {
+	v.splitRatio = ratio
+	v.SetSize(v.width, v.height)
+}

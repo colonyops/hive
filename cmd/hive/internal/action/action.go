@@ -75,6 +75,7 @@ var configActions = map[Type]bool{
 	TypePrevActive:       true,
 	TypeHiveInfo:         true,
 	TypeHiveDoctor:       true,
+	TypeReloadConfig:     true,
 	TypeGroupSet:         true,
 	TypeGroupToggle:      true,
 	TypeTodoPanel:        true,

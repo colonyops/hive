@@ -81,31 +81,15 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 
 	source, _ := os.Getwd()
 
-	deps := tui.Deps{
-		Logger:        cmd.app.Logger,
-		Config:        cmd.app.Config,
-		Service:       cmd.app.Sessions(),
-		MsgStore:      cmd.app.Messages(),
-		TodoService:   cmd.app.Todos(),
-		Bus:           cmd.app.Bus(),
-		Status:        cmd.app.Status(),
-		GitStatus:     cmd.app.GitStatus(),
-		PluginManager: cmd.app.Plugins,
-		CommandSet:    cmd.app.CommandSet,
-		Notifications: cmd.app.Notifications(),
-		Reviews:       cmd.app.Reviews(),
-		Drive:         cmd.app.Drive(),
-		KVStore:       cmd.app.KV(),
-		Renderer:      cmd.app.Renderer(),
-		BuildInfo: tui.BuildInfo{
-			Version: cmd.app.Build.Version,
-			Commit:  cmd.app.Build.Commit,
-			Date:    cmd.app.Build.Date,
-		},
-		DoctorService: cmd.app.Doctor,
-		Honeycomb:     cmd.app.HC(),
-		Sources:       cmd.app.Sources,
+	deps := cmd.tuiDeps()
+	deps.ReloadConfig = func() (tui.Deps, error) {
+		if err := cmd.app.ReloadConfig(cmd.flags.ConfigPath); err != nil {
+			return tui.Deps{}, err
+		}
+		cmd.app.Sessions().SilenceOutput()
+		return cmd.tuiDeps(), nil
 	}
+
 	opts := tui.Opts{
 		LocalRemote: localRemote,
 		Source:      source,
@@ -133,4 +117,32 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	}
 
 	return nil
+}
+
+func (cmd *TuiCmd) tuiDeps() tui.Deps {
+	return tui.Deps{
+		Logger:        cmd.app.Logger,
+		Config:        cmd.app.Config,
+		Service:       cmd.app.Sessions(),
+		MsgStore:      cmd.app.Messages(),
+		TodoService:   cmd.app.Todos(),
+		Bus:           cmd.app.Bus(),
+		Status:        cmd.app.Status(),
+		GitStatus:     cmd.app.GitStatus(),
+		PluginManager: cmd.app.Plugins,
+		CommandSet:    cmd.app.CommandSet,
+		Notifications: cmd.app.Notifications(),
+		Reviews:       cmd.app.Reviews(),
+		Drive:         cmd.app.Drive(),
+		KVStore:       cmd.app.KV(),
+		Renderer:      cmd.app.Renderer(),
+		BuildInfo: tui.BuildInfo{
+			Version: cmd.app.Build.Version,
+			Commit:  cmd.app.Build.Commit,
+			Date:    cmd.app.Build.Date,
+		},
+		DoctorService: cmd.app.Doctor,
+		Honeycomb:     cmd.app.HC(),
+		Sources:       cmd.app.Sources,
+	}
 }
