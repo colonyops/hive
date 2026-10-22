@@ -31,6 +31,26 @@ func IsExplicitRemote(repo string) bool {
 	return false
 }
 
+// RemoteProtocol returns the transport of remote: https for http(s)://, ssh
+// for ssh:// and SCP-style [user@]host:path. ok is false for anything else,
+// such as a local path or git://.
+func RemoteProtocol(remote string) (session.CloneProtocol, bool) {
+	remote = strings.TrimSpace(remote)
+	if scheme, _, found := strings.Cut(remote, "://"); found {
+		switch scheme {
+		case "https", "http":
+			return session.CloneProtocolHttps, true
+		case "ssh":
+			return session.CloneProtocolSsh, true
+		}
+		return "", false
+	}
+	if _, _, ok := remoteHostPath(remote); ok {
+		return session.CloneProtocolSsh, true
+	}
+	return "", false
+}
+
 // ItemRepoLocation expands an item's owner/repo using the host of its http(s)
 // web URL. ok is false for an explicit remote, a malformed repo, or a URL
 // without a host.

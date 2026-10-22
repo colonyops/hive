@@ -67,3 +67,17 @@ func TestIsExplicitRemote(t *testing.T) {
 		assert.False(t, IsExplicitRemote(repo), repo)
 	}
 }
+
+func TestRemoteProtocol(t *testing.T) {
+	for remote, want := range map[string]session.CloneProtocol{
+		"https://github.com/acme/site.git":         session.CloneProtocolHttps,
+		"ssh://git@ghe.example.com:2222/acme/site": session.CloneProtocolSsh,
+		"git@github-work:acme/site.git":            session.CloneProtocolSsh,
+		"git://example.com/acme/site":              "",
+		"/Users/me/src/site":                       "",
+	} {
+		got, ok := RemoteProtocol(remote)
+		assert.Equal(t, want, got, remote)
+		assert.Equal(t, want != "", ok, remote)
+	}
+}

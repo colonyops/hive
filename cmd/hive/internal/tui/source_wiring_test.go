@@ -280,6 +280,23 @@ func TestCreateSourceSession_NoPreferenceKeepsTheScopeRemote(t *testing.T) {
 	assert.Equal(t, "/checkouts/site", creator.created[0].Source)
 }
 
+func TestCreateSourceSession_PreferenceKeepsAScopeRemoteOfThatProtocol(t *testing.T) {
+	creator := &fakeSessionCreator{}
+	resolver := &fakeLaunchResolver{
+		preferred: map[string]string{"acme/site|https://github.com/acme/site/issues/7": "git@github.com:acme/site.git"},
+	}
+	m := newCreateModel(creator, resolver)
+	result := multiResult("7", "session-{{ .ID }}")
+	result.Item.Fields = map[string]any{"url": "https://github.com/acme/site/issues/7"}
+
+	_, _, err := m.createSourceSession(t.Context(), result,
+		sourcePickerScope{Search: "acme/site", Remote: "git@github-work:acme/site.git"}, make(chan string, 10))
+	require.NoError(t, err)
+
+	require.Len(t, creator.created, 1)
+	assert.Equal(t, "git@github-work:acme/site.git", creator.created[0].Remote, "an SSH host alias already satisfies an ssh preference")
+}
+
 func TestCreateSourceSession_GeneratesWithoutAScopeRemote(t *testing.T) {
 	creator := &fakeSessionCreator{}
 	resolver := &fakeLaunchResolver{

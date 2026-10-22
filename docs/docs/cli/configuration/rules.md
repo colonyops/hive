@@ -72,7 +72,7 @@ rules:
     clone_protocol: https
 ```
 
-When a protocol is set, hive clones with the URL it built, even if a local checkout uses the other spelling. The checkout still supplies the files that `copy` rules copy. Hive never rewrites a remote you give it: a URL you type, a hard-coded `repo_template`, `hive new --remote`, or the checkout chosen in the new-session form.
+When a protocol is set, hive clones with the URL it built, even if a local checkout uses the other spelling. The checkout still supplies the files that `copy` rules copy. In the TUI issue picker, a selected session or repository whose remote already uses that protocol keeps its remote, so an SSH host alias still works. Hive never rewrites a remote you give it: a URL you type, a hard-coded `repo_template`, `hive new --remote`, or the checkout chosen in the new-session form.
 
 A `clone_protocol` rule matches if its pattern matches either the HTTPS or the SSH spelling, so patterns like `git@host:` and `https://host/` both work. Every other rule field matches the final URL, which can be either spelling. Write those patterns to work with both, for example `.*[:/]owner/repo`.
 

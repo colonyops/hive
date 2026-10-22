@@ -1131,9 +1131,10 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 
 	itemURL, _ := result.Item.Fields["url"].(string)
 	// The scope remote is a spelling that already works for this user (an SSH
-	// host alias, a custom port); only a configured preference overrides it.
+	// host alias, a custom port); a preference replaces it only to change the
+	// protocol.
 	request := m.launches.PreferredRemote(scope.Search, itemURL)
-	if request == "" {
+	if request == "" || sameProtocol(request, scope.Remote) {
 		request = scope.Remote
 	}
 	if request == "" {
@@ -1928,4 +1929,10 @@ func renderCustomAction(tmplStr string, ref todo.Ref) (*exec.Cmd, error) {
 		return nil, fmt.Errorf("render action template: %w", err)
 	}
 	return exec.Command("sh", "-c", rendered), nil
+}
+
+func sameProtocol(left, right string) bool {
+	l, lok := git.RemoteProtocol(left)
+	r, rok := git.RemoteProtocol(right)
+	return lok && rok && l == r
 }
