@@ -153,3 +153,7 @@ func (s *DriveService) fail(ctx context.Context, command string, err error) erro
 	s.logger.Error().Ctx(ctx).Err(err).Str("command", command).Msg("drive call failed")
 	return err
 }
+
+func (s *DriveService) AcknowledgePane(ctx context.Context, requestID, status string) error {
+	return s.drive.AcknowledgePane(ctx, requestID, status)
+}

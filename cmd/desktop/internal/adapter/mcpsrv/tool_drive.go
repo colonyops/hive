@@ -195,10 +195,11 @@ func (ctrl *DriveController) DeleteDocument(ctx context.Context, _ *mcp.CallTool
 }
 
 func (ctrl *DriveController) OpenDocument(ctx context.Context, _ *mcp.CallToolRequest, in openDocumentInput) (*mcp.CallToolResult, paneResult, error) {
-	if err := ctrl.core.Drive.OpenDocument(ctx, in.Session, in.Path); err != nil {
+	status, err := ctrl.core.Drive.OpenDocument(ctx, in.Session, in.Path)
+	if err != nil {
 		return nil, paneResult{}, ctrl.toolError(err)
 	}
-	return nil, paneResult{Requested: "open"}, nil
+	return nil, paneResult{Requested: "open", Status: status, InstanceURL: ctrl.core.MCPBaseURL(ctx)}, nil
 }
 
 func documentEntryFrom(e drive.Entry) documentEntry {

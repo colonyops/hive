@@ -2325,9 +2325,22 @@ and any other UTF-8 text file, and answers `not_found` for hive state files
 (`kv.json`, `kv.json.lock`). An app-hosted catalogue entry declares
 its mount as `Descriptor.RuntimePath`, joined with the live loopback base when
 the catalogue is rendered; a pinning test in `mcpsrv` keeps those paths
-agreeing with the adapter's constants. The app does not wire the server into a
-Code session's agent: the user adds its address to the agent's own MCP
-configuration, and Settings ▸ MCP servers lists it.
+agreeing with the adapter's constants. Code launches carry runtime-only arguments keyed by agent executable through
+`LaunchRequest`, `CreateOptions`, and the template renderer. Claude Code and
+Codex receive the launching app's MCP addresses as command-line overrides;
+unknown executables retain their configured command. New agent windows and
+restarted tmux sessions use the same current-address callback. Global agent
+configuration is untouched. Settings ▸ MCP servers lists manual setup for
+other launchers (ADR route-agent-pane-requests-through-the-launching-desktop-instance).
+
+Pane requests carry a correlation ID. The app-level `useDrivePaneRequests`
+listener navigates only for the visible session, then acknowledges rendered
+pane visibility through the Wails adapter. `DriveService` waits at most three
+seconds, releases pending state on cancellation or completion, and returns
+`opened`, `closed`, `session_not_visible`, `navigation_failed`, or
+`no_ui_response`. MCP results include the responding instance's URL. The
+listener lives above lazy Code and Chats mounts so off-screen requests receive
+an explicit response.
 
 **A session resolves to a space.** The `session` argument is `global`, a chat's
 record id, or the caller's working directory. `global` is the `shared` space,

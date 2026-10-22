@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -52,11 +54,14 @@ type canvasSessionResolver interface {
 type DriveService struct {
 	// engine is read per call: it starts after the services are built, and
 	// every method answers KindUnavailable until it has.
-	engine   func() *hive.Engine
-	sessions canvasSessionResolver
-	events   *events.Bus
-	reveal   func(string) error
-	logger   zerolog.Logger
+	engine      func() *hive.Engine
+	sessions    canvasSessionResolver
+	events      *events.Bus
+	reveal      func(string) error
+	logger      zerolog.Logger
+	paneMu      sync.Mutex
+	panePending map[string]chan string
+	paneTimeout time.Duration
 }
 
 type DriveDeps struct {
@@ -72,7 +77,7 @@ func newDriveService(d DriveDeps) *DriveService {
 	if d.Reveal == nil {
 		d.Reveal = osopen.Reveal
 	}
-	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, logger: logutils.Component(d.Logger, "desktop.drive")}
+	return &DriveService{engine: d.Engine, sessions: d.Sessions, events: d.Events, reveal: d.Reveal, panePending: make(map[string]chan string), paneTimeout: 3 * time.Second, logger: logutils.Component(d.Logger, "desktop.drive")}
 }
 
 // driveCaller is who a tool call comes from and the space its canvases
@@ -249,34 +254,33 @@ func (s *DriveService) ListCanvases(ctx context.Context, session string) ([]driv
 // is viewing it, so an agent can surface what it made without ever dragging
 // the user away from something else. Opening with a name requires that
 // canvas to exist; empty leaves the pane's own pick.
-func (s *DriveService) SetPaneOpen(ctx context.Context, session, name string, open bool) error {
+func (s *DriveService) SetPaneOpen(ctx context.Context, session, name string, open bool) (string, error) {
 	d, caller, err := s.open(ctx, session)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if caller.space.Kind == drive.SpaceKindShared {
-		return Errorf(KindInvalid, "the shared space has no pane to open or close; the user reads it in the Drive page")
+		return "", Errorf(KindInvalid, "the shared space has no pane to open or close; the user reads it in the Drive page")
 	}
 	pinned := ""
 	if open && name != "" {
 		path, err := canvasPath(name)
 		if err != nil {
-			return err
+			return "", err
 		}
 		c, ok, err := d.LoadCanvas(ctx, caller.space, path)
 		if err != nil {
-			return driveError(err, name)
+			return "", driveError(err, name)
 		}
 		if !ok {
-			return canvasNotFound(name)
+			return "", canvasNotFound(name)
 		}
 		pinned = c.Path
 	}
-	s.events.Publish(ctx, events.DriveToggleRequested{
+	return s.requestPane(ctx, events.DriveToggleRequested{
 		Session: caller.author.Session, HiveSession: caller.author.HiveSession,
 		Space: caller.space.Key, Path: pinned, Open: open,
 	})
-	return nil
 }
 
 // GetCanvasAt is the pane's read: by space key and canvas name or path. A

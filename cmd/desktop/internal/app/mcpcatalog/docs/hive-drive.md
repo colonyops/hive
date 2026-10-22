@@ -104,8 +104,13 @@ either key in the tool. Copy and save include all of them in a YAML header.
 
 The pane does not open by itself: a write while it is closed lights an unseen
 dot on its toggle. Open it when something is finished and worth reading, not
-on every write. Opening is best-effort: it applies only while the user is
-viewing this chat or session, and there is no acknowledgment either way.
+on every write. Opening applies only while the user is viewing this chat or session.
+`open_document`, `open_canvas`, and `close_canvas` return a `status`:
+`opened`, `closed`, `session_not_visible`, `navigation_failed`, or
+`no_ui_response` after three seconds. Only `opened` confirms an open pane;
+`requested` describes the intent. `instanceUrl` identifies the responding app.
+If the session is not visible, ask the user to select it in that app. Do not
+claim that an accepted request made the pane visible.
 
 ## Canvases
 
@@ -389,9 +394,10 @@ the loopback server is disabled. The first allocated port is written to
 restarts.
 
 A workspace that lists `hive-drive` gets this address in its generated MCP
-configuration. Any other agent, such as the one a hive session runs, reaches
-the same server once the user adds the address to that agent's own MCP
-configuration. Hive never edits an agent's configuration outside a workspace.
+configuration. New Claude Code and Codex processes launched in Code receive this instance's
+addresses as command-line overrides. Existing processes need relaunching.
+Custom wrappers and external launches need manual configuration. Hive never
+edits global agent configuration.
 
 The server requires no token. It sits behind the loopback bind, spawns no
 processes, and writes only inside the caller's space under hive's context

@@ -26,7 +26,8 @@ type LaunchRequest struct {
 	// tags are dropped.
 	Tags []string
 	// Env holds KEY=VALUE pairs for the session's tmux environment.
-	Env []string
+	Env       []string
+	AgentArgs map[string][]string
 }
 
 // LaunchError is a failed CreateFromRequest, carrying what a caller needs to
@@ -73,6 +74,7 @@ func (req LaunchRequest) createOptions(repo LaunchRepository, progress io.Writer
 		CollisionSuffix: req.CollisionSuffix,
 		Tags:            uniqueTags(req.Tags),
 		Env:             req.Env,
+		AgentArgs:       req.AgentArgs,
 		Progress:        progress,
 	}
 }

@@ -36,7 +36,7 @@ async function mountAt(
   let api!: Api
   const Host = defineComponent({
     setup() {
-      api = useTerminalDrive(target, () => active.value)
+      api = useTerminalDrive(target)
       return () => null
     },
   })
@@ -105,28 +105,6 @@ describe('useTerminalDrive', () => {
     await router.push('/terminal/add-search')
     await flushPromises()
 
-    expect(router.currentRoute.value.query.doc).toBeUndefined()
-  })
-
-  it('opens and closes on drive:toggle for the session in view only', async () => {
-    const { router, active } = await mountAt('/terminal/fix-login')
-
-    wailsEvents.fire('drive:toggle', { session: 0, hiveSession: 'def456', path: '', open: true })
-    await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBeUndefined()
-
-    active.value = false
-    wailsEvents.fire('drive:toggle', { session: 0, hiveSession: 'abc123', path: 'plans/x.md', open: true })
-    await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBeUndefined()
-
-    active.value = true
-    wailsEvents.fire('drive:toggle', { session: 0, hiveSession: 'abc123', path: 'plans/x.md', open: true })
-    await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBe('plans/x.md')
-
-    wailsEvents.fire('drive:toggle', { session: 0, hiveSession: 'abc123', path: '', open: false })
-    await flushPromises()
     expect(router.currentRoute.value.query.doc).toBeUndefined()
   })
 

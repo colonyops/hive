@@ -29,7 +29,7 @@ import { useDriveRoute } from '../composables/useDriveRoute'
 import { useWailsEvent } from '../composables/useWailsEvent'
 import { useNewSession } from '../composables/useNewSession'
 import { loadTerminalFont, openLink, useXtermPane } from '../composables/useXtermPane'
-import { driveEventAuthor, workspaceSpaceKey, type DriveScope } from '../lib/drive'
+import { workspaceSpaceKey, type DriveScope } from '../lib/drive'
 import { decodeFrame, encodeInputFrames, encodePasteFrames } from '../lib/agentWorkspacesClient'
 import { setAgentsTreeHandles } from '../lib/agentsTree'
 import { isEditableTarget } from '../lib/isEditableTarget'
@@ -310,19 +310,6 @@ watch(
   },
   { immediate: true },
 )
-
-// ── The drive pane rides the route too (?doc[=path]) ────────────────────────
-// The query itself is owned by useDriveRoute, shared with the title bar's
-// right-panel toggle. An agent can ask to open or close the pane
-// (open_document, open_canvas, close_canvas), honored only for the chat in
-// view: an agent must never drag the user away from a different chat — its
-// write already lights the unseen dot there.
-useWailsEvent('drive:toggle', (event) => {
-  const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
-    { path?: string; open: boolean } | undefined
-  if (!payload || driveEventAuthor(payload) !== routeChatId.value) return
-  syncDocQuery(payload.open, payload.path || undefined)
-})
 
 async function resumeChatFromRoute(id: string): Promise<void> {
   await ready()

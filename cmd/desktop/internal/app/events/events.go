@@ -75,6 +75,7 @@ type DriveChanged struct {
 // pick. The asker is a chat (Session) or a hive session (HiveSession),
 // never both.
 type DriveToggleRequested struct {
+	RequestID   string
 	Session     string
 	HiveSession string
 	Space       string

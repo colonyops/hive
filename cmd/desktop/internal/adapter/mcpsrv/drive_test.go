@@ -172,6 +172,7 @@ func TestOpenDocumentPublishesTheToggle(t *testing.T) {
 	cancel := events.Subscribe(t.Context(), core.Events, "test.drive-toggle", events.Buffer(8), func(_ context.Context, e events.DriveToggleRequested) {
 		mu.Lock()
 		defer mu.Unlock()
+		e.RequestID = ""
 		toggles = append(toggles, e)
 	})
 	t.Cleanup(cancel)

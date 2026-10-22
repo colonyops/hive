@@ -1,8 +1,7 @@
 import { computed, watch, type Ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDriveRoute } from '../../composables/useDriveRoute'
-import { useWailsEvent } from '../../composables/useWailsEvent'
-import { driveEventAuthor, type DriveAuthor } from '../../lib/drive'
+import { type DriveAuthor } from '../../lib/drive'
 
 /** The space the attached session reads, and who it is as an author. */
 export interface TerminalDriveTarget {
@@ -16,7 +15,7 @@ export interface TerminalDriveTarget {
  * title bar's right toggle, a reload, and an agent's open_document reach it
  * the same way in both areas.
  */
-export function useTerminalDrive(target: Ref<TerminalDriveTarget | null>, active: () => boolean) {
+export function useTerminalDrive(target: Ref<TerminalDriveTarget | null>) {
   const route = useRoute()
   const { docRequested, docPath, syncDocQuery } = useDriveRoute()
 
@@ -39,16 +38,6 @@ export function useTerminalDrive(target: Ref<TerminalDriveTarget | null>, active
       syncDocQuery(true, sameSession && typeof before.doc === 'string' ? before.doc : '1')
     },
   )
-
-  // An agent can ask to open or close the pane. Honored only for the session
-  // in view, for the Chats pane's reason: it must never drag the user away.
-  useWailsEvent('drive:toggle', (event) => {
-    const payload = (Array.isArray(event.data) ? event.data[0] : event.data) as
-      { path?: string; open: boolean } | undefined
-    if (!payload || !active() || route.name !== 'terminal') return
-    if (driveEventAuthor(payload) !== (target.value?.session ?? null)) return
-    syncDocQuery(payload.open, payload.path || undefined)
-  })
 
   return { pane, docPath, syncDocQuery }
 }

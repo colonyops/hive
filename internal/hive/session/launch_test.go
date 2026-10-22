@@ -109,6 +109,7 @@ func TestLaunchRequestMapsOntoCreateOptions(t *testing.T) {
 	progress := &progressLog{}
 	req := LaunchRequest{
 		Name: "review-pr-1", Prompt: "Review this", Agent: "claude", Repo: "https://github.com/colonyops/hive.git",
+		AgentArgs:       map[string][]string{"claude": {"--mcp-config", "{}"}},
 		CollisionSuffix: "7", Tags: []string{"acme/repo#1", "", "acme/repo#1"}, Env: []string{"A=1"},
 	}
 
@@ -120,6 +121,7 @@ func TestLaunchRequestMapsOntoCreateOptions(t *testing.T) {
 		Remote:          "git@github.com:colonyops/hive.git",
 		Source:          "/work/hive",
 		AgentKey:        "claude",
+		AgentArgs:       map[string][]string{"claude": {"--mcp-config", "{}"}},
 		Background:      true,
 		CollisionSuffix: "7",
 		Tags:            []string{"acme/repo#1"},

@@ -258,7 +258,7 @@ func TestLaunchSessionExecutor_NilLauncherIsError(t *testing.T) {
 }
 
 func repositoryLauncher(creator SessionCreator, links ItemSessionLinker) *RepositoryLauncher {
-	return NewRepositoryLauncher(func() SessionCreator { return creator }, links, nil, zerolog.Nop())
+	return NewRepositoryLauncher(func() SessionCreator { return creator }, links, nil, zerolog.Nop(), nil)
 }
 
 func TestRepositoryLauncher_MapsRequestToSessionService(t *testing.T) {

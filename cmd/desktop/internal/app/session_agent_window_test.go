@@ -92,3 +92,31 @@ func TestNewAgentWindowReportsAStoppedTerminal(t *testing.T) {
 	require.Equal(t, KindNotFound, KindOf(err))
 	require.Empty(t, h.mux.opened)
 }
+
+func TestNewAgentWindowUsesLaunchInstance(t *testing.T) {
+	h := activeHarness(t)
+	detail := reviewSession()
+	windows := &fakeAgentWindows{}
+	base := "http://127.0.0.1:1234"
+	command := "codex --model custom"
+	svc := newSessionsService(SessionsDeps{
+		Hive: h.engine, AgentWindows: windows,
+		AgentCommands: func() map[string]string { return map[string]string{"reviewer": command} },
+		AgentArgs: func(context.Context) map[string][]string {
+			args, err := codeMCPArgs(base)
+			require.NoError(t, err)
+			return args
+		},
+	})
+	for _, port := range []string{"1234", "5678"} {
+		base = "http://127.0.0.1:" + port
+		_, err := svc.NewAgentWindow(t.Context(), detail.Slug, "reviewer")
+		require.NoError(t, err)
+		require.Contains(t, windows.calls[len(windows.calls)-1][3], base+"/mcp/drive")
+		require.Contains(t, windows.calls[len(windows.calls)-1][3], "codex --model custom")
+	}
+	command = "custom-wrapper codex"
+	_, err := svc.NewAgentWindow(t.Context(), detail.Slug, "reviewer")
+	require.NoError(t, err)
+	require.Equal(t, command, windows.calls[2][3])
+}

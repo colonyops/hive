@@ -973,27 +973,6 @@ describe('AgentsMode', () => {
     expect(router.currentRoute.value.query.doc).toBeUndefined()
   })
 
-  // open_document, open_canvas and close_canvas arrive as drive:toggle. Only
-  // the open chat's ask is honored — an agent must never drag the user away
-  // from another chat.
-  it('opens and closes the pane on drive:toggle for the open chat only', async () => {
-    const { wrapper, router } = await mountWithOpenChat()
-
-    wailsEvents.fire('drive:toggle', { session: '99', path: '', open: true })
-    await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBeUndefined()
-
-    wailsEvents.fire('drive:toggle', { session: '7', path: 'plans/x.md', open: true })
-    await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBe('plans/x.md')
-    expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(true)
-
-    wailsEvents.fire('drive:toggle', { session: '7', path: '', open: false })
-    await flushPromises()
-    expect(router.currentRoute.value.query.doc).toBeUndefined()
-    expect(wrapper.find('[data-testid="drive-pane"]').exists()).toBe(false)
-  })
-
   it("keeps the open chat's write seen when its pane was open for it and then closes", async () => {
     const { router } = await mountWithOpenChat()
     await setDoc(router, '1')
