@@ -5,9 +5,9 @@
 // is left out until it is verified on WKWebView (ADR
 // hive-drive-is-one-document-tree-under-the-context-root-and-a-canvas-is-one-document-kind-in-it).
 //
-// The frame fills the reader it sits in, the nearest positioned ancestor in
-// DrivePage and DrivePane, and leaves the tree and the document header in
-// place.
+// The frame fills the positioned DriveReader. DriveReader stretches to the
+// available height for HTML because this absolute frame contributes no layout
+// height.
 defineProps<{
   html: string
   /** Derives `-frame`. */
