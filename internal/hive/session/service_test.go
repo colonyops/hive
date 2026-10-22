@@ -61,13 +61,43 @@ func (m *mockStore) Delete(_ context.Context, id string) error {
 }
 
 // mockGit implements git.Git for testing.
-type mockGit struct{}
+type mockGit struct {
+	// remotes maps a directory to the origin URL RemoteURL reports. SetRemoteURL updates it.
+	remotes map[string]string
+	// setURLCalls records successful and failed SetRemoteURL calls as "dir=url".
+	setURLCalls []string
+	// failSetURLTo makes SetRemoteURL fail when asked to set exactly this URL.
+	failSetURLTo string
+	pullErr      error
+	pulled       []string
+	cloned       []string
+}
 
-func (m *mockGit) Clone(_ context.Context, _, _ string) error                   { return nil }
-func (m *mockGit) Checkout(_ context.Context, _, _ string) error                { return nil }
-func (m *mockGit) Pull(_ context.Context, _ string) error                       { return nil }
-func (m *mockGit) ResetHard(_ context.Context, _ string) error                  { return nil }
-func (m *mockGit) RemoteURL(_ context.Context, _ string) (string, error)        { return "", nil }
+func (m *mockGit) Clone(_ context.Context, url, _ string) error {
+	m.cloned = append(m.cloned, url)
+	return nil
+}
+func (m *mockGit) Checkout(_ context.Context, _, _ string) error { return nil }
+func (m *mockGit) Pull(_ context.Context, dir string) error {
+	m.pulled = append(m.pulled, dir)
+	return m.pullErr
+}
+func (m *mockGit) ResetHard(_ context.Context, _ string) error { return nil }
+func (m *mockGit) RemoteURL(_ context.Context, dir string) (string, error) {
+	return m.remotes[dir], nil
+}
+
+func (m *mockGit) SetRemoteURL(_ context.Context, dir, url string) error {
+	m.setURLCalls = append(m.setURLCalls, dir+"="+url)
+	if url == m.failSetURLTo {
+		return errors.New("set-url failed")
+	}
+	if m.remotes == nil {
+		m.remotes = make(map[string]string)
+	}
+	m.remotes[dir] = url
+	return nil
+}
 func (m *mockGit) IsClean(_ context.Context, _ string) (bool, error)            { return true, nil }
 func (m *mockGit) Branch(_ context.Context, _ string) (string, error)           { return "main", nil }
 func (m *mockGit) CloneBare(_ context.Context, _, _ string) error               { return nil }
@@ -110,6 +140,11 @@ func (testMultiplexer) KillWindow(context.Context, multiplexer.Target) error { r
 func newTestService(t *testing.T, store session.Store, cfg *config.Config) *Service {
 	t.Helper()
 	return newTestServiceWithBus(t, store, cfg, testbus.New(t).EventBus)
+}
+
+func newTestServiceWithGit(t *testing.T, store session.Store, cfg *config.Config, g git.Git) *Service {
+	t.Helper()
+	return NewService(zerolog.New(io.Discard), store, g, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, tmpl.New(tmpl.Config{}), PlainStyler{}, io.Discard, io.Discard, testMultiplexer{})
 }
 
 func newTestServiceWithBus(t *testing.T, store session.Store, cfg *config.Config, bus *events.EventBus) *Service {
@@ -1576,3 +1611,207 @@ var (
 	_ git.Git       = (*capturingMockGit)(nil)
 	_ session.Store = (*mockStore)(nil)
 )
+
+const (
+	httpsSiteRemote = "https://github.com/acme/site.git"
+	sshSiteRemote   = "git@github.com:acme/site.git"
+)
+
+func saveRecycled(t *testing.T, store *mockStore, id, path, remote string, updated time.Time) {
+	t.Helper()
+	require.NoError(t, store.Save(context.Background(), session.Session{
+		ID: id, Name: id, Slug: id, State: session.StateRecycled, Path: path, Remote: remote, UpdatedAt: updated,
+	}))
+}
+
+func TestCreateSession_RecycledSessionReusedAcrossRemoteSpellings(t *testing.T) {
+	store := newMockStore()
+	g := &mockGit{}
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+	svc := newTestServiceWithGit(t, store, cfg, g)
+	path := filepath.Join(cfg.ReposDir(), "site-abc")
+	saveRecycled(t, store, "r1", path, httpsSiteRemote, time.Now())
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{Name: "new", Remote: sshSiteRemote})
+	require.NoError(t, err)
+
+	assert.Equal(t, "r1", sess.ID)
+	assert.Equal(t, sshSiteRemote, sess.Remote)
+	assert.Equal(t, []string{path + "=" + sshSiteRemote}, g.setURLCalls)
+	assert.Equal(t, []string{path}, g.pulled)
+	assert.Empty(t, g.cloned)
+	saved, err := store.Get(context.Background(), "r1")
+	require.NoError(t, err)
+	assert.Equal(t, sshSiteRemote, saved.Remote)
+}
+
+func TestCreateSession_RecycledSessionSameSpellingSkipsSetURL(t *testing.T) {
+	store := newMockStore()
+	g := &mockGit{}
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+	svc := newTestServiceWithGit(t, store, cfg, g)
+	saveRecycled(t, store, "r1", filepath.Join(cfg.ReposDir(), "site-abc"), httpsSiteRemote, time.Now())
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{Name: "new", Remote: httpsSiteRemote})
+	require.NoError(t, err)
+	assert.Empty(t, g.setURLCalls)
+}
+
+func TestCreateSession_RecycledSessionRewriteFailureClonesFresh(t *testing.T) {
+	tests := []struct {
+		name string
+		git  func() *mockGit
+	}{
+		{"set-url fails", func() *mockGit { return &mockGit{failSetURLTo: sshSiteRemote} }},
+		{"pull fails after set-url", func() *mockGit { return &mockGit{pullErr: errors.New("permission denied")} }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newMockStore()
+			g := tt.git()
+			cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+			svc := newTestServiceWithGit(t, store, cfg, g)
+			path := filepath.Join(cfg.ReposDir(), "site-abc")
+			saveRecycled(t, store, "r1", path, httpsSiteRemote, time.Now())
+
+			sess, err := svc.CreateSession(context.Background(), CreateOptions{Name: "new", Remote: sshSiteRemote})
+			require.NoError(t, err)
+
+			assert.NotEqual(t, "r1", sess.ID)
+			assert.Equal(t, []string{sshSiteRemote}, g.cloned)
+			require.Len(t, g.setURLCalls, 2)
+			assert.Equal(t, path+"="+httpsSiteRemote, g.setURLCalls[1], "origin must be restored")
+			old, err := store.Get(context.Background(), "r1")
+			require.NoError(t, err)
+			assert.Equal(t, session.StateRecycled, old.State)
+			assert.Equal(t, httpsSiteRemote, old.Remote)
+		})
+	}
+}
+
+func TestCreateSession_RecycledSessionPullFailureWithSameRemoteMarksCorrupted(t *testing.T) {
+	store := newMockStore()
+	g := &mockGit{pullErr: errors.New("boom")}
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+	svc := newTestServiceWithGit(t, store, cfg, g)
+	saveRecycled(t, store, "r1", filepath.Join(cfg.ReposDir(), "site-abc"), httpsSiteRemote, time.Now())
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{Name: "new", Remote: httpsSiteRemote})
+	require.NoError(t, err)
+
+	assert.NotEqual(t, "r1", sess.ID)
+	assert.Empty(t, g.setURLCalls)
+	old, err := store.Get(context.Background(), "r1")
+	require.NoError(t, err)
+	assert.Equal(t, session.StateCorrupted, old.State)
+}
+
+func TestEnforceMaxRecycled_PoolsRemoteSpellings(t *testing.T) {
+	one := 1
+	store := newMockStore()
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git", Rules: []config.Rule{{Pattern: "", MaxRecycled: &one}}}
+	svc := newTestService(t, store, cfg)
+	now := time.Now()
+	saveRecycled(t, store, "old", t.TempDir(), httpsSiteRemote, now.Add(-time.Hour))
+	saveRecycled(t, store, "new", t.TempDir(), sshSiteRemote, now)
+
+	require.NoError(t, svc.enforceMaxRecycled(context.Background(), sshSiteRemote, config.CloneStrategyFull))
+
+	_, err := store.Get(context.Background(), "old")
+	require.ErrorIs(t, err, session.ErrNotFound)
+	_, err = store.Get(context.Background(), "new")
+	require.NoError(t, err)
+}
+
+func TestPruneExcessRecycled_PoolsRemoteSpellings(t *testing.T) {
+	one := 1
+	store := newMockStore()
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git", Rules: []config.Rule{{Pattern: "", MaxRecycled: &one}}}
+	svc := newTestService(t, store, cfg)
+	now := time.Now()
+	saveRecycled(t, store, "old", t.TempDir(), httpsSiteRemote, now.Add(-time.Hour))
+	saveRecycled(t, store, "new", t.TempDir(), sshSiteRemote, now)
+
+	count, err := svc.Prune(context.Background(), false)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, count)
+	_, err = store.Get(context.Background(), "new")
+	require.NoError(t, err)
+}
+
+func TestBareDirForRemote(t *testing.T) {
+	newSvc := func(t *testing.T, g *mockGit) (*Service, string) {
+		cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+		return newTestServiceWithGit(t, newMockStore(), cfg, g), filepath.Join(cfg.ReposDir(), ".bare")
+	}
+	ctx := context.Background()
+
+	t.Run("hosts with the same owner and repo get separate dirs", func(t *testing.T) {
+		svc, root := newSvc(t, &mockGit{})
+		github := svc.bareDirForRemote(ctx, "https://github.com/acme/x")
+		gitlab := svc.bareDirForRemote(ctx, "https://gitlab.com/acme/x")
+		assert.Equal(t, filepath.Join(root, "github.com", "acme", "x"), github)
+		assert.NotEqual(t, github, gitlab)
+	})
+
+	t.Run("spellings share one dir", func(t *testing.T) {
+		svc, _ := newSvc(t, &mockGit{})
+		assert.Equal(t, svc.bareDirForRemote(ctx, httpsSiteRemote), svc.bareDirForRemote(ctx, sshSiteRemote))
+	})
+
+	t.Run("port colon is replaced", func(t *testing.T) {
+		svc, root := newSvc(t, &mockGit{})
+		assert.Equal(t, filepath.Join(root, "git.example.com_8443", "o", "r"), svc.bareDirForRemote(ctx, "https://git.example.com:8443/o/r"))
+	})
+
+	t.Run("legacy dir with equivalent origin is reused", func(t *testing.T) {
+		g := &mockGit{}
+		svc, root := newSvc(t, g)
+		legacy := filepath.Join(root, "acme", "site")
+		require.NoError(t, os.MkdirAll(legacy, 0o755))
+		g.remotes = map[string]string{legacy: httpsSiteRemote}
+		assert.Equal(t, legacy, svc.bareDirForRemote(ctx, sshSiteRemote))
+	})
+
+	t.Run("legacy dir with a different origin is not reused", func(t *testing.T) {
+		g := &mockGit{}
+		svc, root := newSvc(t, g)
+		legacy := filepath.Join(root, "acme", "site")
+		require.NoError(t, os.MkdirAll(legacy, 0o755))
+		g.remotes = map[string]string{legacy: "https://gitlab.com/acme/site.git"}
+		assert.Equal(t, filepath.Join(root, "github.com", "acme", "site"), svc.bareDirForRemote(ctx, httpsSiteRemote))
+	})
+
+	t.Run("local path keeps the legacy dir", func(t *testing.T) {
+		svc, root := newSvc(t, &mockGit{})
+		assert.Equal(t, filepath.Join(root, "tmp", "repo"), svc.bareDirForRemote(ctx, "/tmp/repo"))
+	})
+}
+
+func TestGetBareCloneLock_SpellingsShareOneLock(t *testing.T) {
+	svc := newTestService(t, newMockStore(), nil)
+	ctx := context.Background()
+	https := svc.getBareCloneLock(svc.bareDirForRemote(ctx, httpsSiteRemote))
+	ssh := svc.getBareCloneLock(svc.bareDirForRemote(ctx, sshSiteRemote))
+	assert.Same(t, https, ssh)
+}
+
+func TestEnsureBareClone_ExistingCloneFollowsRequestedOrigin(t *testing.T) {
+	g := &mockGit{}
+	cfg := &config.Config{DataDir: t.TempDir(), GitPath: "git"}
+	svc := newTestServiceWithGit(t, newMockStore(), cfg, g)
+	bareDir := svc.bareDirForRemote(context.Background(), sshSiteRemote)
+	require.NoError(t, os.MkdirAll(bareDir, 0o755))
+	g.remotes = map[string]string{bareDir: httpsSiteRemote}
+
+	got, err := svc.ensureBareClone(context.Background(), sshSiteRemote, io.Discard)
+	require.NoError(t, err)
+
+	assert.Equal(t, bareDir, got)
+	assert.Equal(t, []string{bareDir + "=" + sshSiteRemote}, g.setURLCalls)
+}
+
+func TestRemoteIdentity_NonDefaultPortIsDistinct(t *testing.T) {
+	assert.False(t, git.EquivalentRemote("https://host:8443/o/r", "git@host:o/r"))
+}
