@@ -28,6 +28,7 @@ import {
   stepTerminalWindow,
   zoomTerminalPane,
 } from '../lib/terminalTree'
+import { useCanvasSettings } from '../stores/useCanvasSettings'
 import { useDriveReview } from '../stores/useDriveReview'
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { useTerminalFont } from '../stores/useTerminalFont'
@@ -63,6 +64,7 @@ export function useAppCommands(deps: AppCommandDeps) {
   const report = useReportDialog()
   const newSession = useNewSession()
   const terminalFont = useTerminalFont()
+  const canvasSettings = useCanvasSettings()
   const { sessionRepository } = useTerminalSessions()
 
   // Mounted on first use and then only hidden, because hiding it must not end
@@ -155,9 +157,18 @@ export function useAppCommands(deps: AppCommandDeps) {
     'terminal.close-pane': closeTerminalPane,
     'terminal.zoom-pane': zoomTerminalPane,
     'terminal.find': findInTerminal,
-    'terminal.text-size-increase': () => terminalFont.stepFontSize(1),
-    'terminal.text-size-decrease': () => terminalFont.stepFontSize(-1),
-    'terminal.text-size-reset': terminalFont.resetFontSize,
+    'terminal.text-size-increase': async () => {
+      await terminalFont.stepFontSize(1)
+      if (appMode.drivePaneVisible.value) await canvasSettings.stepFontSize(1)
+    },
+    'terminal.text-size-decrease': async () => {
+      await terminalFont.stepFontSize(-1)
+      if (appMode.drivePaneVisible.value) await canvasSettings.stepFontSize(-1)
+    },
+    'terminal.text-size-reset': async () => {
+      await terminalFont.resetFontSize()
+      if (appMode.drivePaneVisible.value) canvasSettings.resetFontSize()
+    },
     'terminal.focus-pane-left': () => focusTerminalPaneDirection('left'),
     'terminal.focus-pane-right': () => focusTerminalPaneDirection('right'),
     'terminal.focus-pane-up': () => focusTerminalPaneDirection('up'),

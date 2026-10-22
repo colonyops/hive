@@ -174,6 +174,7 @@ export function useAppMode(
   // Inbox and the drive pane in Chats and Code (hay-kot/hive-desktop#432).
   const agentsDriveAvailable = computed(() => agentsActive.value && routeChatId.value !== null)
   const driveAvailable = computed(() => agentsDriveAvailable.value || codeDrive.value !== null)
+  const drivePaneVisible = computed(() => driveAvailable.value && docRequested.value)
   const previewToggleCollapsed = computed(() => {
     if (driveActive.value) return review.pageCommentsCollapsed.value
     return driveAvailable.value ? !docRequested.value : previewCollapsed.value
@@ -283,6 +284,7 @@ export function useAppMode(
     previewUnseen,
     togglePreview,
     codeDrive,
+    drivePaneVisible,
     viewDriveScope,
     toggleMaximise,
   }

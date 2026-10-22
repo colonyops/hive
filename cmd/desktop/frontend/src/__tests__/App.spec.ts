@@ -13,6 +13,7 @@ import { resetNotificationSettingsForTests } from '../composables/useNotificatio
 import { usePopupTerminal } from '../stores/usePopupTerminal'
 import { resetLaunchersForTests } from '../composables/useLaunchers'
 import { formatCombo, SEQUENCE_TIMEOUT_MS, useKeybindings } from '../composables/useKeybindings'
+import { useCanvasSettings } from '../stores/useCanvasSettings'
 import { defaultTerminalFontSizePx, useTerminalFont } from '../stores/useTerminalFont'
 import { useTerminalSessions } from '../stores/useTerminalSessions'
 import {
@@ -215,6 +216,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/w
   Fonts: vi.fn().mockResolvedValue({ all: [], monospace: [] }),
   SetTheme: vi.fn(),
   SetTerminalFontSize: vi.fn(),
+  SetCanvasFontSize: vi.fn(),
   SetTerminalFontFamily: vi.fn(),
   SetTerminalFontWeights: vi.fn(),
   SetTerminalShowWindows: vi.fn(),
@@ -1571,6 +1573,54 @@ describe('App', () => {
       expect(px.value).toBe(defaultTerminalFontSizePx)
 
       pane.remove()
+      wrapper.unmount()
+    })
+
+    it.each([
+      ['Chats', '/workspaces/web-app?chat=7&doc=1', true],
+      ['Chats', '/workspaces/web-app?chat=7&doc=1', false],
+      ['Code', '/terminal/hive-fix-parser?doc=1', true],
+      ['Code', '/terminal/hive-fix-parser?doc=1', false],
+    ] as const)('steps canvas and session text in %s (%s), terminal focus %s', async (_area, path, terminalFocus) => {
+      vi.mocked(ListSessions).mockResolvedValue([
+        {
+          id: 's1',
+          name: 'fix the parser',
+          slug: 'hive-fix-parser',
+          repo: 'git@github.com:colonyops/hive.git',
+          state: 'active',
+          canvasOwner: 'colonyops/hive',
+          createdAt: '2026-10-01T12:00:00Z',
+        },
+      ])
+      const { wrapper, router } = await mountAppWithRouter()
+      await router.push(path)
+      const { fontSize } = useCanvasSettings()
+      const { px } = useTerminalFont()
+      await flushPromises()
+      const pane = terminalFocus ? focusedPane() : null
+      const press = async (key: string): Promise<void> => {
+        const target = pane ?? window
+        target.dispatchEvent(new KeyboardEvent('keydown', { key, metaKey: true, bubbles: true }))
+        await flushPromises()
+      }
+
+      await press('=')
+      expect(fontSize.value).toBe('large')
+      expect(px.value).toBe(defaultTerminalFontSizePx + 2)
+      await press('+')
+      expect(fontSize.value).toBe('xl')
+      await press('-')
+      expect(fontSize.value).toBe('large')
+      await press('0')
+      expect(fontSize.value).toBe('medium')
+      expect(px.value).toBe(defaultTerminalFontSizePx)
+
+      await router.replace({ query: { chat: router.currentRoute.value.query.chat } })
+      await press('=')
+      expect(fontSize.value).toBe('medium')
+      expect(px.value).toBe(defaultTerminalFontSizePx + 2)
+      pane?.remove()
       wrapper.unmount()
     })
 

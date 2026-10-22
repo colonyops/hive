@@ -23,6 +23,10 @@ const runtime = vi.hoisted(() => ({
   setText: vi.fn().mockResolvedValue(undefined),
   saveFile: vi.fn().mockResolvedValue('/tmp/plan.md'),
 }))
+vi.mock('../../../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/perfservice', () => ({
+  Info: vi.fn().mockResolvedValue({ enabled: false }),
+}))
+
 vi.mock('@wailsio/runtime', () => ({
   Clipboard: { SetText: runtime.setText },
   Dialogs: { SaveFile: runtime.saveFile },

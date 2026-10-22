@@ -105,6 +105,17 @@ export const useCanvasSettings = defineStore('canvasSettings', () => {
     write: (next) => PersistCanvasPageWidth(next),
     label: 'the canvas page width',
   })
+  async function stepFontSize(direction: 1 | -1): Promise<void> {
+    await fontSize.whenHydrated()
+    const index = canvasFontSizes.indexOf(fontSize.value.value)
+    const next = canvasFontSizes[index + direction]
+    if (next) fontSize.set(next)
+  }
+
+  function resetFontSize(): void {
+    fontSize.set(defaultCanvasFontSize)
+  }
+
   const frontmatterExpanded = useStorage('hive.canvas.frontmatter.expanded', true)
 
   return {
@@ -113,6 +124,8 @@ export const useCanvasSettings = defineStore('canvasSettings', () => {
     lineSpacing: lineSpacing.value,
     lineHeight: computed(() => canvasLineSpacingValues[lineSpacing.value.value]),
     setFontSize: fontSize.set,
+    stepFontSize,
+    resetFontSize,
     setLineSpacing: lineSpacing.set,
     pageWidth: pageWidth.value,
     pageWidthClass: computed(() => canvasPageWidthClasses[pageWidth.value.value]),
