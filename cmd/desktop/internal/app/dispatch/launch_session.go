@@ -1,6 +1,7 @@
 package dispatch
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 
@@ -91,9 +92,9 @@ func (l *RepositoryLauncher) LaunchSession(ctx context.Context, req LaunchSessio
 		if s.Name != "" {
 			name = s.Name
 		}
-		l.recorder.Record(ctx, activity.SessionCreated(name, req.Agent, req.Repo))
+		l.recorder.Record(ctx, activity.SessionCreated(name, req.Agent, cmp.Or(s.Remote, req.Repo)))
 	}
-	return SessionExecutionOutcome{ID: s.ID, Name: s.Name, Slug: s.Slug, Path: s.Path}, nil
+	return SessionExecutionOutcome{ID: s.ID, Name: s.Name, Slug: s.Slug, Path: s.Path, Remote: s.Remote}, nil
 }
 
 func uniqueKnownOrigins(origins []models.ItemRef) []models.ItemRef {

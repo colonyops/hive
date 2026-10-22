@@ -492,7 +492,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 	a.outputs = a.buildOutputWorker(cfg)
 	a.Jobs.setCommandCanceller(a.outputs.Cancel)
 	a.ActionRuns = newActionRunsService(a.Stores.ActionRuns, dispatch.NewFlowActions(a.flowStore, a.actionStore))
-	a.Inbox = newInboxService(InboxDeps{Items: a.Stores.InboxItems, Commands: a.Stores.OutputCommands, NodeRuns: a.Stores.NodeRuns, Catalog: a.actionStore, Worker: a.outputs})
+	a.Inbox = newInboxService(InboxDeps{Items: a.Stores.InboxItems, Commands: a.Stores.OutputCommands, NodeRuns: a.Stores.NodeRuns, Catalog: a.actionStore, Worker: a.outputs, Remotes: a.generatedRemote})
 	a.MenuBar = newMenuBarService(MenuBarDeps{
 		Settings: cfg.SettingsStore,
 		Flows:    a.flowStore,
@@ -500,6 +500,7 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 		Catalog:  a.actionStore,
 		Polls:    a.lastTicker(),
 		Events:   a.Events,
+		Remotes:  a.generatedRemote,
 	})
 	a.Sessions = newSessionsService(SessionsDeps{
 		Hive: a.hive, Launcher: a.launcher, WorkspaceLauncher: a.AgentWorkspaces,
@@ -1115,13 +1116,19 @@ func (a *App) buildProducer(logger zerolog.Logger) *ingest.Producer {
 	return producer
 }
 
+// generatedRemote reads the engine per call so a config reload changes the
+// clone policy without rebuilding the services that hold this method value.
+func (a *App) generatedRemote(repo, itemURL string) string {
+	return a.hive.Sessions().GeneratedRemote(repo, itemURL)
+}
+
 // buildOutputWorker wires the output worker. Mock modes keep the worker for
 // explicit detail-pane confirmation RPCs but never start its loop: that keeps
 // the configured action path real in e2e while stopping a background shell
 // action from compromising fixture determinism.
 func (a *App) buildOutputWorker(cfg Config) *dispatch.Worker {
 	messages := func() dispatch.MessageService { return a.hive.Messages() }
-	a.dispatcher = dispatch.NewDispatcher(outputExecutors(a.launcher, a.AgentWorkspaces, messages, a.observedNotifier(cfg.Notifier), cfg.Gate, a.Stores.InboxItems, a.execEnv, cfg.Logger))
+	a.dispatcher = dispatch.NewDispatcher(outputExecutors(a.launcher, a.AgentWorkspaces, messages, a.observedNotifier(cfg.Notifier), cfg.Gate, a.Stores.InboxItems, a.execEnv, cfg.Logger), a.generatedRemote)
 	worker := dispatch.NewWorker(a.Stores.OutputCommands, dispatch.NewFlowActions(a.flowStore, a.actionStore), a.dispatcher, dispatch.DefaultOutputWorkerInterval, cfg.Logger)
 	worker.SetRecorder(a.Activity)
 	worker.SetJobRecorder(a.Jobs)

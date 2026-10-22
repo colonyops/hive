@@ -28,7 +28,7 @@ actions:
     type: launch-session
     applies_to: [pr]
     show_in_detail: true
-    repo_template: "https://github.com/{{ .Payload.repo }}.git"
+    repo_template: "{{ .ItemRemote }}"
     prompt_template: |
       Review pull request {{ .Payload.title }}
 
@@ -58,7 +58,7 @@ syntax. `repo_template` and `workspace` cannot appear together.
 
 Template fields depend on where the action runs:
 
-- Item actions use `{{ .Payload.<field> }}` and `{{ .Key }}`. `{{ .ItemRemote }}` is the clone URL of the item's repository, for `repo_template`.
+- Item actions use `{{ .Payload.<field> }}` and `{{ .Key }}`. `{{ .ItemRemote }}` is the clone URL of the item's repository, for `repo_template`. It is HTTPS unless `git.clone_protocol` or a matching rule in the hive `config.yaml` sets SSH.
 - Session actions use values such as `{{ .Session.Path }}` and `{{ .Session.Branch }}`.
 - Window actions can also use `{{ .Window.ID }}`.
 - Declared inputs use `{{ .Inputs.<name> }}`.
@@ -106,7 +106,7 @@ A `launch-session` action can run a `post_hook` once the session exists. The com
   label: Review PR
   type: launch-session
   applies_to: [pr]
-  repo_template: "https://github.com/{{ .Payload.repo }}.git"
+  repo_template: "{{ .ItemRemote }}"
   prompt_template: "Review pull request #{{ .Payload.num }}"
   post_hook: "gh pr checkout {{ .Payload.num }} && zed ."
   post_hook_timeout: "2m"

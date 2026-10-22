@@ -37,7 +37,7 @@ node:
 - `{{"{{ .Payload.<field> }}"}}` — the item's payload. GitHub items carry `repo`, `title`, `url`, `num`, `author`, `body`, `labels`, and `state`; webhook items carry whatever was POSTed.
 - `{{"{{ .Key }}"}}` — the item's stable identity, e.g. `colonyops/hive#2841`.
 - `{{"{{ .Raw }}"}}` — the payload as raw JSON.
-- `{{"{{ .ItemRemote }}"}}` — the clone URL of the item's repository, built from its `repo` and `url`; empty when the item names no repository.
+- `{{"{{ .ItemRemote }}"}}` — the clone URL of the item's repository, built from its `repo` and `url` and spelled as HTTPS or SSH by `git.clone_protocol` and `rules[].clone_protocol` in the hive config; empty when the item names no repository.
 
 On the `session` and `window` targets — a terminal session row, or a window row
 inside it:
