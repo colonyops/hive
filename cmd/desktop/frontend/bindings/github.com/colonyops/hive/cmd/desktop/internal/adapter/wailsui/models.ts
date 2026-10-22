@@ -65,6 +65,7 @@ export interface AppearanceSettings {
      */
     "terminalLineHeight": number;
     "terminalLetterSpacing": number;
+    "terminalShowScrollbars": boolean;
 
     /**
      * TerminalShowWindows lists every active session's tmux windows in the

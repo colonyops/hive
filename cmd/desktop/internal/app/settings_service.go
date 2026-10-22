@@ -84,6 +84,7 @@ type AppearanceSettings struct {
 	TerminalFontWeightBold          int
 	TerminalLineHeight              float64
 	TerminalLetterSpacing           int
+	TerminalShowScrollbars          bool
 	TerminalShowWindows             bool
 	TerminalShowStatusBar           bool
 	TerminalPoolSize                int
@@ -141,6 +142,7 @@ func (s *SettingsService) Appearance(context.Context) (AppearanceSettings, error
 		TerminalFontWeightBold:          cfg.Appearance.TerminalFontWeightBold,
 		TerminalLineHeight:              cfg.Appearance.TerminalLineHeight,
 		TerminalLetterSpacing:           cfg.Appearance.TerminalLetterSpacing,
+		TerminalShowScrollbars:          cfg.Appearance.TerminalShowScrollbars,
 		TerminalShowWindows:             cfg.Appearance.TerminalShowWindows,
 		TerminalShowStatusBar:           cfg.Appearance.TerminalShowStatusBar,
 		TerminalPoolSize:                cfg.Appearance.TerminalPoolSize,
@@ -215,6 +217,14 @@ func (s *SettingsService) SetTerminalLineHeight(_ context.Context, lineHeight fl
 func (s *SettingsService) SetTerminalLetterSpacing(_ context.Context, spacing int) error {
 	_, err := s.store.Update(func(current *settings.Settings) error {
 		current.Appearance.TerminalLetterSpacing = spacing
+		return nil
+	})
+	return Wrap(err, KindInternal, "saving settings")
+}
+
+func (s *SettingsService) SetTerminalShowScrollbars(_ context.Context, show bool) error {
+	_, err := s.store.Update(func(current *settings.Settings) error {
+		current.Appearance.TerminalShowScrollbars = show
 		return nil
 	})
 	return Wrap(err, KindInternal, "saving settings")
