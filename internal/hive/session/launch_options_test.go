@@ -76,6 +76,46 @@ func TestResolveSessionLaunchRepository_PreferenceDecidesSpelling(t *testing.T) 
 		"the request's spelling is cloned and the checkout supplies the source")
 }
 
+func TestResolveSessionLaunchRepository_RuleForTheCheckoutSpellingApplies(t *testing.T) {
+	workspaceDir := filepath.Join(t.TempDir(), "workspaces")
+	checkout := filepath.Join(workspaceDir, "site")
+	require.NoError(t, mkdirGitDir(checkout))
+
+	cfg := &config.Config{
+		DataDir:    t.TempDir(),
+		Workspaces: []string{workspaceDir},
+		Rules:      []config.Rule{{Pattern: `^https://github\.com/acme/`, CloneProtocol: session.CloneProtocolSsh}},
+	}
+	service := newTestService(t, newMockStore(), cfg)
+	service.git = &launchOptionsGit{remote: "https://github.com/acme/site.git"}
+
+	resolved, err := service.ResolveSessionLaunchRepository(t.Context(), "git@github.com:acme/site.git")
+	require.NoError(t, err)
+	assert.Equal(t, "git@github.com:acme/site.git", resolved.Remote)
+}
+
+func TestPreferredRemote(t *testing.T) {
+	const itemURL = "https://github.com/acme/site/issues/1"
+	ssh := config.Config{Git: config.GitConfig{CloneProtocol: session.CloneProtocolSsh}}
+
+	for name, tc := range map[string]struct {
+		cfg  config.Config
+		repo string
+		want string
+	}{
+		"no preference is empty":   {config.Config{}, "acme/site", ""},
+		"preference generates":     {ssh, "acme/site", "git@github.com:acme/site.git"},
+		"explicit remote is empty": {ssh, "https://example.com/a/b.git", ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := tc.cfg
+			cfg.DataDir = t.TempDir()
+			service := newTestService(t, newMockStore(), &cfg)
+			assert.Equal(t, tc.want, service.PreferredRemote(tc.repo, itemURL))
+		})
+	}
+}
+
 func TestGeneratedRemote(t *testing.T) {
 	const itemURL = "https://github.com/acme/site/issues/1"
 	const giteaURL = "https://gitea.example.com/acme/site/issues/1"

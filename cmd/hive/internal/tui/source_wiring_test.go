@@ -135,6 +135,7 @@ func (f *fakeSessionCreator) CreateSession(_ context.Context, opts sessionsvc.Cr
 
 type fakeLaunchResolver struct {
 	generated map[string]string
+	preferred map[string]string
 	resolved  []string
 	source    string
 	err       error
@@ -142,6 +143,10 @@ type fakeLaunchResolver struct {
 
 func (f *fakeLaunchResolver) GeneratedRemote(repo, itemURL string) string {
 	return f.generated[repo+"|"+itemURL]
+}
+
+func (f *fakeLaunchResolver) PreferredRemote(repo, itemURL string) string {
+	return f.preferred[repo+"|"+itemURL]
 }
 
 func (f *fakeLaunchResolver) ResolveSessionLaunchRepository(_ context.Context, remote string) (sessionsvc.LaunchRepository, error) {
@@ -229,10 +234,10 @@ func TestCreateSourceSessions_SingleItemErrorPassesThrough(t *testing.T) {
 	assert.Empty(t, creator.created)
 }
 
-func TestCreateSourceSession_ResolvesTheGeneratedRemote(t *testing.T) {
+func TestCreateSourceSession_ResolvesThePreferredRemote(t *testing.T) {
 	creator := &fakeSessionCreator{}
 	resolver := &fakeLaunchResolver{
-		generated: map[string]string{"acme/site|https://github.com/acme/site/issues/7": "git@github.com:acme/site.git"},
+		preferred: map[string]string{"acme/site|https://github.com/acme/site/issues/7": "git@github.com:acme/site.git"},
 		source:    "/checkouts/site",
 	}
 	m := newCreateModel(creator, resolver)
@@ -247,6 +252,37 @@ func TestCreateSourceSession_ResolvesTheGeneratedRemote(t *testing.T) {
 	require.Len(t, creator.created, 1)
 	assert.Equal(t, "git@github.com:acme/site.git", creator.created[0].Remote)
 	assert.Equal(t, "/checkouts/site", creator.created[0].Source, "the resolved checkout is the copy source")
+}
+
+func TestCreateSourceSession_NoPreferenceKeepsTheScopeRemote(t *testing.T) {
+	creator := &fakeSessionCreator{}
+	resolver := &fakeLaunchResolver{
+		generated: map[string]string{"acme/site|https://github.com/acme/site/issues/7": "https://github.com/acme/site.git"},
+	}
+	m := newCreateModel(creator, resolver)
+	result := multiResult("7", "session-{{ .ID }}")
+	result.Item.Fields = map[string]any{"url": "https://github.com/acme/site/issues/7"}
+
+	_, _, err := m.createSourceSession(t.Context(), result,
+		sourcePickerScope{Search: "acme/site", Remote: "git@github-work:acme/site.git"}, make(chan string, 10))
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"git@github-work:acme/site.git"}, resolver.resolved, "an SSH host alias must survive")
+}
+
+func TestCreateSourceSession_GeneratesWithoutAScopeRemote(t *testing.T) {
+	creator := &fakeSessionCreator{}
+	resolver := &fakeLaunchResolver{
+		generated: map[string]string{"acme/site|https://github.com/acme/site/issues/7": "https://github.com/acme/site.git"},
+	}
+	m := newCreateModel(creator, resolver)
+	result := multiResult("7", "session-{{ .ID }}")
+	result.Item.Fields = map[string]any{"url": "https://github.com/acme/site/issues/7"}
+
+	_, _, err := m.createSourceSession(t.Context(), result, sourcePickerScope{Search: "acme/site"}, make(chan string, 10))
+	require.NoError(t, err)
+
+	assert.Equal(t, []string{"https://github.com/acme/site.git"}, resolver.resolved)
 }
 
 func TestCreateSourceSession_ScopeSourceWinsOverResolvedSource(t *testing.T) {

@@ -121,6 +121,7 @@ type Opts struct {
 // a session launch uses. *sessionsvc.Service implements it.
 type launchResolver interface {
 	GeneratedRemote(repo, itemURL string) string
+	PreferredRemote(repo, itemURL string) string
 	ResolveSessionLaunchRepository(ctx context.Context, remote string) (sessionsvc.LaunchRepository, error)
 }
 

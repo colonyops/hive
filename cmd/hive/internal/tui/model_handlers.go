@@ -1130,9 +1130,14 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 	}
 
 	itemURL, _ := result.Item.Fields["url"].(string)
-	request := m.launches.GeneratedRemote(scope.Search, itemURL)
+	// The scope remote is a spelling that already works for this user (an SSH
+	// host alias, a custom port); only a configured preference overrides it.
+	request := m.launches.PreferredRemote(scope.Search, itemURL)
 	if request == "" {
 		request = scope.Remote
+	}
+	if request == "" {
+		request = m.launches.GeneratedRemote(scope.Search, itemURL)
 	}
 	if request == "" {
 		return "", "", fmt.Errorf("cannot determine a clone URL for %q: the item has no url and the scope has no remote", scope.Search)

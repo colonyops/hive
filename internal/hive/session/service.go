@@ -875,27 +875,43 @@ func (s *Service) SessionLaunchOptions(ctx context.Context) (LaunchOptions, erro
 // returns "". The protocol is the configured preference for either spelling of
 // the repo, and https when none is set.
 func (s *Service) GeneratedRemote(repo, itemURL string) string {
+	remote, _ := s.generateRemote(repo, itemURL)
+	return remote
+}
+
+// PreferredRemote is GeneratedRemote when a clone protocol preference applies
+// to the repo, and "" when none does, so a caller that already holds a working
+// remote keeps it unless the user chose a protocol.
+func (s *Service) PreferredRemote(repo, itemURL string) string {
+	remote, preferred := s.generateRemote(repo, itemURL)
+	if !preferred {
+		return ""
+	}
+	return remote
+}
+
+func (s *Service) generateRemote(repo, itemURL string) (remote string, preferred bool) {
 	repo = strings.TrimSpace(repo)
 	if git.IsExplicitRemote(repo) {
-		return repo
+		return repo, false
 	}
 	loc, ok := git.ItemRepoLocation(repo, itemURL)
 	if !ok {
-		return ""
+		return "", false
 	}
 	protocol := s.config.GetCloneProtocol(loc.Candidates()...)
 	if protocol == "" {
-		protocol = session.CloneProtocolHttps
+		return loc.CloneURL(session.CloneProtocolHttps), false
 	}
-	return loc.CloneURL(protocol)
+	return loc.CloneURL(protocol), true
 }
 
 // ResolveSessionLaunchRepository finds the known local checkout whose remote
 // is equivalent to remote (git.EquivalentRemote; local paths match only by
 // exact spelling), which supplies the file-copy Source. The returned Remote is
-// the request's spelling when a clone protocol preference applies to it, so
-// the preference decides what is cloned. With no preference it is the
-// checkout's own spelling.
+// the request's spelling when a clone protocol preference applies to either
+// spelling, so the preference decides what is cloned. With no preference it
+// is the checkout's own spelling.
 func (s *Service) ResolveSessionLaunchRepository(ctx context.Context, remote string) (LaunchRepository, error) {
 	options, err := s.SessionLaunchOptions(ctx)
 	if err != nil {
@@ -903,7 +919,7 @@ func (s *Service) ResolveSessionLaunchRepository(ctx context.Context, remote str
 	}
 	for _, repo := range options.Repositories {
 		if git.EquivalentRemote(repo.Remote, remote) {
-			if s.config.GetCloneProtocol(remote) != "" {
+			if s.config.GetCloneProtocol(remote, repo.Remote) != "" {
 				repo.Remote = remote
 			}
 			return repo, nil
