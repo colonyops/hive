@@ -835,8 +835,8 @@ func (s *Service) SessionLaunchOptions(ctx context.Context) (LaunchOptions, erro
 }
 
 // ResolveSessionLaunchRepository selects a known local checkout when the
-// requested remote is equivalent. Non-GitHub and local paths match only by
-// their exact spelling, preserving explicit choices made by the caller.
+// requested remote is equivalent (git.EquivalentRemote). Local paths match
+// only by their exact spelling.
 func (s *Service) ResolveSessionLaunchRepository(ctx context.Context, remote string) (LaunchRepository, error) {
 	options, err := s.SessionLaunchOptions(ctx)
 	if err != nil {

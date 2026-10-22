@@ -43,71 +43,72 @@ type Git interface {
 	HasUnpushedCommits(ctx context.Context, dir string) (bool, error)
 }
 
-// ExtractRepoName extracts the repository name from a git remote URL.
-// Handles both SSH (git@github.com:user/repo.git) and HTTPS (https://github.com/user/repo.git) formats.
-// RemoteIdentity returns a stable identity suitable for matching remotes.
-// GitHub's HTTPS and SSH spellings identify the same repository, so they map
-// to github.com/<owner>/<repo>. Other remotes deliberately retain their exact
-// (trimmed) spelling: a local path or a non-GitHub forge URL is an explicit
-// user choice and must not be conflated with another transport.
+// RemoteIdentity returns the key under which remotes that name the same
+// repository compare equal: host and repository path, without the transport,
+// user, default port, or ".git" suffix. The host is lowercased everywhere but
+// the path only on GitHub, which ignores its case; other forges may not. A
+// local path or a remote that does not parse is returned trimmed.
 func RemoteIdentity(remote string) string {
 	remote = strings.TrimSpace(remote)
-	if remote == "" {
-		return ""
-	}
-
-	owner, repo, ok := githubOwnerRepo(remote)
+	host, path, ok := remoteHostPath(remote)
 	if !ok {
 		return remote
 	}
-	return "github.com/" + strings.ToLower(owner) + "/" + strings.ToLower(repo)
+	path = strings.Trim(path, "/")
+	if len(path) >= len(".git") && strings.EqualFold(path[len(path)-len(".git"):], ".git") {
+		path = strings.TrimRight(path[:len(path)-len(".git")], "/")
+	}
+	if path == "" {
+		return remote
+	}
+	host = strings.ToLower(host)
+	if host == "github.com" {
+		path = strings.ToLower(path)
+	}
+	return host + "/" + path
 }
 
 // EquivalentRemote reports whether two remotes refer to the same repository
-// under RemoteIdentity's intentionally narrow matching rules.
+// under RemoteIdentity.
 func EquivalentRemote(left, right string) bool {
 	leftID, rightID := RemoteIdentity(left), RemoteIdentity(right)
 	return leftID != "" && leftID == rightID
 }
 
-func githubOwnerRepo(remote string) (owner, repo string, ok bool) {
-	remote = strings.TrimSpace(remote)
-	if remote == "" {
-		return "", "", false
-	}
+var defaultRemotePorts = map[string]string{"ssh": "22", "git": "9418", "http": "80", "https": "443"}
 
-	// SCP-style SSH is not accepted by net/url. Git also accepts the
-	// userless spelling github.com:owner/repo.git, so recognize both forms.
-	if at := strings.LastIndex(remote, "@"); at != -1 {
-		if rest := remote[at+1:]; strings.HasPrefix(strings.ToLower(rest), "github.com:") {
-			return githubPath(rest[len("github.com:"):])
+func remoteHostPath(remote string) (host, path string, ok bool) {
+	if strings.Contains(remote, "://") {
+		u, err := url.Parse(remote)
+		if err != nil || u.Hostname() == "" {
+			return "", "", false
 		}
-	} else if colon := strings.Index(remote, ":"); colon != -1 && strings.EqualFold(remote[:colon], "github.com") {
-		return githubPath(remote[colon+1:])
+		defaultPort, known := defaultRemotePorts[u.Scheme]
+		if !known {
+			return "", "", false
+		}
+		host = u.Hostname()
+		if port := u.Port(); port != "" && port != defaultPort {
+			host = u.Host
+		}
+		return host, u.Path, true
 	}
 
-	u, err := url.Parse(remote)
-	if err != nil || !strings.EqualFold(u.Hostname(), "github.com") {
+	// Git reads [user@]host:path as SCP-style SSH only when no slash comes
+	// before the first colon; otherwise it is a local path.
+	colon := strings.Index(remote, ":")
+	if colon <= 0 || strings.Contains(remote[:colon], "/") {
 		return "", "", false
 	}
-	return githubPath(strings.TrimPrefix(u.EscapedPath(), "/"))
+	host = remote[:colon]
+	if at := strings.LastIndex(host, "@"); at != -1 {
+		host = host[at+1:]
+	}
+	return host, remote[colon+1:], host != ""
 }
 
-func githubPath(path string) (owner, repo string, ok bool) {
-	parts := strings.Split(strings.Trim(strings.TrimSpace(path), "/"), "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", false
-	}
-	repo = parts[1]
-	if len(repo) >= len(".git") && strings.EqualFold(repo[len(repo)-len(".git"):], ".git") {
-		repo = repo[:len(repo)-len(".git")]
-	}
-	if repo == "" {
-		return "", "", false
-	}
-	return parts[0], repo, true
-}
-
+// ExtractRepoName extracts the repository name from a git remote URL.
+// Handles both SSH (git@github.com:user/repo.git) and HTTPS (https://github.com/user/repo.git) formats.
 func ExtractRepoName(remote string) string {
 	remote = strings.TrimSuffix(remote, ".git")
 

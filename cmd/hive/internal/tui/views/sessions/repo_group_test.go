@@ -121,6 +121,25 @@ func TestGroupSessionsByRepo(t *testing.T) {
 				{name: "my-repo", remote: "https://github.com/user/my-repo.git", sessions: []string{"s1"}},
 			},
 		},
+		{
+			name: "equivalent remotes share a group led by the local repo",
+			sessions: []session.Session{
+				{Name: "s1", Remote: "git@github.com:user/alpha.git"},
+				{Name: "zeta", Remote: "https://gitlab.com/team/repo.git"},
+				{Name: "beta", Remote: "git@gitlab.com:team/repo.git"},
+				{Name: "other-host", Remote: "git@github.com:team/repo.git"},
+			},
+			localRemote: "ssh://git@gitlab.com/team/repo",
+			wantGroups: []struct {
+				name     string
+				remote   string
+				sessions []string
+			}{
+				{name: "repo", remote: "git@gitlab.com:team/repo.git", sessions: []string{"beta", "zeta"}},
+				{name: "alpha", remote: "git@github.com:user/alpha.git", sessions: []string{"s1"}},
+				{name: "repo", remote: "git@github.com:team/repo.git", sessions: []string{"other-host"}},
+			},
+		},
 	}
 
 	for _, tt := range tests {

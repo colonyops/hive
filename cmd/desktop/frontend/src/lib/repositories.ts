@@ -1,28 +1,5 @@
 import type { SessionLaunchRepository } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/app/dispatch/models'
 
-/** Host and full repository path for grouping; never use this as a Git remote. */
-export function repoIdentity(remote: string): string {
-  let host: string
-  let path: string
-  if (/^(https?|ssh|git):\/\//i.test(remote)) {
-    try {
-      const url = new URL(remote)
-      host = url.host.toLowerCase()
-      path = url.pathname
-    } catch {
-      return remote
-    }
-  } else {
-    if (remote.includes('://')) return remote
-    const scp = /^(?:[^@/]+@)?([^:/]+):(.+)$/.exec(remote)
-    if (!scp) return remote
-    host = scp[1].toLowerCase()
-    path = scp[2]
-  }
-  path = path.replace(/^\/+|\/+$/g, '').replace(/\.git$/, '')
-  return `${host}/${path}`
-}
-
 /**
  * "git@github.com:owner/name.git" and "https://github.com/owner/name.git" both
  * read as "owner/name"; a bare path keeps its last two segments.

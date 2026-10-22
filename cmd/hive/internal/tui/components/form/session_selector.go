@@ -51,7 +51,7 @@ func sessionLabels(sessions []session.Session) []string {
 	multiRemote := false
 	first := sessions[0].Remote
 	for _, s := range sessions[1:] {
-		if s.Remote != first {
+		if !git.EquivalentRemote(s.Remote, first) {
 			multiRemote = true
 			break
 		}

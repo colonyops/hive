@@ -858,7 +858,7 @@ func (m Model) withDiscoveredRepoForRemote(scope sourcePickerScope) sourcePicker
 		return scope
 	}
 	for _, repo := range m.sessionsView.DiscoveredRepos() {
-		if repo.Remote == scope.Remote {
+		if git.EquivalentRemote(repo.Remote, scope.Remote) {
 			scope.Source = repo.Path
 			return scope
 		}

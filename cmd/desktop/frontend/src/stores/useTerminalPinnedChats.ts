@@ -65,6 +65,7 @@ export const useTerminalPinnedChats = defineStore('terminalPinnedChats', () => {
           name: session.name,
           slug: session.slug,
           repo: '',
+          repoKey: '',
           state: 'active',
           canvasOwner: '',
           createdAt: '',

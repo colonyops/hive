@@ -1,7 +1,7 @@
 import { readonly, ref } from 'vue'
 import { ListSessions } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/sessionservice'
 import { Scratch } from '../../bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/terminalservice'
-import { repoDisplayName, repoIdentity } from '../lib/repositories'
+import { repoDisplayName } from '../lib/repositories'
 import { defineStore } from './defineStore'
 import { useResource } from './useResource'
 
@@ -16,6 +16,8 @@ export interface TerminalSessionRow {
   name: string
   slug: string
   repo: string
+  /** Groups rows whose remotes name the same repository over different transports. */
+  repoKey: string
   state: string
   /** The owner key of the session's canvases, its repository as owner/repo. Empty for a row with none. */
   canvasOwner: string
@@ -47,7 +49,7 @@ const SCRATCH_GROUP_KEY = 'scratch'
 export function groupTerminalSessions(rows: readonly TerminalSessionRow[]): TerminalSessionGroup[] {
   const groups = new Map<string, TerminalSessionGroup>()
   for (const row of rows) {
-    const key = repoIdentity(row.repo)
+    const key = row.repoKey
     let group = groups.get(key)
     if (!group) {
       group = { key, name: groupDisplayName(row.repo), sessions: [], kind: 'repo' }
@@ -120,6 +122,7 @@ export const useTerminalSessions = defineStore('terminalSessions', () => {
         name: declared.name,
         slug: declared.slug,
         repo: '',
+        repoKey: '',
         state: 'active',
         canvasOwner: '',
         createdAt: '',
