@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/colonyops/hive/pkg/atomicfile"
@@ -464,9 +465,21 @@ func encodeDoc(doc *yaml.Node) ([]byte, error) {
 // re-encoded form. yaml.v3 drops them between nodes (it keeps those inside a
 // block scalar), and the file is often hand-kept in a dotfiles repository
 // where losing every section break on a settings save is a diff nobody asked
-// for. The two files are aligned by a longest common subsequence of lines, and
-// only the original's unmatched blank lines are added back.
+// for. The two files are aligned by a longest common subsequence of lines,
+// compared without indentation because yaml.v3 re-indents, and only the
+// original's unmatched blank lines are added back. A blank line that would
+// land inside a block scalar changes its value, so a result that does not
+// decode to the same values as out is dropped for out.
 func keepBlankLines(orig, out []byte) []byte {
+	merged := mergeBlankLines(orig, out)
+	var want, got any
+	if yaml.Unmarshal(out, &want) != nil || yaml.Unmarshal(merged, &got) != nil || !reflect.DeepEqual(want, got) {
+		return out
+	}
+	return merged
+}
+
+func mergeBlankLines(orig, out []byte) []byte {
 	before := strings.Split(strings.TrimSuffix(string(orig), "\n"), "\n")
 	after := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
 
@@ -476,7 +489,7 @@ func keepBlankLines(orig, out []byte) []byte {
 	}
 	for i := len(before) - 1; i >= 0; i-- {
 		for j := len(after) - 1; j >= 0; j-- {
-			if before[i] == after[j] {
+			if sameLine(before[i], after[j]) {
 				lcs[i][j] = lcs[i+1][j+1] + 1
 			} else {
 				lcs[i][j] = max(lcs[i+1][j], lcs[i][j+1])
@@ -508,7 +521,7 @@ func keepBlankLines(orig, out []byte) []byte {
 	i, j := 0, 0
 	for i < len(before) || j < len(after) {
 		switch {
-		case i < len(before) && j < len(after) && before[i] == after[j]:
+		case i < len(before) && j < len(after) && sameLine(before[i], after[j]):
 			flush()
 			b.WriteString(after[j] + "\n")
 			i++
@@ -523,6 +536,10 @@ func keepBlankLines(orig, out []byte) []byte {
 	}
 	flush()
 	return []byte(b.String())
+}
+
+func sameLine(a, b string) bool {
+	return strings.TrimSpace(a) == strings.TrimSpace(b)
 }
 
 // writeFileAtomic runs check against a candidate file before the real write,
