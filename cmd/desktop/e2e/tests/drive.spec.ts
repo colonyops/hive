@@ -1,7 +1,7 @@
-import { expect, test } from "./fixtures.js";
+import { expect, test } from "../fixtures/test.js";
 
 // serve.sh seeds the e2e/repo space with one plan and one canvas
-// (fixtures/drive). The drive is the engine's, not the Chats area's, so it
+// (testdata/drive). The drive is the engine's, not the Chats area's, so it
 // works in this server build even though Chats is unavailable here.
 
 const planPath = "plans/2026-10-11-plan.md";

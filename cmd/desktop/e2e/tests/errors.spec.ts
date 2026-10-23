@@ -1,4 +1,4 @@
-import { expect, test } from './fixtures.js'
+import { expect, test } from '../fixtures/test.js'
 
 // The Kind path end to end: a Go core error classified as KindNotFound,
 // serialized by wailsui.MarshalError, delivered as the thrown exception's

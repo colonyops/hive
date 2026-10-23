@@ -25,6 +25,10 @@ COPY cmd/desktop/e2e/package.json cmd/desktop/e2e/package-lock.json ./cmd/deskto
 RUN cd cmd/desktop/e2e && npm ci
 COPY . .
 
+# Playwright strips types without checking them, so a broken import would
+# otherwise surface mid-suite.
+RUN cd cmd/desktop/e2e && npx tsc --noEmit
+
 # Build the frontend and the headless server at image-build time rather than
 # inside Playwright's webServer launcher: compile failures surface here with
 # clean attribution instead of as a mysterious "webServer was not able to

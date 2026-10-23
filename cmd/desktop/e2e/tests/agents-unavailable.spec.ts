@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures.js";
+import { expect, test } from "../fixtures/test.js";
 
 // The e2e lane is the `-tags server` build, where ptyterm's buildSupportsTerminal
 // compiles to false (cmd/desktop/internal/app/ptyterm/supported_server.go). That makes it

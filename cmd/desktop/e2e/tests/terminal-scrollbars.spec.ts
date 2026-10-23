@@ -1,18 +1,12 @@
-import { readFileSync } from 'node:fs'
 import type { Locator, Page, WebSocketRoute } from '@playwright/test'
-import { expect, test } from './fixtures.js'
-
-function binding(service: string, method: string): number {
-  const source = readFileSync(new URL(`../../frontend/bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/${service}.ts`, import.meta.url), 'utf8')
-  const match = source.match(new RegExp(`function ${method}\\([^]*?ByID\\((\\d+)\\)`))
-  if (!match) throw new Error(`Missing binding ${service}.${method}`)
-  return Number(match[1])
-}
+import { screenshotPath } from '../fixtures/paths.js'
+import { expect, test } from '../fixtures/test.js'
+import { bindingID } from '../fixtures/wails.js'
 
 async function terminalFixture(page: Page) {
-  const available = binding('terminalservice', 'Available')
-  const list = binding('sessionservice', 'ListSessions')
-  const scratch = binding('terminalservice', 'Scratch')
+  const available = bindingID('terminalservice', 'Available')
+  const list = bindingID('sessionservice', 'ListSessions')
+  const scratch = bindingID('terminalservice', 'Scratch')
   let socket: WebSocketRoute | undefined
   let cols = 100
   let rows = 30
@@ -95,7 +89,7 @@ async function wheelUp(page: Page, pane: Locator, bottom: Locator) {
   }).toBe(true)
 }
 
-test('terminal scrollbars persist, drag beside the canvas, and follow single/split/zoom layouts', async ({ page }) => {
+test('terminal scrollbars persist, drag beside the canvas, and follow single/split/zoom layouts', async ({ page, browserName }) => {
   const terminal = await terminalFixture(page)
   await page.goto('/#/terminal/scrollbars')
   const pane = page.locator('[data-pane-id="%1"]')
@@ -122,7 +116,7 @@ test('terminal scrollbars persist, drag beside the canvas, and follow single/spl
 
   const bottom = page.getByTestId('terminal-scroll-to-bottom')
   await waitForFittedPane(pane)
-  await page.screenshot({ path: `screenshots/terminal-scrollbars-${test.info().project.name}.png` })
+  await page.screenshot({ path: screenshotPath(`terminal-scrollbars-${browserName}.png`) })
   await wheelUp(page, pane, bottom)
   await bottom.click()
   await expect(bottom).toBeHidden()

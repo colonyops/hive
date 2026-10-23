@@ -1,6 +1,7 @@
-import { expect, test } from './fixtures.js'
+import { screenshotPath } from '../fixtures/paths.js'
+import { expect, test } from '../fixtures/test.js'
 
-test('Diagnostics opens independently and retains evidence when investigation is unavailable', async ({ page }, testInfo) => {
+test('Diagnostics opens independently and retains evidence when investigation is unavailable', async ({ page, browserName }) => {
   await page.goto('/?diagnostics=1')
   await expect(page.getByTestId('diagnostics-window')).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Diagnostics', exact: true })).toBeVisible()
@@ -18,5 +19,5 @@ test('Diagnostics opens independently and retains evidence when investigation is
   await page.getByTestId('diagnostics-actions').click()
   await page.getByRole('menuitem', { name: 'Export snapshot' }).click()
   await expect(page.getByRole('status')).toContainText('Saved')
-  await page.screenshot({ path: `screenshots/diagnostics-${testInfo.project.name}.png`, fullPage: true })
+  await page.screenshot({ path: screenshotPath(`diagnostics-${browserName}.png`), fullPage: true })
 })

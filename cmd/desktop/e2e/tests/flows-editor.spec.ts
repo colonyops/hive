@@ -1,8 +1,8 @@
-import { expect, test } from './fixtures.js'
+import { expect, test } from '../fixtures/test.js'
 
 // Read-only coverage of the flows editor surface (the desktop pipeline's
 // Node-RED-style graph editor — see docs/source-pipeline.md) against the
-// mock feed server's fixture flow (cmd/desktop/e2e/fixtures/flows/
+// mock feed server's fixture flow (cmd/desktop/e2e/testdata/flows/
 // frontend-triage.yaml). A profile IS a flow now, so the active profile's
 // flow is already loaded — there is no empty state to open into; this suite
 // only opens the editor and asserts the fixture's two nodes/one wire render

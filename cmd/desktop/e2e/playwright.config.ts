@@ -1,19 +1,9 @@
 import { defineConfig } from '@playwright/test'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { serverURL } from './fixtures/servers.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
-
-// scripts/serve.sh starts one feed-mode server per browser project so tests
-// never share read/action state across concurrently running projects. The
-// chromium URL is also Playwright's readiness sentinel; the script starts it
-// last after the other mock servers are ready.
-const feedPorts = {
-  chromium: 8931,
-  webkit: 8934,
-  pipelineSmoke: 8935,
-  actionSmoke: 8936,
-} as const
 
 export default defineConfig({
   testDir: './tests',
@@ -36,8 +26,9 @@ export default defineConfig({
   failOnFlakyTests: !!process.env.PW_FAIL_ON_FLAKY,
   expect: { timeout: 10_000 },
   outputDir: 'test-results',
+  // Each spec picks its server with test.use({ server }); fixtures/test.ts
+  // derives baseURL from it.
   use: {
-    baseURL: `http://127.0.0.1:${feedPorts.chromium}`,
     viewport: { width: 1360, height: 864 },
     // Traces are the only forensic record of a flake: run-docker.sh mounts
     // test-results/ out of the container so they survive the run.
@@ -46,7 +37,9 @@ export default defineConfig({
   webServer: {
     command: './scripts/serve.sh',
     cwd: here,
-    url: `http://127.0.0.1:${feedPorts.chromium}`,
+    // serve.sh starts the chromium feed server last, so it doubles as the
+    // readiness sentinel for every server.
+    url: serverURL('feed', 'chromium'),
     timeout: 180_000,
     // Never attach to an already-running local server: doing so can reuse a
     // developer or previous pipeline DB and make fixture state order-dependent.
@@ -56,22 +49,22 @@ export default defineConfig({
     {
       name: 'chromium',
       testIgnore: ['**/source-to-commit.spec.ts', '**/actions.spec.ts'],
-      use: { browserName: 'chromium', baseURL: `http://127.0.0.1:${feedPorts.chromium}` },
+      use: { browserName: 'chromium' },
     },
     {
       name: 'webkit',
       testIgnore: ['**/source-to-commit.spec.ts', '**/actions.spec.ts'],
-      use: { browserName: 'webkit', baseURL: `http://127.0.0.1:${feedPorts.webkit}` },
+      use: { browserName: 'webkit' },
     },
     {
       name: 'pipeline-smoke',
       testMatch: '**/source-to-commit.spec.ts',
-      use: { browserName: 'chromium', baseURL: `http://127.0.0.1:${feedPorts.pipelineSmoke}` },
+      use: { browserName: 'chromium' },
     },
     {
       name: 'action-smoke',
       testMatch: '**/actions.spec.ts',
-      use: { browserName: 'chromium', baseURL: `http://127.0.0.1:${feedPorts.actionSmoke}` },
+      use: { browserName: 'chromium' },
     },
   ],
 })

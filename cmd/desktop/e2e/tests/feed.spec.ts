@@ -1,9 +1,6 @@
-import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { expect, test } from './fixtures.js'
+import { screenshotPath } from '../fixtures/paths.js'
+import { expect, test } from '../fixtures/test.js'
 
-const here = dirname(fileURLToPath(import.meta.url))
 const expectedItems = [
   ['pr2841', 'PR'],
   ['iss1190', 'Issue'],
@@ -75,7 +72,7 @@ test('filters the feed to its remaining unread items', async ({ page }) => {
   ])
 })
 
-test('filters by author together with search and clears back to the full feed', async ({ page }, testInfo) => {
+test('filters by author together with search and clears back to the full feed', async ({ page, browserName }) => {
   await page.getByTestId('view-menu-toggle').click()
   await page.getByTestId('view-author-filter').click()
   await page.getByTestId('view-author-search').fill('octo')
@@ -89,9 +86,7 @@ test('filters by author together with search and clears back to the full feed', 
   await page.getByTestId('view-menu-toggle').click()
   await page.getByTestId('view-author-filter').click()
   await expect(page.getByTestId('view-author-option').filter({ hasText: /^octocat$/ })).toHaveAttribute('aria-checked', 'true')
-  const screenshots = join(here, '..', 'screenshots')
-  await mkdir(screenshots, { recursive: true })
-  await page.screenshot({ path: join(screenshots, `author-filter-${testInfo.project.name}.png`), fullPage: true })
+  await page.screenshot({ path: screenshotPath(`author-filter-${browserName}.png`), fullPage: true })
   await page.keyboard.press('Escape')
   await page.getByTestId('clear-author-filter').click()
   await expect(page.getByTestId('feed-item')).toHaveCount(6)
@@ -272,8 +267,6 @@ test('does not navigate while typing in the feed search box', async ({ page }) =
   await expect(detail).toContainText('batch_spawn: fix detached tmux env & PATH propagation')
 })
 
-test('captures a full-window screenshot', async ({ page }, testInfo) => {
-  const screenshots = join(here, '..', 'screenshots')
-  await mkdir(screenshots, { recursive: true })
-  await page.screenshot({ path: join(screenshots, `full-window-${testInfo.project.name}.png`), fullPage: true })
+test('captures a full-window screenshot', async ({ page, browserName }) => {
+  await page.screenshot({ path: screenshotPath(`full-window-${browserName}.png`), fullPage: true })
 })

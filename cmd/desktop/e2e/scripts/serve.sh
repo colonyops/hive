@@ -29,7 +29,7 @@ E2E_DATA_ROOT="$(mktemp -d "${tmp_base}/hive-desktop-e2e.XXXXXX")"
 # Action ids are slug-limited to 64 bytes. Derive a short, deterministic id
 # from this unique temp root rather than embedding its long basename.
 RUN_ID="$(printf '%s' "${E2E_DATA_ROOT}" | cksum | awk '{print "r" $1}')"
-FIXTURES="$(pwd)/cmd/desktop/e2e/fixtures"
+FIXTURES="$(pwd)/cmd/desktop/e2e/testdata"
 
 pids=()
 pid_names=()

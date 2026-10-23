@@ -1,6 +1,7 @@
 import { type Page } from '@playwright/test'
 import { readFile, writeFile } from 'node:fs/promises'
-import { expect, resetServerState, test } from './fixtures.js'
+import { serverURL } from '../fixtures/servers.js'
+import { expect, resetServerState, test } from '../fixtures/test.js'
 
 type SmokeState = {
   runId: string
@@ -9,9 +10,6 @@ type SmokeState = {
   messages: Array<{ id: string; topic: string; payload: string; sender: string; sessionId: string }>
   outputCommands: Array<{ id: number; actionId: string; key: string; status: string; lastError: string; stdout: string; stderr: string; result: unknown }>
 }
-
-const actionServer = 'http://127.0.0.1:8936'
-const seedServer = 'http://127.0.0.1:8937'
 
 async function smoke(page: Page): Promise<SmokeState> {
   const response = await page.request.get(new URL('/_e2e/actions', page.url()).toString())
@@ -46,12 +44,12 @@ async function cardIds(page: Page): Promise<string[]> {
 // server baseline and the exact durable-row counts below (output_commands,
 // messages) hold on retries too — the interim retries: 0 override this file
 // carried is therefore gone.
-test.use({ serverStateReset: 'per-file' })
+test.use({ server: 'action-smoke', serverStateReset: 'per-file' })
 test.describe.configure({ mode: 'serial' })
-test.beforeAll(async ({}, testInfo) => {
-  // The action-seed server (seedServer) is only observed read-only by this
-  // file, so the action-smoke project server is the one needing a baseline.
-  await resetServerState(testInfo.project.use.baseURL)
+test.beforeAll(async ({ browserName }) => {
+  // The action-seed server is only observed read-only by this file, so the
+  // action-smoke server is the one needing a baseline.
+  await resetServerState(serverURL('action-smoke', browserName))
 })
 
 // The starter catalog's exact bytes are pinned in Go, by
@@ -59,8 +57,8 @@ test.beforeAll(async ({}, testInfo) => {
 // only produced a second copy that rotted the next time the catalog grew, so
 // this asserts what a real first run is the only thing that can show: the app
 // wrote that catalog to the configured path.
-test('first run seeds the starter catalog when the private file is absent', async ({ page }) => {
-  await page.goto(seedServer)
+test('first run seeds the starter catalog when the private file is absent', async ({ page, browserName }) => {
+  await page.goto(serverURL('action-seed', browserName))
   await expect(page.getByTestId('feed-item')).toHaveCount(6)
   const state = await smoke(page)
   const seeded = await readFile(state.actionsPath, 'utf8')
@@ -74,7 +72,7 @@ test('first run seeds the starter catalog when the private file is absent', asyn
 })
 
 test.beforeEach(async ({ page }) => {
-  await page.goto(actionServer)
+  await page.goto('/')
   await expect(page.getByTestId('feed-item')).toHaveCount(6)
 })
 
@@ -137,7 +135,7 @@ test('drag-reorders the catalog and honors that order in settings, the detail pa
   await expect.poll(async () => fileIds(await readFile(state.actionsPath, 'utf8'))).toEqual(reordered)
 
   // The detail pane renders that order, still filtered to applicable actions.
-  await page.goto(actionServer)
+  await page.goto('/')
   await select(page, 'pr2841')
   await expect.poll(() => cardIds(page)).toEqual([moved, ...inDetail])
 

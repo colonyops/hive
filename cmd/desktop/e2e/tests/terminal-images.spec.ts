@@ -1,16 +1,11 @@
 import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
-import { expect, test } from './fixtures.js'
+import { testdataPath } from '../fixtures/paths.js'
+import { expect, test } from '../fixtures/test.js'
+import { bindingID } from '../fixtures/wails.js'
 
 // Server builds cannot run terminals. Only the terminal control/stream is
 // mocked here; clipboard uploads exercise the actual authenticated Go endpoint.
-function binding(service: string, method: string): number {
-  const source = readFileSync(new URL(`../../frontend/bindings/github.com/colonyops/hive/cmd/desktop/internal/adapter/wailsui/${service}.ts`, import.meta.url), 'utf8')
-  const match = source.match(new RegExp(`function ${method}\\([^]*?ByID\\((\\d+)\\)`))
-  if (!match) throw new Error(`Missing binding ${service}.${method}`)
-  return Number(match[1])
-}
-
 const windowState = {
   windowId: '@1', name: 'Images', active: true, activePane: '%1', width: 100, height: 30,
   layout: { paneId: '%1', x: 0, y: 0, width: 100, height: 30, cells: [] },
@@ -21,9 +16,9 @@ const session = { id: '42', name: 'Image chat', workspace: 'images', agent: 'cla
 async function terminalFixture(page: Page) {
   const pastes: { slug: string; paneId: string; text: string }[] = []
   const ptyInput: Buffer[] = []
-  const availability = ['terminalservice', 'agentsservice', 'popupterminalservice'].map((name) => binding(name, 'Available'))
-  const list = binding('sessionservice', 'ListSessions')
-  const scratch = binding('terminalservice', 'Scratch')
+  const availability = ['terminalservice', 'agentsservice', 'popupterminalservice'].map((name) => bindingID(name, 'Available'))
+  const list = bindingID('sessionservice', 'ListSessions')
+  const scratch = bindingID('terminalservice', 'Scratch')
   await page.route('**/wails/runtime', async (route) => {
     const id = route.request().postDataJSON()?.args?.methodID
     let answer: unknown
@@ -68,7 +63,7 @@ async function terminalFixture(page: Page) {
 }
 
 async function imageGesture(page: Page, kind: 'paste' | 'drop') {
-  const png = readFileSync(new URL('./testdata/terminal-image.png', import.meta.url)).toString('base64')
+  const png = readFileSync(testdataPath('terminal-image.png')).toString('base64')
   const pane = page.locator('[data-file-drop-target]:visible').last()
   await expect(pane).toBeVisible()
   await pane.evaluate((host, { kind, png }) => {

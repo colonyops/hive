@@ -1,9 +1,5 @@
-import { mkdir } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import { expect, test } from './fixtures.js'
-
-const here = dirname(fileURLToPath(import.meta.url))
+import { screenshotPath } from '../fixtures/paths.js'
+import { expect, test } from '../fixtures/test.js'
 
 // Mirrors useTheme.ts (the e2e package cannot import frontend modules). The
 // loop proves every id here has a CSS block that actually applies.
@@ -23,14 +19,12 @@ const themes = [
   { id: 'nord-light', label: 'Nord Light' },
 ] as const
 
-test('switches between all themes from the command palette', async ({ page }, testInfo) => {
+test('switches between all themes from the command palette', async ({ page, browserName }) => {
   await page.goto('/')
   await expect(page.getByTestId('feed-item')).toHaveCount(6)
 
   const palette = page.getByTestId('command-palette')
   const input = page.getByTestId('command-palette-input')
-  const screenshots = join(here, '..', 'screenshots')
-  await mkdir(screenshots, { recursive: true })
 
   for (const { id, label } of themes) {
     await page.keyboard.press('Meta+k')
@@ -44,7 +38,7 @@ test('switches between all themes from the command palette', async ({ page }, te
 
     await expect(palette).toBeHidden()
     await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).toBe(id)
-    await page.screenshot({ path: join(screenshots, `full-window-${id}-${testInfo.project.name}.png`), fullPage: true })
+    await page.screenshot({ path: screenshotPath(`full-window-${id}-${browserName}.png`), fullPage: true })
   }
 
   await page.keyboard.press('Meta+k')
