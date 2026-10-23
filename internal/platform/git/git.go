@@ -19,6 +19,8 @@ type Git interface {
 	ResetHard(ctx context.Context, dir string) error
 	// RemoteURL returns the origin remote URL for dir.
 	RemoteURL(ctx context.Context, dir string) (string, error)
+	// SetRemoteURL points origin in dir at url.
+	SetRemoteURL(ctx context.Context, dir, url string) error
 	// IsClean returns true if there are no uncommitted changes in dir.
 	IsClean(ctx context.Context, dir string) (bool, error)
 	// Branch returns the current branch name, or short commit SHA if in detached HEAD state.
