@@ -1,4 +1,4 @@
-import { expect, test } from '../fixtures/test.js'
+import { expect, test } from '../../fixtures/test.js'
 
 // The e2e lane is the `-tags server` build, where tmuxcc compiles to the
 // unavailable stub. That makes it the one place the graceful-unavailable path

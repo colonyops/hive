@@ -4,9 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { serverURL } from './fixtures/servers.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
+const chromium = { browserName: 'chromium' as const }
+const webkit = { browserName: 'webkit' as const }
 
 export default defineConfig({
-  testDir: './tests',
   timeout: 30_000,
   // Some fixture tests mutate a server-local flow through a watcher. Keep the
   // Docker acceptance suite ordered so a slow WebKit watcher cannot race a
@@ -46,25 +47,12 @@ export default defineConfig({
     reuseExistingServer: false,
   },
   projects: [
-    {
-      name: 'chromium',
-      testIgnore: ['**/source-to-commit.spec.ts', '**/actions.spec.ts'],
-      use: { browserName: 'chromium' },
-    },
-    {
-      name: 'webkit',
-      testIgnore: ['**/source-to-commit.spec.ts', '**/actions.spec.ts'],
-      use: { browserName: 'webkit' },
-    },
-    {
-      name: 'pipeline-smoke',
-      testMatch: '**/source-to-commit.spec.ts',
-      use: { browserName: 'chromium' },
-    },
-    {
-      name: 'action-smoke',
-      testMatch: '**/actions.spec.ts',
-      use: { browserName: 'chromium' },
-    },
+    { name: 'smoke-chromium', testDir: './tests/smoke', use: chromium },
+    { name: 'smoke-webkit', testDir: './tests/smoke', use: webkit },
+    { name: 'features-chromium', testDir: './tests/features', use: chromium },
+    { name: 'features-webkit', testDir: './tests/features', use: webkit },
+    { name: 'workflows-chromium', testDir: './tests/workflows', use: chromium },
+    // Only onboarding has a webkit server (scripts/serve.sh).
+    { name: 'workflows-onboarding-webkit', testDir: './tests/workflows/onboarding', use: webkit },
   ],
 })

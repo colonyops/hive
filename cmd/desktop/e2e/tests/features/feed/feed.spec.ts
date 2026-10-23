@@ -1,5 +1,5 @@
-import { screenshotPath } from '../fixtures/paths.js'
-import { expect, test } from '../fixtures/test.js'
+import { screenshotPath } from '../../../fixtures/paths.js'
+import { expect, test } from '../../../fixtures/test.js'
 
 const expectedItems = [
   ['pr2841', 'PR'],

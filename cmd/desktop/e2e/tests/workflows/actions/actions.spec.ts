@@ -1,7 +1,7 @@
 import { type Page } from '@playwright/test'
 import { readFile, writeFile } from 'node:fs/promises'
-import { serverURL } from '../fixtures/servers.js'
-import { expect, resetServerState, test } from '../fixtures/test.js'
+import { serverURL } from '../../../fixtures/servers.js'
+import { expect, resetServerState, test } from '../../../fixtures/test.js'
 
 type SmokeState = {
   runId: string

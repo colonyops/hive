@@ -1,4 +1,4 @@
-import { expect, test } from '../fixtures/test.js'
+import { expect, test } from '../../../fixtures/test.js'
 
 // Read-only coverage of the flows editor surface (the desktop pipeline's
 // Node-RED-style graph editor — see docs/source-pipeline.md) against the

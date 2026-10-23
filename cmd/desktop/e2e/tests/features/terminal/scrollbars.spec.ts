@@ -1,7 +1,7 @@
 import type { Locator, Page, WebSocketRoute } from '@playwright/test'
-import { screenshotPath } from '../fixtures/paths.js'
-import { expect, test } from '../fixtures/test.js'
-import { bindingID } from '../fixtures/wails.js'
+import { screenshotPath } from '../../../fixtures/paths.js'
+import { expect, test } from '../../../fixtures/test.js'
+import { bindingID } from '../../../fixtures/wails.js'
 
 async function terminalFixture(page: Page) {
   const available = bindingID('terminalservice', 'Available')

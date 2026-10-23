@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test'
-import { screenshotPath } from '../fixtures/paths.js'
-import { serverURL } from '../fixtures/servers.js'
-import { expect, test } from '../fixtures/test.js'
+import { screenshotPath } from '../../../fixtures/paths.js'
+import { serverURL } from '../../../fixtures/servers.js'
+import { expect, test } from '../../../fixtures/test.js'
 
 // Dedicated onboarding-mode servers, one per browser: the mock GitHub
 // connection is a per-process singleton that stays connected once the fake

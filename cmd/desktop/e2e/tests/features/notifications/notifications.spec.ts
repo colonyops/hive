@@ -1,4 +1,4 @@
-import { expect, test } from '../fixtures/test.js'
+import { expect, test } from '../../../fixtures/test.js'
 
 test('persists notification preferences from application settings', async ({ page }) => {
   await page.goto('/')

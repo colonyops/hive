@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test'
-import { expect, test } from '../fixtures/test.js'
+import { expect, test } from '../../../fixtures/test.js'
 
 // Reorganizes the e2e/repo space serve.sh seeds. /_e2e/reset puts the space
 // back before every test, so drive.spec.ts still finds the plan where it was.

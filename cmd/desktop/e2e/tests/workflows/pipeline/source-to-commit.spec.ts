@@ -1,7 +1,7 @@
 // fixtures/test.ts wires the per-test /_e2e/reset: on the pipeline server it
 // truncates the event log before this test's page.goto, so the freshly loaded
 // frontend can never hold a checkpoint ahead of the log it reads.
-import { expect, test } from '../fixtures/test.js'
+import { expect, test } from '../../../fixtures/test.js'
 
 test.use({ server: 'pipeline' })
 

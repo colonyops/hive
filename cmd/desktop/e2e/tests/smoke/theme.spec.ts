@@ -1,5 +1,5 @@
-import { screenshotPath } from '../fixtures/paths.js'
-import { expect, test } from '../fixtures/test.js'
+import { screenshotPath } from '../../fixtures/paths.js'
+import { expect, test } from '../../fixtures/test.js'
 
 // Mirrors useTheme.ts (the e2e package cannot import frontend modules). The
 // loop proves every id here has a CSS block that actually applies.

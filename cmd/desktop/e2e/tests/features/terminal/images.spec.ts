@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs'
 import type { Page } from '@playwright/test'
-import { testdataPath } from '../fixtures/paths.js'
-import { expect, test } from '../fixtures/test.js'
-import { bindingID } from '../fixtures/wails.js'
+import { testdataPath } from '../../../fixtures/paths.js'
+import { expect, test } from '../../../fixtures/test.js'
+import { bindingID } from '../../../fixtures/wails.js'
 
 // Server builds cannot run terminals. Only the terminal control/stream is
 // mocked here; clipboard uploads exercise the actual authenticated Go endpoint.

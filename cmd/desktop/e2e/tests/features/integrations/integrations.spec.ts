@@ -1,4 +1,4 @@
-import { expect, test } from '../fixtures/test.js'
+import { expect, test } from '../../../fixtures/test.js'
 
 // The Integrations screen is a projection of the Go connector registry. What
 // it used to be — a hardcoded card per connector plus a "coming soon" array —

@@ -1,5 +1,5 @@
-import { screenshotPath } from '../fixtures/paths.js'
-import { expect, test } from '../fixtures/test.js'
+import { screenshotPath } from '../../fixtures/paths.js'
+import { expect, test } from '../../fixtures/test.js'
 
 test('Diagnostics opens independently and retains evidence when investigation is unavailable', async ({ page, browserName }) => {
   await page.goto('/?diagnostics=1')
