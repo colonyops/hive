@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/domain/multiplexer"
+	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 	"github.com/colonyops/hive/pkg/executil"
 )
 
@@ -130,6 +131,7 @@ func (r execRunner) command(ctx context.Context, args ...string) (*exec.Cmd, str
 	}
 	cmd := exec.CommandContext(ctx, binary, prepared...)
 	cmd.WaitDelay = pipeWaitDelay
+	cmd.Dir = tmuxbin.WorkDir()
 	if r.environ != nil {
 		cmd.Env = r.environ(ctx)
 	}

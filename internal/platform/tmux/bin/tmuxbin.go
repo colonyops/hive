@@ -1,4 +1,4 @@
-// Package tmuxbin locates the tmux executable.
+// Package tmuxbin locates the tmux executable and the directory to run it in.
 //
 // A desktop launch does not inherit the user's shell PATH — macOS starts an
 // .app bundle with /usr/bin:/bin:/usr/sbin:/sbin — so exec.LookPath cannot see

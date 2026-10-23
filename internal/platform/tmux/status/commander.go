@@ -3,6 +3,8 @@ package tmuxstatus
 import (
 	"context"
 	"os/exec"
+
+	tmuxbin "github.com/colonyops/hive/internal/platform/tmux/bin"
 )
 
 // Commander runs tmux commands for an Integration. Implementations may select
@@ -21,5 +23,7 @@ func (execCommander) Available() bool {
 }
 
 func (execCommander) Output(ctx context.Context, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, "tmux", args...).Output()
+	cmd := exec.CommandContext(ctx, "tmux", args...)
+	cmd.Dir = tmuxbin.WorkDir()
+	return cmd.Output()
 }
